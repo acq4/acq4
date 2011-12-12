@@ -208,4 +208,3 @@ class GraphicsObject(QtGui.QGraphicsObject):
     def childItems(self):
         ## PyQt bug -- some child items are returned incorrectly.
         return map(GraphicsScene.translateGraphicsItem, QtGui.QGraphicsObject.childItems(self))
-    

@@ -15,6 +15,7 @@ class ViewBox(GraphicsWidget):
     sigXRangeChanged = QtCore.Signal(object, object)
     sigRangeChangedManually = QtCore.Signal(object)
     sigRangeChanged = QtCore.Signal(object, object)
+    sigActionPositionChanged = QtCore.Signal(object)
     
     def __init__(self, parent=None, border=None, lockAspect=False, enableMouse=True, invertY=False):
         GraphicsWidget.__init__(self, parent)
@@ -53,6 +54,7 @@ class ViewBox(GraphicsWidget):
         self.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding))
         
         self.border = border
+        self.menu = None
         
         self.mouseEnabled = [enableMouse, enableMouse]
         self.setAspectLocked(lockAspect)
@@ -91,6 +93,12 @@ class ViewBox(GraphicsWidget):
         if ptr != self.axHistoryPointer:
             self.axHistoryPointer = ptr
             self.showAxRect(self.axHistory[ptr])
+            
+    def toggleLeftAction(self, act):
+        if act.text() is 'pan':
+            self.setLeftButtonAction('pan')
+        elif act.text() is 'zoom':
+            self.setLeftButtonAction('rect')
 
     def setLeftButtonAction(self, mode='Rect'):
         if mode.lower() == 'rect':
@@ -98,7 +106,7 @@ class ViewBox(GraphicsWidget):
         elif mode.lower() == 'pan':
             self.useleftButtonPan = True
         else:
-            raise Exception('graphicsItems:ViewBox:setLeftButtonAction: unknown mode = %s' % mode)
+            raise Exception('graphicsItems:ViewBox:setLeftButtonAction: unknown mode = %s (Options are "pan" and "rect")' % mode)
             
     def innerSceneItem(self):
         return self.childGroup
@@ -167,10 +175,32 @@ class ViewBox(GraphicsWidget):
                 self.updateMatrix()
         
     def childTransform(self):
+        """
+        Return the transform that maps from child(item in the childGroup) coordinates to local coordinates.
+        (This maps from inside the viewbox to outside)
+        """ 
         m = self.childGroup.transform()
         m1 = QtGui.QTransform()
         m1.translate(self.childGroup.pos().x(), self.childGroup.pos().y())
         return m*m1
+
+    def mapToView(self, obj):
+        """Maps from the local coordinates of the ViewBox to the coordinate system displayed inside the ViewBox"""
+        m = self.childTransform().inverted()[0]
+        return m.map(obj)
+
+    def mapFromView(self, obj):
+        """Maps from the coordinate system displayed inside the ViewBox to the local coordinates of the ViewBox"""
+        m = self.childTransform()
+        return m.map(obj)
+
+    def mapSceneToView(self, obj):
+        """Maps from scene coordinates to the coordinate system displayed inside the ViewBox"""
+        return self.mapToView(self.mapFromScene(obj))
+
+    def mapViewToScene(self, obj):
+        """Maps from the coordinate system displayed inside the ViewBox to scene coordinates"""
+        return self.mapToScene(self.mapFromView(obj))
 
     def viewScale(self):
         vr = self.viewRect()
@@ -284,8 +314,56 @@ class ViewBox(GraphicsWidget):
                 #ev.accept()
                 #self.axHistoryPointer += 1
                 #self.axHistory = self.axHistory[:self.axHistoryPointer] + [ax]
+                
+    #def contextMenuEvent(self, ev):
+        #self.menu = QtGui.QMenu()
+        #self.menu.addAction('Auto Range')
+        #self.menu.addAction('Toggle Zoom/Pan')
+        #self.menu.addAction('Show Grid')
+        #ev.accept()
+        #pos = ev.screenPos()
+        #self.menu.popup(QtCore.QPoint(pos.x(), pos.y()))
+    def mouseClickEvent(self, ev):
+        if ev.button() == QtCore.Qt.RightButton:
+            ev.accept()
+            self.raiseContextMenu(ev)
+    
+    def raiseContextMenu(self, ev):
+        #print "viewbox.raiseContextMenu called."
+        
+        self.getMenu()
+        #print "2:", [str(a.text()) for a in self.menu.actions()]
+        pos = ev.screenPos()
+        pos2 = ev.scenePos()
+        #print "3:", [str(a.text()) for a in self.menu.actions()]
+        self.sigActionPositionChanged.emit(pos2)
+
+        self.menu.popup(QtCore.QPoint(pos.x(), pos.y()))
+        #print "4:", [str(a.text()) for a in self.menu.actions()]
+        
+    def getMenu(self):
+        menu = QtGui.QMenu()
+        menu.setTitle("ViewBox options")
+        menu.addAction("Auto range", self.autoRange)
+            
+            #leftMenu = QtGui.QMenu("Use left button for")
+            #group = QtGui.QActionGroup(self.menu)
+            #pan = leftMenu.addAction("pan", self.toggleLeftAction)
+            #zoom = leftMenu.addAction("zoom", self.toggleLeftAction)
+            #pan.setCheckable(True)
+            #zoom.setCheckable(True)
+            #pan.setActionGroup(group)
+            #zoom.setActionGroup(group)
+            #self.menu.addMenu(leftMenu)
+        #print "1d:", [str(a.text()) for a in self.menu.actions()]
+        if self.menu is None:
+            self.menu = menu
+        #print "1e:", [str(a.text()) for a in self.menu.actions()]
+        return menu
+        
 
     def mouseDragEvent(self, ev):
+        #print 'vbDragEvent'
         #GraphicsWidget.mouseMoveEvent(self, ev)
         
         ev.accept()  ## we accept all buttons
@@ -345,6 +423,7 @@ class ViewBox(GraphicsWidget):
                 self.translateBy(tr, viewCoords=True)
                 self.sigRangeChangedManually.emit(self.mouseEnabled)
         elif ev.button() & QtCore.Qt.RightButton:
+            print "vb.rightDrag"
             if self.aspectLocked is not False:
                 mask[0] = 0
             
@@ -515,3 +594,5 @@ class ViewBox(GraphicsWidget):
             p.setPen(self.border)
             #p.fillRect(bounds, QtGui.QColor(0, 0, 0))
             p.drawRect(bounds)
+
+    

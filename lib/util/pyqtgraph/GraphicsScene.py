@@ -57,6 +57,8 @@ class GraphicsScene(QtGui.QGraphicsScene):
     
     
     _addressCache = weakref.WeakValueDictionary()
+    sigSceneContextMenu = QtCore.Signal(object)
+    sigMouseHover = QtCore.Signal(object)
     
     @classmethod
     def registerObject(cls, obj):
@@ -103,7 +105,9 @@ class GraphicsScene(QtGui.QGraphicsScene):
         self._moveDistance = d
 
     def mousePressEvent(self, ev):
+        print 'scenePress'
         QtGui.QGraphicsScene.mousePressEvent(self, ev)
+        print "mouseGrabberItem: ", self.mouseGrabberItem()
         if self.mouseGrabberItem() is None:  ## nobody claimed press; we are free to generate drag/click events
             self.clickEvents.append(MouseClickEvent(ev))
         #else:
@@ -112,8 +116,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
             #print "click grabbed by:", item
         
     def mouseMoveEvent(self, ev):
-        if int(ev.buttons()) == 0: ## nothing pressed; send mouseHoverOver/OutEvents
-        
+        if int(ev.buttons()) == 0: ## nothing pressed; send mouseHoverOver/OutEvents      
             ## First allow QGraphicsScene to deliver hoverEnter/Move/ExitEvents
             QtGui.QGraphicsScene.mouseMoveEvent(self, ev)
             
@@ -121,7 +124,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
             event = HoverEvent(ev)
             prevItems = self.hoverItems.keys()
             items = self.itemsNearEvent(event)
-            #print "\nHover:", items
+            self.sigMouseHover.emit(items)
             for item in items:
                 if hasattr(item, 'hoverEvent'):
                     event.currentItem = item
@@ -167,14 +170,18 @@ class GraphicsScene(QtGui.QGraphicsScene):
                         ev.accept()
                 
     def mouseReleaseEvent(self, ev):
+        #print 'sceneRelease'
         if self.mouseGrabberItem() is None:
+            #print "sending click/drag event"
             if ev.button() in self.dragButtons:
                 if self.sendDragEvent(ev, final=True):
+                    #print "sent drag event"
                     ev.accept()
                 self.dragButtons.remove(ev.button())
             else:
                 cev = [e for e in self.clickEvents if int(e.button()) == int(ev.button())]
                 if self.sendClickEvent(cev[0]):
+                    print "sent click event"
                     ev.accept()
                 self.clickEvents.remove(cev[0])
                 
@@ -196,6 +203,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
         ## Send a MouseDragEvent to the current dragItem or to 
         ## items near the beginning of the drag
         event = MouseDragEvent(ev, self.clickEvents[0], self.lastDrag, start=init, finish=final)
+        #print "dragEvent: init=", init, 'final=', final, 'self.dragItem=', self.dragItem
         if init and self.dragItem is None:
             acceptedItem = self.lastHoverEvent.dragItems().get(event.button(), None)
             if acceptedItem is not None:
@@ -219,6 +227,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
             self.dragItem.mouseDragEvent(event)
             
         self.lastDrag = event
+        
         return event.isAccepted()
             
         
@@ -241,6 +250,10 @@ class GraphicsScene(QtGui.QGraphicsScene):
                         item.mouseClickEvent(ev)
                         if ev.isAccepted():
                             break
+                if not ev.isAccepted() and ev.button() is QtCore.Qt.RightButton:
+                    print "GraphicsScene emitting sigSceneContextMenu"
+                    self.sigSceneContextMenu.emit(ev)
+                    ev.accept()
         return ev.isAccepted()
         
     #def claimEvent(self, item, button, eventType):
@@ -253,8 +266,8 @@ class GraphicsScene(QtGui.QGraphicsScene):
         
         
     def items(self, *args):
+        #print 'args:', args
         items = QtGui.QGraphicsScene.items(self, *args)
-        
         ## PyQt bug: items() returns a list of QGraphicsItem instances. If the item is subclassed from QGraphicsObject,
         ## then the object returned will be different than the actual item that was originally added to the scene
         if HAVE_SIP and isinstance(self, sip.wrapper):
@@ -264,6 +277,21 @@ class GraphicsScene(QtGui.QGraphicsScene):
                 i2 = GraphicsScene._addressCache.get(addr, i)
                 #print i, "==>", i2
                 items2.append(i2)
+        #print 'items:', items
+        return items2
+    
+    def selectedItems(self, *args):
+        items = QtGui.QGraphicsScene.selectedItems(self, *args)
+        ## PyQt bug: items() returns a list of QGraphicsItem instances. If the item is subclassed from QGraphicsObject,
+        ## then the object returned will be different than the actual item that was originally added to the scene
+        if HAVE_SIP and isinstance(self, sip.wrapper):
+            items2 = []
+            for i in items:
+                addr = sip.unwrapinstance(sip.cast(i, QtGui.QGraphicsItem))
+                i2 = GraphicsScene._addressCache.get(addr, i)
+                #print i, "==>", i2
+                items2.append(i2)
+        #print 'items:', items
         return items2
 
     def itemAt(self, *args):
@@ -297,6 +325,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
         rgn = QtCore.QRectF(point.x()-w, point.y()-h, 2*w, 2*h)
         #self.searchRect.setRect(rgn)
 
+
         items = self.items(point, selMode, sortOrder, tr)
         
         ## remove items whose shape does not contain point (scene.items() apparently sucks at this)
@@ -315,6 +344,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
         
         #for item in items:
             ##seen.add(item)
+
             #shape = item.mapToScene(item.shape())
             #if not shape.contains(point):
                 #continue
@@ -336,9 +366,30 @@ class GraphicsScene(QtGui.QGraphicsScene):
                     return v
         else:
             return widget
+        
+    def addSubContextMenus(self, sender, menu):
+        #items = self.itemsNearEvent(ev)
+        menu.addSeparator()
+        item = sender
+        while item.parentItem() is not None:
+            item = item.parentItem()
+        #for item in items:
+            #if item is sender:
+                #continue
+            if not hasattr(item, "getMenu"):
+                continue
+            subMenus = item.getSubMenus()
+            if type(subMenus) is not list: ## so that some items (like FlowchartViewBox) can return multiple menus
+                subMenus = [subMenus]
+            for sm in subMenus:
+                if sm is not None:
+                    menu.addMenu(sm)
+            
+        return menu
 
     @classmethod
     def translateGraphicsItem(cls, item):
+        ## for fixing pyqt bugs where the wrong item is returned
         if HAVE_SIP and isinstance(item, sip.wrapper):
             addr = sip.unwrapinstance(sip.cast(item, QtGui.QGraphicsItem))
             item = GraphicsScene._addressCache.get(addr, item)

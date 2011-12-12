@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from pyqtgraph.Qt import QtCore, QtGui
+#from PyQt4 import QtCore, QtGui
 #from PySide import QtCore, QtGui
+#import Node as NodeMod
 from Node import *
 #import functions
 from advancedTypes import OrderedDict
@@ -75,21 +77,20 @@ class Flowchart(Node):
         self.inputWasSet = False  ## flag allows detection of changes in the absence of input change.
         self._nodes = {}
         #self.connects = []
-        self._chartGraphicsItem = FlowchartGraphicsItem(self)
+        #self._chartGraphicsItem = FlowchartGraphicsItem(self)
         self._widget = None
         self._scene = None
         self.processing = False ## flag that prevents recursive node updates
+        
+        self.widget()
         
         self.inputNode = Node('Input')
         self.outputNode = Node('Output')
         self.addNode(self.inputNode, 'Input', [-150, 0])
         self.addNode(self.outputNode, 'Output', [300, 0])
             
-        #QtCore.QObject.connect(self.outputNode, QtCore.SIGNAL('outputChanged'), self.outputChanged)
         self.outputNode.sigOutputChanged.connect(self.outputChanged)
-        #QtCore.QObject.connect(self.outputNode, QtCore.SIGNAL('terminalRenamed'), self.internalTerminalRenamed)
         self.outputNode.sigTerminalRenamed.connect(self.internalTerminalRenamed)
-        #QtCore.QObject.connect(self.inputNode, QtCore.SIGNAL('terminalRenamed'), self.internalTerminalRenamed)
         self.inputNode.sigTerminalRenamed.connect(self.internalTerminalRenamed)
         
             
@@ -165,10 +166,12 @@ class Flowchart(Node):
         if type(pos) in [QtCore.QPoint, QtCore.QPointF]:
             pos = [pos.x(), pos.y()]
         item = node.graphicsItem()
-        item.setParentItem(self.chartGraphicsItem())
+        #item.setParentItem(self.chartGraphicsItem())
+        self.viewBox.addItem(item)
+        #item.setPos(pos2.x(), pos2.y())
         item.moveBy(*pos)
         self._nodes[name] = node
-        self.widget().addNode(node)
+        self.widget().addNode(node) 
         #QtCore.QObject.connect(node, QtCore.SIGNAL('closed'), self.nodeClosed)
         node.sigClosed.connect(self.nodeClosed)
         #QtCore.QObject.connect(node, QtCore.SIGNAL('renamed'), self.nodeRenamed)
@@ -384,15 +387,21 @@ class Flowchart(Node):
     def chartGraphicsItem(self):
         """Return the graphicsItem which displays the internals of this flowchart.
         (graphicsItem() still returns the external-view item)"""
-        return self._chartGraphicsItem
+        #return self._chartGraphicsItem
+        return self.viewBox
         
     def widget(self):
         if self._widget is None:
             self._widget = FlowchartCtrlWidget(self)
             self.scene = self._widget.scene()
+            self.viewBox = self._widget.viewBox()
             #self._scene = QtGui.QGraphicsScene()
             #self._widget.setScene(self._scene)
-            self.scene.addItem(self.chartGraphicsItem())
+            #self.scene.addItem(self.chartGraphicsItem())
+            
+            #ci = self.chartGraphicsItem()
+            #self.viewBox.addItem(ci)
+            #self.viewBox.autoRange()
         return self._widget
 
     def listConnections(self):
@@ -508,13 +517,18 @@ class Flowchart(Node):
         self.inputNode.clearTerminals()
         self.outputNode.clearTerminals()
 
-class FlowchartGraphicsItem(QtGui.QGraphicsItem):
+#class FlowchartGraphicsItem(QtGui.QGraphicsItem):
+class FlowchartGraphicsItem(GraphicsObject):
+    
     def __init__(self, chart):
-        QtGui.QGraphicsItem.__init__(self)
-        self.chart = chart
+        print "FlowchartGraphicsItem.__init__"
+        #QtGui.QGraphicsItem.__init__(self)
+        GraphicsObject.__init__(self)
+        self.chart = chart ## chart is an instance of Flowchart()
         self.updateTerminals()
         
     def updateTerminals(self):
+        print "FlowchartGraphicsItem.updateTerminals"
         self.terminals = {}
         bounds = self.boundingRect()
         inp = self.chart.inputs()
@@ -537,14 +551,18 @@ class FlowchartGraphicsItem(QtGui.QGraphicsItem):
             y += dy
         
     def boundingRect(self):
+        print "FlowchartGraphicsItem.boundingRect"
         return QtCore.QRectF()
         
     def paint(self, p, *args):
+        #print "FlowchartGraphicsItem.paint"
         pass
         #p.drawRect(self.boundingRect())
     
 
 class FlowchartCtrlWidget(QtGui.QWidget):
+    """The widget that contains the list of all the nodes in a flowchart and their controls, as well as buttons for loading/saving flowcharts."""
+    
     def __init__(self, chart):
         self.items = {}
         #self.loadDir = loadDir  ## where to look initially for chart files
@@ -560,6 +578,7 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         self.ui.ctrlList.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         
         self.chartWidget = FlowchartWidget(chart, self)
+        self.chartWidget.viewBox().autoRange()
         self.cwWin = QtGui.QMainWindow()
         self.cwWin.setWindowTitle('Flowchart')
         self.cwWin.resize(1000,800)
@@ -639,7 +658,10 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         pass
     
     def scene(self):
-        return self.chartWidget.scene()
+        return self.chartWidget.scene() ## returns the GraphicsScene object
+    
+    def viewBox(self):
+        return self.chartWidget.viewBox()
 
     def nodeRenamed(self, node, oldName):
         self.items[node].setText(0, node.name())
@@ -707,7 +729,7 @@ class FlowchartWidget(dockarea.DockArea):
         #self.ui.setupUi(self)
         
         ## build user interface (it was easier to do it here than via developer)
-        self.view = FlowchartGraphicsView.FlowchartGraphicsView()
+        self.view = FlowchartGraphicsView.FlowchartGraphicsView(self)
         self.viewDock = dockarea.Dock('view', size=(1000,600))
         self.viewDock.addWidget(self.view)
         self.viewDock.hideTitleBar()
@@ -735,16 +757,21 @@ class FlowchartWidget(dockarea.DockArea):
         self.selDock.addWidget(self.selInfo)
         self.addDock(self.selDock, 'bottom')
         
-
-        self._scene = QtGui.QGraphicsScene()
-        self.view.setScene(self._scene)
+        self._scene = self.view.scene()
+        self._viewBox = self.view.viewBox()
+        #self._scene = QtGui.QGraphicsScene()
+        #self._scene = FlowchartGraphicsView.FlowchartGraphicsScene()
+        #self.view.setScene(self._scene)
         
         self.buildMenu()
         #self.ui.addNodeBtn.mouseReleaseEvent = self.addNodeBtnReleased
             
         self._scene.selectionChanged.connect(self.selectionChanged)
-        self.view.sigHoverOver.connect(self.hoverOver)
-        self.view.sigClicked.connect(self.showViewMenu)
+        self._scene.sigMouseHover.connect(self.hoverOver)
+        #self.view.sigClicked.connect(self.showViewMenu)
+        self._scene.sigSceneContextMenu.connect(self.showViewMenu)
+        self._viewBox.sigActionPositionChanged.connect(self.menuPosChanged)
+        
         
     def reloadLibrary(self):
         #QtCore.QObject.disconnect(self.nodeMenu, QtCore.SIGNAL('triggered(QAction*)'), self.nodeMenuTriggered)
@@ -765,23 +792,38 @@ class FlowchartWidget(dockarea.DockArea):
                 act.nodeType = name
             self.subMenus.append(menu)
         self.nodeMenu.triggered.connect(self.nodeMenuTriggered)
+        return self.nodeMenu
+    
+    def menuPosChanged(self, pos):
+        self.menuPos = pos
     
     def showViewMenu(self, ev):
         #QtGui.QPushButton.mouseReleaseEvent(self.ui.addNodeBtn, ev)
-        if ev.button() == QtCore.Qt.RightButton:
-            self.menuPos = self.view.mapToScene(ev.pos())
-            self.nodeMenu.popup(ev.globalPos())
-
+        #if ev.button() == QtCore.Qt.RightButton:
+            #self.menuPos = self.view.mapToScene(ev.pos())
+            #self.nodeMenu.popup(ev.globalPos())
+        print "Flowchart.showViewMenu called"
+        self.menuPos = ev.scenePos()
+        self.nodeMenu.popup(ev.screenPos())
+        
     def scene(self):
-        return self._scene
+        return self._scene ## the GraphicsScene item
+
+    def viewBox(self):
+        return self._viewBox ## the viewBox that items should be added to
 
     def nodeMenuTriggered(self, action):
         nodeType = action.nodeType
-        self.chart.createNode(nodeType, pos=self.menuPos)
+        #pos = self.viewBox().childTransform().map(self.viewBox().mapFromScene(self.menuPos))
+        pos = self.viewBox().mapSceneToView(self.menuPos)
+
+        self.chart.createNode(nodeType, pos=pos)
 
 
     def selectionChanged(self):
+        print "FlowchartWidget.selectionChanged called."
         items = self._scene.selectedItems()
+        print "     scene.selectedItems: ", items
         if len(items) == 0:
             data = None
         else:
@@ -802,6 +844,7 @@ class FlowchartWidget(dockarea.DockArea):
         self.selectedTree.setData(data, hideRoot=True)
 
     def hoverOver(self, items):
+        #print "FlowchartWidget.hoverOver called."
         term = None
         for item in items:
             if item is self.hoverItem:
