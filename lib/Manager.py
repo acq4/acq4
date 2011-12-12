@@ -64,7 +64,12 @@ def logMsg(msg, **kwargs):
         """
     global LOG
     if LOG is not None:
-        LOG.logMsg(msg, **kwargs)
+        try:
+            LOG.logMsg(msg, **kwargs)
+        except:
+            print "Error logging message:"
+            print msg
+            print kwargs
     else:
         print "Can't log message; no log created yet."
         #print args
@@ -75,7 +80,12 @@ def logExc(msg, *args, **kwargs):
     """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
     global LOG
     if LOG is not None:
-        LOG.logExc(msg, *args, **kwargs)
+        try:
+            LOG.logExc(msg, *args, **kwargs)
+        except:
+            print "Error logging exception:"
+            print msg
+            print kwargs
     else:
         print "Can't log error message; no log created yet."
         print args
@@ -102,105 +112,109 @@ class Manager(QtCore.QObject):
     single = None
     
     def __init__(self, configFile=None, argv=None):
-        if Manager.CREATED:
-            raise Exception("Manager object already created!")
-        
-        global LOG
-        LOG = LogWindow(self)
-        self.logWindow = LOG
-        
-        if argv is not None:
-            try:
-                opts, args = getopt.getopt(argv, 'c:m:b:s:d:n', ['config=', 'module=', 'baseDir=', 'storageDir=', 'disable=', 'noManager'])
-            except getopt.GetoptError, err:
-                print str(err)
-                print """
-Valid options are:
-    -c --config=     configuration file
-    -m --module=     module name to load
-    -b --baseDir=    base directory to use
-    -s --storageDir= storage directory to use
-    -n --noManager   Do not load manager module
-    -d --disable=    Disable the device specified
-"""
-        QtCore.QObject.__init__(self)
-        self.alreadyQuit = False
-        self.taskLock = Mutex(QtCore.QMutex.Recursive)
-        atexit.register(self.quit)
-        self.devices = OrderedDict()
-        self.modules = OrderedDict()
-        self.config = OrderedDict()
-        self.definedModules = OrderedDict()
-        #self.devRack = None
-        #self.dataManager = DataManager()
-        self.currentDir = None
-        self.baseDir = None
-        self.gui = None
-        self.shortcuts = []
-        self.disableDevs = []
-        
-        self.interfaceDir = InterfaceDirectory()
-
-        
-        ## Handle command line options
-        loadModules = []
-        setBaseDir = None
-        setStorageDir = None
-        loadManager = True
-        for o, a in opts:
-            if o in ['-c', '--config']:
-                configFile = a
-            elif o in ['-m', '--module']:
-                loadModules.append(a)
-            elif o in ['-b', '--baseDir']:
-                setBaseDir = a
-            elif o in ['-s', '--storageDir']:
-                setStorageDir = a
-            elif o in ['-n', '--noManager']:
-                loadManager = False
-            elif o in ['-d', '--disable']:
-                self.disableDevs.append(a)
-            else:
-                print "Unhandled option", o, a
-        
-        ## Read in configuration file
-        if configFile is None:
-            raise Exception("No configuration file specified!")
-        self.configDir = os.path.dirname(configFile)
-        self.readConfig(configFile)
-        
-        logMsg('ACQ4 started.', importance=9)
-        
-        Manager.CREATED = True
-        Manager.single = self
-        
-        ## Act on options if they were specified..
         try:
-            if setBaseDir is not None:
-                self.setBaseDir(setBaseDir)
-            if setStorageDir is not None:
-                self.setCurrentDir(setStorageDir)
-            if loadManager:
-                #mm = self.loadModule(module='Manager', name='Manager', config={})
-                self.showGUI()
-                self.createWindowShortcut('F1', self.gui.win)
-            for m in loadModules:
-                try:
-                    self.loadDefinedModule(m)
-                except:
-                    if not loadManager:
-                        self.showGUI()
-                        #self.loadModule(module='Manager', name='Manager', config={})
-                    raise
-                    
-        except:
-            printExc("\nError while acting on command line options: (but continuing on anyway..)")
+            if Manager.CREATED:
+                raise Exception("Manager object already created!")
             
+            global LOG
+            LOG = LogWindow(self)
+            self.logWindow = LOG
+            
+            if argv is not None:
+                try:
+                    opts, args = getopt.getopt(argv, 'c:m:b:s:d:n', ['config=', 'module=', 'baseDir=', 'storageDir=', 'disable=', 'noManager'])
+                except getopt.GetoptError, err:
+                    print str(err)
+                    print """
+    Valid options are:
+        -c --config=     configuration file
+        -m --module=     module name to load
+        -b --baseDir=    base directory to use
+        -s --storageDir= storage directory to use
+        -n --noManager   Do not load manager module
+        -d --disable=    Disable the device specified
+    """
+            QtCore.QObject.__init__(self)
+            self.alreadyQuit = False
+            self.taskLock = Mutex(QtCore.QMutex.Recursive)
+            atexit.register(self.quit)
+            self.devices = OrderedDict()
+            self.modules = OrderedDict()
+            self.config = OrderedDict()
+            self.definedModules = OrderedDict()
+            #self.devRack = None
+            #self.dataManager = DataManager()
+            self.currentDir = None
+            self.baseDir = None
+            self.gui = None
+            self.shortcuts = []
+            self.disableDevs = []
+            
+            self.interfaceDir = InterfaceDirectory()
+    
+            
+            ## Handle command line options
+            loadModules = []
+            setBaseDir = None
+            setStorageDir = None
+            loadManager = True
+            for o, a in opts:
+                if o in ['-c', '--config']:
+                    configFile = a
+                elif o in ['-m', '--module']:
+                    loadModules.append(a)
+                elif o in ['-b', '--baseDir']:
+                    setBaseDir = a
+                elif o in ['-s', '--storageDir']:
+                    setStorageDir = a
+                elif o in ['-n', '--noManager']:
+                    loadManager = False
+                elif o in ['-d', '--disable']:
+                    self.disableDevs.append(a)
+                else:
+                    print "Unhandled option", o, a
+            
+            ## Read in configuration file
+            if configFile is None:
+                raise Exception("No configuration file specified!")
+            self.configDir = os.path.dirname(configFile)
+            self.readConfig(configFile)
+            
+            logMsg('ACQ4 started.', importance=9)
+            
+            Manager.CREATED = True
+            Manager.single = self
+            
+            ## Act on options if they were specified..
+            try:
+                if setBaseDir is not None:
+                    self.setBaseDir(setBaseDir)
+                if setStorageDir is not None:
+                    self.setCurrentDir(setStorageDir)
+                if loadManager:
+                    #mm = self.loadModule(module='Manager', name='Manager', config={})
+                    self.showGUI()
+                    self.createWindowShortcut('F1', self.gui.win)
+                for m in loadModules:
+                    try:
+                        self.loadDefinedModule(m)
+                    except:
+                        if not loadManager:
+                            self.showGUI()
+                            #self.loadModule(module='Manager', name='Manager', config={})
+                        raise
+                        
+            except:
+                printExc("\nError while acting on command line options: (but continuing on anyway..)")
+                
+                
+            
+        finally:
+            if len(self.modules) == 0:
+                self.quit()
+                raise Exception("No modules loaded during startup, exiting now.")
             
         #win = QtGui.QApplication.instance().activeWindow()
-        if len(self.modules) == 0:
-            self.quit()
-            raise Exception("No modules loaded during startup, exiting now.")
         win = self.modules[self.modules.keys()[0]].window()
         #if win is None:   ## Breaks on some systems..
             #raise Exception("No GUI windows created during startup, exiting now.")
