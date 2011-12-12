@@ -1126,7 +1126,7 @@ class Handle(UIGraphicsItem):
     
     def __init__(self, radius, typ=None, pen=(200, 200, 220), parent=None):
         #print "   create item with parent", parent
-        self.bounds = QtCore.QRectF(-1e-10, -1e-10, 2e-10, 2e-10)
+        #self.bounds = QtCore.QRectF(-1e-10, -1e-10, 2e-10, 2e-10)
         UIGraphicsItem.__init__(self, parent=parent)
         #self.setFlags(self.ItemIgnoresTransformations | self.ItemSendsScenePositionChanges)
         self.setZValue(11)
@@ -1252,15 +1252,18 @@ class Handle(UIGraphicsItem):
             
     def updateShape(self):
         ## determine rotation of transform
-        m = self.sceneTransform()
+        #m = self.sceneTransform()
         #mi = m.inverted()[0]
-        v = m.map(QtCore.QPointF(1, 0)) - m.map(QtCore.QPointF(0, 0))
-        va = np.arctan2(v.y(), v.x())
         
         dt = self.deviceTransform()
+        
         if dt is None:
             self._shape = self.path
             return
+        
+        v = dt.map(QtCore.QPointF(1, 0)) - dt.map(QtCore.QPointF(0, 0))
+        va = np.arctan2(v.y(), v.x())
+        
         dti = dt.inverted()[0]
         devPos = dt.map(QtCore.QPointF(0,0))
         tr = QtGui.QTransform()
