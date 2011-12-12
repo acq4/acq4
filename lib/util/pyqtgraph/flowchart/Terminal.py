@@ -161,22 +161,27 @@ class Terminal:
         return set([t.node() for t in self.connections() if t.isInput()])
         
     def connectTo(self, term, connectionItem=None):
-        if self.connectedTo(term):
-            raise Exception('Already connected')
-        if term is self:
-            raise Exception('Not connecting terminal to self')
-        if term.node() is self.node():
-            raise Exception("Can't connect to terminal on same node.")
-        for t in [self, term]:
-            if t.isInput() and not t._multi and len(t.connections()) > 0:
-                raise Exception("Cannot connect %s <-> %s: Terminal %s is already connected to %s (and does not allow multiple connections)" % (self, term, t, t.connections().keys()))
-        #if self.hasInput() and term.hasInput():
-            #raise Exception('Target terminal already has input')
+        try:
+            if self.connectedTo(term):
+                raise Exception('Already connected')
+            if term is self:
+                raise Exception('Not connecting terminal to self')
+            if term.node() is self.node():
+                raise Exception("Can't connect to terminal on same node.")
+            for t in [self, term]:
+                if t.isInput() and not t._multi and len(t.connections()) > 0:
+                    raise Exception("Cannot connect %s <-> %s: Terminal %s is already connected to %s (and does not allow multiple connections)" % (self, term, t, t.connections().keys()))
+            #if self.hasInput() and term.hasInput():
+                #raise Exception('Target terminal already has input')
             
-        #if term in self.node().terminals.values():
-            #if self.isOutput() or term.isOutput():
-                #raise Exception('Can not connect an output back to the same node.')
-        
+            #if term in self.node().terminals.values():
+                #if self.isOutput() or term.isOutput():
+                    #raise Exception('Can not connect an output back to the same node.')
+        except:
+            if connectionItem is not None:
+                connectionItem.close()
+            raise
+            
         if connectionItem is None:
             connectionItem = ConnectionItem(self.graphicsItem(), term.graphicsItem())
             #self.graphicsItem().scene().addItem(connectionItem)
@@ -200,7 +205,9 @@ class Terminal:
         if not self.connectedTo(term):
             return
         item = self._connections[term]
-        item.scene().removeItem(item)
+        print "removing connection", item
+        #item.scene().removeItem(item)
+        item.close()
         del self._connections[term]
         del term._connections[self]
         self.recolor()
@@ -212,6 +219,7 @@ class Terminal:
             #term.inputChanged(self)
         #if term.isInput() and term.isOutput():
             #self.inputChanged(term)
+            
         
     def disconnectAll(self):
         for t in self._connections.keys():
@@ -362,7 +370,7 @@ class TerminalGraphicsItem(GraphicsObject):
         if self.menu is None:
             self.menu = QtGui.QMenu()
             self.menu.setTitle("Terminal")
-            self.menu.addAction("Remove", self.removeSelf)
+            self.menu.addAction("Remove terminal", self.removeSelf)
         return self.menu
     
     def getSubMenus(self):
@@ -429,7 +437,8 @@ class TerminalGraphicsItem(GraphicsObject):
                 
                 if not gotTarget:
                     #print "remove unused connection"
-                    self.scene().removeItem(self.newConnection)
+                    #self.scene().removeItem(self.newConnection)
+                    self.newConnection.close()
                 self.newConnection = None
         else:
             if self.newConnection is not None:
@@ -466,6 +475,11 @@ class ConnectionItem(GraphicsObject):
         self.source.getViewBox().addItem(self.line)
         self.updateLine()
         self.setZValue(0)
+        
+    def close(self):
+        if self.scene() is not None:
+            self.scene().removeItem(self.line)
+            self.scene().removeItem(self)
         
     def setTarget(self, target):
         self.target = target

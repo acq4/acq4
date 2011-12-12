@@ -168,6 +168,7 @@ class Flowchart(Node):
         item = node.graphicsItem()
         #item.setParentItem(self.chartGraphicsItem())
         self.viewBox.addItem(item)
+        #item.setPos(pos2.x(), pos2.y())
         item.moveBy(*pos)
         self._nodes[name] = node
         self.widget().addNode(node) 
@@ -768,7 +769,8 @@ class FlowchartWidget(dockarea.DockArea):
         self._scene.selectionChanged.connect(self.selectionChanged)
         self._scene.sigMouseHover.connect(self.hoverOver)
         #self.view.sigClicked.connect(self.showViewMenu)
-        self._scene.sigSceneContextMenuEvent.connect(self.showViewMenu)
+        self._scene.sigSceneContextMenu.connect(self.showViewMenu)
+        self._viewBox.sigActionPositionChanged.connect(self.menuPosChanged)
         
         
     def reloadLibrary(self):
@@ -792,12 +794,15 @@ class FlowchartWidget(dockarea.DockArea):
         self.nodeMenu.triggered.connect(self.nodeMenuTriggered)
         return self.nodeMenu
     
+    def menuPosChanged(self, pos):
+        self.menuPos = pos
+    
     def showViewMenu(self, ev):
         #QtGui.QPushButton.mouseReleaseEvent(self.ui.addNodeBtn, ev)
         #if ev.button() == QtCore.Qt.RightButton:
             #self.menuPos = self.view.mapToScene(ev.pos())
             #self.nodeMenu.popup(ev.globalPos())
-        
+        print "Flowchart.showViewMenu called"
         self.menuPos = ev.scenePos()
         self.nodeMenu.popup(ev.screenPos())
         
@@ -809,7 +814,10 @@ class FlowchartWidget(dockarea.DockArea):
 
     def nodeMenuTriggered(self, action):
         nodeType = action.nodeType
-        self.chart.createNode(nodeType, pos=self.menuPos)
+        #pos = self.viewBox().childTransform().map(self.viewBox().mapFromScene(self.menuPos))
+        pos = self.viewBox().mapSceneToView(self.menuPos)
+
+        self.chart.createNode(nodeType, pos=pos)
 
 
     def selectionChanged(self):

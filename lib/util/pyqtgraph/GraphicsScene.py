@@ -57,7 +57,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
     
     
     _addressCache = weakref.WeakValueDictionary()
-    sigSceneContextMenuEvent = QtCore.Signal(object)
+    sigSceneContextMenu = QtCore.Signal(object)
     sigMouseHover = QtCore.Signal(object)
     
     @classmethod
@@ -203,7 +203,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
         ## Send a MouseDragEvent to the current dragItem or to 
         ## items near the beginning of the drag
         event = MouseDragEvent(ev, self.clickEvents[0], self.lastDrag, start=init, finish=final)
-        print "dragEvent: init=", init, 'final=', final, 'self.dragItem=', self.dragItem
+        #print "dragEvent: init=", init, 'final=', final, 'self.dragItem=', self.dragItem
         if init and self.dragItem is None:
             acceptedItem = self.lastHoverEvent.dragItems().get(event.button(), None)
             if acceptedItem is not None:
@@ -250,6 +250,10 @@ class GraphicsScene(QtGui.QGraphicsScene):
                         item.mouseClickEvent(ev)
                         if ev.isAccepted():
                             break
+                if not ev.isAccepted() and ev.button() is QtCore.Qt.RightButton:
+                    print "GraphicsScene emitting sigSceneContextMenu"
+                    self.sigSceneContextMenu.emit(ev)
+                    ev.accept()
         return ev.isAccepted()
         
     #def claimEvent(self, item, button, eventType):

@@ -15,6 +15,7 @@ class ViewBox(GraphicsWidget):
     sigXRangeChanged = QtCore.Signal(object, object)
     sigRangeChangedManually = QtCore.Signal(object)
     sigRangeChanged = QtCore.Signal(object, object)
+    sigActionPositionChanged = QtCore.Signal(object)
     
     def __init__(self, parent=None, border=None, lockAspect=False, enableMouse=True, invertY=False):
         GraphicsWidget.__init__(self, parent)
@@ -174,10 +175,32 @@ class ViewBox(GraphicsWidget):
                 self.updateMatrix()
         
     def childTransform(self):
+        """
+        Return the transform that maps from child(item in the childGroup) coordinates to local coordinates.
+        (This maps from inside the viewbox to outside)
+        """ 
         m = self.childGroup.transform()
         m1 = QtGui.QTransform()
         m1.translate(self.childGroup.pos().x(), self.childGroup.pos().y())
         return m*m1
+
+    def mapToView(self, obj):
+        """Maps from the local coordinates of the ViewBox to the coordinate system displayed inside the ViewBox"""
+        m = self.childTransform().inverted()[0]
+        return m.map(obj)
+
+    def mapFromView(self, obj):
+        """Maps from the coordinate system displayed inside the ViewBox to the local coordinates of the ViewBox"""
+        m = self.childTransform()
+        return m.map(obj)
+
+    def mapSceneToView(self, obj):
+        """Maps from scene coordinates to the coordinate system displayed inside the ViewBox"""
+        return self.mapToView(self.mapFromScene(obj))
+
+    def mapViewToScene(self, obj):
+        """Maps from the coordinate system displayed inside the ViewBox to scene coordinates"""
+        return self.mapToScene(self.mapFromView(obj))
 
     def viewScale(self):
         vr = self.viewRect()
@@ -307,21 +330,13 @@ class ViewBox(GraphicsWidget):
     
     def raiseContextMenu(self, ev):
         #print "viewbox.raiseContextMenu called."
-        #ownMenu = self.getMenu()
-        #if type(ownMenu) is list:
-            #menu = QtGui.QMenu()
-            #for m in ownMenu:
-                #menu.addMenu(m)
-            #ownMenu = menu
         
-        #self.menu = self.scene().addSubContextMenus(self, ownMenu)
-        #if self.menu is not None:
-            #print "1:", [str(a.text()) for a in self.menu.actions()]
-
         self.getMenu()
         #print "2:", [str(a.text()) for a in self.menu.actions()]
         pos = ev.screenPos()
+        pos2 = ev.scenePos()
         #print "3:", [str(a.text()) for a in self.menu.actions()]
+        self.sigActionPositionChanged.emit(pos2)
 
         self.menu.popup(QtCore.QPoint(pos.x(), pos.y()))
         #print "4:", [str(a.text()) for a in self.menu.actions()]

@@ -64,6 +64,7 @@ class Node(QtCore.QObject):
             term = self.terminals[name]
         
         #print "remove", name
+        term.disconnectAll()
         term.close()
         del self.terminals[name]
         if name in self._inputs:
