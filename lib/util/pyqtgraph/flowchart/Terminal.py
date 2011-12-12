@@ -205,7 +205,7 @@ class Terminal:
         if not self.connectedTo(term):
             return
         item = self._connections[term]
-        print "removing connection", item
+        #print "removing connection", item
         #item.scene().removeItem(item)
         item.close()
         del self._connections[term]
@@ -379,36 +379,6 @@ class TerminalGraphicsItem(GraphicsObject):
     def removeSelf(self):
         self.term.node().removeTerminal(self.term)
         
-    def mouseMoveEvent(self, ev):
-        ev.ignore()
-        #if self.newConnection is None:
-            #self.newConnection = ConnectionItem(self)
-            ##self.scene().addItem(self.newConnection)
-            #self.getViewBox().addItem(self.newConnection)
-        #self.newConnection.setTarget(ev.scenePos())
-        
-    def mouseReleaseEvent(self, ev):
-        ev.ignore()
-        #if self.newConnection is not None:
-            #items = self.scene().items(ev.scenePos())
-            #gotTarget = False
-            #for i in items:
-                #if isinstance(i, TerminalGraphicsItem):
-                    #self.newConnection.setTarget(i)
-                    #try:
-                        #self.term.connectTo(i.term, self.newConnection)
-                        #gotTarget = True
-                    #except:
-                        #self.scene().removeItem(self.newConnection)
-                        #self.newConnection = None
-                        #raise
-                    #break
-            
-            #if not gotTarget:
-                ##print "remove unused connection"
-                #self.scene().removeItem(self.newConnection)
-            #self.newConnection = None
-    
     def mouseDragEvent(self, ev):
         ev.accept()
         if ev.isStart():

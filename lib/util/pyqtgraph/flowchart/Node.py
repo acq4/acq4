@@ -64,7 +64,7 @@ class Node(QtCore.QObject):
             term = self.terminals[name]
         
         #print "remove", name
-        term.disconnectAll()
+        #term.disconnectAll()
         term.close()
         del self.terminals[name]
         if name in self._inputs:
@@ -420,28 +420,17 @@ class NodeGraphicsItem(GraphicsObject):
         else:
             p.setBrush(QtGui.QBrush(QtGui.QColor(200, 200, 200)))
         p.drawRect(bounds)
-        
-    def mouseMoveEvent(self, ev):
-        #QtGui.QGraphicsItem.mouseMoveEvent(self, ev)
-        ev.ignore()
 
+        
     def mousePressEvent(self, ev):
         ev.ignore()
-        #sel = self.isSelected()
-        #ret = QtGui.QGraphicsItem.mousePressEvent(self, ev)
-        #if not sel and self.isSelected():
-            ##self.setBrush(QtGui.QBrush(QtGui.QColor(200, 200, 255)))
-            ##self.emit(QtCore.SIGNAL('selected'))
-            #self.update()
-        #return ret
-    def mouseReleaseEvent(self, ev):
-        ev.ignore()
+
 
     def mouseClickEvent(self, ev):
-        print "Node.mouseClickEvent called."
+        #print "Node.mouseClickEvent called."
         if int(ev.button()) == int(QtCore.Qt.LeftButton):
             ev.accept()
-            print "    ev.button: left"
+            #print "    ev.button: left"
             sel = self.isSelected()
             #ret = QtGui.QGraphicsItem.mousePressEvent(self, ev)
             self.setSelected(True)
@@ -453,14 +442,14 @@ class NodeGraphicsItem(GraphicsObject):
             #return ret
         
         elif int(ev.button()) == int(QtCore.Qt.RightButton):
-            print "    ev.button: right"
+            #print "    ev.button: right"
             ev.accept()
             #pos = ev.screenPos()
             self.raiseContextMenu(ev)
             #self.menu.popup(QtCore.QPoint(pos.x(), pos.y()))
             
     def mouseDragEvent(self, ev):
-        print "Node.mouseDrag"
+        #print "Node.mouseDrag"
         if ev.button() == QtCore.Qt.LeftButton:
             ev.accept()
             self.setPos(self.pos()+self.mapToParent(ev.pos())-self.mapToParent(ev.lastPos()))

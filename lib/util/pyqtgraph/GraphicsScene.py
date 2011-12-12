@@ -105,9 +105,9 @@ class GraphicsScene(QtGui.QGraphicsScene):
         self._moveDistance = d
 
     def mousePressEvent(self, ev):
-        print 'scenePress'
+        #print 'scenePress'
         QtGui.QGraphicsScene.mousePressEvent(self, ev)
-        print "mouseGrabberItem: ", self.mouseGrabberItem()
+        #print "mouseGrabberItem: ", self.mouseGrabberItem()
         if self.mouseGrabberItem() is None:  ## nobody claimed press; we are free to generate drag/click events
             self.clickEvents.append(MouseClickEvent(ev))
         #else:
@@ -181,7 +181,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
             else:
                 cev = [e for e in self.clickEvents if int(e.button()) == int(ev.button())]
                 if self.sendClickEvent(cev[0]):
-                    print "sent click event"
+                    #print "sent click event"
                     ev.accept()
                 self.clickEvents.remove(cev[0])
                 
@@ -270,13 +270,14 @@ class GraphicsScene(QtGui.QGraphicsScene):
         items = QtGui.QGraphicsScene.items(self, *args)
         ## PyQt bug: items() returns a list of QGraphicsItem instances. If the item is subclassed from QGraphicsObject,
         ## then the object returned will be different than the actual item that was originally added to the scene
-        if HAVE_SIP and isinstance(self, sip.wrapper):
-            items2 = []
-            for i in items:
-                addr = sip.unwrapinstance(sip.cast(i, QtGui.QGraphicsItem))
-                i2 = GraphicsScene._addressCache.get(addr, i)
-                #print i, "==>", i2
-                items2.append(i2)
+        items2 = map(self.translateGraphicsItem, items)
+        #if HAVE_SIP and isinstance(self, sip.wrapper):
+            #items2 = []
+            #for i in items:
+                #addr = sip.unwrapinstance(sip.cast(i, QtGui.QGraphicsItem))
+                #i2 = GraphicsScene._addressCache.get(addr, i)
+                ##print i, "==>", i2
+                #items2.append(i2)
         #print 'items:', items
         return items2
     
@@ -284,13 +285,15 @@ class GraphicsScene(QtGui.QGraphicsScene):
         items = QtGui.QGraphicsScene.selectedItems(self, *args)
         ## PyQt bug: items() returns a list of QGraphicsItem instances. If the item is subclassed from QGraphicsObject,
         ## then the object returned will be different than the actual item that was originally added to the scene
-        if HAVE_SIP and isinstance(self, sip.wrapper):
-            items2 = []
-            for i in items:
-                addr = sip.unwrapinstance(sip.cast(i, QtGui.QGraphicsItem))
-                i2 = GraphicsScene._addressCache.get(addr, i)
-                #print i, "==>", i2
-                items2.append(i2)
+        #if HAVE_SIP and isinstance(self, sip.wrapper):
+            #items2 = []
+            #for i in items:
+                #addr = sip.unwrapinstance(sip.cast(i, QtGui.QGraphicsItem))
+                #i2 = GraphicsScene._addressCache.get(addr, i)
+                ##print i, "==>", i2
+                #items2.append(i2)
+        items2 = map(self.translateGraphicsItem, items)
+
         #print 'items:', items
         return items2
 
@@ -299,10 +302,11 @@ class GraphicsScene(QtGui.QGraphicsScene):
         
         ## PyQt bug: items() returns a list of QGraphicsItem instances. If the item is subclassed from QGraphicsObject,
         ## then the object returned will be different than the actual item that was originally added to the scene
-        if HAVE_SIP and isinstance(self, sip.wrapper):
-            addr = sip.unwrapinstance(sip.cast(item, QtGui.QGraphicsItem))
-            item = GraphicsScene._addressCache.get(addr, item)
-        return item
+        #if HAVE_SIP and isinstance(self, sip.wrapper):
+            #addr = sip.unwrapinstance(sip.cast(item, QtGui.QGraphicsItem))
+            #item = GraphicsScene._addressCache.get(addr, item)
+        #return item
+        return self.translateGraphicsItem(item)
 
     def itemsNearEvent(self, event, selMode=QtCore.Qt.IntersectsItemShape, sortOrder=QtCore.Qt.DescendingOrder):
         """
@@ -387,8 +391,8 @@ class GraphicsScene(QtGui.QGraphicsScene):
             
         return menu
 
-    @classmethod
-    def translateGraphicsItem(cls, item):
+    @staticmethod
+    def translateGraphicsItem(item):
         ## for fixing pyqt bugs where the wrong item is returned
         if HAVE_SIP and isinstance(item, sip.wrapper):
             addr = sip.unwrapinstance(sip.cast(item, QtGui.QGraphicsItem))
