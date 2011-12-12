@@ -16,7 +16,11 @@ def excepthook(*args):
     #print args
     ret = original_excepthook(*args)
     #getManager().logExc(*args)
+    
+    ## unhandled exceptions generate an error by default, but this
+    ## can be overridden by raising HelpfulException(msgType='...')
     logMsg("Unhandled exception: ", exception=args, msgType='error')
+    
     sys.last_traceback = None           ## the important bit
 
 sys.excepthook = excepthook

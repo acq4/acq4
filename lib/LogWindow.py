@@ -85,8 +85,6 @@ class LogWindow(QtGui.QMainWindow):
            Feel free to add your own keyword arguments. These will be saved in the log.txt file, but will not affect the content or way that messages are displayed.
         """
 
-        if msgType == 'error':
-            self.flashButtons()
         
         try:
             currentDir = self.manager.getCurrentDir()
@@ -113,9 +111,17 @@ class LogWindow(QtGui.QMainWindow):
             entry[k] = kwargs[k]
             
         self.processEntry(entry)
+        
+        ## Copy in information from the exception if it happens to be there
+        if entry.get('exception', None) is not None and 'msgType' in entry['exception']:
+            entry['msgType'] = entry['exception']['msgType']
+        
         self.saveEntry({name:entry})
         self.wid.addEntry(entry) ## takes care of displaying the entry if it passes the current filters on the logWidget
         #self.wid.displayEntry(entry)
+        
+        if entry['msgType'] == 'error':
+            self.flashButtons()
         
         
     def logExc(self, *args, **kwargs):

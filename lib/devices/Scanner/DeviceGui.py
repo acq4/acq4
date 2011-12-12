@@ -9,6 +9,7 @@ from debug import *
 import numpy as np
 import pyqtgraph.WidgetGroup as WidgetGroup
 from pyqtgraph.ProgressDialog import ProgressDialog
+from HelpfulException import HelpfulException
 
 class ScannerDeviceGui(QtGui.QWidget):
     
@@ -206,7 +207,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         QtGui.QApplication.instance().processEvents()
         if self.progressDlg.wasCanceled():
             self.progressDlg.setValue(100)
-            raise Exception('Calibration canceled by user.')
+            raise HelpfulException('Calibration canceled by user.', msgType='warning')
 
     def runCalibrationInner(self):
         """The scanner calibration routine:
