@@ -315,9 +315,37 @@ class ViewBox(GraphicsWidget):
             #ownMenu = menu
         
         #self.menu = self.scene().addSubContextMenus(self, ownMenu)
-        self.menu = self.getMenu()
+        #if self.menu is not None:
+            #print "1:", [str(a.text()) for a in self.menu.actions()]
+
+        self.getMenu()
+        #print "2:", [str(a.text()) for a in self.menu.actions()]
         pos = ev.screenPos()
+        #print "3:", [str(a.text()) for a in self.menu.actions()]
+
         self.menu.popup(QtCore.QPoint(pos.x(), pos.y()))
+        #print "4:", [str(a.text()) for a in self.menu.actions()]
+        
+    def getMenu(self):
+        menu = QtGui.QMenu()
+        menu.setTitle("ViewBox options")
+        menu.addAction("Auto range", self.autoRange)
+            
+            #leftMenu = QtGui.QMenu("Use left button for")
+            #group = QtGui.QActionGroup(self.menu)
+            #pan = leftMenu.addAction("pan", self.toggleLeftAction)
+            #zoom = leftMenu.addAction("zoom", self.toggleLeftAction)
+            #pan.setCheckable(True)
+            #zoom.setCheckable(True)
+            #pan.setActionGroup(group)
+            #zoom.setActionGroup(group)
+            #self.menu.addMenu(leftMenu)
+        #print "1d:", [str(a.text()) for a in self.menu.actions()]
+        if self.menu is None:
+            self.menu = menu
+        #print "1e:", [str(a.text()) for a in self.menu.actions()]
+        return menu
+        
 
     def mouseDragEvent(self, ev):
         #print 'vbDragEvent'
@@ -552,20 +580,4 @@ class ViewBox(GraphicsWidget):
             #p.fillRect(bounds, QtGui.QColor(0, 0, 0))
             p.drawRect(bounds)
 
-    def getMenu(self):
-        menu = QtGui.QMenu("ViewBox options")
-        menu.addAction("Auto range", self.autoRange)
-            
-            #leftMenu = QtGui.QMenu("Use left button for")
-            #group = QtGui.QActionGroup(self.menu)
-            #pan = leftMenu.addAction("pan", self.toggleLeftAction)
-            #zoom = leftMenu.addAction("zoom", self.toggleLeftAction)
-            #pan.setCheckable(True)
-            #zoom.setCheckable(True)
-            #pan.setActionGroup(group)
-            #zoom.setActionGroup(group)
-            #self.menu.addMenu(leftMenu)
-        if self.menu is None:
-            self.menu = menu
-        return menu
-        
+    

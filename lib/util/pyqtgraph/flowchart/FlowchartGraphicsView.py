@@ -66,11 +66,16 @@ class FlowchartViewBox(ViewBox):
         ViewBox.__init__(self, *args, **kwargs)
         self.widget = widget
         self.menu = None
+        self._subMenus = None ## need a place to store the menus otherwise they dissappear (even though they've been added to other menus) ((yes, it doesn't make sense))
         
     def getMenu(self):
         self.menu = QtGui.QMenu()
-        for menu in self.getSubMenus():
+        #print "1a:", [str(a.text()) for a in self.menu.actions()]
+        self._subMenus = self.getSubMenus()
+        for menu in self._subMenus:
             self.menu.addMenu(menu)
+            #print "1b:", [str(a.text()) for a in self.menu.actions()]
+        #print "1c:", [str(a.text()) for a in self.menu.actions()]
         return self.menu
     
     def getSubMenus(self):
