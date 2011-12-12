@@ -405,7 +405,7 @@ class ViewBox(GraphicsWidget):
         if ev.button() & (QtCore.Qt.LeftButton | QtCore.Qt.MidButton):
             if self.useLeftButtonPan == False:
                 if ev.isFinish():  ## This is the final move in the drag; change the view scale now
-                    print "finish"
+                    #print "finish"
                     self.rbScaleBox.hide()
                     #ax = QtCore.QRectF(Point(self.pressPos), Point(self.mousePos))
                     ax = QtCore.QRectF(Point(ev.buttonDownPos(ev.button())), Point(pos))
@@ -423,7 +423,7 @@ class ViewBox(GraphicsWidget):
                 self.translateBy(tr, viewCoords=True)
                 self.sigRangeChangedManually.emit(self.mouseEnabled)
         elif ev.button() & QtCore.Qt.RightButton:
-            print "vb.rightDrag"
+            #print "vb.rightDrag"
             if self.aspectLocked is not False:
                 mask[0] = 0
             

@@ -93,6 +93,7 @@ class Flowchart(Node):
         self.outputNode.sigTerminalRenamed.connect(self.internalTerminalRenamed)
         self.inputNode.sigTerminalRenamed.connect(self.internalTerminalRenamed)
         
+        self.viewBox.autoRange()
             
         for name, opts in terminals.iteritems():
             self.addTerminal(name, **opts)
@@ -521,14 +522,14 @@ class Flowchart(Node):
 class FlowchartGraphicsItem(GraphicsObject):
     
     def __init__(self, chart):
-        print "FlowchartGraphicsItem.__init__"
+        #print "FlowchartGraphicsItem.__init__"
         #QtGui.QGraphicsItem.__init__(self)
         GraphicsObject.__init__(self)
         self.chart = chart ## chart is an instance of Flowchart()
         self.updateTerminals()
         
     def updateTerminals(self):
-        print "FlowchartGraphicsItem.updateTerminals"
+        #print "FlowchartGraphicsItem.updateTerminals"
         self.terminals = {}
         bounds = self.boundingRect()
         inp = self.chart.inputs()
@@ -551,7 +552,7 @@ class FlowchartGraphicsItem(GraphicsObject):
             y += dy
         
     def boundingRect(self):
-        print "FlowchartGraphicsItem.boundingRect"
+        #print "FlowchartGraphicsItem.boundingRect"
         return QtCore.QRectF()
         
     def paint(self, p, *args):
@@ -578,7 +579,7 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         self.ui.ctrlList.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         
         self.chartWidget = FlowchartWidget(chart, self)
-        self.chartWidget.viewBox().autoRange()
+        #self.chartWidget.viewBox().autoRange()
         self.cwWin = QtGui.QMainWindow()
         self.cwWin.setWindowTitle('Flowchart')
         self.cwWin.resize(1000,800)
@@ -821,9 +822,9 @@ class FlowchartWidget(dockarea.DockArea):
 
 
     def selectionChanged(self):
-        print "FlowchartWidget.selectionChanged called."
+        #print "FlowchartWidget.selectionChanged called."
         items = self._scene.selectedItems()
-        print "     scene.selectedItems: ", items
+        #print "     scene.selectedItems: ", items
         if len(items) == 0:
             data = None
         else:
