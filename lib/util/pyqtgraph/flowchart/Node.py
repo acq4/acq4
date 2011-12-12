@@ -481,7 +481,7 @@ class NodeGraphicsItem(GraphicsObject):
         return self.menu
     
     def getSubMenus(self):
-        return [self.menu]
+        return [self.getMenu()]
     
     def raiseContextMenu(self, ev):
         menu = self.scene().addSubContextMenus(self, self.getMenu())

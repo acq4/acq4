@@ -82,7 +82,8 @@ class FlowchartViewBox(ViewBox):
         menu1 = self.widget.buildMenu()
         menu1.setTitle("Add node")
         menu2 = ViewBox.getMenu(self)
-        return [menu1, menu2]
+        self._subMenus = [menu1, menu2]
+        return self._subMenus
     
     
         

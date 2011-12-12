@@ -94,7 +94,8 @@ class ViewBox(GraphicsWidget):
             self.axHistoryPointer = ptr
             self.showAxRect(self.axHistory[ptr])
             
-    def toggleLeftAction(self, act):
+    def leftButtonActionToggledFromMenu(self, act):
+        print "leftButton...", self, act
         if act.text() is 'pan':
             self.setLeftButtonAction('pan')
         elif act.text() is 'zoom':
@@ -346,20 +347,31 @@ class ViewBox(GraphicsWidget):
         menu.setTitle("ViewBox options")
         menu.addAction("Auto range", self.autoRange)
             
-            #leftMenu = QtGui.QMenu("Use left button for")
-            #group = QtGui.QActionGroup(self.menu)
-            #pan = leftMenu.addAction("pan", self.toggleLeftAction)
-            #zoom = leftMenu.addAction("zoom", self.toggleLeftAction)
-            #pan.setCheckable(True)
-            #zoom.setCheckable(True)
-            #pan.setActionGroup(group)
-            #zoom.setActionGroup(group)
-            #self.menu.addMenu(leftMenu)
+        self._leftMenu = QtGui.QMenu("Use left button for")
+        self._leftMenu.setEnabled(False)
+        group = QtGui.QActionGroup(self.menu)
+        pan = self._leftMenu.addAction("pan", self.leftButtonActionToggledFromMenu)
+        zoom = self._leftMenu.addAction("zoom", self.leftButtonActionToggledFromMenu)
+        pan.setCheckable(True)
+        zoom.setCheckable(True)
+        zoom.setChecked(True)
+        pan.setActionGroup(group)
+        zoom.setActionGroup(group)
+        self._pan = pan
+        self._zoom = zoom
+        menu.addMenu(self._leftMenu)
+        
+        grid = menu.addAction("Show grid")
+        grid.setCheckable(True)
+        grid.setEnabled(False)
         #print "1d:", [str(a.text()) for a in self.menu.actions()]
-        if self.menu is None:
+        if self.menu is None: ## it's important that self.menu is only set if it is None, because otherwise we overwrite additions from sub-classes
             self.menu = menu
         #print "1e:", [str(a.text()) for a in self.menu.actions()]
         return menu
+    
+    def getSubMenus(self):
+        return [self.getMenu()]
         
 
     def mouseDragEvent(self, ev):

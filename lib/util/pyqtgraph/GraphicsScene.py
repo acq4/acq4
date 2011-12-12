@@ -372,22 +372,22 @@ class GraphicsScene(QtGui.QGraphicsScene):
             return widget
         
     def addSubContextMenus(self, sender, menu):
-        #items = self.itemsNearEvent(ev)
-        menu.addSeparator()
+        
         item = sender
+        menusToAdd = []
         while item.parentItem() is not None:
             item = item.parentItem()
-        #for item in items:
-            #if item is sender:
-                #continue
-            if not hasattr(item, "getMenu"):
+            if not hasattr(item, "getSubMenus"):
                 continue
             subMenus = item.getSubMenus()
-            if type(subMenus) is not list: ## so that some items (like FlowchartViewBox) can return multiple menus
-                subMenus = [subMenus]
             for sm in subMenus:
-                if sm is not None:
-                    menu.addMenu(sm)
+                menusToAdd.append(sm)
+        
+        if len(menusToAdd) > 0:
+            menu.addSeparator()
+            
+        for m in menusToAdd:
+            menu.addMenu(m)
             
         return menu
 
