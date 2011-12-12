@@ -212,12 +212,12 @@ class ViewBox(GraphicsWidget):
         self.setRange(QtCore.QRectF(tl, br), padding=0)
         
     def translateBy(self, t, viewCoords=False):
-        t = np.array(t, dtype=float)
+        t = Point(t)
         if viewCoords:  ## scale from pixels
-            t /= self.viewScale()
+            t /= Point(self.viewScale())
         
         vr = self.viewRect()
-        self.setRange(vr.translated(Point(t)), padding=0)
+        self.setRange(vr.translated(t), padding=0)
         
     def wheelEvent(self, ev, axis=None):
         mask = np.array(self.mouseEnabled, dtype=np.float)

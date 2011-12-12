@@ -162,11 +162,17 @@ class ScannerProtoGui(ProtocolGui):
             self.currentCamMod.ui.removeItem(self.spotMarker)
             #self.currentCamMod.ui.removeItem(self.currentTargetMarker)
             #QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
-            self.currentCamMod.ui.sigCameraScaleChanged.disconnect(self.objectiveChanged)
+            try:
+                self.currentCamMod.ui.sigCameraScaleChanged.disconnect(self.objectiveChanged)
+            except TypeError:
+                pass
             
         if self.currentScope is not None:
             #QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
-            self.currentScope.sigObjectiveChanged.disconnect(self.objectiveChanged)
+            try:
+                self.currentScope.sigObjectiveChanged.disconnect(self.objectiveChanged)
+            except TypeError:
+                pass
             
         self.currentCamMod = camMod
         if camDev is None or camMod is None:
@@ -598,7 +604,7 @@ class ScannerProtoGui(ProtocolGui):
         occArea = QtGui.QPainterPath()
         for i in items:
             if isinstance(i, TargetOcclusion):
-                occArea |= i.mapToScene(i.shape())
+                occArea |= i.mapToView(i.shape())
             
         for i in items:
             if isinstance(i, TargetOcclusion) or isinstance(i, TargetProgram) or isinstance(i, graphicsItems.SpiralROI):
@@ -819,7 +825,7 @@ class TargetPoint(graphicsItems.EllipseROI):
             self.scale(s, [0.5, 0.5])
         
     def listPoints(self):
-        p = self.mapToScene(self.boundingRect().center())
+        p = self.mapToView(self.boundingRect().center())
         return [(p.x(), p.y())]
         
     def setPen(self, pen):
@@ -1021,7 +1027,7 @@ class TargetGrid(graphicsItems.ROI):
     def listPoints(self):
         pts = []
         for p in self.points:
-            p1 = self.mapToScene(p[0], p[1])
+            p1 = self.mapToView(Point(p[0], p[1]))
             pts.append((p1.x(), p1.y()))
         
         return pts

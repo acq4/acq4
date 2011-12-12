@@ -284,7 +284,7 @@ class ROI(GraphicsObject):
 
     def hoverEvent(self, ev):
         if self.translatable and (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
-            self.currentPen = fn.mkPen(255, 0, 0)
+            self.currentPen = fn.mkPen(255, 255, 0)
         else:
             self.currentPen = self.pen
         self.update()
@@ -1126,7 +1126,7 @@ class Handle(UIGraphicsItem):
     
     def __init__(self, radius, typ=None, pen=(200, 200, 220), parent=None):
         #print "   create item with parent", parent
-        self.bounds = QtCore.QRectF(-1e-10, -1e-10, 2e-10, 2e-10)
+        #self.bounds = QtCore.QRectF(-1e-10, -1e-10, 2e-10, 2e-10)
         UIGraphicsItem.__init__(self, parent=parent)
         #self.setFlags(self.ItemIgnoresTransformations | self.ItemSendsScenePositionChanges)
         self.setZValue(11)
@@ -1150,7 +1150,7 @@ class Handle(UIGraphicsItem):
 
     def hoverEvent(self, ev):
         if (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
-            self.currentPen = fn.mkPen(255, 0,0)
+            self.currentPen = fn.mkPen(255, 255,0)
         else:
             self.currentPen = self.pen
         self.update()
@@ -1252,20 +1252,23 @@ class Handle(UIGraphicsItem):
             
     def updateShape(self):
         ## determine rotation of transform
-        m = self.sceneTransform()
+        #m = self.sceneTransform()
         #mi = m.inverted()[0]
-        v = m.map(QtCore.QPointF(1, 0)) - m.map(QtCore.QPointF(0, 0))
-        va = np.arctan2(v.y(), v.x())
         
         dt = self.deviceTransform()
+        
         if dt is None:
             self._shape = self.path
             return
+        
+        v = dt.map(QtCore.QPointF(1, 0)) - dt.map(QtCore.QPointF(0, 0))
+        va = np.arctan2(v.y(), v.x())
+        
         dti = dt.inverted()[0]
         devPos = dt.map(QtCore.QPointF(0,0))
         tr = QtGui.QTransform()
-        #tr.rotate(va * 180. / 3.1415926)
         tr.translate(devPos.x(), devPos.y())
+        tr.rotate(va * 180. / 3.1415926)
         
         self._shape = dti.map(tr.map(self.path))
         self.prepareGeometryChange()

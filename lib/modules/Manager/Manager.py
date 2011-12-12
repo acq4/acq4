@@ -10,6 +10,8 @@ class Manager(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         self.win = QtGui.QMainWindow()
+        mp = os.path.dirname(__file__)
+        self.win.setWindowIcon(QtGui.QIcon(os.path.join(mp, 'icon.png')))
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
         self.stateFile = os.path.join('modules', self.name + '_ui.cfg')
