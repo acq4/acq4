@@ -208,3 +208,13 @@ class GraphicsObject(QtGui.QGraphicsObject):
     def childItems(self):
         ## PyQt bug -- some child items are returned incorrectly.
         return map(GraphicsScene.translateGraphicsItem, QtGui.QGraphicsObject.childItems(self))
+
+
+    def sceneTransform(self):
+        ## Qt bug: do no allow access to sceneTransform() until 
+        ## the item has a scene.
+        
+        if self.scene() is None:
+            return self.transform()
+        else:
+            return QtGui.QGraphicsObject.sceneTransform(self)

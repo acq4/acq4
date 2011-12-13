@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 from pyqtgraph.Qt import QtGui, QtCore, QtSvg
-from pyqtgraph import widgets
+from pyqtgraph.graphicsItems.ROI import ROI
 import pyqtgraph as pg
 import TransformGuiTemplate
 import debug
 
-class SelectBox(widgets.ROI):
+class SelectBox(ROI):
     def __init__(self, scalable=False):
         #QtGui.QGraphicsRectItem.__init__(self, 0, 0, size[0], size[1])
-        widgets.ROI.__init__(self, [0,0], [1,1], invertible=True)
+        ROI.__init__(self, [0,0], [1,1], invertible=True)
         center = [0.5, 0.5]
             
         if scalable:
