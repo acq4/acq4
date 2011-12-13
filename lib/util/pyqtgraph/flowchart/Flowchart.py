@@ -573,8 +573,8 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         self.ui = FlowchartCtrlTemplate.Ui_Form()
         self.ui.setupUi(self)
         self.ui.ctrlList.setColumnCount(2)
-        self.ui.ctrlList.setColumnWidth(0, 200)
-        self.ui.ctrlList.setColumnWidth(1, 10)
+        #self.ui.ctrlList.setColumnWidth(0, 200)
+        self.ui.ctrlList.setColumnWidth(1, 20)
         self.ui.ctrlList.setVerticalScrollMode(self.ui.ctrlList.ScrollPerPixel)
         self.ui.ctrlList.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         
@@ -582,8 +582,11 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         #self.chartWidget.viewBox().autoRange()
         self.cwWin = QtGui.QMainWindow()
         self.cwWin.setWindowTitle('Flowchart')
-        self.cwWin.resize(1000,800)
         self.cwWin.setCentralWidget(self.chartWidget)
+        self.cwWin.resize(1000,800)
+        
+        h = self.ui.ctrlList.header()
+        h.setResizeMode(0, h.Stretch)
         
         self.ui.ctrlList.itemChanged.connect(self.itemChanged)
         self.ui.loadBtn.clicked.connect(self.loadClicked)
@@ -596,9 +599,9 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         
     
         
-    def resizeEvent(self, ev):
-        QtGui.QWidget.resizeEvent(self, ev)
-        self.ui.ctrlList.setColumnWidth(0, self.ui.ctrlList.viewport().width()-20)
+    #def resizeEvent(self, ev):
+        #QtGui.QWidget.resizeEvent(self, ev)
+        #self.ui.ctrlList.setColumnWidth(0, self.ui.ctrlList.viewport().width()-20)
         
     def chartToggled(self, b):
         if b:
@@ -654,6 +657,7 @@ class FlowchartCtrlWidget(QtGui.QWidget):
             self.ui.fileNameLabel.setText("<b>[ new ]</b>")
         else:
             self.ui.fileNameLabel.setText("<b>%s</b>" % os.path.split(self.currentFileName)[1])
+        self.resizeEvent(None)
 
     def itemChanged(self, *args):
         pass
