@@ -355,7 +355,7 @@ class NodeGraphicsItem(GraphicsObject):
         self.menu = None
         self.buildMenu()
         
-        self.node.sigTerminalRenamed.connect(self.updateActionMenu)
+        #self.node.sigTerminalRenamed.connect(self.updateActionMenu)
         
     def labelFocusOut(self, ev):
         QtGui.QGraphicsTextItem.focusOutEvent(self.nameItem, ev)
@@ -371,6 +371,10 @@ class NodeGraphicsItem(GraphicsObject):
         newName = str(self.nameItem.toPlainText())
         if newName != self.node.name():
             self.node.rename(newName)
+            
+        ### re-center the label
+        bounds = self.boundingRect()
+        self.nameItem.setPos(bounds.width()/2. - self.nameItem.boundingRect().width()/2., 0)
 
     def setPen(self, pen):
         self.pen = pen
@@ -501,25 +505,25 @@ class NodeGraphicsItem(GraphicsObject):
         #self.menu.addMenu(self.terminalMenu)
         #self.menu.triggered.connect(self.menuTriggered)
         
-    def menuTriggered(self, action):
-        #print "node.menuTriggered called. action:", action
-        act = str(action.text())
-        if act == "Add input":
-            self.node.addInput()
-            self.updateActionMenu()
-        elif act == "Add output":
-            self.node.addOutput()
-            self.updateActionMenu()
-        elif act == "Remove node":
-            self.node.close()
-        else: ## only other option is to remove a terminal
-            self.node.removeTerminal(act)
-            self.terminalMenu.removeAction(action)
+    #def menuTriggered(self, action):
+        ##print "node.menuTriggered called. action:", action
+        #act = str(action.text())
+        #if act == "Add input":
+            #self.node.addInput()
+            #self.updateActionMenu()
+        #elif act == "Add output":
+            #self.node.addOutput()
+            #self.updateActionMenu()
+        #elif act == "Remove node":
+            #self.node.close()
+        #else: ## only other option is to remove a terminal
+            #self.node.removeTerminal(act)
+            #self.terminalMenu.removeAction(action)
 
-    def updateActionMenu(self):
-        for t in self.node.terminals:
-            if t not in [str(a.text()) for a in self.terminalMenu.actions()]:
-                self.terminalMenu.addAction(t)
-        for a in self.terminalMenu.actions():
-            if str(a.text()) not in self.node.terminals:
-                self.terminalMenu.removeAction(a)
+    #def updateActionMenu(self):
+        #for t in self.node.terminals:
+            #if t not in [str(a.text()) for a in self.terminalMenu.actions()]:
+                #self.terminalMenu.addAction(t)
+        #for a in self.terminalMenu.actions():
+            #if str(a.text()) not in self.node.terminals:
+                #self.terminalMenu.removeAction(a)
