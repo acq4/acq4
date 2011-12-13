@@ -217,4 +217,4 @@ class GraphicsObject(QtGui.QGraphicsObject):
         if self.scene() is None:
             return self.transform()
         else:
-            return QtGui.QGraphicsObject.sceneTransform()
+            return QtGui.QGraphicsObject.sceneTransform(self)
