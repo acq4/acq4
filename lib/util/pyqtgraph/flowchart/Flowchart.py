@@ -485,6 +485,7 @@ class Flowchart(Node):
         fileName = str(fileName)
         state = configfile.readConfigFile(fileName)
         self.restoreState(state, clear=True)
+        self.viewBox.autoRange()
         #self.emit(QtCore.SIGNAL('fileLoaded'), fileName)
         self.sigFileLoaded.emit(fileName)
         
