@@ -23,7 +23,7 @@ class LogButton(FeedbackButton):
 
     def __init__(self, *args):
         FeedbackButton.__init__(self, *args)
-        #self.setMaximumHeight(30)
+
         global WIN
         self.clicked.connect(WIN.show)
         WIN.buttons.append(weakref.ref(self))
@@ -564,6 +564,7 @@ class LogWidget(QtGui.QWidget):
         return docStr[:-4]
     
     def exportHtml(self, fileName=False):
+        self.makeError1()
         if fileName is False:
             self.fileDialog = FileDialog(self, "Save HTML as...", self.manager.getCurrentDir().name())
             #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)

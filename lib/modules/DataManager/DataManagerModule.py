@@ -7,8 +7,9 @@ from debug import *
 import FileAnalysisView
 from lib.LogWindow import LogButton, LogWindow
 import FileLogView
-from lib.util.pyqtgraph.FileDialog import FileDialog
+from pyqtgraph.FileDialog import FileDialog
 from lib.Manager import logMsg, logExc
+from StatusBar import StatusBar
 
 
 
@@ -70,8 +71,11 @@ class DataManager(Module):
         self.win.sigClosed.connect(self.quit)
         self.ui.analysisWidget.sigDbChanged.connect(self.analysisDbChanged)
         
-        self.logBtn = LogButton('Log')
-        self.win.statusBar().addPermanentWidget(self.logBtn)
+        #self.logBtn = LogButton('Log')
+        self.win.setStatusBar(StatusBar())
+        #self.win.statusBar().addPermanentWidget(self.logBtn)
+        #self.win.statusBar().setFixedHeight(25)
+        #self.win.statusBar().layout().setSpacing(0)
         self.win.show()
         
     #def hasInterface(self, interface):

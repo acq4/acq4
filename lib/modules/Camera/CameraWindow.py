@@ -26,7 +26,8 @@ from pyqtgraph.SignalProxy import SignalProxy
 import lib.Manager as Manager
 import numpy as np
 from RecordThread import RecordThread
-from lib.LogWindow import LogButton
+#from lib.LogWindow import LogButton
+from StatusBar import StatusBar
 
 traceDepth = 0
 def trace(func):
@@ -195,15 +196,17 @@ class CameraWindow(QtGui.QMainWindow):
         self.fpsLabel.setFont(font)
         self.fpsLabel.setFixedWidth(50)
         self.vLabel.setFixedWidth(50)
-        self.logBtn = LogButton('Log')
+        #self.logBtn = LogButton('Log')
+        
+        self.setStatusBar(StatusBar())
         self.statusBar().addPermanentWidget(self.recLabel)
         self.statusBar().addPermanentWidget(self.xyLabel)
         self.statusBar().addPermanentWidget(self.rgnLabel)
         self.statusBar().addPermanentWidget(self.tLabel)
         self.statusBar().addPermanentWidget(self.vLabel)
         self.statusBar().addPermanentWidget(self.fpsLabel)
-        self.statusBar().addPermanentWidget(self.logBtn)
-        self.logBtn.clicked.connect(module.manager.showLogWindow)
+        #self.statusBar().addPermanentWidget(self.logBtn)
+        #self.logBtn.clicked.connect(module.manager.showLogWindow)
         
         self.show()
         self.openCamera()
