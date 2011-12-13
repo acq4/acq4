@@ -1252,7 +1252,7 @@ class Handle(UIGraphicsItem):
             
     def updateShape(self):
         ## determine rotation of transform
-        #m = self.sceneTransform()
+        #m = self.sceneTransform()  ## Qt bug: do not access sceneTransform() until we know this object has a scene.
         #mi = m.inverted()[0]
         
         dt = self.deviceTransform()
