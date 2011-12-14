@@ -45,7 +45,7 @@ def getHandle(fileName):
     return getDataManager().getHandle(fileName)
 
 def getDirHandle(fileName, create=False):
-    return getDataManager().getDirHandle(fileName)
+    return getDataManager().getDirHandle(fileName, create=create)
 
 def getFileHandle(fileName):
     return getDataManager().getFileHandle(fileName)
