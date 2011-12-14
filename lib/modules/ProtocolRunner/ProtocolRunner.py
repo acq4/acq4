@@ -5,8 +5,8 @@ from ProtocolRunnerTemplate import *
 from PyQt4 import QtGui, QtCore
 #from DirTreeModel import *
 import DirTreeWidget
-from configfile import *
-from advancedTypes import OrderedDict
+import configfile
+from collections import OrderedDict
 from SequenceRunner import *
 from pyqtgraph.WidgetGroup import WidgetGroup
 from Mutex import Mutex, MutexLocker
@@ -15,7 +15,7 @@ from debug import *
 import ptime
 import analysisModules
 import time, gc
-import sip
+#import sip
 import sys, os
 from HelpfulException import HelpfulException
 from pyqtgraph.ProgressDialog import ProgressDialog
@@ -49,7 +49,7 @@ class Window(QtGui.QMainWindow):
 
 class Loader(DirTreeWidget.DirTreeLoader):
     def __init__(self, host, baseDir):
-        DirTreeWidget.DirTreeLoader.__init__(self, baseDir)
+        DirTreeWidget.DirTreeLoader.__init__(self, baseDir, create=True)
         self.host = host
 
     def new(self):
@@ -76,29 +76,20 @@ class ProtocolRunner(Module):
     sigProtocolChanged = QtCore.Signal(object, object)
     
     def __init__(self, manager, name, config):
-        #print "ProtocolRunner __init__"
         Module.__init__(self, manager, name, config)
-        #print "  1"; sys.stdout.flush()
         self.lastProtoTime = None
         self.loopEnabled = False
         self.devListItems = {}
         
-        #print "  2"; sys.stdout.flush()
-        #self.seqListItems = OrderedDict()  ## Looks like {(device, param): listItem, ...}
         self.docks = {}
         self.analysisDocks = {}
         self.deleteState = 0
         self.ui = Ui_MainWindow()
-        #print "  3"; sys.stdout.flush()
         self.win = Window(self)
         
-        #print "  4"; sys.stdout.flush()
         g = self.win.geometry()
-        #print "  4.5"; sys.stdout.flush()
         self.ui.setupUi(self.win)
-        #print "  5"; sys.stdout.flush()
         self.win.setGeometry(g)
-        #print "  6"; sys.stdout.flush()
         
         self.logBtn = LogButton("Log")
         self.win.statusBar().addPermanentWidget(self.logBtn)
@@ -107,9 +98,6 @@ class ProtocolRunner(Module):
         self.ui.protoLeadTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=10e-3, suffix='s', siPrefix=True)
         self.ui.protoCycleTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
         self.ui.seqCycleTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
-        #print "  7"; sys.stdout.flush()
-        #self.win.setCentralWidget(None)  ## get rid of central widget so docks fill the whole screen
-        #self.win.centralWidget().setFixedSize(QtCore.QSize(2, 2))
         self.protoStateGroup = WidgetGroup([
             (self.ui.protoContinuousCheck, 'continuous'),
             (self.ui.protoDurationSpin, 'duration'),
@@ -119,14 +107,13 @@ class ProtocolRunner(Module):
             (self.ui.seqCycleTimeSpin, 'cycleTime'),
             (self.ui.seqRepetitionSpin, 'repetitions', 1),
         ])
-        #print "  8"; sys.stdout.flush()
         
-        self.protocolList = Loader(self, self.manager.config['protocolDir'])
+        try:
+            self.protocolList = Loader(self, self.manager.config['protocolDir'])
+        except KeyError:
+            raise HelpfulException("Config is missing 'protocolDir'; cannot load protocol list.")
+        
         self.ui.LoaderDock.setWidget(self.protocolList)
-        #print "  9"; sys.stdout.flush()
-        
-        #self.protocolList = DirTreeModel(self.manager.config['protocolDir'])
-        #self.ui.protocolList.setModel(self.protocolList)
         
         self.currentProtocol = None   ## pointer to current protocol object
         
@@ -134,76 +121,30 @@ class ProtocolRunner(Module):
             item = QtGui.QListWidgetItem(m, self.ui.analysisList)
             item.setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsUserCheckable )
             item.setCheckState(QtCore.Qt.Unchecked)
-        #print "  10"; sys.stdout.flush()
-        
-        #self.updateDeviceList()
         
         self.taskThread = TaskThread(self)
-        #print "  11"; sys.stdout.flush()
         
         self.newProtocol()
-        #print "  12"; sys.stdout.flush()
         
-        
-        #QtCore.QObject.connect(self.ui.newProtocolBtn, QtCore.SIGNAL('clicked()'), self.newProtocol)
-        #self.ui.newProtocolBtn.clicked.connect(self.newProtocol)
-        #QtCore.QObject.connect(self.ui.saveProtocolBtn, QtCore.SIGNAL('clicked()'), self.saveProtocol)
-        #self.ui.saveProtocolBtn.clicked.connect(self.saveProtocol)
-        #QtCore.QObject.connect(self.ui.loadProtocolBtn, QtCore.SIGNAL('clicked()'), self.loadProtocol)
-        #self.ui.loadProtocolBtn.clicked.connect(self.loadProtocol)
-        #QtCore.QObject.connect(self.ui.saveAsProtocolBtn, QtCore.SIGNAL('clicked()'), self.saveProtocolAs)
-        #self.ui.saveAsProtocolBtn.clicked.connect(self.saveProtocolAs)
-        #QtCore.QObject.connect(self.ui.deleteProtocolBtn, QtCore.SIGNAL('clicked()'), self.deleteProtocol)
-        #self.ui.deleteProtocolBtn.clicked.connect(self.deleteProtocol)
-        #QtCore.QObject.connect(self.ui.testSingleBtn, QtCore.SIGNAL('clicked()'), self.testSingleClicked)
         self.ui.testSingleBtn.clicked.connect(self.testSingleClicked)
-        #QtCore.QObject.connect(self.ui.runProtocolBtn, QtCore.SIGNAL('clicked()'), self.runSingleClicked)
         self.ui.runProtocolBtn.clicked.connect(self.runSingleClicked)
-        #QtCore.QObject.connect(self.ui.testSequenceBtn, QtCore.SIGNAL('clicked()'), self.testSequence)
         self.ui.testSequenceBtn.clicked.connect(self.testSequence)
-        #QtCore.QObject.connect(self.ui.runSequenceBtn, QtCore.SIGNAL('clicked()'), self.runSequence)
         self.ui.runSequenceBtn.clicked.connect(self.runSequenceClicked)
-        #QtCore.QObject.connect(self.ui.stopSingleBtn, QtCore.SIGNAL('clicked()'), self.stopSingle)
         self.ui.stopSingleBtn.clicked.connect(self.stopSingle)
-        #QtCore.QObject.connect(self.ui.stopSequenceBtn, QtCore.SIGNAL('clicked()'), self.stopSequence)
         self.ui.stopSequenceBtn.clicked.connect(self.stopSequence)
-        #QtCore.QObject.connect(self.ui.pauseSequenceBtn, QtCore.SIGNAL('toggled(bool)'), self.pauseSequence)
         self.ui.pauseSequenceBtn.toggled.connect(self.pauseSequence)
-        #QtCore.QObject.connect(self.ui.deviceList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.deviceItemClicked)
         self.ui.deviceList.itemClicked.connect(self.deviceItemClicked)
-        #QtCore.QObject.connect(self.ui.protoDurationSpin, QtCore.SIGNAL('editingFinished()'), self.protParamsChanged)
-        #QtCore.QObject.connect(self.ui.protocolList, QtCore.SIGNAL('doubleClicked(const QModelIndex &)'), self.loadProtocol)
-        #self.ui.protocolList.doubleClicked.connect(self.loadProtocol)
-        #QtCore.QObject.connect(self.ui.protocolList, QtCore.SIGNAL('clicked(const QModelIndex &)'), self.protoListClicked)
-        #self.ui.protocolList.clicked.connect(self.protoListClicked)
-        #QtCore.QObject.connect(self.protocolList, QtCore.SIGNAL('fileRenamed(PyQt_PyObject, PyQt_PyObject)'), self.fileRenamed)
-        #self.protocolList.sigFileRenamed.connect(self.fileRenamed)
         self.protocolList.sigCurrentFileChanged.connect(self.fileChanged)  ## called if loaded protocol file is renamed or moved
-        #QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('finished()'), self.taskThreadStopped)
         self.taskThread.finished.connect(self.taskThreadStopped)
-        #QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('newFrame'), self.handleFrame)
         self.taskThread.sigNewFrame.connect(self.handleFrame)
-        #QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('paused'), self.taskThreadPaused)
         self.taskThread.sigPaused.connect(self.taskThreadPaused)
-        #QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('taskStarted'), self.taskStarted)
         self.taskThread.sigTaskStarted.connect(self.taskStarted)
-        #QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('exitFromError'), self.taskErrored)
         self.taskThread.sigExitFromError.connect(self.taskErrored)
-        #QtCore.QObject.connect(self.ui.deviceList, QtCore.SIGNAL('itemChanged(QListWidgetItem*)'), self.deviceItemChanged)
-        #QtCore.QObject.connect(self.protoStateGroup, QtCore.SIGNAL('changed'), self.protoGroupChanged)
         self.protoStateGroup.sigChanged.connect(self.protoGroupChanged)
-        #print "  13"; sys.stdout.flush()
         self.win.show()
-        #print "  14"; sys.stdout.flush()
-        #QtCore.QObject.connect(self.ui.sequenceParamList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.updateSeqReport)
         self.ui.sequenceParamList.itemChanged.connect(self.updateSeqReport)
-        #QtCore.QObject.connect(self.ui.analysisList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.analysisItemClicked)
         self.ui.analysisList.itemClicked.connect(self.analysisItemClicked)
-        #print "  done"; sys.stdout.flush()
         
-    #def hasInterface(self, interface):
-        #return interface in ['DataSource']
-
         
     def protoGroupChanged(self, param, value):
         #self.emit(QtCore.SIGNAL('protocolChanged'), param, value)
@@ -714,8 +655,8 @@ class ProtocolRunner(Module):
         
         ## Set storage dir
         try:
-            self.currentDir = self.manager.getCurrentDir()
             if store:
+                self.currentDir = self.manager.getCurrentDir()
                 name = self.currentProtocol.name()
                 if name is None:
                     name = 'protocol'
@@ -1014,7 +955,7 @@ class Protocol:
         
         if fileName is not None:
             self.fileName = fileName
-            conf = readConfigFile(fileName)
+            conf = configfile.readConfigFile(fileName)
             if 'protocol' not in conf:
                 self.conf = conf
             else:
@@ -1060,7 +1001,7 @@ class Protocol:
                 raise Exception("Can not write protocol--no file name specified")
             fileName = self.fileName
         self.fileName = fileName
-        writeConfigFile(info, fileName)
+        configfile.writeConfigFile(info, fileName)
         
     def name(self):
         if self.fileName is None:

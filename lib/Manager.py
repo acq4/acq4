@@ -244,15 +244,15 @@ class Manager(QtCore.QObject):
     def configure(self, cfg):
         """Load the devices, modules, stylesheet, and storageDir defined in cfg"""
         
-        try:
-            for key in cfg:
+        for key in cfg:
+            try:
                 ## configure new devices
                 if key == 'devices':
                     for k in cfg['devices']:
                         if k in self.disableDevs:
-                            print "=== Ignoring device '%s' -- disabled by request ===" % k
+                            print "    --> Ignoring device '%s' -- disabled by request" % k
                             continue
-                        print "\n=== Configuring device '%s' ===" % k
+                        print "  === Configuring device '%s' ===" % k
                         try:
                             conf = None
                             if cfg['devices'][k].has_key('config'):
@@ -261,6 +261,7 @@ class Manager(QtCore.QObject):
                             self.loadDevice(driverName, conf, k)
                         except:
                             printExc("Error configuring device %s:" % k)
+                    print "=== Device configuration complete ==="
                             
                 ## Copy in new module definitions
                 elif key == 'modules':
@@ -269,6 +270,7 @@ class Manager(QtCore.QObject):
                         
                 ## set new storage directory
                 elif key == 'storageDir':
+                    print "=== Setting base directory: %s ===" % cfg['storageDir']
                     self.setBaseDir(cfg['storageDir'])
                 
                 ## load stylesheet
@@ -300,8 +302,8 @@ class Manager(QtCore.QObject):
                         #self.config['folderTypes'] = {}
                     #for t in cfg['folderTypes']:
                         #self.config['folderTypes'][t] = cfg['folderTypes'][t]
-        except:
-            printExc("Error while configuring manager:")
+            except:
+                printExc("Error in ACQ4 configuration:")
         #print self.config
         self.sigConfigChanged.emit()
 
@@ -523,7 +525,7 @@ class Manager(QtCore.QObject):
     
     def getCurrentDir(self):
         if self.currentDir is None:
-            raise Exception("CurrentDir has not been set!")
+            raise Exception("Storage directory has not been set.")
         return self.currentDir
     
     def setLogDir(self, d):
@@ -569,7 +571,7 @@ class Manager(QtCore.QObject):
             
     def getBaseDir(self):
         if self.baseDir is None:
-            raise Exception("BaseDir has not been set!")
+            raise Exception("Base storage directory has not been set!")
         return self.baseDir
 
     def setBaseDir(self, d):

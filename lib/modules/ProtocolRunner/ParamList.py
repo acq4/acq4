@@ -150,6 +150,8 @@ class ParamList(QtGui.QTreeWidget):
             if enabled:
                 #num = i.text(2).toInt()[0]
                 num = i.paramData[2]
+                if num < 1:
+                    continue
                 childs = []
                 for j in range(i.childCount()):
                     (dev2, param2, en2) = self.itemData(i.child(j))
