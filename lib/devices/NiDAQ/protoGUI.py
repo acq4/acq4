@@ -50,6 +50,7 @@ class NiDAQProto(ProtocolGui):
         self.ui.periodSpin.sigValueChanging.connect(self.updateRateSpin)
         self.ui.rateSpin.sigValueChanging.connect(self.updatePeriodSpin)
         self.prot.sigProtocolChanged.connect(self.protocolChanged)
+        self.ui.denoiseCombo.currentIndexChanged.connect(self.ui.denoiseStack.setCurrentIndex)
         self.ui.filterCombo.currentIndexChanged.connect(self.ui.filterStack.setCurrentIndex)
         self.ui.rateSpin.setValue(self.rate)
         

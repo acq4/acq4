@@ -119,7 +119,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.patchPlot.setLabel('left', text='Primary', units='A')
         self.patchCurve = self.ui.patchPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
         self.patchFitCurve = self.ui.patchPlot.plot(pen=QtGui.QPen(QtGui.QColor(0, 100, 200)))
-        self.ui.commandPlot.setLabel('left', text='Secondary', units='V')
+        self.ui.commandPlot.setLabel('left', text='Command', units='V')
         self.commandCurve = self.ui.commandPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
         
         self.ui.startBtn.clicked.connect(self.startClicked)

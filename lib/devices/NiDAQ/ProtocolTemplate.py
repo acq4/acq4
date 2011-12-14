@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Tue Dec 13 17:13:09 2011
-#      by: PyQt4 UI code generator 4.8.5
+# Created: Tue Dec 13 17:22:23 2011
+#      by: PyQt4 UI code generator 4.8.6
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -58,8 +58,11 @@ class Ui_Form(object):
         self.denoiseCombo.addItem(_fromUtf8(""))
         self.denoiseCombo.setItemText(1, QtGui.QApplication.translate("Form", "Pointwise", None, QtGui.QApplication.UnicodeUTF8))
         self.gridLayout_3.addWidget(self.denoiseCombo, 0, 1, 1, 1)
-        self.stackedWidget_2 = QtGui.QStackedWidget(self.groupBox)
-        self.stackedWidget_2.setObjectName(_fromUtf8("stackedWidget_2"))
+        self.denoiseStack = QtGui.QStackedWidget(self.groupBox)
+        self.denoiseStack.setObjectName(_fromUtf8("denoiseStack"))
+        self.page_4 = QtGui.QWidget()
+        self.page_4.setObjectName(_fromUtf8("page_4"))
+        self.denoiseStack.addWidget(self.page_4)
         self.page_3 = QtGui.QWidget()
         self.page_3.setObjectName(_fromUtf8("page_3"))
         self.gridLayout_7 = QtGui.QGridLayout(self.page_3)
@@ -86,8 +89,8 @@ class Ui_Form(object):
         self.denoiseWidthSpin.setProperty("value", 1)
         self.denoiseWidthSpin.setObjectName(_fromUtf8("denoiseWidthSpin"))
         self.gridLayout_7.addWidget(self.denoiseWidthSpin, 1, 1, 1, 1)
-        self.stackedWidget_2.addWidget(self.page_3)
-        self.gridLayout_3.addWidget(self.stackedWidget_2, 1, 1, 1, 1)
+        self.denoiseStack.addWidget(self.page_3)
+        self.gridLayout_3.addWidget(self.denoiseStack, 1, 1, 1, 1)
         self.label_9 = QtGui.QLabel(self.groupBox)
         self.label_9.setText(QtGui.QApplication.translate("Form", "Filter", None, QtGui.QApplication.UnicodeUTF8))
         self.label_9.setObjectName(_fromUtf8("label_9"))
@@ -121,7 +124,7 @@ class Ui_Form(object):
         self.label_11.setText(QtGui.QApplication.translate("Form", "Cutoff", None, QtGui.QApplication.UnicodeUTF8))
         self.label_11.setObjectName(_fromUtf8("label_11"))
         self.gridLayout_5.addWidget(self.label_11, 0, 0, 1, 1)
-        self.besselCutoffSpin = QtGui.QDoubleSpinBox(self.page_2)
+        self.besselCutoffSpin = SpinBox(self.page_2)
         self.besselCutoffSpin.setProperty("value", 2.0)
         self.besselCutoffSpin.setObjectName(_fromUtf8("besselCutoffSpin"))
         self.gridLayout_5.addWidget(self.besselCutoffSpin, 0, 1, 1, 1)
@@ -154,7 +157,7 @@ class Ui_Form(object):
         self.label_5.setText(QtGui.QApplication.translate("Form", "pass", None, QtGui.QApplication.UnicodeUTF8))
         self.label_5.setObjectName(_fromUtf8("label_5"))
         self.gridLayout_4.addWidget(self.label_5, 1, 0, 1, 1)
-        self.butterworthPassbandSpin = QtGui.QDoubleSpinBox(self.page_5)
+        self.butterworthPassbandSpin = SpinBox(self.page_5)
         self.butterworthPassbandSpin.setToolTip(QtGui.QApplication.translate("Form", "Upper frequency of butterworth passband in multiples of maximum nyquist frequency (sample rate / 2).", None, QtGui.QApplication.UnicodeUTF8))
         self.butterworthPassbandSpin.setProperty("value", 1.0)
         self.butterworthPassbandSpin.setObjectName(_fromUtf8("butterworthPassbandSpin"))
@@ -168,7 +171,7 @@ class Ui_Form(object):
         self.label_6.setText(QtGui.QApplication.translate("Form", "stop", None, QtGui.QApplication.UnicodeUTF8))
         self.label_6.setObjectName(_fromUtf8("label_6"))
         self.gridLayout_4.addWidget(self.label_6, 2, 0, 1, 1)
-        self.butterworthStopbandSpin = QtGui.QDoubleSpinBox(self.page_5)
+        self.butterworthStopbandSpin = SpinBox(self.page_5)
         self.butterworthStopbandSpin.setToolTip(QtGui.QApplication.translate("Form", "Lower frequency of butterworth stopband in multiples of maximum nyquist frequency (sample rate / 2).", None, QtGui.QApplication.UnicodeUTF8))
         self.butterworthStopbandSpin.setProperty("value", 2.0)
         self.butterworthStopbandSpin.setObjectName(_fromUtf8("butterworthStopbandSpin"))
@@ -225,7 +228,7 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.groupBox_2, 2, 0, 1, 3)
 
         self.retranslateUi(Form)
-        self.stackedWidget_2.setCurrentIndex(0)
+        self.denoiseStack.setCurrentIndex(0)
         self.filterStack.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(Form)
 
