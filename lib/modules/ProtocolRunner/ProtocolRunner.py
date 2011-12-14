@@ -655,8 +655,8 @@ class ProtocolRunner(Module):
         
         ## Set storage dir
         try:
-            self.currentDir = self.manager.getCurrentDir()
             if store:
+                self.currentDir = self.manager.getCurrentDir()
                 name = self.currentProtocol.name()
                 if name is None:
                     name = 'protocol'

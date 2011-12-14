@@ -525,7 +525,7 @@ class Manager(QtCore.QObject):
     
     def getCurrentDir(self):
         if self.currentDir is None:
-            raise Exception("CurrentDir has not been set!")
+            raise Exception("Storage directory has not been set.")
         return self.currentDir
     
     def setLogDir(self, d):
@@ -571,7 +571,7 @@ class Manager(QtCore.QObject):
             
     def getBaseDir(self):
         if self.baseDir is None:
-            raise Exception("BaseDir has not been set!")
+            raise Exception("Base storage directory has not been set!")
         return self.baseDir
 
     def setBaseDir(self, d):
