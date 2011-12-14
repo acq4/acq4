@@ -445,6 +445,22 @@ in loop mode.</string>
         </widget>
        </item>
        <item>
+        <widget class="QPushButton" name="pauseSequenceBtn">
+         <property name="minimumSize">
+          <size>
+           <width>40</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>Pause</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer name="horizontalSpacer_2">
          <property name="orientation">
           <enum>Qt::Horizontal</enum>
@@ -461,22 +477,6 @@ in loop mode.</string>
         <widget class="QPushButton" name="stopSequenceBtn">
          <property name="text">
           <string>Stop Sequence</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="pauseSequenceBtn">
-         <property name="minimumSize">
-          <size>
-           <width>40</width>
-           <height>0</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>Pause</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
          </property>
         </widget>
        </item>
