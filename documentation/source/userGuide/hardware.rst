@@ -30,7 +30,7 @@ MultiClamp 700A/B
 ACQ4 records data and outputs stimuli to the MultiClamp channels via the DAQ. At the same time, the state of the MultiClamp is controlled and recorded via serial or USB interface and the "Commander" software supplied by Molecular Devices. In a typical configuration, each channel of the MultiClamp will use one analog output and two analog inputs on the DAQ board, but each of these connections is optional.
 
 
-.. index::
+.. index:: 
     pair: camera; hardware configuration
 
 Cameras

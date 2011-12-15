@@ -68,8 +68,9 @@ def logMsg(msg, **kwargs):
             LOG.logMsg(msg, **kwargs)
         except:
             print "Error logging message:"
-            print msg
-            print kwargs
+            print "    " + "\n    ".join(msg.split("\n"))
+            print "    " + str(kwargs)
+            sys.excepthook(*sys.exc_info())
     else:
         print "Can't log message; no log created yet."
         #print args
@@ -119,6 +120,8 @@ class Manager(QtCore.QObject):
             global LOG
             LOG = LogWindow(self)
             self.logWindow = LOG
+            
+            self.documentation = Documentation()
             
             if argv is not None:
                 try:
@@ -208,7 +211,8 @@ class Manager(QtCore.QObject):
                 printExc("\nError while acting on command line options: (but continuing on anyway..)")
                 
                 
-            
+        except:
+            printExc("Error while configuring Manager:")
         finally:
             if len(self.modules) == 0:
                 self.quit()
@@ -555,7 +559,7 @@ class Manager(QtCore.QObject):
             self.setLogDir(p)
         else:
             if logDir is None:
-                logMsg("No log directory set. Log messages will not be stored.", msgType='warning', importance=8, docs=["UserGuide/logging"])
+                logMsg("No log directory set. Log messages will not be stored.", msgType='warning', importance=8, docs=["UserGuide/DataManagement/Logging"])
         #self.currentDir.sigChanged.connect(self.currentDirChanged)
         #self.sigCurrentDirChanged.emit()
         self.currentDir.sigChanged.connect(self.currentDirChanged)
@@ -657,6 +661,9 @@ class Manager(QtCore.QObject):
         
         return fields
         
+    def showDocumentation(self, label=None):
+        self.documentation.show(label)
+        
         
     def quit(self):
         """Nicely request that all devices and modules shut down"""
@@ -669,6 +676,7 @@ class Manager(QtCore.QObject):
             lm = len(self.modules)
             ld = len(self.devices)
             with ProgressDialog("Shutting down..", 0, lm+ld, cancelText=None, wait=0) as dlg:
+                self.documentation.quit()
                 print "Requesting all modules shut down.."
                 logMsg("Shutting Down.", importance=9)
                 while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
@@ -989,6 +997,56 @@ class Task:
         
         
 
+    
+class Documentation(QtCore.QObject):
+    """Encapsulates documentation functionality."""
+    def __init__(self):
+        QtCore.QObject.__init__(self)
+        path = os.path.abspath(os.path.dirname(__file__))
+        self.docFile = os.path.normpath(os.path.join(path, '..', 'documentation', 'build', 'qthelp', 'ACQ4.qhc'))
+
+        self.process = QtCore.QProcess()
+        self.process.finished.connect(self.processFinished)
+        
+
+    def show(self, label=None):
+        if self.process.state() == self.process.NotRunning:
+            self.startProcess()
+            if label is not None:
+                QtCore.QTimer.singleShot(2000, lambda: self.activateId(label))
+                return
+        if label is not None:
+            self.activateId(label)
+                
+
+    def expandToc(self, n=2):
+        self.write('expandToc %d\n' % n)
+        
+    def startProcess(self):
+        self.process.start('assistant', ['-collectionFile', self.docFile, '-enableRemoteControl'])
+        if not self.process.waitForStarted():
+            raise Exception("Error starting documentation viewer")
+        QtCore.QTimer.singleShot(1000, self.expandToc)
+        
+    def activateId(self, id):
+        print "activate:", id
+        self.show()
+        self.write('activateIdentifier %s\n' % id)
+        
+    def activateKeyword(self, kwd):
+        self.show()
+        self.write('activateKeyword %s\n' % kwd)
+        
+    def write(self, data):
+        ba = QtCore.QByteArray(data)
+        return self.process.write(ba)
+        
+    def quit(self):
+        self.process.close()
+
+    def processFinished(self):
+        print "Doc viewer exited:", self.process.exitCode()
+        print str(self.process.readAllStandardError())    
     
     
     
