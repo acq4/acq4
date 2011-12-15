@@ -31,9 +31,17 @@ pageTemplate = """
         .user .message {color: #009}
         .status .message {color: #090}
         .logExtra {margin-left: 40px;}
-        .traceback {color: #555}
+        .traceback {color: #555; font-size: 10pt; visibility: hidden; height: 0px;}
         .timestamp {color: #000;}
     </style>
+    
+    <script type="text/javascript">
+        function showDiv(id) {
+            div = document.getElementById(id);
+            div.style.visibility = "visible";
+            div.style.height = "auto";
+        }
+    </script>
 </head>
 <body>
 </body>
@@ -129,6 +137,7 @@ class LogWindow(QtGui.QMainWindow):
             'importance': importance,
             'msgType': msgType,
             #'exception': exception,
+            'id': self.msgCount,
         }
         for k in kwargs:
             entry[k] = kwargs[k]
@@ -166,6 +175,8 @@ class LogWindow(QtGui.QMainWindow):
         
     def textEntered(self):
         msg = unicode(self.wid.ui.input.text())
+        if msg == '!!':
+            self.makeError1()
         try:
             currentDir = self.manager.getCurrentDir()
         except:
@@ -499,8 +510,8 @@ class LogWidget(QtGui.QWidget):
             reasons = self.formatReasonStrForHTML(entry['reasons'])
         if entry.has_key('docs'):
             docs = self.formatDocsStrForHTML(entry['docs'])
-        #if entry.get('exception', None) is not None:
-            #exc = self.formatExceptionForHTML(entry['docs'])
+        if entry.get('exception', None) is not None:
+            exc = self.formatExceptionForHTML(entry['exception'], entryId=entry['id'])
             
         extra = reasons + docs + exc
         if extra != "":
@@ -534,94 +545,104 @@ class LogWidget(QtGui.QWidget):
 
 
 
-    def displayText(self, msg, entry, colorStr='black', timeStamp=None, clean=True):
-        if clean:
-            msg = self.cleanText(msg)
+    #def displayText(self, msg, entry, colorStr='black', timeStamp=None, clean=True):
+        #if clean:
+            #msg = self.cleanText(msg)
         
-        if msg[-1:] == '\n':
-            msg = msg[:-1]     
-        msg = '<br />'.join(msg.split('\n'))
-        if timeStamp is not None:
-            strn = '<b style="color:black"> %s </b> <span style="color:%s"> %s </span>' % (timeStamp, colorStr, msg) 
-        else:
-            strn = '<span style="color:%s"> %s </span>' % (colorStr, msg)
-        #self.ui.output.appendHtml(strn)
-        self.cache[id(entry)].append(strn)
+        #if msg[-1:] == '\n':
+            #msg = msg[:-1]     
+        #msg = '<br />'.join(msg.split('\n'))
+        #if timeStamp is not None:
+            #strn = '<b style="color:black"> %s </b> <span style="color:%s"> %s </span>' % (timeStamp, colorStr, msg) 
+        #else:
+            #strn = '<span style="color:%s"> %s </span>' % (colorStr, msg)
+        ##self.ui.output.appendHtml(strn)
+        #self.cache[id(entry)].append(strn)
             
 
 
-    def displayComplexMessage(self, entry, color='black'):
-        self.displayText(entry['message'], entry, color, timeStamp = entry['timestamp'], clean=True)
-        if entry.has_key('reasons'):
-            reasons = self.formatReasonStrForHTML(entry['reasons'])
-            self.displayText(reasons, entry, 'black', clean=False)
-        if entry.has_key('docs'):
-            docs = self.formatDocsStrForHTML(entry['docs'])
-            self.displayText(docs, entry, 'black', clean=False)
-        if entry.get('exception', None) is not None:
-            self.displayException(entry['exception'], entry, 'black', tracebacks=entry.get('traceback', None))
+    #def displayComplexMessage(self, entry, color='black'):
+        #self.displayText(entry['message'], entry, color, timeStamp = entry['timestamp'], clean=True)
+        #if entry.has_key('reasons'):
+            #reasons = self.formatReasonStrForHTML(entry['reasons'])
+            #self.displayText(reasons, entry, 'black', clean=False)
+        #if entry.has_key('docs'):
+            #docs = self.formatDocsStrForHTML(entry['docs'])
+            #self.displayText(docs, entry, 'black', clean=False)
+        #if entry.get('exception', None) is not None:
+            #self.displayException(entry['exception'], entry, 'black', tracebacks=entry.get('traceback', None))
             
 
     
-    def formatExceptionForHTML(self, exception, entry, color, count=None, tracebacks=None):
+    def formatExceptionForHTML(self, exception, count=1, entryId=None):
         ### Here, exception is a dict that holds the message, reasons, docs, traceback and oldExceptions (which are also dicts, with the same entries)
         ## the count and tracebacks keywords are for calling recursively
         
-        if count is None:
-            count = 1
-        else:
-            count += 1
-        
-        if tracebacks is None:
-            tracebacks = []
+        #if tracebacks is None:
+            #tracebacks = []
             
         indent = 10
         
         text = self.cleanText(exception['message'])
-        if exception.has_key('oldExc'):  
-            self.displayText("&nbsp;"*indent + str(count)+'. ' + text, entry, color, clean=False)
-        else:
-            self.displayText("&nbsp;"*indent + str(count)+'. Original error: ' + text, entry, color, clean=False)
+        #if exception.has_key('oldExc'):  
+            #self.displayText("&nbsp;"*indent + str(count)+'. ' + text, entry, color, clean=False)
+        #else:
+            #self.displayText("&nbsp;"*indent + str(count)+'. Original error: ' + text, entry, color, clean=False)
             
-        tracebacks.append(exception['traceback'])
         
         if exception.has_key('reasons'):
             reasons = self.formatReasonsStrForHTML(exception['reasons'])
-            self.displayText(reasons, entry, color, clean=False)
+            text += reasons
+            #self.displayText(reasons, entry, color, clean=False)
         if exception.has_key('docs'):
             docs = self.formatDocsStrForHTML(exception['docs'])
-            self.displayText(docs, entry, color, clean=False)
+            #self.displayText(docs, entry, color, clean=False)
+            text += docs
+        
+        traceback = [self.formatTracebackForHTML(exception['traceback'], count)]
+        text = [text]
         
         if exception.has_key('oldExc'):
-            self.displayException(exception['oldExc'], entry, color, count=count, tracebacks=tracebacks)
+            exc, tb = self.formatExceptionForHTML(exception['oldExc'], count=count+1)
+            text.extend(exc)
+            traceback.extend(tb)
+            
+        #else:
+            #if len(tracebacks)==count+1:
+                #n=0
+            #else: 
+                #n=1
+            #for i, tb in enumerate(tracebacks):
+                #self.displayTraceback(tb, entry, number=i+n)
+        if count == 1:
+            exc = "<div class=\"exception\"><ol>" + "\n".join(["<li>%s</li><br>" % ex for ex in text]) + "</ol></div>"
+            traceback = "<div class=\"traceback\" id=\"%s\"><ol>"%str(entryId) + "\n".join(["<li>%s</li><br>" % tb for tb in traceback]) + "</ol></div>"
+            
+            return exc + '<a href="#" onclick="showDiv(\'%s\')">Show traceback</a>'%str(entryId) + traceback
         else:
-            if len(tracebacks)==count+1:
-                n=0
-            else: 
-                n=1
-            for i, tb in enumerate(tracebacks):
-                self.displayTraceback(tb, entry, number=i+n)
+            return text, traceback
         
         
-    def displayTraceback(self, tb, entry, color='grey', number=1):
-        tb = [self.cleanText(x) for x in tb]
-        lines = []
-        indent = 16
-        prefix = ''
-        for l in ''.join(tb).split('\n'):
-            if l == '':
-                continue
-            if l[:9] == "Traceback":
-                prefix = ' ' + str(number) + '. '
-                continue
-            spaceCount = 0
-            while l[spaceCount] == ' ':
-                spaceCount += 1
-            if prefix is not '':
-                spaceCount -= 1
-            lines.append("&nbsp;"*(indent+spaceCount*4) + prefix + l)
-            prefix = ''
-        self.displayText('<br />'.join(lines), entry, color, clean=False)
+    def formatTracebackForHTML(self, tb, number):
+        return self.cleanText("\n".join(tb))
+        #tb = [self.cleanText(strip(x)) for x in tb]
+        #lines = []
+        #prefix = ''
+        #for l in ''.join(tb).split('\n'):
+            #if l == '':
+                #continue
+            #if l[:9] == "Traceback":
+                #prefix = ' ' + str(number) + '. '
+                #continue
+            #spaceCount = 0
+            #while l[spaceCount] == ' ':
+                #spaceCount += 1
+            #if prefix is not '':
+                #spaceCount -= 1
+            #lines.append("&nbsp;"*(spaceCount*4) + prefix + l)
+            #prefix = ''
+        #return '<div class="traceback">' + '<br />'.join(lines) + '</div>'
+        #self.displayText('<br />'.join(lines), entry, color, clean=False)
         
     def formatReasonsStrForHTML(self, reasons):
         #indent = 6
