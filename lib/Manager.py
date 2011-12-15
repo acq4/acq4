@@ -1025,7 +1025,8 @@ class Documentation(QtCore.QObject):
     def startProcess(self):
         self.process.start('assistant', ['-collectionFile', self.docFile, '-enableRemoteControl'])
         if not self.process.waitForStarted():
-            raise Exception("Error starting documentation viewer")
+            output = str(self.process.readAllStandardError())
+            raise Exception("Error starting documentation viewer:  " +output)
         QtCore.QTimer.singleShot(1000, self.expandToc)
         
     def activateId(self, id):
