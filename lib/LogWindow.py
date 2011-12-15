@@ -19,6 +19,29 @@ import re
 
 #WIN = None
 
+pageTemplate = """
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <style type="text/css">
+        body {color: #000; font-size: 12pt; font-family: sans;}
+        .entry {}
+        .error .message {color: #900}
+        .warning .message {color: #740}
+        .user .message {color: #009}
+        .status .message {color: #090}
+        .logExtra {margin-left: 40px;}
+        .traceback {color: #555}
+        .timestamp {color: #000;}
+    </style>
+</head>
+<body>
+</body>
+</html>
+"""
+
+
+
 class LogButton(FeedbackButton):
 
     def __init__(self, *args):
@@ -55,8 +78,8 @@ class LogWindow(QtGui.QMainWindow):
         self.resize(1000, 500)
         self.manager = manager
         #global WIN
-        WIN = self
         global WIN
+        WIN = self
         self.msgCount = 0
         self.logCount=0
         self.logFile = None
@@ -112,7 +135,7 @@ class LogWindow(QtGui.QMainWindow):
             
         self.processEntry(entry)
         
-        ## Copy in information from the exception if it happens to be there
+        ## Allow exception to override values in the entry
         if entry.get('exception', None) is not None and 'msgType' in entry['exception']:
             entry['msgType'] = entry['exception']['msgType']
         
@@ -133,6 +156,7 @@ class LogWindow(QtGui.QMainWindow):
     def processEntry(self, entry):
         ## pre-processing common to saveEntry and displayEntry
 
+        ## convert exc_info to serializable dictionary
         if entry.get('exception', None) is not None:
             exc_info = entry.pop('exception')
             entry['exception'] = self.exceptionToDict(*exc_info)
@@ -141,7 +165,7 @@ class LogWindow(QtGui.QMainWindow):
 
         
     def textEntered(self):
-        msg = str(self.wid.ui.input.text())
+        msg = unicode(self.wid.ui.input.text())
         try:
             currentDir = self.manager.getCurrentDir()
         except:
@@ -265,6 +289,8 @@ class LogWindow(QtGui.QMainWindow):
             configfile.appendConfigFile(entry, self.fileName())
             
 
+
+
 class LogWidget(QtGui.QWidget):
     
     sigDisplayEntry = QtCore.Signal(object) ## for thread-safetyness
@@ -296,7 +322,10 @@ class LogWidget(QtGui.QWidget):
         self.ui.exportHtmlBtn.clicked.connect(self.exportHtml)
         self.ui.filterTree.itemChanged.connect(self.setCheckStates)
         self.ui.importanceSlider.valueChanged.connect(self.filtersChanged)
+        self.ui.logView.linkClicked.connect(self.linkClicked)
         
+        page = self.ui.logView.page()
+        page.setLinkDelegationPolicy(page.DelegateAllLinks)
         
     def loadFile(self, f):
         """Load the file, f. f must be able to be read by configfile.py"""
@@ -318,6 +347,8 @@ class LogWidget(QtGui.QWidget):
         self.filterEntries() ## puts all entries through current filters and displays the ones that pass
         
     def addEntry(self, entry):
+        ## All incoming messages begin here
+        
         self.entries.append(entry)
         i = len(self.entryArray)
         
@@ -331,7 +362,10 @@ class LogWidget(QtGui.QWidget):
         self.entryArray[i] = arr
         self.checkDisplay(entry) ## displays the entry if it passes the current filters
         #np.append(self.entryArray, np.array(i, [[i, entry['importance'], entry['msgType'], entry['currentDir']]]), dtype = [('index', int), ('importance', int), ('msgType', str), ('directory', str)])
-    
+
+
+
+
     def setCheckStates(self, item, column):
         if item == self.ui.filterTree.topLevelItem(1):
             if item.checkState(0):
@@ -351,7 +385,7 @@ class LogWidget(QtGui.QWidget):
             child = tree.topLevelItem(1).child(i)
             if tree.topLevelItem(1).checkState(0) or child.checkState(0):
                 text = child.text(0)
-                self.typeFilters.append(str(text))
+                self.typeFilters.append(unicode(text))
             
         self.importanceFilter = self.ui.importanceSlider.value()
     
@@ -385,11 +419,13 @@ class LogWidget(QtGui.QWidget):
             j = len(self.dirFilter)
             i = len(d)
             d = d.view(np.byte).reshape(i, 100)[:, :j]
-            d = d.reshape(i*j).view('|S%s' %str(j))
+            d = d.reshape(i*j).view('|S%d' % j)
             mask *= (d == self.dirFilter)
             
             
-        self.ui.output.clear()
+        #self.ui.output.clear()
+        global pageTemplate
+        self.ui.logView.setHtml(pageTemplate)
         indices = list(self.entryArray[mask]['index'])
         inds = indices
         
@@ -426,38 +462,94 @@ class LogWidget(QtGui.QWidget):
         else:
             for entry in entries:
                 if not self.cache.has_key(id(entry)):
-                    self.cache[id(entry)] = []
-                    ## determine message color:
-                    if entry['msgType'] == 'status':
-                        color = 'green'
-                    elif entry['msgType'] == 'user':
-                        color = 'blue'
-                    elif entry['msgType'] == 'error':
-                        color = 'red'
-                    elif entry['msgType'] == 'warning':
-                        color = '#DD4400' ## orange
-                    else:
-                        color = 'black'
-                        
-                  
+                    self.cache[id(entry)] = self.generateEntryHtml(entry)
                     
+                    ## determine message color:
+                    #if entry['msgType'] == 'status':
+                        #color = 'green'
+                    #elif entry['msgType'] == 'user':
+                        #color = 'blue'
+                    #elif entry['msgType'] == 'error':
+                        #color = 'red'
+                    #elif entry['msgType'] == 'warning':
+                        #color = '#DD4400' ## orange
+                    #else:
+                        #color = 'black'
                         
-                    if entry.has_key('exception') or entry.has_key('docs') or entry.has_key('reasons'):
-                        self.displayComplexMessage(entry, color)
-                    else: 
-                        self.displayText(entry['message'], entry, color, timeStamp=entry['timestamp'])
-                    for x in self.cache[id(entry)]:
-                        self.ui.output.appendHtml(x)
-                else:
-                    for x in self.cache[id(entry)]:
-                        self.ui.output.appendHtml(x)
+                    #if entry.has_key('exception') or entry.has_key('docs') or entry.has_key('reasons'):
+                        ##self.displayComplexMessage(entry, color)
+                        #self.displayComplexMessage(entry)
+                    #else: 
+                        #self.displayText(entry['message'], entry, color, timeStamp=entry['timestamp'])
                         
+                #for x in self.cache[id(entry)]:
+                    #self.ui.output.appendHtml(x)
+                    
+                html = self.cache[id(entry)]
+                self.ui.logView.page().currentFrame().findFirstElement('body').appendInside(html)
+                
+                
+    def generateEntryHtml(self, entry):
+        msg = self.cleanText(entry['message'])
+        
+        reasons = ""
+        docs = ""
+        exc = ""
+        if entry.has_key('reasons'):
+            reasons = self.formatReasonStrForHTML(entry['reasons'])
+        if entry.has_key('docs'):
+            docs = self.formatDocsStrForHTML(entry['docs'])
+        #if entry.get('exception', None) is not None:
+            #exc = self.formatExceptionForHTML(entry['docs'])
+            
+        extra = reasons + docs + exc
+        if extra != "":
+            extra = "<div class='logExtra'>" + extra + "</div>"
+        
+        return """
+        <div class='entry'>
+            <div class='%s'>
+                <span class='timestamp'>%s</span>
+                <span class='message'>%s</span>
+                %s
+            </div>
+        </div>
+        """ % (entry['msgType'], entry['timestamp'], msg, extra)
+        
+        
+        #if entry.has_key('exception') or entry.has_key('docs') or entry.has_key('reasons'):
+            ##self.displayComplexMessage(entry, color)
+            #return self.generateComplex(entry)
+        #else: 
+            #return self.generateSimple(entry['message'], entry, color, timeStamp=entry['timestamp'])
+            ##self.displayText(entry['message'], entry, color, timeStamp=entry['timestamp'])
+    
     def cleanText(self, text):
         text = re.sub(r'&', '&amp;', text)
         text = re.sub(r'>','&gt;', text)
         text = re.sub(r'<', '&lt;', text)
+        text = re.sub('\n', '<br/>\n', text)
         return text
-                    
+
+
+
+
+    def displayText(self, msg, entry, colorStr='black', timeStamp=None, clean=True):
+        if clean:
+            msg = self.cleanText(msg)
+        
+        if msg[-1:] == '\n':
+            msg = msg[:-1]     
+        msg = '<br />'.join(msg.split('\n'))
+        if timeStamp is not None:
+            strn = '<b style="color:black"> %s </b> <span style="color:%s"> %s </span>' % (timeStamp, colorStr, msg) 
+        else:
+            strn = '<span style="color:%s"> %s </span>' % (colorStr, msg)
+        #self.ui.output.appendHtml(strn)
+        self.cache[id(entry)].append(strn)
+            
+
+
     def displayComplexMessage(self, entry, color='black'):
         self.displayText(entry['message'], entry, color, timeStamp = entry['timestamp'], clean=True)
         if entry.has_key('reasons'):
@@ -471,7 +563,7 @@ class LogWidget(QtGui.QWidget):
             
 
     
-    def displayException(self, exception, entry, color, count=None, tracebacks=None):
+    def formatExceptionForHTML(self, exception, entry, color, count=None, tracebacks=None):
         ### Here, exception is a dict that holds the message, reasons, docs, traceback and oldExceptions (which are also dicts, with the same entries)
         ## the count and tracebacks keywords are for calling recursively
         
@@ -511,20 +603,6 @@ class LogWidget(QtGui.QWidget):
                 self.displayTraceback(tb, entry, number=i+n)
         
         
-    def displayText(self, msg, entry, colorStr='black', timeStamp=None, clean=True):
-        if clean:
-            msg = self.cleanText(msg)
-        
-        if msg[-1:] == '\n':
-            msg = msg[:-1]     
-        msg = '<br />'.join(msg.split('\n'))
-        if timeStamp is not None:
-            strn = '<b style="color:black"> %s </b> <span style="color:%s"> %s </span>' % (timeStamp, colorStr, msg) 
-        else:
-            strn = '<span style="color:%s"> %s </span>' % (colorStr, msg)
-        #self.ui.output.appendHtml(strn)
-        self.cache[id(entry)].append(strn)
-            
     def displayTraceback(self, tb, entry, color='grey', number=1):
         tb = [self.cleanText(x) for x in tb]
         lines = []
@@ -546,22 +624,23 @@ class LogWidget(QtGui.QWidget):
         self.displayText('<br />'.join(lines), entry, color, clean=False)
         
     def formatReasonsStrForHTML(self, reasons):
-        indent = 6
-        letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
-        reasonStr = "&nbsp;"*16 + "Possible reasons include: <br>"
-        for i, r in enumerate(reasons):
+        #indent = 6
+        reasonStr = "<div class='reasons'>Possible reasons include:\n<ul>\n"
+        for r in reasons:
             r = self.cleanText(r)
-            reasonStr += "&nbsp;"*22 + letters[i] + ". " + r + "<br>"
-        return reasonStr[:-4]
+            reasonStr += "<li>" + r + "</li>\n"
+            #reasonStr += "&nbsp;"*22 + chr(97+i) + ". " + r + "<br>"
+        reasonStr += "</ul></div>\n"
+        return reasonStr
     
     def formatDocsStrForHTML(self, docs):
-        indent = 6
-        docStr = "&nbsp;"*16 + "Relevant documentation: <br>"
-        letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
-        for i, d in enumerate(docs):
+        #indent = 6
+        docStr = "<div class='docRefs'>Relevant documentation:\n<ul>\n"
+        for d in docs:
             d = self.cleanText(d)
-            docStr += "&nbsp;"*22 + letters[i] + ". " + d + "<br>"
-        return docStr[:-4]
+            docStr += "<li><a href=\"doc:%s\">%s</a></li>\n" % (d, d)
+        docStr += "</ul></div>\n"
+        return docStr
     
     def exportHtml(self, fileName=False):
         if fileName is False:
@@ -573,7 +652,8 @@ class LogWidget(QtGui.QWidget):
             return
         if fileName[-5:] != '.html':
             fileName += '.html'
-        doc = self.ui.output.document().toHtml('utf-8')
+        #doc = self.ui.output.document().toHtml('utf-8')
+        doc = self.ui.logView.page().currentFrame().toHtml()
         f = open(fileName, 'w')
         f.write(doc.encode('utf-8'))
         f.close()
@@ -602,6 +682,13 @@ class LogWidget(QtGui.QWidget):
         except:
             t, exc, tb = sys.exc_info()
             raise HelpfulException(message='msg from makeError', exc=(t, exc, tb), reasons=["reason one", "reason 2"], docs=['what, you expect documentation?'])
+
+    def linkClicked(self, url):
+        url = url.toString()
+        if url[:4] == 'doc:':
+            self.manager.showDocumentation(url[4:].lower())
+
+
 
         
 if __name__ == "__main__":
