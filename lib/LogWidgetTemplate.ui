@@ -70,15 +70,11 @@
         </widget>
        </item>
        <item row="1" column="0" colspan="3">
-        <widget class="QPlainTextEdit" name="output">
-         <property name="horizontalScrollBarPolicy">
-          <enum>Qt::ScrollBarAlwaysOff</enum>
-         </property>
-         <property name="undoRedoEnabled">
-          <bool>false</bool>
-         </property>
-         <property name="readOnly">
-          <bool>true</bool>
+        <widget class="QWebView" name="logView">
+         <property name="url">
+          <url>
+           <string>about:blank</string>
+          </url>
          </property>
         </widget>
        </item>
@@ -285,6 +281,11 @@
   </layout>
  </widget>
  <customwidgets>
+  <customwidget>
+   <class>QWebView</class>
+   <extends>QWidget</extends>
+   <header>QtWebKit/QWebView</header>
+  </customwidget>
   <customwidget>
    <class>TreeWidget</class>
    <extends>QTreeWidget</extends>

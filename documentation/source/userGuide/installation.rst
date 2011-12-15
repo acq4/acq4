@@ -49,7 +49,7 @@ Linux Installation
 
 Make all your windows-using friends jealous::
 
-    $ sudo apt-get install python-qt4 python-qt4-gl python-qt4-gl python-pyserial python-scipy python-pyparsing python-h5py python-imaging bzr
+    $ sudo apt-get install python-qt4 python-qt4-gl python-qt4-gl python-pyserial python-scipy python-pyparsing python-h5py python-imaging bzr qt4-dev-tools pyqt4-dev-tools
     $ bzr branch lp:acq4
     
     

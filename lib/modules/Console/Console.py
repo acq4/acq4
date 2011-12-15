@@ -154,7 +154,7 @@ class Console(Module):
             if self.inCmd:
                 self.inCmd = False
                 self.output.textCursor().insertHtml("</div><br><div style='font-weight: normal; background-color: #FFF;'>")
-                self.stdout.write("</div><br><div style='font-weight: normal; background-color: #FFF;'>")
+                #self.stdout.write("</div><br><div style='font-weight: normal; background-color: #FFF;'>")
             self.output.insertPlainText(strn)
         self.stdout.write(strn)
             

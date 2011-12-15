@@ -25,8 +25,14 @@ class ColorButton(QtGui.QPushButton):
     def paintEvent(self, ev):
         QtGui.QPushButton.paintEvent(self, ev)
         p = QtGui.QPainter(self)
+        rect = self.rect().adjusted(6, 6, -6, -6)
+        ## draw white base, then texture for indicating transparency, then actual color
+        p.setBrush(functions.mkBrush('w'))
+        p.drawRect(rect)
+        p.setBrush(QtGui.QBrush(QtCore.Qt.DiagCrossPattern))
+        p.drawRect(rect)
         p.setBrush(functions.mkBrush(self._color))
-        p.drawRect(self.rect().adjusted(6, 6, -6, -6))
+        p.drawRect(rect)
         p.end()
     
     def setColor(self, color, finished=True):
