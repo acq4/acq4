@@ -659,7 +659,8 @@ class DirHandle(FileHandle):
                     dlg += 1
             files.sort(lambda a,b: cmp(self.cTimeCache[a], self.cTimeCache[b]))
         elif sortMode == 'alpha':
-            files.sort()
+            ## show directories first when sorting alphabetically.
+            files.sort(lambda a,b: 2*cmp(os.path.isdir(os.path.join(self.name(),b)), os.path.isdir(os.path.join(self.name(),a))) + cmp(a,b))
         elif sortMode == None:
             pass
         else:

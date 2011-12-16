@@ -285,7 +285,9 @@ class DirTreeWidget(QtGui.QTreeWidget):
         handle = self.handle(root)
 
         self.clearTree(root)
-
+        if handle is None:
+            return
+        
         for f in handle.ls(useCache=useCache):
             #print "Add handle", f
             try:
