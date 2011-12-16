@@ -23,7 +23,7 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="0.35"
+     inkscape:zoom="0.24748737"
      inkscape:cx="1621.0714"
      inkscape:cy="-80.176516"
      inkscape:document-units="px"
@@ -168,7 +168,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title />
+        <dc:title></dc:title>
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -569,7 +569,10 @@
          height="487.90369"
          width="487.90369"
          id="rect3054"
-         style="fill:#6060ff;fill-opacity:0.58854167;stroke:#000000;stroke-width:15;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none" />
+         style="fill:#6060ff;fill-opacity:0.58854167;stroke:#000000;stroke-width:15;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+         inkscape:export-filename="/home/luke/work/manis_lab/code/acq4/lib/modules/Documentation/icon.png"
+         inkscape:export-xdpi="45.810001"
+         inkscape:export-ydpi="45.810001" />
       <g
          transform="matrix(0.56148171,0,0,0.56148171,-761.82913,-684.58817)"
          id="g4445">
