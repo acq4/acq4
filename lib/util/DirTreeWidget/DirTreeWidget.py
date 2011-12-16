@@ -269,7 +269,7 @@ class DirTreeWidget(QtGui.QTreeWidget):
         item = self.item(handle)
         QtGui.QTreeWidget.editItem(self, item, 0)
 
-    def rebuildTree(self, root=None):
+    def rebuildTree(self, root=None, useCache=True):
         """Completely clear and rebuild the entire tree starting at root"""
         if root is None:
             root = self.invisibleRootItem()
@@ -278,7 +278,7 @@ class DirTreeWidget(QtGui.QTreeWidget):
 
         self.clearTree(root)
 
-        for f in handle.ls():
+        for f in handle.ls(useCache=useCache):
             #print "Add handle", f
             try:
                 childHandle = handle[f]
@@ -349,6 +349,20 @@ class DirTreeWidget(QtGui.QTreeWidget):
             #handle.move(self.handle(parent))
         #except:
             #printExc("Move failed:")
+
+    def contextMenuEvent(self, ev):
+        print "menu:", ev.pos()
+        item = self.itemAt(ev.pos())
+        if item is None:
+            print "no item"
+            return
+        self.menu = QtGui.QMenu(self)
+        act = self.menu.addAction('refresh', self.refreshClicked)
+        self.contextItem = item
+        self.menu.popup(ev.globalPos())
+        
+    def refreshClicked(self):
+        self.rebuildTree(self.contextItem, useCache=False)
 
 
 class FileTreeItem(QtGui.QTreeWidgetItem):

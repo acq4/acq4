@@ -49,7 +49,8 @@ class EventFitter(CtrlNode):
             ('fitTime', float), 
             ('fitRiseTau', float), 
             ('fitDecayTau', float), 
-            ('fitError', float)
+            ('fitError', float),
+            ('fitFractionalError', float),
         ])
         
         offset = 0 ## not all input events will produce output events; offset keeps track of the difference.
@@ -128,8 +129,11 @@ class EventFitter(CtrlNode):
             ## parameters are [amplitude, x-offset, rise tau, fall tau]
             guess = [guessAmp, guessStart, guessRise, guessDecay]
             #guess = [amp, times[0], guessLen/4., guessLen/2.]  ## careful! 
-            fit, junk, comp, err = functions.fitPsp(times, eventData.view(np.ndarray), guess, measureError=True)
-            output[i-offset] = tuple(events[i]) + tuple(fit) + (err,)
+            yVals = eventData.view(np.ndarray)
+            fit, junk, comp, err = functions.fitPsp(times, yVals, guess, measureError=True)
+            
+            fracError = abs(yVals - comp).sum() / abs(comp).sum()
+            output[i-offset] = tuple(events[i]) + tuple(fit) + (err, fracError)
             #output['fitTime'] += output['time']
                 
             #print fit
