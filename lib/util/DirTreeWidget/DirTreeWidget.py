@@ -47,8 +47,16 @@ class DirTreeWidget(QtGui.QTreeWidget):
 
     def quit(self):
         ## not sure if any of this is necessary..
-        self.itemExpanded.disconnect(self.itemExpandedEvent)
-        self.itemChanged.disconnect(self.itemChangedEvent)
+        try:
+            self.itemExpanded.disconnect(self.itemExpandedEvent)
+        except TypeError:
+            pass
+        
+        try:
+            self.itemChanged.disconnect(self.itemChangedEvent)
+        except TypeError:
+            pass
+        
         for h in self.items:
             self.unwatch(h)
         #self.handles = {}
