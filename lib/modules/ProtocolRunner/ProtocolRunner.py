@@ -656,14 +656,14 @@ class ProtocolRunner(Module):
         ## Set storage dir
         try:
             if store:
-                self.currentDir = self.manager.getCurrentDir()
+                currentDir = self.manager.getCurrentDir()
                 name = self.currentProtocol.name()
                 if name is None:
                     name = 'protocol'
                 info = self.protocolInfo()
                 info['dirType'] = 'Protocol'
                 ## Create storage directory with all information about the protocol to be executed
-                dh = self.currentDir.mkdir(name, autoIncrement=True, info=info)
+                dh = currentDir.mkdir(name, autoIncrement=True, info=info)
             else:
                 dh = None
 
@@ -719,14 +719,14 @@ class ProtocolRunner(Module):
                 linkedParams[key] = i[3]
                 
             ## Set storage dir
-            self.currentDir = self.manager.getCurrentDir()
             if store:
+                currentDir = self.manager.getCurrentDir()
                 name = self.currentProtocol.name()
                 if name is None:
                     name = 'protocol'
                 info = self.protocolInfo(params)
                 info['dirType'] = 'ProtocolSequence'
-                dh = self.currentDir.mkdir(name, autoIncrement=True, info=info)
+                dh = currentDir.mkdir(name, autoIncrement=True, info=info)
             else:
                 dh = None
                 
