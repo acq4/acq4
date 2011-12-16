@@ -399,6 +399,9 @@ class GraphicsScene(QtGui.QGraphicsScene):
             item = GraphicsScene._addressCache.get(addr, item)
         return item
 
+    @staticmethod
+    def translateGraphicsItems(items):
+        return map(GraphicsScene.translateGraphicsItem, items)
 
 
 class MouseDragEvent:

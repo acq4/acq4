@@ -4,6 +4,8 @@ from pyqtgraph.Point import Point
 import pyqtgraph.functions as fn
 from ItemGroup import ItemGroup
 from GraphicsWidget import GraphicsWidget
+from UIGraphicsItem import UIGraphicsItem
+from pyqtgraph.GraphicsScene import GraphicsScene
 
 class ViewBox(GraphicsWidget):
     """
@@ -202,7 +204,17 @@ class ViewBox(GraphicsWidget):
     def mapViewToScene(self, obj):
         """Maps from the coordinate system displayed inside the ViewBox to scene coordinates"""
         return self.mapToScene(self.mapFromView(obj))
+    
+    def mapFromItemToView(self, item, obj):
+        return self.mapSceneToView(item.mapToScene(obj))
 
+    def mapFromViewToItem(self, item, obj):
+        return item.mapFromScene(self.mapViewToScene(obj))
+
+    def itemBoundingRect(self, item):
+        """Return the bounding rect of the item in view coordinates"""
+        return self.mapSceneToView(item.sceneBoundingRect()).boundingRect()
+    
     def viewScale(self):
         vr = self.viewRect()
         #print "viewScale:", self.range
@@ -533,8 +545,71 @@ class ViewBox(GraphicsWidget):
         self.setRange(0, min, max, update=update, padding=padding)
 
     def autoRange(self, padding=0.02):
-        br = self.childGroup.childrenBoundingRect()
-        self.setRange(br, padding=padding)
+        #items = []
+        #for citem in self.items:
+            #if citem.isVisible() and citem is not self.grid:
+                #items.append(citem.graphicsItem())
+        #if len(items) < 1:
+            #return
+        #bounds = items[0].sceneBoundingRect()
+        #if len(items) > 1:
+            #for i in items[1:]:
+                #bounds |= i.sceneBoundingRect()
+        #self.view.setRange(bounds)
+        #br = self.childGroup.childrenBoundingRect()
+        bounds = self.childrenBoundingRect()
+        if bounds is not None:
+            self.setRange(bounds, padding=padding)
+        
+    def childrenBoundingRect(self, item=None):
+        """Return the bounding rect of all children. Returns None if there are no bounded children"""
+        if item is None:
+            item = self.childGroup
+        if not item.isVisible():
+            return QtCore.QRectF()
+        
+        if hasattr(item, 'realBoundingRect'):
+            bounds = item.realBoundingRect()
+        else:
+            bounds = item.boundingRect()
+        bounds = self.mapFromItemToView(item, bounds).boundingRect()
+            
+        for ch in GraphicsScene.translateGraphicsItems(item.childItems()):
+            
+            chb = self.childrenBoundingRect(ch)
+            
+            if chb.height() > 0:
+                if bounds.height() > 0:
+                    bounds.setTop(min(bounds.top(), chb.top()))
+                    bounds.setBottom(max(bounds.bottom(), chb.bottom()))
+                else:
+                    bounds.setTop(chb.top())
+                    bounds.setBottom(chb.bottom())
+            if chb.width() > 0:
+                if bounds.width() > 0:
+                    bounds.setLeft(min(bounds.left(), chb.left()))
+                    bounds.setRight(max(bounds.right(), chb.right()))
+                else:
+                    bounds.setLeft(chb.left())
+                    bounds.setRight(chb.right())
+        return bounds
+            
+            
+            #and not isinstance(item, UIGraphicsItem):
+            #bounds = self.itemBoundingRect(item)
+        #else:
+            #bounds = None
+            
+            #chb = self.childrenBoundingRect(ch)
+            #if chb is None or (chb.width() == 0 and chb.height() == 0):
+                #continue
+            #else:
+                #if bounds is None:
+                    #bounds = chb
+                #else:
+                    #bounds |= chb
+        #return bounds
+        
 
     def updateMatrix(self, changed=None):
         if changed is None:

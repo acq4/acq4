@@ -26,7 +26,7 @@ class FileLogView(LogWidget):
         self.mod = mod
         
     def clear(self):
-        self.ui.output.clear()
+        self.ui.logView.clear()
         #pass
     
     def selectedFileChanged(self, dh):

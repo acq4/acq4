@@ -44,17 +44,17 @@ if the current curve and the current plot instance are passed.
 import sys
 import scipy
 import scipy.optimize as optimize
-import PySideImporter
+#import PySideImporter
 import openopt
 import numpy
 import ctypes
 import numpy.random
-from PySide import QtGui, QtCore
-from PySide.QtUiTools import QUiLoader
+#from PySide import QtGui, QtCore
+#from PySide.QtUiTools import QUiLoader
 from metaarray import MetaArray
-# from PyQt4 import Qt
-# import PyQt4.Qwt5 as Qwt
-# from PyQt4.Qwt5.anynumpy import *
+from PyQt4 import Qt
+#import PyQt4.Qwt5 as Qwt
+#from PyQt4.Qwt5.anynumpy import *
 #from sets import *
 
 usingMPlot = False

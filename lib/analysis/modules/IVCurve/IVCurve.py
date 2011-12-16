@@ -167,7 +167,7 @@ class IVCurve(AnalysisModule):
             self.fiScatterPlot = pg.ScatterPlotItem(size=10, pen=pg.mkPen('b'), brush=pg.mkBrush(0, 0, 255, 200), 
                 style='s', identical=True)
             self.fslScatterPlot = pg.ScatterPlotItem(size=6, pen=pg.mkPen('g'), brush=pg.mkBrush(0, 255, 0, 200), 
-                style = '*', identical=True)
+                style = 't', identical=True)
             self.fisiScatterPlot = pg.ScatterPlotItem(size=6, pen=pg.mkPen('y'), brush=pg.mkBrush(255, 255, 0, 200),
                 style = 's', identical=True)
             self.fiPlot.plot(x=current*1e12, y = self.spikecount, clear=True)
