@@ -3,6 +3,7 @@ from UIGraphicsItem import UIGraphicsItem
 from InfiniteLine import InfiniteLine
 import pyqtgraph.functions as fn
 
+__all__ = ['LinearRegionItem']
 
 class LinearRegionItem(UIGraphicsItem):
     """

@@ -3,7 +3,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 #from PySide import QtCore, QtGui
 from pyqtgraph.graphicsItems.GraphicsObject import GraphicsObject
 from Terminal import *
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 from debug import *
 import numpy as np
 #from pyqtgraph.ObjectWorkaround import QObjectWorkaround

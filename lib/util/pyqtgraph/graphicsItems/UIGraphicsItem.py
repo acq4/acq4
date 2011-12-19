@@ -2,6 +2,7 @@ from pyqtgraph.Qt import QtGui, QtCore
 import weakref
 from GraphicsObject import GraphicsObject
 
+__all__ = ['UIGraphicsItem']
 class UIGraphicsItem(GraphicsObject):
     """Base class for graphics items with boundaries relative to a GraphicsView or ViewBox.
     The purpose of this class is to allow the creation of GraphicsItems which live inside 

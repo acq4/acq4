@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'devTemplate.ui'
 #
-# Created: Mon Oct 31 15:10:15 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Sun Dec 18 19:22:47 2011
+#      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -291,4 +291,4 @@ class Ui_Form(object):
         self.shutterBtn.setText(QtGui.QApplication.translate("Form", "Open Shutter", None, QtGui.QApplication.UnicodeUTF8))
         self.qSwitchBtn.setText(QtGui.QApplication.translate("Form", "Turn On QSwitch", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.SpinBox import SpinBox
+from pyqtgraph import SpinBox

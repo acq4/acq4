@@ -6,7 +6,7 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 from numpy import ndarray
-from GraphicsLayout import GraphicsLayout
+import GraphicsLayout
 
 try:
     from metaarray import *
@@ -16,7 +16,8 @@ except:
     HAVE_METAARRAY = False
     
 
-class MultiPlotItem(GraphicsLayout):
+__all__ = ['MultiPlotItem']
+class MultiPlotItem(GraphicsLayout.GraphicsLayout):
     """
     Automaticaly generates a grid of plots from a multi-dimensional array
     """

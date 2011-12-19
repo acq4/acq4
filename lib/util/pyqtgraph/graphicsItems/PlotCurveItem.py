@@ -8,6 +8,7 @@ from pyqtgraph import debug
 from pyqtgraph.Point import Point
 import struct
 
+__all__ = ['PlotCurveItem']
 class PlotCurveItem(GraphicsObject):
     
     sigPlotChanged = QtCore.Signal(object)

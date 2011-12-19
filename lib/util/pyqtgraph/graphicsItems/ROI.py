@@ -25,6 +25,13 @@ import pyqtgraph.functions as fn
 from GraphicsObject import GraphicsObject
 from UIGraphicsItem import UIGraphicsItem
 
+__all__ = [
+    'ROI', 
+    'TestROI', 'RectROI', 'EllipseROI', 'CircleROI', 'PolygonROI', 
+    'LineROI', 'MultiLineROI', 'LineSegmentROI', 'SpiralROI'
+]
+
+
 def rectStr(r):
     return "[%f, %f] + [%f, %f]" % (r.x(), r.y(), r.width(), r.height())
 

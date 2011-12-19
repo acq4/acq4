@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/util/DatabaseGui/QueryTemplate.ui'
+# Form implementation generated from reading ui file 'QueryTemplate.ui'
 #
-# Created: Wed May 18 20:44:16 2011
+# Created: Sun Dec 18 18:41:14 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -41,5 +41,5 @@ class Ui_Form(object):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
         self.queryBtn.setText(QtGui.QApplication.translate("Form", "Query", None, QtGui.QApplication.UnicodeUTF8))
 
+from pyqtgraph import TableWidget
 from FeedbackButton import FeedbackButton
-from pyqtgraph.TableWidget import TableWidget

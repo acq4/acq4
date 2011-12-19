@@ -6,6 +6,7 @@ import weakref
 import pyqtgraph.functions as fn
 from GraphicsWidget import GraphicsWidget
 
+__all__ = ['AxisItem']
 class AxisItem(GraphicsWidget):
     def __init__(self, orientation, pen=None, linkView=None, parent=None, maxTickLength=-5):
         """

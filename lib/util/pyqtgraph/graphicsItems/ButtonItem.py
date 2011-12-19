@@ -1,6 +1,7 @@
 from pyqtgraph.Qt import QtGui, QtCore
 from GraphicsObject import GraphicsObject
 
+__all__ = ['ButtonItem']
 class ButtonItem(GraphicsObject):
     """Button graphicsItem displaying an image."""
     

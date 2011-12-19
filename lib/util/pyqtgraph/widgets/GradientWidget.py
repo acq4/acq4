@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
-from Qt import QtGui, QtCore
+from pyqtgraph.Qt import QtGui, QtCore
 import weakref
+
+__all__ = ['TickSlider', 'GradientWidget', 'BlackWhiteSlider']
 
 class TickSlider(QtGui.QGraphicsView):
     def __init__(self, parent=None, orientation='bottom', allowAdd=True, **kargs):

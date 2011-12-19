@@ -17,8 +17,8 @@ from configfile import *
 from metaarray import MetaArray
 import time
 from Mutex import Mutex, MutexLocker
-from pyqtgraph.SignalProxy import SignalProxy
-from pyqtgraph.ProgressDialog import ProgressDialog
+from pyqtgraph import SignalProxy, ProgressDialog
+#from pyqtgraph.ProgressDialog import ProgressDialog
 from PyQt4 import QtCore, QtGui
 if not hasattr(QtCore, 'Signal'):
     QtCore.Signal = QtCore.pyqtSignal

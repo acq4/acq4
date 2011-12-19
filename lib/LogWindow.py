@@ -10,7 +10,7 @@ from DataManager import DirHandle
 from HelpfulException import HelpfulException
 from Mutex import Mutex
 import numpy as np
-from pyqtgraph.FileDialog import FileDialog
+from pyqtgraph import FileDialog
 from debug import printExc
 import weakref
 import re

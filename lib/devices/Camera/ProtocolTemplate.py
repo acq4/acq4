@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/devices/Camera/ProtocolTemplate.ui'
+# Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Wed May 18 20:44:13 2011
+# Created: Sun Dec 18 19:29:58 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -114,4 +114,4 @@ class Ui_Form(object):
         self.releaseBetweenRadio.setText(QtGui.QApplication.translate("Form", "Release between protocols", None, QtGui.QApplication.UnicodeUTF8))
         self.releaseAfterRadio.setText(QtGui.QApplication.translate("Form", "Release after sequence", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.ImageView import ImageView
+from pyqtgraph import ImageView

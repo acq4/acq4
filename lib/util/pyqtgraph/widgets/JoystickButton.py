@@ -1,6 +1,7 @@
-from Qt import QtGui, QtCore
-if hasattr(QtCore, 'pyqtSignal'):
-    QtCore.Signal = QtCore.pyqtSignal
+from pyqtgraph.Qt import QtGui, QtCore
+
+
+__all__ = ['JoystickButton']
 
 class JoystickButton(QtGui.QPushButton):
     sigStateChanged = QtCore.Signal(object, object)
@@ -83,6 +84,7 @@ if __name__ == '__main__':
     b.sigStateChanged.connect(fn)
         
     ## Start Qt event loop unless running in interactive mode.
+    import sys
     if sys.flags.interactive != 1:
         app.exec_()
         

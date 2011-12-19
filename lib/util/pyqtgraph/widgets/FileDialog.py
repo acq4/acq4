@@ -1,6 +1,7 @@
-from Qt import QtGui
+from pyqtgraph.Qt import QtGui, QtCore
 import sys
 
+__all__ = ['FileDialog']
 
 class FileDialog(QtGui.QFileDialog):
     ## Compatibility fix for OSX:

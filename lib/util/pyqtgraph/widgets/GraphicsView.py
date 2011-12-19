@@ -5,15 +5,17 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-from Qt import QtCore, QtGui, QtOpenGL, QtSvg
+from pyqtgraph.Qt import QtCore, QtGui, QtOpenGL, QtSvg
 #from numpy import vstack
 #import time
-from Point import *
+from pyqtgraph.Point import Point
 #from vector import *
 import sys, os
 import debug    
 from FileDialog import FileDialog
-from GraphicsScene import GraphicsScene
+from pyqtgraph.GraphicsScene import GraphicsScene
+
+__all__ = ['GraphicsView']
 
 class GraphicsView(QtGui.QGraphicsView):
     

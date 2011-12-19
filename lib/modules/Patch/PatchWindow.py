@@ -3,8 +3,8 @@ from __future__ import with_statement
 from PatchTemplate import *
 from PyQt4 import QtGui, QtCore
 #from PyQt4 import Qwt5 as Qwt
-from pyqtgraph.WidgetGroup import WidgetGroup
-from pyqtgraph.PlotWidget import PlotWidget
+from pyqtgraph import WidgetGroup
+from pyqtgraph import PlotWidget
 from metaarray import *
 from Mutex import Mutex, MutexLocker
 import traceback, sys, time

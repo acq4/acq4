@@ -1,6 +1,7 @@
 from pyqtgraph.Qt import QtGui, QtCore
 import pyqtgraph.functions as fn
 
+__all__ = ['ArrowItem']
 class ArrowItem(QtGui.QGraphicsPolygonItem):
     """
     For displaying scale-invariant arrows.

@@ -1,15 +1,14 @@
 # -*- coding: utf-8 -*-
-from Qt import QtGui, QtCore
-if not hasattr(QtCore, 'Signal'):
-    QtCore.Signal = QtCore.pyqtSignal
+from pyqtgraph.Qt import QtGui, QtCore
+from pyqtgraph.SignalProxy import SignalProxy
 
-import functions as fn
+import pyqtgraph.functions as fn
 from math import log
-from SignalProxy import SignalProxy
 from decimal import Decimal as D  ## Use decimal to avoid accumulating floating-point errors
 from decimal import *
 import weakref
 
+__all__ = ['SpinBox']
 class SpinBox(QtGui.QAbstractSpinBox):
     """QSpinBox widget on steroids. Allows selection of numerical value, with extra features:
       - SI prefix notation

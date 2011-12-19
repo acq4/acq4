@@ -3,9 +3,10 @@ from PyQt4 import QtCore, QtGui
 from ProtocolTemplate import *
 from lib.devices.DAQGeneric.protoGUI import DAQGenericProtoGui
 from lib.devices.Device import ProtocolGui
-from pyqtgraph.WidgetGroup import WidgetGroup
+#from pyqtgraph.WidgetGroup import WidgetGroup
 from numpy import ndarray
-from pyqtgraph.graphicsItems import InfiniteLine, VTickGroup
+import pyqtgraph as pg
+#from pyqtgraph.graphicsItems import InfiniteLine, VTickGroup
 #from PyQt4 import Qwt5 as Qwt
 
 class CameraProtoGui(DAQGenericProtoGui):
@@ -14,7 +15,7 @@ class CameraProtoGui(DAQGenericProtoGui):
         
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        self.stateGroup = WidgetGroup(self) ## create state group before DAQ creates its own interface
+        self.stateGroup = pg.WidgetGroup(self) ## create state group before DAQ creates its own interface
         self.ui.horizSplitter.setStretchFactor(0, 0)
         self.ui.horizSplitter.setStretchFactor(1, 1)
         
@@ -55,15 +56,15 @@ class CameraProtoGui(DAQGenericProtoGui):
         
         self.vLines = []
         if 'trigger' in self.plots:
-            l = InfiniteLine()
+            l = pg.InfiniteLine()
             self.vLines.append(l)
             self.plots['trigger'].addItem(self.vLines[0])
         if 'exposure' in self.plots:
-            l = InfiniteLine()
+            l = pg.InfiniteLine()
             self.vLines.append(l)
             self.plots['exposure'].addItem(self.vLines[1])
             
-        self.frameTicks = VTickGroup()
+        self.frameTicks = pg.VTickGroup()
         self.frameTicks.setYRange([0.8, 1.0])
         
         #self.roiRect = QtGui.QGraphicsRectItem()

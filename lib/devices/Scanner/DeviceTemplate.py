@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'DeviceTemplate.ui'
 #
-# Created: Wed Oct 19 11:36:16 2011
+# Created: Sun Dec 18 19:30:02 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -200,4 +200,4 @@ class Ui_Form(object):
         self.label_7.setText(QtGui.QApplication.translate("Form", "X", None, QtGui.QApplication.UnicodeUTF8))
         self.label_8.setText(QtGui.QApplication.translate("Form", "Y", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.ImageView import ImageView
+from pyqtgraph import ImageView

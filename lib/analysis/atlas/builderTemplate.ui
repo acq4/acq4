@@ -226,12 +226,12 @@
   <customwidget>
    <class>GraphicsView</class>
    <extends>QGraphicsView</extends>
-   <header>pyqtgraph.GraphicsView</header>
+   <header>pyqtgraph</header>
   </customwidget>
   <customwidget>
    <class>TreeWidget</class>
    <extends>QTreeWidget</extends>
-   <header>pyqtgraph.TreeWidget</header>
+   <header>pyqtgraph</header>
   </customwidget>
  </customwidgets>
  <resources/>

@@ -1,5 +1,5 @@
 from PyQt4 import QtGui, QtCore
-from pyqtgraph.PlotWidget import PlotWidget
+from pyqtgraph import PlotWidget
 from lib.devices.DAQGeneric import DAQGenericProtoGui
 from SequenceRunner import runSequence
 from pyqtgraph.functions import siFormat

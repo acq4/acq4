@@ -21,7 +21,7 @@ This class is very heavily featured:
 from plotConfigTemplate import *
 from pyqtgraph.Qt import QtGui, QtCore, QtSvg
 import pyqtgraph.functions as fn
-from pyqtgraph.FileDialog import FileDialog
+from pyqtgraph.widgets.FileDialog import FileDialog
 import weakref
 import numpy as np
 from .. PlotCurveItem import PlotCurveItem

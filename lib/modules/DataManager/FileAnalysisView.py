@@ -12,7 +12,7 @@ import lib.analysis.dataModels as models
 #def noop(x):
 #   return x
 #QtCore.QVariant = noop
-from lib.util.pyqtgraph.FileDialog import FileDialog
+from pyqtgraph import FileDialog
 
 class FileAnalysisView(QtGui.QWidget):
     

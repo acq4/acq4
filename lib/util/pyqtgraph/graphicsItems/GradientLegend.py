@@ -1,6 +1,7 @@
 from UIGraphicsItem import *
 import pyqtgraph.functions as fn
 
+__all__ = ['GradientLegend']
 
 class GradientLegend(UIGraphicsItem):
     """

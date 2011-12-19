@@ -2,6 +2,7 @@ from UIGraphicsItem import *
 import numpy as np
 from pyqtgraph.Point import Point
 
+__all__ = ['GridItem']
 class GridItem(UIGraphicsItem):
     """
     Displays a rectangular grid of lines indicating major divisions within a coordinate system.

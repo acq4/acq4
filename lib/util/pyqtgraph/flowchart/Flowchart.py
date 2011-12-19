@@ -5,8 +5,8 @@ from pyqtgraph.Qt import QtCore, QtGui
 #import Node as NodeMod
 from Node import *
 #import functions
-from advancedTypes import OrderedDict
-from .. TreeWidget import *
+from collections import OrderedDict
+from pyqtgraph.widgets.TreeWidget import *
 #from .. DataTreeWidget import *
 import FlowchartTemplate
 import FlowchartCtrlTemplate
@@ -16,9 +16,8 @@ import library
 from debug import printExc
 import configfile
 import pyqtgraph.dockarea as dockarea
-from .. import DataTreeWidget
+import pyqtgraph as pg
 import FlowchartGraphicsView
-from pyqtgraph.FileDialog import FileDialog
 
 def strDict(d):
     return dict([(str(k), v) for k, v in d.iteritems()])
@@ -219,6 +218,11 @@ class Flowchart(Node):
         
         
     def process(self, **args):
+        """
+        Process data through the flowchart, returning the output.
+        Keyword arguments must be the names of input terminals
+        
+        """
         data = {}  ## Stores terminal:value pairs
         
         ## determine order of operations
@@ -474,7 +478,7 @@ class Flowchart(Node):
                 startDir = self.filePath
             if startDir is None:
                 startDir = '.'
-            self.fileDialog = FileDialog(None, "Load Flowchart..", startDir, "Flowchart (*.fc)")
+            self.fileDialog = pg.FileDialog(None, "Load Flowchart..", startDir, "Flowchart (*.fc)")
             #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
             #self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
             self.fileDialog.show()
@@ -494,7 +498,7 @@ class Flowchart(Node):
                 startDir = self.filePath
             if startDir is None:
                 startDir = '.'
-            self.fileDialog = FileDialog(None, "Save Flowchart..", startDir, "Flowchart (*.fc)")
+            self.fileDialog = pg.FileDialog(None, "Save Flowchart..", startDir, "Flowchart (*.fc)")
             #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
             self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
             #self.fileDialog.setDirectory(startDir)
@@ -753,7 +757,7 @@ class FlowchartWidget(dockarea.DockArea):
         self.selDescLabel = QtGui.QLabel()
         self.selNameLabel = QtGui.QLabel()
         self.selDescLabel.setWordWrap(True)
-        self.selectedTree = DataTreeWidget.DataTreeWidget()
+        self.selectedTree = pg.DataTreeWidget()
         #self.selectedTree.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
         #self.selInfoLayout.addWidget(self.selNameLabel)
         self.selInfoLayout.addWidget(self.selDescLabel)

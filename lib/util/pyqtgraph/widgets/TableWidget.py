@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from pyqtgraph.Qt import QtGui, QtCore
+
 import numpy as np
 try:
     import metaarray
@@ -7,6 +8,7 @@ try:
 except:
     HAVE_METAARRAY = False
 
+__all__ = ['TableWidget']
 class TableWidget(QtGui.QTableWidget):
     """Extends QTableWidget with some useful functions for automatic data handling.
     Can automatically format and display:

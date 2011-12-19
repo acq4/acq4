@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import pyqtgraph as pg
 import numpy as np
-import pyqtgraph.ProgressDialog as ProgressDialog
+#import pyqtgraph.ProgressDialog as ProgressDialog
 
 class Map:
     ### A map is a group of (possibly overlapping) scans and associated meta-data. 
@@ -223,7 +223,7 @@ class Map:
             return
         spots = self.sPlotItem.points()
         colors = []
-        with ProgressDialog.ProgressDialog("Computing map %s (%d/%d)" % (self.name(), n, nMax), 0, len(spots)) as dlg:
+        with pg.ProgressDialog("Computing map %s (%d/%d)" % (self.name(), n, nMax), 0, len(spots)) as dlg:
             for i in xrange(len(spots)):
                 s = spots[i]
                 data = []
@@ -264,7 +264,7 @@ class Map:
 
     def loadStubs(self):
         ### Turn all stubs into fully-loaded scans.
-        with ProgressDialog.ProgressDialog("Loading scans...", 0, len(self.stubs)) as dlg:
+        with pg.ProgressDialog("Loading scans...", 0, len(self.stubs)) as dlg:
             for stub in self.stubs:
                 QtGui.QApplication.processEvents()
                 ### can we load a partial map if one scan fails? (should we?)
