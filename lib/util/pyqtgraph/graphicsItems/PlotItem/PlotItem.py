@@ -274,13 +274,13 @@ class PlotItem(GraphicsWidget):
         #for i in range(self.layout.count()):
             #self.layout.removeAt(i)
             
-        for p in self.proxies:
-            try:
-                p.setWidget(None)
-            except RuntimeError:
-                break
-            self.scene().removeItem(p)
-        self.proxies = []
+        #for p in self.proxies:
+            #try:
+                #p.setWidget(None)
+            #except RuntimeError:
+                #break
+            #self.scene().removeItem(p)
+        #self.proxies = []
         
         self.menuAction.releaseWidget(self.menuAction.defaultWidget())
         self.menuAction.setParent(None)
