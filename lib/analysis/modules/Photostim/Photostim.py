@@ -413,6 +413,7 @@ class Photostim(AnalysisModule):
         if data is None:
             stats = self.flowchart.output()['dataOut']
             spot = self.selectedSpot
+            fh = spot.data
             if spot is None:
                 return
         else:
@@ -439,7 +440,7 @@ class Photostim(AnalysisModule):
         stats['SourceFile'] = self.dataModel.getClampFile(fh)
         
         parent = fh.parent()
-        if db.dirTypeName(parent) != 'ProtocolSequence':
+        if self.dataModel.dirType(parent) != 'ProtocolSequence':
             parent = fh
         
         stats['SourceDir'] = parent
