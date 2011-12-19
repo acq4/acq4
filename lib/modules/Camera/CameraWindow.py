@@ -299,12 +299,12 @@ class CameraWindow(QtGui.QMainWindow):
         
         
         
-        ## Check for new frame updates every 10ms
+        ## Check for new frame updates every 16ms
         ## Some checks may be skipped even if there is a new frame waiting to avoid drawing more than 
         ## 60fps.
         self.frameTimer = QtCore.QTimer()
         self.frameTimer.timeout.connect(self.drawFrame)
-        self.frameTimer.start(10)
+        self.frameTimer.start(16) ## draw frames no faster than 60Hz
         #QtCore.QTimer.singleShot(1, self.drawFrame)
         ## avoiding possible singleShot-induced crashes
         
