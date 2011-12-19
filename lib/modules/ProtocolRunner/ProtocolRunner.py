@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import with_statement
+#from __future__ import with_statement
 from lib.modules.Module import *
 from ProtocolRunnerTemplate import *
 from PyQt4 import QtGui, QtCore
@@ -8,7 +8,7 @@ import DirTreeWidget
 import configfile
 from collections import OrderedDict
 from SequenceRunner import *
-from pyqtgraph.WidgetGroup import WidgetGroup
+#from pyqtgraph.WidgetGroup import WidgetGroup
 from Mutex import Mutex, MutexLocker
 from lib.Manager import getManager, logMsg, logExc
 from debug import *
@@ -18,8 +18,9 @@ import time, gc
 #import sip
 import sys, os
 from HelpfulException import HelpfulException
-from pyqtgraph.ProgressDialog import ProgressDialog
+#from pyqtgraph.ProgressDialog import ProgressDialog
 from lib.LogWindow import LogButton
+import pyqtgraph as pg
 
 #import pdb
 
@@ -98,7 +99,7 @@ class ProtocolRunner(Module):
         self.ui.protoLeadTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=10e-3, suffix='s', siPrefix=True)
         self.ui.protoCycleTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
         self.ui.seqCycleTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
-        self.protoStateGroup = WidgetGroup([
+        self.protoStateGroup = pg.WidgetGroup([
             (self.ui.protoContinuousCheck, 'continuous'),
             (self.ui.protoDurationSpin, 'duration'),
             (self.ui.protoLeadTimeSpin, 'leadTime'),
@@ -737,7 +738,7 @@ class ProtocolRunner(Module):
                     
             #print params, linkedParams
             ## Generate the complete array of command structures. This can take a long time, so we start a progress dialog.
-            with ProgressDialog("Generating protocol commands..", 0, pLen) as progressDlg:
+            with pg.ProgressDialog("Generating protocol commands..", 0, pLen) as progressDlg:
                 #progressDlg.setMinimumDuration(500)  ## If this takes less than 500ms, progress dialog never appears.
                 self.lastQtProcessTime = ptime.time()
                 prot = runSequence(lambda p: self.generateProtocol(dh, p, progressDlg), paramInds, paramInds.keys(), linkedParams=linkedParams)

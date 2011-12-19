@@ -267,7 +267,7 @@ class ColumnJoinNode(Node):
         self.layout = QtGui.QGridLayout()
         self.ui.setLayout(self.layout)
         
-        self.tree = TreeWidget.TreeWidget()
+        self.tree = TreeWidget()
         self.addInBtn = QtGui.QPushButton('+ Input')
         self.remInBtn = QtGui.QPushButton('- Input')
         

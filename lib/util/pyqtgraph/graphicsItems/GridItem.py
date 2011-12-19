@@ -1,3 +1,4 @@
+from pyqtgraph.Qt import QtGui, QtCore
 from UIGraphicsItem import *
 import numpy as np
 from pyqtgraph.Point import Point
