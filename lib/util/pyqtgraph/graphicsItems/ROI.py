@@ -35,18 +35,6 @@ __all__ = [
 def rectStr(r):
     return "[%f, %f] + [%f, %f]" % (r.x(), r.y(), r.width(), r.height())
 
-# Multiple inheritance not allowed in PyQt. Retarded workaround:
-#class QObjectWorkaround:
-    #def __init__(self):
-        #self._qObj_ = QtCore.QObject()
-    #def __getattr__(self, attr):
-        #if attr == '_qObj_':
-            #raise Exception("QObjectWorkaround not initialized!")
-        #return getattr(self._qObj_, attr)
-    #def connect(self, *args):
-        #return QtCore.QObject.connect(self._qObj_, *args)
-
-
 class ROI(GraphicsObject):
     """Generic region-of-interest widget. 
     Can be used for implementing many types of selection box with rotate/translate/scale handles."""
@@ -1134,9 +1122,7 @@ class Handle(UIGraphicsItem):
     def __init__(self, radius, typ=None, pen=(200, 200, 220), parent=None):
         #print "   create item with parent", parent
         #self.bounds = QtCore.QRectF(-1e-10, -1e-10, 2e-10, 2e-10)
-        UIGraphicsItem.__init__(self, parent=parent)
         #self.setFlags(self.ItemIgnoresTransformations | self.ItemSendsScenePositionChanges)
-        self.setZValue(11)
         self.roi = []
         self.radius = radius
         self.typ = typ
@@ -1147,7 +1133,11 @@ class Handle(UIGraphicsItem):
         self.isMoving = False
         self.sides, self.startAng = self.types[typ]
         self.buildPath()
-        self.updateShape()
+        self._shape = None
+        
+        UIGraphicsItem.__init__(self, parent=parent)
+        #self.updateShape()
+        self.setZValue(11)
             
     def connectROI(self, roi, i):
         self.roi.append((roi, i))
@@ -1252,12 +1242,18 @@ class Handle(UIGraphicsItem):
             #p.drawLine(Point(x1, y1), Point(x2, y2))
             
     def shape(self):
+        if self._shape is None:
+            s = self.generateShape()
+            if s is None:
+                return self.shape
+            self._shape = s
+            self.prepareGeometryChange()
         return self._shape
     
     def boundingRect(self):
         return self.shape().boundingRect()
             
-    def updateShape(self):
+    def generateShape(self):
         ## determine rotation of transform
         #m = self.sceneTransform()  ## Qt bug: do not access sceneTransform() until we know this object has a scene.
         #mi = m.inverted()[0]
@@ -1266,7 +1262,7 @@ class Handle(UIGraphicsItem):
         
         if dt is None:
             self._shape = self.path
-            return
+            return None
         
         v = dt.map(QtCore.QPointF(1, 0)) - dt.map(QtCore.QPointF(0, 0))
         va = np.arctan2(v.y(), v.x())
@@ -1277,12 +1273,12 @@ class Handle(UIGraphicsItem):
         tr.translate(devPos.x(), devPos.y())
         tr.rotate(va * 180. / 3.1415926)
         
-        self._shape = dti.map(tr.map(self.path))
-        self.prepareGeometryChange()
+        return dti.map(tr.map(self.path))
         
         
     def viewChangedEvent(self):
-        self.updateShape()
+        self._shape = None  ## invalidate shape, recompute later if requested.
+        #self.updateShape()
         
     #def itemChange(self, change, value):
         #if change == self.ItemScenePositionHasChanged:

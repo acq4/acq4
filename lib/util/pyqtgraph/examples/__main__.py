@@ -24,7 +24,7 @@ examples = OrderedDict([
         ('TableWidget', '../widgets/TableWidget.py'),
         ('ColorButton', '../widgets/ColorButton.py'),
         ('CheckTable', '../widgets/CheckTable.py'),
-        ('VerticalLabel', '../widgets/VerticalLabel.py')
+        ('VerticalLabel', '../widgets/VerticalLabel.py'),
         ('JoystickButton', '../widgets/JoystickButton.py'),
     ])),
     ('ImageView', 'ImageView.py'),
