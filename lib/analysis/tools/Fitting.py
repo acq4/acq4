@@ -45,7 +45,11 @@ import sys
 import scipy
 import scipy.optimize as optimize
 #import PySideImporter
-import openopt
+try:
+    import openopt
+    HAVE_OPENOPT = True
+except:
+    HAVE_OPENOPT = False
 import numpy
 import ctypes
 import numpy.random
@@ -299,7 +303,7 @@ class Fitting():
                         print mesg
                 else:
                     # unpack bounds
-                    if boundsopt == 'openopt':
+                    if HAVE_OPENOPT and boundsopt == 'openopt':
                         lb = [y[0] for y in bounds]
                         ub = [y[1] for y in bounds]
                         fopt = openopt.DFP(func[0], fpars, tx, dy, df = None, lb=lb, ub=ub)
