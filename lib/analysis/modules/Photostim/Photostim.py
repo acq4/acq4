@@ -268,7 +268,9 @@ class Photostim(AnalysisModule):
     def mapPointClicked(self, scan, points):
         data = []
         for p in points:
-            data.extend(p.data)
+            for source in p:
+                data.append([source[0], self.dataModel.getClampFile(source[1])])
+            #data.extend(p.data)
         self.redisplayData(data)
         ##self.dbCtrl.mapSpotClicked(point.data)  ## Did this method exist at some point?
 
@@ -307,7 +309,7 @@ class Photostim(AnalysisModule):
                 pc = plot.plot(data, pen=color, clear=False)
                 
                 ## show stats
-                stats = scan.getStats(fh)
+                stats = scan.getStats(fh.parent())
                 statList.append(stats)
                 events = scan.getEvents(fh)['events']
                 evList.append(events)
@@ -401,35 +403,33 @@ class Photostim(AnalysisModule):
         print "Process Events:", fh
         return self.detector.process(fh)
 
-    def processStats(self, data=None, spot=None, fh=None):
+    def processStats(self, data=None, spot=None):
         ## Process output of stats flowchart for a single spot, add spot position fields.
-        ## data is the input to the stats flowchart
-        ##   - data['fileHandle'] will be set from fh or from the currently selected spot
-        ##   - if data is omitted, then the stats for the currently selected spot are returned
-        ##     (this is just the pre-existing output of the stats flowchart)
-        ## spot is used to determine the x,y coords of the spot
-        ## fh is the Protocol dir handle
-        
+        ## data  is the input to the stats flowchart
+        ##       if data is omitted, then the stats for the currently selected spot are returned
+        ##         (this is just the pre-existing output of the stats flowchart)
+        ## spot  is used to determine the x,y coords of the spot
         if data is None:
             stats = self.flowchart.output()['dataOut']
             spot = self.selectedSpot
-            fh = spot.data
+            dh = spot.data
             if spot is None:
                 return
         else:
             if 'regions' not in data:
                 data['regions'] = self.detector.flowchart.output()['regions']
-            if 'fh' is None:
-                data['fileHandle'] = self.selectedSpot.data
-            else:
-                data['fileHandle'] = fh
+            dh = spot.data
+            data['fileHandle'] = dh
+            #if dh is None:
+                #data['fileHandle'] = self.selectedSpot.data
+            #else:
+                #data['fileHandle'] = fh
             stats = self.flowchart.process(**data)['dataOut']
             
-
         if stats is None:
             raise Exception('No data returned from analysis (check flowchart for errors).')
             
-        pos = spot.scenePos()
+        pos = spot.viewPos()
         stats['xPos'] = pos.x()
         stats['yPos'] = pos.y()
         
@@ -437,11 +437,11 @@ class Photostim(AnalysisModule):
         #size = d.info().get('Scanner', {}).get('spotSize', 100e-6)
         #stats['spotSize'] = size
         #print "Process Stats:", spot.data
-        stats['SourceFile'] = self.dataModel.getClampFile(fh)
+        stats['SourceFile'] = self.dataModel.getClampFile(dh)
         
-        parent = fh.parent()
+        parent = dh.parent()
         if self.dataModel.dirType(parent) != 'ProtocolSequence':
-            parent = fh
+            parent = dh
         
         stats['SourceDir'] = parent
         
@@ -461,11 +461,11 @@ class Photostim(AnalysisModule):
         if spot is None:
             raise Exception("No spot selected")
         #fh = self.getClampFile(spot.data)
-        fh = self.dataModel.getClampFile(spot.data)
-        print "Store spot:", fh
-        parentDir = fh.parent()
+        #fh = self.dataModel.getClampFile(spot.data)
+        print "Store spot:", spot.data
+        parentDir = spot.data
         p2 = parentDir.parent()
-        if db.dirTypeName(p2) == 'ProtocolSequence':
+        if self.dataModel.dirType(p2) == 'ProtocolSequence':
             parentDir = p2
             
         ## ask eventdetector to store events for us.
@@ -475,14 +475,14 @@ class Photostim(AnalysisModule):
 
         ## store stats
         #stats = self.processStats(fh=parentDir)  ## should pass the protocol, not the protocolSequence, right?
-        stats = self.processStats(fh=fh.parent())  ## gets current stats if no processing is requested
+        stats = self.processStats(spot=spot)  ## gets current stats if no processing is requested
         
         self.storeStats(stats, parentDir)
         
         
         ## update data in Map
         #scan = self.scans[parentDir]
-        self.selectedScan.updateSpot(fh, events, stats)
+        self.selectedScan.updateSpot(spot.data, events, stats)
         #try:
             #scan = self.scans[parentDir]
         #except KeyError:
@@ -517,7 +517,7 @@ class Photostim(AnalysisModule):
                 except:
                     print fh, scan.getEvents(fh)
                     raise
-                st = scan.getStats(fh)
+                st = scan.getStats(s.data)
                 stats.append(st)
                 dlg.setValue(i)
                 if dlg.wasCanceled():
@@ -562,7 +562,7 @@ class Photostim(AnalysisModule):
     def storeStats(self, data, parentDir):
         ## Store a list of dict records, one per spot.
         ## data: {'SourceFile': clamp file handle, 'xPos':, 'yPos':, ...other fields from stats flowchart...}
-        ## parentDir: protocolSequence dir handle
+        ## parentDir: protocolSequence dir handle (or protocol for single spots)
         
         #print "Store stats:", fh
         

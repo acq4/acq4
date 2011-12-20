@@ -21,8 +21,10 @@ class Scan(QtCore.QObject):
         self.dataModel = host.dataModel
         self.givenName = name
         self._locked = False  ## prevents flowchart changes from clearing the cache--only individual updates allowed
+        self.events = {}    ## {'events': ...}
+        self.stats = {}     ## {protocolDir: stats}
+        self.spotDict = {}  ## protocolDir: spot 
         self.loadFromDB()
-        self.spotDict = {}  ##  fh: spot
         
     def itemVisibilityChanged(self):
         self.sigItemVisibilityChanged.emit(self)
@@ -71,7 +73,7 @@ class Scan(QtCore.QObject):
                 continue
             self.statExample = stats
             self.events[fh] = {'events': events}
-            self.stats[fh] = stats[0]
+            self.stats[dh] = stats[0]
         if haveAll:
             print "  have data for all spots; locking."
             self.lock()
@@ -108,8 +110,9 @@ class Scan(QtCore.QObject):
             ops = []
             for i in range(len(spots)):
                 spot = spots[i]
-                fh = self.dataModel.getClampFile(spot.data)
-                stats = self.getStats(fh, signal=False)
+                #fh = self.dataModel.getClampFile(spot.data)  ## fh should be the protocol dir, not clamp file.
+                dh = spot.data
+                stats = self.getStats(dh, signal=False)
                 #print "stats:", stats
                 color = self.host.getColor(stats)
                 ops.append((spot, color))
@@ -131,22 +134,23 @@ class Scan(QtCore.QObject):
         
         
             
-    def getStats(self, fh, signal=True):
+    def getStats(self, dh, signal=True):
         #print "getStats", fh
-        spot = self.getSpot(fh)
+        spot = self.getSpot(dh)
         #print "  got spot:", spot
         #except:
             #raise Exception("File %s is not in this scan" % fh.name())
-        if fh not in self.stats:
-            print "No stats cache for", fh.name(), "compute.."
+        if dh not in self.stats:
+            print "No stats cache for", dh.name(), "compute.."
+            fh = self.host.dataModel.getClampFile(dh)
             events = self.getEvents(fh, signal=signal)
             try:
-                stats = self.host.processStats(events, spot, fh=fh)
+                stats = self.host.processStats(events, spot)
             except:
                 print events
                 raise
-            self.stats[fh] = stats
-        return self.stats[fh].copy()
+            self.stats[dh] = stats
+        return self.stats[dh].copy()
 
     def getEvents(self, fh, process=True, signal=True):
         if fh not in self.events:
@@ -181,15 +185,16 @@ class Scan(QtCore.QObject):
         gi = self.item
         return gi.points()
 
-    def updateSpot(self, fh, events, stats):
-        self.events[fh] = events
-        self.stats[fh] = stats
+    def updateSpot(self, dh, events, stats):
+        ## called from photostim.storeDBSpot
+        self.events[self.host.dataModel.getClampFile(dh)] = events
+        self.stats[dh] = stats
 
-    def getSpot(self, fh):
-        if fh not in self.spotDict:
+    def getSpot(self, dh):
+        if dh not in self.spotDict:
             for s in self.spots():
-                self.spotDict[self.host.dataModel.getClampFile(s.data)] = s
-        return self.spotDict[fh]
+                self.spotDict[s.data] = s
+        return self.spotDict[dh]
     
     @staticmethod
     def describe(dataModel, source):

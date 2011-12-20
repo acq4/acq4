@@ -184,6 +184,9 @@ class GraphicsObject(QtGui.QGraphicsObject):
     def pos(self):
         return Point(QtGui.QGraphicsObject.pos(self))
     
+    def viewPos(self):
+        return self.mapToView(self.pos())
+    
     #def itemChange(self, change, value):
         #ret = QtGui.QGraphicsObject.itemChange(self, change, value)
         #if change == self.ItemParentHasChanged or change == self.ItemSceneHasChanged:

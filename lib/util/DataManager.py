@@ -458,8 +458,9 @@ class DirHandle(FileHandle):
     
     def __getitem__(self, item):
         #print self.name(), " -> ", item
-        while item[0] == os.path.sep:
-            item = item[1:]
+        #while len(item) > 0 and item[0] == os.path.sep:
+            #item = item[1:]
+        item = item.lstrip(os.path.sep)
         fileName = os.path.join(self.name(), item)
         return self.manager.getHandle(fileName)
     
