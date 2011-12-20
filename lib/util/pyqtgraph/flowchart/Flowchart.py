@@ -186,11 +186,20 @@ class Flowchart(Node):
         del self._nodes[node.name()]
         self.widget().removeNode(node)
         #QtCore.QObject.disconnect(node, QtCore.SIGNAL('closed'), self.nodeClosed)
-        node.sigClosed.disconnect(self.nodeClosed)
+        try:
+            node.sigClosed.disconnect(self.nodeClosed)
+        except TypeError:
+            pass
         #QtCore.QObject.disconnect(node, QtCore.SIGNAL('renamed'), self.nodeRenamed)
-        node.sigRenamed.disconnect(self.nodeRenamed)
+        try:
+            node.sigRenamed.disconnect(self.nodeRenamed)
+        except TypeError:
+            pass
         #QtCore.QObject.disconnect(node, QtCore.SIGNAL('outputChanged'), self.nodeOutputChanged)
-        node.sigOutputChanged.disconnect(self.nodeOutputChanged)
+        try:
+            node.sigOutputChanged.disconnect(self.nodeOutputChanged)
+        except TypeError:
+            pass
         
     def nodeRenamed(self, node, oldName):
         del self._nodes[oldName]
@@ -442,35 +451,43 @@ class Flowchart(Node):
         return state
         
     def restoreState(self, state, clear=False):
-        if clear:
-            self.clear()
-        Node.restoreState(self, state)
-        nodes = state['nodes']
-        nodes.sort(lambda a, b: cmp(a['pos'][0], b['pos'][0]))
-        for n in nodes:
-            if n['name'] in self._nodes:
-                self._nodes[n['name']].moveBy(*n['pos'])
-                continue
-            try:
-                node = self.createNode(n['class'], name=n['name'])
-                node.restoreState(n['state'])
-            except:
-                printExc("Error creating node %s: (continuing anyway)" % n['name'])
-            #node.graphicsItem().moveBy(*n['pos'])
-            
-        self.inputNode.restoreState(state.get('inputNode', {}))
-        self.outputNode.restoreState(state.get('outputNode', {}))
-            
-        #self.restoreTerminals(state['terminals'])
-        for n1, t1, n2, t2 in state['connects']:
-            try:
-                self.connectTerminals(self._nodes[n1][t1], self._nodes[n2][t2])
-            except:
-                print self._nodes[n1].terminals
-                print self._nodes[n2].terminals
-                printExc("Error connecting terminals %s.%s - %s.%s:" % (n1, t1, n2, t2))
+        self.blockSignals(True)
+        try:
+            if clear:
+                self.clear()
+            Node.restoreState(self, state)
+            nodes = state['nodes']
+            nodes.sort(lambda a, b: cmp(a['pos'][0], b['pos'][0]))
+            for n in nodes:
+                if n['name'] in self._nodes:
+                    self._nodes[n['name']].moveBy(*n['pos'])
+                    continue
+                try:
+                    node = self.createNode(n['class'], name=n['name'])
+                    node.restoreState(n['state'])
+                except:
+                    printExc("Error creating node %s: (continuing anyway)" % n['name'])
+                #node.graphicsItem().moveBy(*n['pos'])
                 
+            self.inputNode.restoreState(state.get('inputNode', {}))
+            self.outputNode.restoreState(state.get('outputNode', {}))
+                
+            #self.restoreTerminals(state['terminals'])
+            for n1, t1, n2, t2 in state['connects']:
+                try:
+                    self.connectTerminals(self._nodes[n1][t1], self._nodes[n2][t2])
+                except:
+                    print self._nodes[n1].terminals
+                    print self._nodes[n2].terminals
+                    printExc("Error connecting terminals %s.%s - %s.%s:" % (n1, t1, n2, t2))
+                    
+                
+        finally:
+            self.blockSignals(False)
+            
         self.sigChartLoaded.emit()
+        self.outputChanged()
+        #self.sigOutputChanged.emit()
             
     def loadFile(self, fileName=None, startDir=None):
         if fileName is None:
@@ -702,7 +719,10 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         if node in self.items:
             item = self.items[node]
             #self.disconnect(item.bypassBtn, QtCore.SIGNAL('clicked()'), self.bypassClicked)
-            item.bypassBtn.clicked.disconnect(self.bypassClicked)
+            try:
+                item.bypassBtn.clicked.disconnect(self.bypassClicked)
+            except TypeError:
+                pass
             self.ui.ctrlList.removeTopLevelItem(item)
             
     def bypassClicked(self):
