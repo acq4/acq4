@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from Qt import QtGui, QtCore
+from pyqtgraph.Qt import QtGui, QtCore
 from collections import OrderedDict
 import types, traceback
 import numpy as np
@@ -10,6 +10,7 @@ try:
 except:
     HAVE_METAARRAY = False
 
+__all__ = ['DataTreeWidget']
 
 class DataTreeWidget(QtGui.QTreeWidget):
     """

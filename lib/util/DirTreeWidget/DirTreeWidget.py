@@ -285,7 +285,9 @@ class DirTreeWidget(QtGui.QTreeWidget):
         handle = self.handle(root)
 
         self.clearTree(root)
-
+        if handle is None:
+            return
+        
         for f in handle.ls(useCache=useCache):
             #print "Add handle", f
             try:
@@ -381,8 +383,8 @@ class FileTreeItem(QtGui.QTreeWidgetItem):
 
         if self.handle.isDir():
             self.setExpanded(False)
-            if self.handle.hasChildren():
-                self.setChildIndicatorPolicy(QtGui.QTreeWidgetItem.ShowIndicator)
+            #if self.handle.hasChildren():  ## too expensive.
+            self.setChildIndicatorPolicy(QtGui.QTreeWidgetItem.ShowIndicator)
             self.setFlags(QtCore.Qt.ItemIsSelectable|QtCore.Qt.ItemIsDropEnabled|QtCore.Qt.ItemIsEnabled)
             self.setForeground(0, QtGui.QBrush(QtGui.QColor(0, 0, 150)))
         else:

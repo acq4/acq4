@@ -2,6 +2,7 @@ from pyqtgraph.Qt import QtGui, QtCore
 import weakref
 from GraphicsObject import GraphicsObject
 
+__all__ = ['UIGraphicsItem']
 class UIGraphicsItem(GraphicsObject):
     """Base class for graphics items with boundaries relative to a GraphicsView or ViewBox.
     The purpose of this class is to allow the creation of GraphicsItems which live inside 
@@ -24,6 +25,7 @@ class UIGraphicsItem(GraphicsObject):
                     which means the item will have the same bounds as the view.
         """
         GraphicsObject.__init__(self, parent)
+        self.setFlag(self.ItemSendsScenePositionChanges)
         self._connectedView = None
             
         if bounds is None:
@@ -32,6 +34,7 @@ class UIGraphicsItem(GraphicsObject):
             self._bounds = bounds
             
         self._boundingRect = None
+        self.updateView()
         
     def paint(self, *args):
         ## check for a new view object every time we paint.
@@ -43,6 +46,8 @@ class UIGraphicsItem(GraphicsObject):
         if change == self.ItemParentHasChanged or change == self.ItemSceneHasChanged:
             #print "caught parent/scene change:", self.parentItem(), self.scene()
             self.updateView()
+        elif change == self.ItemScenePositionHasChanged:
+            self.setNewBounds()
         return ret
     
     def updateView(self):
@@ -73,7 +78,11 @@ class UIGraphicsItem(GraphicsObject):
         
     def boundingRect(self):
         if self._boundingRect is None:
-            return QtCore.QRectF()
+            br = self.viewRect()
+            if br is None:
+                return QtCore.QRectF()
+            else:
+                self._boundingRect = br
         return QtCore.QRectF(self._boundingRect)
     
     def realBoundingRect(self):
@@ -90,7 +99,7 @@ class UIGraphicsItem(GraphicsObject):
         
     def setNewBounds(self):
         """Update the item's bounding rect to match the viewport"""
-        self._boundingRect = self.viewRect()
+        self._boundingRect = None  ## invalidate bounding rect, regenerate later if needed.
         self.prepareGeometryChange()
         self.viewChangedEvent()
 

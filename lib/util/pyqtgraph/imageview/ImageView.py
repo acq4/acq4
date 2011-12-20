@@ -14,16 +14,20 @@ Widget used for displaying 2D or 3D data. Features:
 """
 
 from ImageViewTemplate import *
-from graphicsItems import *
+from pyqtgraph.graphicsItems.ImageItem import *
+from pyqtgraph.graphicsItems.ROI import *
+from pyqtgraph.graphicsItems.LinearRegionItem import *
+from pyqtgraph.graphicsItems.InfiniteLine import *
+from pyqtgraph.graphicsItems.ViewBox import *
 #from widgets import ROI
-from Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui
 import sys
 #from numpy import ndarray
 import ptime
 import numpy as np
 import debug
 
-from SignalProxy import SignalProxy
+from pyqtgraph.SignalProxy import SignalProxy
 
 class PlotROI(ROI):
     def __init__(self, size):

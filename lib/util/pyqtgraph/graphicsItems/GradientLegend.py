@@ -1,6 +1,8 @@
+from pyqtgraph.Qt import QtGui, QtCore
 from UIGraphicsItem import *
 import pyqtgraph.functions as fn
 
+__all__ = ['GradientLegend']
 
 class GradientLegend(UIGraphicsItem):
     """

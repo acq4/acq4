@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from pyqtgraph.Qt import QtGui, QtCore
-from pyqtgraph.GraphicsView import GraphicsView
+from pyqtgraph.widgets.GraphicsView import GraphicsView
 from pyqtgraph.GraphicsScene import GraphicsScene
 from pyqtgraph.graphicsItems.ViewBox import ViewBox
 

@@ -1,5 +1,6 @@
 from pyqtgraph.Qt import QtGui, QtCore
 
+__all__ = ['ItemGroup']
 class ItemGroup(QtGui.QGraphicsItem):
     """
     Replacement for QGraphicsItemGroup

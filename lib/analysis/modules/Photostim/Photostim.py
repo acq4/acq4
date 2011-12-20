@@ -8,7 +8,7 @@ from advancedTypes import OrderedDict
 import debug
 import ColorMapper
 import pyqtgraph as pg
-import pyqtgraph.ProgressDialog as ProgressDialog
+#import pyqtgraph.ProgressDialog as ProgressDialog
 
 from Scan import Scan
 from DBCtrl import DBCtrl
@@ -402,9 +402,18 @@ class Photostim(AnalysisModule):
         return self.detector.process(fh)
 
     def processStats(self, data=None, spot=None, fh=None):
+        ## Process output of stats flowchart for a single spot, add spot position fields.
+        ## data is the input to the stats flowchart
+        ##   - data['fileHandle'] will be set from fh or from the currently selected spot
+        ##   - if data is omitted, then the stats for the currently selected spot are returned
+        ##     (this is just the pre-existing output of the stats flowchart)
+        ## spot is used to determine the x,y coords of the spot
+        ## fh is the Protocol dir handle
+        
         if data is None:
             stats = self.flowchart.output()['dataOut']
             spot = self.selectedSpot
+            fh = spot.data
             if spot is None:
                 return
         else:
@@ -428,6 +437,13 @@ class Photostim(AnalysisModule):
         #size = d.info().get('Scanner', {}).get('spotSize', 100e-6)
         #stats['spotSize'] = size
         #print "Process Stats:", spot.data
+        stats['SourceFile'] = self.dataModel.getClampFile(fh)
+        
+        parent = fh.parent()
+        if self.dataModel.dirType(parent) != 'ProtocolSequence':
+            parent = fh
+        
+        stats['SourceDir'] = parent
         
         return stats
 
@@ -458,10 +474,10 @@ class Photostim(AnalysisModule):
         events = self.detector.output()
 
         ## store stats
-        #stats = self.flowchart.output()['dataOut']
-        stats = self.processStats(fh=parentDir)  ## gets current stats if no processing is requested
+        #stats = self.processStats(fh=parentDir)  ## should pass the protocol, not the protocolSequence, right?
+        stats = self.processStats(fh=fh.parent())  ## gets current stats if no processing is requested
         
-        self.storeStats(stats, fh, parentDir)
+        self.storeStats(stats, parentDir)
         
         
         ## update data in Map
@@ -488,25 +504,34 @@ class Photostim(AnalysisModule):
         dh = scan.source()
         spots = scan.spots()
         print "Store scan:", dh.name()
-        with ProgressDialog.ProgressDialog("Storing scan %s" % scan.name(), 0, len(spots)) as dlg:
+        events = []
+        stats = []
+        with pg.ProgressDialog("Preparing data for %s" % scan.name(), 0, len(spots)) as dlg:
             for i in xrange(len(spots)):
                 s = spots[i]
                 #fh = self.getClampFile(s.data)
                 fh = self.dataModel.getClampFile(s.data)
                 try:
                     ev = scan.getEvents(fh)['events']
+                    events.append(ev)
                 except:
                     print fh, scan.getEvents(fh)
                     raise
                 st = scan.getStats(fh)
-                self.detector.storeToDB(ev, dh)
-                self.storeStats(st, fh, dh)
+                stats.append(st)
                 dlg.setValue(i)
                 if dlg.wasCanceled():
                     raise Exception("Scan store canceled by user.")
                 
-            print "   scan %s is now locked" % dh.name()
-            scan.lock()
+        ## Store all events for this scan
+        ev = np.concatenate(events)
+        self.detector.storeToDB(ev, dh)
+        
+        ## Store spot data
+        self.storeStats(stats, dh)
+                
+        print "   scan %s is now locked" % dh.name()
+        scan.lock()
 
     def rewriteSpotPositions(self, scan):
         ## for now, let's just rewrite everything.
@@ -534,8 +559,17 @@ class Photostim(AnalysisModule):
         scan.unlock()
 
 
-    def storeStats(self, data, fh, parentDir):
-        print "Store stats:", fh
+    def storeStats(self, data, parentDir):
+        ## Store a list of dict records, one per spot.
+        ## data: {'SourceFile': clamp file handle, 'xPos':, 'yPos':, ...other fields from stats flowchart...}
+        ## parentDir: protocolSequence dir handle
+        
+        #print "Store stats:", fh
+        
+        ## If only one record was given, make it into a list of one record
+        if isinstance(data, dict):
+            data = [data]
+        
         dbui = self.getElement('Database')
         identity = self.dbIdentity+'.sites'
         table = dbui.getTableName(identity)
@@ -546,26 +580,39 @@ class Photostim(AnalysisModule):
 
         pTable, pRow = db.addDir(parentDir)
         
-        name = fh.name(relativeTo=parentDir)
-        data = data.copy()  ## don't overwrite anything we shouldn't.. 
-        data['SourceFile'] = name
-        data['SourceDir'] = pRow
+        #data = data.copy()  ## don't overwrite anything we shouldn't.. 
+        #data['SourceFile'] = name
+        #data['SourceDir'] = pRow
+        
+        ## Fix up records (convert file handles to names relative to parent) and add new columns
+        records = []
+        for rec in data:
+            sf = rec['SourceFile']
+            if not isinstance(sf, basestring):
+                sf = sf.name(relativeTo=parentDir)
+            rec2 = rec.copy()
+            rec2.update(SourceFile=sf, SourceDir=pRow)
+            records.append(rec2)
         
         ## determine the set of fields we expect to find in the table
-        fields = OrderedDict([
-            ('SourceDir', 'int'),
-            ('SourceFile', 'text'),
-        ])
-        fields.update(db.describeData(data))
+        
+        fields = db.describeData(records)
+        #fields = OrderedDict([
+            #('SourceDir', 'int'),
+            #('SourceFile', 'text'),
+        #])
+        #fields.update(db.describeData(data))
         
         ## Make sure target table exists and has correct columns, links to input file
         db.checkTable(table, owner=identity, fields=fields, links=[('SourceDir', pTable)], create=True)
         
         # delete old
-        db.delete(table, "SourceDir=%d and SourceFile='%s'" % (pRow, name))
+        for rec in records:
+            name = rec['SourceFile']
+            db.delete(table, "SourceDir=%d and SourceFile='%s'" % (pRow, name))
 
         # write new
-        db.insert(table, data)
+        db.insert(table, records)
 
     def loadSpotFromDB(self, dh):
         dbui = self.getElement('Database')

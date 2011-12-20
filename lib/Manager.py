@@ -35,8 +35,8 @@ from Mutex import Mutex
 from debug import *
 import getopt, glob
 import ptime
-from advancedTypes import OrderedDict
-from pyqtgraph.ProgressDialog import ProgressDialog
+from collections import OrderedDict
+from pyqtgraph import ProgressDialog
 from LogWindow import LogWindow
 
 LOG = None

@@ -7,7 +7,7 @@ from debug import *
 import FileAnalysisView
 from lib.LogWindow import LogButton, LogWindow
 import FileLogView
-from pyqtgraph.FileDialog import FileDialog
+from pyqtgraph import FileDialog
 from lib.Manager import logMsg, logExc
 from StatusBar import StatusBar
 

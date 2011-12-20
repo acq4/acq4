@@ -1,5 +1,5 @@
 from PyQt4 import QtGui, QtCore
-from pyqtgraph.PlotWidget import PlotWidget
+from pyqtgraph import PlotWidget
 from lib.devices.DAQGeneric import DAQGenericProtoGui
 from SequenceRunner import runSequence
 from pyqtgraph.functions import siFormat
@@ -161,7 +161,8 @@ class LaserProtoGui(DAQGenericProtoGui):
         ## Params looks like: {'amp': 7} where 'amp' is the name of a sequence parameter, and 7 is the 7th value in the list of 'amp'
         rate = self.powerWidget.rate
         wave = self.powerWidget.getSingleWave(params)
-        rawCmds = self.cache.get(id(wave), self.dev.getChannelCmds({'powerWaveform':wave}, rate)) ## returns {'shutter': array(...), 'qSwitch':array(..), 'pCell':array(...)}
+        rawCmds = self.getChannelCmds(wave, rate)
+        #rawCmds = self.cache.get(id(wave), self.dev.getChannelCmds({'powerWaveform':wave}, rate)) ## returns {'shutter': array(...), 'qSwitch':array(..), 'pCell':array(...)}
         
         ### structure protocol in DAQGeneric-compatible way
         cmd = {}
@@ -172,6 +173,16 @@ class LaserProtoGui(DAQGenericProtoGui):
         cmd['powerWaveform'] = wave  ## just to allow the device task to store this data
         cmd['ignorePowerWaveform'] = True
         return  cmd
+    
+    def getChannelCmds(self, powerWave, rate):
+        key = id(powerWave)
+        if key in self.cache:
+            rawCmds = self.cache[key]
+        else:
+            rawCmds = self.dev.getChannelCmds({'powerWaveform':powerWave}, rate) ## returns {'shutter': array(...), 'qSwitch':array(..), 'pCell':array(...)}
+            self.cache[key] = rawCmds
+        return rawCmds
+        
     
     def powerCmdChanged(self):
         self.clearRawPlots()
@@ -190,14 +201,16 @@ class LaserProtoGui(DAQGenericProtoGui):
         for w in waves:
             if w is not None:
                 ## need to translate w into raw traces, plot them, and cache them (using id(w) as a key)
-                rawWaves = self.dev.getChannelCmds({'powerWaveform':w}, rate) ## calculate raw waveforms for shutter/qSwitch/pCell from powerWaveform
-                self.cache[id(w)] = rawWaves ## cache the calculated waveforms
+                rawWaves = self.getChannelCmds(w, rate)
+                #rawWaves = self.dev.getChannelCmds({'powerWaveform':w}, rate) ## calculate raw waveforms for shutter/qSwitch/pCell from powerWaveform
+                #self.cache[id(w)] = rawWaves ## cache the calculated waveforms
                 self.plotRawCurves(rawWaves, color=QtGui.QColor(100, 100, 100)) ## plot the raw waveform in it's appropriate plot in grey
         
         ## calculate (or pull from cache) and display single-mode wave in red
         single = self.powerWidget.getSingleWave()
         if single is not None:
-            rawSingle = self.cache.get(id(single), self.dev.getChannelCmds({'powerWaveform':single}, rate))
+            #rawSingle = self.cache.get(id(single), self.dev.getChannelCmds({'powerWaveform':single}, rate))
+            rawSingle = self.getChannelCmds(single, rate)
             self.plotRawCurves(rawSingle, color=QtGui.QColor(200, 100, 100))
     
                       

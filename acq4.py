@@ -118,7 +118,7 @@ except:
         for i in range(0, 100):
             x += i
     timer.timeout.connect(donothing)
-    timer.start(200)
+    timer.start(1000)
     
     print "Starting Qt event loop.."
     app.exec_()

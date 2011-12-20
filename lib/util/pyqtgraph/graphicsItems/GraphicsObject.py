@@ -1,8 +1,9 @@
 from pyqtgraph.Qt import QtGui, QtCore  
-from pyqtgraph.GraphicsView import GraphicsScene
+from pyqtgraph.GraphicsScene import GraphicsScene
 from pyqtgraph.Point import Point
 import weakref
 
+__all__ = ['GraphicsObject']
 class GraphicsObject(QtGui.QGraphicsObject):
     """Extends QGraphicsObject with a few important functions. 
     (Most of these assume that the object is in a scene with a single view)

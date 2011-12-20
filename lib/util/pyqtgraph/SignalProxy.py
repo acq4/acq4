@@ -2,6 +2,8 @@
 from Qt import QtCore
 from ptime import time
 
+__all__ = ['SignalProxy']
+
 class SignalProxy(QtCore.QObject):
     """Object which collects rapid-fire signals and condenses them
     into a single signal. Used, for example, to prevent a SpinBox

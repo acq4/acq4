@@ -5,10 +5,12 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
+from pyqtgraph.Qt import QtCore, QtGui
 from GraphicsView import *
-from graphicsItems.PlotItem import *
+from pyqtgraph.graphicsItems.PlotItem import *
 import exceptions
 
+__all__ = ['PlotWidget']
 class PlotWidget(GraphicsView):
     
     #sigRangeChanged = QtCore.Signal(object, object)  ## already defined in GraphicsView

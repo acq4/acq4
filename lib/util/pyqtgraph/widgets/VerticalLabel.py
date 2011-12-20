@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-from Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtGui, QtCore
 
+__all__ = ['VerticalLabel']
 #class VerticalLabel(QtGui.QLabel):
     #def paintEvent(self, ev):
         #p = QtGui.QPainter(self)

@@ -5,8 +5,8 @@ from DirTreeWidget import *
 import numpy as np
 import metaarray
 from pyqtgraph.flowchart.library.common import *
-from pyqtgraph import graphicsItems, Transform, Point
-from pyqtgraph import TreeWidget
+from pyqtgraph import Transform, Point
+#from pyqtgraph import TreeWidget
 import functions
 
 class SubtreeNode(Node):

@@ -3,7 +3,6 @@
 from ..Node import Node
 import functions
 from common import *
-import pyqtgraph as pg
 
 class Threshold(CtrlNode):
     """Absolute threshold detection filter. Returns indexes where data crosses threshold."""

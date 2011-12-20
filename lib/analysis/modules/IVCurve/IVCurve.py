@@ -116,7 +116,7 @@ class IVCurve(AnalysisModule):
                 data.infoCopy('Time'), 
                 data.infoCopy(-1)]
             self.traces = MetaArray(traces, info=info)
-            cmdtimes = numpy.argwhere(cmd[1:]-cmd[:-1] != 0)
+            cmdtimes = numpy.argwhere(cmd[1:]-cmd[:-1] != 0)[:,0]
             self.tstart = cmd.xvals('Time')[cmdtimes[0]]
             self.tend = cmd.xvals('Time')[cmdtimes[1]]
             self.tdur = self.tend - self.tstart
@@ -180,7 +180,8 @@ class IVCurve(AnalysisModule):
             self.fiPlot.addItem(self.fiScatterPlot)
             self.fslPlot.addItem(self.fslScatterPlot)
             self.fslPlot.addItem(self.fisiScatterPlot)
-            self.fslPlot.setXRange(0.0, numpy.max(self.spcmd*iscale))
+            if len(self.spcmd) > 0:
+                self.fslPlot.setXRange(0.0, numpy.max(self.spcmd*iscale))
             self.lrss.setRegion([(self.tend-(self.tdur/2.0)), self.tend]) # steady-state
             self.lrpk.setRegion([self.tstart, self.tstart+(self.tdur/5.0)]) # "peak" during hyperpolarization
             

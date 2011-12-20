@@ -2,8 +2,8 @@
 from PyQt4 import QtCore, QtGui
 import pyqtgraph as pg
 import Canvas, FileLoader, DatabaseGui
-import pyqtgraph.DataTreeWidget as DataTreeWidget
-from advancedTypes import OrderedDict
+#import pyqtgraph.widgets.DataTreeWidget as DataTreeWidget
+from collections import OrderedDict
 
 class AnalysisModule(QtCore.QObject):
     """
@@ -174,9 +174,9 @@ class Element(QtCore.QObject):
         #elif typ == 'database':
             #obj = DatabaseGui.DatabaseGui(host.dataManager(), **args)
         elif typ == 'table':
-            obj = pg.TableWidget.TableWidget(**args)
+            obj = pg.TableWidget(**args)
         elif typ == 'dataTree':
-            obj = DataTreeWidget.DataTreeWidget(**args)
+            obj = pg.DataTreeWidget(**args)
         elif typ == 'parameterTree':
             obj = pg.parametertree.ParameterTree(**args)
         elif typ == 'graphicsView':

@@ -11,6 +11,9 @@ of a large group of widgets.
 from Qt import QtCore, QtGui
 import weakref, inspect
 
+
+__all__ = ['WidgetGroup']
+
 def splitterState(w):
     s = str(w.saveState().toPercentEncoding())
     return s

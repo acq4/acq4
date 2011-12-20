@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'MapCtrlTemplate.ui'
 #
-# Created: Sat Oct 15 21:13:47 2011
+# Created: Sun Dec 18 18:44:11 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -104,5 +104,5 @@ class Ui_Form(object):
         self.addScanBtn.setText(QtGui.QApplication.translate("Form", "Add Scan", None, QtGui.QApplication.UnicodeUTF8))
         self.removeScanBtn.setText(QtGui.QApplication.translate("Form", "Remove Scan", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.TreeWidget import TreeWidget
+from pyqtgraph import TreeWidget
 from FeedbackButton import FeedbackButton

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from pyqtgraph.Qt import QtGui, QtCore
 
+__all__ = ['ProgressDialog']
 class ProgressDialog(QtGui.QProgressDialog):
     """Extends QProgressDialog for use in 'with' statements.
     Arguments:

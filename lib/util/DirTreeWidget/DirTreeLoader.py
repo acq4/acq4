@@ -19,7 +19,7 @@ class DirTreeLoader(QtGui.QWidget):
         
         #self.fileTree = DirTreeModel(baseDir)
         #self.ui.fileTree.setModel(self.fileTree)
-        
+        self.ui.fileTree.setSortMode(sortMode)
         self.ui.fileTree.setBaseDirHandle(baseDir)
         
         self.deleteState = 0

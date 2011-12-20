@@ -385,8 +385,8 @@ class _CameraClass:
                 try:
                     params[p] = self.paramAttrs[p]
                 except KeyError:
-                    print self.paramAttrs.keys()
-                    raise Exception("No parameter named '%s'. Full list is printed above." % p)
+                    #print self.paramAttrs.keys()
+                    raise Exception("No parameter named '%s'. Params are:" % (p, str(self.paramAttrs.keys())))
                 
             if unList:
                 return params[plist[0]]

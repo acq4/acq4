@@ -2,13 +2,14 @@
 from DeviceTemplate import Ui_Form
 import time, os, sys
 from PyQt4 import QtCore, QtGui
-from pyqtgraph.graphicsItems import ImageItem
+#from pyqtgraph.graphicsItems import ImageItem
 import lib.Manager
 from imageAnalysis import *
 from debug import *
 import numpy as np
-import pyqtgraph.WidgetGroup as WidgetGroup
-from pyqtgraph.ProgressDialog import ProgressDialog
+import pyqtgraph as pg
+#import pyqtgraph.WidgetGroup as WidgetGroup
+#from pyqtgraph.ProgressDialog import ProgressDialog
 from HelpfulException import HelpfulException
 
 class ScannerDeviceGui(QtGui.QWidget):
@@ -20,7 +21,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         self.win = win
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        self.stateGroup = WidgetGroup.WidgetGroup({
+        self.stateGroup = pg.WidgetGroup({
             'duration': self.ui.scanDurationSpin,
             'xMin': self.ui.xMinSpin,
             'xMax': self.ui.xMaxSpin,
@@ -185,7 +186,7 @@ class ScannerDeviceGui(QtGui.QWidget):
 
     def runCalibration(self):
         """Wraps around runCalibrationInner, adds progress dialog and error reporting"""
-        with ProgressDialog("Calibrating scanner: Running protocol..", 0, 100) as self.progressDlg:
+        with pg.ProgressDialog("Calibrating scanner: Running protocol..", 0, 100) as self.progressDlg:
             #self.progressDlg.setWindowModality(QtCore.Qt.WindowModal)
             #self.progressDlg.setMinimumDuration(0)
         

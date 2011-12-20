@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'devGuiTemplate.ui'
 #
-# Created: Wed Oct 19 11:34:10 2011
+# Created: Sun Dec 18 19:23:01 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -58,4 +58,4 @@ class Ui_devGui(object):
         self.label.setText(QtGui.QApplication.translate("devGui", "VC Holding", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("devGui", "IC Holding", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.SpinBox import SpinBox
+from pyqtgraph import SpinBox

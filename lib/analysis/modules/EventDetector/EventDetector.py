@@ -127,21 +127,29 @@ class EventDetector(AnalysisModule):
         ## Make sure target table exists and has correct columns, links to input file
         db.checkTable(table, owner=self.dbIdentity, fields=fields, links=[('SourceDir', pTable)], create=True)
         
-        names = []
-        for i in xrange(len(data)):
-            ## delete all records from table for current input file
-            source = data[i]['SourceFile']
-            name = source.name(relativeTo=parentDir)
-            names.append(name)
+        ## convert source file handles to strings relative to the parent dir
+        names = [fh.name(relativeTo=parentDir) for fh in data['SourceFile']]
+        #for i in xrange(len(data)):
+            #source = data[i]['SourceFile']
+            #name = source.name(relativeTo=parentDir)
+            #names.append(name)
+            
+        ## delete all records from table for current input files
+        for name in set(names):
             db.delete(table, "SourceDir=%d and SourceFile='%s'" % (pRow, name))
-
+        
+        ## assemble final list of records
+        records = []
         for i in xrange(len(data)):
             ## add new records
             d2 = data[i]
             rec = {'SourceDir': pRow, 'SourceFile': names[i]}
             rec2 = dict(zip(d2.dtype.names, d2))
             rec2.update(rec)
-            db.insert(table, rec2)
+            records.append(rec2)
+            
+        ## insert all data to DB
+        db.insert(table, records)
                 
     #def storeClicked(self):
         #dbui = self.getElement('Database')

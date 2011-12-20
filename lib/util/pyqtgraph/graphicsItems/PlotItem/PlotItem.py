@@ -21,7 +21,7 @@ This class is very heavily featured:
 from plotConfigTemplate import *
 from pyqtgraph.Qt import QtGui, QtCore, QtSvg
 import pyqtgraph.functions as fn
-from pyqtgraph.FileDialog import FileDialog
+from pyqtgraph.widgets.FileDialog import FileDialog
 import weakref
 import numpy as np
 from .. PlotCurveItem import PlotCurveItem
@@ -274,13 +274,13 @@ class PlotItem(GraphicsWidget):
         #for i in range(self.layout.count()):
             #self.layout.removeAt(i)
             
-        for p in self.proxies:
-            try:
-                p.setWidget(None)
-            except RuntimeError:
-                break
-            self.scene().removeItem(p)
-        self.proxies = []
+        #for p in self.proxies:
+            #try:
+                #p.setWidget(None)
+            #except RuntimeError:
+                #break
+            #self.scene().removeItem(p)
+        #self.proxies = []
         
         self.menuAction.releaseWidget(self.menuAction.defaultWidget())
         self.menuAction.setParent(None)

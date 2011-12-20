@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'LogWidgetTemplate.ui'
 #
-# Created: Wed Dec 14 21:13:01 2011
+# Created: Sun Dec 18 18:54:56 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -157,4 +157,4 @@ class Ui_Form(object):
         self.label_3.setText(QtGui.QApplication.translate("Form", "High", None, QtGui.QApplication.UnicodeUTF8))
 
 from PyQt4 import QtWebKit
-from pyqtgraph.TreeWidget import TreeWidget
+from pyqtgraph import TreeWidget

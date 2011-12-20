@@ -7,6 +7,7 @@ from GraphicsWidget import GraphicsWidget
 from UIGraphicsItem import UIGraphicsItem
 from pyqtgraph.GraphicsScene import GraphicsScene
 
+__all__ = ['ViewBox']
 class ViewBox(GraphicsWidget):
     """
     Box that allows internal scaling/panning of children by mouse drag. 
@@ -509,8 +510,7 @@ class ViewBox(GraphicsWidget):
                 #changes[ax2] = [c-d, c+d]
  
         else:
-            print ax
-            raise Exception("argument 'ax' must be 0, 1, or QRectF.")
+            raise Exception("argument 'ax' must be 0, 1, or QRectF. (got %s)" % str(ax))
         
         changed = [False, False]
         for ax, range in changes.iteritems():

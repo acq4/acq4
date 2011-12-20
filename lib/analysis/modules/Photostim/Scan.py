@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 import numpy as np
-import pyqtgraph.ProgressDialog as ProgressDialog
+import pyqtgraph as pg
 
 class Scan(QtCore.QObject):
     ### This class represents a single photostim scan (one set of non-overlapping points)
@@ -100,7 +100,7 @@ class Scan(QtCore.QObject):
         if not self.item.isVisible():
             return
         spots = self.spots()
-        with ProgressDialog.ProgressDialog("Computing spot colors (Scan %d/%d)" % (n+1,nMax), 0, len(spots)) as dlg:
+        with pg.ProgressDialog("Computing spot colors (Scan %d/%d)" % (n+1,nMax), 0, len(spots)) as dlg:
         #progressDlg = QtGui.QProgressDialog("Computing spot colors (Map %d/%d)" % (n+1,nMax), 0, len(spots))
         #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
         #progressDlg.setMinimumDuration(250)
@@ -146,7 +146,7 @@ class Scan(QtCore.QObject):
                 print events
                 raise
             self.stats[fh] = stats
-        return self.stats[fh]
+        return self.stats[fh].copy()
 
     def getEvents(self, fh, process=True, signal=True):
         if fh not in self.events:

@@ -9,12 +9,14 @@ from CanvasTemplate import *
 #from pyqtgraph.GraphicsView import GraphicsView
 #import pyqtgraph.graphicsItems as graphicsItems
 #from pyqtgraph.PlotWidget import PlotWidget
-from pyqtgraph import ROI
 from pyqtgraph.Qt import QtGui, QtCore
+from pyqtgraph.graphicsItems.ROI import ROI
+from pyqtgraph.graphicsItems.ViewBox import ViewBox
+from pyqtgraph.graphicsItems.GridItem import GridItem
 #import DataManager
 import numpy as np
 import debug
-import pyqtgraph as pg
+#import pyqtgraph as pg
 import weakref
 from CanvasManager import CanvasManager
 #import items
@@ -31,7 +33,7 @@ class Canvas(QtGui.QWidget):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         #self.view = self.ui.view
-        self.view = pg.ViewBox()
+        self.view = ViewBox()
         self.ui.view.setCentralItem(self.view)
         self.itemList = self.ui.itemList
         self.itemList.setSelectionMode(self.itemList.ExtendedSelection)
@@ -50,7 +52,7 @@ class Canvas(QtGui.QWidget):
         self.view.setAspectLocked(True)
         self.view.invertY()
         
-        grid = pg.GridItem()
+        grid = GridItem()
         self.grid = CanvasItem(grid, name='Grid', movable=False)
         self.addItem(self.grid)
         

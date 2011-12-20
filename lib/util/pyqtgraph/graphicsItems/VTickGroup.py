@@ -8,6 +8,7 @@ import pyqtgraph.functions as fn
 import weakref
 from UIGraphicsItem import UIGraphicsItem
 
+__all__ = ['VTickGroup']
 class VTickGroup(UIGraphicsItem):
     """
     Draws a set of tick marks which always occupy the same vertical range of the view,
