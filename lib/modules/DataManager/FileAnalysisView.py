@@ -65,6 +65,10 @@ class FileAnalysisView(QtGui.QWidget):
         self.db = database.AnalysisDatabase(self.dbFile)
         self.sigDbChanged.emit()
         
+    def quit(self):
+        if self.db is not None:
+            self.db.close()
+        
     def createDbClicked(self):
         self.fileDialog = FileDialog(self, "Create Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite *.sql);;All Files (*.*)")
         #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
