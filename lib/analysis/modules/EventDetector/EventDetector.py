@@ -3,7 +3,7 @@ from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
 from flowchart import *
 import os
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import debug
 import FileLoader
 import DatabaseGui

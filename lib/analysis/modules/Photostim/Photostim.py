@@ -4,7 +4,7 @@ from lib.analysis.AnalysisModule import AnalysisModule
 import lib.analysis.modules.EventDetector as EventDetector
 from pyqtgraph.flowchart import *
 import os
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import debug
 import ColorMapper
 import pyqtgraph as pg
@@ -102,7 +102,6 @@ class Photostim(AnalysisModule):
         self.detector.flowchart.sigStateChanged.connect(self.detectorStateChanged)
         self.flowchart.sigStateChanged.connect(self.analyzerStateChanged)
         self.recolorBtn.clicked.connect(self.recolor)
-        
         
     def elementChanged(self, element, old, new):
         name = element.name()

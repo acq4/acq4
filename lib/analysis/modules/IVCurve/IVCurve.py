@@ -6,7 +6,7 @@ relationships from current clamp data.
 """
 from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import pyqtgraph as pg
 from metaarray import MetaArray
 import numpy, scipy.signal

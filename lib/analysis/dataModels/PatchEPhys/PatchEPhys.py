@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import DataManager
 import SequenceRunner
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import functools
 from metaarray import *
 

@@ -7,7 +7,7 @@ from lib.analysis.AnalysisModule import AnalysisModule
 from lib.util.pyqtgraph.functions import mkPen
 from flowchart import *
 import os
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import debug
 import FileLoader
 import DatabaseGui

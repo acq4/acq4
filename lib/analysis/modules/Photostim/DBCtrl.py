@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 from Map import Map
 import DatabaseGui
 import MapCtrlTemplate
