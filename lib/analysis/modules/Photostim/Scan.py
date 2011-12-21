@@ -204,7 +204,7 @@ class Scan(QtCore.QObject):
         #sinfo = source.info()
         #if 'sequenceParams' in sinfo:
         if dataModel.isSequence(source):
-            file = dataModel.getClampFile(source[source.ls()[0]])
+            file = dataModel.getClampFile(source[source.ls(sortMode=None)[0]])
             #first = source[source.ls()[0]]
         else:
             file = dataModel.getClampFile(source)

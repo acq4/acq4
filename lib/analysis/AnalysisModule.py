@@ -68,7 +68,19 @@ class AnalysisModule(QtCore.QObject):
                 self._elements_[name] = Element(name, type=el)
             self._elements_[name].sigObjectChanged.connect(self.elementChanged)
             
-
+    def quit(self):
+        """
+        Called by AnalysisHost when window is closed.
+        Default quit function calls close() on all elements.
+        Module may return False to indicate that it is not ready to quit.
+        """
+        for el in self._elements_.itervalues():
+            if hasattr(el, 'close'):
+                el.close()
+        #self.logBtn.close()
+        return True
+    
+    
     def processData(self, data):
         pass
     

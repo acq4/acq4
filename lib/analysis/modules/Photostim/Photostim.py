@@ -103,6 +103,11 @@ class Photostim(AnalysisModule):
         self.flowchart.sigStateChanged.connect(self.analyzerStateChanged)
         self.recolorBtn.clicked.connect(self.recolor)
         
+    def quit(self):
+        self.scans = []
+        self.maps = []
+        return AnalysisModule.quit(self)
+        
     def elementChanged(self, element, old, new):
         name = element.name()
         
@@ -267,7 +272,7 @@ class Photostim(AnalysisModule):
     def mapPointClicked(self, scan, points):
         data = []
         for p in points:
-            for source in p:
+            for source in p.data:
                 data.append([source[0], self.dataModel.getClampFile(source[1])])
             #data.extend(p.data)
         self.redisplayData(data)
