@@ -349,7 +349,7 @@ class Canvas(QtGui.QWidget):
             
         ## determine parent list item where this item should be inserted
         parent = citem.parentItem()
-        if parent is None:
+        if parent in (None, self.view.childGroup):
             parent = self.itemList.invisibleRootItem()
         else:
             parent = parent.listItem
@@ -443,7 +443,7 @@ class Canvas(QtGui.QWidget):
     def treeItemMoved(self, item, parent, index):
         ##Item moved in tree; update Z values
         if parent is self.itemList.invisibleRootItem():
-            item.canvasItem.setParentItem(None)
+            item.canvasItem.setParentItem(self.view.childGroup)
         else:
             item.canvasItem.setParentItem(parent.canvasItem)
         siblings = [parent.child(i).canvasItem for i in xrange(parent.childCount())]

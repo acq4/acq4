@@ -57,23 +57,41 @@ class Scan(QtCore.QObject):
         return table, rid
 
     def loadFromDB(self):
-        print "Loading scan data for", self.source()
+        sourceDir = self.source()
+        print "Loading scan data for", sourceDir
         self.events = {}
         self.stats = {}
         self.statExample = None
         haveAll = True
+        allEvents, allStats = self.host.loadScanFromDB(sourceDir)
+        
+        for st in allStats:
+            self.stats[sourceDir[st['SourceFile']]] = st
+            
+        for ev in allEvents:
+            fh = ev['SourceFile'] ## sourceFile has already been converted to file handle.
+            if fh not in self.events:
+                self.events[fh] = []
+            self.events[fh].append(ev.reshape(1))
+        for k in self.events:
+            self.events[k] = {'events': np.concatenate(self.events[k])}
+            
         for spot in self.spots():
             dh = spot.data
             #fh = self.host.getClampFile(dh)
             fh = self.dataModel.getClampFile(dh)
-            events, stats = self.host.loadSpotFromDB(dh)
-            if stats is None or len(stats) == 0:
+            #events, stats = self.host.loadSpotFromDB(dh)
+            
+            #events = allEvents[allEvents['SourceFile']==fh.name(relativeTo=self.source())]
+            #stats = allStats[allEvents['SourceFile']==dh.name(relativeTo=self.source())]
+            if dh not in self.stats:
+            #if len(stats) == 0:
                 print "  No data for spot", dh
                 haveAll = False
                 continue
-            self.statExample = stats
-            self.events[fh] = {'events': events}
-            self.stats[dh] = stats[0]
+            else:
+                self.statExample = self.stats[dh]
+            #self.stats[dh] = stats[0]
         if haveAll:
             print "  have data for all spots; locking."
             self.lock()

@@ -23,6 +23,7 @@ class Photostim(AnalysisModule):
             raise Exception("Photostim analysis module requires a data model, but none is loaded yet.")
         self.dbIdentity = "Photostim"  ## how we identify to the database; this determines which tables we own
         self.selectedSpot = None
+        
 
 
         ## setup analysis flowchart
@@ -103,6 +104,7 @@ class Photostim(AnalysisModule):
         self.flowchart.sigStateChanged.connect(self.analyzerStateChanged)
         self.recolorBtn.clicked.connect(self.recolor)
         
+        
     def quit(self):
         self.scans = []
         self.maps = []
@@ -115,6 +117,7 @@ class Photostim(AnalysisModule):
         if name == 'File Loader':
             new.sigBaseChanged.connect(self.baseDirChanged)
             new.ui.dirTree.sigSelectionChanged.connect(self.fileSelected)
+            self.baseDirChanged(new.baseDir())
 
     def fileSelected(self):
         fhl = self.getElement('File Loader').ui.dirTree.selectedFiles()
@@ -126,6 +129,9 @@ class Photostim(AnalysisModule):
 
 
     def baseDirChanged(self, dh):
+        if dh is None:
+            return ## should clear out map list here?
+        
         typ = dh.info()['dirType']
         if typ == 'Slice':
             cells = [dh[d] for d in dh.subDirs() if dh[d].info().get('dirType',None) == 'Cell']
@@ -239,8 +245,9 @@ class Photostim(AnalysisModule):
         map.sPlotItem.sigClicked.connect(self.mapPointClicked)
         
     def unregisterMap(self, map):
-        canvas = self.getElement('Canvas')
-        canvas.removeItem(map.canvasItem)
+        if hasattr(map, 'canvasItem'):
+            canvas = self.getElement('Canvas')
+            canvas.removeItem(map.canvasItem)
         if map in self.maps:
             self.maps.remove(map)
             
@@ -654,7 +661,38 @@ class Photostim(AnalysisModule):
         events = self.detector.readFromDb(parentDir, fh)
         
         return events, stats
+
+    
+    def loadScanFromDB(self, sourceDir):
+        ## sourceDir should be protocolsequence
+        dbui = self.getElement('Database')
+        db = dbui.getDb()
+
+        if db is None:
+            raise Exception("No DB selected")
         
+        #fh = self.getClampFile(dh)
+        #fh = self.dataModel.getClampFile(dh)
+        #parentDir = fh.parent()
+        #p2 = parentDir.parent()
+        #if db.dirTypeName(p2) == 'ProtocolSequence':
+            #parentDir = p2
+            
+        
+        pRow = db.getDirRowID(sourceDir)
+        if pRow is None:
+            return None, None
+            
+        identity = self.dbIdentity+'.sites'
+        table = dbui.getTableName(identity)
+        if not db.hasTable(table):
+            return None, None
+        stats = db.select(table, '*', "where SourceDir=%d" % pRow)
+        events = self.detector.readFromDb(sourceDir)
+        
+        return events, stats
+    
+    
     def getDb(self):
         dbui = self.getElement('Database')
         db = dbui.getDb()

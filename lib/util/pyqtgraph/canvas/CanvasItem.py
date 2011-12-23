@@ -170,7 +170,8 @@ class CanvasItem(QtCore.QObject):
     def setParentItem(self, parent):
         self._parentItem = parent
         if parent is not None:
-            parent = parent.graphicsItem()
+            if isinstance(parent, CanvasItem):
+                parent = parent.graphicsItem()
         self.graphicsItem().setParentItem(parent)
 
     #def name(self):
