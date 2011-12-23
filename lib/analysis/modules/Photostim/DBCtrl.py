@@ -287,9 +287,10 @@ class DBCtrl(QtGui.QWidget):
     
     def clearDBScan(self):
         try:
-            scan = self.selectedScan()
-            if scan is None:
+            item = self.ui.scanTree.currentItem()
+            if item is None:
                 raise Exception("No scan selected.")
+            scan = item.scan
             self.host.clearDBScan(scan)
             self.ui.clearDBScanBtn.success("Cleared.")
         except:

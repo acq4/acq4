@@ -6,6 +6,7 @@ import DataManager, lib.Manager
 import collections
 import functions
 import advancedTypes
+import debug
 
 def quoteList(strns):
     """Given a list of strings, return a single string like '"string1", "string2",...'
@@ -34,41 +35,66 @@ class SqliteDatabase:
     def close(self):
         self.db.close()
 
-    def exe(self, cmd, data=None, toDict=True, toArray=False):
+    def exe(self, cmd, data=None, batch=False, toDict=True, toArray=False):
         """Execute an SQL query. If data is provided, it should be a list of dicts and each will 
-        be bound to the query and executed sequentially. Returns the query object."""
+        be bound to the query and executed sequentially. Returns the query object.
+        Arguments:
+            cmd     - The SQL query to execute
+            data    - List of dicts, one per record to be processed
+                      For each record, data is bound to the query by key name
+                      {"key1": "value1"}  =>  ":key1"="value1"
+            batch   - If True, then all data is processed in a single execution.
+                      In this case, data must be provided as a dict-of-lists or record array.
+            toDict  - If True, return a list-of-dicts representation of the query results
+            toArray - If True, return a record array representation of the query results
+        """
+        p = debug.Profiler('SqliteDatabase.exe', disabled=True)
+        p.mark('Command: %s' % cmd)
         q = QtSql.QSqlQuery(self.db)
         if data is None:
             self._exe(q, cmd)
+            p.mark("Executed with no data")
         else:
             res = []
             if not q.prepare(cmd):
                 print "SQL Query:\n    %s" % cmd
                 raise Exception("Error preparing SQL query (query is printed above): %s" % str(q.lastError().text()))
-            for d in data:
-                #print len(d)
-                for k, v in d.iteritems():
+            p.mark("Prepared query")
+            if batch:
+                for k, v in data.iteritems():
                     q.bindValue(':'+k, v)
-                    #print k, v, type(v)
-                #print "==execute with bound data=="
-                #print cmd
-                #print q.boundValues()
-                #for k, v in q.boundValues().iteritems():
-                    #print str(k), v.typeName()
-                self._exe(q)
+                self._exe(q, batch=True)
+                    
+            else:
+                for d in data:
+                    #print len(d)
+                    for k, v in d.iteritems():
+                        q.bindValue(':'+k, v)
+                        #print k, v, type(v)
+                    p.mark("bound values for record")
+                    #print "==execute with bound data=="
+                    #print cmd
+                    #print q.boundValues()
+                    #for k, v in q.boundValues().iteritems():
+                        #print str(k), v.typeName()
+                    self._exe(q)
+                    p.mark("executed with data")
                 
         if toArray:
-            return self._queryToArray(q)
+            ret = self._queryToArray(q)
         elif toDict:
-            return self._queryToDict(q)
+            ret = self._queryToDict(q)
         else:
-            return q
+            ret = q
+        p.finish("Generated result")
+        return ret
             
     def __call__(self, *args, **kargs):
         return self.exe(*args, **kargs)
             
     def select(self, table, fields='*', sql='', toDict=True, toArray=False):
         """fields should be a list of field names"""
+        p = debug.Profiler("SqliteDatabase.select", disabled=True)
         if fields != '*':
             if isinstance(fields, basestring):
                 fields = fields.split(',')
@@ -81,8 +107,10 @@ class SqliteDatabase:
             fields = ','.join(qf)
             #fields = quoteList(fields)
         cmd = "SELECT %s FROM %s %s" % (fields, table, sql)
+        p.mark("generated command")
         #print cmd
         q = self.exe(cmd, toDict=toDict, toArray=toArray)
+        p.finish("Execution finished.")
         #return self._queryToDict(q)
         return q
         
@@ -98,6 +126,7 @@ class SqliteDatabase:
         
         ## can we optimize this by using batch execution?
         
+        p = debug.Profiler("SqliteDatabase.insert", disabled=True)
         if records is None:
             records = [args]
         if type(records) is not list:
@@ -107,9 +136,10 @@ class SqliteDatabase:
         ret = []
             
         ## Rememember that _prepareData may change the number of columns!
-        records = self._prepareData(table, records, removeUnknownColumns=ignoreExtraColumns)
+        records = self._prepareData(table, records, removeUnknownColumns=ignoreExtraColumns, batch=True)
+        p.mark("prepared data")
         
-        fields = records[0].keys()
+        fields = records.keys()
         insert = "INSERT"
         if replaceOnConflict:
             insert += " OR REPLACE"
@@ -117,7 +147,8 @@ class SqliteDatabase:
         cmd = "%s INTO %s (%s) VALUES (%s)" % (insert, table, quoteList(fields), ','.join([':'+f for f in fields]))
         
         #print len(fields), len(records[0]), len(self.tableSchema(table))
-        self.exe(cmd, records)
+        self.exe(cmd, records, batch=True)
+        p.finish("Executed.")
 
     def delete(self, table, where):
         cmd = "DELETE FROM %s WHERE %s" % (table, where)
@@ -169,12 +200,17 @@ class SqliteDatabase:
     def tableSchema(self, table):
         return self.tables[table]  ## this is a case-insensitive operation
     
-    def _exe(self, query, cmd=None):
+    def _exe(self, query, cmd=None, batch=False):
         """Execute an SQL query, raising an exception if there was an error. (internal use only)"""
-        if cmd is None:
-            ret = query.exec_()
+        if batch:
+            fn = query.execBatch
         else:
-            ret = query.exec_(cmd)
+            fn = query.exec_
+            
+        if cmd is None:
+            ret = fn()
+        else:
+            ret = fn(cmd)
         if not ret:
             if cmd is not None:
                 print "SQL Query:\n    %s" % cmd
@@ -186,13 +222,13 @@ class SqliteDatabase:
             self._readTableList()
     
     
-    def _prepareData(self, table, data, removeUnknownColumns=False):
+    def _prepareData(self, table, data, removeUnknownColumns=False, batch=False):
         """Massage data so it is ready for insert into the DB. (internal use only)
          - data destined for BLOB fields is pickled
          - numerical fields convert to int or float
          - text fields convert to unicode
-         
-         """
+        If batch is True, then data is returned as dict-of-lists.
+        """
          
          ## This can probably be optimized a bit..
         #rec = data[0]
@@ -213,7 +249,12 @@ class SqliteDatabase:
                 funcs[k] = str
             else:
                 funcs[k] = lambda obj: obj
-        newData = []
+                
+        if batch:
+            newData = dict([(k,[]) for k in data[0]])
+        else:
+            newData = []
+            
         for rec in data:
             newRec = {}
             for k in rec:
@@ -230,7 +271,11 @@ class SqliteDatabase:
                         if k not in schema:
                             raise Exception("Field '%s' not present in table '%s'" % (k, table))
                         print "Warning: Setting %s field %s.%s with type %s" % (schema[k], table, k, str(type(rec[k])))
-            newData.append(newRec)
+            if batch:
+                for k in newRec:
+                    newData[k].append(newRec[k])
+            else:
+                newData.append(newRec)
         #print "new data:", newData
         return newData
 
@@ -501,7 +546,15 @@ class AnalysisDatabase(SqliteDatabase):
                 elif typ == 'S':
                     typ = 'text'
                 else:
-                    typ = 'blob'
+                    if typ == 'O': ## check to see if this is a pointer to a string
+                        allStr = 0
+                        for i in xrange(len(data)):
+                            if isinstance(data[i][name], basestring):
+                                allStr += 1
+                        if allStr == len(data):
+                            typ = 'text'
+                    else:
+                        typ = 'blob'
                 fields[name] = typ
         elif isinstance(data, dict):
             for name, v in data.iteritems():

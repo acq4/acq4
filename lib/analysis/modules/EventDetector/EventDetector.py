@@ -10,6 +10,24 @@ import DatabaseGui
 import FeedbackButton
 
 class EventDetector(AnalysisModule):
+    """
+    The basic function of this analyzer is to detect repeated signals (action potentials, PSPs, calcium signals, etc)
+    within a trace. 
+    
+    The core analysis is carried out by a flowchart that may be modified for a variety of different detection algorithms.
+        * The flowchart input "dataIn" is a file handle
+        * The output "events" is a numpy record array with one record per event. The columns are determined 
+          by the flowchart itself
+        * The output "regions" is a list of the regions that are defined within the flowchart. These
+          are optional and may be used by downstream analysis modules.
+          
+    Data is saved to DB in almost exactly the same form that the "events" output produces, with some 
+    extra fields:
+        * SourceDir: integer referring to the rowid of the source directory OR
+                     tuple (table, rowid) if the source directory is not a ProtocolSequence
+        * SourceFile: the name of the file in which the event was detected. The name is relative to the SourceDir.                    
+    
+    """
     def __init__(self, host, flowchartDir=None, dbIdentity="EventDetector"):
         AnalysisModule.__init__(self, host)
         
@@ -98,6 +116,8 @@ class EventDetector(AnalysisModule):
             raise
         
     def storeToDB(self, data=None, parentDir=None):
+        p = debug.Profiler("EventDetector.storeToDB", disabled=True)
+        
         if data is None:
             data = self.flowchart.output()['events']
         if parentDir is None:
@@ -115,7 +135,8 @@ class EventDetector(AnalysisModule):
         ## make sure parent dir is registered in DB, get its table name
         #pDir = self.currentFile.parent()
         pTable, pRow = db.addDir(parentDir)
-            
+        p.mark("DB prep done")
+        
         ## determine the set of fields we expect to find in the table
         fields = OrderedDict([
             ('SourceDir', 'int'),
@@ -123,6 +144,7 @@ class EventDetector(AnalysisModule):
         ])
         fields.update(db.describeData(data))
         fields['SourceFile'] = 'text'   ## SourceFile is currently a FileHandle, but will be converted to str.
+        p.mark("field list done")
         
         ## Make sure target table exists and has correct columns, links to input file
         db.checkTable(table, owner=self.dbIdentity, fields=fields, links=[('SourceDir', pTable)], create=True)
@@ -133,10 +155,12 @@ class EventDetector(AnalysisModule):
             #source = data[i]['SourceFile']
             #name = source.name(relativeTo=parentDir)
             #names.append(name)
-            
+        p.mark("data prepared")
+        
         ## delete all records from table for current input files
         for name in set(names):
             db.delete(table, "SourceDir=%d and SourceFile='%s'" % (pRow, name))
+        p.mark("previous records deleted")
         
         ## assemble final list of records
         records = []
@@ -147,9 +171,59 @@ class EventDetector(AnalysisModule):
             rec2 = dict(zip(d2.dtype.names, d2))
             rec2.update(rec)
             records.append(rec2)
+        p.mark("record list assembled")
             
         ## insert all data to DB
         db.insert(table, records)
+        p.mark("records inserted")
+        p.finish()
+
+        
+        
+    def readFromDb(self, sourceDir, sourceFile=None):
+        """Read events from DB that originate in sourceDir. 
+        If sourceFile is specified, only return events that came from that file. 
+        """
+        
+        dbui = self.getElement('Database')
+        table = dbui.getTableName(self.dbIdentity)
+        db = dbui.getDb()
+        if db is None:
+            raise Exception("No DB selected")
+        
+        #identity = self.dbIdentity+'.events'
+        #table = dbui.getTableName(identity)
+        #if not db.hasTable(table):
+            #return None, None
+            
+        pRow = db.getDirRowID(sourceDir)
+        if pRow is None:
+            return None, None
+        
+        if sourceFile is not None:
+            events = db.select(table, '*', "where SourceDir=%d and SourceFile='%s'" % (pRow, sourceFile.name(relativeTo=sourceDir)), toArray=True)
+        else:
+            events = db.select(table, '*', "where SourceDir=%d" % pRow, toArray=True)
+        
+        if events is None:
+            ## need to make an empty array with the correct field names
+            schema = db.tableSchema(table)
+            ## NOTE: dtype MUST be specified as {names: formats: } since the names are unicode objects
+            ##  [(name, format), ..] does NOT work.
+            events = np.empty(0, dtype={'names': [k for k in schema], 'formats': [object]*len(schema)})
+            
+        else:   ## convert file strings to handles
+            if sourceFile is None:
+                for ev in events:  
+                    #ev['SourceDir'] = parentDir
+                    ev['SourceFile'] = sourceDir[ev['SourceFile']]
+            else:
+                for ev in events: 
+                    #ev['SourceDir'] = parentDir
+                    ev['SourceFile'] = sourceFile
+        
+        return events
+        
                 
     #def storeClicked(self):
         #dbui = self.getElement('Database')

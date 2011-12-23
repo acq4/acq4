@@ -1908,8 +1908,10 @@ def suggestDType(x):
         return x.dtype
     elif isinstance(x, float):
         return float
-    elif isinstance(x, int):
+    elif isinstance(x, int) or isinstance(x, long):
         return int
+    #elif isinstance(x, basestring):  ## don't try to guess correct string length; use object instead.
+        #return '<U%d' % len(x)
     else:
         return object
     

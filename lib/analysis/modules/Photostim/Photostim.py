@@ -416,9 +416,9 @@ class Photostim(AnalysisModule):
         if data is None:
             stats = self.flowchart.output()['dataOut']
             spot = self.selectedSpot
-            dh = spot.data
             if spot is None:
                 return
+            dh = spot.data
         else:
             if 'regions' not in data:
                 data['regions'] = self.detector.flowchart.output()['regions']
@@ -505,6 +505,8 @@ class Photostim(AnalysisModule):
         #loader = self.getElement('File Loader')
         #dh = loader.selectedFile()
         #scan = self.scans[dh]
+        p = debug.Profiler("Photostim.storeDBScan", disabled=True)
+        
         dh = scan.source()
         spots = scan.spots()
         print "Store scan:", dh.name()
@@ -526,14 +528,17 @@ class Photostim(AnalysisModule):
                 dlg.setValue(i)
                 if dlg.wasCanceled():
                     raise Exception("Scan store canceled by user.")
+        p.mark("Prepared data")
                 
         ## Store all events for this scan
         ev = np.concatenate(events)
+        p.mark("concatenate events")
         self.detector.storeToDB(ev, dh)
-        
+        p.mark("stored all events")
         ## Store spot data
         self.storeStats(stats, dh)
-                
+        p.mark("stored all stats")
+        p.finish()
         print "   scan %s is now locked" % dh.name()
         scan.lock()
 
@@ -643,19 +648,8 @@ class Photostim(AnalysisModule):
             return None, None
         stats = db.select(table, '*', "where SourceDir=%d and SourceFile='%s'" % (pRow, fh.name(relativeTo=parentDir)))
         
-        identity = self.dbIdentity+'.events'
-        table = dbui.getTableName(identity)
-        if not db.hasTable(table):
-            return None, None
-        events = db.select(table, '*', "where SourceDir=%d and SourceFile='%s'" % (pRow, fh.name(relativeTo=parentDir)), toArray=True)
         
-        if events is None:
-            ## need to make an empty array with the correct fields
-            schema = db.tableSchema(table)
-            ## NOTE: dtype MUST be specified as {names: formats: } since the names are unicode objects
-            ##  [(name, format), ..] does NOT work.
-            events = np.empty(0, dtype={'names': [k for k in schema], 'formats': [object]*len(schema)})
-            
+        events = self.detector.readFromDb(parentDir, fh)
         
         return events, stats
         
