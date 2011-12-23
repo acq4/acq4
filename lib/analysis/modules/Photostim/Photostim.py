@@ -521,7 +521,7 @@ class Photostim(AnalysisModule):
         print "Store scan:", dh.name()
         events = []
         stats = []
-        with pg.ProgressDialog("Preparing data for %s" % scan.name(), 0, len(spots)) as dlg:
+        with pg.ProgressDialog("Preparing data for %s" % scan.name(), 0, len(spots)+1) as dlg:
             for i in xrange(len(spots)):
                 s = spots[i]
                 #fh = self.getClampFile(s.data)
@@ -537,16 +537,20 @@ class Photostim(AnalysisModule):
                 dlg.setValue(i)
                 if dlg.wasCanceled():
                     raise Exception("Scan store canceled by user.")
-        p.mark("Prepared data")
-                
-        ## Store all events for this scan
-        ev = np.concatenate(events)
-        p.mark("concatenate events")
-        self.detector.storeToDB(ev, dh)
-        p.mark("stored all events")
-        ## Store spot data
-        self.storeStats(stats, dh)
-        p.mark("stored all stats")
+            p.mark("Prepared data")
+            dlg.setLabelText("Storing events..")
+            dlg.setValue(0)
+            dlg.setMaximum(100)
+            ## Store all events for this scan
+            ev = np.concatenate(events)
+            p.mark("concatenate events")
+            self.detector.storeToDB(ev, dh)
+            dlg.setValue(70)
+            dlg.setLabelText("Storing stats..")
+            p.mark("stored all events")
+            ## Store spot data
+            self.storeStats(stats, dh)
+            p.mark("stored all stats")
         p.finish()
         print "   scan %s is now locked" % dh.name()
         scan.lock()

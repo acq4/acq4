@@ -266,7 +266,8 @@ class Map:
 
     def loadStubs(self):
         ### Turn all stubs into fully-loaded scans.
-        with pg.ProgressDialog("Loading scans...", 0, len(self.stubs)) as dlg:
+        with pg.ProgressDialog("Loading scans...", 0, len(self.stubs), busyCursor=True) as dlg:
+            dlg.setValue(0)
             for stub in self.stubs:
                 QtGui.QApplication.processEvents()
                 ### can we load a partial map if one scan fails? (should we?)
