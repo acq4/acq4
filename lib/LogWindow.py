@@ -498,7 +498,14 @@ class LogWidget(QtGui.QWidget):
                     #self.ui.output.appendHtml(x)
                     
                 html = self.cache[id(entry)]
-                self.ui.logView.page().currentFrame().findFirstElement('body').appendInside(html)
+                frame = self.ui.logView.page().currentFrame()
+                isMax = frame.scrollBarValue(QtCore.Qt.Vertical) == frame.scrollBarMaximum(QtCore.Qt.Vertical)
+                
+                frame.findFirstElement('body').appendInside(html)
+                
+                if isMax:
+                    QtGui.QApplication.processEvents()  ## can't scroll to end until the web frame has processed the html change
+                    frame.setScrollBarValue(QtCore.Qt.Vertical, frame.scrollBarMaximum(QtCore.Qt.Vertical))
                 
                 
     def generateEntryHtml(self, entry):
