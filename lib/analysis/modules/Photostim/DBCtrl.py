@@ -274,6 +274,8 @@ class DBCtrl(QtGui.QWidget):
         
     def selectedMap(self):
         item = self.ui.mapTable.currentItem()
+        if item is None:
+            raise Exception("No map selected.")
         if not hasattr(item, 'map'):
             item = item.parent()
         return item.map

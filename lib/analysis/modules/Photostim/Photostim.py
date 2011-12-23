@@ -441,7 +441,9 @@ class Photostim(AnalysisModule):
         #size = d.info().get('Scanner', {}).get('spotSize', 100e-6)
         #stats['spotSize'] = size
         #print "Process Stats:", spot.data
-        stats['SourceFile'] = self.dataModel.getClampFile(dh)
+        
+        #stats['SourceFile'] = self.dataModel.getClampFile(dh)
+        stats['SourceFile'] = dh  ## stats should be stored with the protocol dir, not the clamp file.
         
         parent = dh.parent()
         if self.dataModel.dirType(parent) != 'ProtocolSequence':

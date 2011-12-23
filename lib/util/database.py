@@ -251,7 +251,7 @@ class SqliteDatabase:
                 funcs[k] = lambda obj: obj
                 
         if batch:
-            newData = dict([(k,[]) for k in data[0]])
+            newData = dict([(k,[]) for k in data[0] if not (removeUnknownColumns and (k not in schema))])
         else:
             newData = []
             
