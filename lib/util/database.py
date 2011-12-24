@@ -433,6 +433,11 @@ class AnalysisDatabase(SqliteDatabase):
         """Create a record based on a DirHandle and its meta-info.
         If no table is specified, use the dirType attribute as table name"""
         info = handle.info().deepcopy()
+        for k in info:  ## replace tuple keys with strings
+            if isinstance(k, tuple):
+                n = "_".join(k)
+                info[n] = info[k]
+                del info[k]
         
         ## determine parent directory, make sure parent is in DB.
         parent = handle.parent()

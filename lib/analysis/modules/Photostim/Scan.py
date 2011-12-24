@@ -64,6 +64,8 @@ class Scan(QtCore.QObject):
         self.statExample = None
         haveAll = True
         allEvents, allStats = self.host.loadScanFromDB(sourceDir)
+        if allEvents is None:
+            return 
         
         for st in allStats:
             self.stats[sourceDir[st['SourceFile']]] = st
