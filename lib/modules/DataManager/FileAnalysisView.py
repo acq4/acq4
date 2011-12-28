@@ -62,7 +62,7 @@ class FileAnalysisView(QtGui.QWidget):
             
         self.ui.databaseText.setText(fileName)
         self.dbFile = fileName
-        self.db = database.AnalysisDatabase(self.dbFile)
+        self.db = database.AnalysisDatabase(self.dbFile, dataModel=self.currentModel)
         self.sigDbChanged.emit()
         
     def quit(self):
@@ -125,6 +125,8 @@ class FileAnalysisView(QtGui.QWidget):
         modName = str(self.ui.dataModelCombo.currentText())
         self.currentModel = models.loadModel(modName)
         lib.Manager.getManager().dataModel = self.currentModel  ## make model globally available
+        if self.db is not None:
+            self.db.setDataModel(self.currentModel)
     
     
     def currentDatabase(self):

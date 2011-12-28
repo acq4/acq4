@@ -63,7 +63,11 @@ class Scan(QtCore.QObject):
         self.stats = {}
         self.statExample = None
         haveAll = True
-        allEvents, allStats = self.host.loadScanFromDB(sourceDir)
+        
+        if self.host.dataModel.dirType(sourceDir) == 'ProtocolSequence':
+            allEvents, allStats = self.host.loadScanFromDB(sourceDir)
+        else:
+            allEvents, allStats = self.host.loadSpotFromDB(sourceDir)
         if allEvents is None:
             return 
         

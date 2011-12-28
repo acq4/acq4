@@ -115,13 +115,13 @@ class EventDetector(AnalysisModule):
             self.dbCtrl.storeBtn.failure("Error.")
             raise
         
-    def storeToDB(self, data=None, parentDir=None):
+    def storeToDB(self, data=None, protoDir=None):
         p = debug.Profiler("EventDetector.storeToDB", disabled=True)
         
         if data is None:
             data = self.flowchart.output()['events']
-        if parentDir is None:
-            parentDir = self.currentFile.parent()
+        if protoDir is None:
+            protoDir = self.currentFile.parent()
             
         dbui = self.getElement('Database')
         table = dbui.getTableName(self.dbIdentity)
@@ -132,14 +132,21 @@ class EventDetector(AnalysisModule):
             #raise Exception("No data to store.")
             
             
-        ## make sure parent dir is registered in DB, get its table name
+        ## make sure parent dir(s) are registered in DB, get table names
         #pDir = self.currentFile.parent()
-        pTable, pRow = db.addDir(parentDir)
+        pTable, pRow = db.addDir(protoDir)
+        protoSeqDir = self.dataModel.getParent('ProtocolSequence')
+        if protoSeqDir is not None:
+            psTable, psRow = db.addDir(protoSeqDir)
+            
+        psTable = db.getDirTable('ProtocolSequence')
+        
         p.mark("DB prep done")
         
         ## determine the set of fields we expect to find in the table
         fields = OrderedDict([
-            ('SourceDir', 'int'),
+            ('ProtocolSequenceDir', 'int'),  ## events that are not part of a sequence will have no vaue here.
+            ('ProtocolDir', 'int'),
             ('SourceFile', 'text'),
         ])
         fields.update(db.describeData(data))
@@ -147,7 +154,8 @@ class EventDetector(AnalysisModule):
         p.mark("field list done")
         
         ## Make sure target table exists and has correct columns, links to input file
-        db.checkTable(table, owner=self.dbIdentity, fields=fields, links=[('SourceDir', pTable)], create=True)
+        links = [('ProtocolDir', 'Protocol'), ('ProtocolSequenceDir', 'ProtocolSequence')]
+        db.checkTable(table, owner=self.dbIdentity, fields=fields, links=links, create=True)
         
         ## convert source file handles to strings relative to the parent dir
         names = [fh.name(relativeTo=parentDir) for fh in data['SourceFile']]

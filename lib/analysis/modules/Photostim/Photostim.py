@@ -450,13 +450,13 @@ class Photostim(AnalysisModule):
         #print "Process Stats:", spot.data
         
         #stats['SourceFile'] = self.dataModel.getClampFile(dh)
-        stats['SourceFile'] = dh  ## stats should be stored with the protocol dir, not the clamp file.
+        stats['ProtocolDir'] = dh  ## stats should be stored with the protocol dir, not the clamp file.
         
         parent = dh.parent()
         if self.dataModel.dirType(parent) != 'ProtocolSequence':
-            parent = dh
+            parent = None
         
-        stats['SourceDir'] = parent
+        stats['ProtocolSequenceDir'] = parent
         
         return stats
 
@@ -541,6 +541,7 @@ class Photostim(AnalysisModule):
             dlg.setLabelText("Storing events..")
             dlg.setValue(0)
             dlg.setMaximum(100)
+            
             ## Store all events for this scan
             ev = np.concatenate(events)
             p.mark("concatenate events")
@@ -548,6 +549,7 @@ class Photostim(AnalysisModule):
             dlg.setValue(70)
             dlg.setLabelText("Storing stats..")
             p.mark("stored all events")
+            
             ## Store spot data
             self.storeStats(stats, dh)
             p.mark("stored all stats")
