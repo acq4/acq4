@@ -115,13 +115,16 @@ class EventDetector(AnalysisModule):
             self.dbCtrl.storeBtn.failure("Error.")
             raise
         
-    def storeToDB(self, data=None, protoDir=None):
+    def storeToDB(self, data=None):
         p = debug.Profiler("EventDetector.storeToDB", disabled=True)
         
         if data is None:
             data = self.flowchart.output()['events']
-        if protoDir is None:
-            protoDir = self.currentFile.parent()
+        #if protoDir is None:
+            #protoDir = self.currentFile.parent()
+            
+        if len(data) == 0:
+            return
             
         dbui = self.getElement('Database')
         table = dbui.getTableName(self.dbIdentity)
@@ -134,51 +137,69 @@ class EventDetector(AnalysisModule):
             
         ## make sure parent dir(s) are registered in DB, get table names
         #pDir = self.currentFile.parent()
-        pTable, pRow = db.addDir(protoDir)
-        protoSeqDir = self.dataModel.getParent('ProtocolSequence')
-        if protoSeqDir is not None:
-            psTable, psRow = db.addDir(protoSeqDir)
+        #pTable, pRow = db.addDir(protoDir)
+        #protoSeqDir = self.dataModel.getParent('ProtocolSequence', protoDir)
+        #if protoSeqDir is not None:
+            #psTable, psRow = db.addDir(protoSeqDir)
             
-        psTable = db.getDirTable('ProtocolSequence')
+        #psTable = db.getDirTable('ProtocolSequence')
         
         p.mark("DB prep done")
         
         ## determine the set of fields we expect to find in the table
-        fields = OrderedDict([
-            ('ProtocolSequenceDir', 'int'),  ## events that are not part of a sequence will have no vaue here.
-            ('ProtocolDir', 'int'),
-            ('SourceFile', 'text'),
-        ])
-        fields.update(db.describeData(data))
-        fields['SourceFile'] = 'text'   ## SourceFile is currently a FileHandle, but will be converted to str.
+        #fields = OrderedDict([
+            #('ProtocolSequenceDir', 'int'),  ## events that are not part of a sequence will have no vaue here.
+            #('ProtocolDir', 'int'),
+            #('SourceFile', 'text'),
+        #])
+        columns = db.describeData(data)
+        columns.update({
+            'ProtocolSequenceDir': 'directory:ProtocolSequence',
+            'ProtocolDir': 'directory:Protocol',
+            #'SourceFile': 'file'
+        })
+        
+        
+        #fields['SourceFile'] = 'text'   ## SourceFile is currently a FileHandle, but will be converted to str.
         p.mark("field list done")
         
         ## Make sure target table exists and has correct columns, links to input file
-        links = [('ProtocolDir', 'Protocol'), ('ProtocolSequenceDir', 'ProtocolSequence')]
-        db.checkTable(table, owner=self.dbIdentity, fields=fields, links=links, create=True)
+        #links = [('ProtocolDir', 'Protocol'), ('ProtocolSequenceDir', 'ProtocolSequence')]
+        db.checkTable(table, owner=self.dbIdentity, columns=columns, create=True)
         
         ## convert source file handles to strings relative to the parent dir
-        names = [fh.name(relativeTo=parentDir) for fh in data['SourceFile']]
+        #names = [fh.name(relativeTo=parentDir) for fh in data['SourceFile']]
         #for i in xrange(len(data)):
             #source = data[i]['SourceFile']
             #name = source.name(relativeTo=parentDir)
             #names.append(name)
         p.mark("data prepared")
         
+        ## collect all protocol/Sequence dirs
+        prots = {}
+        seqs = {}
+        for fh in set(data['SourceFile']):
+            prots[fh] = fh.parent()
+            seqs[fh] = self.dataModel.getParent(fh, 'ProtocolSequence')
+            
         ## delete all records from table for current input files
-        for name in set(names):
-            db.delete(table, "SourceDir=%d and SourceFile='%s'" % (pRow, name))
+        for fh in set(data['SourceFile']):
+            db.delete(table, where={'SourceFile': fh})
         p.mark("previous records deleted")
         
         ## assemble final list of records
-        records = []
-        for i in xrange(len(data)):
-            ## add new records
-            d2 = data[i]
-            rec = {'SourceDir': pRow, 'SourceFile': names[i]}
-            rec2 = dict(zip(d2.dtype.names, d2))
-            rec2.update(rec)
-            records.append(rec2)
+        records = {}
+        for col in data.dtype.names:
+            records[col] = data[col]
+        records['ProtocolSequenceDir'] = map(seqs.get, data['SourceFile'])
+        records['ProtocolDir'] = map(prots.get, data['SourceFile'])
+        
+        #for i in xrange(len(data)):
+            #d2 = data[i]
+            #rec = {'SourceDir': pRow, 'SourceFile': names[i]}
+            #rec2 = dict(zip(d2.dtype.names, d2))
+            #rec2.update(rec)
+            #records.append(rec2)
         p.mark("record list assembled")
             
         ## insert all data to DB
@@ -188,8 +209,8 @@ class EventDetector(AnalysisModule):
 
         
         
-    def readFromDb(self, sourceDir, sourceFile=None):
-        """Read events from DB that originate in sourceDir. 
+    def readFromDb(self, sequenceDir=None, sourceFile=None):
+        """Read events from DB that originate in sequenceDir. 
         If sourceFile is specified, only return events that came from that file. 
         """
         
@@ -204,14 +225,14 @@ class EventDetector(AnalysisModule):
         #if not db.hasTable(table):
             #return None, None
             
-        pRow = db.getDirRowID(sourceDir)
-        if pRow is None:
-            return None, None
+        #pRow = db.getDirRowID(sourceDir)
+        #if pRow is None:
+            #return None, None
         
         if sourceFile is not None:
-            events = db.select(table, '*', "where SourceDir=%d and SourceFile='%s'" % (pRow, sourceFile.name(relativeTo=sourceDir)), toArray=True)
+            events = db.select(table, '*', where={'SourceFile': sourceFile}, toArray=True)
         else:
-            events = db.select(table, '*', "where SourceDir=%d" % pRow, toArray=True)
+            events = db.select(table, '*', where={'ProtocolSequenceDir': sequenceDir}, toArray=True)
         
         if events is None:
             ## need to make an empty array with the correct field names
@@ -220,15 +241,15 @@ class EventDetector(AnalysisModule):
             ##  [(name, format), ..] does NOT work.
             events = np.empty(0, dtype={'names': [k for k in schema], 'formats': [object]*len(schema)})
             
-        else:   ## convert file strings to handles
-            if sourceFile is None:
-                for ev in events:  
-                    #ev['SourceDir'] = parentDir
-                    ev['SourceFile'] = sourceDir[ev['SourceFile']]
-            else:
-                for ev in events: 
-                    #ev['SourceDir'] = parentDir
-                    ev['SourceFile'] = sourceFile
+        #else:   ## convert file strings to handles
+            #if sourceFile is None:
+                #for ev in events:  
+                    ##ev['SourceDir'] = parentDir
+                    #ev['SourceFile'] = sourceDir[ev['SourceFile']]
+            #else:
+                #for ev in events: 
+                    ##ev['SourceDir'] = parentDir
+                    #ev['SourceFile'] = sourceFile
         
         return events
         

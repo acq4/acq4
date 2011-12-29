@@ -28,6 +28,9 @@ def quoteList(strns):
     return ','.join(['"'+s+'"' for s in strns])
 
 
+
+
+
 class SqliteDatabase:
     """Encapsulates an SQLITE database through QtSql to make things a bit more pythonic.
     Arbitrary SQL may be executed by calling the db object directly, eg: db('select * from table')
@@ -106,8 +109,17 @@ class SqliteDatabase:
     def __call__(self, *args, **kargs):
         return self.exe(*args, **kargs)
             
-    def select(self, table, columns='*', sql='', toDict=True, toArray=False):
-        """columns should be a list of column names"""
+    def select(self, table, columns='*', where=None, sql='', toDict=True, toArray=False):
+        """
+        Construct and execute a SELECT statement, returning the results.
+        Arguments:
+            table   - the name of the table from which to read data
+            columns - list of column names to read from table. The default is '*', which reads all columns
+            where   - optional dict of {column: value} pairs. only results where column=value will be returned
+            sql     - optional string to be appended to the SQL query
+            toDict  - If True, return a list-of-dicts (this is the default)
+            toArray - if True, return a numpy record array
+        """
         p = debug.Profiler("SqliteDatabase.select", disabled=True)
         if columns != '*':
             if isinstance(columns, basestring):
@@ -120,7 +132,10 @@ class SqliteDatabase:
                     qf.append('"'+f+'"')
             columns = ','.join(qf)
             #columns = quoteList(columns)
-        cmd = "SELECT %s FROM %s %s" % (columns, table, sql)
+            
+        whereStr = self._buildWhereClause(where, table)
+            
+        cmd = "SELECT %s FROM %s %s %s" % (columns, table, whereStr, sql)
         p.mark("generated command")
         q = self.exe(cmd, toDict=toDict, toArray=toArray)
         p.finish("Execution finished.")
@@ -141,12 +156,12 @@ class SqliteDatabase:
         p = debug.Profiler("SqliteDatabase.insert", disabled=True)
         if records is None:
             records = [args]
-        if type(records) is not list:
-            records = [records]
+        #if type(records) is not list:
+            #records = [records]
         if len(records) == 0:
             return
         ret = []
-            
+        
         ## Rememember that _prepareData may change the number of columns!
         records = self._prepareData(table, records, removeUnknownColumns=ignoreExtraColumns, batch=True)
         p.mark("prepared data")
@@ -163,7 +178,8 @@ class SqliteDatabase:
         p.finish("Executed.")
 
     def delete(self, table, where):
-        cmd = "DELETE FROM %s WHERE %s" % (table, where)
+        whereStr = self._buildWhereClause(where, table)
+        cmd = "DELETE FROM %s %s" % (table, whereStr)
         return self(cmd)
 
     def update(self, table, vals, where=None, rowid=None):
@@ -172,14 +188,19 @@ class SqliteDatabase:
             vals: dict of {column: value} pairs
             where: SQL clause specifying rows to update
             rowid: int row IDs. Used instead of 'where'"""
-        if where is None:
-            if rowid is None:
-                raise Exception("Must specify 'where' or 'rowids'")
-            else:
-                where = "rowid=%d" % rowid
+        if rowid is not None:
+            if where is not None:
+                raise Exception("'where' and 'rowid' are mutually exclusive arguments.")
+            where = {'rowid': rowid}
+        whereStr = self._buildWhereClause(where, table)
+        #if where is None:
+            #if rowid is None:
+                #raise Exception("Must specify 'where' or 'rowids'")
+            #else:
+                #where = "rowid=%d" % rowid
         setStr = ', '.join(['"%s"=:%s' % (k, k) for k in vals])
         data = self._prepareData(table, [vals], batch=True)
-        cmd = "UPDATE %s SET %s WHERE %s" % (table, setStr, where)
+        cmd = "UPDATE %s SET %s %s" % (table, setStr, where)
         return self(cmd, data, batch=True)
 
     def lastInsertRow(self):
@@ -197,12 +218,12 @@ class SqliteDatabase:
                    Types may be any string, but are typically int, real, text, or blob.
         """
         #print "create table", table, ', '.join(columns)
+        
+        columns = parseColumnDefs(columns)
+        
         columnStr = []
-        for col in columns:
-            if len(col) == 2:
-                columnStr.append('"%s" %s' % col)
-            elif len(col) == 3:
-                columnStr.append('"%s" %s %s' % col)
+        for name, conf in columns.iteritems():
+            columnStr.append('"%s" %s %s' % (name, conf['Type'], conf.get('Constraints', '')))
         columnStr = ','.join(columnStr)
 
         self('CREATE TABLE %s (%s) %s' % (table, columnStr, sql))
@@ -241,8 +262,22 @@ class SqliteDatabase:
         if str(query.executedQuery())[:6].lower() == 'create':
             self._readTableList()
     
+    def _buildWhereClause(self, where, table):
+        if where is None or len(where) == 0:
+            return ''
+            
+        where = self._prepareData(table, where)[0]
+        conds = []
+        for k,v in where.iteritems():
+            if isinstance(v, basestring):
+                conds.append('"%s"=\'%s\'' % (k, v))
+            else:
+                conds.append('"%s"=%s' % (k,v))
+        whereStr = "WHERE " + " AND ".join(conds)
+        return whereStr
+
     
-    def _prepareData(self, table, data, removeUnknownColumns=False, converters=None, batch=False):
+    def _prepareData(self, table, data, removeUnknownColumns=False, batch=False):
         ## Massage data so it is ready for insert into the DB. (internal use only)
         ##   - data destined for BLOB columns is pickled
         ##   - numerical columns convert to int or float
@@ -255,8 +290,7 @@ class SqliteDatabase:
         
         data = TableData(data)
         
-        if converters is not None:
-            converters = {}
+        converters = {}
             
         ## determine the conversion functions to use for each column.
         schema = self.tableSchema(table)
@@ -277,7 +311,7 @@ class SqliteDatabase:
                 converters[k] = lambda obj: obj
                 
         if batch:
-            newData = dict([(k,[]) for k in data[0] if not (removeUnknownColumns and (k not in schema))])
+            newData = dict([(k,[]) for k in data.columnNames() if not (removeUnknownColumns and (k not in schema))])
         else:
             newData = []
             
@@ -286,15 +320,17 @@ class SqliteDatabase:
             for k in rec:
                 if removeUnknownColumns and (k not in schema):
                     continue
-                
-                try:
-                    newRec[k] = converters[k](rec[k])
-                except:
-                    newRec[k] = rec[k]
-                    if k.lower() != 'rowid':
-                        if k not in schema:
-                            raise Exception("Column '%s' not present in table '%s'" % (k, table))
-                        print "Warning: Setting %s column %s.%s with type %s" % (schema[k], table, k, str(type(rec[k])))
+                if rec[k] is None:
+                    newRec[k] = None
+                else:
+                    try:
+                        newRec[k] = converters[k](rec[k])
+                    except:
+                        newRec[k] = rec[k]
+                        if k.lower() != 'rowid':
+                            if k not in schema:
+                                raise Exception("Column '%s' not present in table '%s'" % (k, table))
+                            print "Warning: Setting %s column %s.%s with type %s" % (schema[k], table, k, str(type(rec[k])))
             if batch:
                 for k in newData:
                     newData[k].append(newRec.get(k, None))
@@ -357,7 +393,7 @@ class SqliteDatabase:
     def _readTableList(self):
         """Reads the schema for each table, extracting the column names and types."""
         
-        res = self.select('sqlite_master', ['name', 'sql'], "where type = 'table'")
+        res = self.select('sqlite_master', ['name', 'sql'], sql="where type = 'table'")
         ident = r"(\w+|'[^']+'|\"[^\"]+\")"
         #print "READ:"
         tables = advancedTypes.CaselessDict()
@@ -463,7 +499,7 @@ class AnalysisDatabase(SqliteDatabase):
                 self.insert('TableConfig', Table=newName, DirType=dirType)
                 
                 ts = self.tableSchema(dirType)
-                link = self.select('TableRelationships', ['Column', 'Table2'], 'where Table1="%s"' % dirType)[0]
+                link = self.select('TableRelationships', ['Column', 'Table2'], sql='where Table1="%s"' % dirType)[0]
                 linkedType = link['Table2']
                 
                 ts[linkedType] = ('directory:%s' % linkedType)
@@ -524,7 +560,7 @@ class AnalysisDatabase(SqliteDatabase):
         self._baseDir = baseDir
 
     def ctrlParam(self, param):
-        res = SqliteDatabase.select(self, 'DbParameters', ['Value'], "where Param='%s'"%param)
+        res = SqliteDatabase.select(self, 'DbParameters', ['Value'], sql="where Param='%s'"%param)
         if len(res) == 0:
             return None
         else:
@@ -567,20 +603,14 @@ class AnalysisDatabase(SqliteDatabase):
         
         ## translate directory / file columns into int / text
         ## build records for insertion to ColumnConfig
+        columns = parseColumnDefs(columns, keyOrder=['Type', 'Constraints', 'Link'])
+            
         records = []
         colTuples = []
-        for col in columns:
-            if isinstance(col, dict):
-                rec = col
-            else:
-                rec = dict(Column=col[0], Type=col[1])
-                if len(col) > 2:
-                    rec['Constraints'] = col[2]
-                if len(col) > 3:
-                    rec['Link'] = col[3]
-                    
-            rec['Table'] = table
-            records.append(rec)
+        for name, col in columns.iteritems():
+            rec = {'Column': name, 'Table': table}
+            rec.update(col)
+            
             typ = rec['Type']
             if typ.startswith('directory'):
                 dirType = typ.lstrip('directory:')
@@ -593,6 +623,7 @@ class AnalysisDatabase(SqliteDatabase):
             if 'Constraints' in rec:
                 tup = tup + (rec['Constraints'],)
             colTuples.append(tup)
+            records.append(rec)
             
             
         ret = SqliteDatabase.createTable(self, table, colTuples, sql)
@@ -612,45 +643,35 @@ class AnalysisDatabase(SqliteDatabase):
         If the table does not exist and create==True, then the table will be created with the 
         given columns and owner. 
         """
-        
+        columns = parseColumnDefs(columns, keyOrder=['Type', 'Constraints', 'Link'])
+            
         ## Make sure target table exists and has correct columns, links to input file
         if not self.hasTable(table):
             if create:
                 ## create table
                 self.createTable(table, columns, owner=owner)
-                #for column, ptable in links:
-                    #self.linkTables(table, column, ptable)
             else:
                 raise Exception("Table %s does not exist." % table)
         else:
-            ## check table for ownership, columns
+            ## check table for ownership
             if self.tableOwner(table) != owner:
                 raise Exception("Table %s is not owned by %s." % (table, owner))
             
+            ## check table for correct columns
             ts = self.tableSchema(table)
-            config = self.getTableConfig(table)
+            config = self.getColumnConfig(table)
             
-            for colName, colType, extra in columns:
+            for colName, col in columns.iteritems():
+                colType = col['Type']
                 if colName not in ts:  ## <-- this is a case-insensitive operation
                     raise Exception("Table has different data structure: Missing column %s" % f)
                 specType = ts[colName]
                 if specType.lower() != colType.lower():  ## type names are case-insensitive too
-                    if colType.startswith('directory'):
-                        dirType = colType.lstrip('directory:')
-                        dirTable = self.dirTableName(dirType)
-                        if (
-                            specType == 'int' and 
-                            colName in config and 
-                            config[colName].get('type',None) == 'directory' and 
-                            config[colName].get('link',None) == dirTable):
+                    ## requested column type does not match schema; check for directory / file types
+                    if (colType == 'file' or colType.startswith('directory')):
+                        if (colName in config and config[colName].get('Type',None) == colType):
                             continue
-                    elif columns[f] == 'file':
-                        if ( 
-                            specType == 'text' and
-                            config[colName].get('type',None) == 'file'):
-                            continue
-                        pass
-                    raise Exception("Table has different data structure: Column '%s' type is %s, should be %s" % (f, ts[f], columns[f]))
+                    raise Exception("Table has different data structure: Column '%s' type is %s, should be %s" % (colName, specType, colType))
         return True
 
     def createDirTable(self, dirHandle):
@@ -660,9 +681,9 @@ class AnalysisDatabase(SqliteDatabase):
         columns = lib.Manager.getManager().suggestedDirFields(dirHandle).keys()
         
         ## Add in any other columns present 
-        for k in dirHandle.info():
-            if k not in columns:
-                columns.append(k)
+        #for k in dirHandle.info():   ## Let's leave it to the user to add these if they want 
+            #if k not in columns:
+                #columns.append(k)
         columns = [(k, 'text') for k in columns]
         columns = [('Dir', 'file')] + columns
         
@@ -683,6 +704,7 @@ class AnalysisDatabase(SqliteDatabase):
 
     def addDir(self, handle):
         """Create a record based on a DirHandle and its meta-info."""
+        print "addDir:", handle
         info = handle.info().deepcopy()
         for k in info:  ## replace tuple keys with strings
             if isinstance(k, tuple):
@@ -700,29 +722,30 @@ class AnalysisDatabase(SqliteDatabase):
         if not self.hasTable(table):
             self.createDirTable(handle)
             
+        ## make sure dir is not already in DB. 
+        ## if it is, just return the row ID
+        rid = self.getDirRowID(handle)
+        if rid is not None:
+            return table, rid
+        
         ## find all directory columns, make sure linked directories are present in DB
         conf = self.getColumnConfig(table)
-        for col in conf:
+        for colName, col in conf.iteritems():
             if col['Type'].startswith('directory'):
                 #pTable = col['Link']
                 pType = col['Type'].lstrip('directory:')
                 parent = self.dataModel().getParent(handle, pType)
                 if parent is not None:
                     self.addDir(parent)
-                    info[col['Column']] = parent
+                    info[colName] = parent
                 else:
-                    info[col['Column']] = None
+                    info[colName] = None
         
-        ## make sure dir is not already in DB. 
-        ## if it is, just return the row ID
-        rid = self.getDirRowID(handle)
-        if rid is not None:
-            return table, rid
             
         #if parentRowId is not None:
             #pType = self.getTableConfig(pTable)['DirType']
             #info[pType+'Dir'] = parentRowId
-        info['Dir'] = handle.name(relativeTo=self.baseDir())
+        info['Dir'] = handle
         
         self.insert(table, info, ignoreExtraColumns=True)
 
@@ -743,18 +766,22 @@ class AnalysisDatabase(SqliteDatabase):
         List all declared relationships for table.
         returns {columnName: linkedTable, ...}
         """
-        links = self.select('TableConfig', ['Column', 'Value'], "where \"Table\"='%s' and Key='link'" % table)
+        links = self.select('TableConfig', ['Column', 'Value'], sql="where \"Table\"='%s' and Key='link'" % table)
         return dict([(link['Column'], link['Value']) for link in links])
 
     def getColumnConfig(self, table):
-        """Return the column config records for table."""
+        """Return the column config records for table.
+        Records are returned as {columnName: {'Type': t, 'Constraints': c, 'Link': l), ...}
+        (Note this is not the same as tableSchema)
+        """
         if table not in self.columnConfigCache:
             if not self.hasTable('ColumnConfig'):
-                return []
-            recs = SqliteDatabase.select(self, 'ColumnConfig', ['Column', 'Type', 'Constraints', 'Link'], "where \"Table\"='%s'" % table)
+                return {}
+            recs = SqliteDatabase.select(self, 'ColumnConfig', ['Column', 'Type', 'Constraints', 'Link'], sql="where \"Table\"='%s'" % table)
             if len(recs) == 0:
-                return []
-            self.columnConfigCache[table] = recs
+                return {}
+            
+            self.columnConfigCache[table] = dict([(r['Column'], r) for r in recs])
         return self.columnConfigCache[table]
         
     def getTableConfig(self, table):
@@ -775,7 +802,7 @@ class AnalysisDatabase(SqliteDatabase):
             
         if not self.hasTable(table):
             return None
-        rec = self.select(table, ['rowid'], "where Dir='%s'" % dirHandle.name(relativeTo=self.baseDir()))
+        rec = self.select(table, ['rowid'], sql="where Dir='%s'" % dirHandle.name(relativeTo=self.baseDir()))
         if len(rec) < 1:
             return None
         #print rec[0]
@@ -783,7 +810,7 @@ class AnalysisDatabase(SqliteDatabase):
 
     def getDir(self, table, rowid):
         ## Return a DirHandle given table, rowid
-        res = self.select(table, ['Dir'], 'where rowid=%d'%rowid)
+        res = self.select(table, ['Dir'], sql='where rowid=%d'%rowid)
         if len(res) < 1:
             raise Exception('rowid %d does not exist in %s' % (rowid, table))
         #print res
@@ -823,7 +850,7 @@ class AnalysisDatabase(SqliteDatabase):
         #return type
 
     def listTablesOwned(self, owner):
-        res = self.select('TableConfig', ['Table'], "where Owner='%s'" % owner)
+        res = self.select('TableConfig', ['Table'], sql="where Owner='%s'" % owner)
         return [x['Table'] for x in res]
     
     ## deprecated--use createTable() with owner specified instead.
@@ -832,7 +859,7 @@ class AnalysisDatabase(SqliteDatabase):
     
     def tableOwner(self, table):
         #res = self.select("DataTableOwners", ["Owner"], sql='where "Table"=\'%s\'' % table)
-        res = self.select('TableConfig', ['Owner'], "where \"Table\"='%s'" % table)
+        res = self.select('TableConfig', ['Owner'], sql="where \"Table\"='%s'" % table)
         if len(res) == 0:
             return None
         return res[0]['Owner']
@@ -856,11 +883,17 @@ class AnalysisDatabase(SqliteDatabase):
                 else:
                     if typ == 'O': ## check to see if this is a pointer to a string
                         allStr = 0
+                        allHandle = 0
                         for i in xrange(len(data)):
-                            if isinstance(data[i][name], basestring):
+                            val = data[i][name]
+                            if val is None or isinstance(val, basestring):
                                 allStr += 1
+                            elif val is None or isinstance(val, DataManager.FileHandle):
+                                allHandle += 1
                         if allStr == len(data):
                             typ = 'text'
+                        elif allHandle == len(data):
+                            typ = 'file'
                     else:
                         typ = 'blob'
                 columns[name] = typ
@@ -872,6 +905,8 @@ class AnalysisDatabase(SqliteDatabase):
                     typ = 'int'
                 elif isinstance(v, basestring):
                     typ = 'text'
+                elif isinstance(v, DataManager.FileHandle):
+                    typ = 'file'
                 else:
                     typ = 'blob'
                 columns[name] = typ
@@ -879,31 +914,34 @@ class AnalysisDatabase(SqliteDatabase):
             raise Exception("Can not describe data of type '%s'" % type(data))
         return columns
 
-    def select(self, table, columns='*', sql='', toDict=True, toArray=False):
+    def select(self, table, columns='*', where=None, sql='', toDict=True, toArray=False):
         """Extends select to convert directory/file columns back into Dir/FileHandles"""
         
         
-        data = SqliteDatabase.select(self, table, columns, sql, toDict=toDict, toArray=toArray)
+        data = SqliteDatabase.select(self, table, columns, where=where, sql=sql, toDict=True, toArray=False)
         data = TableData(data)
         
         config = self.getColumnConfig(table)
         
         ## convert file/dir handles
-        for conf in config:
-            column = conf['Column']
+        for column, conf in config.iteritems():
             if column not in data.columnNames():
                 continue
             
             if conf.get('Type', '').startswith('directory'):
                 rids = set([d[column] for d in data])
                 linkTable = conf['Link']
-                handles = dict([(rid, self.getDir(linkTable, rid)) for rid in rids])
+                handles = dict([(rid, self.getDir(linkTable, rid)) for rid in rids if rid is not None])
+                handles[None] = None
                 data[column] = map(handles.get, data[column])
                     
             elif conf.get('Type', None) == 'file':
-                data[column] = map(self.baseDir().__getitem__, data[column])
-        
-        return data.originalData()
+                data[column] = map(lambda f: None if f is None else self.baseDir()[f], data[column])
+                
+        ret = data.originalData()
+        if toArray:
+            ret = data.toArray()
+        return ret
     
     def _prepareData(self, table, data, removeUnknownColumns=False, batch=False):
         """
@@ -912,42 +950,54 @@ class AnalysisDatabase(SqliteDatabase):
               (and automatically adds directories to their tables if needed)
             - converts filehandles to a string file name relative to the DB base dir.
         """
-        if batch is False:
-            raise Exception("AnalysisDatabase only implements batch mode.")
+        #if batch is False:
+            #raise Exception("AnalysisDatabase only implements batch mode.")
 
         #links = self.listTableLinks(table)
         config = self.getColumnConfig(table)
         
         data = TableData(data)
         dataCols = set(data.columnNames())
-        
-        for col in config:
-            column = col['Column']
-            if column not in dataCols:
+        for colName, colConf in config.iteritems():
+            if colName not in dataCols:
                 continue
             
-            if col.get('Type', '').startswith('directory'):
+            if colConf.get('Type', '').startswith('directory'):
                 ## Make sure all directories are present in the DB
-                handles = data[column]
-                linkTable = col['Link']
-                rowids = {}
+                handles = data[colName]
+                linkTable = colConf['Link']
+                if linkTable is None:
+                    raise Exception('Column "%s" is type "%s" but is not linked to any table.' % (colName, colConf['Type']))
+                rowids = {None: None}
                 for dh in set(handles):
+                    if dh is None:
+                        continue
                     dirTable, rid = self.addDir(dh)
                     if dirTable != linkTable:
                         linkType = self.getTableConfig(linkTable)['DirType']
                         dirType = self.getTableConfig(dirTable)['DirType']
-                        raise Exception("Trying to add directory '%s' (type='%s') to column %s.%s, but this column is for directories of type '%s'." % (dh.name(), dirType, table, column, linkType))
+                        raise Exception("Trying to add directory '%s' (type='%s') to column %s.%s, but this column is for directories of type '%s'." % (dh.name(), dirType, table, colName, linkType))
                     rowids[dh] = rid
                     
                 ## convert dirhandles to rowids
-                data[column] = map(rowids.get, handles)
-            elif col.get('type', None) == 'file':
+                data[colName] = map(rowids.get, handles)
+            elif colConf.get('Type', None) == 'file':
                 ## convert filehandles to strings
-                data[column] = map(lambda fh: fh.name(relativeTo=self.baseDir()), data['column'])
+                files = []
+                for f in data[colName]:
+                    if f is None:
+                        files.append(None)
+                    else:
+                        try:
+                            files.append(f.name(relativeTo=self.baseDir()))
+                        except:
+                            print "f:", f
+                            raise
+                data[colName] = files
 
         newData = SqliteDatabase._prepareData(self, table, data, removeUnknownColumns, batch)
         
-        return data
+        return newData
         
         
         
@@ -960,6 +1010,8 @@ class TableData:
         - numpy record array
         - list-of-dicts (all dicts are _not_ required to have the same keys)
         - dict-of-lists
+        - dict (single record)
+               Note: if all the values in this record are lists, it will be interpreted as multiple records
         
     Data can be accessed and modified by column, by row, or by value
         data[columnName]
@@ -976,7 +1028,14 @@ class TableData:
         elif isinstance(data, list):
             self.mode = 'list'
         elif isinstance(data, dict):
-            self.mode = 'dict'
+            types = set(map(type, data.values()))
+            ## dict may be a dict-of-lists or a single record
+            types -= set([list, np.ndarray]) ## if dict contains any non-sequence values, it is probably a single record.
+            if len(types) != 0:
+                self.data = [self.data]
+                self.mode = 'list'
+            else:
+                self.mode = 'dict'
         elif isinstance(data, TableData):
             self.data = data.data
             self.mode = data.mode
@@ -988,6 +1047,21 @@ class TableData:
         
     def originalData(self):
         return self.data
+    
+    def toArray(self):
+        if self.mode == 'array':
+            return self.data
+        if len(self) < 1:
+            #return np.array([])  ## need to return empty array *with correct columns*, but this is very difficult, so just return None
+            return None
+        rec1 = self[0]
+        dtype = functions.suggestRecordDType(rec1)
+        #print rec1, dtype
+        arr = np.empty(len(self), dtype=dtype)
+        arr[0] = tuple(rec1.values())
+        for i in xrange(1, len(self)):
+            arr[i] = tuple(self[i].values())
+        return arr
             
     def __getitem__array(self, arg):
         if isinstance(arg, tuple):
@@ -1084,6 +1158,49 @@ class TableData:
         return self.columnNames()
     
     
+def parseColumnDefs(defs, keyOrder=None):
+    """
+    Translate a few different forms of column definitions into a single common format.
+    These formats are accepted for all methods which request column definitions (createTable,
+    checkTable, etc)
+        list of tuples:  [(name, type, <constraints>), ...]
+        dict of strings: {name: type, ...}
+        dict of tuples:  {name: (type, <constraints>), ...}
+        dict of dicts:   {name: {'Type': type, ...}, ...}
+        
+    Returns dict of dicts as the common format.
+    """
+    if keyOrder is None:
+        keyOrder = ['Type', 'Constraints']
+    def isSequence(x):
+        return isinstance(x, list) or isinstance(x, tuple)
+    def toDict(args):
+        d = {}
+        for i,v in enumerate(args):
+            d[keyOrder[i]] = v
+            if i >= len(keyOrder) - 1:
+                break
+        return d
+        
+    if isSequence(defs) and all(map(isSequence, defs)):
+        return dict([(c[0], toDict(c[1:])) for c in defs])
+        
+    if isinstance(defs, dict):
+        ret = {}
+        for k, v in defs.iteritems():
+            if isSequence(v):
+                ret[k] = toDict(v)
+            elif isinstance(v, dict):
+                ret[k] = v
+            elif isinstance(v, basestring):
+                ret[k] = {'Type': v}
+            else:
+                raise Exception("Invalid column-list specification: %s" % str(defs))
+        return ret
+        
+    else:
+        raise Exception("Invalid column-list specification: %s" % str(defs))
+
     
         
 

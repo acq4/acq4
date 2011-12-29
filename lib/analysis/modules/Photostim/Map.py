@@ -9,7 +9,7 @@ class Map:
     ### A map is a group of (possibly overlapping) scans and associated meta-data. 
     ### Maps will automatically merge overlapping spots and join non-overlapping scans to create a single scan
     mapFields = OrderedDict([
-        ('cell', 'int'),
+        ('cell', 'directory:Cell'),
         ('scans', 'blob'),
         #('date', 'int'),
         #('name', 'text'),

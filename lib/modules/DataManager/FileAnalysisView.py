@@ -84,7 +84,7 @@ class FileAnalysisView(QtGui.QWidget):
             return
         self.ui.databaseText.setText(fileName)
         self.dbFile = fileName
-        self.db = database.AnalysisDatabase(self.dbFile, self.man.getBaseDir())
+        self.db = database.AnalysisDatabase(self.dbFile, dataModel=self.currentModel, baseDir=self.man.getBaseDir())
         self.sigDbChanged.emit()
         
     def refreshDb(self):

@@ -68,11 +68,12 @@ class Scan(QtCore.QObject):
             allEvents, allStats = self.host.loadScanFromDB(sourceDir)
         else:
             allEvents, allStats = self.host.loadSpotFromDB(sourceDir)
+            
         if allEvents is None:
             return 
         
         for st in allStats:
-            self.stats[sourceDir[st['SourceFile']]] = st
+            self.stats[st['ProtocolDir']] = st
             
         for ev in allEvents:
             fh = ev['SourceFile'] ## sourceFile has already been converted to file handle.

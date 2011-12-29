@@ -305,10 +305,10 @@ def getParentInfo(dh, parentType):
         return dh.info()
     
 def getDayInfo(dh):
-    return getParentInfo('Day')
+    return getParentInfo(dh, 'Day')
 
 def getCellInfo(dh):
-    return getParentInfo('Cell')
+    return getParentInfo(dh, 'Cell')
 
 def getACSF(dh):
     dayInfo = getDayInfo(dh)
