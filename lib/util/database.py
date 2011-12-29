@@ -613,9 +613,7 @@ class AnalysisDatabase(SqliteDatabase):
             
             typ = rec['Type']
             if typ.startswith('directory'):
-                dirType = typ.lstrip('directory:')
-                dirTable = self.dirTableName(dirType)
-                rec['Link'] = dirTable
+                rec['Link'] = self.dirTableName(typ.lstrip('directory:'))
                 typ = 'int'
             elif typ == 'file':
                 typ = 'text'
@@ -699,7 +697,8 @@ class AnalysisDatabase(SqliteDatabase):
             columns = [(colName, 'directory:'+pType)] + columns
             #self.linkTables(tableName, colName, pName)
             
-        self.createTable(tableName, columns)
+        dirType = self.dataModel().dirType(dirHandle)
+        self.createTable(tableName, columns, dirType=dirType)
         return tableName
 
     def addDir(self, handle):
@@ -753,21 +752,21 @@ class AnalysisDatabase(SqliteDatabase):
 
 
 
-    def linkTables(self, table1, col, table2):
-        """Declare a key relationship between two tables. Values in table1.column are ROWIDs from table 2"""
-        #self.insert('TableRelationships', Table1=table1, Column=col, Table2=table2)
-        self.insert('TableConfig', Table=table1, Column=col, Key='link', Value=table2)
-        if table1 in self.columnConfigCache:
-            del self.columnConfigCache[table1]
+    #def linkTables(self, table1, col, table2):
+        #"""Declare a key relationship between two tables. Values in table1.column are ROWIDs from table 2"""
+        ##self.insert('TableRelationships', Table1=table1, Column=col, Table2=table2)
+        #self.insert('TableConfig', Table=table1, Column=col, Key='link', Value=table2)
+        #if table1 in self.columnConfigCache:
+            #del self.columnConfigCache[table1]
 
 
-    def listTableLinks(self, table):
-        """
-        List all declared relationships for table.
-        returns {columnName: linkedTable, ...}
-        """
-        links = self.select('TableConfig', ['Column', 'Value'], sql="where \"Table\"='%s' and Key='link'" % table)
-        return dict([(link['Column'], link['Value']) for link in links])
+    #def listTableLinks(self, table):
+        #"""
+        #List all declared relationships for table.
+        #returns {columnName: linkedTable, ...}
+        #"""
+        #links = self.select('TableConfig', ['Column', 'Value'], sql="where \"Table\"='%s' and Key='link'" % table)
+        #return dict([(link['Column'], link['Value']) for link in links])
 
     def getColumnConfig(self, table):
         """Return the column config records for table.
@@ -976,7 +975,7 @@ class AnalysisDatabase(SqliteDatabase):
                     if dirTable != linkTable:
                         linkType = self.getTableConfig(linkTable)['DirType']
                         dirType = self.getTableConfig(dirTable)['DirType']
-                        raise Exception("Trying to add directory '%s' (type='%s') to column %s.%s, but this column is for directories of type '%s'." % (dh.name(), dirType, table, colName, linkType))
+                        raise Exception("Trying to use directory '%s' (type='%s') for column %s.%s, but this column is for directories of type '%s'." % (dh.name(), dirType, table, colName, linkType))
                     rowids[dh] = rid
                     
                 ## convert dirhandles to rowids

@@ -552,15 +552,16 @@ class Photostim(AnalysisModule):
         dh = scan.source()
         print "Clear scan", dh
         #pRow = db.getDirRowID(dh)
-        
+        colName = self.dataModel.dirType(dh)+'Dir'
+            
         identity = self.dbIdentity+'.sites'
         table = dbui.getTableName(identity)
         #db.delete(table, "SourceDir=%d" % pRow)
-        db.delete(table, where={'ProtocolDir': dh})
+        db.delete(table, where={colName: dh})
         
         identity = self.dbIdentity+'.events'
         table = dbui.getTableName(identity)
-        db.delete(table, where={'ProtocolDir': dh})
+        db.delete(table, where={colName: dh})
         #db.delete(table, "SourceDir=%d" % pRow)
             
         scan.unlock()
@@ -604,6 +605,11 @@ class Photostim(AnalysisModule):
         ## determine the set of fields we expect to find in the table
         
         fields = db.describeData(data)
+        
+        ## override directory fields since describeData can't guess these for us
+        fields['ProtocolDir'] = 'directory:Protocol'
+        fields['ProtocolSequenceDir'] = 'directory:ProtocolSequence'
+        
         #fields = OrderedDict([
             #('SourceDir', 'int'),
             #('SourceFile', 'text'),
