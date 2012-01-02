@@ -16,99 +16,45 @@ import functions as fn
 
 def main():
     global fits, err, psp, data, xVals
-    #amp = -20e-12
-    #ampCV = 0.5
-    #rise = 0.15e-3
-    #riseCV = 0.001
-    #fall = 0.6e-3
-    #fallCV = 0.001
-    #xoff = 1e-3
-    #xoffCV = 0.1
     
-    
-    
-    ## generate amplitude, rise, decay for each event
-    #numEvents = 10
-    #amps = np.random.normal(scale=abs(ampCV*amp), loc=amp, size=numEvents)
-    #if amp < 0:
-        #amps[amps>-1e-12] = -1e-12
-    #else:
-        #amps[amps<1e-12] = 1e-12
-    #rises = np.random.normal(scale=riseCV*rise, loc=rise, size=numEvents)
-    #rises[rises<0] = 0
-    #falls = np.random.normal(scale=fallCV*fall, loc=fall, size=numEvents)
-    #falls[falls<0] = 0
-    #offsets = np.random.normal(scale=xoffCV*xoff, loc=xoff, size=numEvents)
-    #offsets[offsets<0] = 0
-    #amps = fn.logSpace(1e-12, 50e-12, numEvents)
-    #rises = np.random.uniform(50e-6, 2e-3, numEvents)
-    #falls = np.random.uniform(100e-6, 5e-3, numEvents)
-    #offsets = np.random.uniform(0., 2e-3, numEvents)
-    
-    
-
-    #psp = np.vstack([amps, offsets, rises, falls]).transpose()
-    
+    ## generate table of PSP shapes
     nReps = 10
     amps = fn.logSpace(0.2e-12, 150e-12, 20)
-    
     psp = np.empty((len(amps), nReps, 4))  ## last axis is [amp, xoff, rise, fall]
     psp[:,:,0] = amps[:,np.newaxis]
     psp[...,1] = 1e-3
     psp[...,2] = 0.1e-3
     psp[...,3] = 0.6e-3
     
-    
+    ## generate table of traces
     data, xVals = mkDataSet(psp, downsample=40)
     
-    guess = np.array([50e-12, 0, 0.5e-3, 3e-3])
-    fits, times = fitDataSet(xVals, data, fitPsp, guess=guess)
+    ## fit all traces
+    guess = np.array([50e-12, 0.1e-3, 0.5e-3, 3e-3])
+    testFit("opt.leastsq", psp, data, xVals, fitPsp, guess=guess)
+    
+    bounds = [(0, 5e-9), (0, 10e-3), (20e-6, 5e-3), (200e-6, 20e-3)]
+    testFit("opt.fmin_tnc", psp, data, xVals, fitPspFminTnc, guess=guess, bounds=bounds)
+    
+    #testFit("opt.fmin_l_bfgs_b", psp, data, xVals, fitPspLBFGSB, guess=guess, bounds=bounds)
+
+def testFit(title, psp, data, xVals, fitFn, *args, **kargs):
+    fits, times = fitDataSet(xVals, data, fitFn, *args, **kargs)
+    print "Mean fit computation time: %0.2fms" % (times.mean() * 1000)
     
     ## compute fractional error
     psp2 = psp.copy()
     psp2[1] = psp2[2]  ## compare xoff against rise when determining fractional error
-    #err = np.empty(psp.shape, dtype=psp.dtype)
-    #for n in err.dtype.names:
-        #err[n] = (fits[n]-psp2[n]) / psp2[n]
-    
-    #minTime = 1e9
-    #times = []
-    #for i in range(numEvents):
-        #x, y = data[i]
-        #start = time.time()
-        #fits.append(fitPsp(x, y, guess))
-        #times.append(time.time()-start)
-        
-    #times = np.array(times)
-    print "Mean fit computation time: %0.2fms" % (times.mean() * 1000)
-    
-    #fits = np.vstack(fits)
-    
-    #psp2 = psp.copy()
-    #psp2[1] = psp2[2]  ## compare xoff against rise when determining fractional error
-    
     err = (fits-psp2) / psp2
-    
-    #print err.max(axis=1)
-    
     errAvg = err.mean(axis=1)
     
-    p1 = pg.plot()
-    
+    ## plot log(error) in each fit parameter vs amplitude
+    ## (errors get larger as amplitude approaches the noise floor)
+    p1 = pg.plot(title=title)
     p1.plot(x=psp[:,0,0], y=np.log(abs(errAvg[:,0])), pen='g')
     p1.plot(x=psp[:,0,0], y=np.log(abs(errAvg[:,1])), pen='y')
     p1.plot(x=psp[:,0,0], y=np.log(abs(errAvg[:,2])), pen='r')
     p1.plot(x=psp[:,0,0], y=np.log(abs(errAvg[:,3])), pen='b')
-    
-    #p1 = pg.PlotWindow(title="amp error vs amplitude")
-    #p1.addDataItem(pg.ScatterPlotItem(x=psp[:,0], y=err[:,0]))
-    #p2 = pg.PlotWindow(title="rise error vs rise")
-    #p2.addDataItem(pg.ScatterPlotItem(x=psp[:,2], y=err[:,2]))
-    #p3 = pg.PlotWindow(title="decay error vs decay")
-    #p3.addDataItem(pg.ScatterPlotItem(x=psp[:,3], y=err[:,3]))
-    #p.show()
-
-
 
 
 
@@ -151,12 +97,39 @@ def fitPsp(x, y, guess, risePower=1.0):
     fit[0] *= maxVal
     return fit
 
-#def fitPsp(x, y, guess, risePower=1.0):
-    #def errFn(v, x, y):
-        #return y - pspFunc(v, x, risePower)
-        
-    #return opt.leastsq(errFn, guess, args=(x, y))[0]
 
+def fitPspSlow(x, y, guess, risePower=1.0):
+    def errFn(v, x, y):
+        return y - pspFunc(v, x, risePower)
+        
+    return opt.leastsq(errFn, guess, args=(x, y))[0]
+
+def fitPspFminTnc(x, y, guess, bounds, risePower=1.0):
+    def errFn(v, x, y):
+        err = abs(y - (v[0] * pspInnerFunc(x-v[1], v[2], v[3], risePower))).sum()
+        print "ERR:", v, err
+        return err
+    
+    fit = opt.fmin_tnc(errFn, guess, bounds=bounds, args=(x,y), approx_grad=True)[0]
+    print "====", fit
+    maxX = fit[2] * np.log(1 + (fit[3]*risePower / fit[2]))
+    maxVal = (1.0 - np.exp(-maxX / fit[2]))**risePower * np.exp(-maxX / fit[3])
+    fit[0] *= maxVal
+    return fit
+
+#def fitPspLBFGSB(x, y, guess, bounds, risePower=1.0):
+    #def errFn(v, x, y):
+        #err = abs(y - (v[0] * pspInnerFunc(x-v[1], abs(v[2]), abs(v[3]), risePower))).sum()
+        #print "ERR:", v, err
+        #return err
+    
+    #fit = opt.fmin_l_bfgs_b(errFn, guess, bounds=bounds, args=(x,y), approx_grad=True)[0]
+    #print guess, bounds, x.shape, y.shape
+    #print "====", fit
+    #maxX = fit[2] * np.log(1 + (fit[3]*risePower / fit[2]))
+    #maxVal = (1.0 - np.exp(-maxX / fit[2]))**risePower * np.exp(-maxX / fit[3])
+    #fit[0] *= maxVal
+    #return fit
 
 
 def mkData(v, power=1, noise=5e-12, length=5e-3, rate=400e3, downsample=40):
