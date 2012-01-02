@@ -30,6 +30,9 @@ class SqliteDatabase:
         self.db.setDatabaseName(fileName)
         self.db.open()
         self._readTableList()
+        
+    def close(self):
+        self.db.close()
 
     def exe(self, cmd, data=None, toDict=True, toArray=False):
         """Execute an SQL query. If data is provided, it should be a list of dicts and each will 

@@ -55,45 +55,6 @@
             
   <div class="section" id="spinbox">
 <h1>SpinBox<a class="headerlink" href="#spinbox" title="Permalink to this headline">¶</a></h1>
-<dl class="class">
-<dt id="pyqtgraph.SpinBox.SpinBox">
-<em class="property">class </em><tt class="descclassname">pyqtgraph.SpinBox.</tt><tt class="descname">SpinBox</tt><big>(</big><em>parent=None</em>, <em>value=0.0</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="../_modules/pyqtgraph/SpinBox.html#SpinBox"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyqtgraph.SpinBox.SpinBox" title="Permalink to this definition">¶</a></dt>
-<dd><p>QSpinBox widget on steroids. Allows selection of numerical value, with extra features:
-- SI prefix notation
-- Float values with linear and decimal stepping (1-9, 10-90, 100-900, etc.)
-- Option for unbounded values
-- Delayed signals (allows multiple rapid changes with only one change signal)</p>
-<dl class="method">
-<dt id="pyqtgraph.SpinBox.SpinBox.editingFinishedEvent">
-<tt class="descname">editingFinishedEvent</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/pyqtgraph/SpinBox.html#SpinBox.editingFinishedEvent"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyqtgraph.SpinBox.SpinBox.editingFinishedEvent" title="Permalink to this definition">¶</a></dt>
-<dd><p>Edit has finished; set value.</p>
-</dd></dl>
-
-<dl class="method">
-<dt id="pyqtgraph.SpinBox.SpinBox.interpret">
-<tt class="descname">interpret</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/pyqtgraph/SpinBox.html#SpinBox.interpret"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyqtgraph.SpinBox.SpinBox.interpret" title="Permalink to this definition">¶</a></dt>
-<dd><p>Return value of text. Return False if text is invalid, raise exception if text is intermediate</p>
-</dd></dl>
-
-<dl class="method">
-<dt id="pyqtgraph.SpinBox.SpinBox.setProperty">
-<tt class="descname">setProperty</tt><big>(</big><em>prop</em>, <em>val</em><big>)</big><a class="reference internal" href="../_modules/pyqtgraph/SpinBox.html#SpinBox.setProperty"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyqtgraph.SpinBox.SpinBox.setProperty" title="Permalink to this definition">¶</a></dt>
-<dd><p>setProperty is just for compatibility with QSpinBox</p>
-</dd></dl>
-
-<dl class="method">
-<dt id="pyqtgraph.SpinBox.SpinBox.setValue">
-<tt class="descname">setValue</tt><big>(</big><em>value=None</em>, <em>update=True</em>, <em>delaySignal=False</em><big>)</big><a class="reference internal" href="../_modules/pyqtgraph/SpinBox.html#SpinBox.setValue"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyqtgraph.SpinBox.SpinBox.setValue" title="Permalink to this definition">¶</a></dt>
-<dd><p>Set the value of this spin. 
-If the value is out of bounds, it will be moved to the nearest boundary
-If the spin is integer type, the value will be coerced to int
-Returns the actual value set.</p>
-<p>If value is None, then the current value is used (this is for resetting
-the value after bounds, etc. have changed)</p>
-</dd></dl>
-
-</dd></dl>
-
 </div>
 
 

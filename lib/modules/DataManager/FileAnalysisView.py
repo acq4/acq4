@@ -62,8 +62,12 @@ class FileAnalysisView(QtGui.QWidget):
             
         self.ui.databaseText.setText(fileName)
         self.dbFile = fileName
-        self.db = database.AnalysisDatabase(self.dbFile)
+        self.db = database.AnalysisDatabase(self.dbFile, dataModel=self.currentModel)
         self.sigDbChanged.emit()
+        
+    def quit(self):
+        if self.db is not None:
+            self.db.close()
         
     def createDbClicked(self):
         self.fileDialog = FileDialog(self, "Create Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite *.sql);;All Files (*.*)")
@@ -80,7 +84,7 @@ class FileAnalysisView(QtGui.QWidget):
             return
         self.ui.databaseText.setText(fileName)
         self.dbFile = fileName
-        self.db = database.AnalysisDatabase(self.dbFile, self.man.getBaseDir())
+        self.db = database.AnalysisDatabase(self.dbFile, dataModel=self.currentModel, baseDir=self.man.getBaseDir())
         self.sigDbChanged.emit()
         
     def refreshDb(self):
@@ -121,6 +125,8 @@ class FileAnalysisView(QtGui.QWidget):
         modName = str(self.ui.dataModelCombo.currentText())
         self.currentModel = models.loadModel(modName)
         lib.Manager.getManager().dataModel = self.currentModel  ## make model globally available
+        if self.db is not None:
+            self.db.setDataModel(self.currentModel)
     
     
     def currentDatabase(self):

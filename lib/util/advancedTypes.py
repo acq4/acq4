@@ -270,13 +270,23 @@ class CaselessDict(dict):
     """Case-insensitive dict. Values can be set and retrieved using keys of any case.
     Note that when iterating, the original case is returned for each key."""
     def __init__(self, *args):
-        dict.__init__(self, *args)
-        self.keyMap = dict([(k.lower(), k) for k in self.keys()])
+        dict.__init__(self)
+        self.keyMap = dict([(k.lower(), k) for k in dict.keys(self)])
+        if len(args) == 0:
+            return
+        elif len(args) == 1 and isinstance(args[0], dict):
+            for k in args[0]:
+                self[k] = args[0][k]
+        else:
+            raise Exception("CaselessDict may only be instantiated with a single dict.")
+        
+    #def keys(self):
+        #return self.keyMap.values()
     
     def __setitem__(self, key, val):
         kl = key.lower()
         if kl in self.keyMap:
-            dict.__setitem__(self, kl, val)
+            dict.__setitem__(self, self.keyMap[kl], val)
         else:
             dict.__setitem__(self, key, val)
             self.keyMap[kl] = key

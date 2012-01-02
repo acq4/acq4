@@ -16,7 +16,7 @@ def strDict(d):
 
 class Node(QtCore.QObject):
     
-    sigOutputChanged = QtCore.Signal(object)
+    sigOutputChanged = QtCore.Signal(object)   # self
     sigClosed = QtCore.Signal(object)
     sigRenamed = QtCore.Signal(object, object)
     sigTerminalRenamed = QtCore.Signal(object, object)

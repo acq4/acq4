@@ -448,7 +448,9 @@ class Profiler:
             print msg2
         self.t1 = ptime.time()  ## don't measure time it took to print
         
-    def finish(self):
+    def finish(self, msg=None):
+        if msg is not None:
+            self.mark(msg)
         if self.disabled: 
             return
         t1 = ptime.time()

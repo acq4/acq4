@@ -99,7 +99,7 @@ class PlotCurveItem(GraphicsObject):
     def getRange(self, ax, frac=1.0):
         (x, y) = self.getData()
         if x is None or len(x) == 0:
-            return (0, 1)
+            return (0, 0)
             
         if ax == 0:
             d = x

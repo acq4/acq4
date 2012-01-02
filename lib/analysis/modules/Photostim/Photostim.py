@@ -4,7 +4,7 @@ from lib.analysis.AnalysisModule import AnalysisModule
 import lib.analysis.modules.EventDetector as EventDetector
 from pyqtgraph.flowchart import *
 import os
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import debug
 import ColorMapper
 import pyqtgraph as pg
@@ -23,6 +23,7 @@ class Photostim(AnalysisModule):
             raise Exception("Photostim analysis module requires a data model, but none is loaded yet.")
         self.dbIdentity = "Photostim"  ## how we identify to the database; this determines which tables we own
         self.selectedSpot = None
+        
 
 
         ## setup analysis flowchart
@@ -104,6 +105,11 @@ class Photostim(AnalysisModule):
         self.recolorBtn.clicked.connect(self.recolor)
         
         
+    def quit(self):
+        self.scans = []
+        self.maps = []
+        return AnalysisModule.quit(self)
+        
     def elementChanged(self, element, old, new):
         name = element.name()
         
@@ -111,6 +117,7 @@ class Photostim(AnalysisModule):
         if name == 'File Loader':
             new.sigBaseChanged.connect(self.baseDirChanged)
             new.ui.dirTree.sigSelectionChanged.connect(self.fileSelected)
+            self.baseDirChanged(new.baseDir())
 
     def fileSelected(self):
         fhl = self.getElement('File Loader').ui.dirTree.selectedFiles()
@@ -122,6 +129,9 @@ class Photostim(AnalysisModule):
 
 
     def baseDirChanged(self, dh):
+        if dh is None:
+            return ## should clear out map list here?
+        
         typ = dh.info()['dirType']
         if typ == 'Slice':
             cells = [dh[d] for d in dh.subDirs() if dh[d].info().get('dirType',None) == 'Cell']
@@ -235,8 +245,9 @@ class Photostim(AnalysisModule):
         map.sPlotItem.sigClicked.connect(self.mapPointClicked)
         
     def unregisterMap(self, map):
-        canvas = self.getElement('Canvas')
-        canvas.removeItem(map.canvasItem)
+        if hasattr(map, 'canvasItem'):
+            canvas = self.getElement('Canvas')
+            canvas.removeItem(map.canvasItem)
         if map in self.maps:
             self.maps.remove(map)
             
@@ -268,7 +279,9 @@ class Photostim(AnalysisModule):
     def mapPointClicked(self, scan, points):
         data = []
         for p in points:
-            data.extend(p.data)
+            for source in p.data:
+                data.append([source[0], self.dataModel.getClampFile(source[1])])
+            #data.extend(p.data)
         self.redisplayData(data)
         ##self.dbCtrl.mapSpotClicked(point.data)  ## Did this method exist at some point?
 
@@ -307,7 +320,7 @@ class Photostim(AnalysisModule):
                 pc = plot.plot(data, pen=color, clear=False)
                 
                 ## show stats
-                stats = scan.getStats(fh)
+                stats = scan.getStats(fh.parent())
                 statList.append(stats)
                 events = scan.getEvents(fh)['events']
                 evList.append(events)
@@ -401,35 +414,33 @@ class Photostim(AnalysisModule):
         print "Process Events:", fh
         return self.detector.process(fh)
 
-    def processStats(self, data=None, spot=None, fh=None):
+    def processStats(self, data=None, spot=None):
         ## Process output of stats flowchart for a single spot, add spot position fields.
-        ## data is the input to the stats flowchart
-        ##   - data['fileHandle'] will be set from fh or from the currently selected spot
-        ##   - if data is omitted, then the stats for the currently selected spot are returned
-        ##     (this is just the pre-existing output of the stats flowchart)
-        ## spot is used to determine the x,y coords of the spot
-        ## fh is the Protocol dir handle
-        
+        ## data  is the input to the stats flowchart
+        ##       if data is omitted, then the stats for the currently selected spot are returned
+        ##         (this is just the pre-existing output of the stats flowchart)
+        ## spot  is used to determine the x,y coords of the spot
         if data is None:
             stats = self.flowchart.output()['dataOut']
             spot = self.selectedSpot
-            fh = spot.data
             if spot is None:
                 return
+            dh = spot.data
         else:
             if 'regions' not in data:
                 data['regions'] = self.detector.flowchart.output()['regions']
-            if 'fh' is None:
-                data['fileHandle'] = self.selectedSpot.data
-            else:
-                data['fileHandle'] = fh
+            dh = spot.data
+            data['fileHandle'] = dh
+            #if dh is None:
+                #data['fileHandle'] = self.selectedSpot.data
+            #else:
+                #data['fileHandle'] = fh
             stats = self.flowchart.process(**data)['dataOut']
             
-
         if stats is None:
             raise Exception('No data returned from analysis (check flowchart for errors).')
             
-        pos = spot.scenePos()
+        pos = spot.viewPos()
         stats['xPos'] = pos.x()
         stats['yPos'] = pos.y()
         
@@ -437,13 +448,15 @@ class Photostim(AnalysisModule):
         #size = d.info().get('Scanner', {}).get('spotSize', 100e-6)
         #stats['spotSize'] = size
         #print "Process Stats:", spot.data
-        stats['SourceFile'] = self.dataModel.getClampFile(fh)
         
-        parent = fh.parent()
-        if self.dataModel.dirType(parent) != 'ProtocolSequence':
-            parent = fh
+        #stats['SourceFile'] = self.dataModel.getClampFile(dh)
+        stats['ProtocolDir'] = dh  ## stats should be stored with the protocol dir, not the clamp file.
+        stats['ProtocolSequenceDir'] = self.dataModel.getParent(dh, 'ProtocolSequence')
+        #parent = dh.parent()
+        #if self.dataModel.dirType(parent) != 'ProtocolSequence':
+            #parent = None
         
-        stats['SourceDir'] = parent
+        #stats['ProtocolSequenceDir'] = parent
         
         return stats
 
@@ -452,64 +465,46 @@ class Photostim(AnalysisModule):
     def storeDBSpot(self):
         """Stores data for selected spot immediately, using current flowchart outputs"""
         dbui = self.getElement('Database')
-        #identity = self.dbIdentity+'.sites'
-        #table = dbui.getTableName(identity)
         db = dbui.getDb()
         
         ## get events and stats for selected spot
         spot = self.selectedSpot
         if spot is None:
             raise Exception("No spot selected")
-        #fh = self.getClampFile(spot.data)
-        fh = self.dataModel.getClampFile(spot.data)
-        print "Store spot:", fh
-        parentDir = fh.parent()
-        p2 = parentDir.parent()
-        if db.dirTypeName(p2) == 'ProtocolSequence':
-            parentDir = p2
+        print "Store spot:", spot.data
+        #parentDir = spot.data
+        #p2 = parentDir.parent()
+        #if self.dataModel.dirType(p2) == 'ProtocolSequence':
+            #parentDir = p2
             
         ## ask eventdetector to store events for us.
         #print parentDir
-        self.detector.storeToDB(parentDir=parentDir)
+        self.detector.storeToDB()
         events = self.detector.output()
 
         ## store stats
-        #stats = self.processStats(fh=parentDir)  ## should pass the protocol, not the protocolSequence, right?
-        stats = self.processStats(fh=fh.parent())  ## gets current stats if no processing is requested
+        stats = self.processStats(spot=spot)  ## gets current stats if no processing is requested
         
-        self.storeStats(stats, parentDir)
-        
+        self.storeStats(stats)
         
         ## update data in Map
-        #scan = self.scans[parentDir]
-        self.selectedScan.updateSpot(fh, events, stats)
-        #try:
-            #scan = self.scans[parentDir]
-        #except KeyError:
-            #scan = self.seriesScans[parentDir][fh]
-        #scan.updateSpot(fh, events, stats)
+        self.selectedScan.updateSpot(spot.data, events, stats)
         
-
-    #def selectedScan(self):
-        #loader = self.getElement('File Loader')
-        #dh = loader.selectedFile()
-        #scan = self.scans[dh]
-        #return scan
 
     def storeDBScan(self, scan):
         """Store all data for a scan, using cached values if possible"""
-        #loader = self.getElement('File Loader')
-        #dh = loader.selectedFile()
-        #scan = self.scans[dh]
-        dh = scan.source()
-        spots = scan.spots()
-        print "Store scan:", dh.name()
+        p = debug.Profiler("Photostim.storeDBScan", disabled=True)
+        
+        #dh = scan.source()
+        print "Store scan:", scan.source().name()
         events = []
         stats = []
-        with pg.ProgressDialog("Preparing data for %s" % scan.name(), 0, len(spots)) as dlg:
+        spots = scan.spots()
+        with pg.ProgressDialog("Preparing data for %s" % scan.name(), 0, len(spots)+1) as dlg:
+            
+            ## collect events and stats from all spots in the scan
             for i in xrange(len(spots)):
                 s = spots[i]
-                #fh = self.getClampFile(s.data)
                 fh = self.dataModel.getClampFile(s.data)
                 try:
                     ev = scan.getEvents(fh)['events']
@@ -517,20 +512,30 @@ class Photostim(AnalysisModule):
                 except:
                     print fh, scan.getEvents(fh)
                     raise
-                st = scan.getStats(fh)
+                st = scan.getStats(s.data)
                 stats.append(st)
                 dlg.setValue(i)
                 if dlg.wasCanceled():
                     raise Exception("Scan store canceled by user.")
                 
-        ## Store all events for this scan
-        ev = np.concatenate(events)
-        self.detector.storeToDB(ev, dh)
-        
-        ## Store spot data
-        self.storeStats(stats, dh)
-                
-        print "   scan %s is now locked" % dh.name()
+            p.mark("Prepared data")
+            dlg.setLabelText("Storing events..")
+            dlg.setValue(0)
+            dlg.setMaximum(100)
+            
+            ## Store all events for this scan
+            ev = np.concatenate(events)
+            p.mark("concatenate events")
+            self.detector.storeToDB(ev)
+            dlg.setValue(70)
+            dlg.setLabelText("Storing stats..")
+            p.mark("stored all events")
+            
+            ## Store spot data
+            self.storeStats(stats)
+            p.mark("stored all stats")
+        p.finish()
+        print "   scan %s is now locked" % scan.source().name()
         scan.lock()
 
     def rewriteSpotPositions(self, scan):
@@ -546,23 +551,26 @@ class Photostim(AnalysisModule):
         #scan = self.scans[dh]
         dh = scan.source()
         print "Clear scan", dh
-        pRow = db.getDirRowID(dh)
-        
+        #pRow = db.getDirRowID(dh)
+        colName = self.dataModel.dirType(dh)+'Dir'
+            
         identity = self.dbIdentity+'.sites'
         table = dbui.getTableName(identity)
-        db.delete(table, "SourceDir=%d" % pRow)
+        #db.delete(table, "SourceDir=%d" % pRow)
+        db.delete(table, where={colName: dh})
         
         identity = self.dbIdentity+'.events'
         table = dbui.getTableName(identity)
-        db.delete(table, "SourceDir=%d" % pRow)
+        db.delete(table, where={colName: dh})
+        #db.delete(table, "SourceDir=%d" % pRow)
             
         scan.unlock()
 
 
-    def storeStats(self, data, parentDir):
+    def storeStats(self, data):
         ## Store a list of dict records, one per spot.
         ## data: {'SourceFile': clamp file handle, 'xPos':, 'yPos':, ...other fields from stats flowchart...}
-        ## parentDir: protocolSequence dir handle
+        ## parentDir: protocolSequence dir handle (or protocol for single spots)
         
         #print "Store stats:", fh
         
@@ -578,25 +586,30 @@ class Photostim(AnalysisModule):
         if db is None:
             raise Exception("No DB selected")
 
-        pTable, pRow = db.addDir(parentDir)
+        #pTable, pRow = db.addDir(parentDir)
         
         #data = data.copy()  ## don't overwrite anything we shouldn't.. 
         #data['SourceFile'] = name
         #data['SourceDir'] = pRow
         
         ## Fix up records (convert file handles to names relative to parent) and add new columns
-        records = []
-        for rec in data:
-            sf = rec['SourceFile']
-            if not isinstance(sf, basestring):
-                sf = sf.name(relativeTo=parentDir)
-            rec2 = rec.copy()
-            rec2.update(SourceFile=sf, SourceDir=pRow)
-            records.append(rec2)
+        #records = []
+        #for rec in data:
+            #sf = rec['SourceFile']
+            #if not isinstance(sf, basestring):
+                #sf = sf.name(relativeTo=parentDir)
+            #rec2 = rec.copy()
+            #rec2.update(SourceFile=sf, SourceDir=pRow)
+            #records.append(rec2)
         
         ## determine the set of fields we expect to find in the table
         
-        fields = db.describeData(records)
+        fields = db.describeData(data)
+        
+        ## override directory fields since describeData can't guess these for us
+        fields['ProtocolDir'] = 'directory:Protocol'
+        fields['ProtocolSequenceDir'] = 'directory:ProtocolSequence'
+        
         #fields = OrderedDict([
             #('SourceDir', 'int'),
             #('SourceFile', 'text'),
@@ -604,15 +617,15 @@ class Photostim(AnalysisModule):
         #fields.update(db.describeData(data))
         
         ## Make sure target table exists and has correct columns, links to input file
-        db.checkTable(table, owner=identity, fields=fields, links=[('SourceDir', pTable)], create=True)
+        db.checkTable(table, owner=identity, columns=fields, create=True)
         
         # delete old
-        for rec in records:
-            name = rec['SourceFile']
-            db.delete(table, "SourceDir=%d and SourceFile='%s'" % (pRow, name))
+        for source in set([d['ProtocolDir'] for d in data]):
+            #name = rec['SourceFile']
+            db.delete(table, where={'ProtocolDir': source})
 
         # write new
-        db.insert(table, records)
+        db.insert(table, data)
 
     def loadSpotFromDB(self, dh):
         dbui = self.getElement('Database')
@@ -624,37 +637,57 @@ class Photostim(AnalysisModule):
         #fh = self.getClampFile(dh)
         fh = self.dataModel.getClampFile(dh)
         parentDir = fh.parent()
-        p2 = parentDir.parent()
-        if db.dirTypeName(p2) == 'ProtocolSequence':
-            parentDir = p2
+        #p2 = parentDir.parent()
+        #if db.dirTypeName(p2) == 'ProtocolSequence':
+            #parentDir = p2
             
         
-        pRow = db.getDirRowID(parentDir)
-        if pRow is None:
-            return None, None
+        #pRow = db.getDirRowID(parentDir)
+        #if pRow is None:
+            #return None, None
             
         identity = self.dbIdentity+'.sites'
         table = dbui.getTableName(identity)
         if not db.hasTable(table):
             return None, None
-        stats = db.select(table, '*', "where SourceDir=%d and SourceFile='%s'" % (pRow, fh.name(relativeTo=parentDir)))
+            
+        stats = db.select(table, '*', where={'ProtocolDir': parentDir})
+        events = self.detector.readFromDb(sourceFile=fh)
         
-        identity = self.dbIdentity+'.events'
+        return events, stats
+
+    
+    def loadScanFromDB(self, sourceDir):
+        ## sourceDir should be protocolsequence
+        dbui = self.getElement('Database')
+        db = dbui.getDb()
+
+        if db is None:
+            raise Exception("No DB selected")
+        
+        #fh = self.getClampFile(dh)
+        #fh = self.dataModel.getClampFile(dh)
+        #parentDir = fh.parent()
+        #p2 = parentDir.parent()
+        #if db.dirTypeName(p2) == 'ProtocolSequence':
+            #parentDir = p2
+            
+        
+        #pRow = db.getDirRowID(sourceDir)
+        #if pRow is None:
+            #return None, None
+            
+        identity = self.dbIdentity+'.sites'
         table = dbui.getTableName(identity)
         if not db.hasTable(table):
             return None, None
-        events = db.select(table, '*', "where SourceDir=%d and SourceFile='%s'" % (pRow, fh.name(relativeTo=parentDir)), toArray=True)
-        
-        if events is None:
-            ## need to make an empty array with the correct fields
-            schema = db.tableSchema(table)
-            ## NOTE: dtype MUST be specified as {names: formats: } since the names are unicode objects
-            ##  [(name, format), ..] does NOT work.
-            events = np.empty(0, dtype={'names': [k for k in schema], 'formats': [object]*len(schema)})
             
+        stats = db.select(table, '*', where={'ProtocolSequenceDir': sourceDir})
+        events = self.detector.readFromDb(sequenceDir=sourceDir)
         
         return events, stats
-        
+    
+    
     def getDb(self):
         dbui = self.getElement('Database')
         db = dbui.getDb()

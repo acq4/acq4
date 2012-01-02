@@ -24,10 +24,10 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="0.24748737"
-     inkscape:cx="1621.0714"
+     inkscape:cx="944.26919"
      inkscape:cy="-80.176516"
      inkscape:document-units="px"
-     inkscape:current-layer="g3052"
+     inkscape:current-layer="g4392"
      showgrid="false"
      inkscape:window-width="1400"
      inkscape:window-height="1030"
@@ -634,6 +634,46 @@
              id="tspan4443"
              sodipodi:role="line">?</tspan></text>
       </g>
+    </g>
+    <g
+       transform="translate(1632.9749,1175.5432)"
+       id="g4392"
+       mask="url(#mask3809)">
+      <rect
+         ry="100.0051"
+         y="117.97108"
+         x="98.994949"
+         height="487.90369"
+         width="487.90369"
+         id="rect4394"
+         style="fill:#6060ff;fill-opacity:0.58854167;stroke:#000000;stroke-width:15;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+         inkscape:export-filename="/home/luke/work/manis_lab/code/acq4/lib/modules/Console/icon.png"
+         inkscape:export-xdpi="45.810001"
+         inkscape:export-ydpi="45.810001" />
+      <rect
+         style="fill:#0c0cae;fill-opacity:1;stroke:#000000;stroke-width:5;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;stroke-dashoffset:0"
+         id="rect4406"
+         width="460.62958"
+         height="440.42651"
+         x="1834.437"
+         y="1395.8141"
+         transform="translate(-1632.9749,-1175.5432)"
+         ry="0" />
+      <path
+         style="fill:none;stroke:#e3e3e3;stroke-width:30;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+         d="m 282.27436,293.00184 72.731,72.731 -66.6701,66.67"
+         id="path4408"
+         inkscape:connector-curvature="0" />
+      <path
+         inkscape:connector-curvature="0"
+         id="path5184"
+         d="m 388.27436,293.00184 72.731,72.731 -66.6701,66.67"
+         style="fill:none;stroke:#e3e3e3;stroke-width:30;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none" />
+      <path
+         style="fill:none;stroke:#e3e3e3;stroke-width:30;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+         d="m 502.27436,293.00184 72.731,72.731 -66.6701,66.67"
+         id="path5186"
+         inkscape:connector-curvature="0" />
     </g>
   </g>
 </svg>

@@ -21,8 +21,10 @@ class Scan(QtCore.QObject):
         self.dataModel = host.dataModel
         self.givenName = name
         self._locked = False  ## prevents flowchart changes from clearing the cache--only individual updates allowed
+        self.events = {}    ## {'events': ...}
+        self.stats = {}     ## {protocolDir: stats}
+        self.spotDict = {}  ## protocolDir: spot 
         self.loadFromDB()
-        self.spotDict = {}  ##  fh: spot
         
     def itemVisibilityChanged(self):
         self.sigItemVisibilityChanged.emit(self)
@@ -55,23 +57,48 @@ class Scan(QtCore.QObject):
         return table, rid
 
     def loadFromDB(self):
-        print "Loading scan data for", self.source()
+        sourceDir = self.source()
+        print "Loading scan data for", sourceDir
         self.events = {}
         self.stats = {}
         self.statExample = None
         haveAll = True
+        
+        if self.host.dataModel.dirType(sourceDir) == 'ProtocolSequence':
+            allEvents, allStats = self.host.loadScanFromDB(sourceDir)
+        else:
+            allEvents, allStats = self.host.loadSpotFromDB(sourceDir)
+            
+        if allEvents is None:
+            return 
+        
+        for st in allStats:
+            self.stats[st['ProtocolDir']] = st
+            
+        for ev in allEvents:
+            fh = ev['SourceFile'] ## sourceFile has already been converted to file handle.
+            if fh not in self.events:
+                self.events[fh] = []
+            self.events[fh].append(ev.reshape(1))
+        for k in self.events:
+            self.events[k] = {'events': np.concatenate(self.events[k])}
+            
         for spot in self.spots():
             dh = spot.data
             #fh = self.host.getClampFile(dh)
             fh = self.dataModel.getClampFile(dh)
-            events, stats = self.host.loadSpotFromDB(dh)
-            if stats is None or len(stats) == 0:
+            #events, stats = self.host.loadSpotFromDB(dh)
+            
+            #events = allEvents[allEvents['SourceFile']==fh.name(relativeTo=self.source())]
+            #stats = allStats[allEvents['SourceFile']==dh.name(relativeTo=self.source())]
+            if dh not in self.stats:
+            #if len(stats) == 0:
                 print "  No data for spot", dh
                 haveAll = False
                 continue
-            self.statExample = stats
-            self.events[fh] = {'events': events}
-            self.stats[fh] = stats[0]
+            else:
+                self.statExample = self.stats[dh]
+            #self.stats[dh] = stats[0]
         if haveAll:
             print "  have data for all spots; locking."
             self.lock()
@@ -108,8 +135,9 @@ class Scan(QtCore.QObject):
             ops = []
             for i in range(len(spots)):
                 spot = spots[i]
-                fh = self.dataModel.getClampFile(spot.data)
-                stats = self.getStats(fh, signal=False)
+                #fh = self.dataModel.getClampFile(spot.data)  ## fh should be the protocol dir, not clamp file.
+                dh = spot.data
+                stats = self.getStats(dh, signal=False)
                 #print "stats:", stats
                 color = self.host.getColor(stats)
                 ops.append((spot, color))
@@ -131,22 +159,25 @@ class Scan(QtCore.QObject):
         
         
             
-    def getStats(self, fh, signal=True):
+    def getStats(self, dh, signal=True):
+        ## Return stats for a single file. (cached if available)
+        ## fh is the clamp file
         #print "getStats", fh
-        spot = self.getSpot(fh)
+        spot = self.getSpot(dh)
         #print "  got spot:", spot
         #except:
             #raise Exception("File %s is not in this scan" % fh.name())
-        if fh not in self.stats:
-            print "No stats cache for", fh.name(), "compute.."
+        if dh not in self.stats:
+            print "No stats cache for", dh.name(), "compute.."
+            fh = self.host.dataModel.getClampFile(dh)
             events = self.getEvents(fh, signal=signal)
             try:
-                stats = self.host.processStats(events, spot, fh=fh)
+                stats = self.host.processStats(events, spot)
             except:
                 print events
                 raise
-            self.stats[fh] = stats
-        return self.stats[fh].copy()
+            self.stats[dh] = stats
+        return self.stats[dh].copy()
 
     def getEvents(self, fh, process=True, signal=True):
         if fh not in self.events:
@@ -181,15 +212,16 @@ class Scan(QtCore.QObject):
         gi = self.item
         return gi.points()
 
-    def updateSpot(self, fh, events, stats):
-        self.events[fh] = events
-        self.stats[fh] = stats
+    def updateSpot(self, dh, events, stats):
+        ## called from photostim.storeDBSpot
+        self.events[self.host.dataModel.getClampFile(dh)] = events
+        self.stats[dh] = stats
 
-    def getSpot(self, fh):
-        if fh not in self.spotDict:
+    def getSpot(self, dh):
+        if dh not in self.spotDict:
             for s in self.spots():
-                self.spotDict[self.host.dataModel.getClampFile(s.data)] = s
-        return self.spotDict[fh]
+                self.spotDict[s.data] = s
+        return self.spotDict[dh]
     
     @staticmethod
     def describe(dataModel, source):
@@ -199,7 +231,7 @@ class Scan(QtCore.QObject):
         #sinfo = source.info()
         #if 'sequenceParams' in sinfo:
         if dataModel.isSequence(source):
-            file = dataModel.getClampFile(source[source.ls()[0]])
+            file = dataModel.getClampFile(source[source.ls(sortMode=None)[0]])
             #first = source[source.ls()[0]]
         else:
             file = dataModel.getClampFile(source)

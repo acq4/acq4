@@ -9,12 +9,17 @@ to easily store and retrieve data files along with meta data. The objects
 probably only need to be created via functions in the Manager class.
 """
 
-from __future__ import with_statement
+if __name__ == '__main__':
+    import os, sys
+    path = os.path.dirname(os.path.abspath(__file__))
+    sys.path.append(os.path.join(path, '..', '..'))
+
+#from __future__ import with_statement
 import threading, os, re, sys, shutil
 ##  import fcntl  ## linux only?
 from functions import strncmp
 from configfile import *
-from metaarray import MetaArray
+#from metaarray import MetaArray
 import time
 from Mutex import Mutex, MutexLocker
 from pyqtgraph import SignalProxy, ProgressDialog
@@ -458,8 +463,9 @@ class DirHandle(FileHandle):
     
     def __getitem__(self, item):
         #print self.name(), " -> ", item
-        while item[0] == os.path.sep:
-            item = item[1:]
+        #while len(item) > 0 and item[0] == os.path.sep:
+            #item = item[1:]
+        item = item.lstrip(os.path.sep)
         fileName = os.path.join(self.name(), item)
         return self.manager.getHandle(fileName)
     
@@ -998,3 +1004,4 @@ class DirHandle(FileHandle):
 
 
 dm = DataManager()
+
