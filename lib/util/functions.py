@@ -43,8 +43,8 @@ def fileDialog():
 ## the built in logspace function is pretty much useless.
 def logSpace(start, stop, num):
     num = int(num)
-    d = (stop / start) ** (1./num)
-    return start * (d ** np.arange(0, num+1))
+    d = (stop / start) ** (1./(num-1))
+    return start * (d ** np.arange(0, num))
 
 def linSpace(start, stop, num):
     return np.linspace(start, stop, num)

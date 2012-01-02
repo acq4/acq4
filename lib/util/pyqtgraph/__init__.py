@@ -59,7 +59,8 @@ def plot(*args, **kargs):
         del kargs['title']
     else:
         w = PlotWindow()
-    w.plot(*args, **kargs)
+    if len(args)+len(kargs) > 0:
+        w.plot(*args, **kargs)
     plots.append(w)
     w.show()
     return w

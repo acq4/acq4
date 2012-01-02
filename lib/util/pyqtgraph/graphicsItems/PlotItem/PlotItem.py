@@ -642,6 +642,7 @@ class PlotItem(GraphicsWidget):
         plot(yVals)   # x vals will be integers
         plot(xVals, yVals)
         plot(y=yVals, x=xVals)
+        plot(metaArray)
         """
         if y is not None:
             data = y
@@ -716,6 +717,7 @@ class PlotItem(GraphicsWidget):
     def plotChanged(self, curve=None):
         ## Recompute auto range if needed
         for ax in [0, 1]:
+            #print "range", ax
             if self.autoScale[ax]:
                 percentScale = [self.ctrl.xAutoPercentSpin.value(), self.ctrl.yAutoPercentSpin.value()][ax] * 0.01
                 mn = None
@@ -724,6 +726,7 @@ class PlotItem(GraphicsWidget):
                     if not c.isVisible():
                         continue
                     cmn, cmx = c.getRange(ax, percentScale)
+                    #print "   ", c, cmn, cmx
                     if mn is None or cmn < mn:
                         mn = cmn
                     if mx is None or cmx > mx:
