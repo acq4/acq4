@@ -160,6 +160,8 @@ class Scan(QtCore.QObject):
         
             
     def getStats(self, dh, signal=True):
+        ## Return stats for a single file. (cached if available)
+        ## fh is the clamp file
         #print "getStats", fh
         spot = self.getSpot(dh)
         #print "  got spot:", spot
