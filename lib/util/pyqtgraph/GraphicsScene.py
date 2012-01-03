@@ -125,6 +125,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
             event = HoverEvent(ev)
             prevItems = self.hoverItems.keys()
             items = self.itemsNearEvent(event)
+            #print 'items:', items
             self.sigMouseHover.emit(items)
             for item in items:
                 if hasattr(item, 'hoverEvent'):
