@@ -49,6 +49,7 @@ class AuditoryCortex(Atlas.Atlas):
             self.canvas.sigItemTransformChangeFinished.connect(self.itemMoved) ## new style
             
         Atlas.Atlas.__init__(self, canvas, state)
+        self.uiChanged()
         
     def ctrlWidget(self):
         return self.ctrl
