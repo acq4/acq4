@@ -88,7 +88,7 @@ class AnalysisDatabase(SqliteDatabase):
                 for rec in oldDb.select(table):
                     dh = oldDb.baseDir()[rec['Dir']]
                     newDb.addDir(dh)
-            for table in ['photostim_events', 'photostim_sites']:
+            for table in ['Photostim_events', 'Photostim_sites']:
                 schema = oldDb.tableSchema(table)
                 ## SourceDir -> ProtocolSequenceDir     type='directory:ProtocolSequence'
                 del schema['SourceDir']
