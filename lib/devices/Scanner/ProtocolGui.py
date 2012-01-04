@@ -509,6 +509,7 @@ class ScannerProtoGui(ProtocolGui):
         i = self.items[name]
         #self.removeItemPoints(i)
         i.scene().removeItem(i)
+        i.close()
         del self.items[name]
         #self.occlusions.get(name)
         self.sequenceChanged()
@@ -520,6 +521,7 @@ class ScannerProtoGui(ProtocolGui):
                 self.dev.updateTarget(k, None)  ## inform the device that this target is no more
             i = self.items[k]
             i.scene().removeItem(i)
+            i.close()
             #self.removeItemPoints(i)
         self.items = {}
         #self.occlusions = {}
@@ -794,6 +796,8 @@ class TargetPoint(graphicsItems.EllipseROI):
         #self.host = args.get('host', None)
         self.rebuildOpts = args.get('rebuildOpts', {})
         
+    def close(self):
+        pass
         
     def updateInit(self, host):
         self.treeItem.graphicsItem = self
@@ -883,6 +887,10 @@ class TargetGrid(graphicsItems.ROI):
         self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         self.regeneratePoints()
         self.rebuildOpts = rebuildOpts
+        
+    def close(self):
+        del self.gridSpacingSpin
+        del self.gridLayoutCombo
         
     def updateInit(self, host):
         self.treeItem.graphicsItem = self ## make grid accessible from tree
@@ -1117,6 +1125,9 @@ class TargetOcclusion(graphicsItems.PolygonROI):
     def resetParents(self):
         pass
     
+    def close(self):
+        pass
+    
 class TargetProgram(QtCore.QObject):
     
     
@@ -1132,5 +1143,8 @@ class TargetProgram(QtCore.QObject):
         self.origin.setPen(pen)
         
     def listPoints(self):
+        pass
+    
+    def close(self):
         pass
         
