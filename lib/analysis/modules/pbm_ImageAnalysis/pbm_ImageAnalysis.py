@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import pyqtgraph as pg
 from metaarray import MetaArray
 import numpy
@@ -389,7 +389,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         """ append one roi to the self.AllRois list, put it on the screen (scene), and
         make sure it is actively connected to code. The return value lets us
         handle the rois when we restore them """
-        roi = pg.widgets.RectROI(pos, hw, scaleSnap=True, translateSnap=True)
+        roi = pg.RectROI(pos, hw, scaleSnap=True, translateSnap=True)
 #       roi = qtgraph.widgets.EllipseROI(pos, hw, scaleSnap=True, translateSnap=True)
 #       roi = qtgraph.widgets.MultiLineROI([[0,0], [5,5], [10,10]], 3, scaleSnap=True, translateSnap=True)
         roi.ID = self.nROI # give each ROI a unique identification number

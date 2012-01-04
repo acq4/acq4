@@ -6,9 +6,10 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 from Qt import QtCore, QtGui
-from PlotWidget import *
-from ImageView import *
-from graphicsItems import GraphicsLayout
+from widgets.PlotWidget import *
+from imageview import *
+from widgets.GraphicsLayoutWidget import GraphicsLayoutWidget
+from widgets.GraphicsView import GraphicsView
 QAPP = None
 
 def mkQApp():
@@ -16,21 +17,12 @@ def mkQApp():
         global QAPP
         QAPP = QtGui.QApplication([])
 
-class GraphicsLayoutView(GraphicsView):
-    def __init__(self, parent=None, **kargs):
-        GraphicsView.__init__(self, parent)
-        self.ci = GraphicsLayout(**kargs)
-        for n in ['nextRow', 'nextCol', 'addPlot', 'addViewBox', 'addItem', 'getItem']:
-            setattr(self, n, getattr(self.ci, n))
-        self.setCentralItem(self.ci)
-    
 
-
-class GraphicsWindow(GraphicsLayoutView):
+class GraphicsWindow(GraphicsLayoutWidget):
     def __init__(self, title=None, size=(800,600), **kargs):
         mkQApp()
         self.win = QtGui.QMainWindow()
-        GraphicsLayoutView.__init__(self, **kargs)
+        GraphicsLayoutWidget.__init__(self, **kargs)
         self.win.setCentralWidget(self)
         self.win.resize(*size)
         if title is not None:

@@ -6,15 +6,16 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 from GraphicsView import GraphicsView
-from graphicsItems import MultiPlotItem
+import pyqtgraph.graphicsItems.MultiPlotItem as MultiPlotItem
 import exceptions
 
+__all__ = ['MultiPlotWidget']
 class MultiPlotWidget(GraphicsView):
     """Widget implementing a graphicsView with a single PlotItem inside."""
     def __init__(self, parent=None):
         GraphicsView.__init__(self, parent)
         self.enableMouse(False)
-        self.mPlotItem = MultiPlotItem()
+        self.mPlotItem = MultiPlotItem.MultiPlotItem()
         self.setCentralItem(self.mPlotItem)
         ## Explicitly wrap methods from mPlotItem
         #for m in ['setData']:

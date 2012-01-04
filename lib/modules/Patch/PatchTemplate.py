@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'PatchTemplate.ui'
 #
-# Created: Wed Oct 19 11:38:59 2011
+# Created: Sun Dec 18 17:57:25 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -321,5 +321,4 @@ class Ui_Form(object):
         self.fitErrorLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
         self.drawFitCheck.setText(QtGui.QApplication.translate("Form", "Draw Fit", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.PlotWidget import PlotWidget
-from pyqtgraph.SpinBox import SpinBox
+from pyqtgraph import SpinBox, PlotWidget

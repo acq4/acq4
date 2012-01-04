@@ -19,7 +19,7 @@ from debug import *
 from scipy import stats, signal, ndimage
 from numpy import log
 from WidgetGroup import *
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import time
 import pickle
 from pyqtgraph.Point import *

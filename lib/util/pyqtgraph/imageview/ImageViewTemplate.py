@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/util/pyqtgraph/ImageViewTemplate.ui'
+# Form implementation generated from reading ui file 'ImageViewTemplate.ui'
 #
-# Created: Wed May 18 20:44:20 2011
+# Created: Sun Dec 18 12:18:25 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 
-from Qt import QtCore, QtGui
+from PyQt4 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -168,6 +168,6 @@ class Ui_Form(object):
         self.normTimeRangeCheck.setText(QtGui.QApplication.translate("Form", "Time range", None, QtGui.QApplication.UnicodeUTF8))
         self.normFrameCheck.setText(QtGui.QApplication.translate("Form", "Frame", None, QtGui.QApplication.UnicodeUTF8))
 
-from GraphicsView import GraphicsView
-from pyqtgraph.GradientWidget import GradientWidget
-from PlotWidget import PlotWidget
+from pyqtgraph.widgets.GraphicsView import GraphicsView
+from pyqtgraph.widgets.PlotWidget import PlotWidget
+from pyqtgraph.widgets.GradientWidget import GradientWidget

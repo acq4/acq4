@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import DataManager
 import SequenceRunner
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import functools
 from metaarray import *
 
@@ -190,6 +190,16 @@ def buildSequenceArrayIter(dh, func=None, join=True, truncate=False, fill=None):
     
     yield data, None
 
+def getParent(child, parentType):
+    """Return the (grand)parent of child that matches parentType"""
+    if dirType(child) == parentType:
+        return child
+    parent = child.parent()
+    if parent is child:
+        return None
+    return getParent(parent, parentType)
+    
+
 
 def getClampFile(protoDH):
     """Given a protocol directory handle, return the clamp file handle within. 
@@ -286,15 +296,19 @@ def getClampHoldingLevel(fh):
         except KeyError:
             return None
         
+
+def getParentInfo(dh, parentType):
+    dh = getParent(dh, parentType)
+    if dh is None:
+        return None
+    else:
+        return dh.info()
+    
 def getDayInfo(dh):
-    while dirType(dh) != 'Day':
-        dh = dh.parent()
-    return dh.info()
+    return getParentInfo(dh, 'Day')
 
 def getCellInfo(dh):
-    while dirType(dh) not in ['Cell']:
-        dh = dh.parent()
-    return dh.info()
+    return getParentInfo(dh, 'Cell')
 
 def getACSF(dh):
     dayInfo = getDayInfo(dh)

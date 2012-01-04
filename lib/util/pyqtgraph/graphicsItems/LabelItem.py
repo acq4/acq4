@@ -3,6 +3,7 @@ import pyqtgraph.functions as fn
 from GraphicsWidget import GraphicsWidget
 
 
+__all__ = ['LabelItem']
 
 class LabelItem(GraphicsWidget):
     """

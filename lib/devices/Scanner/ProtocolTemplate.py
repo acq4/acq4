@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Tue Oct 25 09:54:36 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Sun Dec 18 19:30:01 2011
+#      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -271,6 +271,4 @@ class Ui_Form(object):
         self.hideCheck.setText(QtGui.QApplication.translate("Form", "Hide items", None, QtGui.QApplication.UnicodeUTF8))
         self.hideMarkerBtn.setText(QtGui.QApplication.translate("Form", "Hide Spot Marker", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.TreeWidget import TreeWidget
-from pyqtgraph.PlotWidget import PlotWidget
-from pyqtgraph.SpinBox import SpinBox
+from pyqtgraph import SpinBox, TreeWidget, PlotWidget

@@ -9,6 +9,7 @@ import pyqtgraph.functions as fn
 import pyqtgraph.debug as debug
 from GraphicsObject import GraphicsObject
 
+__all__ = ['ImageItem']
 class ImageItem(GraphicsObject):
     """
     GraphicsObject displaying an image. Optimized for rapid update (ie video display)

@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 from ..Node import Node
 import weakref
-from pyqtgraph import graphicsItems
+#from pyqtgraph import graphicsItems
 from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.graphicsItems.ScatterPlotItem import ScatterPlotItem
+from pyqtgraph.graphicsItems.PlotCurveItem import PlotCurveItem
+
 from common import *
 import numpy as np
 
@@ -44,10 +47,10 @@ class PlotWidgetNode(Node):
                     if vid in self.items:
                         items.add(vid)
                     else:
-                        if isinstance(val, graphicsItems.PlotCurveItem):
+                        if isinstance(val, PlotCurveItem):
                             self.plot.addCurve(val)
                             item = val
-                        if isinstance(val, graphicsItems.ScatterPlotItem):
+                        if isinstance(val, ScatterPlotItem):
                             self.plot.addDataItem(val)
                             item = val
                         if isinstance(val, QtGui.QGraphicsItem):
@@ -136,7 +139,7 @@ class ScatterPlot(CtrlNode):
             'input': {'io': 'in'},
             'plot': {'io': 'out'}
         })
-        self.item = graphicsItems.ScatterPlotItem()
+        self.item = ScatterPlotItem()
         self.keys = []
         
         #self.ui = QtGui.QWidget()

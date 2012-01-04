@@ -170,7 +170,8 @@ class CanvasItem(QtCore.QObject):
     def setParentItem(self, parent):
         self._parentItem = parent
         if parent is not None:
-            parent = parent.graphicsItem()
+            if isinstance(parent, CanvasItem):
+                parent = parent.graphicsItem()
         self.graphicsItem().setParentItem(parent)
 
     #def name(self):
@@ -386,8 +387,8 @@ class CanvasItem(QtCore.QObject):
 
     def selectBoxToItem(self):
         """Move/scale the selection box so it fits the item's bounding rect. (assumes item is not rotated)"""
-        rect = self._graphicsItem.sceneBoundingRect()
         self.itemRect = self._graphicsItem.boundingRect()
+        rect = self._graphicsItem.mapRectToParent(self.itemRect)
         self.selectBox.blockSignals(True)
         self.selectBox.setPos([rect.x(), rect.y()])
         self.selectBox.setSize(rect.size())

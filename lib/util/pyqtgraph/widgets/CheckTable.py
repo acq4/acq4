@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
-from Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtGui, QtCore
 import VerticalLabel
+
+__all__ = ['CheckTable']
 
 class CheckTable(QtGui.QWidget):
     

@@ -1,9 +1,8 @@
 from pyqtgraph.Qt import QtGui, QtCore
 import pyqtgraph.functions as fn
-from ViewBox import ViewBox
-from PlotItem import PlotItem
 from GraphicsWidget import GraphicsWidget
 
+__all__ = ['GraphicsLayout']
 class GraphicsLayout(GraphicsWidget):
     """
     Used for laying out GraphicsWidgets in a grid.
@@ -91,3 +90,8 @@ class GraphicsLayout(GraphicsWidget):
         items = []
         for i in self.items.keys():
             self.removeItem(i)
+
+
+## Must be imported at the end to avoid cyclic-dependency hell:
+from ViewBox import ViewBox
+from PlotItem import PlotItem

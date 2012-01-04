@@ -7,7 +7,7 @@ from debug import *
 import FileAnalysisView
 from lib.LogWindow import LogButton, LogWindow
 import FileLogView
-from pyqtgraph.FileDialog import FileDialog
+from pyqtgraph import FileDialog
 from lib.Manager import logMsg, logExc
 from StatusBar import StatusBar
 
@@ -342,6 +342,7 @@ class DataManager(Module):
         ## Silly: needed to prevent lockup on some systems.
         #print "      module quitting.."
         self.ui.fileTreeWidget.quit()
+        self.ui.analysisWidget.quit()
         #sip.delete(self.dialog)
         #print "      deleted dialog, calling superclass quit.."
         Module.quit(self)

@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Wed Oct 26 11:24:47 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Sun Dec 18 17:54:57 2011
+#      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -171,5 +171,4 @@ class Ui_Form(object):
         self.waveGeneratorLabel.setText(QtGui.QApplication.translate("Form", "Command Function (A)", None, QtGui.QApplication.UnicodeUTF8))
 
 from generator.StimGenerator import StimGenerator
-from pyqtgraph.PlotWidget import PlotWidget
-from pyqtgraph.SpinBox import SpinBox
+from pyqtgraph import SpinBox, PlotWidget

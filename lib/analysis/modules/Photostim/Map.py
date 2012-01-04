@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import pyqtgraph as pg
 import numpy as np
-import pyqtgraph.ProgressDialog as ProgressDialog
+#import pyqtgraph.ProgressDialog as ProgressDialog
 
 class Map:
     ### A map is a group of (possibly overlapping) scans and associated meta-data. 
     ### Maps will automatically merge overlapping spots and join non-overlapping scans to create a single scan
     mapFields = OrderedDict([
-        ('cell', 'int'),
+        ('cell', 'directory:Cell'),
         ('scans', 'blob'),
         #('date', 'int'),
         #('name', 'text'),
@@ -28,9 +28,9 @@ class Map:
         self.stubs = []      ## list of ScanStub objects for scans in the map that have not been loaded yet
         self.scans = []      ## list of loaded Scan objects
         self.scanItems = {}  ## maps {scan: tree item}
-        self.points = []         ## Holds all data: [ (position, [(scan, dh), ...], spotData), ... ]
+        #self.points = []         ## Holds all data: [ (position, [(scan, dh), ...], spotData), ... ]
         self.pointsByFile = {}   ## just a lookup dictionary
-        self.spots = []          ## used to construct scatterplotitem
+        self.spots = []          ## holds all data {pos, size, [(scan, dh), ...]};  used to construct scatterplotitem
         self.sPlotItem = pg.ScatterPlotItem(pxMode=False)
         
         self.header = self.mapFields.keys()[2:]
@@ -72,8 +72,8 @@ class Map:
 
     def rebuildPlot(self):
         ## decide on point locations, build scatterplot
-        self.points = []         ## Holds all data: [ (position, [(scan, dh), ...], spotData), ... ]
-        self.pointsByFile = {}   ## just a lookup dictionary
+        #self.points = []         ## Holds all data: [ (position, [(scan, dh), ...], spotData), ... ]
+        self.pointsByFile = {}   ## just a lookup dictionary  {protocolDir: self.spots[N]}
         self.spots = []               ## used to construct scatterplotitem
         for scan in self.scans:  ## iterate over all points in all scans
             #if isinstance(scan, tuple):
@@ -83,24 +83,26 @@ class Map:
 
     def addScanSpots(self, scan):
         for pt in scan.spots():
-            pos = pt.scenePos()
+            pos = pt.viewPos()
             size = pt.size  #sceneBoundingRect().width()
+            dh = pt.data
+            
             added = False
-            fh = self.host.dataModel.getClampFile(pt.data)
-            for pt2 in self.points:     ## check all previously added points for position match
-                pos2 = pt2[0]
+            for pt2 in self.spots:     ## check all previously added points for position match
+                pos2 = pt2['pos']
                 dp = pos2-pos
                 dist = (dp.x()**2 + dp.y()**2)**0.5
                 if dist < size/3.:      ## if position matches, add scan/spot data into existing site
-                    pt2[1].append((scan, pt.data))
-                    pt2[2]['data'].append((scan, fh))
+                    pt2['data'].append((scan, pt.data))
+                    #pt2[2]['data'].append((scan, dh))
                     added = True
                     self.pointsByFile[pt.data] = pt2
                     break
             if not added:               ## ..otherwise, add a new site
-                self.spots.append({'pos': pos, 'size': size, 'data': [(scan, fh)]})
-                self.points.append((pos, [(scan, fh)], self.spots[-1]))
-                self.pointsByFile[pt.data] = self.points[-1]
+                newSpot = {'pos': pos, 'size': size, 'data': [(scan, dh)]}
+                self.spots.append(newSpot)
+                #self.points.append((pos, [(scan, dh)], self.spots[-1]))
+                self.pointsByFile[pt.data] = newSpot
 
     def addScans(self, scanList):
         #print "Map.addScans:", scanList
@@ -223,7 +225,7 @@ class Map:
             return
         spots = self.sPlotItem.points()
         colors = []
-        with ProgressDialog.ProgressDialog("Computing map %s (%d/%d)" % (self.name(), n, nMax), 0, len(spots)) as dlg:
+        with pg.ProgressDialog("Computing map %s (%d/%d)" % (self.name(), n, nMax), 0, len(spots)) as dlg:
             for i in xrange(len(spots)):
                 s = spots[i]
                 data = []
@@ -264,7 +266,8 @@ class Map:
 
     def loadStubs(self):
         ### Turn all stubs into fully-loaded scans.
-        with ProgressDialog.ProgressDialog("Loading scans...", 0, len(self.stubs)) as dlg:
+        with pg.ProgressDialog("Loading scans...", 0, len(self.stubs), busyCursor=True) as dlg:
+            dlg.setValue(0)
             for stub in self.stubs:
                 QtGui.QApplication.processEvents()
                 ### can we load a partial map if one scan fails? (should we?)

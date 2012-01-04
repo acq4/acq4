@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'LogWidgetTemplate.ui'
 #
-# Created: Sat Oct 15 21:31:13 2011
+# Created: Sun Dec 18 18:54:56 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -50,12 +50,10 @@ class Ui_Form(object):
         self.exportHtmlBtn = QtGui.QPushButton(self.widget)
         self.exportHtmlBtn.setObjectName(_fromUtf8("exportHtmlBtn"))
         self.gridLayout.addWidget(self.exportHtmlBtn, 0, 2, 1, 1)
-        self.output = QtGui.QPlainTextEdit(self.widget)
-        self.output.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        self.output.setUndoRedoEnabled(False)
-        self.output.setReadOnly(True)
-        self.output.setObjectName(_fromUtf8("output"))
-        self.gridLayout.addWidget(self.output, 1, 0, 1, 3)
+        self.logView = QtWebKit.QWebView(self.widget)
+        self.logView.setUrl(QtCore.QUrl(_fromUtf8("about:blank")))
+        self.logView.setObjectName(_fromUtf8("logView"))
+        self.gridLayout.addWidget(self.logView, 1, 0, 1, 3)
         self.widget1 = QtGui.QWidget(self.splitter)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(1)
@@ -158,4 +156,5 @@ class Ui_Form(object):
         self.label.setText(QtGui.QApplication.translate("Form", "Importance Filter:", None, QtGui.QApplication.UnicodeUTF8))
         self.label_3.setText(QtGui.QApplication.translate("Form", "High", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.TreeWidget import TreeWidget
+from PyQt4 import QtWebKit
+from pyqtgraph import TreeWidget

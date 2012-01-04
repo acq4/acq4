@@ -262,19 +262,19 @@
   <customwidget>
    <class>GradientWidget</class>
    <extends>QWidget</extends>
-   <header>pyqtgraph.GradientWidget</header>
+   <header>pyqtgraph.widgets.GradientWidget</header>
    <container>1</container>
   </customwidget>
   <customwidget>
    <class>GraphicsView</class>
    <extends>QWidget</extends>
-   <header>GraphicsView</header>
+   <header>pyqtgraph.widgets.GraphicsView</header>
    <container>1</container>
   </customwidget>
   <customwidget>
    <class>PlotWidget</class>
    <extends>QWidget</extends>
-   <header>PlotWidget</header>
+   <header>pyqtgraph.widgets.PlotWidget</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

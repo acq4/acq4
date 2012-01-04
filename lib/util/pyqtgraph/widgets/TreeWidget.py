@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
-from Qt import QtGui, QtCore
-if not hasattr(QtCore, 'Signal'):
-    QtCore.Signal = QtCore.pyqtSignal
+from pyqtgraph.Qt import QtGui, QtCore
 from weakref import *
 
+__all__ = ['TreeWidget']
 class TreeWidget(QtGui.QTreeWidget):
     """Extends QTreeWidget to allow internal drag/drop with widgets in the tree.
     Also maintains the expanded state of subtrees as they are moved.

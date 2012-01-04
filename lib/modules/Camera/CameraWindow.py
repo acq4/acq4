@@ -11,7 +11,7 @@ from CameraTemplate import Ui_MainWindow
 #from pyqtgraph.GraphicsView import *
 #from pyqtgraph.graphicsItems import *
 import pyqtgraph as pg
-from pyqtgraph import ROI
+#from pyqtgraph import ROI
 import ptime
 from lib.filetypes.ImageFile import *
 from Mutex import Mutex, MutexLocker
@@ -21,7 +21,7 @@ import time, types, os.path, re, sys
 from debug import *
 from metaarray import *
 #import sip
-from pyqtgraph.SignalProxy import SignalProxy
+from pyqtgraph import SignalProxy
 #from lib.Manager import getManager
 import lib.Manager as Manager
 import numpy as np
@@ -43,17 +43,17 @@ def trace(func):
     return func
 
 
-class CamROI(ROI):
+class CamROI(pg.ROI):
     def __init__(self, size, parent=None):
-        ROI.__init__(self, pos=[0,0], size=size, maxBounds=QtCore.QRectF(0, 0, size[0], size[1]), scaleSnap=True, translateSnap=True, parent=parent)
+        pg.ROI.__init__(self, pos=[0,0], size=size, maxBounds=QtCore.QRectF(0, 0, size[0], size[1]), scaleSnap=True, translateSnap=True, parent=parent)
         self.addScaleHandle([0, 0], [1, 1])
         self.addScaleHandle([1, 0], [0, 1])
         self.addScaleHandle([0, 1], [1, 0])
         self.addScaleHandle([1, 1], [0, 0])
 
-class PlotROI(ROI):
+class PlotROI(pg.ROI):
     def __init__(self, pos, size):
-        ROI.__init__(self, pos, size=size)
+        pg.ROI.__init__(self, pos, size=size)
         self.addScaleHandle([1, 1], [0, 0])
 
 class CameraWindow(QtGui.QMainWindow):
@@ -302,12 +302,12 @@ class CameraWindow(QtGui.QMainWindow):
         
         
         
-        ## Check for new frame updates every 10ms
+        ## Check for new frame updates every 16ms
         ## Some checks may be skipped even if there is a new frame waiting to avoid drawing more than 
         ## 60fps.
         self.frameTimer = QtCore.QTimer()
         self.frameTimer.timeout.connect(self.drawFrame)
-        self.frameTimer.start(10)
+        self.frameTimer.start(16) ## draw frames no faster than 60Hz
         #QtCore.QTimer.singleShot(1, self.drawFrame)
         ## avoiding possible singleShot-induced crashes
         

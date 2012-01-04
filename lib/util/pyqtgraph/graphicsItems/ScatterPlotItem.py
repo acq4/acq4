@@ -3,6 +3,7 @@ from pyqtgraph.Point import Point
 import pyqtgraph.functions as fn
 from GraphicsObject import GraphicsObject
 
+__all__ = ['ScatterPlotItem', 'SpotItem']
 class ScatterPlotItem(GraphicsObject):
     
     #sigPointClicked = QtCore.Signal(object, object)

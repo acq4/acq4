@@ -8,18 +8,18 @@ class DirTreeLoader(QtGui.QWidget):
     
     sigCurrentFileChanged = QtCore.Signal(object, object, object)
     
-    def __init__(self, baseDir, sortMode='alpha', *args):
+    def __init__(self, baseDir, sortMode='alpha', create=False, *args):
         QtGui.QWidget.__init__(self, *args)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         if isinstance(baseDir, basestring):
-            baseDir = DataManager.getHandle(baseDir)
+            baseDir = DataManager.getDirHandle(baseDir, create=create)
         self.baseDir = baseDir
         self.currentFile = None
         
         #self.fileTree = DirTreeModel(baseDir)
         #self.ui.fileTree.setModel(self.fileTree)
-        
+        self.ui.fileTree.setSortMode(sortMode)
         self.ui.fileTree.setBaseDirHandle(baseDir)
         
         self.deleteState = 0

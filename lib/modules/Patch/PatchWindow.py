@@ -3,8 +3,8 @@ from __future__ import with_statement
 from PatchTemplate import *
 from PyQt4 import QtGui, QtCore
 #from PyQt4 import Qwt5 as Qwt
-from pyqtgraph.WidgetGroup import WidgetGroup
-from pyqtgraph.PlotWidget import PlotWidget
+from pyqtgraph import WidgetGroup
+from pyqtgraph import PlotWidget
 from metaarray import *
 from Mutex import Mutex, MutexLocker
 import traceback, sys, time
@@ -121,7 +121,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.patchPlot.setLabel('left', text='Primary', units='A')
         self.patchCurve = self.ui.patchPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
         self.patchFitCurve = self.ui.patchPlot.plot(pen=QtGui.QPen(QtGui.QColor(0, 100, 200)))
-        self.ui.commandPlot.setLabel('left', text='Secondary', units='V')
+        self.ui.commandPlot.setLabel('left', text='Command', units='V')
         self.commandCurve = self.ui.commandPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
         
         self.ui.startBtn.clicked.connect(self.startClicked)

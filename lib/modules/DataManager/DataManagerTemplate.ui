@@ -97,7 +97,7 @@
          </widget>
         </item>
         <item>
-         <widget class="FileTreeWidget" name="fileTreeWidget">
+         <widget class="DirTreeWidget" name="fileTreeWidget">
           <property name="editTriggers">
            <set>QAbstractItemView::EditKeyPressed|QAbstractItemView::SelectedClicked</set>
           </property>
@@ -261,9 +261,9 @@
    <container>1</container>
   </customwidget>
   <customwidget>
-   <class>FileTreeWidget</class>
+   <class>DirTreeWidget</class>
    <extends>QTreeWidget</extends>
-   <header>FileTreeWidget</header>
+   <header>DirTreeWidget</header>
   </customwidget>
  </customwidgets>
  <resources/>

@@ -1,6 +1,7 @@
 from pyqtgraph.Qt import QtGui, QtCore  
-from pyqtgraph.GraphicsView import GraphicsScene
+from pyqtgraph.GraphicsScene import GraphicsScene
 
+__all__ = ['GraphicsWidget']
 class GraphicsWidget(QtGui.QGraphicsWidget):
     def __init__(self, *args, **kargs):
         """
@@ -10,5 +11,5 @@ class GraphicsWidget(QtGui.QGraphicsWidget):
         QtGui.QGraphicsWidget.__init__(self, *args, **kargs)
         GraphicsScene.registerObject(self)  ## workaround for pyqt bug in graphicsscene.items()
 
-    def getMenu(self):
-        pass
+    #def getMenu(self):
+        #pass

@@ -14,16 +14,20 @@ Widget used for displaying 2D or 3D data. Features:
 """
 
 from ImageViewTemplate import *
-from graphicsItems import *
+from pyqtgraph.graphicsItems.ImageItem import *
+from pyqtgraph.graphicsItems.ROI import *
+from pyqtgraph.graphicsItems.LinearRegionItem import *
+from pyqtgraph.graphicsItems.InfiniteLine import *
+from pyqtgraph.graphicsItems.ViewBox import *
 #from widgets import ROI
-from Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui
 import sys
 #from numpy import ndarray
 import ptime
 import numpy as np
 import debug
 
-from SignalProxy import SignalProxy
+from pyqtgraph.SignalProxy import SignalProxy
 
 class PlotROI(ROI):
     def __init__(self, size):
@@ -46,18 +50,22 @@ class ImageView(QtGui.QWidget):
         self.imageDisp = None
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        self.scene = self.ui.graphicsView.sceneObj
+        self.scene = self.ui.graphicsView.scene()
         
         self.ignoreTimeLine = False
         
-        if 'linux' in sys.platform.lower():   ## Stupid GL bug in linux.
-            self.ui.graphicsView.setViewport(QtGui.QWidget())
+        #if 'linux' in sys.platform.lower():   ## Stupid GL bug in linux.
+        #    self.ui.graphicsView.setViewport(QtGui.QWidget())
         
-        self.ui.graphicsView.enableMouse(True)
-        self.ui.graphicsView.autoPixelRange = False
-        self.ui.graphicsView.setAspectLocked(True)
+        #self.ui.graphicsView.enableMouse(True)
+        #self.ui.graphicsView.autoPixelRange = False
+        #self.ui.graphicsView.setAspectLocked(True)
         #self.ui.graphicsView.invertY()
-        self.ui.graphicsView.enableMouse()
+        #self.ui.graphicsView.enableMouse()
+        self.view = ViewBox()
+        self.ui.graphicsView.setCentralItem(self.view)
+        self.view.setAspectLocked(True)
+        self.view.invertY()
         
         self.ticks = [t[0] for t in self.ui.gradientWidget.listTicks()]
         self.ticks[0].colorChangeAllowed = False
@@ -67,19 +75,19 @@ class ImageView(QtGui.QWidget):
         self.ui.gradientWidget.setOrientation('right')
         
         self.imageItem = ImageItem()
-        self.scene.addItem(self.imageItem)
+        self.view.addItem(self.imageItem)
         self.currentIndex = 0
         
         self.ui.normGroup.hide()
 
         self.roi = PlotROI(10)
         self.roi.setZValue(20)
-        self.scene.addItem(self.roi)
+        self.view.addItem(self.roi)
         self.roi.hide()
         self.normRoi = PlotROI(10)
         self.normRoi.setPen(QtGui.QPen(QtGui.QColor(255,255,0)))
         self.normRoi.setZValue(20)
-        self.scene.addItem(self.normRoi)
+        self.view.addItem(self.normRoi)
         self.normRoi.hide()
         #self.ui.roiPlot.hide()
         self.roiCurve = self.ui.roiPlot.plot()
@@ -107,9 +115,9 @@ class ImageView(QtGui.QWidget):
         self.ui.roiPlot.addItem(self.normRgn)
         self.normRgn.hide()
             
-        ## wrap functions from graphics view
+        ## wrap functions from view box
         for fn in ['addItem', 'removeItem']:
-            setattr(self, fn, getattr(self.ui.graphicsView, fn))
+            setattr(self, fn, getattr(self.view, fn))
 
         self.timeLine.sigPositionChanged.connect(self.timeLineChanged)
         self.ui.gradientWidget.sigGradientChanged.connect(self.updateImage)
@@ -443,7 +451,7 @@ class ImageView(QtGui.QWidget):
         image = self.getProcessedImage()
         
         #self.ui.graphicsView.setRange(QtCore.QRectF(0, 0, image.shape[self.axes['x']], image.shape[self.axes['y']]), padding=0., lockAspect=True)        
-        self.ui.graphicsView.setRange(self.imageItem.sceneBoundingRect(), padding=0., lockAspect=True)
+        self.view.setRange(self.imageItem.boundingRect(), padding=0.)
         
     def getProcessedImage(self):
         if self.imageDisp is None:

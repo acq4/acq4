@@ -1,8 +1,8 @@
-from Qt import QtCore, QtGui, QtOpenGL, QtSvg
+from pyqtgraph.Qt import QtCore, QtGui, QtOpenGL, QtSvg
 import weakref
-from Point import Point
-import functions as fn
-import ptime
+from pyqtgraph.Point import Point
+import pyqtgraph.functions as fn
+import pyqtgraph.ptime as ptime
 
 try:
     import sip
@@ -11,6 +11,7 @@ except:
     HAVE_SIP = False
 
 
+__all__ = ['GraphicsScene']
 
 class GraphicsScene(QtGui.QGraphicsScene):
     """
@@ -124,6 +125,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
             event = HoverEvent(ev)
             prevItems = self.hoverItems.keys()
             items = self.itemsNearEvent(event)
+            #print 'items:', items
             self.sigMouseHover.emit(items)
             for item in items:
                 if hasattr(item, 'hoverEvent'):
@@ -251,7 +253,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
                         if ev.isAccepted():
                             break
                 if not ev.isAccepted() and ev.button() is QtCore.Qt.RightButton:
-                    print "GraphicsScene emitting sigSceneContextMenu"
+                    #print "GraphicsScene emitting sigSceneContextMenu"
                     self.sigSceneContextMenu.emit(ev)
                     ev.accept()
         return ev.isAccepted()
@@ -399,6 +401,9 @@ class GraphicsScene(QtGui.QGraphicsScene):
             item = GraphicsScene._addressCache.get(addr, item)
         return item
 
+    @staticmethod
+    def translateGraphicsItems(items):
+        return map(GraphicsScene.translateGraphicsItem, items)
 
 
 class MouseDragEvent:

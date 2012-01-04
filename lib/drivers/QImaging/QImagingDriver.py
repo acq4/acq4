@@ -10,7 +10,7 @@ from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis
 from pyqtgraph import graphicsWindows as gw
 from PyQt4 import QtGui
 from Mutex import Mutex, MutexLocker
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import atexit
 import traceback
 import time

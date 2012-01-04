@@ -7,8 +7,8 @@ labelFile = "CochlearNucleus/images/cochlear_nucleus_label.ma"
 
 from PyQt4 import QtCore, QtGui
 import pyqtgraph as pg
-import pyqtgraph.ColorButton as ColorButton
-import pyqtgraph.ProgressDialog as ProgressDialog
+#import pyqtgraph.ColorButton as ColorButton
+#import pyqtgraph.ProgressDialog as ProgressDialog
 import numpy as np
 import builderTemplate
 import metaarray
@@ -157,7 +157,7 @@ def addLabel(info=None):
         item.setCheckState(0, QtCore.Qt.Checked)
     else:
         item.setCheckState(0, QtCore.Qt.Unchecked)
-    btn = ColorButton.ColorButton(color=info['color'])
+    btn = pg.ColorButton(color=info['color'])
     ui.labelTree.addTopLevelItem(item)
     ui.labelTree.setItemWidget(item, 2, btn)
     labelInfo[l] = {'item': item, 'btn': btn}
@@ -256,7 +256,7 @@ def renderStack(overlay=True):
     if overlay is True, multiply in the original data image
     """
     stack = np.zeros(displayLabel.shape + (4,), dtype=np.ubyte)
-    with ProgressDialog.ProgressDialog("Rendering label stack...", maximum=displayLabel.shape[0]) as dlg:
+    with pg.ProgressDialog("Rendering label stack...", maximum=displayLabel.shape[0]) as dlg:
         for z in range(displayLabel.shape[0]):
             stack[z] = renderLabels(z)
             if overlay:  ## multiply colors, not alpha.

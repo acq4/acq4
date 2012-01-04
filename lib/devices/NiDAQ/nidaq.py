@@ -339,7 +339,7 @@ class Task(DeviceTask):
                 cutoff = self.cmd['besselCutoff']
                 order = self.cmd['besselOrder']
                 
-                data = NiDAQ.lowpass(data, filter='bessel', cutoff=cutoff*fScale, order=order, samplerate=res['info']['rate'])
+                data = NiDAQ.lowpass(data, filter='bessel', cutoff=cutoff, order=order, samplerate=res['info']['rate'])
                 
                 res['info']['filterMethod'] = method
                 res['info']['filterCutoff'] = cutoff
@@ -350,7 +350,7 @@ class Task(DeviceTask):
                 passDB = self.cmd['butterworthPassDB']
                 stopDB = self.cmd['butterworthStopDB']
                 
-                data = NiDAQ.lowpass(data, filter='butterworth', cutoff=passF*fScale, stopCutoff=stopF*fScale, gpass=passDB, gstop=stopDB, samplerate=res['info']['rate'])
+                data = NiDAQ.lowpass(data, filter='butterworth', cutoff=passF, stopCutoff=stopF, gpass=passDB, gstop=stopDB, samplerate=res['info']['rate'])
                 
                 res['info']['filterMethod'] = method
                 res['info']['filterPassband'] = passF

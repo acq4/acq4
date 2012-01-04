@@ -6,6 +6,7 @@ import numpy as np
 import weakref
 
 
+__all__ = ['InfiniteLine']
 class InfiniteLine(UIGraphicsItem):
     """
     Displays a line of infinite length.
@@ -51,6 +52,7 @@ class InfiniteLine(UIGraphicsItem):
         self.setAcceptHoverEvents(m)
       
     def setBounds(self, bounds):
+        """Set the (minimum, maximum) allowable values when dragging."""
         self.maxRange = bounds
         self.setValue(self.value())
         
@@ -60,7 +62,13 @@ class InfiniteLine(UIGraphicsItem):
         self.update()
         
     def setAngle(self, angle):
-        """Takes angle argument in degrees."""
+        """
+        Takes angle argument in degrees.
+        0 is horizontal; 90 is vertical.
+        
+        Note that the use of value() and setValue() changes if the line is 
+        not vertical or horizontal.
+        """
         self.angle = ((angle+45) % 180) - 45   ##  -45 <= angle < 135
         self.resetTransform()
         self.rotate(self.angle)
@@ -129,6 +137,9 @@ class InfiniteLine(UIGraphicsItem):
                 
     def boundingRect(self):
         br = UIGraphicsItem.boundingRect(self)
+        
+        ## add a 4-pixel radius around the line for mouse interaction.
+        
         #print "line bounds:", self, br
         dt = self.deviceTransform()
         if dt is None:
@@ -141,8 +152,8 @@ class InfiniteLine(UIGraphicsItem):
         px = Point(dti.map(norm)-dti.map(Point(0,0)))  ## orthogonal pixel mapped back to item coords
         px = px[1]  ## project to y-direction
         
-        br.setBottom(-px*2)
-        br.setTop(px*2)
+        br.setBottom(-px*4)
+        br.setTop(px*4)
         return br.normalized()
     
     def paint(self, p, *args):

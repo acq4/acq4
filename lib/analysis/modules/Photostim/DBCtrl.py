@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 from Map import Map
 import DatabaseGui
 import MapCtrlTemplate
@@ -114,16 +114,16 @@ class DBCtrl(QtGui.QWidget):
         table = dbui.getTableName(ident)
         
         rec = map.getRecord()
-        cell = rec['cell']
-        if cell is not None:
-            pt, rid = db.addDir(cell)
-            rec['cell'] = rid
+        #if cell is not None:
+            #pt, rid = db.addDir(cell)
+            #rec['cell'] = rid
         if rec['cell'] is None:
             return
+        cell = rec['cell']
         
         #fields = db.describeData(rec)
         #fields['cell'] = 'int'
-        db.checkTable(table, ident, Map.mapFields, [('cell', 'Cell')], create=True)
+        db.checkTable(table, ident, Map.mapFields, create=True)
         
         if map.rowID is None:
             db.insert(table, rec)
@@ -149,7 +149,7 @@ class DBCtrl(QtGui.QWidget):
         if db.tableOwner(table) != ident:
             raise Exception("Table %s not owned by %s" % (table, ident))
         
-        db.delete(table, 'rowid=%d'%rowID)
+        db.delete(table, where={'rowid':rowID})
         
         self.host.unregisterMap(map)
         
@@ -168,11 +168,11 @@ class DBCtrl(QtGui.QWidget):
         if db.tableOwner(table) != ident:
             raise Exception("Table %s not owned by %s" % (table, ident))
         
-        row = db.getDirRowID(cell)
-        if row is None:
-            return
+        #row = db.getDirRowID(cell)
+        #if row is None:
+            #return
             
-        maps = db.select(table, ['rowid','*'], 'where cell=%d'%row)
+        maps = db.select(table, ['rowid','*'], where={'cell': cell})
         #print maps
         for rec in maps:
             scans = []
@@ -274,6 +274,8 @@ class DBCtrl(QtGui.QWidget):
         
     def selectedMap(self):
         item = self.ui.mapTable.currentItem()
+        if item is None:
+            raise Exception("No map selected.")
         if not hasattr(item, 'map'):
             item = item.parent()
         return item.map
@@ -287,9 +289,10 @@ class DBCtrl(QtGui.QWidget):
     
     def clearDBScan(self):
         try:
-            scan = self.selectedScan()
-            if scan is None:
+            item = self.ui.scanTree.currentItem()
+            if item is None:
                 raise Exception("No scan selected.")
+            scan = item.scan
             self.host.clearDBScan(scan)
             self.ui.clearDBScanBtn.success("Cleared.")
         except:

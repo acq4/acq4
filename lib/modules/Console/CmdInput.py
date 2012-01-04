@@ -25,10 +25,10 @@ class CmdInput(QtGui.QLineEdit):
             self.execCmd()
         else:
             QtGui.QLineEdit.keyPressEvent(self, ev)
-            self.history[0] = str(self.text())
+            self.history[0] = unicode(self.text())
         
     def execCmd(self):
-        cmd = str(self.text())
+        cmd = unicode(self.text())
         if len(self.history) == 1 or cmd != self.history[1]:
             self.history.insert(1, cmd)
         #self.lastCmd = cmd

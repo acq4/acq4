@@ -9,15 +9,21 @@ to easily store and retrieve data files along with meta data. The objects
 probably only need to be created via functions in the Manager class.
 """
 
-from __future__ import with_statement
+if __name__ == '__main__':
+    import os, sys
+    path = os.path.dirname(os.path.abspath(__file__))
+    sys.path.append(os.path.join(path, '..', '..'))
+
+#from __future__ import with_statement
 import threading, os, re, sys, shutil
 ##  import fcntl  ## linux only?
 from functions import strncmp
 from configfile import *
-from metaarray import MetaArray
+#from metaarray import MetaArray
 import time
 from Mutex import Mutex, MutexLocker
-from pyqtgraph.SignalProxy import SignalProxy
+from pyqtgraph import SignalProxy, ProgressDialog
+#from pyqtgraph.ProgressDialog import ProgressDialog
 from PyQt4 import QtCore, QtGui
 if not hasattr(QtCore, 'Signal'):
     QtCore.Signal = QtCore.pyqtSignal
@@ -27,6 +33,7 @@ import lib.filetypes as filetypes
 from debug import *
 import copy
 import advancedTypes
+
 
 def abspath(fileName):
     """Return an absolute path string which is guaranteed to uniquely identify a file."""
@@ -43,7 +50,7 @@ def getHandle(fileName):
     return getDataManager().getHandle(fileName)
 
 def getDirHandle(fileName, create=False):
-    return getDataManager().getDirHandle(fileName)
+    return getDataManager().getDirHandle(fileName, create=create)
 
 def getFileHandle(fileName):
     return getDataManager().getFileHandle(fileName)
@@ -456,8 +463,9 @@ class DirHandle(FileHandle):
     
     def __getitem__(self, item):
         #print self.name(), " -> ", item
-        while item[0] == os.path.sep:
-            item = item[1:]
+        #while len(item) > 0 and item[0] == os.path.sep:
+            #item = item[1:]
+        item = item.lstrip(os.path.sep)
         fileName = os.path.join(self.name(), item)
         return self.manager.getHandle(fileName)
     
@@ -650,12 +658,15 @@ class DirHandle(FileHandle):
         
         if sortMode == 'date':
             ## Sort files by creation time
-            for f in files:
-                if f not in self.cTimeCache:
-                    self.cTimeCache[f] = self._getFileCTime(f)
+            with ProgressDialog("Reading directory data...", maximum=len(files)) as dlg:
+                for f in files:
+                    if f not in self.cTimeCache:
+                        self.cTimeCache[f] = self._getFileCTime(f)
+                    dlg += 1
             files.sort(lambda a,b: cmp(self.cTimeCache[a], self.cTimeCache[b]))
         elif sortMode == 'alpha':
-            files.sort()
+            ## show directories first when sorting alphabetically.
+            files.sort(lambda a,b: 2*cmp(os.path.isdir(os.path.join(self.name(),b)), os.path.isdir(os.path.join(self.name(),a))) + cmp(a,b))
         elif sortMode == None:
             pass
         else:
@@ -993,3 +1004,4 @@ class DirHandle(FileHandle):
 
 
 dm = DataManager()
+

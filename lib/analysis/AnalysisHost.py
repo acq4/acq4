@@ -57,8 +57,9 @@ class AnalysisHost(QtGui.QMainWindow):
         
         lib.Manager.getManager().declareInterface(modName, 'analysisMod', self.mod)
         
+    def closeEvent(self, ev):
+        if self.quit():
+            ev.accept()
+        
     def quit(self):
-        for el in self.elements:
-            if hasattr(el, 'close'):
-                el.close()
-        #self.logBtn.close()
+        return self.mod.quit()

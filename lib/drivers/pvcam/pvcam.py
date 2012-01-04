@@ -2,7 +2,7 @@
 from ctypes import *
 import sys, numpy, time, re, os
 from clibrary import *
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 from debug import backtrace
 import ptime
 
@@ -364,7 +364,7 @@ class _CameraClass:
         
 
     def listParams(self, params=None):
-        """Return the list of all parameters with bounds, read/write access, and dependencies"""
+        """Return the dict of all parameters with bounds, read/write access, and dependencies"""
         
         if params is None:
             return self.paramAttrs.copy()
@@ -385,8 +385,8 @@ class _CameraClass:
                 try:
                     params[p] = self.paramAttrs[p]
                 except KeyError:
-                    print self.paramAttrs.keys()
-                    raise Exception("No parameter named '%s'. Full list is printed above." % p)
+                    #print self.paramAttrs.keys()
+                    raise Exception("No parameter named '%s'. Params are:" % (p, str(self.paramAttrs.keys())))
                 
             if unList:
                 return params[plist[0]]
@@ -873,7 +873,7 @@ class _CameraClass:
     def _buildParamList(self):
         """Builds the list of attributes for each remote parameter"""
         plist = self.pvcam.listParams()
-        plist = filter(self.paramAvailable, plist)
+        plist = filter(self.paramAvailable, plist.keys())
         rem = ['ADC_OFFSET']  ## Set by manufacturer; do not change.
         for r in rem:
             if r in plist:

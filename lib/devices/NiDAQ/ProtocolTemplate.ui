@@ -82,10 +82,11 @@
        </widget>
       </item>
       <item row="1" column="1">
-       <widget class="QStackedWidget" name="stackedWidget_2">
+       <widget class="QStackedWidget" name="denoiseStack">
         <property name="currentIndex">
          <number>0</number>
         </property>
+        <widget class="QWidget" name="page_4"/>
         <widget class="QWidget" name="page_3">
          <layout class="QGridLayout" name="gridLayout_7">
           <property name="margin">
@@ -198,7 +199,7 @@
            </widget>
           </item>
           <item row="0" column="1">
-           <widget class="QDoubleSpinBox" name="besselCutoffSpin">
+           <widget class="SpinBox" name="besselCutoffSpin">
             <property name="value">
              <double>2.000000000000000</double>
             </property>
@@ -256,7 +257,7 @@
            </widget>
           </item>
           <item row="1" column="1">
-           <widget class="QDoubleSpinBox" name="butterworthPassbandSpin">
+           <widget class="SpinBox" name="butterworthPassbandSpin">
             <property name="toolTip">
              <string>Upper frequency of butterworth passband in multiples of maximum nyquist frequency (sample rate / 2).</string>
             </property>
@@ -283,7 +284,7 @@
            </widget>
           </item>
           <item row="2" column="1">
-           <widget class="QDoubleSpinBox" name="butterworthStopbandSpin">
+           <widget class="SpinBox" name="butterworthStopbandSpin">
             <property name="toolTip">
              <string>Lower frequency of butterworth stopband in multiples of maximum nyquist frequency (sample rate / 2).</string>
             </property>
@@ -402,7 +403,7 @@
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header>pyqtgraph.SpinBox</header>
+   <header>pyqtgraph</header>
   </customwidget>
  </customwidgets>
  <resources/>

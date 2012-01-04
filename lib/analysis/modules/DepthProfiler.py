@@ -9,7 +9,7 @@ import pyqtgraph as pg
 from metaarray import MetaArray
 import numpy as np
 import functions as fn
-import pyqtgraph.ProgressDialog as ProgressDialog
+#import pyqtgraph.ProgressDialog as ProgressDialog
 import scipy.optimize
 
 class DepthProfiler(AnalysisModule):
@@ -121,7 +121,7 @@ class DepthProfiler(AnalysisModule):
             v2 = [2.0, v[1], v[2]*0.3, 1.0, 0.0]
             return err * slopeGaussian(v2, x)
         
-        with ProgressDialog.ProgressDialog("Processing..", 0, height-1, cancelText=None) as dlg:
+        with pg.ProgressDialog("Processing..", 0, height-1, cancelText=None) as dlg:
             for i in range(height):
                 row = self.normData[:, i]
                 guess = [row.max()-row.min(), xVals[int(width/2)], self.px[0]*3, row.max(), 0.0]

@@ -7,7 +7,7 @@ from lib.devices.Device import ProtocolGui
 from SequenceRunner import *
 from pyqtgraph.WidgetGroup import WidgetGroup
 #from PyQt4 import Qwt5 as Qwt
-from pyqtgraph.PlotWidget import PlotWidget
+from pyqtgraph import PlotWidget
 import numpy
 import weakref
 from debug import *

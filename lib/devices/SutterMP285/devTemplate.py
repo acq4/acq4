@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'devTemplate.ui'
 #
-# Created: Wed Oct 19 11:35:13 2011
+# Created: Sun Dec 18 17:49:50 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -264,5 +264,4 @@ class Ui_Form(object):
         self.label_4.setText(QtGui.QApplication.translate("Form", "Max Speed", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("Form", "X", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.SpinBox import SpinBox
-from pyqtgraph.JoystickButton import JoystickButton
+from pyqtgraph import SpinBox, JoystickButton

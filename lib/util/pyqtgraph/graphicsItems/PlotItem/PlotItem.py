@@ -21,7 +21,7 @@ This class is very heavily featured:
 from plotConfigTemplate import *
 from pyqtgraph.Qt import QtGui, QtCore, QtSvg
 import pyqtgraph.functions as fn
-from pyqtgraph.FileDialog import FileDialog
+from pyqtgraph.widgets.FileDialog import FileDialog
 import weakref
 import numpy as np
 from .. PlotCurveItem import PlotCurveItem
@@ -30,6 +30,7 @@ from .. ViewBox import ViewBox
 from .. AxisItem import AxisItem
 from .. LabelItem import LabelItem
 from .. GraphicsWidget import GraphicsWidget
+from .. ButtonItem import ButtonItem
 from pyqtgraph.WidgetGroup import WidgetGroup
 
 __all__ = ['PlotItem']
@@ -45,6 +46,8 @@ try:
     HAVE_METAARRAY = True
 except:
     HAVE_METAARRAY = False
+
+
 
 
 class PlotItem(GraphicsWidget):
@@ -63,21 +66,23 @@ class PlotItem(GraphicsWidget):
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         ## Set up control buttons
         
-        self.ctrlBtn = QtGui.QToolButton()
-        self.ctrlBtn.setText('?')
-        self.autoBtn = QtGui.QToolButton()
-        self.autoBtn.setText('A')
-        #self.autoBtn.hide()
-        self.proxies = []
-        for b in [self.ctrlBtn, self.autoBtn]:
-            proxy = QtGui.QGraphicsProxyWidget(self)
-            proxy.setWidget(b)
-            proxy.setAcceptHoverEvents(False)
-            b.setStyleSheet("background-color: #000000; color: #888; font-size: 6pt")
-            self.proxies.append(proxy)
+        #self.ctrlBtn = QtGui.QToolButton()
+        #self.ctrlBtn.setText('?')
+        #self.autoBtn = QtGui.QToolButton()
+        #self.autoBtn.setText('A')
+        ##self.autoBtn.hide()
+        #self.proxies = []
+        #for b in [self.ctrlBtn, self.autoBtn]:
+            #proxy = QtGui.QGraphicsProxyWidget(self)
+            #proxy.setWidget(b)
+            #proxy.setAcceptHoverEvents(False)
+            #b.setStyleSheet("background-color: #000000; color: #888; font-size: 6pt")
+            #self.proxies.append(proxy)
+        path = os.path.dirname(__file__)
+        self.ctrlBtn = ButtonItem(os.path.join(path, 'ctrl.png'), 14, self)
         self.ctrlBtn.clicked.connect(self.ctrlBtnClicked)
+        self.autoBtn = ButtonItem(os.path.join(path, 'auto.png'), 14, self)
         self.autoBtn.clicked.connect(self.enableAutoScale)
-        
         
         self.layout = QtGui.QGraphicsGridLayout()
         self.layout.setContentsMargins(1,1,1,1)
@@ -171,8 +176,6 @@ class PlotItem(GraphicsWidget):
         self.yLinkPlot = None
         self.linksBlocked = False
 
-        
-        #self.ctrlBtn.setFixedWidth(60)
         self.setAcceptHoverEvents(True)
         
         ## Connect control widgets
@@ -254,10 +257,10 @@ class PlotItem(GraphicsWidget):
         self.ctrlMenu.setParent(None)
         self.ctrlMenu = None
         
-        self.ctrlBtn.setParent(None)
-        self.ctrlBtn = None
-        self.autoBtn.setParent(None)
-        self.autoBtn = None
+        #self.ctrlBtn.setParent(None)
+        #self.ctrlBtn = None
+        #self.autoBtn.setParent(None)
+        #self.autoBtn = None
         
         for k in self.scales:
             i = self.scales[k]['item']
@@ -271,13 +274,13 @@ class PlotItem(GraphicsWidget):
         #for i in range(self.layout.count()):
             #self.layout.removeAt(i)
             
-        for p in self.proxies:
-            try:
-                p.setWidget(None)
-            except RuntimeError:
-                break
-            self.scene().removeItem(p)
-        self.proxies = []
+        #for p in self.proxies:
+            #try:
+                #p.setWidget(None)
+            #except RuntimeError:
+                #break
+            #self.scene().removeItem(p)
+        #self.proxies = []
         
         self.menuAction.releaseWidget(self.menuAction.defaultWidget())
         self.menuAction.setParent(None)
@@ -541,7 +544,7 @@ class PlotItem(GraphicsWidget):
     def enableAutoScale(self):
         self.ctrl.xAutoRadio.setChecked(True)
         self.ctrl.yAutoRadio.setChecked(True)
-        self.autoBtn.hide()
+        self.autoBtn.disable()
         self.updateXScale()
         self.updateYScale()
         self.replot()
@@ -571,7 +574,7 @@ class PlotItem(GraphicsWidget):
             self.autoScale[1] = False
             self.ctrl.yManualRadio.setChecked(True)
             #self.setManualYScale()
-        self.autoBtn.show()
+        self.autoBtn.enable()
         #self.replot()
         
     def setManualXScale(self):
@@ -639,6 +642,7 @@ class PlotItem(GraphicsWidget):
         plot(yVals)   # x vals will be integers
         plot(xVals, yVals)
         plot(y=yVals, x=xVals)
+        plot(metaArray)
         """
         if y is not None:
             data = y
@@ -713,6 +717,7 @@ class PlotItem(GraphicsWidget):
     def plotChanged(self, curve=None):
         ## Recompute auto range if needed
         for ax in [0, 1]:
+            #print "range", ax
             if self.autoScale[ax]:
                 percentScale = [self.ctrl.xAutoPercentSpin.value(), self.ctrl.yAutoPercentSpin.value()][ax] * 0.01
                 mn = None
@@ -721,6 +726,7 @@ class PlotItem(GraphicsWidget):
                     if not c.isVisible():
                         continue
                     cmn, cmx = c.getRange(ax, percentScale)
+                    #print "   ", c, cmn, cmx
                     if mn is None or cmn < mn:
                         mn = cmn
                     if mx is None or cmx > mx:
@@ -1080,8 +1086,10 @@ class PlotItem(GraphicsWidget):
     def resizeEvent(self, ev):
         if self.ctrlBtn is None:  ## already closed down
             return
-        self.ctrlBtn.move(0, self.size().height() - self.ctrlBtn.size().height())
-        self.autoBtn.move(self.ctrlBtn.width(), self.size().height() - self.autoBtn.size().height())
+        btnRect = self.mapRectFromItem(self.ctrlBtn, self.ctrlBtn.boundingRect())
+        y = self.size().height() - btnRect.height()
+        self.ctrlBtn.setPos(0, y)
+        self.autoBtn.setPos(btnRect.width()+3, y)
         
     def hoverMoveEvent(self, ev):
         self.mousePos = ev.pos()

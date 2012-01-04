@@ -1,7 +1,9 @@
+from pyqtgraph.Qt import QtGui, QtCore
 from UIGraphicsItem import *
 import numpy as np
 import pyqtgraph.functions as fn
 
+__all__ = ['ScaleBar']
 class ScaleBar(UIGraphicsItem):
     """
     Displays a rectangular bar with 10 divisions to indicate the relative scale of objects on the view.

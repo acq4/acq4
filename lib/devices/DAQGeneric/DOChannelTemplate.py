@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'DOChannelTemplate.ui'
 #
-# Created: Wed Oct 19 11:32:51 2011
+# Created: Sun Dec 18 19:22:36 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

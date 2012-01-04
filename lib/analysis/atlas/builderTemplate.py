@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'builderTemplate.ui'
 #
-# Created: Mon Nov 28 16:19:22 2011
+# Created: Sun Dec 18 17:43:50 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -148,5 +148,4 @@ class Ui_Form(object):
         self.labelTree.headerItem().setText(0, QtGui.QApplication.translate("Form", "color", None, QtGui.QApplication.UnicodeUTF8))
         self.labelTree.headerItem().setText(2, QtGui.QApplication.translate("Form", "id", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.TreeWidget import TreeWidget
-from pyqtgraph.GraphicsView import GraphicsView
+from pyqtgraph import GraphicsView, TreeWidget
