@@ -13,6 +13,8 @@ import numpy as np
 class PlotDataItem(GraphicsObject):
     """GraphicsItem for displaying plot curves, scatter plots, or both."""
     
+    sigPlotChanged = QtCore.Signal(object)
+    sigClicked = QtCore.Signal(object)
     
     def __init__(self, *args, **kargs):
         """
@@ -40,12 +42,13 @@ class PlotDataItem(GraphicsObject):
                            options are o, s, t, d, +
             symbolPen    - outline pen for drawing points OR list of pens, one per point
             symbolBrush  - brush for filling points OR list of brushes, one per point
-            symbolSize   - size (diameter) of symbols OR list of diameters
-            pxMode       - bool. If True, then symbolSize is specified in pixels. If False, then symbolSize is 
+            symbolSize   - diameter of symbols OR list of diameters
+            pxMode       - (bool) If True, then symbolSize is specified in pixels. If False, then symbolSize is 
                            specified in data coordinates.
                            
         Optimization keyword arguments:
             identical    - spots are all identical. The spot image will be rendered only once and repeated for every point
+            decimate     - (int) decimate data
                            
         Meta-info keyword arguments:
             name         - name of dataset. This would appear in a legend
@@ -54,15 +57,18 @@ class PlotDataItem(GraphicsObject):
         self.setFlag(self.ItemHasNoContents)
         self.xData = None
         self.yData = None
+        self.curves = []
+        self.scatters = []
+        self.clear()
         self.opts = {
             'fftMode': False,
             'logMode': [False, False],
             'downsample': False,
             'alphaHint': 1.0,
-            'alphaMode': False
+            'alphaMode': False,
+            'pen': (200,200,200),
+            'shadowPen': None,
         }
-        self.curves = []
-        self.scatters = []
         self.setData(*args, **kargs)
     
     def implements(self, interface=None):
@@ -73,7 +79,43 @@ class PlotDataItem(GraphicsObject):
     
     def boundingRect(self):
         return QtCore.QRectF()  ## let child items handle this
+
+    def setAlpha(self, alpha, auto):
+        self.opts['alphaHint'] = alpha
+        self.opts['alphaMode'] = auto
+        self.update()
+        
+    def setFftMode(self, mode):
+        self.opts['fftMode'] = mode
+        self.xDisp = self.yDisp = None
+        self.path = None
+        self.update()
     
+    def setLogMode(self, mode):
+        self.opts['logMode'] = mode
+        self.xDisp = self.yDisp = None
+        self.path = None
+        self.update()
+    
+    def setPointMode(self, mode):
+        self.opts['pointMode'] = mode
+        self.update()
+        
+    def setPen(self, pen):
+        self.opts['pen'] = fn.mkPen(pen)
+        self.update()
+        
+    def setShadowPen(self, pen):
+        self.opts['shadowPen'] = pen
+        self.update()
+
+    def setDownsampling(self, ds):
+        if self.opts['downsample'] != ds:
+            self.opts['downsample'] = ds
+            self.xDisp = self.yDisp = None
+            self.path = None
+            self.update()
+        
     def setData(self, *args, **kargs):
         """
         Clear any data displayed by this item and display new data.
@@ -90,22 +132,23 @@ class PlotDataItem(GraphicsObject):
             if dt == 'empty':
                 return
             elif dt == 'listOfValues':
-                y = data
+                y = np.array(data)
             elif dt == 'Nx2array':
                 x = data[:,0]
                 y = data[:,1]
             elif dt == 'recarray' or dt == 'dictOfLists':
                 if 'x' in data:
-                    x = data['x']
+                    x = np.array(data['x'])
                 if 'y' in data:
-                    y = data['y']
+                    y = np.array(data['y'])
             elif dt ==  'listOfDicts':
                 if 'x' in data[0]:
-                    x = [d.get('x',None) for d in data]
+                    x = np.array([d.get('x',None) for d in data])
                 if 'y' in data[0]:
-                    y = [d.get('y',None) for d in data]
+                    y = np.array([d.get('y',None) for d in data])
             elif dt == 'MetaArray':
-                pass
+                y = data.view(np.ndarray)
+                x = data.xvals(0)
             else:
                 raise Exception('Invalid data type %s' % type(data))
             
@@ -131,10 +174,12 @@ class PlotDataItem(GraphicsObject):
         curveArgs = {}
         for k in ['pen', 'shadowPen']:
             if k in kargs:
-                curveArgs[k] = kargs[k]
-        curve = PlotCurveItem(x=x, y=y, **curveArgs)
-        curve.setParentItem(self)
-        self.curves.append(curve)
+                self.opts[k] = kargs[k]
+            curveArgs[k] = self.opts[k]
+        if curveArgs['pen'] is not None:
+            curve = PlotCurveItem(x=x, y=y, **curveArgs)
+            curve.setParentItem(self)
+            self.curves.append(curve)
         
         scatterArgs = {}
         for k,v in [('symbolPen','pen'), ('symbolBrush','brush'), ('symbol','style')]:
@@ -162,7 +207,7 @@ class PlotDataItem(GraphicsObject):
                 x = x[::ds]
                 #y = resample(y[:len(x)*ds], len(x))  ## scipy.signal.resample causes nasty ringing
                 y = y[::ds]
-            if self.opts['spectrumMode']:
+            if self.opts['fftMode']:
                 f = fft(y) / len(y)
                 y = abs(f[1:len(f)/2])
                 dt = x[-1] - x[0]
@@ -203,6 +248,8 @@ class PlotDataItem(GraphicsObject):
         self.scatters = []
         self.xData = None
         self.yData = None
+        self.xDisp = None
+        self.yDisp = None
                 
     def appendData(self, *args, **kargs):
         pass
@@ -214,6 +261,8 @@ def dataType(obj):
     if isSequence(obj):
         first = obj[0]
         if isinstance(obj, np.ndarray):
+            if HAVE_METAARRAY and isinstance(obj, metaarray.MetaArray):
+                return 'MetaArray'
             if obj.ndim == 1:
                 if obj.dtype.names is None:
                     return 'listOfValues'
@@ -222,7 +271,7 @@ def dataType(obj):
             elif obj.ndim == 2 and obj.dtype.names is None and obj.shape[1] == 2:
                 return 'Nx2array'
             else:
-                raise Exception
+                raise Exception('array shape must be (N,) or (N,2); got %s instead' % str(obj.shape))
         elif isinstance(first, dict):
             return 'listOfDict'
         else:

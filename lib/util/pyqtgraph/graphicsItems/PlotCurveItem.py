@@ -11,7 +11,6 @@ import struct
 __all__ = ['PlotCurveItem']
 class PlotCurveItem(GraphicsObject):
     
-    sigPlotChanged = QtCore.Signal(object)
     
     """Class representing a single plot curve. Provides:
         - Fast data update
@@ -20,9 +19,10 @@ class PlotCurveItem(GraphicsObject):
         - mouse interaction
     """
     
+    sigPlotChanged = QtCore.Signal(object)
     sigClicked = QtCore.Signal(object)
     
-    def __init__(self, y=None, x=None, copy=False, pen=None, shadow=None, parent=None, color=None, clickable=False):
+    def __init__(self, y=None, x=None, copy=False, pen=None, shadowPen=None, parent=None, color=None, clickable=False):
         GraphicsObject.__init__(self, parent)
         #GraphicsWidget.__init__(self, parent)
         self.free()
@@ -36,7 +36,7 @@ class PlotCurveItem(GraphicsObject):
         else:
             self.setPen(pen)
         
-        self.shadow = shadow
+        self.shadowPen = shadowPen
         if y is not None:
             self.updateData(y, x, copy)
         #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
@@ -175,7 +175,7 @@ class PlotCurveItem(GraphicsObject):
         self.update()
         
     def setShadowPen(self, pen):
-        self.shadow = pen
+        self.shadowPen = pen
         self.update()
 
     def setDownsampling(self, ds):
@@ -316,8 +316,8 @@ class PlotCurveItem(GraphicsObject):
             return QtCore.QRectF()
             
             
-        if self.shadow is not None:
-            lineWidth = (max(self.pen.width(), self.shadow.width()) + 1)
+        if self.shadowPen is not None:
+            lineWidth = (max(self.pen.width(), self.shadowPen.width()) + 1)
         else:
             lineWidth = (self.pen.width()+1)
             
@@ -348,8 +348,8 @@ class PlotCurveItem(GraphicsObject):
         path = self.path
         prof.mark('generate path')
             
-        if self.shadow is not None:
-            sp = QtGui.QPen(self.shadow)
+        if self.shadowPen is not None:
+            sp = QtGui.QPen(self.shadowPen)
         else:
             sp = None
 
@@ -363,7 +363,7 @@ class PlotCurveItem(GraphicsObject):
             pen.setColor(c)
             #pen.setCosmetic(True)
             
-        if self.shadow is not None:
+        if self.shadowPen is not None:
             p.setPen(sp)
             p.drawPath(path)
         p.setPen(cp)

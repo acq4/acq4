@@ -238,7 +238,11 @@ def mkColor(*args):
         (r, g, b, a) = args
     else:
         raise Exception(err)
-    return QtGui.QColor(r, g, b, a)
+    
+    args = [r,g,b,a]
+    args = map(lambda a: 0 if np.isnan(a) or np.isinf(a) else a, args)
+    args = map(int, args)
+    return QtGui.QColor(*args)
     
 def colorTuple(c):
     return (c.red(), c.green(), c.blue(), c.alpha())

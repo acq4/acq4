@@ -24,8 +24,9 @@ import pyqtgraph.functions as fn
 from pyqtgraph.widgets.FileDialog import FileDialog
 import weakref
 import numpy as np
-from .. PlotCurveItem import PlotCurveItem
-from .. ScatterPlotItem import ScatterPlotItem
+#from .. PlotCurveItem import PlotCurveItem
+#from .. ScatterPlotItem import ScatterPlotItem
+from .. PlotDataItem import PlotDataItem
 from .. ViewBox import ViewBox
 from .. AxisItem import AxisItem
 from .. LabelItem import LabelItem
@@ -152,6 +153,7 @@ class PlotItem(GraphicsWidget):
             
         self.items = []
         self.curves = []
+        self.itemMeta = weakref.WeakKeyDictionary()
         self.dataItems = []
         self.paramList = {}
         self.avgCurves = {}
@@ -463,7 +465,7 @@ class PlotItem(GraphicsWidget):
             if len(remKeys) < 1:  ## In this case, there would be 1 average plot for each data plot; not useful.
                 return
                 
-        p = curve.meta().copy()
+        p = self.itemMeta.get(curve,{}).copy()
         for k in p:
             if type(k) is tuple:
                 p['.'.join(k)] = p[k]
@@ -612,16 +614,16 @@ class PlotItem(GraphicsWidget):
             self.dataItems.append(item)
             self.plotChanged()
             
-        if isinstance(item, PlotCurveItem):
             params = kargs.get('params', {})
-            item.setMeta(params)
+            self.itemMeta[item] = params
+            #item.setMeta(params)
             self.curves.append(item)
             #self.addItem(c)
             
             ## configure curve for this plot
             (alpha, auto) = self.alphaState()
             item.setAlpha(alpha, auto)
-            item.setSpectrumMode(self.ctrl.powerSpectrumGroup.isChecked())
+            item.setFftMode(self.ctrl.powerSpectrumGroup.isChecked())
             item.setDownsampling(self.downsampleMode())
             item.setPointMode(self.pointMode())
             
@@ -673,52 +675,64 @@ class PlotItem(GraphicsWidget):
         self.avgCurves = {}
         
     
-    def plot(self, data=None, data2=None, x=None, y=None, clear=False, params=None, pen=None, 
-        symbol=None, decimate = None, **kargs):
-        """Add a new plot curve. Data may be specified a few ways:
-        plot(yVals)   # x vals will be integers
-        plot(xVals, yVals)
-        plot(y=yVals, x=xVals)
-        plot(metaArray)
+    def plot(self, *args, **kargs):
         """
-        if y is not None:
-            data = y
-        if data2 is not None:
-            x = data
-            data = data2
-        if decimate is not None and decimate > 1:
-            data = data[::decimate]
-            if x is not None:
-                x = x[::decimate]
-          #  print 'plot with decimate = %d' % (decimate)
+        Add and return a new plot.
+        See PlotDataItem.__init__ for data arguments
+        
+        Extra allowed arguments are:
+            clear    - clear all plots before displaying new data
+            params   - meta-parameters to associate with this data
+        """
+        
+        
+        
+        #if y is not None:
+            #data = y
+        #if data2 is not None:
+            #x = data
+            #data = data2
+        #if decimate is not None and decimate > 1:
+            #data = data[::decimate]
+            #if x is not None:
+                #x = x[::decimate]
+          ##  print 'plot with decimate = %d' % (decimate)
+        clear = kargs.get('clear', False)
+        params = kargs.get('params', None)
+          
         if clear:
             self.clear()
+            
+        item = PlotDataItem(*args, **kargs)
+            
         if params is None:
             params = {}
-        if HAVE_METAARRAY and isinstance(data, MetaArray):
-            curve = self._plotMetaArray(data, x=x, **kargs)
-        elif isinstance(data, np.ndarray):
-            curve = self._plotArray(data, x=x, **kargs)
-        elif isinstance(data, list):
-            if x is not None:
-                x = np.array(x)
-            curve = self._plotArray(np.array(data), x=x, **kargs)
-        elif data is None:
-            curve = PlotCurveItem(**kargs)
-        else:
-            raise Exception('Not sure how to plot object of type %s' % type(data))
+        #if HAVE_METAARRAY and isinstance(data, MetaArray):
+            #curve = self._plotMetaArray(data, x=x, **kargs)
+        #elif isinstance(data, np.ndarray):
+            #curve = self._plotArray(data, x=x, **kargs)
+        #elif isinstance(data, list):
+            #if x is not None:
+                #x = np.array(x)
+            #curve = self._plotArray(np.array(data), x=x, **kargs)
+        #elif data is None:
+            #curve = PlotCurveItem(**kargs)
+        #else:
+            #raise Exception('Not sure how to plot object of type %s' % type(data))
             
         #print data, curve
-        self.addItem(curve, params=params)
-        if pen is not None:
-            curve.setPen(fn.mkPen(pen))
+        self.addItem(item, params=params)
+        #if pen is not None:
+            #curve.setPen(fn.mkPen(pen))
         
-        return curve
+        return item
 
     def scatterPlot(self, *args, **kargs):
-        sp = ScatterPlotItem(*args, **kargs)
-        self.addItem(sp)
-        return sp
+        print "PlotItem.scatterPlot is deprecated. Use PlotItem.plot instead."
+        return self.plot(*args, **kargs)
+        #sp = ScatterPlotItem(*args, **kargs)
+        #self.addItem(sp)
+        #return sp
 
     
 
@@ -758,7 +772,7 @@ class PlotItem(GraphicsWidget):
         #print "paramList:", self.paramList
         for c in self.curves:
             #print "  curve:", c
-            for p in c.meta().keys():
+            for p in self.itemMeta.get(c, {}).keys():
                 #print "    param:", p
                 if type(p) is tuple:
                     p = '.'.join(p)
@@ -1146,6 +1160,11 @@ class PlotItem(GraphicsWidget):
             s.show()
         else:
             s.hide()
+            
+    def hideButtons(self):
+        self.ctrlBtn.hide()
+        self.autoBtn.hide()
+        
             
     def _plotArray(self, arr, x=None, **kargs):
         if arr.ndim != 1:

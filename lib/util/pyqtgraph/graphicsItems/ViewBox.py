@@ -6,6 +6,7 @@ from ItemGroup import ItemGroup
 from GraphicsWidget import GraphicsWidget
 from UIGraphicsItem import UIGraphicsItem
 from pyqtgraph.GraphicsScene import GraphicsScene
+import pyqtgraph
 
 __all__ = ['ViewBox']
 class ViewBox(GraphicsWidget):
@@ -39,7 +40,8 @@ class ViewBox(GraphicsWidget):
         #self.childGroup = QtGui.QGraphicsItemGroup(self)
         self.childGroup = ItemGroup(self)
         self.currentScale = Point(1, 1)
-        self.useLeftButtonPan = True # normally use left button to pan
+        
+        self.useLeftButtonPan = pyqtgraph.getConfigOption('leftButtonPan') # normally use left button to pan
         # this also enables capture of keyPressEvents.
         
         ## Make scale box that is shown when dragging on the view
