@@ -21,6 +21,13 @@ class ScatterPlotItem(GraphicsObject):
                     Otherwise, size is in scene coordinates and the spots scale with the view.
             identical: If True, all spots are forced to look identical. 
                        This can result in performance enhancement.
+                       
+            style can be one of:
+                'o'  circle
+                's'  square
+                't'  triangle
+                'd'  diamond
+                '+'  plus
         """
         
         
@@ -61,6 +68,12 @@ class ScatterPlotItem(GraphicsObject):
             #self.optimizeFragments = []
             #self.setFlags(self.flags() | self.ItemIgnoresTransformations)
             
+    def implements(self, interface=None):
+        ints = ['plotData']
+        if interface is None:
+            return ints
+        return interface in ints
+    
     def setPxMode(self, mode):
         self.pxMode = mode
             

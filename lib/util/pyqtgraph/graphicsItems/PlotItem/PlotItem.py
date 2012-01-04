@@ -483,7 +483,7 @@ class PlotItem(GraphicsWidget):
             plot.setShadowPen(fn.mkPen([0, 0, 0, 100], width=3))
             plot.setAlpha(1.0, False)
             plot.setZValue(100)
-            self.addItem(plot)
+            self.addItem(plot, skipAverage=True)
             self.avgCurves[key] = [0, plot]
         self.avgCurves[key][0] += 1
         (n, plot) = self.avgCurves[key]
@@ -605,10 +605,47 @@ class PlotItem(GraphicsWidget):
         self.ctrl.yAutoRadio.setChecked(True)
         #self.replot()
 
-    def addItem(self, item, *args):
+    def addItem(self, item, *args, **kargs):
         self.items.append(item)
         self.vb.addItem(item, *args)
+        if hasattr(item, 'implements') and item.implements('plotData'):
+            self.dataItems.append(item)
+            self.plotChanged()
+            
+        if isinstance(item, PlotCurveItem):
+            params = kargs.get('params', {})
+            item.setMeta(params)
+            self.curves.append(item)
+            #self.addItem(c)
+            
+            ## configure curve for this plot
+            (alpha, auto) = self.alphaState()
+            item.setAlpha(alpha, auto)
+            item.setSpectrumMode(self.ctrl.powerSpectrumGroup.isChecked())
+            item.setDownsampling(self.downsampleMode())
+            item.setPointMode(self.pointMode())
+            
+            ## Hide older plots if needed
+            self.updateDecimation()
+            
+            ## Add to average if needed
+            self.updateParamList()
+            if self.ctrl.averageGroup.isChecked() and 'skipAverage' not in kargs:
+                self.addAvgCurve(item)
+                
+            #c.connect(c, QtCore.SIGNAL('plotChanged'), self.plotChanged)
+            item.sigPlotChanged.connect(self.plotChanged)
+            self.plotChanged()
+
+    def addDataItem(self, item, *args):
+        print "PlotItem.addDataItem is deprecated. Use addItem instead."
+        self.addItem(item, *args)
         
+    def addCurve(self, c, params=None):
+        print "PlotItem.addCurve is deprecated. Use addItem instead."
+        self.addItem(item, params)
+
+
     def removeItem(self, item):
         if not item in self.items:
             return
@@ -672,7 +709,7 @@ class PlotItem(GraphicsWidget):
             raise Exception('Not sure how to plot object of type %s' % type(data))
             
         #print data, curve
-        self.addCurve(curve, params)
+        self.addItem(curve, params=params)
         if pen is not None:
             curve.setPen(fn.mkPen(pen))
         
@@ -680,39 +717,10 @@ class PlotItem(GraphicsWidget):
 
     def scatterPlot(self, *args, **kargs):
         sp = ScatterPlotItem(*args, **kargs)
-        self.addDataItem(sp)
+        self.addItem(sp)
         return sp
 
-    def addDataItem(self, item):
-        self.addItem(item)
-        self.dataItems.append(item)
-        self.plotChanged()
     
-    def addCurve(self, c, params=None):
-        if params is None:
-            params = {}
-        c.setMeta(params)
-        self.curves.append(c)
-        self.addItem(c)
-        
-        ## configure curve for this plot
-        (alpha, auto) = self.alphaState()
-        c.setAlpha(alpha, auto)
-        c.setSpectrumMode(self.ctrl.powerSpectrumGroup.isChecked())
-        c.setDownsampling(self.downsampleMode())
-        c.setPointMode(self.pointMode())
-        
-        ## Hide older plots if needed
-        self.updateDecimation()
-        
-        ## Add to average if needed
-        self.updateParamList()
-        if self.ctrl.averageGroup.isChecked():
-            self.addAvgCurve(c)
-            
-        #c.connect(c, QtCore.SIGNAL('plotChanged'), self.plotChanged)
-        c.sigPlotChanged.connect(self.plotChanged)
-        self.plotChanged()
 
     def plotChanged(self, curve=None):
         ## Recompute auto range if needed
@@ -1138,7 +1146,7 @@ class PlotItem(GraphicsWidget):
             s.show()
         else:
             s.hide()
-
+            
     def _plotArray(self, arr, x=None, **kargs):
         if arr.ndim != 1:
             raise Exception("Array must be 1D to plot (shape is %s)" % arr.shape)

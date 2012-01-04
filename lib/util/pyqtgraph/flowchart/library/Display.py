@@ -48,10 +48,10 @@ class PlotWidgetNode(Node):
                         items.add(vid)
                     else:
                         if isinstance(val, PlotCurveItem):
-                            self.plot.addCurve(val)
+                            self.plot.addItem(val)
                             item = val
                         if isinstance(val, ScatterPlotItem):
-                            self.plot.addDataItem(val)
+                            self.plot.addItem(val)
                             item = val
                         if isinstance(val, QtGui.QGraphicsItem):
                             self.plot.addItem(val)

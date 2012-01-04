@@ -55,6 +55,12 @@ class PlotCurveItem(GraphicsObject):
         self.setClickable(clickable)
         #self.fps = None
         
+    def implements(self, interface=None):
+        ints = ['plotData']
+        if interface is None:
+            return ints
+        return interface in ints
+    
     def setClickable(self, s):
         self.clickable = s
         
