@@ -2,8 +2,8 @@
 from PyQt4 import QtCore, QtGui
 import pyqtgraph as pg
 import Canvas, FileLoader, DatabaseGui
-import pyqtgraph.DataTreeWidget as DataTreeWidget
-from advancedTypes import OrderedDict
+#import pyqtgraph.widgets.DataTreeWidget as DataTreeWidget
+from collections import OrderedDict
 
 class AnalysisModule(QtCore.QObject):
     """
@@ -68,7 +68,19 @@ class AnalysisModule(QtCore.QObject):
                 self._elements_[name] = Element(name, type=el)
             self._elements_[name].sigObjectChanged.connect(self.elementChanged)
             
-
+    def quit(self):
+        """
+        Called by AnalysisHost when window is closed.
+        Default quit function calls close() on all elements.
+        Module may return False to indicate that it is not ready to quit.
+        """
+        for el in self._elements_.itervalues():
+            if hasattr(el, 'close'):
+                el.close()
+        #self.logBtn.close()
+        return True
+    
+    
     def processData(self, data):
         pass
     
@@ -174,9 +186,9 @@ class Element(QtCore.QObject):
         #elif typ == 'database':
             #obj = DatabaseGui.DatabaseGui(host.dataManager(), **args)
         elif typ == 'table':
-            obj = pg.TableWidget.TableWidget(**args)
+            obj = pg.TableWidget(**args)
         elif typ == 'dataTree':
-            obj = DataTreeWidget.DataTreeWidget(**args)
+            obj = pg.DataTreeWidget(**args)
         elif typ == 'parameterTree':
             obj = pg.parametertree.ParameterTree(**args)
         elif typ == 'graphicsView':

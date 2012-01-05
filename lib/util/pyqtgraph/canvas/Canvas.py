@@ -9,12 +9,14 @@ from CanvasTemplate import *
 #from pyqtgraph.GraphicsView import GraphicsView
 #import pyqtgraph.graphicsItems as graphicsItems
 #from pyqtgraph.PlotWidget import PlotWidget
-from pyqtgraph import widgets
 from pyqtgraph.Qt import QtGui, QtCore
+from pyqtgraph.graphicsItems.ROI import ROI
+from pyqtgraph.graphicsItems.ViewBox import ViewBox
+from pyqtgraph.graphicsItems.GridItem import GridItem
 #import DataManager
 import numpy as np
 import debug
-import pyqtgraph as pg
+#import pyqtgraph as pg
 import weakref
 from CanvasManager import CanvasManager
 #import items
@@ -30,12 +32,14 @@ class Canvas(QtGui.QWidget):
         QtGui.QWidget.__init__(self, parent)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        self.view = self.ui.view
+        #self.view = self.ui.view
+        self.view = ViewBox()
+        self.ui.view.setCentralItem(self.view)
         self.itemList = self.ui.itemList
         self.itemList.setSelectionMode(self.itemList.ExtendedSelection)
         self.allowTransforms = allowTransforms
         self.multiSelectBox = SelectBox()
-        self.scene().addItem(self.multiSelectBox)
+        self.view.addItem(self.multiSelectBox)
         self.multiSelectBox.hide()
         self.multiSelectBox.setZValue(1e6)
         self.ui.mirrorSelectionBtn.hide()
@@ -44,10 +48,11 @@ class Canvas(QtGui.QWidget):
         self.redirect = None  ## which canvas to redirect items to
         self.items = []
         
-        self.view.enableMouse()
+        #self.view.enableMouse()
         self.view.setAspectLocked(True)
+        self.view.invertY()
         
-        grid = pg.GridItem()
+        grid = GridItem()
         self.grid = CanvasItem(grid, name='Grid', movable=False)
         self.addItem(self.grid)
         
@@ -105,25 +110,12 @@ class Canvas(QtGui.QWidget):
         self.resizeEvent()
 
     def autoRange(self):
-        items = []
-        #for i in range(self.itemList.topLevelItemCount()):
-            #name = self.itemList.topLevelItem(i).name
-            #citem = self.items[name]
-        for citem in self.items:
-            if citem.isVisible() and citem is not self.grid:
-                items.append(citem.graphicsItem())
-        if len(items) < 1:
-            return
-        bounds = items[0].sceneBoundingRect()
-        if len(items) > 1:
-            for i in items[1:]:
-                bounds |= i.sceneBoundingRect()
-        self.view.setRange(bounds)
+        self.view.autoRange()
 
     def resizeEvent(self, ev=None):
         if ev is not None:
             QtGui.QWidget.resizeEvent(self, ev)
-        self.hideBtn.move(self.view.size().width() - self.hideBtn.width(), 0)
+        self.hideBtn.move(self.ui.view.size().width() - self.hideBtn.width(), 0)
         
         if not self.sizeApplied:
             self.sizeApplied = True
@@ -257,11 +249,11 @@ class Canvas(QtGui.QWidget):
         ## Get list of selected canvas items
         items = self.selectedItems()
         
-        rect = items[0].graphicsItem().sceneBoundingRect()
+        rect = self.view.itemBoundingRect(items[0].graphicsItem())
         for i in items:
             if not i.isMovable():  ## all items in selection must be movable
                 return
-            br = i.graphicsItem().sceneBoundingRect()
+            br = self.view.itemBoundingRect(i.graphicsItem())
             rect = rect|br
             
         self.multiSelectBox.blockSignals(True)
@@ -357,7 +349,7 @@ class Canvas(QtGui.QWidget):
             
         ## determine parent list item where this item should be inserted
         parent = citem.parentItem()
-        if parent is None:
+        if parent in (None, self.view.childGroup):
             parent = self.itemList.invisibleRootItem()
         else:
             parent = parent.listItem
@@ -451,7 +443,7 @@ class Canvas(QtGui.QWidget):
     def treeItemMoved(self, item, parent, index):
         ##Item moved in tree; update Z values
         if parent is self.itemList.invisibleRootItem():
-            item.canvasItem.setParentItem(None)
+            item.canvasItem.setParentItem(self.view.childGroup)
         else:
             item.canvasItem.setParentItem(parent.canvasItem)
         siblings = [parent.child(i).canvasItem for i in xrange(parent.childCount())]
@@ -506,16 +498,16 @@ class Canvas(QtGui.QWidget):
             #del self.items[item.name]
             self.items.remove(item)
         else:
-            self.view.scene().removeItem(item)
+            self.view.removeItem(item)
         
         ## disconnect signals, remove from list, etc..
         
 
     def addToScene(self, item):
-        self.view.scene().addItem(item)
+        self.view.addItem(item)
         
     def removeFromScene(self, item):
-        self.view.scene().removeItem(item)
+        self.view.removeItem(item)
 
     
     def listItems(self):
@@ -525,8 +517,8 @@ class Canvas(QtGui.QWidget):
     def getListItem(self, name):
         return self.items[name]
         
-    def scene(self):
-        return self.view.scene()
+    #def scene(self):
+        #return self.view.scene()
         
     def itemTransformChanged(self, item):
         #self.emit(QtCore.SIGNAL('itemTransformChanged'), self, item)
@@ -538,10 +530,10 @@ class Canvas(QtGui.QWidget):
         
 
 
-class SelectBox(widgets.ROI):
+class SelectBox(ROI):
     def __init__(self, scalable=False):
         #QtGui.QGraphicsRectItem.__init__(self, 0, 0, size[0], size[1])
-        widgets.ROI.__init__(self, [0,0], [1,1])
+        ROI.__init__(self, [0,0], [1,1])
         center = [0.5, 0.5]
             
         if scalable:

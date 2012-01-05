@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from pyqtgraph.Qt import QtCore, QtGui
 import weakref
+from pyqtgraph.graphicsItems.GraphicsObject import GraphicsObject
 #from PySide import QtCore, QtGui
 from eq import *
 
@@ -25,7 +26,7 @@ class Terminal:
         self._name = name
         self._renamable = renamable
         self._connections = {}
-        self._graphicsItem = TerminalGraphicsItem(self)
+        self._graphicsItem = TerminalGraphicsItem(self, parent=self._node().graphicsItem())
         self._bypass = bypass
         
         if multi:
@@ -160,25 +161,32 @@ class Terminal:
         return set([t.node() for t in self.connections() if t.isInput()])
         
     def connectTo(self, term, connectionItem=None):
-        if self.connectedTo(term):
-            raise Exception('Already connected')
-        if term is self:
-            raise Exception('Not connecting terminal to self')
-        if term.node() is self.node():
-            raise Exception("Can't connect to terminal on same node.")
-        for t in [self, term]:
-            if t.isInput() and not t._multi and len(t.connections()) > 0:
-                raise Exception("Cannot connect %s <-> %s: Terminal %s is already connected to %s (and does not allow multiple connections)" % (self, term, t, t.connections().keys()))
-        #if self.hasInput() and term.hasInput():
-            #raise Exception('Target terminal already has input')
+        try:
+            if self.connectedTo(term):
+                raise Exception('Already connected')
+            if term is self:
+                raise Exception('Not connecting terminal to self')
+            if term.node() is self.node():
+                raise Exception("Can't connect to terminal on same node.")
+            for t in [self, term]:
+                if t.isInput() and not t._multi and len(t.connections()) > 0:
+                    raise Exception("Cannot connect %s <-> %s: Terminal %s is already connected to %s (and does not allow multiple connections)" % (self, term, t, t.connections().keys()))
+            #if self.hasInput() and term.hasInput():
+                #raise Exception('Target terminal already has input')
             
-        #if term in self.node().terminals.values():
-            #if self.isOutput() or term.isOutput():
-                #raise Exception('Can not connect an output back to the same node.')
-        
+            #if term in self.node().terminals.values():
+                #if self.isOutput() or term.isOutput():
+                    #raise Exception('Can not connect an output back to the same node.')
+        except:
+            if connectionItem is not None:
+                connectionItem.close()
+            raise
+            
         if connectionItem is None:
             connectionItem = ConnectionItem(self.graphicsItem(), term.graphicsItem())
-            self.graphicsItem().scene().addItem(connectionItem)
+            #self.graphicsItem().scene().addItem(connectionItem)
+            self.graphicsItem().getViewBox().addItem(connectionItem)
+            #connectionItem.setParentItem(self.graphicsItem().parent().parent())
         self._connections[term] = connectionItem
         term._connections[self] = connectionItem
         
@@ -197,7 +205,9 @@ class Terminal:
         if not self.connectedTo(term):
             return
         item = self._connections[term]
-        item.scene().removeItem(item)
+        #print "removing connection", item
+        #item.scene().removeItem(item)
+        item.close()
         del self._connections[term]
         del term._connections[self]
         self.recolor()
@@ -209,6 +219,7 @@ class Terminal:
             #term.inputChanged(self)
         #if term.isInput() and term.isOutput():
             #self.inputChanged(term)
+            
         
     def disconnectAll(self):
         for t in self._connections.keys():
@@ -268,10 +279,13 @@ class Terminal:
         return {'io': self._io, 'multi': self._multi, 'optional': self._optional}
 
 
-class TerminalGraphicsItem(QtGui.QGraphicsItem):
+#class TerminalGraphicsItem(QtGui.QGraphicsItem):
+class TerminalGraphicsItem(GraphicsObject):
+    
     def __init__(self, term, parent=None):
         self.term = term
-        QtGui.QGraphicsItem.__init__(self, parent)
+        #QtGui.QGraphicsItem.__init__(self, parent)
+        GraphicsObject.__init__(self, parent)
         self.box = QtGui.QGraphicsRectItem(0, 0, 10, 10, self)
         self.label = QtGui.QGraphicsTextItem(self.term.name(), self)
         self.label.scale(0.7, 0.7)
@@ -282,6 +296,9 @@ class TerminalGraphicsItem(QtGui.QGraphicsItem):
             self.label.setTextInteractionFlags(QtCore.Qt.TextEditorInteraction)
             self.label.focusOutEvent = self.labelFocusOut
             self.label.keyPressEvent = self.labelKeyPress
+        self.setZValue(20)
+        self.menu = None
+            
 
     def labelFocusOut(self, ev):
         QtGui.QGraphicsTextItem.focusOutEvent(self.label, ev)
@@ -335,34 +352,68 @@ class TerminalGraphicsItem(QtGui.QGraphicsItem):
             c.updateLine()
             
     def mousePressEvent(self, ev):
+        #ev.accept()
+        ev.ignore()
+
+    def mouseClickEvent(self, ev):
         ev.accept()
-        
-    def mouseMoveEvent(self, ev):
-        if self.newConnection is None:
-            self.newConnection = ConnectionItem(self)
-            self.scene().addItem(self.newConnection)
-        self.newConnection.setTarget(ev.scenePos())
-        
-    def mouseReleaseEvent(self, ev):
-        if self.newConnection is not None:
-            items = self.scene().items(ev.scenePos())
-            gotTarget = False
-            for i in items:
-                if isinstance(i, TerminalGraphicsItem):
-                    self.newConnection.setTarget(i)
-                    try:
-                        self.term.connectTo(i.term, self.newConnection)
-                        gotTarget = True
-                    except:
-                        self.scene().removeItem(self.newConnection)
-                        self.newConnection = None
-                        raise
-                    break
+        self.label.setFocus(QtCore.Qt.MouseFocusReason)
+        if ev.button() == QtCore.Qt.RightButton:
+            self.raiseContextMenu(ev)
             
-            if not gotTarget:
-                #print "remove unused connection"
-                self.scene().removeItem(self.newConnection)
-            self.newConnection = None
+    def raiseContextMenu(self, ev):
+        menu = self.scene().addSubContextMenus(self, self.getMenu())
+        pos = ev.screenPos()
+        menu.popup(QtCore.QPoint(pos.x(), pos.y()))
+        
+    def getMenu(self):
+        if self.menu is None:
+            self.menu = QtGui.QMenu()
+            self.menu.setTitle("Terminal")
+            self.menu.addAction("Remove terminal", self.removeSelf)
+        return self.menu
+    
+    def getSubMenus(self):
+        return [self.getMenu()]
+    
+    def removeSelf(self):
+        self.term.node().removeTerminal(self.term)
+        
+    def mouseDragEvent(self, ev):
+        ev.accept()
+        if ev.isStart():
+            if self.newConnection is None:
+                self.newConnection = ConnectionItem(self)
+                #self.scene().addItem(self.newConnection)
+                self.getViewBox().addItem(self.newConnection)
+                #self.newConnection.setParentItem(self.parent().parent())
+
+            self.newConnection.setTarget(self.mapToView(ev.pos()))
+        elif ev.isFinish():
+            if self.newConnection is not None:
+                items = self.scene().items(ev.scenePos())
+                gotTarget = False
+                for i in items:
+                    if isinstance(i, TerminalGraphicsItem):
+                        self.newConnection.setTarget(i)
+                        try:
+                            self.term.connectTo(i.term, self.newConnection)
+                            gotTarget = True
+                        except:
+                            self.scene().removeItem(self.newConnection)
+                            self.newConnection = None
+                            raise
+                        break
+                
+                if not gotTarget:
+                    #print "remove unused connection"
+                    #self.scene().removeItem(self.newConnection)
+                    self.newConnection.close()
+                self.newConnection = None
+        else:
+            if self.newConnection is not None:
+                self.newConnection.setTarget(self.mapToView(ev.pos()))
+        
         
     def hoverEnterEvent(self, ev):
         self.hover = True
@@ -371,16 +422,19 @@ class TerminalGraphicsItem(QtGui.QGraphicsItem):
         self.hover = False
         
     def connectPoint(self):
-        return self.box.sceneBoundingRect().center()
+        return self.mapToView(self.mapFromItem(self.box, self.box.boundingRect().center()))
 
     def nodeMoved(self):
         for t, item in self.term.connections().iteritems():
             item.updateLine()
 
 
-class ConnectionItem(QtGui.QGraphicsItem):
+#class ConnectionItem(QtGui.QGraphicsItem):
+class ConnectionItem(GraphicsObject):
+    
     def __init__(self, source, target=None):
-        QtGui.QGraphicsItem.__init__(self)
+        #QtGui.QGraphicsItem.__init__(self)
+        GraphicsObject.__init__(self)
         self.setFlags(
             self.ItemIsSelectable | 
             self.ItemIsFocusable
@@ -388,8 +442,14 @@ class ConnectionItem(QtGui.QGraphicsItem):
         self.source = source
         self.target = target
         self.line = QtGui.QGraphicsLineItem(self)
+        self.source.getViewBox().addItem(self.line)
         self.updateLine()
-        self.setZValue(-10)
+        self.setZValue(0)
+        
+    def close(self):
+        if self.scene() is not None:
+            self.scene().removeItem(self.line)
+            self.scene().removeItem(self)
         
     def setTarget(self, target):
         self.target = target
@@ -413,6 +473,18 @@ class ConnectionItem(QtGui.QGraphicsItem):
             ev.accept()
         else:
             ev.ignore()
+    
+    def mousePressEvent(self, ev):
+        ev.ignore()
+        
+    def mouseClickEvent(self, ev):
+        if ev.button() == QtCore.Qt.LeftButton:
+            ev.accept()
+            sel = self.isSelected()
+            self.setSelected(True)
+            if not sel and self.isSelected():
+                self.update()
+        
         
     def boundingRect(self):
         return self.line.boundingRect()
@@ -424,6 +496,9 @@ class ConnectionItem(QtGui.QGraphicsItem):
         if self.isSelected():
             pen = QtGui.QPen(QtGui.QColor(200, 200, 0), 3)
         else:
-            pen = QtGui.QPen(QtGui.QColor(0, 0, 0), 1)
+            pen = QtGui.QPen(QtGui.QColor(100, 100, 250), 1)
         if self.line.pen() != pen:
             self.line.setPen(pen)
+            
+        #p.setPen(QtGui.QPen(QtGui.QColor(250,0,0)))
+        #p.drawPath(self.line.shape())

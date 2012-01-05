@@ -43,8 +43,8 @@ def fileDialog():
 ## the built in logspace function is pretty much useless.
 def logSpace(start, stop, num):
     num = int(num)
-    d = (stop / start) ** (1./num)
-    return start * (d ** np.arange(0, num+1))
+    d = (stop / start) ** (1./(num-1))
+    return start * (d ** np.arange(0, num))
 
 def linSpace(start, stop, num):
     return np.linspace(start, stop, num)
@@ -1908,8 +1908,10 @@ def suggestDType(x):
         return x.dtype
     elif isinstance(x, float):
         return float
-    elif isinstance(x, int):
+    elif isinstance(x, int) or isinstance(x, long):
         return int
+    #elif isinstance(x, basestring):  ## don't try to guess correct string length; use object instead.
+        #return '<U%d' % len(x)
     else:
         return object
     

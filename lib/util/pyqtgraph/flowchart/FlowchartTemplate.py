@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/util/pyqtgraph/flowchart/FlowchartTemplate.ui'
 #
-# Created: Fri Dec  2 19:52:53 2011
+# Created: Wed Jan  4 18:01:38 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -55,5 +55,5 @@ class Ui_Form(object):
     def retranslateUi(self, Form):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
 
-from .. DataTreeWidget import DataTreeWidget
+from pyqtgraph.widgets.DataTreeWidget import DataTreeWidget
 from FlowchartGraphicsView import FlowchartGraphicsView

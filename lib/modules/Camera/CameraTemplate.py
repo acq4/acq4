@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/modules/Camera/CameraTemplate.ui'
 #
-# Created: Fri Dec  2 19:52:50 2011
+# Created: Wed Jan  4 18:01:34 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -24,14 +24,9 @@ class Ui_MainWindow(object):
         self.horizontalLayout_3.setSpacing(0)
         self.horizontalLayout_3.setMargin(0)
         self.horizontalLayout_3.setObjectName(_fromUtf8("horizontalLayout_3"))
-        self.graphicsWidget = QtGui.QWidget(self.centralwidget)
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
-        sizePolicy.setHorizontalStretch(10)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.graphicsWidget.sizePolicy().hasHeightForWidth())
-        self.graphicsWidget.setSizePolicy(sizePolicy)
-        self.graphicsWidget.setObjectName(_fromUtf8("graphicsWidget"))
-        self.horizontalLayout_3.addWidget(self.graphicsWidget)
+        self.graphicsView = GraphicsView(self.centralwidget)
+        self.graphicsView.setObjectName(_fromUtf8("graphicsView"))
+        self.horizontalLayout_3.addWidget(self.graphicsView)
         MainWindow.setCentralWidget(self.centralwidget)
         self.statusbar = QtGui.QStatusBar(MainWindow)
         self.statusbar.setObjectName(_fromUtf8("statusbar"))
@@ -406,8 +401,5 @@ class Ui_MainWindow(object):
 "(by pressing \'Static\' above) or \'Continuous\' needs to be pressed.", None, QtGui.QApplication.UnicodeUTF8))
         self.divideBgBtn.setText(QtGui.QApplication.translate("MainWindow", "Divide Background", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.PlotWidget import PlotWidget
-from pyqtgraph.SpinBox import SpinBox
+from pyqtgraph import SpinBox, GradientWidget, GraphicsView, PlotWidget
 from FeedbackButton import FeedbackButton
-from pyqtgraph.GradientWidget import GradientWidget
-from pyqtgraph.GraphicsView import GraphicsView

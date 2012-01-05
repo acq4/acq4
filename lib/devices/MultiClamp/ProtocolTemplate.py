@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/devices/MultiClamp/ProtocolTemplate.ui'
 #
-# Created: Fri Dec  2 19:52:49 2011
+# Created: Wed Jan  4 18:01:33 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -171,5 +171,4 @@ class Ui_Form(object):
         self.waveGeneratorLabel.setText(QtGui.QApplication.translate("Form", "Command Function (A)", None, QtGui.QApplication.UnicodeUTF8))
 
 from generator.StimGenerator import StimGenerator
-from pyqtgraph.PlotWidget import PlotWidget
-from pyqtgraph.SpinBox import SpinBox
+from pyqtgraph import SpinBox, PlotWidget

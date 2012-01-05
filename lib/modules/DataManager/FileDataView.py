@@ -3,8 +3,9 @@
 from PyQt4 import QtCore, QtGui
 from DataManager import *
 #import lib.Manager as Manager
-from pyqtgraph.MultiPlotWidget import MultiPlotWidget
-from pyqtgraph.ImageView import ImageView
+import pyqtgraph as pg
+#from pyqtgraph.MultiPlotWidget import MultiPlotWidget
+#from pyqtgraph.ImageView import ImageView
 from DictView import *
 import metaarray
 import weakref
@@ -62,7 +63,7 @@ class FileDataView(QtGui.QSplitter):
                     raise
             else:
                 self.clear()
-                w = ImageView(self)
+                w = pg.ImageView(self)
                 #print "add image:", w.ui.roiPlot.plotItem
                 #self.plots = [weakref.ref(w.ui.roiPlot.plotItem)]
                 self.addWidget(w)
@@ -71,7 +72,7 @@ class FileDataView(QtGui.QSplitter):
             self.currentType = 'image'
         else:
             self.clear()
-            w = MultiPlotWidget(self)
+            w = pg.MultiPlotWidget(self)
             self.addWidget(w)
             w.plot(data)
             self.currentType = 'plot'

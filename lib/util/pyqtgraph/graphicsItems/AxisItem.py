@@ -4,8 +4,10 @@ from pyqtgraph.Point import Point
 import pyqtgraph.debug as debug
 import weakref
 import pyqtgraph.functions as fn
+from GraphicsWidget import GraphicsWidget
 
-class AxisItem(QtGui.QGraphicsWidget):
+__all__ = ['AxisItem']
+class AxisItem(GraphicsWidget):
     def __init__(self, orientation, pen=None, linkView=None, parent=None, maxTickLength=-5):
         """
         GraphicsItem showing a single plot axis with ticks, values, and label.
@@ -14,7 +16,7 @@ class AxisItem(QtGui.QGraphicsWidget):
         """
         
         
-        QtGui.QGraphicsWidget.__init__(self, parent)
+        GraphicsWidget.__init__(self, parent)
         self.label = QtGui.QGraphicsTextItem(self)
         self.orientation = orientation
         if orientation not in ['left', 'right', 'top', 'bottom']:
@@ -382,14 +384,14 @@ class AxisItem(QtGui.QGraphicsWidget):
             self.setWidth()
         else:
             self.setHeight()
-        QtGui.QGraphicsWidget.show(self)
+        GraphicsWidget.show(self)
         
     def hide(self):
         if self.orientation in ['left', 'right']:
             self.setWidth(0)
         else:
             self.setHeight(0)
-        QtGui.QGraphicsWidget.hide(self)
+        GraphicsWidget.hide(self)
 
     def wheelEvent(self, ev):
         if self.linkedView is None or self.linkedView() is None: return

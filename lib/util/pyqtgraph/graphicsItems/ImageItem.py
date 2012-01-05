@@ -7,8 +7,10 @@ except:
     pass
 import pyqtgraph.functions as fn
 import pyqtgraph.debug as debug
+from GraphicsObject import GraphicsObject
 
-class ImageItem(QtGui.QGraphicsObject):
+__all__ = ['ImageItem']
+class ImageItem(GraphicsObject):
     """
     GraphicsObject displaying an image. Optimized for rapid update (ie video display)
     
@@ -22,7 +24,7 @@ class ImageItem(QtGui.QGraphicsObject):
     
     def __init__(self, image=None, copy=True, parent=None, border=None, mode=None, *args):
         #QObjectWorkaround.__init__(self)
-        QtGui.QGraphicsObject.__init__(self)
+        GraphicsObject.__init__(self)
         #self.pixmapItem = QtGui.QGraphicsPixmapItem(self)
         self.qimage = QtGui.QImage()
         self.pixmap = None

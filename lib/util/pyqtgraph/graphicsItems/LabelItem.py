@@ -1,21 +1,22 @@
 from pyqtgraph.Qt import QtGui, QtCore
 import pyqtgraph.functions as fn
+from GraphicsWidget import GraphicsWidget
 
 
+__all__ = ['LabelItem']
 
-class LabelItem(QtGui.QGraphicsWidget):
+class LabelItem(GraphicsWidget):
     """
     GraphicsWidget displaying text.
     Used mainly as axis labels, titles, etc.
     
     Note: To display text inside a scaled view (ViewBox, PlotWidget, etc) use QGraphicsTextItem
-          with the ItemIgnoresTransformations set.
-    
+          with the flag ItemIgnoresTransformations set.
     """
     
     
     def __init__(self, text, parent=None, **args):
-        QtGui.QGraphicsWidget.__init__(self, parent)
+        GraphicsWidget.__init__(self, parent)
         self.item = QtGui.QGraphicsTextItem(self)
         self.opts = args
         if 'color' not in args:

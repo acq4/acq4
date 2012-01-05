@@ -1,16 +1,18 @@
 from pyqtgraph.Qt import QtGui, QtCore
 import pyqtgraph.functions as fn
-from ViewBox import ViewBox
-from PlotItem import PlotItem
+from GraphicsWidget import GraphicsWidget
 
-class GraphicsLayout(QtGui.QGraphicsWidget):
+__all__ = ['GraphicsLayout']
+class GraphicsLayout(GraphicsWidget):
     """
     Used for laying out GraphicsWidgets in a grid.
     """
 
 
     def __init__(self, parent=None, border=None):
-        QtGui.QGraphicsWidget.__init__(self, parent)
+        GraphicsWidget.__init__(self, parent)
+        if border is True:
+            border = (100,100,100)
         self.border = border
         self.layout = QtGui.QGraphicsGridLayout()
         self.setLayout(self.layout)
@@ -88,3 +90,8 @@ class GraphicsLayout(QtGui.QGraphicsWidget):
         items = []
         for i in self.items.keys():
             self.removeItem(i)
+
+
+## Must be imported at the end to avoid cyclic-dependency hell:
+from ViewBox import ViewBox
+from PlotItem import PlotItem

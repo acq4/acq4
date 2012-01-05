@@ -8,7 +8,7 @@ from PyQt4 import QtCore, QtGui
 import time
 import numpy as np
 from pyqtgraph.WidgetGroup import WidgetGroup
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 from debug import printExc
 from devGuiTemplate import *
 

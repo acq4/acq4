@@ -400,7 +400,7 @@
   <customwidget>
    <class>ImageView</class>
    <extends>QWidget</extends>
-   <header>pyqtgraph.ImageView</header>
+   <header>pyqtgraph</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

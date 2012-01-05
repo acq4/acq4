@@ -8,6 +8,7 @@ from pyqtgraph import debug
 from pyqtgraph.Point import Point
 import struct
 
+__all__ = ['PlotCurveItem']
 class PlotCurveItem(GraphicsObject):
     
     sigPlotChanged = QtCore.Signal(object)
@@ -26,7 +27,7 @@ class PlotCurveItem(GraphicsObject):
         #GraphicsWidget.__init__(self, parent)
         self.free()
         #self.dispPath = None
-        
+        self.path = None
         if pen is None:
             if color is None:
                 self.setPen((200,200,200))
@@ -98,7 +99,7 @@ class PlotCurveItem(GraphicsObject):
     def getRange(self, ax, frac=1.0):
         (x, y) = self.getData()
         if x is None or len(x) == 0:
-            return (0, 1)
+            return (0, 0)
             
         if ax == 0:
             d = x
@@ -294,7 +295,15 @@ class PlotCurveItem(GraphicsObject):
         
         prof.finish()
         return path
-        
+
+    def shape(self):
+        if self.path is None:
+            try:
+                self.path = self.generatePath(*self.getData())
+            except:
+                return QtGui.QPainterPath()
+        return self.path
+
     def boundingRect(self):
         (x, y) = self.getData()
         if x is None or y is None or len(x) == 0 or len(y) == 0:
@@ -369,26 +378,30 @@ class PlotCurveItem(GraphicsObject):
         self.path = None
         #del self.xData, self.yData, self.xDisp, self.yDisp, self.path
         
-    def mousePressEvent(self, ev):
-        #GraphicsObject.mousePressEvent(self, ev)
-        if not self.clickable:
-            ev.ignore()
-        if ev.button() != QtCore.Qt.LeftButton:
-            ev.ignore()
-        self.mousePressPos = ev.pos()
-        self.mouseMoved = False
+    #def mousePressEvent(self, ev):
+        ##GraphicsObject.mousePressEvent(self, ev)
+        #if not self.clickable:
+            #ev.ignore()
+        #if ev.button() != QtCore.Qt.LeftButton:
+            #ev.ignore()
+        #self.mousePressPos = ev.pos()
+        #self.mouseMoved = False
         
-    def mouseMoveEvent(self, ev):
-        #GraphicsObject.mouseMoveEvent(self, ev)
-        self.mouseMoved = True
-        #print "move"
+    #def mouseMoveEvent(self, ev):
+        ##GraphicsObject.mouseMoveEvent(self, ev)
+        #self.mouseMoved = True
+        ##print "move"
         
-    def mouseReleaseEvent(self, ev):
-        #GraphicsObject.mouseReleaseEvent(self, ev)
-        if not self.mouseMoved:
-            self.sigClicked.emit(self)
+    #def mouseReleaseEvent(self, ev):
+        ##GraphicsObject.mouseReleaseEvent(self, ev)
+        #if not self.mouseMoved:
+            #self.sigClicked.emit(self)
 
-
+    def mouseClickEvent(self, ev):
+        if not self.clickable or ev.button() != QtCore.Qt.LeftButton:
+            return
+        ev.accept()
+        self.sigClicked.emit(self)
 
 
 

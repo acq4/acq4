@@ -1,7 +1,9 @@
+from pyqtgraph.Qt import QtGui, QtCore
 from UIGraphicsItem import *
 import numpy as np
 from pyqtgraph.Point import Point
 
+__all__ = ['GridItem']
 class GridItem(UIGraphicsItem):
     """
     Displays a rectangular grid of lines indicating major divisions within a coordinate system.
@@ -11,7 +13,7 @@ class GridItem(UIGraphicsItem):
     def __init__(self):
         UIGraphicsItem.__init__(self)
         #QtGui.QGraphicsItem.__init__(self, *args)
-        self.setFlag(QtGui.QGraphicsItem.ItemClipsToShape)
+        #self.setFlag(QtGui.QGraphicsItem.ItemClipsToShape)
         #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         
         self.picture = None
@@ -25,12 +27,15 @@ class GridItem(UIGraphicsItem):
     def paint(self, p, opt, widget):
         #p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100)))
         #p.drawRect(self.boundingRect())
-        UIGraphicsItem.paint(self, p, opt, widget)
-        ## draw picture
+        #UIGraphicsItem.paint(self, p, opt, widget)
+        ### draw picture
         if self.picture is None:
             #print "no pic, draw.."
             self.generatePicture()
-        p.drawPicture(0, 0, self.picture)
+        p.drawPicture(QtCore.QPointF(0, 0), self.picture)
+        #p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
+        #p.drawLine(0, -100, 0, 100)
+        #p.drawLine(-100, 0, 100, 0)
         #print "drawing Grid."
         
         
@@ -89,6 +94,9 @@ class GridItem(UIGraphicsItem):
                     p2[ax] = p1[ax]
                     p1[bx] = ul[bx]
                     p2[bx] = br[bx]
+                    ## don't draw lines that are out of bounds.
+                    if p1[ax] < min(ul[ax], br[ax]) or p1[ax] > max(ul[ax], br[ax]):
+                        continue
                     p.drawLine(QtCore.QPointF(p1[0], p1[1]), QtCore.QPointF(p2[0], p2[1]))
                     if i < 2:
                         p.setPen(textPen)

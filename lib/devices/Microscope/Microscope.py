@@ -3,7 +3,7 @@ from __future__ import with_statement
 from lib.devices.Device import *
 from deviceTemplate import Ui_Form
 from Mutex import Mutex
-from pyqtgraph.SpinBox import *
+from pyqtgraph import SpinBox
 
 def ftrace(func):
     def w(*args, **kargs):

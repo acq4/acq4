@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 from pyqtgraph.flowchart.Node import Node
-import weakref
-from pyqtgraph import graphicsItems
-from PyQt4 import QtCore, QtGui
 from pyqtgraph.flowchart.library.common import *
+import pyqtgraph as pg
+import weakref
+#from pyqtgraph import graphicsItems
+from PyQt4 import QtCore, QtGui
 import numpy as np
 
 class EventListPlotter(CtrlNode):
@@ -49,8 +50,9 @@ class EventListPlotter(CtrlNode):
                 #self.items[c] = graphicsItems.VTickGroup(events, view=plot, pen=color)
                 #self.items[c].setYRange([0., 0.2], relative=True)
             #self.items[c] = graphicsItems.VTickGroup(events, view=plot, pen=color)
-            self.items[c] = graphicsItems.VTickGroup(events, yrange=[0.8, 1.], pen=color)
+            self.items[c] = pg.VTickGroup(events, yrange=[0.8, 1.], pen=color)
             #self.items[c].setYRange([0., 0.2], relative=True)
+            self.items[c].setZValue(1000)
         return {'plot': self.items}
 
 

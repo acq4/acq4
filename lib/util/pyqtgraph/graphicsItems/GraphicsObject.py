@@ -1,15 +1,23 @@
 from pyqtgraph.Qt import QtGui, QtCore  
+from pyqtgraph.GraphicsScene import GraphicsScene
+from pyqtgraph.Point import Point
 import weakref
 
-
+__all__ = ['GraphicsObject']
 class GraphicsObject(QtGui.QGraphicsObject):
     """Extends QGraphicsObject with a few important functions. 
-    (Most of these assume that the object is in a scene with a single view)"""
+    (Most of these assume that the object is in a scene with a single view)
+    
+    This class also generates a cache of the Qt-internal addresses of each item
+    so that GraphicsScene.items() can return the correct objects (this is a PyQt bug)
+    """
+    
     
     def __init__(self, *args):
         QtGui.QGraphicsObject.__init__(self, *args)
         self._viewWidget = None
         self._viewBox = None
+        GraphicsScene.registerObject(self)  ## workaround for pyqt bug in graphicsscene.items()
     
     def getViewWidget(self):
         """Return the view widget for this item. If the scene has multiple views, only the first view is returned.
@@ -55,7 +63,7 @@ class GraphicsObject(QtGui.QGraphicsObject):
         
         
     def deviceTransform(self, viewportTransform=None):
-        """Return the transform that converts item coordinates to device coordinates.
+        """Return the transform that converts item coordinates to device coordinates (usually pixels).
         Extends deviceTransform to automatically determine the viewportTransform.
         """
         if viewportTransform is None:
@@ -97,7 +105,7 @@ class GraphicsObject(QtGui.QGraphicsObject):
         view = self.getViewBox()
         if view is None:
             return None
-        bounds = self.mapRectFromView(view.viewRect())
+        bounds = self.mapRectFromView(view.viewRect()).normalized()
         
         ## nah.
         #for p in self.getBoundingParents():
@@ -115,6 +123,17 @@ class GraphicsObject(QtGui.QGraphicsObject):
         vt = vt.inverted()[0]
         orig = vt.map(QtCore.QPointF(0, 0))
         return vt.map(QtCore.QPointF(1, 0))-orig, vt.map(QtCore.QPointF(0, 1))-orig
+        
+    def pixelLength(self, direction):
+        """Return the length of one pixel in the direction indicated (in local coordinates)"""
+        dt = self.deviceTransform()
+        if dt is None:
+            return None
+        viewDir = Point(dt.map(direction) - dt.map(Point(0,0)))
+        norm = viewDir.norm()
+        dti = dt.inverted()[0]
+        return Point(dti.map(norm)-dti.map(Point(0,0))).length()
+        
 
     def pixelSize(self):
         v = self.pixelVectors()
@@ -125,14 +144,14 @@ class GraphicsObject(QtGui.QGraphicsObject):
         if vt is None:
             return 0
         vt = vt.inverted()[0]
-        return abs((vt.map(QtCore.QPointF(1, 0))-vt.map(QtCore.QPointF(0, 0))).x())
+        return Point(vt.map(QtCore.QPointF(1, 0))-vt.map(QtCore.QPointF(0, 0))).length()
         
     def pixelHeight(self):
         vt = self.deviceTransform()
         if vt is None:
             return 0
         vt = vt.inverted()[0]
-        return abs((vt.map(QtCore.QPointF(0, 1))-vt.map(QtCore.QPointF(0, 0))).y())
+        return Point(vt.map(QtCore.QPointF(0, 1))-vt.map(QtCore.QPointF(0, 0))).length()
         
         
 
@@ -161,3 +180,45 @@ class GraphicsObject(QtGui.QGraphicsObject):
             return None
         vt = vt.inverted()[0]
         return vt.mapRect(obj)
+
+    def pos(self):
+        return Point(QtGui.QGraphicsObject.pos(self))
+    
+    def viewPos(self):
+        return self.mapToView(self.pos())
+    
+    #def itemChange(self, change, value):
+        #ret = QtGui.QGraphicsObject.itemChange(self, change, value)
+        #if change == self.ItemParentHasChanged or change == self.ItemSceneHasChanged:
+            #print "Item scene changed:", self
+            #self.setChildScene(self)  ## This is bizarre. 
+        #return ret
+    
+    #def setChildScene(self, ch):
+        #scene = self.scene()
+        #for ch2 in ch.childItems():
+            #if ch2.scene() is not scene:
+                #print "item", ch2, "has different scene:", ch2.scene(), scene
+                #scene.addItem(ch2)
+                #QtGui.QApplication.processEvents()
+                #print "   --> ", ch2.scene()
+            #self.setChildScene(ch2)
+            
+    def parentItem(self):
+        ## PyQt bug -- some items are returned incorrectly.
+        return GraphicsScene.translateGraphicsItem(QtGui.QGraphicsObject.parentItem(self))
+        
+    
+    def childItems(self):
+        ## PyQt bug -- some child items are returned incorrectly.
+        return map(GraphicsScene.translateGraphicsItem, QtGui.QGraphicsObject.childItems(self))
+
+
+    def sceneTransform(self):
+        ## Qt bug: do no allow access to sceneTransform() until 
+        ## the item has a scene.
+        
+        if self.scene() is None:
+            return self.transform()
+        else:
+            return QtGui.QGraphicsObject.sceneTransform(self)

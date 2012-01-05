@@ -6,7 +6,7 @@ relationships from current clamp data.
 """
 from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import pyqtgraph as pg
 from metaarray import MetaArray
 import numpy, scipy.signal
@@ -53,8 +53,8 @@ class IVCurve(AnalysisModule):
         self.IVScatterPlot_ss = pg.ScatterPlotItem(size=6, pen=pg.mkPen('w'), brush=pg.mkBrush(255, 255, 255, 255), identical=True)
         self.IVScatterPlot_pk = pg.ScatterPlotItem(size=6, pen=pg.mkPen('r'), brush=pg.mkBrush(255, 0, 0, 255), identical=True)
 
-        self.lrss = pg.LinearRegionItem(self.data_plot, 'vertical', [0, 1])
-        self.lrpk = pg.LinearRegionItem(self.data_plot, 'vertical', [0, 1])
+        self.lrss = pg.LinearRegionItem([0, 1])
+        self.lrpk = pg.LinearRegionItem([0, 1])
         self.data_plot.addItem(self.lrss)
         self.data_plot.addItem(self.lrpk)
         self.ctrl.IVCurve_ssTStart.setSuffix(' ms')
@@ -116,7 +116,7 @@ class IVCurve(AnalysisModule):
                 data.infoCopy('Time'), 
                 data.infoCopy(-1)]
             self.traces = MetaArray(traces, info=info)
-            cmdtimes = numpy.argwhere(cmd[1:]-cmd[:-1] != 0)
+            cmdtimes = numpy.argwhere(cmd[1:]-cmd[:-1] != 0)[:,0]
             self.tstart = cmd.xvals('Time')[cmdtimes[0]]
             self.tend = cmd.xvals('Time')[cmdtimes[1]]
             self.tdur = self.tend - self.tstart
@@ -167,7 +167,7 @@ class IVCurve(AnalysisModule):
             self.fiScatterPlot = pg.ScatterPlotItem(size=10, pen=pg.mkPen('b'), brush=pg.mkBrush(0, 0, 255, 200), 
                 style='s', identical=True)
             self.fslScatterPlot = pg.ScatterPlotItem(size=6, pen=pg.mkPen('g'), brush=pg.mkBrush(0, 255, 0, 200), 
-                style = 'o', identical=True)
+                style = 't', identical=True)
             self.fisiScatterPlot = pg.ScatterPlotItem(size=6, pen=pg.mkPen('y'), brush=pg.mkBrush(255, 255, 0, 200),
                 style = 's', identical=True)
             self.fiPlot.plot(x=current*1e12, y = self.spikecount, clear=True)
@@ -180,7 +180,8 @@ class IVCurve(AnalysisModule):
             self.fiPlot.addItem(self.fiScatterPlot)
             self.fslPlot.addItem(self.fslScatterPlot)
             self.fslPlot.addItem(self.fisiScatterPlot)
-            self.fslPlot.setXRange(0.0, numpy.max(self.spcmd*iscale))
+            if len(self.spcmd) > 0:
+                self.fslPlot.setXRange(0.0, numpy.max(self.spcmd*iscale))
             self.lrss.setRegion([(self.tend-(self.tdur/2.0)), self.tend]) # steady-state
             self.lrpk.setRegion([self.tstart, self.tstart+(self.tdur/5.0)]) # "peak" during hyperpolarization
             

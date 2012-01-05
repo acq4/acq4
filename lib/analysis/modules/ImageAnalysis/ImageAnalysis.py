@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import pyqtgraph as pg
 from metaarray import MetaArray
 import numpy as np
@@ -45,7 +45,7 @@ class ImageAnalysis(AnalysisModule):
         #self.traces = None
         self.plot = self.getElement('Time Plot', create=True)
         self.plot2 = self.getElement('Trial Plot', create=True)
-        self.lr = pg.LinearRegionItem(self.plot, 'vertical', [0, 1])
+        self.lr = pg.LinearRegionItem([0, 1])
         self.plot.addItem(self.lr)
         
         self.view = self.getElement('Image', create=True)

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/util/Canvas/items/ScanCanvasItemTemplate.ui'
 #
-# Created: Fri Dec  2 19:52:51 2011
+# Created: Wed Jan  4 18:01:36 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -76,4 +76,4 @@ class Ui_Form(object):
         self.label.setText(QtGui.QApplication.translate("Form", "Spot Frame Number", None, QtGui.QApplication.UnicodeUTF8))
         self.bgFrameCheck.setText(QtGui.QApplication.translate("Form", "Background Frame", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.SpinBox import SpinBox
+from pyqtgraph import SpinBox

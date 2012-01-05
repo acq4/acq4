@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 import pyqtgraph as pg
-import pyqtgraph.TreeWidget as TreeWidget
-import pyqtgraph.flowchart.library.EventDetection as FCEventDetection
+#import pyqtgraph.TreeWidget as TreeWidget
+import flowchart.EventDetection as FCEventDetection
 import debug
 
 class ScatterPlotter(QtGui.QSplitter):
@@ -21,7 +21,7 @@ class ScatterPlotter(QtGui.QSplitter):
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.ctrl.setLayout(self.layout)
         
-        self.scanList = TreeWidget.TreeWidget()
+        self.scanList = pg.TreeWidget()
         self.layout.addWidget(self.scanList)
         
         self.filter = FCEventDetection.EventFilter('eventFilter')
@@ -33,11 +33,11 @@ class ScatterPlotter(QtGui.QSplitter):
         self.layout.addWidget(self.yCombo)
         
         self.columns = []
-        self.scans = {}    ## maps scan: (scatterPlotItem, treeItem)
+        self.scans = {}    ## maps scan: (scatterPlotItem, treeItem, valid)
         
-        self.xCombo.currentIndexChanged.connect(self.updateAll)
-        self.yCombo.currentIndexChanged.connect(self.updateAll)
-        self.filter.sigStateChanged.connect(self.updateAll)
+        self.xCombo.currentIndexChanged.connect(self.invalidate)
+        self.yCombo.currentIndexChanged.connect(self.invalidate)
+        self.filter.sigStateChanged.connect(self.invalidate)
         self.scanList.itemChanged.connect(self.itemChanged)
 
     def itemChanged(self, item, col):
@@ -46,12 +46,17 @@ class ScatterPlotter(QtGui.QSplitter):
             gi.show()
         else:
             gi.hide()
+        self.updateAll()
 
-
+    def invalidate(self):  ## mark all scans as invalid and update
+        for s in self.scans:
+            self.scans[s][2] = False
+        self.updateAll()
 
     def addScan(self, scanDict):
         plot = pg.ScatterPlotItem(pen=QtGui.QPen(QtCore.Qt.NoPen), brush=pg.mkBrush((255, 255, 255, 100)))
         self.plot.addDataItem(plot)
+        plot.sigClicked.connect(self.plotClicked)
         
         if not isinstance(scanDict, dict):
             scanDict = {'key':scanDict}
@@ -61,12 +66,18 @@ class ScatterPlotter(QtGui.QSplitter):
             item.setCheckState(0, QtCore.Qt.Checked)
             item.scan = scan
             self.scanList.addTopLevelItem(item)
-            self.scans[scan] = (plot, item)
+            self.scans[scan] = [plot, item, False]
             self.updateScan(scan)
-            scan.sigEventsChanged.connect(self.updateScan)
-    
+            scan.sigEventsChanged.connect(self.invalidateScan)
+
+    def invalidateScan(self, scan):
+        self.scans[scan][2] = False
+        self.updateScan(scan)
+
     def updateScan(self, scan):
         try:
+            if self.scans[scan] is True:
+                return
             self.updateColumns(scan)
             x, y = self.getAxes()
             plot = self.scans[scan][0]
@@ -82,14 +93,14 @@ class ScatterPlotter(QtGui.QSplitter):
             pts = [{'pos': (data['output'][i][x], data['output'][i][y]), 'data': (scan, data['output'][i]['SourceFile'], data['output'][i]['fitTime'])} for i in xrange(len(data['output']))]
             plot.setPoints(pts)
             #print pts
-            plot.sigClicked.connect(self.plotClicked)
+            self.scans[scan][2] = True  ## plot is valid
         except:
             pass
             #debug.printExc("Error updating scatter plot:")
         
     def plotClicked(self, plot, points):
         self.sigClicked.emit(self, points)
-    
+
     def updateAll(self):
         for s in self.scans:
             if self.scans[s][1].checkState(0) == QtCore.Qt.Checked:

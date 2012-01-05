@@ -6,7 +6,7 @@ import ScanCanvasItemTemplate
 import lib.Manager
 import pyqtgraph as pg
 import numpy as np
-import pyqtgraph.ProgressDialog as ProgressDialog
+#import pyqtgraph.ProgressDialog as ProgressDialog
 
 class ScanCanvasItem(CanvasItem):
     def __init__(self, **opts):
@@ -189,7 +189,7 @@ class ScanCanvasItem(CanvasItem):
         images = []
         handles = []
         nulls = []
-        with ProgressDialog.ProgressDialog("Loading scan images..", 0, len(dirs)) as dlg:
+        with pg.ProgressDialog("Loading scan images..", 0, len(dirs)) as dlg:
             for d in dirs:
                 if 'Camera' not in d.subDirs():
                     continue

@@ -1,5 +1,5 @@
 from pyqtgraph.Qt import QtCore, QtGui
-from pyqtgraph.TreeWidget import TreeWidget
+from pyqtgraph.widgets.TreeWidget import TreeWidget
 import collections, os, weakref, re
 #import functions as fn
         

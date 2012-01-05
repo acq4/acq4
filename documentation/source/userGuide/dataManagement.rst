@@ -14,7 +14,8 @@ Meta Information
 User-defined Folder Types
 -------------------------
 
-
+.. _UserGuide/dataManagement/logging:
+    
 Notes and Logs
 --------------
 

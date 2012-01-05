@@ -25,8 +25,8 @@ class FileLogView(LogWidget):
         self.currentLogDir = None ## will be set to a dh when a file is selected in Data Manager
         self.mod = mod
         
-    def clear(self):
-        self.ui.output.clear()
+    #def clear(self):
+        #self.ui.logView.clear()
         #pass
     
     def selectedFileChanged(self, dh):

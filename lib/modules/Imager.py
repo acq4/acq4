@@ -2,7 +2,7 @@
 
 from lib.modules.Module import Module
 from PyQt4 import QtGui, QtCore
-from pyqtgraph.ImageView import ImageView
+from pyqtgraph import ImageView
 import pyqtgraph as PG
 import InterfaceCombo
 import pyqtgraph.parametertree as PT

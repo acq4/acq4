@@ -21,14 +21,17 @@ This class is very heavily featured:
 from plotConfigTemplate import *
 from pyqtgraph.Qt import QtGui, QtCore, QtSvg
 import pyqtgraph.functions as fn
-from pyqtgraph.FileDialog import FileDialog
+from pyqtgraph.widgets.FileDialog import FileDialog
 import weakref
+from types import *
 import numpy as np
 from .. PlotCurveItem import PlotCurveItem
 from .. ScatterPlotItem import ScatterPlotItem
 from .. ViewBox import ViewBox
 from .. AxisItem import AxisItem
 from .. LabelItem import LabelItem
+from .. GraphicsWidget import GraphicsWidget
+from .. ButtonItem import ButtonItem
 from pyqtgraph.WidgetGroup import WidgetGroup
 
 __all__ = ['PlotItem']
@@ -46,7 +49,9 @@ except:
     HAVE_METAARRAY = False
 
 
-class PlotItem(QtGui.QGraphicsWidget):
+
+
+class PlotItem(GraphicsWidget):
     
     sigYRangeChanged = QtCore.Signal(object, object)
     sigXRangeChanged = QtCore.Signal(object, object)
@@ -57,28 +62,28 @@ class PlotItem(QtGui.QGraphicsWidget):
     managers = {}
     
     def __init__(self, parent=None, name=None, labels=None, **kargs):
-        QtGui.QGraphicsWidget.__init__(self, parent)
+        GraphicsWidget.__init__(self, parent)
         
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         ## Set up control buttons
         
-        self.ctrlBtn = QtGui.QToolButton()
-        self.ctrlBtn.setText('?')
-        self.autoBtn = QtGui.QToolButton()
-        self.autoBtn.setText('A')
-        #self.autoBtn.hide()
-        self.proxies = []
-        for b in [self.ctrlBtn, self.autoBtn]:
-            proxy = QtGui.QGraphicsProxyWidget(self)
-            proxy.setWidget(b)
-            proxy.setAcceptHoverEvents(False)
-            b.setStyleSheet("background-color: #000000; color: #888; font-size: 6pt")
-            self.proxies.append(proxy)
-        #QtCore.QObject.connect(self.ctrlBtn, QtCore.SIGNAL('clicked()'), self.ctrlBtnClicked)
+        #self.ctrlBtn = QtGui.QToolButton()
+        #self.ctrlBtn.setText('?')
+        #self.autoBtn = QtGui.QToolButton()
+        #self.autoBtn.setText('A')
+        ##self.autoBtn.hide()
+        #self.proxies = []
+        #for b in [self.ctrlBtn, self.autoBtn]:
+            #proxy = QtGui.QGraphicsProxyWidget(self)
+            #proxy.setWidget(b)
+            #proxy.setAcceptHoverEvents(False)
+            #b.setStyleSheet("background-color: #000000; color: #888; font-size: 6pt")
+            #self.proxies.append(proxy)
+        path = os.path.dirname(__file__)
+        self.ctrlBtn = ButtonItem(os.path.join(path, 'ctrl.png'), 14, self)
         self.ctrlBtn.clicked.connect(self.ctrlBtnClicked)
-        #QtCore.QObject.connect(self.autoBtn, QtCore.SIGNAL('clicked()'), self.enableAutoScale)
+        self.autoBtn = ButtonItem(os.path.join(path, 'auto.png'), 14, self)
         self.autoBtn.clicked.connect(self.enableAutoScale)
-        
         
         self.layout = QtGui.QGraphicsGridLayout()
         self.layout.setContentsMargins(1,1,1,1)
@@ -87,14 +92,10 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.layout.setVerticalSpacing(0)
         
         self.vb = ViewBox()
-        #QtCore.QObject.connect(self.vb, QtCore.SIGNAL('xRangeChanged'), self.xRangeChanged)
         self.vb.sigXRangeChanged.connect(self.xRangeChanged)
-        #QtCore.QObject.connect(self.vb, QtCore.SIGNAL('yRangeChanged'), self.yRangeChanged)
         self.vb.sigYRangeChanged.connect(self.yRangeChanged)
-        #QtCore.QObject.connect(self.vb, QtCore.SIGNAL('rangeChangedManually'), self.enableManualScale)
         self.vb.sigRangeChangedManually.connect(self.enableManualScale)
         
-        #QtCore.QObject.connect(self.vb, QtCore.SIGNAL('viewChanged'), self.viewChanged)
         self.vb.sigRangeChanged.connect(self.viewRangeChanged)
         
         self.layout.addItem(self.vb, 2, 1)
@@ -176,8 +177,6 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.yLinkPlot = None
         self.linksBlocked = False
 
-        
-        #self.ctrlBtn.setFixedWidth(60)
         self.setAcceptHoverEvents(True)
         
         ## Connect control widgets
@@ -259,10 +258,10 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.ctrlMenu.setParent(None)
         self.ctrlMenu = None
         
-        self.ctrlBtn.setParent(None)
-        self.ctrlBtn = None
-        self.autoBtn.setParent(None)
-        self.autoBtn = None
+        #self.ctrlBtn.setParent(None)
+        #self.ctrlBtn = None
+        #self.autoBtn.setParent(None)
+        #self.autoBtn = None
         
         for k in self.scales:
             i = self.scales[k]['item']
@@ -276,13 +275,13 @@ class PlotItem(QtGui.QGraphicsWidget):
         #for i in range(self.layout.count()):
             #self.layout.removeAt(i)
             
-        for p in self.proxies:
-            try:
-                p.setWidget(None)
-            except RuntimeError:
-                break
-            self.scene().removeItem(p)
-        self.proxies = []
+        #for p in self.proxies:
+            #try:
+                #p.setWidget(None)
+            #except RuntimeError:
+                #break
+            #self.scene().removeItem(p)
+        #self.proxies = []
         
         self.menuAction.releaseWidget(self.menuAction.defaultWidget())
         self.menuAction.setParent(None)
@@ -361,6 +360,8 @@ class PlotItem(QtGui.QGraphicsWidget):
 
     def setXLink(self, plot=None):
         """Link this plot's X axis to another plot (pass either the PlotItem/PlotWidget or the registered name of the plot)"""
+        if isinstance(plot, types.StringTypes) and len(plot) == 0:
+            plot = None
         if isinstance(plot, basestring):
             if self.manager is None:
                 return
@@ -376,6 +377,8 @@ class PlotItem(QtGui.QGraphicsWidget):
             
     def setYLink(self, plot=None):
         """Link this plot's Y axis to another plot (pass either the PlotItem/PlotWidget or the registered name of the plot)"""
+        if isinstance(plot, types.StringTypes) and len(plot) == 0:
+            plot = None
         if isinstance(plot, basestring):
             if self.manager is None:
                 return
@@ -546,7 +549,7 @@ class PlotItem(QtGui.QGraphicsWidget):
     def enableAutoScale(self):
         self.ctrl.xAutoRadio.setChecked(True)
         self.ctrl.yAutoRadio.setChecked(True)
-        self.autoBtn.hide()
+        self.autoBtn.disable()
         self.updateXScale()
         self.updateYScale()
         self.replot()
@@ -576,7 +579,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             self.autoScale[1] = False
             self.ctrl.yManualRadio.setChecked(True)
             #self.setManualYScale()
-        self.autoBtn.show()
+        self.autoBtn.enable()
         #self.replot()
         
     def setManualXScale(self):
@@ -639,11 +642,12 @@ class PlotItem(QtGui.QGraphicsWidget):
         
     
     def plot(self, data=None, data2=None, x=None, y=None, clear=False, params=None, pen=None, 
-        symbol=None, decimate = None):
+        symbol=None, decimate = None, **kargs):
         """Add a new plot curve. Data may be specified a few ways:
         plot(yVals)   # x vals will be integers
         plot(xVals, yVals)
         plot(y=yVals, x=xVals)
+        plot(metaArray)
         """
         if y is not None:
             data = y
@@ -660,15 +664,15 @@ class PlotItem(QtGui.QGraphicsWidget):
         if params is None:
             params = {}
         if HAVE_METAARRAY and isinstance(data, MetaArray):
-            curve = self._plotMetaArray(data, x=x)
+            curve = self._plotMetaArray(data, x=x, **kargs)
         elif isinstance(data, np.ndarray):
-            curve = self._plotArray(data, x=x)
+            curve = self._plotArray(data, x=x, **kargs)
         elif isinstance(data, list):
             if x is not None:
                 x = np.array(x)
-            curve = self._plotArray(np.array(data), x=x)
+            curve = self._plotArray(np.array(data), x=x, **kargs)
         elif data is None:
-            curve = PlotCurveItem()
+            curve = PlotCurveItem(**kargs)
         else:
             raise Exception('Not sure how to plot object of type %s' % type(data))
             
@@ -718,6 +722,7 @@ class PlotItem(QtGui.QGraphicsWidget):
     def plotChanged(self, curve=None):
         ## Recompute auto range if needed
         for ax in [0, 1]:
+            #print "range", ax
             if self.autoScale[ax]:
                 percentScale = [self.ctrl.xAutoPercentSpin.value(), self.ctrl.yAutoPercentSpin.value()][ax] * 0.01
                 mn = None
@@ -726,6 +731,7 @@ class PlotItem(QtGui.QGraphicsWidget):
                     if not c.isVisible():
                         continue
                     cmn, cmx = c.getRange(ax, percentScale)
+                    #print "   ", c, cmn, cmx
                     if mn is None or cmn < mn:
                         mn = cmn
                     if mx is None or cmx > mx:
@@ -1085,8 +1091,10 @@ class PlotItem(QtGui.QGraphicsWidget):
     def resizeEvent(self, ev):
         if self.ctrlBtn is None:  ## already closed down
             return
-        self.ctrlBtn.move(0, self.size().height() - self.ctrlBtn.size().height())
-        self.autoBtn.move(self.ctrlBtn.width(), self.size().height() - self.autoBtn.size().height())
+        btnRect = self.mapRectFromItem(self.ctrlBtn, self.ctrlBtn.boundingRect())
+        y = self.size().height() - btnRect.height()
+        self.ctrlBtn.setPos(0, y)
+        self.autoBtn.setPos(btnRect.width()+3, y)
         
     def hoverMoveEvent(self, ev):
         self.mousePos = ev.pos()
@@ -1136,19 +1144,19 @@ class PlotItem(QtGui.QGraphicsWidget):
         else:
             s.hide()
 
-    def _plotArray(self, arr, x=None):
+    def _plotArray(self, arr, x=None, **kargs):
         if arr.ndim != 1:
             raise Exception("Array must be 1D to plot (shape is %s)" % arr.shape)
         if x is None:
             x = np.arange(arr.shape[0])
         if x.ndim != 1:
             raise Exception("X array must be 1D to plot (shape is %s)" % x.shape)
-        c = PlotCurveItem(arr, x=x)
+        c = PlotCurveItem(arr, x=x, **kargs)
         return c
             
         
         
-    def _plotMetaArray(self, arr, x=None, autoLabel=True):
+    def _plotMetaArray(self, arr, x=None, autoLabel=True, **kargs):
         inf = arr.infoCopy()
         if arr.ndim != 1:
             raise Exception('can only automatically plot 1 dimensional arrays.')
@@ -1161,7 +1169,7 @@ class PlotItem(QtGui.QGraphicsWidget):
                 xv = np.arange(arr.shape[0])
             else:
                 xv = x
-        c = PlotCurveItem()
+        c = PlotCurveItem(**kargs)
         c.setData(x=xv, y=arr.view(np.ndarray))
         
         if autoLabel:

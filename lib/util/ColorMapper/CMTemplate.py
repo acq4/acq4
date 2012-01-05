@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/util/ColorMapper/CMTemplate.ui'
 #
-# Created: Fri Dec  2 19:52:51 2011
+# Created: Wed Jan  4 18:01:36 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -65,5 +65,5 @@ class Ui_Form(object):
         self.tree.headerItem().setText(4, QtGui.QApplication.translate("Form", "colors", None, QtGui.QApplication.UnicodeUTF8))
         self.tree.headerItem().setText(5, QtGui.QApplication.translate("Form", "remove", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.TreeWidget import TreeWidget
+from pyqtgraph import TreeWidget
 from FeedbackButton import FeedbackButton

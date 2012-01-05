@@ -3,6 +3,7 @@ from pyqtgraph.Point import Point
 import pyqtgraph.functions as fn
 from GraphicsObject import GraphicsObject
 
+__all__ = ['ScatterPlotItem', 'SpotItem']
 class ScatterPlotItem(GraphicsObject):
     
     #sigPointClicked = QtCore.Signal(object, object)
@@ -220,36 +221,50 @@ class ScatterPlotItem(GraphicsObject):
         return pts
             
 
-    def mousePressEvent(self, ev):
-        QtGui.QGraphicsItem.mousePressEvent(self, ev)
+    #def mousePressEvent(self, ev):
+        #QtGui.QGraphicsItem.mousePressEvent(self, ev)
+        #if ev.button() == QtCore.Qt.LeftButton:
+            #pts = self.pointsAt(ev.pos())
+            #if len(pts) > 0:
+                #self.mouseMoved = False
+                #self.ptsClicked = pts
+                #ev.accept()
+            #else:
+                ##print "no spots"
+                #ev.ignore()
+        #else:
+            #ev.ignore()
+        
+    #def mouseMoveEvent(self, ev):
+        #QtGui.QGraphicsItem.mouseMoveEvent(self, ev)
+        #self.mouseMoved = True
+        #pass
+    
+    #def mouseReleaseEvent(self, ev):
+        #QtGui.QGraphicsItem.mouseReleaseEvent(self, ev)
+        #if not self.mouseMoved:
+            #self.sigClicked.emit(self, self.ptsClicked)
+
+    def mouseClickEvent(self, ev):
         if ev.button() == QtCore.Qt.LeftButton:
             pts = self.pointsAt(ev.pos())
             if len(pts) > 0:
-                self.mouseMoved = False
                 self.ptsClicked = pts
+                self.sigClicked.emit(self, self.ptsClicked)
                 ev.accept()
             else:
                 #print "no spots"
                 ev.ignore()
         else:
             ev.ignore()
-        
-    def mouseMoveEvent(self, ev):
-        QtGui.QGraphicsItem.mouseMoveEvent(self, ev)
-        self.mouseMoved = True
-        pass
-    
-    def mouseReleaseEvent(self, ev):
-        QtGui.QGraphicsItem.mouseReleaseEvent(self, ev)
-        if not self.mouseMoved:
-            self.sigClicked.emit(self, self.ptsClicked)
 
 
-class SpotItem(QtGui.QGraphicsWidget):
+
+class SpotItem(GraphicsObject):
     #sigClicked = QtCore.Signal(object)
     
     def __init__(self, size, pxMode, brush, pen, data=None, style=None, image=None, index=None):
-        QtGui.QGraphicsWidget.__init__(self)
+        GraphicsObject.__init__(self)
         self.pxMode = pxMode
 
         if style is None:
@@ -346,138 +361,3 @@ class SpotItem(QtGui.QGraphicsWidget):
         p.setBrush(self.brush)
         p.drawPath(self.path)
         
-    #def mousePressEvent(self, ev):
-        #QtGui.QGraphicsItem.mousePressEvent(self, ev)
-        #if ev.button() == QtCore.Qt.LeftButton:
-            #self.mouseMoved = False
-            #ev.accept()
-        #else:
-            #ev.ignore()
-
-        
-        
-    #def mouseMoveEvent(self, ev):
-        #QtGui.QGraphicsItem.mouseMoveEvent(self, ev)
-        #self.mouseMoved = True
-        #pass
-    
-    #def mouseReleaseEvent(self, ev):
-        #QtGui.QGraphicsItem.mouseReleaseEvent(self, ev)
-        #if not self.mouseMoved:
-            #self.sigClicked.emit(self)
-        
-#class PixmapSpotItem(QtGui.QGraphicsItem):
-    ##sigClicked = QtCore.Signal(object)
-    
-    #def __init__(self, size, brush, pen, data, image=None, style=None, index=None):
-        #"""This class draws a scale-invariant image centered at 0,0.
-        #If no image is specified, then an antialiased circle is constructed instead.
-        #It should be quite fast, but large spots will use a lot of memory."""
-        
-        #QtGui.QGraphicsItem.__init__(self)
-        #self.pen = pen
-        #self.brush = brush
-        #self.size = size
-        #self.style = style
-        #self.index = index
-        #self.setFlags(self.flags() | self.ItemIgnoresTransformations | self.ItemHasNoContents)
-        #if image is None:
-            #self.image = self.makeSpotImage(self.size, self.pen, self.brush, style=style)
-        #else:
-            #self.image = image
-        #self.pixmap = QtGui.QPixmap(self.image)
-        ##self.setPixmap(self.pixmap)
-        #self.data = data
-        #self.pi = QtGui.QGraphicsPixmapItem(self.pixmap, self)
-        #self.pi.setPos(-0.5*size, -0.5*size)
-        
-        ##self.translate(-0.5, -0.5)
-    #def boundingRect(self):
-        #return self.pi.boundingRect()
-        
-    #@staticmethod
-    #def makeSpotImage(size, pen, brush, style=None):
-        #img = QtGui.QImage(size+2, size+2, QtGui.QImage.Format_ARGB32_Premultiplied)
-        #img.fill(0)
-        #p = QtGui.QPainter(img)
-        #try:
-            #p.setRenderHint(p.Antialiasing)
-            #p.setBrush(brush)
-            #p.setPen(pen)
-##            print 'mkspotimage style: ', style
-            #if style is 'o': # circle
-                #p.drawEllipse(0, 0, size, size)
-            #elif style == 's': # square
-                #p.drawRect(QtCore.QRectF(0., 0., size, size))
-            #elif style is 't' or style is '^': # triangle
-                #path = QtGui.QPainterPath()
-                #ppath=QtGui.QPolygonF([QtCore.QPointF(0, size), 
-                    #QtCore.QPointF(size, size), QtCore.QPointF((size/2.0), 0),
-                    #QtCore.QPointF(0, size)])
-                #path.addPolygon(ppath)
-                #p.drawPath(path)
-            #elif style == 'd': # diamond
-                #path=QtGui.QPainterPath()
-                #ppath = QtGui.QPolygonF([QtCore.QPointF(0.1*size, 0.5*size), QtCore.QPointF(0.5*size, 0.0),
-                    #QtCore.QPointF(0.9*size, 0.5*size),QtCore.QPointF(0.5*size, size)])
-                #path.addPolygon(ppath)
-                #p.drawPath(path)
-            #elif style == '+': # plus, obviously
-                #path=QtGui.QPainterPath()
-                #path.moveTo(size/2, 0.0)
-                #path.lineTo(size/2, size)
-                #path.moveTo(0, size/2)
-                #path.lineTo(size, size/2)
-                #p.drawPath(path)
-            #elif style == 'x': # x, obviously
-                #path=QtGui.QPainterPath()
-                #path.moveTo(0., 0.0)
-                #path.lineTo(size, size)
-                #path.moveTo(0, size)
-                #path.lineTo(size, 0)
-                #p.drawPath(path)
-            #elif style == '*': # asterix (sic), obviously
-                #path=QtGui.QPainterPath()
-                #path.moveTo(0., 0.0)
-                #path.lineTo(size, size)
-                #path.moveTo(0, size)
-                #path.lineTo(size, 0)
-                #path.moveTo(size/2.0, 0)
-                #path.lineTo(size/2.0, size)
-                #path.moveTo(0., size/2.0)
-                #path.lineTo(size, size/2.0)
-                #p.drawPath(path)
-            #else: # default is the circle - also "none"
-                #p.drawEllipse(0, 0, size, size)
-        #finally:
-            #p.end()  ## failure to end a painter properly causes crash.
-        #return img
-        
-        
-        
-    #def paint(self, p, *args):
-        #p.setCompositionMode(p.CompositionMode_Plus)
-        #QtGui.QGraphicsPixmapItem.paint(self, p, *args)
-        
-    #def setBrush(self, brush):
-        #self.brush = fn.mkBrush(brush)
-        #self.update()
-        
-    #def setPen(self, pen):
-        #self.pen = fn.mkPen(pen)
-        #self.update()
-        
-    #def boundingRect(self):
-        #return self.path.boundingRect()
-        
-    #def shape(self):
-        #return self.path
-        
-    #def paint(self, p, *opts):
-        #if self.pxMode:
-            #p.drawPixmap(QtCore.QPoint(int(-0.5*self.size), int(-0.5*self.size)), self.pixmap)
-        #else:
-            #p.setPen(self.pen)
-            #p.setBrush(self.brush)
-            #p.drawPath(self.path)
-

@@ -7,7 +7,7 @@ from debug import *
 import FileAnalysisView
 from lib.LogWindow import LogButton, LogWindow
 import FileLogView
-from lib.util.pyqtgraph.FileDialog import FileDialog
+from pyqtgraph import FileDialog
 from lib.Manager import logMsg, logExc
 
 
@@ -30,6 +30,8 @@ class DataManager(Module):
         #self.dm = self.manager.dataManager
         self.dm = getDataManager()
         self.win = Window()
+        mp = os.path.dirname(__file__)
+        self.win.setWindowIcon(QtGui.QIcon(os.path.join(mp, 'icon.png')))
         self.win.dm = self  ## so embedded widgets can find the module easily
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
@@ -336,6 +338,7 @@ class DataManager(Module):
         ## Silly: needed to prevent lockup on some systems.
         #print "      module quitting.."
         self.ui.fileTreeWidget.quit()
+        self.ui.analysisWidget.quit()
         #sip.delete(self.dialog)
         #print "      deleted dialog, calling superclass quit.."
         Module.quit(self)

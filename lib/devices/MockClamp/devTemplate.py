@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/devices/MockClamp/devTemplate.ui'
 #
-# Created: Fri Dec  2 19:52:48 2011
+# Created: Wed Jan  4 18:01:33 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -119,4 +119,4 @@ class Ui_MockClampDevGui(object):
         self.pipWholeRadio.setText(QtGui.QApplication.translate("MockClampDevGui", "Whole Cell", None, QtGui.QApplication.UnicodeUTF8))
         self.label_7.setText(QtGui.QApplication.translate("MockClampDevGui", "Cell", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.SpinBox import SpinBox
+from pyqtgraph import SpinBox

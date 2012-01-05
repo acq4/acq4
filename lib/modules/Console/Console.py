@@ -25,6 +25,8 @@ class Console(Module):
         
         self.win = QtGui.QMainWindow()
         self.win.setWindowTitle('ACQ4 Console')
+        mp = os.path.dirname(__file__)
+        self.win.setWindowIcon(QtGui.QIcon(os.path.join(mp, 'icon.png')))
         self.win.resize(800,500)
         self.win.show()
         self.cw = QtGui.QWidget()
@@ -154,7 +156,7 @@ class Console(Module):
             if self.inCmd:
                 self.inCmd = False
                 self.output.textCursor().insertHtml("</div><br><div style='font-weight: normal; background-color: #FFF;'>")
-                self.stdout.write("</div><br><div style='font-weight: normal; background-color: #FFF;'>")
+                #self.stdout.write("</div><br><div style='font-weight: normal; background-color: #FFF;'>")
             self.output.insertPlainText(strn)
         self.stdout.write(strn)
             

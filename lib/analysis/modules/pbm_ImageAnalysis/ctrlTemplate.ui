@@ -555,6 +555,16 @@
         </property>
        </widget>
       </item>
+      <item row="6" column="3">
+       <widget class="QCheckBox" name="ImagePhys_RectSelect">
+        <property name="text">
+         <string>Rectangle Select</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

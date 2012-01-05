@@ -1,8 +1,8 @@
 from pyqtgraph.Qt import QtCore, QtGui
 from Parameter import Parameter, registerParameterType
 from ParameterItem import ParameterItem
-from pyqtgraph.SpinBox import SpinBox
-from pyqtgraph.ColorButton import ColorButton
+from pyqtgraph.widgets.SpinBox import SpinBox
+from pyqtgraph.widgets.ColorButton import ColorButton
 import os, collections
 
 class WidgetParameterItem(ParameterItem):

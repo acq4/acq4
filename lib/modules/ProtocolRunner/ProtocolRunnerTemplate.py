@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/modules/ProtocolRunner/ProtocolRunnerTemplate.ui'
 #
-# Created: Fri Dec  2 19:52:51 2011
+# Created: Wed Jan  4 18:01:36 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -180,16 +180,16 @@ class Ui_MainWindow(object):
         self.runSequenceBtn.setEnabled(False)
         self.runSequenceBtn.setObjectName(_fromUtf8("runSequenceBtn"))
         self.horizontalLayout_3.addWidget(self.runSequenceBtn)
-        spacerItem6 = QtGui.QSpacerItem(58, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-        self.horizontalLayout_3.addItem(spacerItem6)
-        self.stopSequenceBtn = QtGui.QPushButton(self.dockWidgetContents_7)
-        self.stopSequenceBtn.setObjectName(_fromUtf8("stopSequenceBtn"))
-        self.horizontalLayout_3.addWidget(self.stopSequenceBtn)
         self.pauseSequenceBtn = QtGui.QPushButton(self.dockWidgetContents_7)
         self.pauseSequenceBtn.setMinimumSize(QtCore.QSize(40, 0))
         self.pauseSequenceBtn.setCheckable(True)
         self.pauseSequenceBtn.setObjectName(_fromUtf8("pauseSequenceBtn"))
         self.horizontalLayout_3.addWidget(self.pauseSequenceBtn)
+        spacerItem6 = QtGui.QSpacerItem(58, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        self.horizontalLayout_3.addItem(spacerItem6)
+        self.stopSequenceBtn = QtGui.QPushButton(self.dockWidgetContents_7)
+        self.stopSequenceBtn.setObjectName(_fromUtf8("stopSequenceBtn"))
+        self.horizontalLayout_3.addWidget(self.stopSequenceBtn)
         self.gridLayout_2.addLayout(self.horizontalLayout_3, 2, 0, 1, 2)
         self.SequenceDock.setWidget(self.dockWidgetContents_7)
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.SequenceDock)
@@ -253,9 +253,9 @@ class Ui_MainWindow(object):
         self.sequenceParamList.headerItem().setText(2, QtGui.QApplication.translate("MainWindow", "len", None, QtGui.QApplication.UnicodeUTF8))
         self.testSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Test", None, QtGui.QApplication.UnicodeUTF8))
         self.runSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Record Sequence", None, QtGui.QApplication.UnicodeUTF8))
-        self.stopSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Stop Sequence", None, QtGui.QApplication.UnicodeUTF8))
         self.pauseSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Pause", None, QtGui.QApplication.UnicodeUTF8))
+        self.stopSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Stop Sequence", None, QtGui.QApplication.UnicodeUTF8))
         self.dockWidget.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Analysis", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.SpinBox import SpinBox
+from pyqtgraph import SpinBox
 from ParamList import ParamList

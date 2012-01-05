@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/devices/DAQGeneric/AOChannelTemplate.ui'
 #
-# Created: Fri Dec  2 19:52:47 2011
+# Created: Wed Jan  4 18:01:32 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -122,4 +122,4 @@ class Ui_Form(object):
         self.displayCheck.setText(QtGui.QApplication.translate("Form", "Display", None, QtGui.QApplication.UnicodeUTF8))
 
 from generator.StimGenerator import StimGenerator
-from pyqtgraph.SpinBox import SpinBox
+from pyqtgraph import SpinBox

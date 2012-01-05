@@ -21,8 +21,11 @@ class NiDAQProto(ProtocolGui):
         self.updateNPts()
         self.updateDevList()
         #self.devs = []
-        self.ui.rateSpin.setOpts(dec=True, step=1, minStep=10, bounds=[1,None], siPrefix=True, suffix='Hz')
-        self.ui.periodSpin.setOpts(dec=True, step=1, minStep=1e-6, bounds=[1e-6,None], siPrefix=True, suffix='s')
+        self.ui.rateSpin.setOpts(dec=True, step=0.5, minStep=10, bounds=[1,None], siPrefix=True, suffix='Hz')
+        self.ui.periodSpin.setOpts(dec=True, step=0.5, minStep=1e-6, bounds=[1e-6,None], siPrefix=True, suffix='s')
+        self.ui.besselCutoffSpin.setOpts(value=20e3, dec=True, step=0.5, minStep=10, bounds=[1,None], siPrefix=True, suffix='Hz')
+        self.ui.butterworthPassbandSpin.setOpts(value=20e3, dec=True, step=0.5, minStep=10, bounds=[1,None], siPrefix=True, suffix='Hz')
+        self.ui.butterworthStopbandSpin.setOpts(value=40e3, dec=True, step=0.5, minStep=10, bounds=[1,None], siPrefix=True, suffix='Hz')
         
         ## important to create widget group before connecting anything else.
         self.stateGroup = WidgetGroup([
@@ -41,10 +44,13 @@ class NiDAQProto(ProtocolGui):
             (self.ui.butterworthStopDBSpin, 'butterworthStopDB'),
         ])
         
+        
+        
         self.ui.rateSpin.valueChanged.connect(self.rateChanged)
         self.ui.periodSpin.sigValueChanging.connect(self.updateRateSpin)
         self.ui.rateSpin.sigValueChanging.connect(self.updatePeriodSpin)
         self.prot.sigProtocolChanged.connect(self.protocolChanged)
+        self.ui.denoiseCombo.currentIndexChanged.connect(self.ui.denoiseStack.setCurrentIndex)
         self.ui.filterCombo.currentIndexChanged.connect(self.ui.filterStack.setCurrentIndex)
         self.ui.rateSpin.setValue(self.rate)
         

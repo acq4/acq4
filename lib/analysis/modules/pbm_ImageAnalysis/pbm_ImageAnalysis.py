@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import pyqtgraph as pg
 from metaarray import MetaArray
 import numpy
@@ -22,6 +22,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.physData = None # physiology data associated with the current image
         self.dataStruct = 'flat' # 'flat' or 'interleaved' are valid at present.
         self.ignoreFirst = False # ImagePhys_ignoreFirst
+        self.rectSelect = True #
         self.tStart = 0.0 # baseline time start = applies to the image: ImagePhys_BaseStart
         self.tEnd = 50.0 # baseline time end (msec) : ImagePhys_BaseEnd
         self.imageLPF = 0.0 # low pass filter of the image data, Hz: ImagePhys_ImgLPF
@@ -57,14 +58,16 @@ class pbm_ImageAnalysis(AnalysisModule):
             #('Data Table',  {'type': 'table', 'pos': ('below', 'Time Plot')}),
         ])
         self.initializeElements()
+        self.ctrl.ImagePhys_RectSelect.stateChanged.connect(self.updateRectSelect)
         self.ctrl.ImagePhys_Update.clicked.connect(self.updateAnalysis)
         self.ctrl.ImagePhys_PhysLPF.valueChanged.connect(self.physLPF_valueChanged)
         self.ROI_Plot = self.getElement('ROI Plot', create=True)
         self.trialPlot = self.getElement('Trial Plot', create=True)
         self.physPlot = self.getElement('Phys Plot', create = True)
-        self.lr = pg.LinearRegionItem(self.ROI_Plot, 'vertical', [0, 1])
-        self.ROI_Plot.addItem(self.lr)
-        self.physPlot.setXLink(self.ROI_Plot) # not sure - this seems to be at the wrong level in the window manager
+        self.lr = pg.LinearRegionItem([0, 1])
+        # self.ROI_Plot.addItem(self.lr)
+        self.updateRectSelect()    
+        self.ROI_Plot.plotItem.setXLink(plot = 'Phys Plot') # not sure - this seems to be at the wrong level in the window manager
         self.imageView = self.getElement('Image', create=True)
         self.imageItem = self.imageView.imageItem      
         ## Plots are updated when the selected region changes
@@ -85,6 +88,15 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrl.ImagePhys_BleachInfo.setText('None')
         self.ctrl.ImagePhys_NormInfo.setText('None')
 
+    def updateRectSelect(self):
+        self.rectSelect = self.ctrl.ImagePhys_RectSelect.isChecked()
+        if self.rectSelect:
+            self.ROI_Plot.plotItem.vb.setLeftButtonAction(mode='rect') # use the rubber band box instead
+            self.physPlot.plotItem.vb.setLeftButtonAction(mode='rect') # use the rubber band box instead
+        else:
+            self.ROI_Plot.plotItem.vb.setLeftButtonAction(mode='pan') # use the standard pan mode instead
+            self.physPlot.plotItem.vb.setLeftButtonAction(mode='pan') # use the standard pan modeinstead
+        
     def changeView(self):
         print 'changeView'
         if self.dataState['Loaded'] is False:
@@ -94,7 +106,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.imageView.setImage(self.baseImage)
             self.ctrl.ImagePhys_View.setText('View Movie')
             self.viewFlag = True
-        else: # loking at fixed image, switch to movie
+        else: # looking at fixed image, switch to movie
             self.imageView.setImage(self.imageData)
             self.ctrl.ImagePhys_View.setText('View Ref Img')
             self.viewFlag = False
@@ -277,7 +289,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.physData =  Utility.SignalFilter_LPFBessel(self.physData, self.physLPF, samplefreq, NPole = 8)
             print self.physData.shape
         self.physLPFChanged = False # we have updated now, so flag is reset
-        maxplotpts=8192
+        maxplotpts=50000
         shdat = self.physData.shape
         decimate_factor = 2
         if shdat[0] > 2*maxplotpts:
@@ -389,7 +401,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         """ append one roi to the self.AllRois list, put it on the screen (scene), and
         make sure it is actively connected to code. The return value lets us
         handle the rois when we restore them """
-        roi = pg.widgets.RectROI(pos, hw, scaleSnap=True, translateSnap=True)
+        roi = pg.RectROI(pos, hw, scaleSnap=True, translateSnap=True)
 #       roi = qtgraph.widgets.EllipseROI(pos, hw, scaleSnap=True, translateSnap=True)
 #       roi = qtgraph.widgets.MultiLineROI([[0,0], [5,5], [10,10]], 3, scaleSnap=True, translateSnap=True)
         roi.ID = self.nROI # give each ROI a unique identification number

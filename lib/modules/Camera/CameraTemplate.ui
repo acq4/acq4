@@ -22,14 +22,7 @@
      <number>0</number>
     </property>
     <item>
-     <widget class="QWidget" name="graphicsWidget" native="true">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-        <horstretch>10</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-     </widget>
+     <widget class="GraphicsView" name="graphicsView"/>
     </item>
    </layout>
   </widget>
@@ -718,23 +711,23 @@ Either a set of static background frames need to have already by collected
   <customwidget>
    <class>PlotWidget</class>
    <extends>QWidget</extends>
-   <header>pyqtgraph.PlotWidget</header>
+   <header>pyqtgraph</header>
    <container>1</container>
   </customwidget>
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header>pyqtgraph.SpinBox</header>
+   <header>pyqtgraph</header>
   </customwidget>
   <customwidget>
    <class>GraphicsView</class>
    <extends>QGraphicsView</extends>
-   <header>pyqtgraph.GraphicsView</header>
+   <header>pyqtgraph</header>
   </customwidget>
   <customwidget>
    <class>GradientWidget</class>
    <extends>QWidget</extends>
-   <header>pyqtgraph.GradientWidget</header>
+   <header>pyqtgraph</header>
    <container>1</container>
   </customwidget>
   <customwidget>

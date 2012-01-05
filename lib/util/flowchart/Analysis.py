@@ -3,9 +3,10 @@
 from pyqtgraph.flowchart.library.common import *
 import functions
 import numpy as np
-from pyqtgraph import graphicsItems
+#from pyqtgraph import graphicsItems
+import pyqtgraph as pg
 import metaarray
-import pyqtgraph.CheckTable as CheckTable
+#import pyqtgraph.CheckTable as CheckTable
 from collections import OrderedDict
 
 class EventFitter(CtrlNode):
@@ -49,7 +50,8 @@ class EventFitter(CtrlNode):
             ('fitTime', float), 
             ('fitRiseTau', float), 
             ('fitDecayTau', float), 
-            ('fitError', float)
+            ('fitError', float),
+            ('fitFractionalError', float),
         ])
         
         offset = 0 ## not all input events will produce output events; offset keeps track of the difference.
@@ -128,8 +130,11 @@ class EventFitter(CtrlNode):
             ## parameters are [amplitude, x-offset, rise tau, fall tau]
             guess = [guessAmp, guessStart, guessRise, guessDecay]
             #guess = [amp, times[0], guessLen/4., guessLen/2.]  ## careful! 
-            fit, junk, comp, err = functions.fitPsp(times, eventData.view(np.ndarray), guess, measureError=True)
-            output[i-offset] = tuple(events[i]) + tuple(fit) + (err,)
+            yVals = eventData.view(np.ndarray)
+            fit, junk, comp, err = functions.fitPsp(times, yVals, guess, measureError=True)
+            
+            fracError = abs(yVals - comp).sum() / abs(comp).sum()
+            output[i-offset] = tuple(events[i]) + tuple(fit) + (err, fracError)
             #output['fitTime'] += output['time']
                 
             #print fit
@@ -137,18 +142,18 @@ class EventFitter(CtrlNode):
             
             if display and self.plot.isConnected():
                 if self.ctrls['plotFits'].isChecked():
-                    item = graphicsItems.PlotCurveItem(comp, times, pen=(0, 0, 255), clickable=True)
+                    item = pg.PlotCurveItem(comp, times, pen=(0, 0, 255), clickable=True)
                     item.setZValue(100)
                     self.plotItems.append(item)
                     item.eventIndex = i
                     item.sigClicked.connect(self.fitClicked)
                     item.deleted = False
                 if self.ctrls['plotGuess'].isChecked():
-                    item2 = graphicsItems.PlotCurveItem(functions.pspFunc(guess, times), times, pen=(255, 0, 0))
+                    item2 = pg.PlotCurveItem(functions.pspFunc(guess, times), times, pen=(255, 0, 0))
                     item2.setZValue(100)
                     self.plotItems.append(item2)
                 if self.ctrls['plotEvents'].isChecked():
-                    item2 = graphicsItems.PlotCurveItem(eventData, times, pen=(0, 255, 0))
+                    item2 = pg.PlotCurveItem(eventData, times, pen=(0, 255, 0))
                     item2.setZValue(100)
                     self.plotItems.append(item2)
                 #plot = self.plot.connections().keys()[0].node().getPlot()
@@ -261,7 +266,7 @@ class StatsCalculator(Node):
             ('std', np.std)
         ])
         
-        self.ui = CheckTable.CheckTable(self.funcs.keys())
+        self.ui = pg.CheckTable(self.funcs.keys())
         #QtCore.QObject.connect(self.ui, QtCore.SIGNAL('stateChanged'), self.update)
         self.ui.sigStateChanged.connect(self.update)
         

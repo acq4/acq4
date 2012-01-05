@@ -3,8 +3,11 @@ from ..Node import Node
 from pyqtgraph.Qt import QtGui, QtCore
 import numpy as np
 from common import *
-from pyqtgraph import graphicsItems, Transform, Point
-from pyqtgraph import TreeWidget
+from pyqtgraph.Transform import Transform
+from pyqtgraph.Point import Point
+from pyqtgraph.widgets.TreeWidget import TreeWidget
+from pyqtgraph.graphicsItems.LinearRegionItem import LinearRegionItem
+
 import functions
 
 try:
@@ -146,7 +149,7 @@ class RegionSelectNode(CtrlNode):
                     #print "  set rgn:", c, region
                     #item.setXVals(events)
                 else:
-                    item = graphicsItems.LinearRegionItem(plot, vals=region)
+                    item = LinearRegionItem(values=region)
                     self.items[c] = item
                     #item.connect(item, QtCore.SIGNAL('regionChanged'), self.rgnChanged)
                     item.sigRegionChanged.connect(self.rgnChanged)
@@ -264,7 +267,7 @@ class ColumnJoinNode(Node):
         self.layout = QtGui.QGridLayout()
         self.ui.setLayout(self.layout)
         
-        self.tree = TreeWidget.TreeWidget()
+        self.tree = TreeWidget()
         self.addInBtn = QtGui.QPushButton('+ Input')
         self.remInBtn = QtGui.QPushButton('- Input')
         
@@ -280,7 +283,9 @@ class ColumnJoinNode(Node):
         return self.ui
         
     def addInput(self):
+        #print "ColumnJoinNode.addInput called."
         term = Node.addInput(self, 'input', renamable=True)
+        #print "Node.addInput returned. term:", term
         item = QtGui.QTreeWidgetItem([term.name()])
         item.term = term
         term.joinItem = item

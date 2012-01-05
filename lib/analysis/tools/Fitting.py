@@ -44,17 +44,21 @@ if the current curve and the current plot instance are passed.
 import sys
 import scipy
 import scipy.optimize as optimize
-import PySideImporter
-import openopt
+#import PySideImporter
+try:
+    import openopt
+    HAVE_OPENOPT = True
+except:
+    HAVE_OPENOPT = False
 import numpy
 import ctypes
 import numpy.random
-from PySide import QtGui, QtCore
-from PySide.QtUiTools import QUiLoader
+#from PySide import QtGui, QtCore
+#from PySide.QtUiTools import QUiLoader
 from metaarray import MetaArray
-# from PyQt4 import Qt
-# import PyQt4.Qwt5 as Qwt
-# from PyQt4.Qwt5.anynumpy import *
+from PyQt4 import Qt
+#import PyQt4.Qwt5 as Qwt
+#from PyQt4.Qwt5.anynumpy import *
 #from sets import *
 
 usingMPlot = False
@@ -299,7 +303,7 @@ class Fitting():
                         print mesg
                 else:
                     # unpack bounds
-                    if boundsopt == 'openopt':
+                    if HAVE_OPENOPT and boundsopt == 'openopt':
                         lb = [y[0] for y in bounds]
                         ub = [y[1] for y in bounds]
                         fopt = openopt.DFP(func[0], fpars, tx, dy, df = None, lb=lb, ub=ub)

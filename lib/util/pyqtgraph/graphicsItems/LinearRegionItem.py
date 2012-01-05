@@ -1,9 +1,11 @@
 from pyqtgraph.Qt import QtGui, QtCore
-import weakref
-from GraphicsObject import GraphicsObject
+from UIGraphicsItem import UIGraphicsItem
 from InfiniteLine import InfiniteLine
+import pyqtgraph.functions as fn
 
-class LinearRegionItem(GraphicsObject):
+__all__ = ['LinearRegionItem']
+
+class LinearRegionItem(UIGraphicsItem):
     """
     Used for marking a horizontal or vertical region in plots.
     The region can be dragged and is bounded by lines which can be dragged individually.
@@ -11,112 +13,45 @@ class LinearRegionItem(GraphicsObject):
     
     sigRegionChangeFinished = QtCore.Signal(object)
     sigRegionChanged = QtCore.Signal(object)
+    Vertical = 0
+    Horizontal = 1
     
-    def __init__(self, view, orientation="vertical", vals=[0,1], brush=None, movable=True, bounds=None):
-        GraphicsObject.__init__(self)
+    def __init__(self, values=[0,1], orientation=None, brush=None, movable=True, bounds=None):
+        UIGraphicsItem.__init__(self)
+        if orientation is None:
+            orientation = LinearRegionItem.Vertical
         self.orientation = orientation
-        if hasattr(self, "ItemHasNoContents"):  
-            self.setFlag(self.ItemHasNoContents)
-        self.rect = QtGui.QGraphicsRectItem(self)
-        self.rect.setParentItem(self)
         self.bounds = QtCore.QRectF()
-        self.view = weakref.ref(view)
-        self.setBrush = self.rect.setBrush
-        self.brush = self.rect.brush
         self.blockLineSignal = False
+        self.moving = False
         
-        if orientation[0] == 'h':
+        if orientation == LinearRegionItem.Horizontal:
             self.lines = [
-                InfiniteLine(view, QtCore.QPointF(0, vals[0]), 0, movable=movable, bounds=bounds), 
-                InfiniteLine(view, QtCore.QPointF(0, vals[1]), 0, movable=movable, bounds=bounds)]
+                InfiniteLine(QtCore.QPointF(0, values[0]), 0, movable=movable, bounds=bounds), 
+                InfiniteLine(QtCore.QPointF(0, values[1]), 0, movable=movable, bounds=bounds)]
         else:
             self.lines = [
-                InfiniteLine(view, QtCore.QPointF(vals[0], 0), 90, movable=movable, bounds=bounds), 
-                InfiniteLine(view, QtCore.QPointF(vals[1], 0), 90, movable=movable, bounds=bounds)]
-        #QtCore.QObject.connect(self.view(), QtCore.SIGNAL('viewChanged'), self.updateBounds)
-        self.view().sigRangeChanged.connect(self.updateBounds)
+                InfiniteLine(QtCore.QPointF(values[1], 0), 90, movable=movable, bounds=bounds), 
+                InfiniteLine(QtCore.QPointF(values[0], 0), 90, movable=movable, bounds=bounds)]
         
         for l in self.lines:
             l.setParentItem(self)
-            #l.connect(l, QtCore.SIGNAL('positionChangeFinished'), self.lineMoveFinished)
             l.sigPositionChangeFinished.connect(self.lineMoveFinished)
-            #l.connect(l, QtCore.SIGNAL('positionChanged'), self.lineMoved)
             l.sigPositionChanged.connect(self.lineMoved)
             
         if brush is None:
             brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 50))
         self.setBrush(brush)
+        
         self.setMovable(movable)
-            
-    def setBounds(self, bounds):
-        for l in self.lines:
-            l.setBounds(bounds)
-        
-    def setMovable(self, m):
-        for l in self.lines:
-            l.setMovable(m)
-        self.movable = m
-
-    def boundingRect(self):
-        return self.rect.boundingRect()
-            
-    def lineMoved(self):
-        if self.blockLineSignal:
-            return
-        self.updateBounds()
-        #self.emit(QtCore.SIGNAL('regionChanged'), self)
-        self.sigRegionChanged.emit(self)
-            
-    def lineMoveFinished(self):
-        #self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
-        self.sigRegionChangeFinished.emit(self)
-        
-            
-    def updateBounds(self):
-        vb = self.view().viewRect()
-        vals = [self.lines[0].value(), self.lines[1].value()]
-        if self.orientation[0] == 'h':
-            vb.setTop(min(vals))
-            vb.setBottom(max(vals))
-        else:
-            vb.setLeft(min(vals))
-            vb.setRight(max(vals))
-        if vb != self.bounds:
-            self.bounds = vb
-            self.rect.setRect(vb)
-        
-    def mousePressEvent(self, ev):
-        if not self.movable:
-            ev.ignore()
-            return
-        for l in self.lines:
-            l.mousePressEvent(ev)  ## pass event to both lines so they move together
-        #if self.movable and ev.button() == QtCore.Qt.LeftButton:
-            #ev.accept()
-            #self.pressDelta = self.mapToParent(ev.pos()) - QtCore.QPointF(*self.p)
-        #else:
-            #ev.ignore()
-            
-    def mouseReleaseEvent(self, ev):
-        for l in self.lines:
-            l.mouseReleaseEvent(ev)
-            
-    def mouseMoveEvent(self, ev):
-        #print "move", ev.pos()
-        if not self.movable:
-            return
-        self.lines[0].blockSignals(True)  # only want to update once
-        for l in self.lines:
-            l.mouseMoveEvent(ev)
-        self.lines[0].blockSignals(False)
-        #self.setPos(self.mapToParent(ev.pos()) - self.pressDelta)
-        #self.emit(QtCore.SIGNAL('dragged'), self)
 
     def getRegion(self):
-        if self.orientation[0] == 'h':
-            r = (self.bounds.top(), self.bounds.bottom())
-        else:
-            r = (self.bounds.left(), self.bounds.right())
+        """Return the values at the edges of the region."""
+        #if self.orientation[0] == 'h':
+            #r = (self.bounds.top(), self.bounds.bottom())
+        #else:
+            #r = (self.bounds.left(), self.bounds.right())
+        r = [self.lines[0].value(), self.lines[1].value()]
         return (min(r), max(r))
 
     def setRegion(self, rgn):
@@ -129,3 +64,158 @@ class LinearRegionItem(GraphicsObject):
         #self.blockLineSignal = False
         self.lineMoved()
         self.lineMoveFinished()
+
+    def setBrush(self, br):
+        self.brush = fn.mkBrush(br)
+        self.currentBrush = self.brush
+
+    def setBounds(self, bounds):
+        for l in self.lines:
+            l.setBounds(bounds)
+        
+    def setMovable(self, m):
+        for l in self.lines:
+            l.setMovable(m)
+        self.movable = m
+        self.setAcceptHoverEvents(m)
+
+    def boundingRect(self):
+        br = UIGraphicsItem.boundingRect(self)
+        rng = self.getRegion()
+        if self.orientation == LinearRegionItem.Vertical:
+            br.setLeft(rng[0])
+            br.setRight(rng[1])
+        else:
+            br.setTop(rng[0])
+            br.setBottom(rng[1])
+        return br.normalized()
+        
+    def paint(self, p, *args):
+        UIGraphicsItem.paint(self, p, *args)
+        p.setBrush(self.currentBrush)
+        p.drawRect(self.boundingRect())
+            
+    def lineMoved(self):
+        if self.blockLineSignal:
+            return
+        self.prepareGeometryChange()
+        #self.emit(QtCore.SIGNAL('regionChanged'), self)
+        self.sigRegionChanged.emit(self)
+            
+    def lineMoveFinished(self):
+        #self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
+        self.sigRegionChangeFinished.emit(self)
+        
+            
+    #def updateBounds(self):
+        #vb = self.view().viewRect()
+        #vals = [self.lines[0].value(), self.lines[1].value()]
+        #if self.orientation[0] == 'h':
+            #vb.setTop(min(vals))
+            #vb.setBottom(max(vals))
+        #else:
+            #vb.setLeft(min(vals))
+            #vb.setRight(max(vals))
+        #if vb != self.bounds:
+            #self.bounds = vb
+            #self.rect.setRect(vb)
+        
+    #def mousePressEvent(self, ev):
+        #if not self.movable:
+            #ev.ignore()
+            #return
+        #for l in self.lines:
+            #l.mousePressEvent(ev)  ## pass event to both lines so they move together
+        ##if self.movable and ev.button() == QtCore.Qt.LeftButton:
+            ##ev.accept()
+            ##self.pressDelta = self.mapToParent(ev.pos()) - QtCore.QPointF(*self.p)
+        ##else:
+            ##ev.ignore()
+            
+    #def mouseReleaseEvent(self, ev):
+        #for l in self.lines:
+            #l.mouseReleaseEvent(ev)
+            
+    #def mouseMoveEvent(self, ev):
+        ##print "move", ev.pos()
+        #if not self.movable:
+            #return
+        #self.lines[0].blockSignals(True)  # only want to update once
+        #for l in self.lines:
+            #l.mouseMoveEvent(ev)
+        #self.lines[0].blockSignals(False)
+        ##self.setPos(self.mapToParent(ev.pos()) - self.pressDelta)
+        ##self.emit(QtCore.SIGNAL('dragged'), self)
+
+    def mouseDragEvent(self, ev):
+        if not self.movable or int(ev.button() & QtCore.Qt.LeftButton) == 0:
+            return
+        ev.accept()
+        
+        if ev.isStart():
+            bdp = ev.buttonDownPos()
+            self.cursorOffsets = [l.pos() - bdp for l in self.lines]
+            self.startPositions = [l.pos() for l in self.lines]
+            self.moving = True
+            
+        if not self.moving:
+            return
+            
+        #delta = ev.pos() - ev.lastPos()
+        self.lines[0].blockSignals(True)  # only want to update once
+        for i, l in enumerate(self.lines):
+            l.setPos(self.cursorOffsets[i] + ev.pos())
+            #l.setPos(l.pos()+delta)
+            #l.mouseDragEvent(ev)
+        self.lines[0].blockSignals(False)
+        self.prepareGeometryChange()
+        
+        if ev.isFinish():
+            self.moving = False
+            self.sigRegionChangeFinished.emit(self)
+        else:
+            self.sigRegionChanged.emit(self)
+            
+    def mouseClickEvent(self, ev):
+        if self.moving and ev.button() == QtCore.Qt.RightButton:
+            ev.accept()
+            for i, l in enumerate(self.lines):
+                l.setPos(self.startPositions[i])
+            self.moving = False
+            self.sigRegionChanged.emit(self)
+            self.sigRegionChangeFinished.emit(self)
+
+
+    def hoverEvent(self, ev):
+        if (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
+            self.currentBrush = fn.mkBrush(255, 0,0,100)
+        else:
+            self.currentBrush = self.brush
+        self.update()
+            
+    #def hoverEnterEvent(self, ev):
+        #print "rgn hover enter"
+        #ev.ignore()
+        #self.updateHoverBrush()
+
+    #def hoverMoveEvent(self, ev):
+        #print "rgn hover move"
+        #ev.ignore()
+        #self.updateHoverBrush()
+
+    #def hoverLeaveEvent(self, ev):
+        #print "rgn hover leave"
+        #ev.ignore()
+        #self.updateHoverBrush(False)
+        
+    #def updateHoverBrush(self, hover=None):
+        #if hover is None:
+            #scene = self.scene()
+            #hover = scene.claimEvent(self, QtCore.Qt.LeftButton, scene.Drag)
+        
+        #if hover:
+            #self.currentBrush = fn.mkBrush(255, 0,0,100)
+        #else:
+            #self.currentBrush = self.brush
+        #self.update()
+

@@ -101,6 +101,10 @@ class Point(QtCore.QPointF):
         """Returns the vector length of this Point."""
         return (self[0]**2 + self[1]**2) ** 0.5
     
+    def norm(self):
+        """Returns a vector in the same direction with unit length."""
+        return self / self.length()
+    
     def angle(self, a):
         """Returns the angle in degrees between this vector and the vector a."""
         n1 = self.length()

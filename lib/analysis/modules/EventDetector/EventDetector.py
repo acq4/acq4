@@ -3,13 +3,31 @@ from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
 from flowchart import *
 import os
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import debug
 import FileLoader
 import DatabaseGui
 import FeedbackButton
 
 class EventDetector(AnalysisModule):
+    """
+    The basic function of this analyzer is to detect repeated signals (action potentials, PSPs, calcium signals, etc)
+    within a trace. 
+    
+    The core analysis is carried out by a flowchart that may be modified for a variety of different detection algorithms.
+        * The flowchart input "dataIn" is a file handle
+        * The output "events" is a numpy record array with one record per event. The columns are determined 
+          by the flowchart itself
+        * The output "regions" is a list of the regions that are defined within the flowchart. These
+          are optional and may be used by downstream analysis modules.
+          
+    Data is saved to DB in almost exactly the same form that the "events" output produces, with some 
+    extra fields:
+        * SourceDir: integer referring to the rowid of the source directory OR
+                     tuple (table, rowid) if the source directory is not a ProtocolSequence
+        * SourceFile: the name of the file in which the event was detected. The name is relative to the SourceDir.                    
+    
+    """
     def __init__(self, host, flowchartDir=None, dbIdentity="EventDetector"):
         AnalysisModule.__init__(self, host)
         
@@ -97,11 +115,16 @@ class EventDetector(AnalysisModule):
             self.dbCtrl.storeBtn.failure("Error.")
             raise
         
-    def storeToDB(self, data=None, parentDir=None):
+    def storeToDB(self, data=None):
+        p = debug.Profiler("EventDetector.storeToDB", disabled=True)
+        
         if data is None:
             data = self.flowchart.output()['events']
-        if parentDir is None:
-            parentDir = self.currentFile.parent()
+        #if protoDir is None:
+            #protoDir = self.currentFile.parent()
+            
+        if len(data) == 0:
+            return
             
         dbui = self.getElement('Database')
         table = dbui.getTableName(self.dbIdentity)
@@ -112,36 +135,124 @@ class EventDetector(AnalysisModule):
             #raise Exception("No data to store.")
             
             
-        ## make sure parent dir is registered in DB, get its table name
+        ## make sure parent dir(s) are registered in DB, get table names
         #pDir = self.currentFile.parent()
-        pTable, pRow = db.addDir(parentDir)
+        #pTable, pRow = db.addDir(protoDir)
+        #protoSeqDir = self.dataModel.getParent('ProtocolSequence', protoDir)
+        #if protoSeqDir is not None:
+            #psTable, psRow = db.addDir(protoSeqDir)
             
+        #psTable = db.getDirTable('ProtocolSequence')
+        
+        p.mark("DB prep done")
+        
         ## determine the set of fields we expect to find in the table
-        fields = OrderedDict([
-            ('SourceDir', 'int'),
-            ('SourceFile', 'text'),
-        ])
-        fields.update(db.describeData(data))
-        fields['SourceFile'] = 'text'   ## SourceFile is currently a FileHandle, but will be converted to str.
+        #fields = OrderedDict([
+            #('ProtocolSequenceDir', 'int'),  ## events that are not part of a sequence will have no vaue here.
+            #('ProtocolDir', 'int'),
+            #('SourceFile', 'text'),
+        #])
+        columns = db.describeData(data)
+        columns.update({
+            'ProtocolSequenceDir': 'directory:ProtocolSequence',
+            'ProtocolDir': 'directory:Protocol',
+            #'SourceFile': 'file'
+        })
+        
+        
+        #fields['SourceFile'] = 'text'   ## SourceFile is currently a FileHandle, but will be converted to str.
+        p.mark("field list done")
         
         ## Make sure target table exists and has correct columns, links to input file
-        db.checkTable(table, owner=self.dbIdentity, fields=fields, links=[('SourceDir', pTable)], create=True)
+        #links = [('ProtocolDir', 'Protocol'), ('ProtocolSequenceDir', 'ProtocolSequence')]
+        db.checkTable(table, owner=self.dbIdentity, columns=columns, create=True)
         
-        names = []
-        for i in xrange(len(data)):
-            ## delete all records from table for current input file
-            source = data[i]['SourceFile']
-            name = source.name(relativeTo=parentDir)
-            names.append(name)
-            db.delete(table, "SourceDir=%d and SourceFile='%s'" % (pRow, name))
+        ## convert source file handles to strings relative to the parent dir
+        #names = [fh.name(relativeTo=parentDir) for fh in data['SourceFile']]
+        #for i in xrange(len(data)):
+            #source = data[i]['SourceFile']
+            #name = source.name(relativeTo=parentDir)
+            #names.append(name)
+        p.mark("data prepared")
+        
+        ## collect all protocol/Sequence dirs
+        prots = {}
+        seqs = {}
+        for fh in set(data['SourceFile']):
+            prots[fh] = fh.parent()
+            seqs[fh] = self.dataModel.getParent(fh, 'ProtocolSequence')
+            
+        ## delete all records from table for current input files
+        for fh in set(data['SourceFile']):
+            db.delete(table, where={'SourceFile': fh})
+        p.mark("previous records deleted")
+        
+        ## assemble final list of records
+        records = {}
+        for col in data.dtype.names:
+            records[col] = data[col]
+        records['ProtocolSequenceDir'] = map(seqs.get, data['SourceFile'])
+        records['ProtocolDir'] = map(prots.get, data['SourceFile'])
+        
+        #for i in xrange(len(data)):
+            #d2 = data[i]
+            #rec = {'SourceDir': pRow, 'SourceFile': names[i]}
+            #rec2 = dict(zip(d2.dtype.names, d2))
+            #rec2.update(rec)
+            #records.append(rec2)
+        p.mark("record list assembled")
+            
+        ## insert all data to DB
+        db.insert(table, records)
+        p.mark("records inserted")
+        p.finish()
 
-        for i in xrange(len(data)):
-            ## add new records
-            d2 = data[i]
-            rec = {'SourceDir': pRow, 'SourceFile': names[i]}
-            rec2 = dict(zip(d2.dtype.names, d2))
-            rec2.update(rec)
-            db.insert(table, rec2)
+        
+        
+    def readFromDb(self, sequenceDir=None, sourceFile=None):
+        """Read events from DB that originate in sequenceDir. 
+        If sourceFile is specified, only return events that came from that file. 
+        """
+        
+        dbui = self.getElement('Database')
+        table = dbui.getTableName(self.dbIdentity)
+        db = dbui.getDb()
+        if db is None:
+            raise Exception("No DB selected")
+        
+        #identity = self.dbIdentity+'.events'
+        #table = dbui.getTableName(identity)
+        #if not db.hasTable(table):
+            #return None, None
+            
+        #pRow = db.getDirRowID(sourceDir)
+        #if pRow is None:
+            #return None, None
+        
+        if sourceFile is not None:
+            events = db.select(table, '*', where={'SourceFile': sourceFile}, toArray=True)
+        else:
+            events = db.select(table, '*', where={'ProtocolSequenceDir': sequenceDir}, toArray=True)
+        
+        if events is None:
+            ## need to make an empty array with the correct field names
+            schema = db.tableSchema(table)
+            ## NOTE: dtype MUST be specified as {names: formats: } since the names are unicode objects
+            ##  [(name, format), ..] does NOT work.
+            events = np.empty(0, dtype={'names': [k for k in schema], 'formats': [object]*len(schema)})
+            
+        #else:   ## convert file strings to handles
+            #if sourceFile is None:
+                #for ev in events:  
+                    ##ev['SourceDir'] = parentDir
+                    #ev['SourceFile'] = sourceDir[ev['SourceFile']]
+            #else:
+                #for ev in events: 
+                    ##ev['SourceDir'] = parentDir
+                    #ev['SourceFile'] = sourceFile
+        
+        return events
+        
                 
     #def storeClicked(self):
         #dbui = self.getElement('Database')

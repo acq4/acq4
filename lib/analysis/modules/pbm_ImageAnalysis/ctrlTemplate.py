@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/pbm_ImageAnalysis/ctrlTemplate.ui'
 #
-# Created: Fri Dec  2 19:52:46 2011
+# Created: Wed Jan  4 18:01:30 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -290,6 +290,10 @@ class Ui_Form(object):
         self.ImagePhys_SaveROI = QtGui.QPushButton(self.groupBox)
         self.ImagePhys_SaveROI.setObjectName(_fromUtf8("ImagePhys_SaveROI"))
         self.gridLayout_2.addWidget(self.ImagePhys_SaveROI, 13, 3, 1, 1)
+        self.ImagePhys_RectSelect = QtGui.QCheckBox(self.groupBox)
+        self.ImagePhys_RectSelect.setChecked(True)
+        self.ImagePhys_RectSelect.setObjectName(_fromUtf8("ImagePhys_RectSelect"))
+        self.gridLayout_2.addWidget(self.ImagePhys_RectSelect, 6, 3, 1, 1)
         self.gridLayout.addWidget(self.groupBox, 0, 0, 1, 1)
 
         self.retranslateUi(Form)
@@ -330,4 +334,5 @@ class Ui_Form(object):
         self.ImagePhys_Update.setText(QtGui.QApplication.translate("Form", "Update", None, QtGui.QApplication.UnicodeUTF8))
         self.ImagePhys_RetrieveROI.setText(QtGui.QApplication.translate("Form", "Retrieve ROI File", None, QtGui.QApplication.UnicodeUTF8))
         self.ImagePhys_SaveROI.setText(QtGui.QApplication.translate("Form", "Save ROI File", None, QtGui.QApplication.UnicodeUTF8))
+        self.ImagePhys_RectSelect.setText(QtGui.QApplication.translate("Form", "Rectangle Select", None, QtGui.QApplication.UnicodeUTF8))
 

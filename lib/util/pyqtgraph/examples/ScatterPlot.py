@@ -10,7 +10,7 @@ import numpy as np
 app = QtGui.QApplication([])
 mw = QtGui.QMainWindow()
 mw.resize(800,800)
-view = pg.GraphicsLayoutView()  ## GraphicsView with GraphicsLayout inserted by default
+view = pg.GraphicsLayoutWidget()  ## GraphicsView with GraphicsLayout inserted by default
 mw.setCentralWidget(view)
 mw.show()
 

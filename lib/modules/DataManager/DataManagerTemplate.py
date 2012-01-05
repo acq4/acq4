@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/modules/DataManager/DataManagerTemplate.ui'
 #
-# Created: Fri Dec  2 19:52:50 2011
+# Created: Wed Jan  4 18:01:35 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -71,7 +71,7 @@ class Ui_MainWindow(object):
         self.newFolderList.setSizePolicy(sizePolicy)
         self.newFolderList.setObjectName(_fromUtf8("newFolderList"))
         self.verticalLayout_2.addWidget(self.newFolderList)
-        self.fileTreeWidget = FileTreeWidget(self.layoutWidget)
+        self.fileTreeWidget = DirTreeWidget(self.layoutWidget)
         self.fileTreeWidget.setEditTriggers(QtGui.QAbstractItemView.EditKeyPressed|QtGui.QAbstractItemView.SelectedClicked)
         self.fileTreeWidget.setDragEnabled(True)
         self.fileTreeWidget.setDragDropMode(QtGui.QAbstractItemView.DragDrop)
@@ -179,5 +179,5 @@ class Ui_MainWindow(object):
         self.logDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Current Log", None, QtGui.QApplication.UnicodeUTF8))
 
 from FileInfoView import FileInfoView
-from FileTreeWidget import FileTreeWidget
+from DirTreeWidget import DirTreeWidget
 from FileDataView import FileDataView

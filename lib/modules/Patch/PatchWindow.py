@@ -3,8 +3,8 @@ from __future__ import with_statement
 from PatchTemplate import *
 from PyQt4 import QtGui, QtCore
 #from PyQt4 import Qwt5 as Qwt
-from pyqtgraph.WidgetGroup import WidgetGroup
-from pyqtgraph.PlotWidget import PlotWidget
+from pyqtgraph import WidgetGroup
+from pyqtgraph import PlotWidget
 from metaarray import *
 from Mutex import Mutex, MutexLocker
 import traceback, sys, time
@@ -35,8 +35,8 @@ class PatchWindow(QtGui.QMainWindow):
         
         self.params = {
             'mode': 'vc',
-            'rate': 200000,
-            'downsample': 20,
+            'rate': 400000,
+            'downsample': 10,
             'cycleTime': .2,
             'recordTime': 0.1,
             'delayTime': 0.03,
@@ -114,49 +114,24 @@ class PatchWindow(QtGui.QMainWindow):
             (self.ui.drawFitCheck, 'drawFit'),
             (self.ui.averageSpin, 'average'),
         ])
-        #self.stateGroup = WidgetGroup([
-        #    (self.ui.icPulseSpin, 'icPulse', 1e12),
-        #    (self.ui.vcPulseSpin, 'vcPulse', 1e3),
-        #    (self.ui.icHoldSpin, 'icHolding', 1e12),
-        #    (self.ui.vcHoldSpin, 'vcHolding', 1e3),
-        #    (self.ui.icPulseCheck, 'icPulseEnabled'),
-        #    (self.ui.vcPulseCheck, 'vcPulseEnabled'),
-        #    (self.ui.icHoldCheck, 'icHoldingEnabled'),
-        #    (self.ui.vcHoldCheck, 'vcHoldingEnabled'),
-        #    (self.ui.cycleTimeSpin, 'cycleTime', 1),
-        #    (self.ui.pulseTimeSpin, 'pulseTime', 1e3),
-        #    (self.ui.delayTimeSpin, 'delayTime', 1e3),
-        #])
         self.stateGroup.setState(self.params)
         
         self.ui.patchPlot.setLabel('left', text='Primary', units='A')
         self.patchCurve = self.ui.patchPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
         self.patchFitCurve = self.ui.patchPlot.plot(pen=QtGui.QPen(QtGui.QColor(0, 100, 200)))
-        self.ui.commandPlot.setLabel('left', text='Secondary', units='V')
+        self.ui.commandPlot.setLabel('left', text='Command', units='V')
         self.commandCurve = self.ui.commandPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
         
-        #QtCore.QObject.connect(self.ui.startBtn, QtCore.SIGNAL('clicked()'), self.startClicked)
         self.ui.startBtn.clicked.connect(self.startClicked)
-        #QtCore.QObject.connect(self.ui.recordBtn, QtCore.SIGNAL('clicked()'), self.recordClicked)
         self.ui.recordBtn.clicked.connect(self.recordClicked)
-        #QtCore.QObject.connect(self.ui.bathModeBtn, QtCore.SIGNAL('clicked()'), self.bathMode)
         self.ui.bathModeBtn.clicked.connect(self.bathMode)
-        #QtCore.QObject.connect(self.ui.patchModeBtn, QtCore.SIGNAL('clicked()'), self.patchMode)
         self.ui.patchModeBtn.clicked.connect(self.patchMode)
-        #QtCore.QObject.connect(self.ui.cellModeBtn, QtCore.SIGNAL('clicked()'), self.cellMode)
         self.ui.cellModeBtn.clicked.connect(self.cellMode)
-        #QtCore.QObject.connect(self.ui.monitorModeBtn, QtCore.SIGNAL('clicked()'), self.monitorMode)
         self.ui.monitorModeBtn.clicked.connect(self.monitorMode)
-        #QtCore.QObject.connect(self.ui.resetBtn, QtCore.SIGNAL('clicked()'), self.resetClicked)
         self.ui.resetBtn.clicked.connect(self.resetClicked)
-        #QtCore.QObject.connect(self.thread, QtCore.SIGNAL('finished()'), self.threadStopped)
         self.thread.finished.connect(self.threadStopped)
-        #QtCore.QObject.connect(self.thread, QtCore.SIGNAL('newFrame'), self.handleNewFrame)
         self.thread.sigNewFrame.connect(self.handleNewFrame)
-        #QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('toggled(bool)'), self.updateParams)
-        #QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('toggled(bool)'), self.updateParams)
         self.ui.vcModeRadio.toggled.connect(self.updateParams)
-        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.updateParams)
         self.stateGroup.sigChanged.connect(self.updateParams)
                 
         ## Configure analysis plots, curves, and data arrays
@@ -164,17 +139,10 @@ class PatchWindow(QtGui.QMainWindow):
         self.analysisData = {'time': []}
         for n in self.analysisItems:
             w = getattr(self.ui, n+'Check')
-            #QtCore.QObject.connect(w, QtCore.SIGNAL('clicked()'), self.showPlots)
             w.clicked.connect(self.showPlots)
             p = self.plots[n]
-            #p.setCanvasBackground(QtGui.QColor(0,0,0))
-            #p.replot()
             self.analysisCurves[n] = p.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
             for suf in ['', 'Std']:
-                #self.analysisCurves[n+suf] = p.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=False)
-                #self.analysisCurves[n+suf] = PlotCurve(n+suf)
-                #self.analysisCurves[n+suf].setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-                #self.analysisCurves[n+suf].attach(p)
                 self.analysisData[n+suf] = []
         self.showPlots()
         self.updateParams()
@@ -197,7 +165,8 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.vcHoldCheck.setChecked(False)
         self.ui.vcModeRadio.setChecked(True)
         self.ui.cycleTimeSpin.setValue(0.2)
-        self.ui.pulseTimeSpin.setValue(50e-3)
+        self.ui.pulseTimeSpin.setValue(10e-3)
+        self.ui.delayTimeSpin.setValue(10e-3)
         self.ui.averageSpin.setValue(1)
     
     def patchMode(self):
@@ -205,7 +174,8 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.vcHoldCheck.setChecked(True)
         self.ui.vcModeRadio.setChecked(True)
         self.ui.cycleTimeSpin.setValue(0.2)
-        self.ui.pulseTimeSpin.setValue(50e-3)
+        self.ui.pulseTimeSpin.setValue(10e-3)
+        self.ui.delayTimeSpin.setValue(10e-3)
         self.ui.averageSpin.setValue(1)
     
     def cellMode(self):
@@ -213,6 +183,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.icModeRadio.setChecked(True)
         self.ui.cycleTimeSpin.setValue(250e-3)
         self.ui.pulseTimeSpin.setValue(150e-3)
+        self.ui.delayTimeSpin.setValue(30e-3)
         self.ui.averageSpin.setValue(1)
 
     def monitorMode(self):

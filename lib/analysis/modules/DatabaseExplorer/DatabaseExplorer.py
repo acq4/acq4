@@ -6,11 +6,11 @@ import DatabaseGui
 #from flowchart import *
 #import flowchart.library.EventDetection as FCEventDetection
 import os
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import debug
 import ColorMapper
 import pyqtgraph as pg
-import pyqtgraph.TreeWidget as TreeWidget
+#import pyqtgraph.TreeWidget as TreeWidget
 
 
 class DatabaseExplorer(AnalysisModule):

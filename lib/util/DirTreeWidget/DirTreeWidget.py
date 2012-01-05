@@ -47,8 +47,16 @@ class DirTreeWidget(QtGui.QTreeWidget):
 
     def quit(self):
         ## not sure if any of this is necessary..
-        self.itemExpanded.disconnect(self.itemExpandedEvent)
-        self.itemChanged.disconnect(self.itemChangedEvent)
+        try:
+            self.itemExpanded.disconnect(self.itemExpandedEvent)
+        except TypeError:
+            pass
+        
+        try:
+            self.itemChanged.disconnect(self.itemChangedEvent)
+        except TypeError:
+            pass
+        
         for h in self.items:
             self.unwatch(h)
         #self.handles = {}
@@ -269,7 +277,7 @@ class DirTreeWidget(QtGui.QTreeWidget):
         item = self.item(handle)
         QtGui.QTreeWidget.editItem(self, item, 0)
 
-    def rebuildTree(self, root=None):
+    def rebuildTree(self, root=None, useCache=True):
         """Completely clear and rebuild the entire tree starting at root"""
         if root is None:
             root = self.invisibleRootItem()
@@ -277,8 +285,10 @@ class DirTreeWidget(QtGui.QTreeWidget):
         handle = self.handle(root)
 
         self.clearTree(root)
-
-        for f in handle.ls():
+        if handle is None:
+            return
+        
+        for f in handle.ls(useCache=useCache):
             #print "Add handle", f
             try:
                 childHandle = handle[f]
@@ -350,6 +360,20 @@ class DirTreeWidget(QtGui.QTreeWidget):
         #except:
             #printExc("Move failed:")
 
+    def contextMenuEvent(self, ev):
+        print "menu:", ev.pos()
+        item = self.itemAt(ev.pos())
+        if item is None:
+            print "no item"
+            return
+        self.menu = QtGui.QMenu(self)
+        act = self.menu.addAction('refresh', self.refreshClicked)
+        self.contextItem = item
+        self.menu.popup(ev.globalPos())
+        
+    def refreshClicked(self):
+        self.rebuildTree(self.contextItem, useCache=False)
+
 
 class FileTreeItem(QtGui.QTreeWidgetItem):
     def __init__(self, handle, checkState=None, allowMove=True, allowRename=True):
@@ -359,8 +383,8 @@ class FileTreeItem(QtGui.QTreeWidgetItem):
 
         if self.handle.isDir():
             self.setExpanded(False)
-            if self.handle.hasChildren():
-                self.setChildIndicatorPolicy(QtGui.QTreeWidgetItem.ShowIndicator)
+            #if self.handle.hasChildren():  ## too expensive.
+            self.setChildIndicatorPolicy(QtGui.QTreeWidgetItem.ShowIndicator)
             self.setFlags(QtCore.Qt.ItemIsSelectable|QtCore.Qt.ItemIsDropEnabled|QtCore.Qt.ItemIsEnabled)
             self.setForeground(0, QtGui.QBrush(QtGui.QColor(0, 0, 150)))
         else:

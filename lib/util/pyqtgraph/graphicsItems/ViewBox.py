@@ -3,8 +3,12 @@ import numpy as np
 from pyqtgraph.Point import Point
 import pyqtgraph.functions as fn
 from ItemGroup import ItemGroup
+from GraphicsWidget import GraphicsWidget
+from UIGraphicsItem import UIGraphicsItem
+from pyqtgraph.GraphicsScene import GraphicsScene
 
-class ViewBox(QtGui.QGraphicsWidget):
+__all__ = ['ViewBox']
+class ViewBox(GraphicsWidget):
     """
     Box that allows internal scaling/panning of children by mouse drag. 
     Not really compatible with GraphicsView having the same functionality.
@@ -14,9 +18,10 @@ class ViewBox(QtGui.QGraphicsWidget):
     sigXRangeChanged = QtCore.Signal(object, object)
     sigRangeChangedManually = QtCore.Signal(object)
     sigRangeChanged = QtCore.Signal(object, object)
+    sigActionPositionChanged = QtCore.Signal(object)
     
     def __init__(self, parent=None, border=None, lockAspect=False, enableMouse=True, invertY=False):
-        QtGui.QGraphicsWidget.__init__(self, parent)
+        GraphicsWidget.__init__(self, parent)
         #self.gView = view
         #self.showGrid = showGrid
         ## separating targetRange and viewRange allows the view to be resized
@@ -27,7 +32,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         self.wheelScaleFactor = -1.0 / 8.0
         self.aspectLocked = False
         self.setFlag(self.ItemClipsChildrenToShape)
-        self.setFlag(self.ItemIsFocusable, True)  ## so we can receive key presses
+        self.setFlag(self.ItemIsFocusable, False)  ## so we can receive key presses
         #self.setFlag(QtGui.QGraphicsItem.ItemClipsToShape)
         #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         
@@ -52,6 +57,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         self.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding))
         
         self.border = border
+        self.menu = None
         
         self.mouseEnabled = [enableMouse, enableMouse]
         self.setAspectLocked(lockAspect)
@@ -90,6 +96,12 @@ class ViewBox(QtGui.QGraphicsWidget):
         if ptr != self.axHistoryPointer:
             self.axHistoryPointer = ptr
             self.showAxRect(self.axHistory[ptr])
+            
+    def toggleLeftAction(self, act):
+        if act.text() is 'pan':
+            self.setLeftButtonAction('pan')
+        elif act.text() is 'zoom':
+            self.setLeftButtonAction('rect')
 
     def setLeftButtonAction(self, mode='Rect'):
         if mode.lower() == 'rect':
@@ -97,7 +109,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         elif mode.lower() == 'pan':
             self.useleftButtonPan = True
         else:
-            raise Exception('graphicsItems:ViewBox:setLeftButtonAction: unknown mode = %s' % mode)
+            raise Exception('graphicsItems:ViewBox:setLeftButtonAction: unknown mode = %s (Options are "pan" and "rect")' % mode)
             
     def innerSceneItem(self):
         return self.childGroup
@@ -166,11 +178,43 @@ class ViewBox(QtGui.QGraphicsWidget):
                 self.updateMatrix()
         
     def childTransform(self):
+        """
+        Return the transform that maps from child(item in the childGroup) coordinates to local coordinates.
+        (This maps from inside the viewbox to outside)
+        """ 
         m = self.childGroup.transform()
         m1 = QtGui.QTransform()
         m1.translate(self.childGroup.pos().x(), self.childGroup.pos().y())
         return m*m1
 
+    def mapToView(self, obj):
+        """Maps from the local coordinates of the ViewBox to the coordinate system displayed inside the ViewBox"""
+        m = self.childTransform().inverted()[0]
+        return m.map(obj)
+
+    def mapFromView(self, obj):
+        """Maps from the coordinate system displayed inside the ViewBox to the local coordinates of the ViewBox"""
+        m = self.childTransform()
+        return m.map(obj)
+
+    def mapSceneToView(self, obj):
+        """Maps from scene coordinates to the coordinate system displayed inside the ViewBox"""
+        return self.mapToView(self.mapFromScene(obj))
+
+    def mapViewToScene(self, obj):
+        """Maps from the coordinate system displayed inside the ViewBox to scene coordinates"""
+        return self.mapToScene(self.mapFromView(obj))
+    
+    def mapFromItemToView(self, item, obj):
+        return self.mapSceneToView(item.mapToScene(obj))
+
+    def mapFromViewToItem(self, item, obj):
+        return item.mapFromScene(self.mapViewToScene(obj))
+
+    def itemBoundingRect(self, item):
+        """Return the bounding rect of the item in view coordinates"""
+        return self.mapSceneToView(item.sceneBoundingRect()).boundingRect()
+    
     def viewScale(self):
         vr = self.viewRect()
         #print "viewScale:", self.range
@@ -188,52 +232,28 @@ class ViewBox(QtGui.QGraphicsWidget):
 
     def scaleBy(self, s, center=None):
         """Scale by s around given center point (or center of view)"""
-        #print "scaleBy", s, center
-        #if self.aspectLocked:
-            #s[0] = s[1]
         scale = Point(s)
         if self.aspectLocked is not False:
             scale[0] = self.aspectLocked * scale[1]
 
-        #xr, yr = self.range
         vr = self.viewRect()
         if center is None:
             center = Point(vr.center())
-            #xc = (xr[1] + xr[0]) * 0.5
-            #yc = (yr[1] + yr[0]) * 0.5
         else:
             center = Point(center)
-            #(xc, yc) = center
         
-        #x1 = xc + (xr[0]-xc) * s[0]
-        #x2 = xc + (xr[1]-xc) * s[0]
-        #y1 = yc + (yr[0]-yc) * s[1]
-        #y2 = yc + (yr[1]-yc) * s[1]
         tl = center + (vr.topLeft()-center) * scale
         br = center + (vr.bottomRight()-center) * scale
        
-        #print xr, xc, s, (xr[0]-xc) * s[0], (xr[1]-xc) * s[0]
-        #print [[x1, x2], [y1, y2]]
-        
-        #if not self.aspectLocked:
-            #self.setXRange(x1, x2, update=False, padding=0)
-        #self.setYRange(y1, y2, padding=0)
-        #print self.range
-        
         self.setRange(QtCore.QRectF(tl, br), padding=0)
         
     def translateBy(self, t, viewCoords=False):
-        t = t.astype(np.float)
-        #print "translate:", t, self.viewScale()
+        t = Point(t)
         if viewCoords:  ## scale from pixels
-            t /= self.viewScale()
-        #xr, yr = self.range
+            t /= Point(self.viewScale())
         
         vr = self.viewRect()
-        #print xr, yr, t
-        #self.setXRange(xr[0] + t[0], xr[1] + t[0], update=False, padding=0)
-        #self.setYRange(yr[0] + t[1], yr[1] + t[1], padding=0)
-        self.setRange(vr.translated(Point(t)), padding=0)
+        self.setRange(vr.translated(t), padding=0)
         
     def wheelEvent(self, ev, axis=None):
         mask = np.array(self.mouseEnabled, dtype=np.float)
@@ -242,115 +262,195 @@ class ViewBox(QtGui.QGraphicsWidget):
             mask[:] = 0
             mask[axis] = mv
         s = ((mask * 0.02) + 1) ** (ev.delta() * self.wheelScaleFactor) # actual scaling factor
-        # scale 'around' mouse cursor position
         center = Point(self.childGroup.transform().inverted()[0].map(ev.pos()))
         self.scaleBy(s, center)
-        #self.emit(QtCore.SIGNAL('rangeChangedManually'), self.mouseEnabled)
         self.sigRangeChangedManually.emit(self.mouseEnabled)
         ev.accept()
 
-    def mouseMoveEvent(self, ev):
-        QtGui.QGraphicsWidget.mouseMoveEvent(self, ev)
-        pos = np.array([ev.pos().x(), ev.pos().y()])
-        dif = pos - self.mousePos
-        dif *= -1
-        self.mousePos = pos
+    ### Mouse press/move/release are now replaced by mouseDrag.
+    #def mouseMoveEvent(self, ev):
+        #GraphicsWidget.mouseMoveEvent(self, ev)
+        #pos = np.array([ev.pos().x(), ev.pos().y()])
+        #dif = pos - self.mousePos
+        #dif *= -1
+        #self.mousePos = pos
+
+        ### Ignore axes if mouse is disabled
+        #mask = np.array(self.mouseEnabled, dtype=np.float)
+
+        ### Scale or translate based on mouse button
+        #if ev.buttons() & (QtCore.Qt.LeftButton | QtCore.Qt.MidButton):
+            #if self.useLeftButtonPan == False:
+                ### update scale box
+                #self.updateScaleBox()
+                ### don't emit until scale has changed
+                #ev.accept()
+            #else:
+                #if not self.yInverted:
+                    #mask *= np.array([1, -1])
+                #tr = dif*mask
+                #self.translateBy(tr, viewCoords=True)
+                #self.sigRangeChangedManually.emit(self.mouseEnabled)
+                #ev.accept()
+        #elif ev.buttons() & QtCore.Qt.RightButton:
+            #if self.aspectLocked is not False:
+                #mask[0] = 0
+            #dif = ev.screenPos() - ev.lastScreenPos()
+            #dif = np.array([dif.x(), dif.y()])
+            #dif[0] *= -1
+            #s = ((mask * 0.02) + 1) ** dif
+            #center = Point(self.childGroup.transform().inverted()[0].map(ev.buttonDownPos(QtCore.Qt.RightButton)))
+            #self.scaleBy(s, center)
+            #self.sigRangeChangedManually.emit(self.mouseEnabled)
+            #ev.accept()
+        #else:
+            #ev.ignore()
+
+    #def mousePressEvent(self, ev):
+        #GraphicsWidget.mousePressEvent(self, ev)
+        #self.mousePos = np.array([ev.pos().x(), ev.pos().y()])
+        #self.pressPos = self.mousePos.copy()
+        #ev.accept()
+
+    #def mouseReleaseEvent(self, ev):
+        #GraphicsWidget.mouseReleaseEvent(self, ev)
+        #pos = np.array([ev.pos().x(), ev.pos().y()])
+        #self.mousePos = pos
+        #if ev.button() & (QtCore.Qt.LeftButton | QtCore.Qt.MidButton) and self.useLeftButtonPan == False:
+            
+            ### Get rectangle from drag
+            #if self.rbScaleBox.isVisible():
+                #self.rbScaleBox.hide()
+                #ax = QtCore.QRectF(Point(self.pressPos), Point(self.mousePos))
+                #ax = self.childGroup.mapRectFromParent(ax)
+                #self.showAxRect(ax)
+                #ev.accept()
+                #self.axHistoryPointer += 1
+                #self.axHistory = self.axHistory[:self.axHistoryPointer] + [ax]
+                
+    #def contextMenuEvent(self, ev):
+        #self.menu = QtGui.QMenu()
+        #self.menu.addAction('Auto Range')
+        #self.menu.addAction('Toggle Zoom/Pan')
+        #self.menu.addAction('Show Grid')
+        #ev.accept()
+        #pos = ev.screenPos()
+        #self.menu.popup(QtCore.QPoint(pos.x(), pos.y()))
+    def mouseClickEvent(self, ev):
+        if ev.button() == QtCore.Qt.RightButton:
+            ev.accept()
+            self.raiseContextMenu(ev)
+    
+    def raiseContextMenu(self, ev):
+        #print "viewbox.raiseContextMenu called."
+        
+        self.getMenu()
+        #print "2:", [str(a.text()) for a in self.menu.actions()]
+        pos = ev.screenPos()
+        pos2 = ev.scenePos()
+        #print "3:", [str(a.text()) for a in self.menu.actions()]
+        self.sigActionPositionChanged.emit(pos2)
+
+        self.menu.popup(QtCore.QPoint(pos.x(), pos.y()))
+        #print "4:", [str(a.text()) for a in self.menu.actions()]
+        
+    def getMenu(self):
+        menu = QtGui.QMenu()
+        menu.setTitle("ViewBox options")
+        menu.addAction("Auto range", self.autoRange)
+            
+            #leftMenu = QtGui.QMenu("Use left button for")
+            #group = QtGui.QActionGroup(self.menu)
+            #pan = leftMenu.addAction("pan", self.toggleLeftAction)
+            #zoom = leftMenu.addAction("zoom", self.toggleLeftAction)
+            #pan.setCheckable(True)
+            #zoom.setCheckable(True)
+            #pan.setActionGroup(group)
+            #zoom.setActionGroup(group)
+            #self.menu.addMenu(leftMenu)
+        #print "1d:", [str(a.text()) for a in self.menu.actions()]
+        if self.menu is None:
+            self.menu = menu
+        #print "1e:", [str(a.text()) for a in self.menu.actions()]
+        return menu
         
 
+    def mouseDragEvent(self, ev):
+        #print 'vbDragEvent'
+        #GraphicsWidget.mouseMoveEvent(self, ev)
+        
+        ev.accept()  ## we accept all buttons
+        
+        #if ev.isStart():
+            #self.mousePos = np.array([ev.pos().x(), ev.pos().y()])
+            #self.pressPos = self.mousePos.copy()
+            #ev.accept()
+            #return
+            
+        #if ev.isFinish():
+            #pos = np.array([ev.pos().x(), ev.pos().y()])
+            ##self.mousePos = pos
+            #if ev.button() & (QtCore.Qt.LeftButton | QtCore.Qt.MidButton) and self.useLeftButtonPan == False:
+                
+                ### Get rectangle from drag
+                #if self.rbScaleBox.isVisible():
+                    #self.rbScaleBox.hide()
+                    ##ax = QtCore.QRectF(Point(self.pressPos), Point(self.mousePos))
+                    #ax = QtCore.QRectF(Point(ev.buttonDownPos(ev.button())), Point(pos))
+                    #ax = self.childGroup.mapRectFromParent(ax)
+                    #self.showAxRect(ax)
+                    #ev.accept()
+                    #self.axHistoryPointer += 1
+                    #self.axHistory = self.axHistory[:self.axHistoryPointer] + [ax]
+            #return
+            
+        pos = ev.pos()
+        lastPos = ev.lastPos()
+        #dif = pos - self.mousePos
+        dif = pos - lastPos
+        dif = dif * -1
+        #self.mousePos = pos
 
         ## Ignore axes if mouse is disabled
         mask = np.array(self.mouseEnabled, dtype=np.float)
 
         ## Scale or translate based on mouse button
-        if ev.buttons() & (QtCore.Qt.LeftButton | QtCore.Qt.MidButton):
+        if ev.button() & (QtCore.Qt.LeftButton | QtCore.Qt.MidButton):
             if self.useLeftButtonPan == False:
-                ## update scale box
-                self.updateScaleBox()
-                #ax = self.mouseRect()
-                #self.rbScaleBox.setRect(ax)
-                #self.sigRangeChangedManually.emit(self.mouseEnabled)
-                ## don't emit until scale has changed
-                ev.accept()
+                if ev.isFinish():  ## This is the final move in the drag; change the view scale now
+                    #print "finish"
+                    self.rbScaleBox.hide()
+                    #ax = QtCore.QRectF(Point(self.pressPos), Point(self.mousePos))
+                    ax = QtCore.QRectF(Point(ev.buttonDownPos(ev.button())), Point(pos))
+                    ax = self.childGroup.mapRectFromParent(ax)
+                    self.showAxRect(ax)
+                    self.axHistoryPointer += 1
+                    self.axHistory = self.axHistory[:self.axHistoryPointer] + [ax]
+                else:
+                    ## update shape of scale box
+                    self.updateScaleBox(ev.buttonDownPos(), ev.pos())
             else:
                 if not self.yInverted:
                     mask *= np.array([1, -1])
                 tr = dif*mask
                 self.translateBy(tr, viewCoords=True)
-                #self.emit(QtCore.SIGNAL('rangeChangedManually'), self.mouseEnabled)
                 self.sigRangeChangedManually.emit(self.mouseEnabled)
-                ev.accept()
-        elif ev.buttons() & QtCore.Qt.RightButton:
+        elif ev.button() & QtCore.Qt.RightButton:
+            #print "vb.rightDrag"
             if self.aspectLocked is not False:
                 mask[0] = 0
+            
             dif = ev.screenPos() - ev.lastScreenPos()
             dif = np.array([dif.x(), dif.y()])
             dif[0] *= -1
             s = ((mask * 0.02) + 1) ** dif
-            #print mask, dif, s
             center = Point(self.childGroup.transform().inverted()[0].map(ev.buttonDownPos(QtCore.Qt.RightButton)))
             self.scaleBy(s, center)
-            #self.emit(QtCore.SIGNAL('rangeChangedManually'), self.mouseEnabled)
             self.sigRangeChangedManually.emit(self.mouseEnabled)
-            ev.accept()
-        else:
-            ev.ignore()
 
-    def mousePressEvent(self, ev):
-        QtGui.QGraphicsWidget.mousePressEvent(self, ev)
-        #if self.rbScaleBox is not None:
-            #self.removeItem(self.rbScaleBox)
-            #del self.rbScaleBox
-            #self.rbScaleBox = None
-            
-        self.mousePos = np.array([ev.pos().x(), ev.pos().y()])
-        self.pressPos = self.mousePos.copy()
-        
-        # check modifiers first:
-        #mmods = ev.modifiers()
-        #if mmods == QtCore.Qt.ControlModifier:
-            #ax = self.axHistory(self.axHistoryPointer)
-            #self.showAxRect(ax)
-            ##print 'Previous'
-        #elif mmods == QtCore.Qt.MetaModifier:
-            #if self.axHistoryPointer+1 < len(self.axHistory):
-                #self.axHistoryPointer += 1
-                #self.showAxRect(self.AxHistory(self.axHistoryPointer+1))
-            ##print 'Next'
-        #elif mmods == QtCore.Qt.ShiftModifier:
-            #self.axHistoryPointer = None
-            #self.axHistory = []
-            ##print 'cleared'
-        #elif mmods == QtCore.Qt.AltModifier:
 
-            
-        ev.accept()
-
-    def mouseReleaseEvent(self, ev):
-        QtGui.QGraphicsWidget.mouseReleaseEvent(self, ev)
-        pos = np.array([ev.pos().x(), ev.pos().y()])
-        #if sum(abs(self.pressPos - pos)) < 3:  ## Detect click
-            #if ev.button() == QtCore.Qt.RightButton:
-                #self.ctrlMenu.popup(self.mapToGlobal(ev.pos()))
-        self.mousePos = pos
-        if ev.button() & (QtCore.Qt.LeftButton | QtCore.Qt.MidButton) and self.useLeftButtonPan == False:
-            #if self.rbScaleBox is not None:
-                #self.removeItem(self.rbScaleBox)
-                ##del self.rbScaleBox # remove the rectangle
-                #self.rbScaleBox = None
-            #ax = self.mouseRect()
-            
-            ## Get rectangle from drag
-            if self.rbScaleBox.isVisible():
-                self.rbScaleBox.hide()
-                ax = QtCore.QRectF(Point(self.pressPos), Point(self.mousePos))
-                ax = self.childGroup.mapRectFromParent(ax)
-                self.showAxRect(ax)
-                ev.accept()
-                self.axHistoryPointer += 1
-                self.axHistory = self.axHistory[:self.axHistoryPointer] + [ax]
-
-    def updateScaleBox(self):
-        r = QtCore.QRectF(Point(self.pressPos), Point(self.mousePos))
+    def updateScaleBox(self, p1, p2):
+        r = QtCore.QRectF(p1, p2)
         r = self.childGroup.mapRectFromParent(r)
         self.rbScaleBox.setPos(r.topLeft())
         self.rbScaleBox.resetTransform()
@@ -398,8 +498,7 @@ class ViewBox(QtGui.QGraphicsWidget):
                 #changes[ax2] = [c-d, c+d]
  
         else:
-            print ax
-            raise Exception("argument 'ax' must be 0, 1, or QRectF.")
+            raise Exception("argument 'ax' must be 0, 1, or QRectF. (got %s)" % str(ax))
         
         changed = [False, False]
         for ax, range in changes.iteritems():
@@ -434,8 +533,71 @@ class ViewBox(QtGui.QGraphicsWidget):
         self.setRange(0, min, max, update=update, padding=padding)
 
     def autoRange(self, padding=0.02):
-        br = self.childGroup.childrenBoundingRect()
-        self.setRange(br, padding=padding)
+        #items = []
+        #for citem in self.items:
+            #if citem.isVisible() and citem is not self.grid:
+                #items.append(citem.graphicsItem())
+        #if len(items) < 1:
+            #return
+        #bounds = items[0].sceneBoundingRect()
+        #if len(items) > 1:
+            #for i in items[1:]:
+                #bounds |= i.sceneBoundingRect()
+        #self.view.setRange(bounds)
+        #br = self.childGroup.childrenBoundingRect()
+        bounds = self.childrenBoundingRect()
+        if bounds is not None:
+            self.setRange(bounds, padding=padding)
+        
+    def childrenBoundingRect(self, item=None):
+        """Return the bounding rect of all children. Returns None if there are no bounded children"""
+        if item is None:
+            item = self.childGroup
+        if not item.isVisible():
+            return QtCore.QRectF()
+        
+        if hasattr(item, 'realBoundingRect'):
+            bounds = item.realBoundingRect()
+        else:
+            bounds = item.boundingRect()
+        bounds = self.mapFromItemToView(item, bounds).boundingRect()
+            
+        for ch in GraphicsScene.translateGraphicsItems(item.childItems()):
+            
+            chb = self.childrenBoundingRect(ch)
+            
+            if chb.height() > 0:
+                if bounds.height() > 0:
+                    bounds.setTop(min(bounds.top(), chb.top()))
+                    bounds.setBottom(max(bounds.bottom(), chb.bottom()))
+                else:
+                    bounds.setTop(chb.top())
+                    bounds.setBottom(chb.bottom())
+            if chb.width() > 0:
+                if bounds.width() > 0:
+                    bounds.setLeft(min(bounds.left(), chb.left()))
+                    bounds.setRight(max(bounds.right(), chb.right()))
+                else:
+                    bounds.setLeft(chb.left())
+                    bounds.setRight(chb.right())
+        return bounds
+            
+            
+            #and not isinstance(item, UIGraphicsItem):
+            #bounds = self.itemBoundingRect(item)
+        #else:
+            #bounds = None
+            
+            #chb = self.childrenBoundingRect(ch)
+            #if chb is None or (chb.width() == 0 and chb.height() == 0):
+                #continue
+            #else:
+                #if bounds is None:
+                    #bounds = chb
+                #else:
+                    #bounds |= chb
+        #return bounds
+        
 
     def updateMatrix(self, changed=None):
         if changed is None:
@@ -507,3 +669,5 @@ class ViewBox(QtGui.QGraphicsWidget):
             p.setPen(self.border)
             #p.fillRect(bounds, QtGui.QColor(0, 0, 0))
             p.drawRect(bounds)
+
+    

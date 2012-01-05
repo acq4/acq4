@@ -213,10 +213,16 @@ class PulseParameter(GroupParameter):
     def sumChanged(self):
         if self['sum', 'affect'] == 'length':
             sign = 1 if self['length'] >= 0 else -1
-            self.length.setValue(sign * self['sum'] / self['amplitude'], blockSignal=self.lenChanged)
+            if self['amplitude'] == 0:
+                self.length.setValue(0, blockSignal=self.lenChanged)
+            else:
+                self.length.setValue(sign * self['sum'] / self['amplitude'], blockSignal=self.lenChanged)
         else:
             sign = 1 if self['amplitude'] >= 0 else -1
-            self.amplitude.setValue(sign * self['sum'] / self['length'], blockSignal=self.ampChanged)
+            if self['length'] == 0:
+                self.amplitude.setValue(0, blockSignal=self.ampChanged)
+            else:
+                self.amplitude.setValue(sign * self['sum'] / self['length'], blockSignal=self.ampChanged)
 
     def varName(self):
         name = self.name()

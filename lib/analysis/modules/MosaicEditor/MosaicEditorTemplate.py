@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/MosaicEditor/MosaicEditorTemplate.ui'
 #
-# Created: Fri Dec  2 19:52:45 2011
+# Created: Wed Jan  4 18:01:30 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

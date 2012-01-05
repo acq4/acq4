@@ -3,7 +3,7 @@ from lib.modules.ProtocolRunner.analysisModules import AnalysisModule
 from lib.Manager import getManager
 from PyQt4 import QtCore, QtGui
 from UncagingTemplate import Ui_Form
-from pyqtgraph.graphicsItems import ImageItem
+from pyqtgraph import ImageItem
 from numpy import *
 from scipy.ndimage.filters import gaussian_filter
 from metaarray import MetaArray
@@ -289,7 +289,7 @@ class Prot:
         ## Set correct scene
         cModName = str(self.ui().ui.cameraModCombo.currentText())
         camMod = self.ui().man.getModule(cModName)
-        scene = camMod.ui.scene
+        scene = camMod.ui.view.scene()
         for i in self.items:
             (item, p, s) = i
             if item.scene() is not scene:

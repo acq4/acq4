@@ -1,10 +1,13 @@
 from pyqtgraph.Qt import QtGui, QtCore
-from GraphicsObject import GraphicsObject
+from pyqtgraph.Point import Point
+from UIGraphicsItem import UIGraphicsItem
+import pyqtgraph.functions as fn
 import numpy as np
 import weakref
 
 
-class InfiniteLine(GraphicsObject):
+__all__ = ['InfiniteLine']
+class InfiniteLine(UIGraphicsItem):
     """
     Displays a line of infinite length.
     This line may be dragged to indicate a position in data coordinates.
@@ -14,58 +17,62 @@ class InfiniteLine(GraphicsObject):
     sigPositionChangeFinished = QtCore.Signal(object)
     sigPositionChanged = QtCore.Signal(object)
     
-    def __init__(self, view, pos=0, angle=90, pen=None, movable=False, bounds=None):
-        GraphicsObject.__init__(self)
-        self.bounds = QtCore.QRectF()   ## graphicsitem boundary
+    def __init__(self, pos=None, angle=90, pen=None, movable=False, bounds=None):
+        """
+        Initialization options:
+            pos      - Position of the line. This can be a QPointF or a single value for vertical/horizontal lines.
+            angle    - Angle of line in degrees. 0 is horizontal, 90 is vertical.
+            pen      - Pen to use when drawing line
+            movable  - If True, the line can be dragged to a new position by the user
+            bounds   - Optional [min, max] bounding values. Bounds are only valid if the line is vertical or horizontal.
+        """
+        
+        UIGraphicsItem.__init__(self)
         
         if bounds is None:              ## allowed value boundaries for orthogonal lines
             self.maxRange = [None, None]
         else:
             self.maxRange = bounds
+        self.moving = False
         self.setMovable(movable)
-        self.view = weakref.ref(view)
         self.p = [0, 0]
         self.setAngle(angle)
+        if pos is None:
+            pos = Point(0,0)
         self.setPos(pos)
 
-        self.hasMoved = False
-
         if pen is None:
-            pen = QtGui.QPen(QtGui.QColor(200, 200, 100))
+            pen = (200, 200, 100)
         self.setPen(pen)
         self.currentPen = self.pen
         #self.setFlag(self.ItemSendsScenePositionChanges)
-        #for p in self.getBoundingParents():
-            #QtCore.QObject.connect(p, QtCore.SIGNAL('viewChanged'), self.updateLine)
-        #QtCore.QObject.connect(self.view(), QtCore.SIGNAL('viewChanged'), self.updateLine)
-        self.view().sigRangeChanged.connect(self.updateLine)
       
     def setMovable(self, m):
         self.movable = m
         self.setAcceptHoverEvents(m)
       
     def setBounds(self, bounds):
+        """Set the (minimum, maximum) allowable values when dragging."""
         self.maxRange = bounds
         self.setValue(self.value())
         
-    def hoverEnterEvent(self, ev):
-        self.currentPen = QtGui.QPen(QtGui.QColor(255, 0,0))
-        self.update()
-        ev.ignore()
-
-    def hoverLeaveEvent(self, ev):
-        self.currentPen = self.pen
-        self.update()
-        ev.ignore()
-        
     def setPen(self, pen):
-        self.pen = pen
+        self.pen = fn.mkPen(pen)
         self.currentPen = self.pen
+        self.update()
         
     def setAngle(self, angle):
-        """Takes angle argument in degrees."""
+        """
+        Takes angle argument in degrees.
+        0 is horizontal; 90 is vertical.
+        
+        Note that the use of value() and setValue() changes if the line is 
+        not vertical or horizontal.
+        """
         self.angle = ((angle+45) % 180) - 45   ##  -45 <= angle < 135
-        self.updateLine()
+        self.resetTransform()
+        self.rotate(self.angle)
+        self.update()
         
     def setPos(self, pos):
         if type(pos) in [list, tuple]:
@@ -94,8 +101,8 @@ class InfiniteLine(GraphicsObject):
             
         if self.p != newPos:
             self.p = newPos
-            self.updateLine()
-            #self.emit(QtCore.SIGNAL('positionChanged'), self)
+            UIGraphicsItem.setPos(self, Point(self.p))
+            self.update()
             self.sigPositionChanged.emit(self)
 
     def getXPos(self):
@@ -128,93 +135,113 @@ class InfiniteLine(GraphicsObject):
             #print "ignore", change
         #return GraphicsObject.itemChange(self, change, val)
                 
-    def updateLine(self):
-
-        #unit = QtCore.QRect(0, 0, 10, 10)
-        #if self.scene() is not None:
-            #gv = self.scene().views()[0]
-            #unit = gv.mapToScene(unit).boundingRect()
-            ##print unit
-            #unit = self.mapRectFromScene(unit)
-            ##print unit
-        
-        vr = self.view().viewRect()
-        #vr = self.viewBounds()
-        if vr is None:
-            return
-        #print 'before', self.bounds
-        
-        if self.angle > 45:
-            m = np.tan((90-self.angle) * np.pi / 180.)
-            y2 = vr.bottom()
-            y1 = vr.top()
-            x1 = self.p[0] + (y1 - self.p[1]) * m
-            x2 = self.p[0] + (y2 - self.p[1]) * m
-        else:
-            m = np.tan(self.angle * np.pi / 180.)
-            x1 = vr.left()
-            x2 = vr.right()
-            y2 = self.p[1] + (x1 - self.p[0]) * m
-            y1 = self.p[1] + (x2 - self.p[0]) * m
-        #print vr, x1, y1, x2, y2
-        self.prepareGeometryChange()
-        self.line = (QtCore.QPointF(x1, y1), QtCore.QPointF(x2, y2))
-        self.bounds = QtCore.QRectF(self.line[0], self.line[1])
-        ## Stupid bug causes lines to disappear:
-        if self.angle % 180 == 90:
-            px = self.pixelWidth()
-            #self.bounds.setWidth(1e-9)
-            self.bounds.setX(x1 + px*-5)
-            self.bounds.setWidth(px*10)
-        if self.angle % 180 == 0:
-            px = self.pixelHeight()
-            #self.bounds.setHeight(1e-9)
-            self.bounds.setY(y1 + px*-5)
-            self.bounds.setHeight(px*10)
-
-        #QtGui.QGraphicsLineItem.setLine(self, x1, y1, x2, y2)
-        #self.update()
-        
     def boundingRect(self):
-        #self.updateLine()
-        #return QtGui.QGraphicsLineItem.boundingRect(self)
-        #print "bounds", self.bounds
-        return self.bounds
+        br = UIGraphicsItem.boundingRect(self)
+        
+        ## add a 4-pixel radius around the line for mouse interaction.
+        
+        #print "line bounds:", self, br
+        dt = self.deviceTransform()
+        if dt is None:
+            return QtCore.QRectF()
+        lineDir = Point(dt.map(Point(1, 0)) - dt.map(Point(0,0)))  ## direction of line in pixel-space
+        orthoDir = Point(lineDir[1], -lineDir[0])  ## orthogonal to line in pixel-space
+        norm = orthoDir.norm()  ## direction of one pixel orthogonal to line
+        
+        dti = dt.inverted()[0]
+        px = Point(dti.map(norm)-dti.map(Point(0,0)))  ## orthogonal pixel mapped back to item coords
+        px = px[1]  ## project to y-direction
+        
+        br.setBottom(-px*4)
+        br.setTop(px*4)
+        return br.normalized()
     
     def paint(self, p, *args):
-        w,h  = self.pixelWidth()*5, self.pixelHeight()*5*1.1547
-        #self.updateLine()
-        l = self.line
-        
+        UIGraphicsItem.paint(self, p, *args)
+        br = self.boundingRect()
         p.setPen(self.currentPen)
-        #print "paint", self.line
-        p.drawLine(l[0], l[1])
-        
-        p.setBrush(QtGui.QBrush(self.currentPen.color()))
-        p.drawConvexPolygon(QtGui.QPolygonF([
-            l[0] + QtCore.QPointF(-w, 0),
-            l[0] + QtCore.QPointF(0, h),
-            l[0] + QtCore.QPointF(w, 0),
-        ]))
-        
-        #p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
+        p.drawLine(Point(br.right(), 0), Point(br.left(), 0))
         #p.drawRect(self.boundingRect())
         
-    def mousePressEvent(self, ev):
-        if self.movable and ev.button() == QtCore.Qt.LeftButton:
-            ev.accept()
-            self.pressDelta = self.mapToParent(ev.pos()) - QtCore.QPointF(*self.p)
-        else:
-            ev.ignore()
+        
+    #def mousePressEvent(self, ev):
+        #if self.movable and ev.button() == QtCore.Qt.LeftButton:
+            #ev.accept()
+            #self.pressDelta = self.mapToParent(ev.pos()) - QtCore.QPointF(*self.p)
+        #else:
+            #ev.ignore()
             
-    def mouseMoveEvent(self, ev):
-        self.setPos(self.mapToParent(ev.pos()) - self.pressDelta)
-        #self.emit(QtCore.SIGNAL('dragged'), self)
-        self.sigDragged.emit(self)
-        self.hasMoved = True
+    #def mouseMoveEvent(self, ev):
+        #self.setPos(self.mapToParent(ev.pos()) - self.pressDelta)
+        ##self.emit(QtCore.SIGNAL('dragged'), self)
+        #self.sigDragged.emit(self)
+        #self.hasMoved = True
 
-    def mouseReleaseEvent(self, ev):
-        if self.hasMoved and ev.button() == QtCore.Qt.LeftButton:
-            self.hasMoved = False
-            #self.emit(QtCore.SIGNAL('positionChangeFinished'), self)
+    #def mouseReleaseEvent(self, ev):
+        #if self.hasMoved and ev.button() == QtCore.Qt.LeftButton:
+            #self.hasMoved = False
+            ##self.emit(QtCore.SIGNAL('positionChangeFinished'), self)
+            #self.sigPositionChangeFinished.emit(self)
+
+    def mouseDragEvent(self, ev):
+        if self.movable and ev.button() == QtCore.Qt.LeftButton:
+            if ev.isStart():
+                self.moving = True
+                self.cursorOffset = self.pos() - self.mapToParent(ev.buttonDownPos())
+                self.startPosition = self.pos()
+            ev.accept()
+            
+            if not self.moving:
+                return
+                
+            #pressDelta = self.mapToParent(ev.buttonDownPos()) - Point(self.p)
+            self.setPos(self.cursorOffset + self.mapToParent(ev.pos()))
+            self.sigDragged.emit(self)
+            if ev.isFinish():
+                self.moving = False
+                self.sigPositionChangeFinished.emit(self)
+        #else:
+            #print ev
+
+            
+    def mouseClickEvent(self, ev):
+        if self.moving and ev.button() == QtCore.Qt.RightButton:
+            ev.accept()
+            self.setPos(self.startPosition)
+            self.moving = False
+            self.sigDragged.emit(self)
             self.sigPositionChangeFinished.emit(self)
+
+    def hoverEvent(self, ev):
+        if (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
+            self.currentPen = fn.mkPen(255, 0,0)
+        else:
+            self.currentPen = self.pen
+        self.update()
+        
+    #def hoverEnterEvent(self, ev):
+        #print "line hover enter"
+        #ev.ignore()
+        #self.updateHoverPen()
+
+    #def hoverMoveEvent(self, ev):
+        #print "line hover move"
+        #ev.ignore()
+        #self.updateHoverPen()
+
+    #def hoverLeaveEvent(self, ev):
+        #print "line hover leave"
+        #ev.ignore()
+        #self.updateHoverPen(False)
+        
+    #def updateHoverPen(self, hover=None):
+        #if hover is None:
+            #scene = self.scene()
+            #hover = scene.claimEvent(self, QtCore.Qt.LeftButton, scene.Drag)
+        
+        #if hover:
+            #self.currentPen = fn.mkPen(255, 0,0)
+        #else:
+            #self.currentPen = self.pen
+        #self.update()
+

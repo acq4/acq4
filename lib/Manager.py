@@ -35,8 +35,8 @@ from Mutex import Mutex
 from debug import *
 import getopt, glob
 import ptime
-from advancedTypes import OrderedDict
-from pyqtgraph.ProgressDialog import ProgressDialog
+from collections import OrderedDict
+from pyqtgraph import ProgressDialog
 from LogWindow import LogWindow
 
 LOG = None
@@ -64,7 +64,13 @@ def logMsg(msg, **kwargs):
         """
     global LOG
     if LOG is not None:
-        LOG.logMsg(msg, **kwargs)
+        try:
+            LOG.logMsg(msg, **kwargs)
+        except:
+            print "Error logging message:"
+            print "    " + "\n    ".join(msg.split("\n"))
+            print "    " + str(kwargs)
+            sys.excepthook(*sys.exc_info())
     else:
         print "Can't log message; no log created yet."
         #print args
@@ -75,7 +81,12 @@ def logExc(msg, *args, **kwargs):
     """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
     global LOG
     if LOG is not None:
-        LOG.logExc(msg, *args, **kwargs)
+        try:
+            LOG.logExc(msg, *args, **kwargs)
+        except:
+            print "Error logging exception:"
+            print msg
+            print kwargs
     else:
         print "Can't log error message; no log created yet."
         print args
@@ -102,105 +113,112 @@ class Manager(QtCore.QObject):
     single = None
     
     def __init__(self, configFile=None, argv=None):
-        if Manager.CREATED:
-            raise Exception("Manager object already created!")
-        
-        global LOG
-        LOG = LogWindow(self)
-        self.logWindow = LOG
-        
-        if argv is not None:
-            try:
-                opts, args = getopt.getopt(argv, 'c:m:b:s:d:n', ['config=', 'module=', 'baseDir=', 'storageDir=', 'disable=', 'noManager'])
-            except getopt.GetoptError, err:
-                print str(err)
-                print """
-Valid options are:
-    -c --config=     configuration file
-    -m --module=     module name to load
-    -b --baseDir=    base directory to use
-    -s --storageDir= storage directory to use
-    -n --noManager   Do not load manager module
-    -d --disable=    Disable the device specified
-"""
-        QtCore.QObject.__init__(self)
-        self.alreadyQuit = False
-        self.taskLock = Mutex(QtCore.QMutex.Recursive)
-        atexit.register(self.quit)
-        self.devices = OrderedDict()
-        self.modules = OrderedDict()
-        self.config = OrderedDict()
-        self.definedModules = OrderedDict()
-        #self.devRack = None
-        #self.dataManager = DataManager()
-        self.currentDir = None
-        self.baseDir = None
-        self.gui = None
-        self.shortcuts = []
-        self.disableDevs = []
-        
-        self.interfaceDir = InterfaceDirectory()
-
-        
-        ## Handle command line options
-        loadModules = []
-        setBaseDir = None
-        setStorageDir = None
-        loadManager = True
-        for o, a in opts:
-            if o in ['-c', '--config']:
-                configFile = a
-            elif o in ['-m', '--module']:
-                loadModules.append(a)
-            elif o in ['-b', '--baseDir']:
-                setBaseDir = a
-            elif o in ['-s', '--storageDir']:
-                setStorageDir = a
-            elif o in ['-n', '--noManager']:
-                loadManager = False
-            elif o in ['-d', '--disable']:
-                self.disableDevs.append(a)
-            else:
-                print "Unhandled option", o, a
-        
-        ## Read in configuration file
-        if configFile is None:
-            raise Exception("No configuration file specified!")
-        self.configDir = os.path.dirname(configFile)
-        self.readConfig(configFile)
-        
-        logMsg('ACQ4 started.', importance=9)
-        
-        Manager.CREATED = True
-        Manager.single = self
-        
-        ## Act on options if they were specified..
         try:
-            if setBaseDir is not None:
-                self.setBaseDir(setBaseDir)
-            if setStorageDir is not None:
-                self.setCurrentDir(setStorageDir)
-            if loadManager:
-                #mm = self.loadModule(module='Manager', name='Manager', config={})
-                self.showGUI()
-                self.createWindowShortcut('F1', self.gui.win)
-            for m in loadModules:
-                try:
-                    self.loadDefinedModule(m)
-                except:
-                    if not loadManager:
-                        self.showGUI()
-                        #self.loadModule(module='Manager', name='Manager', config={})
-                    raise
-                    
-        except:
-            printExc("\nError while acting on command line options: (but continuing on anyway..)")
+            if Manager.CREATED:
+                raise Exception("Manager object already created!")
             
+            global LOG
+            LOG = LogWindow(self)
+            self.logWindow = LOG
+            
+            self.documentation = Documentation()
+            
+            if argv is not None:
+                try:
+                    opts, args = getopt.getopt(argv, 'c:m:b:s:d:n', ['config=', 'module=', 'baseDir=', 'storageDir=', 'disable=', 'noManager'])
+                except getopt.GetoptError, err:
+                    print str(err)
+                    print """
+    Valid options are:
+        -c --config=     configuration file
+        -m --module=     module name to load
+        -b --baseDir=    base directory to use
+        -s --storageDir= storage directory to use
+        -n --noManager   Do not load manager module
+        -d --disable=    Disable the device specified
+    """
+            QtCore.QObject.__init__(self)
+            self.alreadyQuit = False
+            self.taskLock = Mutex(QtCore.QMutex.Recursive)
+            atexit.register(self.quit)
+            self.devices = OrderedDict()
+            self.modules = OrderedDict()
+            self.config = OrderedDict()
+            self.definedModules = OrderedDict()
+            #self.devRack = None
+            #self.dataManager = DataManager()
+            self.currentDir = None
+            self.baseDir = None
+            self.gui = None
+            self.shortcuts = []
+            self.disableDevs = []
+            
+            self.interfaceDir = InterfaceDirectory()
+    
+            
+            ## Handle command line options
+            loadModules = []
+            setBaseDir = None
+            setStorageDir = None
+            loadManager = True
+            for o, a in opts:
+                if o in ['-c', '--config']:
+                    configFile = a
+                elif o in ['-m', '--module']:
+                    loadModules.append(a)
+                elif o in ['-b', '--baseDir']:
+                    setBaseDir = a
+                elif o in ['-s', '--storageDir']:
+                    setStorageDir = a
+                elif o in ['-n', '--noManager']:
+                    loadManager = False
+                elif o in ['-d', '--disable']:
+                    self.disableDevs.append(a)
+                else:
+                    print "Unhandled option", o, a
+            
+            ## Read in configuration file
+            if configFile is None:
+                raise Exception("No configuration file specified!")
+            self.configDir = os.path.dirname(configFile)
+            self.readConfig(configFile)
+            
+            logMsg('ACQ4 started.', importance=9)
+            
+            Manager.CREATED = True
+            Manager.single = self
+            
+            ## Act on options if they were specified..
+            try:
+                if setBaseDir is not None:
+                    self.setBaseDir(setBaseDir)
+                if setStorageDir is not None:
+                    self.setCurrentDir(setStorageDir)
+                if loadManager:
+                    #mm = self.loadModule(module='Manager', name='Manager', config={})
+                    self.showGUI()
+                    self.createWindowShortcut('F1', self.gui.win)
+                for m in loadModules:
+                    try:
+                        self.loadDefinedModule(m)
+                    except:
+                        if not loadManager:
+                            self.showGUI()
+                            #self.loadModule(module='Manager', name='Manager', config={})
+                        raise
+                        
+            except:
+                printExc("\nError while acting on command line options: (but continuing on anyway..)")
+                
+                
+        except:
+            printExc("Error while configuring Manager:")
+        finally:
+            if len(self.modules) == 0:
+                self.quit()
+                raise Exception("No modules loaded during startup, exiting now.")
             
         #win = QtGui.QApplication.instance().activeWindow()
-        if len(self.modules) == 0:
-            self.quit()
-            raise Exception("No modules loaded during startup, exiting now.")
         win = self.modules[self.modules.keys()[0]].window()
         #if win is None:   ## Breaks on some systems..
             #raise Exception("No GUI windows created during startup, exiting now.")
@@ -230,15 +248,15 @@ Valid options are:
     def configure(self, cfg):
         """Load the devices, modules, stylesheet, and storageDir defined in cfg"""
         
-        try:
-            for key in cfg:
+        for key in cfg:
+            try:
                 ## configure new devices
                 if key == 'devices':
                     for k in cfg['devices']:
                         if k in self.disableDevs:
-                            print "=== Ignoring device '%s' -- disabled by request ===" % k
+                            print "    --> Ignoring device '%s' -- disabled by request" % k
                             continue
-                        print "\n=== Configuring device '%s' ===" % k
+                        print "  === Configuring device '%s' ===" % k
                         try:
                             conf = None
                             if cfg['devices'][k].has_key('config'):
@@ -247,6 +265,7 @@ Valid options are:
                             self.loadDevice(driverName, conf, k)
                         except:
                             printExc("Error configuring device %s:" % k)
+                    print "=== Device configuration complete ==="
                             
                 ## Copy in new module definitions
                 elif key == 'modules':
@@ -255,6 +274,7 @@ Valid options are:
                         
                 ## set new storage directory
                 elif key == 'storageDir':
+                    print "=== Setting base directory: %s ===" % cfg['storageDir']
                     self.setBaseDir(cfg['storageDir'])
                 
                 ## load stylesheet
@@ -286,8 +306,8 @@ Valid options are:
                         #self.config['folderTypes'] = {}
                     #for t in cfg['folderTypes']:
                         #self.config['folderTypes'][t] = cfg['folderTypes'][t]
-        except:
-            printExc("Error while configuring manager:")
+            except:
+                printExc("Error in ACQ4 configuration:")
         #print self.config
         self.sigConfigChanged.emit()
 
@@ -509,7 +529,7 @@ Valid options are:
     
     def getCurrentDir(self):
         if self.currentDir is None:
-            raise Exception("CurrentDir has not been set!")
+            raise Exception("Storage directory has not been set.")
         return self.currentDir
     
     def setLogDir(self, d):
@@ -539,7 +559,7 @@ Valid options are:
             self.setLogDir(p)
         else:
             if logDir is None:
-                logMsg("No log directory set. Log messages will not be stored.", msgType='warning', importance=8, docs=["UserGuide/logging"])
+                logMsg("No log directory set. Log messages will not be stored.", msgType='warning', importance=8, docs=["UserGuide/DataManagement/Logging"])
         #self.currentDir.sigChanged.connect(self.currentDirChanged)
         #self.sigCurrentDirChanged.emit()
         self.currentDir.sigChanged.connect(self.currentDirChanged)
@@ -555,7 +575,7 @@ Valid options are:
             
     def getBaseDir(self):
         if self.baseDir is None:
-            raise Exception("BaseDir has not been set!")
+            raise Exception("Base storage directory has not been set!")
         return self.baseDir
 
     def setBaseDir(self, d):
@@ -641,6 +661,9 @@ Valid options are:
         
         return fields
         
+    def showDocumentation(self, label=None):
+        self.documentation.show(label)
+        
         
     def quit(self):
         """Nicely request that all devices and modules shut down"""
@@ -653,6 +676,7 @@ Valid options are:
             lm = len(self.modules)
             ld = len(self.devices)
             with ProgressDialog("Shutting down..", 0, lm+ld, cancelText=None, wait=0) as dlg:
+                self.documentation.quit()
                 print "Requesting all modules shut down.."
                 logMsg("Shutting Down.", importance=9)
                 while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
@@ -973,6 +997,57 @@ class Task:
         
         
 
+    
+class Documentation(QtCore.QObject):
+    """Encapsulates documentation functionality."""
+    def __init__(self):
+        QtCore.QObject.__init__(self)
+        path = os.path.abspath(os.path.dirname(__file__))
+        self.docFile = os.path.normpath(os.path.join(path, '..', 'documentation', 'build', 'qthelp', 'ACQ4.qhc'))
+
+        self.process = QtCore.QProcess()
+        self.process.finished.connect(self.processFinished)
+        
+
+    def show(self, label=None):
+        if self.process.state() == self.process.NotRunning:
+            self.startProcess()
+            if label is not None:
+                QtCore.QTimer.singleShot(2000, lambda: self.activateId(label))
+                return
+        if label is not None:
+            self.activateId(label)
+                
+
+    def expandToc(self, n=2):
+        self.write('expandToc %d\n' % n)
+        
+    def startProcess(self):
+        self.process.start('assistant', ['-collectionFile', self.docFile, '-enableRemoteControl'])
+        if not self.process.waitForStarted():
+            output = str(self.process.readAllStandardError())
+            raise Exception("Error starting documentation viewer:  " +output)
+        QtCore.QTimer.singleShot(1000, self.expandToc)
+        
+    def activateId(self, id):
+        print "activate:", id
+        self.show()
+        self.write('activateIdentifier %s\n' % id)
+        
+    def activateKeyword(self, kwd):
+        self.show()
+        self.write('activateKeyword %s\n' % kwd)
+        
+    def write(self, data):
+        ba = QtCore.QByteArray(data)
+        return self.process.write(ba)
+        
+    def quit(self):
+        self.process.close()
+
+    def processFinished(self):
+        print "Doc viewer exited:", self.process.exitCode()
+        print str(self.process.readAllStandardError())    
     
     
     

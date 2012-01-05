@@ -124,12 +124,12 @@
   <customwidget>
    <class>TreeWidget</class>
    <extends>QTreeWidget</extends>
-   <header>.. TreeWidget</header>
+   <header>pyqtgraph.widgets.TreeWidget</header>
   </customwidget>
   <customwidget>
    <class>GraphicsView</class>
    <extends>QGraphicsView</extends>
-   <header>pyqtgraph.GraphicsView</header>
+   <header>pyqtgraph.widgets.GraphicsView</header>
   </customwidget>
   <customwidget>
    <class>CanvasCombo</class>

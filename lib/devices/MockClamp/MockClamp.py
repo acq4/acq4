@@ -8,7 +8,7 @@ from PyQt4 import QtCore, QtGui
 import time
 import numpy as np
 from pyqtgraph.WidgetGroup import WidgetGroup
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 from debug import printExc
 from devTemplate import *
 import subprocess, pickle, os
@@ -67,9 +67,10 @@ class MockClamp(DAQGeneric):
         #if 'Command' in config:
             #daqConfig['command'] = {'type': 'ao', 'channel': config['Command']}
             
+        
         daqConfig = {
-            'command': {'type': 'ao', 'channel': config['Command']},
-            'primary': {'type': 'ai', 'channel': config['ScaledSignal']},
+            'command': config['Command'],
+            'primary': config['ScaledSignal'],
         }
             
             
@@ -165,7 +166,15 @@ class MockClamp(DAQGeneric):
     def setChanHolding(self, chan, value=None):
         if chan == 'command':
             self.setHolding(value=value)
-        
+        else:
+            DAQGeneric.setChanHolding(self, chan, value)
+
+    def getChanHolding(self, chan):
+        if chan == 'command':
+            return self.getHolding()
+        else:
+            return DAQGeneric.getChanHolding(self, chan)
+            
     def getHolding(self, mode=None):
         global ivModes
         with self.devLock:
