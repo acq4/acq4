@@ -5,7 +5,7 @@
 # reliable error messaging for missed frames
 # Add fast/simple histogram 
 
-from __future__ import with_statement
+#from __future__ import with_statement
 
 from CameraTemplate import Ui_MainWindow
 #from pyqtgraph.GraphicsView import *
@@ -21,7 +21,7 @@ import time, types, os.path, re, sys
 from debug import *
 from metaarray import *
 #import sip
-from pyqtgraph import SignalProxy
+from pyqtgraph import SignalProxy, Point
 #from lib.Manager import getManager
 import lib.Manager as Manager
 import numpy as np
@@ -272,7 +272,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.cam.sigCameraStopped.connect(self.cameraStopped)
         self.cam.sigCameraStarted.connect(self.cameraStarted)
         self.cam.sigShowMessage.connect(self.showMessage)
-        self.ui.graphicsView.sigSceneMouseMoved.connect(self.setMouse)
+        self.ui.graphicsView.scene().sigMouseMoved.connect(self.updateMouse)
         
         ## Connect Background Subtraction Dock
         self.ui.bgBlurSpin.valueChanged.connect(self.updateBackgroundBlur)
@@ -541,31 +541,32 @@ class CameraWindow(QtGui.QMainWindow):
         self.module.quit(fromUi=True)
 
     #@trace
-    def setMouse(self, qpt=None):
-        #print "mouse:", qpt
-        if qpt is None:
+    def updateMouse(self, pos=None):
+        if pos is None:
             if not hasattr(self, 'mouse'):
                 return
-            (x, y) = self.mouse
+            pos = self.mouse
         else:
-            x = qpt.x()
-            y = qpt.y()
-        self.mouse = [x, y]
-        self.xyLabel.setText("X:%0.1fum Y:%0.1fum" % (x * 1e6, y * 1e6))
+            pos = self.view.mapSceneToView(pos)
+        self.mouse = pos
+        self.xyLabel.setText("X:%0.1fum Y:%0.1fum" % (pos.x() * 1e6, pos.y() * 1e6))
         
         img = self.imageItem.image
         if img is None:
             return
-        pos = self.imageItem.mapFromScene(QtCore.QPointF(x, y))
-        try:
-            z = img[int(pos.x()), int(pos.y())]
-        except IndexError:
-            return
-    
-        if hasattr(z, 'shape') and len(z.shape) > 0:
-            z = "Z:(%s, %s, %s)" % (str(z[0]), str(z[1]), str(z[2]))
+        pos = self.imageItem.mapFromView(pos)
+        if pos.x() < 0 or pos.y() < 0:
+            z = ""
         else:
-            z = "Z:%s" % str(z)
+            try:
+                z = img[int(pos.x()), int(pos.y())]
+                if hasattr(z, 'shape') and len(z.shape) > 0:
+                    z = "Z:(%s, %s, %s)" % (str(z[0]), str(z[1]), str(z[2]))
+                else:
+                    z = "Z:%s" % str(z)
+            except IndexError:
+                z = ""
+    
         
         self.vLabel.setText(z)
             
@@ -991,7 +992,7 @@ class CameraWindow(QtGui.QMainWindow):
 
 
             ## update info for pixel under mouse pointer
-            self.setMouse()
+            self.updateMouse()
             self.updateRgnLabel()
 
             

@@ -58,8 +58,9 @@ class GraphicsScene(QtGui.QGraphicsScene):
     
     
     _addressCache = weakref.WeakValueDictionary()
-    sigMouseHover = QtCore.Signal(object)  
-    sigMouseClick = QtCore.Signal(object)   ## emitted when MouseClickEvent is not accepted by any items under the click.
+    sigMouseHover = QtCore.Signal(object)   ## emits a list of objects hovered over
+    sigMouseMoved = QtCore.Signal(object)   ## emits position of mouse on every move
+    sigMouseClicked = QtCore.Signal(object)   ## emitted when MouseClickEvent is not accepted by any items under the click.
     
     @classmethod
     def registerObject(cls, obj):
@@ -117,6 +118,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
             #print "click grabbed by:", item
         
     def mouseMoveEvent(self, ev):
+        self.sigMouseMoved.emit(ev.scenePos())
         if int(ev.buttons()) == 0: ## nothing pressed; send mouseHoverOver/OutEvents      
             ## First allow QGraphicsScene to deliver hoverEnter/Move/ExitEvents
             QtGui.QGraphicsScene.mouseMoveEvent(self, ev)
@@ -253,7 +255,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
                             break
                 if not ev.isAccepted() and ev.button() is QtCore.Qt.RightButton:
                     #print "GraphicsScene emitting sigSceneContextMenu"
-                    self.sigMouseClick.emit(ev)
+                    self.sigMouseClicked.emit(ev)
                     ev.accept()
         return ev.isAccepted()
         
