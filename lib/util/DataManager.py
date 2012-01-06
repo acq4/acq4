@@ -658,7 +658,7 @@ class DirHandle(FileHandle):
         
         if sortMode == 'date':
             ## Sort files by creation time
-            with ProgressDialog("Reading directory data...", maximum=len(files)) as dlg:
+            with ProgressDialog("Reading directory data...", maximum=len(files), cancel=None) as dlg:
                 for f in files:
                     if f not in self.cTimeCache:
                         self.cTimeCache[f] = self._getFileCTime(f)
