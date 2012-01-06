@@ -35,7 +35,7 @@ def main():
     
     #testFit("opt.leastsq", psp, data, xVals, fitPsp, guess=guess)
     
-    testFit("opt.leastsq_bounded", psp, data, xVals, fitPspBounded, guess=guess, bounds=bounds)
+    testFit("opt.leastsq_bounded", psp, data, xVals, fn.fitPsp, guess=guess, bounds=bounds)
     
     #testFit("opt.fmin_tnc", psp, data, xVals, fitPspFminTnc, guess=guess, bounds=bounds)
     
@@ -97,26 +97,26 @@ def pspFunc(v, x, risePower=1.0):
 def normalize(fn):
     def wrapper(x, y, guess, bounds, risePower=1.0):
         ## Find peak x,y 
-        peakX = np.argmax(y)
-        peakVal = y[peakX]
-        peakTime = x[peakX]
+        #peakX = np.argmax(y)
+        #peakVal = y[peakX]
+        #peakTime = x[peakX]
         
         ## normalize data, guess, and bounds
-        y = y / peakVal
-        x = x / peakTime
+        #y = y / peakVal
+        #x = x / peakTime
         guess = np.array(guess)
-        guess[0] /= peakVal
-        guess[1:] /= peakTime
+        #guess[0] /= peakVal
+        #guess[1:] /= peakTime
         bounds = np.array(bounds)
-        bounds[0] = bounds[0] / peakVal
-        bounds[1:] = bounds[1:] / peakTime
+        #bounds[0] = bounds[0] / peakVal
+        #bounds[1:] = bounds[1:] / peakTime
         
         
         ## interpolate
-        x2 = (x[:peakVal] + x[1:peakVal+1]) /2.
-        y2 = (y[:peakVal] + y[1:peakVal+1]) /2.
-        x = np.concatenate([x, x2])
-        y = np.concatenate([y, y2])
+        #x2 = (x[:peakVal] + x[1:peakVal+1]) /2.
+        #y2 = (y[:peakVal] + y[1:peakVal+1]) /2.
+        #x = np.concatenate([x, x2])
+        #y = np.concatenate([y, y2])
         
         ## run the fit on normalized data
         fit = fn(x, y, guess, bounds, risePower)
@@ -125,8 +125,8 @@ def normalize(fn):
         ## also, make sure amplitude is properly scaled such that fit[0] is the maximum value of the function
         maxX = fit[2] * np.log(1 + (fit[3]*risePower / fit[2]))
         maxVal = (1.0 - np.exp(-maxX / fit[2]))**risePower * np.exp(-maxX / fit[3])
-        fit[0] *= maxVal * peakVal
-        fit[1:] *= peakTime
+        fit[0] *= maxVal #* peakVal
+        #fit[1:] *= peakTime
         
         return fit
     return wrapper
