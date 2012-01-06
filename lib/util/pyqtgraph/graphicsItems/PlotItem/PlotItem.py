@@ -16,7 +16,7 @@ This class is very heavily featured:
   - Control panel with a huge feature set including averaging, decimation,
     display, power spectrum, svg/png export, plot linking, and more.
 """
-
+print __file__
 #from graphicsItems import *
 from plotConfigTemplate import *
 from pyqtgraph.Qt import QtGui, QtCore, QtSvg
@@ -311,15 +311,23 @@ class PlotItem(GraphicsWidget):
         #print "update plot list", self
         try:
             for sc in [self.ctrl.xLinkCombo, self.ctrl.yLinkCombo]:
-                current = str(sc.currentText())
-                sc.clear()
-                sc.addItem("")
-                if self.manager is not None:
-                    for w in self.manager.listWidgets():
-                        #print w
-                        if w == self.name:
-                            continue
-                        sc.addItem(w)
+                current = unicode(sc.currentText())
+                sc.blockSignals(True)
+                try:
+                    sc.clear()
+                    sc.addItem("")
+                    if self.manager is not None:
+                        for w in self.manager.listWidgets():
+                            #print w
+                            if w == self.name:
+                                continue
+                            sc.addItem(w)
+                            if w == current:
+                                sc.setCurrentIndex(sc.count()-1)
+                finally:
+                    sc.blockSignals(False)
+                    if unicode(sc.currentText()) != current:
+                        sc.currentItemChanged.emit()
         except:
             import gc
             refs= gc.get_referrers(self)
