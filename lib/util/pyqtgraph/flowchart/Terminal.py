@@ -2,6 +2,8 @@
 from pyqtgraph.Qt import QtCore, QtGui
 import weakref
 from pyqtgraph.graphicsItems.GraphicsObject import GraphicsObject
+import pyqtgraph.functions as fn
+from pyqtgraph.Point import Point
 #from PySide import QtCore, QtGui
 from eq import *
 
@@ -286,6 +288,7 @@ class TerminalGraphicsItem(GraphicsObject):
         self.term = term
         #QtGui.QGraphicsItem.__init__(self, parent)
         GraphicsObject.__init__(self, parent)
+        self.brush = fn.mkBrush(0,0,0)
         self.box = QtGui.QGraphicsRectItem(0, 0, 10, 10, self)
         self.label = QtGui.QGraphicsTextItem(self.term.name(), self)
         self.label.scale(0.7, 0.7)
@@ -319,6 +322,7 @@ class TerminalGraphicsItem(GraphicsObject):
         self.label.setPlainText(name)
 
     def setBrush(self, brush):
+        self.brush = brush
         self.box.setBrush(brush)
 
     def disconnect(self, target):
@@ -356,30 +360,50 @@ class TerminalGraphicsItem(GraphicsObject):
         ev.ignore()
 
     def mouseClickEvent(self, ev):
-        ev.accept()
-        self.label.setFocus(QtCore.Qt.MouseFocusReason)
+        if ev.button() == QtCore.Qt.LeftButton:
+            ev.accept()
+            self.label.setFocus(QtCore.Qt.MouseFocusReason)
         if ev.button() == QtCore.Qt.RightButton:
-            self.raiseContextMenu(ev)
+            if self.raiseContextMenu(ev):
+                ev.accept()
             
     def raiseContextMenu(self, ev):
-        menu = self.scene().addSubContextMenus(self, self.getMenu())
+        ## only raise menu if this terminal is removable
+        menu = self.getMenu()
+        if menu is None:
+            return False
+        menu = self.scene().addParentContextMenus(self, menu, ev)
         pos = ev.screenPos()
         menu.popup(QtCore.QPoint(pos.x(), pos.y()))
+        return True
         
     def getMenu(self):
         if self.menu is None:
-            self.menu = QtGui.QMenu()
-            self.menu.setTitle("Terminal")
-            self.menu.addAction("Remove terminal", self.removeSelf)
+            if self.removable():
+                self.menu = QtGui.QMenu()
+                self.menu.setTitle("Terminal")
+                self.menu.addAction("Remove terminal", self.removeSelf)
+            else:
+                return None
         return self.menu
-    
-    def getSubMenus(self):
-        return [self.getMenu()]
+
+    def removable(self):
+        return (
+            (self.term.isOutput() and self.term.node()._allowAddOutput) or 
+            (self.term.isInput()  and self.term.node()._allowAddInput))
+        
+    ## probably never need this
+    #def getContextMenus(self, ev):
+        #return [self.getMenu()]
     
     def removeSelf(self):
         self.term.node().removeTerminal(self.term)
         
     def mouseDragEvent(self, ev):
+        if ev.button() != QtCore.Qt.LeftButton:
+            ev.ignore()
+            return
+        
         ev.accept()
         if ev.isStart():
             if self.newConnection is None:
@@ -414,14 +438,22 @@ class TerminalGraphicsItem(GraphicsObject):
             if self.newConnection is not None:
                 self.newConnection.setTarget(self.mapToView(ev.pos()))
         
+    def hoverEvent(self, ev):
+        if not ev.isExit() and ev.acceptDrags(QtCore.Qt.LeftButton):
+            ev.acceptClicks(QtCore.Qt.LeftButton) ## we don't use the click, but we also don't want anyone else to use it.
+            self.box.setBrush(fn.mkBrush('w'))
+        else:
+            self.box.setBrush(self.brush)
+        self.update()
         
-    def hoverEnterEvent(self, ev):
-        self.hover = True
+    #def hoverEnterEvent(self, ev):
+        #self.hover = True
         
-    def hoverLeaveEvent(self, ev):
-        self.hover = False
+    #def hoverLeaveEvent(self, ev):
+        #self.hover = False
         
     def connectPoint(self):
+        ## return the connect position of this terminal in view coords
         return self.mapToView(self.mapFromItem(self.box, self.box.boundingRect().center()))
 
     def nodeMoved(self):
@@ -441,14 +473,16 @@ class ConnectionItem(GraphicsObject):
         )
         self.source = source
         self.target = target
-        self.line = QtGui.QGraphicsLineItem(self)
-        self.source.getViewBox().addItem(self.line)
+        self.length = 0
+        self.hovered = False
+        #self.line = QtGui.QGraphicsLineItem(self)
+        self.source.getViewBox().addItem(self)
         self.updateLine()
         self.setZValue(0)
         
     def close(self):
         if self.scene() is not None:
-            self.scene().removeItem(self.line)
+            #self.scene().removeItem(self.line)
             self.scene().removeItem(self)
         
     def setTarget(self, target):
@@ -456,15 +490,23 @@ class ConnectionItem(GraphicsObject):
         self.updateLine()
     
     def updateLine(self):
-        start = self.source.connectPoint()
+        start = Point(self.source.connectPoint())
         if isinstance(self.target, TerminalGraphicsItem):
-            stop = self.target.connectPoint()
+            stop = Point(self.target.connectPoint())
         elif isinstance(self.target, QtCore.QPointF):
-            stop = self.target
+            stop = Point(self.target)
         else:
             return
         self.prepareGeometryChange()
-        self.line.setLine(start.x(), start.y(), stop.x(), stop.y())
+        self.resetTransform()
+        ang = (stop-start).angle(Point(0, 1))
+        if ang is None:
+            ang = 0
+        self.rotate(ang)
+        self.setPos(start)
+        self.length = (start-stop).length()
+        self.update()
+        #self.line.setLine(start.x(), start.y(), stop.x(), stop.y())
 
     def keyPressEvent(self, ev):
         if ev.key() == QtCore.Qt.Key_Delete:
@@ -484,21 +526,30 @@ class ConnectionItem(GraphicsObject):
             self.setSelected(True)
             if not sel and self.isSelected():
                 self.update()
-        
-        
+                
+    def hoverEvent(self, ev):
+        if (not ev.isExit()) and ev.acceptClicks(QtCore.Qt.LeftButton):
+            self.hovered = True
+        else:
+            self.hovered = False
+        self.update()
+            
+            
     def boundingRect(self):
-        return self.line.boundingRect()
+        #return self.line.boundingRect()
+        px = self.pixelWidth()
+        return QtCore.QRectF(-5*px, 0, 10*px, self.length)
         
-    def shape(self):
-        return self.line.shape()
+    #def shape(self):
+        #return self.line.shape()
         
     def paint(self, p, *args):
         if self.isSelected():
-            pen = QtGui.QPen(QtGui.QColor(200, 200, 0), 3)
+            p.setPen(fn.mkPen(200, 200, 0, width=3))
         else:
-            pen = QtGui.QPen(QtGui.QColor(100, 100, 250), 1)
-        if self.line.pen() != pen:
-            self.line.setPen(pen)
-            
-        #p.setPen(QtGui.QPen(QtGui.QColor(250,0,0)))
-        #p.drawPath(self.line.shape())
+            if self.hovered:
+                p.setPen(fn.mkPen(150, 150, 250, width=1))
+            else:
+                p.setPen(fn.mkPen(100, 100, 250, width=1))
+                
+        p.drawLine(0, 0, 0, self.length)

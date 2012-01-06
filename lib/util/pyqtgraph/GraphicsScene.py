@@ -31,8 +31,8 @@ class GraphicsScene(QtGui.QGraphicsScene):
     -  Reimplements items() and itemAt() to circumvent PyQt bug
     
     Mouse interaction is as follows:
-    1) Every time the mouse moves, the scene delivers both the standard hoverEnter/Move/LeaveEvents and 
-       custom HoverEvents. 
+    1) Every time the mouse moves, the scene delivers both the standard hoverEnter/Move/LeaveEvents 
+       as well as custom HoverEvents. 
     2) Items are sent HoverEvents in Z-order and each item may optionally call event.acceptClicks(button), 
        acceptDrags(button) or both. If this method call returns True, this informs the item that _if_ 
        the user clicks/drags the specified mouse button, the item is guaranteed to be the 
@@ -58,8 +58,8 @@ class GraphicsScene(QtGui.QGraphicsScene):
     
     
     _addressCache = weakref.WeakValueDictionary()
-    sigSceneContextMenu = QtCore.Signal(object)
-    sigMouseHover = QtCore.Signal(object)
+    sigMouseHover = QtCore.Signal(object)  
+    sigMouseClick = QtCore.Signal(object)   ## emitted when MouseClickEvent is not accepted by any items under the click.
     
     @classmethod
     def registerObject(cls, obj):
@@ -253,7 +253,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
                             break
                 if not ev.isAccepted() and ev.button() is QtCore.Qt.RightButton:
                     #print "GraphicsScene emitting sigSceneContextMenu"
-                    self.sigSceneContextMenu.emit(ev)
+                    self.sigMouseClick.emit(ev)
                     ev.accept()
         return ev.isAccepted()
         
@@ -372,18 +372,45 @@ class GraphicsScene(QtGui.QGraphicsScene):
         else:
             return widget
         
-    def addSubContextMenus(self, sender, menu):
+    def addParentContextMenus(self, item, menu, event):
+        """
+        Can be called by any item in the scene to expand its context menu to include parent context menus.
+        Parents may implement getContextMenus to add new menus / actions to the existing menu.
+        getContextMenus must accept 1 argument (the event that generated the original menu) and
+        return a single QMenu or a list of QMenus.
+        
+        The final menu will look like:
+        
+            Original Item 1
+            Original Item 2
+            ...
+            Original Item N
+            ------------------
+            Parent Item 1
+            Parent Item 2
+            ...
+            Grandparent Item 1
+            ...
+            
+        
+        Arguments:
+            item   - The item that initially created the context menu 
+                     (This is probably the item making the call to this function)
+            menu   - The context menu being shown by the item
+            event  - The original event that triggered the menu to appear.
+        """
+        
         #items = self.itemsNearEvent(ev)
         menu.addSeparator()
-        item = sender
         while item.parentItem() is not None:
             item = item.parentItem()
         #for item in items:
             #if item is sender:
                 #continue
-            if not hasattr(item, "getMenu"):
+            if not hasattr(item, "getContextMenus"):
                 continue
-            subMenus = item.getSubMenus()
+            
+            subMenus = item.getContextMenus(event)
             if type(subMenus) is not list: ## so that some items (like FlowchartViewBox) can return multiple menus
                 subMenus = [subMenus]
             for sm in subMenus:
