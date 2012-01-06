@@ -9,6 +9,7 @@ from GraphicsObject import GraphicsObject
 from PlotCurveItem import PlotCurveItem
 from ScatterPlotItem import ScatterPlotItem
 import numpy as np
+import pyqtgraph.functions as fn
 
 class PlotDataItem(GraphicsObject):
     """GraphicsItem for displaying plot curves, scatter plots, or both."""

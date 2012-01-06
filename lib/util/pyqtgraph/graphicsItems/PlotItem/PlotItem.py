@@ -620,6 +620,7 @@ class PlotItem(GraphicsWidget):
             self.curves.append(item)
             #self.addItem(c)
             
+        if isinstance(item, PlotDataItem):
             ## configure curve for this plot
             (alpha, auto) = self.alphaState()
             item.setAlpha(alpha, auto)
