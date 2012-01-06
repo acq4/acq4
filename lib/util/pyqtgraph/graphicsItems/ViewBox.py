@@ -346,7 +346,7 @@ class ViewBox(GraphicsWidget):
     def raiseContextMenu(self, ev):
         #print "viewbox.raiseContextMenu called."
         
-        menu = self.getMenu(ev)
+        menu = self.getMenu()
         self.scene().addParentContextMenus(self, menu, ev)
         #print "2:", [str(a.text()) for a in self.menu.actions()]
         pos = ev.screenPos()

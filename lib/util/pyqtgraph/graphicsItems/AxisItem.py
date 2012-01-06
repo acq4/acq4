@@ -38,7 +38,7 @@ class AxisItem(GraphicsWidget):
         
         self.labelText = ''
         self.labelUnits = ''
-        self.labelUnitPrefix=''
+        #self.labelUnitPrefix=''
         self.labelStyle = {'color': '#CCC'}
         
         self.textHeight = 18
@@ -108,15 +108,15 @@ class AxisItem(GraphicsWidget):
         if self.autoScale:
             self.setScale()
         
-    def setLabel(self, text=None, units=None, unitPrefix=None, **args):
+    def setLabel(self, text=None, units=None, **args):
         if text is not None:
             self.labelText = text
             self.showLabel()
         if units is not None:
             self.labelUnits = units
             self.showLabel()
-        if unitPrefix is not None:
-            self.labelUnitPrefix = unitPrefix
+        #if unitPrefix is not None:
+            #self.labelUnitPrefix = unitPrefix
         if len(args) > 0:
             self.labelStyle = args
         self.label.setHtml(self.labelString())
@@ -131,7 +131,7 @@ class AxisItem(GraphicsWidget):
                 units = u'(x%g)' % (1.0/self.scale)
         else:
             #print repr(self.labelUnitPrefix), repr(self.labelUnits)
-            units = u'(%s%s)' % (self.labelUnitPrefix, self.labelUnits)
+            units = u'(%s)' % (self.labelUnits)
             
         s = u'%s %s' % (self.labelText, units)
         
@@ -161,6 +161,17 @@ class AxisItem(GraphicsWidget):
         self.update()
         
     def setScale(self, scale=None):
+        """
+        Set the value scaling for this axis. 
+        The scaling value 1) multiplies the values displayed along the axis
+        and 2) changes the way units are displayed in the label. 
+        For example:
+            If the axis spans values from -0.1 to 0.1 and has units set to 'V'
+            then a scale of 1000 would cause the axis to display values -100 to 100
+            and the units would appear as 'mV'
+        If scale is None, then it will be determined automatically based on the current 
+        range displayed by the axis.
+        """
         if scale is None:
             #if self.drawLabel:  ## If there is a label, then we are free to rescale the values 
             if self.label.isVisible():

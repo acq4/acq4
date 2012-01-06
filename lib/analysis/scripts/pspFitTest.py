@@ -300,8 +300,8 @@ def showAll():
             p.plot(xVals, data[i,j], pen=(80,60,60))
             p.plot(xVals, fit, pen=(50, green, 255-green, 200))
             #p.plot(xVals, pspFunc(psp[i,j], xVals), pen='b')
-            p.showScale('left', False)
-            p.showScale('bottom', False)
+            p.hideAxis('left')
+            p.hideAxis('bottom')
             p.hideButtons()
         w.nextRow()
 

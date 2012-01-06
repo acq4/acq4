@@ -191,6 +191,8 @@ class PlotDataItem(GraphicsObject):
             sp.setParentItem(self)
             self.scatters.append(sp)
 
+        self.sigPlotChanged.emit(self)
+
 
     def getData(self):
         if self.xData is None:

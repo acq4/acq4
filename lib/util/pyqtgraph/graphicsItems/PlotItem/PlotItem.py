@@ -80,10 +80,13 @@ class PlotItem(GraphicsWidget):
             #b.setStyleSheet("background-color: #000000; color: #888; font-size: 6pt")
             #self.proxies.append(proxy)
         path = os.path.dirname(__file__)
-        self.ctrlBtn = ButtonItem(os.path.join(path, 'ctrl.png'), 14, self)
-        self.ctrlBtn.clicked.connect(self.ctrlBtnClicked)
-        self.autoBtn = ButtonItem(os.path.join(path, 'auto.png'), 14, self)
-        self.autoBtn.clicked.connect(self.enableAutoScale)
+        #self.ctrlBtn = ButtonItem(os.path.join(path, 'ctrl.png'), 14, self)
+        #self.ctrlBtn.clicked.connect(self.ctrlBtnClicked)
+        self.autoImageFile = os.path.join(path, 'auto.png')
+        self.lockImageFile = os.path.join(path, 'lock.png')
+        self.autoBtn = ButtonItem(self.autoImageFile, 14, self)
+        self.autoBtn.mode = 'auto'
+        self.autoBtn.clicked.connect(self.autoBtnClicked)
         
         self.layout = QtGui.QGraphicsGridLayout()
         self.layout.setContentsMargins(1,1,1,1)
@@ -165,6 +168,7 @@ class PlotItem(GraphicsWidget):
         c.setupUi(w)
         dv = QtGui.QDoubleValidator(self)
         self.ctrlMenu = QtGui.QMenu()
+        self.ctrlMenu.setTitle('Plot Options')
         self.menuAction = QtGui.QWidgetAction(self)
         self.menuAction.setDefaultWidget(w)
         self.ctrlMenu.addAction(self.menuAction)
@@ -226,10 +230,10 @@ class PlotItem(GraphicsWidget):
         self.linksBlocked = False
         self.manager = None
         
-        self.showScale('right', False)
-        self.showScale('top', False)
-        self.showScale('left', True)
-        self.showScale('bottom', True)
+        self.hideAxis('right')
+        self.hideAxis('top')
+        self.showAxis('left')
+        self.showAxis('bottom')
         
         if name is not None:
             self.registerPlot(name)
@@ -243,6 +247,7 @@ class PlotItem(GraphicsWidget):
         if len(kargs) > 0:
             self.plot(**kargs)
         
+        self.enableAutoScale()
     #def paint(self, *args):
         #prof = debug.Profiler('PlotItem.paint', disabled=True)
         #QtGui.QGraphicsWidget.paint(self, *args)
@@ -488,7 +493,7 @@ class PlotItem(GraphicsWidget):
         
         ### Create a new curve if needed
         if key not in self.avgCurves:
-            plot = PlotCurveItem()
+            plot = PlotDataItem()
             plot.setPen(fn.mkPen([0, 200, 0]))
             plot.setShadowPen(fn.mkPen([0, 0, 0, 100], width=3))
             plot.setAlpha(1.0, False)
@@ -550,11 +555,21 @@ class PlotItem(GraphicsWidget):
         #self.emit(QtCore.SIGNAL('yRangeChanged'), self, range)
         self.sigYRangeChanged.emit(self, range)
 
-
+    def autoBtnClicked(self):
+        if self.autoBtn.mode == 'auto':
+            self.enableAutoScale()
+        else:
+            self.enableManualScale()
+            
     def enableAutoScale(self):
+        """
+        Enable auto-scaling. The plot will continuously scale to fit the boundaries of its data.
+        """
         self.ctrl.xAutoRadio.setChecked(True)
         self.ctrl.yAutoRadio.setChecked(True)
-        self.autoBtn.disable()
+        
+        self.autoBtn.setImageFile(self.lockImageFile)
+        self.autoBtn.mode = 'lock'
         self.updateXScale()
         self.updateYScale()
         self.replot()
@@ -584,7 +599,9 @@ class PlotItem(GraphicsWidget):
             self.autoScale[1] = False
             self.ctrl.yManualRadio.setChecked(True)
             #self.setManualYScale()
-        self.autoBtn.enable()
+        #self.autoBtn.enable()
+        self.autoBtn.setImageFile(self.autoImageFile)
+        self.autoBtn.mode = 'auto'
         #self.replot()
         
     def setManualXScale(self):
@@ -1115,20 +1132,28 @@ class PlotItem(GraphicsWidget):
         ev.accept()
 
     def resizeEvent(self, ev):
-        if self.ctrlBtn is None:  ## already closed down
+        if self.autoBtn is None:  ## already closed down
             return
-        btnRect = self.mapRectFromItem(self.ctrlBtn, self.ctrlBtn.boundingRect())
+        btnRect = self.mapRectFromItem(self.autoBtn, self.autoBtn.boundingRect())
         y = self.size().height() - btnRect.height()
-        self.ctrlBtn.setPos(0, y)
-        self.autoBtn.setPos(btnRect.width()+3, y)
+        self.autoBtn.setPos(0, y)
         
     def hoverMoveEvent(self, ev):
         self.mousePos = ev.pos()
         self.mouseScreenPos = ev.screenPos()
         
         
-    def ctrlBtnClicked(self):
-        self.ctrlMenu.popup(self.mouseScreenPos)
+    #def ctrlBtnClicked(self):
+        #self.ctrlMenu.popup(self.mouseScreenPos)
+        
+    def getMenu(self):
+        return self.ctrlMenu
+    
+    def getContextMenus(self, event):
+        ## called when another item is displaying its context menu; we get to add extras to the end of the menu.
+        return self.ctrlMenu
+        
+        
         
     #def contextMenuEvent(self, ev):  ## only after button release!
         #self.ctrlMenu.popup(self.mouseScreenPos)
@@ -1144,14 +1169,31 @@ class PlotItem(GraphicsWidget):
         self._checkScaleKey(key)
         return self.scales[key]['item']
         
-    def setLabel(self, key, text=None, units=None, unitPrefix=None, **args):
-        """Key is one of: 'left', 'right', 'top', 'bottom'"""
-        self.getScale(key).setLabel(text=text, units=units, unitPrefix=unitPrefix, **args)
+    def setLabel(self, axis, text=None, units=None, unitPrefix=None, **args):
+        """
+        Set the label for an axis. Basic HTML formatting is allowed.
+        Arguments:
+            axis  - must be one of 'left', 'bottom', 'right', or 'top'
+            text  - text to display along the axis. HTML allowed.
+            units - units to display after the title. If units are given, 
+                    then an SI prefix will be automatically appended
+                    and the axis values will be scaled accordingly.
+                    (ie, use 'V' instead of 'mV'; 'm' will be added automatically)
+        """
+        self.getScale(axis).setLabel(text=text, units=units, **args)
         
-    def showLabel(self, key, show=True):
-        self.getScale(key).showLabel(show)
+    def showLabel(self, axis, show=True):
+        """
+        Show or hide one of the plot's axis labels (the axis itself will be unaffected).
+        axis must be one of 'left', 'bottom', 'right', or 'top'
+        """
+        self.getScale(axis).showLabel(show)
 
     def setTitle(self, title=None, **args):
+        """
+        Set the title of the plot. Basic HTML formatting is allowed.
+        If title is None, then the title will be hidden.
+        """
         if title is None:
             self.titleLabel.setVisible(False)
             self.layout.setRowFixedHeight(0, 0)
@@ -1162,16 +1204,27 @@ class PlotItem(GraphicsWidget):
             self.titleLabel.setVisible(True)
             self.titleLabel.setText(title, **args)
 
-    def showScale(self, key, show=True):
-        s = self.getScale(key)
-        p = self.scales[key]['pos']
+    def showAxis(self, axis, show=True):
+        """
+        Show or hide one of the plot's axes.
+        axis must be one of 'left', 'bottom', 'right', or 'top'
+        """
+        s = self.getScale(axis)
+        p = self.scales[axis]['pos']
         if show:
             s.show()
         else:
             s.hide()
             
+    def hideAxis(self, axis):
+        self.showAxis(axis, False)
+            
+    def showScale(self, *args, **kargs):
+        print "Deprecated. use showAxis() instead"
+        return self.showAxis(*args, **kargs)
+            
     def hideButtons(self):
-        self.ctrlBtn.hide()
+        #self.ctrlBtn.hide()
         self.autoBtn.hide()
         
             

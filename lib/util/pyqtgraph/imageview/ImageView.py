@@ -96,7 +96,7 @@ class ImageView(QtGui.QWidget):
         self.timeLine.setZValue(1)
         self.ui.roiPlot.addItem(self.timeLine)
         self.ui.splitter.setSizes([self.height()-35, 35])
-        self.ui.roiPlot.showScale('left', False)
+        self.ui.roiPlot.hideAxis('left')
         
         self.keysPressed = {}
         self.playTimer = QtCore.QTimer()
@@ -300,14 +300,14 @@ class ImageView(QtGui.QWidget):
             self.ui.splitter.setSizes([self.height()*0.6, self.height()*0.4])
             self.roiCurve.show()
             self.roiChanged()
-            self.ui.roiPlot.showScale('left', True)
+            self.ui.roiPlot.showAxis('left')
         else:
             self.roi.hide()
             self.ui.roiPlot.setMouseEnabled(False, False)
             self.ui.roiPlot.setXRange(self.tVals.min(), self.tVals.max())
             self.ui.splitter.setSizes([self.height()-35, 35])
             self.roiCurve.hide()
-            self.ui.roiPlot.showScale('left', False)
+            self.ui.roiPlot.hideAxis('left')
 
     def roiChanged(self):
         if self.image is None:
