@@ -61,7 +61,7 @@ class PlotItem(GraphicsWidget):
     lastFileDir = None
     managers = {}
     
-    def __init__(self, parent=None, name=None, labels=None, **kargs):
+    def __init__(self, parent=None, name=None, labels=None, title=None, **kargs):
         GraphicsWidget.__init__(self, parent)
         
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
@@ -118,18 +118,6 @@ class PlotItem(GraphicsWidget):
         for k in self.scales:
             self.layout.addItem(self.scales[k]['item'], *self.scales[k]['pos'])
             
-        ## Create and place label items
-        #self.labels = {
-            #'title':  {'item': LabelItem('title', size='11pt'),  'pos': (0, 2), 'text': ''},
-            #'top':    {'item': LabelItem('top'),    'pos': (1, 2), 'text': '', 'units': '', 'unitPrefix': ''},
-            #'bottom': {'item': LabelItem('bottom'), 'pos': (5, 2), 'text': '', 'units': '', 'unitPrefix': ''},
-            #'left':   {'item': LabelItem('left'),   'pos': (3, 0), 'text': '', 'units': '', 'unitPrefix': ''},
-            #'right':  {'item': LabelItem('right'),  'pos': (3, 4), 'text': '', 'units': '', 'unitPrefix': ''}
-        #}
-        #self.labels['left']['item'].setAngle(-90)
-        #self.labels['right']['item'].setAngle(-90)
-        #for k in self.labels:
-            #self.layout.addItem(self.labels[k]['item'], *self.labels[k]['pos'])
         self.titleLabel = LabelItem('', size='11pt')
         self.layout.addItem(self.titleLabel, 0, 1)
         self.setTitle(None)  ## hide
@@ -243,6 +231,9 @@ class PlotItem(GraphicsWidget):
                 if isinstance(labels[k], basestring):
                     labels[k] = (labels[k],)
                 self.setLabel(k, *labels[k])
+                
+        if title is not None:
+            self.setTitle(title)
         
         if len(kargs) > 0:
             self.plot(**kargs)

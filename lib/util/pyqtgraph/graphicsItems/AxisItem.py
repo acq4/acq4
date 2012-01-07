@@ -38,7 +38,7 @@ class AxisItem(GraphicsWidget):
         
         self.labelText = ''
         self.labelUnits = ''
-        #self.labelUnitPrefix=''
+        self.labelUnitPrefix=''
         self.labelStyle = {'color': '#CCC'}
         
         self.textHeight = 18
@@ -108,15 +108,15 @@ class AxisItem(GraphicsWidget):
         if self.autoScale:
             self.setScale()
         
-    def setLabel(self, text=None, units=None, **args):
+    def setLabel(self, text=None, units=None, unitPrefix=None, **args):
         if text is not None:
             self.labelText = text
             self.showLabel()
         if units is not None:
             self.labelUnits = units
             self.showLabel()
-        #if unitPrefix is not None:
-            #self.labelUnitPrefix = unitPrefix
+        if unitPrefix is not None:
+            self.labelUnitPrefix = unitPrefix
         if len(args) > 0:
             self.labelStyle = args
         self.label.setHtml(self.labelString())
@@ -131,7 +131,7 @@ class AxisItem(GraphicsWidget):
                 units = u'(x%g)' % (1.0/self.scale)
         else:
             #print repr(self.labelUnitPrefix), repr(self.labelUnits)
-            units = u'(%s)' % (self.labelUnits)
+            units = u'(%s%s)' % (self.labelUnitPrefix, self.labelUnits)
             
         s = u'%s %s' % (self.labelText, units)
         
