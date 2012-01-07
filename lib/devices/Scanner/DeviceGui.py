@@ -266,9 +266,12 @@ class ScannerDeviceGui(QtGui.QWidget):
         margin = fit[3]
         #sensorSize = lib.Manager.getManager().getDevice(camera).getParam('sensorSize')
         #print "Spot size is %f x %g (%f px)" % (size, spotWidth, fit[3])
+        #debug = []
         for i in range(len(positions)):
             frame = frames[i]
-            fBlur = blur(frame, blurRadius)
+            fBlur = blur(frame.astype(np.float32), blurRadius)
+            #debug.append(frame[np.newaxis, ...])
+            #debug.append(fBlur[np.newaxis, ...])
             mx = fBlur.max()
             diff = mx - fBlur.min()
             ss = self.spotSize(fBlur)
@@ -308,7 +311,7 @@ class ScannerDeviceGui(QtGui.QWidget):
             spotCommands.append(positions[i])
             spotFrames.append(frame[newaxis])
             self.updatePrgDlg(40 + 60 * i / frames.shape[0])
-        
+        #pg.show(np.concatenate(debug, axis=0))
         #for i in range(len(spotLocations)):
             #print spotLocations[i], spotCommands[i]
         
@@ -316,8 +319,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         if len(spotFrames) == 0:
             #self.image.updateImage(frames.max(axis=0))
             self.ui.view.setImage(frames)
-            print "frames shape:", frames.shape
-            raise Exception('Calibration never detected laser spot!\n  Looking for spots that are %f pixels wide.\n  (Check: 1. shutter is closed, 2. mirrors on, 3. objective is clean, 4. spot visible (and bright enough) when shutter is open)' % fit[3])
+            raise HelpfulException('Calibration never detected laser spot!  Looking for spots that are %f pixels wide.'% fit[3], reasons=['shutter is disabled', 'mirrors are disabled', 'objective is not clean', 'spot is not visible or not bright enough when shutter is open'])
 
         spotFrameMax = concatenate(spotFrames).max(axis=0)
         #self.image.updateImage(maxFrame, autoRange=True)
@@ -336,7 +338,7 @@ class ScannerDeviceGui(QtGui.QWidget):
             self.addSpot(sl, fit[3]*binning[0])
         
         if len(spotFrames) < 10:
-            raise Exception('Calibration detected only %d frames with laser spot; need minimum of 10.' % len(spotFrames))
+            raise HelpfulException('Calibration detected only %d frames with laser spot; need minimum of 10.' % len(spotFrames), reasons=['spot is too dim for camera sensitivity', 'objective is not clean', 'mirrors are scanning too quickly', 'mirror scanning region is not within the camera\'s view'])
 
         self.updatePrgDlg(90, "Calibrating scanner: Doing linear regression..")
         
