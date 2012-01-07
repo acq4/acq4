@@ -627,7 +627,7 @@ class LogWidget(QtGui.QWidget):
                 #self.displayTraceback(tb, entry, number=i+n)
         if count == 1:
             exc = "<div class=\"exception\"><ol>" + "\n".join(["<li>%s</li>" % ex for ex in text]) + "</ol></div>"
-            tbStr = "\n".join(["<li><b>%s</b>%s</li>" % (mesages[i], tb) for i,tb in enumerate(traceback)])
+            tbStr = "\n".join(["<li><b>%s</b>%s</li>" % (messages[i], tb) for i,tb in enumerate(traceback)])
             traceback = "<div class=\"traceback\" id=\"%s\"><ol>"%str(entryId) + tbStr + "</ol></div>"
             
             return exc + '<a href="#" onclick="showDiv(\'%s\')">Show traceback</a>'%str(entryId) + traceback
