@@ -873,7 +873,7 @@ class _CameraClass:
     def _buildParamList(self):
         """Builds the list of attributes for each remote parameter"""
         plist = self.pvcam.listParams()
-        plist = filter(self.paramAvailable, plist.keys())
+        plist = filter(self.paramAvailable, plist)
         rem = ['ADC_OFFSET']  ## Set by manufacturer; do not change.
         for r in rem:
             if r in plist:

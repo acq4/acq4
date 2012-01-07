@@ -237,7 +237,7 @@ class PlotDataItem(GraphicsObject):
             d = y
             
         if frac >= 1.0:
-            return (d.min(), d.max())
+            return (np.min(d), np.max(d))
         elif frac <= 0.0:
             raise Exception("Value for parameter 'frac' must be > 0. (got %s)" % str(frac))
         else:

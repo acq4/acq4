@@ -70,7 +70,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         ## create graphics scene
         #self.image = ImageItem()
-        self.scene = self.ui.view.scene
+        #self.scene = self.ui.view.scene
         #self.ui.view.enableMouse()
         #self.scene.addItem(self.image)
         #self.ui.view.setAspectLocked(True)
@@ -172,7 +172,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         s.scale(size, size)
         s.setPos(pos[0]-s2, pos[1]-s2)
         s.setPen(QtGui.QPen(QtGui.QColor(100, 255, 100, 70)))
-        self.scene.addItem(s)
+        self.ui.view.addItem(s)
         s.setZValue(100)
         self.spots.append(s)
         
@@ -180,7 +180,7 @@ class ScannerDeviceGui(QtGui.QWidget):
     def clearSpots(self):
         """Clear all circles from the image"""
         for s in self.spots:
-            self.scene.removeItem(s)
+            self.ui.view.removeItem(s)
         self.spots = []
         
 
