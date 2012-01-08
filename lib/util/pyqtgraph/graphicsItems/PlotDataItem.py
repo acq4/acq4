@@ -155,8 +155,9 @@ class PlotDataItem(GraphicsObject):
                 raise Exception('Invalid data type %s' % type(data))
             
         elif len(args) == 2:
-            if dataType(args[0]) != 'listOfValues' or  dataType(args[1]) != 'listOfValues':
-                raise Exception('When passing two unnamed arguments, both must be a list or array of values.')
+            types = ['listOfValues', 'MetaArray']
+            if dataType(args[0]) not in types or  dataType(args[1]) not in types:
+                raise Exception('When passing two unnamed arguments, both must be a list or array of values. (got %s, %s)' % (str(type(args[0])), str(type(args[1]))))
             x = args[0]
             y = args[1]
             
@@ -237,7 +238,7 @@ class PlotDataItem(GraphicsObject):
             d = y
             
         if frac >= 1.0:
-            return (d.min(), d.max())
+            return (np.min(d), np.max(d))
         elif frac <= 0.0:
             raise Exception("Value for parameter 'frac' must be > 0. (got %s)" % str(frac))
         else:

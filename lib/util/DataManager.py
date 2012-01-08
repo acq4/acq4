@@ -658,7 +658,7 @@ class DirHandle(FileHandle):
         
         if sortMode == 'date':
             ## Sort files by creation time
-            with ProgressDialog("Reading directory data...", maximum=len(files), cancel=None) as dlg:
+            with ProgressDialog("Reading directory data...", maximum=len(files), cancelText=None) as dlg:
                 for f in files:
                     if f not in self.cTimeCache:
                         self.cTimeCache[f] = self._getFileCTime(f)
@@ -787,18 +787,6 @@ class DirHandle(FileHandle):
         t = time.time()
         with self.lock:
             #p.mark('lock')
-            ## Convert object to FileType if needed
-            #if not isinstance(obj, FileType):
-                #try:
-                    #if hasattr(obj, '__class__'):
-                        #objType = obj.__class__.__name__
-                    #else:
-                        #objType = type(obj).__name__
-                    #mod = __import__('lib.filetypes.%s' % objType, fromlist=['*'])
-                    #cls = getattr(mod, objType)
-                    #obj = cls(obj)
-                #except:
-                    #raise Exception("Can not create file from object of type %s" % str(type(obj)))
                     
             if fileType is None:
                 fileType = filetypes.suggestWriteType(obj, fileName)
@@ -807,10 +795,6 @@ class DirHandle(FileHandle):
                 raise Exception("Can not create file from object of type %s" % str(type(obj)))
 
             #p.mark('type')
-            ## Add on default extension if there is one   ### Removed--FileTypes now handle this.
-            #ext = obj.extension(**kwargs)
-            #if fileName[-len(ext):] != ext:
-                #fileName = fileName + ext
                 
             fileClass = filetypes.getFileType(fileType)
             #p.mark('get class')
