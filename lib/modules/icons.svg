@@ -168,7 +168,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title />
+        <dc:title></dc:title>
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -689,97 +689,148 @@
          height="487.90369"
          x="98.994949"
          y="117.97108"
-         ry="100.0051" />
+         ry="100.0051"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
       <rect
          style="fill:#ffffff;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:0.8471027px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
          id="rect3227"
          width="355.5737"
          height="429.12198"
          x="169.70563"
-         y="147.0891" />
+         y="147.0891"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
       <path
          style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0"
          d="m 197.9899,183.9054 222.23356,0"
          id="path4021"
-         inkscape:connector-curvature="0" />
+         inkscape:connector-curvature="0"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
       <path
          inkscape:connector-curvature="0"
          id="path4023"
          d="m 237.9899,210.706 222.23356,0"
          style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0"
-         sodipodi:nodetypes="cc" />
+         sodipodi:nodetypes="cc"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
       <path
          style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0"
          d="m 237.9899,235.07019 182.23356,0"
          id="path4025"
          inkscape:connector-curvature="0"
-         sodipodi:nodetypes="cc" />
+         sodipodi:nodetypes="cc"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
       <path
          inkscape:connector-curvature="0"
          id="path4027"
          d="m 237.9899,259.43437 242.23356,0"
          style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0"
-         sodipodi:nodetypes="cc" />
+         sodipodi:nodetypes="cc"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
       <path
          style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0"
          d="m 197.9899,283.79855 222.23356,0"
          id="path4029"
-         inkscape:connector-curvature="0" />
+         inkscape:connector-curvature="0"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
       <path
          inkscape:connector-curvature="0"
          id="path4031"
          d="m 237.9899,308.16274 182.23356,0"
          style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0"
-         sodipodi:nodetypes="cc" />
+         sodipodi:nodetypes="cc"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
       <path
          style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0"
          d="m 237.9899,332.52692 122.23356,0"
          id="path4033"
          inkscape:connector-curvature="0"
-         sodipodi:nodetypes="cc" />
+         sodipodi:nodetypes="cc"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
       <path
          inkscape:connector-curvature="0"
          id="path4035"
          d="m 237.9899,356.8911 222.23356,0"
          style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0"
-         sodipodi:nodetypes="cc" />
+         sodipodi:nodetypes="cc"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
       <path
          inkscape:connector-curvature="0"
          id="path4039"
          d="m 197.9899,405.61947 222.23356,0"
-         style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0" />
+         style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
       <path
          style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0"
          d="m 237.9899,429.98365 222.23356,0"
          id="path4041"
-         inkscape:connector-curvature="0" />
+         inkscape:connector-curvature="0"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
       <path
          inkscape:connector-curvature="0"
          id="path4043"
          d="m 237.9899,454.34784 222.23356,0"
-         style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0" />
+         style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
       <path
          style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0"
          d="m 197.9899,478.71202 222.23356,0"
          id="path4045"
-         inkscape:connector-curvature="0" />
+         inkscape:connector-curvature="0"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
       <path
          inkscape:connector-curvature="0"
          id="path4047"
          d="m 237.9899,503.07621 222.23356,0"
-         style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0" />
+         style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
       <path
          style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0"
          d="m 237.9899,527.44039 162.23356,0"
          id="path4049"
          inkscape:connector-curvature="0"
-         sodipodi:nodetypes="cc" />
+         sodipodi:nodetypes="cc"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
       <path
          inkscape:connector-curvature="0"
          id="path4051"
          d="m 237.9899,554.24099 242.23356,0"
          style="fill:none;stroke:#000000;stroke-width:13.34;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:13.34,13.34;stroke-dashoffset:0"
-         sodipodi:nodetypes="cc" />
+         sodipodi:nodetypes="cc"
+         inkscape:export-filename="C:\Documents and Settings\Luke\acq4\lib\logIcon.png"
+         inkscape:export-xdpi="91.627419"
+         inkscape:export-ydpi="91.627419" />
     </g>
   </g>
 </svg>
