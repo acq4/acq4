@@ -343,6 +343,7 @@ class NodeGraphicsItem(GraphicsObject):
         
         bounds = self.boundingRect()
         self.nameItem = QtGui.QGraphicsTextItem(self.node.name(), self)
+        self.nameItem.setDefaultTextColor(QtGui.QColor(50, 50, 50))
         self.nameItem.moveBy(bounds.width()/2. - self.nameItem.boundingRect().width()/2., 0)
         self.nameItem.setTextInteractionFlags(QtCore.Qt.TextEditorInteraction)
         self.updateTerminals()
