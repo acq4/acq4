@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
+if __name__ == '__main__':
+    import os, sys
+    path = os.path.join(os.path.dirname(__file__), '..', '..')
+    sys.path = [path] + sys.path
+    
+    
 from pyqtgraph.Qt import QtGui, QtCore
 import weakref
+import numpy as np
 
 __all__ = ['TickSlider', 'GradientWidget', 'BlackWhiteSlider']
 
@@ -269,12 +276,20 @@ class GradientWidget(TickSlider):
             g.setStops(stops)
         return g
         
-    def getColor(self, x):
+    def getColor(self, x, toQColor=True):
         ticks = self.listTicks()
         if x <= ticks[0][1]:
-            return QtGui.QColor(ticks[0][0].color)  # always copy colors before handing them out
+            c = ticks[0][0].color
+            if toQColor:
+                return QtGui.QColor(c)  # always copy colors before handing them out
+            else:
+                return (c.red(), c.green(), c.blue(), c.alpha())
         if x >= ticks[-1][1]:
-            return QtGui.QColor(ticks[-1][0].color)
+            c = ticks[-1][0].color
+            if toQColor:
+                return QtGui.QColor(c)  # always copy colors before handing them out
+            else:
+                return (c.red(), c.green(), c.blue(), c.alpha())
             
         x2 = ticks[0][1]
         for i in range(1,len(ticks)):
@@ -295,7 +310,10 @@ class GradientWidget(TickSlider):
             g = c1.green() * (1.-f) + c2.green() * f
             b = c1.blue() * (1.-f) + c2.blue() * f
             a = c1.alpha() * (1.-f) + c2.alpha() * f
-            return QtGui.QColor(r, g, b,a)
+            if toQColor:
+                return QtGui.QColor(r, g, b,a)
+            else:
+                return (r,g,b,a)
         elif self.colorMode == 'hsv':
             h1,s1,v1,_ = c1.getHsv()
             h2,s2,v2,_ = c2.getHsv()
@@ -304,9 +322,26 @@ class GradientWidget(TickSlider):
             v = v1 * (1.-f) + v2 * f
             c = QtGui.QColor()
             c.setHsv(h,s,v)
-            return c
+            if toQColor:
+                return c
+            else:
+                return (c.red(), c.green(), c.blue(), c.alpha())
                     
-                    
+    def getLookupTable(self, nPts, alpha=True):
+        """Return an RGB/A lookup table."""
+        if alpha:
+            table = np.empty((nPts,4), dtype=np.ubyte)
+        else:
+            table = np.empty((nPts,3), dtype=np.ubyte)
+            
+        for i in range(nPts):
+            x = float(i)/(nPts-1)
+            color = self.getColor(x, toQColor=False)
+            table[i] = color[:table.shape[1]]
+            
+        return table
+            
+            
 
     def mouseReleaseEvent(self, ev):
         TickSlider.mouseReleaseEvent(self, ev)

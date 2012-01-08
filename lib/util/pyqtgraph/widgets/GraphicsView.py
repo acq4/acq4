@@ -42,11 +42,11 @@ class GraphicsView(QtGui.QGraphicsView):
         QtGui.QGraphicsView.__init__(self, parent)
         if useOpenGL is None:
             if 'linux' in sys.platform:  ## linux has bugs in opengl implementation
-                useOpenGL = False
+                useOpenGL = True
             elif 'darwin' in sys.platform: ## openGL speeds up display on mac
                 useOpenGL = True
             else:
-                useOpenGL = False
+                useOpenGL = True
         self.useOpenGL(useOpenGL)
         
         self.setCacheMode(self.CacheBackground)

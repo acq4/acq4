@@ -70,6 +70,9 @@ class PlotDataItem(GraphicsObject):
             'alphaMode': False,
             'pen': (200,200,200),
             'shadowPen': None,
+            'symbol': None,
+            'symbolPen': (200,200,200),
+            'symbolBrush': (50, 50, 150),
         }
         self.setData(*args, **kargs)
     
@@ -85,18 +88,19 @@ class PlotDataItem(GraphicsObject):
     def setAlpha(self, alpha, auto):
         self.opts['alphaHint'] = alpha
         self.opts['alphaMode'] = auto
-        self.update()
+        self.setOpacity(alpha)
+        #self.update()
         
     def setFftMode(self, mode):
         self.opts['fftMode'] = mode
-        self.xDisp = self.yDisp = None
-        self.path = None
+        #self.xDisp = self.yDisp = None
+        #self.path = None
         self.update()
     
     def setLogMode(self, mode):
         self.opts['logMode'] = mode
-        self.xDisp = self.yDisp = None
-        self.path = None
+        #self.xDisp = self.yDisp = None
+        #self.path = None
         self.update()
     
     def setPointMode(self, mode):
@@ -114,8 +118,8 @@ class PlotDataItem(GraphicsObject):
     def setDownsampling(self, ds):
         if self.opts['downsample'] != ds:
             self.opts['downsample'] = ds
-            self.xDisp = self.yDisp = None
-            self.path = None
+            #self.xDisp = self.yDisp = None
+            #self.path = None
             self.update()
         
     def setData(self, *args, **kargs):
@@ -155,9 +159,8 @@ class PlotDataItem(GraphicsObject):
                 raise Exception('Invalid data type %s' % type(data))
             
         elif len(args) == 2:
-            types = ['listOfValues', 'MetaArray']
-            if dataType(args[0]) not in types or  dataType(args[1]) not in types:
-                raise Exception('When passing two unnamed arguments, both must be a list or array of values. (got %s, %s)' % (str(type(args[0])), str(type(args[1]))))
+            if dataType(args[0]) != 'listOfValues' or  dataType(args[1]) != 'listOfValues':
+                raise Exception('When passing two unnamed arguments, both must be a list or array of values.')
             x = args[0]
             y = args[1]
             
@@ -165,7 +168,24 @@ class PlotDataItem(GraphicsObject):
             x = kargs['x']
         if 'y' in kargs:
             y = kargs['y']
+
+
+        ## pull in all style arguments. 
+        ## Use self.opts to fill in anything not present in kargs.
+        
+        curveArgs = {}
+        for k in ['pen', 'shadowPen']:
+            if k in kargs:
+                self.opts[k] = kargs[k]
+            curveArgs[k] = self.opts[k]
+
+        scatterArgs = {}
+        for k,v in [('symbolPen','pen'), ('symbolBrush','brush'), ('symbol','style')]:
+            if k in kargs:
+                self.opts[k] = kargs[k]
+            scatterArgs[v] = self.opts[k]
             
+
         if y is None:
             return
         if y is not None and x is None:
@@ -174,21 +194,12 @@ class PlotDataItem(GraphicsObject):
         self.xData = x
         self.yData = y
         
-        curveArgs = {}
-        for k in ['pen', 'shadowPen']:
-            if k in kargs:
-                self.opts[k] = kargs[k]
-            curveArgs[k] = self.opts[k]
         if curveArgs['pen'] is not None:
             curve = PlotCurveItem(x=x, y=y, **curveArgs)
             curve.setParentItem(self)
             self.curves.append(curve)
         
-        scatterArgs = {}
-        for k,v in [('symbolPen','pen'), ('symbolBrush','brush'), ('symbol','style')]:
-            if k in kargs:
-                scatterArgs[v] = kargs[k]
-        if len(scatterArgs) > 0:
+        if scatterArgs['symbol'] is not None:
             sp = ScatterPlotItem(x=x, y=y, **scatterArgs)
             sp.setParentItem(self)
             self.scatters.append(sp)
@@ -238,7 +249,7 @@ class PlotDataItem(GraphicsObject):
             d = y
             
         if frac >= 1.0:
-            return (np.min(d), np.max(d))
+            return (d.min(), d.max())
         elif frac <= 0.0:
             raise Exception("Value for parameter 'frac' must be > 0. (got %s)" % str(frac))
         else:

@@ -16,7 +16,6 @@ This class is very heavily featured:
   - Control panel with a huge feature set including averaging, decimation,
     display, power spectrum, svg/png export, plot linking, and more.
 """
-print __file__
 #from graphicsItems import *
 from plotConfigTemplate import *
 from pyqtgraph.Qt import QtGui, QtCore, QtSvg

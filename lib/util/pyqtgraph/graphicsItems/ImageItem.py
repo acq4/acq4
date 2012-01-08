@@ -27,7 +27,7 @@ class ImageItem(GraphicsObject):
         GraphicsObject.__init__(self)
         #self.pixmapItem = QtGui.QGraphicsPixmapItem(self)
         self.qimage = QtGui.QImage()
-        self.pixmap = None
+        self._pixmap = None
         self.paintMode = mode
         #self.useWeave = True
         self.blackLevel = None
@@ -61,17 +61,20 @@ class ImageItem(GraphicsObject):
         #return QtCore.QRectF(0, 0, self.qimage.width(), self.qimage.height())
         
     def width(self):
-        if self.pixmap is None:
+        pixmap = self.pixmap()
+        if pixmap is None:
             return None
-        return self.pixmap.width()
+        return pixmap.width()
         
     def height(self):
-        if self.pixmap is None:
+        pixmap = self.pixmap()
+        if pixmap is None:
             return None
-        return self.pixmap.height()
+        return pixmap.height()
 
     def boundingRect(self):
-        if self.pixmap is None:
+        pixmap = self.pixmap()
+        if pixmap is None:
             return QtCore.QRectF(0., 0., 0., 0.)
         return QtCore.QRectF(0., 0., float(self.width()), float(self.height()))
 
@@ -211,11 +214,21 @@ class ImageItem(GraphicsObject):
             im1[..., 2][mask] = 255
         prof.mark('6')
         #print "Final image:", im1.dtype, im1.min(), im1.max(), im1.shape
-        self.ims = im1.tostring()  ## Must be held in memory here because qImage won't do it for us :(
+        #self.ims = im1.tostring()  ## Must be held in memory here because qImage won't do it for us :(
         prof.mark('7')
-        qimage = QtGui.QImage(buffer(self.ims), im1.shape[1], im1.shape[0], QtGui.QImage.Format_ARGB32)
+        try:
+            buf = im1.data
+        except AttributeError:
+            im1 = np.ascontiguousarray(im1)
+            buf = im1.data
+        
+        qimage = QtGui.QImage(buf, im1.shape[1], im1.shape[0], QtGui.QImage.Format_ARGB32)
+        self.qimage = qimage
+        self.qimage.data = im1
+        self._pixmap = None
         prof.mark('8')
-        self.pixmap = QtGui.QPixmap.fromImage(qimage)
+        
+        #self.pixmap = QtGui.QPixmap.fromImage(qimage)
         prof.mark('9')
         ##del self.ims
         #self.item.setPixmap(self.pixmap)
@@ -285,7 +298,7 @@ class ImageItem(GraphicsObject):
         
         
     def getPixmap(self):
-        return self.pixmap.copy()
+        return self.pixmap().copy()
 
     def getHistogram(self, bins=500, step=3):
         """returns x and y arrays containing the histogram values for the current image.
@@ -379,15 +392,26 @@ class ImageItem(GraphicsObject):
         self.drawKernelCenter = center
         self.drawMode = mode
         self.drawMask = mask
-    
+
+    def pixmap(self):
+        if self.qimage is None:
+            return None
+        if self._pixmap is None:
+            self._pixmap = QtGui.QPixmap.fromImage(self.qimage)
+        return self._pixmap
+
     def paint(self, p, *args):
         
         #QtGui.QGraphicsPixmapItem.paint(self, p, *args)
-        if self.pixmap is None:
+        if self.qimage is None:
             return
         if self.paintMode is not None:
             p.setCompositionMode(self.paintMode)
-        p.drawPixmap(self.boundingRect(), self.pixmap, QtCore.QRectF(0, 0, self.pixmap.width(), self.pixmap.height()))
+        
+        #pixmap = self.pixmap()
+        #p.drawPixmap(self.boundingRect(), pixmap, QtCore.QRectF(0, 0, pixmap.width(), pixmap.height()))
+        
+        p.drawImage(QtCore.QPointF(0,0), self.qimage)
         if self.border is not None:
             p.setPen(self.border)
             p.drawRect(self.boundingRect())
@@ -395,4 +419,7 @@ class ImageItem(GraphicsObject):
     def pixelSize(self):
         """return size of a single pixel in the image"""
         br = self.sceneBoundingRect()
-        return br.width()/self.pixmap.width(), br.height()/self.pixmap.height()
+        pixmap = self.pixmap()
+        if pixmap is None:
+            return 1,1
+        return br.width()/pixmap.width(), br.height()/pixmap.height()

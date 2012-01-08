@@ -350,3 +350,126 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
     ## Untranspose array before returning
     return output.transpose(tr2)
 
+
+
+
+
+def makeQImage(data, lut=None, range=None):
+    """
+    Convert a 2D or 3D array into a QImage suitable for display.
+    
+    Arguments:
+        data  - 2D or 3D numpy array of int/float types
+        
+                For 2D arrays (x, y):
+                  * The color will be determined using a lookup table (see argument 'lut').
+                  * If maxVal and minVal are given, the data is rescaled and converted to int
+                    before using the lookup table.
+                 
+                For 3D arrays (x, y, rgba):
+                  * The third axis must have length 3 or 4 and will be interpreted as RGBA.
+                  * maxVal and minVal may be single values or lists of 3-4 values
+                    which rescale the colors into the range 0-255.
+                  * The 'lut' argument is not allowed.
+                 
+        lut   - Lookup table for 2D data. May be 1D or 2D (N,rgba) and must have dtype=ubyte.
+                Values in data will be converted to color by indexing directly from lut.
+                Lookup tables can be built using GradientWidget.
+        range - List [min, max]; optionally rescale data before converting through the
+                lookup table.   rescaled = (data-min) * len(lut) / (max-min)
+                
+    """
+    ## sanity checks
+    if data.ndim == 3:
+        if data.shape[2] not in (3,4):
+            raise Exception("data.shape[2] must be 3 or 4")
+        if lut is not None:
+            raise Exception("can not use lokup table with 3D data")
+    elif data.ndim != 2:
+        raise Exception("data must be 2D or 3D")
+        
+    if lut is not None:
+        if lut.ndim == 2:
+            if lut.shape[1] not in (3,4):
+                raise Exception("lut.shape[1] must be 3 or 4")
+        elif lut.ndim != 1:
+            raise Exception("lut must be 1D or 2D")
+        if lut.dtype is not np.ubyte:
+            raise Exception('lookup table must have dtype=uint')
+        
+    if range is not None:
+        range = np.array(range)
+        if range.shape == (2,):
+            pass
+        elif range.shape in [(3,2), (4,2)]:
+            if data.ndim == 3:
+                raise Exception("Can not use 2D range with 3D data.")
+            if lut is not None:
+                raise Exception('Can not use 2D range and lookup table together.')
+        else:
+            raise Exception("Range must have shape (2,) or (3,2) or (4,2)")
+        
+        
+
+    if lut is not None:
+        lutLength = lut.shape[0]
+    else:
+        lutLength = 256
+
+
+
+    ## Apply range if given
+    if range is not None:
+        if range.ndim == 1:
+            if data.ndim == 2:
+                range = range[np.newaxis, np.newaxis, :]
+            else:
+                range = range[np.newaxis, np.newaxis, np.newaxis, :]
+        else:
+            range = range[np.newaxis, np.newaxis, ...]
+            if data.ndim == 2:
+                data = data[..., np.newaxis]
+            
+        data = ((data.astype(int)-range[...,0]) * lut.shape[0]) / (range[...,1]-range[...,0])
+
+    ## apply LUT if given
+    if lut is not None:
+        
+        if data.dtype.kind not in ('i', 'u'):
+            data = data.astype(int)
+            
+        data = np.clip(data, 0, lutLength)
+        data = lut[data]
+    else:
+        if data.dtype is not np.ubyte:
+            data = np.clip(data, 0, 255).astype(np.ubyte)
+    
+    ## copy data into ARGB ordered array
+    imgData = np.empty(data.shape[:2]+(4,), dtype=np.ubyte)
+    if data.ndim == 2:
+        data = data[..., np.newaxis]
+        
+    order = [2,1,0,3] ## for some reason, the colors line up as BGR in the final image.
+    if data.shape[2] == 1:
+        for i in xrange(3):
+            imgData[..., order[i]] = data[..., 0]    
+    else:
+        for i in xrange(0, data.shape[2]):
+            imgData[..., order[i]] = data[..., i]    
+        
+    if data.shape[2] == 4:
+        imgFormat = QtGui.QImage.Format_ARGB32
+    else:
+        imgFormat = QtGui.QImage.Format_RGB32
+        imgData[..., 3] = 255
+
+    ## create QImage from buffer
+    try:
+        buf = imgData.data
+    except AttributeError:
+        imgData = np.ascontiguousarray(imgData)
+        buf = imgData.data
+    qimage = QtGui.QImage(buf, imgData.shape[1], imgData.shape[0], imgFormat)
+    qimage.data = imgData
+    return qimage
+    
