@@ -20,6 +20,8 @@ class PlotDataItem(GraphicsObject):
     
     def __init__(self, *args, **kargs):
         """
+        There are a LOT of different ways to create a PlotDataItem:
+        
         Data initialization: (x,y data only)
             PlotDataItem(yValues)
             PlotDataItem(xValues, yValues)
