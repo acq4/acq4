@@ -429,7 +429,7 @@ def makeARGB(data, lut=None, levels=None):
         
         try:  ## use weave to speed up scaling
             if levels.ndim == 1:
-                scale = float(lutLength / (levels[1]-levels[0]))
+                scale = float(lutLength) / (levels[1]-levels[0])
                 offset = float(levels[0])
                 data = rescaleData(data, scale, offset)
             else:
@@ -548,6 +548,7 @@ def makeQImage(imgData, alpha):
     else:
         imgFormat = QtGui.QImage.Format_RGB32
         
+    imgData = imgData.transpose((1, 0, 2))  ## QImage expects the row/column order to be opposite
     try:
         buf = imgData.data
     except AttributeError:

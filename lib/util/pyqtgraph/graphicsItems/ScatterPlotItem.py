@@ -10,19 +10,19 @@ class ScatterPlotItem(GraphicsObject):
     sigClicked = QtCore.Signal(object, object)  ## self, points
     
     def __init__(self, spots=None, x=None, y=None, pxMode=True, pen='default', brush='default', size=7, 
-        style=None, identical=False, data=None):
+        symbol=None, identical=False, data=None):
             
         """
         Arguments:
             spots: list of dicts. Each dict specifies parameters for a single spot:
-                   {'pos': (x,y), 'size', 'pen', 'brush', 'style'}
+                   {'pos': (x,y), 'size', 'pen', 'brush', 'symbol'}
             x,y: array of x,y values. Alternatively, specify spots['pos'] = (x,y)
             pxMode: If True, spots are always the same size regardless of scaling, and size is given in px.
                     Otherwise, size is in scene coordinates and the spots scale with the view.
             identical: If True, all spots are forced to look identical. 
                        This can result in performance enhancement.
                        
-            style can be one of:
+            symbol can be one of:
                 'o'  circle
                 's'  square
                 't'  triangle
@@ -47,7 +47,7 @@ class ScatterPlotItem(GraphicsObject):
         else:
             self.pen = fn.mkPen(pen)
         
-        self.style = style
+        self.symbol = symbol
         self.size = size
         
         self.pxMode = pxMode
@@ -96,7 +96,7 @@ class ScatterPlotItem(GraphicsObject):
             spots - list of dicts specifying parameters for each spot
                     [ {'pos': (x,y), 'pen': 'r', ...}, ...]
             x, y -  arrays specifying location of spots to add. 
-                    all other parameters (pen, style, etc.) will be set to the default
+                    all other parameters (pen, symbol, etc.) will be set to the default
                     values for this scatter plot.
                     these arguments are IGNORED if 'spots' is specified
             data -  list of arbitrary objects to be assigned to spot.data for each spot
@@ -142,9 +142,9 @@ class ScatterPlotItem(GraphicsObject):
             brush = s.get('brush', self.brush)
             pen = s.get('pen', self.pen)
             pen.setCosmetic(True)
-            style = s.get('style', self.style)
+            symbol = s.get('symbol', self.symbol)
             data2 = s.get('data', None)
-            item = self.mkSpot(pos, size, self.pxMode, brush, pen, data2, style=style, index=len(self.spots))
+            item = self.mkSpot(pos, size, self.pxMode, brush, pen, data2, symbol=symbol, index=len(self.spots))
             self.spots.append(item)
             #if self.optimize:
                 #item.hide()
@@ -175,22 +175,22 @@ class ScatterPlotItem(GraphicsObject):
             return None
         if self._spotPixmap is None:
             #print 'spotPixmap'
-            spot = SpotItem(size=self.size, pxMode=True, brush=self.brush, pen=self.pen, style=self.style)
-            #self._spotPixmap = PixmapSpotItem.makeSpotImage(self.size, self.pen, self.brush, self.style)
+            spot = SpotItem(size=self.size, pxMode=True, brush=self.brush, pen=self.pen, symbol=self.symbol)
+            #self._spotPixmap = PixmapSpotItem.makeSpotImage(self.size, self.pen, self.brush, self.symbol)
             self._spotPixmap = spot.pixmap
         return self._spotPixmap
 
-    def mkSpot(self, pos, size, pxMode, brush, pen, data, style=None, index=None):
+    def mkSpot(self, pos, size, pxMode, brush, pen, data, symbol=None, index=None):
         ## Make and return a SpotItem (or PixmapSpotItem if in pxMode)
         
         brush = fn.mkBrush(brush)
         pen = fn.mkPen(pen)
         if pxMode:
             img = self.spotPixmap()  ## returns None if not using identical mode
-            #item = PixmapSpotItem(size, brush, pen, data, image=img, style=style, index=index)
-            item = SpotItem(size, pxMode, brush, pen, data, style=style, image=img, index=index)
+            #item = PixmapSpotItem(size, brush, pen, data, image=img, symbol=symbol, index=index)
+            item = SpotItem(size, pxMode, brush, pen, data, symbol=symbol, image=img, index=index)
         else:
-            item = SpotItem(size, pxMode, brush, pen, data, style=style, index=index)
+            item = SpotItem(size, pxMode, brush, pen, data, symbol=symbol, index=index)
         item.setParentItem(self)
         item.setPos(pos)
         #item.sigClicked.connect(self.pointClicked)
@@ -276,41 +276,41 @@ class ScatterPlotItem(GraphicsObject):
 class SpotItem(GraphicsObject):
     #sigClicked = QtCore.Signal(object)
     
-    def __init__(self, size, pxMode, brush, pen, data=None, style=None, image=None, index=None):
+    def __init__(self, size, pxMode, brush, pen, data=None, symbol=None, image=None, index=None):
         GraphicsObject.__init__(self)
         self.pxMode = pxMode
 
-        if style is None:
-            style = 'o'    ## circle by default
-        elif isinstance(style, int):  ## allow styles specified by integer for easy iteration
-            style = ['o', 's', 't', 'd', '+'][style]
-        ####print 'SpotItem style: ', style
+        if symbol is None:
+            symbol = 'o'    ## circle by default
+        elif isinstance(symbol, int):  ## allow symbols specified by integer for easy iteration
+            symbol = ['o', 's', 't', 'd', '+'][symbol]
+        ####print 'SpotItem symbol: ', symbol
         self.data = data
         self.pen = pen
         self.brush = brush
         self.size = size
         self.index = index
-        self.style = style
+        self.symbol = symbol
         #s2 = size/2.
         self.path = QtGui.QPainterPath()
-        if style == 'o':
+        if symbol == 'o':
             self.path.addEllipse(QtCore.QRectF(-0.5, -0.5, 1, 1))
-        elif style == 's':
+        elif symbol == 's':
             self.path.addRect(QtCore.QRectF(-0.5, -0.5, 1, 1))
-        elif style is 't' or style is '^':
+        elif symbol is 't' or symbol is '^':
             self.path.moveTo(-0.5, -0.5)
             self.path.lineTo(0, 0.5)
             self.path.lineTo(0.5, -0.5)
             self.path.closeSubpath()
             #self.path.connectPath(self.path)
-        elif style == 'd':
+        elif symbol == 'd':
             self.path.moveTo(0., -0.5)
             self.path.lineTo(-0.4, 0.)
             self.path.lineTo(0, 0.5)
             self.path.lineTo(0.4, 0)
             self.path.closeSubpath()
             #self.path.connectPath(self.path)
-        elif style == '+':
+        elif symbol == '+':
             self.path.moveTo(-0.5, -0.01)
             self.path.lineTo(-0.5, 0.01)
             self.path.lineTo(-0.01, 0.01)
@@ -325,15 +325,15 @@ class SpotItem(GraphicsObject):
             self.path.lineTo(-0.01, -0.01)
             self.path.closeSubpath()
             #self.path.connectPath(self.path)
-        #elif style == 'x':
+        #elif symbol == 'x':
         else:
-            raise Exception("Unknown spot style '%s'" % style)
+            raise Exception("Unknown spot symbol '%s'" % symbol)
             #self.path.addEllipse(QtCore.QRectF(-0.5, -0.5, 1, 1))
         
         if pxMode:
             ## pre-render an image of the spot and display this rather than redrawing every time.
             if image is None:
-                self.pixmap = self.makeSpotImage(size, pen, brush, style)
+                self.pixmap = self.makeSpotImage(size, pen, brush, symbol)
             else:
                 self.pixmap = image ## image is already provided (probably shared with other spots)
             self.setFlags(self.flags() | self.ItemIgnoresTransformations | self.ItemHasNoContents)
@@ -343,7 +343,7 @@ class SpotItem(GraphicsObject):
             self.scale(size, size)
 
 
-    def makeSpotImage(self, size, pen, brush, style=None):
+    def makeSpotImage(self, size, pen, brush, symbol=None):
         self.spotImage = QtGui.QImage(size+2, size+2, QtGui.QImage.Format_ARGB32_Premultiplied)
         self.spotImage.fill(0)
         p = QtGui.QPainter(self.spotImage)

@@ -160,7 +160,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.view.addItem(self.scopeItemGroup)
         self.scopeItemGroup.setZValue(10)
         self.cameraItemGroup.setZValue(0)
-        self.imageItem = pg.ImageItem(parent=self.cameraItemGroup)
+        self.imageItem = pg.ImageItem()
         self.view.addItem(self.imageItem)
         self.imageItem.setParentItem(self.cameraItemGroup)
         self.imageItem.setZValue(-10)
@@ -963,7 +963,7 @@ class CameraWindow(QtGui.QMainWindow):
             #m.scale(info['pixelSize'][0], info['pixelSize'][1])
             
             ## update image in viewport
-            self.imageItem.updateImage(data, clipMask=self.currentClipMask, white=wl, black=bl, copy=False)
+            self.imageItem.updateImage(data, levels=[bl, wl])
             self.imageItem.setTransform(m)
 
             ## Update viewport to correct for scope movement/scaling

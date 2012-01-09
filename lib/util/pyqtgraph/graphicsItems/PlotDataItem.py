@@ -180,7 +180,7 @@ class PlotDataItem(GraphicsObject):
             curveArgs[k] = self.opts[k]
 
         scatterArgs = {}
-        for k,v in [('symbolPen','pen'), ('symbolBrush','brush'), ('symbol','style')]:
+        for k,v in [('symbolPen','pen'), ('symbolBrush','brush'), ('symbol','symbol')]:
             if k in kargs:
                 self.opts[k] = kargs[k]
             scatterArgs[v] = self.opts[k]

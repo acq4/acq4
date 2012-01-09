@@ -25,14 +25,14 @@ view.enableMouse()
 view.setAspectLocked(True)
 
 ## Create image item
-img = pg.ImageItem()
+img = pg.ImageItem(border='w')
 view.scene().addItem(img)
 
 ## Set initial view bounds
 view.setRange(QtCore.QRectF(0, 0, 200, 200))
 
 ## Create random image
-data = np.random.normal(size=(50, 600, 600), loc=1024, scale=64).astype(np.uint16)
+data = np.random.normal(size=(15, 600, 600), loc=1024, scale=64).astype(np.uint16)
 i = 0
 
 updateTime = ptime.time()
@@ -42,7 +42,7 @@ def updateData():
     global img, data, i, updateTime, fps
 
     ## Display the data
-    img.updateImage(data[i], copy=False)
+    img.setImage(data[i])
     i = (i+1) % data.shape[0]
 
     QtCore.QTimer.singleShot(1, updateData)
@@ -60,7 +60,7 @@ def updateData():
 #t.start(20)
 updateData()
 
-view.scaleToImage(img)
+#view.scaleToImage(img)
 
 #img.setFlag(img.ItemIgnoresTransformations, True)
 

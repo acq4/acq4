@@ -444,7 +444,7 @@ class ImageView(QtGui.QWidget):
         
         self.ui.gradientWidget.setTickValue(self.ticks[0], 0.0)
         self.ui.gradientWidget.setTickValue(self.ticks[1], 1.0)
-        self.imageItem.setLevels(white=self.whiteLevel(), black=self.blackLevel())
+        self.imageItem.setLevels([self.blackLevel(), self.whiteLevel()])
             
 
     def autoRange(self):
@@ -535,14 +535,14 @@ class ImageView(QtGui.QWidget):
         #print "update:", image.ndim, image.max(), image.min(), self.blackLevel(), self.whiteLevel()
         if self.axes['t'] is None:
             #self.ui.timeSlider.hide()
-            self.imageItem.updateImage(image, white=self.whiteLevel(), black=self.blackLevel())
+            self.imageItem.updateImage(image, levels=[self.blackLevel(),self.whiteLevel()])
             #self.ui.roiPlot.hide()
             #self.ui.roiBtn.hide()
         else:
             #self.ui.roiBtn.show()
             self.ui.roiPlot.show()
             #self.ui.timeSlider.show()
-            self.imageItem.updateImage(image[self.currentIndex], white=self.whiteLevel(), black=self.blackLevel())
+            self.imageItem.updateImage(image[self.currentIndex], levels=[self.blackLevel(),self.whiteLevel()])
             
             
     def timeIndex(self, slider):

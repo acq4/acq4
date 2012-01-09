@@ -22,7 +22,7 @@ class ImageItem(GraphicsObject):
     ## performance gains from this are marginal, and it's rather unreliable.
     useWeave = False
     
-    def __init__(self, image=None, *args, **kargs):
+    def __init__(self, image=None, **kargs):
         """
         See setImage for all allowed arguments.
         """
@@ -46,7 +46,9 @@ class ImageItem(GraphicsObject):
         self.border = None
         
         if image is not None:
-            self.setImage(image, *args, **kargs)
+            self.setImage(image, **kargs)
+        else:
+            self.setOpts(**kargs)
 
     def setCompositionMode(self, mode):
         self.paintMode = mode
@@ -56,6 +58,10 @@ class ImageItem(GraphicsObject):
     #def setAlpha(self, alpha):
         #self.setOpacity(alpha)
         #self.updateImage()
+        
+    def setBorder(self, b):
+        self.border = fn.mkPen(b)
+        self.update()
         
     def width(self):
         if self.image is None:
@@ -102,6 +108,20 @@ class ImageItem(GraphicsObject):
         if update:
             self.updateImage()
 
+    def setOpts(self, update=True, **kargs):
+        if 'lut' in kargs:
+            self.setLookupTable(kargs['lut'], update=update)
+        if 'levels' in kargs:
+            self.setLevels(kargs['levels'], update=update)
+        #if 'clipLevel' in kargs:
+            #self.setClipLevel(kargs['clipLevel'])
+        if 'opacity' in kargs:
+            self.setOpacity(kargs['opacity'])
+        if 'compositionMode' in kargs:
+            self.setCompositionMode(kargs['compositionMode'])
+        if 'border' in kargs:
+            self.setBorder(kargs['border'])
+
     def setImage(self, image=None, autoLevels=None, **kargs):
         """
         Update the image displayed by this item.
@@ -129,33 +149,36 @@ class ImageItem(GraphicsObject):
             
         prof.mark('1')
             
-        if autoLevels is None and 'levels' not in kargs:
-            autoLevels = True
+        if autoLevels is None:
+            if 'levels' in kargs:
+                autoLevels = False
+            else:
+                autoLevels = True
         if autoLevels:
             img = self.image
             while img.size > 2**16:
                 img = img[::2, ::2]
-            kargs['levels'] = [img.min(), img.max()]
+            mn, mx = img.min(), img.max()
+            if mn == mx:
+                mn = 0
+                mx = 255
+            kargs['levels'] = [mn,mx]
         prof.mark('2')
         
-        if 'lut' in kargs:
-            self.setLookupTable(kargs['lut'], update=False)
-        if 'levels' in kargs:
-            self.setLevels(kargs['levels'], update=False)
-        #if 'clipLevel' in kargs:
-            #self.setClipLevel(kargs['clipLevel'])
-        if 'opacity' in kargs:
-            self.setOpacity(kargs['opacity'])
-        if 'compositionMode' in kargs:
-            self.setCompositionMode(kargs['compositionMode'])
-        if 'border' in kargs:
-            self.setBorder(kargs['border'])
+        self.setOpts(update=False, **kargs)
         prof.mark('3')
         
         self.qimage = None
         self.update()
         prof.mark('4')
+
+        if gotNewData:
+            self.sigImageChanged.emit()
+
+
         prof.finish()
+
+
 
     def updateImage(self, *args, **kargs):
         ## used for re-rendering qimage from self.image.
@@ -163,7 +186,7 @@ class ImageItem(GraphicsObject):
         ## can we make any assumptions here that speed things up?
         ## dtype, range, size are all the same?
         defaults = {
-            'autoRange': False,
+            'autoLevels': False,
         }
         defaults.update(kargs)
         return self.setImage(*args, **defaults)
@@ -214,11 +237,11 @@ class ImageItem(GraphicsObject):
         self.setPxMode(False)
 
     def getPixmap(self):
-        if self.pixmap is None:
+        if self.qimage is None:
             self.render()
-            if self.pixmap is None:
+            if self.qimage is None:
                 return None
-        return self.pixmap
+        return QtGui.QPixmap.fromImage(self.qimage)
     
     def pixelSize(self):
         """return scene-size of a single pixel in the image"""
