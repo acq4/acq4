@@ -14,16 +14,26 @@ class RawImageWidget(QtGui.QWidget):
     """
     def __init__(self, parent=None):
         QtGui.QWidget.__init__(self, parent=None)
+        self.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding,QtGui.QSizePolicy.Expanding))
+        self.opts = None
         self.image = None
     
-    def setImage(self, img):
-        """Scale may be any integer > 1, but this will slow things down a little."""
-        self.image = fn.makeQImage(img)
+    def setImage(self, img, *args, **kargs):
+        """
+        img must be ndarray of shape (x,y), (x,y,3), or (x,y,4).
+        Extra arguments are sent to functions.makeARGB
+        """
+        self.opts = (img, args, kargs)
+        self.image = None
         self.update()
 
     def paintEvent(self, ev):
-        if self.image is None:
+        if self.opts is None:
             return
+        if self.image is None:
+            argb, alpha = fn.makeARGB(self.opts[0], *self.opts[1], **self.opts[2])
+            self.image = fn.makeQImage(argb, alpha)
+            self.opts = ()
         #if self.pixmap is None:
             #self.pixmap = QtGui.QPixmap.fromImage(self.image)
         p = QtGui.QPainter(self)
