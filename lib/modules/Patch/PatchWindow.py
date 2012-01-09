@@ -147,6 +147,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.showPlots()
         self.updateParams()
         self.show()
+        self.bathMode()
     
     def quit(self):
         #print "Stopping patch thread.."
@@ -256,14 +257,8 @@ class PatchWindow(QtGui.QMainWindow):
         
         if mode == 'vc':
             self.ui.patchPlot.setLabel('left', units='A')
-            #self.ui.commandPlot.setLabel('left', units='V')
-            #scale1 = 1e12
-            #scale2 = 1e3
         else:
             self.ui.patchPlot.setLabel('left', units='V')
-            #self.ui.commandPlot.setLabel('left', units='A')
-            #scale1 = 1e3
-            #scale2 = 1e12
         prof.mark('1')
             
         self.patchCurve.setData(data.xvals('Time'), data['primary'])

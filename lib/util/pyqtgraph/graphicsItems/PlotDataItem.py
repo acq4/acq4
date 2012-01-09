@@ -154,15 +154,22 @@ class PlotDataItem(GraphicsObject):
                     y = np.array([d.get('y',None) for d in data])
             elif dt == 'MetaArray':
                 y = data.view(np.ndarray)
-                x = data.xvals(0)
+                x = data.xvals(0).view(np.ndarray)
             else:
                 raise Exception('Invalid data type %s' % type(data))
             
         elif len(args) == 2:
-            if dataType(args[0]) != 'listOfValues' or  dataType(args[1]) != 'listOfValues':
+            seq = ('listOfValues', 'MetaArray')
+            if dataType(args[0]) not in seq or  dataType(args[1]) not in seq:
                 raise Exception('When passing two unnamed arguments, both must be a list or array of values.')
-            x = args[0]
-            y = args[1]
+            if not isinstance(args[0], np.ndarray):
+                x = np.array(args[0])
+            else:
+                x = args[0].view(np.ndarray)
+            if not isinstance(args[1], np.ndarray):
+                y = np.array(args[1])
+            else:
+                y = args[1].view(np.ndarray)
             
         if 'x' in kargs:
             x = kargs['x']
@@ -191,8 +198,8 @@ class PlotDataItem(GraphicsObject):
         if y is not None and x is None:
             x = np.arange(len(y))
         
-        self.xData = x
-        self.yData = y
+        self.xData = x.view(np.ndarray)  ## one last check to make sure there are no MetaArrays getting by
+        self.yData = y.view(np.ndarray)
         
         if curveArgs['pen'] is not None:
             curve = PlotCurveItem(x=x, y=y, **curveArgs)
@@ -249,7 +256,7 @@ class PlotDataItem(GraphicsObject):
             d = y
             
         if frac >= 1.0:
-            return (d.min(), d.max())
+            return (np.min(d), np.max(d))
         elif frac <= 0.0:
             raise Exception("Value for parameter 'frac' must be > 0. (got %s)" % str(frac))
         else:

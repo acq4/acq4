@@ -19,6 +19,8 @@ colorAbbrev = {
 SI_PREFIXES = u'yzafpnµm kMGTPEZY'
 SI_PREFIXES_ASCII = 'yzafpnum kMGTPEZY'
 
+USE_WEAVE = True
+
 
 from Qt import QtGui, QtCore
 import numpy as np
@@ -425,9 +427,12 @@ def makeARGB(data, lut=None, levels=None):
 
 
     ## Apply levels if given
+    global USE_WEAVE
     if levels is not None:
         
         try:  ## use weave to speed up scaling
+            if not USE_WEAVE:
+                raise Exception('Weave is disabled; falling back to slower version.')
             if levels.ndim == 1:
                 scale = float(lutLength) / (levels[1]-levels[0])
                 offset = float(levels[0])
@@ -448,6 +453,10 @@ def makeARGB(data, lut=None, levels=None):
                         newData[...,i] = rescaleData(data[...,i], scale, offset)
                 data = newData
         except:
+            if USE_WEAVE:
+                debug.printExc("Error; disabling weave.")
+                USE_WEAVE = False
+            
             if levels.ndim == 1:
                 if data.ndim == 2:
                     levels = levels[np.newaxis, np.newaxis, :]
@@ -458,8 +467,7 @@ def makeARGB(data, lut=None, levels=None):
                 if data.ndim == 2:
                     data = data[..., np.newaxis]
             data = ((data.astype(int)-levels[...,0]) * lutLength) / (levels[...,1]-levels[...,0])
-            raise
-
+        
     prof.mark('2')
 
 
@@ -471,6 +479,8 @@ def makeARGB(data, lut=None, levels=None):
             
         data = np.clip(data, 0, lutLength-1)
         try:
+            if not USE_WEAVE:
+                raise Exception('Weave is disabled; falling back to slower version.')
             
             newData = np.empty((data.size,) + lut.shape[1:], dtype=np.uint8)
             flat = data.reshape(data.size)
@@ -499,6 +509,9 @@ def makeARGB(data, lut=None, levels=None):
             scipy.weave.inline(code, ['flat', 'lut', 'newData', 'size', 'ncol', 'newStride', 'lutStride', 'flatStride', 'newColStride', 'lutColStride'])
             data = newData.reshape(data.shape + lut.shape[1:])
         except:
+            if USE_WEAVE:
+                debug.printExc("Error; disabling weave.")
+                USE_WEAVE = False
             data = lut[data]
             raise
     else:
@@ -569,11 +582,13 @@ def rescaleData(data, scale, offset):
     size = data.size
     
     code = """
+    double sc = (double)scale;
+    double off = (double)offset;
     for( int i=0; i<size; i++ ) {
-        newData[i] = (int)(((double)flat[i] - offset) * scale);
+        newData[i] = (int)(((double)flat[i] - off) * sc);
     }
     """
-    scipy.weave.inline(code, ['flat', 'newData', 'size', 'offset', 'scale'])
+    scipy.weave.inline(code, ['flat', 'newData', 'size', 'offset', 'scale'], compiler='gcc')
     data = newData.reshape(data.shape)
     return data
     

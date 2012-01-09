@@ -224,14 +224,14 @@ class PlotCurveItem(GraphicsObject):
         
         self.prepareGeometryChange()
         if copy:
-            self.yData = y.copy()
+            self.yData = y.view(np.ndarray).copy()
         else:
-            self.yData = y
+            self.yData = y.view(np.ndarray)
             
         if copy and x is not None:
-            self.xData = x.copy()
+            self.xData = x.view(np.ndarray).copy()
         else:
-            self.xData = x
+            self.xData = x.view(np.ndarray)
         prof.mark('copy')
         
         if x is None:
