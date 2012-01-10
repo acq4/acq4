@@ -10,7 +10,7 @@ import numpy as np
 import pyqtgraph as pg
 from pyqtgraph import RawImageWidget
 import scipy.ndimage as ndi
-
+import pyqtgraph.ptime as ptime
 import VideoTemplate
 
 #QtGui.QApplication.setGraphicsSystem('raster')
@@ -91,7 +91,7 @@ ui.dtypeCombo.currentIndexChanged.connect(mkData)
 
 
 ptr = 0
-lastTime = time.time()
+lastTime = ptime.time()
 fps = None
 def update():
     global ui, ptr, lastTime, fps, LUT, img
@@ -118,7 +118,7 @@ def update():
         #img.setImage(data[ptr%data.shape[0]], autoRange=False)
         
     ptr += 1
-    now = time.time()
+    now = ptime.time()
     dt = now - lastTime
     lastTime = now
     if fps is None:
