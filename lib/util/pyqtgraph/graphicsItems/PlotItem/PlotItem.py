@@ -1046,7 +1046,7 @@ class PlotItem(GraphicsWidget):
         if b is None:
             b = self.ctrl.powerSpectrumGroup.isChecked()
         for c in self.curves:
-            c.setSpectrumMode(b)
+            c.setFftMode(b)
         self.enableAutoScale()
         self.recomputeAverages()
             

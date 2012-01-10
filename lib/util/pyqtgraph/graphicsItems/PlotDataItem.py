@@ -224,7 +224,7 @@ class PlotDataItem(GraphicsObject):
                 #y = resample(y[:len(x)*ds], len(x))  ## scipy.signal.resample causes nasty ringing
                 y = y[::ds]
             if self.opts['fftMode']:
-                f = fft(y) / len(y)
+                f = np.fft.fft(y) / len(y)
                 y = abs(f[1:len(f)/2])
                 dt = x[-1] - x[0]
                 x = np.linspace(0, 0.5*len(x)/dt, len(y))
