@@ -22,7 +22,7 @@ class PlotCurveItem(GraphicsObject):
     sigPlotChanged = QtCore.Signal(object)
     sigClicked = QtCore.Signal(object)
     
-    def __init__(self, y=None, x=None, copy=False, pen=None, shadowPen=None, parent=None, color=None, clickable=False):
+    def __init__(self, y=None, x=None, fillLevel=None, copy=False, pen=None, shadowPen=None, brush=None, parent=None, color=None, clickable=False):
         GraphicsObject.__init__(self, parent)
         #GraphicsWidget.__init__(self, parent)
         self.free()
@@ -40,6 +40,9 @@ class PlotCurveItem(GraphicsObject):
         if y is not None:
             self.updateData(y, x, copy)
         #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
+        
+        self.fillLevel = fillLevel
+        self.brush = brush
         
         self.metaData = {}
         self.opts = {
@@ -302,6 +305,7 @@ class PlotCurveItem(GraphicsObject):
         prof.finish()
         return path
 
+
     def shape(self):
         if self.path is None:
             try:
@@ -343,10 +347,26 @@ class PlotCurveItem(GraphicsObject):
                 #self.specPath = self.generatePath(*self.getData())
             #path = self.specPath
         #else:
+        x = None
+        y = None
         if self.path is None:
-            self.path = self.generatePath(*self.getData())
+            x,y = self.getData()
+            self.path = self.generatePath(x,y)
+            self.fillPath = None
         path = self.path
         prof.mark('generate path')
+            
+        if self.brush is not None:
+            if self.fillPath is None:
+                if x is None:
+                    x,y = self.getData()
+                p2 = QtGui.QPainterPath(self.path)
+                p2.lineTo(x[-1], self.fillLevel)
+                p2.lineTo(x[0], self.fillLevel)
+                p2.closeSubpath()
+                self.fillPath = p2
+                
+            p.fillPath(self.fillPath, fn.mkBrush(self.brush))
             
         if self.shadowPen is not None:
             sp = QtGui.QPen(self.shadowPen)

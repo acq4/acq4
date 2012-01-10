@@ -39,7 +39,8 @@ class PlotDataItem(GraphicsObject):
             pen          - pen to use for drawing line between points. Default is solid grey, 1px width.
                            use None to disable line drawing.
             shadowPen    - pen for secondary line to draw behind the primary line. disabled by default.
-            fillBrush    - fill to use when 
+            fillLevel    - fill the area between the curve and fillLevel
+            fillBrush    - fill to use when fillLevel is specified
             
         Point style keyword arguments:
             symbol       - symbol to use for drawing points OR list of symbols, one per point. Default is no symbol.
@@ -75,6 +76,8 @@ class PlotDataItem(GraphicsObject):
             'symbol': None,
             'symbolPen': (200,200,200),
             'symbolBrush': (50, 50, 150),
+            'fillLevel': None,
+            'brush': None,
         }
         self.setData(*args, **kargs)
     
@@ -183,7 +186,7 @@ class PlotDataItem(GraphicsObject):
         ## Use self.opts to fill in anything not present in kargs.
         
         curveArgs = {}
-        for k in ['pen', 'shadowPen']:
+        for k in ['pen', 'shadowPen', 'fillLevel', 'brush']:
             if k in kargs:
                 self.opts[k] = kargs[k]
             curveArgs[k] = self.opts[k]
@@ -203,12 +206,12 @@ class PlotDataItem(GraphicsObject):
         self.xData = x.view(np.ndarray)  ## one last check to make sure there are no MetaArrays getting by
         self.yData = y.view(np.ndarray)
         
-        if curveArgs['pen'] is not None:
+        if curveArgs['pen'] is not None or curveArgs['brush'] is not None:
             curve = PlotCurveItem(x=x, y=y, **curveArgs)
             curve.setParentItem(self)
             self.curves.append(curve)
         
-        if scatterArgs['symbol'] is not None:
+        if scatterArgs['symbol'] is not None or 'symbolPen' in kargs or 'symbolBrush' in kargs:
             sp = ScatterPlotItem(x=x, y=y, **scatterArgs)
             sp.setParentItem(self)
             self.scatters.append(sp)

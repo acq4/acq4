@@ -119,8 +119,10 @@ def siEval(s):
 def mkBrush(*args):
     if len(args) == 1:
         arg = args[0]
-        if isinstance(arg, QtGui.QBrush):
-            return arg
+        if arg is None:
+            return QtGui.QBrush(QtCore.Qt.NoBrush)
+        elif isinstance(arg, QtGui.QBrush):
+            return QtGui.QBrush(arg)
         else:
             color = arg
     if len(args) > 1:

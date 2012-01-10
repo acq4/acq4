@@ -58,7 +58,13 @@ def update():
 timer = QtCore.QTimer()
 timer.timeout.connect(update)
 timer.start(50)
-    
+
+
+win.nextRow()
+
+p7 = win.addPlot(title="Filled plot")
+y = np.sin(np.linspace(0, 10, 1000)) + np.random.normal(size=1000, scale=0.1)
+p7.plot(y, fillLevel=-0.3, brush=(50,50,200,100))
 
 
 ## Start Qt event loop unless running in interactive mode.
