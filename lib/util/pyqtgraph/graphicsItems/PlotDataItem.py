@@ -121,9 +121,8 @@ class PlotDataItem(GraphicsObject):
     def setDownsampling(self, ds):
         if self.opts['downsample'] != ds:
             self.opts['downsample'] = ds
-            #self.xDisp = self.yDisp = None
-            #self.path = None
-            self.update()
+            self.xDisp = self.yDisp = None
+            self.updateItems()
         
     def setData(self, *args, **kargs):
         """
@@ -302,7 +301,7 @@ class PlotDataItem(GraphicsObject):
         self.yData = None
         self.xDisp = None
         self.yDisp = None
-                
+            
     def appendData(self, *args, **kargs):
         pass
     

@@ -25,7 +25,7 @@ class PlotCurveItem(GraphicsObject):
     def __init__(self, y=None, x=None, fillLevel=None, copy=False, pen=None, shadowPen=None, brush=None, parent=None, color=None, clickable=False):
         GraphicsObject.__init__(self, parent)
         #GraphicsWidget.__init__(self, parent)
-        self.free()
+        self.clear()
         #self.dispPath = None
         self.path = None
         if pen is None:
@@ -396,7 +396,7 @@ class PlotCurveItem(GraphicsObject):
         #p.drawRect(self.boundingRect())
         
         
-    def free(self):
+    def clear(self):
         self.xData = None  ## raw values
         self.yData = None
         self.xDisp = None  ## display values (after log / fft)
