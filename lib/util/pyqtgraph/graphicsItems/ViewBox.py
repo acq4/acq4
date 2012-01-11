@@ -346,7 +346,7 @@ class ViewBox(GraphicsWidget):
     def raiseContextMenu(self, ev):
         #print "viewbox.raiseContextMenu called."
         
-        menu = self.getMenu()
+        menu = self.getMenu(ev)
         self.scene().addParentContextMenus(self, menu, ev)
         #print "2:", [str(a.text()) for a in self.menu.actions()]
         pos = ev.screenPos()
@@ -361,7 +361,7 @@ class ViewBox(GraphicsWidget):
         return [self.getMenu(event)]
         
 
-    def getMenu(self):
+    def getMenu(self, ev=None):
         menu = QtGui.QMenu()
         menu.setTitle("ViewBox options")
         menu.addAction("Auto range", self.autoRange)
