@@ -98,15 +98,13 @@ class PlotDataItem(GraphicsObject):
         
     def setFftMode(self, mode):
         self.opts['fftMode'] = mode
-        #self.xDisp = self.yDisp = None
-        #self.path = None
-        self.update()
+        self.xDisp = self.yDisp = None
+        self.updateItems()
     
     def setLogMode(self, mode):
         self.opts['logMode'] = mode
-        #self.xDisp = self.yDisp = None
-        #self.path = None
-        self.update()
+        self.xDisp = self.yDisp = None
+        self.updateItems()
     
     def setPointMode(self, mode):
         self.opts['pointMode'] = mode
@@ -185,18 +183,27 @@ class PlotDataItem(GraphicsObject):
         ## pull in all style arguments. 
         ## Use self.opts to fill in anything not present in kargs.
         
-        curveArgs = {}
-        for k in ['pen', 'shadowPen', 'fillLevel', 'brush']:
-            if k in kargs:
-                self.opts[k] = kargs[k]
-            curveArgs[k] = self.opts[k]
 
-        scatterArgs = {}
-        for k,v in [('symbolPen','pen'), ('symbolBrush','brush'), ('symbol','symbol')]:
-            if k in kargs:
-                self.opts[k] = kargs[k]
-            scatterArgs[v] = self.opts[k]
+        ## if symbol pen/brush are given with no symbol, then assume symbol is 'o'
+        if 'symbol' not in kargs and ('symbolPen' in kargs or 'symbolBrush' in kargs):
+            kargs['symbol'] = 'o'
             
+        for k in self.opts.keys():
+            if k in kargs:
+                opts[k] = kargs[k]
+                
+        #curveArgs = {}
+        #for k in ['pen', 'shadowPen', 'fillLevel', 'brush']:
+            #if k in kargs:
+                #self.opts[k] = kargs[k]
+            #curveArgs[k] = self.opts[k]
+            
+        #scatterArgs = {}
+        #for k,v in [('symbolPen','pen'), ('symbolBrush','brush'), ('symbol','symbol')]:
+            #if k in kargs:
+                #self.opts[k] = kargs[k]
+            #scatterArgs[v] = self.opts[k]
+        
 
         if y is None:
             return
@@ -206,17 +213,36 @@ class PlotDataItem(GraphicsObject):
         self.xData = x.view(np.ndarray)  ## one last check to make sure there are no MetaArrays getting by
         self.yData = y.view(np.ndarray)
         
+        self.updateItems()
+        
+        self.sigPlotChanged.emit(self)
+
+
+    def updateItems(self):
+        for c in self.curves:
+            c.scene().removeItem(c)
+        for s in self.scatters:
+            s.scene().removeItem(s)
+            
+        curveArgs = {}
+        for k in ['pen', 'shadowPen', 'fillLevel', 'brush']:
+            curveArgs[k] = self.opts[k]
+        
+        scatterArgs = {}
+        for k,v in [('symbolPen','pen'), ('symbolBrush','brush'), ('symbol','symbol')]:
+            scatterArgs[v] = self.opts[k]
+        
+        x,y = self.getData()
+        
         if curveArgs['pen'] is not None or curveArgs['brush'] is not None:
             curve = PlotCurveItem(x=x, y=y, **curveArgs)
             curve.setParentItem(self)
             self.curves.append(curve)
         
-        if scatterArgs['symbol'] is not None or 'symbolPen' in kargs or 'symbolBrush' in kargs:
+        if scatterArgs['symbol'] is not None:
             sp = ScatterPlotItem(x=x, y=y, **scatterArgs)
             sp.setParentItem(self)
             self.scatters.append(sp)
-
-        self.sigPlotChanged.emit(self)
 
 
     def getData(self):
@@ -268,20 +294,15 @@ class PlotDataItem(GraphicsObject):
             return (scipy.stats.scoreatpercentile(d, 50 - (frac * 50)), scipy.stats.scoreatpercentile(d, 50 + (frac * 50)))
 
     def clear(self):
-        for c in self.curves:
-            c.scene().removeItem(c)
-        for s in self.scatters:
-            s.scene().removeItem(s)
+        for i in self.curves+self.scatters:
+            if i.scene() is not None:
+                i.scene().removeItem(i)
         self.curves = []
         self.scatters = []
         self.xData = None
         self.yData = None
         self.xDisp = None
         self.yDisp = None
-                
-    def free(self):
-        for c in self.curves:
-            c.free()
                 
     def appendData(self, *args, **kargs):
         pass
