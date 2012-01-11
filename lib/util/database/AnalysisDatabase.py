@@ -320,7 +320,7 @@ class AnalysisDatabase(SqliteDatabase):
             for colName, col in columns.iteritems():
                 colType = col['Type']
                 if colName not in ts:  ## <-- this is a case-insensitive operation
-                    raise Exception("Table has different data structure: Missing column %s" % f)
+                    raise Exception("Table has different data structure: Missing column %s" % colName)
                 specType = ts[colName]
                 if specType.lower() != colType.lower():  ## type names are case-insensitive too
                     ## requested column type does not match schema; check for directory / file types
