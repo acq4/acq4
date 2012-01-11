@@ -482,7 +482,7 @@ class CellHealthAnalyzer(CtrlNode):
     #def process(self, waveform):
         #print "CellHealthAnalyzer.process called."
         
-    def process(self, data):
+    def process(self, data, display=None):
         cmd = data['command']['Time':self.ctrls['start'].value():self.ctrls['stop'].value()]
         #data = waveform['primary']['Time':self.ctrls['start'].value():self.ctrls['stop'].value()]
         
@@ -651,12 +651,12 @@ class CellHealthAnalyzer(CtrlNode):
         #}}
         return {'stats': stats}
     
-    def saveState(self):
-        state = CtrlNode.saveState(self)
-        state['ui'] = self.ui.saveState()
-        return state
+    #def saveState(self):
+        #state = CtrlNode.saveState(self)
+        #state['ui'] = self.ui.saveState()
+        #return state
         
-    def restoreState(self, state):
-        CtrlNode.restoreState(self, state)
-        self.defaultState = state
-        self.ui.restoreState(state['ui'])
+    #def restoreState(self, state):
+        #CtrlNode.restoreState(self, state)
+        #self.defaultState = state
+        #self.ui.restoreState(state['ui'])
