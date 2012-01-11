@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/AtlasBuilder/ctrlTemplate.ui'
 #
-# Created: Wed Jan  4 18:01:29 2012
+# Created: Sun Jan  8 14:57:01 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

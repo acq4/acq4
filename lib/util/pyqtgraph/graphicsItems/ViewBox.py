@@ -107,7 +107,7 @@ class ViewBox(GraphicsWidget):
         if mode.lower() == 'rect':
             self.useLeftButtonPan = False
         elif mode.lower() == 'pan':
-            self.useleftButtonPan = True
+            self.useLeftButtonPan = True
         else:
             raise Exception('graphicsItems:ViewBox:setLeftButtonAction: unknown mode = %s (Options are "pan" and "rect")' % mode)
             

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/devices/Scanner/DeviceTemplate.ui'
 #
-# Created: Wed Jan  4 18:01:34 2012
+# Created: Sun Jan  8 14:57:06 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

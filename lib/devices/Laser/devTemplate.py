@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/devices/Laser/devTemplate.ui'
 #
-# Created: Wed Jan  4 18:01:32 2012
+# Created: Sun Jan  8 14:57:05 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

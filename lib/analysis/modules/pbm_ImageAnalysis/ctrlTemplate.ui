@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>358</width>
+    <width>391</width>
     <height>410</height>
    </rect>
   </property>
@@ -38,7 +38,7 @@
    <item row="0" column="0">
     <widget class="QGroupBox" name="groupBox">
      <property name="title">
-      <string>Image-Phys Analysis Parameters</string>
+      <string>Corrections, ROI's and Event Detection</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
@@ -92,7 +92,7 @@
         </property>
        </widget>
       </item>
-      <item row="13" column="0">
+      <item row="14" column="0">
        <widget class="QLabel" name="label_6">
         <property name="font">
          <font>
@@ -107,7 +107,7 @@
         </property>
        </widget>
       </item>
-      <item row="14" column="0">
+      <item row="15" column="0">
        <widget class="QLabel" name="label_7">
         <property name="font">
          <font>
@@ -158,7 +158,7 @@
        <widget class="QPushButton" name="ImagePhys_getRatio">
         <property name="font">
          <font>
-          <pointsize>11</pointsize>
+          <pointsize>12</pointsize>
          </font>
         </property>
         <property name="text">
@@ -198,7 +198,7 @@
         </property>
        </widget>
       </item>
-      <item row="16" column="0">
+      <item row="17" column="0">
        <widget class="QLabel" name="label_4">
         <property name="font">
          <font>
@@ -211,7 +211,7 @@
         </property>
        </widget>
       </item>
-      <item row="17" column="0">
+      <item row="18" column="0">
        <widget class="QLabel" name="label_2">
         <property name="font">
          <font>
@@ -223,43 +223,17 @@
         </property>
        </widget>
       </item>
-      <item row="12" column="0">
+      <item row="13" column="0">
        <widget class="Line" name="line">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
        </widget>
       </item>
-      <item row="12" column="3">
+      <item row="13" column="3">
        <widget class="Line" name="line_2">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
-        </property>
-       </widget>
-      </item>
-      <item row="22" column="0">
-       <widget class="QPushButton" name="pushButton_2">
-        <property name="text">
-         <string>STA</string>
-        </property>
-       </widget>
-      </item>
-      <item row="20" column="0">
-       <widget class="QPushButton" name="pushButton">
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="text">
-         <string>XCorr</string>
-        </property>
-       </widget>
-      </item>
-      <item row="23" column="0">
-       <widget class="QPushButton" name="pushButton_3">
-        <property name="text">
-         <string>Rev STA</string>
         </property>
        </widget>
       </item>
@@ -422,20 +396,7 @@
         </property>
        </widget>
       </item>
-      <item row="8" column="3">
-       <widget class="QPushButton" name="ImagePhys_View">
-        <property name="font">
-         <font>
-          <family>Arial</family>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="text">
-         <string>View Ref Img</string>
-        </property>
-       </widget>
-      </item>
-      <item row="14" column="1">
+      <item row="15" column="1">
        <widget class="QDoubleSpinBox" name="ImagePhys_PhysLPF">
         <property name="font">
          <font>
@@ -457,7 +418,7 @@
         </property>
        </widget>
       </item>
-      <item row="16" column="1">
+      <item row="17" column="1">
        <widget class="QDoubleSpinBox" name="ImagePhys_PhysThresh">
         <property name="font">
          <font>
@@ -475,16 +436,28 @@
          <number>1</number>
         </property>
         <property name="minimum">
-         <double>-100.000000000000000</double>
+         <double>0.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>2000.000000000000000</double>
+        </property>
+        <property name="singleStep">
+         <double>5.000000000000000</double>
+        </property>
+        <property name="value">
+         <double>50.000000000000000</double>
         </property>
        </widget>
       </item>
-      <item row="17" column="1">
+      <item row="18" column="1">
        <widget class="QComboBox" name="ImagePhys_PhysSign">
         <property name="font">
          <font>
           <pointsize>12</pointsize>
          </font>
+        </property>
+        <property name="currentIndex">
+         <number>1</number>
         </property>
         <item>
          <property name="text">
@@ -498,38 +471,47 @@
         </item>
        </widget>
       </item>
-      <item row="18" column="0">
+      <item row="19" column="0">
        <widget class="Line" name="line_5">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
        </widget>
       </item>
-      <item row="9" column="3">
-       <widget class="QPushButton" name="ImagePhys_addRoi">
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
+      <item row="22" column="0">
+       <widget class="QCheckBox" name="ImagePhys_RectSelect">
         <property name="text">
-         <string>Add Roi</string>
+         <string>Select with rectangle box</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
         </property>
        </widget>
       </item>
-      <item row="10" column="3">
-       <widget class="QPushButton" name="ImagePhys_clearRoi">
+      <item row="20" column="0">
+       <widget class="QLabel" name="label_9">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>20</verstretch>
+         </sizepolicy>
+        </property>
         <property name="font">
          <font>
           <pointsize>12</pointsize>
+          <weight>75</weight>
+          <bold>true</bold>
          </font>
         </property>
         <property name="text">
-         <string>Clear All ROIs</string>
+         <string>Preferences</string>
         </property>
        </widget>
       </item>
-      <item row="23" column="3">
+      <item row="22" column="3">
        <widget class="QPushButton" name="ImagePhys_Update">
         <property name="font">
          <font>
@@ -541,27 +523,96 @@
         </property>
        </widget>
       </item>
-      <item row="11" column="3">
+      <item row="18" column="3">
+       <widget class="QPushButton" name="ImagePhys_DetectSpikes">
+        <property name="minimumSize">
+         <size>
+          <width>5</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>Detect Spikes</string>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="3">
+       <widget class="QPushButton" name="ImagePhys_View">
+        <property name="font">
+         <font>
+          <family>Arial</family>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>View Ref Img</string>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="3">
+       <widget class="QPushButton" name="ImagePhys_addRoi">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>Add Roi</string>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="3">
+       <widget class="QPushButton" name="ImagePhys_clearRoi">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>Clear All ROIs</string>
+        </property>
+       </widget>
+      </item>
+      <item row="10" column="3">
        <widget class="QPushButton" name="ImagePhys_RetrieveROI">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
         <property name="text">
          <string>Retrieve ROI File</string>
         </property>
        </widget>
       </item>
-      <item row="13" column="3">
+      <item row="11" column="3">
        <widget class="QPushButton" name="ImagePhys_SaveROI">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
         <property name="text">
          <string>Save ROI File</string>
         </property>
        </widget>
       </item>
-      <item row="6" column="3">
-       <widget class="QCheckBox" name="ImagePhys_RectSelect">
+      <item row="12" column="3">
+       <widget class="QPushButton" name="ImagePhys_CorrTool_BL1">
         <property name="text">
-         <string>Rectangle Select</string>
+         <string>Baseline 1</string>
         </property>
-        <property name="checked">
-         <bool>true</bool>
+       </widget>
+      </item>
+      <item row="14" column="3">
+       <widget class="QPushButton" name="ImagePhys_CorrTool_HPF">
+        <property name="text">
+         <string>HPF Baseline</string>
         </property>
        </widget>
       </item>

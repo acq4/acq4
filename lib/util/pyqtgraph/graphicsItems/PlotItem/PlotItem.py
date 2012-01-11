@@ -371,7 +371,7 @@ class PlotItem(GraphicsWidget):
         if not isinstance(plot, PlotItem) and hasattr(plot, 'getPlotItem'):
             plot = plot.getPlotItem()
         self.xLinkPlot = plot
-        if plot is not None:
+        if plot is not None and self.manager is not None:
             self.setManualXScale()
             self.manager.linkX(self, plot)
             
