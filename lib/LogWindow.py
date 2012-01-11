@@ -161,7 +161,7 @@ class LogWindow(QtGui.QMainWindow):
     def logExc(self, *args, **kwargs):
         """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
         kwargs['exception'] = sys.exc_info()
-        kwargs['traceback'] = [['Callstack: \n'] + traceback.format_stack()[:-3] + ["------- exception caught ----------"]]
+        kwargs['traceback'] = ['Callstack: \n'] + traceback.format_stack()[:-3] + ["------- exception caught ----------"]
         self.logMsg(*args, **kwargs)
         
     def processEntry(self, entry):
@@ -192,7 +192,7 @@ class LogWindow(QtGui.QMainWindow):
             #+ ["  ---- exception caught ---->\n"] 
             #+ traceback.format_tb(sys.exc_info()[2])
             #+ traceback.format_exception_only(*sys.exc_info()[:2]))
-        print topTraceback
+        #print topTraceback
         excDict = {}
         excDict['message'] = traceback.format_exception(exType, exc, tb)[-1]
         excDict['traceback'] = topTraceback + traceback.format_exception(exType, exc, tb)[:-1]
@@ -638,7 +638,11 @@ class LogWidget(QtGui.QWidget):
         
         
     def formatTracebackForHTML(self, tb, number):
-        tb = [line for line in tb if not line.startswith("Traceback (most recent call last)")]
+        try:
+            tb = [line for line in tb if not line.startswith("Traceback (most recent call last)")]
+        except:
+            print "\n"+str(tb)+"\n"
+            raise
         return "<ul><li>" + "</li><li>".join(map(self.cleanText, tb)) + "</li></ul>"
         #tb = [self.cleanText(strip(x)) for x in tb]
         #lines = []
