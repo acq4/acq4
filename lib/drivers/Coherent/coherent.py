@@ -127,20 +127,12 @@ class Coherent(object):
                 while len(s) > 0:  ## pull packets out of s one at a time
                     res += s[:s.index('\r\n')]
                     s = s[s.index('\r\n')+2:]
-                    #if len(res) == 1:  ## error packet was sent
-                        #errors.append(res)
-                    #else:
                     packets.append(res)
                     res = ''
             except ValueError:   ## partial packet; append and wait for more data
                 res += s  
                 
-            #if len(res) > 32:  ## no valid packets are longer than 32 bytes; give up
-                #raise Exception("Got junk data while reading for packet: '%s'" % str(res))
-            
             if len(res) == 0:
-                #if len(errors) > 0:
-                    #self.raiseError(errors)
                 if len(packets) == 1:
                     if 'Error' in packets[0]:
                         raise Exception(packets[0])
@@ -148,14 +140,9 @@ class Coherent(object):
                 if len(packets) > 1:
                     raise Exception("Too many packets read.", packets)
             
-            #if len(s) > 0:
-                #if s != '\r' and s[0] != '=':
-                    #print "SutterMP285 Error: '%s'" % s
-                ##print "return:", repr(s)
-                #break
             time.sleep(0.01)
             if time.time() - start > timeout:
-                raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % repr(res))
+                raise TimeoutError("Timeout while waiting for response. (Data so far: %s, %s)" % (repr(res), repr(s)))
 
 
 
