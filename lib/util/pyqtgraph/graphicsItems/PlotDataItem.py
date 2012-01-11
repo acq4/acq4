@@ -276,6 +276,10 @@ class PlotDataItem(GraphicsObject):
         self.xDisp = None
         self.yDisp = None
                 
+    def free(self):
+        for c in self.curves:
+            c.free()
+                
     def appendData(self, *args, **kargs):
         pass
     

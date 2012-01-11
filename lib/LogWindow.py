@@ -170,7 +170,7 @@ class LogWindow(QtGui.QMainWindow):
         ## convert exc_info to serializable dictionary
         if entry.get('exception', None) is not None:
             exc_info = entry.pop('exception')
-            entry['exception'] = self.exceptionToDict(*exc_info)
+            entry['exception'] = self.exceptionToDict(*exc_info, topTraceback=entry.get('traceback', []))
         else:
             entry['exception'] = None
 
@@ -187,15 +187,15 @@ class LogWindow(QtGui.QMainWindow):
         self.wid.ui.input.clear()
 
     
-    def exceptionToDict(self, exType, exc, tb):
+    def exceptionToDict(self, exType, exc, tb, topTraceback):
         #lines = (traceback.format_stack()[:-skip] 
             #+ ["  ---- exception caught ---->\n"] 
             #+ traceback.format_tb(sys.exc_info()[2])
             #+ traceback.format_exception_only(*sys.exc_info()[:2]))
-        
+        print topTraceback
         excDict = {}
         excDict['message'] = traceback.format_exception(exType, exc, tb)[-1]
-        excDict['traceback'] = traceback.format_exception(exType, exc, tb)[:-1]
+        excDict['traceback'] = topTraceback + traceback.format_exception(exType, exc, tb)[:-1]
         if hasattr(exc, 'docs'):
             if len(exc.docs) > 0:
                 excDict['docs'] = exc.docs
@@ -206,7 +206,7 @@ class LogWindow(QtGui.QMainWindow):
             for k in exc.kwargs:
                 excDict[k] = exc.kwargs[k]
         if hasattr(exc, 'oldExc'):
-            excDict['oldExc'] = self.exceptionToDict(*exc.oldExc)
+            excDict['oldExc'] = self.exceptionToDict(*exc.oldExc, topTraceback=[])
         return excDict
         
     def flashButtons(self):
@@ -594,11 +594,13 @@ class LogWidget(QtGui.QWidget):
         indent = 10
         
         text = self.cleanText(exception['message'])
+        text = text.lstrip('HelpfulException:')
         #if exception.has_key('oldExc'):  
             #self.displayText("&nbsp;"*indent + str(count)+'. ' + text, entry, color, clean=False)
         #else:
             #self.displayText("&nbsp;"*indent + str(count)+'. Original error: ' + text, entry, color, clean=False)
         messages = [text]
+        print "\n", messages, "\n"
         
         if exception.has_key('reasons'):
             reasons = self.formatReasonsStrForHTML(exception['reasons'])
