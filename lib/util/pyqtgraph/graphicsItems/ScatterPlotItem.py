@@ -8,6 +8,7 @@ class ScatterPlotItem(GraphicsObject):
     
     #sigPointClicked = QtCore.Signal(object, object)
     sigClicked = QtCore.Signal(object, object)  ## self, points
+    sigPlotChanged = QtCore.Signal(object)
     
     def __init__(self, spots=None, x=None, y=None, pxMode=True, pen='default', brush='default', size=7, 
         symbol=None, identical=False, data=None):

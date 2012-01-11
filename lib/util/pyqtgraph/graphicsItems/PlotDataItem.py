@@ -190,7 +190,7 @@ class PlotDataItem(GraphicsObject):
             
         for k in self.opts.keys():
             if k in kargs:
-                opts[k] = kargs[k]
+                self.opts[k] = kargs[k]
                 
         #curveArgs = {}
         #for k in ['pen', 'shadowPen', 'fillLevel', 'brush']:
@@ -219,10 +219,9 @@ class PlotDataItem(GraphicsObject):
 
 
     def updateItems(self):
-        for c in self.curves:
-            c.scene().removeItem(c)
-        for s in self.scatters:
-            s.scene().removeItem(s)
+        for c in self.curves+self.scatters:
+            if c.scene() is not None:
+                c.scene().removeItem(c)
             
         curveArgs = {}
         for k in ['pen', 'shadowPen', 'fillLevel', 'brush']:
