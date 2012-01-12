@@ -190,7 +190,7 @@ class PlotDataItem(GraphicsObject):
             
         for k in self.opts.keys():
             if k in kargs:
-                opts[k] = kargs[k]
+                self.opts[k] = kargs[k]
                 
         #curveArgs = {}
         #for k in ['pen', 'shadowPen', 'fillLevel', 'brush']:
