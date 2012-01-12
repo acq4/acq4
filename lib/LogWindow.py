@@ -638,7 +638,13 @@ class LogWidget(QtGui.QWidget):
         
         
     def formatTracebackForHTML(self, tb, number):
-        tb = [line for line in tb if not line.startswith("Traceback (most recent call last)")]
+        holder = []
+        for line in tb:
+            if type(line) is str:
+                holder.append(line)
+            elif type(line) is list:
+                holder.extend(line)
+        tb = [line for line in holder if not line.startswith("Traceback (most recent call last)")]
         return "<ul><li>" + "</li><li>".join(map(self.cleanText, tb)) + "</li></ul>"
         #tb = [self.cleanText(strip(x)) for x in tb]
         #lines = []
