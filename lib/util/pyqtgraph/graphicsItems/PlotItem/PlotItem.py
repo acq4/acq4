@@ -1083,7 +1083,7 @@ class PlotItem(GraphicsWidget):
                 curves[i].show()
             else:
                 if self.ctrl.forgetTracesCheck.isChecked():
-                    curves[i].free()
+                    curves[i].clear()
                     self.removeItem(curves[i])
                 else:
                     curves[i].hide()
