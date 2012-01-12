@@ -19,6 +19,7 @@ win.setCentralWidget(cw)
 
 l = QtGui.QGridLayout()
 cw.setLayout(l)
+l.setSpacing(0)
 
 v = pg.GraphicsView()
 vb = pg.ViewBox()
