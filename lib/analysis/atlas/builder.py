@@ -211,7 +211,7 @@ def updateImage():
         img = displayData.view(np.ndarray)[ui.zSlider.value()].mean(axis=2)
     else:
         img = displayData.view(np.ndarray)[ui.zSlider.value()]
-    dataImg.updateImage(img, copy=False, black=0, white=255)
+    dataImg.setImage(img, levels=None)
     #labelImg.updateImage(displayLabel.view(np.ndarray)[ui.zSlider.value()], copy=False, white=10, black=0)
     if labelImg.isVisible():
         updateLabelImage()
@@ -291,7 +291,7 @@ def updateLabelImage(sl=None):
     
     if labelCache is None:
         labelCache = img
-        labelImg.updateImage(labelCache, copy=False, white=255, black=0)
+        labelImg.setImage(labelCache, levels=None)
     else:
         labelCache[sl] = img
         labelImg.updateImage()

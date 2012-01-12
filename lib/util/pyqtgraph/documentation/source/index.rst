@@ -3,8 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to pyqtgraph's documentation!
-=====================================
+Welcome to the documentation for pyqtgraph 1.8
+==============================================
 
 Contents:
 
@@ -15,6 +15,7 @@ Contents:
     how_to_use
     plotting
     images
+    style
     region_of_interest
     graphicswindow
     parametertree

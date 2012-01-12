@@ -18,8 +18,8 @@ def main():
     global fits, err, psp, data, xVals
     
     ## generate table of PSP shapes
-    nReps = 10
-    amps = fn.logSpace(0.2e-12, 150e-12, 20)
+    nReps = 20
+    amps = fn.logSpace(2e-12, 300e-12, 20)
     psp = np.empty((len(amps), nReps, 4))  ## last axis is [amp, xoff, rise, fall]
     psp[:,:,0] = amps[:,np.newaxis]
     psp[...,1] = 1e-3
@@ -31,14 +31,22 @@ def main():
     
     ## fit all traces
     guess = np.array([50e-12, 0.1e-3, 0.5e-3, 3e-3])
-    testFit("opt.leastsq", psp, data, xVals, fitPsp, guess=guess)
+    bounds = [(0, 5e-9), (0, 2e-3), (100e-6, 5e-3), (200e-6, 20e-3)]
     
-    bounds = [(0, 5e-9), (0, 10e-3), (20e-6, 5e-3), (200e-6, 20e-3)]
-    testFit("opt.fmin_tnc", psp, data, xVals, fitPspFminTnc, guess=guess, bounds=bounds)
+    #testFit("opt.leastsq", psp, data, xVals, fitPsp, guess=guess)
+    
+    testFit("opt.leastsq_bounded", psp, data, xVals, fn.fitPsp, guess=guess, bounds=bounds)
+    
+    #testFit("opt.fmin_tnc", psp, data, xVals, fitPspFminTnc, guess=guess, bounds=bounds)
     
     #testFit("opt.fmin_l_bfgs_b", psp, data, xVals, fitPspLBFGSB, guess=guess, bounds=bounds)
 
+    #testFit("opt.fmin_cobyla", psp, data, xVals, fitPspCobyla, guess=guess, bounds=bounds)
+    
+    #testFit("opt.fmin_slsqp", psp, data, xVals, fitPspSlsqp, guess=guess, bounds=bounds)
+
 def testFit(title, psp, data, xVals, fitFn, *args, **kargs):
+    global fits, times
     fits, times = fitDataSet(xVals, data, fitFn, *args, **kargs)
     print "Mean fit computation time: %0.2fms" % (times.mean() * 1000)
     
@@ -59,9 +67,8 @@ def testFit(title, psp, data, xVals, fitFn, *args, **kargs):
 
 
 def pspInnerFunc(x, rise, decay, power):
-    out = np.empty(x.shape, x.dtype)
+    out = np.zeros(x.shape, x.dtype)
     mask = x >= 0
-    out[~mask] = 0
     xvals = x[mask]
     out[mask] =  (1.0 - np.exp(-xvals / rise))**power * np.exp(-xvals / decay)
     return out
@@ -86,15 +93,81 @@ def pspFunc(v, x, risePower=1.0):
     return out
 
 
-def fitPsp(x, y, guess, risePower=1.0):
-    def errFn(v, x, y):
-        return y - v[0] * pspInnerFunc(x-v[1], abs(v[2]), abs(v[3]), risePower)
+
+def normalize(fn):
+    def wrapper(x, y, guess, bounds, risePower=1.0):
+        ## Find peak x,y 
+        #peakX = np.argmax(y)
+        #peakVal = y[peakX]
+        #peakTime = x[peakX]
         
-    fit = opt.leastsq(errFn, guess, args=(x, y))[0]
+        ## normalize data, guess, and bounds
+        #y = y / peakVal
+        #x = x / peakTime
+        guess = np.array(guess)
+        #guess[0] /= peakVal
+        #guess[1:] /= peakTime
+        bounds = np.array(bounds)
+        #bounds[0] = bounds[0] / peakVal
+        #bounds[1:] = bounds[1:] / peakTime
+        
+        
+        ## interpolate
+        #x2 = (x[:peakVal] + x[1:peakVal+1]) /2.
+        #y2 = (y[:peakVal] + y[1:peakVal+1]) /2.
+        #x = np.concatenate([x, x2])
+        #y = np.concatenate([y, y2])
+        
+        ## run the fit on normalized data
+        fit = fn(x, y, guess, bounds, risePower)
+        
+        ## reverse normalization before returning fit parameters
+        ## also, make sure amplitude is properly scaled such that fit[0] is the maximum value of the function
+        maxX = fit[2] * np.log(1 + (fit[3]*risePower / fit[2]))
+        maxVal = (1.0 - np.exp(-maxX / fit[2]))**risePower * np.exp(-maxX / fit[3])
+        fit[0] *= maxVal #* peakVal
+        #fit[1:] *= peakTime
+        
+        return fit
+    return wrapper
+
+    
+def errFn(v, x, y, risePower):
+    fit = v[0] * pspInnerFunc(x-v[1], v[2], v[3], risePower)
+    err = abs(y - fit) * (fit + 3.0)
+    err = (err**2).sum()
+    return err
+
+    
+    
+def fitPsp(x, y, guess, risePower=1.0):
+    #def errFn(v, x, y):
+        #err = y - v[0] * pspInnerFunc(x-v[1], abs(v[2]), abs(v[3]), risePower)
+        ##print "ERR: ", v, (abs(err)**2).sum()
+        #return err
+        
+    fit = opt.leastsq(errFn, guess, args=(x, y, risePower))[0]
     fit[2:] = abs(fit[2:])
     maxX = fit[2] * np.log(1 + (fit[3]*risePower / fit[2]))
     maxVal = (1.0 - np.exp(-maxX / fit[2]))**risePower * np.exp(-maxX / fit[3])
     fit[0] *= maxVal
+    return fit
+
+@normalize
+def fitPspBounded(x, y, guess, bounds, risePower=1.0):
+    boundCenter = (bounds[:,1] + bounds[:,0]) /2.
+    boundWidth = bounds[:,1] - bounds[:,0]
+    def errFn(v, x, y):
+        err = y - v[0] * pspInnerFunc(x-v[1], v[2], v[3], risePower)
+        
+        ## compute error that grows as v leaves boundaries
+        boundErr = np.clip(np.abs(v-boundCenter) - boundWidth, 0, np.inf) / boundWidth
+        err += 10 * boundErr.sum()
+        
+        #print "ERR: ", v, (abs(err)**2).sum()
+        return err
+        
+    fit = opt.leastsq(errFn, guess, args=(x, y), ftol=1e-3, xtol=1e-3)[0]
     return fit
 
 
@@ -104,32 +177,61 @@ def fitPspSlow(x, y, guess, risePower=1.0):
         
     return opt.leastsq(errFn, guess, args=(x, y))[0]
 
-def fitPspFminTnc(x, y, guess, bounds, risePower=1.0):
-    def errFn(v, x, y):
-        err = abs(y - (v[0] * pspInnerFunc(x-v[1], v[2], v[3], risePower))).sum()
-        print "ERR:", v, err
-        return err
     
-    fit = opt.fmin_tnc(errFn, guess, bounds=bounds, args=(x,y), approx_grad=True)[0]
-    print "====", fit
-    maxX = fit[2] * np.log(1 + (fit[3]*risePower / fit[2]))
-    maxVal = (1.0 - np.exp(-maxX / fit[2]))**risePower * np.exp(-maxX / fit[3])
-    fit[0] *= maxVal
+    
+@normalize
+def fitPspFminTnc(x, y, guess, bounds, risePower=1.0):
+    
+    fit = opt.fmin_tnc(errFn, guess, bounds=bounds, args=(x,y, risePower), approx_grad=True, messages=0)[0]
     return fit
 
-#def fitPspLBFGSB(x, y, guess, bounds, risePower=1.0):
-    #def errFn(v, x, y):
-        #err = abs(y - (v[0] * pspInnerFunc(x-v[1], abs(v[2]), abs(v[3]), risePower))).sum()
-        #print "ERR:", v, err
-        #return err
+@normalize
+def fitPspLBFGSB(x, y, guess, bounds, risePower=1.0):
+    fit = opt.fmin_l_bfgs_b(errFn, guess, bounds=bounds, args=(x,y,risePower), approx_grad=True)[0]
+    return fit
+
+@normalize
+def fitPspCobyla(x, y, guess, bounds, risePower=1.0):
+    def cons(v, *args):
+        ret = 1 if all(v > bounds[:,0]) and all(v < bounds[:,1]) else 0
+        #print "Constraint:", v, ret
+        return ret
     
-    #fit = opt.fmin_l_bfgs_b(errFn, guess, bounds=bounds, args=(x,y), approx_grad=True)[0]
-    #print guess, bounds, x.shape, y.shape
-    #print "====", fit
-    #maxX = fit[2] * np.log(1 + (fit[3]*risePower / fit[2]))
-    #maxVal = (1.0 - np.exp(-maxX / fit[2]))**risePower * np.exp(-maxX / fit[3])
-    #fit[0] *= maxVal
-    #return fit
+    fit = opt.fmin_cobyla(errFn, guess, [cons], args=(x,y,risePower), rhobeg=guess*0.5)
+    return fit
+
+
+@normalize
+def fitPspSlsqp(x, y, guess, bounds, risePower=1.0):
+    fit = opt.fmin_slsqp(errFn, guess, bounds=bounds, args=(x,y,risePower), disp=0, acc=1e-3)
+    
+    return fit
+
+@normalize
+def fitPspSlsqpExtraAxes(x, y, guess, bounds, risePower=1.0):
+    guess = np.append(guess, [0,0]) ## add extra axes to help gradient search
+    bounds = np.append(bounds, bounds[0:1]+bounds[1:2], axis=0)
+    bounds = np.append(bounds, bounds[1:2]+bounds[2:3], axis=0)
+    print guess
+    print bounds
+    def errFn(v, x, y, risePower):
+        fit = (v[0]+v[4]) * pspInnerFunc(x-(v[1]+v[4]+v[5]), v[2]+v[5], v[3], risePower)
+        err = abs(y - fit) * (fit + 1.0)
+        err = (err**2).sum()
+        return err
+    fit = opt.fmin_slsqp(errFn, guess, bounds=bounds, args=(x,y,risePower))
+    fit[0] += fit[4]
+    fit[1] += fit[4]+fit[5]
+    fit[2] += fit[5]
+    
+    return fit[:4]
+
+
+
+
+
+
+
 
 
 def mkData(v, power=1, noise=5e-12, length=5e-3, rate=400e3, downsample=40):
@@ -164,12 +266,17 @@ def mkDataSet(psp, **kargs):
 
 def fitDataSet(xVals, data, fitFn, *args, **kargs):
     ## Fit an array of traces using fitFn(xVals, data[index], *args, **kargs)
+    global psp
     space = data.shape[:-1]
     fits = np.empty(space + (4,))
     times = np.empty(space)
     for ind in np.ndindex(space):
+        #print "Guess", kargs['guess']
         start = time.time()
         fits[ind] = fitFn(xVals, data[ind], *args, **kargs)
+        #print "Real:", psp[ind]
+        #print "Fit: ", fits[ind]
+        #print ""
         times[ind] = time.time() - start
     return fits, times
     
@@ -179,6 +286,24 @@ def showFit(index):
     p = pg.plot(xVals, data[index])
     p.plot(xVals, pspFunc(psp[index], xVals), pen='b')
     p.plot(xVals, pspFunc(fits[index], xVals), pen='r')
+    
+def showAll():
+    global xVals, data, psp, fits
+    w = pg.GraphicsWindow()
+    for i in range(psp.shape[0]):
+        for j in range(psp.shape[1]):
+            p = w.addPlot()
+            fit = pspFunc(fits[i,j], xVals)
+            err = (abs(data[i,j]-fit)**2).sum() / (data[i,j]**2).sum()
+            
+            green = np.clip((np.log(err)+3)*60, 0, 255)
+            p.plot(xVals, data[i,j], pen=(80,60,60))
+            p.plot(xVals, fit, pen=(50, green, 255-green, 200))
+            #p.plot(xVals, pspFunc(psp[i,j], xVals), pen='b')
+            p.hideAxis('left')
+            p.hideAxis('bottom')
+            p.hideButtons()
+        w.nextRow()
 
 
 if __name__ == '__main__':

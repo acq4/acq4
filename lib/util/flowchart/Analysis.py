@@ -90,7 +90,7 @@ class EventFitter(CtrlNode):
                 guessAmp = mx
             else:
                 guessAmp = mn
-                
+            guessAmp *= 2  ## fit converges more reliably if we start too large
             guessRise = guessLen/4.
             guessDecay = guessLen/2.
             guessStart = times[0]
@@ -132,9 +132,11 @@ class EventFitter(CtrlNode):
             guess = [guessAmp, guessStart, guessRise, guessDecay]
             #guess = [amp, times[0], guessLen/4., guessLen/2.]  ## careful! 
             yVals = eventData.view(np.ndarray)
-            fit, junk, comp, err = functions.fitPsp(times, yVals, guess, measureError=True)
+            fit = functions.fitPsp(times, yVals, guess)
             
-            fracError = abs(yVals - comp).sum() / abs(comp).sum()
+            computed = functions.pspFunc(fit, times)
+            err = abs(yVals - computed).sum()
+            fracError = err / abs(computed).sum()
             output[i-offset] = tuple(events[i]) + tuple(fit) + (err, fracError)
             #output['fitTime'] += output['time']
                 
@@ -143,7 +145,7 @@ class EventFitter(CtrlNode):
             
             if display and self.plot.isConnected():
                 if self.ctrls['plotFits'].isChecked():
-                    item = pg.PlotCurveItem(comp, times, pen=(0, 0, 255), clickable=True)
+                    item = pg.PlotCurveItem(computed, times, pen=(0, 0, 255), clickable=True)
                     item.setZValue(100)
                     self.plotItems.append(item)
                     item.eventIndex = i

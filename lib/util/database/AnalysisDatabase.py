@@ -1,5 +1,6 @@
 from database import *
 from pyqtgraph.widgets.ProgressDialog import ProgressDialog
+import debug
 
 
 class AnalysisDatabase(SqliteDatabase):
@@ -88,11 +89,16 @@ class AnalysisDatabase(SqliteDatabase):
                     continue
                 for rec in oldDb.select(table):
                     dh = oldDb.baseDir()[rec['Dir']]
-                    newDb.addDir(dh)
+                    try:
+                        newDb.addDir(dh)
+                    except:
+                        print "Can't add directory %s from old DB:" % dh.name()
+                        debug.printExc()
                     
             total = len(oldDb.select('Photostim_events')) + len(oldDb.select('Photostim_sites'))
             n=0
-            for table in ['Photostim_events', 'Photostim_sites']:
+
+            for table in ['Photostim_events', 'Photostim_sites', 'Photostim_events2', 'Photostim_sites2']:
                 if prog.wasCanceled():
                     break
                 schema = oldDb.tableSchema(table)
@@ -316,7 +322,7 @@ class AnalysisDatabase(SqliteDatabase):
             for colName, col in columns.iteritems():
                 colType = col['Type']
                 if colName not in ts:  ## <-- this is a case-insensitive operation
-                    raise Exception("Table has different data structure: Missing column %s" % f)
+                    raise Exception("Table has different data structure: Missing column %s" % colName)
                 specType = ts[colName]
                 if specType.lower() != colType.lower():  ## type names are case-insensitive too
                     ## requested column type does not match schema; check for directory / file types

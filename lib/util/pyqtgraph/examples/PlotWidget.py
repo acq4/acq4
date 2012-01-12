@@ -49,7 +49,7 @@ def rand(n):
 
 def updateData():
     yd, xd = rand(10000)
-    p1.updateData(yd, x=xd)
+    p1.setData(y=yd, x=xd)
 
 ## Start a timer to rapidly update the plot in pw
 t = QtCore.QTimer()

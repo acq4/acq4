@@ -8,15 +8,19 @@ class ButtonItem(GraphicsObject):
     clicked = QtCore.Signal(object)
     
     def __init__(self, imageFile, width=None, parentItem=None):
-        self.pixmap = QtGui.QPixmap(imageFile)
         self.enabled = True
         GraphicsObject.__init__(self)
+        self.setImageFile(imageFile)
         if width is not None:
             s = float(width) / self.pixmap.width()
             self.scale(s, s)
         if parentItem is not None:
             self.setParentItem(parentItem)
         self.setOpacity(0.7)
+        
+    def setImageFile(self, imageFile):        
+        self.pixmap = QtGui.QPixmap(imageFile)
+        self.update()
         
     def mouseClickEvent(self, ev):
         if self.enabled:

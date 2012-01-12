@@ -557,11 +557,13 @@ class Photostim(AnalysisModule):
         identity = self.dbIdentity+'.sites'
         table = dbui.getTableName(identity)
         #db.delete(table, "SourceDir=%d" % pRow)
-        db.delete(table, where={colName: dh})
+        if table in db.listTables():
+            db.delete(table, where={colName: dh})
         
         identity = self.dbIdentity+'.events'
         table = dbui.getTableName(identity)
-        db.delete(table, where={colName: dh})
+        if table in db.listTables():
+            db.delete(table, where={colName: dh})
         #db.delete(table, "SourceDir=%d" % pRow)
             
         scan.unlock()

@@ -55,19 +55,22 @@ class CoherentLaser(Laser):
             bounds = self.driver.getWavelengthRange()
         return bounds[0]*1e-9, bounds[1]*1e-9
         
-    def openShutter(self):
-        with self.driverLock:
-            self.driver.setShutter(True)
-        Laser.openShutter(self)
+    ## Shutter functions are disabled because coherent lasers are not really designed to 
+    ## operate their shutters this way. Use an external shutter instead.
+    ## (excessive shutter activity can damage the shutter)
+    #def openShutter(self):
+        #with self.driverLock:
+            #self.driver.setShutter(True)
+        #Laser.openShutter(self)
         
-    def closeShutter(self):
-        with self.driverLock:
-            self.driver.setShutter(False)
-        Laser.closeShutter(self)
+    #def closeShutter(self):
+        #with self.driverLock:
+            #self.driver.setShutter(False)
+        #Laser.closeShutter(self)
         
-    def getShutter(self):
-        with self.driverLock:
-            return self.driver.getShutter()
+    #def getShutter(self):
+        #with self.driverLock:
+            #return self.driver.getShutter()
         
     def createTask(self, cmd):
         return CoherentTask(self, cmd)
