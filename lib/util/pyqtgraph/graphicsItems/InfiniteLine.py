@@ -146,7 +146,10 @@ class InfiniteLine(UIGraphicsItem):
             return QtCore.QRectF()
         lineDir = Point(dt.map(Point(1, 0)) - dt.map(Point(0,0)))  ## direction of line in pixel-space
         orthoDir = Point(lineDir[1], -lineDir[0])  ## orthogonal to line in pixel-space
-        norm = orthoDir.norm()  ## direction of one pixel orthogonal to line
+        try:
+            norm = orthoDir.norm()  ## direction of one pixel orthogonal to line
+        except ZeroDivisionError:
+            return br
         
         dti = dt.inverted()[0]
         px = Point(dti.map(norm)-dti.map(Point(0,0)))  ## orthogonal pixel mapped back to item coords

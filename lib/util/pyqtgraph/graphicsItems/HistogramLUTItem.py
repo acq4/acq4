@@ -10,12 +10,16 @@ from ViewBox import *
 from GradientEditorItem import *
 from LinearRegionItem import *
 from PlotDataItem import *
+from GridItem import *
 import numpy as np
 
 __all__ = ['HistogramLUTItem']
 
 
 class HistogramLUTItem(GraphicsWidget):
+    sigLookupTableChanged = QtCore.Signal(object)
+    sigLevelsChanged = QtCore.Signal(object)
+    
     def __init__(self, image=None):
         GraphicsWidget.__init__(self)
         self.layout = QtGui.QGraphicsGridLayout()
@@ -29,6 +33,10 @@ class HistogramLUTItem(GraphicsWidget):
         self.vb.addItem(self.region)
         self.layout.addItem(self.vb, 0, 0)
         self.layout.addItem(self.gradient, 0, 1)
+        self.range = None
+        
+        #self.grid = GridItem()
+        #self.vb.addItem(self.grid)
         
         self.gradient.sigGradientChanged.connect(self.gradientChanged)
         self.region.sigRegionChanged.connect(self.regionChanged)
@@ -44,6 +52,16 @@ class HistogramLUTItem(GraphicsWidget):
     #def sizeHint(self, *args):
         #return QtCore.QSizeF(115, 200)
         
+    def setHistogramRange(self, mn, mx, padding=0.0):
+        d = mx-mn
+        mn -= d*padding
+        mx += d*padding
+        self.range = [mn,mx]
+        self.updateRange()
+        
+    def autoHistogramRange(self):
+        self.range = None
+        self.updateRange()
 
     def setImageItem(self, img):
         self.imageItem = img
@@ -56,10 +74,12 @@ class HistogramLUTItem(GraphicsWidget):
     def gradientChanged(self):
         if self.imageItem is not None:
             self.imageItem.setLookupTable(self.gradient.getLookupTable(512))
+        self.sigLookupTableChanged.emit(self)
 
     def regionChanged(self):
         if self.imageItem is not None:
             self.imageItem.setLevels(self.region.getRegion())
+        self.sigLevelsChanged.emit(self)
 
     def imageChanged(self, autoLevel=False):
         h = self.imageItem.getHistogram()
@@ -70,6 +90,15 @@ class HistogramLUTItem(GraphicsWidget):
             mn = h[0][int(len(h[0])*0.1)]
             mx = h[0][int(len(h[0])*0.9)]
             self.region.setRegion([mn, mx])
-            self.vb.autoRange()
+            self.updateRange()
             
+    def updateRange(self):
+        self.vb.autoRange()
+        if self.range is not None:
+            self.vb.setYRange(*self.range)
+            
+    def getLevels(self):
+        return self.region.getRegion()
         
+    def setLevels(self, mn, mx):
+        self.region.setRegion([mn, mx])

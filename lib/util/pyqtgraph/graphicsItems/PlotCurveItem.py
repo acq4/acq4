@@ -28,6 +28,7 @@ class PlotCurveItem(GraphicsObject):
         self.clear()
         #self.dispPath = None
         self.path = None
+        self.fillPath = None
         if pen is None:
             if color is None:
                 self.setPen((200,200,200))

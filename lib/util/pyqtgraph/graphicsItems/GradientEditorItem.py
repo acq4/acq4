@@ -564,6 +564,7 @@ class Tick(GraphicsObject):
         if  ev.button() == QtCore.Qt.RightButton and self.moving:
             ev.accept()
             self.setPos(self.startPosition)
+            self.view().tickMoved(self, self.startPosition)
             self.moving = False
             self.sigMoving.emit(self)
             self.sigMoved.emit(self)
