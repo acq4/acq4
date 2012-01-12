@@ -13,3 +13,20 @@ class GraphicsWidget(QtGui.QGraphicsWidget):
 
     #def getMenu(self):
         #pass
+        
+    def setFixedHeight(self, h):
+        self.setMaximumHeight(h)
+        self.setMinimumHeight(h)
+
+    def setFixedWidth(self, h):
+        self.setMaximumWidth(h)
+        self.setMinimumWidth(h)
+        
+    def height(self):
+        return self.geometry().height()
+    
+    def width(self):
+        return self.geometry().width()
+
+
+

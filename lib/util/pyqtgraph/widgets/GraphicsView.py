@@ -15,6 +15,7 @@ import debug
 from FileDialog import FileDialog
 from pyqtgraph.GraphicsScene import GraphicsScene
 import numpy as np
+import pyqtgraph.functions as fn
 
 __all__ = ['GraphicsView']
 
@@ -27,7 +28,7 @@ class GraphicsView(QtGui.QGraphicsView):
     sigScaleChanged = QtCore.Signal(object)
     lastFileDir = None
     
-    def __init__(self, parent=None, useOpenGL=None):
+    def __init__(self, parent=None, useOpenGL=None, background='k'):
         """Re-implementation of QGraphicsView that removes scrollbars and allows unambiguous control of the 
         viewed coordinate range. Also automatically creates a QGraphicsScene and a central QGraphicsWidget
         that is automatically scaled to the full view geometry.
@@ -52,8 +53,9 @@ class GraphicsView(QtGui.QGraphicsView):
         
         self.setCacheMode(self.CacheBackground)
         
-        brush = QtGui.QBrush(QtGui.QColor(0,0,0))
-        self.setBackgroundBrush(brush)
+        if background is not None:
+            brush = fn.mkBrush(background)
+            self.setBackgroundBrush(brush)
         
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.setFrameShape(QtGui.QFrame.NoFrame)
