@@ -29,10 +29,13 @@ class LinearRegionItem(UIGraphicsItem):
             self.lines = [
                 InfiniteLine(QtCore.QPointF(0, values[0]), 0, movable=movable, bounds=bounds), 
                 InfiniteLine(QtCore.QPointF(0, values[1]), 0, movable=movable, bounds=bounds)]
-        else:
+        elif orientation == LinearRegionItem.Vertical:
             self.lines = [
                 InfiniteLine(QtCore.QPointF(values[1], 0), 90, movable=movable, bounds=bounds), 
                 InfiniteLine(QtCore.QPointF(values[0], 0), 90, movable=movable, bounds=bounds)]
+        else:
+            raise Exception('Orientation must be one of LinearRegionItem.Vertical or LinearRegionItem.Horizontal')
+        
         
         for l in self.lines:
             l.setParentItem(self)
