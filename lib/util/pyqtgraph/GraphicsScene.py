@@ -3,6 +3,7 @@ import weakref
 from pyqtgraph.Point import Point
 import pyqtgraph.functions as fn
 import pyqtgraph.ptime as ptime
+import debug
 
 try:
     import sip
@@ -137,7 +138,12 @@ class GraphicsScene(QtGui.QGraphicsScene):
                     else:
                         prevItems.remove(item)
                         event.enter = False
-                    item.hoverEvent(event)
+                        
+                    try:
+                        item.hoverEvent(event)
+                    except:
+                        debug.printExc("Error sending hover event:")
+                        
             #print "  --> accepted drags:", event.dragItems().items()
                     
             ## Anything left in prevItems needs an Exit event
@@ -145,8 +151,12 @@ class GraphicsScene(QtGui.QGraphicsScene):
             event.exit = True
             for item in prevItems:
                 event.currentItem = item
-                item.hoverEvent(event)
-                del self.hoverItems[item]
+                try:
+                    item.hoverEvent(event)
+                except:
+                    debug.printExc("Error sending hover exit event:")
+                finally:
+                    del self.hoverItems[item]
                 
             self.lastHoverEvent = event  ## save this so we can ask about accepted events later.
                 
@@ -213,21 +223,31 @@ class GraphicsScene(QtGui.QGraphicsScene):
                 #print "Drag -> pre-selected item:", acceptedItem
                 self.dragItem = acceptedItem
                 event.currentItem = self.dragItem
-                self.dragItem.mouseDragEvent(event)
+                try:
+                    self.dragItem.mouseDragEvent(event)
+                except:
+                    debug.printExc("Error sending drag event:")
+                    
             else:
                 #print "drag -> new item"
                 for item in self.itemsNearEvent(event):
                     #print "check item:", item
                     if hasattr(item, 'mouseDragEvent'):
                         event.currentItem = item
-                        item.mouseDragEvent(event)
+                        try:
+                            item.mouseDragEvent(event)
+                        except:
+                            debug.printExc("Error sending drag event:")
                         if event.isAccepted():
                             #print "   --> accepted"
                             self.dragItem = item
                             break
         elif self.dragItem is not None:
             event.currentItem = self.dragItem
-            self.dragItem.mouseDragEvent(event)
+            try:
+                self.dragItem.mouseDragEvent(event)
+            except:
+                debug.printExc("Error sending hover exit event:")
             
         self.lastDrag = event
         
@@ -245,12 +265,19 @@ class GraphicsScene(QtGui.QGraphicsScene):
             acceptedItem = self.lastHoverEvent.clickItems().get(ev.button(), None)
             if acceptedItem is not None:
                 ev.currentItem = acceptedItem
-                acceptedItem.mouseClickEvent(ev)
+                try:
+                    acceptedItem.mouseClickEvent(ev)
+                except:
+                    debug.printExc("Error sending click event:")
             else:
                 for item in self.itemsNearEvent(ev):
                     if hasattr(item, 'mouseClickEvent'):
                         ev.currentItem = item
-                        item.mouseClickEvent(ev)
+                        try:
+                            item.mouseClickEvent(ev)
+                        except:
+                            debug.printExc("Error sending click event:")
+                            
                         if ev.isAccepted():
                             break
                 if not ev.isAccepted() and ev.button() is QtCore.Qt.RightButton:
