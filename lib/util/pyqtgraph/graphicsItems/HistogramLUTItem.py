@@ -63,10 +63,13 @@ class HistogramLUTItem(GraphicsWidget):
 
     def imageChanged(self, autoLevel=False):
         h = self.imageItem.getHistogram()
+        if h[0] is None:
+            return
         self.plot.setData(*h, fillLevel=0.0, brush=(100, 100, 200))
         if autoLevel:
             mn = h[0][int(len(h[0])*0.1)]
             mx = h[0][int(len(h[0])*0.9)]
             self.region.setRegion([mn, mx])
+            self.vb.autoRange()
             
         
