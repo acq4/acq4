@@ -299,7 +299,7 @@ class TerminalGraphicsItem(GraphicsObject):
             self.label.setTextInteractionFlags(QtCore.Qt.TextEditorInteraction)
             self.label.focusOutEvent = self.labelFocusOut
             self.label.keyPressEvent = self.labelKeyPress
-        self.setZValue(20)
+        #self.setZValue(20)
         self.menu = None
             
 
@@ -509,7 +509,7 @@ class ConnectionItem(GraphicsObject):
         #self.line.setLine(start.x(), start.y(), stop.x(), stop.y())
 
     def keyPressEvent(self, ev):
-        if ev.key() == QtCore.Qt.Key_Delete:
+        if ev.key() == QtCore.Qt.Key_Delete or ev.key() == QtCore.Qt.Key_Backspace:
             #if isinstance(self.target, TerminalGraphicsItem):
             self.source.disconnect(self.target)
             ev.accept()
