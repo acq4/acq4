@@ -167,7 +167,7 @@ class Flowchart(Node):
         if type(pos) in [QtCore.QPoint, QtCore.QPointF]:
             pos = [pos.x(), pos.y()]
         item = node.graphicsItem()
-        item.setZValue(self.nextZVal)
+        item.setZValue(self.nextZVal*2)
         self.nextZVal += 1
         #item.setParentItem(self.chartGraphicsItem())
         self.viewBox.addItem(item)

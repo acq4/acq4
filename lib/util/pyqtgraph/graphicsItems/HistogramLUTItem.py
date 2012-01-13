@@ -11,7 +11,10 @@ from GradientEditorItem import *
 from LinearRegionItem import *
 from PlotDataItem import *
 from GridItem import *
+from pyqtgraph.Point import Point
+import pyqtgraph.functions as fn
 import numpy as np
+
 
 __all__ = ['HistogramLUTItem']
 
@@ -19,30 +22,40 @@ __all__ = ['HistogramLUTItem']
 class HistogramLUTItem(GraphicsWidget):
     sigLookupTableChanged = QtCore.Signal(object)
     sigLevelsChanged = QtCore.Signal(object)
+    sigLevelChangeFinished = QtCore.Signal(object)
     
     def __init__(self, image=None):
         GraphicsWidget.__init__(self)
         self.layout = QtGui.QGraphicsGridLayout()
         self.setLayout(self.layout)
+        self.layout.setContentsMargins(1,1,1,1)
+        self.layout.setSpacing(0)
         self.vb = ViewBox()
-        self.vb.setMaximumWidth(90)
+        self.vb.setMaximumWidth(152)
+        self.vb.setMinimumWidth(52)
         self.gradient = GradientEditorItem()
         self.gradient.setOrientation('right')
         self.gradient.loadPreset('grey')
         self.region = LinearRegionItem([0, 1], LinearRegionItem.Horizontal)
+        self.region.setZValue(1000)
         self.vb.addItem(self.region)
         self.layout.addItem(self.vb, 0, 0)
         self.layout.addItem(self.gradient, 0, 1)
         self.range = None
+        self.gradient.setFlag(self.gradient.ItemStacksBehindParent)
+        self.vb.setFlag(self.gradient.ItemStacksBehindParent)
         
         #self.grid = GridItem()
         #self.vb.addItem(self.grid)
         
         self.gradient.sigGradientChanged.connect(self.gradientChanged)
-        self.region.sigRegionChanged.connect(self.regionChanged)
+        self.region.sigRegionChanged.connect(self.regionChanging)
+        self.region.sigRegionChangeFinished.connect(self.regionChanged)
+        self.vb.sigRangeChanged.connect(self.viewRangeChanged)
         self.plot = PlotDataItem()
         self.plot.rotate(90)
         self.vb.addItem(self.plot)
+        self.vb.setMouseEnabled(False, True)
         
         self.imageItem = None
         if image is not None:
@@ -51,6 +64,21 @@ class HistogramLUTItem(GraphicsWidget):
 
     #def sizeHint(self, *args):
         #return QtCore.QSizeF(115, 200)
+        
+    def paint(self, p, *args):
+        pen = self.region.lines[0].pen
+        rgn = self.getLevels()
+        p1 = self.vb.mapFromViewToItem(self, Point(self.vb.viewRect().center().x(), rgn[0]))
+        p2 = self.vb.mapFromViewToItem(self, Point(self.vb.viewRect().center().x(), rgn[1]))
+        gradRect = self.gradient.mapRectToParent(self.gradient.gradRect.rect())
+        for pen in [fn.mkPen('k', width=3), pen]:
+            p.setPen(pen)
+            p.drawLine(p1, gradRect.bottomLeft())
+            p.drawLine(p2, gradRect.topLeft())
+            p.drawLine(gradRect.topLeft(), gradRect.topRight())
+            p.drawLine(gradRect.bottomLeft(), gradRect.bottomRight())
+        #p.drawRect(self.boundingRect())
+        
         
     def setHistogramRange(self, mn, mx, padding=0.0):
         d = mx-mn
@@ -70,6 +98,9 @@ class HistogramLUTItem(GraphicsWidget):
         self.regionChanged()
         self.imageChanged(autoLevel=True)
         self.vb.autoRange()
+        
+    def viewRangeChanged(self):
+        self.update()
     
     def gradientChanged(self):
         if self.imageItem is not None:
@@ -77,9 +108,16 @@ class HistogramLUTItem(GraphicsWidget):
         self.sigLookupTableChanged.emit(self)
 
     def regionChanged(self):
+        #if self.imageItem is not None:
+            #self.imageItem.setLevels(self.region.getRegion())
+        self.sigLevelChangeFinished.emit(self)
+        #self.update()
+
+    def regionChanging(self):
         if self.imageItem is not None:
             self.imageItem.setLevels(self.region.getRegion())
         self.sigLevelsChanged.emit(self)
+        self.update()
 
     def imageChanged(self, autoLevel=False):
         h = self.imageItem.getHistogram()

@@ -356,7 +356,7 @@ class NodeGraphicsItem(GraphicsObject):
         self.nameItem.moveBy(self.bounds.width()/2. - self.nameItem.boundingRect().width()/2., 0)
         self.nameItem.setTextInteractionFlags(QtCore.Qt.TextEditorInteraction)
         self.updateTerminals()
-        self.setZValue(10)
+        #self.setZValue(10)
 
         self.nameItem.focusOutEvent = self.labelFocusOut
         self.nameItem.keyPressEvent = self.labelKeyPress
@@ -365,6 +365,11 @@ class NodeGraphicsItem(GraphicsObject):
         self.buildMenu()
         
         #self.node.sigTerminalRenamed.connect(self.updateActionMenu)
+        
+    def setZValue(self, z):
+        for t, item in self.terminals.itervalues():
+            item.setZValue(z+1)
+        GraphicsObject.setZValue(self, z)
         
     def labelFocusOut(self, ev):
         QtGui.QGraphicsTextItem.focusOutEvent(self.nameItem, ev)
@@ -403,7 +408,7 @@ class NodeGraphicsItem(GraphicsObject):
         for i, t in inp.iteritems():
             item = t.graphicsItem()
             item.setParentItem(self)
-            item.setZValue(self.zValue())
+            item.setZValue(self.zValue()+1)
             br = self.bounds
             item.setAnchor(0, y)
             self.terminals[i] = (t, item)
@@ -488,7 +493,7 @@ class NodeGraphicsItem(GraphicsObject):
         #return ret
 
     def keyPressEvent(self, ev):
-        if ev.key() == QtCore.Qt.Key_Delete:
+        if ev.key() == QtCore.Qt.Key_Delete or ev.key() == QtCore.Qt.Key_Backspace:
             ev.accept()
             if not self.node._allowRemove:
                 return
