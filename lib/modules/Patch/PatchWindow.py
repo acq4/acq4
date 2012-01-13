@@ -416,9 +416,7 @@ class PatchThread(QtCore.QThread):
                 
                 lastTime = None
                 while True:
-                    prof = Profiler('PatchThread.run', disabled=True)
-                    #lastTime = time.clock()   ## moved to after the command run
-                    
+                    ## copy in parameters from GUI
                     updateCommand = False
                     l.relock()
                     if self.paramsUpdated:
@@ -428,88 +426,12 @@ class PatchThread(QtCore.QThread):
                         updateCommand = True
                     l.unlock()
                     
-                    ## Regenerate command signal if parameters have changed
-                    numPts = int(float(params['recordTime']) * params['rate'])
-                    mode = params['mode']
-                    if params[mode+'HoldingEnabled']:
-                        holding = params[mode+'Holding']
-                    else:
-                        holding = 0.
-                    if params[mode+'PulseEnabled']:
-                        amplitude = params[mode+'Pulse']
-                    else:
-                        amplitude = 0.
-                    cmdData = empty(numPts)
-                    cmdData[:] = holding
-                    start = int(params['delayTime'] * params['rate'])
-                    stop = start + int(params['pulseTime'] * params['rate'])
-                    cmdData[start:stop] = holding + amplitude
-                    #cmdData[-1] = holding
-                    
-                    cmd = {
-                        'protocol': {'duration': params['recordTime'], 'leadTime': 0.02},
-                        daqName: {'rate': params['rate'], 'numPts': numPts, 'downsample': params['downsample']},
-                        clampName: {
-                            'mode': params['mode'],
-                            'command': cmdData,
-                            'holding': holding
-                        }
-                        
-                    }
-                    prof.mark('build command')
-                    
-                    ## Create and execute task.
-                    ## the try/except block is just to catch errors that come up during multiclamp auto pipette offset procedure.
-                    results = []
-                    for i in range(params['average']):
-                        exc = False
-                        count = 0
-                        while not exc:
-                            count += 1
-                            try:
-                                ## Create task
-                                task = self.manager.createTask(cmd)
-                                ## Execute task
-                                task.execute()
-                                exc = True
-                            except:
-                                err = sys.exc_info()[1].args
-                                #print err
-                                if count < 5 and len(err) > 1 and err[1] == 'ExtCmdSensOff':  ## external cmd sensitivity is off, wait to see if it comes back..
-                                    time.sleep(1.0)
-                                    continue
-                                else:
-                                    raise
-                        #print cmd
-                        
-                        ## analyze trace 
-                        result = task.getResult()
-                        #print result
-                        results.append(result)
-                        
-                    prof.mark('execute')
-                        
-                    ## average together results if we collected more than 1
-                    if len(results) == 1:
-                        result = results[0]
-                        avg = result[clampName]
-                    else:
-                        avg = concatenate([res[clampName].view(ndarray)[newaxis, ...] for res in results], axis=0).mean(axis=0)
-                        avg = MetaArray(avg, info=results[0][clampName].infoCopy())
-                        result = results[0]
-                        result[clampName] = avg
-                    #print result[clampName]['primary'].max(), result[clampName]['primary'].min()
-                    
-                    #print result[clampName]
+                    ## run protocol and analysis
                     try:
-                        analysis = self.analyze(avg, params)
-                        frame = {'data': result, 'analysis': analysis}
-                        prof.mark('analyze')
-                        
-                        #self.emit(QtCore.SIGNAL('newFrame'), frame)
-                        self.sigNewFrame.emit(frame)
+                        self.runOnce(params, l, clamp, daqName, clampName)
                     except:
-                        printExc('Error in patch analysis:')
+                        printExc("Error running/analyzing patch protocol")
+                    
                     
                     
                     lastTime = ptime.time()-params['recordTime'] ## This is not a proper 'cycle time', but instead enforces a minimum interval between cycles (but this can be very important for performance)
@@ -534,11 +456,97 @@ class PatchThread(QtCore.QThread):
                         c += 1
                     if stop:
                         break
-                    prof.mark('wait')
-                    prof.finish()
         except:
             printExc("Error in patch acquisition thread, exiting.")
         #self.emit(QtCore.SIGNAL('threadStopped'))
+        
+    def runOnce(self, params, l, clamp, daqName, clampName):
+        prof = Profiler('PatchThread.run', disabled=True)
+        #lastTime = time.clock()   ## moved to after the command run
+        
+        
+        ## Regenerate command signal if parameters have changed
+        numPts = int(float(params['recordTime']) * params['rate'])
+        mode = params['mode']
+        if params[mode+'HoldingEnabled']:
+            holding = params[mode+'Holding']
+        else:
+            holding = 0.
+        if params[mode+'PulseEnabled']:
+            amplitude = params[mode+'Pulse']
+        else:
+            amplitude = 0.
+        cmdData = empty(numPts)
+        cmdData[:] = holding
+        start = int(params['delayTime'] * params['rate'])
+        stop = start + int(params['pulseTime'] * params['rate'])
+        cmdData[start:stop] = holding + amplitude
+        #cmdData[-1] = holding
+        
+        cmd = {
+            'protocol': {'duration': params['recordTime'], 'leadTime': 0.02},
+            daqName: {'rate': params['rate'], 'numPts': numPts, 'downsample': params['downsample']},
+            clampName: {
+                'mode': params['mode'],
+                'command': cmdData,
+                'holding': holding
+            }
+            
+        }
+        prof.mark('build command')
+        
+        ## Create and execute task.
+        ## the try/except block is just to catch errors that come up during multiclamp auto pipette offset procedure.
+        results = []
+        for i in range(params['average']):
+            exc = False
+            count = 0
+            while not exc:
+                count += 1
+                try:
+                    ## Create task
+                    task = self.manager.createTask(cmd)
+                    ## Execute task
+                    task.execute()
+                    exc = True
+                except:
+                    err = sys.exc_info()[1].args
+                    #print err
+                    if count < 5 and len(err) > 1 and err[1] == 'ExtCmdSensOff':  ## external cmd sensitivity is off, wait to see if it comes back..
+                        time.sleep(1.0)
+                        continue
+                    else:
+                        raise
+            #print cmd
+            
+            ## analyze trace 
+            result = task.getResult()
+            #print result
+            results.append(result)
+            
+        prof.mark('execute')
+            
+        ## average together results if we collected more than 1
+        if len(results) == 1:
+            result = results[0]
+            avg = result[clampName]
+        else:
+            avg = concatenate([res[clampName].view(ndarray)[newaxis, ...] for res in results], axis=0).mean(axis=0)
+            avg = MetaArray(avg, info=results[0][clampName].infoCopy())
+            result = results[0]
+            result[clampName] = avg
+        #print result[clampName]['primary'].max(), result[clampName]['primary'].min()
+        
+        #print result[clampName]
+        try:
+            analysis = self.analyze(avg, params)
+            frame = {'data': result, 'analysis': analysis}
+            prof.mark('analyze')
+            
+            #self.emit(QtCore.SIGNAL('newFrame'), frame)
+            self.sigNewFrame.emit(frame)
+        except:
+            printExc('Error in patch analysis:')
             
     def analyze(self, data, params):
         #print "\n\nAnalysis parameters:", params
