@@ -299,7 +299,7 @@ class TerminalGraphicsItem(GraphicsObject):
             self.label.setTextInteractionFlags(QtCore.Qt.TextEditorInteraction)
             self.label.focusOutEvent = self.labelFocusOut
             self.label.keyPressEvent = self.labelKeyPress
-        #self.setZValue(20)
+        self.setZValue(1)
         self.menu = None
             
 

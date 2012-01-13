@@ -375,7 +375,13 @@ class GraphicsScene(QtGui.QGraphicsScene):
                 items2.append(item)
         
         ## Sort by descending Z-order (don't trust scene.itms() to do this either)
-        items2.sort(lambda a,b: cmp(b.zValue(), a.zValue()))
+        ## use 'absolute' z value, which is the sum of all item/parent ZValues
+        def absZValue(item):
+            if item is None:
+                return 0
+            return item.zValue() + absZValue(item.parentItem())
+        
+        items2.sort(lambda a,b: cmp(absZValue(b), absZValue(a)))
         
         return items2
         

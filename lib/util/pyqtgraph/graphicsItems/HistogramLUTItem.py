@@ -55,7 +55,9 @@ class HistogramLUTItem(GraphicsWidget):
         self.plot = PlotDataItem()
         self.plot.rotate(90)
         self.vb.addItem(self.plot)
-        self.vb.setMouseEnabled(False, True)
+        self.autoHistogramRange()
+        
+        self.lut = None
         
         self.imageItem = None
         if image is not None:
@@ -86,26 +88,40 @@ class HistogramLUTItem(GraphicsWidget):
         mx += d*padding
         self.range = [mn,mx]
         self.updateRange()
+        self.vb.setMouseEnabled(False, False)
         
     def autoHistogramRange(self):
         self.range = None
         self.updateRange()
+        self.vb.setMouseEnabled(False, False)
 
     def setImageItem(self, img):
         self.imageItem = img
         img.sigImageChanged.connect(self.imageChanged)
-        self.gradientChanged()
+        img.setLookupTable(self.getLookupTable)  ## send function pointer, not the result
+        #self.gradientChanged()
         self.regionChanged()
-        self.imageChanged(autoLevel=True)
-        self.vb.autoRange()
+        self.imageChanged(autoLevel=True, autoRange=True)
         
     def viewRangeChanged(self):
         self.update()
     
     def gradientChanged(self):
-        if self.imageItem is not None:
-            self.imageItem.setLookupTable(self.gradient.getLookupTable(512))
+        self.imageItem.setLookupTable(self.getLookupTable)  ## send function pointer, not the result
+        self.lut = None
+        #if self.imageItem is not None:
+            #self.imageItem.setLookupTable(self.gradient.getLookupTable(512))
         self.sigLookupTableChanged.emit(self)
+
+    def getLookupTable(self, img, n=None):
+        if n is None:
+            if img.dtype == np.uint8:
+                n = 256
+            else:
+                n = 512
+        if self.lut is None:
+            self.lut = self.gradient.getLookupTable(n)
+        return self.lut
 
     def regionChanged(self):
         #if self.imageItem is not None:
@@ -119,7 +135,7 @@ class HistogramLUTItem(GraphicsWidget):
         self.sigLevelsChanged.emit(self)
         self.update()
 
-    def imageChanged(self, autoLevel=False):
+    def imageChanged(self, autoLevel=False, autoRange=False):
         h = self.imageItem.getHistogram()
         if h[0] is None:
             return
@@ -128,6 +144,8 @@ class HistogramLUTItem(GraphicsWidget):
             mn = h[0][0]
             mx = h[0][-1]
             self.region.setRegion([mn, mx])
+            self.updateRange()
+        if autoRange:
             self.updateRange()
             
     def updateRange(self):

@@ -47,7 +47,7 @@ class LinearRegionItem(UIGraphicsItem):
         self.setBrush(brush)
         
         self.setMovable(movable)
-
+        
     def getRegion(self):
         """Return the values at the edges of the region."""
         #if self.orientation[0] == 'h':
