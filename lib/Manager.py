@@ -326,8 +326,8 @@ class Manager(QtCore.QObject):
         else:
             raise Exception("Could not find configuration named '%s'" % name)
 
-    def __del__(self):
-        self.quit()
+    #def __del__(self):
+        #self.quit()
     
     def readConfigFile(self, fileName, missingOk=True):
         fileName = self.configFileName(fileName)

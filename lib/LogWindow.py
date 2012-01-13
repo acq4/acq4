@@ -322,12 +322,13 @@ class LogWidget(QtGui.QWidget):
         self.typeFilters = []
         self.importanceFilter = 0
         self.dirFilter = False
-        self.entryArray = np.zeros(0, dtype=[ ### a record array for quick filtering of entries
+        self.entryArrayBuffer = np.zeros(1000, dtype=[ ### a record array for quick filtering of entries
             ('index', 'int32'),
             ('importance', 'int32'),
             ('msgType', '|S10'),
             ('directory', '|S100')
         ])
+        self.entryArray = self.entryArrayBuffer[:0]
         
         self.filtersChanged()
         
@@ -344,12 +345,13 @@ class LogWidget(QtGui.QWidget):
         """Load the file, f. f must be able to be read by configfile.py"""
         log = configfile.readConfigFile(f)
         self.entries = []
-        self.entryArray = np.zeros(len(log),dtype=[
+        self.entryArrayBuffer = np.zeros(len(log),dtype=[
             ('index', 'int32'),
             ('importance', 'int32'),
             ('msgType', '|S10'),
             ('directory', '|S100')
         ])
+        self.entryArray = self.entryArrayBuffer[:]
                                    
         i = 0
         for k,v in log.iteritems():
@@ -371,7 +373,13 @@ class LogWidget(QtGui.QWidget):
             entryDir = ''
             
         arr = np.array([(i, entry['importance'], entry['msgType'], entryDir)], dtype = [('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100')])
-        self.entryArray.resize(i+1)
+        
+        ## make more room if needed
+        if len(self.entryArrayBuffer) == len(self.entryArray):
+            newArray = np.empty(len(self.entryArrayBuffer)+1000, self.entryArrayBuffer.dtype)
+            newArray[:len(self.entryArray)] = self.entryArray
+            self.entryArrayBuffer = newArray
+        self.entryArray = self.entryArrayBuffer[:len(self.entryArray)+1]
         #self.entryArray[i] = [(i, entry['importance'], entry['msgType'], entry['currentDir'])]
         self.entryArray[i] = arr
         self.checkDisplay(entry) ## displays the entry if it passes the current filters
@@ -600,7 +608,7 @@ class LogWidget(QtGui.QWidget):
         #else:
             #self.displayText("&nbsp;"*indent + str(count)+'. Original error: ' + text, entry, color, clean=False)
         messages = [text]
-        print "\n", messages, "\n"
+        #print "\n", messages, "\n"
         
         if exception.has_key('reasons'):
             reasons = self.formatReasonsStrForHTML(exception['reasons'])
