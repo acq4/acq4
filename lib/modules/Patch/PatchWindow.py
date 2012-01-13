@@ -501,12 +501,15 @@ class PatchThread(QtCore.QThread):
                     #print result[clampName]['primary'].max(), result[clampName]['primary'].min()
                     
                     #print result[clampName]
-                    analysis = self.analyze(avg, params)
-                    frame = {'data': result, 'analysis': analysis}
-                    prof.mark('analyze')
-                    
-                    #self.emit(QtCore.SIGNAL('newFrame'), frame)
-                    self.sigNewFrame.emit(frame)
+                    try:
+                        analysis = self.analyze(avg, params)
+                        frame = {'data': result, 'analysis': analysis}
+                        prof.mark('analyze')
+                        
+                        #self.emit(QtCore.SIGNAL('newFrame'), frame)
+                        self.sigNewFrame.emit(frame)
+                    except:
+                        printExc('Error in patch analysis:')
                     
                     
                     lastTime = ptime.time()-params['recordTime'] ## This is not a proper 'cycle time', but instead enforces a minimum interval between cycles (but this can be very important for performance)
@@ -589,14 +592,15 @@ class PatchThread(QtCore.QThread):
         
         ## fit again using shorter data
         ## this should help to avoid fitting against h-currents
-        tau4 = fit1[0][2]*4
+        tau4 = fit1[0][2]*10
         t0 = pulse.xvals('Time')[0]
         shortPulse = pulse['Time': t0:t0+tau4]
-        tVals2 = shortPulse.xvals('Time')-params['delayTime']
-        fit1 = scipy.optimize.leastsq(
-            lambda v, t, y: y - expFn(v, t), pred1, 
-            args=(tVals2, shortPulse['primary'].view(np.ndarray) - baseMean),
-            maxfev=200, full_output=1)
+        if shortPulse.shape[0] > 10:  ## but only if we can get enough samples from this
+            tVals2 = shortPulse.xvals('Time')-params['delayTime']
+            fit1 = scipy.optimize.leastsq(
+                lambda v, t, y: y - expFn(v, t), pred1, 
+                args=(tVals2, shortPulse['primary'].view(np.ndarray) - baseMean),
+                maxfev=200, full_output=1)
         
         
         #fit2 = scipy.optimize.leastsq(

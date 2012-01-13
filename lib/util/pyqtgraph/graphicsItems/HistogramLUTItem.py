@@ -87,8 +87,8 @@ class HistogramLUTItem(GraphicsWidget):
             return
         self.plot.setData(*h, fillLevel=0.0, brush=(100, 100, 200))
         if autoLevel:
-            mn = h[0][int(len(h[0])*0.1)]
-            mx = h[0][int(len(h[0])*0.9)]
+            mn = h[0][0]
+            mx = h[0][-1]
             self.region.setRegion([mn, mx])
             self.updateRange()
             
