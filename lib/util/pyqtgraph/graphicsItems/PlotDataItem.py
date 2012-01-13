@@ -121,9 +121,8 @@ class PlotDataItem(GraphicsObject):
     def setDownsampling(self, ds):
         if self.opts['downsample'] != ds:
             self.opts['downsample'] = ds
-            #self.xDisp = self.yDisp = None
-            #self.path = None
-            self.update()
+            self.xDisp = self.yDisp = None
+            self.updateItems()
         
     def setData(self, *args, **kargs):
         """
@@ -164,7 +163,7 @@ class PlotDataItem(GraphicsObject):
         elif len(args) == 2:
             seq = ('listOfValues', 'MetaArray')
             if dataType(args[0]) not in seq or  dataType(args[1]) not in seq:
-                raise Exception('When passing two unnamed arguments, both must be a list or array of values.')
+                raise Exception('When passing two unnamed arguments, both must be a list or array of values. (got %s, %s)' % (str(type(args[0])), str(type(args[1]))))
             if not isinstance(args[0], np.ndarray):
                 x = np.array(args[0])
             else:
@@ -190,7 +189,7 @@ class PlotDataItem(GraphicsObject):
             
         for k in self.opts.keys():
             if k in kargs:
-                opts[k] = kargs[k]
+                self.opts[k] = kargs[k]
                 
         #curveArgs = {}
         #for k in ['pen', 'shadowPen', 'fillLevel', 'brush']:
@@ -219,10 +218,9 @@ class PlotDataItem(GraphicsObject):
 
 
     def updateItems(self):
-        for c in self.curves:
-            c.scene().removeItem(c)
-        for s in self.scatters:
-            s.scene().removeItem(s)
+        for c in self.curves+self.scatters:
+            if c.scene() is not None:
+                c.scene().removeItem(c)
             
         curveArgs = {}
         for k in ['pen', 'shadowPen', 'fillLevel', 'brush']:
@@ -303,7 +301,7 @@ class PlotDataItem(GraphicsObject):
         self.yData = None
         self.xDisp = None
         self.yDisp = None
-                
+            
     def appendData(self, *args, **kargs):
         pass
     

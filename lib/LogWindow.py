@@ -161,7 +161,7 @@ class LogWindow(QtGui.QMainWindow):
     def logExc(self, *args, **kwargs):
         """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
         kwargs['exception'] = sys.exc_info()
-        kwargs['traceback'] = [['Callstack: \n'] + traceback.format_stack()[:-3] + ["------- exception caught ----------"]]
+        kwargs['traceback'] = ['Callstack: \n'] + traceback.format_stack()[:-3] + ["------- exception caught ----------"]
         self.logMsg(*args, **kwargs)
         
     def processEntry(self, entry):
@@ -192,7 +192,7 @@ class LogWindow(QtGui.QMainWindow):
             #+ ["  ---- exception caught ---->\n"] 
             #+ traceback.format_tb(sys.exc_info()[2])
             #+ traceback.format_exception_only(*sys.exc_info()[:2]))
-        print topTraceback
+        #print topTraceback
         excDict = {}
         excDict['message'] = traceback.format_exception(exType, exc, tb)[-1]
         excDict['traceback'] = topTraceback + traceback.format_exception(exType, exc, tb)[:-1]
@@ -322,12 +322,13 @@ class LogWidget(QtGui.QWidget):
         self.typeFilters = []
         self.importanceFilter = 0
         self.dirFilter = False
-        self.entryArray = np.zeros(0, dtype=[ ### a record array for quick filtering of entries
+        self.entryArrayBuffer = np.zeros(1000, dtype=[ ### a record array for quick filtering of entries
             ('index', 'int32'),
             ('importance', 'int32'),
             ('msgType', '|S10'),
             ('directory', '|S100')
         ])
+        self.entryArray = self.entryArrayBuffer[:0]
         
         self.filtersChanged()
         
@@ -344,12 +345,13 @@ class LogWidget(QtGui.QWidget):
         """Load the file, f. f must be able to be read by configfile.py"""
         log = configfile.readConfigFile(f)
         self.entries = []
-        self.entryArray = np.zeros(len(log),dtype=[
+        self.entryArrayBuffer = np.zeros(len(log),dtype=[
             ('index', 'int32'),
             ('importance', 'int32'),
             ('msgType', '|S10'),
             ('directory', '|S100')
         ])
+        self.entryArray = self.entryArrayBuffer[:]
                                    
         i = 0
         for k,v in log.iteritems():
@@ -371,7 +373,13 @@ class LogWidget(QtGui.QWidget):
             entryDir = ''
             
         arr = np.array([(i, entry['importance'], entry['msgType'], entryDir)], dtype = [('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100')])
-        self.entryArray.resize(i+1)
+        
+        ## make more room if needed
+        if len(self.entryArrayBuffer) == len(self.entryArray):
+            newArray = np.empty(len(self.entryArrayBuffer)+1000, self.entryArrayBuffer.dtype)
+            newArray[:len(self.entryArray)] = self.entryArray
+            self.entryArrayBuffer = newArray
+        self.entryArray = self.entryArrayBuffer[:len(self.entryArray)+1]
         #self.entryArray[i] = [(i, entry['importance'], entry['msgType'], entry['currentDir'])]
         self.entryArray[i] = arr
         self.checkDisplay(entry) ## displays the entry if it passes the current filters
@@ -600,7 +608,7 @@ class LogWidget(QtGui.QWidget):
         #else:
             #self.displayText("&nbsp;"*indent + str(count)+'. Original error: ' + text, entry, color, clean=False)
         messages = [text]
-        print "\n", messages, "\n"
+        #print "\n", messages, "\n"
         
         if exception.has_key('reasons'):
             reasons = self.formatReasonsStrForHTML(exception['reasons'])
@@ -638,13 +646,11 @@ class LogWidget(QtGui.QWidget):
         
         
     def formatTracebackForHTML(self, tb, number):
-        holder = []
-        for line in tb:
-            if type(line) is str:
-                holder.append(line)
-            elif type(line) is list:
-                holder.extend(line)
-        tb = [line for line in holder if not line.startswith("Traceback (most recent call last)")]
+        try:
+            tb = [line for line in tb if not line.startswith("Traceback (most recent call last)")]
+        except:
+            print "\n"+str(tb)+"\n"
+            raise
         return "<ul><li>" + "</li><li>".join(map(self.cleanText, tb)) + "</li></ul>"
         #tb = [self.cleanText(strip(x)) for x in tb]
         #lines = []

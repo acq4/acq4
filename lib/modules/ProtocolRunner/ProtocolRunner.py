@@ -1095,7 +1095,8 @@ class TaskThread(QtCore.QThread):
             #l.unlock()
             #print "TaskThread:startProtocol starting..", self.lock.depth()
             self.start() ### causes self.run() to be called from somewhere in C code
-            logMsg("Protocol Started.", importance=1)
+            #name = '' if protocol.fileName is None else protocol.fileName
+            logMsg("Protocol started.", importance=1)
             #print "TaskThread:startProtocol started", self.lock.depth()
     
     def pause(self, pause):

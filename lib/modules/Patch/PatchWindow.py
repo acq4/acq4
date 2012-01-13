@@ -190,8 +190,8 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.averageSpin.setValue(1)
 
     def monitorMode(self):
-        self.ui.cycleTimeSpin.setValue(20)
-        self.ui.averageSpin.setValue(10)
+        self.ui.cycleTimeSpin.setValue(40)
+        self.ui.averageSpin.setValue(5)
         
     def showPlots(self):
         """Show/hide analysis plot widgets"""
@@ -418,9 +418,7 @@ class PatchThread(QtCore.QThread):
                 
                 lastTime = None
                 while True:
-                    prof = Profiler('PatchThread.run', disabled=True)
-                    #lastTime = time.clock()   ## moved to after the command run
-                    
+                    ## copy in parameters from GUI
                     updateCommand = False
                     l.relock()
                     if self.paramsUpdated:
@@ -430,85 +428,12 @@ class PatchThread(QtCore.QThread):
                         updateCommand = True
                     l.unlock()
                     
-                    ## Regenerate command signal if parameters have changed
-                    numPts = int(float(params['recordTime']) * params['rate'])
-                    mode = params['mode']
-                    if params[mode+'HoldingEnabled']:
-                        holding = params[mode+'Holding']
-                    else:
-                        holding = 0.
-                    if params[mode+'PulseEnabled']:
-                        amplitude = params[mode+'Pulse']
-                    else:
-                        amplitude = 0.
-                    cmdData = empty(numPts)
-                    cmdData[:] = holding
-                    start = int(params['delayTime'] * params['rate'])
-                    stop = start + int(params['pulseTime'] * params['rate'])
-                    cmdData[start:stop] = holding + amplitude
-                    #cmdData[-1] = holding
+                    ## run protocol and analysis
+                    try:
+                        self.runOnce(params, l, clamp, daqName, clampName)
+                    except:
+                        printExc("Error running/analyzing patch protocol")
                     
-                    cmd = {
-                        'protocol': {'duration': params['recordTime'], 'leadTime': 0.02},
-                        daqName: {'rate': params['rate'], 'numPts': numPts, 'downsample': params['downsample']},
-                        clampName: {
-                            'mode': params['mode'],
-                            'command': cmdData,
-                            'holding': holding
-                        }
-                        
-                    }
-                    prof.mark('build command')
-                    
-                    ## Create and execute task.
-                    ## the try/except block is just to catch errors that come up during multiclamp auto pipette offset procedure.
-                    results = []
-                    for i in range(params['average']):
-                        exc = False
-                        count = 0
-                        while not exc:
-                            count += 1
-                            try:
-                                ## Create task
-                                task = self.manager.createTask(cmd)
-                                ## Execute task
-                                task.execute()
-                                exc = True
-                            except:
-                                err = sys.exc_info()[1].args
-                                #print err
-                                if count < 5 and len(err) > 1 and err[1] == 'ExtCmdSensOff':  ## external cmd sensitivity is off, wait to see if it comes back..
-                                    time.sleep(1.0)
-                                    continue
-                                else:
-                                    raise
-                        #print cmd
-                        
-                        ## analyze trace 
-                        result = task.getResult()
-                        #print result
-                        results.append(result)
-                        
-                    prof.mark('execute')
-                        
-                    ## average together results if we collected more than 1
-                    if len(results) == 1:
-                        result = results[0]
-                        avg = result[clampName]
-                    else:
-                        avg = concatenate([res[clampName].view(ndarray)[newaxis, ...] for res in results], axis=0).mean(axis=0)
-                        avg = MetaArray(avg, info=results[0][clampName].infoCopy())
-                        result = results[0]
-                        result[clampName] = avg
-                    #print result[clampName]['primary'].max(), result[clampName]['primary'].min()
-                    
-                    #print result[clampName]
-                    analysis = self.analyze(avg, params)
-                    frame = {'data': result, 'analysis': analysis}
-                    prof.mark('analyze')
-                    
-                    #self.emit(QtCore.SIGNAL('newFrame'), frame)
-                    self.sigNewFrame.emit(frame)
                     
                     
                     lastTime = ptime.time()-params['recordTime'] ## This is not a proper 'cycle time', but instead enforces a minimum interval between cycles (but this can be very important for performance)
@@ -533,16 +458,102 @@ class PatchThread(QtCore.QThread):
                         c += 1
                     if stop:
                         break
-                    prof.mark('wait')
-                    prof.finish()
         except:
             printExc("Error in patch acquisition thread, exiting.")
         #self.emit(QtCore.SIGNAL('threadStopped'))
+        
+    def runOnce(self, params, l, clamp, daqName, clampName):
+        prof = Profiler('PatchThread.run', disabled=True)
+        #lastTime = time.clock()   ## moved to after the command run
+        
+        
+        ## Regenerate command signal if parameters have changed
+        numPts = int(float(params['recordTime']) * params['rate'])
+        mode = params['mode']
+        if params[mode+'HoldingEnabled']:
+            holding = params[mode+'Holding']
+        else:
+            holding = 0.
+        if params[mode+'PulseEnabled']:
+            amplitude = params[mode+'Pulse']
+        else:
+            amplitude = 0.
+        cmdData = empty(numPts)
+        cmdData[:] = holding
+        start = int(params['delayTime'] * params['rate'])
+        stop = start + int(params['pulseTime'] * params['rate'])
+        cmdData[start:stop] = holding + amplitude
+        #cmdData[-1] = holding
+        
+        cmd = {
+            'protocol': {'duration': params['recordTime'], 'leadTime': 0.02},
+            daqName: {'rate': params['rate'], 'numPts': numPts, 'downsample': params['downsample']},
+            clampName: {
+                'mode': params['mode'],
+                'command': cmdData,
+                'holding': holding
+            }
+            
+        }
+        prof.mark('build command')
+        
+        ## Create and execute task.
+        ## the try/except block is just to catch errors that come up during multiclamp auto pipette offset procedure.
+        results = []
+        for i in range(params['average']):
+            exc = False
+            count = 0
+            while not exc:
+                count += 1
+                try:
+                    ## Create task
+                    task = self.manager.createTask(cmd)
+                    ## Execute task
+                    task.execute()
+                    exc = True
+                except:
+                    err = sys.exc_info()[1].args
+                    #print err
+                    if count < 5 and len(err) > 1 and err[1] == 'ExtCmdSensOff':  ## external cmd sensitivity is off, wait to see if it comes back..
+                        time.sleep(1.0)
+                        continue
+                    else:
+                        raise
+            #print cmd
+            
+            ## analyze trace 
+            result = task.getResult()
+            #print result
+            results.append(result)
+            
+        prof.mark('execute')
+            
+        ## average together results if we collected more than 1
+        if len(results) == 1:
+            result = results[0]
+            avg = result[clampName]
+        else:
+            avg = concatenate([res[clampName].view(ndarray)[newaxis, ...] for res in results], axis=0).mean(axis=0)
+            avg = MetaArray(avg, info=results[0][clampName].infoCopy())
+            result = results[0]
+            result[clampName] = avg
+        #print result[clampName]['primary'].max(), result[clampName]['primary'].min()
+        
+        #print result[clampName]
+        try:
+            analysis = self.analyze(avg, params)
+            frame = {'data': result, 'analysis': analysis}
+            prof.mark('analyze')
+            
+            #self.emit(QtCore.SIGNAL('newFrame'), frame)
+            self.sigNewFrame.emit(frame)
+        except:
+            printExc('Error in patch analysis:')
             
     def analyze(self, data, params):
         #print "\n\nAnalysis parameters:", params
         ## Extract specific time segments
-        nudge = 0.1e-3
+        nudge = 50e-6
         base = data['Time': 0.0:(params['delayTime']-nudge)]
         pulse = data['Time': params['delayTime']+nudge:params['delayTime']+params['pulseTime']-nudge]
         pulseEnd = data['Time': params['delayTime']+(params['pulseTime']*2./3.):params['delayTime']+params['pulseTime']-nudge]
@@ -580,14 +591,28 @@ class PatchThread(QtCore.QThread):
             pred2 = [irv, irv, 50e-3]
             
         # Fit exponential to pulse and post-pulse traces
-        tVals1 = pulse.xvals('Time')-pulse.xvals('Time').min()
-        tVals2 = end.xvals('Time')-end.xvals('Time').min()
+        tVals1 = pulse.xvals('Time')-params['delayTime']
+        #tVals2 = end.xvals('Time')-end.xvals('Time').min()
         
         baseMean = base['primary'].mean()
         fit1 = scipy.optimize.leastsq(
             lambda v, t, y: y - expFn(v, t), pred1, 
-            args=(tVals1, pulse['primary'] - baseMean),
+            args=(tVals1, pulse['primary'].view(np.ndarray) - baseMean),
             maxfev=200, full_output=1)
+        
+        ## fit again using shorter data
+        ## this should help to avoid fitting against h-currents
+        tau4 = fit1[0][2]*10
+        t0 = pulse.xvals('Time')[0]
+        shortPulse = pulse['Time': t0:t0+tau4]
+        if shortPulse.shape[0] > 10:  ## but only if we can get enough samples from this
+            tVals2 = shortPulse.xvals('Time')-params['delayTime']
+            fit1 = scipy.optimize.leastsq(
+                lambda v, t, y: y - expFn(v, t), pred1, 
+                args=(tVals2, shortPulse['primary'].view(np.ndarray) - baseMean),
+                maxfev=200, full_output=1)
+        
+        
         #fit2 = scipy.optimize.leastsq(
             #lambda v, t, y: y - expFn(v, t), pred2, 
             #args=(tVals2, end['primary'] - baseMean),
@@ -629,10 +654,19 @@ class PatchThread(QtCore.QThread):
             iRes = vStep / iStep
             
             ## From Santos-Sacchi 1993
+            
+            ## 1. compute charge transfered during the charging phase 
             pTimes = pulse.xvals('Time')
             iCapEnd = pTimes[-1]
             iCap = iPulse['Time':pTimes[0]:iCapEnd] - iPulseEnd.mean()
+            #self.iCap1 = iCap
+            ## Instead, we will use the fit to guess how much charge transfer there would have been 
+            ## if the charging curve had gone all the way back to the beginning of the pulse
+            iCap = expFn((fit1[1],fit1[1],fit1[2]), np.linspace(0, iCapEnd-pTimes[0], iCap.shape[0]))
+            #self.iCap2 = iCap
             Q = sum(iCap) * (iCapEnd - pTimes[0]) / iCap.shape[0]
+            
+            
             Rin = iRes
             Vc = vStep
             Rs_denom = (Q * Rin + fitTau * Vc)

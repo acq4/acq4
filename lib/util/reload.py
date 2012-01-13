@@ -23,14 +23,14 @@ Does NOT:
 
 
 import inspect, os, sys, __builtin__, gc, traceback
+from debug import printExc
 
 def reloadAll(prefix=None, debug=False):
     """Automatically reload everything whose __file__ begins with prefix.
     - Skips reload if the file has not been updated (if .pyc is newer than .py)
     - if prefix is None, checks all loaded modules
     """
-    
-    for mod in sys.modules.values():
+    for modName, mod in sys.modules.iteritems():
         if not inspect.ismodule(mod):
             continue
         
@@ -51,9 +51,7 @@ def reloadAll(prefix=None, debug=False):
         try:
             reload(mod, debug=debug)
         except:
-            print traceback.format_exc().strip()
-            print "Error while reloading module %s, skipping\n" % mod
-
+            printExc("Error while reloading module %s, skipping\n" % mod)
 
 
 def reload(module, debug=False, lists=False, dicts=False):

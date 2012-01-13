@@ -144,3 +144,6 @@ class Point(QtCore.QPointF):
         
     def copy(self):
         return Point(self)
+        
+    def toQPoint(self):
+        return QtCore.QPoint(*self)

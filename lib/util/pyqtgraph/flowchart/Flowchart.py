@@ -75,6 +75,7 @@ class Flowchart(Node):
         
         self.inputWasSet = False  ## flag allows detection of changes in the absence of input change.
         self._nodes = {}
+        self.nextZVal = 10
         #self.connects = []
         #self._chartGraphicsItem = FlowchartGraphicsItem(self)
         self._widget = None
@@ -87,7 +88,7 @@ class Flowchart(Node):
         self.outputNode = Node('Output', allowRemove=False)
         self.addNode(self.inputNode, 'Input', [-150, 0])
         self.addNode(self.outputNode, 'Output', [300, 0])
-            
+        
         self.outputNode.sigOutputChanged.connect(self.outputChanged)
         self.outputNode.sigTerminalRenamed.connect(self.internalTerminalRenamed)
         self.inputNode.sigTerminalRenamed.connect(self.internalTerminalRenamed)
@@ -166,6 +167,8 @@ class Flowchart(Node):
         if type(pos) in [QtCore.QPoint, QtCore.QPointF]:
             pos = [pos.x(), pos.y()]
         item = node.graphicsItem()
+        item.setZValue(self.nextZVal)
+        self.nextZVal += 1
         #item.setParentItem(self.chartGraphicsItem())
         self.viewBox.addItem(item)
         #item.setPos(pos2.x(), pos2.y())

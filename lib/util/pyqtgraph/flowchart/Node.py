@@ -403,6 +403,7 @@ class NodeGraphicsItem(GraphicsObject):
         for i, t in inp.iteritems():
             item = t.graphicsItem()
             item.setParentItem(self)
+            item.setZValue(self.zValue())
             br = self.bounds
             item.setAnchor(0, y)
             self.terminals[i] = (t, item)
@@ -414,6 +415,7 @@ class NodeGraphicsItem(GraphicsObject):
         for i, t in out.iteritems():
             item = t.graphicsItem()
             item.setParentItem(self)
+            item.setZValue(self.zValue())
             br = self.bounds
             item.setAnchor(bounds.width(), y)
             self.terminals[i] = (t, item)
@@ -488,7 +490,7 @@ class NodeGraphicsItem(GraphicsObject):
     def keyPressEvent(self, ev):
         if ev.key() == QtCore.Qt.Key_Delete:
             ev.accept()
-            if not self._allowRemove:
+            if not self.node._allowRemove:
                 return
             self.node.close()
         else:
