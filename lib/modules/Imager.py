@@ -67,9 +67,12 @@ class Imager(Module):
         self.snap_button = QtGui.QPushButton('Snap')
         self.run_button = QtGui.QPushButton('Run')
         self.stop_button = QtGui.QPushButton('Stop')
+        self.video_button = QtGui.QPushButton('Video')
+        self.video_button.setCheckable(True)
         self.l2.addWidget(self.snap_button)
         self.l2.addWidget(self.run_button)
         self.l2.addWidget(self.stop_button)
+        self.l2.addWidget(self.video_button)
         self.win.resize(800, 480)
         self.param = PT.Parameter(name = 'param', children=[
             dict(name='Sample Rate', type='float', value=100000., suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10000., 1000000.], siPrefix=True),
@@ -101,7 +104,6 @@ class Imager(Module):
                 dict(name="Duration", type="float", value=0, readonly=True, suffix='s', siPrefix = True),
                 dict(name="Current Frame", type='int', value = 0, readonly=True),
             ]),
-            
         ])
         self.stopFlag = False
         self.tree.setParameters(self.param)
@@ -110,6 +112,7 @@ class Imager(Module):
         self.run_button.clicked.connect(self.PMT_Run)
         self.snap_button.clicked.connect(self.PMT_Snap)
         self.stop_button.clicked.connect(self.PMT_Stop)
+        self.video_button.clicked.connect(self.toggleVideo)
         self.Manager = manager
         
     def PMT_Run(self):
@@ -291,7 +294,7 @@ class Imager(Module):
                 #elif scandir == 1:
                     #imgData[y*width:(y+1)*width] = NP.flipud(imgData[y*width:(y+1)*width])
                     #scandir = 0            
-            imgData = self.decomb(imgData, maxShift=200e-6*sampleRate)  ## correct for mirror lag up to 200us
+            imgData = self.decomb(imgData, minShift=50e-6*sampleRate, maxShift=200e-6*sampleRate)  ## correct for mirror lag up to 200us
         
         if overscanPixels > 0:
             imgData = imgData[overscanPixels:-overscanPixels]  ## remove overscan
@@ -322,7 +325,7 @@ class Imager(Module):
             self.param['YSweep'] = self.param['XSweep']
             self.param['Image Height'] = self.param['Image Width']
             
-    def decomb(self, img, maxShift):
+    def decomb(self, img, minShift, maxShift):
         ## split image into fields
         nr = 2 * (img.shape[1] // 2)
         f1 = img[:,0:nr:2]
@@ -332,7 +335,7 @@ class Imager(Module):
         bestShift = None
         bestError = None
         #errs = []
-        for shift in range(int(maxShift)):
+        for shift in range(int(minShift), int(maxShift)):
             f2s = f2[:-shift] if shift > 0 else f2
             err1 = NP.abs((f1[shift:, 1:]-f2s[:, 1:])**2).sum()
             err2 = NP.abs((f1[shift:, 1:]-f2s[:, :-1])**2).sum()
@@ -355,4 +358,18 @@ class Imager(Module):
             decombed[:, ::2] = img[:, ::2]
         decombed[rightShift:, 1::2] = img[:-rightShift, 1::2]
         return decombed
+        
+        
+    def toggleVideo(self, b):
+        if b:
+            self.startVideo()
+            
+    def startVideo(self):
+        while True:
+            img = self.takeImage()
+            self.view.setImage(img, autoLevels=False)
+            QtGui.QApplication.processEvents()
+            if not self.video_button.isChecked():
+                return
+        
         
