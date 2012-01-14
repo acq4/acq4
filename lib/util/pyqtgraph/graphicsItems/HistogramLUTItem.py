@@ -107,7 +107,9 @@ class HistogramLUTItem(GraphicsWidget):
         self.update()
     
     def gradientChanged(self):
-        self.imageItem.setLookupTable(self.getLookupTable)  ## send function pointer, not the result
+        if self.imageItem is not None:
+            self.imageItem.setLookupTable(self.getLookupTable)  ## send function pointer, not the result
+            
         self.lut = None
         #if self.imageItem is not None:
             #self.imageItem.setLookupTable(self.gradient.getLookupTable(512))
