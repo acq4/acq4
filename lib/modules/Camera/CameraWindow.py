@@ -378,7 +378,11 @@ class CameraWindow(QtGui.QMainWindow):
                 return
             bl, wl = self.getLevels()
             mn, mx = self.lastMinMax
-            self.autoGainLevels = [(bl-mn) / float(mx-mn), (wl-mn) / float(mx-mn)]
+            rng = float(mx-mn)
+            if rng == 0:
+                return
+            newLevels = [(bl-mn) / rng, (wl-mn) / rng]
+            self.autoGainLevels = newLevels
         #self.requestFrameUpdate()
 
     #@trace
