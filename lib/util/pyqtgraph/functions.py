@@ -426,10 +426,12 @@ def makeARGB(data, lut=None, levels=None):
     else:
         lutLength = 256
 
-
+    ## weave requires contiguous arrays
+    global USE_WEAVE
+    if (levels is not None or lut is not None) and USE_WEAVE:
+        data = np.ascontiguousarray(data)
 
     ## Apply levels if given
-    global USE_WEAVE
     if levels is not None:
         
         try:  ## use weave to speed up scaling
@@ -468,7 +470,7 @@ def makeARGB(data, lut=None, levels=None):
                 levels = levels[np.newaxis, np.newaxis, ...]
                 if data.ndim == 2:
                     data = data[..., np.newaxis]
-            data = ((data.astype(int)-levels[...,0]) * lutLength) / (levels[...,1]-levels[...,0])
+            data = ((data-levels[...,0]) * lutLength) / (levels[...,1]-levels[...,0])
         
     prof.mark('2')
 
@@ -515,7 +517,6 @@ def makeARGB(data, lut=None, levels=None):
                 debug.printExc("Error; disabling weave.")
                 USE_WEAVE = False
             data = lut[data]
-            raise
     else:
         if data.dtype is not np.ubyte:
             data = np.clip(data, 0, 255).astype(np.ubyte)

@@ -26,6 +26,9 @@ class HistogramLUTItem(GraphicsWidget):
     
     def __init__(self, image=None):
         GraphicsWidget.__init__(self)
+        self.lut = None
+        self.imageItem = None
+        
         self.layout = QtGui.QGraphicsGridLayout()
         self.setLayout(self.layout)
         self.layout.setContentsMargins(1,1,1,1)
@@ -57,9 +60,6 @@ class HistogramLUTItem(GraphicsWidget):
         self.vb.addItem(self.plot)
         self.autoHistogramRange()
         
-        self.lut = None
-        
-        self.imageItem = None
         if image is not None:
             self.setImageItem(image)
         #self.setSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding)
@@ -89,11 +89,20 @@ class HistogramLUTItem(GraphicsWidget):
         self.range = [mn,mx]
         self.updateRange()
         self.vb.setMouseEnabled(False, False)
+        self.region.setBounds([mn,mx])
         
     def autoHistogramRange(self):
         self.range = None
         self.updateRange()
         self.vb.setMouseEnabled(False, False)
+            
+    def updateRange(self):
+        self.vb.autoRange()
+        if self.range is not None:
+            self.vb.setYRange(*self.range)
+        vr = self.vb.viewRect()
+        
+        self.region.setBounds([vr.top(), vr.bottom()])
 
     def setImageItem(self, img):
         self.imageItem = img
@@ -149,11 +158,6 @@ class HistogramLUTItem(GraphicsWidget):
             self.updateRange()
         if autoRange:
             self.updateRange()
-            
-    def updateRange(self):
-        self.vb.autoRange()
-        if self.range is not None:
-            self.vb.setYRange(*self.range)
             
     def getLevels(self):
         return self.region.getRegion()
