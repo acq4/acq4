@@ -331,6 +331,9 @@ class GraphicsView(QtGui.QGraphicsView):
             #ev1.setButtonDownScreenPos(fev.screenPos())
         #return ev1
         
+    def leaveEvent(self, ev):
+        self.scene().leaveEvent(ev)  ## inform scene when mouse leaves
+        
     def mousePressEvent(self, ev):
         QtGui.QGraphicsView.mousePressEvent(self, ev)
 
