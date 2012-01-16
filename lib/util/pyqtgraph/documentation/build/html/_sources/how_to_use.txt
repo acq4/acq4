@@ -8,6 +8,7 @@ There are a few suggested ways to use pyqtgraph:
 * Embedding widgets in a PyQt application
 
 
+
 Command-line use
 ----------------
 

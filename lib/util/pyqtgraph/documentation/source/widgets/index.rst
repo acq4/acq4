@@ -1,22 +1,30 @@
 Pyqtgraph's Widgets
 ===================
 
-Pyqtgraph provides several QWidget subclasses which are useful for building sophisticated user interfaces. These widgets can generally be used in any Qt application and provide functionality that is frequently useful in science and engineering applications.
+Pyqtgraph provides several QWidget subclasses which are useful for building user interfaces. These widgets can generally be used in any Qt application and provide functionality that is frequently useful in science and engineering applications.
 
 Contents:
 
 .. toctree::
     :maxdepth: 2
 
+    datatreewidget
+    checktable
+    tablewidget
+    gradientwidget
+    colorbutton
+    graphicslayoutwidget
     dockarea
     parametertree
-    SpinBox
-    ImageView
-    PlotWidget
-    GradientWidget
-    flowchart
-    canvas
-    colorbutton
-    checktable
-    datatreewidget
-    tablewidget
+    histogramlutwidget
+    progressdialog
+    spinbox
+    filedialog
+    graphicsview
+    joystickbutton
+    multiplotwidget
+    treewidget
+    verticallabel
+    rawimagewidget
+    plotwidget
+

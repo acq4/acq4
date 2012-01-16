@@ -63,6 +63,11 @@ images = []
 QAPP = None
 
 def plot(*args, **kargs):
+    """
+    | Create and return a PlotWindow (this is just a window with PlotWidget inside), plot data in it.
+    | Accepts a *title* argument to set the title of the window.
+    | All other arguments are used to plot data. (see :func:`PlotItem.plot() <pyqtgraph.PlotItem.plot>`)
+    """
     mkQApp()
     if 'title' in kargs:
         w = PlotWindow(title=kargs['title'])
@@ -76,6 +81,12 @@ def plot(*args, **kargs):
     return w
     
 def image(*args, **kargs):
+    """
+    | Create and return an ImageWindow (this is just a window with ImageView widget inside), show image data inside.
+    | Will show 2D or 3D image data.
+    | Accepts a *title* argument to set the title of the window.
+    | All other arguments are used to show data. (see :func:`ImageView.setImage() <pyqtgraph.ImageView.setImage>`)
+    """
     mkQApp()
     w = ImageWindow(*args, **kargs)
     images.append(w)

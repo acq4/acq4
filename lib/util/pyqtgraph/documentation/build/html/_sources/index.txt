@@ -19,23 +19,8 @@ Contents:
     region_of_interest
     graphicswindow
     parametertree
-    graphicsItems/index
-        viewbox
-        plotcurveitem
-        scatterplotitem
-        plotitem
-        imageitem
-        linearregion
-        infiniteline
-        arrow
-        curvepoint
-        grid
-        gradientlegend
-    widgets/index
-        dockarea
-        spinbox
-        gradientwidget
-        flowchart
+    internals
+    apireference
     
 
 Indices and tables

@@ -104,9 +104,9 @@ class PlotItem(GraphicsWidget):
         self.alpha = 1.0
         self.autoAlpha = True
         self.spectrumMode = False
-         
+        
         self.autoScale = [True, True]
-         
+        
         ## Create and place scale items
         self.scales = {
             'top':    {'item': AxisItem(orientation='top',    linkView=self.vb), 'pos': (1, 1)}, 
@@ -116,12 +116,12 @@ class PlotItem(GraphicsWidget):
         }
         for k in self.scales:
             self.layout.addItem(self.scales[k]['item'], *self.scales[k]['pos'])
-            
+        
         self.titleLabel = LabelItem('', size='11pt')
         self.layout.addItem(self.titleLabel, 0, 1)
         self.setTitle(None)  ## hide
-
-
+        
+        
         for i in range(4):
             self.layout.setRowPreferredHeight(i, 0)
             self.layout.setRowMinimumHeight(i, 0)

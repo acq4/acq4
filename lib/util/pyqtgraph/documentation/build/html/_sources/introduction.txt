@@ -28,6 +28,19 @@ Amongst the core features of pyqtgraph are:
 * ParameterTree widget for rapid prototyping of dynamic interfaces (Similar to the property trees in Qt Designer and many other applications)
 
 
+.. _examples:
+
+Examples
+--------
+
+Pyqtgraph includes an extensive set of examples that can be accessed by running::
+    
+    import pyqtgraph.examples
+    pyqtgraph.examples.run()
+
+This will start a launcher with a list of available examples. Select an item from the list to view its source code and double-click an item to run the example.
+
+
 How does it compare to...
 -------------------------
 

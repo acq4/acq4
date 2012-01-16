@@ -5,7 +5,7 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-colorAbbrev = {
+Colors = {
     'b': (0,0,255,255),
     'g': (0,255,0,255),
     'r': (255,0,0,255),
@@ -14,7 +14,7 @@ colorAbbrev = {
     'y': (255,255,0,255),
     'k': (0,0,0,255),
     'w': (255,255,255,255),
-}
+}  
 
 SI_PREFIXES = u'yzafpnµm kMGTPEZY'
 SI_PREFIXES_ASCII = 'yzafpnum kMGTPEZY'
@@ -32,9 +32,11 @@ import debug
 def siScale(x, minVal=1e-25, allowUnicode=True):
     """
     Return the recommended scale factor and SI prefix string for x.
-    Example:
-        siScale(0.0001)   =>   (1e6, 'μ')
-        This indicates that the number 0.0001 is best represented as 0.0001 * 1e6 = 100 μUnits
+    
+    Example::
+    
+        siScale(0.0001)   # returns (1e6, 'μ')
+        # This indicates that the number 0.0001 is best represented as 0.0001 * 1e6 = 100 μUnits
     """
     
     if isinstance(x, decimal.Decimal):
@@ -68,8 +70,10 @@ def siScale(x, minVal=1e-25, allowUnicode=True):
 def siFormat(x, precision=3, suffix='', space=True, error=None, minVal=1e-25, allowUnicode=True):
     """
     Return the number x formatted in engineering notation with SI prefix.
-    Example:
-        siFormat(0.0001, suffix='V')  =>  "100 μV"
+    
+    Example::
+    
+        siFormat(0.0001, suffix='V')  # returns "100 μV"
     """
     
     if space is True:
@@ -93,8 +97,10 @@ def siFormat(x, precision=3, suffix='', space=True, error=None, minVal=1e-25, al
 def siEval(s):
     """
     Convert a value written in SI notation to its equivalent prefixless value
-    Example:
-        siEval("100 μV")  =>  0.0001
+    
+    Example::
+    
+        siEval("100 μV")  # returns 0.0001
     """
     
     s = unicode(s)
@@ -114,81 +120,23 @@ def siEval(s):
     return v * 1000**n
     
 
-
-
-def mkBrush(*args):
-    if len(args) == 1:
-        arg = args[0]
-        if arg is None:
-            return QtGui.QBrush(QtCore.Qt.NoBrush)
-        elif isinstance(arg, QtGui.QBrush):
-            return QtGui.QBrush(arg)
-        else:
-            color = arg
-    if len(args) > 1:
-        color = args
-    return QtGui.QBrush(mkColor(color))
-
-def mkPen(*args, **kargs):
-    """Convenience function for making pens. Examples:
-    mkPen(color)
-    mkPen(color, width=2)
-    mkPen(cosmetic=False, width=4.5, color='r')
-    mkPen({'color': "FF0", width: 2})
-    mkPen(None)   (no pen)
-    """
-    
-    color = kargs.get('color', None)
-    width = kargs.get('width', 1)
-    style = kargs.get('style', None)
-    cosmetic = kargs.get('cosmetic', True)
-    hsv = kargs.get('hsv', None)
-    
-    if len(args) == 1:
-        arg = args[0]
-        if isinstance(arg, dict):
-            return mkPen(**arg)
-        if isinstance(arg, QtGui.QPen):
-            return arg
-        elif arg is None:
-            style = QtCore.Qt.NoPen
-        else:
-            color = arg
-    if len(args) > 1:
-        color = args
-        
-    if color is None:
-        color = mkColor(200, 200, 200)
-    if hsv is not None:
-        color = hsvColor(*hsv)
-    else:
-        color = mkColor(color)
-        
-    pen = QtGui.QPen(QtGui.QBrush(color), width)
-    pen.setCosmetic(cosmetic)
-    if style is not None:
-        pen.setStyle(style)
-    return pen
-
-def hsvColor(h, s=1.0, v=1.0, a=1.0):
-    c = QtGui.QColor()
-    c.setHsvF(h, s, v, a)
-    return c
-
 def mkColor(*args):
-    """make a QColor from a variety of argument types
-    accepted types are:
-    r, g, b, [a]
-    (r, g, b, [a])
-    float (greyscale, 0.0-1.0)
-    int  (uses intColor)
-    (int, hues)  (uses intColor)
-    QColor
-    "c"    (see colorAbbrev dictionary)
-    "RGB"  (strings may optionally begin with "#")
-    "RGBA"
-    "RRGGBB"
-    "RRGGBBAA"
+    """
+    Convenience function for constructing QColor from a variety of argument types. Accepted arguments are:
+    
+    ================ ================================================
+     'c'             one of: r, g, b, c, m, y, k, w                      
+     R, G, B, [A]    integers 0-255
+     (R, G, B, [A])  tuple of integers 0-255
+     float           greyscale, 0.0-1.0
+     int             see :func:`intColor() <pyqtgraph.intColor>`
+     (int, hues)     see :func:`intColor() <pyqtgraph.intColor>`
+     "RGB"           hexadecimal strings; may begin with '#'
+     "RGBA"          
+     "RRGGBB"       
+     "RRGGBBAA"     
+     QColor          QColor instance; makes a copy.
+    ================ ================================================
     """
     err = 'Not sure how to make a color from "%s"' % str(args)
     if len(args) == 1:
@@ -249,8 +197,81 @@ def mkColor(*args):
     args = map(lambda a: 0 if np.isnan(a) or np.isinf(a) else a, args)
     args = map(int, args)
     return QtGui.QColor(*args)
+
+
+def mkBrush(*args):
+    """
+    | Convenience function for constructing Brush.
+    | This function always constructs a solid brush and accepts the same arguments as :func:`mkColor() <pyqtgraph.mkColor>`
+    | Calling mkBrush(None) returns an invisible brush.
+    """
+    if len(args) == 1:
+        arg = args[0]
+        if arg is None:
+            return QtGui.QBrush(QtCore.Qt.NoBrush)
+        elif isinstance(arg, QtGui.QBrush):
+            return QtGui.QBrush(arg)
+        else:
+            color = arg
+    if len(args) > 1:
+        color = args
+    return QtGui.QBrush(mkColor(color))
+
+def mkPen(*args, **kargs):
+    """
+    Convenience function for constructing QPen. 
+    
+    Examples::
+    
+        mkPen(color)
+        mkPen(color, width=2)
+        mkPen(cosmetic=False, width=4.5, color='r')
+        mkPen({'color': "FF0", width: 2})
+        mkPen(None)   # (no pen)
+    
+    In these examples, *color* may be replaced with any arguments accepted by :func:`mkColor() <pyqtgraph.mkColor>`    """
+    
+    color = kargs.get('color', None)
+    width = kargs.get('width', 1)
+    style = kargs.get('style', None)
+    cosmetic = kargs.get('cosmetic', True)
+    hsv = kargs.get('hsv', None)
+    
+    if len(args) == 1:
+        arg = args[0]
+        if isinstance(arg, dict):
+            return mkPen(**arg)
+        if isinstance(arg, QtGui.QPen):
+            return arg
+        elif arg is None:
+            style = QtCore.Qt.NoPen
+        else:
+            color = arg
+    if len(args) > 1:
+        color = args
+        
+    if color is None:
+        color = mkColor(200, 200, 200)
+    if hsv is not None:
+        color = hsvColor(*hsv)
+    else:
+        color = mkColor(color)
+        
+    pen = QtGui.QPen(QtGui.QBrush(color), width)
+    pen.setCosmetic(cosmetic)
+    if style is not None:
+        pen.setStyle(style)
+    return pen
+
+def hsvColor(h, s=1.0, v=1.0, a=1.0):
+    """Generate a QColor from HSVa values."""
+    c = QtGui.QColor()
+    c.setHsvF(h, s, v, a)
+    return c
+
     
 def colorTuple(c):
+    """Return a tuple (R,G,B,A) from a QColor"""
     return (c.red(), c.green(), c.blue(), c.alpha())
 
 def colorStr(c):
@@ -258,12 +279,13 @@ def colorStr(c):
     return ('%02x'*4) % colorTuple(c)
 
 def intColor(index, hues=9, values=1, maxValue=255, minValue=150, maxHue=360, minHue=0, sat=255, alpha=255, **kargs):
-    """Creates a QColor from a single index. Useful for stepping through a predefined list of colors.
-     - The argument "index" determines which color from the set will be returned
-     - All other arguments determine what the set of predefined colors will be
+    """
+    Creates a QColor from a single index. Useful for stepping through a predefined list of colors.
+    
+    The argument *index* determines which color from the set will be returned. All other arguments determine what the set of predefined colors will be
      
-    Colors are chosen by cycling across hues while varying the value (brightness). By default, there
-    are 9 hues and 3 values for a total of 27 different colors. """
+    Colors are chosen by cycling across hues while varying the value (brightness). 
+    By default, this selects from a list of 9 hues."""
     hues = int(hues)
     values = int(values)
     ind = int(index) % (hues * values)
@@ -282,27 +304,41 @@ def intColor(index, hues=9, values=1, maxValue=255, minValue=150, maxHue=360, mi
 
 
 def affineSlice(data, shape, origin, vectors, axes, **kargs):
-    """Take an arbitrary slice through an array.
-    Parameters:
-        data: the original dataset
-        shape: the shape of the slice to take (Note the return value may have more dimensions than len(shape))
-        origin: the location in the original dataset that will become the origin in the sliced data.
-        vectors: list of unit vectors which point in the direction of the slice axes
-                 each vector must be the same length as axes
-                 If the vectors are not unit length, the result will be scaled.
-                 If the vectors are not orthogonal, the result will be sheared.
-        axes: the axes in the original dataset which correspond to the slice vectors
+    """
+    Take a slice of any orientation through an array. This is useful for extracting sections of multi-dimensional arrays such as MRI images for viewing as 1D or 2D data.
+    
+    The slicing axes are aribtrary; they do not need to be orthogonal to the original data or even to each other. It is possible to use this function to extract arbitrary linear, rectangular, or parallelepiped shapes from within larger datasets.
+    
+    For a graphical interface to this function, see :func:`ROI.getArrayRegion`
+    
+    Arguments:
+    
+        | *data* (ndarray): the original dataset
+        | *shape*: the shape of the slice to take (Note the return value may have more dimensions than len(shape))
+        | *origin*: the location in the original dataset that will become the origin in the sliced data.
+        | *vectors*: list of unit vectors which point in the direction of the slice axes
         
-        Example: start with a 4D data set, take a diagonal-planar slice out of the last 3 axes
-            - data = array with dims (time, x, y, z) = (100, 40, 40, 40)
-            - The plane to pull out is perpendicular to the vector (x,y,z) = (1,1,1) 
-            - The origin of the slice will be at (x,y,z) = (40, 0, 0)
-            - The we will slice a 20x20 plane from each timepoint, giving a final shape (100, 20, 20)
-            affineSlice(data, shape=(20,20), origin=(40,0,0), vectors=((-1, 1, 0), (-1, 0, 1)), axes=(1,2,3))
+        * each vector must have the same length as *axes*
+        * If the vectors are not unit length, the result will be scaled.
+        * If the vectors are not orthogonal, the result will be sheared.
             
-            Note the following: 
-                len(shape) == len(vectors) 
-                len(origin) == len(axes) == len(vectors[0])
+        *axes*: the axes in the original dataset which correspond to the slice *vectors*
+        
+    Example: start with a 4D fMRI data set, take a diagonal-planar slice out of the last 3 axes
+        
+        * data = array with dims (time, x, y, z) = (100, 40, 40, 40)
+        * The plane to pull out is perpendicular to the vector (x,y,z) = (1,1,1) 
+        * The origin of the slice will be at (x,y,z) = (40, 0, 0)
+        * We will slice a 20x20 plane from each timepoint, giving a final shape (100, 20, 20)
+        
+    The call for this example would look like::
+        
+        affineSlice(data, shape=(20,20), origin=(40,0,0), vectors=((-1, 1, 0), (-1, 0, 1)), axes=(1,2,3))
+    
+    Note the following must be true: 
+        
+        | len(shape) == len(vectors) 
+        | len(origin) == len(axes) == len(vectors[0])
     """
     
     # sanity check
