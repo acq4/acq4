@@ -69,39 +69,42 @@ class Scan(QtCore.QObject):
         else:
             allEvents, allStats = self.host.loadSpotFromDB(sourceDir)
             
-        if allEvents is None:
+        if allEvents is None and allStats is None:
             return 
         
-        for st in allStats:
-            self.stats[st['ProtocolDir']] = st
-            
-        for ev in allEvents:
-            fh = ev['SourceFile'] ## sourceFile has already been converted to file handle.
-            if fh not in self.events:
-                self.events[fh] = []
-            self.events[fh].append(ev.reshape(1))
-        for k in self.events:
-            self.events[k] = {'events': np.concatenate(self.events[k])}
-            
-        for spot in self.spots():
-            dh = spot.data
-            #fh = self.host.getClampFile(dh)
-            fh = self.dataModel.getClampFile(dh)
-            #events, stats = self.host.loadSpotFromDB(dh)
-            
-            #events = allEvents[allEvents['SourceFile']==fh.name(relativeTo=self.source())]
-            #stats = allStats[allEvents['SourceFile']==dh.name(relativeTo=self.source())]
-            if dh not in self.stats:
-            #if len(stats) == 0:
-                print "  No data for spot", dh
-                haveAll = False
-                continue
-            else:
-                self.statExample = self.stats[dh]
+     
+        if allEvents is not None:
+            for ev in allEvents:
+                fh = ev['SourceFile'] ## sourceFile has already been converted to file handle.
+                if fh not in self.events:
+                    self.events[fh] = []
+                self.events[fh].append(ev.reshape(1))
+            for k in self.events:
+                self.events[k] = {'events': np.concatenate(self.events[k])}
+        
+        if allStats is not None:   
+            for st in allStats:
+                self.stats[st['ProtocolDir']] = st
+                
+            for spot in self.spots():
+                dh = spot.data
+                #fh = self.host.getClampFile(dh)
+                fh = self.dataModel.getClampFile(dh)
+                #events, stats = self.host.loadSpotFromDB(dh)
+                
+                #events = allEvents[allEvents['SourceFile']==fh.name(relativeTo=self.source())]
+                #stats = allStats[allEvents['SourceFile']==dh.name(relativeTo=self.source())]
+                if dh not in self.stats:
+                #if len(stats) == 0:
+                    print "  No data for spot", dh
+                    haveAll = False
+                    continue
+                else:
+                    self.statExample = self.stats[dh]
             #self.stats[dh] = stats[0]
-        if haveAll:
-            print "  have data for all spots; locking."
-            self.lock()
+            if haveAll:
+                print "  have data for all spots; locking."
+                self.lock()
 
     def getStatsKeys(self):
         if self.statExample is None:

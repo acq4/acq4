@@ -66,7 +66,7 @@
         </widget>
        </item>
        <item row="1" column="3">
-        <widget class="GradientWidget" name="gradientWidget" native="true">
+        <widget class="HistogramLUTWidget" name="gradientWidget" native="true">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
            <horstretch>0</horstretch>
@@ -260,12 +260,6 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>GradientWidget</class>
-   <extends>QWidget</extends>
-   <header>pyqtgraph.widgets.GradientWidget</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
    <class>GraphicsView</class>
    <extends>QWidget</extends>
    <header>pyqtgraph.widgets.GraphicsView</header>
@@ -275,6 +269,12 @@
    <class>PlotWidget</class>
    <extends>QWidget</extends>
    <header>pyqtgraph.widgets.PlotWidget</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>HistogramLUTWidget</class>
+   <extends>QWidget</extends>
+   <header>pyqtgraph.widgets.HistogramLUTWidget</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

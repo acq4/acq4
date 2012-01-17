@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1166</width>
-    <height>674</height>
+    <width>1051</width>
+    <height>877</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -22,7 +22,7 @@
      <number>0</number>
     </property>
     <item>
-     <widget class="GraphicsView" name="graphicsView"/>
+     <widget class="GraphicsView" name="graphicsView" native="true"/>
     </item>
    </layout>
   </widget>
@@ -256,21 +256,7 @@ the data manager window.</string>
      <item>
       <layout class="QHBoxLayout">
        <item>
-        <widget class="GraphicsView" name="histogram">
-         <property name="frameShape">
-          <enum>QFrame::NoFrame</enum>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="GradientWidget" name="gradientWidget" native="true">
-         <property name="minimumSize">
-          <size>
-           <width>20</width>
-           <height>0</height>
-          </size>
-         </property>
-        </widget>
+        <widget class="HistogramLUTWidget" name="histogram"/>
        </item>
       </layout>
      </item>
@@ -709,9 +695,15 @@ Either a set of static background frames need to have already by collected
  <layoutdefault spacing="2" margin="0"/>
  <customwidgets>
   <customwidget>
+   <class>GraphicsView</class>
+   <extends>QWidget</extends>
+   <header>pyqtgraph.widgets.GraphicsView</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
    <class>PlotWidget</class>
    <extends>QWidget</extends>
-   <header>pyqtgraph</header>
+   <header>pyqtgraph.widgets.PlotWidget</header>
    <container>1</container>
   </customwidget>
   <customwidget>
@@ -720,20 +712,14 @@ Either a set of static background frames need to have already by collected
    <header>pyqtgraph</header>
   </customwidget>
   <customwidget>
-   <class>GraphicsView</class>
-   <extends>QGraphicsView</extends>
-   <header>pyqtgraph</header>
-  </customwidget>
-  <customwidget>
-   <class>GradientWidget</class>
-   <extends>QWidget</extends>
-   <header>pyqtgraph</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
    <class>FeedbackButton</class>
    <extends>QPushButton</extends>
    <header>FeedbackButton</header>
+  </customwidget>
+  <customwidget>
+   <class>HistogramLUTWidget</class>
+   <extends>QGraphicsView</extends>
+   <header>pyqtgraph</header>
   </customwidget>
  </customwidgets>
  <resources/>

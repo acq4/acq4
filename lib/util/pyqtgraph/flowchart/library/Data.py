@@ -186,10 +186,12 @@ class EvalNode(Node):
     nodeName = 'PythonEval'
     
     def __init__(self, name):
-        Node.__init__(self, name, terminals = {
-            'input': {'io': 'in', 'renamable': True},
-            'output': {'io': 'out', 'renamable': True},
-        })
+        Node.__init__(self, name, 
+            terminals = {
+                'input': {'io': 'in', 'renamable': True},
+                'output': {'io': 'out', 'renamable': True},
+            },
+            allowAddInput=True, allowAddOutput=True)
         
         self.ui = QtGui.QWidget()
         self.layout = QtGui.QGridLayout()

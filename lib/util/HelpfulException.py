@@ -1,4 +1,5 @@
 ## test to see if new branch is working
+import sys
 
 class HelpfulException(Exception):
     """Allows for stacked exceptions.
@@ -11,10 +12,13 @@ class HelpfulException(Exception):
            -- add additional information to the original exception
            -- use self.prependErr("Additional message, ex: Protocol initiation failed. ", exc, reasons="a. A device could not be found.", docs='')
            """
-    def __init__(self, message='', exc=(None, None, None), reasons=None, docs=None, **kwargs):
+    def __init__(self, message='', exc=None, reasons=None, docs=None, **kwargs):
         Exception.__init__(self, message)
         self.kwargs = kwargs
+        if exc is None:
+            exc = sys.exc_info()
         self.oldExc = exc
+        
         #self.messages = [message]
         if reasons is None:
             self.reasons = []

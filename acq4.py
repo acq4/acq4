@@ -14,10 +14,10 @@ from lib.util.pycRename import pycRename
 modDir = os.path.abspath(os.path.split(__file__)[0])
 pycRename(modDir)
 
-
 import sip
 sip.setapi('QString', 2)
 sip.setapi('QVariant', 2)
+    
 
 ## PyQt bug: make sure qt.conf was installed correctly
 #pyDir = os.path.split(sys.executable)[0]

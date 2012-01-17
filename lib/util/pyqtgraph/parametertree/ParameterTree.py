@@ -10,6 +10,8 @@ class ParameterTree(TreeWidget):
     
     def __init__(self, parent=None):
         TreeWidget.__init__(self, parent)
+        self.setVerticalScrollMode(self.ScrollPerPixel)
+        self.setHorizontalScrollMode(self.ScrollPerPixel)
         self.setAnimated(False)
         self.setColumnCount(2)
         self.setHeaderLabels(["Parameter", "Value"])
@@ -27,8 +29,9 @@ class ParameterTree(TreeWidget):
             root = self.invisibleRootItem()
             ## Hide top-level item
             if not showTop:
-                item.setSizeHint(0, QtCore.QSize(0,0))
-                item.setSizeHint(1, QtCore.QSize(0,0))
+                item.setText(0, '')
+                item.setSizeHint(0, QtCore.QSize(1,1))
+                item.setSizeHint(1, QtCore.QSize(1,1))
                 depth -= 1
         root.addChild(item)
         item.treeWidgetChanged()

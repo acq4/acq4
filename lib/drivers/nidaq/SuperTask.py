@@ -128,7 +128,13 @@ class SuperTask:
                 if 'data' not in self.channelInfo[c]:
                     raise Exception("No data specified for DAQ channel %s" % c)
                 waves.append(atleast_2d(self.channelInfo[c]['data']))
-            self.taskInfo[key]['cache'] = concatenate(waves)
+            try:
+                self.taskInfo[key]['cache'] = concatenate(waves)
+            except:
+                print "Input shapes for %s:" % ','.join(self.channelInfo.keys())
+                for w in waves:
+                    print w.shape
+                raise
         return self.taskInfo[key]['cache']
         
     def writeTaskData(self):

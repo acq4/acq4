@@ -2,6 +2,7 @@
 from pyqtgraph.Qt import QtCore, QtGui
 #from PySide import QtCore, QtGui
 from pyqtgraph.graphicsItems.GraphicsObject import GraphicsObject
+import pyqtgraph.functions as fn
 from Terminal import *
 from collections import OrderedDict
 from debug import *
@@ -22,7 +23,7 @@ class Node(QtCore.QObject):
     sigTerminalRenamed = QtCore.Signal(object, object)
 
     
-    def __init__(self, name, terminals=None):
+    def __init__(self, name, terminals=None, allowAddInput=False, allowAddOutput=False, allowRemove=True):
         QtCore.QObject.__init__(self)
         self._name = name
         self._bypass = False
@@ -31,6 +32,10 @@ class Node(QtCore.QObject):
         self.terminals = OrderedDict()
         self._inputs = {}
         self._outputs = {}
+        self._allowAddInput = allowAddInput   ## flags to allow the user to add/remove terminals
+        self._allowAddOutput = allowAddOutput
+        self._allowRemove = allowRemove
+        
         self.exception = None
         if terminals is None:
             return
@@ -333,21 +338,25 @@ class NodeGraphicsItem(GraphicsObject):
         #self.shadow.setBlurRadius(10)
         #self.setGraphicsEffect(self.shadow)
         
-        self.pen = QtGui.QPen(QtGui.QColor(0,0,0))
-        self.brush = QtGui.QBrush(QtGui.QColor(200, 200, 200, 200))
+        self.pen = fn.mkPen(0,0,0)
+        self.selectPen = fn.mkPen(200,200,200,width=2)
+        self.brush = fn.mkBrush(200, 200, 200, 150)
+        self.hoverBrush = fn.mkBrush(200, 200, 200, 200)
+        self.selectBrush = fn.mkBrush(200, 200, 255, 200)
+        self.hovered = False
+        
         self.node = node
         flags = self.ItemIsMovable | self.ItemIsSelectable | self.ItemIsFocusable |self.ItemSendsGeometryChanges
         #flags =  self.ItemIsFocusable |self.ItemSendsGeometryChanges
 
         self.setFlags(flags)
-        
-        bounds = self.boundingRect()
+        self.bounds = QtCore.QRectF(0, 0, 100, 100)
         self.nameItem = QtGui.QGraphicsTextItem(self.node.name(), self)
-        self.nameItem.moveBy(bounds.width()/2. - self.nameItem.boundingRect().width()/2., 0)
+        self.nameItem.setDefaultTextColor(QtGui.QColor(50, 50, 50))
+        self.nameItem.moveBy(self.bounds.width()/2. - self.nameItem.boundingRect().width()/2., 0)
         self.nameItem.setTextInteractionFlags(QtCore.Qt.TextEditorInteraction)
         self.updateTerminals()
-        self.pen = QtGui.QPen(QtGui.QColor(0,0,0))
-        self.setZValue(10)
+        #self.setZValue(10)
 
         self.nameItem.focusOutEvent = self.labelFocusOut
         self.nameItem.keyPressEvent = self.labelKeyPress
@@ -356,6 +365,11 @@ class NodeGraphicsItem(GraphicsObject):
         self.buildMenu()
         
         #self.node.sigTerminalRenamed.connect(self.updateActionMenu)
+        
+    def setZValue(self, z):
+        for t, item in self.terminals.itervalues():
+            item.setZValue(z+1)
+        GraphicsObject.setZValue(self, z)
         
     def labelFocusOut(self, ev):
         QtGui.QGraphicsTextItem.focusOutEvent(self.nameItem, ev)
@@ -386,7 +400,7 @@ class NodeGraphicsItem(GraphicsObject):
         
         
     def updateTerminals(self):
-        bounds = self.boundingRect()
+        bounds = self.bounds
         self.terminals = {}
         inp = self.node.inputs()
         dy = bounds.height() / (len(inp)+1)
@@ -394,7 +408,8 @@ class NodeGraphicsItem(GraphicsObject):
         for i, t in inp.iteritems():
             item = t.graphicsItem()
             item.setParentItem(self)
-            br = self.boundingRect()
+            item.setZValue(self.zValue()+1)
+            br = self.bounds
             item.setAnchor(0, y)
             self.terminals[i] = (t, item)
             y += dy
@@ -405,7 +420,8 @@ class NodeGraphicsItem(GraphicsObject):
         for i, t in out.iteritems():
             item = t.graphicsItem()
             item.setParentItem(self)
-            br = self.boundingRect()
+            item.setZValue(self.zValue())
+            br = self.bounds
             item.setAnchor(bounds.width(), y)
             self.terminals[i] = (t, item)
             y += dy
@@ -414,16 +430,22 @@ class NodeGraphicsItem(GraphicsObject):
         
         
     def boundingRect(self):
-        return QtCore.QRectF(0, 0, 100, 100)
+        return self.bounds.adjusted(-5, -5, 5, 5)
         
     def paint(self, p, *args):
-        bounds = self.boundingRect()
+        
         p.setPen(self.pen)
         if self.isSelected():
-            p.setBrush(QtGui.QBrush(QtGui.QColor(200, 200, 255)))
+            p.setPen(self.selectPen)
+            p.setBrush(self.selectBrush)
         else:
-            p.setBrush(QtGui.QBrush(QtGui.QColor(200, 200, 200)))
-        p.drawRect(bounds)
+            p.setPen(self.pen)
+            if self.hovered:
+                p.setBrush(self.hoverBrush)
+            else:
+                p.setBrush(self.brush)
+                
+        p.drawRect(self.bounds)
 
         
     def mousePressEvent(self, ev):
@@ -458,15 +480,24 @@ class NodeGraphicsItem(GraphicsObject):
             ev.accept()
             self.setPos(self.pos()+self.mapToParent(ev.pos())-self.mapToParent(ev.lastPos()))
         
+    def hoverEvent(self, ev):
+        if not ev.isExit() and ev.acceptClicks(QtCore.Qt.LeftButton):
+            ev.acceptDrags(QtCore.Qt.LeftButton)
+            self.hovered = True
+        else:
+            self.hovered = False
+        self.update()
             
     #def mouseReleaseEvent(self, ev):
         #ret = QtGui.QGraphicsItem.mouseReleaseEvent(self, ev)
         #return ret
 
     def keyPressEvent(self, ev):
-        if ev.key() == QtCore.Qt.Key_Delete:
-            self.node.close()
+        if ev.key() == QtCore.Qt.Key_Delete or ev.key() == QtCore.Qt.Key_Backspace:
             ev.accept()
+            if not self.node._allowRemove:
+                return
+            self.node.close()
         else:
             ev.ignore()
 
@@ -484,26 +515,27 @@ class NodeGraphicsItem(GraphicsObject):
     def getMenu(self):
         return self.menu
     
-    def getSubMenus(self):
-        return [self.getMenu()]
+
+    def getContextMenus(self, event):
+        return [self.menu]
     
     def raiseContextMenu(self, ev):
-        menu = self.scene().addSubContextMenus(self, self.getMenu())
+        menu = self.scene().addParentContextMenus(self, self.getMenu(), ev)
         pos = ev.screenPos()
         menu.popup(QtCore.QPoint(pos.x(), pos.y()))
         
     def buildMenu(self):
         self.menu = QtGui.QMenu()
         self.menu.setTitle("Node")
-        self.menu.addAction("Add input", self.node.addInput)
-        self.menu.addAction("Add output", self.node.addOutput)
-        #self.menu.addSeparator()
-        self.menu.addAction("Remove node", self.node.close)
-        #self.terminalMenu = QtGui.QMenu("Remove terminal")
-        #for t in self.node.terminals:
-            #self.terminalMenu.addAction(t, self.node.removeTerminal)
-        #self.menu.addMenu(self.terminalMenu)
-        #self.menu.triggered.connect(self.menuTriggered)
+        a = self.menu.addAction("Add input", self.node.addInput)
+        if not self.node._allowAddInput:
+            a.setEnabled(False)
+        a = self.menu.addAction("Add output", self.node.addOutput)
+        if not self.node._allowAddOutput:
+            a.setEnabled(False)
+        a = self.menu.addAction("Remove node", self.node.close)
+        if not self.node._allowRemove:
+            a.setEnabled(False)
         
     #def menuTriggered(self, action):
         ##print "node.menuTriggered called. action:", action

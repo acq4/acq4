@@ -75,6 +75,7 @@ class Flowchart(Node):
         
         self.inputWasSet = False  ## flag allows detection of changes in the absence of input change.
         self._nodes = {}
+        self.nextZVal = 10
         #self.connects = []
         #self._chartGraphicsItem = FlowchartGraphicsItem(self)
         self._widget = None
@@ -83,11 +84,11 @@ class Flowchart(Node):
         
         self.widget()
         
-        self.inputNode = Node('Input')
-        self.outputNode = Node('Output')
+        self.inputNode = Node('Input', allowRemove=False)
+        self.outputNode = Node('Output', allowRemove=False)
         self.addNode(self.inputNode, 'Input', [-150, 0])
         self.addNode(self.outputNode, 'Output', [300, 0])
-            
+        
         self.outputNode.sigOutputChanged.connect(self.outputChanged)
         self.outputNode.sigTerminalRenamed.connect(self.internalTerminalRenamed)
         self.inputNode.sigTerminalRenamed.connect(self.internalTerminalRenamed)
@@ -166,6 +167,8 @@ class Flowchart(Node):
         if type(pos) in [QtCore.QPoint, QtCore.QPointF]:
             pos = [pos.x(), pos.y()]
         item = node.graphicsItem()
+        item.setZValue(self.nextZVal*2)
+        self.nextZVal += 1
         #item.setParentItem(self.chartGraphicsItem())
         self.viewBox.addItem(item)
         #item.setPos(pos2.x(), pos2.y())
@@ -799,7 +802,7 @@ class FlowchartWidget(dockarea.DockArea):
         self._scene.selectionChanged.connect(self.selectionChanged)
         self._scene.sigMouseHover.connect(self.hoverOver)
         #self.view.sigClicked.connect(self.showViewMenu)
-        self._scene.sigSceneContextMenu.connect(self.showViewMenu)
+        #self._scene.sigSceneContextMenu.connect(self.showViewMenu)
         self._viewBox.sigActionPositionChanged.connect(self.menuPosChanged)
         
         
@@ -811,7 +814,7 @@ class FlowchartWidget(dockarea.DockArea):
         library.loadLibrary(reloadLibs=True)
         self.buildMenu()
         
-    def buildMenu(self):
+    def buildMenu(self, pos=None):
         self.nodeMenu = QtGui.QMenu()
         self.subMenus = []
         for section, nodes in library.getNodeTree().iteritems():
@@ -820,6 +823,7 @@ class FlowchartWidget(dockarea.DockArea):
             for name in nodes:
                 act = menu.addAction(name)
                 act.nodeType = name
+                act.pos = pos
             self.subMenus.append(menu)
         self.nodeMenu.triggered.connect(self.nodeMenuTriggered)
         return self.nodeMenu
@@ -833,7 +837,9 @@ class FlowchartWidget(dockarea.DockArea):
             #self.menuPos = self.view.mapToScene(ev.pos())
             #self.nodeMenu.popup(ev.globalPos())
         #print "Flowchart.showViewMenu called"
-        self.menuPos = ev.scenePos()
+
+        #self.menuPos = ev.scenePos()
+        self.buildMenu(ev.scenePos())
         self.nodeMenu.popup(ev.screenPos())
         
     def scene(self):
@@ -844,8 +850,11 @@ class FlowchartWidget(dockarea.DockArea):
 
     def nodeMenuTriggered(self, action):
         nodeType = action.nodeType
-        #pos = self.viewBox().childTransform().map(self.viewBox().mapFromScene(self.menuPos))
-        pos = self.viewBox().mapSceneToView(self.menuPos)
+        if action.pos is not None:
+            pos = action.pos
+        else:
+            pos = self.menuPos
+        pos = self.viewBox().mapSceneToView(pos)
 
         self.chart.createNode(nodeType, pos=pos)
 

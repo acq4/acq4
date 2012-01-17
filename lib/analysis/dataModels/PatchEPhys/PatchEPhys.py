@@ -49,9 +49,12 @@ def isSequence(dh):
         #return False
     
 def dirType(dh):
-    """Return a string representing the type of data stored in a directory.
+    """
+    Return a string representing the type of data stored in a directory.
     Usually, this is provided in the meta-info for the directory, but in a few
-    cases we need to do a little more probing."""
+    cases (old data formats) we need to do a little more probing.
+    Returns None if the type cannot be determined.
+    """
     info = dh.info()
     type = info.get('dirType', None)
     if type is None:
@@ -69,10 +72,11 @@ def dirType(dh):
             try:
                 if dirType(dh.parent()) == 'ProtocolSequence':
                     type = 'Protocol'
-                else:
-                    raise Exception()
+                #else:
+                    #raise Exception()
             except:
-                raise Exception("Can't determine type for dir %s" % dh.name())
+                pass
+                #raise Exception("Can't determine type for dir %s" % dh.name())
     return type
 
 def listSequenceParams(dh):

@@ -5,7 +5,7 @@
 # reliable error messaging for missed frames
 # Add fast/simple histogram 
 
-from __future__ import with_statement
+#from __future__ import with_statement
 
 from CameraTemplate import Ui_MainWindow
 #from pyqtgraph.GraphicsView import *
@@ -21,12 +21,12 @@ import time, types, os.path, re, sys
 from debug import *
 from metaarray import *
 #import sip
-from pyqtgraph import SignalProxy
+from pyqtgraph import SignalProxy, Point
 #from lib.Manager import getManager
 import lib.Manager as Manager
 import numpy as np
 from RecordThread import RecordThread
-#from lib.LogWindow import LogButton
+from lib.LogWindow import LogButton
 from StatusBar import StatusBar
 
 traceDepth = 0
@@ -105,13 +105,13 @@ class CameraWindow(QtGui.QMainWindow):
         
         
         #self.ui.histogram.invertY(False)
-        self.avgLevelLine = QtGui.QGraphicsLineItem()
-        self.avgLevelLine.setPen(QtGui.QPen(QtGui.QColor(200, 200, 0)))
-        self.histogramCurve = pg.PlotCurveItem()
-        self.ui.histogram.scene().addItem(self.avgLevelLine)
-        self.ui.histogram.scene().addItem(self.histogramCurve)
+        #self.avgLevelLine = QtGui.QGraphicsLineItem()
+        #self.avgLevelLine.setPen(QtGui.QPen(QtGui.QColor(200, 200, 0)))
+        #self.histogramCurve = pg.PlotCurveItem()
+        #self.ui.histogram.scene().addItem(self.avgLevelLine)
+        #self.ui.histogram.scene().addItem(self.histogramCurve)
         #self.histogramCurve.rotate(-90)
-        self.histogramCurve.scale(1.0, -1.0)
+        #self.histogramCurve.scale(1.0, -1.0)
         self.lastHistogramUpdate = 0
         
         self.levelMax = 1
@@ -119,12 +119,12 @@ class CameraWindow(QtGui.QMainWindow):
         self.lastMinMax = None  ## Records most recently measured maximum/minimum image values
         
         
-        self.ticks = [t[0] for t in self.ui.gradientWidget.listTicks()]
-        self.ticks[0].colorChangeAllowed = False
-        self.ticks[1].colorChangeAllowed = False
-        self.ui.gradientWidget.allowAdd = False
-        self.ui.gradientWidget.setTickColor(self.ticks[1], QtGui.QColor(255,255,255))
-        self.ui.gradientWidget.setOrientation('right')
+        #self.ticks = [t[0] for t in self.ui.gradientWidget.listTicks()]
+        #self.ticks[0].colorChangeAllowed = False
+        #self.ticks[1].colorChangeAllowed = False
+        #self.ui.gradientWidget.allowAdd = False
+        #self.ui.gradientWidget.setTickColor(self.ticks[1], QtGui.QColor(255,255,255))
+        #self.ui.gradientWidget.setOrientation('right')
         
         
         
@@ -161,10 +161,12 @@ class CameraWindow(QtGui.QMainWindow):
         self.view.addItem(self.scopeItemGroup)
         self.scopeItemGroup.setZValue(10)
         self.cameraItemGroup.setZValue(0)
-        self.imageItem = pg.ImageItem(parent=self.cameraItemGroup)
+        self.imageItem = pg.ImageItem()
         self.view.addItem(self.imageItem)
         self.imageItem.setParentItem(self.cameraItemGroup)
         self.imageItem.setZValue(-10)
+        
+        self.ui.histogram.setImageItem(self.imageItem)
         
         #grid = Grid(self.gv)
         #self.scene.addItem(grid)
@@ -176,6 +178,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.view.setAspectLocked(True)
         self.view.invertY()
         self.AGCLastMax = None
+        self.autoGainLevels = [0.0, 1.0]
 
         self.persistentFrames = []
         
@@ -196,8 +199,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.fpsLabel.setFont(font)
         self.fpsLabel.setFixedWidth(50)
         self.vLabel.setFixedWidth(50)
-        #self.logBtn = LogButton('Log')
-        
+        self.logBtn = LogButton('Log')
         self.setStatusBar(StatusBar())
         self.statusBar().addPermanentWidget(self.recLabel)
         self.statusBar().addPermanentWidget(self.xyLabel)
@@ -275,7 +277,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.cam.sigCameraStopped.connect(self.cameraStopped)
         self.cam.sigCameraStarted.connect(self.cameraStarted)
         self.cam.sigShowMessage.connect(self.showMessage)
-        self.ui.graphicsView.sigSceneMouseMoved.connect(self.setMouse)
+        self.ui.graphicsView.scene().sigMouseMoved.connect(self.updateMouse)
         
         ## Connect Background Subtraction Dock
         self.ui.bgBlurSpin.valueChanged.connect(self.updateBackgroundBlur)
@@ -290,7 +292,9 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.spinROITime.valueChanged.connect(self.setROITime)
         
         ## Connect DisplayGain dock
-        self.ui.gradientWidget.sigGradientChanged.connect(self.levelsChanged)
+        self.ui.histogram.sigLookupTableChanged.connect(self.levelsChanged)
+        self.ui.histogram.sigLevelsChanged.connect(self.levelsChanged)
+        
         self.ui.btnAutoGain.toggled.connect(self.toggleAutoGain)
         self.ui.btnAutoGain.setChecked(True)
         
@@ -544,31 +548,32 @@ class CameraWindow(QtGui.QMainWindow):
         self.module.quit(fromUi=True)
 
     #@trace
-    def setMouse(self, qpt=None):
-        #print "mouse:", qpt
-        if qpt is None:
+    def updateMouse(self, pos=None):
+        if pos is None:
             if not hasattr(self, 'mouse'):
                 return
-            (x, y) = self.mouse
+            pos = self.mouse
         else:
-            x = qpt.x()
-            y = qpt.y()
-        self.mouse = [x, y]
-        self.xyLabel.setText("X:%0.1fum Y:%0.1fum" % (x * 1e6, y * 1e6))
+            pos = self.view.mapSceneToView(pos)
+        self.mouse = pos
+        self.xyLabel.setText("X:%0.1fum Y:%0.1fum" % (pos.x() * 1e6, pos.y() * 1e6))
         
         img = self.imageItem.image
         if img is None:
             return
-        pos = self.imageItem.mapFromScene(QtCore.QPointF(x, y))
-        try:
-            z = img[int(pos.x()), int(pos.y())]
-        except IndexError:
-            return
-    
-        if hasattr(z, 'shape') and len(z.shape) > 0:
-            z = "Z:(%s, %s, %s)" % (str(z[0]), str(z[1]), str(z[2]))
+        pos = self.imageItem.mapFromView(pos)
+        if pos.x() < 0 or pos.y() < 0:
+            z = ""
         else:
-            z = "Z:%s" % str(z)
+            try:
+                z = img[int(pos.x()), int(pos.y())]
+                if hasattr(z, 'shape') and len(z.shape) > 0:
+                    z = "Z:(%s, %s, %s)" % (str(z[0]), str(z[1]), str(z[2]))
+                else:
+                    z = "Z:%s" % str(z)
+            except IndexError:
+                z = ""
+    
         
         self.vLabel.setText(z)
             
@@ -624,7 +629,7 @@ class CameraWindow(QtGui.QMainWindow):
         try:
             #self.cam = self.module.cam.getCamera()
             self.bitDepth = self.cam.getParam('bitDepth')
-            self.ui.histogram.setRange(QtCore.QRectF(0, -2**self.bitDepth, 1, 2**self.bitDepth))
+            #self.ui.histogram.setRange(QtCore.QRectF(0, -2**self.bitDepth, 1, 2**self.bitDepth))
             self.setLevelRange()
             self.camSize = self.cam.getParam('sensorSize')
             self.ui.statusbar.showMessage("Opened camera %s" % self.cam, 5000)
@@ -694,8 +699,9 @@ class CameraWindow(QtGui.QMainWindow):
                 rmax = 1.0
                 #self.ui.gradientWidget.tickMoved(self.ticks[1], QtCore.QPointF(rmax, 0.0))
                 #self.ui.gradientWidget.tickMoved(self.ticks[0], QtCore.QPointF(rmin, 0.0))
-                self.ui.gradientWidget.setTickValue(1, rmax)
-                self.ui.gradientWidget.setTickValue(0, rmin)
+                #self.ui.gradientWidget.setTickValue(1, rmax)
+                #self.ui.gradientWidget.setTickValue(0, rmin)
+                self.ui.histogram.setLevels(rmin, rmax)
             else:
                 bl, wl = self.getLevels()
                 if self.ui.divideBgBtn.isChecked():
@@ -706,29 +712,35 @@ class CameraWindow(QtGui.QMainWindow):
                     rmax = float(2**self.bitDepth - 1)
                     #self.ui.gradientWidget.tickMoved(self.ticks[1], QtCore.QPointF(wl/rmax, 0.0))
                     #self.ui.gradientWidget.tickMoved(self.ticks[0], QtCore.QPointF(bl/rmax, 0.0))
-                    self.ui.gradientWidget.setTickValue(1, wl/rmax)
-                    self.ui.gradientWidget.setTickValue(0, bl/rmax)
+                    #self.ui.gradientWidget.setTickValue(1, wl/rmax)
+                    #self.ui.gradientWidget.setTickValue(0, bl/rmax)
+                    self.ui.histogram.setLevels(bl/rmax, wl/rmax)
         self.levelMin = rmin
         self.levelMax = rmax
         
         
     #@trace
     def getLevels(self):
-        wl = self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[1])
-        bl = self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[0])
-        return (bl, wl)
+        #wl = self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[1])
+        #bl = self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[0])
+        
+        return self.ui.histogram.getLevels()
 
     #@trace
     def toggleAutoGain(self, b):
-        bl, wl = self.getLevels()
-        self.setLevelRange()
-        if not b and self.lastMinMax is not None:
-            #print bl, wl
-            wl = self.lastMinMax[0] + (self.lastMinMax[1]-self.lastMinMax[0]) * wl
-            bl = self.lastMinMax[0] + (self.lastMinMax[1]-self.lastMinMax[0]) * bl
+        #bl, wl = self.getLevels()
+        #self.setLevelRange()
+        #if not b and self.lastMinMax is not None:
+            ##print bl, wl
+            #wl = self.lastMinMax[0] + (self.lastMinMax[1]-self.lastMinMax[0]) * wl
+            #bl = self.lastMinMax[0] + (self.lastMinMax[1]-self.lastMinMax[0]) * bl
             #print bl, wl, self.lastMinMax
-            self.ui.gradientWidget.setTickValue(1, wl/float(2**self.bitDepth - 1))
-            self.ui.gradientWidget.setTickValue(0, bl/float(2**self.bitDepth - 1))
+            #self.ui.gradientWidget.setTickValue(1, wl/float(2**self.bitDepth - 1))
+            #self.ui.gradientWidget.setTickValue(0, bl/float(2**self.bitDepth - 1))
+            #self.ui.histogram.setLevels(bl/float(2**self.bitDepth - 1), wl/float(2**self.bitDepth - 1))
+        if b:
+            self.lastAGCMax = None
+            #self.ui.histogram.setLevels(*self.lastMinMax)
             
             
 
@@ -935,7 +947,7 @@ class CameraWindow(QtGui.QMainWindow):
                 minVal = data.min() * (1.0-cw) + center.min() * cw
                 maxVal = data.max() * (1.0-cw) + center.max() * cw
                 
-                
+                ## Smooth min/max range to avoid noise
                 if self.AGCLastMax is None:
                     minVal = minVal
                     maxVal = maxVal
@@ -943,12 +955,32 @@ class CameraWindow(QtGui.QMainWindow):
                     s = 1.0 - 1.0 / (self.ui.spinAutoGainSpeed.value()+1.0)
                     minVal = self.AGCLastMin * s + minVal * (1.0-s)
                     maxVal = self.AGCLastMax * s + maxVal * (1.0-s)
+                    
+                ## Convert current levels into fraction of previous range
+                if self.AGCLastMax is None:
+                    bl = 0.0
+                    wl = 1.0
+                else:
+                    bl = float(bl - self.AGCLastMin) / (self.AGCLastMax-self.AGCLastMin)
+                    wl = float(wl - self.AGCLastMin) / (self.AGCLastMax-self.AGCLastMin)
+                #print "========"
+                #print bl, wl
+                ## and convert fraction of previous range into new levels
+                bl = bl * (maxVal-minVal) + minVal
+                wl = wl * (maxVal-minVal) + minVal
+                #print bl, wl
+                
                 self.AGCLastMax = maxVal
                 self.AGCLastMin = minVal
                 
-                wl = minVal + (maxVal-minVal) * wl
-                bl = minVal + (maxVal-minVal) * bl
+                #wl = minVal + (maxVal-minVal) * wl
+                #bl = minVal + (maxVal-minVal) * bl
+                
+                #bl = 
+                
                 self.lastMinMax = minVal, maxVal
+                self.ui.histogram.setLevels(bl, wl)
+                self.ui.histogram.setHistogramRange(minVal, maxVal, padding=0.05)
             #print "  post: LevelMin ", self.levelMin
             #print "        LevelMax ", self.levelMax
             #print "        AGCLastMax", self.AGCLastMax
@@ -965,7 +997,7 @@ class CameraWindow(QtGui.QMainWindow):
             #m.scale(info['pixelSize'][0], info['pixelSize'][1])
             
             ## update image in viewport
-            self.imageItem.updateImage(data, clipMask=self.currentClipMask, white=wl, black=bl, copy=False)
+            self.imageItem.updateImage(data)#, levels=[bl, wl])
             self.imageItem.setTransform(m)
 
             ## Update viewport to correct for scope movement/scaling
@@ -994,7 +1026,7 @@ class CameraWindow(QtGui.QMainWindow):
 
 
             ## update info for pixel under mouse pointer
-            self.setMouse()
+            self.updateMouse()
             self.updateRgnLabel()
 
             
@@ -1013,13 +1045,15 @@ class CameraWindow(QtGui.QMainWindow):
         #sys.stdout.write('!')
 
     def updateHistogram(self, data, wl, bl):
-        now = time.time()
-        if now > self.lastHistogramUpdate + 1.0:
-            avg = data.mean()
-            self.avgLevelLine.setLine(0.0, avg, 1.0, avg)
-            bins = np.linspace(0, 2**self.bitDepth, 500)
-            h = np.histogram(data, bins=bins)
-            xVals = h[0].astype(np.float32)/h[0].max()
-            self.histogramCurve.setData(x=xVals, y=bins[:-1])
-            self.lastHistogramUpdate = now
+        return
+        #now = time.time()
+        #if now > self.lastHistogramUpdate + 1.0:
+            #avg = data.mean()
+            #self.avgLevelLine.setLine(0.0, avg, 1.0, avg)
+            #bins = np.linspace(0, 2**self.bitDepth, 500)
+            #h = np.histogram(data, bins=bins)
+            #xVals = h[0].astype(np.float32)/h[0].max()
+            #self.histogramCurve.setData(x=xVals, y=bins[:-1])
+            #self.lastHistogramUpdate = now
+
 

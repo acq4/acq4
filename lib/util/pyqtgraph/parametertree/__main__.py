@@ -135,3 +135,6 @@ t2.setParameters(p, showTop=False)
 t2.show()
 t2.resize(400,600)
     
+import sys
+if sys.flags.interactive == 0:
+    app.exec_()

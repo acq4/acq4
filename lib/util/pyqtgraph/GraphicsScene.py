@@ -3,6 +3,7 @@ import weakref
 from pyqtgraph.Point import Point
 import pyqtgraph.functions as fn
 import pyqtgraph.ptime as ptime
+import debug
 
 try:
     import sip
@@ -31,8 +32,8 @@ class GraphicsScene(QtGui.QGraphicsScene):
     -  Reimplements items() and itemAt() to circumvent PyQt bug
     
     Mouse interaction is as follows:
-    1) Every time the mouse moves, the scene delivers both the standard hoverEnter/Move/LeaveEvents and 
-       custom HoverEvents. 
+    1) Every time the mouse moves, the scene delivers both the standard hoverEnter/Move/LeaveEvents 
+       as well as custom HoverEvents. 
     2) Items are sent HoverEvents in Z-order and each item may optionally call event.acceptClicks(button), 
        acceptDrags(button) or both. If this method call returns True, this informs the item that _if_ 
        the user clicks/drags the specified mouse button, the item is guaranteed to be the 
@@ -58,8 +59,9 @@ class GraphicsScene(QtGui.QGraphicsScene):
     
     
     _addressCache = weakref.WeakValueDictionary()
-    sigSceneContextMenu = QtCore.Signal(object)
-    sigMouseHover = QtCore.Signal(object)
+    sigMouseHover = QtCore.Signal(object)   ## emits a list of objects hovered over
+    sigMouseMoved = QtCore.Signal(object)   ## emits position of mouse on every move
+    sigMouseClicked = QtCore.Signal(object)   ## emitted when MouseClickEvent is not accepted by any items under the click.
     
     @classmethod
     def registerObject(cls, obj):
@@ -117,39 +119,17 @@ class GraphicsScene(QtGui.QGraphicsScene):
             #print "click grabbed by:", item
         
     def mouseMoveEvent(self, ev):
-        if int(ev.buttons()) == 0: ## nothing pressed; send mouseHoverOver/OutEvents      
-            ## First allow QGraphicsScene to deliver hoverEnter/Move/ExitEvents
-            QtGui.QGraphicsScene.mouseMoveEvent(self, ev)
-            
-            ## Next deliver our own HoverEvents
-            event = HoverEvent(ev)
-            prevItems = self.hoverItems.keys()
-            items = self.itemsNearEvent(event)
-            #print 'items:', items
-            self.sigMouseHover.emit(items)
-            for item in items:
-                if hasattr(item, 'hoverEvent'):
-                    event.currentItem = item
-                    if item not in self.hoverItems:
-                        self.hoverItems[item] = None
-                        event.enter = True
-                    else:
-                        prevItems.remove(item)
-                        event.enter = False
-                    item.hoverEvent(event)
-            #print "  --> accepted drags:", event.dragItems().items()
-                    
-            ## Anything left in prevItems needs an Exit event
-            event.enter = False
-            event.exit = True
-            for item in prevItems:
-                event.currentItem = item
-                item.hoverEvent(event)
-                del self.hoverItems[item]
-                
-            self.lastHoverEvent = event  ## save this so we can ask about accepted events later.
-                
-        else:  ## button is pressed; send mouseMoveEvents and mouseDragEvents
+        self.sigMouseMoved.emit(ev.scenePos())
+        
+        ## First allow QGraphicsScene to deliver hoverEnter/Move/ExitEvents
+        QtGui.QGraphicsScene.mouseMoveEvent(self, ev)
+
+    
+        ## Next deliver our own HoverEvents
+        self.sendHoverEvents(ev)
+        
+        
+        if int(ev.buttons()) != 0:  ## button is pressed; send mouseMoveEvents and mouseDragEvents
             QtGui.QGraphicsScene.mouseMoveEvent(self, ev)
             if self.mouseGrabberItem() is None:
                 now = ptime.time()
@@ -193,13 +173,47 @@ class GraphicsScene(QtGui.QGraphicsScene):
             self.clickEvents = []
             self.lastDrag = None
         QtGui.QGraphicsScene.mouseReleaseEvent(self, ev)
+        
+        self.sendHoverEvents(ev)  ## let items prepare for next click/drag
 
     def mouseDoubleClickEvent(self, ev):
         QtGui.QGraphicsScene.mouseDoubleClickEvent(self, ev)
         if self.mouseGrabberItem() is None:  ## nobody claimed press; we are free to generate drag/click events
             self.clickEvents.append(MouseClickEvent(ev, double=True))
         
-
+    def sendHoverEvents(self, ev):
+        acceptable = int(ev.buttons()) == 0  ## if a button 
+        event = HoverEvent(ev, acceptable)
+        prevItems = self.hoverItems.keys()
+        items = self.itemsNearEvent(event)
+        self.sigMouseHover.emit(items)
+        for item in items:
+            if hasattr(item, 'hoverEvent'):
+                event.currentItem = item
+                if item not in self.hoverItems:
+                    self.hoverItems[item] = None
+                    event.enter = True
+                else:
+                    prevItems.remove(item)
+                    event.enter = False
+                    
+                try:
+                    item.hoverEvent(event)
+                except:
+                    debug.printExc("Error sending hover event:")
+                    
+        event.enter = False
+        event.exit = True
+        for item in prevItems:
+            event.currentItem = item
+            try:
+                item.hoverEvent(event)
+            except:
+                debug.printExc("Error sending hover exit event:")
+            finally:
+                del self.hoverItems[item]
+        
+        self.lastHoverEvent = event  ## save this so we can ask about accepted events later.
 
     def sendDragEvent(self, ev, init=False, final=False):
         ## Send a MouseDragEvent to the current dragItem or to 
@@ -212,21 +226,31 @@ class GraphicsScene(QtGui.QGraphicsScene):
                 #print "Drag -> pre-selected item:", acceptedItem
                 self.dragItem = acceptedItem
                 event.currentItem = self.dragItem
-                self.dragItem.mouseDragEvent(event)
+                try:
+                    self.dragItem.mouseDragEvent(event)
+                except:
+                    debug.printExc("Error sending drag event:")
+                    
             else:
                 #print "drag -> new item"
                 for item in self.itemsNearEvent(event):
                     #print "check item:", item
                     if hasattr(item, 'mouseDragEvent'):
                         event.currentItem = item
-                        item.mouseDragEvent(event)
+                        try:
+                            item.mouseDragEvent(event)
+                        except:
+                            debug.printExc("Error sending drag event:")
                         if event.isAccepted():
                             #print "   --> accepted"
                             self.dragItem = item
                             break
         elif self.dragItem is not None:
             event.currentItem = self.dragItem
-            self.dragItem.mouseDragEvent(event)
+            try:
+                self.dragItem.mouseDragEvent(event)
+            except:
+                debug.printExc("Error sending hover exit event:")
             
         self.lastDrag = event
         
@@ -244,17 +268,24 @@ class GraphicsScene(QtGui.QGraphicsScene):
             acceptedItem = self.lastHoverEvent.clickItems().get(ev.button(), None)
             if acceptedItem is not None:
                 ev.currentItem = acceptedItem
-                acceptedItem.mouseClickEvent(ev)
+                try:
+                    acceptedItem.mouseClickEvent(ev)
+                except:
+                    debug.printExc("Error sending click event:")
             else:
                 for item in self.itemsNearEvent(ev):
                     if hasattr(item, 'mouseClickEvent'):
                         ev.currentItem = item
-                        item.mouseClickEvent(ev)
+                        try:
+                            item.mouseClickEvent(ev)
+                        except:
+                            debug.printExc("Error sending click event:")
+                            
                         if ev.isAccepted():
                             break
                 if not ev.isAccepted() and ev.button() is QtCore.Qt.RightButton:
                     #print "GraphicsScene emitting sigSceneContextMenu"
-                    self.sigSceneContextMenu.emit(ev)
+                    self.sigMouseClicked.emit(ev)
                     ev.accept()
         return ev.isAccepted()
         
@@ -373,15 +404,49 @@ class GraphicsScene(QtGui.QGraphicsScene):
         else:
             return widget
         
-    def addSubContextMenus(self, sender, menu):
+    def addParentContextMenus(self, item, menu, event):
+        """
+        Can be called by any item in the scene to expand its context menu to include parent context menus.
+        Parents may implement getContextMenus to add new menus / actions to the existing menu.
+        getContextMenus must accept 1 argument (the event that generated the original menu) and
+        return a single QMenu or a list of QMenus.
         
-        item = sender
+        The final menu will look like:
+        
+            Original Item 1
+            Original Item 2
+            ...
+            Original Item N
+            ------------------
+            Parent Item 1
+            Parent Item 2
+            ...
+            Grandparent Item 1
+            ...
+            
+        
+        Arguments:
+            item   - The item that initially created the context menu 
+                     (This is probably the item making the call to this function)
+            menu   - The context menu being shown by the item
+            event  - The original event that triggered the menu to appear.
+        """
+        
+        #items = self.itemsNearEvent(ev)
         menusToAdd = []
         while item.parentItem() is not None:
             item = item.parentItem()
-            if not hasattr(item, "getSubMenus"):
+        #for item in items:
+            #if item is sender:
+                #continue
+            if not hasattr(item, "getContextMenus"):
                 continue
-            subMenus = item.getSubMenus()
+
+            
+            subMenus = item.getContextMenus(event)
+            if type(subMenus) is not list: ## so that some items (like FlowchartViewBox) can return multiple menus
+                subMenus = [subMenus]
+
             for sm in subMenus:
                 menusToAdd.append(sm)
         
@@ -571,8 +636,9 @@ class HoverEvent:
     event.isEnter() returns True if the mouse has just entered the item's shape;
     event.isExit() returns True if the mouse has just left.
     """
-    def __init__(self, moveEvent):
+    def __init__(self, moveEvent, acceptable):
         self.enter = False
+        self.acceptable = acceptable
         self.exit = False
         self.__clickItems = weakref.WeakValueDictionary()
         self.__dragItems = weakref.WeakValueDictionary()
@@ -593,12 +659,16 @@ class HoverEvent:
         
     def acceptClicks(self, button):
         """"""
+        if not self.acceptable:
+            return False
         if button not in self.__clickItems:
             self.__clickItems[button] = self.currentItem
             return True
         return False
         
     def acceptDrags(self, button):
+        if not self.acceptable:
+            return False
         if button not in self.__dragItems:
             self.__dragItems[button] = self.currentItem
             return True

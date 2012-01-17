@@ -6,6 +6,16 @@
 from Qt import QtGui 
 
 
+CONFIG_OPTIONS = {
+    'leftButtonPan': True
+}
+
+def setConfigOption(opt, value):
+    CONFIG_OPTIONS[opt] = value
+
+def getConfigOption(opt):
+    return CONFIG_OPTIONS[opt]
+
 ## Import almost everything to make it available from a single namespace
 ## don't import the more complex systems--canvas, parametertree, flowchart, dockarea
 ## these must be imported separately.

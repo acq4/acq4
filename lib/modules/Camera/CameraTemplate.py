@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'CameraTemplate.ui'
 #
-# Created: Sun Dec 18 17:40:13 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Thu Jan 12 11:55:47 2012
+#      by: PyQt4 UI code generator 4.9
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName(_fromUtf8("MainWindow"))
-        MainWindow.resize(1166, 674)
+        MainWindow.resize(1051, 877)
         self.centralwidget = QtGui.QWidget(MainWindow)
         self.centralwidget.setObjectName(_fromUtf8("centralwidget"))
         self.horizontalLayout_3 = QtGui.QHBoxLayout(self.centralwidget)
@@ -67,7 +67,7 @@ class Ui_MainWindow(object):
         self.recordXframesSpin.setEnabled(True)
         self.recordXframesSpin.setMinimum(1)
         self.recordXframesSpin.setMaximum(1000000)
-        self.recordXframesSpin.setProperty(_fromUtf8("value"), 100)
+        self.recordXframesSpin.setProperty("value", 100)
         self.recordXframesSpin.setObjectName(_fromUtf8("recordXframesSpin"))
         self.horizontalLayout_4.addWidget(self.recordXframesSpin)
         self.framesLabel = QtGui.QLabel(self.dockWidgetContents)
@@ -126,14 +126,9 @@ class Ui_MainWindow(object):
         self.vboxlayout.setObjectName(_fromUtf8("vboxlayout"))
         self.hboxlayout1 = QtGui.QHBoxLayout()
         self.hboxlayout1.setObjectName(_fromUtf8("hboxlayout1"))
-        self.histogram = GraphicsView(self.dockWidgetContents_2)
-        self.histogram.setFrameShape(QtGui.QFrame.NoFrame)
+        self.histogram = HistogramLUTWidget(self.dockWidgetContents_2)
         self.histogram.setObjectName(_fromUtf8("histogram"))
         self.hboxlayout1.addWidget(self.histogram)
-        self.gradientWidget = GradientWidget(self.dockWidgetContents_2)
-        self.gradientWidget.setMinimumSize(QtCore.QSize(20, 0))
-        self.gradientWidget.setObjectName(_fromUtf8("gradientWidget"))
-        self.hboxlayout1.addWidget(self.gradientWidget)
         self.vboxlayout.addLayout(self.hboxlayout1)
         self.btnAutoGain = QtGui.QPushButton(self.dockWidgetContents_2)
         self.btnAutoGain.setCheckable(True)
@@ -149,7 +144,7 @@ class Ui_MainWindow(object):
         self.label_6.setObjectName(_fromUtf8("label_6"))
         self.gridlayout.addWidget(self.label_6, 0, 0, 1, 1)
         self.spinAutoGainSpeed = QtGui.QDoubleSpinBox(self.dockWidgetContents_2)
-        self.spinAutoGainSpeed.setProperty(_fromUtf8("value"), 2.0)
+        self.spinAutoGainSpeed.setProperty("value", 2.0)
         self.spinAutoGainSpeed.setObjectName(_fromUtf8("spinAutoGainSpeed"))
         self.gridlayout.addWidget(self.spinAutoGainSpeed, 0, 1, 1, 1)
         self.label_8 = QtGui.QLabel(self.dockWidgetContents_2)
@@ -189,7 +184,7 @@ class Ui_MainWindow(object):
         self.gridLayout.addWidget(self.label_7, 5, 0, 1, 1)
         self.spinROITime = QtGui.QDoubleSpinBox(self.dockWidgetContents_4)
         self.spinROITime.setSingleStep(0.1)
-        self.spinROITime.setProperty(_fromUtf8("value"), 5.0)
+        self.spinROITime.setProperty("value", 5.0)
         self.spinROITime.setObjectName(_fromUtf8("spinROITime"))
         self.gridLayout.addWidget(self.spinROITime, 5, 1, 1, 1)
         spacerItem2 = QtGui.QSpacerItem(88, 17, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
@@ -276,7 +271,7 @@ class Ui_MainWindow(object):
         self.hboxlayout2.addWidget(self.label_4)
         self.bgTimeSpin = QtGui.QDoubleSpinBox(self.frame_2)
         self.bgTimeSpin.setSingleStep(1.0)
-        self.bgTimeSpin.setProperty(_fromUtf8("value"), 5.0)
+        self.bgTimeSpin.setProperty("value", 5.0)
         self.bgTimeSpin.setObjectName(_fromUtf8("bgTimeSpin"))
         self.hboxlayout2.addWidget(self.bgTimeSpin)
         self.vboxlayout1.addWidget(self.frame_2)
@@ -293,7 +288,7 @@ class Ui_MainWindow(object):
         self.label_5.setObjectName(_fromUtf8("label_5"))
         self.hboxlayout3.addWidget(self.label_5)
         self.bgBlurSpin = QtGui.QDoubleSpinBox(self.frame_3)
-        self.bgBlurSpin.setProperty(_fromUtf8("value"), 0.0)
+        self.bgBlurSpin.setProperty("value", 0.0)
         self.bgBlurSpin.setObjectName(_fromUtf8("bgBlurSpin"))
         self.hboxlayout3.addWidget(self.bgBlurSpin)
         self.vboxlayout1.addWidget(self.frame_3)
@@ -401,5 +396,7 @@ class Ui_MainWindow(object):
 "(by pressing \'Static\' above) or \'Continuous\' needs to be pressed.", None, QtGui.QApplication.UnicodeUTF8))
         self.divideBgBtn.setText(QtGui.QApplication.translate("MainWindow", "Divide Background", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph import SpinBox, GradientWidget, GraphicsView, PlotWidget
+from pyqtgraph.widgets.GraphicsView import GraphicsView
+from pyqtgraph.widgets.PlotWidget import PlotWidget
+from pyqtgraph import HistogramLUTWidget, SpinBox
 from FeedbackButton import FeedbackButton

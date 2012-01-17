@@ -11,7 +11,6 @@ import struct
 __all__ = ['PlotCurveItem']
 class PlotCurveItem(GraphicsObject):
     
-    sigPlotChanged = QtCore.Signal(object)
     
     """Class representing a single plot curve. Provides:
         - Fast data update
@@ -20,14 +19,16 @@ class PlotCurveItem(GraphicsObject):
         - mouse interaction
     """
     
+    sigPlotChanged = QtCore.Signal(object)
     sigClicked = QtCore.Signal(object)
     
-    def __init__(self, y=None, x=None, copy=False, pen=None, shadow=None, parent=None, color=None, clickable=False):
+    def __init__(self, y=None, x=None, fillLevel=None, copy=False, pen=None, shadowPen=None, brush=None, parent=None, color=None, clickable=False):
         GraphicsObject.__init__(self, parent)
         #GraphicsWidget.__init__(self, parent)
-        self.free()
+        self.clear()
         #self.dispPath = None
         self.path = None
+        self.fillPath = None
         if pen is None:
             if color is None:
                 self.setPen((200,200,200))
@@ -36,10 +37,13 @@ class PlotCurveItem(GraphicsObject):
         else:
             self.setPen(pen)
         
-        self.shadow = shadow
+        self.shadowPen = shadowPen
         if y is not None:
             self.updateData(y, x, copy)
         #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
+        
+        self.fillLevel = fillLevel
+        self.brush = brush
         
         self.metaData = {}
         self.opts = {
@@ -55,6 +59,12 @@ class PlotCurveItem(GraphicsObject):
         self.setClickable(clickable)
         #self.fps = None
         
+    def implements(self, interface=None):
+        ints = ['plotData']
+        if interface is None:
+            return ints
+        return interface in ints
+    
     def setClickable(self, s):
         self.clickable = s
         
@@ -169,7 +179,7 @@ class PlotCurveItem(GraphicsObject):
         self.update()
         
     def setShadowPen(self, pen):
-        self.shadow = pen
+        self.shadowPen = pen
         self.update()
 
     def setDownsampling(self, ds):
@@ -218,14 +228,14 @@ class PlotCurveItem(GraphicsObject):
         
         self.prepareGeometryChange()
         if copy:
-            self.yData = y.copy()
+            self.yData = y.view(np.ndarray).copy()
         else:
-            self.yData = y
+            self.yData = y.view(np.ndarray)
             
         if copy and x is not None:
-            self.xData = x.copy()
+            self.xData = x.view(np.ndarray).copy()
         else:
-            self.xData = x
+            self.xData = x.view(np.ndarray)
         prof.mark('copy')
         
         if x is None:
@@ -296,6 +306,7 @@ class PlotCurveItem(GraphicsObject):
         prof.finish()
         return path
 
+
     def shape(self):
         if self.path is None:
             try:
@@ -310,8 +321,8 @@ class PlotCurveItem(GraphicsObject):
             return QtCore.QRectF()
             
             
-        if self.shadow is not None:
-            lineWidth = (max(self.pen.width(), self.shadow.width()) + 1)
+        if self.shadowPen is not None:
+            lineWidth = (max(self.pen.width(), self.shadowPen.width()) + 1)
         else:
             lineWidth = (self.pen.width()+1)
             
@@ -337,13 +348,29 @@ class PlotCurveItem(GraphicsObject):
                 #self.specPath = self.generatePath(*self.getData())
             #path = self.specPath
         #else:
+        x = None
+        y = None
         if self.path is None:
-            self.path = self.generatePath(*self.getData())
+            x,y = self.getData()
+            self.path = self.generatePath(x,y)
+            self.fillPath = None
         path = self.path
         prof.mark('generate path')
             
-        if self.shadow is not None:
-            sp = QtGui.QPen(self.shadow)
+        if self.brush is not None:
+            if self.fillPath is None:
+                if x is None:
+                    x,y = self.getData()
+                p2 = QtGui.QPainterPath(self.path)
+                p2.lineTo(x[-1], self.fillLevel)
+                p2.lineTo(x[0], self.fillLevel)
+                p2.closeSubpath()
+                self.fillPath = p2
+                
+            p.fillPath(self.fillPath, fn.mkBrush(self.brush))
+            
+        if self.shadowPen is not None:
+            sp = QtGui.QPen(self.shadowPen)
         else:
             sp = None
 
@@ -357,7 +384,7 @@ class PlotCurveItem(GraphicsObject):
             pen.setColor(c)
             #pen.setCosmetic(True)
             
-        if self.shadow is not None:
+        if self.shadowPen is not None:
             p.setPen(sp)
             p.drawPath(path)
         p.setPen(cp)
@@ -370,7 +397,7 @@ class PlotCurveItem(GraphicsObject):
         #p.drawRect(self.boundingRect())
         
         
-    def free(self):
+    def clear(self):
         self.xData = None  ## raw values
         self.yData = None
         self.xDisp = None  ## display values (after log / fft)

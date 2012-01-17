@@ -14,6 +14,8 @@ import sys, os
 import debug    
 from FileDialog import FileDialog
 from pyqtgraph.GraphicsScene import GraphicsScene
+import numpy as np
+import pyqtgraph.functions as fn
 
 __all__ = ['GraphicsView']
 
@@ -26,7 +28,7 @@ class GraphicsView(QtGui.QGraphicsView):
     sigScaleChanged = QtCore.Signal(object)
     lastFileDir = None
     
-    def __init__(self, parent=None, useOpenGL=None):
+    def __init__(self, parent=None, useOpenGL=None, background='k'):
         """Re-implementation of QGraphicsView that removes scrollbars and allows unambiguous control of the 
         viewed coordinate range. Also automatically creates a QGraphicsScene and a central QGraphicsWidget
         that is automatically scaled to the full view geometry.
@@ -42,17 +44,18 @@ class GraphicsView(QtGui.QGraphicsView):
         QtGui.QGraphicsView.__init__(self, parent)
         if useOpenGL is None:
             if 'linux' in sys.platform:  ## linux has bugs in opengl implementation
-                useOpenGL = False
+                useOpenGL = True
             elif 'darwin' in sys.platform: ## openGL speeds up display on mac
                 useOpenGL = True
             else:
-                useOpenGL = False
+                useOpenGL = True
         self.useOpenGL(useOpenGL)
         
         self.setCacheMode(self.CacheBackground)
         
-        brush = QtGui.QBrush(QtGui.QColor(0,0,0))
-        self.setBackgroundBrush(brush)
+        if background is not None:
+            brush = fn.mkBrush(background)
+            self.setBackgroundBrush(brush)
         
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.setFrameShape(QtGui.QFrame.NoFrame)
@@ -398,7 +401,7 @@ class GraphicsView(QtGui.QGraphicsView):
             return
         
         if ev.buttons() == QtCore.Qt.RightButton:
-            delta = Point(clip(delta[0], -50, 50), clip(-delta[1], -50, 50))
+            delta = Point(np.clip(delta[0], -50, 50), np.clip(-delta[1], -50, 50))
             scale = 1.01 ** delta
             #if self.yInverted:
                 #scale[0] = 1. / scale[0]

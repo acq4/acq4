@@ -6,6 +6,7 @@ from ItemGroup import ItemGroup
 from GraphicsWidget import GraphicsWidget
 from UIGraphicsItem import UIGraphicsItem
 from pyqtgraph.GraphicsScene import GraphicsScene
+import pyqtgraph
 
 __all__ = ['ViewBox']
 class ViewBox(GraphicsWidget):
@@ -39,7 +40,8 @@ class ViewBox(GraphicsWidget):
         #self.childGroup = QtGui.QGraphicsItemGroup(self)
         self.childGroup = ItemGroup(self)
         self.currentScale = Point(1, 1)
-        self.useLeftButtonPan = True # normally use left button to pan
+        
+        self.useLeftButtonPan = pyqtgraph.getConfigOption('leftButtonPan') # normally use left button to pan
         # this also enables capture of keyPressEvents.
         
         ## Make scale box that is shown when dragging on the view
@@ -108,7 +110,7 @@ class ViewBox(GraphicsWidget):
         if mode.lower() == 'rect':
             self.useLeftButtonPan = False
         elif mode.lower() == 'pan':
-            self.useleftButtonPan = True
+            self.useLeftButtonPan = True
         else:
             raise Exception('graphicsItems:ViewBox:setLeftButtonAction: unknown mode = %s (Options are "pan" and "rect")' % mode)
             
@@ -345,47 +347,45 @@ class ViewBox(GraphicsWidget):
     def raiseContextMenu(self, ev):
         #print "viewbox.raiseContextMenu called."
         
-        self.getMenu()
+        menu = self.getMenu(ev)
+        self.scene().addParentContextMenus(self, menu, ev)
         #print "2:", [str(a.text()) for a in self.menu.actions()]
         pos = ev.screenPos()
         pos2 = ev.scenePos()
         #print "3:", [str(a.text()) for a in self.menu.actions()]
-        self.sigActionPositionChanged.emit(pos2)
+        #self.sigActionPositionChanged.emit(pos2)
 
-        self.menu.popup(QtCore.QPoint(pos.x(), pos.y()))
+        menu.popup(QtCore.QPoint(pos.x(), pos.y()))
         #print "4:", [str(a.text()) for a in self.menu.actions()]
         
-    def getMenu(self):
+    def getContextMenus(self, event):
+        return [self.getMenu(event)]
+        
+
+    def getMenu(self, ev=None):
         menu = QtGui.QMenu()
         menu.setTitle("ViewBox options")
         menu.addAction("Auto range", self.autoRange)
             
-        self._leftMenu = QtGui.QMenu("Use left button for")
-        self._leftMenu.setEnabled(False)
+        leftMenu = QtGui.QMenu("Use left button for")
         group = QtGui.QActionGroup(self.menu)
-        pan = self._leftMenu.addAction("pan", self.leftButtonActionToggledFromMenu)
-        zoom = self._leftMenu.addAction("zoom", self.leftButtonActionToggledFromMenu)
+
+        pan = leftMenu.addAction("pan", self.leftButtonActionToggledFromMenu)
+        zoom = leftMenu.addAction("zoom", self.leftButtonActionToggledFromMenu)
+
+
         pan.setCheckable(True)
         zoom.setCheckable(True)
+
         zoom.setChecked(True)
+
         pan.setActionGroup(group)
         zoom.setActionGroup(group)
-        self._pan = pan
-        self._zoom = zoom
-        menu.addMenu(self._leftMenu)
-        
-        grid = menu.addAction("Show grid")
-        grid.setCheckable(True)
-        grid.setEnabled(False)
-        #print "1d:", [str(a.text()) for a in self.menu.actions()]
-        if self.menu is None: ## it's important that self.menu is only set if it is None, because otherwise we overwrite additions from sub-classes
-            self.menu = menu
-        #print "1e:", [str(a.text()) for a in self.menu.actions()]
+
+        menu.addMenu(leftMenu)
+        self._menu = menu   ## store to prevent automatic garbage collection
         return menu
     
-    def getSubMenus(self):
-        return [self.getMenu()]
-        
 
     def mouseDragEvent(self, ev):
         #print 'vbDragEvent'
