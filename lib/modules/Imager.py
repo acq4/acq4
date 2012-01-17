@@ -80,9 +80,9 @@ class Imager(Module):
             dict(name='Image Width', type='int', value=256),
             dict(name='Y = X', type='bool', value=True),
             dict(name='Image Height', type='int', value=256),
-            dict(name='XCenter', type='float', value=0.25, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
+            dict(name='XCenter', type='float', value=-0.3, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
             dict(name='XSweep', type='float', value=0.5, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
-            dict(name='YCenter', type='float', value=-0.5, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
+            dict(name='YCenter', type='float', value=-0.75, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
             dict(name='YSweep', type='float', value=0.5, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
             dict(name='Bidirectional', type='bool', value=True),
             dict(name='Overscan', type='float', value=2.0, suffix='%'),
@@ -294,7 +294,7 @@ class Imager(Module):
                 #elif scandir == 1:
                     #imgData[y*width:(y+1)*width] = NP.flipud(imgData[y*width:(y+1)*width])
                     #scandir = 0            
-            imgData = self.decomb(imgData, minShift=50e-6*sampleRate, maxShift=200e-6*sampleRate)  ## correct for mirror lag up to 200us
+            imgData = self.decomb(imgData, minShift=0*sampleRate, maxShift=200e-6*sampleRate)  ## correct for mirror lag up to 200us
         
         if overscanPixels > 0:
             imgData = imgData[overscanPixels:-overscanPixels]  ## remove overscan
