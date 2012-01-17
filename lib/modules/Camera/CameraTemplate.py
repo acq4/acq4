@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'CameraTemplate.ui'
 #
-# Created: Thu Jan 12 11:55:47 2012
+# Created: Fri Jan 13 13:37:45 2012
 #      by: PyQt4 UI code generator 4.9
 #
 # WARNING! All changes made in this file will be lost!
@@ -97,9 +97,6 @@ class Ui_MainWindow(object):
         self.btnFullFrame = QtGui.QPushButton(self.dockWidgetContents)
         self.btnFullFrame.setObjectName(_fromUtf8("btnFullFrame"))
         self.hboxlayout.addWidget(self.btnFullFrame)
-        self.scaleToImageBtn = QtGui.QPushButton(self.dockWidgetContents)
-        self.scaleToImageBtn.setObjectName(_fromUtf8("scaleToImageBtn"))
-        self.hboxlayout.addWidget(self.scaleToImageBtn)
         spacerItem1 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.hboxlayout.addItem(spacerItem1)
         self.gridLayout_2.addLayout(self.hboxlayout, 1, 0, 1, 1)
@@ -240,23 +237,10 @@ class Ui_MainWindow(object):
         sizePolicy.setHeightForWidth(self.dockWidgetContents_3.sizePolicy().hasHeightForWidth())
         self.dockWidgetContents_3.setSizePolicy(sizePolicy)
         self.dockWidgetContents_3.setObjectName(_fromUtf8("dockWidgetContents_3"))
-        self.vboxlayout1 = QtGui.QVBoxLayout(self.dockWidgetContents_3)
-        self.vboxlayout1.setSpacing(2)
-        self.vboxlayout1.setMargin(0)
-        self.vboxlayout1.setObjectName(_fromUtf8("vboxlayout1"))
-        self.label = QtGui.QLabel(self.dockWidgetContents_3)
-        self.label.setObjectName(_fromUtf8("label"))
-        self.vboxlayout1.addWidget(self.label)
-        self.splitter = QtGui.QSplitter(self.dockWidgetContents_3)
-        self.splitter.setOrientation(QtCore.Qt.Horizontal)
-        self.splitter.setObjectName(_fromUtf8("splitter"))
-        self.staticBgBtn = FeedbackButton(self.splitter)
-        self.staticBgBtn.setCheckable(True)
-        self.staticBgBtn.setObjectName(_fromUtf8("staticBgBtn"))
-        self.continuousBgBtn = QtGui.QPushButton(self.splitter)
-        self.continuousBgBtn.setCheckable(True)
-        self.continuousBgBtn.setObjectName(_fromUtf8("continuousBgBtn"))
-        self.vboxlayout1.addWidget(self.splitter)
+        self.gridLayout_3 = QtGui.QGridLayout(self.dockWidgetContents_3)
+        self.gridLayout_3.setMargin(0)
+        self.gridLayout_3.setSpacing(0)
+        self.gridLayout_3.setObjectName(_fromUtf8("gridLayout_3"))
         self.frame_2 = QtGui.QFrame(self.dockWidgetContents_3)
         self.frame_2.setFrameShape(QtGui.QFrame.StyledPanel)
         self.frame_2.setFrameShadow(QtGui.QFrame.Raised)
@@ -265,16 +249,11 @@ class Ui_MainWindow(object):
         self.hboxlayout2.setSpacing(0)
         self.hboxlayout2.setMargin(0)
         self.hboxlayout2.setObjectName(_fromUtf8("hboxlayout2"))
-        self.label_4 = QtGui.QLabel(self.frame_2)
+        self.gridLayout_3.addWidget(self.frame_2, 0, 0, 1, 1)
+        self.label_4 = QtGui.QLabel(self.dockWidgetContents_3)
         self.label_4.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.label_4.setObjectName(_fromUtf8("label_4"))
-        self.hboxlayout2.addWidget(self.label_4)
-        self.bgTimeSpin = QtGui.QDoubleSpinBox(self.frame_2)
-        self.bgTimeSpin.setSingleStep(1.0)
-        self.bgTimeSpin.setProperty("value", 5.0)
-        self.bgTimeSpin.setObjectName(_fromUtf8("bgTimeSpin"))
-        self.hboxlayout2.addWidget(self.bgTimeSpin)
-        self.vboxlayout1.addWidget(self.frame_2)
+        self.gridLayout_3.addWidget(self.label_4, 2, 0, 1, 1)
         self.frame_3 = QtGui.QFrame(self.dockWidgetContents_3)
         self.frame_3.setFrameShape(QtGui.QFrame.StyledPanel)
         self.frame_3.setFrameShadow(QtGui.QFrame.Raised)
@@ -291,13 +270,26 @@ class Ui_MainWindow(object):
         self.bgBlurSpin.setProperty("value", 0.0)
         self.bgBlurSpin.setObjectName(_fromUtf8("bgBlurSpin"))
         self.hboxlayout3.addWidget(self.bgBlurSpin)
-        self.vboxlayout1.addWidget(self.frame_3)
+        self.gridLayout_3.addWidget(self.frame_3, 4, 0, 1, 4)
+        spacerItem3 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.gridLayout_3.addItem(spacerItem3, 6, 1, 1, 1)
+        self.contAvgBgCheck = QtGui.QCheckBox(self.dockWidgetContents_3)
+        self.contAvgBgCheck.setObjectName(_fromUtf8("contAvgBgCheck"))
+        self.gridLayout_3.addWidget(self.contAvgBgCheck, 3, 0, 1, 4)
+        self.bgTimeSpin = QtGui.QDoubleSpinBox(self.dockWidgetContents_3)
+        self.bgTimeSpin.setDecimals(1)
+        self.bgTimeSpin.setSingleStep(1.0)
+        self.bgTimeSpin.setProperty("value", 5.0)
+        self.bgTimeSpin.setObjectName(_fromUtf8("bgTimeSpin"))
+        self.gridLayout_3.addWidget(self.bgTimeSpin, 2, 2, 1, 2)
+        self.collectBgBtn = QtGui.QPushButton(self.dockWidgetContents_3)
+        self.collectBgBtn.setCheckable(True)
+        self.collectBgBtn.setObjectName(_fromUtf8("collectBgBtn"))
+        self.gridLayout_3.addWidget(self.collectBgBtn, 1, 0, 1, 4)
         self.divideBgBtn = QtGui.QPushButton(self.dockWidgetContents_3)
         self.divideBgBtn.setCheckable(True)
         self.divideBgBtn.setObjectName(_fromUtf8("divideBgBtn"))
-        self.vboxlayout1.addWidget(self.divideBgBtn)
-        spacerItem3 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        self.vboxlayout1.addItem(spacerItem3)
+        self.gridLayout_3.addWidget(self.divideBgBtn, 5, 0, 1, 4)
         self.dockWidget_3.setWidget(self.dockWidgetContents_3)
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(2), self.dockWidget_3)
 
@@ -329,8 +321,6 @@ class Ui_MainWindow(object):
         self.spinExposure.setToolTip(QtGui.QApplication.translate("MainWindow", "Sets the exposure time for each frame.", None, QtGui.QApplication.UnicodeUTF8))
         self.btnFullFrame.setToolTip(QtGui.QApplication.translate("MainWindow", "Set the region of interest to the maximum possible area.", None, QtGui.QApplication.UnicodeUTF8))
         self.btnFullFrame.setText(QtGui.QApplication.translate("MainWindow", "Full Frame", None, QtGui.QApplication.UnicodeUTF8))
-        self.scaleToImageBtn.setToolTip(QtGui.QApplication.translate("MainWindow", "Scales the view such that camera pixels match screen pixels exactly. This can increase the rate frames are displayed (does not affect the acquisition rate, though).", None, QtGui.QApplication.UnicodeUTF8))
-        self.scaleToImageBtn.setText(QtGui.QApplication.translate("MainWindow", "Scale 1:1", None, QtGui.QApplication.UnicodeUTF8))
         self.dockWidget_2.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Display Gain", None, QtGui.QApplication.UnicodeUTF8))
         self.btnAutoGain.setToolTip(QtGui.QApplication.translate("MainWindow", "Determines the behavior of the white/black level sliders.\n"
 "When enabled, the sliders maximum and minimum values are set\n"
@@ -365,32 +355,19 @@ class Ui_MainWindow(object):
         self.clearFramesBtn.setToolTip(QtGui.QApplication.translate("MainWindow", "Clears all images from the canvas.", None, QtGui.QApplication.UnicodeUTF8))
         self.clearFramesBtn.setText(QtGui.QApplication.translate("MainWindow", "Clear", None, QtGui.QApplication.UnicodeUTF8))
         self.dockWidget_3.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Background Subtraction", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("MainWindow", "Collect Background:", None, QtGui.QApplication.UnicodeUTF8))
-        self.staticBgBtn.setToolTip(QtGui.QApplication.translate("MainWindow", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
-"<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
-"p, li { white-space: pre-wrap; }\n"
-"</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Collects a set of frames to use for background division.</span></p>\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Frames are collected for the amount of time set in Time const.</span></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.staticBgBtn.setText(QtGui.QApplication.translate("MainWindow", "Static", None, QtGui.QApplication.UnicodeUTF8))
-        self.continuousBgBtn.setToolTip(QtGui.QApplication.translate("MainWindow", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
-"<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
-"p, li { white-space: pre-wrap; }\n"
-"</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Collects frames continuously for background division.</span></p>\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Used to enhance time-varying signals.</span></p>\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Uses the time constant set below.</span></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.continuousBgBtn.setText(QtGui.QApplication.translate("MainWindow", "Continuous", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("MainWindow", "Time const.", None, QtGui.QApplication.UnicodeUTF8))
-        self.bgTimeSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "Sets the approximate number of frames to be averaged for\n"
-"background division.", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("MainWindow", "Blur Bg.", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_4.setText(QtGui.QApplication.translate("MainWindow", "Average", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_5.setText(QtGui.QApplication.translate("MainWindow", "Blur Background.", None, QtGui.QApplication.UnicodeUTF8))
         self.bgBlurSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Blurs the background frame before dividing it from the current frame.</span></p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Large blur values may cause performance to degrade.</span></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
+        self.contAvgBgCheck.setText(QtGui.QApplication.translate("MainWindow", "Continuous Average", None, QtGui.QApplication.UnicodeUTF8))
+        self.bgTimeSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "Sets the approximate number of frames to be averaged for\n"
+"background division.", None, QtGui.QApplication.UnicodeUTF8))
+        self.bgTimeSpin.setSuffix(QtGui.QApplication.translate("MainWindow", " s", None, QtGui.QApplication.UnicodeUTF8))
+        self.collectBgBtn.setText(QtGui.QApplication.translate("MainWindow", "Collect Background", None, QtGui.QApplication.UnicodeUTF8))
         self.divideBgBtn.setToolTip(QtGui.QApplication.translate("MainWindow", "Enables background division. \n"
 "Either a set of static background frames need to have already by collected\n"
 "(by pressing \'Static\' above) or \'Continuous\' needs to be pressed.", None, QtGui.QApplication.UnicodeUTF8))

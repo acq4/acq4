@@ -104,6 +104,9 @@ class ImageItem(GraphicsObject):
         #return self.whiteLevel, self.blackLevel
 
     def setLookupTable(self, lut, update=True):
+        """
+        Set the lookup table to use for this image. (see functions.makeARGB for more information on how this is used)
+        Optionally, lut can be a callable that accepts the current image as an argument and returns the lookup table to use."""
         self.lut = lut
         if update:
             self.updateImage()
@@ -198,7 +201,12 @@ class ImageItem(GraphicsObject):
         prof = debug.Profiler('ImageItem.render', disabled=True)
         if self.image is None:
             return
-        argb, alpha = fn.makeARGB(self.image, lut=self.lut, levels=self.levels)
+        if callable(self.lut):
+            lut = self.lut(self.image)
+        else:
+            lut = self.lut
+            
+        argb, alpha = fn.makeARGB(self.image, lut=lut, levels=self.levels)
         self.qimage = fn.makeQImage(argb, alpha)
         #self.pixmap = QtGui.QPixmap.fromImage(self.qimage)
         prof.finish()

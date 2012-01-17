@@ -151,6 +151,11 @@ class GraphicsScene(QtGui.QGraphicsScene):
                     if self.sendDragEvent(ev, init=init):
                         ev.accept()
                 
+    def leaveEvent(self, ev):  ## inform items that mouse is gone
+        if len(self.dragButtons) == 0:
+            self.sendHoverEvents(ev, exitOnly=True)
+        
+                
     def mouseReleaseEvent(self, ev):
         #print 'sceneRelease'
         if self.mouseGrabberItem() is None:
@@ -181,12 +186,21 @@ class GraphicsScene(QtGui.QGraphicsScene):
         if self.mouseGrabberItem() is None:  ## nobody claimed press; we are free to generate drag/click events
             self.clickEvents.append(MouseClickEvent(ev, double=True))
         
-    def sendHoverEvents(self, ev):
-        acceptable = int(ev.buttons()) == 0  ## if a button 
-        event = HoverEvent(ev, acceptable)
+    def sendHoverEvents(self, ev, exitOnly=False):
+        ## if exitOnly, then just inform all previously hovered items that the mouse has left.
+        
+        if exitOnly:
+            acceptable=False
+            items = []
+            event = HoverEvent(None, acceptable)
+        else:
+            acceptable = int(ev.buttons()) == 0  ## if we are in mid-drag, do not allow items to accept the hover event.
+            event = HoverEvent(ev, acceptable)
+            items = self.itemsNearEvent(event)
+            self.sigMouseHover.emit(items)
+            
         prevItems = self.hoverItems.keys()
-        items = self.itemsNearEvent(event)
-        self.sigMouseHover.emit(items)
+            
         for item in items:
             if hasattr(item, 'hoverEvent'):
                 event.currentItem = item
@@ -375,7 +389,13 @@ class GraphicsScene(QtGui.QGraphicsScene):
                 items2.append(item)
         
         ## Sort by descending Z-order (don't trust scene.itms() to do this either)
-        items2.sort(lambda a,b: cmp(b.zValue(), a.zValue()))
+        ## use 'absolute' z value, which is the sum of all item/parent ZValues
+        def absZValue(item):
+            if item is None:
+                return 0
+            return item.zValue() + absZValue(item.parentItem())
+        
+        items2.sort(lambda a,b: cmp(absZValue(b), absZValue(a)))
         
         return items2
         
@@ -643,12 +663,16 @@ class HoverEvent:
         self.__clickItems = weakref.WeakValueDictionary()
         self.__dragItems = weakref.WeakValueDictionary()
         self.currentItem = None
-        self._scenePos = moveEvent.scenePos()
-        self._screenPos = moveEvent.screenPos()
-        self._lastScenePos = moveEvent.lastScenePos()
-        self._lastScreenPos = moveEvent.lastScreenPos()
-        self._buttons = moveEvent.buttons()
-        self._modifiers = moveEvent.modifiers()
+        if moveEvent is not None:
+            self._scenePos = moveEvent.scenePos()
+            self._screenPos = moveEvent.screenPos()
+            self._lastScenePos = moveEvent.lastScenePos()
+            self._lastScreenPos = moveEvent.lastScreenPos()
+            self._buttons = moveEvent.buttons()
+            self._modifiers = moveEvent.modifiers()
+        else:
+            self.exit = True
+            
         
         
     def isEnter(self):

@@ -1,30 +1,18 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-## TODO
-# reliable error messaging for missed frames
-# Add fast/simple histogram 
-
-#from __future__ import with_statement
-
-from CameraTemplate import Ui_MainWindow
-#from pyqtgraph.GraphicsView import *
-#from pyqtgraph.graphicsItems import *
-import pyqtgraph as pg
-#from pyqtgraph import ROI
-import ptime
-from lib.filetypes.ImageFile import *
-from Mutex import Mutex, MutexLocker
-from PyQt4 import QtGui, QtCore
-import scipy.ndimage
 import time, types, os.path, re, sys
+from PyQt4 import QtGui, QtCore
+from CameraTemplate import Ui_MainWindow
+import pyqtgraph as pg
+from pyqtgraph import SignalProxy, Point
+import ptime
+#from lib.filetypes.ImageFile import *
+from Mutex import Mutex, MutexLocker
+import numpy as np
+import scipy.ndimage
 from debug import *
 from metaarray import *
-#import sip
-from pyqtgraph import SignalProxy, Point
-#from lib.Manager import getManager
 import lib.Manager as Manager
-import numpy as np
 from RecordThread import RecordThread
 from lib.LogWindow import LogButton
 from StatusBar import StatusBar
@@ -62,38 +50,48 @@ class CameraWindow(QtGui.QMainWindow):
     sigCameraScaleChanged = QtCore.Signal()
     
     def __init__(self, module):
-        
+        self.hasQuit = False
         self.module = module ## handle to the rest of the application
+        
+        ## Camera state variables
         self.cam = self.module.cam
         self.roi = None
         self.exposure = 0.001
         self.binning = 1
         self.region = None
-        #self.acquireThread = self.module.cam.acqThread
-        #self.acquireThread.setParam('binning', self.binning)
-        #self.acquireThread.setParam('exposure', self.exposure)
         
-        #self.frameBuffer = []
+        ## ROI state variables
         self.lastPlotTime = None
         self.ROIs = []
         self.plotCurves = []
         
-        
+        ## Frame handling variables
         self.nextFrame = None
         self.updateFrame = False
         self.currentFrame = None
-        self.currentClipMask = None
+        #self.currentClipMask = None
         self.backgroundFrame = None
         self.blurredBackgroundFrame = None
         self.lastDrawTime = None
         self.fps = None
         self.bgStartTime = None
         self.bgFrameCount = 0
+        #self.levelMax = 1
+        #self.levelMin = 0
+        self.lastMinMax = None  ## Records most recently measured maximum/minimum image values
+        #self.AGCLastMax = None
+        self.autoGainLevels = [0.0, 1.0]
+        self.ignoreLevelChange = False
+        self.persistentFrames = []
         
+        
+        ## Start building UI
         QtGui.QMainWindow.__init__(self)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+        #self.setCentralWidget(self.ui.centralwidget)
         
+        ## Load previous window state
         self.stateFile = os.path.join('modules', self.module.name + '_ui.cfg')
         uiState = module.manager.readConfigFile(self.stateFile)
         if 'geometry' in uiState:
@@ -103,85 +101,34 @@ class CameraWindow(QtGui.QMainWindow):
             ws = QtCore.QByteArray.fromPercentEncoding(uiState['window'])
             self.restoreState(ws)
         
-        
-        #self.ui.histogram.invertY(False)
-        #self.avgLevelLine = QtGui.QGraphicsLineItem()
-        #self.avgLevelLine.setPen(QtGui.QPen(QtGui.QColor(200, 200, 0)))
-        #self.histogramCurve = pg.PlotCurveItem()
-        #self.ui.histogram.scene().addItem(self.avgLevelLine)
-        #self.ui.histogram.scene().addItem(self.histogramCurve)
-        #self.histogramCurve.rotate(-90)
-        #self.histogramCurve.scale(1.0, -1.0)
-        self.lastHistogramUpdate = 0
-        
-        self.levelMax = 1
-        self.levelMin = 0
-        self.lastMinMax = None  ## Records most recently measured maximum/minimum image values
-        
-        
-        #self.ticks = [t[0] for t in self.ui.gradientWidget.listTicks()]
-        #self.ticks[0].colorChangeAllowed = False
-        #self.ticks[1].colorChangeAllowed = False
-        #self.ui.gradientWidget.allowAdd = False
-        #self.ui.gradientWidget.setTickColor(self.ticks[1], QtGui.QColor(255,255,255))
-        #self.ui.gradientWidget.setOrientation('right')
-        
-        
-        
-        ## Create device configuration dock 
-        #dw = self.module.cam.deviceInterface()
-        #dock = QtGui.QDockWidget(self)
-        #dock.setFeatures(dock.DockWidgetMovable|dock.DockWidgetFloatable|dock.DockWidgetVerticalTitleBar)
-        #dock.setWidget(dw)
-        #self.addDockWidget(QtCore.Qt.TopDockWidgetArea, dock)
-        
-        self.hasQuit = False
-        
-        
-        ## Set up camera graphicsView
-        #l = QtGui.QVBoxLayout(self.ui.graphicsWidget)
-        #l.setContentsMargins(0,0,0,0)
-        #self.gv = pg.GraphicsView(self.ui.graphicsWidget)
-        #l.addWidget(self.gv)
-        #self.gv.enableMouse()
+        ## set up ViewBox
         self.view = pg.ViewBox()
+        self.view.setAspectLocked(True)
+        self.view.invertY()
         self.ui.graphicsView.setCentralItem(self.view)
-
-        #self.ui.plotWidget.setCanvasBackground(QtGui.QColor(0,0,0))
-        #self.ui.plotWidget.enableAxis(Qwt.QwtPlot.xBottom, False)
-        #self.ui.plotWidget.replot()
-
-        self.setCentralWidget(self.ui.centralwidget)
-        #self.scene = self.gv.scene()
         
+        ## set up item groups
         self.cameraItemGroup = pg.ItemGroup()
         self.scopeItemGroup = pg.ItemGroup()
-        
         self.view.addItem(self.cameraItemGroup)
         self.view.addItem(self.scopeItemGroup)
         self.scopeItemGroup.setZValue(10)
         self.cameraItemGroup.setZValue(0)
+        
+        ## video image item
         self.imageItem = pg.ImageItem()
         self.view.addItem(self.imageItem)
         self.imageItem.setParentItem(self.cameraItemGroup)
         self.imageItem.setZValue(-10)
-        
         self.ui.histogram.setImageItem(self.imageItem)
         
         #grid = Grid(self.gv)
         #self.scene.addItem(grid)
         
+        ## Scale bar
         self.scaleBar = pg.ScaleBar(100e-6)
         self.view.addItem(self.scaleBar)
-        
-        #self.gv.setScene(self.scene)
-        self.view.setAspectLocked(True)
-        self.view.invertY()
-        self.AGCLastMax = None
-        self.autoGainLevels = [0.0, 1.0]
 
-        self.persistentFrames = []
-        
         ### Set up status bar labels
         self.recLabel = QtGui.QLabel()
         self.fpsLabel = QtGui.QLabel()
@@ -210,49 +157,43 @@ class CameraWindow(QtGui.QMainWindow):
         #self.statusBar().addPermanentWidget(self.logBtn)
         #self.logBtn.clicked.connect(module.manager.showLogWindow)
         
+        ## done with UI
         self.show()
-        self.openCamera()
-        self.ui.plotWidget.resize(self.ui.plotWidget.size().width(), 40)
+        #self.ui.plotWidget.resize(self.ui.plotWidget.size().width(), 40)
         
-       
-
+        
+        
+        ## set up recording thread
         self.recordThread = RecordThread(self, self.module.manager)
         self.recordThread.start()
         self.recordThread.sigShowMessage.connect(self.showMessage)
         self.recordThread.finished.connect(self.recordThreadStopped)
         self.recordThread.sigRecordingFinished.connect(self.recordFinished)
-        #QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('recordingFailed'), self.recordingFailed, QtCore.Qt.QueuedConnection)
         self.recordThread.sigRecordingFailed.connect(self.recordingFailed)
         
-    
 
-
-
+        ## open camera, determine bit depth and sensor area
+        self.openCamera()
+        
         ## Initialize values
         self.cameraCenter = self.scopeCenter = [self.camSize[0]*0.5, self.camSize[1]*0.5]
         self.cameraScale = [1, 1]
         self.view.setRange(QtCore.QRectF(0, 0, self.camSize[0], self.camSize[1]))
         
-        
-        
-        
+        ## Camera region-of-interest control
         self.roi = CamROI(self.camSize, parent=self.cameraItemGroup)
         self.roi.sigRegionChangeFinished.connect(self.regionWidgetChanged)
-        #self.cameraItemGroup.addToGroup(self.roi)
         self.roi.setZValue(-1)
         self.setRegion()
         
+        ## Set up microscope objective borders
         self.borders = []
         scope = self.module.cam.getScopeDevice()
         if scope is not None:
-            #QtCore.QObject.connect(scope, QtCore.SIGNAL('objectiveListChanged'), self.updateBorders)
             scope.sigObjectiveListChanged.connect(self.updateBorders)
-            #QtCore.QObject.connect(scope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
             self.cameraCenter = self.cam.getPosition()
             self.cameraScale = self.cam.getPixelSize()
             self.scopeCenter = self.cam.getPosition(justScope=True)
-            #print self.cameraCenter, self.scopeCenter
-            #self.updateBorders()
             self.centerView()
         self.updateBorders()
         
@@ -261,18 +202,16 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.spinExposure.setValue(self.exposure)
         self.ui.spinExposure.setOpts(dec=True, step=1, minStep=100e-6, siPrefix=True, suffix='s', bounds=[0, 10])
         
+        ## connect UI signals
         self.ui.btnAcquire.clicked.connect(self.toggleAcquire)
         self.ui.btnRecord.toggled.connect(self.toggleRecord)
         #Signals from self.ui.btnSnap and self.ui.btnRecord are caught by the RecordThread
         self.ui.btnFullFrame.clicked.connect(lambda: self.setRegion())
-        self.ui.scaleToImageBtn.clicked.connect(self.scaleToImage)
-        
-        
-        ## Use delayed connection for these two widgets
+        #self.ui.scaleToImageBtn.clicked.connect(self.scaleToImage)
         self.proxy1 = SignalProxy(self.ui.binningCombo.currentIndexChanged, slot=self.binningComboChanged)
         self.ui.spinExposure.valueChanged.connect(self.setExposure)  ## note that this signal (from lib.util.SpinBox) is delayed.
         
-        
+        ## Signals from Camera device
         self.cam.sigNewFrame.connect(self.newFrame)
         self.cam.sigCameraStopped.connect(self.cameraStopped)
         self.cam.sigCameraStarted.connect(self.cameraStarted)
@@ -281,7 +220,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         ## Connect Background Subtraction Dock
         self.ui.bgBlurSpin.valueChanged.connect(self.updateBackgroundBlur)
-        self.ui.staticBgBtn.clicked.connect(self.collectStaticBackground)
+        self.ui.collectBgBtn.clicked.connect(self.collectBgClicked)
         self.ui.divideBgBtn.clicked.connect(self.divideClicked)
         self.ui.bgBlurSpin.valueChanged.connect(self.requestFrameUpdate)
         
@@ -294,17 +233,13 @@ class CameraWindow(QtGui.QMainWindow):
         ## Connect DisplayGain dock
         self.ui.histogram.sigLookupTableChanged.connect(self.levelsChanged)
         self.ui.histogram.sigLevelsChanged.connect(self.levelsChanged)
-        
         self.ui.btnAutoGain.toggled.connect(self.toggleAutoGain)
         self.ui.btnAutoGain.setChecked(True)
-        
         
         ## Connect Persistent Frames dock
         self.ui.addFrameBtn.clicked.connect(self.addPersistentFrame)
         self.ui.clearFramesBtn.clicked.connect(self.clearPersistentFrames)
-        
-        
-        
+
         
         ## Check for new frame updates every 16ms
         ## Some checks may be skipped even if there is a new frame waiting to avoid drawing more than 
@@ -335,7 +270,6 @@ class CameraWindow(QtGui.QMainWindow):
             border.setPen(QtGui.QPen(QtGui.QColor(50,80,80))) 
             border.setZValue(10)
             self.scopeItemGroup.resetTransform()
-            #self.scopeItemGroup.addToGroup(border)
             self.borders.append(border)
         self.updateCameraDecorations()
 
@@ -361,8 +295,6 @@ class CameraWindow(QtGui.QMainWindow):
         (img, info) = self.currentFrame
         s = info['pixelSize']
         p = info['imagePosition']
-        #r = info['region']
-        #b = info['binning']
         self.persistentFrames.append(im)
         self.addItem(im, p, s, z)
         
@@ -374,11 +306,9 @@ class CameraWindow(QtGui.QMainWindow):
         
         if pos is None:
             pos = self.cameraCenter
-#        item.resetTransform()
         item.setPos(QtCore.QPointF(pos[0], pos[1]))
         item.scale(scale[0], scale[1])
         item.setZValue(z)
-        #print pos, item.mapRectToScene(item.boundingRect())
     
     def removeItem(self, item):
         self.view.removeItem(item)
@@ -386,7 +316,6 @@ class CameraWindow(QtGui.QMainWindow):
     #@trace
     def  clearPersistentFrames(self):
         for i in self.persistentFrames:
-            #self.persistentGroup1.removeFromGroup(i)
             self.view.removeItem(i)
         self.persistentFrames = []
 
@@ -398,9 +327,6 @@ class CameraWindow(QtGui.QMainWindow):
         roi.setPen(pen)
         self.view.addItem(roi)
         plot = self.ui.plotWidget.plot(pen=pen)
-        #plot = PlotCurve('roi%d'%len(self.ROIs))
-        #plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        #plot.attach(self.ui.plotWidget)
         self.ROIs.append({'roi': roi, 'plot': plot, 'vals': [], 'times': []})
         
     def clearROIs(self):
@@ -411,7 +337,6 @@ class CameraWindow(QtGui.QMainWindow):
         
     #@trace
     def clearFrameBuffer(self):
-        #self.frameBuffer = []
         for r in self.ROIs:
             r['vals'] = []
             r['times'] = []
@@ -432,7 +357,6 @@ class CameraWindow(QtGui.QMainWindow):
             self.ui.recordXframesSpin.setEnabled(False)
             self.ui.framesLabel.setEnabled(False)
         else:
-            #printExc( "Record button toggled off.")
             self.ui.btnRecord.setChecked(False)
             self.ui.recordXframesCheck.setEnabled(True)
             self.ui.recordXframesSpin.setEnabled(True)
@@ -445,17 +369,27 @@ class CameraWindow(QtGui.QMainWindow):
         self.toggleRecord(False)
         self.ui.btnRecord.setEnabled(False)  ## Recording thread has stopped, can't record anymore.
         self.showMessage("Recording thread died! See console for error message.")
-        #print "Recording thread stopped."
             
     def recordingFailed(self):
         self.toggleRecord(False)
         self.showMessage("Recording failed! See console for error message.")
-        #print "Recording failed."
 
     #@trace
     def levelsChanged(self):
-        #self.updateColorScale()
-        self.requestFrameUpdate()
+        if self.ui.btnAutoGain.isChecked() and not self.ignoreLevelChange:
+            if self.lastMinMax is None:
+                return
+            bl, wl = self.getLevels()
+            mn, mx = self.lastMinMax
+            rng = float(mx-mn)
+            if rng == 0:
+                return
+            newLevels = [(bl-mn) / rng, (wl-mn) / rng]
+            #print "autogain:", newLevels
+            #import traceback
+            #print "\n".join(traceback.format_stack())
+            self.autoGainLevels = newLevels
+        #self.requestFrameUpdate()
 
     #@trace
     def requestFrameUpdate(self):
@@ -463,8 +397,9 @@ class CameraWindow(QtGui.QMainWindow):
 
     #@trace
     def divideClicked(self):
-        self.AGCLastMax = None
-        self.AGCLastMin = None
+        #self.AGCLastMax = None
+        #self.AGCLastMin = None
+        self.lastMinMax = None
         #self.setLevelRange()
         #if self.ui.divideBgBtn.isChecked() and not self.ui.btnLockBackground.isChecked():
             #self.backgroundFrame = None
@@ -488,8 +423,8 @@ class CameraWindow(QtGui.QMainWindow):
             self.region = newRegion
             self.cam.setParam('region', self.region, autoRestart=autoRestart)
         
-    def scaleToImage(self):
-        self.gv.scaleToImage(self.imageItem)
+    #def scaleToImage(self):
+        #self.gv.scaleToImage(self.imageItem)
             
     #@trace
     def closeEvent(self, ev):
@@ -497,7 +432,6 @@ class CameraWindow(QtGui.QMainWindow):
 
     #@trace
     def quit(self):
-        #self.frameTimer.stop()
         geom = self.geometry()
         uiState = {'window': str(self.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
         Manager.getManager().writeConfigFile(uiState, self.stateFile)
@@ -507,44 +441,31 @@ class CameraWindow(QtGui.QMainWindow):
         if self.hasQuit:
             return
         try:
-            #QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
-            
             self.recordThread.sigShowMessage.disconnect(self.showMessage)
-            #QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('finished()'), self.recordThreadStopped)
             self.recordThread.finished.disconnect(self.recordThreadStopped)
-            #QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('recordingFailed'), self.recordingFailed)
             self.recordThread.sigRecordingFailed.disconnect(self.recordingFailed)
             self.recordThread.sigRecordingFinished.disconnect(self.recordFinished)
         except TypeError:
             pass
         
         try:
-            #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('newFrame'), self.newFrame)
             self.cam.sigNewFrame.disconnect(self.newFrame)
-            #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('cameraStopped'), self.cameraStopped)
             self.cam.sigCameraStopped.disconnect(self.cameraStopped)
-            #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('cameraStarted'), self.cameraStarted)
             self.cam.sigCameraStarted.disconnect(self.cameraStarted)
-            #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('showMessage'), self.showMessage)
             self.cam.sigShowMessage.disconnect(self.showMessage)
         except TypeError:
             pass
         
         self.hasQuit = True
         if self.cam.isRunning():
-            #print "Stopping acquisition thread.."
             self.cam.stop()
             if not self.cam.wait(10000):
                 printExc("Timed out while waiting for acq thread exit!")
         if self.recordThread.isRunning():
-            #print "Stopping recording thread.."
             self.recordThread.stop()
-            #print "  requested stop, waiting for thread -- running=",self.recordThread.isRunning() 
             if not self.recordThread.wait(10000):
                 raise Exception("Timed out while waiting for rec. thread exit!")
-            #print "  record thread finished."
         del self.recordThread  ## Required due to cyclic reference
-        #sip.delete(self)
         self.module.quit(fromUi=True)
 
     #@trace
@@ -580,18 +501,15 @@ class CameraWindow(QtGui.QMainWindow):
 
     #@trace
     def cameraStopped(self):
-        #printExc("ACQ stopped; stopping record.")
-        #print "Signal sender was: ", self.sender()
         self.toggleRecord(False)
-        #if not self.ui.btnLockBackground.isChecked():
-        self.backgroundFrame = None
+        #self.backgroundFrame = None
         self.ui.btnAcquire.setChecked(False)
         self.ui.btnAcquire.setEnabled(True)
         
     #@trace
     def cameraStarted(self):
-        self.AGCLastMax = None
-        self.AGCLastMin = None
+        #self.AGCLastMax = None
+        #self.AGCLastMin = None
         self.ui.btnAcquire.setChecked(True)
         self.ui.btnAcquire.setEnabled(True)
 
@@ -601,15 +519,12 @@ class CameraWindow(QtGui.QMainWindow):
     #@trace
     def setBinning(self, ind=None, autoRestart=True):
         """Set camera's binning value. If ind is specified, it is the index from binningCombo from which to grab the new binning value."""
-        #sys.stdout.write("+")
         self.backgroundFrame = None
         if ind is not None:
             self.binning = int(self.ui.binningCombo.itemText(ind))
         self.cam.setParam('binning', (self.binning, self.binning), autoRestart=autoRestart)
-        #self.acquireThread.reset()
         self.clearFrameBuffer()
         self.updateRgnLabel()
-        #sys.stdout.write("- ")
         
     def setUiBinning(self, b):
         ind = self.ui.binningCombo.findText(str(b))
@@ -619,7 +534,6 @@ class CameraWindow(QtGui.QMainWindow):
         
     #@trace
     def setExposure(self, e=None, autoRestart=True):
-        #print "Set exposure:", e
         if e is not None:
             self.exposure = e
         self.cam.setParam('exposure', self.exposure, autoRestart=autoRestart)
@@ -627,10 +541,8 @@ class CameraWindow(QtGui.QMainWindow):
     #@trace
     def openCamera(self, ind=0):
         try:
-            #self.cam = self.module.cam.getCamera()
             self.bitDepth = self.cam.getParam('bitDepth')
-            #self.ui.histogram.setRange(QtCore.QRectF(0, -2**self.bitDepth, 1, 2**self.bitDepth))
-            self.setLevelRange()
+            #self.setLevelRange()
             self.camSize = self.cam.getParam('sensorSize')
             self.ui.statusbar.showMessage("Opened camera %s" % self.cam, 5000)
             self.scope = self.module.cam.getScopeDevice()
@@ -691,53 +603,32 @@ class CameraWindow(QtGui.QMainWindow):
         self.rgnLabel.setText('[%d, %d, %d, %d] %dx%d' % (self.region[0], self.region[1], (img.shape[0]-1)*self.binning, (img.shape[1]-1)*self.binning, self.binning, self.binning))
     
     #@trace
-    def setLevelRange(self, rmin=None, rmax=None):
-        
-        if rmin is None:
-            if self.ui.btnAutoGain.isChecked():
-                rmin = 0.0
-                rmax = 1.0
-                #self.ui.gradientWidget.tickMoved(self.ticks[1], QtCore.QPointF(rmax, 0.0))
-                #self.ui.gradientWidget.tickMoved(self.ticks[0], QtCore.QPointF(rmin, 0.0))
-                #self.ui.gradientWidget.setTickValue(1, rmax)
-                #self.ui.gradientWidget.setTickValue(0, rmin)
-                self.ui.histogram.setLevels(rmin, rmax)
-            else:
-                bl, wl = self.getLevels()
-                if self.ui.divideBgBtn.isChecked():
-                    rmin = 0.0
-                    rmax = 2.0
-                else:
-                    rmin = 0.0
-                    rmax = float(2**self.bitDepth - 1)
-                    #self.ui.gradientWidget.tickMoved(self.ticks[1], QtCore.QPointF(wl/rmax, 0.0))
-                    #self.ui.gradientWidget.tickMoved(self.ticks[0], QtCore.QPointF(bl/rmax, 0.0))
-                    #self.ui.gradientWidget.setTickValue(1, wl/rmax)
-                    #self.ui.gradientWidget.setTickValue(0, bl/rmax)
-                    self.ui.histogram.setLevels(bl/rmax, wl/rmax)
-        self.levelMin = rmin
-        self.levelMax = rmax
+    #def setLevelRange(self, rmin=None, rmax=None):
+        ### 
+        #if rmin is None:
+            #if self.ui.btnAutoGain.isChecked():
+                #rmin = 0.0
+                #rmax = 1.0
+                #self.ui.histogram.setLevels(rmin, rmax)
+            #else:
+                #bl, wl = self.getLevels()
+                #if self.ui.divideBgBtn.isChecked():
+                    #rmin = 0.0
+                    #rmax = 2.0
+                #else:
+                    #rmin = 0.0
+                    #rmax = float(2**self.bitDepth - 1)
+                    #self.ui.histogram.setLevels(bl/rmax, wl/rmax)
+        #self.levelMin = rmin
+        #self.levelMax = rmax
         
         
     #@trace
     def getLevels(self):
-        #wl = self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[1])
-        #bl = self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[0])
-        
         return self.ui.histogram.getLevels()
 
     #@trace
     def toggleAutoGain(self, b):
-        #bl, wl = self.getLevels()
-        #self.setLevelRange()
-        #if not b and self.lastMinMax is not None:
-            ##print bl, wl
-            #wl = self.lastMinMax[0] + (self.lastMinMax[1]-self.lastMinMax[0]) * wl
-            #bl = self.lastMinMax[0] + (self.lastMinMax[1]-self.lastMinMax[0]) * bl
-            #print bl, wl, self.lastMinMax
-            #self.ui.gradientWidget.setTickValue(1, wl/float(2**self.bitDepth - 1))
-            #self.ui.gradientWidget.setTickValue(0, bl/float(2**self.bitDepth - 1))
-            #self.ui.histogram.setLevels(bl/float(2**self.bitDepth - 1), wl/float(2**self.bitDepth - 1))
         if b:
             self.lastAGCMax = None
             #self.ui.histogram.setLevels(*self.lastMinMax)
@@ -841,26 +732,40 @@ class CameraWindow(QtGui.QMainWindow):
         ## self.nextFrame gets picked up by drawFrame() at some point
         self.nextFrame = frame
         
-        if self.ui.staticBgBtn.isChecked():
-            if self.bgStartTime == None:
-                self.bgStartTime = ptime.time()
-            if ptime.time()-self.bgStartTime < self.ui.bgTimeSpin.value():
-                if self.backgroundFrame == None:
-                    self.backgroundFrame = frame[0].astype(float)
-                else:
-                    x = float(self.bgFrameCount)/(self.bgFrameCount + 1)
-                    #print "mix:", x
-                    self.backgroundFrame = x * self.backgroundFrame + (1-x)*frame[0].astype(float)
-                self.bgFrameCount += 1
+        ## stop collecting bg frames if we are in static mode and time is up
+        if self.ui.collectBgBtn.isChecked() and not self.ui.contAvgBgCheck.isChecked():
+            #if self.bgStartTime == None:
+                #self.bgStartTime = ptime.time()
+            timeLeft = self.ui.bgTimeSpin.value() - (ptime.time()-self.bgStartTime)
+            if timeLeft > 0:
+                self.ui.collectBgBtn.setText("Collecting... (%d)" % int(timeLeft+1))
             else:
-                self.ui.staticBgBtn.setChecked(False)
-                self.updateBackgroundBlur()
+                self.ui.collectBgBtn.setChecked(False)
+                self.ui.collectBgBtn.setText("Collect Background")
+                
+        if self.ui.collectBgBtn.isChecked():
+            if self.ui.contAvgBgCheck.isChecked():
+                x = 1.0 - 1.0 / (self.ui.bgTimeSpin.value()+1.0)
+            else:
+                x = float(self.bgFrameCount)/(self.bgFrameCount + 1)
+                self.bgFrameCount += 1
+                
+            if self.backgroundFrame == None:
+                self.backgroundFrame = frame[0].astype(float)
+            else:
+                #print "mix:", x
+                self.backgroundFrame = x * self.backgroundFrame + (1-x)*frame[0].astype(float)
     
-    def collectStaticBackground(self):
+    def collectBgClicked(self, checked):
         ###self.backgroundFrame = ### an average of frames collected -- how to do this?
-        self.backgroundFrame = None ## reset background frame
-        self.bgFrameCount = 0
-        self.bgStartTime = ptime.time()
+        if checked:
+            if not self.ui.contAvgBgCheck.isChecked():
+                self.backgroundFrame = None ## reset background frame
+                self.bgFrameCount = 0
+                self.bgStartTime = ptime.time()
+            self.ui.collectBgBtn.setText("Collecting...")
+        else:
+            self.ui.collectBgBtn.setText("Collect Background")
         #self.updateBackgroundBlur()
         #pass
     
@@ -870,6 +775,12 @@ class CameraWindow(QtGui.QMainWindow):
             self.blurredBackgroundFrame = scipy.ndimage.gaussian_filter(self.backgroundFrame, (b, b))
         else:
             self.blurredBackgroundFrame = self.backgroundFrame
+
+    def getBackgroundFrame(self):
+        if self.backgroundFrame is None:
+            return None
+        self.updateBackgroundBlur()
+        return self.blurredBackgroundFrame
         
     #@trace
     def drawFrame(self):
@@ -902,44 +813,31 @@ class CameraWindow(QtGui.QMainWindow):
             
             ## Handle the next available frame, if there is one.
             if self.nextFrame is not None:
-                #print "===== New Frame ====="
-                #print "   pre: LevelMin ", self.levelMin
-                #print "        LevelMax ", self.levelMax
-                #print "        AGCLastMax", self.AGCLastMax
-                #print "        AGCLastMin", self.AGCLastMin
-                
                 self.currentFrame = self.nextFrame
                 self.nextFrame = None
-                (data, info) = self.currentFrame
-                self.currentClipMask = (data >= (2**self.bitDepth * 0.99)) ##mask of pixels that are saturated
-                
-                #self.ui.levelThermo.setValue(int(data.mean()))
+                #(data, info) = self.currentFrame
+                #self.currentClipMask = (data >= (2**self.bitDepth * 0.99)) ##mask of pixels that are saturated
                 
                 ## If continous background division is enabled, mix the current frame into the background frame
+                #if self.ui.continuousBgBtn.isChecked():
+                    #if self.backgroundFrame is None or self.backgroundFrame.shape != data.shape:
+                        #self.backgroundFrame = data.astype(float)
+                    #s = 1.0 - 1.0 / (self.ui.bgTimeSpin.value()+1.0)
+                    #self.backgroundFrame *= s
+                    #self.backgroundFrame += data * (1.0-s)
+                #if self.ui.continuousBgBtn.isChecked() or self.ui.staticBgBtn.isChecked():
                 #if self.ui.divideBgBtn.isChecked():
-                if self.ui.continuousBgBtn.isChecked():
-                    if self.backgroundFrame is None or self.backgroundFrame.shape != data.shape:
-                        self.backgroundFrame = data.astype(float)
-                    #if not self.ui.btnLockBackground.isChecked():
-                    s = 1.0 - 1.0 / (self.ui.bgTimeSpin.value()+1.0)
-                    self.backgroundFrame *= s
-                    self.backgroundFrame += data * (1.0-s)
-                    #b = self.ui.bgBlurSpin.value()
-                    #if b > 0.0:
-                        #self.blurredBackgroundFrame = scipy.ndimage.gaussian_filter(self.backgroundFrame, (b, b))
-                    #else:
-                        #self.blurredBackgroundFrame = self.backgroundFrame
-                if self.ui.continuousBgBtn.isChecked() or self.ui.staticBgBtn.isChecked():
-                    self.updateBackgroundBlur()
+                    #self.updateBackgroundBlur()
             (data, info) = self.currentFrame
 
             
             ## divide the background out of the current frame if needed
-            if self.ui.divideBgBtn.isChecked() and self.backgroundFrame is not None:
-                data = data / self.blurredBackgroundFrame
+            if self.ui.divideBgBtn.isChecked():
+                bg = self.getBackgroundFrame()
+                if bg is not None:
+                    data = data / bg
             
-            ## determine black/white levels from level controls
-            (bl, wl) = self.getLevels()
+            ## Set new levels if auto gain is enabled
             if self.ui.btnAutoGain.isChecked():
                 cw = self.ui.spinAutoGainCenterWeight.value()
                 (w,h) = data.shape
@@ -948,81 +846,65 @@ class CameraWindow(QtGui.QMainWindow):
                 maxVal = data.max() * (1.0-cw) + center.max() * cw
                 
                 ## Smooth min/max range to avoid noise
-                if self.AGCLastMax is None:
+                if self.lastMinMax is None:
                     minVal = minVal
                     maxVal = maxVal
                 else:
                     s = 1.0 - 1.0 / (self.ui.spinAutoGainSpeed.value()+1.0)
-                    minVal = self.AGCLastMin * s + minVal * (1.0-s)
-                    maxVal = self.AGCLastMax * s + maxVal * (1.0-s)
+                    minVal = self.lastMinMax[0] * s + minVal * (1.0-s)
+                    maxVal = self.lastMinMax[1] * s + maxVal * (1.0-s)
                     
-                ## Convert current levels into fraction of previous range
-                if self.AGCLastMax is None:
-                    bl = 0.0
-                    wl = 1.0
-                else:
-                    bl = float(bl - self.AGCLastMin) / (self.AGCLastMax-self.AGCLastMin)
-                    wl = float(wl - self.AGCLastMin) / (self.AGCLastMax-self.AGCLastMin)
-                #print "========"
-                #print bl, wl
+                self.lastMinMax = [minVal, maxVal]
+                
                 ## and convert fraction of previous range into new levels
-                bl = bl * (maxVal-minVal) + minVal
-                wl = wl * (maxVal-minVal) + minVal
-                #print bl, wl
+                bl = self.autoGainLevels[0] * (maxVal-minVal) + minVal
+                wl = self.autoGainLevels[1] * (maxVal-minVal) + minVal
                 
-                self.AGCLastMax = maxVal
-                self.AGCLastMin = minVal
+                #self.AGCLastMax = maxVal
+                #self.AGCLastMin = minVal
                 
-                #wl = minVal + (maxVal-minVal) * wl
-                #bl = minVal + (maxVal-minVal) * bl
-                
-                #bl = 
-                
-                self.lastMinMax = minVal, maxVal
-                self.ui.histogram.setLevels(bl, wl)
-                self.ui.histogram.setHistogramRange(minVal, maxVal, padding=0.05)
-            #print "  post: LevelMin ", self.levelMin
-            #print "        LevelMax ", self.levelMax
-            #print "        AGCLastMax", self.AGCLastMax
-            #print "        AGCLastMin", self.AGCLastMin
+                #self.lastMinMax = minVal, maxVal
+                self.ignoreLevelChange = True
+                try:
+                    self.ui.histogram.setLevels(bl, wl)
+                    self.ui.histogram.setHistogramRange(minVal, maxVal, padding=0.05)
+                finally:
+                    self.ignoreLevelChange = False
+            else:
+                self.ignoreLevelChange = True
+                try:
+                    self.ui.histogram.setHistogramRange(0, 2**self.bitDepth)
+                finally:
+                    self.ignoreLevelChange = False
             
             ## Update histogram plot
-            self.updateHistogram(self.currentFrame[0], wl, bl)
+            #self.updateHistogram(self.currentFrame[0], wl, bl)
             
             ## Translate and scale image based on ROI and binning
             m = QtGui.QTransform()
             m.translate(info['region'][0], info['region'][1])
             m.scale(*info['binning'])
-            #m.translate(info['imagePosition'][0], info['imagePosition'][1])
-            #m.scale(info['pixelSize'][0], info['pixelSize'][1])
             
             ## update image in viewport
             self.imageItem.updateImage(data)#, levels=[bl, wl])
             self.imageItem.setTransform(m)
 
             ## Update viewport to correct for scope movement/scaling
-            #print info
             newPos = info['centerPosition']
             if newPos != self.cameraCenter:
-                #self.emit(QtCore.SIGNAL('cameraPosChanged'))
                 self.sigCameraPosChanged.emit()
                 diff = [newPos[0] - self.cameraCenter[0], newPos[1] - self.cameraCenter[1]]
                 self.view.translateBy([diff[0], diff[1]])
-                #print "translate view:", diff
                 self.cameraCenter = newPos
                 self.scopeCenter = info['scopePosition']
                 self.updateCameraDecorations()
             
             newScale = [info['pixelSize'][0] / info['binning'][0], info['pixelSize'][1] / info['binning'][1]]
             if newScale != self.cameraScale:  ## If scale has changed, re-center on new objective.
-                #self.emit(QtCore.SIGNAL('cameraScaleChanged'))
                 self.sigCameraScaleChanged.emit()
                 self.centerView()
-                #diff = [self.cameraScale[0] / newScale[0], self.cameraScale[1] /newScale[1]]
-                #self.gv.scale(diff[0], diff[1])
                 self.cameraScale = newScale
                 self.updateCameraDecorations()
-            #print self.cameraCenter, self.scopeCenter
 
 
             ## update info for pixel under mouse pointer
@@ -1044,16 +926,16 @@ class CameraWindow(QtGui.QMainWindow):
 
         #sys.stdout.write('!')
 
-    def updateHistogram(self, data, wl, bl):
-        return
-        #now = time.time()
-        #if now > self.lastHistogramUpdate + 1.0:
-            #avg = data.mean()
-            #self.avgLevelLine.setLine(0.0, avg, 1.0, avg)
-            #bins = np.linspace(0, 2**self.bitDepth, 500)
-            #h = np.histogram(data, bins=bins)
-            #xVals = h[0].astype(np.float32)/h[0].max()
-            #self.histogramCurve.setData(x=xVals, y=bins[:-1])
-            #self.lastHistogramUpdate = now
+    #def updateHistogram(self, data, wl, bl):
+        #return
+        ##now = time.time()
+        ##if now > self.lastHistogramUpdate + 1.0:
+            ##avg = data.mean()
+            ##self.avgLevelLine.setLine(0.0, avg, 1.0, avg)
+            ##bins = np.linspace(0, 2**self.bitDepth, 500)
+            ##h = np.histogram(data, bins=bins)
+            ##xVals = h[0].astype(np.float32)/h[0].max()
+            ##self.histogramCurve.setData(x=xVals, y=bins[:-1])
+            ##self.lastHistogramUpdate = now
 
 
