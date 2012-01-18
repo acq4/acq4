@@ -80,6 +80,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.lastMinMax = None  ## Records most recently measured maximum/minimum image values
         #self.AGCLastMax = None
         self.autoGainLevels = [0.0, 1.0]
+        self.ignoreLevelChange = False
         self.persistentFrames = []
         
         
@@ -373,7 +374,7 @@ class CameraWindow(QtGui.QMainWindow):
 
     #@trace
     def levelsChanged(self):
-        if self.ui.btnAutoGain.isChecked():
+        if self.ui.btnAutoGain.isChecked() and not self.ignoreLevelChange:
             if self.lastMinMax is None:
                 return
             bl, wl = self.getLevels()
@@ -382,6 +383,9 @@ class CameraWindow(QtGui.QMainWindow):
             if rng == 0:
                 return
             newLevels = [(bl-mn) / rng, (wl-mn) / rng]
+            #print "autogain:", newLevels
+            #import traceback
+            #print "\n".join(traceback.format_stack())
             self.autoGainLevels = newLevels
         #self.requestFrameUpdate()
 
@@ -858,10 +862,18 @@ class CameraWindow(QtGui.QMainWindow):
                 #self.AGCLastMin = minVal
                 
                 #self.lastMinMax = minVal, maxVal
-                self.ui.histogram.setLevels(bl, wl)
-                self.ui.histogram.setHistogramRange(minVal, maxVal, padding=0.05)
+                self.ignoreLevelChange = True
+                try:
+                    self.ui.histogram.setLevels(bl, wl)
+                    self.ui.histogram.setHistogramRange(minVal, maxVal, padding=0.05)
+                finally:
+                    self.ignoreLevelChange = False
             else:
-                self.ui.histogram.setHistogramRange(0, 2**self.bitDepth)
+                self.ignoreLevelChange = True
+                try:
+                    self.ui.histogram.setHistogramRange(0, 2**self.bitDepth)
+                finally:
+                    self.ignoreLevelChange = False
             
             ## Update histogram plot
             #self.updateHistogram(self.currentFrame[0], wl, bl)

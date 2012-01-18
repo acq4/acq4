@@ -42,6 +42,13 @@
        <property name="spacing">
         <number>3</number>
        </property>
+       <item row="0" column="2">
+        <widget class="QPushButton" name="exportHtmlBtn">
+         <property name="text">
+          <string>Export HTML</string>
+         </property>
+        </widget>
+       </item>
        <item row="0" column="0">
         <widget class="QLabel" name="dirLabel">
          <property name="text">
@@ -62,21 +69,8 @@
          </property>
         </spacer>
        </item>
-       <item row="0" column="2">
-        <widget class="QPushButton" name="exportHtmlBtn">
-         <property name="text">
-          <string>Export HTML</string>
-         </property>
-        </widget>
-       </item>
        <item row="1" column="0" colspan="3">
-        <widget class="QWebView" name="logView">
-         <property name="url">
-          <url>
-           <string>about:blank</string>
-          </url>
-         </property>
-        </widget>
+        <widget class="QTextBrowser" name="output"/>
        </item>
       </layout>
      </widget>
@@ -284,11 +278,6 @@
   </layout>
  </widget>
  <customwidgets>
-  <customwidget>
-   <class>QWebView</class>
-   <extends>QWidget</extends>
-   <header>QtWebKit/QWebView</header>
-  </customwidget>
   <customwidget>
    <class>TreeWidget</class>
    <extends>QTreeWidget</extends>
