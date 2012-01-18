@@ -8,6 +8,8 @@ Contents:
 .. toctree::
     :maxdepth: 2
 
+    plotwidget
+    imageview
     datatreewidget
     checktable
     tablewidget
@@ -26,5 +28,4 @@ Contents:
     treewidget
     verticallabel
     rawimagewidget
-    plotwidget
 

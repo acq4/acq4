@@ -150,7 +150,7 @@ def mkColor(*args):
             if c[0] == '#':
                 c = c[1:]
             if len(c) == 1:
-                (r, g, b, a) = colorAbbrev[c]
+                (r, g, b, a) = Colors[c]
             if len(c) == 3:
                 r = int(c[0]*2, 16)
                 g = int(c[1]*2, 16)
@@ -349,7 +349,8 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
     for v in vectors:
         if len(v) != len(axes):
             raise Exception("each vector must be same length as axes.")
-    shape = (np.ceil(shape[0]), np.ceil(shape[1]))
+        
+    shape = map(np.ceil, shape)
 
     ## transpose data so slice axes come first
     trAx = range(data.ndim)

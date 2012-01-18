@@ -124,7 +124,7 @@ class HistogramLUTItem(GraphicsWidget):
             #self.imageItem.setLookupTable(self.gradient.getLookupTable(512))
         self.sigLookupTableChanged.emit(self)
 
-    def getLookupTable(self, img, n=None):
+    def getLookupTable(self, img=None, n=None):
         if n is None:
             if img.dtype == np.uint8:
                 n = 256

@@ -8,23 +8,24 @@ Contents:
 .. toctree::
     :maxdepth: 2
 
-    datatreewidget
-    checktable
-    tablewidget
+    plotwidget
+    imageview
+    dockarea
+    spinbox
     gradientwidget
+    histogramlutwidget
+    parametertree
+    graphicsview
+    rawimagewidget
+    datatreewidget
+    tablewidget
+    treewidget
+    checktable
     colorbutton
     graphicslayoutwidget
-    dockarea
-    parametertree
-    histogramlutwidget
     progressdialog
-    spinbox
     filedialog
-    graphicsview
     joystickbutton
     multiplotwidget
-    treewidget
     verticallabel
-    rawimagewidget
-    plotwidget
 

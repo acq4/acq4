@@ -115,7 +115,10 @@ class PlotItem(GraphicsWidget):
             'right':  {'item': AxisItem(orientation='right',  linkView=self.vb), 'pos': (2, 2)}
         }
         for k in self.scales:
-            self.layout.addItem(self.scales[k]['item'], *self.scales[k]['pos'])
+            item = self.scales[k]['item']
+            self.layout.addItem(item, *self.scales[k]['pos'])
+            item.setZValue(-1000)
+            item.setFlag(item.ItemNegativeZStacksBehindParent)
         
         self.titleLabel = LabelItem('', size='11pt')
         self.layout.addItem(self.titleLabel, 0, 1)

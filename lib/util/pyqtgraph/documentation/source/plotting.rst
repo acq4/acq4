@@ -3,12 +3,12 @@ Plotting in pyqtgraph
 
 There are a few basic ways to plot data in pyqtgraph: 
 
-===============================================================  =================
+================================================================ ==================================================
 :func:`pyqtgraph.plot`                                           Create a new plot window showing your data
-:func:`PlotWidget.plot <pyqtgraph.PlotWidget.plot>`              Add a new set of data to an existing plot widget
-:func:`PlotItem.plot <pyqtgraph.PlotItem.plot>`                  Add a new set of data to an existing plot widget
-:func:`GraphicsWindow.addPlot <pyqtgraph.GraphicsWindow.plot>`   Add a new plot to a grid of plots
-===============================================================  =================
+:func:`PlotWidget.plot() <pyqtgraph.PlotWidget.plot>`            Add a new set of data to an existing plot widget
+:func:`PlotItem.plot() <pyqtgraph.PlotItem.plot>`                Add a new set of data to an existing plot widget
+:func:`GraphicsWindow.addPlot() <pyqtgraph.GraphicsWindow.plot>` Add a new plot to a grid of plots
+================================================================ ==================================================
 
 All of these will accept the same basic arguments which control how the plot data is interpreted and displayed:
     
@@ -21,7 +21,9 @@ All of these will accept the same basic arguments which control how the plot dat
 * fillLevel - Fills the area under the plot curve to this Y-value.
 * brush - The brush to use when filling under the curve.
     
-All three functions also return handles to the objects that are created, allowing the plots and data to be further modified.
+See the 'plotting' :ref:`example <examples>` for a demonstration of these arguments.
+    
+All of the above functions also return handles to the objects that are created, allowing the plots and data to be further modified.
 
 Organization of Plotting Classes
 --------------------------------

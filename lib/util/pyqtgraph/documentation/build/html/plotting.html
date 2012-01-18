@@ -56,20 +56,20 @@
 <p>There are a few basic ways to plot data in pyqtgraph:</p>
 <table border="1" class="docutils">
 <colgroup>
-<col width="57%" />
-<col width="43%" />
+<col width="56%" />
+<col width="44%" />
 </colgroup>
 <tbody valign="top">
 <tr><td><a class="reference internal" href="functions.html#pyqtgraph.plot" title="pyqtgraph.plot"><tt class="xref py py-func docutils literal"><span class="pre">pyqtgraph.plot()</span></tt></a></td>
 <td>Create a new plot window showing your data</td>
 </tr>
-<tr><td><tt class="xref py py-func docutils literal"><span class="pre">PlotWidget.plot</span></tt></td>
+<tr><td><tt class="xref py py-func docutils literal"><span class="pre">PlotWidget.plot()</span></tt></td>
 <td>Add a new set of data to an existing plot widget</td>
 </tr>
-<tr><td><a class="reference internal" href="graphicsItems/plotitem.html#pyqtgraph.PlotItem.plot" title="pyqtgraph.PlotItem.plot"><tt class="xref py py-func docutils literal"><span class="pre">PlotItem.plot</span></tt></a></td>
+<tr><td><a class="reference internal" href="graphicsItems/plotitem.html#pyqtgraph.PlotItem.plot" title="pyqtgraph.PlotItem.plot"><tt class="xref py py-func docutils literal"><span class="pre">PlotItem.plot()</span></tt></a></td>
 <td>Add a new set of data to an existing plot widget</td>
 </tr>
-<tr><td><tt class="xref py py-func docutils literal"><span class="pre">GraphicsWindow.addPlot</span></tt></td>
+<tr><td><tt class="xref py py-func docutils literal"><span class="pre">GraphicsWindow.addPlot()</span></tt></td>
 <td>Add a new plot to a grid of plots</td>
 </tr>
 </tbody>
@@ -85,7 +85,8 @@
 <li>fillLevel - Fills the area under the plot curve to this Y-value.</li>
 <li>brush - The brush to use when filling under the curve.</li>
 </ul>
-<p>All three functions also return handles to the objects that are created, allowing the plots and data to be further modified.</p>
+<p>See the &#8216;plotting&#8217; <a class="reference internal" href="introduction.html#examples"><em>example</em></a> for a demonstration of these arguments.</p>
+<p>All of the above functions also return handles to the objects that are created, allowing the plots and data to be further modified.</p>
 <div class="section" id="organization-of-plotting-classes">
 <h2>Organization of Plotting Classes<a class="headerlink" href="#organization-of-plotting-classes" title="Permalink to this headline">¶</a></h2>
 <p>There are several classes invloved in displaying plot data. Most of these classes are instantiated automatically, but it is useful to understand how they are organized and relate to each other. Pyqtgraph is based heavily on Qt&#8217;s GraphicsView framework&#8211;if you are not already familiar with this, it&#8217;s worth reading about (but not essential). Most importantly: 1) Qt GUIs are composed of QWidgets, 2) A special widget called QGraphicsView is used for displaying complex graphics, and 3) QGraphicsItems define the objects that are displayed within a QGraphicsView.</p>
