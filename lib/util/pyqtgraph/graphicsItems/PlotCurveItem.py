@@ -352,11 +352,11 @@ class PlotCurveItem(GraphicsObject):
         y = None
         if self.path is None:
             x,y = self.getData()
+            if x is None or len(x) == 0 or y is None or len(y) == 0:
+                return
             self.path = self.generatePath(x,y)
             self.fillPath = None
             
-        if x is None or len(x) == 0:
-            return
             
         path = self.path
         prof.mark('generate path')
