@@ -227,7 +227,9 @@ class GraphicsScene(QtGui.QGraphicsScene):
             finally:
                 del self.hoverItems[item]
         
-        self.lastHoverEvent = event  ## save this so we can ask about accepted events later.
+        if hasattr(ev, 'buttons') and int(ev.buttons()) == 0:
+            self.lastHoverEvent = event  ## save this so we can ask about accepted events later.
+            
 
     def sendDragEvent(self, ev, init=False, final=False):
         ## Send a MouseDragEvent to the current dragItem or to 
@@ -246,7 +248,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
                     debug.printExc("Error sending drag event:")
                     
             else:
-                #print "drag -> new item"
+                print "drag -> new item"
                 for item in self.itemsNearEvent(event):
                     #print "check item:", item
                     if hasattr(item, 'mouseDragEvent'):
