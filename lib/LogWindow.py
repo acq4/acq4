@@ -2,6 +2,11 @@ import time
 import traceback
 import sys, os
 
+if __name__ == "__main__":
+    #import os.path as osp
+    d = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path = [os.path.join(d,'lib','util')] + sys.path + [d]
+
 from PyQt4 import QtGui, QtCore
 import LogWidgetTemplate
 from FeedbackButton import FeedbackButton
@@ -108,10 +113,7 @@ class LogWindow(QtGui.QMainWindow):
         configfile.writeConfigFile('', self.fileName())  ## start a new temp log file, destroying anything left over from the last session.
         self.buttons = [] ## weak references to all Log Buttons get added to this list, so it's easy to make them all do things, like flash red.
         self.lock = Mutex()
-        
-
-        ## self.wid.ui.input is a QLineEdit
-        ## self.wid.ui.output is a QPlainTextEdit
+    
         
         self.wid.ui.input.returnPressed.connect(self.textEntered)
         
@@ -705,12 +707,12 @@ class LogWidget(QtGui.QWidget):
         
     def formatReasonsStrForHTML(self, reasons):
         #indent = 6
-        reasonStr = "<div class='reasons'>Possible reasons include:\n<ul>\n"
+        reasonStr = "<table class='reasons'><tr><td>Possible reasons include:\n<ul>\n"
         for r in reasons:
             r = self.cleanText(r)
             reasonStr += "<li>" + r + "</li>\n"
             #reasonStr += "&nbsp;"*22 + chr(97+i) + ". " + r + "<br>"
-        reasonStr += "</ul></div>\n"
+        reasonStr += "</ul></td></tr></table>\n"
         return reasonStr
     
     def formatDocsStrForHTML(self, docs):
@@ -780,7 +782,11 @@ class LogWidget(QtGui.QWidget):
 
         
 if __name__ == "__main__":
-    import sys
+    #import sys
+    #import os.path as osp
+    #d = osp.dirname(osp.dirname(osp.abspath(__file__)))
+    #sys.path = [osp.join(d, 'util')] + sys.path + [d]
+    #from lib.util import pyqtgraph
     app = QtGui.QApplication([])
     log = LogWindow()
     log.show()
