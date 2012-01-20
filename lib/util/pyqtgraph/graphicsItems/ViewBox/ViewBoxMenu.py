@@ -40,7 +40,6 @@ class ViewBoxMenu(QtGui.QMenu):
                 (ui.maxText.editingFinished, 'MaxTextChanged'),
                 (ui.autoRadio.clicked, 'AutoClicked'),
                 (ui.autoPercentSpin.valueChanged, 'AutoSpinChanged'),
-                (ui.linkRadio.clicked, 'LinkClicked'),
                 (ui.linkCombo.currentIndexChanged, 'LinkComboChanged'),
             ]
             
@@ -122,8 +121,6 @@ class ViewBoxMenu(QtGui.QMenu):
                 if ind == -1:
                     ind = 0
                 c.setCurrentIndex(ind)
-                if ind > 0:
-                    self.ctrl[i].linkRadio.setChecked(True)
             finally:
                 c.blockSignals(False)
             
@@ -155,9 +152,6 @@ class ViewBoxMenu(QtGui.QMenu):
         self.ctrl[0].autoRadio.setChecked(True)
         self.view.setAutoRange('x', val)
 
-    def xLinkClicked(self):
-        pass
-    
     def xLinkComboChanged(self, ind):
         self.view.setXLink(str(self.ctrl[0].linkCombo.currentText()))
 
@@ -184,9 +178,6 @@ class ViewBoxMenu(QtGui.QMenu):
         self.ctrl[1].autoRadio.setChecked(True)
         self.view.setAutoRange('y', val)
 
-    def yLinkClicked(self):
-        pass
-    
     def yLinkComboChanged(self, ind):
         self.view.setYLink(str(self.ctrl[1].linkCombo.currentText()))
 

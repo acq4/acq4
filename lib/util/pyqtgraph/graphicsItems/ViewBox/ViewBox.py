@@ -42,8 +42,20 @@ class ViewBox(GraphicsWidget):
     PanMode = 3
     RectMode = 1
     
-    def __init__(self, parent=None, border=None, lockAspect=False, enableMouse=True, invertY=False):
+    ## axes
+    XAxis = 0
+    YAxis = 1
+    XYAxes = 2
+    
+    ## for linking views together
+    NamedViews = weakref.WeakValueDictionary()   # name: ViewBox
+    AllViews = weakref.WeakKeyDictionary()       # ViewBox: None
+    
+    
+    def __init__(self, parent=None, border=None, lockAspect=False, enableMouse=True, invertY=False, name=None):
         GraphicsWidget.__init__(self, parent)
+        self.name = None
+        self.linksBlocked = False
         #self.gView = view
         #self.showGrid = showGrid
         
@@ -58,6 +70,7 @@ class ViewBox(GraphicsWidget):
             'aspectLocked': False,    ## False if aspect is unlocked, otherwise float specifies the locked ratio.
             'autoRange': [False, False],  ## False if auto range is disabled, 
                                           ## otherwise float gives the fraction of data that is visible
+            'linkedViews': [None, None],
             
             'mouseEnabled': [enableMouse, enableMouse],
             'mouseMode': ViewBox.PanMode,  
@@ -101,7 +114,32 @@ class ViewBox(GraphicsWidget):
         self.border = border
         self.menu = ViewBoxMenu(self)
         
+        self.register(name)
+        if name is None:
+            self.updateViewLists()
         
+    def register(self, name):
+        """
+        Add this ViewBox to the registered list of views. 
+        *name* will appear in the drop-down lists for axis linking in all other views.
+        The same can be accomplished by initializing the ViewBox with the *name* attribute.
+        """
+        ViewBox.AllViews[self] = None
+        if self.name is not None:
+            del ViewBox.NamedViews[self.name]
+        self.name = name
+        if name is not None:
+            ViewBox.NamedViews[name] = self
+            ViewBox.updateAllViewLists()
+
+    def unregister(self):
+        del ViewBox.AllViews[self]
+        if self.name is not None:
+            del ViewBox.NamedViews[self.name]
+
+    def close(self):
+        self.unregister()
+
     def implements(self, interface):
         return interface == 'ViewBox'
         
@@ -248,11 +286,12 @@ class ViewBox(GraphicsWidget):
                 changed[ax] = True
             
         if any(changed) and disableAutoRange:
-            ax = ''
-            if changed[0]:
-                ax = ax + 'x'
-            if changed[1]:
-                ax = ax + 'y'
+            if all(changed):
+                ax = ViewBox.XYAxes
+            elif changed[0]:
+                ax = ViewBox.XAxis
+            elif changed[1]:
+                ax = ViewBox.YAxis
             self.enableAutoRange(ax, False)
                 
                 
@@ -260,6 +299,12 @@ class ViewBox(GraphicsWidget):
         
         if update:
             self.updateMatrix(changed)
+            
+        for ax, range in changes.iteritems():
+            link = self.state['linkedViews'][ax]
+            if link is not None:
+                link.linkedViewChanged(self, ax)
+        
 
             
     def setYRange(self, min, max, padding=0.02, update=True):
@@ -311,18 +356,18 @@ class ViewBox(GraphicsWidget):
         
     def enableAutoRange(self, axis=None, enable=True):
         """
-        Enable (or disable) auto-range for *axis*, which may be 'x', 'y', or 'xy' for both.
+        Enable (or disable) auto-range for *axis*, which may be ViewBox.XAxis, ViewBox.YAxis, or ViewBox.XYAxes for both.
         When enabled, the axis will automatically rescale when items are added/removed or change their shape.
         """
-        if axis == 'xy':
+        if axis == ViewBox.XYAxes:
             self.state['autoRange'][0] = enable
             self.state['autoRange'][1] = enable
-        elif axis == 'x':
+        elif axis == ViewBox.XAxis:
             self.state['autoRange'][0] = enable
-        elif axis == 'y':
+        elif axis == ViewBox.YAxis:
             self.state['autoRange'][1] = enable
         else:
-            raise Exception('axis argument must be "x", "y", or "xy".')
+            raise Exception('axis argument must be ViewBox.XAxis, ViewBox.YAxis, or ViewBox.XYAxes.')
         
         self.updateAutoRange()
         self.sigStateChanged.emit(self)
@@ -348,6 +393,104 @@ class ViewBox(GraphicsWidget):
             tr.setBottom(cr.bottom())
             
         self.setRange(tr, padding=0, disableAutoRange=False)
+        
+    def setXLink(self, view):
+        self.linkView(self.XAxis, view)
+        
+    def setYLink(self, view):
+        self.linkView(self.YAxis, view)
+        
+        
+    def linkView(self, axis, view):
+        """
+        Link X or Y axes of two views and unlink any previously connected axes. *axis* must be ViewBox.XAxis or ViewBox.YAxis.
+        If view is None, the axis is left unlinked.
+        """
+        if isinstance(view, basestring):
+            if view == '':
+                view = None
+            else:
+                view = ViewBox.NamedViews[view]
+
+        ## used to connect/disconnect signals between a pair of views
+        if axis == ViewBox.XAxis:
+            signal = 'sigXRangeChanged'
+            slot = self.linkedXChanged
+        else:
+            signal = 'sigYRangeChanged'
+            slot = self.linkedYChanged
+
+
+        oldLink = self.state['linkedViews'][axis]
+        if oldLink is not None:
+            getattr(oldLink, signal).disconnect(slot)
+            
+        self.state['linkedViews'][axis] = view
+        
+        if view is not None:
+            getattr(view, signal).connect(slot)
+            if view.autoRangeEnabled()[axis] is True:
+                self.enableAutoRange(axis, False)
+                slot()
+            else:
+                if self.autoRangeEnabled()[axis] is False:
+                    slot()
+            
+        self.sigStateChanged.emit(self)
+        
+    def blockLink(self, b):
+        self.linksBlocked = b  ## prevents recursive plot-change propagation
+
+    def linkedXChanged(self):
+        view = self.state['linkedViews'][0]
+        self.linkedViewChanged(view, ViewBox.XAxis)
+
+    def linkedYChanged(self):
+        view = self.state['linkedViews'][0]
+        self.linkedViewChanged(view, ViewBox.YAxis)
+        
+
+    def linkedViewChanged(self, view, axis):
+        if self.linksBlocked:
+            return
+        
+        vr = view.viewRect()
+        vg = view.screenGeometry()
+        if vg is None:
+            return
+            
+        sg = self.screenGeometry()
+        
+        view.blockLink(True)
+        try:
+            if axis == ViewBox.XAxis:
+                upp = float(vr.width()) / vg.width()
+                x1 = vr.left() + (sg.x()-vg.x()) * upp
+                x2 = x1 + sg.width() * upp
+                self.enableAutoRange(ViewBox.XAxis, False)
+                self.setXRange(x1, x2, padding=0)
+            else:
+                upp = float(vr.height()) / vg.height()
+                x1 = vr.bottom() + (sg.y()-vg.y()) * upp
+                x2 = x1 + sg.height() * upp
+                self.enableAutoRange(ViewBox.YAxis, False)
+                self.setYRange(x1, x2, padding=0)
+        finally:
+            view.blockLink(False)
+        
+        
+    def screenGeometry(self):
+        """return the screen geometry of the viewbox"""
+        v = self.getViewWidget()
+        if v is None:
+            return None
+        b = self.sceneBoundingRect()
+        wr = v.mapFromScene(b).boundingRect()
+        pos = v.mapToGlobal(v.pos())
+        wr.adjust(pos.x(), pos.y(), pos.x(), pos.y())
+        return wr
+        
+    
 
     def itemsChanged(self):
         ## called when items are added/removed from self.childGroup
@@ -722,7 +865,26 @@ class ViewBox(GraphicsWidget):
             self.scene().render(p)
             p.end()
 
+    def updateViewLists(self):
+        def cmpViews(a, b):
+            wins = 100 * cmp(a.window() is self.window(), b.window() is self.window())
+            alpha = cmp(a.name, b.name)
+            return wins + alpha
+            
+        ## make a sorted list of all named views
+        nv = ViewBox.NamedViews.values()
+        nv.sort(cmpViews)
+        
+        if self in nv:
+            nv.remove(self)
+        names = [v.name for v in nv]
+        self.menu.setViewList(names)
 
+    @staticmethod
+    def updateAllViewLists():
+        for v in ViewBox.AllViews:
+            v.updateViewLists()
+            
 
 
 

@@ -82,7 +82,7 @@ class PlotItem(GraphicsWidget):
         self.layout.setHorizontalSpacing(0)
         self.layout.setVerticalSpacing(0)
         
-        self.vb = ViewBox()
+        self.vb = ViewBox(name=name)
         #self.vb.sigXRangeChanged.connect(self.xRangeChanged)
         #self.vb.sigYRangeChanged.connect(self.yRangeChanged)
         #self.vb.sigRangeChangedManually.connect(self.enableManualScale)
@@ -376,8 +376,8 @@ class PlotItem(GraphicsWidget):
         ##self.emit(QtCore.SIGNAL('viewChanged'), *args)
         #self.sigRangeChanged.emit(self, range)
 
-    def blockLink(self, b):
-        self.linksBlocked = b
+    #def blockLink(self, b):
+        #self.linksBlocked = b
 
     #def xLinkComboChanged(self):
         #self.setXLink(str(self.ctrl.xLinkCombo.currentText()))
@@ -578,7 +578,7 @@ class PlotItem(GraphicsWidget):
         """
         Enable auto-scaling. The plot will continuously scale to fit the boundaries of its data.
         """
-        self.vb.enableAutoRange('xy')
+        self.vb.enableAutoRange(self.vb.XYAxes)
         #self.ctrl.xAutoRadio.setChecked(True)
         #self.ctrl.yAutoRadio.setChecked(True)
         
