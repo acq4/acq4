@@ -81,11 +81,8 @@ class ImageCanvasItem(CanvasItem):
         
         
         
-        #self.item.connect(self.item, QtCore.SIGNAL('imageChanged'), self.updateHistogram)
         self.graphicsItem().sigImageChanged.connect(self.updateHistogram)
-        #self.levelRgn.connect(self.levelRgn, QtCore.SIGNAL('regionChanged'), self.levelsChanged)
         self.levelRgn.sigRegionChanged.connect(self.levelsChanged)
-        #self.levelRgn.connect(self.levelRgn, QtCore.SIGNAL('regionChangeFinished'), self.levelsChangeFinished)
         self.levelRgn.sigRegionChangeFinished.connect(self.levelsChangeFinished)
         
     @classmethod

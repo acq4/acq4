@@ -89,13 +89,13 @@ class ExampleLoader(QtGui.QMainWindow):
             return
         text = open(fn).read()
         self.ui.codeView.setPlainText(text)
-        
-        
-        
-if __name__ == '__main__':
+
+def run():
     app = QtGui.QApplication([])
     loader = ExampleLoader()
     
     if sys.flags.interactive != 1:
         app.exec_()
-    
+
+if __name__ == '__main__':
+    run()
