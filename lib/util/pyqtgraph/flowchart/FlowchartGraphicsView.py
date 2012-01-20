@@ -65,25 +65,25 @@ class FlowchartViewBox(ViewBox):
     def __init__(self, widget, *args, **kwargs):
         ViewBox.__init__(self, *args, **kwargs)
         self.widget = widget
-        self.menu = None
-        self._subMenus = None ## need a place to store the menus otherwise they dissappear (even though they've been added to other menus) ((yes, it doesn't make sense))
+        #self.menu = None
+        #self._subMenus = None ## need a place to store the menus otherwise they dissappear (even though they've been added to other menus) ((yes, it doesn't make sense))
+        
+        
+        
         
     def getMenu(self, ev):
         ## called by ViewBox to create a new context menu
-        self.menu = QtGui.QMenu()
-        #print "1a:", [str(a.text()) for a in self.menu.actions()]
+        self._fc_menu = QtGui.QMenu()
         self._subMenus = self.getContextMenus(ev)
         for menu in self._subMenus:
-            self.menu.addMenu(menu)
-            #print "1b:", [str(a.text()) for a in self.menu.actions()]
-        #print "1c:", [str(a.text()) for a in self.menu.actions()]
-        return self.menu
+            self._fc_menu.addMenu(menu)
+        return self._fc_menu
     
     def getContextMenus(self, ev):
         ## called by scene to add menus on to someone else's context menu
         menu = self.widget.buildMenu(ev.scenePos())
         menu.setTitle("Add node")
-        return [menu, ViewBox.getMenu(self)]
+        return [menu, ViewBox.getMenu(self, ev)]
 
     
     

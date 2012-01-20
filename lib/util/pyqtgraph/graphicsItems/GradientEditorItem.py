@@ -47,13 +47,13 @@ class TickSliderItem(GraphicsWidget):
         #self.setBackgroundRole(QtGui.QPalette.NoRole)
         #self.setMouseTracking(True)
         
-    def boundingRect(self):
-        return self.mapRectFromParent(self.geometry()).normalized()
+    #def boundingRect(self):
+        #return self.mapRectFromParent(self.geometry()).normalized()
         
-    def shape(self):  ## No idea why this is necessary, but rotated items do not receive clicks otherwise.
-        p = QtGui.QPainterPath()
-        p.addRect(self.boundingRect())
-        return p
+    #def shape(self):  ## No idea why this is necessary, but rotated items do not receive clicks otherwise.
+        #p = QtGui.QPainterPath()
+        #p.addRect(self.boundingRect())
+        #return p
         
     def paint(self, p, opt, widget):
         #p.setPen(fn.mkPen('g', width=3))

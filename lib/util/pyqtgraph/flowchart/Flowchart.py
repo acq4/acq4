@@ -803,7 +803,7 @@ class FlowchartWidget(dockarea.DockArea):
         self._scene.sigMouseHover.connect(self.hoverOver)
         #self.view.sigClicked.connect(self.showViewMenu)
         #self._scene.sigSceneContextMenu.connect(self.showViewMenu)
-        self._viewBox.sigActionPositionChanged.connect(self.menuPosChanged)
+        #self._viewBox.sigActionPositionChanged.connect(self.menuPosChanged)
         
         
     def reloadLibrary(self):

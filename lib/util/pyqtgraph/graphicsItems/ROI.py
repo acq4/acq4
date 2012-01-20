@@ -1503,6 +1503,9 @@ class PolygonROI(ROI):
 
 
 class LineSegmentROI(ROI):
+    """
+    ROI subclass with two or more freely-moving handles connecting lines.
+    """
     def __init__(self, positions, pos=None, **args):
         if pos is None:
             pos = [0,0]
@@ -1526,7 +1529,7 @@ class LineSegmentROI(ROI):
         p.setPen(self.currentPen)
         for i in range(len(self.handles)-1):
             h1 = self.handles[i]['item'].pos()
-            h2 = self.handles[i-1]['item'].pos()
+            h2 = self.handles[i+1]['item'].pos()
             p.drawLine(h1, h2)
         
     def boundingRect(self):
@@ -1550,6 +1553,47 @@ class LineSegmentROI(ROI):
         #sc['handles'] = self.handles
         return sc
 
+    def getArrayRegion(self, data, img, axes=(0,1)):
+        """
+        Use the position of this ROI relative to an imageItem to pull a slice from an array.
+        Since this pulls 1D data from a 2D coordinate system, the return value will have ndim = data.ndim-1
+        """
+        
+        
+        #shape = self.state['size']
+        
+        #origin = self.mapToItem(img, QtCore.QPointF(0, 0))
+        
+        ## vx and vy point in the directions of the slice axes, but must be scaled properly
+        #vx = self.mapToItem(img, QtCore.QPointF(1, 0)) - origin
+        #vy = self.mapToItem(img, QtCore.QPointF(0, 1)) - origin
+        
+        imgPts = [self.mapToItem(img, h['item'].pos()) for h in self.handles]
+        rgns = []
+        for i in range(len(imgPts)-1):
+            d = Point(imgPts[i+1] - imgPts[i])
+            o = Point(imgPts[i])
+            r = fn.affineSlice(data, shape=(int(d.length()),), vectors=[d.norm()], origin=o, axes=axes, order=1)
+            rgns.append(r)
+            
+        return np.concatenate(rgns, axis=axes[0])
+        
+        
+        #lvx = np.sqrt(vx.x()**2 + vx.y()**2)
+        #lvy = np.sqrt(vy.x()**2 + vy.y()**2)
+        #pxLen = img.width() / float(data.shape[axes[0]])
+        #sx =  pxLen / lvx
+        #sy =  pxLen / lvy
+        
+        #vectors = ((vx.x()*sx, vx.y()*sx), (vy.x()*sy, vy.y()*sy))
+        #shape = self.state['size']
+        #shape = [abs(shape[0]/sx), abs(shape[1]/sy)]
+        
+        #origin = (origin.x(), origin.y())
+        
+        ##print "shape", shape, "vectors", vectors, "origin", origin
+        
+        #return fn.affineSlice(data, shape=shape, vectors=vectors, origin=origin, axes=axes, order=1)
 
 
 class SpiralROI(ROI):
