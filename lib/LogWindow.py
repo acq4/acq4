@@ -32,7 +32,7 @@ Stylesheet = """
     .user .message {color: #009}
     .status .message {color: #090}
     .logExtra {margin-left: 40px;}
-    .traceback {color: #555; font-size: 10pt; visibility: hidden; height: 0px;}
+    .traceback {color: #555; font-size: 10pt; height: 0px;}
     .timestamp {color: #000;}
 """
 
@@ -48,7 +48,7 @@ pageTemplate = """
         .user .message {color: #009}
         .status .message {color: #090}
         .logExtra {margin-left: 40px;}
-        .traceback {color: #555; font-size: 10pt; visibility: hidden; height: 0px;}
+        .traceback {color: #555; font-size: 10pt; height: 0px;}
         .timestamp {color: #000;}
     </style>
     
@@ -175,7 +175,7 @@ class LogWindow(QtGui.QMainWindow):
     def logExc(self, *args, **kwargs):
         """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
         kwargs['exception'] = sys.exc_info()
-        kwargs['traceback'] = traceback.format_stack()[:-3] + ["------- exception caught ----------"]
+        kwargs['traceback'] = traceback.format_stack()[:-2] + ["------- exception caught ---------->\n"]
         self.logMsg(*args, **kwargs)
         
     def processEntry(self, entry):
@@ -193,6 +193,8 @@ class LogWindow(QtGui.QMainWindow):
         msg = unicode(self.wid.ui.input.text())
         if msg == '!!':
             self.makeError1()
+        elif msg == '##':
+            self.makeErrorLogExc()
         try:
             currentDir = self.manager.getCurrentDir()
         except:
@@ -208,7 +210,7 @@ class LogWindow(QtGui.QMainWindow):
             #+ traceback.format_exception_only(*sys.exc_info()[:2]))
         #print topTraceback
         excDict = {}
-        excDict['message'] = traceback.format_exception(exType, exc, tb)[-1]
+        excDict['message'] = traceback.format_exception(exType, exc, tb)[-1][:-1] 
         excDict['traceback'] = topTraceback + traceback.format_exception(exType, exc, tb)[:-1]
         if hasattr(exc, 'docs'):
             if len(exc.docs) > 0:
@@ -251,6 +253,12 @@ class LogWindow(QtGui.QMainWindow):
                 #raise
             #else:
             raise HelpfulException(message='This button does not work.', exc=(t, exc, tb), reasons=["It's supposed to raise an error for testing purposes", "You're doing it wrong."])
+        
+    def makeErrorLogExc(self):
+        try:
+            print y
+        except:
+            self.logExc('This is the message sent to logExc', msgType='error')
     
     def makeError2(self):
         try:
@@ -332,6 +340,7 @@ class LogWidget(QtGui.QWidget):
         
         self.entries = [] ## stores all log entries in memory
         self.cache = {} ## for storing html strings of entries that have already been processed
+        self.displayedEntries = []
         #self.currentEntries = None ## recordArray that stores currently displayed entries -- so that if filters get more restrictive we can just refilter this list instead of filtering everything
         self.typeFilters = []
         self.importanceFilter = 0
@@ -532,6 +541,7 @@ class LogWidget(QtGui.QWidget):
                 
                 #frame.findFirstElement('body').appendInside(html)
                 self.ui.output.append(html)
+                self.displayedEntries.append(entry)
                 
                 if isMax:
                     QtGui.QApplication.processEvents()  ## can't scroll to end until the web frame has processed the html change
@@ -588,7 +598,7 @@ class LogWidget(QtGui.QWidget):
         text = re.sub(r'&', '&amp;', text)
         text = re.sub(r'>','&gt;', text)
         text = re.sub(r'<', '&lt;', text)
-        text = re.sub('\n', '<br/>\n', text)
+        text = re.sub(r'\n', '<br/>\n', text)
         return text
 
 
@@ -669,7 +679,7 @@ class LogWidget(QtGui.QWidget):
                 #self.displayTraceback(tb, entry, number=i+n)
         if count == 1:
             exc = "<div class=\"exception\"><ol>" + "\n".join(["<li>%s</li>" % ex for ex in text]) + "</ol></div>"
-            tbStr = "\n".join(["<li><b>%s</b>%s</li>" % (messages[i], tb) for i,tb in enumerate(traceback)])
+            tbStr = "\n".join(["<li><b>%s</b><br/><span class='traceback'>%s</span></li>" % (messages[i], tb) for i,tb in enumerate(traceback)])
             #traceback = "<div class=\"traceback\" id=\"%s\"><ol>"%str(entryId) + tbStr + "</ol></div>"
             entry['tracebackHtml'] = tbStr
 
@@ -685,7 +695,7 @@ class LogWidget(QtGui.QWidget):
         except:
             print "\n"+str(tb)+"\n"
             raise
-        return "<br>".join(map(self.cleanText, tb))
+        return re.sub(" ", "&nbsp;", ("").join(map(self.cleanText, tb)))[:-1]
         #tb = [self.cleanText(strip(x)) for x in tb]
         #lines = []
         #prefix = ''
@@ -725,7 +735,7 @@ class LogWidget(QtGui.QWidget):
         return docStr
     
     def exportHtml(self, fileName=False):
-        self.makeError1()
+        #self.makeError1()
         if fileName is False:
             self.fileDialog = FileDialog(self, "Save HTML as...", self.manager.getCurrentDir().name())
             #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
@@ -735,9 +745,23 @@ class LogWidget(QtGui.QWidget):
             return
         if fileName[-5:] != '.html':
             fileName += '.html'
+            
         #doc = self.ui.output.document().toHtml('utf-8')
+        #for e in self.displayedEntries:
+            #if e.has_key('tracebackHtml'):
+                #doc = re.sub(r'<a href="exc:%s">(<[^>]+>)*Show traceback %s(<[^>]+>)*</a>'%(str(e['id']), str(e['id'])), e['tracebackHtml'], doc)
+                
+        global pageTemplate
+        doc = pageTemplate
+        for e in self.displayedEntries:
+            doc += self.cache[id(e)]
+        for e in self.displayedEntries:
+            if e.has_key('tracebackHtml'):
+                doc = re.sub(r'<a href="exc:%s">(<[^>]+>)*Show traceback %s(<[^>]+>)*</a>'%(str(e['id']), str(e['id'])), e['tracebackHtml'], doc)
+            
+            
+        
         #doc = self.ui.logView.page().currentFrame().toHtml()
-        doSomethingElse()
         f = open(fileName, 'w')
         f.write(doc.encode('utf-8'))
         f.close()
@@ -779,6 +803,7 @@ class LogWidget(QtGui.QWidget):
     def clear(self):
         #self.ui.logView.setHtml("")
         self.ui.output.clear()
+        self.displayedEntryies = []
 
         
 if __name__ == "__main__":
@@ -788,7 +813,7 @@ if __name__ == "__main__":
     #sys.path = [osp.join(d, 'util')] + sys.path + [d]
     #from lib.util import pyqtgraph
     app = QtGui.QApplication([])
-    log = LogWindow()
+    log = LogWindow(None)
     log.show()
     original_excepthook = sys.excepthook
     
