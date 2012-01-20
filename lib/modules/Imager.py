@@ -7,6 +7,7 @@ import pyqtgraph as PG
 import InterfaceCombo
 import pyqtgraph.parametertree as PT
 import numpy as NP
+import metaarray as MA
 import time
 #import matplotlib.pylab as MP
 
@@ -56,6 +57,8 @@ class Imager(Module):
         self.w2 = QtGui.QWidget()
         self.l2 = QtGui.QVBoxLayout()
         self.w2.setLayout(self.l2)
+        self.currentStack = None
+        self.currentStackLength = 0
         
         self.win.setCentralWidget(self.w1)
         self.w1.addWidget(self.w2)
@@ -68,6 +71,8 @@ class Imager(Module):
         self.run_button = QtGui.QPushButton('Run')
         self.stop_button = QtGui.QPushButton('Stop')
         self.video_button = QtGui.QPushButton('Video')
+        self.record_button = QtGui.QPushButton('Record Stack')
+        self.record_button.setCheckable(True)
         self.video_button.setCheckable(True)
         self.l2.addWidget(self.snap_button)
         self.l2.addWidget(self.run_button)
@@ -113,6 +118,7 @@ class Imager(Module):
         self.snap_button.clicked.connect(self.PMT_Snap)
         self.stop_button.clicked.connect(self.PMT_Stop)
         self.video_button.clicked.connect(self.toggleVideo)
+        self.record_button.toggled.connect(self.recordToggled)
         self.Manager = manager
         
     def PMT_Run(self):
@@ -176,7 +182,25 @@ class Imager(Module):
         if self.param['Store']:
             info = self.param.getValues()
             info['2pImageType'] = 'Snap'
-            dh = self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
+            if self.record_button.isChecked():
+                mainfo = [
+                    {'name': 'Frame'},
+                    {'name': 'X'},
+                    {'name': 'Y'},
+                    info
+                ]
+                    
+                data = MA.MetaArray(imgData[NP.newaxis, ...], info=mainfo, appendAxis='Frame')
+                if self.currentStack is None:
+                    fh = self.manager.getCurrentDir().writeFile(data, '2pStack.ma', info=info, autoIncrement=True)
+                    self.currentStack = fh
+                    self.currentStackLength += 1
+                    self.record_button.setText('Recording (%d)' % self.currentStackLength)
+                else:
+                    data.write(self.currentStack.name(), appendAxis='Time')
+                
+            else:
+                self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
 
     def PMT_Stop(self):
         self.stopFlag = True
@@ -372,4 +396,8 @@ class Imager(Module):
             if not self.video_button.isChecked():
                 return
         
-        
+    def recordToggled(self, b):
+        if not b:
+            self.currentStack = None
+            self.currentStackLength = 0
+            self.record_button.setText('Record Stack')
