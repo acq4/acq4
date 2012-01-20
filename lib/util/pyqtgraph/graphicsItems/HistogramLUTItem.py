@@ -88,7 +88,7 @@ class HistogramLUTItem(GraphicsWidget):
         mx += d*padding
         self.range = [mn,mx]
         self.updateRange()
-        self.vb.setMouseEnabled(False, False)
+        self.vb.setMouseEnabled(False, True)
         self.region.setBounds([mn,mx])
         
     def autoHistogramRange(self):

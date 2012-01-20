@@ -24,9 +24,7 @@ class PlotCurveItem(GraphicsObject):
     
     def __init__(self, y=None, x=None, fillLevel=None, copy=False, pen=None, shadowPen=None, brush=None, parent=None, color=None, clickable=False):
         GraphicsObject.__init__(self, parent)
-        #GraphicsWidget.__init__(self, parent)
         self.clear()
-        #self.dispPath = None
         self.path = None
         self.fillPath = None
         if pen is None:
@@ -40,6 +38,8 @@ class PlotCurveItem(GraphicsObject):
         self.shadowPen = shadowPen
         if y is not None:
             self.updateData(y, x, copy)
+            
+        ## this is disastrous for performance.
         #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         
         self.fillLevel = fillLevel

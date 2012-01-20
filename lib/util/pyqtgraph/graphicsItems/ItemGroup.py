@@ -1,14 +1,14 @@
 from pyqtgraph.Qt import QtGui, QtCore
+from GraphicsObject import GraphicsObject
 
 __all__ = ['ItemGroup']
-class ItemGroup(QtGui.QGraphicsItem):
+class ItemGroup(GraphicsObject):
     """
     Replacement for QGraphicsItemGroup
     """
-    ## Should probably just use QGraphicsGroupItem and instruct it to pass events on to children..
     
     def __init__(self, *args):
-        QtGui.QGraphicsItem.__init__(self, *args)
+        GraphicsObject.__init__(self, *args)
         if hasattr(self, "ItemHasNoContents"):
             self.setFlag(self.ItemHasNoContents)
     

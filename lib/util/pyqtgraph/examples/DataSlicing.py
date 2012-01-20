@@ -24,7 +24,7 @@ l.addWidget(imv1, 0, 0)
 l.addWidget(imv2, 1, 0)
 win.show()
 
-roi = pg.LineSegmentROI([[10, 10], [50,50]], pen='r')
+roi = pg.LineSegmentROI([[10, 64], [120,64]], pen='r')
 imv1.addItem(roi)
 
 x1 = np.linspace(-30, 10, 128)[:, np.newaxis, np.newaxis]
@@ -47,6 +47,9 @@ roi.sigRegionChanged.connect(update)
 ## Display the data
 imv1.setImage(data)
 imv1.setHistogramRange(data.min(), data.max())
+
+update()
+
 ## Start Qt event loop unless running in interactive mode.
 if sys.flags.interactive != 1:
     app.exec_()
