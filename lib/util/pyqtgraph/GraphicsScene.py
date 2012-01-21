@@ -248,7 +248,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
                     debug.printExc("Error sending drag event:")
                     
             else:
-                print "drag -> new item"
+                #print "drag -> new item"
                 for item in self.itemsNearEvent(event):
                     #print "check item:", item
                     if hasattr(item, 'mouseDragEvent'):

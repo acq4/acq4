@@ -471,7 +471,7 @@ class ListParameter(Parameter):
         
         Parameter.setLimits(self, limits)
         #print self.name(), self.value(), limits
-        if self.value() not in self.reverse:
+        if self.value() not in self.reverse and len(self.reverse) > 0:
             self.setValue(self.reverse.keys()[0])
             
 

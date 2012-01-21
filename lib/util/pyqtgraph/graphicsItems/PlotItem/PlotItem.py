@@ -312,7 +312,8 @@ class PlotItem(GraphicsWidget):
         #else:
             #print "no manager"
 
-    #def registerPlot(self, name):
+    def registerPlot(self, name):
+        self.vb.register(name)
         #self.name = name
         #win = str(self.window())
         ##print "register", name, win
