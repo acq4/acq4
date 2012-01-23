@@ -743,6 +743,7 @@ class ViewBox(GraphicsWidget):
         for ch in GraphicsScene.translateGraphicsItems(item.childItems()):
             
             chb = self.childrenBoundingRect(ch)
+            boundsOld = QtCore.QRectF(bounds)
             
             if chb.height() > 0:
                 if bounds.height() > 0:
@@ -758,6 +759,9 @@ class ViewBox(GraphicsWidget):
                 else:
                     bounds.setLeft(chb.left())
                     bounds.setRight(chb.right())
+                    
+            if np.isnan(bounds.height()) or np.isnan(bounds.width()):
+                bounds = boundsOld
         return bounds
             
             
