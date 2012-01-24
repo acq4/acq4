@@ -7,6 +7,7 @@ import pyqtgraph as PG
 import InterfaceCombo
 import pyqtgraph.parametertree as PT
 import numpy as NP
+import metaarray as MA
 import time
 #import matplotlib.pylab as MP
 
@@ -56,6 +57,8 @@ class Imager(Module):
         self.w2 = QtGui.QWidget()
         self.l2 = QtGui.QVBoxLayout()
         self.w2.setLayout(self.l2)
+        self.currentStack = None
+        self.currentStackLength = 0
         
         self.win.setCentralWidget(self.w1)
         self.w1.addWidget(self.w2)
@@ -68,14 +71,17 @@ class Imager(Module):
         self.run_button = QtGui.QPushButton('Run')
         self.stop_button = QtGui.QPushButton('Stop')
         self.video_button = QtGui.QPushButton('Video')
+        self.record_button = QtGui.QPushButton('Record Stack')
+        self.record_button.setCheckable(True)
         self.video_button.setCheckable(True)
         self.l2.addWidget(self.snap_button)
         self.l2.addWidget(self.run_button)
         self.l2.addWidget(self.stop_button)
         self.l2.addWidget(self.video_button)
+        self.l2.addWidget(self.record_button)
         self.win.resize(800, 480)
         self.param = PT.Parameter(name = 'param', children=[
-            dict(name='Sample Rate', type='float', value=100000., suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10000., 1000000.], siPrefix=True),
+            dict(name='Sample Rate', type='float', value=1.2e6, suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10e3, 5e6], siPrefix=True),
             dict(name='Downsample', type='int', value=1, limits=[1,None]),
             dict(name='Image Width', type='int', value=256),
             dict(name='Y = X', type='bool', value=True),
@@ -85,6 +91,10 @@ class Imager(Module):
             dict(name='YCenter', type='float', value=-0.75, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
             dict(name='YSweep', type='float', value=0.5, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
             dict(name='Bidirectional', type='bool', value=True),
+            dict(name='Decomb', type='bool', value=True, children=[
+                dict(name='Auto', type='bool', value=True),
+                dict(name='Shift', type='float', value=100e-6, suffix='s', step=10e-6, siPrefix=True),
+            ]),
             dict(name='Overscan', type='float', value=2.0, suffix='%'),
             dict(name='Pockels', type='float', value= 0.03, suffix='V', dec=True, minStep=1e-3, limits=[0, 1.5], step=0.1, siPrefix=True),
             dict(name='Blank Screen', type='bool', value=True),
@@ -92,6 +102,7 @@ class Imager(Module):
             dict(name='Show Mirror V', type='bool', value=False),
             dict(name='Store', type='bool', value=True),
             dict(name='Frame Time', type='float', readonly=True, value=0.0),
+            dict(name='Scope Device', type='interface', interfaceTypes=['microscope']),
             dict(name="Z-Stack", type="bool", value=False, children=[
                 dict(name='Stage', type='interface', interfaceTypes='stage'),
                 dict(name="Step Size", type="float", value=5e-6, suffix='m', dec=True, minStep=1e-7, step=0.5, limits=[1e-9,1], siPrefix=True),
@@ -113,6 +124,7 @@ class Imager(Module):
         self.snap_button.clicked.connect(self.PMT_Snap)
         self.stop_button.clicked.connect(self.PMT_Stop)
         self.video_button.clicked.connect(self.toggleVideo)
+        self.record_button.toggled.connect(self.recordToggled)
         self.Manager = manager
         
     def PMT_Run(self):
@@ -176,7 +188,28 @@ class Imager(Module):
         if self.param['Store']:
             info = self.param.getValues()
             info['2pImageType'] = 'Snap'
-            dh = self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
+            #info['microscope'] = self.param['Scope Device'].value()
+            scope = self.Manager.getDevice(self.param['Scope Device'])
+            info['microscope'] = scope.getState()
+            if self.record_button.isChecked():
+                mainfo = [
+                    {'name': 'Frame'},
+                    {'name': 'X'},
+                    {'name': 'Y'},
+                    info
+                ]
+                    
+                data = MA.MetaArray(imgData[NP.newaxis, ...], info=mainfo, appendAxis='Frame')
+                if self.currentStack is None:
+                    fh = self.manager.getCurrentDir().writeFile(data, '2pStack.ma', info=info, autoIncrement=True)
+                    self.currentStack = fh
+                else:
+                    data.write(self.currentStack.name(), appendAxis='Frame')
+                self.currentStackLength += 1
+                self.record_button.setText('Recording (%d)' % self.currentStackLength)
+                
+            else:
+                self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
 
     def PMT_Stop(self):
         self.stopFlag = True
@@ -294,7 +327,12 @@ class Imager(Module):
                 #elif scandir == 1:
                     #imgData[y*width:(y+1)*width] = NP.flipud(imgData[y*width:(y+1)*width])
                     #scandir = 0            
-            imgData = self.decomb(imgData, minShift=0*sampleRate, maxShift=200e-6*sampleRate)  ## correct for mirror lag up to 200us
+            if self.param['Decomb', 'Auto']:
+                imgData, shift = self.decomb(imgData, minShift=0*sampleRate, maxShift=200e-6*sampleRate)  ## correct for mirror lag up to 200us
+                self.param['Decomb', 'Shift'] = shift / sampleRate
+            else:
+                imgData, shift = self.decomb(imgData, auto=False, shift=self.param['Decomb', 'Shift']*sampleRate)
+            
         
         if overscanPixels > 0:
             imgData = imgData[overscanPixels:-overscanPixels]  ## remove overscan
@@ -325,26 +363,29 @@ class Imager(Module):
             self.param['YSweep'] = self.param['XSweep']
             self.param['Image Height'] = self.param['Image Width']
             
-    def decomb(self, img, minShift, maxShift):
+    def decomb(self, img, minShift=0, maxShift=100, auto=True, shift=None):
         ## split image into fields
         nr = 2 * (img.shape[1] // 2)
         f1 = img[:,0:nr:2]
         f2 = img[:,1:nr+1:2]
         
         ## find optimal shift
-        bestShift = None
-        bestError = None
-        #errs = []
-        for shift in range(int(minShift), int(maxShift)):
-            f2s = f2[:-shift] if shift > 0 else f2
-            err1 = NP.abs((f1[shift:, 1:]-f2s[:, 1:])**2).sum()
-            err2 = NP.abs((f1[shift:, 1:]-f2s[:, :-1])**2).sum()
-            totErr = (err1+err2) / float(f1.shape[0]-shift)
-            #errs.append(totErr)
-            if totErr < bestError or bestError is None:
-                bestError = totErr
-                bestShift = shift
-        #PG.plot(errs)
+        if auto:
+            bestShift = None
+            bestError = None
+            #errs = []
+            for shift in range(int(minShift), int(maxShift)):
+                f2s = f2[:-shift] if shift > 0 else f2
+                err1 = NP.abs((f1[shift:, 1:]-f2s[:, 1:])**2).sum()
+                err2 = NP.abs((f1[shift:, 1:]-f2s[:, :-1])**2).sum()
+                totErr = (err1+err2) / float(f1.shape[0]-shift)
+                #errs.append(totErr)
+                if totErr < bestError or bestError is None:
+                    bestError = totErr
+                    bestShift = shift
+            #PG.plot(errs)
+        else:
+            bestShift = shift
         
         ## reconstrict from shifted fields
         leftShift = bestShift // 2
@@ -357,7 +398,7 @@ class Imager(Module):
         else:
             decombed[:, ::2] = img[:, ::2]
         decombed[rightShift:, 1::2] = img[:-rightShift, 1::2]
-        return decombed
+        return decombed, bestShift
         
         
     def toggleVideo(self, b):
@@ -372,4 +413,8 @@ class Imager(Module):
             if not self.video_button.isChecked():
                 return
         
-        
+    def recordToggled(self, b):
+        if not b:
+            self.currentStack = None
+            self.currentStackLength = 0
+            self.record_button.setText('Record Stack')

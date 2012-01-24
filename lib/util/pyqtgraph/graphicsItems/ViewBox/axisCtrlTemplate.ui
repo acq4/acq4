@@ -93,15 +93,15 @@
      </property>
     </widget>
    </item>
-   <item row="4" column="0">
-    <widget class="QRadioButton" name="linkRadio">
-     <property name="text">
-      <string>Link</string>
-     </property>
-    </widget>
-   </item>
    <item row="4" column="1" colspan="2">
     <widget class="QComboBox" name="linkCombo"/>
+   </item>
+   <item row="4" column="0">
+    <widget class="QLabel" name="label">
+     <property name="text">
+      <string>Link Axis:</string>
+     </property>
+    </widget>
    </item>
   </layout>
  </widget>

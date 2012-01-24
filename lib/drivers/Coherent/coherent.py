@@ -22,7 +22,12 @@ class Coherent(object):
         self.readPacket()
 
     def getPower(self):
-        return float(self['UF'])
+        try:
+            v = self['UF']
+            return float(v)
+        except:
+            print v
+            raise
     
     def getWavelength(self):
         return float(self['VW'])
@@ -62,12 +67,18 @@ class Coherent(object):
         return self['ALIGN']
         
     def __getitem__(self, arg):  ## request a single value from the laser
+        #print "write", arg
         self.write("?%s\r\n" % arg)
-        return self.readPacket()
+        ret = self.readPacket()
+        #print "   return:", ret
+        return ret
         
     def __setitem__(self, arg, val):  ## set a single value on the laser
+        #print "write", arg, val
         self.write("%s=%s\r\n" % (arg,str(val)))
-        return self.readPacket()
+        ret = self.readPacket()
+        #print "   return:", ret
+        return ret
 
     def clearBuffer(self):
         d = self.read()
