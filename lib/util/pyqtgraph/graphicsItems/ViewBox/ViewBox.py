@@ -145,13 +145,20 @@ class ViewBox(GraphicsWidget):
         
         
     def getState(self, copy=True):
+        state = self.state.copy()
+        state['linkedViews'] = [(None if v is None else v.name) for v in state['linkedViews']]
         if copy:
             return deepcopy(self.state)
         else:
             return self.state
         
     def setState(self, state):
-        self.state = deepcopy(state)
+        state = state.copy()
+        self.setXLink(state['linkedViews'][0])
+        self.setYLink(state['linkedViews'][1])
+        del state['linkedViews']
+        
+        self.state.update(state)
         self.updateMatrix()
         self.sigStateChanged.emit(self)
 

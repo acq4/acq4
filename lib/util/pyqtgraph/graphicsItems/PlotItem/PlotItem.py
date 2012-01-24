@@ -1065,11 +1065,15 @@ class PlotItem(GraphicsWidget):
         #self.updateYScale()
         self.updateParamList()
         
-        if 'view' in state:
-            self.vb.setState(state['view'])
-        else:
-            print "State has no view:"
-            print state
+        if 'view' not in state:
+            r = [[float(state['xMinText']), float(state['xMaxText'])], [float(state['yMinText']), float(state['yMaxText'])]]
+            state['view'] = {
+                'autoRange': [state['xAutoRadio'], state['yAutoRadio']],
+                'linkedViews': [state['xLinkCombo'], state['yLinkCombo']],
+                'targetRange': r,
+                'viewRange': r,
+            }
+        self.vb.setState(state['view'])
         
         
         #print "\nRESTORE %s:\n" % str(self.name), state
