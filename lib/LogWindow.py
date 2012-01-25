@@ -797,7 +797,11 @@ class LogWidget(QtGui.QWidget):
             self.manager.showDocumentation(url[4:].lower())
         elif url[:4] == 'exc:':
             cursor = self.ui.output.document().find('Show traceback %s' % url[4:])
-            tb = self.entries[int(url[4:])-1]['tracebackHtml']
+            try:
+                tb = self.entries[int(url[4:])-1]['tracebackHtml']
+            except IndexError:
+                print "requested index %d, but only %d entries exist." % (int(url[4:])-1, len(self.entries))
+                raise
             cursor.insertHtml(tb)
 
     def clear(self):

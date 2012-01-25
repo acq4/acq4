@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'axisCtrlTemplate.ui'
 #
-# Created: Thu Jan 19 23:59:37 2012
+# Created: Fri Jan 20 12:41:24 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -50,12 +50,12 @@ class Ui_Form(object):
         self.autoPanCheck = QtGui.QCheckBox(Form)
         self.autoPanCheck.setObjectName(_fromUtf8("autoPanCheck"))
         self.gridLayout.addWidget(self.autoPanCheck, 3, 1, 1, 2)
-        self.linkRadio = QtGui.QRadioButton(Form)
-        self.linkRadio.setObjectName(_fromUtf8("linkRadio"))
-        self.gridLayout.addWidget(self.linkRadio, 4, 0, 1, 1)
         self.linkCombo = QtGui.QComboBox(Form)
         self.linkCombo.setObjectName(_fromUtf8("linkCombo"))
         self.gridLayout.addWidget(self.linkCombo, 4, 1, 1, 2)
+        self.label = QtGui.QLabel(Form)
+        self.label.setObjectName(_fromUtf8("label"))
+        self.gridLayout.addWidget(self.label, 4, 0, 1, 1)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
@@ -69,5 +69,5 @@ class Ui_Form(object):
         self.autoRadio.setText(QtGui.QApplication.translate("Form", "Auto", None, QtGui.QApplication.UnicodeUTF8))
         self.autoPercentSpin.setSuffix(QtGui.QApplication.translate("Form", "%", None, QtGui.QApplication.UnicodeUTF8))
         self.autoPanCheck.setText(QtGui.QApplication.translate("Form", "Auto Pan Only", None, QtGui.QApplication.UnicodeUTF8))
-        self.linkRadio.setText(QtGui.QApplication.translate("Form", "Link", None, QtGui.QApplication.UnicodeUTF8))
+        self.label.setText(QtGui.QApplication.translate("Form", "Link Axis:", None, QtGui.QApplication.UnicodeUTF8))
 

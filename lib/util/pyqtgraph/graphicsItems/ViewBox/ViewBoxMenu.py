@@ -40,7 +40,6 @@ class ViewBoxMenu(QtGui.QMenu):
                 (ui.maxText.editingFinished, 'MaxTextChanged'),
                 (ui.autoRadio.clicked, 'AutoClicked'),
                 (ui.autoPercentSpin.valueChanged, 'AutoSpinChanged'),
-                (ui.linkRadio.clicked, 'LinkClicked'),
                 (ui.linkCombo.currentIndexChanged, 'LinkComboChanged'),
             ]
             
@@ -122,8 +121,6 @@ class ViewBoxMenu(QtGui.QMenu):
                 if ind == -1:
                     ind = 0
                 c.setCurrentIndex(ind)
-                if ind > 0:
-                    self.ctrl[i].linkRadio.setChecked(True)
             finally:
                 c.blockSignals(False)
             
@@ -138,7 +135,7 @@ class ViewBoxMenu(QtGui.QMenu):
         self.view.setMouseEnabled(x=b)
 
     def xManualClicked(self):
-        self.view.enableAutoRange('x', False)
+        self.view.enableAutoRange(ViewBox.XAxis, False)
         
     def xMinTextChanged(self):
         self.ctrl[0].manualRadio.setChecked(True)
@@ -149,15 +146,12 @@ class ViewBoxMenu(QtGui.QMenu):
         self.view.setXRange(float(self.ctrl[0].minText.text()), float(self.ctrl[0].maxText.text()), padding=0)
         
     def xAutoClicked(self):
-        self.view.enableAutoRange('x', True)
+        self.view.enableAutoRange(ViewBox.XAxis, True)
         
     def xAutoSpinChanged(self, val):
         self.ctrl[0].autoRadio.setChecked(True)
-        self.view.setAutoRange('x', val)
+        self.view.enableAutoRange(ViewBox.XAxis, val)
 
-    def xLinkClicked(self):
-        pass
-    
     def xLinkComboChanged(self, ind):
         self.view.setXLink(str(self.ctrl[0].linkCombo.currentText()))
 
@@ -167,7 +161,7 @@ class ViewBoxMenu(QtGui.QMenu):
         self.view.setMouseEnabled(y=b)
 
     def yManualClicked(self):
-        self.view.enableAutoRange('y', False)
+        self.view.enableAutoRange(ViewBox.YAxis, False)
         
     def yMinTextChanged(self):
         self.ctrl[1].manualRadio.setChecked(True)
@@ -178,15 +172,12 @@ class ViewBoxMenu(QtGui.QMenu):
         self.view.setYRange(float(self.ctrl[1].minText.text()), float(self.ctrl[1].maxText.text()), padding=0)
         
     def yAutoClicked(self):
-        self.view.enableAutoRange('y', True)
+        self.view.enableAutoRange(ViewBox.YAxis, True)
         
     def yAutoSpinChanged(self, val):
         self.ctrl[1].autoRadio.setChecked(True)
-        self.view.setAutoRange('y', val)
+        self.view.enableAutoRange(ViewBox.YAxis, val)
 
-    def yLinkClicked(self):
-        pass
-    
     def yLinkComboChanged(self, ind):
         self.view.setYLink(str(self.ctrl[1].linkCombo.currentText()))
 
