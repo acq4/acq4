@@ -420,6 +420,9 @@ class ViewBox(GraphicsWidget):
             else:
                 view = ViewBox.NamedViews[view]
 
+        if hasattr(view, 'implements') and view.implements('ViewBoxWrapper'):
+            view = view.getViewBox()
+
         ## used to connect/disconnect signals between a pair of views
         if axis == ViewBox.XAxis:
             signal = 'sigXRangeChanged'
