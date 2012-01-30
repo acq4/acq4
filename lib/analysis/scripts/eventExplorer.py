@@ -86,7 +86,7 @@ if 'ev' not in locals():
         print "Read from cache..."
         ev = pickle.load(open(cacheFile, 'r'))
     else:
-        ev = db.select('events', ['sourceDir', 'SourceFile', 'fitAmplitude', 'fitTime', 'fitDecayTau', 'userTransform', 'type', 'Source'], toArray=True)
+        ev = db.select('events', ['ProtocolSequenceDir', 'SourceFile', 'fitAmplitude', 'fitTime', 'fitDecayTau', 'userTransform', 'type', 'Source', 'ProtocolDir'], toArray=True)
 
 
         ## insert holding levels
@@ -94,9 +94,9 @@ if 'ev' not in locals():
         holding = np.empty(ev.shape)
         hvals = {}
         for i in range(len(ev)):
-            sd = ev[i]['sourceDir']
+            sd = ev[i]['ProtocolSequenceDir']
             if sd not in hvals:
-                cf = db.getDir('ProtocolSequence', sd)[ev[i]['SourceFile']]
+                cf = ev[i]['SourceFile']
                 hvals[sd] = mod.getClampHoldingLevel(cf)
                 #print hvals[sd], cf
             holding[i] = hvals[sd]
@@ -110,10 +110,10 @@ if 'ev' not in locals():
         for i in range(len(ev)):
             if i%1000 == 0:
                 print i
-            key = (ev[i]['sourceDir'], ev[i]['SourceFile'])
+            key = (ev[i]['ProtocolSequenceDir'], ev[i]['SourceFile'])
             if key not in pcache:
                 try:
-                    dh = db.getDir('ProtocolSequence', key[0])[key[1]].parent()
+                    dh = ev[i]['ProtocolDir']
                     p1 = pg.Point(dh.info()['Scanner']['position'])
                     if key[0] not in tcache:
                         tr = pg.Transform()
@@ -132,7 +132,7 @@ if 'ev' not in locals():
     cells = list(set(ev['Source']))
     #for c in cells:
         #print c, db.getDir('Cell', c)
-    cells.sort(lambda a,b: cmp(db.getDir('Cell', a).name(), db.getDir('Cell', b).name()))
+    cells.sort(lambda a,b: cmp(db.getDir('DirType_Cell', a).name(), db.getDir('DirType_Cell', b).name()))
     cellSpin.setMaximum(len(cells)-1)
     print "Done."
 
@@ -181,10 +181,10 @@ def showCell():
     
     dh = db.getDir('Cell', cell)
     try:
-        image.updateImage(dh['morphology.png'].read())
+        image.setImage(dh['morphology.png'].read())
         gv.setRange(image.sceneBoundingRect())
     except:
-        image.updateImage(np.zeros((2,2)))
+        image.setImage(np.zeros((2,2)))
         pass
     
     ev2 = select(ev, source=cell)

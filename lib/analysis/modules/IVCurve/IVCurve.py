@@ -165,11 +165,11 @@ class IVCurve(AnalysisModule):
             self.spcmd = current[self.spk]
             # plot with lines and symbols:
             self.fiScatterPlot = pg.ScatterPlotItem(size=10, pen=pg.mkPen('b'), brush=pg.mkBrush(0, 0, 255, 200), 
-                style='s', identical=True)
+                symbol='s', identical=True)
             self.fslScatterPlot = pg.ScatterPlotItem(size=6, pen=pg.mkPen('g'), brush=pg.mkBrush(0, 255, 0, 200), 
-                style = 't', identical=True)
+                symbol = 't', identical=True)
             self.fisiScatterPlot = pg.ScatterPlotItem(size=6, pen=pg.mkPen('y'), brush=pg.mkBrush(255, 255, 0, 200),
-                style = 's', identical=True)
+                symbol = 's', identical=True)
             self.fiPlot.plot(x=current*1e12, y = self.spikecount, clear=True)
             #self.fiPlot.setXRange(-0.5, 0.5)
             self.fiScatterPlot.addPoints(x=current*iscale, y=self.spikecount )# plot the spike counts

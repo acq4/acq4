@@ -96,7 +96,7 @@ class ImageView(QtGui.QWidget):
         self.timeLine.setZValue(1)
         self.ui.roiPlot.addItem(self.timeLine)
         self.ui.splitter.setSizes([self.height()-35, 35])
-        self.ui.roiPlot.showScale('left', False)
+        self.ui.roiPlot.hideAxis('left')
         
         self.keysPressed = {}
         self.playTimer = QtCore.QTimer()
@@ -300,14 +300,14 @@ class ImageView(QtGui.QWidget):
             self.ui.splitter.setSizes([self.height()*0.6, self.height()*0.4])
             self.roiCurve.show()
             self.roiChanged()
-            self.ui.roiPlot.showScale('left', True)
+            self.ui.roiPlot.showAxis('left')
         else:
             self.roi.hide()
             self.ui.roiPlot.setMouseEnabled(False, False)
             self.ui.roiPlot.setXRange(self.tVals.min(), self.tVals.max())
             self.ui.splitter.setSizes([self.height()-35, 35])
             self.roiCurve.hide()
-            self.ui.roiPlot.showScale('left', False)
+            self.ui.roiPlot.hideAxis('left')
 
     def roiChanged(self):
         if self.image is None:
@@ -444,7 +444,7 @@ class ImageView(QtGui.QWidget):
         
         self.ui.gradientWidget.setTickValue(self.ticks[0], 0.0)
         self.ui.gradientWidget.setTickValue(self.ticks[1], 1.0)
-        self.imageItem.setLevels(white=self.whiteLevel(), black=self.blackLevel())
+        self.imageItem.setLevels([self.blackLevel(), self.whiteLevel()])
             
 
     def autoRange(self):
@@ -535,14 +535,14 @@ class ImageView(QtGui.QWidget):
         #print "update:", image.ndim, image.max(), image.min(), self.blackLevel(), self.whiteLevel()
         if self.axes['t'] is None:
             #self.ui.timeSlider.hide()
-            self.imageItem.updateImage(image, white=self.whiteLevel(), black=self.blackLevel())
+            self.imageItem.updateImage(image, levels=[self.blackLevel(),self.whiteLevel()])
             #self.ui.roiPlot.hide()
             #self.ui.roiBtn.hide()
         else:
             #self.ui.roiBtn.show()
             self.ui.roiPlot.show()
             #self.ui.timeSlider.show()
-            self.imageItem.updateImage(image[self.currentIndex], white=self.whiteLevel(), black=self.blackLevel())
+            self.imageItem.updateImage(image[self.currentIndex], levels=[self.blackLevel(),self.whiteLevel()])
             
             
     def timeIndex(self, slider):

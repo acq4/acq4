@@ -37,7 +37,7 @@ kern = np.array([
     [0.0, 0.5, 0.0]
 ])
 img.setDrawKernel(kern, mask=kern, center=(1,1), mode='add')
-img.setLevels(10,0)
+img.setLevels([0, 10])
 
 ## Start Qt event loop unless running in interactive mode.
 if sys.flags.interactive != 1:

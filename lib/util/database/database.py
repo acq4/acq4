@@ -42,7 +42,7 @@ class SqliteDatabase:
     regardless of the type specified by its column.
     """
     def __init__(self, fileName=':memory:'):
-        self.db = QtSql.QSqlDatabase.addDatabase("QSQLITE")
+        self.db = QtSql.QSqlDatabase.addDatabase("QSQLITE", os.path.abspath(fileName))
         self.db.setDatabaseName(fileName)
         self.db.open()
         self.tables = {}
@@ -239,7 +239,7 @@ class SqliteDatabase:
         return table in self.tables  ## this is a case-insensitive operation
     
     def tableSchema(self, table):
-        return self.tables[table]  ## this is a case-insensitive operation
+        return self.tables[table].copy()  ## this is a case-insensitive operation
     
     def _exe(self, query, cmd=None, batch=False):
         """Execute an SQL query, raising an exception if there was an error. (internal use only)"""
@@ -506,7 +506,7 @@ class TableData:
         if isinstance(arg, basestring):
             return self.data[arg]
         elif isinstance(arg, int):
-            return dict([(k, v[arg]) for k, v in self.data.iteritems()])
+            return collections.OrderedDict([(k, v[arg]) for k, v in self.data.iteritems()])
         elif isinstance(arg, tuple):
             arg = self._orderArgs(arg)
             return self.data[arg[1]][arg[0]]
@@ -597,7 +597,7 @@ def parseColumnDefs(defs, keyOrder=None):
     def isSequence(x):
         return isinstance(x, list) or isinstance(x, tuple)
     def toDict(args):
-        d = {}
+        d = collections.OrderedDict()
         for i,v in enumerate(args):
             d[keyOrder[i]] = v
             if i >= len(keyOrder) - 1:
@@ -608,7 +608,7 @@ def parseColumnDefs(defs, keyOrder=None):
         return dict([(c[0], toDict(c[1:])) for c in defs])
         
     if isinstance(defs, dict):
-        ret = {}
+        ret = collections.OrderedDict()
         for k, v in defs.iteritems():
             if isSequence(v):
                 ret[k] = toDict(v)

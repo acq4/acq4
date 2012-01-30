@@ -520,7 +520,8 @@ class ScannerProtoGui(ProtocolGui):
             if clearHistory == True:
                 self.dev.updateTarget(k, None)  ## inform the device that this target is no more
             i = self.items[k]
-            i.scene().removeItem(i)
+            if i.scene() is not None:
+                i.scene().removeItem(i)
             #self.removeItemPoints(i)
         self.items = {}
         #self.occlusions = {}

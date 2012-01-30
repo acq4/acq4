@@ -46,7 +46,7 @@ class Imager(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config) 
         self.win = QtGui.QMainWindow()
-        self.testMode = True # set to True to just display the scan signals
+        self.testMode = False # set to True to just display the scan signals
         self.win.show()
         self.win.setWindowTitle('Multiphoton Imager')
         self.w1 = QtGui.QSplitter()
@@ -74,7 +74,6 @@ class Imager(Module):
         self.param = PT.Parameter(name = 'param', children=[
             dict(name='Sample Rate', type='float', value=100000., suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10000., 1000000.], siPrefix=True),
             dict(name='Downsample', type='int', value=1, limits=[1,None]),
-            dict(name='Image Size', type='list', value=256, limits=[32,64,128,256,512,1024,2048]),
             dict(name='Image Width', type='int', value=256),
             dict(name='Y = X', type='bool', value=True),
             dict(name='Image Height', type='int', value=256),
@@ -90,8 +89,6 @@ class Imager(Module):
             dict(name='Show Mirror V', type='bool', value=False),
             dict(name='Store', type='bool', value=True),
             dict(name='Frame Time', type='float', readonly=True, value=0.0),
-            dict(name='Microscope', type='interface', interfaceTypes='microscope'),
-
             dict(name="Z-Stack", type="bool", value=False, children=[
                 dict(name='Stage', type='interface', interfaceTypes='stage'),
                 dict(name="Step Size", type="float", value=5e-6, suffix='m', dec=True, minStep=1e-7, step=0.5, limits=[1e-9,1], siPrefix=True),
@@ -109,7 +106,6 @@ class Imager(Module):
         self.stopFlag = False
         self.tree.setParameters(self.param)
         self.param.sigTreeStateChanged.connect(self.update)
-        self.param.param('Image Size').sigValueChanged.connect(self.updateXY)
         self.update()
         self.run_button.clicked.connect(self.PMT_Run)
         self.snap_button.clicked.connect(self.PMT_Snap)
@@ -136,15 +132,24 @@ class Imager(Module):
                     stage.moveBy([0.0, 0.0, self.param['Z-Stack', 'Step Size']], speed=20, block=True)  
             imgData = NP.concatenate(images, axis=0)
         elif self.param['Timed']: # 
-            
+            info['2pImageType'] = 'Timed'
             self.param['Timed', 'Current Frame'] = 0
-            self.images = []
-            self.nSteps = self.param['Timed', 'N Intervals']
-            self.nImages = 0
-            self.TimedTimer = QtCore.QTimer()
-            self.TimedTimer.timeout.connect(self.checkTimer)
-            self.TimedTimer.start(0.0)
-            return
+            images = []
+            nSteps = self.param['Timed', 'N Intervals']
+            for i in range(nSteps):
+                if self.stopFlag:
+                    break
+                self.param['Timed', 'Current Frame'] = i
+                img = self.takeImage()[NP.newaxis, ...]
+                images.append(img)
+                self.view.setImage(img)
+                if self.stopFlag:
+                    break
+                
+                if i < nSteps-1:
+                    time.sleep(self.param['Timed', 'Interval'])
+            imgData = NP.concatenate(images, axis=0)
+
         else:
             info['2pImageType'] = 'Snap'
             imgData = self.takeImage()
@@ -153,47 +158,20 @@ class Imager(Module):
         info = self.param.getValues()
         
         if self.param['Store']:
-            self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
+            dh = self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
 
-    def checkTimer(self):
-        if self.stopFlag:
-            self.TimedTimer.stop()
-            return
-        self.param['Timed', 'Current Frame'] = self.nImages
-        self.nImages += 1
-        img = self.takeImage()[NP.newaxis, ...]
-        self.images.append(img)
-        self.view.setImage(img)
-        
-        self.nSteps -= 1
-        if self.nSteps == 0:
-            imgData = NP.concatenate(self.images, axis=0)
-            self.TimedTimer.stop()
-            self.view.setImage(imgData)
-            info = self.param.getValues()           
-            info['2pImageType'] = 'Timed'
-            if self.param['Store']:
-                self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)  
-                
-        if self.nSteps > 0:
-            self.TimedTimer.stop()
-            self.TimedTimer.start(self.param['Timed', 'Interval']*1000.0)
-            
-        
     def PMT_Snap(self):
         """
         Take one image as a snap, regardless of whether a Z stack or a Timed acquisition is selected
         """
         imgData = self.takeImage()
+        if self.testMode:
+            return
         self.view.setImage(imgData)
-        
+        info = self.param.getValues()
+        info['2pImageType'] = 'Snap'
         if self.param['Store']:
-            scope = self.Manager.getDevice(self.param['Microscope'])
-            scopePosition = scope.getPosition()
-            objective = scope.getObjective()['name']
             info = self.param.getValues()
-            info['scopePosition'] = scopePosition
-            info['objective'] = objective
             info['2pImageType'] = 'Snap'
             dh = self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
 
@@ -206,48 +184,62 @@ class Imager(Module):
             height = width
         else:
             height = self.param['Image Height']
-        viewImagePts = height * width
-        imagePts = height * width
-        xscanV0 = self.param['XSweep']/2.0
+        #viewImagePts = height * width
+        #imagePts = height * width
+        
+        xscan = self.param['XSweep']/2.0
         xcenter = self.param['XCenter']
         ycenter = self.param['YCenter']
         if self.param['Y = X']:
-            yscanV = xscanV0
+            yscan = xscan
         else:
-            yscanV = self.param['YSweep']/2.0
-        overscan = self.param['Overscan'] # in percent of scan, in voltage
-        xoverscan = xscanV0*overscan/100.0 # overscan voltage
-        xscanV = xscanV0 + xoverscan
+            yscan = self.param['YSweep']/2.0
+            
+        sampleRate = self.param['Sample Rate']
         downsample = self.param['Downsample']
-        noverscan = int(width*overscan/100.0)
-        nsamp = imagePts+2*noverscan*height
-        samples = nsamp*downsample
-        nscanwidth = downsample*(width+2*noverscan)
-        if self.testMode:
-            print '__________________________'
-            print "imagePts: %d" % (imagePts)
-            print "overscan: %f" % (overscan)
-            print "noverscan: %d" % (noverscan)
-            print "samples: %d" % (samples)
-            print "downsample %d" % (downsample)
-            print "xoverscan: %f" % (xoverscan)
-        saw1 = NP.linspace(xcenter - xscanV, xcenter + xscanV, nscanwidth)
+        overscan = self.param['Overscan']/100.     ## fraction of voltage scan range
+        xscan *= overscan + 1.0 
+        overscanPixels = int(width / 2. * overscan)
+        pixelsPerRow = width + 2 * overscanPixels  ## make sure width is increased by an even number.
+        samplesPerRow = pixelsPerRow * downsample
+        samples = samplesPerRow * height
+        #xoverscan = xscan*overscan/100.0 # overscan voltage
+        #noverscan = int(width*xoverscan)     ## ???  pixels * volts
+        #nsamp = imagePts+2*noverscan*height  
+        #scanpixels = pixelsPerRow * height
+        #nscwidth = downsample*(width+2*noverscan)
+#        if self.testMode:
+#            print "imagePts: %d" % (imagePts)
+#            print "noverscan: %d" % (noverscan)
+#            print "samples: %d" % (samples)
+#            print "downsample %d" % (downsample)
+#            print "xoverscan: %f" % (xoverscan)
         if not self.param['Bidirectional']:
+            saw1 = NP.linspace(xcenter-xscan, xcenter+xscan, samplesPerRow)
+            #if noverscan > 0:
+                #saw1 = NP.concatenate((saw1[0]*NP.ones(noverscan), saw1, saw1[-1]*NP.ones(noverscan)))
             xScan = NP.tile(saw1, (1, height))[0,:]
         else:
-            scandir = 0
-            xScan = NP.empty(samples)
-            for y in range(height):
-                if scandir == 0:
-                    xScan[y*nscanwidth:(y+1)*nscanwidth] = saw1
-                    scandir = 1
-                elif scandir == 1:
-                    xScan[y*nscanwidth:(y+1)*nscanwidth] = NP.flipud(saw1)
-                    scandir = 0
-        yvals = NP.linspace(ycenter-yscanV, ycenter+yscanV, height)
+            saw1 = NP.linspace(xcenter-xscan, xcenter+xscan, samplesPerRow)
+            rows = [saw1, saw1[::-1]] * int(height/2)
+            if len(rows) < height:
+                rows.append(saw1)
+            xScan = NP.concatenate(rows, axis=0)
+            #if noverscan > 0:
+                #saw1 = NP.concatenate((saw1[0]*NP.ones(noverscan), saw1, saw1[-1]*NP.ones(noverscan)))
+            #scandir = 0
+            #xScan = NP.empty(samples)
+            #for y in range(height):
+                #if scandir == 0:
+                    #xScan[y*nscwidth:(y+1)*nscwidth] = saw1
+                    #scandir = 1
+                #elif scandir == 1:
+                    #xScan[y*nscwidth:(y+1)*nscwidth] = NP.flipud(saw1)
+                    #scandir = 0
+        yvals = NP.linspace(ycenter-yscan, ycenter+yscan, height)
         yScan = NP.empty(samples)
         for y in range(height):
-            yScan[y*nscanwidth:(y+1)*nscanwidth] = yvals[y]
+            yScan[y*samplesPerRow:(y+1)*samplesPerRow] = yvals[y]
         
 #        if self.testMode:
 #            MP.figure(1)
@@ -256,13 +248,13 @@ class Imager(Module):
 #            MP.show()
 #            return
             
-        cmd= {'protocol': {'duration': nsamp/self.param['Sample Rate']},
-              'DAQ' : {'rate': self.param['Sample Rate'], 'numPts': nsamp, 'downsample':downsample}, 
+        cmd= {'protocol': {'duration': samples/sampleRate},
+              'DAQ' : {'rate': sampleRate, 'numPts': samples, 'downsample':downsample}, 
               'Scanner-Raw': {
                   'XAxis' : {'command': xScan},
                   'YAxis' : {'command': yScan}
                   },
-             # 'Laser-2P': {'pCell' : {'preset': self.param['Pockels']}},
+              'PockelCell': {'Switch' : {'preset': self.param['Pockels']}},
               'PMT' : {
                   'Input': {'record': True},
                 #  'PlateVoltage': {'record' : False, 'recordInit': True}
@@ -275,46 +267,51 @@ class Imager(Module):
                 task.execute(block = False)
                 while not task.isDone():
                     QtGui.QApplication.processEvents()
-                    time.sleep(0.01)
+                    time.sleep(0.1)
         else:
             task.execute(block = False)
             while not task.isDone():
                 QtGui.QApplication.processEvents()
-                time.sleep(0.01)
+                time.sleep(0.1)
 
         data = task.getResult()
         imgData = data['PMT']['Input'].view(NP.ndarray)
 #        print imgData.shape
 #        print width*height
-        imgTemp = NP.zeros((width * height))
-        if noverscan > 0: # remove the overscan data
-            for y in range(height): # first remove the overscan data from the array
-#                if y < 10:
-#                    print "y: %d y0: %d + width: %d into: %d, %d" % (y, y0, y0+width, y*width, (y+1)*width)
-                imgTemp[y*width:(y+1)*width] = imgData[y*nscanwidth+noverscan:(y+1)*nscanwidth-noverscan]
-            imgData = imgTemp # [width*height]
-            imgTemp=[]
+        #imgTemp = NP.zeros((width * height))
+        imgData.shape = (height, pixelsPerRow)
+        imgData = imgData.transpose()
+        
         if self.param['Bidirectional']:
-            scandir = 0
-            for y in range(height):
-                if scandir == 0:
-                    scandir = 1
-                elif scandir == 1:
-                    imgData[y*width:(y+1)*width] = imgData[(y+1)*width-1:(y*width)-1:-1]
-                    scandir = 0            
+            #scandir = 0
+            for y in range(1, height, 2):
+                imgData[:,y] = imgData[::-1,y]
+                #if scandir == 0:
+                    #scandir = 1
+                #elif scandir == 1:
+                    #imgData[y*width:(y+1)*width] = NP.flipud(imgData[y*width:(y+1)*width])
+                    #scandir = 0            
+            imgData = self.decomb(imgData, maxShift=200e-6*sampleRate)  ## correct for mirror lag up to 200us
+        
+        if overscanPixels > 0:
+            imgData = imgData[overscanPixels:-overscanPixels]  ## remove overscan
+        #if noverscan > 0: # remove the overscan data
+            #actualWidth = 2*noverscan+width
+            ##print "actualWidth: %d" % (actualWidth)
+            #for y in range(height): # first remove the overscan data from the array
+                #y0 = y*actualWidth + noverscan # first point in non-overscanned dat for this line
+##                if y < 10:
+##                    print "y: %d y0: %d + width: %d into: %d, %d" % (y, y0, y0+width, y*width, (y+1)*width)
+                #imgTemp[y*width:(y+1)*width] = imgData[y0:y0+width]
+            #imgData = imgTemp # [width*height]
+            #imgTemp=[]
         if self.param['Show PMT V']:
-            PG.plot(y=imgData, x=NP.linspace(0,imagePts*downsample/self.param['Sample Rate'], 
-            imagePts))
+            PG.plot(y=imgData, x=NP.linspace(0, samples/sampleRate, imgData.size))
         if self.param['Show Mirror V']:
-            PG.plot(y=xScan, x=NP.linspace(0,samples*downsample/self.param['Sample Rate'], 
-            samples))
+            PG.plot(y=xScan, x=NP.linspace(0, samples/self.param['Sample Rate'], xScan.size))
 
 
-        imgData = imgData.reshape((width, height)).transpose()
-        if self.testMode:
-            print "size of imgData on return: ", imgData.shape
-            print NP.max(NP.max(imgData))
-            print NP.min(NP.min(imgData))
+        #imgData = imgData.reshape((width, height)).transpose()
         return imgData
   
     def update(self):
@@ -325,9 +322,37 @@ class Imager(Module):
             self.param['YSweep'] = self.param['XSweep']
             self.param['Image Height'] = self.param['Image Width']
             
-    def updateXY(self):
-        self.param['Image Height'] = self.param['Image Size']
-        self.param['Image Width'] = self.param['Image Size']
+    def decomb(self, img, maxShift):
+        ## split image into fields
+        nr = 2 * (img.shape[1] // 2)
+        f1 = img[:,0:nr:2]
+        f2 = img[:,1:nr+1:2]
         
-            
+        ## find optimal shift
+        bestShift = None
+        bestError = None
+        #errs = []
+        for shift in range(int(maxShift)):
+            f2s = f2[:-shift] if shift > 0 else f2
+            err1 = NP.abs((f1[shift:, 1:]-f2s[:, 1:])**2).sum()
+            err2 = NP.abs((f1[shift:, 1:]-f2s[:, :-1])**2).sum()
+            totErr = (err1+err2) / float(f1.shape[0]-shift)
+            #errs.append(totErr)
+            if totErr < bestError or bestError is None:
+                bestError = totErr
+                bestShift = shift
+        #PG.plot(errs)
+        
+        ## reconstrict from shifted fields
+        leftShift = bestShift // 2
+        rightShift = leftShift + (bestShift % 2)
+        if rightShift == 0:
+            return img
+        decombed = NP.zeros(img.shape, img.dtype)
+        if leftShift > 0:
+            decombed[:-leftShift, ::2] = img[leftShift:, ::2]
+        else:
+            decombed[:, ::2] = img[:, ::2]
+        decombed[rightShift:, 1::2] = img[:-rightShift, 1::2]
+        return decombed
         

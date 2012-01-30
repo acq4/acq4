@@ -55,7 +55,7 @@ class ScatterPlotter(QtGui.QSplitter):
 
     def addScan(self, scanDict):
         plot = pg.ScatterPlotItem(pen=QtGui.QPen(QtCore.Qt.NoPen), brush=pg.mkBrush((255, 255, 255, 100)))
-        self.plot.addDataItem(plot)
+        self.plot.addItem(plot)
         plot.sigClicked.connect(self.plotClicked)
         
         if not isinstance(scanDict, dict):

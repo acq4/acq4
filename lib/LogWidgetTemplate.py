@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/LogWidgetTemplate.ui'
 #
-# Created: Sun Jan  8 14:57:00 2012
+# Created: Wed Jan 11 17:59:27 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -128,6 +128,7 @@ class Ui_Form(object):
         self.importanceSlider.setSizePolicy(sizePolicy)
         self.importanceSlider.setMaximum(9)
         self.importanceSlider.setPageStep(0)
+        self.importanceSlider.setProperty(_fromUtf8("value"), 4)
         self.importanceSlider.setTracking(True)
         self.importanceSlider.setOrientation(QtCore.Qt.Horizontal)
         self.importanceSlider.setTickPosition(QtGui.QSlider.TicksAbove)

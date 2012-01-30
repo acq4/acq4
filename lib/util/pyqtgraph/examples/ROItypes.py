@@ -44,7 +44,7 @@ im2 = pg.ImageItem(arr)
 v.addItem(im1)
 v.addItem(im2)
 im2.moveBy(110, 20)
-v.autoRange()
+v.setRange(QtCore.QRectF(0, 0, 200, 120))
 
 im3 = pg.ImageItem()
 v2 = w.addViewBox(1,0)
@@ -79,16 +79,16 @@ def updateRoi(roi):
         return
     lastRoi = roi
     arr1 = roi.getArrayRegion(im1.image, img=im1)
-    im3.updateImage(arr1, autoRange=True)
+    im3.setImage(arr1)
     arr2 = roi.getArrayRegion(im2.image, img=im2)
-    im4.updateImage(arr2, autoRange=True)
+    im4.setImage(arr2)
     updateRoiPlot(roi, arr1)
     
 def updateRoiPlot(roi, data=None):
     if data is None:
         data = roi.getArrayRegion(im1.image, img=im1)
     if data is not None:
-        roi.curve.updateData(data.mean(axis=1))
+        roi.curve.setData(data.mean(axis=1))
 
 
 ## Create a variety of different ROI types

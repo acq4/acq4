@@ -5,6 +5,7 @@ from collections import OrderedDict
 
 examples = OrderedDict([
     ('Command-line usage', 'CLIexample.py'),
+    ('Basic Plotting', 'Plotting.py'),
     ('GraphicsItems', OrderedDict([
         ('PlotItem', 'PlotItem.py'),
         ('ImageItem - video', 'ImageItem.py'),

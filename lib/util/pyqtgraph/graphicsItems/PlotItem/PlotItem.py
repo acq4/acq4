@@ -16,7 +16,6 @@ This class is very heavily featured:
   - Control panel with a huge feature set including averaging, decimation,
     display, power spectrum, svg/png export, plot linking, and more.
 """
-
 #from graphicsItems import *
 from plotConfigTemplate import *
 from pyqtgraph.Qt import QtGui, QtCore, QtSvg
@@ -25,8 +24,9 @@ from pyqtgraph.widgets.FileDialog import FileDialog
 import weakref
 from types import *
 import numpy as np
-from .. PlotCurveItem import PlotCurveItem
-from .. ScatterPlotItem import ScatterPlotItem
+#from .. PlotCurveItem import PlotCurveItem
+#from .. ScatterPlotItem import ScatterPlotItem
+from .. PlotDataItem import PlotDataItem
 from .. ViewBox import ViewBox
 from .. AxisItem import AxisItem
 from .. LabelItem import LabelItem
@@ -61,7 +61,7 @@ class PlotItem(GraphicsWidget):
     lastFileDir = None
     managers = {}
     
-    def __init__(self, parent=None, name=None, labels=None, **kargs):
+    def __init__(self, parent=None, name=None, labels=None, title=None, **kargs):
         GraphicsWidget.__init__(self, parent)
         
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
@@ -80,10 +80,13 @@ class PlotItem(GraphicsWidget):
             #b.setStyleSheet("background-color: #000000; color: #888; font-size: 6pt")
             #self.proxies.append(proxy)
         path = os.path.dirname(__file__)
-        self.ctrlBtn = ButtonItem(os.path.join(path, 'ctrl.png'), 14, self)
-        self.ctrlBtn.clicked.connect(self.ctrlBtnClicked)
-        self.autoBtn = ButtonItem(os.path.join(path, 'auto.png'), 14, self)
-        self.autoBtn.clicked.connect(self.enableAutoScale)
+        #self.ctrlBtn = ButtonItem(os.path.join(path, 'ctrl.png'), 14, self)
+        #self.ctrlBtn.clicked.connect(self.ctrlBtnClicked)
+        self.autoImageFile = os.path.join(path, 'auto.png')
+        self.lockImageFile = os.path.join(path, 'lock.png')
+        self.autoBtn = ButtonItem(self.autoImageFile, 14, self)
+        self.autoBtn.mode = 'auto'
+        self.autoBtn.clicked.connect(self.autoBtnClicked)
         
         self.layout = QtGui.QGraphicsGridLayout()
         self.layout.setContentsMargins(1,1,1,1)
@@ -115,18 +118,6 @@ class PlotItem(GraphicsWidget):
         for k in self.scales:
             self.layout.addItem(self.scales[k]['item'], *self.scales[k]['pos'])
             
-        ## Create and place label items
-        #self.labels = {
-            #'title':  {'item': LabelItem('title', size='11pt'),  'pos': (0, 2), 'text': ''},
-            #'top':    {'item': LabelItem('top'),    'pos': (1, 2), 'text': '', 'units': '', 'unitPrefix': ''},
-            #'bottom': {'item': LabelItem('bottom'), 'pos': (5, 2), 'text': '', 'units': '', 'unitPrefix': ''},
-            #'left':   {'item': LabelItem('left'),   'pos': (3, 0), 'text': '', 'units': '', 'unitPrefix': ''},
-            #'right':  {'item': LabelItem('right'),  'pos': (3, 4), 'text': '', 'units': '', 'unitPrefix': ''}
-        #}
-        #self.labels['left']['item'].setAngle(-90)
-        #self.labels['right']['item'].setAngle(-90)
-        #for k in self.labels:
-            #self.layout.addItem(self.labels[k]['item'], *self.labels[k]['pos'])
         self.titleLabel = LabelItem('', size='11pt')
         self.layout.addItem(self.titleLabel, 0, 1)
         self.setTitle(None)  ## hide
@@ -153,6 +144,7 @@ class PlotItem(GraphicsWidget):
             
         self.items = []
         self.curves = []
+        self.itemMeta = weakref.WeakKeyDictionary()
         self.dataItems = []
         self.paramList = {}
         self.avgCurves = {}
@@ -164,6 +156,7 @@ class PlotItem(GraphicsWidget):
         c.setupUi(w)
         dv = QtGui.QDoubleValidator(self)
         self.ctrlMenu = QtGui.QMenu()
+        self.ctrlMenu.setTitle('Plot Options')
         self.menuAction = QtGui.QWidgetAction(self)
         self.menuAction.setDefaultWidget(w)
         self.ctrlMenu.addAction(self.menuAction)
@@ -225,10 +218,10 @@ class PlotItem(GraphicsWidget):
         self.linksBlocked = False
         self.manager = None
         
-        self.showScale('right', False)
-        self.showScale('top', False)
-        self.showScale('left', True)
-        self.showScale('bottom', True)
+        self.hideAxis('right')
+        self.hideAxis('top')
+        self.showAxis('left')
+        self.showAxis('bottom')
         
         if name is not None:
             self.registerPlot(name)
@@ -238,10 +231,14 @@ class PlotItem(GraphicsWidget):
                 if isinstance(labels[k], basestring):
                     labels[k] = (labels[k],)
                 self.setLabel(k, *labels[k])
+                
+        if title is not None:
+            self.setTitle(title)
         
         if len(kargs) > 0:
             self.plot(**kargs)
         
+        self.enableAutoScale()
     #def paint(self, *args):
         #prof = debug.Profiler('PlotItem.paint', disabled=True)
         #QtGui.QGraphicsWidget.paint(self, *args)
@@ -310,15 +307,23 @@ class PlotItem(GraphicsWidget):
         #print "update plot list", self
         try:
             for sc in [self.ctrl.xLinkCombo, self.ctrl.yLinkCombo]:
-                current = str(sc.currentText())
-                sc.clear()
-                sc.addItem("")
-                if self.manager is not None:
-                    for w in self.manager.listWidgets():
-                        #print w
-                        if w == self.name:
-                            continue
-                        sc.addItem(w)
+                current = unicode(sc.currentText())
+                sc.blockSignals(True)
+                try:
+                    sc.clear()
+                    sc.addItem("")
+                    if self.manager is not None:
+                        for w in self.manager.listWidgets():
+                            #print w
+                            if w == self.name:
+                                continue
+                            sc.addItem(w)
+                            if w == current:
+                                sc.setCurrentIndex(sc.count()-1)
+                finally:
+                    sc.blockSignals(False)
+                    if unicode(sc.currentText()) != current:
+                        sc.currentItemChanged.emit()
         except:
             import gc
             refs= gc.get_referrers(self)
@@ -468,7 +473,7 @@ class PlotItem(GraphicsWidget):
             if len(remKeys) < 1:  ## In this case, there would be 1 average plot for each data plot; not useful.
                 return
                 
-        p = curve.meta().copy()
+        p = self.itemMeta.get(curve,{}).copy()
         for k in p:
             if type(k) is tuple:
                 p['.'.join(k)] = p[k]
@@ -483,12 +488,12 @@ class PlotItem(GraphicsWidget):
         
         ### Create a new curve if needed
         if key not in self.avgCurves:
-            plot = PlotCurveItem()
+            plot = PlotDataItem()
             plot.setPen(fn.mkPen([0, 200, 0]))
             plot.setShadowPen(fn.mkPen([0, 0, 0, 100], width=3))
             plot.setAlpha(1.0, False)
             plot.setZValue(100)
-            self.addItem(plot)
+            self.addItem(plot, skipAverage=True)
             self.avgCurves[key] = [0, plot]
         self.avgCurves[key][0] += 1
         (n, plot) = self.avgCurves[key]
@@ -545,11 +550,21 @@ class PlotItem(GraphicsWidget):
         #self.emit(QtCore.SIGNAL('yRangeChanged'), self, range)
         self.sigYRangeChanged.emit(self, range)
 
-
+    def autoBtnClicked(self):
+        if self.autoBtn.mode == 'auto':
+            self.enableAutoScale()
+        else:
+            self.enableManualScale()
+            
     def enableAutoScale(self):
+        """
+        Enable auto-scaling. The plot will continuously scale to fit the boundaries of its data.
+        """
         self.ctrl.xAutoRadio.setChecked(True)
         self.ctrl.yAutoRadio.setChecked(True)
-        self.autoBtn.disable()
+        
+        self.autoBtn.setImageFile(self.lockImageFile)
+        self.autoBtn.mode = 'lock'
         self.updateXScale()
         self.updateYScale()
         self.replot()
@@ -579,7 +594,9 @@ class PlotItem(GraphicsWidget):
             self.autoScale[1] = False
             self.ctrl.yManualRadio.setChecked(True)
             #self.setManualYScale()
-        self.autoBtn.enable()
+        #self.autoBtn.enable()
+        self.autoBtn.setImageFile(self.autoImageFile)
+        self.autoBtn.mode = 'auto'
         #self.replot()
         
     def setManualXScale(self):
@@ -610,10 +627,48 @@ class PlotItem(GraphicsWidget):
         self.ctrl.yAutoRadio.setChecked(True)
         #self.replot()
 
-    def addItem(self, item, *args):
+    def addItem(self, item, *args, **kargs):
         self.items.append(item)
         self.vb.addItem(item, *args)
+        if hasattr(item, 'implements') and item.implements('plotData'):
+            self.dataItems.append(item)
+            self.plotChanged()
+            
+            params = kargs.get('params', {})
+            self.itemMeta[item] = params
+            #item.setMeta(params)
+            self.curves.append(item)
+            #self.addItem(c)
+            
+        if isinstance(item, PlotDataItem):
+            ## configure curve for this plot
+            (alpha, auto) = self.alphaState()
+            item.setAlpha(alpha, auto)
+            item.setFftMode(self.ctrl.powerSpectrumGroup.isChecked())
+            item.setDownsampling(self.downsampleMode())
+            item.setPointMode(self.pointMode())
+            
+            ## Hide older plots if needed
+            self.updateDecimation()
+            
+            ## Add to average if needed
+            self.updateParamList()
+            if self.ctrl.averageGroup.isChecked() and 'skipAverage' not in kargs:
+                self.addAvgCurve(item)
+                
+            #c.connect(c, QtCore.SIGNAL('plotChanged'), self.plotChanged)
+            item.sigPlotChanged.connect(self.plotChanged)
+            self.plotChanged()
+
+    def addDataItem(self, item, *args):
+        print "PlotItem.addDataItem is deprecated. Use addItem instead."
+        self.addItem(item, *args)
         
+    def addCurve(self, c, params=None):
+        print "PlotItem.addCurve is deprecated. Use addItem instead."
+        self.addItem(item, params)
+
+
     def removeItem(self, item):
         if not item in self.items:
             return
@@ -641,83 +696,66 @@ class PlotItem(GraphicsWidget):
         self.avgCurves = {}
         
     
-    def plot(self, data=None, data2=None, x=None, y=None, clear=False, params=None, pen=None, 
-        symbol=None, decimate = None, **kargs):
-        """Add a new plot curve. Data may be specified a few ways:
-        plot(yVals)   # x vals will be integers
-        plot(xVals, yVals)
-        plot(y=yVals, x=xVals)
-        plot(metaArray)
+    def plot(self, *args, **kargs):
         """
-        if y is not None:
-            data = y
-        if data2 is not None:
-            x = data
-            data = data2
-        if decimate is not None and decimate > 1:
-            data = data[::decimate]
-            if x is not None:
-                x = x[::decimate]
-          #  print 'plot with decimate = %d' % (decimate)
+        Add and return a new plot.
+        See PlotDataItem.__init__ for data arguments
+        
+        Extra allowed arguments are:
+            clear    - clear all plots before displaying new data
+            params   - meta-parameters to associate with this data
+        """
+        
+        
+        
+        #if y is not None:
+            #data = y
+        #if data2 is not None:
+            #x = data
+            #data = data2
+        #if decimate is not None and decimate > 1:
+            #data = data[::decimate]
+            #if x is not None:
+                #x = x[::decimate]
+          ##  print 'plot with decimate = %d' % (decimate)
+        clear = kargs.get('clear', False)
+        params = kargs.get('params', None)
+          
         if clear:
             self.clear()
+            
+        item = PlotDataItem(*args, **kargs)
+            
         if params is None:
             params = {}
-        if HAVE_METAARRAY and isinstance(data, MetaArray):
-            curve = self._plotMetaArray(data, x=x, **kargs)
-        elif isinstance(data, np.ndarray):
-            curve = self._plotArray(data, x=x, **kargs)
-        elif isinstance(data, list):
-            if x is not None:
-                x = np.array(x)
-            curve = self._plotArray(np.array(data), x=x, **kargs)
-        elif data is None:
-            curve = PlotCurveItem(**kargs)
-        else:
-            raise Exception('Not sure how to plot object of type %s' % type(data))
+        #if HAVE_METAARRAY and isinstance(data, MetaArray):
+            #curve = self._plotMetaArray(data, x=x, **kargs)
+        #elif isinstance(data, np.ndarray):
+            #curve = self._plotArray(data, x=x, **kargs)
+        #elif isinstance(data, list):
+            #if x is not None:
+                #x = np.array(x)
+            #curve = self._plotArray(np.array(data), x=x, **kargs)
+        #elif data is None:
+            #curve = PlotCurveItem(**kargs)
+        #else:
+            #raise Exception('Not sure how to plot object of type %s' % type(data))
             
         #print data, curve
-        self.addCurve(curve, params)
-        if pen is not None:
-            curve.setPen(fn.mkPen(pen))
+        self.addItem(item, params=params)
+        #if pen is not None:
+            #curve.setPen(fn.mkPen(pen))
         
-        return curve
+        return item
 
     def scatterPlot(self, *args, **kargs):
-        sp = ScatterPlotItem(*args, **kargs)
-        self.addDataItem(sp)
-        return sp
+        print "PlotItem.scatterPlot is deprecated. Use PlotItem.plot instead."
+        return self.plot(*args, **kargs)
+        #sp = ScatterPlotItem(*args, **kargs)
+        #self.addItem(sp)
+        #return sp
 
-    def addDataItem(self, item):
-        self.addItem(item)
-        self.dataItems.append(item)
-        self.plotChanged()
     
-    def addCurve(self, c, params=None):
-        if params is None:
-            params = {}
-        c.setMeta(params)
-        self.curves.append(c)
-        self.addItem(c)
-        
-        ## configure curve for this plot
-        (alpha, auto) = self.alphaState()
-        c.setAlpha(alpha, auto)
-        c.setSpectrumMode(self.ctrl.powerSpectrumGroup.isChecked())
-        c.setDownsampling(self.downsampleMode())
-        c.setPointMode(self.pointMode())
-        
-        ## Hide older plots if needed
-        self.updateDecimation()
-        
-        ## Add to average if needed
-        self.updateParamList()
-        if self.ctrl.averageGroup.isChecked():
-            self.addAvgCurve(c)
-            
-        #c.connect(c, QtCore.SIGNAL('plotChanged'), self.plotChanged)
-        c.sigPlotChanged.connect(self.plotChanged)
-        self.plotChanged()
 
     def plotChanged(self, curve=None):
         ## Recompute auto range if needed
@@ -755,7 +793,7 @@ class PlotItem(GraphicsWidget):
         #print "paramList:", self.paramList
         for c in self.curves:
             #print "  curve:", c
-            for p in c.meta().keys():
+            for p in self.itemMeta.get(c, {}).keys():
                 #print "    param:", p
                 if type(p) is tuple:
                     p = '.'.join(p)
@@ -1013,7 +1051,7 @@ class PlotItem(GraphicsWidget):
         if b is None:
             b = self.ctrl.powerSpectrumGroup.isChecked()
         for c in self.curves:
-            c.setSpectrumMode(b)
+            c.setFftMode(b)
         self.enableAutoScale()
         self.recomputeAverages()
             
@@ -1050,7 +1088,7 @@ class PlotItem(GraphicsWidget):
                 curves[i].show()
             else:
                 if self.ctrl.forgetTracesCheck.isChecked():
-                    curves[i].free()
+                    curves[i].clear()
                     self.removeItem(curves[i])
                 else:
                     curves[i].hide()
@@ -1089,20 +1127,28 @@ class PlotItem(GraphicsWidget):
         ev.accept()
 
     def resizeEvent(self, ev):
-        if self.ctrlBtn is None:  ## already closed down
+        if self.autoBtn is None:  ## already closed down
             return
-        btnRect = self.mapRectFromItem(self.ctrlBtn, self.ctrlBtn.boundingRect())
+        btnRect = self.mapRectFromItem(self.autoBtn, self.autoBtn.boundingRect())
         y = self.size().height() - btnRect.height()
-        self.ctrlBtn.setPos(0, y)
-        self.autoBtn.setPos(btnRect.width()+3, y)
+        self.autoBtn.setPos(0, y)
         
     def hoverMoveEvent(self, ev):
         self.mousePos = ev.pos()
         self.mouseScreenPos = ev.screenPos()
         
         
-    def ctrlBtnClicked(self):
-        self.ctrlMenu.popup(self.mouseScreenPos)
+    #def ctrlBtnClicked(self):
+        #self.ctrlMenu.popup(self.mouseScreenPos)
+        
+    def getMenu(self):
+        return self.ctrlMenu
+    
+    def getContextMenus(self, event):
+        ## called when another item is displaying its context menu; we get to add extras to the end of the menu.
+        return self.ctrlMenu
+        
+        
         
     #def contextMenuEvent(self, ev):  ## only after button release!
         #self.ctrlMenu.popup(self.mouseScreenPos)
@@ -1118,14 +1164,31 @@ class PlotItem(GraphicsWidget):
         self._checkScaleKey(key)
         return self.scales[key]['item']
         
-    def setLabel(self, key, text=None, units=None, unitPrefix=None, **args):
-        """Key is one of: 'left', 'right', 'top', 'bottom'"""
-        self.getScale(key).setLabel(text=text, units=units, unitPrefix=unitPrefix, **args)
+    def setLabel(self, axis, text=None, units=None, unitPrefix=None, **args):
+        """
+        Set the label for an axis. Basic HTML formatting is allowed.
+        Arguments:
+            axis  - must be one of 'left', 'bottom', 'right', or 'top'
+            text  - text to display along the axis. HTML allowed.
+            units - units to display after the title. If units are given, 
+                    then an SI prefix will be automatically appended
+                    and the axis values will be scaled accordingly.
+                    (ie, use 'V' instead of 'mV'; 'm' will be added automatically)
+        """
+        self.getScale(axis).setLabel(text=text, units=units, **args)
         
-    def showLabel(self, key, show=True):
-        self.getScale(key).showLabel(show)
+    def showLabel(self, axis, show=True):
+        """
+        Show or hide one of the plot's axis labels (the axis itself will be unaffected).
+        axis must be one of 'left', 'bottom', 'right', or 'top'
+        """
+        self.getScale(axis).showLabel(show)
 
     def setTitle(self, title=None, **args):
+        """
+        Set the title of the plot. Basic HTML formatting is allowed.
+        If title is None, then the title will be hidden.
+        """
         if title is None:
             self.titleLabel.setVisible(False)
             self.layout.setRowFixedHeight(0, 0)
@@ -1136,14 +1199,30 @@ class PlotItem(GraphicsWidget):
             self.titleLabel.setVisible(True)
             self.titleLabel.setText(title, **args)
 
-    def showScale(self, key, show=True):
-        s = self.getScale(key)
-        p = self.scales[key]['pos']
+    def showAxis(self, axis, show=True):
+        """
+        Show or hide one of the plot's axes.
+        axis must be one of 'left', 'bottom', 'right', or 'top'
+        """
+        s = self.getScale(axis)
+        p = self.scales[axis]['pos']
         if show:
             s.show()
         else:
             s.hide()
-
+            
+    def hideAxis(self, axis):
+        self.showAxis(axis, False)
+            
+    def showScale(self, *args, **kargs):
+        print "Deprecated. use showAxis() instead"
+        return self.showAxis(*args, **kargs)
+            
+    def hideButtons(self):
+        #self.ctrlBtn.hide()
+        self.autoBtn.hide()
+        
+            
     def _plotArray(self, arr, x=None, **kargs):
         if arr.ndim != 1:
             raise Exception("Array must be 1D to plot (shape is %s)" % arr.shape)

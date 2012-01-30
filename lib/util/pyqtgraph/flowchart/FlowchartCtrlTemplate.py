@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/util/pyqtgraph/flowchart/FlowchartCtrlTemplate.ui'
 #
-# Created: Sun Jan  8 14:57:10 2012
+# Created: Wed Jan 11 17:59:36 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

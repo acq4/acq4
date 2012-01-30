@@ -147,6 +147,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.showPlots()
         self.updateParams()
         self.show()
+        self.bathMode()
     
     def quit(self):
         #print "Stopping patch thread.."
@@ -187,8 +188,8 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.averageSpin.setValue(1)
 
     def monitorMode(self):
-        self.ui.cycleTimeSpin.setValue(20)
-        self.ui.averageSpin.setValue(10)
+        self.ui.cycleTimeSpin.setValue(40)
+        self.ui.averageSpin.setValue(5)
         
     def showPlots(self):
         """Show/hide analysis plot widgets"""
@@ -256,14 +257,8 @@ class PatchWindow(QtGui.QMainWindow):
         
         if mode == 'vc':
             self.ui.patchPlot.setLabel('left', units='A')
-            #self.ui.commandPlot.setLabel('left', units='V')
-            #scale1 = 1e12
-            #scale2 = 1e3
         else:
             self.ui.patchPlot.setLabel('left', units='V')
-            #self.ui.commandPlot.setLabel('left', units='A')
-            #scale1 = 1e3
-            #scale2 = 1e12
         prof.mark('1')
             
         self.patchCurve.setData(data.xvals('Time'), data['primary'])
@@ -545,7 +540,7 @@ class PatchThread(QtCore.QThread):
     def analyze(self, data, params):
         #print "\n\nAnalysis parameters:", params
         ## Extract specific time segments
-        nudge = 0.1e-3
+        nudge = 50e-6
         base = data['Time': 0.0:(params['delayTime']-nudge)]
         pulse = data['Time': params['delayTime']+nudge:params['delayTime']+params['pulseTime']-nudge]
         pulseEnd = data['Time': params['delayTime']+(params['pulseTime']*2./3.):params['delayTime']+params['pulseTime']-nudge]
@@ -583,14 +578,27 @@ class PatchThread(QtCore.QThread):
             pred2 = [irv, irv, 50e-3]
             
         # Fit exponential to pulse and post-pulse traces
-        tVals1 = pulse.xvals('Time')-pulse.xvals('Time').min()
-        tVals2 = end.xvals('Time')-end.xvals('Time').min()
+        tVals1 = pulse.xvals('Time')-params['delayTime']
+        #tVals2 = end.xvals('Time')-end.xvals('Time').min()
         
         baseMean = base['primary'].mean()
         fit1 = scipy.optimize.leastsq(
             lambda v, t, y: y - expFn(v, t), pred1, 
-            args=(tVals1, pulse['primary'] - baseMean),
+            args=(tVals1, pulse['primary'].view(np.ndarray) - baseMean),
             maxfev=200, full_output=1)
+        
+        ## fit again using shorter data
+        ## this should help to avoid fitting against h-currents
+        tau4 = fit1[0][2]*4
+        t0 = pulse.xvals('Time')[0]
+        shortPulse = pulse['Time': t0:t0+tau4]
+        tVals2 = shortPulse.xvals('Time')-params['delayTime']
+        fit1 = scipy.optimize.leastsq(
+            lambda v, t, y: y - expFn(v, t), pred1, 
+            args=(tVals2, shortPulse['primary'].view(np.ndarray) - baseMean),
+            maxfev=200, full_output=1)
+        
+        
         #fit2 = scipy.optimize.leastsq(
             #lambda v, t, y: y - expFn(v, t), pred2, 
             #args=(tVals2, end['primary'] - baseMean),
@@ -632,10 +640,19 @@ class PatchThread(QtCore.QThread):
             iRes = vStep / iStep
             
             ## From Santos-Sacchi 1993
+            
+            ## 1. compute charge transfered during the charging phase 
             pTimes = pulse.xvals('Time')
             iCapEnd = pTimes[-1]
             iCap = iPulse['Time':pTimes[0]:iCapEnd] - iPulseEnd.mean()
+            #self.iCap1 = iCap
+            ## Instead, we will use the fit to guess how much charge transfer there would have been 
+            ## if the charging curve had gone all the way back to the beginning of the pulse
+            iCap = expFn((fit1[1],fit1[1],fit1[2]), np.linspace(0, iCapEnd-pTimes[0], iCap.shape[0]))
+            #self.iCap2 = iCap
             Q = sum(iCap) * (iCapEnd - pTimes[0]) / iCap.shape[0]
+            
+            
             Rin = iRes
             Vc = vStep
             Rs_denom = (Q * Rin + fitTau * Vc)

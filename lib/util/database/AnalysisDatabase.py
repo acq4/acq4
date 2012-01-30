@@ -1,5 +1,6 @@
 from database import *
-
+from pyqtgraph.widgets.ProgressDialog import ProgressDialog
+import debug
 
 class AnalysisDatabase(SqliteDatabase):
     """Defines the structure for DBs used for analysis. Essential features are:
@@ -70,38 +71,73 @@ class AnalysisDatabase(SqliteDatabase):
             
     def _convertDB(self, dbFile, version):
         ## Convert datbase dbFile from version to the latest version
+        
         newFileName = dbFile+"version_upgrade"
+        if os.path.exists(newFileName):
+            raise Exception("A .version_upgrade for %s already exists. Please delete or rename it" %dbFile)
         if version is None:
+            prog = ProgressDialog("Converting database...")
             from AnalysisDatabase_ver0 import AnalysisDatabase as AnalysisDatabaseOld
             oldDb = AnalysisDatabaseOld(dbFile)
-            newDb = AnalysisDatabase(newFileName, self.dataModel(), self.baseDir())
+            newDb = AnalysisDatabase(newFileName, self.dataModel(), oldDb.baseDir())
             
             dirTypes = ['Day', 'Experiment', 'Slice', 'Cell', 'Site', 'Protocol', 'ProtocolSequence']
-            
+            print oldDb.listTables()
             for table in dirTypes:
+                if not oldDb.hasTable(table):
+                    continue
                 for rec in oldDb.select(table):
                     dh = oldDb.baseDir()[rec['Dir']]
-                    newDb.addDir(dh)
-            for table in ['photostim_events', 'photostim_sites', 'photostim_maps']:
+                    try:
+                        newDb.addDir(dh)
+                    except:
+                        print "Can't add directory %s from old DB:" % dh.name()
+                        debug.printExc()
+                    
+            total = len(oldDb.select('Photostim_events')) + len(oldDb.select('Photostim_sites'))
+            n=0
+            for table in ['Photostim_events', 'Photostim_sites', 'Photostim_events2', 'Photostim_sites2']:
+                if prog.wasCanceled():
+                    break
                 schema = oldDb.tableSchema(table)
                 ## SourceDir -> ProtocolSequenceDir     type='directory:ProtocolSequence'
+                del schema['SourceDir']
+                schema['ProtocolSequenceDir'] = 'directory:ProtocolSequence'
+                
                 ## add column ProtocolDir
+                schema['ProtocolDir'] = 'directory:Protocol'
+                
                 ## SourceFile -> ?        type='file'
+                if 'SourceFile' in schema:
+                    schema['SourceFile'] = 'file'
+                
                 owner = oldDb.tableOwner(table)
                 newDb.createTable(table, schema, owner=owner)
                 
                 
                 
-                records = self.select(table)
+                records = oldDb.select(table)
+                for r in records:
+                    if prog.wasCanceled():
+                        break
                 ##  SourceFile -> convert to filehandle
+                    r['SourceFile']= oldDb.getDir('ProtocolSequence', r['SourceDir'])[r['SourceFile']]
+                    del r['SourceDir']
                 ##  ProtocolDir, ProtocolSequenceDir -> dirHandles
-                self.insert(table, records)
+                    #r['ProtocolSequenceDir'] = oldDb.getDir('ProtocolSequence', r['SourceDir'])
+                    r['ProtocolDir'] = r['SourceFile'].parent()
+                    r['ProtocolSequenceDir'] = self.dataModel().getParent(r['ProtocolDir'], 'ProtocolSequence')
+                    n+=1
+                    prog.setValue(n/total)
+                
+                newDb.insert(table, records)
             
             
             oldDb.close()
             newDb.close()
-            os.rename(dbFile, dbFile+'version_upgrade_backup')
-            os.rename(newFileName, dbFile)
+            if not prog.wasCanceled():
+                os.rename(dbFile, dbFile+'version_upgrade_backup')
+                os.rename(newFileName, dbFile)
         else:
             raise Exception("Don't know how to convert from version %s" % str(version))
         
@@ -284,7 +320,7 @@ class AnalysisDatabase(SqliteDatabase):
             for colName, col in columns.iteritems():
                 colType = col['Type']
                 if colName not in ts:  ## <-- this is a case-insensitive operation
-                    raise Exception("Table has different data structure: Missing column %s" % f)
+                    raise Exception("Table has different data structure: Missing column %s" % colName)
                 specType = ts[colName]
                 if specType.lower() != colType.lower():  ## type names are case-insensitive too
                     ## requested column type does not match schema; check for directory / file types

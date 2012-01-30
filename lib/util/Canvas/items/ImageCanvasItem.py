@@ -70,7 +70,7 @@ class ImageCanvasItem(CanvasItem):
         self.layout.addWidget(self.maxBtn, self.layout.rowCount(), 0, 1, 2)
 
 
-        self.updateHistogram(autoRange=True)
+        self.updateHistogram(autoLevels=True)
         
         # addWidget arguments: row, column, rowspan, colspan 
         self.layout.addWidget(self.histogram, self.layout.rowCount(), 0, 1, 2)
@@ -159,13 +159,14 @@ class ImageCanvasItem(CanvasItem):
         self.graphicsItem().updateImage(fd.mean(axis=0))
         self.updateHistogram(autoRange=True)
 
+#        self.updateHistogram(autoLevels=True)
 
     def timeSliderReleased(self):
         self.blockHistogram = False
         self.updateHistogram()
         
         
-    def updateHistogram(self, autoRange=False):
+    def updateHistogram(self, autoLevels=False):
         if self.blockHistogram:
             return
         x, y = self.graphicsItem().getHistogram()
@@ -173,14 +174,14 @@ class ImageCanvasItem(CanvasItem):
             return
         self.histogram.clearPlots()
         self.histogram.plot(x, y)
-        if autoRange:
-            self.graphicsItem().updateImage(autoRange=True)
+        if autoLevels:
+            self.graphicsItem().updateImage(autoLevels=True)
             w, b = self.graphicsItem().getLevels()
             self.levelRgn.blockSignals(True)
             self.levelRgn.setRegion([w, b])
             self.levelRgn.blockSignals(False)
             
-    def updateImage(self, data, autoRange=True):
+    def updateImage(self, data, autoLevels=True):
         self.data = data
         if data.ndim == 4:
             showTime = True
@@ -204,17 +205,17 @@ class ImageCanvasItem(CanvasItem):
         else:
             self.timeSlider.hide()
             self.maxBtn.hide()
-            self.graphicsItem().updateImage(data)
+            self.graphicsItem().updateImage(data, autoLevels=autoLevels)
             
         tr = self.saveTransform()
         self.resetUserTransform()
         self.restoreTransform(tr)
             
-        self.updateHistogram(autoRange=autoRange)
+        self.updateHistogram(autoLevels=autoLevels)
         
     def levelsChanged(self):
         rgn = self.levelRgn.getRegion()
-        self.graphicsItem().setLevels(rgn[1], rgn[0])
+        self.graphicsItem().setLevels(rgn)
         self.hideSelectBox()
 
     def levelsChangeFinished(self):

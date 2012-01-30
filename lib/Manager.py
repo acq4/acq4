@@ -38,6 +38,7 @@ import ptime
 from collections import OrderedDict
 from pyqtgraph import ProgressDialog
 from LogWindow import LogWindow
+from HelpfulException import HelpfulException
 
 LOG = None
 
@@ -85,8 +86,9 @@ def logExc(msg, *args, **kwargs):
             LOG.logExc(msg, *args, **kwargs)
         except:
             print "Error logging exception:"
-            print msg
-            print kwargs
+            print "    " + "\n    ".join(msg.split("\n"))
+            print "    " + str(kwargs)
+            sys.excepthook(*sys.exc_info())
     else:
         print "Can't log error message; no log created yet."
         print args
@@ -852,10 +854,13 @@ class Task:
                 try:
                     self.tasks[devName].start()
                 except:
-                    printExc("Error starting device '%s':" % devName)
+                    raise HelpfulException("Error starting device '%s'; aborting protocol." % devName)
                 self.startedDevs.append(devName)
                 prof.mark('start %s' % devName)
             self.startTime = ptime.time()
+            
+                    
+            
             #print "  %d Task started" % self.id
                 
             if not block:

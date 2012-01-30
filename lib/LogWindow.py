@@ -1,6 +1,6 @@
 import time
 import traceback
-import sys
+import sys, os
 
 from PyQt4 import QtGui, QtCore
 import LogWidgetTemplate
@@ -24,7 +24,7 @@ pageTemplate = """
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <style type="text/css">
-        body {color: #000; font-size: 12pt; font-family: sans;}
+        body {color: #000; font-size: 11pt; font-family: sans;}
         .entry {}
         .error .message {color: #900}
         .warning .message {color: #740}
@@ -78,6 +78,8 @@ class LogWindow(QtGui.QMainWindow):
     def __init__(self, manager):
         QtGui.QMainWindow.__init__(self)
         self.setWindowTitle("Log")
+        path = os.path.dirname(__file__)
+        self.setWindowIcon(QtGui.QIcon(os.path.join(path, 'logIcon.png')))
         self.wid = LogWidget(self, manager)
         self.wid.ui.input = QtGui.QLineEdit()
         self.wid.ui.gridLayout.addWidget(self.wid.ui.input, 2, 0, 1, 3)
@@ -159,7 +161,7 @@ class LogWindow(QtGui.QMainWindow):
     def logExc(self, *args, **kwargs):
         """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
         kwargs['exception'] = sys.exc_info()
-        kwargs['traceback'] = [['Callstack: \n'] + traceback.format_stack()[:-3] + ["------- exception caught ----------"]]
+        kwargs['traceback'] = ['Callstack: \n'] + traceback.format_stack()[:-3] + ["------- exception caught ----------"]
         self.logMsg(*args, **kwargs)
         
     def processEntry(self, entry):
@@ -168,7 +170,7 @@ class LogWindow(QtGui.QMainWindow):
         ## convert exc_info to serializable dictionary
         if entry.get('exception', None) is not None:
             exc_info = entry.pop('exception')
-            entry['exception'] = self.exceptionToDict(*exc_info)
+            entry['exception'] = self.exceptionToDict(*exc_info, topTraceback=entry.get('traceback', []))
         else:
             entry['exception'] = None
 
@@ -185,15 +187,15 @@ class LogWindow(QtGui.QMainWindow):
         self.wid.ui.input.clear()
 
     
-    def exceptionToDict(self, exType, exc, tb):
+    def exceptionToDict(self, exType, exc, tb, topTraceback):
         #lines = (traceback.format_stack()[:-skip] 
             #+ ["  ---- exception caught ---->\n"] 
             #+ traceback.format_tb(sys.exc_info()[2])
             #+ traceback.format_exception_only(*sys.exc_info()[:2]))
-        
+        #print topTraceback
         excDict = {}
         excDict['message'] = traceback.format_exception(exType, exc, tb)[-1]
-        excDict['traceback'] = traceback.format_exception(exType, exc, tb)[:-1]
+        excDict['traceback'] = topTraceback + traceback.format_exception(exType, exc, tb)[:-1]
         if hasattr(exc, 'docs'):
             if len(exc.docs) > 0:
                 excDict['docs'] = exc.docs
@@ -204,7 +206,7 @@ class LogWindow(QtGui.QMainWindow):
             for k in exc.kwargs:
                 excDict[k] = exc.kwargs[k]
         if hasattr(exc, 'oldExc'):
-            excDict['oldExc'] = self.exceptionToDict(*exc.oldExc)
+            excDict['oldExc'] = self.exceptionToDict(*exc.oldExc, topTraceback=[])
         return excDict
         
     def flashButtons(self):
@@ -506,7 +508,7 @@ class LogWidget(QtGui.QWidget):
                 if isMax:
                     QtGui.QApplication.processEvents()  ## can't scroll to end until the web frame has processed the html change
                     frame.setScrollBarValue(QtCore.Qt.Vertical, frame.scrollBarMaximum(QtCore.Qt.Vertical))
-                
+                self.ui.logView.update()
                 
     def generateEntryHtml(self, entry):
         msg = self.cleanText(entry['message'])
@@ -592,11 +594,13 @@ class LogWidget(QtGui.QWidget):
         indent = 10
         
         text = self.cleanText(exception['message'])
+        text = text.lstrip('HelpfulException:')
         #if exception.has_key('oldExc'):  
             #self.displayText("&nbsp;"*indent + str(count)+'. ' + text, entry, color, clean=False)
         #else:
             #self.displayText("&nbsp;"*indent + str(count)+'. Original error: ' + text, entry, color, clean=False)
-            
+        messages = [text]
+        print "\n", messages, "\n"
         
         if exception.has_key('reasons'):
             reasons = self.formatReasonsStrForHTML(exception['reasons'])
@@ -611,8 +615,9 @@ class LogWidget(QtGui.QWidget):
         text = [text]
         
         if exception.has_key('oldExc'):
-            exc, tb = self.formatExceptionForHTML(exception['oldExc'], count=count+1)
+            exc, tb, msgs = self.formatExceptionForHTML(exception['oldExc'], count=count+1)
             text.extend(exc)
+            messages.extend(msgs)
             traceback.extend(tb)
             
         #else:
@@ -623,16 +628,22 @@ class LogWidget(QtGui.QWidget):
             #for i, tb in enumerate(tracebacks):
                 #self.displayTraceback(tb, entry, number=i+n)
         if count == 1:
-            exc = "<div class=\"exception\"><ol>" + "\n".join(["<li>%s</li><br>" % ex for ex in text]) + "</ol></div>"
-            traceback = "<div class=\"traceback\" id=\"%s\"><ol>"%str(entryId) + "\n".join(["<li>%s</li><br>" % tb for tb in traceback]) + "</ol></div>"
+            exc = "<div class=\"exception\"><ol>" + "\n".join(["<li>%s</li>" % ex for ex in text]) + "</ol></div>"
+            tbStr = "\n".join(["<li><b>%s</b>%s</li>" % (messages[i], tb) for i,tb in enumerate(traceback)])
+            traceback = "<div class=\"traceback\" id=\"%s\"><ol>"%str(entryId) + tbStr + "</ol></div>"
             
             return exc + '<a href="#" onclick="showDiv(\'%s\')">Show traceback</a>'%str(entryId) + traceback
         else:
-            return text, traceback
+            return text, traceback, messages
         
         
     def formatTracebackForHTML(self, tb, number):
-        return self.cleanText("\n".join(tb))
+        try:
+            tb = [line for line in tb if not line.startswith("Traceback (most recent call last)")]
+        except:
+            print "\n"+str(tb)+"\n"
+            raise
+        return "<ul><li>" + "</li><li>".join(map(self.cleanText, tb)) + "</li></ul>"
         #tb = [self.cleanText(strip(x)) for x in tb]
         #lines = []
         #prefix = ''

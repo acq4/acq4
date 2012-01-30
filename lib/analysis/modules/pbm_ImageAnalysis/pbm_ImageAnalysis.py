@@ -467,10 +467,10 @@ class pbm_ImageAnalysis(AnalysisModule):
         else:
             ysign = -1.0
         if self.physThreshLine is None:
-            self.physThreshLine = self.physPlot.plot(x=[self.tdat[0], self.tdat[-1]], y=[ysign*thr, ysign*thr], pen=pg.mkPen('r'), clear=False)
+            self.physThreshLine = self.physPlot.plot(x=numpy.array([self.tdat[0], self.tdat[-1]]), y=numpy.array([ysign*thr, ysign*thr]), pen=pg.mkPen('r'), clear=False)
             self.detectSpikes(firstTime)
         else:
-            self.physThreshLine.setData(x=[self.tdat[0], self.tdat[-1]], y=[ysign*thr, ysign*thr])
+            self.physThreshLine.setData(x=numpy.array([self.tdat[0], self.tdat[-1]]), y=numpy.array([ysign*thr, ysign*thr]))
             self.detectSpikes()
 
     def detectSpikes(self, firstTime = False):
@@ -488,11 +488,11 @@ class pbm_ImageAnalysis(AnalysisModule):
         if firstTime is True: # add scatter plot to the window
             print 'first time'
             self.spikesFound = pg.ScatterPlotItem(size=6, pen=pg.mkPen('g'), brush=pg.mkBrush(0, 255, 0, 200), 
-                style = 't', identical=True)
+                symbol = 't', identical=True)
             self.spikesFound.addPoints(x=sptimes, y=yspmarks)
             self.physPlot.addItem(self.spikesFound)
             self.spikesFoundpk = pg.ScatterPlotItem(size=4, pen=pg.mkPen('r'), brush=pg.mkBrush(0, 255, 0, 200), 
-                style = 'o', identical=True)
+                symbol = 'o', identical=True)
             self.spikesFoundpk.addPoints(x=sptimes, y=self.physData[sppts])
             self.physPlot.addItem(self.spikesFoundpk)
         else: # just change the data in the scatter plot to reflect the new analysis
