@@ -9,16 +9,29 @@ Contents:
 .. toctree::
     :maxdepth: 2
 
-    viewbox
+    plotdataitem
     plotcurveitem
     scatterplotitem
     plotitem
     imageitem
-    linearregion
+    viewbox
+    linearregionitem
     infiniteline
-    arrow
+    roi
+    graphicslayout
+    axisitem
+    arrowitem
     curvepoint
-    grid
+    curvearrow
+    griditem
+    scalebar
+    labelitem
+    vtickgroup
+    gradienteditoritem
+    histogramlutitem
     gradientlegend
-
+    buttonitem
+    graphicsobject
+    graphicswidget
+    uigraphicsitem
 

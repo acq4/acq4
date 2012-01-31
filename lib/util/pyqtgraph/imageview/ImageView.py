@@ -47,6 +47,7 @@ class ImageView(QtGui.QWidget):
         self.levelMin = 0
         self.name = name
         self.image = None
+        self.axes = {}
         self.imageDisp = None
         self.ui = Ui_Form()
         self.ui.setupUi(self)
@@ -67,16 +68,18 @@ class ImageView(QtGui.QWidget):
         self.view.setAspectLocked(True)
         self.view.invertY()
         
-        self.ticks = [t[0] for t in self.ui.gradientWidget.listTicks()]
-        self.ticks[0].colorChangeAllowed = False
-        self.ticks[1].colorChangeAllowed = False
-        self.ui.gradientWidget.allowAdd = False
-        self.ui.gradientWidget.setTickColor(self.ticks[1], QtGui.QColor(255,255,255))
-        self.ui.gradientWidget.setOrientation('right')
+        #self.ticks = [t[0] for t in self.ui.gradientWidget.listTicks()]
+        #self.ticks[0].colorChangeAllowed = False
+        #self.ticks[1].colorChangeAllowed = False
+        #self.ui.gradientWidget.allowAdd = False
+        #self.ui.gradientWidget.setTickColor(self.ticks[1], QtGui.QColor(255,255,255))
+        #self.ui.gradientWidget.setOrientation('right')
         
         self.imageItem = ImageItem()
         self.view.addItem(self.imageItem)
         self.currentIndex = 0
+        
+        self.ui.histogram.setImageItem(self.imageItem)
         
         self.ui.normGroup.hide()
 
@@ -119,8 +122,12 @@ class ImageView(QtGui.QWidget):
         for fn in ['addItem', 'removeItem']:
             setattr(self, fn, getattr(self.view, fn))
 
+        ## wrap functions from histogram
+        for fn in ['setHistogramRange', 'autoHistogramRange', 'getLookupTable', 'getLevels']:
+            setattr(self, fn, getattr(self.ui.histogram, fn))
+
         self.timeLine.sigPositionChanged.connect(self.timeLineChanged)
-        self.ui.gradientWidget.sigGradientChanged.connect(self.updateImage)
+        #self.ui.gradientWidget.sigGradientChanged.connect(self.updateImage)
         self.ui.roiBtn.clicked.connect(self.roiClicked)
         self.roi.sigRegionChanged.connect(self.roiChanged)
         self.ui.normBtn.toggled.connect(self.normToggled)
@@ -138,11 +145,14 @@ class ImageView(QtGui.QWidget):
         self.ui.roiPlot.registerPlot(self.name + '_ROI')
         
         self.noRepeatKeys = [QtCore.Qt.Key_Right, QtCore.Qt.Key_Left, QtCore.Qt.Key_Up, QtCore.Qt.Key_Down, QtCore.Qt.Key_PageUp, QtCore.Qt.Key_PageDown]
+        
+        
+        self.roiClicked() ## initialize roi plot to correct shape / visibility
 
     def close(self):
         self.ui.roiPlot.close()
         self.ui.graphicsView.close()
-        self.ui.gradientWidget.sigGradientChanged.disconnect(self.updateImage)
+        #self.ui.gradientWidget.sigGradientChanged.disconnect(self.updateImage)
         self.scene.clear()
         del self.image
         del self.imageDisp
@@ -292,8 +302,13 @@ class ImageView(QtGui.QWidget):
         self.normRoi.setVisible(b and self.ui.normROICheck.isChecked())
         self.normRgn.setVisible(b and self.ui.normTimeRangeCheck.isChecked())
 
+    def hasTimeAxis(self):
+        return 't' in self.axes and self.axes['t'] is not None
+
     def roiClicked(self):
+        showRoiPlot = False
         if self.ui.roiBtn.isChecked():
+            showRoiPlot = True
             self.roi.show()
             #self.ui.roiPlot.show()
             self.ui.roiPlot.setMouseEnabled(True, True)
@@ -304,10 +319,24 @@ class ImageView(QtGui.QWidget):
         else:
             self.roi.hide()
             self.ui.roiPlot.setMouseEnabled(False, False)
-            self.ui.roiPlot.setXRange(self.tVals.min(), self.tVals.max())
-            self.ui.splitter.setSizes([self.height()-35, 35])
             self.roiCurve.hide()
             self.ui.roiPlot.hideAxis('left')
+            
+        if self.hasTimeAxis():
+            showRoiPlot = True
+            mn = self.tVals.min()
+            mx = self.tVals.max()
+            self.ui.roiPlot.setXRange(mn, mx, padding=0.01)
+            self.timeLine.show()
+            self.timeLine.setBounds([mn, mx])
+            self.ui.roiPlot.show()
+            if not self.ui.roiBtn.isChecked():
+                self.ui.splitter.setSizes([self.height()-35, 35])
+        else:
+            self.timeLine.hide()
+            #self.ui.roiPlot.hide()
+            
+        self.ui.roiPlot.setVisible(showRoiPlot)
 
     def roiChanged(self):
         if self.image is None:
@@ -389,15 +418,16 @@ class ImageView(QtGui.QWidget):
         self.imageDisp = None
         
         
+        prof.mark('3')
+            
+        self.currentIndex = 0
+        self.updateImage()
         if levels is None and autoLevels:
             self.autoLevels()
         if levels is not None:  ## this does nothing since getProcessedImage sets these values again.
             self.levelMax = levels[1]
             self.levelMin = levels[0]
-        prof.mark('3')
             
-        self.currentIndex = 0
-        self.updateImage()
         if self.ui.roiBtn.isChecked():
             self.roiChanged()
         prof.mark('4')
@@ -442,9 +472,11 @@ class ImageView(QtGui.QWidget):
         #self.ui.whiteSlider.setValue(self.ui.whiteSlider.maximum())
         #self.ui.blackSlider.setValue(0)
         
-        self.ui.gradientWidget.setTickValue(self.ticks[0], 0.0)
-        self.ui.gradientWidget.setTickValue(self.ticks[1], 1.0)
-        self.imageItem.setLevels([self.blackLevel(), self.whiteLevel()])
+        #self.ui.gradientWidget.setTickValue(self.ticks[0], 0.0)
+        #self.ui.gradientWidget.setTickValue(self.ticks[1], 1.0)
+        #self.imageItem.setLevels([self.blackLevel(), self.whiteLevel()])
+        
+        self.ui.histogram.imageChanged(autoLevel=True)
             
 
     def autoRange(self):
@@ -535,14 +567,14 @@ class ImageView(QtGui.QWidget):
         #print "update:", image.ndim, image.max(), image.min(), self.blackLevel(), self.whiteLevel()
         if self.axes['t'] is None:
             #self.ui.timeSlider.hide()
-            self.imageItem.updateImage(image, levels=[self.blackLevel(),self.whiteLevel()])
+            self.imageItem.updateImage(image)
             #self.ui.roiPlot.hide()
             #self.ui.roiBtn.hide()
         else:
             #self.ui.roiBtn.show()
             self.ui.roiPlot.show()
             #self.ui.timeSlider.show()
-            self.imageItem.updateImage(image[self.currentIndex], levels=[self.blackLevel(),self.whiteLevel()])
+            self.imageItem.updateImage(image[self.currentIndex])
             
             
     def timeIndex(self, slider):
@@ -573,12 +605,12 @@ class ImageView(QtGui.QWidget):
         #print ind
         return ind, t
 
-    def whiteLevel(self):
-        return self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[1])
-        #return self.levelMin + (self.levelMax-self.levelMin) * self.ui.whiteSlider.value() / self.ui.whiteSlider.maximum() 
+    #def whiteLevel(self):
+        #return self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[1])
+        ##return self.levelMin + (self.levelMax-self.levelMin) * self.ui.whiteSlider.value() / self.ui.whiteSlider.maximum() 
     
-    def blackLevel(self):
-        return self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[0])
-        #return self.levelMin + ((self.levelMax-self.levelMin) / self.ui.blackSlider.maximum()) * self.ui.blackSlider.value()
+    #def blackLevel(self):
+        #return self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[0])
+        ##return self.levelMin + ((self.levelMax-self.levelMin) / self.ui.blackSlider.maximum()) * self.ui.blackSlider.value()
         
     

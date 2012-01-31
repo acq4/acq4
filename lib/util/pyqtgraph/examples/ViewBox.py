@@ -13,27 +13,27 @@ import pyqtgraph as pg
 
 app = QtGui.QApplication([])
 mw = QtGui.QMainWindow()
-cw = QtGui.QWidget()
-vl = QtGui.QVBoxLayout()
-cw.setLayout(vl)
-mw.setCentralWidget(cw)
+#cw = QtGui.QWidget()
+#vl = QtGui.QVBoxLayout()
+#cw.setLayout(vl)
+#mw.setCentralWidget(cw)
 mw.show()
 mw.resize(800, 600)
 
-
-gv = pg.GraphicsView(cw)
-gv.enableMouse(False)    ## Mouse interaction will be handled by the ViewBox
+gv = pg.GraphicsView()
+mw.setCentralWidget(gv)
+#gv.enableMouse(False)    ## Mouse interaction will be handled by the ViewBox
 l = QtGui.QGraphicsGridLayout()
 l.setHorizontalSpacing(0)
 l.setVerticalSpacing(0)
-vl.addWidget(gv)
+#vl.addWidget(gv)
 
 
 vb = pg.ViewBox()
 #grid = pg.GridItem()
 #vb.addItem(grid)
 
-p1 = pg.PlotCurveItem()
+p1 = pg.PlotDataItem()
 vb.addItem(p1)
 
 class movableRect(QtGui.QGraphicsRectItem):
@@ -85,7 +85,7 @@ def rand(n):
 
 def updateData():
     yd, xd = rand(10000)
-    p1.updateData(yd, x=xd)
+    p1.setData(y=yd, x=xd)
 
 yd, xd = rand(10000)
 updateData()

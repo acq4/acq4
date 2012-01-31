@@ -7,14 +7,15 @@ class RawImageWidget(QtGui.QWidget):
     """
     Widget optimized for very fast video display. 
     Generally using an ImageItem inside GraphicsView is fast enough,
-    but if you need even more performance, this widget is about as fast as it gets.
-
-    The tradeoff is that this widget will _only_ display the unscaled image
-    and nothing else. 
+    but if you need even more performance, this widget is about as fast as it gets (but only in unscaled mode).
     """
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, scaled=False):
+        """
+        Setting scaled=True will cause the entire image to be displayed within the boundaries of the widget. This also greatly reduces the speed at which it will draw frames.
+        """
         QtGui.QWidget.__init__(self, parent=None)
         self.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding,QtGui.QSizePolicy.Expanding))
+        self.scaled = scaled
         self.opts = None
         self.image = None
     
@@ -37,7 +38,18 @@ class RawImageWidget(QtGui.QWidget):
         #if self.pixmap is None:
             #self.pixmap = QtGui.QPixmap.fromImage(self.image)
         p = QtGui.QPainter(self)
-        p.drawImage(QtCore.QPointF(), self.image)
+        if self.scaled:
+            rect = self.rect()
+            ar = rect.width() / float(rect.height())
+            imar = self.image.width() / float(self.image.height())
+            if ar > imar:
+                rect.setWidth(int(rect.width() * imar/ar))
+            else:
+                rect.setHeight(int(rect.height() * ar/imar))
+                
+            p.drawImage(rect, self.image)
+        else:
+            p.drawImage(QtCore.QPointF(), self.image)
         #p.drawPixmap(self.rect(), self.pixmap)
         p.end()
 
@@ -48,8 +60,9 @@ class RawImageGLWidget(QtOpenGL.QGLWidget):
     Generally this will be about as fast as using GraphicsView + ImageItem,
     but performance may vary on some platforms.
     """
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, scaled=False):
         QtOpenGL.QGLWidget.__init__(self, parent=None)
+        self.scaled = scaled
         self.image = None
     
     def setImage(self, img):

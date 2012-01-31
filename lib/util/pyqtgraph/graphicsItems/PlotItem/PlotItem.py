@@ -33,6 +33,7 @@ from .. LabelItem import LabelItem
 from .. GraphicsWidget import GraphicsWidget
 from .. ButtonItem import ButtonItem
 from pyqtgraph.WidgetGroup import WidgetGroup
+import collections
 
 __all__ = ['PlotItem']
 
@@ -65,20 +66,8 @@ class PlotItem(GraphicsWidget):
         GraphicsWidget.__init__(self, parent)
         
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
-        ## Set up control buttons
         
-        #self.ctrlBtn = QtGui.QToolButton()
-        #self.ctrlBtn.setText('?')
-        #self.autoBtn = QtGui.QToolButton()
-        #self.autoBtn.setText('A')
-        ##self.autoBtn.hide()
-        #self.proxies = []
-        #for b in [self.ctrlBtn, self.autoBtn]:
-            #proxy = QtGui.QGraphicsProxyWidget(self)
-            #proxy.setWidget(b)
-            #proxy.setAcceptHoverEvents(False)
-            #b.setStyleSheet("background-color: #000000; color: #888; font-size: 6pt")
-            #self.proxies.append(proxy)
+        ## Set up control buttons
         path = os.path.dirname(__file__)
         #self.ctrlBtn = ButtonItem(os.path.join(path, 'ctrl.png'), 14, self)
         #self.ctrlBtn.clicked.connect(self.ctrlBtnClicked)
@@ -94,20 +83,19 @@ class PlotItem(GraphicsWidget):
         self.layout.setHorizontalSpacing(0)
         self.layout.setVerticalSpacing(0)
         
-        self.vb = ViewBox()
-        self.vb.sigXRangeChanged.connect(self.xRangeChanged)
-        self.vb.sigYRangeChanged.connect(self.yRangeChanged)
-        self.vb.sigRangeChangedManually.connect(self.enableManualScale)
-        
-        self.vb.sigRangeChanged.connect(self.viewRangeChanged)
+        self.vb = ViewBox(name=name)
+        #self.vb.sigXRangeChanged.connect(self.xRangeChanged)
+        #self.vb.sigYRangeChanged.connect(self.yRangeChanged)
+        #self.vb.sigRangeChangedManually.connect(self.enableManualScale)
+        #self.vb.sigRangeChanged.connect(self.viewRangeChanged)
         
         self.layout.addItem(self.vb, 2, 1)
         self.alpha = 1.0
         self.autoAlpha = True
         self.spectrumMode = False
-         
-        self.autoScale = [True, True]
-         
+        
+        #self.autoScale = [True, True]
+        
         ## Create and place scale items
         self.scales = {
             'top':    {'item': AxisItem(orientation='top',    linkView=self.vb), 'pos': (1, 1)}, 
@@ -116,13 +104,16 @@ class PlotItem(GraphicsWidget):
             'right':  {'item': AxisItem(orientation='right',  linkView=self.vb), 'pos': (2, 2)}
         }
         for k in self.scales:
-            self.layout.addItem(self.scales[k]['item'], *self.scales[k]['pos'])
-            
+            item = self.scales[k]['item']
+            self.layout.addItem(item, *self.scales[k]['pos'])
+            item.setZValue(-1000)
+            item.setFlag(item.ItemNegativeZStacksBehindParent)
+        
         self.titleLabel = LabelItem('', size='11pt')
         self.layout.addItem(self.titleLabel, 0, 1)
         self.setTitle(None)  ## hide
-
-
+        
+        
         for i in range(4):
             self.layout.setRowPreferredHeight(i, 0)
             self.layout.setRowMinimumHeight(i, 0)
@@ -155,37 +146,68 @@ class PlotItem(GraphicsWidget):
         self.ctrl = c = Ui_Form()
         c.setupUi(w)
         dv = QtGui.QDoubleValidator(self)
+        
+        menuItems = [
+            ('Fourier Transform', c.powerSpectrumGroup),
+            ('Downsample', c.decimateGroup),
+            ('Average', c.averageGroup),
+            ('Alpha', c.alphaGroup),
+            ('Grid', c.gridGroup),
+            ('Points', c.pointsGroup),
+        ]
+        
+        
         self.ctrlMenu = QtGui.QMenu()
+        
         self.ctrlMenu.setTitle('Plot Options')
-        self.menuAction = QtGui.QWidgetAction(self)
-        self.menuAction.setDefaultWidget(w)
-        self.ctrlMenu.addAction(self.menuAction)
+        self.subMenus = []
+        for name, grp in menuItems:
+            sm = QtGui.QMenu(name)
+            act = QtGui.QWidgetAction(self)
+            act.setDefaultWidget(grp)
+            sm.addAction(act)
+            self.subMenus.append(sm)
+            self.ctrlMenu.addMenu(sm)
+        
+        
+        exportOpts = collections.OrderedDict([
+            ('SVG - Full Plot', self.saveSvgClicked),
+            ('SVG - Curves Only', self.saveSvgCurvesClicked),
+            ('Image', self.saveImgClicked),
+            ('CSV', self.saveCsvClicked),
+        ])
+        
+        self.vb.menu.setExportMethods(exportOpts)
+        
+        #self.menuAction = QtGui.QWidgetAction(self)
+        #self.menuAction.setDefaultWidget(w)
+        #self.ctrlMenu.addAction(self.menuAction)
         
         #if HAVE_WIDGETGROUP:
-        self.stateGroup = WidgetGroup(self.ctrlMenu)
+        self.stateGroup = WidgetGroup(w)
         
         self.fileDialog = None
         
-        self.xLinkPlot = None
-        self.yLinkPlot = None
-        self.linksBlocked = False
+        #self.xLinkPlot = None
+        #self.yLinkPlot = None
+        #self.linksBlocked = False
 
-        self.setAcceptHoverEvents(True)
+        #self.setAcceptHoverEvents(True)
         
         ## Connect control widgets
-        c.xMinText.editingFinished.connect(self.setManualXScale)
-        c.xMaxText.editingFinished.connect(self.setManualXScale)
-        c.yMinText.editingFinished.connect(self.setManualYScale)
-        c.yMaxText.editingFinished.connect(self.setManualYScale)
+        #c.xMinText.editingFinished.connect(self.setManualXScale)
+        #c.xMaxText.editingFinished.connect(self.setManualXScale)
+        #c.yMinText.editingFinished.connect(self.setManualYScale)
+        #c.yMaxText.editingFinished.connect(self.setManualYScale)
         
-        c.xManualRadio.clicked.connect(lambda: self.updateXScale())
-        c.yManualRadio.clicked.connect(lambda: self.updateYScale())
+        #c.xManualRadio.clicked.connect(lambda: self.updateXScale())
+        #c.yManualRadio.clicked.connect(lambda: self.updateYScale())
         
-        c.xAutoRadio.clicked.connect(self.updateXScale)
-        c.yAutoRadio.clicked.connect(self.updateYScale)
+        #c.xAutoRadio.clicked.connect(self.updateXScale)
+        #c.yAutoRadio.clicked.connect(self.updateYScale)
 
-        c.xAutoPercentSpin.valueChanged.connect(self.replot)
-        c.yAutoPercentSpin.valueChanged.connect(self.replot)
+        #c.xAutoPercentSpin.valueChanged.connect(self.replot)
+        #c.yAutoPercentSpin.valueChanged.connect(self.replot)
         
         c.alphaGroup.toggled.connect(self.updateAlpha)
         c.alphaSlider.valueChanged.connect(self.updateAlpha)
@@ -195,13 +217,13 @@ class PlotItem(GraphicsWidget):
         c.gridAlphaSlider.valueChanged.connect(self.updateGrid)
 
         c.powerSpectrumGroup.toggled.connect(self.updateSpectrumMode)
-        c.saveSvgBtn.clicked.connect(self.saveSvgClicked)
-        c.saveSvgCurvesBtn.clicked.connect(self.saveSvgCurvesClicked)
-        c.saveImgBtn.clicked.connect(self.saveImgClicked)
-        c.saveCsvBtn.clicked.connect(self.saveCsvClicked)
+        #c.saveSvgBtn.clicked.connect(self.saveSvgClicked)
+        #c.saveSvgCurvesBtn.clicked.connect(self.saveSvgCurvesClicked)
+        #c.saveImgBtn.clicked.connect(self.saveImgClicked)
+        #c.saveCsvBtn.clicked.connect(self.saveCsvClicked)
         
-        self.ctrl.xLinkCombo.currentIndexChanged.connect(self.xLinkComboChanged)
-        self.ctrl.yLinkCombo.currentIndexChanged.connect(self.yLinkComboChanged)
+        #self.ctrl.xLinkCombo.currentIndexChanged.connect(self.xLinkComboChanged)
+        #self.ctrl.yLinkCombo.currentIndexChanged.connect(self.yLinkComboChanged)
 
         c.downsampleSpin.valueChanged.connect(self.updateDownsampling)
 
@@ -210,12 +232,12 @@ class PlotItem(GraphicsWidget):
         
         self.ctrl.maxTracesCheck.toggled.connect(self.updateDecimation)
         self.ctrl.maxTracesSpin.valueChanged.connect(self.updateDecimation)
-        c.xMouseCheck.toggled.connect(self.mouseCheckChanged)
-        c.yMouseCheck.toggled.connect(self.mouseCheckChanged)
+        #c.xMouseCheck.toggled.connect(self.mouseCheckChanged)
+        #c.yMouseCheck.toggled.connect(self.mouseCheckChanged)
 
-        self.xLinkPlot = None
-        self.yLinkPlot = None
-        self.linksBlocked = False
+        #self.xLinkPlot = None
+        #self.yLinkPlot = None
+        #self.linksBlocked = False
         self.manager = None
         
         self.hideAxis('right')
@@ -223,8 +245,8 @@ class PlotItem(GraphicsWidget):
         self.showAxis('left')
         self.showAxis('bottom')
         
-        if name is not None:
-            self.registerPlot(name)
+        #if name is not None:
+            #self.registerPlot(name)
         
         if labels is not None:
             for k in labels:
@@ -239,6 +261,7 @@ class PlotItem(GraphicsWidget):
             self.plot(**kargs)
         
         self.enableAutoScale()
+        
     #def paint(self, *args):
         #prof = debug.Profiler('PlotItem.paint', disabled=True)
         #QtGui.QGraphicsWidget.paint(self, *args)
@@ -280,56 +303,57 @@ class PlotItem(GraphicsWidget):
             #self.scene().removeItem(p)
         #self.proxies = []
         
-        self.menuAction.releaseWidget(self.menuAction.defaultWidget())
-        self.menuAction.setParent(None)
-        self.menuAction = None
+        #self.menuAction.releaseWidget(self.menuAction.defaultWidget())
+        #self.menuAction.setParent(None)
+        #self.menuAction = None
         
-        if self.manager is not None:
-            self.manager.sigWidgetListChanged.disconnect(self.updatePlotList)
-            self.manager.removeWidget(self.name)
+        #if self.manager is not None:
+            #self.manager.sigWidgetListChanged.disconnect(self.updatePlotList)
+            #self.manager.removeWidget(self.name)
         #else:
             #print "no manager"
 
     def registerPlot(self, name):
-        self.name = name
-        win = str(self.window())
-        #print "register", name, win
-        if win not in PlotItem.managers:
-            PlotItem.managers[win] = PlotWidgetManager()
-        self.manager = PlotItem.managers[win]
-        self.manager.addWidget(self, name)
-        #QtCore.QObject.connect(self.manager, QtCore.SIGNAL('widgetListChanged'), self.updatePlotList)
-        self.manager.sigWidgetListChanged.connect(self.updatePlotList)
-        self.updatePlotList()
+        self.vb.register(name)
+        #self.name = name
+        #win = str(self.window())
+        ##print "register", name, win
+        #if win not in PlotItem.managers:
+            #PlotItem.managers[win] = PlotWidgetManager()
+        #self.manager = PlotItem.managers[win]
+        #self.manager.addWidget(self, name)
+        ##QtCore.QObject.connect(self.manager, QtCore.SIGNAL('widgetListChanged'), self.updatePlotList)
+        #self.manager.sigWidgetListChanged.connect(self.updatePlotList)
+        #self.updatePlotList()
 
-    def updatePlotList(self):
-        """Update the list of all plotWidgets in the "link" combos"""
-        #print "update plot list", self
-        try:
-            for sc in [self.ctrl.xLinkCombo, self.ctrl.yLinkCombo]:
-                current = unicode(sc.currentText())
-                sc.blockSignals(True)
-                try:
-                    sc.clear()
-                    sc.addItem("")
-                    if self.manager is not None:
-                        for w in self.manager.listWidgets():
-                            #print w
-                            if w == self.name:
-                                continue
-                            sc.addItem(w)
-                            if w == current:
-                                sc.setCurrentIndex(sc.count()-1)
-                finally:
-                    sc.blockSignals(False)
-                    if unicode(sc.currentText()) != current:
-                        sc.currentItemChanged.emit()
-        except:
-            import gc
-            refs= gc.get_referrers(self)
-            print "  error during update of", self
-            print "  Referrers are:", refs
-            raise
+    #def updatePlotList(self):
+        #"""Update the list of all plotWidgets in the "link" combos"""
+        ##print "update plot list", self
+        #try:
+            #for sc in [self.ctrl.xLinkCombo, self.ctrl.yLinkCombo]:
+                #current = unicode(sc.currentText())
+                #sc.blockSignals(True)
+                #try:
+                    #sc.clear()
+                    #sc.addItem("")
+                    #if self.manager is not None:
+                        #for w in self.manager.listWidgets():
+                            ##print w
+                            #if w == self.name:
+                                #continue
+                            #sc.addItem(w)
+                            #if w == current:
+                                #sc.setCurrentIndex(sc.count()-1)
+                #finally:
+                    #sc.blockSignals(False)
+                    #if unicode(sc.currentText()) != current:
+                        #sc.currentItemChanged.emit()
+        #except:
+            #import gc
+            #refs= gc.get_referrers(self)
+            #print "  error during update of", self
+            #print "  Referrers are:", refs
+            #raise
         
     def updateGrid(self, *args):
         g = self.ctrl.gridGroup.isChecked()
@@ -350,88 +374,88 @@ class PlotItem(GraphicsWidget):
 
 
 
-    def viewRangeChanged(self, vb, range):
-        #self.emit(QtCore.SIGNAL('viewChanged'), *args)
-        self.sigRangeChanged.emit(self, range)
 
-    def blockLink(self, b):
-        self.linksBlocked = b
+    #def viewRangeChanged(self, vb, range):
+        ##self.emit(QtCore.SIGNAL('viewChanged'), *args)
+        #self.sigRangeChanged.emit(self, range)
 
-    def xLinkComboChanged(self):
-        self.setXLink(str(self.ctrl.xLinkCombo.currentText()))
+    #def blockLink(self, b):
+        #self.linksBlocked = b
 
-    def yLinkComboChanged(self):
-        self.setYLink(str(self.ctrl.yLinkCombo.currentText()))
+    #def xLinkComboChanged(self):
+        #self.setXLink(str(self.ctrl.xLinkCombo.currentText()))
 
-    def setXLink(self, plot=None):
-        """Link this plot's X axis to another plot (pass either the PlotItem/PlotWidget or the registered name of the plot)"""
-        if isinstance(plot, types.StringTypes) and len(plot) == 0:
-            plot = None
-        if isinstance(plot, basestring):
-            if self.manager is None:
-                return
-            if self.xLinkPlot is not None:
-                self.manager.unlinkX(self, self.xLinkPlot)
-            plot = self.manager.getWidget(plot)
-        if not isinstance(plot, PlotItem) and hasattr(plot, 'getPlotItem'):
-            plot = plot.getPlotItem()
-        self.xLinkPlot = plot
-        if plot is not None and self.manager is not None:
-            self.setManualXScale()
-            self.manager.linkX(self, plot)
+    #def yLinkComboChanged(self):
+        #self.setYLink(str(self.ctrl.yLinkCombo.currentText()))
+
+    #def setXLink(self, plot=None):
+        #"""Link this plot's X axis to another plot (pass either the PlotItem/PlotWidget or the registered name of the plot)"""
+        #if isinstance(plot, basestring):
+            #if self.manager is None:
+                #return
+            #if self.xLinkPlot is not None:
+                #self.manager.unlinkX(self, self.xLinkPlot)
+            #plot = self.manager.getWidget(plot)
+        #if not isinstance(plot, PlotItem) and hasattr(plot, 'getPlotItem'):
+            #plot = plot.getPlotItem()
+        #self.xLinkPlot = plot
+        #if plot is not None:
+            #self.setManualXScale()
+            #self.manager.linkX(self, plot)
+
             
-    def setYLink(self, plot=None):
-        """Link this plot's Y axis to another plot (pass either the PlotItem/PlotWidget or the registered name of the plot)"""
-        if isinstance(plot, types.StringTypes) and len(plot) == 0:
-            plot = None
-        if isinstance(plot, basestring):
-            if self.manager is None:
-                return
-            if self.yLinkPlot is not None:
-                self.manager.unlinkY(self, self.yLinkPlot)
-            plot = self.manager.getWidget(plot)
-        if not isinstance(plot, PlotItem) and hasattr(plot, 'getPlotItem'):
-            plot = plot.getPlotItem()
-        self.yLinkPlot = plot
-        if plot is not None:
-            self.setManualYScale()
-            self.manager.linkY(self, plot)
+
+    #def setYLink(self, plot=None):
+        #"""Link this plot's Y axis to another plot (pass either the PlotItem/PlotWidget or the registered name of the plot)"""
+        #if isinstance(plot, basestring):
+            #if self.manager is None:
+                #return
+            #if self.yLinkPlot is not None:
+                #self.manager.unlinkY(self, self.yLinkPlot)
+            #plot = self.manager.getWidget(plot)
+        #if not isinstance(plot, PlotItem) and hasattr(plot, 'getPlotItem'):
+            #plot = plot.getPlotItem()
+        #self.yLinkPlot = plot
+        #if plot is not None:
+            #self.setManualYScale()
+            #self.manager.linkY(self, plot)
         
-    def linkXChanged(self, plot):
-        """Called when a linked plot has changed its X scale"""
-        #print "update from", plot
-        if self.linksBlocked:
-            return
-        pr = plot.vb.viewRect()
-        pg = plot.viewGeometry()
-        if pg is None:
-            #print "   return early"
-            return
-        sg = self.viewGeometry()
-        upp = float(pr.width()) / pg.width()
-        x1 = pr.left() + (sg.x()-pg.x()) * upp
-        x2 = x1 + sg.width() * upp
-        plot.blockLink(True)
-        self.setManualXScale()
-        self.setXRange(x1, x2, padding=0)
-        plot.blockLink(False)
-        self.replot()
+    #def linkXChanged(self, plot):
+        #"""Called when a linked plot has changed its X scale"""
+        ##print "update from", plot
+        #if self.linksBlocked:
+            #return
+        #pr = plot.vb.viewRect()
+        #pg = plot.viewGeometry()
+        #if pg is None:
+            ##print "   return early"
+            #return
+        #sg = self.viewGeometry()
+        #upp = float(pr.width()) / pg.width()
+        #x1 = pr.left() + (sg.x()-pg.x()) * upp
+        #x2 = x1 + sg.width() * upp
+        #plot.blockLink(True)
+        #self.setManualXScale()
+        #self.setXRange(x1, x2, padding=0)
+        #plot.blockLink(False)
+        #self.replot()
         
-    def linkYChanged(self, plot):
-        """Called when a linked plot has changed its Y scale"""
-        if self.linksBlocked:
-            return
-        pr = plot.vb.viewRect()
-        pg = plot.vb.boundingRect()
-        sg = self.vb.boundingRect()
-        upp = float(pr.height()) / pg.height()
-        y1 = pr.bottom() + (sg.y()-pg.y()) * upp
-        y2 = y1 + sg.height() * upp
-        plot.blockLink(True)
-        self.setManualYScale()
-        self.setYRange(y1, y2, padding=0)
-        plot.blockLink(False)
-        self.replot()
+    #def linkYChanged(self, plot):
+        #"""Called when a linked plot has changed its Y scale"""
+        #if self.linksBlocked:
+            #return
+        #pr = plot.vb.viewRect()
+        #pg = plot.vb.boundingRect()
+        #sg = self.vb.boundingRect()
+        #upp = float(pr.height()) / pg.height()
+        #y1 = pr.bottom() + (sg.y()-pg.y()) * upp
+        #y2 = y1 + sg.height() * upp
+        #plot.blockLink(True)
+        #self.setManualYScale()
+        #self.setYRange(y1, y2, padding=0)
+        #plot.blockLink(False)
+        #self.replot()
+
 
     def avgToggled(self, b):
         if b:
@@ -507,48 +531,48 @@ class PlotItem(GraphicsWidget):
             plot.setData(x, y)
         
         
-    def mouseCheckChanged(self):
-        state = [self.ctrl.xMouseCheck.isChecked(), self.ctrl.yMouseCheck.isChecked()]
-        self.vb.setMouseEnabled(*state)
+    #def mouseCheckChanged(self):
+        #state = [self.ctrl.xMouseCheck.isChecked(), self.ctrl.yMouseCheck.isChecked()]
+        #self.vb.setMouseEnabled(*state)
         
-    def xRangeChanged(self, _, range):
-        if any(np.isnan(range)) or any(np.isinf(range)):
-            raise Exception("yRange invalid: %s. Signal came from %s" % (str(range), str(self.sender())))
-        self.ctrl.xMinText.setText('%0.5g' % range[0])
-        self.ctrl.xMaxText.setText('%0.5g' % range[1])
+    #def xRangeChanged(self, _, range):
+        #if any(np.isnan(range)) or any(np.isinf(range)):
+            #raise Exception("yRange invalid: %s. Signal came from %s" % (str(range), str(self.sender())))
+        #self.ctrl.xMinText.setText('%0.5g' % range[0])
+        #self.ctrl.xMaxText.setText('%0.5g' % range[1])
         
-        ## automatically change unit scale
-        maxVal = max(abs(range[0]), abs(range[1]))
-        (scale, prefix) = fn.siScale(maxVal)
-        #for l in ['top', 'bottom']:
-            #if self.getLabel(l).isVisible():
-                #self.setLabel(l, unitPrefix=prefix)
-                #self.getScale(l).setScale(scale)
-            #else:
-                #self.setLabel(l, unitPrefix='')
-                #self.getScale(l).setScale(1.0)
+        ### automatically change unit scale
+        #maxVal = max(abs(range[0]), abs(range[1]))
+        #(scale, prefix) = fn.siScale(maxVal)
+        ##for l in ['top', 'bottom']:
+            ##if self.getLabel(l).isVisible():
+                ##self.setLabel(l, unitPrefix=prefix)
+                ##self.getScale(l).setScale(scale)
+            ##else:
+                ##self.setLabel(l, unitPrefix='')
+                ##self.getScale(l).setScale(1.0)
         
-        #self.emit(QtCore.SIGNAL('xRangeChanged'), self, range)
-        self.sigXRangeChanged.emit(self, range)
+        ##self.emit(QtCore.SIGNAL('xRangeChanged'), self, range)
+        #self.sigXRangeChanged.emit(self, range)
 
-    def yRangeChanged(self, _, range):
-        if any(np.isnan(range)) or any(np.isinf(range)):
-            raise Exception("yRange invalid: %s. Signal came from %s" % (str(range), str(self.sender())))
-        self.ctrl.yMinText.setText('%0.5g' % range[0])
-        self.ctrl.yMaxText.setText('%0.5g' % range[1])
+    #def yRangeChanged(self, _, range):
+        #if any(np.isnan(range)) or any(np.isinf(range)):
+            #raise Exception("yRange invalid: %s. Signal came from %s" % (str(range), str(self.sender())))
+        #self.ctrl.yMinText.setText('%0.5g' % range[0])
+        #self.ctrl.yMaxText.setText('%0.5g' % range[1])
         
-        ## automatically change unit scale
-        maxVal = max(abs(range[0]), abs(range[1]))
-        (scale, prefix) = fn.siScale(maxVal)
-        #for l in ['left', 'right']:
-            #if self.getLabel(l).isVisible():
-                #self.setLabel(l, unitPrefix=prefix)
-                #self.getScale(l).setScale(scale)
-            #else:
-                #self.setLabel(l, unitPrefix='')
-                #self.getScale(l).setScale(1.0)
-        #self.emit(QtCore.SIGNAL('yRangeChanged'), self, range)
-        self.sigYRangeChanged.emit(self, range)
+        ### automatically change unit scale
+        #maxVal = max(abs(range[0]), abs(range[1]))
+        #(scale, prefix) = fn.siScale(maxVal)
+        ##for l in ['left', 'right']:
+            ##if self.getLabel(l).isVisible():
+                ##self.setLabel(l, unitPrefix=prefix)
+                ##self.getScale(l).setScale(scale)
+            ##else:
+                ##self.setLabel(l, unitPrefix='')
+                ##self.getScale(l).setScale(1.0)
+        ##self.emit(QtCore.SIGNAL('yRangeChanged'), self, range)
+        #self.sigYRangeChanged.emit(self, range)
 
     def autoBtnClicked(self):
         if self.autoBtn.mode == 'auto':
@@ -560,79 +584,80 @@ class PlotItem(GraphicsWidget):
         """
         Enable auto-scaling. The plot will continuously scale to fit the boundaries of its data.
         """
-        self.ctrl.xAutoRadio.setChecked(True)
-        self.ctrl.yAutoRadio.setChecked(True)
+        self.vb.enableAutoRange(self.vb.XYAxes)
+        #self.ctrl.xAutoRadio.setChecked(True)
+        #self.ctrl.yAutoRadio.setChecked(True)
         
-        self.autoBtn.setImageFile(self.lockImageFile)
-        self.autoBtn.mode = 'lock'
-        self.updateXScale()
-        self.updateYScale()
-        self.replot()
+        #self.autoBtn.setImageFile(self.lockImageFile)
+        #self.autoBtn.mode = 'lock'
+        #self.updateXScale()
+        #self.updateYScale()
+        #self.replot()
       
-    def updateXScale(self):
-        """Set plot to autoscale or not depending on state of radio buttons"""
-        if self.ctrl.xManualRadio.isChecked():
-            self.setManualXScale()
-        else:
-            self.setAutoXScale()
-        self.replot()
-        
-    def updateYScale(self, b=False):
-        """Set plot to autoscale or not depending on state of radio buttons"""
-        if self.ctrl.yManualRadio.isChecked():
-            self.setManualYScale()
-        else:
-            self.setAutoYScale()
-        self.replot()
-
-    def enableManualScale(self, v=[True, True]):
-        if v[0]:
-            self.autoScale[0] = False
-            self.ctrl.xManualRadio.setChecked(True)
+    #def updateXScale(self):
+        #"""Set plot to autoscale or not depending on state of radio buttons"""
+        #if self.ctrl.xManualRadio.isChecked():
             #self.setManualXScale()
-        if v[1]:
-            self.autoScale[1] = False
-            self.ctrl.yManualRadio.setChecked(True)
+        #else:
+            #self.setAutoXScale()
+        #self.replot()
+        
+    #def updateYScale(self, b=False):
+        #"""Set plot to autoscale or not depending on state of radio buttons"""
+        #if self.ctrl.yManualRadio.isChecked():
             #self.setManualYScale()
-        #self.autoBtn.enable()
-        self.autoBtn.setImageFile(self.autoImageFile)
-        self.autoBtn.mode = 'auto'
-        #self.replot()
-        
-    def setManualXScale(self):
-        self.autoScale[0] = False
-        x1 = float(self.ctrl.xMinText.text())
-        x2 = float(self.ctrl.xMaxText.text())
-        self.ctrl.xManualRadio.setChecked(True)
-        self.setXRange(x1, x2, padding=0)
-        self.autoBtn.show()
-        #self.replot()
-        
-    def setManualYScale(self):
-        self.autoScale[1] = False
-        y1 = float(self.ctrl.yMinText.text())
-        y2 = float(self.ctrl.yMaxText.text())
-        self.ctrl.yManualRadio.setChecked(True)
-        self.setYRange(y1, y2, padding=0)
-        self.autoBtn.show()
+        #else:
+            #self.setAutoYScale()
         #self.replot()
 
-    def setAutoXScale(self):
-        self.autoScale[0] = True
-        self.ctrl.xAutoRadio.setChecked(True)
-        #self.replot()
+    #def enableManualScale(self, v=[True, True]):
+        #if v[0]:
+            #self.autoScale[0] = False
+            #self.ctrl.xManualRadio.setChecked(True)
+            ##self.setManualXScale()
+        #if v[1]:
+            #self.autoScale[1] = False
+            #self.ctrl.yManualRadio.setChecked(True)
+            ##self.setManualYScale()
+        ##self.autoBtn.enable()
+        #self.autoBtn.setImageFile(self.autoImageFile)
+        #self.autoBtn.mode = 'auto'
+        ##self.replot()
         
-    def setAutoYScale(self):
-        self.autoScale[1] = True
-        self.ctrl.yAutoRadio.setChecked(True)
-        #self.replot()
+    #def setManualXScale(self):
+        #self.autoScale[0] = False
+        #x1 = float(self.ctrl.xMinText.text())
+        #x2 = float(self.ctrl.xMaxText.text())
+        #self.ctrl.xManualRadio.setChecked(True)
+        #self.setXRange(x1, x2, padding=0)
+        #self.autoBtn.show()
+        ##self.replot()
+        
+    #def setManualYScale(self):
+        #self.autoScale[1] = False
+        #y1 = float(self.ctrl.yMinText.text())
+        #y2 = float(self.ctrl.yMaxText.text())
+        #self.ctrl.yManualRadio.setChecked(True)
+        #self.setYRange(y1, y2, padding=0)
+        #self.autoBtn.show()
+        ##self.replot()
+
+    #def setAutoXScale(self):
+        #self.autoScale[0] = True
+        #self.ctrl.xAutoRadio.setChecked(True)
+        ##self.replot()
+        
+    #def setAutoYScale(self):
+        #self.autoScale[1] = True
+        #self.ctrl.yAutoRadio.setChecked(True)
+        ##self.replot()
 
     def addItem(self, item, *args, **kargs):
         self.items.append(item)
         self.vb.addItem(item, *args)
         if hasattr(item, 'implements') and item.implements('plotData'):
             self.dataItems.append(item)
-            self.plotChanged()
+            #self.plotChanged()
             
             params = kargs.get('params', {})
             self.itemMeta[item] = params
@@ -657,8 +682,8 @@ class PlotItem(GraphicsWidget):
                 self.addAvgCurve(item)
                 
             #c.connect(c, QtCore.SIGNAL('plotChanged'), self.plotChanged)
-            item.sigPlotChanged.connect(self.plotChanged)
-            self.plotChanged()
+            #item.sigPlotChanged.connect(self.plotChanged)
+            #self.plotChanged()
 
     def addDataItem(self, item, *args):
         print "PlotItem.addDataItem is deprecated. Use addItem instead."
@@ -683,7 +708,7 @@ class PlotItem(GraphicsWidget):
             self.updateDecimation()
             self.updateParamList()
             #item.connect(item, QtCore.SIGNAL('plotChanged'), self.plotChanged)
-            item.sigPlotChanged.connect(self.plotChanged)
+            #item.sigPlotChanged.connect(self.plotChanged)
 
     def clear(self):
         for i in self.items[:]:
@@ -757,33 +782,40 @@ class PlotItem(GraphicsWidget):
 
     
 
-    def plotChanged(self, curve=None):
+    #def plotChanged(self, curve=None):
         ## Recompute auto range if needed
-        for ax in [0, 1]:
+        #args = {}
+        #for ax in [0, 1]:
             #print "range", ax
-            if self.autoScale[ax]:
-                percentScale = [self.ctrl.xAutoPercentSpin.value(), self.ctrl.yAutoPercentSpin.value()][ax] * 0.01
-                mn = None
-                mx = None
-                for c in self.curves + [c[1] for c in self.avgCurves.values()] + self.dataItems:
-                    if not c.isVisible():
-                        continue
-                    cmn, cmx = c.getRange(ax, percentScale)
-                    #print "   ", c, cmn, cmx
-                    if mn is None or cmn < mn:
-                        mn = cmn
-                    if mx is None or cmx > mx:
-                        mx = cmx
-                if mn is None or mx is None or any(np.isnan([mn, mx])) or any(np.isinf([mn, mx])):
-                    continue
-                if mn == mx:
-                    mn -= 1
-                    mx += 1
-                self.setRange(ax, mn, mx)
-                #print "Auto range:", ax, mn, mx
+            #if self.autoScale[ax]:
+                #percentScale = [self.ctrl.xAutoPercentSpin.value(), self.ctrl.yAutoPercentSpin.value()][ax] * 0.01
+                #mn = None
+                #mx = None
+                #for c in self.curves + [c[1] for c in self.avgCurves.values()] + self.dataItems:
+                    #if not c.isVisible():
+                        #continue
+                    #cmn, cmx = c.getRange(ax, percentScale)
+                    ##print "   ", c, cmn, cmx
+                    #if mn is None or cmn < mn:
+                        #mn = cmn
+                    #if mx is None or cmx > mx:
+                        #mx = cmx
+                #if mn is None or mx is None or any(np.isnan([mn, mx])) or any(np.isinf([mn, mx])):
+                    #continue
+                #if mn == mx:
+                    #mn -= 1
+                    #mx += 1
+                #if ax == 0:
+                    #args['xRange'] = [mn, mx]
+                #else:
+                    #args['yRange'] = [mn, mx]
+                    
+        #if len(args) > 0:
+            ##print args
+            #self.setRange(**args)
                 
     def replot(self):
-        self.plotChanged()
+        #self.plotChanged()
         self.update()
 
     def updateParamList(self):
@@ -1016,6 +1048,7 @@ class PlotItem(GraphicsWidget):
             #raise Exception("State save/restore requires WidgetGroup class.")
         state = self.stateGroup.state()
         state['paramList'] = self.paramList.copy()
+        state['view'] = self.vb.getState()
         #print "\nSAVE %s:\n" % str(self.name), state
         #print "Saving state. averageGroup.isChecked(): %s  state: %s" % (str(self.ctrl.averageGroup.isChecked()), str(state['averageGroup']))
         return state
@@ -1033,9 +1066,20 @@ class PlotItem(GraphicsWidget):
         self.updateDecimation()
         
         self.stateGroup.setState(state)
-        self.updateXScale()
-        self.updateYScale()
+        #self.updateXScale()
+        #self.updateYScale()
         self.updateParamList()
+        
+        if 'view' not in state:
+            r = [[float(state['xMinText']), float(state['xMaxText'])], [float(state['yMinText']), float(state['yMaxText'])]]
+            state['view'] = {
+                'autoRange': [state['xAutoRadio'], state['yAutoRadio']],
+                'linkedViews': [state['xLinkCombo'], state['yLinkCombo']],
+                'targetRange': r,
+                'viewRange': r,
+            }
+        self.vb.setState(state['view'])
+        
         
         #print "\nRESTORE %s:\n" % str(self.name), state
         #print "Restoring state. averageGroup.isChecked(): %s  state: %s" % (str(self.ctrl.averageGroup.isChecked()), str(state['averageGroup']))
@@ -1133,9 +1177,9 @@ class PlotItem(GraphicsWidget):
         y = self.size().height() - btnRect.height()
         self.autoBtn.setPos(0, y)
         
-    def hoverMoveEvent(self, ev):
-        self.mousePos = ev.pos()
-        self.mouseScreenPos = ev.screenPos()
+    #def hoverMoveEvent(self, ev):
+        #self.mousePos = ev.pos()
+        #self.mouseScreenPos = ev.screenPos()
         
         
     #def ctrlBtnClicked(self):
@@ -1148,10 +1192,6 @@ class PlotItem(GraphicsWidget):
         ## called when another item is displaying its context menu; we get to add extras to the end of the menu.
         return self.ctrlMenu
         
-        
-        
-    #def contextMenuEvent(self, ev):  ## only after button release!
-        #self.ctrlMenu.popup(self.mouseScreenPos)
 
     def getLabel(self, key):
         pass
@@ -1275,62 +1315,62 @@ class PlotItem(GraphicsWidget):
         self.writeCsv()
       
 
-class PlotWidgetManager(QtCore.QObject):
+#class PlotWidgetManager(QtCore.QObject):
     
-    sigWidgetListChanged = QtCore.Signal(object)
+    #sigWidgetListChanged = QtCore.Signal(object)
     
-    """Used for managing communication between PlotWidgets"""
-    def __init__(self):
-        QtCore.QObject.__init__(self)
-        self.widgets = weakref.WeakValueDictionary() # Don't keep PlotWidgets around just because they are listed here
+    #"""Used for managing communication between PlotWidgets"""
+    #def __init__(self):
+        #QtCore.QObject.__init__(self)
+        #self.widgets = weakref.WeakValueDictionary() # Don't keep PlotWidgets around just because they are listed here
     
-    def addWidget(self, w, name):
-        self.widgets[name] = w
-        #self.emit(QtCore.SIGNAL('widgetListChanged'), self.widgets.keys())
-        self.sigWidgetListChanged.emit(self.widgets.keys())
+    #def addWidget(self, w, name):
+        #self.widgets[name] = w
+        ##self.emit(QtCore.SIGNAL('widgetListChanged'), self.widgets.keys())
+        #self.sigWidgetListChanged.emit(self.widgets.keys())
         
-    def removeWidget(self, name):
-        if name in self.widgets:
-            del self.widgets[name]
-            #self.emit(QtCore.SIGNAL('widgetListChanged'), self.widgets.keys())
-            self.sigWidgetListChanged.emit(self.widgets.keys())
-        else:
-            print "plot %s not managed" % name
+    #def removeWidget(self, name):
+        #if name in self.widgets:
+            #del self.widgets[name]
+            ##self.emit(QtCore.SIGNAL('widgetListChanged'), self.widgets.keys())
+            #self.sigWidgetListChanged.emit(self.widgets.keys())
+        #else:
+            #print "plot %s not managed" % name
         
         
-    def listWidgets(self):
-        return self.widgets.keys()
+    #def listWidgets(self):
+        #return self.widgets.keys()
         
-    def getWidget(self, name):
-        if name not in self.widgets:
-            return None
-        else:
-            return self.widgets[name]
+    #def getWidget(self, name):
+        #if name not in self.widgets:
+            #return None
+        #else:
+            #return self.widgets[name]
             
-    def linkX(self, p1, p2):
-        #QtCore.QObject.connect(p1, QtCore.SIGNAL('xRangeChanged'), p2.linkXChanged)
-        p1.sigXRangeChanged.connect(p2.linkXChanged)
-        #QtCore.QObject.connect(p2, QtCore.SIGNAL('xRangeChanged'), p1.linkXChanged)
-        p2.sigXRangeChanged.connect(p1.linkXChanged)
-        p1.linkXChanged(p2)
-        #p2.setManualXScale()
+    #def linkX(self, p1, p2):
+        ##QtCore.QObject.connect(p1, QtCore.SIGNAL('xRangeChanged'), p2.linkXChanged)
+        #p1.sigXRangeChanged.connect(p2.linkXChanged)
+        ##QtCore.QObject.connect(p2, QtCore.SIGNAL('xRangeChanged'), p1.linkXChanged)
+        #p2.sigXRangeChanged.connect(p1.linkXChanged)
+        #p1.linkXChanged(p2)
+        ##p2.setManualXScale()
 
-    def unlinkX(self, p1, p2):
-        #QtCore.QObject.disconnect(p1, QtCore.SIGNAL('xRangeChanged'), p2.linkXChanged)
-        p1.sigXRangeChanged.disconnect(p2.linkXChanged)
-        #QtCore.QObject.disconnect(p2, QtCore.SIGNAL('xRangeChanged'), p1.linkXChanged)
-        p2.sigXRangeChanged.disconnect(p1.linkXChanged)
+    #def unlinkX(self, p1, p2):
+        ##QtCore.QObject.disconnect(p1, QtCore.SIGNAL('xRangeChanged'), p2.linkXChanged)
+        #p1.sigXRangeChanged.disconnect(p2.linkXChanged)
+        ##QtCore.QObject.disconnect(p2, QtCore.SIGNAL('xRangeChanged'), p1.linkXChanged)
+        #p2.sigXRangeChanged.disconnect(p1.linkXChanged)
         
-    def linkY(self, p1, p2):
-        #QtCore.QObject.connect(p1, QtCore.SIGNAL('yRangeChanged'), p2.linkYChanged)
-        p1.sigYRangeChanged.connect(p2.linkYChanged)
-        #QtCore.QObject.connect(p2, QtCore.SIGNAL('yRangeChanged'), p1.linkYChanged)
-        p2.sigYRangeChanged.connect(p1.linkYChanged)
-        p1.linkYChanged(p2)
-        #p2.setManualYScale()
+    #def linkY(self, p1, p2):
+        ##QtCore.QObject.connect(p1, QtCore.SIGNAL('yRangeChanged'), p2.linkYChanged)
+        #p1.sigYRangeChanged.connect(p2.linkYChanged)
+        ##QtCore.QObject.connect(p2, QtCore.SIGNAL('yRangeChanged'), p1.linkYChanged)
+        #p2.sigYRangeChanged.connect(p1.linkYChanged)
+        #p1.linkYChanged(p2)
+        ##p2.setManualYScale()
 
-    def unlinkY(self, p1, p2):
-        #QtCore.QObject.disconnect(p1, QtCore.SIGNAL('yRangeChanged'), p2.linkYChanged)
-        p1.sigYRangeChanged.disconnect(p2.linkYChanged)
-        #QtCore.QObject.disconnect(p2, QtCore.SIGNAL('yRangeChanged'), p1.linkYChanged)
-        p2.sigYRangeChanged.disconnect(p1.linkYChanged)
+    #def unlinkY(self, p1, p2):
+        ##QtCore.QObject.disconnect(p1, QtCore.SIGNAL('yRangeChanged'), p2.linkYChanged)
+        #p1.sigYRangeChanged.disconnect(p2.linkYChanged)
+        ##QtCore.QObject.disconnect(p2, QtCore.SIGNAL('yRangeChanged'), p1.linkYChanged)
+        #p2.sigYRangeChanged.disconnect(p1.linkYChanged)

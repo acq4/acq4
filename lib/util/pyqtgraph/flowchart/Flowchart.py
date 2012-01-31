@@ -75,6 +75,7 @@ class Flowchart(Node):
         
         self.inputWasSet = False  ## flag allows detection of changes in the absence of input change.
         self._nodes = {}
+        self.nextZVal = 10
         #self.connects = []
         #self._chartGraphicsItem = FlowchartGraphicsItem(self)
         self._widget = None
@@ -87,7 +88,7 @@ class Flowchart(Node):
         self.outputNode = Node('Output', allowRemove=False)
         self.addNode(self.inputNode, 'Input', [-150, 0])
         self.addNode(self.outputNode, 'Output', [300, 0])
-            
+        
         self.outputNode.sigOutputChanged.connect(self.outputChanged)
         self.outputNode.sigTerminalRenamed.connect(self.internalTerminalRenamed)
         self.inputNode.sigTerminalRenamed.connect(self.internalTerminalRenamed)
@@ -166,6 +167,8 @@ class Flowchart(Node):
         if type(pos) in [QtCore.QPoint, QtCore.QPointF]:
             pos = [pos.x(), pos.y()]
         item = node.graphicsItem()
+        item.setZValue(self.nextZVal*2)
+        self.nextZVal += 1
         #item.setParentItem(self.chartGraphicsItem())
         self.viewBox.addItem(item)
         #item.setPos(pos2.x(), pos2.y())
@@ -799,7 +802,7 @@ class FlowchartWidget(dockarea.DockArea):
         self._scene.sigMouseHover.connect(self.hoverOver)
         #self.view.sigClicked.connect(self.showViewMenu)
         #self._scene.sigSceneContextMenu.connect(self.showViewMenu)
-        self._viewBox.sigActionPositionChanged.connect(self.menuPosChanged)
+        #self._viewBox.sigActionPositionChanged.connect(self.menuPosChanged)
         
         
     def reloadLibrary(self):

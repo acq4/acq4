@@ -19,6 +19,18 @@ import re
 
 #WIN = None
 
+Stylesheet = """
+    body {color: #000; font-size: 11pt; font-family: sans;}
+    .entry {}
+    .error .message {color: #900}
+    .warning .message {color: #740}
+    .user .message {color: #009}
+    .status .message {color: #090}
+    .logExtra {margin-left: 40px;}
+    .traceback {color: #555; font-size: 10pt; visibility: hidden; height: 0px;}
+    .timestamp {color: #000;}
+"""
+
 pageTemplate = """
 <html>
 <head>
@@ -161,7 +173,7 @@ class LogWindow(QtGui.QMainWindow):
     def logExc(self, *args, **kwargs):
         """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
         kwargs['exception'] = sys.exc_info()
-        kwargs['traceback'] = ['Callstack: \n'] + traceback.format_stack()[:-3] + ["------- exception caught ----------"]
+        kwargs['traceback'] = traceback.format_stack()[:-3] + ["------- exception caught ----------"]
         self.logMsg(*args, **kwargs)
         
     def processEntry(self, entry):
@@ -322,12 +334,13 @@ class LogWidget(QtGui.QWidget):
         self.typeFilters = []
         self.importanceFilter = 0
         self.dirFilter = False
-        self.entryArray = np.zeros(0, dtype=[ ### a record array for quick filtering of entries
+        self.entryArrayBuffer = np.zeros(1000, dtype=[ ### a record array for quick filtering of entries
             ('index', 'int32'),
             ('importance', 'int32'),
             ('msgType', '|S10'),
             ('directory', '|S100')
         ])
+        self.entryArray = self.entryArrayBuffer[:0]
         
         self.filtersChanged()
         
@@ -335,21 +348,23 @@ class LogWidget(QtGui.QWidget):
         self.ui.exportHtmlBtn.clicked.connect(self.exportHtml)
         self.ui.filterTree.itemChanged.connect(self.setCheckStates)
         self.ui.importanceSlider.valueChanged.connect(self.filtersChanged)
-        self.ui.logView.linkClicked.connect(self.linkClicked)
+        #self.ui.logView.linkClicked.connect(self.linkClicked)
+        self.ui.output.anchorClicked.connect(self.linkClicked)
         
-        page = self.ui.logView.page()
-        page.setLinkDelegationPolicy(page.DelegateAllLinks)
+        #page = self.ui.logView.page()
+        #page.setLinkDelegationPolicy(page.DelegateAllLinks)
         
     def loadFile(self, f):
         """Load the file, f. f must be able to be read by configfile.py"""
         log = configfile.readConfigFile(f)
         self.entries = []
-        self.entryArray = np.zeros(len(log),dtype=[
+        self.entryArrayBuffer = np.zeros(len(log),dtype=[
             ('index', 'int32'),
             ('importance', 'int32'),
             ('msgType', '|S10'),
             ('directory', '|S100')
         ])
+        self.entryArray = self.entryArrayBuffer[:]
                                    
         i = 0
         for k,v in log.iteritems():
@@ -371,7 +386,13 @@ class LogWidget(QtGui.QWidget):
             entryDir = ''
             
         arr = np.array([(i, entry['importance'], entry['msgType'], entryDir)], dtype = [('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100')])
-        self.entryArray.resize(i+1)
+        
+        ## make more room if needed
+        if len(self.entryArrayBuffer) == len(self.entryArray):
+            newArray = np.empty(len(self.entryArrayBuffer)+1000, self.entryArrayBuffer.dtype)
+            newArray[:len(self.entryArray)] = self.entryArray
+            self.entryArrayBuffer = newArray
+        self.entryArray = self.entryArrayBuffer[:len(self.entryArray)+1]
         #self.entryArray[i] = [(i, entry['importance'], entry['msgType'], entry['currentDir'])]
         self.entryArray[i] = arr
         self.checkDisplay(entry) ## displays the entry if it passes the current filters
@@ -437,9 +458,11 @@ class LogWidget(QtGui.QWidget):
             mask *= (d == self.dirFilter)
             
             
-        #self.ui.output.clear()
-        global pageTemplate
-        self.ui.logView.setHtml(pageTemplate)
+        self.ui.output.clear()
+        global Stylesheet
+        self.ui.output.document().setDefaultStyleSheet(Stylesheet)
+        #global pageTemplate
+        #self.ui.logView.setHtml(pageTemplate)
         indices = list(self.entryArray[mask]['index'])
         inds = indices
         
@@ -500,15 +523,19 @@ class LogWidget(QtGui.QWidget):
                     #self.ui.output.appendHtml(x)
                     
                 html = self.cache[id(entry)]
-                frame = self.ui.logView.page().currentFrame()
-                isMax = frame.scrollBarValue(QtCore.Qt.Vertical) == frame.scrollBarMaximum(QtCore.Qt.Vertical)
+                #frame = self.ui.logView.page().currentFrame()
+                #isMax = frame.scrollBarValue(QtCore.Qt.Vertical) == frame.scrollBarMaximum(QtCore.Qt.Vertical)
+                sb = self.ui.output.verticalScrollBar()
+                isMax = sb.value() == sb.maximum()
                 
-                frame.findFirstElement('body').appendInside(html)
+                #frame.findFirstElement('body').appendInside(html)
+                self.ui.output.append(html)
                 
                 if isMax:
                     QtGui.QApplication.processEvents()  ## can't scroll to end until the web frame has processed the html change
-                    frame.setScrollBarValue(QtCore.Qt.Vertical, frame.scrollBarMaximum(QtCore.Qt.Vertical))
-                self.ui.logView.update()
+                    self.ui.output.scrollToAnchor(str(entry['id']))
+                    #frame.setScrollBarValue(QtCore.Qt.Vertical, frame.scrollBarMaximum(QtCore.Qt.Vertical))
+                #self.ui.logView.update()
                 
     def generateEntryHtml(self, entry):
         msg = self.cleanText(entry['message'])
@@ -521,21 +548,31 @@ class LogWidget(QtGui.QWidget):
         if entry.has_key('docs'):
             docs = self.formatDocsStrForHTML(entry['docs'])
         if entry.get('exception', None) is not None:
-            exc = self.formatExceptionForHTML(entry['exception'], entryId=entry['id'])
+            exc = self.formatExceptionForHTML(entry, entryId=entry['id'])
             
         extra = reasons + docs + exc
         if extra != "":
-            extra = "<div class='logExtra'>" + extra + "</div>"
+            #extra = "<div class='logExtra'>" + extra + "</div>"
+            extra = "<table class='logExtra'><tr><td>" + extra + "</td></tr></table>"
         
+        #return """
+        #<div class='entry'>
+            #<div class='%s'>
+                #<span class='timestamp'>%s</span>
+                #<span class='message'>%s</span>
+                #%s
+            #</div>
+        #</div>
+        #""" % (entry['msgType'], entry['timestamp'], msg, extra)
         return """
-        <div class='entry'>
-            <div class='%s'>
+        <a name="%s"/><table class='entry'><tr><td>
+            <table class='%s'><tr><td>
                 <span class='timestamp'>%s</span>
                 <span class='message'>%s</span>
                 %s
-            </div>
-        </div>
-        """ % (entry['msgType'], entry['timestamp'], msg, extra)
+            </td></tr></table>
+        </td></tr></table>
+        """ % (str(entry['id']), entry['msgType'], entry['timestamp'], msg, extra)
         
         
         #if entry.has_key('exception') or entry.has_key('docs') or entry.has_key('reasons'):
@@ -584,10 +621,11 @@ class LogWidget(QtGui.QWidget):
             
 
     
-    def formatExceptionForHTML(self, exception, count=1, entryId=None):
+    def formatExceptionForHTML(self, entry, exception=None, count=1, entryId=None):
         ### Here, exception is a dict that holds the message, reasons, docs, traceback and oldExceptions (which are also dicts, with the same entries)
         ## the count and tracebacks keywords are for calling recursively
-        
+        if exception is None:
+            exception = entry['exception']
         #if tracebacks is None:
             #tracebacks = []
             
@@ -600,7 +638,7 @@ class LogWidget(QtGui.QWidget):
         #else:
             #self.displayText("&nbsp;"*indent + str(count)+'. Original error: ' + text, entry, color, clean=False)
         messages = [text]
-        print "\n", messages, "\n"
+        #print "\n", messages, "\n"
         
         if exception.has_key('reasons'):
             reasons = self.formatReasonsStrForHTML(exception['reasons'])
@@ -615,7 +653,7 @@ class LogWidget(QtGui.QWidget):
         text = [text]
         
         if exception.has_key('oldExc'):
-            exc, tb, msgs = self.formatExceptionForHTML(exception['oldExc'], count=count+1)
+            exc, tb, msgs = self.formatExceptionForHTML(entry, exception['oldExc'], count=count+1)
             text.extend(exc)
             messages.extend(msgs)
             traceback.extend(tb)
@@ -630,9 +668,11 @@ class LogWidget(QtGui.QWidget):
         if count == 1:
             exc = "<div class=\"exception\"><ol>" + "\n".join(["<li>%s</li>" % ex for ex in text]) + "</ol></div>"
             tbStr = "\n".join(["<li><b>%s</b>%s</li>" % (messages[i], tb) for i,tb in enumerate(traceback)])
-            traceback = "<div class=\"traceback\" id=\"%s\"><ol>"%str(entryId) + tbStr + "</ol></div>"
-            
-            return exc + '<a href="#" onclick="showDiv(\'%s\')">Show traceback</a>'%str(entryId) + traceback
+            #traceback = "<div class=\"traceback\" id=\"%s\"><ol>"%str(entryId) + tbStr + "</ol></div>"
+            entry['tracebackHtml'] = tbStr
+
+            #return exc + '<a href="#" onclick="showDiv(\'%s\')">Show traceback</a>'%str(entryId) + traceback
+            return exc + '<a href="exc:%s">Show traceback %s</a>'%(str(entryId), str(entryId))
         else:
             return text, traceback, messages
         
@@ -643,7 +683,7 @@ class LogWidget(QtGui.QWidget):
         except:
             print "\n"+str(tb)+"\n"
             raise
-        return "<ul><li>" + "</li><li>".join(map(self.cleanText, tb)) + "</li></ul>"
+        return "<br>".join(map(self.cleanText, tb))
         #tb = [self.cleanText(strip(x)) for x in tb]
         #lines = []
         #prefix = ''
@@ -693,7 +733,8 @@ class LogWidget(QtGui.QWidget):
         if fileName[-5:] != '.html':
             fileName += '.html'
         #doc = self.ui.output.document().toHtml('utf-8')
-        doc = self.ui.logView.page().currentFrame().toHtml()
+        #doc = self.ui.logView.page().currentFrame().toHtml()
+        doSomethingElse()
         f = open(fileName, 'w')
         f.write(doc.encode('utf-8'))
         f.close()
@@ -727,9 +768,18 @@ class LogWidget(QtGui.QWidget):
         url = url.toString()
         if url[:4] == 'doc:':
             self.manager.showDocumentation(url[4:].lower())
+        elif url[:4] == 'exc:':
+            cursor = self.ui.output.document().find('Show traceback %s' % url[4:])
+            try:
+                tb = self.entries[int(url[4:])-1]['tracebackHtml']
+            except IndexError:
+                print "requested index %d, but only %d entries exist." % (int(url[4:])-1, len(self.entries))
+                raise
+            cursor.insertHtml(tb)
 
     def clear(self):
-        self.ui.logView.setHtml("")
+        #self.ui.logView.setHtml("")
+        self.ui.output.clear()
 
         
 if __name__ == "__main__":

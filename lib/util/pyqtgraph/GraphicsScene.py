@@ -3,6 +3,7 @@ import weakref
 from pyqtgraph.Point import Point
 import pyqtgraph.functions as fn
 import pyqtgraph.ptime as ptime
+import debug
 
 try:
     import sip
@@ -119,38 +120,16 @@ class GraphicsScene(QtGui.QGraphicsScene):
         
     def mouseMoveEvent(self, ev):
         self.sigMouseMoved.emit(ev.scenePos())
-        if int(ev.buttons()) == 0: ## nothing pressed; send mouseHoverOver/OutEvents      
-            ## First allow QGraphicsScene to deliver hoverEnter/Move/ExitEvents
-            QtGui.QGraphicsScene.mouseMoveEvent(self, ev)
-            
-            ## Next deliver our own HoverEvents
-            event = HoverEvent(ev)
-            prevItems = self.hoverItems.keys()
-            items = self.itemsNearEvent(event)
-            self.sigMouseHover.emit(items)
-            for item in items:
-                if hasattr(item, 'hoverEvent'):
-                    event.currentItem = item
-                    if item not in self.hoverItems:
-                        self.hoverItems[item] = None
-                        event.enter = True
-                    else:
-                        prevItems.remove(item)
-                        event.enter = False
-                    item.hoverEvent(event)
-            #print "  --> accepted drags:", event.dragItems().items()
-                    
-            ## Anything left in prevItems needs an Exit event
-            event.enter = False
-            event.exit = True
-            for item in prevItems:
-                event.currentItem = item
-                item.hoverEvent(event)
-                del self.hoverItems[item]
-                
-            self.lastHoverEvent = event  ## save this so we can ask about accepted events later.
-                
-        else:  ## button is pressed; send mouseMoveEvents and mouseDragEvents
+        
+        ## First allow QGraphicsScene to deliver hoverEnter/Move/ExitEvents
+        QtGui.QGraphicsScene.mouseMoveEvent(self, ev)
+
+    
+        ## Next deliver our own HoverEvents
+        self.sendHoverEvents(ev)
+        
+        
+        if int(ev.buttons()) != 0:  ## button is pressed; send mouseMoveEvents and mouseDragEvents
             QtGui.QGraphicsScene.mouseMoveEvent(self, ev)
             if self.mouseGrabberItem() is None:
                 now = ptime.time()
@@ -171,6 +150,11 @@ class GraphicsScene(QtGui.QGraphicsScene):
                 if len(self.dragButtons) > 0:
                     if self.sendDragEvent(ev, init=init):
                         ev.accept()
+                
+    def leaveEvent(self, ev):  ## inform items that mouse is gone
+        if len(self.dragButtons) == 0:
+            self.sendHoverEvents(ev, exitOnly=True)
+        
                 
     def mouseReleaseEvent(self, ev):
         #print 'sceneRelease'
@@ -194,13 +178,58 @@ class GraphicsScene(QtGui.QGraphicsScene):
             self.clickEvents = []
             self.lastDrag = None
         QtGui.QGraphicsScene.mouseReleaseEvent(self, ev)
+        
+        self.sendHoverEvents(ev)  ## let items prepare for next click/drag
 
     def mouseDoubleClickEvent(self, ev):
         QtGui.QGraphicsScene.mouseDoubleClickEvent(self, ev)
         if self.mouseGrabberItem() is None:  ## nobody claimed press; we are free to generate drag/click events
             self.clickEvents.append(MouseClickEvent(ev, double=True))
         
-
+    def sendHoverEvents(self, ev, exitOnly=False):
+        ## if exitOnly, then just inform all previously hovered items that the mouse has left.
+        
+        if exitOnly:
+            acceptable=False
+            items = []
+            event = HoverEvent(None, acceptable)
+        else:
+            acceptable = int(ev.buttons()) == 0  ## if we are in mid-drag, do not allow items to accept the hover event.
+            event = HoverEvent(ev, acceptable)
+            items = self.itemsNearEvent(event)
+            self.sigMouseHover.emit(items)
+            
+        prevItems = self.hoverItems.keys()
+            
+        for item in items:
+            if hasattr(item, 'hoverEvent'):
+                event.currentItem = item
+                if item not in self.hoverItems:
+                    self.hoverItems[item] = None
+                    event.enter = True
+                else:
+                    prevItems.remove(item)
+                    event.enter = False
+                    
+                try:
+                    item.hoverEvent(event)
+                except:
+                    debug.printExc("Error sending hover event:")
+                    
+        event.enter = False
+        event.exit = True
+        for item in prevItems:
+            event.currentItem = item
+            try:
+                item.hoverEvent(event)
+            except:
+                debug.printExc("Error sending hover exit event:")
+            finally:
+                del self.hoverItems[item]
+        
+        if hasattr(ev, 'buttons') and int(ev.buttons()) == 0:
+            self.lastHoverEvent = event  ## save this so we can ask about accepted events later.
+            
 
     def sendDragEvent(self, ev, init=False, final=False):
         ## Send a MouseDragEvent to the current dragItem or to 
@@ -213,21 +242,31 @@ class GraphicsScene(QtGui.QGraphicsScene):
                 #print "Drag -> pre-selected item:", acceptedItem
                 self.dragItem = acceptedItem
                 event.currentItem = self.dragItem
-                self.dragItem.mouseDragEvent(event)
+                try:
+                    self.dragItem.mouseDragEvent(event)
+                except:
+                    debug.printExc("Error sending drag event:")
+                    
             else:
                 #print "drag -> new item"
                 for item in self.itemsNearEvent(event):
                     #print "check item:", item
                     if hasattr(item, 'mouseDragEvent'):
                         event.currentItem = item
-                        item.mouseDragEvent(event)
+                        try:
+                            item.mouseDragEvent(event)
+                        except:
+                            debug.printExc("Error sending drag event:")
                         if event.isAccepted():
                             #print "   --> accepted"
                             self.dragItem = item
                             break
         elif self.dragItem is not None:
             event.currentItem = self.dragItem
-            self.dragItem.mouseDragEvent(event)
+            try:
+                self.dragItem.mouseDragEvent(event)
+            except:
+                debug.printExc("Error sending hover exit event:")
             
         self.lastDrag = event
         
@@ -245,12 +284,19 @@ class GraphicsScene(QtGui.QGraphicsScene):
             acceptedItem = self.lastHoverEvent.clickItems().get(ev.button(), None)
             if acceptedItem is not None:
                 ev.currentItem = acceptedItem
-                acceptedItem.mouseClickEvent(ev)
+                try:
+                    acceptedItem.mouseClickEvent(ev)
+                except:
+                    debug.printExc("Error sending click event:")
             else:
                 for item in self.itemsNearEvent(ev):
                     if hasattr(item, 'mouseClickEvent'):
                         ev.currentItem = item
-                        item.mouseClickEvent(ev)
+                        try:
+                            item.mouseClickEvent(ev)
+                        except:
+                            debug.printExc("Error sending click event:")
+                            
                         if ev.isAccepted():
                             break
                 if not ev.isAccepted() and ev.button() is QtCore.Qt.RightButton:
@@ -345,7 +391,13 @@ class GraphicsScene(QtGui.QGraphicsScene):
                 items2.append(item)
         
         ## Sort by descending Z-order (don't trust scene.itms() to do this either)
-        items2.sort(lambda a,b: cmp(b.zValue(), a.zValue()))
+        ## use 'absolute' z value, which is the sum of all item/parent ZValues
+        def absZValue(item):
+            if item is None:
+                return 0
+            return item.zValue() + absZValue(item.parentItem())
+        
+        items2.sort(lambda a,b: cmp(absZValue(b), absZValue(a)))
         
         return items2
         
@@ -599,18 +651,23 @@ class HoverEvent:
     event.isEnter() returns True if the mouse has just entered the item's shape;
     event.isExit() returns True if the mouse has just left.
     """
-    def __init__(self, moveEvent):
+    def __init__(self, moveEvent, acceptable):
         self.enter = False
+        self.acceptable = acceptable
         self.exit = False
         self.__clickItems = weakref.WeakValueDictionary()
         self.__dragItems = weakref.WeakValueDictionary()
         self.currentItem = None
-        self._scenePos = moveEvent.scenePos()
-        self._screenPos = moveEvent.screenPos()
-        self._lastScenePos = moveEvent.lastScenePos()
-        self._lastScreenPos = moveEvent.lastScreenPos()
-        self._buttons = moveEvent.buttons()
-        self._modifiers = moveEvent.modifiers()
+        if moveEvent is not None:
+            self._scenePos = moveEvent.scenePos()
+            self._screenPos = moveEvent.screenPos()
+            self._lastScenePos = moveEvent.lastScenePos()
+            self._lastScreenPos = moveEvent.lastScreenPos()
+            self._buttons = moveEvent.buttons()
+            self._modifiers = moveEvent.modifiers()
+        else:
+            self.exit = True
+            
         
         
     def isEnter(self):
@@ -621,12 +678,16 @@ class HoverEvent:
         
     def acceptClicks(self, button):
         """"""
+        if not self.acceptable:
+            return False
         if button not in self.__clickItems:
             self.__clickItems[button] = self.currentItem
             return True
         return False
         
     def acceptDrags(self, button):
+        if not self.acceptable:
+            return False
         if button not in self.__dragItems:
             self.__dragItems[button] = self.currentItem
             return True

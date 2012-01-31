@@ -20,43 +20,60 @@ class PlotDataItem(GraphicsObject):
     
     def __init__(self, *args, **kargs):
         """
-        There are a LOT of different ways to create a PlotDataItem:
+        There are many different ways to create a PlotDataItem:
         
         Data initialization: (x,y data only)
-            PlotDataItem(yValues)
-            PlotDataItem(xValues, yValues)
-            PlotDataItem(x=xValues, y=yValues)
-            PlotDataItem(ndarray(Nx2))    numpy array with shape (N, 2) where x=data[:,0] and y=data[:,1]
-            
+        
+            =================================== ======================================
+            PlotDataItem(xValues, yValues)      x and y values may be any sequence (including ndarray) of real numbers
+            PlotDataItem(yValues)               y values only -- x will be automatically set to range(len(y))
+            PlotDataItem(x=xValues, y=yValues)  x and y given by keyword arguments
+            PlotDataItem(ndarray(Nx2))          numpy array with shape (N, 2) where x=data[:,0] and y=data[:,1]
+            =================================== ======================================
+        
         Data initialization: (x,y data AND may include spot style)
+        
+            ===========================   =========================================
             PlotDataItem(recarray)        numpy array with dtype=[('x', float), ('y', float), ...]
             PlotDataItem(list-of-dicts)   [{'x': x, 'y': y, ...},   ...] 
             PlotDataItem(dict-of-lists)   {'x': [...], 'y': [...],  ...}           
             PlotDataItem(MetaArray)       1D array of Y values with X sepecified as axis values 
                                           OR 2D array with a column 'y' and extra columns as needed.
-            
+            ===========================   =========================================
+        
         Line style keyword arguments:
-            pen          - pen to use for drawing line between points. Default is solid grey, 1px width.
-                           use None to disable line drawing.
-            shadowPen    - pen for secondary line to draw behind the primary line. disabled by default.
-            fillLevel    - fill the area between the curve and fillLevel
-            fillBrush    - fill to use when fillLevel is specified
-            
+        
+            ==========   ================================================
+            pen          pen to use for drawing line between points. Default is solid grey, 1px width. Use None to disable line drawing.
+            shadowPen    pen for secondary line to draw behind the primary line. disabled by default.
+            fillLevel    fill the area between the curve and fillLevel
+            fillBrush    fill to use when fillLevel is specified
+            ==========   ================================================
+        
         Point style keyword arguments:
-            symbol       - symbol to use for drawing points OR list of symbols, one per point. Default is no symbol.
+        
+            ============   ================================================
+            symbol         symbol to use for drawing points OR list of symbols, one per point. Default is no symbol.
                            options are o, s, t, d, +
-            symbolPen    - outline pen for drawing points OR list of pens, one per point
-            symbolBrush  - brush for filling points OR list of brushes, one per point
-            symbolSize   - diameter of symbols OR list of diameters
-            pxMode       - (bool) If True, then symbolSize is specified in pixels. If False, then symbolSize is 
+            symbolPen      outline pen for drawing points OR list of pens, one per point
+            symbolBrush    brush for filling points OR list of brushes, one per point
+            symbolSize     diameter of symbols OR list of diameters
+            pxMode         (bool) If True, then symbolSize is specified in pixels. If False, then symbolSize is 
                            specified in data coordinates.
-                           
+            ============   ================================================
+        
         Optimization keyword arguments:
-            identical    - spots are all identical. The spot image will be rendered only once and repeated for every point
-            decimate     - (int) decimate data
-                           
+        
+            ==========   ================================================
+            identical    spots are all identical. The spot image will be rendered only once and repeated for every point
+            decimate     (int) decimate data
+            ==========   ================================================
+        
         Meta-info keyword arguments:
-            name         - name of dataset. This would appear in a legend
+        
+            ==========   ================================================
+            name         name of dataset. This would appear in a legend
+            ==========   ================================================
         """
         GraphicsObject.__init__(self)
         self.setFlag(self.ItemHasNoContents)
@@ -71,13 +88,17 @@ class PlotDataItem(GraphicsObject):
             'downsample': False,
             'alphaHint': 1.0,
             'alphaMode': False,
+            
             'pen': (200,200,200),
             'shadowPen': None,
-            'symbol': None,
-            'symbolPen': (200,200,200),
-            'symbolBrush': (50, 50, 150),
             'fillLevel': None,
             'brush': None,
+            
+            'symbol': None,
+            'symbolSize': 10,
+            'symbolPen': (200,200,200),
+            'symbolBrush': (50, 50, 150),
+            'identical': False,
         }
         self.setData(*args, **kargs)
     
@@ -111,10 +132,21 @@ class PlotDataItem(GraphicsObject):
         self.update()
         
     def setPen(self, pen):
+        """
+        | Sets the pen used to draw lines between points.
+        | *pen* can be a QPen or any argument accepted by :func:`pyqtgraph.mkPen() <pyqtgraph.mkPen>`
+        """
         self.opts['pen'] = fn.mkPen(pen)
         self.update()
         
     def setShadowPen(self, pen):
+        """
+        | Sets the shadow pen used to draw lines between points (this is for enhancing contrast or 
+          emphacizing data). 
+        | This line is drawn behind the primary pen (see :func:`setPen() <pyqtgraph.PlotDataItem.setPen>`)
+          and should generally be assigned greater width than the primary pen.
+        | *pen* can be a QPen or any argument accepted by :func:`pyqtgraph.mkPen() <pyqtgraph.mkPen>`
+        """
         self.opts['shadowPen'] = pen
         self.update()
 
@@ -127,7 +159,7 @@ class PlotDataItem(GraphicsObject):
     def setData(self, *args, **kargs):
         """
         Clear any data displayed by this item and display new data.
-        See __init__ for details; it accepts the same arguments.
+        See :func:`__init__() <pyqtgraph.PlotDataItem.__init__>` for details; it accepts the same arguments.
         """
         
         self.clear()
@@ -163,7 +195,7 @@ class PlotDataItem(GraphicsObject):
         elif len(args) == 2:
             seq = ('listOfValues', 'MetaArray')
             if dataType(args[0]) not in seq or  dataType(args[1]) not in seq:
-                raise Exception('When passing two unnamed arguments, both must be a list or array of values.')
+                raise Exception('When passing two unnamed arguments, both must be a list or array of values. (got %s, %s)' % (str(type(args[0])), str(type(args[1]))))
             if not isinstance(args[0], np.ndarray):
                 x = np.array(args[0])
             else:
@@ -209,11 +241,18 @@ class PlotDataItem(GraphicsObject):
         if y is not None and x is None:
             x = np.arange(len(y))
         
+        if isinstance(x, list):
+            x = np.array(x)
+        if isinstance(y, list):
+            y = np.array(y)
+        
         self.xData = x.view(np.ndarray)  ## one last check to make sure there are no MetaArrays getting by
         self.yData = y.view(np.ndarray)
         
         self.updateItems()
-        
+        view = self.getViewBox()
+        if view is not None:
+            view.itemBoundsChanged(self)  ## inform view so it can update its range if it wants
         self.sigPlotChanged.emit(self)
 
 

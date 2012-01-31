@@ -144,7 +144,7 @@ class Microscope(Device):
     #@ftrace
     def getState(self):
         with self.lock:
-            return {'position': self.position[:], 'objective': self.objective[:]}
+            return {'position': self.position[:], 'objective': self.getObjective()}
     
     def deviceInterface(self, win):
         iface = ScopeGUI(self, win)
