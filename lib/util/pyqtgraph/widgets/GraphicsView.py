@@ -48,7 +48,7 @@ class GraphicsView(QtGui.QGraphicsView):
             elif 'darwin' in sys.platform: ## openGL speeds up display on mac
                 useOpenGL = True
             else:
-                useOpenGL = True
+                useOpenGL = False
         self.useOpenGL(useOpenGL)
         
         self.setCacheMode(self.CacheBackground)

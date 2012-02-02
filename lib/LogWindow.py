@@ -349,7 +349,8 @@ class LogWidget(QtGui.QWidget):
             ('index', 'int32'),
             ('importance', 'int32'),
             ('msgType', '|S10'),
-            ('directory', '|S100')
+            ('directory', '|S100'),
+            ('entryId', 'int32')
         ])
         self.entryArray = self.entryArrayBuffer[:0]
         
@@ -373,15 +374,16 @@ class LogWidget(QtGui.QWidget):
             ('index', 'int32'),
             ('importance', 'int32'),
             ('msgType', '|S10'),
-            ('directory', '|S100')
+            ('directory', '|S100'),
+            ('entryId', 'int32')
         ])
         self.entryArray = self.entryArrayBuffer[:]
                                    
         i = 0
         for k,v in log.iteritems():
-            v['id'] = k  ## record unique ID to facilitate HTML generation (javascript needs this ID)
+            v['id'] = k[9:]  ## record unique ID to facilitate HTML generation (javascript needs this ID)
             self.entries.append(v)
-            self.entryArray[i] = np.array([(i, v.get('importance', 5), v.get('msgType', 'status'), v.get('currentDir', ''))], dtype=[('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100')])
+            self.entryArray[i] = np.array([(i, v.get('importance', 5), v.get('msgType', 'status'), v.get('currentDir', ''), v.get('entryId', v['id']))], dtype=[('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100'), ('entryId', 'int32')])
             i += 1
             
         self.filterEntries() ## puts all entries through current filters and displays the ones that pass
@@ -396,7 +398,7 @@ class LogWidget(QtGui.QWidget):
         if entryDir is None:
             entryDir = ''
             
-        arr = np.array([(i, entry['importance'], entry['msgType'], entryDir)], dtype = [('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100')])
+        arr = np.array([(i, entry['importance'], entry['msgType'], entryDir, entry['id'])], dtype = [('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100'), ('entryId', 'int32')])
         
         ## make more room if needed
         if len(self.entryArrayBuffer) == len(self.entryArray):
@@ -797,7 +799,14 @@ class LogWidget(QtGui.QWidget):
             self.manager.showDocumentation(url[4:].lower())
         elif url[:4] == 'exc:':
             cursor = self.ui.output.document().find('Show traceback %s' % url[4:])
-            tb = self.entries[int(url[4:])-1]['tracebackHtml']
+            try:
+                tb = self.entries[int(url[4:])-1]['tracebackHtml']
+            except IndexError:
+                try:
+                    tb = self.entries[self.entryArray[self.entryArray['entryId']==(int(url[4:]))]['index']]['tracebackHtml']
+                except:
+                    print "requested index %d, but only %d entries exist." % (int(url[4:])-1, len(self.entries))
+                    raise
             cursor.insertHtml(tb)
 
     def clear(self):

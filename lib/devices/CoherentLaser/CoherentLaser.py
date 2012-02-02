@@ -12,9 +12,9 @@ class CoherentLaser(Laser):
         self.port = config['port']-1  ## windows com ports start at COM1, pyserial ports start at 0
         self.baud = config.get('baud', 19200)
         self.driver = Coherent(self.port, self.baud)
-        self.driverLock = Mutex(QtCore.QMutex.Recursive)
+        self.driverLock = Mutex(QtCore.QMutex.Recursive)  ## access to low level driver calls
         
-        self.coherentLock = Mutex(QtCore.QMutex.Recursive)
+        self.coherentLock = Mutex(QtCore.QMutex.Recursive)  ## access to self.attributes
         self.coherentPower = 0
         self.coherentWavelength = 0
         
@@ -47,7 +47,7 @@ class CoherentLaser(Laser):
             return self.coherentWavelength
         
     def setWavelength(self, wl):
-        with self.coherentLock:
+        with self.driverLock:
             self.driver.setWavelength(wl*1e9)
             
     def getWavelengthRange(self):

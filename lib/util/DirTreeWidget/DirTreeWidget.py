@@ -112,6 +112,11 @@ class DirTreeWidget(QtGui.QTreeWidget):
         """Given a file handle, return the corresponding tree item."""
         if handle in self.items:
             return self.items[handle]
+        else:
+            self.flushSignals()  ## might be something waiting to be added to the tree
+            
+        if handle in self.items:
+            return self.items[handle]
         elif create:
             return self.addHandle(handle)
         else:

@@ -82,7 +82,7 @@ class PlotItem(GraphicsWidget):
         self.layout.setHorizontalSpacing(0)
         self.layout.setVerticalSpacing(0)
         
-        self.vb = ViewBox()
+        self.vb = ViewBox(name=name)
         #self.vb.sigXRangeChanged.connect(self.xRangeChanged)
         #self.vb.sigYRangeChanged.connect(self.yRangeChanged)
         #self.vb.sigRangeChangedManually.connect(self.enableManualScale)
@@ -129,7 +129,7 @@ class PlotItem(GraphicsWidget):
         
 
         ## Wrap a few methods from viewBox
-        for m in ['setXRange', 'setYRange', 'setRange', 'autoRange', 'viewRect', 'setMouseEnabled']:
+        for m in ['setXRange', 'setYRange', 'setXLink', 'setYLink', 'setRange', 'autoRange', 'viewRect', 'setMouseEnabled']:
             setattr(self, m, getattr(self.vb, m))
             
         self.items = []
@@ -261,6 +261,13 @@ class PlotItem(GraphicsWidget):
         
         self.enableAutoScale()
         
+    def implements(self, interface=None):
+        return interface in ['ViewBoxWrapper']
+
+    def getViewBox(self):
+        return self.vb
+    
+        
     #def paint(self, *args):
         #prof = debug.Profiler('PlotItem.paint', disabled=True)
         #QtGui.QGraphicsWidget.paint(self, *args)
@@ -312,7 +319,8 @@ class PlotItem(GraphicsWidget):
         #else:
             #print "no manager"
 
-    #def registerPlot(self, name):
+    def registerPlot(self, name):
+        self.vb.register(name)
         #self.name = name
         #win = str(self.window())
         ##print "register", name, win
@@ -376,8 +384,8 @@ class PlotItem(GraphicsWidget):
         ##self.emit(QtCore.SIGNAL('viewChanged'), *args)
         #self.sigRangeChanged.emit(self, range)
 
-    def blockLink(self, b):
-        self.linksBlocked = b
+    #def blockLink(self, b):
+        #self.linksBlocked = b
 
     #def xLinkComboChanged(self):
         #self.setXLink(str(self.ctrl.xLinkCombo.currentText()))
@@ -524,7 +532,7 @@ class PlotItem(GraphicsWidget):
         else:
             plot.setData(x, y)
         
-        
+
     #def mouseCheckChanged(self):
         #state = [self.ctrl.xMouseCheck.isChecked(), self.ctrl.yMouseCheck.isChecked()]
         #self.vb.setMouseEnabled(*state)
@@ -578,7 +586,7 @@ class PlotItem(GraphicsWidget):
         """
         Enable auto-scaling. The plot will continuously scale to fit the boundaries of its data.
         """
-        self.vb.enableAutoRange('xy')
+        self.vb.enableAutoRange(self.vb.XYAxes)
         #self.ctrl.xAutoRadio.setChecked(True)
         #self.ctrl.yAutoRadio.setChecked(True)
         
@@ -1064,11 +1072,15 @@ class PlotItem(GraphicsWidget):
         #self.updateYScale()
         self.updateParamList()
         
-        if 'view' in state:
-            self.vb.setState(state['view'])
-        else:
-            print "State has no view:"
-            print state
+        if 'view' not in state:
+            r = [[float(state['xMinText']), float(state['xMaxText'])], [float(state['yMinText']), float(state['yMaxText'])]]
+            state['view'] = {
+                'autoRange': [state['xAutoRadio'], state['yAutoRadio']],
+                'linkedViews': [state['xLinkCombo'], state['yLinkCombo']],
+                'targetRange': r,
+                'viewRange': r,
+            }
+        self.vb.setState(state['view'])
         
         
         #print "\nRESTORE %s:\n" % str(self.name), state

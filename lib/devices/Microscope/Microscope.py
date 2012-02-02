@@ -74,6 +74,7 @@ class Microscope(Device):
             self.objDev.sigSwitchChanged.connect(self.objectiveSwitched)
         
         self.setObjective(currentObj)
+        dm.declareInterface(name, ['microscope'], self)
 
     def quit(self):
         pass
@@ -143,7 +144,7 @@ class Microscope(Device):
     #@ftrace
     def getState(self):
         with self.lock:
-            return {'position': self.position[:], 'objective': self.objective[:]}
+            return {'position': self.position[:], 'objective': self.getObjective()}
     
     def deviceInterface(self, win):
         iface = ScopeGUI(self, win)

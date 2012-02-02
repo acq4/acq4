@@ -89,7 +89,7 @@ class HistogramLUTItem(GraphicsWidget):
         self.range = [mn,mx]
         self.updateRange()
         self.vb.setMouseEnabled(False, True)
-        self.region.setBounds([mn,mx])
+        #self.region.setBounds([mn,mx])
         
     def autoHistogramRange(self):
         self.range = None
@@ -102,7 +102,7 @@ class HistogramLUTItem(GraphicsWidget):
             self.vb.setYRange(*self.range)
         vr = self.vb.viewRect()
         
-        self.region.setBounds([vr.top(), vr.bottom()])
+        #self.region.setBounds([vr.top(), vr.bottom()])
 
     def setImageItem(self, img):
         self.imageItem = img
