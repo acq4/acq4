@@ -539,9 +539,10 @@ class AxoPatchProtoGui(DAQGenericProtoGui):
             
         self.inputWidget.setUnits(inpUnits)
         self.cmdWidget.setUnits(cmdUnits)
+        self.cmdWidget.setMeta('y', minStep=scale, step=scale*10, value=0.)
         self.inputPlot.setLabel('left', units=inpUnits)
         self.cmdPlot.setLabel('left', units=cmdUnits)
-        w.setScale(scale)
+        #w.setScale(scale)
         for s in w.getSpins():
             s.setOpts(minStep=scale)
                 
