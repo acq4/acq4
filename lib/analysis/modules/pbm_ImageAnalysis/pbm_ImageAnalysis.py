@@ -76,6 +76,8 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ROIDistanceMap = []
         self.spikesFound = None
         self.burstsFound = None
+        self.spikesFoundpk = None
+        self.withinBurstsFound = None
         self.FData = []
         
         self.ctrlWidget = QtGui.QWidget()
@@ -130,7 +132,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrl.ImagePhys_CorrTool_HPF.clicked.connect(self.BaselineHPF)
         self.ctrl.ImagePhys_ExportTiff.clicked.connect(self.ExportTiff)
         
-        # self.ctrl.ImagePhys_PhysThresh.valueChanged.connect(self.showPhysTrigger) # not a good idea to pick off here.
+        self.ctrl.ImagePhys_PhysThresh.valueChanged.connect(self.showPhysTrigger) 
         #
         # analysis buttons
         #
@@ -141,7 +143,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrlFunc.IAFuncs_STA.clicked.connect(self.computeSTA)
         self.ctrlFunc.IAFuncs_Analysis_AXCorr_Individual.clicked.connect(self.Analog_Xcorr_Individual)
         self.ctrlFunc.IAFuncs_Analysis_AXCorr.clicked.connect(self.Analog_Xcorr)
-        
+
     def initDataState(self):
         self.dataState = {'Loaded': False, 'bleachCorrection': False, 'Normalized': False,
                         'NType' : None, 'Structure': 'Flat', 'NTrials': 0}
@@ -351,14 +353,23 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.updateThisROI(self.lastROITouched)    
         return True
 
+    def clearPhysiologyInfo(self):
+        self.physPlot.clearPlots()
+        self.physData = []
+        self.physThreshLine = None
+        self.spikesFound = None
+        self.spikeFoundpk = None
+        self.burstsFound = None
+        self.withinBurstsFound = None
+        self.makeSpikePointers() # prepare the graph
+        
     def readPhysiology(self, dh):
         """ call to read the physiology from the primary data channel
         dh is thehandle to the directory where the data is stored (not the file itself)
         """
-        self.physPlot.clearPlots()
-        self.physData = []
         if dh is None:
             return
+        self.clearPhysiologyInfo()
         data = self.dataModel.getClampFile(dh).read() # retrieve the physiology traces
         self.physData = self.dataModel.getClampPrimary(data)
         self.physData = self.physData * 1e12 # convert to pA
@@ -385,8 +396,8 @@ class pbm_ImageAnalysis(AnalysisModule):
         tdat = tdat[::decimate_factor]
         self.physPlot.plot(tdat, self.physData[::decimate_factor], pen=pg.mkPen('w')) # , decimate=decimate_factor)
         self.tdat = data.infoCopy()[1]['values']
-        self.showPhysTrigger(firstTime = True)
-        
+        self.showPhysTrigger()
+        self.detectSpikes()
         
     def loadRatioImage(self):
         pass # not implemented yet...
@@ -520,7 +531,7 @@ class pbm_ImageAnalysis(AnalysisModule):
 # detect spikes in physiology trace
 #
 
-    def showPhysTrigger(self, firstTime = False):
+    def showPhysTrigger(self):
         thr = self.ctrl.ImagePhys_PhysThresh.value()
         sign = self.ctrl.ImagePhys_PhysSign.currentIndex()
         if sign == 0:
@@ -530,13 +541,11 @@ class pbm_ImageAnalysis(AnalysisModule):
         if self.physThreshLine is None:
             self.physThreshLine = self.physPlot.plot(x=numpy.array([self.tdat[0], self.tdat[-1]]),
                 y=numpy.array([ysign*thr, ysign*thr]), pen=pg.mkPen('r'), clear=False)
-            self.detectSpikes(firstTime)
         else:
             self.physThreshLine.setData(x=numpy.array([self.tdat[0], self.tdat[-1]]), 
                 y=numpy.array([ysign*thr, ysign*thr]))
-            self.detectSpikes()
 
-    def detectSpikes(self, firstTime = False, burstMark = None, ):
+    def detectSpikes(self, burstMark = None):
         spikescale = 1.0 # or 1e-12...
         thr = spikescale*self.ctrl.ImagePhys_PhysThresh.value()
         sign = self.ctrl.ImagePhys_PhysSign.currentIndex()
@@ -547,37 +556,57 @@ class pbm_ImageAnalysis(AnalysisModule):
         (sptimes, sppts) = Utility.findspikes(self.tdat, ysign*self.physData, thr*spikescale, t0=None, t1= None, 
             dt = 1.0/self.samplefreq, mode='peak', interpolate=False, debug=False)
         self.SpikeTimes = sptimes
-        yspmarks=ysign*thr*spikescale*numpy.ones(len(sptimes))
-        (bol, bil) = self.defineSpikeBursts()
-        yburstMarks = ysign*thr*0.8*spikescale*numpy.ones(len(bol))
-        if firstTime is True: # add scatter plot to the window
-            print 'first time'
-            self.spikesFound = pg.ScatterPlotItem(size=6, pen=pg.mkPen('g'), brush=pg.mkBrush(0, 255, 0, 200), 
-                symbol = 't', identical=True)
-            self.spikesFound.addPoints(x=sptimes, y=yspmarks)
-            self.physPlot.addItem(self.spikesFound)
-            
-            self.spikesFoundpk = pg.ScatterPlotItem(size=4, pen=pg.mkPen('r'), brush=pg.mkBrush(0, 255, 0, 200), 
-                symbol = 'o', identical=True)
-            self.spikesFoundpk.addPoints(x=sptimes, y=self.physData[sppts])
-            self.physPlot.addItem(self.spikesFoundpk)
-            
-            self.burstsFound = pg.ScatterPlotItem(size=7, pen=pg.mkPen('y'), brush=pg.mkBrush(255, 255, 0, 200),
-                symbol = 's', identical = True)
-            self.burstsFound.addPoints(x=bol, y = yburstMarks)
-            self.physPlot.addItem(self.burstsFound)           
-        else: # just change the data in the scatter plot to reflect the new analysis
-            print 'not first time'
-            if self.spikesFound is not None:
-                self.spikesFound.setPoints(x=sptimes, y=yspmarks)
-                self.spikesFoundpk.setPoints(x=sptimes, y=self.physData[sppts])
-                bol = list(bol)
-                print bol
-                self.burstsFound.setPoints(x=bol, y = yburstMarks)
+        if len(sptimes) <= 1:
+            return
+        yspmarks=ysign*thr*spikescale
+        bList = self.defineSpikeBursts()
+        yburstMarks = ysign*thr*0.9*spikescale
+        ywithinBurstMarks = ysign*thr*0.8*spikescale
+        self.makeSpikePointers(spikes=(sptimes, yspmarks), spikespk=(sptimes, self.physData[sppts]),
+            bursts = (bList, yburstMarks, ywithinBurstMarks))
         print 'spikes detected: %d' % (len(sptimes))
-       # print yspmarks
-       # print sptimes
 
+    def makeSpikePointers(self, spikes = None, spikespk = None, bursts=None):
+        # add scatterplot items to physiology trace  - these start out empty, but we can replace
+        # the points in the arrays later.
+        if spikes is not None and len(spikes[0]) > 0:
+            if self.spikesFound is None:
+                    self.spikesFound = pg.ScatterPlotItem(size=6, pen=pg.mkPen('g'), brush=pg.mkBrush(0, 255, 0, 200), 
+                    symbol = 't', identical=True)
+                    #self.clearPhysiologyInfosetPoints(x=[], y=spikes[1])
+                    self.physPlot.addItem(self.spikesFound)
+            else:
+                self.spikesFound.setPoints(x=spikes[0], y=spikes[1]*numpy.ones(len(spikes[0])))
+            
+        if spikespk is not None and len(spikespk[0]) > 0:
+            if self.spikesFoundpk is None:
+                self.spikesFoundpk = pg.ScatterPlotItem(size=4, pen=pg.mkPen('r'), brush=pg.mkBrush(0, 255, 0, 200), 
+                    symbol = 'o', identical=True)
+                #self.spikesFoundpk.setPoints(x=spikespk[0], y=spikespk[1])
+                self.physPlot.addItem(self.spikesFoundpk)
+            else:
+                self.spikesFoundpk.setPoints(x=spikespk[0], y=spikespk[1]*numpy.ones(len(spikespk[0])))
+            
+        if bursts is not None and len(bursts[0]) > 0:
+            if self.burstsFound is None:
+                self.burstsFound = pg.ScatterPlotItem(size=7, pen=pg.mkPen('y'), brush=pg.mkBrush(255, 255, 0, 200),
+                    symbol = 's', identical = True)
+                #self.burstsFound.setPoints(x=bursts[0], y = bursts[1])
+                self.physPlot.addItem(self.burstsFound)
+            if self.withinBurstsFound is None:
+                self.withinBurstsFound = pg.ScatterPlotItem(size=7, pen=pg.mkPen('b'), brush=pg.mkBrush(0, 0, 255, 200),
+                    symbol = 'o', identical = True)
+                #self.withinBurstsFound.addPoints(x=withinbursts[0], y = withinbursts[1])
+                self.physPlot.addItem(self.withinBurstsFound)
+            onsetSpikes = []
+            burstSpikes= []
+            for b in range(len(bursts[0])):
+                bdat = bursts[0][b]
+                onsetSpikes.append(bdat[0])
+                burstSpikes.extend(bdat[1:].tolist())
+            self.burstsFound.setPoints(x=onsetSpikes, y = [bursts[1] for x in range(len(onsetSpikes))])
+            self.withinBurstsFound.setPoints(x=burstSpikes, y = [bursts[2] for x in range(len(burstSpikes))])
+                
     def ROIDistStrength(self):
         (self.ROIDfig, self.ROID_plots) = PL.subplots(nrows = 1, ncols=1, 
                     sharex = True, sharey = True)
@@ -602,32 +631,40 @@ class pbm_ImageAnalysis(AnalysisModule):
         
         
     def defineSpikeBursts(self):
+        """
+        The following criteria are avaiable to select from within the spike train:
+        1. minimum time before a spike
+        2. minimum rate AFTER the spike (for the next N spikes)
+        3. minimum # of spikes (N) for minimum rate determination (define burst length)
+        The return arrays are the times of first spikes
+        """
+        
         minTime = 0.100 # in milliseconds
-        maxInterval = 0.020 # maximum time between spikes to be counted in a burst
-        minNspikes = 3 # minimum # of spikes per measure.
+        maxInterval = 0.040 # maximum time between spikes to be counted in a burst
+        minNspikes = 3 # minimum number of spikes for event to count as a burst
         # first we find the indices of all events that meet the above criteria:
+        if len(self.SpikeTimes) < 3:
+            return([], [])
         isis = numpy.diff(self.SpikeTimes)
         burstOnsetCandidates = numpy.where(isis > minTime)[0].tolist()
         burstOnsetCandidates = [x + 1 for x in burstOnsetCandidates] 
         # those are candidate events...
-        burstDurList = []
-        trueBurstList = []
+        allBurstList = []
+        burstOnsetList = []
         for i in burstOnsetCandidates:
-            print 'candidate at: ', i
-            burstCount = 0
-            for j in range(i,len(self.SpikeTimes)):
-                print 'checking spike j= ', j, isis[j], maxInterval
+            tempWithinBurst = [i] # list of spike times that follow this one
+            for j in range(i,len(self.SpikeTimes)-1):
                 if isis[j] <= maxInterval: # if interspike interval is long, we terminate
-                    print 'isis < maxint at ', j
-                    burstCount += 1
-                    if burstCount >= minNspikes:
-                        trueBurstList.append(i)
-                        print 'burstcount > minsp'
-                else:
+                    tempWithinBurst.append(j+1) # keep track of spikes that are "within" a burst
+                else: # if isi is too long, terminate burst
                     break
-        print 'trueburst: ', trueBurstList
-                        
-        return(self.SpikeTimes[trueBurstList], burstDurList)
+            if len(tempWithinBurst) >= (minNspikes-1) and i not in burstOnsetList: # note, tempWithinBurst does not include the first spike.
+                burstOnsetList.append(i)
+                allBurstList.append(tempWithinBurst)
+        burstTList = []
+        for j in range(len(allBurstList)):
+            burstTList.append(self.SpikeTimes[allBurstList[j]])
+        return(burstTList)
                 
 
     def NetworkGraph(self):
@@ -753,7 +790,6 @@ class pbm_ImageAnalysis(AnalysisModule):
         if roi is None:
             return
         self.ROI_Plot.clearPlots()
-        c = 0
         lineScans = []
         for imgSet in self.imageData:
             data = roi.getArrayRegion(imgSet['procMean'], self.imageItem, axes=(1,2))
@@ -762,34 +798,36 @@ class pbm_ImageAnalysis(AnalysisModule):
             spacer = np.empty((lineScans[-1].shape[0], 1), dtype = lineScans[-1].dtype)
             spacer[:] = lineScans[-1].min()
             lineScans.append(spacer)
-            
             data = roi.getArrayRegion(imgSet['procStd'], self.imageItem, axes=(1,2))
             s = data.mean(axis=1).mean(axis=1)
-            
             self.ROI_Plot.plot(m, pen=pg.hsvColor(c*0.2, 1.0, 1.0))
             self.ROI_Plot.plot(m-s, pen=pg.hsvColor(c*0.2, 1.0, 0.4))
-            self.ROI_Plot.plot(m+s, pen=pg.hsvColor(c*0.2, 1.0, 0.4))
-            
-            c += 1
-            
+            self.ROI_Plot.plot(m+s, pen=pg.hsvColor(c*0.2, 1.0, 0.4))            
+
         lineScan = np.hstack(lineScans)
         self.getElement('Line Scan').setImage(lineScan)
         self.currentRoi = roi
         
-    def updateThisROI(self, ourWidget, livePlot=True):
+    def updateThisROI(self, roi, livePlot=True):
         """ called when we need to update the ROI result plot for a particular ROI widget 
         """
-        if ourWidget in self.AllRois:
-            tr = ourWidget.getArrayRegion(self.rawData, self.imageView.imageItem, axes=(1,2))
+        if roi in self.AllRois:
+            tr = roi.getArrayRegion(self.rawData, self.imageView.imageItem, axes=(1,2))
             tr = tr.mean(axis=2).mean(axis=1) # compute average over the ROI against time
             trm = tr.mean(axis=0)
             tr = tr/(self.background*trm/self.backgroundmean)
-            #bk = self.background/self.backgroundmean
+            # bk = self.background/self.backgroundmean
             tr[0] = tr[1]
             if livePlot:
                 self.ROI_Plot.plot(self.imageTimes, tr, pen=pg.mkPen('r'), clear=True)
                 # self.ROI_Plot.plot(self.imageTimes, bk, pen=pg.mkPen('b'))
-            self.lastROITouched = ourWidget # save the most recent one
+            if self.lastROITouched == []:
+                self.lastROITouched = roi
+                roi.pen.setWidth(0.12) # just bump up the width
+            if roi != self.lastROITouched:
+                self.lastROITouched.pen.setWidth(0.12)
+                roi.pen.setWidthF(0.25)
+                self.lastROITouched = roi # save the most recent one
             return(tr)
 
     def calculateROIs(self):
