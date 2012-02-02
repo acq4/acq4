@@ -27,6 +27,8 @@ class DataMapping:
         self.offset = {}
         if chans is None:
             chans = device.listChannels()
+        if type(chans) in [str, unicode]:
+            chans = [chans]
         for ch in chans:
             self.scale[ch] = device.getChanScale(ch)
             self.offset[ch] = device.getChanOffset(ch)
@@ -132,10 +134,13 @@ class DAQGeneric(Device):
         return self._DGConfig.get(param, None)
     
         
-    def setChanHolding(self, channel, level=None, block=True):
+    def setChanHolding(self, channel, level=None, block=True, mapping=None):
         """Define and set the holding values for this channel
-        If block is True, then return only after the value has been set on the DAQ.
-        If block is False, then simply schedule the change to take place when the DAQ is available.
+        If *block* is True, then return only after the value has been set on the DAQ.
+        If *block* is False, then simply schedule the change to take place when the DAQ is available.
+        *mapping* is a DataMapping object which tells the device how to translate *level* into
+            a voltage on the physical DAQ channel. If *mapping* is None, then it will use self.getMapping(*channel*)
+            to determine the correct mapping.
         """
         with self._DGLock:
             #print "set holding", channel, level
@@ -147,7 +152,9 @@ class DAQGeneric(Device):
             else:
                 self._DGHolding[channel] = level
                 
-            val = self.mapToDAQ(channel, self._DGHolding[channel])
+            if mapping is None:
+                mapping = self.getMapping(channel)
+            val = mapping.mapToDaq(channel, self._DGHolding[channel])
             #print "Set holding for channel %s: %f => %f" % (channel, self._DGHolding[channel], val)
             
             isVirtual = self._DGConfig[channel].get('virtual', False)
@@ -168,7 +175,7 @@ class DAQGeneric(Device):
         with self._DGLock:
             return self._DGHolding[chan]
         
-    def getChannelValue(self, channel, block=True):
+    def getChannelValue(self, channel, block=True, raw=False):
         with self._DGLock:
             daq = self._DGConfig[channel]['device']
             chan = self._DGConfig[channel]['channel']
@@ -177,7 +184,10 @@ class DAQGeneric(Device):
         ## release _DGLock before getChannelValue
         daqDev = self.dm.getDevice(daq)
         val = daqDev.getChannelValue(chan, mode=mode, block=block)
-        return self.mapFromDAQ(channel, val)
+        if not raw:
+            return self.mapFromDAQ(channel, val)
+        else:
+            return val
 
     def reconfigureChannel(self, chan, config):
         """Allows reconfiguration of channel properties (including the actual DAQ channel name)"""
