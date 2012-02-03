@@ -25,9 +25,9 @@ class MosaicEditor(AnalysisModule):
         self._elements_ = OrderedDict([
             ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'host': self}),
             ('Mosaic', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('right',), 'size': (600, 200)}),
-            ('Canvas', {'type': 'canvas', 'pos': ('bottom', 'Mosaic'), 'size': (600, 600), 'args': {'name': 'MosaicEditor'}}),
+            ('Canvas', {'type': 'canvas', 'pos': ('bottom', 'Mosaic'), 'size': (600, 800), 'args': {'name': 'MosaicEditor'}}),
         ])
-        
+
         self.initializeElements()
 
         self.ui.canvas = self.getElement('Canvas', create=True)
@@ -39,13 +39,14 @@ class MosaicEditor(AnalysisModule):
         self.ui.fileLoader = self.getElement('File Loader', create=True)
         self.ui.fileLoader.ui.fileTree.hide()
         #self.ui.fileLoader.ui.verticalLayout_2.addWidget(addScanImagesBtn)
-        
-        
-        
-        
+        try:
+            self.ui.fileLoader.setBaseClicked() # get the currently selected directory in the DataManager
+        except:
+            pass
+
         for a in atlas.listAtlases():
             self.ui.atlasCombo.addItem(a)
-        
+
         #self.connect(self.ui.canvas, QtCore.SIGNAL('itemTransformChangeFinished'), self.itemMoved)
         self.ui.canvas.sigItemTransformChangeFinished.connect(self.itemMoved)
         #self.connect(addScanImagesBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)

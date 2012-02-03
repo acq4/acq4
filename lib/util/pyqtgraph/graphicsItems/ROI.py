@@ -42,6 +42,7 @@ class ROI(GraphicsObject):
     sigRegionChangeFinished = QtCore.Signal(object)
     sigRegionChangeStarted = QtCore.Signal(object)
     sigRegionChanged = QtCore.Signal(object)
+    sigHoverEvent = QtCore.Signal(object)
     
     def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None, pen=None, movable=True):
         #QObjectWorkaround.__init__(self)
@@ -280,6 +281,7 @@ class ROI(GraphicsObject):
     def hoverEvent(self, ev):
         if self.translatable and (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
             self.currentPen = fn.mkPen(255, 255, 0)
+            self.sigHoverEvent.emit(self)
         else:
             self.currentPen = self.pen
         self.update()

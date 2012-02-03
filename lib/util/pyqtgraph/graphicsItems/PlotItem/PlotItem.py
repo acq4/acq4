@@ -22,6 +22,7 @@ from pyqtgraph.Qt import QtGui, QtCore, QtSvg
 import pyqtgraph.functions as fn
 from pyqtgraph.widgets.FileDialog import FileDialog
 import weakref
+#from types import *
 import numpy as np
 #from .. PlotCurveItem import PlotCurveItem
 #from .. ScatterPlotItem import ScatterPlotItem
@@ -380,6 +381,7 @@ class PlotItem(GraphicsWidget):
 
 
 
+
     #def viewRangeChanged(self, vb, range):
         ##self.emit(QtCore.SIGNAL('viewChanged'), *args)
         #self.sigRangeChanged.emit(self, range)
@@ -407,7 +409,9 @@ class PlotItem(GraphicsWidget):
         #if plot is not None:
             #self.setManualXScale()
             #self.manager.linkX(self, plot)
+
             
+
     #def setYLink(self, plot=None):
         #"""Link this plot's Y axis to another plot (pass either the PlotItem/PlotWidget or the registered name of the plot)"""
         #if isinstance(plot, basestring):
@@ -458,6 +462,7 @@ class PlotItem(GraphicsWidget):
         #self.setYRange(y1, y2, padding=0)
         #plot.blockLink(False)
         #self.replot()
+
 
     def avgToggled(self, b):
         if b:

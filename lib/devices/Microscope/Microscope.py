@@ -123,7 +123,7 @@ class Microscope(Device):
         
     #@ftrace
     def getObjective(self):
-        """Return a tuple ("objective name", scale)"""
+        """Return a dict {'name': , 'scale': , 'offset': } for the current objective"""
         with self.lock:
             #print "Microscope:getObjective locked"
             if self.currentObjective not in self.objectives:
