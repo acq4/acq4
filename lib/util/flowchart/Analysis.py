@@ -3,6 +3,7 @@
 from pyqtgraph.flowchart.library.common import *
 import functions
 import numpy as np
+import scipy
 #from pyqtgraph import graphicsItems
 import pyqtgraph as pg
 import metaarray
@@ -457,5 +458,207 @@ class EventMasker(CtrlNode):
         return {'output': events[mask]}
         
 
+class CellHealthAnalyzer(CtrlNode):
+    
+    nodeName = 'CellHealthAnalyzer'
+    uiTemplate = [
+        ('start', 'spin', {'min':0, 'suffix': 's', 'siPrefix':True, 'step':0.1, 'minStep':0.0001, 'value':0.8}),
+        ('stop', 'spin', {'min':0, 'suffix': 's', 'siPrefix':True, 'step':0.1, 'minStep':0.0001, 'value':1.0}),
+        ('mode', 'combo', {'values':['VC', 'IC']}),
+        ('SeriesResistance', 'check', {'value':True}),
+        ('MembraneResistance', 'check', {'value':True}),
+        ('HoldingCurrent', 'check', {'value': True}),
+        ('RestingPotential', 'check', {'value':True}),
+        ('Capacitance', 'check', {'value': True}),
+        ('FitError', 'check', {'value': True})
+        ]
+        
 
+    
+    def __init__(self, name):
+        CtrlNode.__init__(self, name, terminals={
+            'data': {'io': 'in'},
+            'stats': {'io': 'out'}
+        })
+        
+    #def process(self, waveform):
+        #print "CellHealthAnalyzer.process called."
+        
+    def process(self, data, display=None):
+        cmd = data['command']['Time':self.ctrls['start'].value():self.ctrls['stop'].value()]
+        #data = waveform['primary']['Time':self.ctrls['start'].value():self.ctrls['stop'].value()]
+        
+        pulseStart = cmd.axisValues('Time')[np.argwhere(cmd != cmd[0])[0][0]]
+        pulseStop = cmd.axisValues('Time')[np.argwhere(cmd != cmd[0])[-1][0]]
+        
+        #print "\n\nAnalysis parameters:", params
+        ## Extract specific time segments
+        nudge = 0.1e-3
+        base = data['Time': :(pulseStart-nudge)]
+        pulse = data['Time': (pulseStart+nudge):(pulseStop-nudge)]
+        pulseEnd = data['Time': pulseStart+((pulseStop-pulseStart)*2./3.):pulseStop-nudge]
+        end = data['Time': (pulseStop+nudge): ]
+        #print "time ranges:", pulse.xvals('Time').min(),pulse.xvals('Time').max(),end.xvals('Time').min(),end.xvals('Time').max()
+        pulseAmp = pulse['command'].mean() - base['command'].mean()
+        
+        ### Exponential fit
+        ##  v[0] is offset to start of exp
+        ##  v[1] is amplitude of exp
+        ##  v[2] is tau
+        def expFn(v, t):
+            return (v[0]-v[1]) + v[1] * np.exp(-t / v[2])
+        
+        ## predictions
+        ar = 10e6
+        ir = 200e6
+        if self.ctrls['mode'].currentText() == 'VC':
+            ari = pulseAmp / ar
+            iri = pulseAmp / ir
+            pred1 = [ari, ari-iri, 1e-3]
+            pred2 = [iri-ari, iri-ari, 1e-3]
+        else:
+            #clamp = self.manager.getDevice(self.clampName)
+            try:
+                bridge = data._info[-1]['ClampState']['ClampParams']['BridgeBalResist']
+                bridgeOn = data._info[-1]['ClampState']['ClampParams']['BridgeBalEnabled']
+                #bridge = float(clamp.getParam('BridgeBalResist'))  ## pull this from the data instead.
+                #bridgeOn = clamp.getParam('BridgeBalEnable')
+                if not bridgeOn:
+                    bridge = 0.0
+            except:
+                bridge = 0.0
+            #print "bridge:", bridge
+            arv = pulseAmp * ar - bridge
+            irv = pulseAmp * ir
+            pred1 = [arv, -irv, 10e-3]
+            pred2 = [irv, irv, 50e-3]
+            
+        # Fit exponential to pulse and post-pulse traces
+        tVals1 = pulse.xvals('Time')-pulse.xvals('Time').min()
+        tVals2 = end.xvals('Time')-end.xvals('Time').min()
+        
+        baseMean = base['primary'].mean()
+        fit1 = scipy.optimize.leastsq(
+            lambda v, t, y: y - expFn(v, t), pred1, 
+            args=(tVals1, pulse['primary'] - baseMean),
+            maxfev=200, full_output=1)
+        #fit2 = scipy.optimize.leastsq(
+            #lambda v, t, y: y - expFn(v, t), pred2, 
+            #args=(tVals2, end['primary'] - baseMean),
+            #maxfev=200, full_output=1, warning=False)
+            
+        
+        #err = max(abs(fit1[2]['fvec']).sum(), abs(fit2[2]['fvec']).sum())
+        err = abs(fit1[2]['fvec']).sum()
+        
+        
+        # Average fit1 with fit2 (needs massaging since fits have different starting points)
+        #print fit1
+        fit1 = fit1[0]
+        #fit2 = fit2[0]
+        #fitAvg = [   ## Let's just not do this.
+            #0.5 * (fit1[0] - (fit2[0] - (fit1[0] - fit1[1]))),
+            #0.5 * (fit1[1] - fit2[1]),
+            #0.5 * (fit1[2] + fit2[2])            
+        #]
+        fitAvg = fit1
 
+        (fitOffset, fitAmp, fitTau) = fit1
+        #print fit1
+        
+        fitTrace = np.empty(len(data))
+        
+        ## Handle analysis differently depending on clamp mode
+        if self.ctrls['mode'].currentText() == 'VC':
+            iBase = base['Channel': 'primary']
+            iPulse = pulse['Channel': 'primary'] 
+            iPulseEnd = pulseEnd['Channel': 'primary'] 
+            vBase = base['Channel': 'command']
+            vPulse = pulse['Channel': 'command'] 
+            vStep = vPulse.mean() - vBase.mean()
+            sign = [-1, 1][vStep > 0]
+
+            iStep = sign * max(1e-15, sign * (iPulseEnd.mean() - iBase.mean()))
+            iRes = vStep / iStep
+            
+            ## From Santos-Sacchi 1993
+            pTimes = pulse.xvals('Time')
+            iCapEnd = pTimes[-1]
+            iCap = iPulse['Time':pTimes[0]:iCapEnd] - iPulseEnd.mean()
+            Q = sum(iCap) * (iCapEnd - pTimes[0]) / iCap.shape[0]
+            Rin = iRes
+            Vc = vStep
+            Rs_denom = (Q * Rin + fitTau * Vc)
+            if Rs_denom != 0.0:
+                Rs = (Rin * fitTau * Vc) / Rs_denom
+                Rm = Rin - Rs
+                Cm = (Rin**2 * Q) / (Rm**2 * Vc)
+            else:
+                Rs = 0
+                Rm = 0
+                Cm = 0
+            aRes = Rs
+            cap = Cm
+            
+        if self.ctrls['mode'].currentText() == 'IC':
+            iBase = base['Channel': 'command']
+            iPulse = pulse['Channel': 'command'] 
+            vBase = base['Channel': 'primary']
+            vPulse = pulse['Channel': 'primary'] 
+            vPulseEnd = pulseEnd['Channel': 'primary'] 
+            iStep = iPulse.mean() - iBase.mean()
+            
+            if iStep >= 0:
+                vStep = max(1e-5, -fitAmp)
+            else:
+                vStep = min(-1e-5, -fitAmp)
+           
+            if iStep == 0:
+                iStep = 1e-14
+                
+            iRes = (vStep / iStep)
+            aRes = (fitOffset / iStep) + bridge
+            cap = fitTau / iRes
+            
+            
+        rmp = vBase.mean()
+        rmps = vBase.std()
+        rmc = iBase.mean()
+        rmcs = iBase.std()
+        #print rmp, rmc
+        
+        ## use ui to determine which stats to return
+        stats = {}
+        if self.ctrls['SeriesResistance'].isChecked():
+            stats['SeriesResistance'] = aRes
+        if self.ctrls['MembraneResistance'].isChecked():
+            stats['MembraneResistance'] = iRes
+        if self.ctrls['Capacitance'].isChecked():
+            stats['Capacitance'] = cap
+        if self.ctrls['HoldingCurrent'].isChecked():
+            stats['HoldingCurrent'] = rmc
+        if self.ctrls['FitError'].isChecked():
+            stats['FitError'] = err
+        if self.ctrls['RestingPotential'].isChecked():
+            stats['RestingPotential'] = rmp
+            
+        #return {'stats':{
+            #'inputResistance': iRes, 
+            #'accessResistance': aRes,
+            #'capacitance': cap,
+            #'restingPotential': rmp, 'restingPotentialStd': rmps,
+            #'restingCurrent': rmc, 'restingCurrentStd': rmcs,
+            #'fitError': err,
+            #'fitTrace': fitTrace
+        #}}
+        return {'stats': stats}
+    
+    #def saveState(self):
+        #state = CtrlNode.saveState(self)
+        #state['ui'] = self.ui.saveState()
+        #return state
+        
+    #def restoreState(self, state):
+        #CtrlNode.restoreState(self, state)
+        #self.defaultState = state
+        #self.ui.restoreState(state['ui'])

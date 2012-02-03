@@ -85,12 +85,10 @@ class UIGraphicsItem(GraphicsObject):
                 self._boundingRect = br
         return QtCore.QRectF(self._boundingRect)
     
-    def realBoundingRect(self):
+    def dataBounds(self, axis, frac=1.0):
         """Called by ViewBox for determining the auto-range bounds.
-        If the height or with of the rect is 0, that dimension will be ignored.
-        By default, UIGraphicsItems are excluded from autoRange by returning 
-        a zero-size rect."""
-        return QtCore.QRectF()
+        By default, UIGraphicsItems are excluded from autoRange."""
+        return None
 
     def viewRangeChanged(self):
         """Called when the view widget/viewbox is resized/rescaled"""

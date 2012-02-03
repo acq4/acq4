@@ -14,7 +14,8 @@ from debug import *
 from pyqtgraph import siFormat
 import lib.Manager as Manager
 import ptime
-from lib.LogWindow import LogButton
+#from lib.LogWindow import LogButton
+from StatusBar import StatusBar
 
 
 class PatchWindow(QtGui.QMainWindow):
@@ -63,8 +64,9 @@ class PatchWindow(QtGui.QMainWindow):
         self.setCentralWidget(self.cw)
         self.ui = Ui_Form()
         self.ui.setupUi(self.cw)
-        self.logBtn = LogButton("Log")
-        self.statusBar().addPermanentWidget(self.logBtn)
+        #self.logBtn = LogButton("Log")
+        #self.statusBar().addPermanentWidget(self.logBtn)
+        self.setStatusBar(StatusBar())
 
         self.stateFile = os.path.join('modules', self.clampName + '_ui.cfg')
         uiState = Manager.getManager().readConfigFile(self.stateFile)

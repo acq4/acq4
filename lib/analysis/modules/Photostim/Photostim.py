@@ -9,7 +9,7 @@ import debug
 import ColorMapper
 import pyqtgraph as pg
 #import pyqtgraph.ProgressDialog as ProgressDialog
-
+from HelpfulException import HelpfulException
 from Scan import Scan
 from DBCtrl import DBCtrl
 from ScatterPlotter import ScatterPlotter
@@ -516,7 +516,7 @@ class Photostim(AnalysisModule):
                 stats.append(st)
                 dlg.setValue(i)
                 if dlg.wasCanceled():
-                    raise Exception("Scan store canceled by user.")
+                    raise HelpfulException("Scan store canceled by user.", msgType='status')
                 
             p.mark("Prepared data")
             dlg.setLabelText("Storing events..")
@@ -557,11 +557,13 @@ class Photostim(AnalysisModule):
         identity = self.dbIdentity+'.sites'
         table = dbui.getTableName(identity)
         #db.delete(table, "SourceDir=%d" % pRow)
-        db.delete(table, where={colName: dh})
+        if table in db.listTables():
+            db.delete(table, where={colName: dh})
         
         identity = self.dbIdentity+'.events'
         table = dbui.getTableName(identity)
-        db.delete(table, where={colName: dh})
+        if table in db.listTables():
+            db.delete(table, where={colName: dh})
         #db.delete(table, "SourceDir=%d" % pRow)
             
         scan.unlock()

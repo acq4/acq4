@@ -18,9 +18,10 @@ import time, gc
 #import sip
 import sys, os
 from HelpfulException import HelpfulException
-#from pyqtgraph.ProgressDialog import ProgressDialog
-from lib.LogWindow import LogButton
+#from lib.LogWindow import LogButton
 import pyqtgraph as pg
+from StatusBar import StatusBar
+
 
 #import pdb
 
@@ -92,8 +93,9 @@ class ProtocolRunner(Module):
         self.ui.setupUi(self.win)
         self.win.setGeometry(g)
         
-        self.logBtn = LogButton("Log")
-        self.win.statusBar().addPermanentWidget(self.logBtn)
+        #self.logBtn = LogButton("Log")
+        #self.win.statusBar().addPermanentWidget(self.logBtn)
+        self.win.setStatusBar(StatusBar())
         
         self.ui.protoDurationSpin.setOpts(dec=True, bounds=[1e-3,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
         self.ui.protoLeadTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=10e-3, suffix='s', siPrefix=True)

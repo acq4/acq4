@@ -106,7 +106,10 @@ class ScannerProtoGui(ProtocolGui):
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
         self.spotMarker = TargetPoint([0,0], 100e-6, host=self, movable=False)
         self.spotMarker.setPen(pg.mkPen(color=(255,255,255), width = 2))
-        self.updateSpotSizes()
+        try:
+            self.updateSpotSizes()
+        except HelpfulException:
+            self.testTarget.hide()
         self.spotMarker.hide()
         
         #camMod = self.cameraModule()
@@ -136,6 +139,11 @@ class ScannerProtoGui(ProtocolGui):
                 self.addOcclusion(points = t['points'], pos = t['pos'], name=k)
         for item in self.items.values():
             item.resetParents()
+            
+        if 'offVoltage' not in self.dev.config: ## we don't have a voltage for virtual shuttering
+            self.ui.simulateShutterCheck.setChecked(False)
+            self.ui.simulateShutterCheck.setEnabled(False)
+            
     #def protocolChanged(self, name, val):
         #if name == 'duration':
             #self.protDuration = val
@@ -162,14 +170,12 @@ class ScannerProtoGui(ProtocolGui):
             self.currentCamMod.ui.removeItem(self.testTarget)
             self.currentCamMod.ui.removeItem(self.spotMarker)
             #self.currentCamMod.ui.removeItem(self.currentTargetMarker)
-            #QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
             try:
                 self.currentCamMod.ui.sigCameraScaleChanged.disconnect(self.objectiveChanged)
             except TypeError:
                 pass
             
         if self.currentScope is not None:
-            #QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
             try:
                 self.currentScope.sigObjectiveChanged.disconnect(self.objectiveChanged)
             except TypeError:
@@ -181,11 +187,9 @@ class ScannerProtoGui(ProtocolGui):
             return
         self.currentScope = camDev.getScopeDevice()
         self.currentCamMod = camMod
-        #QtCore.QObject.connect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
         self.currentCamMod.ui.sigCameraScaleChanged.connect(self.objectiveChanged)
         
         if self.currentScope is not None:
-            #QtCore.QObject.connect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
             self.currentScope.sigObjectiveChanged.connect(self.objectiveChanged)
             
         camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
@@ -195,29 +199,42 @@ class ScannerProtoGui(ProtocolGui):
         
         
     def objectiveChanged(self):
+        
         camDev = self.cameraDevice()
         if camDev is None:
             return
         obj = camDev.getObjective()
         if self.currentObjective != obj:
             self.currentObjective = obj
-            self.updateSpotSizes()
+            try:
+                self.updateSpotSizes()
+                self.testTarget.setPointSize()
+                self.spotMarker.setPointSize()
+                self.testTarget.show()
+            except:
+                logMsg("Could not update scanner spot sizes for %s objective" %str(obj), msgType='warning', importance=2)
+                self.testTarget.hide()
+                
             for i in self.items.values():
                 li = self.listItem(i.name) ## actually a tree item
                 if i.objective == obj:
                     li.setCheckState(0, QtCore.Qt.Checked)
+                    li.graphicsItem.setVisible(True)
                 else:
                     li.setCheckState(0, QtCore.Qt.Unchecked)
+                    li.graphicsItem.setVisible(False)
+                    
                 #self.itemToggled(li)
+                
             #self.testTarget.setPointSize(self.pointSize()[0])
-            self.testTarget.setPointSize()
-            self.spotMarker.setPointSize()
+            #self.testTarget.setPointSize()
+            #self.spotMarker.setPointSize()
             #self.cameraModule().ui.centerItem(self.testTarget)
         camMod = self.cameraModule()
-        camMod.ui.removeItem(self.testTarget)
-        camMod.ui.removeItem(self.spotMarker)
-        camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
-        camMod.ui.addItem(self.spotMarker, None, [1,1], 1010)
+        #camMod.ui.removeItem(self.testTarget)
+        #camMod.ui.removeItem(self.spotMarker)
+        #camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
+        #camMod.ui.addItem(self.spotMarker, None, [1,1], 1010)
 
     def sizeSpinChanged(self):
         #print "packingSpinChanged."
@@ -240,7 +257,7 @@ class ScannerProtoGui(ProtocolGui):
 
     def showInterface(self, b):
         for k in self.items:
-            if self.listItem(k).checkState() == QtCore.Qt.Checked:
+            if self.listItem(k).checkState(0) == QtCore.Qt.Checked:
                 self.items[k].setVisible(not b)
         self.testTarget.setVisible(not b)
 
@@ -383,7 +400,11 @@ class ScannerProtoGui(ProtocolGui):
         if name is None:
             name = 'Grid'
             autoName = True
-        ptSize, dispSize = self.pointSize()
+        try:
+            ptSize, dispSize = self.pointSize()
+        except:
+            exc = sys.exc_info()
+            raise HelpfulException('Scanner is unable to find the size of grid points, so cannot add a grid.', exc=exc)
         autoPos = False
         if pos is None:
             pos = [0,0]
@@ -489,14 +510,20 @@ class ScannerProtoGui(ProtocolGui):
                 child = item.child(i)
                 self.ui.itemTree.prepareMove(child)
                 item.removeChild(child)
-                child.graphicsItem.setParentItem(parent)
-                child.graphicsItem.updateFamily()
+                cgi = child.graphicsItem
+                if cgi.parentItem().parentItem() is not None:
+                    pos = cgi.parentItem().parentItem().mapFromScene(cgi.scenePos())
+                else:
+                    pos = cgi.scenePos()
+                cgi.setParentItem(cgi.parentItem().parentItem())
+                cgi.setPos(pos, update=False)
                 if parent is not None:
                     parent.addChild(child)
                     self.ui.itemTree.recoverMove(child)
                 else:
                     self.ui.itemTree.addTopLevelItem(child)
                     self.ui.itemTree.recoverMove(child)
+                child.graphicsItem.updateFamily()
                     
         if parent == None:
             item = self.ui.itemTree.takeTopLevelItem(self.ui.itemTree.indexOfTopLevelItem(item))
@@ -528,13 +555,15 @@ class ScannerProtoGui(ProtocolGui):
         self.sequenceChanged()
         
     def treeItemMoved(self, item, parent, index):
+        g = item.graphicsItem
         if parent is not self.ui.itemTree.invisibleRootItem():
-            g = item.graphicsItem
             newPos = parent.graphicsItem.mapFromScene(g.scenePos())
             g.setParentItem(parent.graphicsItem)
-            g.setPos(newPos)
+            
         else:
+            newPos = g.scenePos()
             item.graphicsItem.setParentItem(None)
+        g.setPos(newPos)
         item.graphicsItem.updateFamily()
         #print "tree Item Moved"
         
@@ -1121,11 +1150,6 @@ class TargetOcclusion(pg.PolygonROI):
     
 class TargetProgram(QtCore.QObject):
     
-    
-    
-    
-    
-    
     def __init__(self):
         self.origin = QtGui.QGraphicsEllipseItem(0,0,1,1)
         self.paths = []
@@ -1136,3 +1160,4 @@ class TargetProgram(QtCore.QObject):
     def listPoints(self):
         pass
         
+

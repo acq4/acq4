@@ -43,7 +43,7 @@ class FileLoader(QtGui.QWidget):
             return
         if not dh.isDir():
             dh = dh.parent()
-            
+
         self.ui.dirTree.setBaseDirHandle(dh)
         self._baseDir = dh
         self.sigBaseChanged.emit(dh)

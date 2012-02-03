@@ -17,6 +17,7 @@ class ScanCanvasItem(CanvasItem):
             subDirs: list of DirHandles to the individual Protocols for each spot 
                      (optional; this allows the inclusion of only part of a scan sequence)
         """
+        self.defaultSize = 1e-4 # set a default spot size as 100 um.
         if 'handle' not in opts:
             raise Exception("ScanCanvasItem must be initialized with 'handle' or 'handles' specified in opts")
         
@@ -264,7 +265,7 @@ class ScanImageCanvasItem(ImageCanvasItem):
         self.handles = handles
         ImageCanvasItem.__init__(self, self.handles[0], **kargs)
         self.graphicsItem().updateImage(self.img)
-        self.updateHistogram(autoRange=True)
+        self.updateHistogram(autoLevels=True)
 
     def storeUserTransform(self, fh=None):
         trans = self.saveTransform()

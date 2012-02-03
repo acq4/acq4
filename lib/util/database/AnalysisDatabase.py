@@ -2,6 +2,7 @@ from database import *
 from pyqtgraph.widgets.ProgressDialog import ProgressDialog
 import debug
 
+
 class AnalysisDatabase(SqliteDatabase):
     """Defines the structure for DBs used for analysis. Essential features are:
      - a table of control parameters "DbParameters"
@@ -96,6 +97,7 @@ class AnalysisDatabase(SqliteDatabase):
                     
             total = len(oldDb.select('Photostim_events')) + len(oldDb.select('Photostim_sites'))
             n=0
+
             for table in ['Photostim_events', 'Photostim_sites', 'Photostim_events2', 'Photostim_sites2']:
                 if prog.wasCanceled():
                     break

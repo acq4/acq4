@@ -3,7 +3,8 @@ from PyQt4 import QtCore, QtGui
 import modules
 import pyqtgraph.dockarea as dockarea
 import lib.Manager
-from lib.LogWindow import LogButton
+#from lib.LogWindow import LogButton
+from StatusBar import StatusBar
 
 class AnalysisHost(QtGui.QMainWindow):
     """Window for hosting analysis widgets.
@@ -22,8 +23,9 @@ class AnalysisHost(QtGui.QMainWindow):
         self.dockArea = dockarea.DockArea()
         self.setCentralWidget(self.dockArea)
         
-        self.logBtn = LogButton('Log')
-        self.statusBar().addPermanentWidget(self.logBtn)
+        #self.logBtn = LogButton('Log')
+        #self.statusBar().addPermanentWidget(self.logBtn)
+        self.setStatusBar(StatusBar())
         
         if module is not None:
             self.loadModule(module)

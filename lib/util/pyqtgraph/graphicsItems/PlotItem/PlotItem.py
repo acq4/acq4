@@ -22,6 +22,7 @@ from pyqtgraph.Qt import QtGui, QtCore, QtSvg
 import pyqtgraph.functions as fn
 from pyqtgraph.widgets.FileDialog import FileDialog
 import weakref
+#from types import *
 import numpy as np
 #from .. PlotCurveItem import PlotCurveItem
 #from .. ScatterPlotItem import ScatterPlotItem
@@ -129,7 +130,7 @@ class PlotItem(GraphicsWidget):
         
 
         ## Wrap a few methods from viewBox
-        for m in ['setXRange', 'setYRange', 'setRange', 'autoRange', 'viewRect', 'setMouseEnabled']:
+        for m in ['setXRange', 'setYRange', 'setXLink', 'setYLink', 'setRange', 'autoRange', 'viewRect', 'setMouseEnabled']:
             setattr(self, m, getattr(self.vb, m))
             
         self.items = []
@@ -261,6 +262,13 @@ class PlotItem(GraphicsWidget):
         
         self.enableAutoScale()
         
+    def implements(self, interface=None):
+        return interface in ['ViewBoxWrapper']
+
+    def getViewBox(self):
+        return self.vb
+    
+        
     #def paint(self, *args):
         #prof = debug.Profiler('PlotItem.paint', disabled=True)
         #QtGui.QGraphicsWidget.paint(self, *args)
@@ -373,6 +381,7 @@ class PlotItem(GraphicsWidget):
 
 
 
+
     #def viewRangeChanged(self, vb, range):
         ##self.emit(QtCore.SIGNAL('viewChanged'), *args)
         #self.sigRangeChanged.emit(self, range)
@@ -400,7 +409,9 @@ class PlotItem(GraphicsWidget):
         #if plot is not None:
             #self.setManualXScale()
             #self.manager.linkX(self, plot)
+
             
+
     #def setYLink(self, plot=None):
         #"""Link this plot's Y axis to another plot (pass either the PlotItem/PlotWidget or the registered name of the plot)"""
         #if isinstance(plot, basestring):
@@ -451,6 +462,7 @@ class PlotItem(GraphicsWidget):
         #self.setYRange(y1, y2, padding=0)
         #plot.blockLink(False)
         #self.replot()
+
 
     def avgToggled(self, b):
         if b:
@@ -525,7 +537,7 @@ class PlotItem(GraphicsWidget):
         else:
             plot.setData(x, y)
         
-        
+
     #def mouseCheckChanged(self):
         #state = [self.ctrl.xMouseCheck.isChecked(), self.ctrl.yMouseCheck.isChecked()]
         #self.vb.setMouseEnabled(*state)
@@ -1065,11 +1077,15 @@ class PlotItem(GraphicsWidget):
         #self.updateYScale()
         self.updateParamList()
         
-        if 'view' in state:
-            self.vb.setState(state['view'])
-        else:
-            print "State has no view:"
-            print state
+        if 'view' not in state:
+            r = [[float(state['xMinText']), float(state['xMaxText'])], [float(state['yMinText']), float(state['yMaxText'])]]
+            state['view'] = {
+                'autoRange': [state['xAutoRadio'], state['yAutoRadio']],
+                'linkedViews': [state['xLinkCombo'], state['yLinkCombo']],
+                'targetRange': r,
+                'viewRange': r,
+            }
+        self.vb.setState(state['view'])
         
         
         #print "\nRESTORE %s:\n" % str(self.name), state
