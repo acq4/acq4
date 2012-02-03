@@ -395,7 +395,7 @@ class ViewBox(GraphicsWidget):
             
         fractionVisible = self.state['autoRange'][:]
         for i in [0,1]:
-            if fractionVisible[i] is False:
+            if type(fractionVisible[i]) is bool:
                 fractionVisible[i] = 1.0
         cr = self.childrenBoundingRect(frac=fractionVisible)
         wp = cr.width() * 0.02
