@@ -44,7 +44,7 @@
       </sizepolicy>
      </property>
      <property name="title">
-      <string>Analysis Functions</string>
+      <string>Imaging Analysis Functions</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
@@ -62,210 +62,29 @@
       <property name="margin">
        <number>0</number>
       </property>
+      <item row="1" column="1" rowspan="2">
+       <widget class="Line" name="line">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+       </widget>
+      </item>
       <item row="0" column="0">
-       <widget class="QPushButton" name="IAFuncs_Distance">
-        <property name="text">
-         <string>ROI Distances</string>
+       <widget class="Line" name="line_2">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
         </property>
        </widget>
       </item>
-      <item row="6" column="0">
-       <widget class="QPushButton" name="IAFuncs_STA">
-        <property name="text">
-         <string>STA</string>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="0">
-       <widget class="QPushButton" name="IAFuncs_DistanceStrength">
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="text">
-         <string>Distance-Strength</string>
-        </property>
-       </widget>
-      </item>
-      <item row="5" column="0">
-       <widget class="QPushButton" name="IAFuncs_RevSTA">
-        <property name="text">
-         <string>Rev STA</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="2" rowspan="7">
-       <widget class="QWidget" name="widget" native="true">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <widget class="Line" name="line_4">
+      <item row="1" column="0" rowspan="2">
+       <widget class="QWidget" name="widget_2" native="true">
+        <widget class="QPushButton" name="IAFuncs_NetworkGraph">
          <property name="geometry">
           <rect>
-           <x>6</x>
-           <y>265</y>
-           <width>131</width>
-           <height>20</height>
-          </rect>
-         </property>
-         <property name="lineWidth">
-          <number>2</number>
-         </property>
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-        </widget>
-        <widget class="QPushButton" name="IAFuncs_Analysis_AFFT_Individual">
-         <property name="geometry">
-          <rect>
-           <x>30</x>
-           <y>325</y>
-           <width>81</width>
-           <height>21</height>
-          </rect>
-         </property>
-         <property name="font">
-          <font>
-           <pointsize>9</pointsize>
-          </font>
-         </property>
-         <property name="toolTip">
-          <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
-&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
-p, li { white-space: pre-wrap; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Lucida Grande'; font-size:11pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;For Intrinsic Imaging: Compute the FFT of each image.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="text">
-          <string>Individual FFT</string>
-         </property>
-        </widget>
-        <widget class="QPushButton" name="IAFuncs_Analysis_FourierMap">
-         <property name="geometry">
-          <rect>
-           <x>30</x>
-           <y>350</y>
-           <width>81</width>
-           <height>21</height>
-          </rect>
-         </property>
-         <property name="font">
-          <font>
-           <pointsize>9</pointsize>
-          </font>
-         </property>
-         <property name="toolTip">
-          <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
-&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
-p, li { white-space: pre-wrap; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Lucida Grande'; font-size:11pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;For Intrinsic Imaging: Compute the Fourier Phase map relative the the stimulus (Valatsky et al., 2003)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="text">
-          <string>Fourier Map</string>
-         </property>
-        </widget>
-        <widget class="QPushButton" name="IAFuncs_Analysis_AFFT">
-         <property name="geometry">
-          <rect>
-           <x>30</x>
-           <y>300</y>
-           <width>81</width>
-           <height>21</height>
-          </rect>
-         </property>
-         <property name="font">
-          <font>
-           <pointsize>9</pointsize>
-          </font>
-         </property>
-         <property name="toolTip">
-          <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
-&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
-p, li { white-space: pre-wrap; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Lucida Grande'; font-size:11pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;For Intrinsic Imaging: Compute the average FFT of images. &lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="text">
-          <string>Avg FFT</string>
-         </property>
-        </widget>
-        <widget class="QPushButton" name="IAFuncs_Analysis_AXCorr_Individual">
-         <property name="geometry">
-          <rect>
-           <x>35</x>
-           <y>45</y>
-           <width>81</width>
-           <height>21</height>
-          </rect>
-         </property>
-         <property name="font">
-          <font>
-           <pointsize>9</pointsize>
-          </font>
-         </property>
-         <property name="toolTip">
-          <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
-&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
-p, li { white-space: pre-wrap; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Lucida Grande'; font-size:11pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Compute the cross-correlation between each pair of ROI's. The computation is done on the analog waveform.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="text">
-          <string>Individual XCorr</string>
-         </property>
-        </widget>
-        <widget class="QLabel" name="label_15">
-         <property name="geometry">
-          <rect>
-           <x>10</x>
-           <y>95</y>
-           <width>136</width>
-           <height>16</height>
-          </rect>
-         </property>
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-           <weight>75</weight>
-           <bold>true</bold>
-          </font>
-         </property>
-         <property name="text">
-          <string>SMC-Calcium Event Detection</string>
-         </property>
-        </widget>
-        <widget class="QLabel" name="label_13">
-         <property name="geometry">
-          <rect>
-           <x>5</x>
-           <y>280</y>
-           <width>96</width>
-           <height>21</height>
-          </rect>
-         </property>
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-           <weight>75</weight>
-           <bold>true</bold>
-          </font>
-         </property>
-         <property name="text">
-          <string>Intrinsic Imaging</string>
-         </property>
-        </widget>
-        <widget class="QPushButton" name="IAFuncs_Analysis_smcAnalyze">
-         <property name="geometry">
-          <rect>
-           <x>45</x>
-           <y>225</y>
-           <width>71</width>
-           <height>21</height>
+           <x>0</x>
+           <y>125</y>
+           <width>141</width>
+           <height>32</height>
           </rect>
          </property>
          <property name="font">
@@ -274,38 +93,13 @@ p, li { white-space: pre-wrap; }
           </font>
          </property>
          <property name="text">
-          <string>SMC</string>
-         </property>
-        </widget>
-        <widget class="QPushButton" name="IAFuncs_Analysis_AXCorr">
-         <property name="geometry">
-          <rect>
-           <x>35</x>
-           <y>20</y>
-           <width>81</width>
-           <height>21</height>
-          </rect>
-         </property>
-         <property name="font">
-          <font>
-           <pointsize>9</pointsize>
-          </font>
-         </property>
-         <property name="toolTip">
-          <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
-&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
-p, li { white-space: pre-wrap; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Lucida Grande'; font-size:11pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Compute the average cross-correlation across all pairs of ROIs in the field over time. The computation is done on the analog waveform.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="text">
-          <string>Average XCorr</string>
+          <string>Network Graph</string>
          </property>
         </widget>
         <widget class="QLabel" name="label_14">
          <property name="geometry">
           <rect>
-           <x>5</x>
+           <x>0</x>
            <y>5</y>
            <width>71</width>
            <height>16</height>
@@ -322,12 +116,12 @@ p, li { white-space: pre-wrap; }
           <string>Analog Xcorr</string>
          </property>
         </widget>
-        <widget class="QPushButton" name="IAFuncs_Analysis_SpikeXCorr">
+        <widget class="QPushButton" name="IAFuncs_Analysis_AXCorr">
          <property name="geometry">
           <rect>
-           <x>45</x>
-           <y>250</y>
-           <width>71</width>
+           <x>5</x>
+           <y>20</y>
+           <width>131</width>
            <height>21</height>
           </rect>
          </property>
@@ -336,15 +130,65 @@ p, li { white-space: pre-wrap; }
            <pointsize>11</pointsize>
           </font>
          </property>
+         <property name="toolTip">
+          <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Lucida Grande'; font-size:11pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Compute the average cross-correlation across all pairs of ROIs in the field over time. The computation is done on the analog waveform.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         </property>
          <property name="text">
-          <string>Digital Xcorr</string>
+          <string>Average XCorr</string>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="IAFuncs_Analysis_AXCorr_Individual">
+         <property name="geometry">
+          <rect>
+           <x>5</x>
+           <y>45</y>
+           <width>131</width>
+           <height>21</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>11</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Lucida Grande'; font-size:11pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Compute the cross-correlation between each pair of ROI's. The computation is done on the analog waveform.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         </property>
+         <property name="text">
+          <string>Individual XCorr</string>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="IAFuncs_DistanceStrength">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>100</y>
+           <width>141</width>
+           <height>32</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>11</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Distance-Strength</string>
          </property>
         </widget>
         <widget class="QCheckBox" name="IAFuncs_checkbox_TraceLabels">
          <property name="geometry">
           <rect>
-           <x>40</x>
-           <y>70</y>
+           <x>70</x>
+           <y>5</y>
            <width>81</width>
            <height>16</height>
           </rect>
@@ -361,217 +205,376 @@ p, li { white-space: pre-wrap; }
           <bool>true</bool>
          </property>
         </widget>
-        <widget class="Line" name="line_2">
+        <widget class="QWidget" name="widget" native="true">
          <property name="geometry">
           <rect>
-           <x>10</x>
-           <y>85</y>
-           <width>121</width>
-           <height>16</height>
+           <x>145</x>
+           <y>-25</y>
+           <width>146</width>
+           <height>396</height>
           </rect>
          </property>
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
          </property>
+         <widget class="Line" name="line_4">
+          <property name="geometry">
+           <rect>
+            <x>10</x>
+            <y>245</y>
+            <width>131</width>
+            <height>20</height>
+           </rect>
+          </property>
+          <property name="lineWidth">
+           <number>2</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="IAFuncs_Analysis_AFFT_Individual">
+          <property name="geometry">
+           <rect>
+            <x>30</x>
+            <y>325</y>
+            <width>81</width>
+            <height>21</height>
+           </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>9</pointsize>
+           </font>
+          </property>
+          <property name="toolTip">
+           <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Lucida Grande'; font-size:11pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;For Intrinsic Imaging: Compute the FFT of each image.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="text">
+           <string>Individual FFT</string>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="IAFuncs_Analysis_FourierMap">
+          <property name="geometry">
+           <rect>
+            <x>30</x>
+            <y>350</y>
+            <width>81</width>
+            <height>21</height>
+           </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>9</pointsize>
+           </font>
+          </property>
+          <property name="toolTip">
+           <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Lucida Grande'; font-size:11pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;For Intrinsic Imaging: Compute the Fourier Phase map relative the the stimulus (Valatsky et al., 2003)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="text">
+           <string>Fourier Map</string>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="IAFuncs_Analysis_AFFT">
+          <property name="geometry">
+           <rect>
+            <x>30</x>
+            <y>300</y>
+            <width>81</width>
+            <height>21</height>
+           </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>9</pointsize>
+           </font>
+          </property>
+          <property name="toolTip">
+           <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Lucida Grande'; font-size:11pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;For Intrinsic Imaging: Compute the average FFT of images. &lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="text">
+           <string>Avg FFT</string>
+          </property>
+         </widget>
+         <widget class="QLabel" name="label_15">
+          <property name="geometry">
+           <rect>
+            <x>10</x>
+            <y>30</y>
+            <width>136</width>
+            <height>16</height>
+           </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>10</pointsize>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="text">
+           <string>SMC-Calcium Event Detection</string>
+          </property>
+         </widget>
+         <widget class="QLabel" name="label_13">
+          <property name="geometry">
+           <rect>
+            <x>5</x>
+            <y>280</y>
+            <width>96</width>
+            <height>21</height>
+           </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>10</pointsize>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="text">
+           <string>Intrinsic Imaging</string>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="IAFuncs_Analysis_smcAnalyze">
+          <property name="geometry">
+           <rect>
+            <x>15</x>
+            <y>190</y>
+            <width>71</width>
+            <height>21</height>
+           </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>11</pointsize>
+           </font>
+          </property>
+          <property name="text">
+           <string>SMC</string>
+          </property>
+         </widget>
+         <widget class="QWidget" name="layoutWidget">
+          <property name="geometry">
+           <rect>
+            <x>11</x>
+            <y>47</y>
+            <width>126</width>
+            <height>140</height>
+           </rect>
+          </property>
+          <layout class="QFormLayout" name="formLayout">
+           <item row="1" column="0" colspan="2">
+            <layout class="QHBoxLayout" name="horizontalLayout_2">
+             <item>
+              <widget class="QLabel" name="label_18">
+               <property name="font">
+                <font>
+                 <pointsize>10</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>Kd (nM)</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QDoubleSpinBox" name="smc_Kd">
+               <property name="font">
+                <font>
+                 <pointsize>10</pointsize>
+                </font>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+               </property>
+               <property name="decimals">
+                <number>0</number>
+               </property>
+               <property name="minimum">
+                <double>0.000000000000000</double>
+               </property>
+               <property name="maximum">
+                <double>5000.000000000000000</double>
+               </property>
+               <property name="value">
+                <double>345.000000000000000</double>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item row="2" column="0" colspan="2">
+            <layout class="QHBoxLayout" name="horizontalLayout_3">
+             <item>
+              <widget class="QLabel" name="label_19">
+               <property name="font">
+                <font>
+                 <pointsize>10</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>TCa  (sec)</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QDoubleSpinBox" name="smc_TCa">
+               <property name="font">
+                <font>
+                 <pointsize>10</pointsize>
+                </font>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+               </property>
+               <property name="decimals">
+                <number>3</number>
+               </property>
+               <property name="minimum">
+                <double>0.001000000000000</double>
+               </property>
+               <property name="maximum">
+                <double>5.000000000000000</double>
+               </property>
+               <property name="singleStep">
+                <double>0.010000000000000</double>
+               </property>
+               <property name="value">
+                <double>0.025000000000000</double>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item row="3" column="0" colspan="2">
+            <layout class="QHBoxLayout" name="horizontalLayout_4">
+             <item>
+              <widget class="QLabel" name="label_17">
+               <property name="font">
+                <font>
+                 <pointsize>10</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>C0 (uM)</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QDoubleSpinBox" name="smc_C0">
+               <property name="font">
+                <font>
+                 <pointsize>10</pointsize>
+                </font>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+               </property>
+               <property name="decimals">
+                <number>3</number>
+               </property>
+               <property name="minimum">
+                <double>0.010000000000000</double>
+               </property>
+               <property name="maximum">
+                <double>1000.000000000000000</double>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item row="0" column="0" colspan="2">
+            <layout class="QHBoxLayout" name="horizontalLayout">
+             <item>
+              <widget class="QLabel" name="label_16">
+               <property name="font">
+                <font>
+                 <pointsize>10</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>A (uM)</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QDoubleSpinBox" name="smc_Amplitude">
+               <property name="font">
+                <font>
+                 <pointsize>10</pointsize>
+                </font>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+               </property>
+               <property name="maximum">
+                <double>1000.000000000000000</double>
+               </property>
+               <property name="singleStep">
+                <double>0.100000000000000</double>
+               </property>
+               <property name="value">
+                <double>1.000000000000000</double>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QPushButton" name="IAFuncs_Analysis_SpikeXCorr">
+          <property name="geometry">
+           <rect>
+            <x>10</x>
+            <y>215</y>
+            <width>126</width>
+            <height>21</height>
+           </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>11</pointsize>
+           </font>
+          </property>
+          <property name="text">
+           <string>Digital Xcorr</string>
+          </property>
+         </widget>
         </widget>
-        <widget class="QWidget" name="layoutWidget">
+        <widget class="QPushButton" name="IAFuncs_Distance">
          <property name="geometry">
           <rect>
-           <x>16</x>
-           <y>112</y>
-           <width>126</width>
-           <height>140</height>
-          </rect>
-         </property>
-         <layout class="QFormLayout" name="formLayout">
-          <item row="1" column="0" colspan="2">
-           <layout class="QHBoxLayout" name="horizontalLayout_2">
-            <item>
-             <widget class="QLabel" name="label_18">
-              <property name="font">
-               <font>
-                <pointsize>10</pointsize>
-               </font>
-              </property>
-              <property name="text">
-               <string>Kd (nM)</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QDoubleSpinBox" name="smc_Kd">
-              <property name="font">
-               <font>
-                <pointsize>10</pointsize>
-               </font>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-              </property>
-              <property name="decimals">
-               <number>0</number>
-              </property>
-              <property name="minimum">
-               <double>0.000000000000000</double>
-              </property>
-              <property name="maximum">
-               <double>5000.000000000000000</double>
-              </property>
-              <property name="value">
-               <double>345.000000000000000</double>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item row="2" column="0" colspan="2">
-           <layout class="QHBoxLayout" name="horizontalLayout_3">
-            <item>
-             <widget class="QLabel" name="label_19">
-              <property name="font">
-               <font>
-                <pointsize>10</pointsize>
-               </font>
-              </property>
-              <property name="text">
-               <string>TCa  (sec)</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QDoubleSpinBox" name="smc_TCa">
-              <property name="font">
-               <font>
-                <pointsize>10</pointsize>
-               </font>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-              </property>
-              <property name="decimals">
-               <number>3</number>
-              </property>
-              <property name="minimum">
-               <double>0.001000000000000</double>
-              </property>
-              <property name="maximum">
-               <double>5.000000000000000</double>
-              </property>
-              <property name="singleStep">
-               <double>0.010000000000000</double>
-              </property>
-              <property name="value">
-               <double>0.025000000000000</double>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item row="3" column="0" colspan="2">
-           <layout class="QHBoxLayout" name="horizontalLayout_4">
-            <item>
-             <widget class="QLabel" name="label_17">
-              <property name="font">
-               <font>
-                <pointsize>10</pointsize>
-               </font>
-              </property>
-              <property name="text">
-               <string>C0 (uM)</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QDoubleSpinBox" name="smc_C0">
-              <property name="font">
-               <font>
-                <pointsize>10</pointsize>
-               </font>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-              </property>
-              <property name="decimals">
-               <number>3</number>
-              </property>
-              <property name="minimum">
-               <double>0.010000000000000</double>
-              </property>
-              <property name="maximum">
-               <double>1000.000000000000000</double>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item row="0" column="0" colspan="2">
-           <layout class="QHBoxLayout" name="horizontalLayout">
-            <item>
-             <widget class="QLabel" name="label_16">
-              <property name="font">
-               <font>
-                <pointsize>10</pointsize>
-               </font>
-              </property>
-              <property name="text">
-               <string>A (uM)</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QDoubleSpinBox" name="smc_Amplitude">
-              <property name="font">
-               <font>
-                <pointsize>10</pointsize>
-               </font>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-              </property>
-              <property name="maximum">
-               <double>1000.000000000000000</double>
-              </property>
-              <property name="singleStep">
-               <double>0.100000000000000</double>
-              </property>
-              <property name="value">
-               <double>1.000000000000000</double>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-         </layout>
-        </widget>
-       </widget>
-      </item>
-      <item row="1" column="0" rowspan="3">
-       <widget class="QWidget" name="widget_2" native="true">
-        <widget class="QPushButton" name="IAFuncs_NetworkGraph">
-         <property name="geometry">
-          <rect>
-           <x>-5</x>
-           <y>250</y>
-           <width>158</width>
+           <x>0</x>
+           <y>70</y>
+           <width>141</width>
            <height>32</height>
           </rect>
          </property>
          <property name="font">
           <font>
-           <pointsize>12</pointsize>
+           <pointsize>11</pointsize>
           </font>
          </property>
          <property name="text">
-          <string>Network Graph</string>
+          <string>ROI Distances</string>
          </property>
         </widget>
-       </widget>
-      </item>
-      <item row="1" column="1" rowspan="4">
-       <widget class="Line" name="line">
-        <property name="orientation">
-         <enum>Qt::Vertical</enum>
-        </property>
        </widget>
       </item>
      </layout>

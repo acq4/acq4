@@ -28,6 +28,7 @@ from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import os, shutil
+import operator
 import pyqtgraph as pg
 import Image
 from metaarray import MetaArray
@@ -35,13 +36,17 @@ import numpy
 import scipy
 import ctrlTemplate
 import ctrlTemplateAnalysis
+import ctrlTemplatePhysiology
 from lib.analysis.tools import Utility
 from lib.analysis.tools import Fitting
 
 #import smc as SMC # Vogelstein's OOPSI analysis for calcium transients
 
 import pylab as PL
+""" 
+We use matplotlib/pylab for *some* figure generation.
 
+"""
 class pbm_ImageAnalysis(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
@@ -76,16 +81,25 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ROIDistanceMap = []
         self.spikesFound = None
         self.burstsFound = None
+        self.spikeTimes = []
+        self.burstTimes = []
+        
         self.spikesFoundpk = None
         self.withinBurstsFound = None
         self.FData = []
+        self.MPLFig = None # We keep one instance of a matplotlib figure, create and destroy as needed
         
         self.ctrlWidget = QtGui.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
-        self.ctrlFuncWidget = QtGui.QWidget()
-        self.ctrlFunc = ctrlTemplateAnalysis.Ui_Form()
-        self.ctrlFunc.setupUi(self.ctrlFuncWidget)
+        
+        self.ctrlImageFuncWidget = QtGui.QWidget()
+        self.ctrlImageFunc = ctrlTemplateAnalysis.Ui_Form()
+        self.ctrlImageFunc.setupUi(self.ctrlImageFuncWidget)
+        
+        self.ctrlPhysFuncWidget = QtGui.QWidget()
+        self.ctrlPhysFunc = ctrlTemplatePhysiology.Ui_Form()
+        self.ctrlPhysFunc.setupUi(self.ctrlPhysFuncWidget)
         
         self.initDataState()
         self.RGB = Utility.makeRGB()
@@ -94,9 +108,10 @@ class pbm_ImageAnalysis(AnalysisModule):
         self._elements_ = OrderedDict([
             ('File Loader', {'type': 'fileInput', 'size': (150, 300), 'host': self, 'showFileTree': True}),
             ('Image',       {'type': 'imageView', 'pos': ('right', 'File Loader'), 'size': (500, 500)}),
-            ('Analysis',    {'type': 'ctrl', 'object': self.ctrlFuncWidget, 'host': self, 'size': (150,300)}),
-            ('Parameters',  {'type': 'ctrl', 'object': self.ctrlWidget,     'pos' : ('above', 'Analysis'), 'size': (150,300)}), 
-            ('ROI Plot',   {'type': 'plot',  'pos': ('right', 'Parameters'),'size': (1000, 300)}),
+            ('Analysis',    {'type': 'ctrl', 'object': self.ctrlImageFuncWidget, 'host': self, 'size': (150,300)}),
+            ('Physiology',  {'type': 'ctrl', 'object': self.ctrlPhysFuncWidget, 'pos' : ('above', 'Analysis'), 'size': (150,300)}),
+            ('Imaging Parameters',  {'type': 'ctrl', 'object': self.ctrlWidget, 'pos' : ('above', 'Physiology'), 'size': (150,300)}), 
+            ('ROI Plot',   {'type': 'plot',  'pos': ('right', 'Imaging Parameters'),'size': (1000, 300)}),
             ('Phys Plot',   {'type': 'plot',  'pos': ('bottom', 'ROI Plot'),'size': (1000, 300)}),
             ('Trial Plot',  {'type': 'plot', 'size': (1000, 300)}),
 #            ('Line Scan',   {'type': 'imageView', 'size': (1000, 300)}),
@@ -105,7 +120,6 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.initializeElements()
         self.ctrl.ImagePhys_RectSelect.stateChanged.connect(self.updateRectSelect)
         self.ctrl.ImagePhys_Update.clicked.connect(self.updateAnalysis)
-        self.ctrl.ImagePhys_PhysLPF.valueChanged.connect(self.physLPF_valueChanged)
         self.ROI_Plot = self.getElement('ROI Plot', create=True)
         self.trialPlot = self.getElement('Trial Plot', create=True)
         self.physPlot = self.getElement('Phys Plot', create = True)
@@ -119,6 +133,8 @@ class pbm_ImageAnalysis(AnalysisModule):
         # Plots are updated when the selected region changes
         self.lr.sigRegionChanged.connect(self.updateAnalysis)
         self.imageView.sigProcessingChanged.connect(self.processData)
+        
+        # main image processing buttons
         self.ctrl.ImagePhys_addRoi.clicked.connect(self.addOneROI)
         self.ctrl.ImagePhys_clearRoi.clicked.connect(self.clearAllROI)
         self.ctrl.ImagePhys_getRatio.clicked.connect(self.loadRatioImage)
@@ -127,22 +143,26 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrl.ImagePhys_View.clicked.connect(self.changeView)
         self.ctrl.ImagePhys_RetrieveROI.clicked.connect(self.restoreROI)
         self.ctrl.ImagePhys_SaveROI.clicked.connect(self.saveROI)
-        self.ctrl.ImagePhys_DetectSpikes.clicked.connect(self.detectSpikes)
         self.ctrl.ImagePhys_CorrTool_BL1.clicked.connect(self.Baseline1)
         self.ctrl.ImagePhys_CorrTool_HPF.clicked.connect(self.BaselineHPF)
         self.ctrl.ImagePhys_ExportTiff.clicked.connect(self.ExportTiff)
         
-        self.ctrl.ImagePhys_PhysThresh.valueChanged.connect(self.showPhysTrigger) 
+        # Physiology analysis buttons and controls
+        self.ctrlPhysFunc.ImagePhys_DetectSpikes.clicked.connect(self.detectSpikes)
+        self.ctrlPhysFunc.ImagePhys_PhysThresh.valueChanged.connect(self.showPhysTrigger) 
+        #self.ctrlPhysFunc.ImagePhysFuncs_RevSTA.clicked.connect(self.RevSTA)
+        self.ctrlPhysFunc.ImagePhys_STA.clicked.connect(self.computeSTA)
+        self.ctrlPhysFunc.ImagePhys_BTA.clicked.connect(self.computeBTA)
+        self.ctrlPhysFunc.ImagePhys_PhysLPF.valueChanged.connect(self.physLPF_valueChanged)
+        
         #
-        # analysis buttons
+        # Imaging analysis buttons
         #
-        self.ctrlFunc.IAFuncs_Distance.clicked.connect(self.ROIDistances)
-        self.ctrlFunc.IAFuncs_DistanceStrength.clicked.connect(self.ROIDistStrength)
-        self.ctrlFunc.IAFuncs_NetworkGraph.clicked.connect(self.NetworkGraph)
-        #self.ctrlFunc.IAFuncs_RevSTA.clicked.connect(self.RevSTA)
-        self.ctrlFunc.IAFuncs_STA.clicked.connect(self.computeSTA)
-        self.ctrlFunc.IAFuncs_Analysis_AXCorr_Individual.clicked.connect(self.Analog_Xcorr_Individual)
-        self.ctrlFunc.IAFuncs_Analysis_AXCorr.clicked.connect(self.Analog_Xcorr)
+        self.ctrlImageFunc.IAFuncs_Distance.clicked.connect(self.ROIDistances)
+        self.ctrlImageFunc.IAFuncs_DistanceStrength.clicked.connect(self.ROIDistStrength)
+        self.ctrlImageFunc.IAFuncs_NetworkGraph.clicked.connect(self.NetworkGraph)
+        self.ctrlImageFunc.IAFuncs_Analysis_AXCorr_Individual.clicked.connect(self.Analog_Xcorr_Individual)
+        self.ctrlImageFunc.IAFuncs_Analysis_AXCorr.clicked.connect(self.Analog_Xcorr)
 
     def initDataState(self):
         self.dataState = {'Loaded': False, 'bleachCorrection': False, 'Normalized': False,
@@ -416,7 +436,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.ignoreFirst = True
         else:
             self.ignoreFirst = False
-        lpf = self.ctrl.ImagePhys_PhysLPF.value()
+        lpf = self.ctrlPhysFunc.ImagePhys_PhysLPF.value()
         if lpf == 0.0:
             self.physLPF = 0.0
         else:
@@ -532,8 +552,8 @@ class pbm_ImageAnalysis(AnalysisModule):
 #
 
     def showPhysTrigger(self):
-        thr = self.ctrl.ImagePhys_PhysThresh.value()
-        sign = self.ctrl.ImagePhys_PhysSign.currentIndex()
+        thr = self.ctrlPhysFunc.ImagePhys_PhysThresh.value()
+        sign = self.ctrlPhysFunc.ImagePhys_PhysSign.currentIndex()
         if sign == 0:
             ysign = 1.0
         else:
@@ -547,8 +567,8 @@ class pbm_ImageAnalysis(AnalysisModule):
 
     def detectSpikes(self, burstMark = None):
         spikescale = 1.0 # or 1e-12...
-        thr = spikescale*self.ctrl.ImagePhys_PhysThresh.value()
-        sign = self.ctrl.ImagePhys_PhysSign.currentIndex()
+        thr = spikescale*self.ctrlPhysFunc.ImagePhys_PhysThresh.value()
+        sign = self.ctrlPhysFunc.ImagePhys_PhysSign.currentIndex()
         if sign == 0:
             ysign = 1.0
         else:
@@ -560,6 +580,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             return
         yspmarks=ysign*thr*spikescale
         bList = self.defineSpikeBursts()
+        self.burstTimes = bList
         yburstMarks = ysign*thr*0.9*spikescale
         ywithinBurstMarks = ysign*thr*0.8*spikescale
         self.makeSpikePointers(spikes=(sptimes, yspmarks), spikespk=(sptimes, self.physData[sppts]),
@@ -607,13 +628,20 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.burstsFound.setPoints(x=onsetSpikes, y = [bursts[1] for x in range(len(onsetSpikes))])
             self.withinBurstsFound.setPoints(x=burstSpikes, y = [bursts[2] for x in range(len(burstSpikes))])
                 
+    def checkMPL(self):
+        if self.MPLFig is not None:
+            PL.close()
+            self.MPLFig = None
+            
+
     def ROIDistStrength(self):
-        (self.ROIDfig, self.ROID_plots) = PL.subplots(nrows = 1, ncols=1, 
+        self.checkMPL()
+        (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Image Analysis", nrows = 1, ncols=1, 
                     sharex = True, sharey = True)
-        self.ROIDfig.suptitle('Analog XCorr: %s' % self.currentFileName, fontsize=11)
-#        print len(self.ROIDistanceMap)
-#        print self.IXC_strength
-        self.ROID_plots.scatter(self.ROIDistanceMap, self.IXC_strength, s=15, color='tomato')
+        self.MPLFig.suptitle('Analog XCorr: %s' % self.currentFileName, fontsize=11)
+        sp = self.MPL_plots.scatter(self.ROIDistanceMap, self.IXC_strength, s=15, color='tomato')
+        self.MPL_plots.set_xlabel('Distance (pixels)')
+        self.MPL_plots.set_ylabel('Correlation (R)')
         PL.show()
         
     def RevSTA(self):
@@ -622,13 +650,81 @@ class pbm_ImageAnalysis(AnalysisModule):
     def computeSTA(self):
         """
         Compute the spike-triggered average of the ROI signals, given the spike train. 
+        This one is just the basic spike-triggered average
+        """
+        self.computeBTA(singleSpike=True)
+
+    def computeBTA(self, singleSpike=False):
+        """
+        Compute the spike-triggered average of the ROI signals, given the spike train. 
         The following criteria are avaiable to select from within the spike train:
         1. minimum time before a spike
         2. minimum rate AFTER the spike (for the next N spikes)
         3. minimum # of spikes (N) for minimum rate determination (define burst)
         """
-        (bol, bil) = self.defineSpikeBursts()
+        if not singleSpike: # normal processing is to do bursts, using first spike of burst
+            if self.burstTimes == []:
+                bList = self.defineSpikeBursts()
+                self.burstTimes = bList
+            onsetSpikes = []
+            burstSpikes= []
+            bList = self.burstTimes
+            for b in range(len(bList)):
+                bdat = bList[b]
+                onsetSpikes.append(bdat[0])
+                burstSpikes.extend(bdat[1:].tolist())
+            plotTitle = 'Burst-Onset-Triggered Fluorescence'
+        else: # but we can also handle just regular spike trains...
+            onsetSpikes = self.SpikeTimes
+            plotTitle = 'All-Spikes-Triggered Fluorescence'
+        self.calculateROIs()
+        N = len(onsetSpikes)
+        avCaF = [[0]*N for i in xrange(self.nROI)]
+        avCaT = [[0]*N for i in xrange(self.nROI)]
+
+        for roi in range(0, self.nROI):
+            i = 0
+            for onSp in onsetSpikes:
+                (x, y) = Utility.clipdata(self.FData[roi], self.imageTimes, onSp-0.1, onSp+0.5)
+                avCaF[roi][i] = y
+                avCaT[roi][i] = (x.tolist()-onSp)
+                i = i + 1
+        self.checkMPL()
+        (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Image Analysis", nrows = self.nROI+1, ncols=2, 
+                    sharex = False, sharey = False)
+        self.MPLFig.suptitle('%s:\n %s' % (plotTitle, self.currentFileName), fontsize=11)
+        dt = numpy.mean(numpy.diff(self.imageTimes))/2.
+        tbase = numpy.arange(-0.1, 0.5, dt)
+        axmin = 1e6
+        axmax = -1e6
+        ave = [[]]*self.nROI
+        std = [[]]*self.nROI
+        CaAmin = 1e6
+        CaAmax = -1e6
+        for roi in range(0, self.nROI):
+            self.MPL_plots[self.nROI][0].plot(self.imageTimes, self.FData[roi])
+            interCaF = numpy.zeros((N, len(tbase)))
+            for i in range(0, len(onsetSpikes)):
+            #sp = self.MPL_plots.scatter(avCaT, avCaF, s=15, color='tomato')
+                self.MPL_plots[roi][0].plot(avCaT[roi][i], avCaF[roi][i]*100., color = 'k', linestyle = '-')
+                f_int = scipy.interpolate.interp1d(avCaT[roi][i], avCaF[roi][i]*100., bounds_error = False)
+                interCaF[i, :] = f_int(tbase)
+                CaAmin = numpy.nanmin([numpy.nanmin(avCaF[roi][i]), CaAmin])
+                CaAmax = numpy.nanmax([numpy.nanmax(avCaF[roi][i]), CaAmax])
+            #    self.MPL_plots[roi][1].plot(tbase, interCaF[roi,i,:], 'r')
+            ave[roi] = scipy.stats.nanmean(interCaF, axis = 0)
+            std[roi] = scipy.stats.nanstd(interCaF, axis = 0)
+            self.MPL_plots[roi][1].errorbar(tbase, ave[roi]*100., yerr=std[roi]*100., color='r')
+            self.MPL_plots[roi][0].set_xlabel('T (sec)')
+            self.MPL_plots[roi][0].set_ylabel('dF/F (%)')
+            axmin = numpy.nanmin([numpy.nanmin(ave[roi]-std[roi]), axmin])
+            axmax = numpy.nanmax([numpy.nanmax(ave[roi]+std[roi]), axmax])
+        for roi in range(0, self.nROI):
+            self.MPL_plots[roi][1].set_ylim((axmin*100., axmax*100.))
+            self.MPL_plots[roi][0].set_ylim((CaAmin*100., CaAmax*100.))
+#            self.MPL_plots[roi][1].errorbar(tbase, ave[roi], yerr=std[roi], color='r')
         
+        PL.show()
         
     def defineSpikeBursts(self):
         """
@@ -637,11 +733,16 @@ class pbm_ImageAnalysis(AnalysisModule):
         2. minimum rate AFTER the spike (for the next N spikes)
         3. minimum # of spikes (N) for minimum rate determination (define burst length)
         The return arrays are the times of first spikes
+        2 Feb 2012 P. B. Manis (working version)
         """
         
-        minTime = 0.100 # in milliseconds
-        maxInterval = 0.040 # maximum time between spikes to be counted in a burst
-        minNspikes = 3 # minimum number of spikes for event to count as a burst
+        #minTime = 0.100 # in milliseconds
+        #maxInterval = 0.040 # maximum time between spikes to be counted in a burst
+        #minNspikes = 3 # minimum number of spikes for event to count as a burst
+        minTime = self.ctrlPhysFunc.ImagePhys_burstISI.value()/1000.0
+        maxInterval = self.ctrlPhysFunc.ImagePhys_withinBurstISI.value()/1000.0
+        minNspikes = self.ctrlPhysFunc.ImagePhys_minBurstSpikes.value()
+        print 'burst parameters min, max, n: ', minTime, maxInterval, minNspikes
         # first we find the indices of all events that meet the above criteria:
         if len(self.SpikeTimes) < 3:
             return([], [])
@@ -668,14 +769,12 @@ class pbm_ImageAnalysis(AnalysisModule):
                 
 
     def NetworkGraph(self):
-        (self.ROI_NG, self.ROI_NG_plots) = PL.subplots(nrows = 1, ncols=1, 
+        self.checkMPL()
+        (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Network Graph", nrows = 1, ncols=1, 
                     sharex = True, sharey = True)
-        self.ROI_NG.suptitle('Network Graph: %s' % self.currentFileName, fontsize=11)
-        print len(self.ROIDistanceMap)
-        print self.IXC_strength
+        self.MPLFig.suptitle('Network Graph: %s' % self.currentFileName, fontsize=11)
         maxStr = numpy.nanmax(self.IXC_strength)
         minStr = numpy.nanmin(self.IXC_strength)
-        print maxStr, minStr
         maxline = 4.0
         minline = 0.25
         nd = len(self.AllRois)
@@ -691,8 +790,10 @@ class pbm_ImageAnalysis(AnalysisModule):
                 y2 = wpos2[1]+0.5*wpos2[3]                
                 lw = maxline*(self.IXC_strength[i,j]-minStr)/(maxStr-minStr)+minline
                 print lw
-                self.ROI_NG_plots.plot([x1, x2], [y1, y2], linewidth=lw, 
+                self.MPL_plots.plot([x1, x2], [y1, y2], linewidth=lw, 
                 linestyle = '-', color='tomato')
+        self.MPL_plots.set_xlabel('X (pixels)')
+        self.MPL_plots.set_ylabel('Y (pixels)')
         PL.show()        
         
 #--------------- From PyImageAnalysis3.py: -----------------------------
@@ -834,9 +935,11 @@ class pbm_ImageAnalysis(AnalysisModule):
         i = 0
         self.FData = []
         for ourWidget in self.AllRois:
-            tr = ourWidget.getArrayRegion(self.imageData, self.imageView.imageItem, axes=(1,2))
+            tr = ourWidget.getArrayRegion(self.rawData, self.imageView.imageItem, axes=(1,2))
             tr = tr.mean(axis=2).mean(axis=1) # compute average over the ROI against time
             tr[0] = tr[1]
+            trm = tr.mean(axis=0)
+            tr = tr/(self.background*trm/self.backgroundmean)
             sh = numpy.shape(self.FData)
             if sh[0] == 0:
                 self.FData = numpy.atleast_2d(tr) # create a new trace in this place
@@ -948,9 +1051,9 @@ class pbm_ImageAnalysis(AnalysisModule):
                             self.AllRois[i].boundingRect().height(), self.AllRois[i].boundingRect().width()])
         data = data.T
         if fileName is None or fileName is False:
-            try:
-                fileName, ok= QtGui.QFileDialog.getSaveFileName(None, "Save ROI data", "*.csv")
-            except:
+            fileName= QtGui.QFileDialog.getSaveFileName(None, "Save ROI as csv file", "", 
+                self.tr("CSV Files (*.csv)"))
+            if not fileName:
                 return
         fname = fileName
         if "." not in fileName:
@@ -997,18 +1100,15 @@ class pbm_ImageAnalysis(AnalysisModule):
 
 
     def makeROIDataFigure(self, clear = False, gcolor = 'k'):
-            if clear is True:
-                if self.ROIfig is not None:
-                    self.ROIfig.clf()
-                    PL.close()
-                (self.ROIfig, self.ROI_plots) = PL.subplots(nrows = self.nROI, ncols=1, 
-                    sharex = True)
-                self.ROIfig.suptitle('Analog XCorr: %s' % self.currentFileName, fontsize=10)
-            for i, plr in enumerate(self.ROI_plots):
-                plr.plot(self.imageTimes, self.FData[i,:], color = gcolor)
-                plr.hold(True)
-            PL.show()
-            
+        self.checkMPL()
+        (self.MPLFig, self.MPL_plots) = PL.subplots(num="ROI Data", nrows = self.nROI, ncols=1, 
+        sharex = True)
+        self.MPLFig.suptitle('Analog XCorr: %s' % self.currentFileName, fontsize=10)
+        for i, plr in enumerate(self.MPL_plots):
+            plr.plot(self.imageTimes, self.FData[i,:], color = gcolor)
+            plr.hold(True)
+        PL.show()
+
 #----------------------Stack Ops (math on images) ---------------------------------
 
     def stackOp_absmax(self): # absolute maximum
@@ -1282,7 +1382,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.IXC_strength.fill(numpy.nan)
         xtrace  = 0
         yMinorTicks = 0
-        bLegend = self.ctrlFunc.IAFuncs_checkbox_TraceLabels.isChecked()
+        bLegend = self.ctrlImageFunc.IAFuncs_checkbox_TraceLabels.isChecked()
         gridFlag = True
         if self.nROI > 8:
             gridFlag = False
@@ -1292,9 +1392,10 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.newWindow.setCentralWidget(self.mpw)
             self.newWindow.show()
         else:
-            (self.MPLfig, self.IXC_plots) = PL.subplots(nrows = self.nROI, ncols=self.nROI, 
+            self.checkMPL()
+            (self.MPLFig, self.IXC_plots) = PL.subplots(num="Individual ROI Cross Correlations", nrows = self.nROI, ncols=self.nROI, 
                     sharex = True, sharey = True)
-            self.MPLfig.suptitle('Analog XCorr: %s' % self.currentFileName, fontsize=11)
+            self.MPLFig.suptitle('XCorr: %s' % self.currentFileName, fontsize=11)
         for xtrace1 in range(0, self.nROI-1):
             a1 = numpy.polyfit(self.imageTimes, FData[xtrace1,:], 2)
             y1 = numpy.polyval(a1, self.imageTimes)
@@ -1326,7 +1427,8 @@ class pbm_ImageAnalysis(AnalysisModule):
                     self.IXC_plots[xtrace1, xtrace2].hold = True
                     self.IXC_plots[xtrace1, xtrace2].plot(self.lags,numpy.zeros(self.lags.shape), color = '0.5')
                     self.IXC_plots[xtrace1, xtrace2].set_title('ROIs: %d, %d' % (xtrace1, xtrace2), fontsize=10)
-                    
+                    self.IXC_plots[xtrace1, xtrace2].set_xlabel('T (sec)')
+                    self.IXC_plots[xtrace1, xtrace2].set_ylabel('Corr (R)')
                 xtrace = xtrace + 1
         # now rescale all the plot Y axes by getting the min/max "viewRange" across all, then setting them all the same
 
@@ -1342,8 +1444,12 @@ class pbm_ImageAnalysis(AnalysisModule):
             ymax = numpy.amax(bmax)
             for i in range(0, xtrace):
                 self.IXC_plots[i].setYRange(ymin, ymax) # remember, all are linked to the 0'th plot
+                self.IXC_plots[i].setYlabel("R")
+                self.IXC_plots[i].setXlabel("Time (s)")
                 if i == 0:
-                    print dir(self.IXC_plots[i])
+                    pass
+                    #self.IXC_plots[i].setYlabel("R")
+                    #self.IXC_plots[i].setXlabel("Time (s)")
                 if i > 0:
                     self.IXC_plots[i].hideAxis('left')
                     self.IXC_plots[i].hideAxis('bottom')
@@ -1351,7 +1457,6 @@ class pbm_ImageAnalysis(AnalysisModule):
         else:
             PL.show()
         
-        print self.IXC_strength
         #MPlots.sameScale(self.IXC_plots)
         #MPlots.PlotReset(self.IXC_plots[xtrace-1], xAxisOn=True, yAxisOn=True, xlabel='Lag', unitsX='s',
         #                 ylabel='C', xMinorTicks=0, yMinorTicks=0, clearFlag = False,)
