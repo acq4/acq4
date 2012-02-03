@@ -364,7 +364,13 @@ class ViewBox(GraphicsWidget):
         """
         Enable (or disable) auto-range for *axis*, which may be ViewBox.XAxis, ViewBox.YAxis, or ViewBox.XYAxes for both.
         When enabled, the axis will automatically rescale when items are added/removed or change their shape.
+        The argument *enable* may optionally be a float (0.0-1.0) which indicates the fraction of the data that should
+        be visible (this only works with items implementing a dataRange method, such as PlotDataItem).
         """
+        
+        if enable is True:
+            enable = 1.0
+        
         if axis == ViewBox.XYAxes:
             self.state['autoRange'][0] = enable
             self.state['autoRange'][1] = enable
@@ -387,15 +393,19 @@ class ViewBox(GraphicsWidget):
         if not any(self.state['autoRange']):
             return
             
-        cr = self.childrenBoundingRect()
+        fractionVisible = self.state['autoRange'][:]
+        for i in [0,1]:
+            if fractionVisible[i] is False:
+                fractionVisible[i] = 1.0
+        cr = self.childrenBoundingRect(frac=fractionVisible)
         wp = cr.width() * 0.02
         hp = cr.height() * 0.02
         cr = cr.adjusted(-wp, -hp, wp, hp)
         
-        if self.state['autoRange'][0]:
+        if self.state['autoRange'][0] is not False:
             tr.setLeft(cr.left())
             tr.setRight(cr.right())
-        if self.state['autoRange'][1]:
+        if self.state['autoRange'][1] is not False:
             tr.setTop(cr.top())
             tr.setBottom(cr.bottom())
             

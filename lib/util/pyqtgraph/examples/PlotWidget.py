@@ -32,10 +32,14 @@ p1 = pw.plot()
 p1.setPen((200,200,100))
 
 ## Add in some extra graphics
-rect = QtGui.QGraphicsRectItem(QtCore.QRectF(0, 0, 1, 1e-10))
+rect = QtGui.QGraphicsRectItem(QtCore.QRectF(0, 0, 1, 5e-11))
 rect.setPen(QtGui.QPen(QtGui.QColor(100, 200, 100)))
 pw.addItem(rect)
 
+pw.setLabel('left', 'Value', units='V')
+pw.setLabel('bottom', 'Time', units='s')
+pw.setXRange(0, 2)
+pw.setYRange(0, 1e-10)
 
 def rand(n):
     data = np.random.random(n)
