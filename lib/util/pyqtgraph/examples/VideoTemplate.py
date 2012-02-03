@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/util/pyqtgraph/examples/VideoTemplate.ui'
+# Form implementation generated from reading ui file 'VideoTemplate.ui'
 #
-# Created: Thu Feb  2 15:25:11 2012
+# Created: Sun Jan  8 19:22:32 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

@@ -22,7 +22,7 @@ from pyqtgraph.Qt import QtGui, QtCore, QtSvg
 import pyqtgraph.functions as fn
 from pyqtgraph.widgets.FileDialog import FileDialog
 import weakref
-from types import *
+#from types import *
 import numpy as np
 #from .. PlotCurveItem import PlotCurveItem
 #from .. ScatterPlotItem import ScatterPlotItem

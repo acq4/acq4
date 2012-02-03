@@ -85,7 +85,6 @@ class ViewBox(GraphicsWidget):
         ])
         
         self.setFlag(self.ItemClipsChildrenToShape)
-
         self.setFlag(self.ItemIsFocusable, True)  ## so we can receive key presses
         
         ## childGroup is required so that ViewBox has local coordinates similar to device coordinates.

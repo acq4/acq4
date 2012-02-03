@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/analysis/modules/pbm_ImageAnalysis/ctrlTemplate.ui'
+# Form implementation generated from reading ui file 'ctrlTemplate.ui'
 #
-# Created: Thu Feb  2 15:25:04 2012
+# Created: Fri Feb  3 10:20:01 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

@@ -91,7 +91,6 @@ class CanvasItem(QtCore.QObject):
             self.baseTransform = self.opts['transform']
         else:
             self.baseTransform = pg.Transform()
-            self.baseTransform = pg.Transform()
             if 'pos' in self.opts and self.opts['pos'] is not None:
                 self.baseTransform.translate(self.opts['pos'])
             if 'angle' in self.opts and self.opts['angle'] is not None:

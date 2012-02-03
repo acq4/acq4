@@ -55,19 +55,17 @@ class ImageCanvasItem(CanvasItem):
             item = pg.ImageItem()
         CanvasItem.__init__(self, item, **opts)
         
-        showTime = True
-        
         self.histogram = pg.PlotWidget()
         self.blockHistogram = False
         self.histogram.setMaximumHeight(100)
         self.levelRgn = pg.LinearRegionItem()
         self.histogram.addItem(self.levelRgn)
 
-        self.timeSlider = QtGui.QSlider(QtCore.Qt.Horizontal)
-        self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 2)
-        self.maxBtn = QtGui.QPushButton('Max')
-        self.maxBtn.clicked.connect(self.maxClicked)
-        self.layout.addWidget(self.maxBtn, self.layout.rowCount(), 0, 1, 2)
+        #self.timeSlider = QtGui.QSlider(QtCore.Qt.Horizontal)
+        #self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 2)
+        #self.maxBtn = QtGui.QPushButton('Max')
+        #self.maxBtn.clicked.connect(self.maxClicked)
+        #self.layout.addWidget(self.maxBtn, self.layout.rowCount(), 0, 1, 2)
 
 
         self.updateHistogram(autoLevels=True)
@@ -75,30 +73,32 @@ class ImageCanvasItem(CanvasItem):
         # addWidget arguments: row, column, rowspan, colspan 
         self.layout.addWidget(self.histogram, self.layout.rowCount(), 0, 1, 2)
         
-        if showTime:
-            self.timeSlider = QtGui.QSlider(QtCore.Qt.Horizontal)
-            self.timeSlider.setMinimum(0)
-            self.timeSlider.setMaximum(self.data.shape[0]-1)
-            self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 2)
-            self.timeSlider.valueChanged.connect(self.timeChanged)
-            self.timeSlider.sliderPressed.connect(self.timeSliderPressed)
-            self.timeSlider.sliderReleased.connect(self.timeSliderReleased)
-            thisRow = self.layout.rowCount()
-            self.edgeBtn = QtGui.QPushButton('Edge')
-            self.edgeBtn.clicked.connect(self.edgeClicked)
-            self.layout.addWidget(self.edgeBtn, thisRow, 0, 1, 1)
+        self.timeSlider = QtGui.QSlider(QtCore.Qt.Horizontal)
+        self.timeSlider.setMinimum(0)
+        self.timeSlider.setMaximum(self.data.shape[0]-1)
+        self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 2)
+        self.timeSlider.valueChanged.connect(self.timeChanged)
+        self.timeSlider.sliderPressed.connect(self.timeSliderPressed)
+        self.timeSlider.sliderReleased.connect(self.timeSliderReleased)
+        thisRow = self.layout.rowCount()
+        self.edgeBtn = QtGui.QPushButton('Edge')
+        self.edgeBtn.clicked.connect(self.edgeClicked)
+        self.layout.addWidget(self.edgeBtn, thisRow, 0, 1, 1)
 
-            self.maxBtn2 = QtGui.QPushButton('Max w/Filter')
-            self.maxBtn2.clicked.connect(self.max2Clicked)
-            self.layout.addWidget(self.maxBtn2, thisRow, 1, 1, 1)
+        self.maxBtn2 = QtGui.QPushButton('Max w/Filter')
+        self.maxBtn2.clicked.connect(self.max2Clicked)
+        self.layout.addWidget(self.maxBtn2, thisRow, 1, 1, 1)
 
-            self.meanBtn = QtGui.QPushButton('Mean')
-            self.meanBtn.clicked.connect(self.meanClicked)
-            self.layout.addWidget(self.meanBtn, thisRow+1, 0, 1, 1)
+        self.meanBtn = QtGui.QPushButton('Mean')
+        self.meanBtn.clicked.connect(self.meanClicked)
+        self.layout.addWidget(self.meanBtn, thisRow+1, 0, 1, 1)
 
-            self.maxBtn = QtGui.QPushButton('Max no Filter')
-            self.maxBtn.clicked.connect(self.maxClicked)
-            self.layout.addWidget(self.maxBtn, thisRow+1, 1, 1, 1)
+        self.maxBtn = QtGui.QPushButton('Max no Filter')
+        self.maxBtn.clicked.connect(self.maxClicked)
+        self.layout.addWidget(self.maxBtn, thisRow+1, 1, 1, 1)
+        
+        ## controls that only appear if there is a time axis
+        self.timeControls = [self.timeSlider, self.edgeBtn, self.maxBtn, self.meanBtn, self.maxBtn2]
             
         if self.data is not None:
             self.updateImage(self.data)
@@ -136,26 +136,26 @@ class ImageCanvasItem(CanvasItem):
         dif = blur - blur2
         #dif[dif < 0.] = 0
         self.graphicsItem().updateImage(dif.max(axis=0))
-        self.updateHistogram(autoRange=True)
+        self.updateHistogram(autoLevels=True)
 
     def maxClicked(self):
         ## just the max of a stack
         fd = self.data.astype(float)
         self.graphicsItem().updateImage(fd.max(axis=0))
-        self.updateHistogram(autoRange=True)
+        self.updateHistogram(autoLevels=True)
 
     def max2Clicked(self):
         ## just the max of a stack, after a little 3d bluring
         fd = self.data.astype(float)
         blur = ndimage.gaussian_filter(fd, (1, 1, 1))
         self.graphicsItem().updateImage(blur.max(axis=0))
-        self.updateHistogram(autoRange=True)
+        self.updateHistogram(autoLevels=True)
 
     def meanClicked(self):
         ## just the max of a stack
         fd = self.data.astype(float)
         self.graphicsItem().updateImage(fd.mean(axis=0))
-        self.updateHistogram(autoRange=True)
+        self.updateHistogram(autoLevels=True)
 
 #        self.updateHistogram(autoLevels=True)
 
@@ -197,13 +197,16 @@ class ImageCanvasItem(CanvasItem):
             self.timeSlider.valueChanged.connect(self.timeChanged)
             self.timeSlider.sliderPressed.connect(self.timeSliderPressed)
             self.timeSlider.sliderReleased.connect(self.timeSliderReleased)
-            self.timeSlider.show()
-            self.maxBtn.show()
+            #self.timeSlider.show()
+            #self.maxBtn.show()
             self.graphicsItem().updateImage(data[self.timeSlider.value()])
         else:
-            self.timeSlider.hide()
-            self.maxBtn.hide()
+            #self.timeSlider.hide()
+            #self.maxBtn.hide()
             self.graphicsItem().updateImage(data, autoLevels=autoLevels)
+
+	for widget in self.timeControls:
+            widget.setVisible(showTime)
             
         tr = self.saveTransform()
         self.resetUserTransform()

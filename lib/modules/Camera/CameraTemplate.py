@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/modules/Camera/CameraTemplate.ui'
+# Form implementation generated from reading ui file 'CameraTemplate.ui'
 #
-# Created: Thu Feb  2 15:25:08 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Jan 13 13:37:45 2012
+#      by: PyQt4 UI code generator 4.9
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -67,7 +67,7 @@ class Ui_MainWindow(object):
         self.recordXframesSpin.setEnabled(True)
         self.recordXframesSpin.setMinimum(1)
         self.recordXframesSpin.setMaximum(1000000)
-        self.recordXframesSpin.setProperty(_fromUtf8("value"), 100)
+        self.recordXframesSpin.setProperty("value", 100)
         self.recordXframesSpin.setObjectName(_fromUtf8("recordXframesSpin"))
         self.horizontalLayout_4.addWidget(self.recordXframesSpin)
         self.framesLabel = QtGui.QLabel(self.dockWidgetContents)
@@ -141,7 +141,7 @@ class Ui_MainWindow(object):
         self.label_6.setObjectName(_fromUtf8("label_6"))
         self.gridlayout.addWidget(self.label_6, 0, 0, 1, 1)
         self.spinAutoGainSpeed = QtGui.QDoubleSpinBox(self.dockWidgetContents_2)
-        self.spinAutoGainSpeed.setProperty(_fromUtf8("value"), 2.0)
+        self.spinAutoGainSpeed.setProperty("value", 2.0)
         self.spinAutoGainSpeed.setObjectName(_fromUtf8("spinAutoGainSpeed"))
         self.gridlayout.addWidget(self.spinAutoGainSpeed, 0, 1, 1, 1)
         self.label_8 = QtGui.QLabel(self.dockWidgetContents_2)
@@ -181,7 +181,7 @@ class Ui_MainWindow(object):
         self.gridLayout.addWidget(self.label_7, 5, 0, 1, 1)
         self.spinROITime = QtGui.QDoubleSpinBox(self.dockWidgetContents_4)
         self.spinROITime.setSingleStep(0.1)
-        self.spinROITime.setProperty(_fromUtf8("value"), 5.0)
+        self.spinROITime.setProperty("value", 5.0)
         self.spinROITime.setObjectName(_fromUtf8("spinROITime"))
         self.gridLayout.addWidget(self.spinROITime, 5, 1, 1, 1)
         spacerItem2 = QtGui.QSpacerItem(88, 17, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
@@ -267,7 +267,7 @@ class Ui_MainWindow(object):
         self.label_5.setObjectName(_fromUtf8("label_5"))
         self.hboxlayout3.addWidget(self.label_5)
         self.bgBlurSpin = QtGui.QDoubleSpinBox(self.frame_3)
-        self.bgBlurSpin.setProperty(_fromUtf8("value"), 0.0)
+        self.bgBlurSpin.setProperty("value", 0.0)
         self.bgBlurSpin.setObjectName(_fromUtf8("bgBlurSpin"))
         self.hboxlayout3.addWidget(self.bgBlurSpin)
         self.gridLayout_3.addWidget(self.frame_3, 4, 0, 1, 4)
@@ -279,7 +279,7 @@ class Ui_MainWindow(object):
         self.bgTimeSpin = QtGui.QDoubleSpinBox(self.dockWidgetContents_3)
         self.bgTimeSpin.setDecimals(1)
         self.bgTimeSpin.setSingleStep(1.0)
-        self.bgTimeSpin.setProperty(_fromUtf8("value"), 5.0)
+        self.bgTimeSpin.setProperty("value", 5.0)
         self.bgTimeSpin.setObjectName(_fromUtf8("bgTimeSpin"))
         self.gridLayout_3.addWidget(self.bgTimeSpin, 2, 2, 1, 2)
         self.collectBgBtn = QtGui.QPushButton(self.dockWidgetContents_3)
