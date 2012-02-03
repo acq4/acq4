@@ -16,6 +16,7 @@ class FeedbackButton(QtGui.QPushButton):
         self.origTip = self.toolTip()
         self.limitedTime = True
         
+        
         #self.textTimer = QtCore.QTimer()
         #self.tipTimer = QtCore.QTimer()
         #self.textTimer.timeout.connect(self.setText)
@@ -82,6 +83,8 @@ class FeedbackButton(QtGui.QPushButton):
         #if self.origStyle is None:
             #self.origStyle = self.styleSheet()
             #self.origText = self.text()
+        self.setFixedHeight(self.height())
+        
         if message is not None:
             self.setText(message, temporary=True)
         self.setToolTip(tip, temporary=True)

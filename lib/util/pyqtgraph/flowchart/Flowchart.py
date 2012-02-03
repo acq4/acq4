@@ -93,7 +93,7 @@ class Flowchart(Node):
         self.outputNode.sigTerminalRenamed.connect(self.internalTerminalRenamed)
         self.inputNode.sigTerminalRenamed.connect(self.internalTerminalRenamed)
         
-        self.viewBox.autoRange()
+        self.viewBox.autoRange(padding = 0.04)
             
         for name, opts in terminals.iteritems():
             self.addTerminal(name, **opts)
@@ -509,6 +509,7 @@ class Flowchart(Node):
         fileName = str(fileName)
         state = configfile.readConfigFile(fileName)
         self.restoreState(state, clear=True)
+        self.viewBox.autoRange()
         #self.emit(QtCore.SIGNAL('fileLoaded'), fileName)
         self.sigFileLoaded.emit(fileName)
         
@@ -836,6 +837,7 @@ class FlowchartWidget(dockarea.DockArea):
             #self.menuPos = self.view.mapToScene(ev.pos())
             #self.nodeMenu.popup(ev.globalPos())
         #print "Flowchart.showViewMenu called"
+
         #self.menuPos = ev.scenePos()
         self.buildMenu(ev.scenePos())
         self.nodeMenu.popup(ev.screenPos())

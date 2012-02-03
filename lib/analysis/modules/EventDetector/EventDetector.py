@@ -87,7 +87,7 @@ class EventDetector(AnalysisModule):
         fp = self.getElement('Filter Plot', create=False)
         if dp is not None:
             self.flowchart.nodes()['Plot_000'].setPlot(dp)
-        if fp is not None:
+        if fp is not None and 'Plot_001' in self.flowchart.nodes().keys():
             self.flowchart.nodes()['Plot_001'].setPlot(fp)
 
 
@@ -222,8 +222,10 @@ class EventDetector(AnalysisModule):
         
         #identity = self.dbIdentity+'.events'
         #table = dbui.getTableName(identity)
-        #if not db.hasTable(table):
+        if not db.hasTable(table):
             #return None, None
+            return None
+            #return np.empty(0)
             
         #pRow = db.getDirRowID(sourceDir)
         #if pRow is None:

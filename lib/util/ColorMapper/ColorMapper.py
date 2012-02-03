@@ -190,7 +190,7 @@ class ColorMapper(QtGui.QWidget):
             i.updateArgList()
         
     def getColor(self, args):
-        color = np.array([0.,0.,0.,1.])
+        color = np.array([0.,0.,0.,0.])
         for item in self.items:
             c = item.getColor(args)
             c = np.array([c.red(), c.green(), c.blue(), c.alpha()], dtype=float) / 255.

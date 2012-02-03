@@ -265,7 +265,7 @@ class ScanImageCanvasItem(ImageCanvasItem):
         self.handles = handles
         ImageCanvasItem.__init__(self, self.handles[0], **kargs)
         self.graphicsItem().updateImage(self.img)
-        self.updateHistogram(autoRange=True)
+        self.updateHistogram(autoLevels=True)
 
     def storeUserTransform(self, fh=None):
         trans = self.saveTransform()
