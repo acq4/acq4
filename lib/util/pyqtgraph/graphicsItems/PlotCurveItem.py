@@ -106,7 +106,7 @@ class PlotCurveItem(GraphicsObject):
         #dt = self.xData[-1] - self.xData[0]
         #self.xSpec = linspace(0, 0.5*len(self.xData)/dt, len(self.ySpec))
         
-    def getRange(self, ax, frac=1.0):
+    def dataBounds(self, ax, frac=1.0):
         (x, y) = self.getData()
         if x is None or len(x) == 0:
             return (0, 0)
@@ -122,27 +122,7 @@ class PlotCurveItem(GraphicsObject):
             raise Exception("Value for parameter 'frac' must be > 0. (got %s)" % str(frac))
         else:
             return (scipy.stats.scoreatpercentile(d, 50 - (frac * 50)), scipy.stats.scoreatpercentile(d, 50 + (frac * 50)))
-            #bins = 1000
-            #h = histogram(d, bins)
-            #s = len(d) * (1.0-frac)
-            #mnTot = mxTot = 0
-            #mnInd = mxInd = 0
-            #for i in range(bins):
-                #mnTot += h[0][i]
-                #if mnTot > s:
-                    #mnInd = i
-                    #break
-            #for i in range(bins):
-                #mxTot += h[0][-i-1]
-                #if mxTot > s:
-                    #mxInd = -i-1
-                    #break
-            ##print mnInd, mxInd, h[1][mnInd], h[1][mxInd]
-            #return(h[1][mnInd], h[1][mxInd])
-                
             
-            
-        
     def setMeta(self, data):
         self.metaData = data
         

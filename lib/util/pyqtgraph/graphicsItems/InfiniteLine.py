@@ -166,6 +166,11 @@ class InfiniteLine(UIGraphicsItem):
         p.drawLine(Point(br.right(), 0), Point(br.left(), 0))
         #p.drawRect(self.boundingRect())
         
+    def dataBounds(self, axis, frac=1.0):
+        if axis == 0:
+            return None   ## x axis should never be auto-scaled
+        else:
+            return (0,0)
         
     #def mousePressEvent(self, ev):
         #if self.movable and ev.button() == QtCore.Qt.LeftButton:

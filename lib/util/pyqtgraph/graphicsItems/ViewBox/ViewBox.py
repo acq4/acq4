@@ -259,7 +259,6 @@ class ViewBox(GraphicsWidget):
         """
         changes = {}
         
-        
         if rect is not None:
             changes = {0: [rect.left(), rect.right()], 1: [rect.top(), rect.bottom()]}
         if xRange is not None:
@@ -733,58 +732,101 @@ class ViewBox(GraphicsWidget):
             #(self.mousePos[0]-self.pressPos[0])/vs[0], -(self.mousePos[1]-self.pressPos[1])/vs[1])
         #return(ax)
 
-        
-    def childrenBoundingRect(self, item=None):
-        """Return the bounding rect of all children. Returns None if there are no bounded children"""
+    def allChildren(self, item=None):
+        """Return a list of all children and grandchildren of this ViewBox"""
         if item is None:
-            #print "children bounding rect:"
             item = self.childGroup
-        if not item.isVisible():
-            return QtCore.QRectF()
         
-        if hasattr(item, 'realBoundingRect'):
-            bounds = item.realBoundingRect()
-            #print "   item real:", item, bounds
-        else:
-            bounds = item.boundingRect()
-            #print "   item:", item, bounds
-        bounds = self.mapFromItemToView(item, bounds).boundingRect()
+        children = [item]
+        for ch in item.childItems():
+            children.extend(self.allChildren(ch))
+        return children
+        
+        
+        
+    def childrenBoundingRect(self, frac=None):
+        """Return the bounding range of all children.
+        [[xmin, xmax], [ymin, ymax]]
+        Values may be None if there are no specific bounds for an axis.
+        """
+        
+        items = self.allChildren()
+        
+        #if item is None:
+            ##print "children bounding rect:"
+            #item = self.childGroup
             
-        for ch in GraphicsScene.translateGraphicsItems(item.childItems()):
+        range = [None, None]
             
-            chb = self.childrenBoundingRect(ch)
-            
-            if chb.height() > 0:
-                if bounds.height() > 0:
-                    bounds.setTop(min(bounds.top(), chb.top()))
-                    bounds.setBottom(max(bounds.bottom(), chb.bottom()))
+        for item in items:
+            if not item.isVisible():
+                continue
+        
+            #print "=========", item
+            useX = True
+            useY = True
+            if hasattr(item, 'dataBounds'):
+                if frac is None:
+                    frac = (1.0, 1.0)
+                xr = item.dataBounds(0, frac=frac[0])
+                yr = item.dataBounds(1, frac=frac[1])
+                if xr is None:
+                    useX = False
+                    xr = (0,0)
+                if yr is None:
+                    useY = False
+                    yr = (0,0)
+                
+                bounds = QtCore.QRectF(xr[0], yr[0], xr[1]-xr[0], yr[1]-yr[0])
+                #print "   item real:", bounds
+            else:
+                if int(item.flags() & item.ItemHasNoContents) > 0:
+                    continue
+                    #print "   empty"
                 else:
-                    bounds.setTop(chb.top())
-                    bounds.setBottom(chb.bottom())
-            if chb.width() > 0:
-                if bounds.width() > 0:
-                    bounds.setLeft(min(bounds.left(), chb.left()))
-                    bounds.setRight(max(bounds.right(), chb.right()))
+                    bounds = item.boundingRect()
+                    #bounds = [[item.left(), item.top()], [item.right(), item.bottom()]]
+                #print "   item:", bounds
+            #bounds = QtCore.QRectF(bounds[0][0], bounds[1][0], bounds[0][1]-bounds[0][0], bounds[1][1]-bounds[1][0])
+            bounds = self.mapFromItemToView(item, bounds).boundingRect()
+            #print "    ", bounds
+            
+            
+            if not any([useX, useY]):
+                continue
+            
+            if useX != useY:  ##   !=  means  xor
+                continue  ## need to check for item rotations and decide how best to apply this boundary. 
+            
+            
+            if useY:
+                if range[1] is not None:
+                    range[1] = [min(bounds.top(), range[1][0]), max(bounds.bottom(), range[1][1])]
+                    #bounds.setTop(min(bounds.top(), chb.top()))
+                    #bounds.setBottom(max(bounds.bottom(), chb.bottom()))
                 else:
-                    bounds.setLeft(chb.left())
-                    bounds.setRight(chb.right())
+                    range[1] = [bounds.top(), bounds.bottom()]
+                    #bounds.setTop(chb.top())
+                    #bounds.setBottom(chb.bottom())
+            if useX:
+                if range[0] is not None:
+                    range[0] = [min(bounds.left(), range[0][0]), max(bounds.right(), range[0][1])]
+                    #bounds.setLeft(min(bounds.left(), chb.left()))
+                    #bounds.setRight(max(bounds.right(), chb.right()))
+                else:
+                    range[0] = [bounds.left(), bounds.right()]
+                    #bounds.setLeft(chb.left())
+                    #bounds.setRight(chb.right())
+        
+        tr = self.targetRange()
+        if range[0] is None:
+            range[0] = tr[0]
+        if range[1] is None:
+            range[1] = tr[1]
+            
+        bounds = QtCore.QRectF(range[0][0], range[1][0], range[0][1]-range[0][0], range[1][1]-range[1][0])
         return bounds
             
-            
-            #and not isinstance(item, UIGraphicsItem):
-            #bounds = self.itemBoundingRect(item)
-        #else:
-            #bounds = None
-            
-            #chb = self.childrenBoundingRect(ch)
-            #if chb is None or (chb.width() == 0 and chb.height() == 0):
-                #continue
-            #else:
-                #if bounds is None:
-                    #bounds = chb
-                #else:
-                    #bounds |= chb
-        #return bounds
         
 
     def updateMatrix(self, changed=None):
