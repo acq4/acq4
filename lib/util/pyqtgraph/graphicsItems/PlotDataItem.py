@@ -313,7 +313,7 @@ class PlotDataItem(GraphicsObject):
         #print self.xDisp.shape, self.xDisp.min(), self.xDisp.max()
         return self.xDisp, self.yDisp
 
-    def getRange(self, ax, frac=1.0):
+    def dataBounds(self, ax, frac=1.0):
         (x, y) = self.getData()
         if x is None or len(x) == 0:
             return (0, 0)
@@ -329,6 +329,7 @@ class PlotDataItem(GraphicsObject):
             raise Exception("Value for parameter 'frac' must be > 0. (got %s)" % str(frac))
         else:
             return (scipy.stats.scoreatpercentile(d, 50 - (frac * 50)), scipy.stats.scoreatpercentile(d, 50 + (frac * 50)))
+
 
     def clear(self):
         for i in self.curves+self.scatters:

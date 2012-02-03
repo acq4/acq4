@@ -130,7 +130,7 @@ class PlotItem(GraphicsWidget):
         
 
         ## Wrap a few methods from viewBox
-        for m in ['setXRange', 'setYRange', 'setRange', 'autoRange', 'viewRect', 'setMouseEnabled']:
+        for m in ['setXRange', 'setYRange', 'setXLink', 'setYLink', 'setRange', 'autoRange', 'viewRect', 'setMouseEnabled']:
             setattr(self, m, getattr(self.vb, m))
             
         self.items = []
@@ -261,6 +261,13 @@ class PlotItem(GraphicsWidget):
             self.plot(**kargs)
         
         self.enableAutoScale()
+        
+    def implements(self, interface=None):
+        return interface in ['ViewBoxWrapper']
+
+    def getViewBox(self):
+        return self.vb
+    
         
     #def paint(self, *args):
         #prof = debug.Profiler('PlotItem.paint', disabled=True)
@@ -530,7 +537,7 @@ class PlotItem(GraphicsWidget):
         else:
             plot.setData(x, y)
         
-        
+
     #def mouseCheckChanged(self):
         #state = [self.ctrl.xMouseCheck.isChecked(), self.ctrl.yMouseCheck.isChecked()]
         #self.vb.setMouseEnabled(*state)

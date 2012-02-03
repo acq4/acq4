@@ -32,10 +32,14 @@ p1 = pw.plot()
 p1.setPen((200,200,100))
 
 ## Add in some extra graphics
-rect = QtGui.QGraphicsRectItem(QtCore.QRectF(0, 0, 1, 1e-10))
+rect = QtGui.QGraphicsRectItem(QtCore.QRectF(0, 0, 1, 5e-11))
 rect.setPen(QtGui.QPen(QtGui.QColor(100, 200, 100)))
 pw.addItem(rect)
 
+pw.setLabel('left', 'Value', units='V')
+pw.setLabel('bottom', 'Time', units='s')
+pw.setXRange(0, 2)
+pw.setYRange(0, 1e-10)
 
 def rand(n):
     data = np.random.random(n)
@@ -72,11 +76,11 @@ def clicked():
     print "curve clicked"
 curve.sigClicked.connect(clicked)
 
-lr = pg.LinearRegionItem([1, 3], bounds=[0,10], movable=True)
+lr = pg.LinearRegionItem([1, 30], bounds=[0,100], movable=True)
 pw3.addItem(lr)
 line = pg.InfiniteLine(angle=90, movable=True)
 pw3.addItem(line)
-line.setBounds([1,3])
+line.setBounds([0,200])
 
 ## Start Qt event loop unless running in interactive mode.
 if sys.flags.interactive != 1:
