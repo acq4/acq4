@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'ManagerTemplate.ui'
+# Form implementation generated from reading ui file './lib/modules/Manager/ManagerTemplate.ui'
 #
-# Created: Thu Aug 18 16:32:40 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Fri Feb  3 12:01:59 2012
+#      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -53,10 +53,13 @@ class Ui_MainWindow(object):
         self.loadModuleBtn = QtGui.QPushButton(self.groupBox_2)
         self.loadModuleBtn.setObjectName(_fromUtf8("loadModuleBtn"))
         self.verticalLayout_4.addWidget(self.loadModuleBtn)
-        self.verticalLayout.addWidget(self.groupBox_2)
-        self.logBtn = LogButton(self.centralwidget)
+        self.logBtn = QtGui.QPushButton(self.groupBox_2)
         self.logBtn.setObjectName(_fromUtf8("logBtn"))
-        self.verticalLayout.addWidget(self.logBtn)
+        self.verticalLayout_4.addWidget(self.logBtn)
+        self.verticalLayout.addWidget(self.groupBox_2)
+        self.logBtn1 = LogButton(self.centralwidget)
+        self.logBtn1.setObjectName(_fromUtf8("logBtn1"))
+        self.verticalLayout.addWidget(self.logBtn1)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem)
         self.reloadModuleBtn = QtGui.QPushButton(self.centralwidget)
@@ -81,6 +84,7 @@ class Ui_MainWindow(object):
         self.groupBox_2.setTitle(QtGui.QApplication.translate("MainWindow", "Modules", None, QtGui.QApplication.UnicodeUTF8))
         self.loadModuleBtn.setText(QtGui.QApplication.translate("MainWindow", "Load Module", None, QtGui.QApplication.UnicodeUTF8))
         self.logBtn.setText(QtGui.QApplication.translate("MainWindow", "Log", None, QtGui.QApplication.UnicodeUTF8))
+        self.logBtn1.setText(QtGui.QApplication.translate("MainWindow", "Log", None, QtGui.QApplication.UnicodeUTF8))
         self.reloadModuleBtn.setText(QtGui.QApplication.translate("MainWindow", "Reload Libraries", None, QtGui.QApplication.UnicodeUTF8))
         self.quitBtn.setText(QtGui.QApplication.translate("MainWindow", "Quit ACQ4", None, QtGui.QApplication.UnicodeUTF8))
 

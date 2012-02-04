@@ -57,6 +57,7 @@ class pbm_ImageAnalysis(AnalysisModule):
                                 # This image may come from a separate file or a calculation on the present file
         self.physData = None # physiology data associated with the current image
         self.dataStruct = 'flat' # 'flat' or 'interleaved' are valid at present.
+        self.imageInfo = []
         self.ignoreFirst = False # ImagePhys_ignoreFirst
         self.rectSelect = True #
         self.tStart = 0.0 # baseline time start = applies to the image: ImagePhys_BaseStart
@@ -163,6 +164,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrlImageFunc.IAFuncs_NetworkGraph.clicked.connect(self.NetworkGraph)
         self.ctrlImageFunc.IAFuncs_Analysis_AXCorr_Individual.clicked.connect(self.Analog_Xcorr_Individual)
         self.ctrlImageFunc.IAFuncs_Analysis_AXCorr.clicked.connect(self.Analog_Xcorr)
+        self.ctrlImageFunc.IAFuncs_Analysis_UnbiasedXC.clicked.connect(self.Analog_Xcorr_unbiased)
 
     def initDataState(self):
         self.dataState = {'Loaded': False, 'bleachCorrection': False, 'Normalized': False,
@@ -267,6 +269,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.imageData = self.imageData[fi:]
             self.baseImage = self.imageData[0] # save first image in series to show after processing...
             self.imageTimes = img.infoCopy()[0].values()[1]
+            self.imageInfo = img.infoCopy()
             self.imageTimes = self.imageTimes[fi:]
             self.imageView.setImage(self.imageData)
             self.dataState['Loaded'] = True
@@ -298,6 +301,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.baseImage = self.imageData[0] # just to show after processing...
             self.imageTimes = img.infoCopy()[0].values()[1]
             self.imageTimes = self.imageTimes[fi:]
+            self.imageInfo = img.infoCopy()
             self.imageView.setImage(self.imageData)
             self.dataState['Loaded'] = True
             self.dataState['Structure'] = 'Flat'
@@ -773,6 +777,13 @@ class pbm_ImageAnalysis(AnalysisModule):
         (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Network Graph", nrows = 1, ncols=1, 
                     sharex = True, sharey = True)
         self.MPLFig.suptitle('Network Graph: %s' % self.currentFileName, fontsize=11)
+        px = self.imageInfo[3]['pixelSize']
+        region = self.imageInfo[3]['region']
+        sx = region[2]-region[0]
+        sy = region[3]-region[1]
+        sx = sx*px[0]*1e6
+        sy = sy*px[1]*1e6
+        binning = self.imageInfo[3]['binning']
         maxStr = numpy.nanmax(self.IXC_strength)
         minStr = numpy.nanmin(self.IXC_strength)
         maxline = 4.0
@@ -781,20 +792,21 @@ class pbm_ImageAnalysis(AnalysisModule):
         for i in range(0, nd):
             wpos1 = [self.AllRois[i].pos().x(), self.AllRois[i].pos().y(),
                             self.AllRois[i].boundingRect().width(), self.AllRois[i].boundingRect().height()]
-            x1 = wpos1[0]+0.5*wpos1[2]
-            y1 = wpos1[1]+0.5*wpos1[3]                
+            x1 = (wpos1[0]+0.5*wpos1[2])*px[0]*1e6
+            y1 = (wpos1[1]+0.5*wpos1[3])*px[1]*1e6                
             for j in range(i+1, nd):
                 wpos2 = [self.AllRois[j].pos().x(), self.AllRois[j].pos().y(),
                             self.AllRois[j].boundingRect().width(), self.AllRois[j].boundingRect().height()]
-                x2 = wpos2[0]+0.5*wpos2[2]
-                y2 = wpos2[1]+0.5*wpos2[3]                
+                x2 = (wpos2[0]+0.5*wpos2[2])*px[0]*1e6
+                y2 = (wpos2[1]+0.5*wpos2[3])*px[1]*1e6
                 lw = maxline*(self.IXC_strength[i,j]-minStr)/(maxStr-minStr)+minline
-                print lw
                 self.MPL_plots.plot([x1, x2], [y1, y2], linewidth=lw, 
-                linestyle = '-', color='tomato')
-        self.MPL_plots.set_xlabel('X (pixels)')
-        self.MPL_plots.set_ylabel('Y (pixels)')
-        PL.show()        
+                linestyle = '-', color='tomato', marker='o')
+        self.MPL_plots.set_xlim((0, sx))
+        self.MPL_plots.set_ylim((sy, 0))
+        self.MPL_plots.set_xlabel('X (um)')
+        self.MPL_plots.set_ylabel('Y (um)')
+        PL.show()
         
 #--------------- From PyImageAnalysis3.py: -----------------------------
 #---------------- ROI routines on Images  ------------------------------
@@ -1324,7 +1336,9 @@ class pbm_ImageAnalysis(AnalysisModule):
     def Analog_Xcorr(self, FData = None, dt = None):
         """Average cross correlation of all traces"""
         self.calculateROIs()
-        FData = self.FData
+        print self.FData
+        if not FData:
+            FData = self.FData
         if dt is None:
             if self.imageTimes is []:
                 dt = 1
@@ -1340,8 +1354,8 @@ class pbm_ImageAnalysis(AnalysisModule):
 #                         textName='CrossCorrelation', clearFlag= True)
         nxc = 0
         self.xcorr = []
-        for roi1 in range(0, self.nROI-1):
-            for roi2 in range(roi1+1, self.nROI):
+        for roi1 in range(0, len(FData)-1):
+            for roi2 in range(roi1+1, len(FData)):
                 (a1, b1) = numpy.polyfit(self.imageTimes, FData[roi1,:], 1)
                 (a2, b2) = numpy.polyfit(self.imageTimes, FData[roi2,:], 1)
                 y1 = numpy.polyval([a1, b1], self.imageTimes)
@@ -1361,12 +1375,33 @@ class pbm_ImageAnalysis(AnalysisModule):
 #        MPlots.PlotLine(self.ui.qwt_XCorrPlot, self.lags, self.xcorr, color = 'k', dataID = 'XcorrIndividual')
 #        self.selectAverageXcorrTab()
 
-    def Analog_Xcorr_Individual(self, FData = None, dt = None):
+    def Analog_Xcorr_unbiased(self, FData = None, dt = None):
+        self.oldROIs = self.AllRois
+        self.clearAllROI()
+        img_sh = self.rawData.shape
+        img_x = img_sh[1]
+        img_y = img_sh[2]
+        nx = 10
+        ny = 10
+        dx = int(img_x/nx)
+        dy = int(img_y/ny)
+        print dx, dy
+        for i in range(0, nx):
+            for j in range(0, ny):
+                self.addOneROI(pos=[i*dx, j*dy], hw=[dx, dy])
+        self.Analog_Xcorr_Individual(plottype = 'image')
+        
+    def Analog_Xcorr_Individual(self, FData = None, dt = None, plottype = 'traces'):
         """ compute and display the individual cross correlations between pairs of traces
             in the data set"""
         self.use_pg = False
         self.calculateROIs()
-        FData = self.FData
+        print FData
+        if not FData:
+            FData = self.FData
+            nROI = self.nROI
+        else:
+            nROI = len(FData)
         if dt is None:
             if self.imageTimes is []:
                 dt = 1
@@ -1374,11 +1409,11 @@ class pbm_ImageAnalysis(AnalysisModule):
                 dt = numpy.mean(numpy.diff(self.imageTimes))
         
         nxc = 0
-        rows = self.nROI-1
+        rows = nROI-1
         cols = rows
-        self.IXC_corr =  [[]]*(sum(range(1,self.nROI)))
-        self.IXC_plots = [[]]*(sum(range(1,self.nROI)))
-        self.IXC_strength = numpy.empty((self.nROI, self.nROI))
+        self.IXC_corr =  [[]]*(sum(range(1,nROI)))
+        self.IXC_plots = [[]]*(sum(range(1,nROI)))
+        self.IXC_strength = numpy.empty((nROI, nROI))
         self.IXC_strength.fill(numpy.nan)
         xtrace  = 0
         yMinorTicks = 0
@@ -1393,21 +1428,27 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.newWindow.show()
         else:
             self.checkMPL()
-            (self.MPLFig, self.IXC_plots) = PL.subplots(num="Individual ROI Cross Correlations", nrows = self.nROI, ncols=self.nROI, 
+            if plottype == 'traces':
+                (self.MPLFig, self.IXC_plots) = PL.subplots(num="Individual ROI Cross Correlations", nrows = self.nROI, ncols=self.nROI, 
                     sharex = True, sharey = True)
-            self.MPLFig.suptitle('XCorr: %s' % self.currentFileName, fontsize=11)
-        for xtrace1 in range(0, self.nROI-1):
+                self.MPLFig.suptitle('XCorr: %s' % self.currentFileName, fontsize=11)
+            else:
+                self.MPLFig = PL.subplot(111)
+        for xtrace1 in range(0, nROI-1):
             a1 = numpy.polyfit(self.imageTimes, FData[xtrace1,:], 2)
             y1 = numpy.polyval(a1, self.imageTimes)
-            for xtrace2 in range(xtrace1+1, self.nROI):
+            for xtrace2 in range(xtrace1+1, nROI):
                 if bLegend:
                     legend = legend=('%d vs %d' % (xtrace1, xtrace2))
                 else:
                     legend = None
+                print 'calculating corr on %d vs %d' % (xtrace1, xtrace2)
                 a2 = numpy.polyfit(self.imageTimes, FData[xtrace2,:], 2)
                 y2 = numpy.polyval(a2, self.imageTimes)
                 sc = self.ccf(FData[xtrace1,:]-y1, FData[xtrace2,:]-y2)
+                #sc = self.ccf(FData[xtrace1,:], FData[xtrace2,:])
                 self.IXC_corr[xtrace] = sc
+                print sc.max()
                 self.IXC_strength[xtrace1, xtrace2] = sc.max()
                 s = numpy.shape(sc)
                 self.lags = dt*(numpy.arange(0, s[0])-s[0]/2.0)
@@ -1415,24 +1456,25 @@ class pbm_ImageAnalysis(AnalysisModule):
                 #                color = 'lightgray', linestyle='Dash', dataID=('ref_%d_%d' % (xtrace1, xtrace2)))
                 #MPlots.PlotLine(self.IXC_plots[xtrace], self.lags, self.IXC_corr[xtrace],
                 #                color = 'k', dataID = ('Xcorr_%d_%d' % (xtrace1, xtrace2)))
-                if self.use_pg:
-                    self.IXC_plots[xtrace] = self.mpw.addPlot(xtrace1, xtrace2)
-                    self.IXC_plots[xtrace].plot(self.lags, self.IXC_corr[xtrace])
-                    if xtrace == 0:
-                        self.IXC_plots[0].registerPlot(name='xcorr_%03d' % xtrace)
-                    if xtrace > 0:
-                        self.IXC_plots[xtrace].vb.setXLink('xcorr_000') # not sure - this seems to be at the wrong level in the window manager
-                else: # pylab
-                    self.IXC_plots[xtrace1, xtrace2].plot(self.lags,self.IXC_corr[xtrace])
-                    self.IXC_plots[xtrace1, xtrace2].hold = True
-                    self.IXC_plots[xtrace1, xtrace2].plot(self.lags,numpy.zeros(self.lags.shape), color = '0.5')
-                    self.IXC_plots[xtrace1, xtrace2].set_title('ROIs: %d, %d' % (xtrace1, xtrace2), fontsize=10)
-                    self.IXC_plots[xtrace1, xtrace2].set_xlabel('T (sec)')
-                    self.IXC_plots[xtrace1, xtrace2].set_ylabel('Corr (R)')
+                if plottype == 'traces':
+                    if self.use_pg:
+                        self.IXC_plots[xtrace] = self.mpw.addPlot(xtrace1, xtrace2)
+                        self.IXC_plots[xtrace].plot(self.lags, self.IXC_corr[xtrace])
+                        if xtrace == 0:
+                            self.IXC_plots[0].registerPlot(name='xcorr_%03d' % xtrace)
+                        if xtrace > 0:
+                            self.IXC_plots[xtrace].vb.setXLink('xcorr_000') # not sure - this seems to be at the wrong level in the window manager
+                    else: # pylab
+                        self.IXC_plots[xtrace1, xtrace2].plot(self.lags,self.IXC_corr[xtrace])
+                        self.IXC_plots[xtrace1, xtrace2].hold = True
+                        self.IXC_plots[xtrace1, xtrace2].plot(self.lags,numpy.zeros(self.lags.shape), color = '0.5')
+                        self.IXC_plots[xtrace1, xtrace2].set_title('ROIs: %d, %d' % (xtrace1, xtrace2), fontsize=10)
+                        self.IXC_plots[xtrace1, xtrace2].set_xlabel('T (sec)')
+                        self.IXC_plots[xtrace1, xtrace2].set_ylabel('Corr (R)')
                 xtrace = xtrace + 1
         # now rescale all the plot Y axes by getting the min/max "viewRange" across all, then setting them all the same
 
-        if self.use_pg:
+        if self.use_pg and plottype == 'traces':
             ymin = 0
             ymax = 0
             bmin = []
@@ -1455,6 +1497,9 @@ class pbm_ImageAnalysis(AnalysisModule):
                     self.IXC_plots[i].hideAxis('bottom')
                  #   self.IXC_plots[i].hideButtons()
         else:
+            if plottype == 'image':
+                print self.IXC_strength.shape
+                self.MPLFig.imshow(self.IXC_strength)
             PL.show()
         
         #MPlots.sameScale(self.IXC_plots)

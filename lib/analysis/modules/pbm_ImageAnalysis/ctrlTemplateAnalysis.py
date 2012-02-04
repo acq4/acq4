@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/pbm_ImageAnalysis/ctrlTemplateAnalysis.ui'
 #
-# Created: Thu Feb  2 15:25:04 2012
+# Created: Fri Feb  3 12:01:53 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -59,7 +59,7 @@ class Ui_Form(object):
         self.widget_2 = QtGui.QWidget(self.groupBox)
         self.widget_2.setObjectName(_fromUtf8("widget_2"))
         self.IAFuncs_NetworkGraph = QtGui.QPushButton(self.widget_2)
-        self.IAFuncs_NetworkGraph.setGeometry(QtCore.QRect(0, 125, 141, 32))
+        self.IAFuncs_NetworkGraph.setGeometry(QtCore.QRect(0, 155, 141, 32))
         font = QtGui.QFont()
         font.setPointSize(11)
         self.IAFuncs_NetworkGraph.setFont(font)
@@ -85,7 +85,7 @@ class Ui_Form(object):
         self.IAFuncs_Analysis_AXCorr_Individual.setFont(font)
         self.IAFuncs_Analysis_AXCorr_Individual.setObjectName(_fromUtf8("IAFuncs_Analysis_AXCorr_Individual"))
         self.IAFuncs_DistanceStrength = QtGui.QPushButton(self.widget_2)
-        self.IAFuncs_DistanceStrength.setGeometry(QtCore.QRect(0, 100, 141, 32))
+        self.IAFuncs_DistanceStrength.setGeometry(QtCore.QRect(0, 130, 141, 32))
         font = QtGui.QFont()
         font.setPointSize(11)
         self.IAFuncs_DistanceStrength.setFont(font)
@@ -243,11 +243,17 @@ class Ui_Form(object):
         self.IAFuncs_Analysis_SpikeXCorr.setFont(font)
         self.IAFuncs_Analysis_SpikeXCorr.setObjectName(_fromUtf8("IAFuncs_Analysis_SpikeXCorr"))
         self.IAFuncs_Distance = QtGui.QPushButton(self.widget_2)
-        self.IAFuncs_Distance.setGeometry(QtCore.QRect(0, 70, 141, 32))
+        self.IAFuncs_Distance.setGeometry(QtCore.QRect(0, 105, 141, 32))
         font = QtGui.QFont()
         font.setPointSize(11)
         self.IAFuncs_Distance.setFont(font)
         self.IAFuncs_Distance.setObjectName(_fromUtf8("IAFuncs_Distance"))
+        self.IAFuncs_Analysis_UnbiasedXC = QtGui.QPushButton(self.widget_2)
+        self.IAFuncs_Analysis_UnbiasedXC.setGeometry(QtCore.QRect(5, 75, 131, 21))
+        font = QtGui.QFont()
+        font.setPointSize(11)
+        self.IAFuncs_Analysis_UnbiasedXC.setFont(font)
+        self.IAFuncs_Analysis_UnbiasedXC.setObjectName(_fromUtf8("IAFuncs_Analysis_UnbiasedXC"))
         self.gridLayout_2.addWidget(self.widget_2, 1, 0, 2, 1)
         self.gridLayout.addWidget(self.groupBox, 0, 0, 1, 1)
 
@@ -300,4 +306,10 @@ class Ui_Form(object):
         self.label_16.setText(QtGui.QApplication.translate("Form", "A (uM)", None, QtGui.QApplication.UnicodeUTF8))
         self.IAFuncs_Analysis_SpikeXCorr.setText(QtGui.QApplication.translate("Form", "Digital Xcorr", None, QtGui.QApplication.UnicodeUTF8))
         self.IAFuncs_Distance.setText(QtGui.QApplication.translate("Form", "ROI Distances", None, QtGui.QApplication.UnicodeUTF8))
+        self.IAFuncs_Analysis_UnbiasedXC.setToolTip(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
+"p, li { white-space: pre-wrap; }\n"
+"</style></head><body style=\" font-family:\'Lucida Grande\'; font-size:11pt; font-weight:400; font-style:normal;\">\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Compute the cross-correlation between each pair of ROI\'s. The computation is done on the analog waveform.</p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
+        self.IAFuncs_Analysis_UnbiasedXC.setText(QtGui.QApplication.translate("Form", "Unbiased XCorr (slow)", None, QtGui.QApplication.UnicodeUTF8))
 

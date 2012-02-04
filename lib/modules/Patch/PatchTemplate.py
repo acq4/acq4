@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'PatchTemplate.ui'
+# Form implementation generated from reading ui file './lib/modules/Patch/PatchTemplate.ui'
 #
-# Created: Sun Dec 18 17:57:25 2011
+# Created: Fri Feb  3 12:01:59 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

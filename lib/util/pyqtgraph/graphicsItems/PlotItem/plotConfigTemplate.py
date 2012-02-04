@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'plotConfigTemplate.ui'
+# Form implementation generated from reading ui file './lib/util/pyqtgraph/graphicsItems/PlotItem/plotConfigTemplate.ui'
 #
-# Created: Fri Jan 20 11:24:44 2012
+# Created: Fri Feb  3 12:02:02 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
