@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericProtoGui
+from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericProtoGui, DataMapping
 from Mutex import Mutex, MutexLocker
 #from lib.devices.Device import *
 from PyQt4 import QtCore, QtGui
@@ -33,7 +33,51 @@ lpf_freq = np.array([1.0, 2.0, 5.0, 10.0, 100.0])
         #LPFchannel: 'DAQ', '/Dev1/ai15'
         #VCommand: 'DAQ', '/Dev1/ao0'
         #ScaledSignal: 'DAQ', '/Dev1/ai5'
+class AP200DataMapping(DataMapping):
+    def __init__(self, dev, chans=None, mode=None):
+        ## mode can be provided:
+        ##   - during __init__
+        ##   - explicitly when calling map functions
+        ##   - implicitly when calling map functions (uses device's current mode)
         
+        self.dev = dev
+        self.mode = mode
+        self.gainSwitch = self.dev.getGainSwitchValue()
+        
+    def setMode(self, mode):
+        self.mode = mode
+            
+    def getGain(self, chan, mode, switch=None):
+        if switch == None:
+            switch = self.gainSwitch
+        if mode is None:
+            if self.mode is None:
+                mode = self.dev.getMode()
+            else:
+                mode = self.mode
+        if chan != 'command':
+            return self.dev.interpretGainSwitchValue(switch, mode)
+        else:
+            global ivModes
+            ivMode = ivModes[mode]
+            if ivMode == 'vc':
+                return 50.0 # in VC mode, sensitivity is 20mV/V; scale is 1/20e-3 = 50
+            else:
+                return 5e8 # in IC mode, sensitivity is 2nA/V; scale is 1/2e-9 = 5e8
+        
+    def mapToDaq(self, chan, data, mode=None):
+        gain = self.getGain(chan, mode)
+        return data * gain
+        
+        
+    def mapFromDaq(self, chan, data, mode=None):
+        gain = self.getGain(chan, mode)
+        return data / gain
+        
+    
+    
+    
+    
 class AxoPatch200(DAQGeneric):
     
     sigShowModeDialog = QtCore.Signal(object)
@@ -46,7 +90,10 @@ class AxoPatch200(DAQGeneric):
         # Generate config to use for DAQ 
         daqConfig = {}
         
-        ## Don't sctually need to inform the DAQ about these channels.
+        for ch in ['GainChannel', 'LPFChannel', 'ModeChannel']:
+            if ch not in config:
+                continue
+            daqConfig[ch]  = config[ch].copy()
         #if 'GainChannel' in config:
         #    daqConfig['gain'] = {'type': 'ai', 'channel': config['GainChannel']}
         #if 'LPFChannel' in config:
@@ -64,21 +111,20 @@ class AxoPatch200(DAQGeneric):
             
         ## Note that both of these channels can be present, but we will only ever record from one at a time.
         ## Usually, we'll record from "I OUTPUT" in current clamp and "10 Vm OUTPUT" in voltage clamp.
-        self.hasSecondaryChannel = True
         if 'SecondaryVCSignal' in config: 
+            self.hasSecondaryChannel = True
             #daqConfig['secondary'] = {'type': 'ai', 'channel': config['SecondaryVCSignal']}
             daqConfig['secondary'] = config['SecondaryVCSignal']
             if config['SecondaryVCSignal'].get('type', None) != 'ai':
                 raise Exception("AxoPatch200: SecondaryVCSignal configuration must have type:'ai'")
         elif 'SecondaryICSignal' in config:
+            self.hasSecondaryChannel = True
             #daqConfig['secondary'] = {'type': 'ai', 'channel': config['SecondaryICSignal']}
             daqConfig['secondary'] = config['SecondaryICSignal']
             if config['SecondaryICSignal'].get('type', None) != 'ai':
                 raise Exception("AxoPatch200: SecondaryICSignal configuration must have type:'ai'")
         else:
             self.hasSecondaryChannel = False
-            
-        DAQGeneric.__init__(self, dm, daqConfig, name)
         
         self.holding = {
             'vc': config.get('vcHolding', -0.05),
@@ -86,20 +132,19 @@ class AxoPatch200(DAQGeneric):
         }
         
         self.config = config
-        self.modeLock = Mutex(Mutex.Recursive)
-        self.devLock = Mutex(Mutex.Recursive)
+        self.modeLock = Mutex(Mutex.Recursive)   ## protects self.mdCanceled
+        self.devLock = Mutex(Mutex.Recursive)    ## protects self.holding, possibly self.config, ..others, perhaps?
         self.mdCanceled = False
+        
+        DAQGeneric.__init__(self, dm, daqConfig, name)
         
         self.modeDialog = QtGui.QMessageBox()
         self.modeDialog.hide()
         self.modeDialog.setModal(False)
         self.modeDialog.setWindowTitle("Mode Switch Request")
         self.modeDialog.addButton(self.modeDialog.Cancel)
-        #QtCore.QObject.connect(self.modeDialog, QtCore.SIGNAL('buttonClicked(QAbstractButton*)'), self.modeDialogClicked)
         self.modeDialog.buttonClicked.connect(self.modeDialogClicked)
         
-        #QtCore.QObject.connect(self, QtCore.SIGNAL('showModeDialog'), self.showModeDialog)
-        #QtCore.QObject.connect(self, QtCore.SIGNAL('hideModeDialog'), self.hideModeDialog)
         self.sigShowModeDialog.connect(self.showModeDialog)
         self.sigHideModeDialog.connect(self.hideModeDialog)
         
@@ -120,6 +165,9 @@ class AxoPatch200(DAQGeneric):
         
     def deviceInterface(self, win):
         return AxoPatchDevGui(self)
+    
+    def getMapping(self, chans=None, mode=None):
+        return AP200DataMapping(self, chans, mode)
         
         
     def setHolding(self, mode=None, value=None, force=False):
@@ -137,11 +185,11 @@ class AxoPatch200(DAQGeneric):
                 self.holding[ivMode] = value
             
             if ivMode == ivModes[currentMode] or force:
-                gain = self.getCmdGain(mode)
+                mapping = self.getMapping(mode=mode)
                 ## override the scale since getChanScale won't necessarily give the correct value
                 ## (we may be about to switch modes)
-                DAQGeneric.setChanHolding(self, 'command', value, scale=gain)
-            #self.emit(QtCore.SIGNAL('holdingChanged'), self.holding.copy())
+                DAQGeneric.setChanHolding(self, 'command', value, mapping=mapping)
+           
             self.sigHoldingChanged.emit('primary', self.holding.copy())
             
     def setChanHolding(self, chan, value=None):
@@ -188,7 +236,7 @@ class AxoPatch200(DAQGeneric):
             self.mdCanceled = False
         app = QtGui.QApplication.instance()
         msg = 'Please set AxoPatch mode switch to %s' % mode
-        #self.emit(QtCore.SIGNAL('showModeDialog'), msg)
+
         self.sigShowModeDialog.emit(msg)
         
         #print "Set mode:", mode
@@ -212,8 +260,7 @@ class AxoPatch200(DAQGeneric):
             #print "  ..current:", currentMode
             
         #print "  got mode"
-        #self.emit(QtCore.SIGNAL('hideModeDialog'))
-        #self.emit(QtCore.SIGNAL('modeChanged'), mode)
+
         self.sigHideModeDialog.emit()
         self.sigModeChanged.emit(mode)
         
@@ -242,7 +289,7 @@ class AxoPatch200(DAQGeneric):
         with self.devLock:
             #print "  got lock"
             global mode_tel, modeNames
-            m = self.readChannel('ModeChannel')
+            m = self.readChannel('ModeChannel', raw=True)
             #print "  read value"
             if m is None:
                 return None
@@ -259,35 +306,50 @@ class AxoPatch200(DAQGeneric):
         
     def getGain(self):
         with self.devLock:
-            global gain_tel, gain_vm, gain_im, ivModes
             mode = self.getMode()
             if mode is None:
                 return None
-            g = self.readChannel('GainChannel')
-            if g is None:
+            g = self.getGainSwitchValue()
+            return self.interpretGainSwitchValue(g, mode)
+            
+    def interpretGainSwitchValue(self, val, mode):
+        ## convert a gain-switch-position integer (as returned from getGainSwitchValue)
+        ## into an actual gain value
+            global gain_vm, gain_im, ivModes
+            if val is None:
                 return None
             if ivModes[mode] == 'vc':
-                return gain_vm[np.argmin(np.abs(gain_tel-g))]
+                return gain_vm[val]
             else:
-                return gain_im[np.argmin(np.abs(gain_tel-g))]
+                return gain_im[val]
         
+        
+    def getGainSwitchValue(self):
+        ## return the integer value corresponding to the current position of the output gain switch
+        global gain_tel
+        g = self.readChannel('GainChannel', raw=True)
+        if g is None:
+            return None
+        return np.argmin(np.abs(gain_tel-g))
+    
     def getCmdGain(self, mode=None):
         with self.devLock:
             if mode is None:
                 mode = self.getMode()
+            global ivModes
             ivMode = ivModes[mode]
             if ivMode == 'vc':
                 return 50.0 # in VC mode, sensitivity is 20mV/V; scale is 1/20e-3 = 50
             else:
                 return 5e8 # in IC mode, sensitivity is 2nA/V; scale is 1/2e-9 = 5e8
         
-    def getChanScale(self, chan):
-        if chan == 'command':
-            return self.getCmdGain()
-        elif chan == 'primary':
-            return self.getGain()
-        else:
-            return DAQGeneric.getChanScale(self, chan)
+    #def getChanScale(self, chan):
+        #if chan == 'command':
+            #return self.getCmdGain()
+        #elif chan == 'primary':
+            #return self.getGain()
+        #else:
+            #return DAQGeneric.getChanScale(self, chan)
             #raise Exception("No scale for channel %s" % chan)
         
     def getChanUnits(self, chan):
@@ -305,20 +367,15 @@ class AxoPatch200(DAQGeneric):
         elif chan == 'primary':
             return units[1]
         
-    def readChannel(self, ch):
-        if ch in self.config:
-            chOpts = self.config[ch]
-            #dev = chOpts[0]
-            #chan = chOpts[1]
-            #if len(chOpts) > 2:
-                #mode = chOpts[2]
-            #else:
-                #mode = None
-                
-            dev = self.dm.getDevice(chOpts['device'])
-            return dev.getChannelValue(chOpts['channel'], chOpts.get('mode', None))
-        else:
-            return None
+    def readChannel(self, ch, **opts):
+        ## this should go away.
+        return self.getChannelValue(ch, **opts)
+        #if ch in self.config:
+            #chOpts = self.config[ch]
+            #dev = self.dm.getDevice(chOpts['device'])
+            #return dev.getChannelValue(chOpts['channel'], chOpts.get('mode', None))
+        #else:
+            #return None
         
     def reconfigureSecondaryChannel(self, mode):
         ## Secondary channel changes depending on which mode we're in.
@@ -364,16 +421,18 @@ class AxoPatch200Task(DAQGenericTask):
         
         ## Do not configure daq until mode is set. Otherwise, holding values may be incorrect.
         DAQGenericTask.configure(self, tasks, startOrder)
+        self.mapping.setMode(self.ampState['mode']) 
         
-    def getChanScale(self, chan):
-        if chan == 'primary':
-            return self.ampState['gain']
-        elif chan == 'command':
-            return self.dev.getCmdGain(self.ampState['mode'])
-        elif chan == 'secondary':
-            return self.dev.getChanScale('secondary')
-        else:
-            raise Exception("No scale for channel %s" % chan)
+    #def getChanScale(self, chan):
+        #print "AxoPatch200Task.getChanScale called."
+        #if chan == 'primary':
+            #return self.ampState['gain']
+        #elif chan == 'command':
+            #return self.dev.getCmdGain(self.ampState['mode'])
+        #elif chan == 'secondary':
+            #return self.dev.getChanScale('secondary')
+        #else:
+            #raise Exception("No scale for channel %s" % chan)
             
     def storeResult(self, dirHandle):
         #DAQGenericTask.storeResult(self, dirHandle)
@@ -431,9 +490,6 @@ class AxoPatchProtoGui(DAQGenericProtoGui):
             (self.splitter3, 'splitter3'),
         ])
         
-        #QtCore.QObject.connect(self.ctrl.holdingCheck, QtCore.SIGNAL('stateChanged(int)'), self.holdingCheckChanged)
-        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.holdingChanged)
-        #QtCore.QObject.connect(self.modeCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.modeChanged)
         self.modeCombo.currentIndexChanged.connect(self.modeChanged)
         self.modeChanged()
         
@@ -483,9 +539,10 @@ class AxoPatchProtoGui(DAQGenericProtoGui):
             
         self.inputWidget.setUnits(inpUnits)
         self.cmdWidget.setUnits(cmdUnits)
+        self.cmdWidget.setMeta('y', minStep=scale, step=scale*10, value=0.)
         self.inputPlot.setLabel('left', units=inpUnits)
         self.cmdPlot.setLabel('left', units=cmdUnits)
-        w.setScale(scale)
+        #w.setScale(scale)
         for s in w.getSpins():
             s.setOpts(minStep=scale)
                 
@@ -511,15 +568,11 @@ class AxoPatchDevGui(QtGui.QWidget):
         self.ui.vcHoldingSpin.setOpts(step=1, minStep=1e-3, dec=True, suffix='V', siPrefix=True)
         self.ui.icHoldingSpin.setOpts(step=1, minStep=1e-12, dec=True, suffix='A', siPrefix=True)
         self.updateStatus()
-        #QtCore.QObject.connect(self.ui.modeCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.modeComboChanged)
+        
         self.ui.modeCombo.currentIndexChanged.connect(self.modeComboChanged)
-        #QtCore.QObject.connect(self.ui.vcHoldingSpin, QtCore.SIGNAL('valueChanged(double)'), self.vcHoldingChanged)
         self.ui.vcHoldingSpin.valueChanged.connect(self.vcHoldingChanged)
-        #QtCore.QObject.connect(self.ui.icHoldingSpin, QtCore.SIGNAL('valueChanged(double)'), self.icHoldingChanged)
         self.ui.icHoldingSpin.valueChanged.connect(self.icHoldingChanged)
-        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.devHoldingChanged)
         self.dev.sigHoldingChanged.connect(self.devHoldingChanged)
-        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('modeChanged'), self.devModeChanged)
         self.dev.sigModeChanged.connect(self.devModeChanged)
         
     def updateStatus(self):

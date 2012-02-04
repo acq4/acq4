@@ -15,6 +15,7 @@ from metaarray import *
 import lib.Manager as Manager
 from RecordThread import RecordThread
 from lib.LogWindow import LogButton
+from StatusBar import StatusBar
 
 traceDepth = 0
 def trace(func):
@@ -146,15 +147,22 @@ class CameraWindow(QtGui.QMainWindow):
         self.fpsLabel.setFixedWidth(50)
         self.vLabel.setFixedWidth(50)
         self.logBtn = LogButton('Log')
-        self.statusBar().addPermanentWidget(self.recLabel)
-        self.statusBar().addPermanentWidget(self.xyLabel)
-        self.statusBar().addPermanentWidget(self.rgnLabel)
-        self.statusBar().addPermanentWidget(self.tLabel)
-        self.statusBar().addPermanentWidget(self.vLabel)
-        self.statusBar().addPermanentWidget(self.fpsLabel)
-        self.statusBar().addPermanentWidget(self.logBtn)
-        self.logBtn.clicked.connect(module.manager.showLogWindow)
-
+        self.setStatusBar(StatusBar())
+        #self.statusBar().addPermanentWidget(self.recLabel)
+        self.statusBar().insertPermanentWidget(0, self.recLabel)
+        #self.statusBar().addPermanentWidget(self.xyLabel)
+        self.statusBar().insertPermanentWidget(0, self.xyLabel)
+        #self.statusBar().addPermanentWidget(self.rgnLabel)
+        self.statusBar().insertPermanentWidget(0, self.rgnLabel)
+        #self.statusBar().addPermanentWidget(self.tLabel)
+        self.statusBar().insertPermanentWidget(0, self.tLabel)
+        #self.statusBar().addPermanentWidget(self.vLabel)
+        self.statusBar().insertPermanentWidget(0, self.vLabel)
+        #self.statusBar().addPermanentWidget(self.fpsLabel)
+        self.statusBar().insertPermanentWidget(0, self.fpsLabel)
+        #self.statusBar().addPermanentWidget(self.logBtn)
+        #self.logBtn.clicked.connect(module.manager.showLogWindow)
+        
         ## done with UI
         self.show()
         #self.ui.plotWidget.resize(self.ui.plotWidget.size().width(), 40)
@@ -405,7 +413,7 @@ class CameraWindow(QtGui.QMainWindow):
             
     #@trace
     def showMessage(self, msg):
-        self.ui.statusbar.showMessage(str(msg))
+        self.statusBar().showMessage(str(msg))
         
     def regionWidgetChanged(self, *args):
         self.updateRegion()
@@ -542,7 +550,7 @@ class CameraWindow(QtGui.QMainWindow):
             self.bitDepth = self.cam.getParam('bitDepth')
             #self.setLevelRange()
             self.camSize = self.cam.getParam('sensorSize')
-            self.ui.statusbar.showMessage("Opened camera %s" % self.cam, 5000)
+            self.statusBar().showMessage("Opened camera %s" % self.cam, 5000)
             self.scope = self.module.cam.getScopeDevice()
             
             try:
@@ -556,7 +564,7 @@ class CameraWindow(QtGui.QMainWindow):
             
             
         except:
-            self.ui.statusbar.showMessage("Error opening camera")
+            self.statusBar().showMessage("Error opening camera")
             raise
     
 

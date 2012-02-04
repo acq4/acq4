@@ -929,7 +929,6 @@ class ViewBox(GraphicsWidget):
             p.end()
 
     def updateViewLists(self):
-        return
         def cmpViews(a, b):
             wins = 100 * cmp(a.window() is self.window(), b.window() is self.window())
             alpha = cmp(a.name, b.name)

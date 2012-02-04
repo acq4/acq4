@@ -718,7 +718,7 @@ class ROI(GraphicsObject):
     
     
     def boundingRect(self):
-        return QtCore.QRectF(0, 0, self.state['size'][0], self.state['size'][1])
+        return QtCore.QRectF(0, 0, self.state['size'][0], self.state['size'][1]).normalized()
 
     def paint(self, p, opt, widget):
         p.save()

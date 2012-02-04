@@ -16,7 +16,7 @@ The class is responsible for:
 ##   - make sure 'lib' path is available for module search
 ##   - add util to front of search path. This allows us to override some libs 
 ##     that may be installed globally with local versions.
-import sys
+import sys, gc
 import os.path as osp
 d = osp.dirname(osp.dirname(osp.abspath(__file__)))
 sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
@@ -975,6 +975,8 @@ class Task:
             prof.mark("release all")
             prof.finish()
             
+        if abort:
+            gc.collect()  ## it is often the case that now is a good time to garbage-collect.
         #print "tasks:", self.tasks
         #print "RESULT:", self.result        
         
