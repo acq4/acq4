@@ -38,10 +38,16 @@
    <item row="0" column="0">
     <widget class="QGroupBox" name="groupBox">
      <property name="sizePolicy">
-      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+      <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
        <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>380</height>
+      </size>
      </property>
      <property name="title">
       <string>Imaging Analysis Functions</string>
@@ -78,6 +84,12 @@
       </item>
       <item row="1" column="0" rowspan="2">
        <widget class="QWidget" name="widget_2" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
         <widget class="QPushButton" name="IAFuncs_NetworkGraph">
          <property name="geometry">
           <rect>
@@ -211,7 +223,7 @@ p, li { white-space: pre-wrap; }
            <x>145</x>
            <y>-25</y>
            <width>146</width>
-           <height>396</height>
+           <height>336</height>
           </rect>
          </property>
          <property name="sizePolicy">
@@ -239,8 +251,8 @@ p, li { white-space: pre-wrap; }
          <widget class="QPushButton" name="IAFuncs_Analysis_AFFT_Individual">
           <property name="geometry">
            <rect>
-            <x>30</x>
-            <y>325</y>
+            <x>65</x>
+            <y>275</y>
             <width>81</width>
             <height>21</height>
            </rect>
@@ -264,8 +276,8 @@ p, li { white-space: pre-wrap; }
          <widget class="QPushButton" name="IAFuncs_Analysis_FourierMap">
           <property name="geometry">
            <rect>
-            <x>30</x>
-            <y>350</y>
+            <x>15</x>
+            <y>300</y>
             <width>81</width>
             <height>21</height>
            </rect>
@@ -289,9 +301,9 @@ p, li { white-space: pre-wrap; }
          <widget class="QPushButton" name="IAFuncs_Analysis_AFFT">
           <property name="geometry">
            <rect>
-            <x>30</x>
-            <y>300</y>
-            <width>81</width>
+            <x>15</x>
+            <y>275</y>
+            <width>46</width>
             <height>21</height>
            </rect>
           </property>
@@ -334,8 +346,8 @@ p, li { white-space: pre-wrap; }
          <widget class="QLabel" name="label_13">
           <property name="geometry">
            <rect>
-            <x>5</x>
-            <y>280</y>
+            <x>20</x>
+            <y>255</y>
             <width>96</width>
             <height>21</height>
            </rect>

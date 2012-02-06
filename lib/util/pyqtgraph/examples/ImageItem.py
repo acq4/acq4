@@ -12,7 +12,7 @@ app = QtGui.QApplication([])
 
 ## Create window with GraphicsView widget
 win = QtGui.QMainWindow()
-win.resize(800,800)
+win.resize(600,600)
 view = pg.GraphicsView()
 #view.useOpenGL(True)
 win.setCentralWidget(view)
@@ -29,10 +29,10 @@ img = pg.ImageItem(border='w')
 view.scene().addItem(img)
 
 ## Set initial view bounds
-view.setRange(QtCore.QRectF(0, 0, 200, 200))
+view.setRange(QtCore.QRectF(0, 0, 600, 600))
 
 ## Create random image
-data = np.random.normal(size=(15, 600, 600), loc=1024, scale=64).astype(np.uint16)
+data = np.random.normal(size=(15, 400, 400), loc=1024, scale=64).astype(np.uint16)
 i = 0
 
 updateTime = ptime.time()
