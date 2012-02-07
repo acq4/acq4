@@ -168,6 +168,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrlImageFunc.IAFuncs_Analysis_AXCorr_Individual.clicked.connect(self.Analog_Xcorr_Individual)
         self.ctrlImageFunc.IAFuncs_Analysis_AXCorr.clicked.connect(self.Analog_Xcorr)
         self.ctrlImageFunc.IAFuncs_Analysis_UnbiasedXC.clicked.connect(self.Analog_Xcorr_unbiased)
+        self.ctrlImageFunc.IAFuncs_DistanceStrengthPrint.clicked.connect(self.printDistStrength)
 
     def initDataState(self):
         self.dataState = {'Loaded': False, 'bleachCorrection': False, 'Normalized': False,
@@ -897,10 +898,25 @@ class pbm_ImageAnalysis(AnalysisModule):
         (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Image Analysis", nrows = 1, ncols=1, 
                     sharex = True, sharey = True)
         self.MPLFig.suptitle('Analog XCorr: %s' % self.currentFileName, fontsize=11)
+        threshold = self.ctrlImageFunc.IAFuncs_XCorrThreshold.value()
+        x0 = numpy.amin(self.ROIDistanceMap)
+        x1 = numpy.amax(self.ROIDistanceMap)
+        thrliney = [threshold, threshold]
+        thrlinex = [x0, x1]
         sp = self.MPL_plots.scatter(self.ROIDistanceMap, self.IXC_Strength, s=15, color='tomato')
+        self.MPL_plots.plot(thrlinex, thrliney, '-', color = 'k')
         self.MPL_plots.set_xlabel('Distance (%s)' % self.imageScaleUnit)
         self.MPL_plots.set_ylabel('Correlation (R)')
         PL.show()
+
+    def printDistStrength(self):
+        print '\n\n----------------------------------\nROI Distance Map\nFile: %s '% self.currentFileName
+        print 'roi1\troi2\td (um)\t R'
+        sh = self.ROIDistanceMap.shape
+        for i in range(0, sh[0]):
+            for j in range(i+1, sh[1]):
+                print '%d\t%d\t%8.0f\t%6.3f' % (i,j,self.ROIDistanceMap[i,j], self.IXC_Strength[i,j])
+        print '-------------------------------\n'
         
     def NetworkGraph(self):
         """
@@ -920,7 +936,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         minStr = numpy.nanmin(self.IXC_Strength)
         maxline = 4.0
         minline = 0.25
-        threshold = 0.25
+        threshold = self.ctrlImageFunc.IAFuncs_XCorrThreshold.value()
         nd = len(self.AllRois)
         for i in range(0, nd):
             wpos1 = [self.AllRois[i].pos().x(), self.AllRois[i].pos().y(),
@@ -1629,7 +1645,6 @@ class pbm_ImageAnalysis(AnalysisModule):
     def Analog_Xcorr(self, FData = None, dt = None):
         """Average cross correlation of all traces"""
         self.calculateROIs()
-        print self.FData
         if not FData:
             FData = self.FData
         if dt is None:
@@ -1637,14 +1652,18 @@ class pbm_ImageAnalysis(AnalysisModule):
                 dt = 1
             else:
                 dt = numpy.mean(numpy.diff(self.imageTimes))
-        self.avgXcorrWindow = pyqtgrwindow(title = 'Analog_Xcorr_Average')
-        self.mpwavg = pg.GraphicsLayoutWidget()
-        self.avgXcorrWindow.setCentralWidget(self.mpwavg)
-        self.avgXcorrWindow.show()
-
-#        self.selectAnalysisTab()
-#        MPlots.PlotReset(self.ui.qwt_XCorrPlot, xlabel='Lag', unitsX='s', ylabel = 'AverageCorr', unitsY='',
-#                         textName='CrossCorrelation', clearFlag= True)
+        self.use_MPL = self.ctrlImageFunc.IAFuncs_MatplotlibCheckBox.checkState()
+        if not self.use_MPL:
+            self.avgXcorrWindow = pyqtgrwindow(title = 'Analog_Xcorr_Average')
+            self.mpwavg = pg.GraphicsLayoutWidget()
+            self.avgXcorrWindow.setCentralWidget(self.mpwavg)
+            self.avgXcorrWindow.show()
+        else:
+            self.checkMPL()
+            (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Average XCorr", nrows = 1, ncols=1, 
+                        sharex = True, sharey = True)
+            self.MPLFig.suptitle('Average XCorr: %s' % self.currentFileName, fontsize=11)
+            
         nxc = 0
         self.xcorr = []
         for roi1 in range(0, len(FData)-1):
@@ -1662,12 +1681,20 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.xcorr = self.xcorr/nxc
         s = numpy.shape(self.xcorr)
         self.lags = dt*(numpy.arange(0, s[0])-s[0]/2.0)
-        p = self.mpwavg.addPlot(0,0)
-        p.plot(self.lags,self.xcorr)
-        p.setXRange(numpy.min(self.lags), numpy.max(self.lags))
-
-#        MPlots.PlotLine(self.ui.qwt_XCorrPlot, self.lags, self.xcorr, color = 'k', dataID = 'XcorrIndividual')
-#        self.selectAverageXcorrTab()
+        if not self.use_MPL:
+            p = self.mpwavg.addPlot(0,0)
+            p.plot(self.lags,self.xcorr)
+            p.setXRange(numpy.min(self.lags), numpy.max(self.lags))
+        else:
+            self.MPL_plots.plot(self.lags, self.xcorr)
+            self.MPL_plots.plot(self.lags,numpy.zeros(self.lags.shape), color = '0.5')
+            self.MPL_plots.plot([0,0], [-0.5, 1.0], color = '0.5')
+            self.MPL_plots.set_title('Average XCorr', fontsize=10)
+            self.MPL_plots.set_xlabel('T (sec)', fontsize=10)
+            self.MPL_plots.set_ylabel('Corr (R)', fontsize=10)
+            PH.cleanAxes(self.MPL_plots)
+            PL.show()
+            
 
     def Analog_Xcorr_unbiased(self, FData = None, dt = None):
         self.oldROIs = self.AllRois
@@ -1689,7 +1716,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         """ compute and display the individual cross correlations between pairs of traces
             in the data set"""
         print 'Calculating cross-correlations between all ROIs'
-        self.use_pg = False
+        self.use_MPL = self.ctrlImageFunc.IAFuncs_MatplotlibCheckBox.checkState()
         self.calculateROIs()
         if self.ROIDistanceMap == []:
             self.ROIDistances()
@@ -1718,7 +1745,7 @@ class pbm_ImageAnalysis(AnalysisModule):
 
         if self.nROI > 8:
             gridFlag = False
-        if self.use_pg:
+        if not self.use_MPL:
             self.newWindow = pyqtgrwindow(title = 'Analog_Xcorr_Individual')
             self.pgwin = pg.GraphicsLayoutWidget()
             self.newWindow.setCentralWidget(self.pgwin)
@@ -1753,7 +1780,7 @@ class pbm_ImageAnalysis(AnalysisModule):
                 #MPlots.PlotLine(self.IXC_plots[xtrace], self.lags, self.IXC_corr[xtrace],
                 #                color = 'k', dataID = ('Xcorr_%d_%d' % (xtrace1, xtrace2)))
                 if plottype == 'traces':
-                    if self.use_pg:
+                    if not self.use_MPL:
                         self.IXC_plots[xtrace] = self.pgwin.addPlot(xtrace1, xtrace2)
                         self.IXC_plots[xtrace].plot(self.lags, self.IXC_corr[xtrace])
                         if xtrace == 0:
@@ -1774,7 +1801,7 @@ class pbm_ImageAnalysis(AnalysisModule):
                 xtrace = xtrace + 1
         # now rescale all the plot Y axes by getting the min/max "viewRange" across all, then setting them all the same
 
-        if self.use_pg and plottype == 'traces':
+        if not self.use_MPL and plottype == 'traces':
             ymin = 0
             ymax = 0
             bmin = []

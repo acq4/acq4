@@ -97,7 +97,7 @@
           <property name="geometry">
            <rect>
             <x>0</x>
-            <y>220</y>
+            <y>225</y>
             <width>137</width>
             <height>32</height>
            </rect>
@@ -110,7 +110,8 @@
           </property>
           <property name="font">
            <font>
-            <pointsize>12</pointsize>
+            <family>Arial</family>
+            <pointsize>11</pointsize>
            </font>
           </property>
           <property name="text">
@@ -222,7 +223,8 @@
          </property>
          <property name="font">
           <font>
-           <pointsize>9</pointsize>
+           <family>Arial</family>
+           <pointsize>11</pointsize>
           </font>
          </property>
          <property name="text">
@@ -241,6 +243,12 @@
            <height>32</height>
           </rect>
          </property>
+         <property name="font">
+          <font>
+           <family>Arial</family>
+           <pointsize>11</pointsize>
+          </font>
+         </property>
          <property name="text">
           <string>Rev STA</string>
          </property>
@@ -256,7 +264,8 @@
          </property>
          <property name="font">
           <font>
-           <pointsize>9</pointsize>
+           <family>Arial</family>
+           <pointsize>11</pointsize>
           </font>
          </property>
          <property name="text">
