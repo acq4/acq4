@@ -343,13 +343,13 @@ class AxoPatch200(DAQGeneric):
             else:
                 return 5e8 # in IC mode, sensitivity is 2nA/V; scale is 1/2e-9 = 5e8
         
-    def getChanScale(self, chan):
-        if chan == 'command':
-            return self.getCmdGain()
-        elif chan == 'primary':
-            return self.getGain()
-        else:
-            return DAQGeneric.getChanScale(self, chan)
+    #def getChanScale(self, chan):
+        #if chan == 'command':
+            #return self.getCmdGain()
+        #elif chan == 'primary':
+            #return self.getGain()
+        #else:
+            #return DAQGeneric.getChanScale(self, chan)
             #raise Exception("No scale for channel %s" % chan)
         
     def getChanUnits(self, chan):
@@ -423,16 +423,16 @@ class AxoPatch200Task(DAQGenericTask):
         DAQGenericTask.configure(self, tasks, startOrder)
         self.mapping.setMode(self.ampState['mode']) 
         
-    def getChanScale(self, chan):
-        print "AxoPatch200Task.getChanScale called."
-        if chan == 'primary':
-            return self.ampState['gain']
-        elif chan == 'command':
-            return self.dev.getCmdGain(self.ampState['mode'])
-        elif chan == 'secondary':
-            return self.dev.getChanScale('secondary')
-        else:
-            raise Exception("No scale for channel %s" % chan)
+    #def getChanScale(self, chan):
+        #print "AxoPatch200Task.getChanScale called."
+        #if chan == 'primary':
+            #return self.ampState['gain']
+        #elif chan == 'command':
+            #return self.dev.getCmdGain(self.ampState['mode'])
+        #elif chan == 'secondary':
+            #return self.dev.getChanScale('secondary')
+        #else:
+            #raise Exception("No scale for channel %s" % chan)
             
     def storeResult(self, dirHandle):
         #DAQGenericTask.storeResult(self, dirHandle)

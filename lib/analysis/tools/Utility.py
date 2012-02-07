@@ -427,69 +427,63 @@ def findspikes(x, v, thresh, t0=None, t1= None, dt=1.0, mode=None, interpolate=F
         show()
     dv = numpy.diff(v)/dt # compute slope
     st=numpy.array([])
+    spk = []
     spv = numpy.where(v > thresh)[0].tolist() # find points above threshold
     sps = numpy.where(dv > 0.0)[0].tolist() # find points where slope is positive
     sp = list(set(spv) & set(sps)) # intersection defines putative spike start times
     sp.sort() # make sure all detected events are in order (sets is unordered)
     sp = tuple(sp) # convert to tuple
     if sp is ():
-        return(st) # nothing detected
+        return(st, spk) # nothing detected
+    dx = 1
     if mode is 'schmitt': # normal operating mode is fixed voltage threshold
         for k in sp:
             x = xt[k-1:k+1]
             y = v[k-1:k+1]
             if interpolate:
+                dx = 0
                 m = (y[1]-y[0])/dt # local slope
                 b = y[0]-(x[0]*m)
-                st  = numpy.append(st, x[1]+(thresh-b)/m)
+                st  = numpy.append(st, (thresh-b)/m)
             else:
                 st = numpy.append(st, x[1])
+        diffsp = numpy.diff(st)
+        spk = list(numpy.where(diffsp > 2*dt)) # look for non-sequential points in the array
+        for i in range(0,len(spk)):
+            spk[i] = spk[i] - dx
+        st = numpy.sort(numpy.array(st[spk]))
+
+#        print 'st returned: '
+#        print st[0:10]
                 
     elif mode is 'peak':
-        pkwidth = 1.0 # in same units as dt  - usually msec
+        pkwidth = 1.0e-3 # in same units as dt  - usually msec
         kpkw = int(pkwidth/dt)
         z = (numpy.array(numpy.where(numpy.diff(spv) > 1)[0])+1).tolist()
         z.insert(0, 0) # first element in spv is needed to get starting AP
+        spk = []
         for k in z:
             zk = spv[k]
-            spk = numpy.argmax(v[zk:zk+kpkw])+zk # find the peak position
-#            print spk
-#            print len(v)
-            x = xt[spk-1:spk+2]
-            y = v[spk-1:spk+2]
-#            print 'lenny: ', len(y)
+            spkp = numpy.argmax(v[zk:zk+kpkw])+zk # find the peak position
+            x = xt[spkp-1:spkp+2]
+            y = v[spkp-1:spkp+2]
             if interpolate:
                 try:
                     # mimic Igor FindPeak routine with B = 1
                     m1 = (y[1]-y[0])/dt # local slope to left of peak
                     b1 = y[0]-(x[0]*m1)
-#                    print x
-#                    print y
                     m2 = (y[2]-y[1])/dt # local slope to right of peak
                     b2 = y[1]-(x[1]*m2)
                     mprime = (m2-m1)/dt # find where slope goes to 0 by getting the line
                     bprime = m2-((dt/2.0)*mprime)
                     st = numpy.append(st, -bprime/mprime+x[1])
+                    spk.append(spkp)
                 except:
                     continue
             else:
                 st = numpy.append(st, x[1]) # always save the first one
-#        print "xt spike: %8.3f  vs ST way: %8.3f   diff: %8.4f" %  (xt[spk], xt[sp[0]], xt[sp[0]]-xt[spk]) 
-
-    #print 'sp: ', sp
-    #print 'spike list shape: ', st.shape
-    #print 'st: ', st
-    #diffsp = numpy.diff(st) # look for the jumps
-    # print diffsp
-    #isd = numpy.where(diffsp > 0.7) # look for non-sequential points in the array
-    #stret = numpy.array(st[isd])
-    #stret = numpy.append(st, st[0])
-    #stret = numpy.sort(stret)
-    #for i in isd:
-    #    if xt[sp[i+1]] > st[i]+dt: # minimum interval in time
-    #        stret = numpy.append(stret, xt[sp[i+1]]) # build times from difference array
-#    stret = numpy.sort(stret)
-    return(st)
+                spk.append(spkp)
+    return(st, spk)
 
 # getSpikes returns a dictionary with keys that are record numbers, each with values
 # that are the array of spike timesin the spike window.

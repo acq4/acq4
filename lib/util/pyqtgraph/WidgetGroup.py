@@ -112,7 +112,7 @@ class WidgetGroup(QtCore.QObject):
     sigChanged = QtCore.Signal(str, object)
     
     
-    def __init__(self, widgetList):
+    def __init__(self, widgetList=None):
         """Initialize WidgetGroup, adding specified widgets into this group.
         widgetList can be: 
          - a list of widget specifications (widget, [name], [scale])
@@ -135,6 +135,8 @@ class WidgetGroup(QtCore.QObject):
         elif isinstance(widgetList, dict):
             for name, w in widgetList.iteritems():
                 self.addWidget(w, name)
+        elif widgetList is None:
+            return
         else:
             raise Exception("Wrong argument type %s" % type(widgetList))
         

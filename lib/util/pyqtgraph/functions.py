@@ -430,8 +430,8 @@ def makeARGB(data, lut=None, levels=None):
     if data.ndim == 3:
         if data.shape[2] not in (3,4):
             raise Exception("data.shape[2] must be 3 or 4")
-        if lut is not None:
-            raise Exception("can not use lokup table with 3D data")
+        #if lut is not None:
+            #raise Exception("can not use lookup table with 3D data")
     elif data.ndim != 2:
         raise Exception("data must be 2D or 3D")
         
@@ -513,7 +513,7 @@ def makeARGB(data, lut=None, levels=None):
 
 
     ## apply LUT if given
-    if lut is not None:
+    if lut is not None and data.ndim == 2:
         
         if data.dtype.kind not in ('i', 'u'):
             data = data.astype(int)
