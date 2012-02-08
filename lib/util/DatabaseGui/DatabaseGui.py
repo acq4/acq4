@@ -63,7 +63,7 @@ class DatabaseGui(QtGui.QWidget):
             combo.currentIndexChanged.connect(self.tableChanged)
             
     def tableChanged(self, ind):
-        combo = QtCore.sender()
+        combo = self.sender()
         self.sigTableChanged.emit(combo.ident, combo.currentText())
         
         

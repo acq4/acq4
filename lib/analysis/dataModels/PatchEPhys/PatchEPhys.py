@@ -192,7 +192,11 @@ def buildSequenceArrayIter(dh, func=None, join=True, truncate=False, fill=None):
 
 def getParent(child, parentType):
     """Return the (grand)parent of child that matches parentType"""
-    if dirType(child) == parentType:
+    try:
+        typ = dirType(child)
+    except:
+        typ = None
+    if typ == parentType:
         return child
     parent = child.parent()
     if parent is child:
