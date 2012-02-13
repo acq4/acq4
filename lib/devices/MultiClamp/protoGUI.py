@@ -117,7 +117,8 @@ class MultiClampProtoGui(ProtocolGui):
             self.stateGroup.setState(state)
         except:
             printExc('Error while restoring MultiClamp protocol GUI state:')
-        self.ui.waveGeneratorWidget.update()
+            
+        #self.ui.waveGeneratorWidget.update() ## should be called as a result of stateGroup.setState; don't need to call again
         
         
         

@@ -33,6 +33,8 @@ def reloadAll(prefix=None, debug=False):
     for modName, mod in sys.modules.iteritems():
         if not inspect.ismodule(mod):
             continue
+        if modName == '__main__':
+            continue
         
         ## Ignore if the file name does not start with prefix
         if not hasattr(mod, '__file__') or os.path.splitext(mod.__file__)[1] not in ['.py', '.pyc']:

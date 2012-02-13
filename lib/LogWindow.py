@@ -41,16 +41,7 @@ pageTemplate = """
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <style type="text/css">
-        body {color: #000; font-size: 11pt; font-family: sans;}
-        .entry {}
-        .error .message {color: #900}
-        .warning .message {color: #740}
-        .user .message {color: #009}
-        .status .message {color: #090}
-        .logExtra {margin-left: 40px;}
-        .traceback {color: #555; font-size: 10pt; height: 0px;}
-        .timestamp {color: #000;}
-    </style>
+%s    </style>
     
     <script type="text/javascript">
         function showDiv(id) {
@@ -63,7 +54,7 @@ pageTemplate = """
 <body>
 </body>
 </html>
-"""
+""" % Stylesheet
 
 
 
