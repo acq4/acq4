@@ -115,6 +115,8 @@ class ViewBoxMenu(QtGui.QMenu):
             c.blockSignals(True)
             try:
                 view = state['linkedViews'][i]
+                if hasattr(view, 'name'):
+                    view = view.name
                 if view is None:
                     view = ''
                 ind = c.findText(view)
