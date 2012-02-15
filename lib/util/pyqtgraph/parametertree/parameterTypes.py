@@ -131,8 +131,8 @@ class WidgetParameterItem(ParameterItem):
                 self.focusNext(forward=False)
                 return True ## don't let anyone else see this event
             
-        elif ev.type() == ev.FocusOut:
-            self.hideEditor()
+        #elif ev.type() == ev.FocusOut:
+            #self.hideEditor()
         return False
         
     def setFocus(self):
