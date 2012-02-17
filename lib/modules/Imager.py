@@ -391,7 +391,7 @@ class Imager(Module):
         leftShift = bestShift // 2
         rightShift = leftShift + (bestShift % 2)
         if rightShift == 0:
-            return img
+            return img, 0
         decombed = NP.zeros(img.shape, img.dtype)
         if leftShift > 0:
             decombed[:-leftShift, ::2] = img[leftShift:, ::2]

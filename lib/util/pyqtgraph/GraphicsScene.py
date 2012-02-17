@@ -84,7 +84,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
         self.dragItem = None
         self.lastDrag = None
         self.hoverItems = weakref.WeakKeyDictionary()
-        
+        self.lastHoverEvent = None
         #self.searchRect = QtGui.QGraphicsRectItem()
         #self.searchRect.setPen(fn.mkPen(200,0,0))
         #self.addItem(self.searchRect)
@@ -237,7 +237,11 @@ class GraphicsScene(QtGui.QGraphicsScene):
         event = MouseDragEvent(ev, self.clickEvents[0], self.lastDrag, start=init, finish=final)
         #print "dragEvent: init=", init, 'final=', final, 'self.dragItem=', self.dragItem
         if init and self.dragItem is None:
-            acceptedItem = self.lastHoverEvent.dragItems().get(event.button(), None)
+            if self.lastHoverEvent is not None:
+                acceptedItem = self.lastHoverEvent.dragItems().get(event.button(), None)
+            else:
+                acceptedItem = None
+                
             if acceptedItem is not None:
                 #print "Drag -> pre-selected item:", acceptedItem
                 self.dragItem = acceptedItem
@@ -281,7 +285,11 @@ class GraphicsScene(QtGui.QGraphicsScene):
             
         ## otherwise, search near the cursor
         else:
-            acceptedItem = self.lastHoverEvent.clickItems().get(ev.button(), None)
+            if self.lastHoverEvent is not None:
+                acceptedItem = self.lastHoverEvent.clickItems().get(ev.button(), None)
+            else:
+                acceptedItem = None
+                
             if acceptedItem is not None:
                 ev.currentItem = acceptedItem
                 try:
