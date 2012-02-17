@@ -71,7 +71,7 @@ OSX Installation
 
 
 
-OSX Alternate Installation Method
+OSX Alternate Installation Method #1
 ---------------------------------
 
 These instructions are for building on MacOSX 10.5. If you're building on 10.6 or 10.7 some of these libraries will be available as binaries. 
@@ -154,3 +154,65 @@ Download and install the following packages in order:
         $ bzr branch lp:acq4
         
 That's it, you're done and ready to setup configuration files.
+
+
+OSX Alternate Method #2 (for building without Enthought or Active State Python on Mac OSX Lion):
+------------------------------------------------------------------------------------------------
+#. Remove all previous installations of python, with the possible exception of the basic Apple version 2.6
+#. Install "Brew":
+	| /usr/bin/ruby -e "$(curl -fsSL https://raw.github.com/gist/323731)"
+	| export PATH=/usr/local/bin:$PATH
+	| source ~/.bash_profile
+	| brew update
+	::
+#. | Now install some support libraries and Python:
+	| (follow the directions to set things up at www.thisisthegreenroom.com)
+	| brew install readline sqlite gdbm pkg-config
+	| brew install python --framework --universal
+	| export PATH=/usr/local/share/python:$PATH && source ~/.bash_profile
+	| cd /System/Library/Frameworks/Python.framework/Versions
+	| sudo rm Current
+	| ln -s /usr/local/Cellar/python/2.7.2/Frameworks/Python.framework/Versions/Current
+
+#.  Install pip as some packages are not in brew format:
+	| easy_install pip
+
+#. | Now we get to work:
+	|sudo pip install numpy
+	| go to http://gcc.gnu.org/wiki/GFortranBinaries to get the gfortran binary for mac os x Lion. These are needed to compile scipy.
+	| sudo pip install scipy
+	|| (if that fails, get the dev branch: -e git+https://github.com/scipy/scipy#egg=scipy-dev)
+	| brew install Qt (or install the standard Qt Libraries, but not the SDK). 
+
+#. | Get ready and build PyQt:
+	| sip: I had a problem with sip 4.13.2, so, first, get rid of potential conflicting versions.
+	| brew remove sip (only needed if you have installed sip before)
+	| brew remove pyqt (may fail; it might not be installed)
+	| cd `brew --prefix`
+	| brew versions sip
+	| git checkout 042cf7a Library/Formula/sip.rb (gets 4.13.1)
+	| brew install sip
+	| git checkout 2bf9bba Library/Formula/pyqt.rb (gets pyqt 4.9.1)
+	| brew install pyqt
+	|| (remarkably, this finally ran to completion and I was able to import PyQt4 in python!)
+
+	| Make sure to export (put these in your bash profile file):
+	| export PYTHONPATH=/usr/local/lib/python:$PYTHONPATH
+	| export PYTHONPATH=/usr/local/lib/python2.7/site-packages:$PYTHONPATH
+	| source ~/.bash_profile
+
+#. Get the remaining packages using pip and brew:
+	| sudo pip install matplotlib
+	| sudo pip install h5py
+	| brew install PIL
+	| sudo pip install pyparsing==1.5.2
+
+#. Finally, navigate to the place where you would like to store acq4. ::
+
+     bzr branch lp:acq4
+        
+That's it, you're done and ready to setup configuration files.
+
+Resources:
+http://www.thisisthegreenroom.com/2011/installing-python-numpy-scipy-matplotlib-and-ipython-on-lion/
+http://luke.campagnola.me/code/acq4/download.html
