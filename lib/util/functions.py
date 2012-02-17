@@ -18,8 +18,8 @@ from metaarray import *
 #from scipy import *
 #from scipy.optimize import leastsq
 #from scipy.ndimage import gaussian_filter, generic_filter, median_filter
-from scipy import stats
-import scipy.signal, scipy.ndimage, scipy.optimize
+#from scipy import stats
+#import scipy.signal, scipy.ndimage, scipy.optimize
 import numpy.ma
 from debug import *
 import numpy as np

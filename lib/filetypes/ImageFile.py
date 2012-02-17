@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import Image
+from PIL import Image
 
 ## Install support for 16-bit images in PIL
 if Image.VERSION == '1.1.7':

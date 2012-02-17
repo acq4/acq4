@@ -30,7 +30,7 @@ from collections import OrderedDict
 import os, shutil
 import operator
 import pyqtgraph as pg
-import Image
+import PIL as Image
 from metaarray import MetaArray
 import numpy
 import scipy
