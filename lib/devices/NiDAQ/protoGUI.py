@@ -84,7 +84,21 @@ class NiDAQProto(ProtocolGui):
             printExc("Error while loading DAQ protocol GUI configuration (proceeding with default configuration) :")
         
     def generateProtocol(self, params=None):
-        return self.currentState()
+        prot = self.currentState()
+        prot2 = {}
+        
+        # just for cleanliness, remove any filtering parameters that are not in use:
+        remNames = ['butterworth', 'bessel']
+        if prot['filterMethod'].lower() in remNames:
+            remNames.remove(prot['filterMethod'].lower())
+        if prot['denoiseMethod'] == 'None':
+            remNames.append('denoiseWidth')
+            remNames.append('denoiseThreshold')
+        for k in prot:
+            if not any(map(k.startswith, remNames)):
+                prot2[k] = prot[k]
+        
+        return prot2
         
     def currentState(self):
         self.updateNPts()
