@@ -942,7 +942,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         (sx, sy, px) = self.getImageScaling()
         maxStr = numpy.nanmax(self.IXC_Strength)
         minStr = numpy.nanmin(self.IXC_Strength)
-        maxline = 4.0
+        maxline = 4096.0
         minline = 0.25
         threshold = self.ctrlImageFunc.IAFuncs_XCorrThreshold.value()
         nd = len(self.AllRois)
