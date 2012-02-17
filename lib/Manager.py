@@ -110,6 +110,7 @@ class Manager(QtCore.QObject):
     sigCurrentDirChanged = QtCore.Signal(object, object, object) # (file, change, args)
     sigBaseDirChanged = QtCore.Signal()
     sigLogDirChanged = QtCore.Signal(object) #dir
+    sigTaskCreated = QtCore.Signal(object, object)  ## for debugger module
     
     CREATED = False
     single = None
@@ -417,7 +418,7 @@ class Manager(QtCore.QObject):
         
         
     def listModules(self):
-        """List currently loaded modules. """
+        """List names of currently loaded modules. """
         return self.modules.keys()[:]
 
     def getDirOfSelectedFile(self):
@@ -520,7 +521,9 @@ class Manager(QtCore.QObject):
         return t.getResult()
 
     def createTask(self, cmd):
-        return Task(self, cmd)
+        t = Task(self, cmd)
+        self.sigTaskCreated.emit(cmd, t)
+        return t
 
     def showGUI(self):
         """Show the Manager GUI"""
