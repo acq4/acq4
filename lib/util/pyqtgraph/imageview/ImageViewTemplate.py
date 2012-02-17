@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/util/pyqtgraph/imageview/ImageViewTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:25 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:41 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -79,22 +79,22 @@ class Ui_Form(object):
         self.gridLayout_2.addWidget(self.normDivideRadio, 0, 1, 1, 1)
         self.label_5 = QtGui.QLabel(self.normGroup)
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.label_5.setFont(font)
         self.label_5.setObjectName(_fromUtf8("label_5"))
         self.gridLayout_2.addWidget(self.label_5, 0, 0, 1, 1)
         self.label_3 = QtGui.QLabel(self.normGroup)
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.label_3.setFont(font)
         self.label_3.setObjectName(_fromUtf8("label_3"))
         self.gridLayout_2.addWidget(self.label_3, 1, 0, 1, 1)
         self.label_4 = QtGui.QLabel(self.normGroup)
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.label_4.setFont(font)
         self.label_4.setObjectName(_fromUtf8("label_4"))
         self.gridLayout_2.addWidget(self.label_4, 2, 0, 1, 1)

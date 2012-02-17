@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/devices/DAQGeneric/DeviceTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:19 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:35 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -25,8 +25,8 @@ class Ui_Form(object):
         self.nameLabel = QtGui.QLabel(Form)
         font = QtGui.QFont()
         font.setPointSize(13)
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.nameLabel.setFont(font)
         self.nameLabel.setObjectName(_fromUtf8("nameLabel"))
         self.gridLayout_2.addWidget(self.nameLabel, 0, 0, 1, 1)

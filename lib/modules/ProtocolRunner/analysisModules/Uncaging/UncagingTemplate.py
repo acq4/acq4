@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/modules/ProtocolRunner/analysisModules/Uncaging/UncagingTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:23 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:38 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -50,7 +50,7 @@ class Ui_Form(object):
         self.alphaSlider = QtGui.QSlider(Form)
         self.alphaSlider.setMaximum(255)
         self.alphaSlider.setPageStep(10)
-        self.alphaSlider.setProperty(_fromUtf8("value"), 150)
+        self.alphaSlider.setProperty("value", 150)
         self.alphaSlider.setOrientation(QtCore.Qt.Horizontal)
         self.alphaSlider.setObjectName(_fromUtf8("alphaSlider"))
         self.gridLayout.addWidget(self.alphaSlider, 6, 1, 1, 2)
@@ -75,24 +75,24 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.clampBaseStartSpin, 8, 1, 1, 1)
         self.clampTestStartSpin = QtGui.QDoubleSpinBox(Form)
         self.clampTestStartSpin.setMaximum(100000.0)
-        self.clampTestStartSpin.setProperty(_fromUtf8("value"), 400.0)
+        self.clampTestStartSpin.setProperty("value", 400.0)
         self.clampTestStartSpin.setObjectName(_fromUtf8("clampTestStartSpin"))
         self.gridLayout.addWidget(self.clampTestStartSpin, 9, 1, 1, 1)
         self.clampTestStopSpin = QtGui.QDoubleSpinBox(Form)
         self.clampTestStopSpin.setMaximum(100000.0)
-        self.clampTestStopSpin.setProperty(_fromUtf8("value"), 450.0)
+        self.clampTestStopSpin.setProperty("value", 450.0)
         self.clampTestStopSpin.setObjectName(_fromUtf8("clampTestStopSpin"))
         self.gridLayout.addWidget(self.clampTestStopSpin, 9, 2, 1, 1)
         self.clampBaseStopSpin = QtGui.QDoubleSpinBox(Form)
         self.clampBaseStopSpin.setMaximum(100000.0)
-        self.clampBaseStopSpin.setProperty(_fromUtf8("value"), 380.0)
+        self.clampBaseStopSpin.setProperty("value", 380.0)
         self.clampBaseStopSpin.setObjectName(_fromUtf8("clampBaseStopSpin"))
         self.gridLayout.addWidget(self.clampBaseStopSpin, 8, 2, 1, 1)
         self.label_6 = QtGui.QLabel(Form)
         self.label_6.setObjectName(_fromUtf8("label_6"))
         self.gridLayout.addWidget(self.label_6, 10, 0, 1, 1)
         self.pspToleranceSpin = QtGui.QDoubleSpinBox(Form)
-        self.pspToleranceSpin.setProperty(_fromUtf8("value"), 4.0)
+        self.pspToleranceSpin.setProperty("value", 4.0)
         self.pspToleranceSpin.setObjectName(_fromUtf8("pspToleranceSpin"))
         self.gridLayout.addWidget(self.pspToleranceSpin, 10, 1, 1, 2)
         self.recomputeBtn = QtGui.QPushButton(Form)
@@ -106,7 +106,7 @@ class Ui_Form(object):
         self.spotToleranceSpin.setMinimum(0.01)
         self.spotToleranceSpin.setMaximum(100000000.0)
         self.spotToleranceSpin.setSingleStep(0.1)
-        self.spotToleranceSpin.setProperty(_fromUtf8("value"), 1000.0)
+        self.spotToleranceSpin.setProperty("value", 1000.0)
         self.spotToleranceSpin.setObjectName(_fromUtf8("spotToleranceSpin"))
         self.gridLayout.addWidget(self.spotToleranceSpin, 15, 1, 1, 1)
         self.label_7 = QtGui.QLabel(Form)

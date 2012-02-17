@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/devices/Scanner/DeviceTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:21 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:37 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -75,20 +75,20 @@ class Ui_Form(object):
         self.yMaxSpin.setMinimum(-10.0)
         self.yMaxSpin.setMaximum(10.0)
         self.yMaxSpin.setSingleStep(0.1)
-        self.yMaxSpin.setProperty(_fromUtf8("value"), 2.0)
+        self.yMaxSpin.setProperty("value", 2.0)
         self.yMaxSpin.setObjectName(_fromUtf8("yMaxSpin"))
         self.gridLayout_2.addWidget(self.yMaxSpin, 5, 3, 1, 1)
         self.scanDurationSpin = QtGui.QDoubleSpinBox(self.groupBox)
         self.scanDurationSpin.setMinimum(0.01)
         self.scanDurationSpin.setMaximum(100.0)
-        self.scanDurationSpin.setProperty(_fromUtf8("value"), 5.0)
+        self.scanDurationSpin.setProperty("value", 5.0)
         self.scanDurationSpin.setObjectName(_fromUtf8("scanDurationSpin"))
         self.gridLayout_2.addWidget(self.scanDurationSpin, 2, 3, 1, 1)
         self.xMinSpin = QtGui.QDoubleSpinBox(self.groupBox)
         self.xMinSpin.setMinimum(-10.0)
         self.xMinSpin.setMaximum(10.0)
         self.xMinSpin.setSingleStep(0.1)
-        self.xMinSpin.setProperty(_fromUtf8("value"), -2.0)
+        self.xMinSpin.setProperty("value", -2.0)
         self.xMinSpin.setObjectName(_fromUtf8("xMinSpin"))
         self.gridLayout_2.addWidget(self.xMinSpin, 4, 1, 1, 1)
         self.scanLabel = QtGui.QLabel(self.groupBox)
@@ -118,14 +118,14 @@ class Ui_Form(object):
         self.yMinSpin.setMinimum(-10.0)
         self.yMinSpin.setMaximum(10.0)
         self.yMinSpin.setSingleStep(0.1)
-        self.yMinSpin.setProperty(_fromUtf8("value"), -2.0)
+        self.yMinSpin.setProperty("value", -2.0)
         self.yMinSpin.setObjectName(_fromUtf8("yMinSpin"))
         self.gridLayout_2.addWidget(self.yMinSpin, 4, 3, 1, 1)
         self.xMaxSpin = QtGui.QDoubleSpinBox(self.groupBox)
         self.xMaxSpin.setMinimum(-10.0)
         self.xMaxSpin.setMaximum(10.0)
         self.xMaxSpin.setSingleStep(0.1)
-        self.xMaxSpin.setProperty(_fromUtf8("value"), 2.0)
+        self.xMaxSpin.setProperty("value", 2.0)
         self.xMaxSpin.setObjectName(_fromUtf8("xMaxSpin"))
         self.gridLayout_2.addWidget(self.xMaxSpin, 5, 1, 1, 1)
         self.gridLayout_3.addLayout(self.gridLayout_2, 0, 0, 1, 1)

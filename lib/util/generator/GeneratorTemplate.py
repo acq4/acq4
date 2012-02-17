@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/util/generator/GeneratorTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:24 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:39 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -121,8 +121,8 @@ class Ui_Form(object):
         sizePolicy.setHeightForWidth(self.errorBtn.sizePolicy().hasHeightForWidth())
         self.errorBtn.setSizePolicy(sizePolicy)
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.errorBtn.setFont(font)
         self.errorBtn.setCheckable(True)
         self.errorBtn.setObjectName(_fromUtf8("errorBtn"))
@@ -134,8 +134,8 @@ class Ui_Form(object):
         sizePolicy.setHeightForWidth(self.helpBtn.sizePolicy().hasHeightForWidth())
         self.helpBtn.setSizePolicy(sizePolicy)
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.helpBtn.setFont(font)
         self.helpBtn.setCheckable(True)
         self.helpBtn.setObjectName(_fromUtf8("helpBtn"))

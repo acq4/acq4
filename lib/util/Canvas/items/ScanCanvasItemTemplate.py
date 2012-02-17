@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/util/Canvas/items/ScanCanvasItemTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:23 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:39 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -37,7 +37,7 @@ class Ui_Form(object):
         self.sizeSpin.setMinimum(0.0)
         self.sizeSpin.setMaximum(100000.0)
         self.sizeSpin.setSingleStep(1e-06)
-        self.sizeSpin.setProperty(_fromUtf8("value"), 0.0)
+        self.sizeSpin.setProperty("value", 0.0)
         self.sizeSpin.setObjectName(_fromUtf8("sizeSpin"))
         self.gridLayout.addWidget(self.sizeSpin, 2, 1, 1, 2)
         self.loadSpotImagesBtn = QtGui.QPushButton(Form)
@@ -47,7 +47,7 @@ class Ui_Form(object):
         self.label.setObjectName(_fromUtf8("label"))
         self.gridLayout.addWidget(self.label, 5, 0, 1, 1)
         self.spotFrameSpin = QtGui.QSpinBox(Form)
-        self.spotFrameSpin.setProperty(_fromUtf8("value"), 1)
+        self.spotFrameSpin.setProperty("value", 1)
         self.spotFrameSpin.setObjectName(_fromUtf8("spotFrameSpin"))
         self.gridLayout.addWidget(self.spotFrameSpin, 5, 1, 1, 2)
         self.bgFrameCheck = QtGui.QCheckBox(Form)

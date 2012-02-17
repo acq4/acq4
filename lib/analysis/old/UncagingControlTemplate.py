@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/analysis/old/UncagingControlTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:18 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:35 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 

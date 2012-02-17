@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/util/pyqtgraph/graphicsItems/PlotItem/plotConfigTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:25 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:40 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -45,7 +45,7 @@ class Ui_Form(object):
         self.downsampleSpin = QtGui.QSpinBox(self.decimateGroup)
         self.downsampleSpin.setMinimum(1)
         self.downsampleSpin.setMaximum(100000)
-        self.downsampleSpin.setProperty(_fromUtf8("value"), 1)
+        self.downsampleSpin.setProperty("value", 1)
         self.downsampleSpin.setObjectName(_fromUtf8("downsampleSpin"))
         self.gridLayout_4.addWidget(self.downsampleSpin, 0, 1, 1, 1)
         self.autoDecimateRadio = QtGui.QRadioButton(self.decimateGroup)
@@ -85,7 +85,7 @@ class Ui_Form(object):
         self.verticalLayout_4.setObjectName(_fromUtf8("verticalLayout_4"))
         self.gridAlphaSlider = QtGui.QSlider(self.gridGroup)
         self.gridAlphaSlider.setMaximum(255)
-        self.gridAlphaSlider.setProperty(_fromUtf8("value"), 70)
+        self.gridAlphaSlider.setProperty("value", 70)
         self.gridAlphaSlider.setOrientation(QtCore.Qt.Horizontal)
         self.gridAlphaSlider.setObjectName(_fromUtf8("gridAlphaSlider"))
         self.verticalLayout_4.addWidget(self.gridAlphaSlider)
@@ -101,7 +101,7 @@ class Ui_Form(object):
         self.horizontalLayout.addWidget(self.autoAlphaCheck)
         self.alphaSlider = QtGui.QSlider(self.alphaGroup)
         self.alphaSlider.setMaximum(1000)
-        self.alphaSlider.setProperty(_fromUtf8("value"), 1000)
+        self.alphaSlider.setProperty("value", 1000)
         self.alphaSlider.setOrientation(QtCore.Qt.Horizontal)
         self.alphaSlider.setObjectName(_fromUtf8("alphaSlider"))
         self.horizontalLayout.addWidget(self.alphaSlider)

@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/modules/ProtocolRunner/ProtocolRunnerTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:22 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:38 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -93,11 +93,11 @@ class Ui_MainWindow(object):
         self.gridLayout.addLayout(self.horizontalLayout_2, 6, 0, 1, 4)
         self.protoDurationSpin = SpinBox(self.dockWidgetContents_5)
         self.protoDurationSpin.setMinimumSize(QtCore.QSize(60, 0))
-        self.protoDurationSpin.setProperty(_fromUtf8("value"), 0.1)
+        self.protoDurationSpin.setProperty("value", 0.1)
         self.protoDurationSpin.setObjectName(_fromUtf8("protoDurationSpin"))
         self.gridLayout.addWidget(self.protoDurationSpin, 1, 2, 1, 2)
         self.protoLeadTimeSpin = SpinBox(self.dockWidgetContents_5)
-        self.protoLeadTimeSpin.setProperty(_fromUtf8("value"), 0.01)
+        self.protoLeadTimeSpin.setProperty("value", 0.01)
         self.protoLeadTimeSpin.setObjectName(_fromUtf8("protoLeadTimeSpin"))
         self.gridLayout.addWidget(self.protoLeadTimeSpin, 2, 2, 1, 2)
         self.protoCycleTimeSpin = SpinBox(self.dockWidgetContents_5)
@@ -127,7 +127,7 @@ class Ui_MainWindow(object):
         self.label_9.setObjectName(_fromUtf8("label_9"))
         self.verticalLayout.addWidget(self.label_9)
         self.seqCycleTimeSpin = SpinBox(self.dockWidgetContents_7)
-        self.seqCycleTimeSpin.setProperty(_fromUtf8("value"), 1.0)
+        self.seqCycleTimeSpin.setProperty("value", 1.0)
         self.seqCycleTimeSpin.setObjectName(_fromUtf8("seqCycleTimeSpin"))
         self.verticalLayout.addWidget(self.seqCycleTimeSpin)
         self.label_11 = QtGui.QLabel(self.dockWidgetContents_7)

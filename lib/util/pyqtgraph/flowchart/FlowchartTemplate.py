@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/util/pyqtgraph/flowchart/FlowchartTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:25 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:40 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -32,8 +32,8 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.selDescLabel, 0, 0, 1, 1)
         self.selNameLabel = QtGui.QLabel(self.selInfoWidget)
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.selNameLabel.setFont(font)
         self.selNameLabel.setText(_fromUtf8(""))
         self.selNameLabel.setObjectName(_fromUtf8("selNameLabel"))

@@ -38,7 +38,7 @@
    <item row="0" column="0">
     <widget class="QGroupBox" name="groupBox">
      <property name="title">
-      <string>Corrections, ROI's and Event Detection</string>
+      <string>Corrections, ROI's and Filtering</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
@@ -193,28 +193,6 @@
         </property>
        </widget>
       </item>
-      <item row="8" column="1">
-       <widget class="QLabel" name="ImagePhys_NormInfo">
-        <property name="font">
-         <font>
-          <family>Arial</family>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="frameShape">
-         <enum>QFrame::StyledPanel</enum>
-        </property>
-        <property name="frameShadow">
-         <enum>QFrame::Sunken</enum>
-        </property>
-        <property name="text">
-         <string>None</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-       </widget>
-      </item>
       <item row="9" column="1">
        <widget class="QDoubleSpinBox" name="ImagePhys_BaseStart">
         <property name="font">
@@ -297,6 +275,7 @@
        <widget class="QPushButton" name="ImagePhys_clearRoi">
         <property name="font">
          <font>
+          <family>Arial</family>
           <pointsize>12</pointsize>
          </font>
         </property>
@@ -309,6 +288,7 @@
        <widget class="QPushButton" name="ImagePhys_RetrieveROI">
         <property name="font">
          <font>
+          <family>Arial</family>
           <pointsize>12</pointsize>
          </font>
         </property>
@@ -321,6 +301,7 @@
        <widget class="QPushButton" name="ImagePhys_Update">
         <property name="font">
          <font>
+          <family>Arial</family>
           <pointsize>12</pointsize>
          </font>
         </property>
@@ -349,6 +330,7 @@
        <widget class="QPushButton" name="ImagePhys_getRatio">
         <property name="font">
          <font>
+          <family>Arial</family>
           <pointsize>12</pointsize>
          </font>
         </property>
@@ -380,11 +362,12 @@
        <widget class="QLabel" name="label_2">
         <property name="font">
          <font>
+          <family>Arial</family>
           <pointsize>12</pointsize>
          </font>
         </property>
         <property name="text">
-         <string>Down Sample</string>
+         <string>Downsample</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -414,6 +397,7 @@
        <widget class="QPushButton" name="ImagePhys_SaveROI">
         <property name="font">
          <font>
+          <family>Arial</family>
           <pointsize>12</pointsize>
          </font>
         </property>
@@ -459,6 +443,12 @@
       </item>
       <item row="13" column="3">
        <widget class="QPushButton" name="ImagePhys_CorrTool_BL1">
+        <property name="font">
+         <font>
+          <family>Arial</family>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
         <property name="text">
          <string>Baseline 1</string>
         </property>
@@ -477,6 +467,7 @@
         </property>
         <property name="font">
          <font>
+          <family>Arial</family>
           <pointsize>12</pointsize>
           <weight>75</weight>
           <bold>true</bold>
@@ -489,6 +480,12 @@
       </item>
       <item row="14" column="3">
        <widget class="QPushButton" name="ImagePhys_ExportTiff">
+        <property name="font">
+         <font>
+          <family>Arial</family>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
         <property name="text">
          <string>Export TIFF</string>
         </property>
@@ -507,6 +504,12 @@ rectangle  box</string>
       </item>
       <item row="12" column="0">
        <widget class="QPushButton" name="ImagePhys_CorrTool_HPF">
+        <property name="font">
+         <font>
+          <family>Arial</family>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
         <property name="text">
          <string>HPF Baseline</string>
         </property>
@@ -516,6 +519,12 @@ rectangle  box</string>
        <widget class="QPushButton" name="ImagePhys_CorrTool_LPF">
         <property name="enabled">
          <bool>false</bool>
+        </property>
+        <property name="font">
+         <font>
+          <family>Arial</family>
+          <pointsize>12</pointsize>
+         </font>
         </property>
         <property name="text">
          <string>LPF Signal</string>
@@ -539,6 +548,28 @@ rectangle  box</string>
           <string>Std Image</string>
          </property>
         </item>
+       </widget>
+      </item>
+      <item row="8" column="1">
+       <widget class="QLabel" name="ImagePhys_NormInfo">
+        <property name="font">
+         <font>
+          <family>Arial</family>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="frameShape">
+         <enum>QFrame::StyledPanel</enum>
+        </property>
+        <property name="frameShadow">
+         <enum>QFrame::Sunken</enum>
+        </property>
+        <property name="text">
+         <string>None</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
        </widget>
       </item>
      </layout>

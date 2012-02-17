@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/analysis/atlas/builderTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:16 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:33 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -81,7 +81,7 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.greyCheck, 4, 1, 1, 1)
         self.labelSlider = QtGui.QSlider(self.groupBox)
         self.labelSlider.setMaximum(255)
-        self.labelSlider.setProperty(_fromUtf8("value"), 50)
+        self.labelSlider.setProperty("value", 50)
         self.labelSlider.setOrientation(QtCore.Qt.Horizontal)
         self.labelSlider.setObjectName(_fromUtf8("labelSlider"))
         self.gridLayout.addWidget(self.labelSlider, 6, 1, 1, 1)
@@ -111,7 +111,7 @@ class Ui_Form(object):
         self.labelSpin = QtGui.QSpinBox(self.groupBox_3)
         self.labelSpin.setMinimum(0)
         self.labelSpin.setMaximum(15)
-        self.labelSpin.setProperty(_fromUtf8("value"), 0)
+        self.labelSpin.setProperty("value", 0)
         self.labelSpin.setObjectName(_fromUtf8("labelSpin"))
         self.gridLayout_3.addWidget(self.labelSpin, 1, 1, 1, 1)
         self.gridLayout_4.addWidget(self.groupBox_3, 1, 0, 1, 1)

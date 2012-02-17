@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/devices/Laser/protoTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:20 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:36 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -31,15 +31,15 @@ class Ui_Form(object):
         self.gridLayout_2.addWidget(self.checkPowerBtn, 0, 2, 1, 1)
         self.label_3 = QtGui.QLabel(Form)
         font = QtGui.QFont()
-        font.setWeight(50)
         font.setBold(False)
+        font.setWeight(50)
         self.label_3.setFont(font)
         self.label_3.setObjectName(_fromUtf8("label_3"))
         self.gridLayout_2.addWidget(self.label_3, 1, 0, 1, 1)
         self.samplePowerLabel = QtGui.QLabel(Form)
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.samplePowerLabel.setFont(font)
         self.samplePowerLabel.setObjectName(_fromUtf8("samplePowerLabel"))
         self.gridLayout_2.addWidget(self.samplePowerLabel, 1, 1, 1, 1)
@@ -56,7 +56,7 @@ class Ui_Form(object):
         self.wavelengthSpin = QtGui.QSpinBox(self.wavelengthWidget)
         self.wavelengthSpin.setMaximum(4000)
         self.wavelengthSpin.setSingleStep(10)
-        self.wavelengthSpin.setProperty(_fromUtf8("value"), 1080)
+        self.wavelengthSpin.setProperty("value", 1080)
         self.wavelengthSpin.setObjectName(_fromUtf8("wavelengthSpin"))
         self.horizontalLayout.addWidget(self.wavelengthSpin)
         self.gridLayout_2.addWidget(self.wavelengthWidget, 4, 0, 1, 3)

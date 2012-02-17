@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/modules/Patch/PatchTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:22 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:38 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -116,7 +116,7 @@ class Ui_Form(object):
         self.cycleTimeSpin = SpinBox(self.groupBox_2)
         self.cycleTimeSpin.setMaximumSize(QtCore.QSize(70, 16777215))
         self.cycleTimeSpin.setSingleStep(1.0)
-        self.cycleTimeSpin.setProperty(_fromUtf8("value"), 0.2)
+        self.cycleTimeSpin.setProperty("value", 0.2)
         self.cycleTimeSpin.setObjectName(_fromUtf8("cycleTimeSpin"))
         self.gridLayout_2.addWidget(self.cycleTimeSpin, 10, 2, 1, 1)
         self.vcHoldSpin = SpinBox(self.groupBox_2)
@@ -148,7 +148,7 @@ class Ui_Form(object):
         self.averageSpin = QtGui.QSpinBox(self.groupBox_2)
         self.averageSpin.setMinimum(1)
         self.averageSpin.setMaximum(100)
-        self.averageSpin.setProperty(_fromUtf8("value"), 1)
+        self.averageSpin.setProperty("value", 1)
         self.averageSpin.setObjectName(_fromUtf8("averageSpin"))
         self.gridLayout_2.addWidget(self.averageSpin, 11, 2, 1, 1)
         self.verticalLayout.addWidget(self.groupBox_2)
@@ -177,8 +177,8 @@ class Ui_Form(object):
         self.inputResistanceLabel = QtGui.QLabel(self.groupBox)
         font = QtGui.QFont()
         font.setPointSize(11)
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.inputResistanceLabel.setFont(font)
         self.inputResistanceLabel.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.inputResistanceLabel.setObjectName(_fromUtf8("inputResistanceLabel"))
@@ -192,8 +192,8 @@ class Ui_Form(object):
         self.accessResistanceLabel = QtGui.QLabel(self.groupBox)
         font = QtGui.QFont()
         font.setPointSize(11)
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.accessResistanceLabel.setFont(font)
         self.accessResistanceLabel.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.accessResistanceLabel.setObjectName(_fromUtf8("accessResistanceLabel"))
@@ -208,8 +208,8 @@ class Ui_Form(object):
         self.restingPotentialLabel.setMinimumSize(QtCore.QSize(140, 0))
         font = QtGui.QFont()
         font.setPointSize(11)
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.restingPotentialLabel.setFont(font)
         self.restingPotentialLabel.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.restingPotentialLabel.setObjectName(_fromUtf8("restingPotentialLabel"))
@@ -220,8 +220,8 @@ class Ui_Form(object):
         self.restingCurrentLabel = QtGui.QLabel(self.groupBox)
         self.restingCurrentLabel.setMinimumSize(QtCore.QSize(120, 0))
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.restingCurrentLabel.setFont(font)
         self.restingCurrentLabel.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.restingCurrentLabel.setObjectName(_fromUtf8("restingCurrentLabel"))
@@ -231,8 +231,8 @@ class Ui_Form(object):
         self.formLayout.setWidget(5, QtGui.QFormLayout.LabelRole, self.capacitanceCheck)
         self.capacitanceLabel = QtGui.QLabel(self.groupBox)
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.capacitanceLabel.setFont(font)
         self.capacitanceLabel.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.capacitanceLabel.setObjectName(_fromUtf8("capacitanceLabel"))
@@ -242,8 +242,8 @@ class Ui_Form(object):
         self.formLayout.setWidget(6, QtGui.QFormLayout.LabelRole, self.fitErrorCheck)
         self.fitErrorLabel = QtGui.QLabel(self.groupBox)
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.fitErrorLabel.setFont(font)
         self.fitErrorLabel.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.fitErrorLabel.setObjectName(_fromUtf8("fitErrorLabel"))

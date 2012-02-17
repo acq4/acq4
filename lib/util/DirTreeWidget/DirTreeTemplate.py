@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/util/DirTreeWidget/DirTreeTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:23 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:39 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -65,8 +65,8 @@ class Ui_Form(object):
         sizePolicy.setHeightForWidth(self.currentLabel.sizePolicy().hasHeightForWidth())
         self.currentLabel.setSizePolicy(sizePolicy)
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.currentLabel.setFont(font)
         self.currentLabel.setText(_fromUtf8(""))
         self.currentLabel.setObjectName(_fromUtf8("currentLabel"))

@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/devices/DAQGeneric/InputChannelTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:19 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:36 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -24,8 +24,8 @@ class Ui_Form(object):
         self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
         self.groupBox = QtGui.QGroupBox(Form)
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.groupBox.setFont(font)
         self.groupBox.setCheckable(True)
         self.groupBox.setObjectName(_fromUtf8("groupBox"))
@@ -35,24 +35,24 @@ class Ui_Form(object):
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
         self.recordCheck = QtGui.QCheckBox(self.groupBox)
         font = QtGui.QFont()
-        font.setWeight(50)
         font.setBold(False)
+        font.setWeight(50)
         self.recordCheck.setFont(font)
         self.recordCheck.setChecked(True)
         self.recordCheck.setObjectName(_fromUtf8("recordCheck"))
         self.gridLayout.addWidget(self.recordCheck, 0, 0, 1, 1)
         self.displayCheck = QtGui.QCheckBox(self.groupBox)
         font = QtGui.QFont()
-        font.setWeight(50)
         font.setBold(False)
+        font.setWeight(50)
         self.displayCheck.setFont(font)
         self.displayCheck.setChecked(True)
         self.displayCheck.setObjectName(_fromUtf8("displayCheck"))
         self.gridLayout.addWidget(self.displayCheck, 0, 1, 1, 1)
         self.recordInitCheck = QtGui.QCheckBox(self.groupBox)
         font = QtGui.QFont()
-        font.setWeight(50)
         font.setBold(False)
+        font.setWeight(50)
         self.recordInitCheck.setFont(font)
         self.recordInitCheck.setObjectName(_fromUtf8("recordInitCheck"))
         self.gridLayout.addWidget(self.recordInitCheck, 1, 0, 1, 2)

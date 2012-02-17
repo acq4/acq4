@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/AtlasBuilder/ctrlTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:16 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:33 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -54,7 +54,7 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.label_4, 1, 0, 1, 1)
         self.penSizeSpin = QtGui.QSpinBox(Form)
         self.penSizeSpin.setMinimum(1)
-        self.penSizeSpin.setProperty(_fromUtf8("value"), 1)
+        self.penSizeSpin.setProperty("value", 1)
         self.penSizeSpin.setObjectName(_fromUtf8("penSizeSpin"))
         self.gridLayout.addWidget(self.penSizeSpin, 1, 1, 1, 1)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)

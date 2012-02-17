@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/devices/Laser/devTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:19 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:36 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -64,8 +64,8 @@ class Ui_Form(object):
         self.outputPowerLabel = QtGui.QLabel(self.powerGroup)
         font = QtGui.QFont()
         font.setPointSize(12)
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.outputPowerLabel.setFont(font)
         self.outputPowerLabel.setText(_fromUtf8(""))
         self.outputPowerLabel.setObjectName(_fromUtf8("outputPowerLabel"))
@@ -73,8 +73,8 @@ class Ui_Form(object):
         self.samplePowerLabel = QtGui.QLabel(self.powerGroup)
         font = QtGui.QFont()
         font.setPointSize(11)
-        font.setWeight(50)
         font.setBold(False)
+        font.setWeight(50)
         self.samplePowerLabel.setFont(font)
         self.samplePowerLabel.setText(_fromUtf8(""))
         self.samplePowerLabel.setObjectName(_fromUtf8("samplePowerLabel"))
@@ -113,8 +113,8 @@ class Ui_Form(object):
         self.calibrationList = QtGui.QTreeWidget(self.groupBox_2)
         font = QtGui.QFont()
         font.setPointSize(8)
-        font.setWeight(50)
         font.setBold(False)
+        font.setWeight(50)
         self.calibrationList.setFont(font)
         self.calibrationList.setRootIsDecorated(False)
         self.calibrationList.setItemsExpandable(False)
@@ -155,7 +155,7 @@ class Ui_Form(object):
         self.measurementSpin.setSizePolicy(sizePolicy)
         self.measurementSpin.setMinimum(0.0)
         self.measurementSpin.setMaximum(100.0)
-        self.measurementSpin.setProperty(_fromUtf8("value"), 1.0)
+        self.measurementSpin.setProperty("value", 1.0)
         self.measurementSpin.setObjectName(_fromUtf8("measurementSpin"))
         self.gridLayout_2.addWidget(self.measurementSpin, 1, 4, 1, 1)
         self.label_3 = QtGui.QLabel(self.groupBox)
@@ -201,7 +201,7 @@ class Ui_Form(object):
         self.minVSpin = SpinBox(self.pCellGroup)
         self.minVSpin.setMinimum(-99.0)
         self.minVSpin.setSingleStep(0.01)
-        self.minVSpin.setProperty(_fromUtf8("value"), -0.2)
+        self.minVSpin.setProperty("value", -0.2)
         self.minVSpin.setObjectName(_fromUtf8("minVSpin"))
         self.gridLayout_7.addWidget(self.minVSpin, 0, 1, 1, 1)
         self.label_11 = QtGui.QLabel(self.pCellGroup)
@@ -212,7 +212,7 @@ class Ui_Form(object):
         self.stepsSpin.setDecimals(0)
         self.stepsSpin.setMinimum(10.0)
         self.stepsSpin.setMaximum(1000.0)
-        self.stepsSpin.setProperty(_fromUtf8("value"), 20.0)
+        self.stepsSpin.setProperty("value", 20.0)
         self.stepsSpin.setObjectName(_fromUtf8("stepsSpin"))
         self.gridLayout_7.addWidget(self.stepsSpin, 0, 3, 1, 1)
         self.label_10 = QtGui.QLabel(self.pCellGroup)
@@ -221,7 +221,7 @@ class Ui_Form(object):
         self.gridLayout_7.addWidget(self.label_10, 2, 0, 1, 1)
         self.maxVSpin = SpinBox(self.pCellGroup)
         self.maxVSpin.setSingleStep(0.01)
-        self.maxVSpin.setProperty(_fromUtf8("value"), 1.2)
+        self.maxVSpin.setProperty("value", 1.2)
         self.maxVSpin.setObjectName(_fromUtf8("maxVSpin"))
         self.gridLayout_7.addWidget(self.maxVSpin, 2, 1, 1, 1)
         self.recalibratePCellCheck = QtGui.QCheckBox(self.pCellGroup)

@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/util/pyqtgraph/graphicsItems/ViewBox/axisCtrlTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:25 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:40 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -44,7 +44,7 @@ class Ui_Form(object):
         self.autoPercentSpin.setMinimum(1)
         self.autoPercentSpin.setMaximum(100)
         self.autoPercentSpin.setSingleStep(1)
-        self.autoPercentSpin.setProperty(_fromUtf8("value"), 100)
+        self.autoPercentSpin.setProperty("value", 100)
         self.autoPercentSpin.setObjectName(_fromUtf8("autoPercentSpin"))
         self.gridLayout.addWidget(self.autoPercentSpin, 2, 1, 1, 2)
         self.autoPanCheck = QtGui.QCheckBox(Form)

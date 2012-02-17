@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/modules/DataManager/DataManagerTemplate.ui'
 #
-# Created: Sun Feb  5 11:26:22 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Feb 17 15:44:38 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -93,8 +93,8 @@ class Ui_MainWindow(object):
         self.fileNameLabel.setSizePolicy(sizePolicy)
         font = QtGui.QFont()
         font.setPointSize(7)
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.fileNameLabel.setFont(font)
         self.fileNameLabel.setText(_fromUtf8(""))
         self.fileNameLabel.setObjectName(_fromUtf8("fileNameLabel"))
