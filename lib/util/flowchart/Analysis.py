@@ -102,6 +102,7 @@ class EventFitter(CtrlNode):
             #print "   amp:", guessAmp
             
             zc = functions.zeroCrossingEvents(eventData - (guessAmp/3.))
+            
             ## eliminate events going the wrong direction
             if len(zc) > 0:
                 if guessAmp > 0:
@@ -131,8 +132,15 @@ class EventFitter(CtrlNode):
             ## parameters are [amplitude, x-offset, rise tau, fall tau]
             guess = [guessAmp, guessStart, guessRise, guessDecay]
             #guess = [amp, times[0], guessLen/4., guessLen/2.]  ## careful! 
+            bounds = [
+                sorted((guessAmp * 0.1, guessAmp)),
+                sorted((guessStart-guessRise*2, guessStart+guessRise*2)), 
+                sorted((dt, guessDecay)),
+                sorted((dt, guessDecay * 50.))
+            ]
             yVals = eventData.view(np.ndarray)
-            fit = functions.fitPsp(times, yVals, guess)
+            
+            fit = functions.fitPsp(times, yVals, guess=guess, bounds=bounds)
             
             computed = functions.pspFunc(fit, times)
             err = abs(yVals - computed).sum()

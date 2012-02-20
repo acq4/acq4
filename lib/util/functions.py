@@ -86,7 +86,7 @@ def pspFunc(v, x, risePower=1.0):
         raise
     return out
 
-def fit(function, xVals, yVals, guess, errFn=None, measureError=False, generateResult=False, resultXVals=None):
+def fit(function, xVals, yVals, guess, errFn=None, measureError=False, generateResult=False, resultXVals=None, **kargs):
     """fit xVals, yVals to the specified function. 
     If generateResult is True, then the fit is used to generate an array of points from function
     with the xVals supplied (useful for plotting the fit results with the original data). 
@@ -95,7 +95,7 @@ def fit(function, xVals, yVals, guess, errFn=None, measureError=False, generateR
         errFn = lambda v, x, y: function(v, x)-y
     if len(xVals) < len(guess):
         raise Exception("Too few data points to fit this function. (%d variables, %d points)" % (len(guess), len(xVals)))
-    fitResult = scipy.optimize.leastsq(errFn, guess, args=(xVals, yVals))
+    fitResult = scipy.optimize.leastsq(errFn, guess, args=(xVals, yVals), **kargs)
     error = None
     #if measureError:
         #error = errFn(fit[0], xVals, yVals)
@@ -126,6 +126,96 @@ def fitPsp(xVals, yVals, guess=[1e-3, 0, 10e-3, 10e-3], bounds=None, **kargs):
     amp, xoff, rise, fall = vals
     ## fit may return negative tau values (since pspFunc uses abs(tau)); return the absolute value.
     return (amp, xoff, abs(rise), abs(fall))#, junk, comp, err
+
+
+
+###########################################
+#### testing replacemant for fitPsp, pspFunc, etc
+###########################################
+
+def fitPspNormalize(fn):
+    ## Used to normalize data before fitting, then un-normalize the fit parameters before returning
+    
+    def wrapper(x, y, guess, bounds=None, risePower=1.0):
+        ## Find peak x,y 
+        peakX = np.argmax(y)
+        peakVal = y[peakX]
+        peakTime = x[peakX]
+        
+        ## normalize data, guess, and bounds
+        y = y / peakVal
+        x = x / peakTime
+        guess = np.array(guess)
+        guess[0] /= peakVal
+        guess[1:] /= peakTime
+        bounds = np.array(bounds)
+        bounds[0] = bounds[0] / peakVal
+        bounds[1:] = bounds[1:] / peakTime
+        
+        
+        ## interpolate
+        #x2 = (x[:peakVal] + x[1:peakVal+1]) /2.
+        #y2 = (y[:peakVal] + y[1:peakVal+1]) /2.
+        #x = np.concatenate([x, x2])
+        #y = np.concatenate([y, y2])
+        
+        ## run the fit on normalized data
+        fit = fn(x, y, guess, bounds, risePower)
+        
+        ## reverse normalization before returning fit parameters
+        ## also, make sure amplitude is properly scaled such that fit[0] is the maximum value of the function
+        maxX = fit[2] * np.log(1 + (fit[3]*risePower / fit[2]))
+        maxVal = (1.0 - np.exp(-maxX / fit[2]))**risePower * np.exp(-maxX / fit[3])
+        fit[0] *= maxVal * peakVal
+        fit[1:] *= peakTime
+        
+        return fit
+    return wrapper
+
+def pspInnerFunc(x, rise, decay, power):
+    out = np.zeros(x.shape, x.dtype)
+    mask = x >= 0
+    xvals = x[mask]
+    out[mask] =  (1.0 - np.exp(-xvals / rise))**power * np.exp(-xvals / decay)
+    return out
+
+
+def errFn(v, x, y, risePower):
+    fit = v[0] * pspInnerFunc(x-v[1], v[2], v[3], risePower)
+    err = abs(y - fit) * (fit + 3.0)
+    err = (err**2).sum()
+    return err
+
+@fitPspNormalize
+def fitPspSlsqp(x, y, guess, bounds, risePower=1.0):
+    fit = scipy.optimize.fmin_slsqp(errFn, guess, bounds=bounds, args=(x,y,risePower), acc=1e-3, disp=0)
+    
+    return fit
+
+def pspFunc(v, x, risePower=1.0):
+    """Function approximating a PSP shape. 
+    v = [amplitude, x offset, rise tau, decay tau]
+    Uses absolute value of both taus, so fits may indicate negative tau.
+    """
+    ## determine scaling factor needed to achieve correct amplitude
+    v[2] = abs(v[2])
+    v[3] = abs(v[3])
+    maxX = v[2] * np.log(1 + (v[3]*risePower / v[2]))
+    maxVal = (1.0 - np.exp(-maxX / v[2]))**risePower * np.exp(-maxX / v[3])
+    #maxVal = pspInnerFunc(np.array([maxX]), v[2], v[3], risePower)[0]
+    
+    try:
+        out = v[0] / maxVal * pspInnerFunc(x-v[1], v[2], v[3], risePower)
+    except:
+        print v[2], v[3], maxVal, x.shape, x.dtype
+        raise
+    return out
+
+### Don't use this -- it causes segfaults
+#fitPsp = fitPspSlsqp
+
+
+
 
 
 
@@ -189,6 +279,10 @@ def fitPsp(xVals, yVals, guess=[1e-3, 0, 10e-3, 10e-3], bounds=None, **kargs):
     #return fit
 
 
+##################################################################################################################
+##################################################################################################################
+##################################################################################################################
+##################################################################################################################
 
 
 STRNCMP_REGEX = re.compile(r'(-?\d+(\.\d*)?((e|E)-?\d+)?)')
