@@ -68,7 +68,7 @@ class ViewBox(GraphicsWidget):
         
             'yInverted': invertY,
             'aspectLocked': False,    ## False if aspect is unlocked, otherwise float specifies the locked ratio.
-            'autoRange': [False, False],  ## False if auto range is disabled, 
+            'autoRange': [True, True],  ## False if auto range is disabled, 
                                           ## otherwise float gives the fraction of data that is visible
             'linkedViews': [None, None],
             
@@ -200,6 +200,7 @@ class ViewBox(GraphicsWidget):
         if item.zValue() < self.zValue():
             item.setZValue(self.zValue()+1)
         item.setParentItem(self.childGroup)
+        self.updateAutoRange()
         #print "addItem:", item, item.boundingRect()
         
     def removeItem(self, item):
@@ -207,6 +208,7 @@ class ViewBox(GraphicsWidget):
 
     def resizeEvent(self, ev):
         #self.setRange(self.range, padding=0)
+        self.updateAutoRange()
         self.updateMatrix()
         self.sigStateChanged.emit(self)
         

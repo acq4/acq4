@@ -146,7 +146,7 @@ class ViewBoxMenu(QtGui.QMenu):
         self.view.setXRange(float(self.ctrl[0].minText.text()), float(self.ctrl[0].maxText.text()), padding=0)
         
     def xAutoClicked(self):
-        val = self.ctrl[0].autoSpin.value() * 0.01
+        val = self.ctrl[0].autoPercentSpin.value() * 0.01
         self.view.enableAutoRange(ViewBox.XAxis, val)
         
     def xAutoSpinChanged(self, val):
@@ -173,7 +173,7 @@ class ViewBoxMenu(QtGui.QMenu):
         self.view.setYRange(float(self.ctrl[1].minText.text()), float(self.ctrl[1].maxText.text()), padding=0)
         
     def yAutoClicked(self):
-        val = self.ctrl[1].autoSpin.value() * 0.01
+        val = self.ctrl[1].autoPercentSpin.value() * 0.01
         self.view.enableAutoRange(ViewBox.YAxis, val)
         
     def yAutoSpinChanged(self, val):
