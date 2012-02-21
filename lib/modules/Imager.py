@@ -11,6 +11,33 @@ import metaarray as MA
 import time
 #import matplotlib.pylab as MP
 
+Presets = {
+    'video': {
+        'Downsample': 1,
+        'Image Width': 300,
+        'Image Height': 300,
+        'Overscan': 60,
+        'Store': False,
+        'Blank Screen': False,
+        ('Decomb', 'Shift'): 173e-6,
+        ('Decomb', 'Auto'): False,
+    },
+    'quality': {
+        'Downsample': 10,
+        'Image Width': 500,
+        'Image Height': 500,
+        'Overscan': 5,
+        'Blank Screen': True,
+        ('Decomb', 'Shift'): 17e-6,
+        ('Decomb', 'Auto'): False,
+    }
+}
+
+
+
+
+
+
 class Black(QtGui.QWidget):
     def paintEvent(self, event):
         p = QtGui.QPainter(self)
@@ -81,26 +108,27 @@ class Imager(Module):
         self.l2.addWidget(self.record_button)
         self.win.resize(800, 480)
         self.param = PT.Parameter(name = 'param', children=[
-            dict(name='Sample Rate', type='float', value=1.2e6, suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10e3, 5e6], siPrefix=True),
+            dict(name="Preset", type='list', value='', values=['', 'video', 'quality']),
+            dict(name='Sample Rate', type='float', value=1.0e6, suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10e3, 5e6], siPrefix=True),
             dict(name='Downsample', type='int', value=1, limits=[1,None]),
-            dict(name='Image Width', type='int', value=256),
+            dict(name='Image Width', type='int', value=500),
             dict(name='Y = X', type='bool', value=True),
-            dict(name='Image Height', type='int', value=256),
+            dict(name='Image Height', type='int', value=500),
             dict(name='XCenter', type='float', value=-0.3, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
-            dict(name='XSweep', type='float', value=0.5, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
+            dict(name='XSweep', type='float', value=1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
             dict(name='YCenter', type='float', value=-0.75, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
-            dict(name='YSweep', type='float', value=0.5, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
+            dict(name='YSweep', type='float', value=1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
             dict(name='Bidirectional', type='bool', value=True),
             dict(name='Decomb', type='bool', value=True, children=[
                 dict(name='Auto', type='bool', value=True),
                 dict(name='Shift', type='float', value=100e-6, suffix='s', step=10e-6, siPrefix=True),
             ]),
-            dict(name='Overscan', type='float', value=2.0, suffix='%'),
+            dict(name='Overscan', type='float', value=5.0, suffix='%'),
             dict(name='Pockels', type='float', value= 0.03, suffix='V', dec=True, minStep=1e-3, limits=[0, 1.5], step=0.1, siPrefix=True),
             dict(name='Blank Screen', type='bool', value=True),
+            dict(name='Store', type='bool', value=True),
             dict(name='Show PMT V', type='bool', value=False),
             dict(name='Show Mirror V', type='bool', value=False),
-            dict(name='Store', type='bool', value=True),
             dict(name='Frame Time', type='float', readonly=True, value=0.0),
             dict(name='Scope Device', type='interface', interfaceTypes=['microscope']),
             dict(name="Z-Stack", type="bool", value=False, children=[
@@ -331,6 +359,7 @@ class Imager(Module):
                 imgData, shift = self.decomb(imgData, minShift=0*sampleRate, maxShift=200e-6*sampleRate)  ## correct for mirror lag up to 200us
                 self.param['Decomb', 'Shift'] = shift / sampleRate
             else:
+                print self.param['Decomb', 'Shift'], sampleRate
                 imgData, shift = self.decomb(imgData, auto=False, shift=self.param['Decomb', 'Shift']*sampleRate)
             
         
@@ -356,6 +385,13 @@ class Imager(Module):
         return imgData
   
     def update(self):
+        preset = self.param['Preset']
+        if preset != '':
+            self.param['Preset'] = ''
+            global Presets
+            for k,v in Presets[preset].iteritems():
+                self.param[k] = v
+            
         self.param['Frame Time'] = self.param['Image Width']*self.param['Image Height']*self.param['Downsample']/self.param['Sample Rate']
         self.param['Z-Stack', 'Depth'] = self.param['Z-Stack', 'Step Size'] * (self.param['Z-Stack', 'Steps']-1)
         self.param['Timed', 'Duration'] = self.param['Timed', 'Interval'] * (self.param['Timed', 'N Intervals']-1)
