@@ -67,7 +67,13 @@ class ScreenBlanker:
         
         self.widgets = []
         
-    
+class RegionCtrl(PG.ROI):
+    def __init__(self, pos, size):
+        PG.ROI.__init__(self, pos, size, pen='r')
+        self.addScaleHandle([0,0], [1,1])
+        self.addScaleHandle([1,1], [0,0])
+        #self.addRotateHandle([1,0], [0,1])
+        #self.addRotateHandle([0,1], [1,0])
 
 
 class Imager(Module):
@@ -87,6 +93,8 @@ class Imager(Module):
         self.currentStack = None
         self.currentStackLength = 0
         
+        self.regionCtrl = None
+        
         self.win.setCentralWidget(self.w1)
         self.w1.addWidget(self.w2)
         
@@ -101,11 +109,15 @@ class Imager(Module):
         self.record_button = QtGui.QPushButton('Record Stack')
         self.record_button.setCheckable(True)
         self.video_button.setCheckable(True)
+        self.cameraSnapBtn = QtGui.QPushButton('Camera Snap')
+        
         self.l2.addWidget(self.snap_button)
         self.l2.addWidget(self.run_button)
         self.l2.addWidget(self.stop_button)
         self.l2.addWidget(self.video_button)
         self.l2.addWidget(self.record_button)
+        self.l2.addWidget(self.cameraSnapBtn)
+        
         self.win.resize(800, 480)
         self.param = PT.Parameter(name = 'param', children=[
             dict(name="Preset", type='list', value='', values=['', 'video', 'quality']),
@@ -131,6 +143,9 @@ class Imager(Module):
             dict(name='Show Mirror V', type='bool', value=False),
             dict(name='Frame Time', type='float', readonly=True, value=0.0),
             dict(name='Scope Device', type='interface', interfaceTypes=['microscope']),
+            dict(name='Scanner Device', type='interface', interfaceTypes=['scanner']),
+            dict(name='Laser Device', type='interface', interfaceTypes=['laser']),
+            dict(name='Camera Module', type='interface', interfaceTypes=['cameraModule']),
             dict(name="Z-Stack", type="bool", value=False, children=[
                 dict(name='Stage', type='interface', interfaceTypes='stage'),
                 dict(name="Step Size", type="float", value=5e-6, suffix='m', dec=True, minStep=1e-7, step=0.5, limits=[1e-9,1], siPrefix=True),
@@ -153,7 +168,10 @@ class Imager(Module):
         self.stop_button.clicked.connect(self.PMT_Stop)
         self.video_button.clicked.connect(self.toggleVideo)
         self.record_button.toggled.connect(self.recordToggled)
+        self.cameraSnapBtn.clicked.connect(self.cameraSnap)
         self.Manager = manager
+        
+        self.param.param('Camera Module').sigValueChanged.connect(self.setupCameraModule)
         
     def PMT_Run(self):
         info = {}
@@ -454,3 +472,122 @@ class Imager(Module):
             self.currentStack = None
             self.currentStackLength = 0
             self.record_button.setText('Record Stack')
+            
+    def getScopeDevice(self):
+        return self.manager.getDevice(self.param['Scope Device'])
+            
+    def setupCameraModule(self):
+        modName = self.param['Camera Module']
+        mod = self.manager.getModule(modName)
+        
+        if self.regionCtrl is not None:
+            self.regionCtrl.scene().removeItem(self.regionCtrl)
+        
+        scope = self.getScopeDevice()
+        pos = scope.getPosition()
+        size = [mod.window().cameraScale[0] * 100]*2
+        self.regionCtrl = RegionCtrl(pos, size)
+        mod.window.addItem(self.regionCtrl, z=100)
+        
+        
+    def cameraSnap(self):
+        width = self.param['Image Width']
+        if self.param['Y = X']:
+            height = width
+        else:
+            height = self.param['Image Height']
+        
+        #xscan = self.param['XSweep']/2.0
+        #xcenter = self.param['XCenter']
+        #ycenter = self.param['YCenter']
+        #if self.param['Y = X']:
+            #yscan = xscan
+        #else:
+            #yscan = self.param['YSweep']/2.0
+            
+        xscan = self.regionCtrl.width()
+        yscan = self.regionCtrl.height()
+        xcenter = self.regionCtrl.center().x()
+        ycenter = self.regionCtrl.center().y()
+            
+        sampleRate = self.param['Sample Rate']
+        downsample = self.param['Downsample']
+        overscan = self.param['Overscan']/100.     ## fraction of voltage scan range
+        xscan *= overscan + 1.0 
+        overscanPixels = int(width / 2. * overscan)
+        pixelsPerRow = width + 2 * overscanPixels  ## make sure width is increased by an even number.
+        samplesPerRow = pixelsPerRow * downsample
+        samples = samplesPerRow * height
+        if not self.param['Bidirectional']:
+            saw1 = NP.linspace(xcenter-xscan, xcenter+xscan, samplesPerRow)
+            xScan = NP.tile(saw1, (1, height))[0,:]
+        else:
+            saw1 = NP.linspace(xcenter-xscan, xcenter+xscan, samplesPerRow)
+            rows = [saw1, saw1[::-1]] * int(height/2)
+            if len(rows) < height:
+                rows.append(saw1)
+            xScan = NP.concatenate(rows, axis=0)
+            
+        yvals = NP.linspace(ycenter-yscan, ycenter+yscan, height)
+        yScan = NP.empty(samples)
+        for y in range(height):
+            yScan[y*samplesPerRow:(y+1)*samplesPerRow] = yvals[y]
+        
+            
+        cmd= {'protocol': {'duration': samples/sampleRate},
+              'DAQ' : {'rate': sampleRate, 'numPts': samples, 'downsample':downsample}, 
+              #'Scanner-Raw': {
+                  #'XAxis' : {'command': xScan},
+                  #'YAxis' : {'command': yScan}
+                  #},
+              'Scanner': {
+                  'xPosition' : xScan,
+                  'yPosition' : yScan
+                  },
+              'PockelCell': {'Switch' : {'preset': self.param['Pockels']}},
+              'PMT' : {
+                  'Input': {'record': True},
+                  }
+            }
+        # take some data
+        task = self.Manager.createTask(cmd)
+        if self.param['Blank Screen']:
+            with ScreenBlanker():
+                task.execute(block = False)
+                while not task.isDone():
+                    QtGui.QApplication.processEvents()
+                    time.sleep(0.1)
+        else:
+            task.execute(block = False)
+            while not task.isDone():
+                QtGui.QApplication.processEvents()
+                time.sleep(0.1)
+
+        data = task.getResult()
+        imgData = data['PMT']['Input'].view(NP.ndarray)
+        imgData.shape = (height, pixelsPerRow)
+        imgData = imgData.transpose()
+        
+        if self.param['Bidirectional']:
+            for y in range(1, height, 2):
+                imgData[:,y] = imgData[::-1,y]
+            if self.param['Decomb', 'Auto']:
+                imgData, shift = self.decomb(imgData, minShift=0*sampleRate, maxShift=200e-6*sampleRate)  ## correct for mirror lag up to 200us
+                self.param['Decomb', 'Shift'] = shift / sampleRate
+            else:
+                print self.param['Decomb', 'Shift'], sampleRate
+                imgData, shift = self.decomb(imgData, auto=False, shift=self.param['Decomb', 'Shift']*sampleRate)
+            
+        
+        if overscanPixels > 0:
+            imgData = imgData[overscanPixels:-overscanPixels]  ## remove overscan
+
+        if self.param['Show PMT V']:
+            PG.plot(y=imgData, x=NP.linspace(0, samples/sampleRate, imgData.size))
+        if self.param['Show Mirror V']:
+            PG.plot(y=xScan, x=NP.linspace(0, samples/self.param['Sample Rate'], xScan.size))
+
+        self.view.setImage(imgData)
+
+        return imgData
+        
