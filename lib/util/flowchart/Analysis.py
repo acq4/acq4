@@ -48,11 +48,13 @@ class EventFitter(CtrlNode):
         dt = waveform.xvals(0)[1] - waveform.xvals(0)[0]
         output = np.empty(len(events), dtype=dtype + [
             ('fitAmplitude', float), 
-            ('fitTime', float), 
+            ('fitTime', float),
             ('fitRiseTau', float), 
             ('fitDecayTau', float), 
+            ('fitTimeToPeak', float),
             ('fitError', float),
             ('fitFractionalError', float),
+            ('fitLengthOverDecay', float),
         ])
         
         offset = 0 ## not all input events will produce output events; offset keeps track of the difference.
@@ -152,9 +154,11 @@ class EventFitter(CtrlNode):
             fit = functions.fitPsp(times, yVals, guess=guess, bounds=bounds)
             
             computed = functions.pspFunc(fit, times)
+            peakTime = functions.pspMaxTime(fit[2], fit[3])
             err = abs(yVals - computed).sum()
             fracError = err / abs(computed).sum()
-            output[i-offset] = tuple(events[i]) + tuple(fit) + (err, fracError)
+            lengthOverDecay = (times[-1] - fit[1]) / fit[3]  # ratio of (length of data that was fit : decay constant)
+            output[i-offset] = tuple(events[i]) + tuple(fit) + (peakTime, err, fracError, lengthOverDecay)
             #output['fitTime'] += output['time']
                 
             #print fit

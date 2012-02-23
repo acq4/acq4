@@ -136,6 +136,10 @@ def pspInnerFunc(x, rise, decay, power):
     out[mask] =  (1.0 - np.exp(-xvals / rise))**power * np.exp(-xvals / decay)
     return out
 
+def pspMaxTime(rise, decay, risePower=2.0):
+    """Return the time from start to peak for a psp with given parameters."""
+    return rise * np.log(1 + (decay * risePower / rise))
+
 def pspFunc(v, x, risePower=2.0):
     """Function approximating a PSP shape. 
     v = [amplitude, x offset, rise tau, decay tau]
@@ -148,7 +152,7 @@ def pspFunc(v, x, risePower=2.0):
     ## determine scaling factor needed to achieve correct amplitude
     v[2] = abs(v[2])
     v[3] = abs(v[3])
-    maxX = v[2] * np.log(1 + (v[3]*risePower / v[2]))
+    maxX = pspMaxTime(v[2], v[3], risePower)
     maxVal = (1.0 - np.exp(-maxX / v[2]))**risePower * np.exp(-maxX / v[3])
     #maxVal = pspInnerFunc(np.array([maxX]), v[2], v[3], risePower)[0]
     
