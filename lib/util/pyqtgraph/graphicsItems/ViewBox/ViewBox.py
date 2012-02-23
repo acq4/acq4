@@ -56,6 +56,7 @@ class ViewBox(GraphicsWidget):
         GraphicsWidget.__init__(self, parent)
         self.name = None
         self.linksBlocked = False
+        self.addedItems = []
         #self.gView = view
         #self.showGrid = showGrid
         
@@ -201,9 +202,11 @@ class ViewBox(GraphicsWidget):
             item.setZValue(self.zValue()+1)
         item.setParentItem(self.childGroup)
         self.updateAutoRange()
+        self.addedItems.append(item)
         #print "addItem:", item, item.boundingRect()
         
     def removeItem(self, item):
+        self.addedItems.remove(item)
         self.scene().removeItem(item)
 
     def resizeEvent(self, ev):
@@ -762,7 +765,8 @@ class ViewBox(GraphicsWidget):
         Values may be None if there are no specific bounds for an axis.
         """
         
-        items = self.allChildren()
+        #items = self.allChildren()
+        items = self.addedItems
         
         #if item is None:
             ##print "children bounding rect:"
