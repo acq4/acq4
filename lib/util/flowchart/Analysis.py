@@ -51,6 +51,8 @@ class EventFitter(CtrlNode):
             ('fitTime', float), 
             ('fitRiseTau', float), 
             ('fitDecayTau', float), 
+            ('fitRiseTime', float),
+            ('fitMaxRiseSlope', float),            
             ('fitError', float),
             ('fitFractionalError', float),
         ])
@@ -135,9 +137,17 @@ class EventFitter(CtrlNode):
             fit = functions.fitPsp(times, yVals, guess)
             
             computed = functions.pspFunc(fit, times)
+            
+            if guessAmp > 0:
+                peakTime = times[np.argwhere(computed == computed.max())[0][0]]
+                fitMaxRiseSlope = (computed[1:]-computed[:-1]).max()/dt
+            else:
+                peakTime = times[np.argwhere(computed == computed.min())[0][0]]
+                fitMaxRiseSlope = (computed[1:]-computed[:-1]).min()/dt
+            fitRiseTime = peakTime-fit[1]
             err = abs(yVals - computed).sum()
             fracError = err / abs(computed).sum()
-            output[i-offset] = tuple(events[i]) + tuple(fit) + (err, fracError)
+            output[i-offset] = tuple(events[i]) + tuple(fit) +(fitRiseTime, fitMaxRiseSlope) + (err, fracError)
             #output['fitTime'] += output['time']
                 
             #print fit
