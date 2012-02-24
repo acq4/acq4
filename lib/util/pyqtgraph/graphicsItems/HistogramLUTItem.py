@@ -83,18 +83,24 @@ class HistogramLUTItem(GraphicsWidget):
         
         
     def setHistogramRange(self, mn, mx, padding=0.0):
-        d = mx-mn
-        mn -= d*padding
-        mx += d*padding
-        self.range = [mn,mx]
-        self.updateRange()
-        self.vb.setMouseEnabled(False, True)
+        """Set the Y range on the histogram plot. This disables auto-scaling."""
+        self.vb.enableAutoRange(self.vb.YAxis, False)
+        self.vb.setYRange(mn, mx, padding)
+        
+        #d = mx-mn
+        #mn -= d*padding
+        #mx += d*padding
+        #self.range = [mn,mx]
+        #self.updateRange()
+        #self.vb.setMouseEnabled(False, True)
         #self.region.setBounds([mn,mx])
         
     def autoHistogramRange(self):
-        self.range = None
-        self.updateRange()
-        self.vb.setMouseEnabled(False, False)
+        """Enable auto-scaling on the histogram plot."""
+        self.vb.enableAutoRange(self.vb.XYAxes)
+        #self.range = None
+        #self.updateRange()
+        #self.vb.setMouseEnabled(False, False)
             
     def updateRange(self):
         self.vb.autoRange()

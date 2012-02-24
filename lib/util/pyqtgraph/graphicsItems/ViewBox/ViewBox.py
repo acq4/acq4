@@ -772,7 +772,7 @@ class ViewBox(GraphicsWidget):
             if not item.isVisible():
                 continue
         
-            #print "=========", item
+            print "=========", item
             useX = True
             useY = True
             if hasattr(item, 'dataBounds'):
@@ -788,7 +788,7 @@ class ViewBox(GraphicsWidget):
                     yr = (0,0)
                 
                 bounds = QtCore.QRectF(xr[0], yr[0], xr[1]-xr[0], yr[1]-yr[0])
-                #print "   item real:", bounds
+                print "   item real:", bounds
             else:
                 if int(item.flags() & item.ItemHasNoContents) > 0:
                     continue
@@ -796,10 +796,10 @@ class ViewBox(GraphicsWidget):
                 else:
                     bounds = item.boundingRect()
                     #bounds = [[item.left(), item.top()], [item.right(), item.bottom()]]
-                #print "   item:", bounds
+                print "   item:", bounds
             #bounds = QtCore.QRectF(bounds[0][0], bounds[1][0], bounds[0][1]-bounds[0][0], bounds[1][1]-bounds[1][0])
             bounds = self.mapFromItemToView(item, bounds).boundingRect()
-            #print "    ", bounds
+            print "    ", bounds
             
             
             if not any([useX, useY]):
