@@ -8,7 +8,7 @@ from GraphicsWidget import GraphicsWidget
 
 __all__ = ['AxisItem']
 class AxisItem(GraphicsWidget):
-    def __init__(self, orientation, pen=None, linkView=None, parent=None, maxTickLength=-5):
+    def __init__(self, orientation, pen=None, linkView=None, parent=None, maxTickLength=-5, showValues=True):
         """
         GraphicsItem showing a single plot axis with ticks, values, and label.
         Can be configured to fit on any side of a plot, and can automatically synchronize its displayed scale with ViewBox items.
@@ -18,6 +18,7 @@ class AxisItem(GraphicsWidget):
         
         GraphicsWidget.__init__(self, parent)
         self.label = QtGui.QGraphicsTextItem(self)
+        self.showValues = showValues
         self.orientation = orientation
         if orientation not in ['left', 'right', 'top', 'bottom']:
             raise Exception("Orientation argument must be one of 'left', 'right', 'top', or 'bottom'.")
@@ -251,45 +252,63 @@ class AxisItem(GraphicsWidget):
             tbounds = self.mapRectFromScene(self.linkedView().mapRectToScene(self.linkedView().boundingRect()))
         
         if self.orientation == 'left':
-            p.drawLine(bounds.topRight(), bounds.bottomRight())
+            span = (bounds.topRight(), bounds.bottomRight())
             tickStart = tbounds.right()
             tickStop = bounds.right()
             tickDir = -1
             axis = 0
         elif self.orientation == 'right':
-            p.drawLine(bounds.topLeft(), bounds.bottomLeft())
+            span = (bounds.topLeft(), bounds.bottomLeft())
             tickStart = tbounds.left()
             tickStop = bounds.left()
             tickDir = 1
             axis = 0
         elif self.orientation == 'top':
-            p.drawLine(bounds.bottomLeft(), bounds.bottomRight())
+            span = (bounds.bottomLeft(), bounds.bottomRight())
             tickStart = tbounds.bottom()
             tickStop = bounds.bottom()
             tickDir = -1
             axis = 1
         elif self.orientation == 'bottom':
-            p.drawLine(bounds.topLeft(), bounds.topRight())
+            span = (bounds.topLeft(), bounds.topRight())
             tickStart = tbounds.top()
             tickStop = bounds.top()
             tickDir = 1
             axis = 1
-        
+
+        ## draw long line along axis
+        p.drawLine(*span)
+
+        ## determine size of this item in pixels
+        points = map(self.mapToDevice, span)
+        lengthInPixels = Point(points[1] - points[0]).length()
+
+        ## decide optimal tick spacing in pixels
+        pixelSpacing = np.log(lengthInPixels+10) * 3
+        optimalTickCount = lengthInPixels / pixelSpacing
+
         ## Determine optimal tick spacing
         #intervals = [1., 2., 5., 10., 20., 50.]
         #intervals = [1., 2.5, 5., 10., 25., 50.]
-        intervals = [1., 2., 10., 20., 100.]
+        intervals = np.array([0.1, 0.2, 1., 2., 10., 20., 100., 200.])
         dif = abs(self.range[1] - self.range[0])
         if dif == 0.0:
             return
-        #print "dif:", dif
         pw = 10 ** (np.floor(np.log10(dif))-1)
-        for i in range(len(intervals)):
-            i1 = i
-            if dif / (pw*intervals[i]) < 10:
-                break
+        scaledIntervals = intervals * pw
+        scaledTickCounts = dif / scaledIntervals 
+        i1 = np.argwhere(scaledTickCounts < optimalTickCount)[0,0]
         
-        textLevel = i1  ## draw text at this scale level
+        distBetweenIntervals = (optimalTickCount-scaledTickCounts[i1]) / (scaledTickCounts[i1-1]-scaledTickCounts[i1])
+        
+        #print optimalTickCount, i1, scaledIntervals, distBetweenIntervals
+        
+        #for i in range(len(intervals)):
+            #i1 = i
+            #if dif / (pw*intervals[i]) < 10:
+                #break
+        
+        textLevel = 0  ## draw text at this scale level
         
         #print "range: %s   dif: %f   power: %f  interval: %f   spacing: %f" % (str(self.range), dif, pw, intervals[i1], sp)
         
@@ -308,11 +327,11 @@ class AxisItem(GraphicsWidget):
         ## (to improve performance, we do not interleave line and text drawing, since this causes unnecessary pipeline switching)
         ## draw three different intervals, long ticks first
         texts = []
-        for i in reversed([i1, i1+1, i1+2]):
-            if i > len(intervals):
+        for i in [2,1,0]:
+            if i1+i > len(intervals):
                 continue
             ## spacing for this interval
-            sp = pw*intervals[i]
+            sp = pw*intervals[i1+i]
             
             ## determine starting tick
             start = np.ceil(self.range[0] / sp) * sp
@@ -328,10 +347,18 @@ class AxisItem(GraphicsWidget):
             places = max(0, 1-int(np.log10(sp*self.scale)))
         
             ## length of tick
-            h = np.clip((self.tickLength*3 / num) - 1., min(0, self.tickLength), max(0, self.tickLength))
-            
+            #h = np.clip((self.tickLength*3 / num) - 1., min(0, self.tickLength), max(0, self.tickLength))
+            if i == 0:
+                h = self.tickLength * distBetweenIntervals / 2.
+            else:
+                h = self.tickLength*i/2.
+                
             ## alpha
-            a = min(255, (765. / num) - 1.)
+            if i == 0:
+                #a = min(255, (765. / num) - 1.)
+                a = 255 * distBetweenIntervals
+            else:
+                a = 255
             
             if axis == 0:
                 offset = self.range[0] * xs - bounds.height()
@@ -351,41 +378,42 @@ class AxisItem(GraphicsWidget):
                     continue
                 if p1[1-axis] < 0:
                     continue
-                p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100, a)))
+                p.setPen(QtGui.QPen(QtGui.QColor(150, 150, 150, a)))
                 # draw tick only if there is none
                 tickPos = p1[1-axis]
                 if tickPos not in tickPositions:
                     p.drawLine(Point(p1), Point(p2))
                     tickPositions.add(tickPos)
-                if i == textLevel:
-                    if abs(v) < .001 or abs(v) >= 10000:
-                        vstr = "%g" % (v * self.scale)
-                    else:
-                        vstr = ("%%0.%df" % places) % (v * self.scale)
+                    if i >= textLevel:
+                        if abs(v) < .001 or abs(v) >= 10000:
+                            vstr = "%g" % (v * self.scale)
+                        else:
+                            vstr = ("%%0.%df" % places) % (v * self.scale)
+                            
+                        textRect = p.boundingRect(QtCore.QRectF(0, 0, 100, 100), QtCore.Qt.AlignCenter, vstr)
+                        height = textRect.height()
+                        self.textHeight = height
+                        if self.orientation == 'left':
+                            textFlags = QtCore.Qt.AlignRight|QtCore.Qt.AlignVCenter
+                            rect = QtCore.QRectF(tickStop-100, x-(height/2), 99-max(0,self.tickLength), height)
+                        elif self.orientation == 'right':
+                            textFlags = QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter
+                            rect = QtCore.QRectF(tickStop+max(0,self.tickLength)+1, x-(height/2), 100-max(0,self.tickLength), height)
+                        elif self.orientation == 'top':
+                            textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignBottom
+                            rect = QtCore.QRectF(x-100, tickStop-max(0,self.tickLength)-height, 200, height)
+                        elif self.orientation == 'bottom':
+                            textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignTop
+                            rect = QtCore.QRectF(x-100, tickStop+max(0,self.tickLength), 200, height)
                         
-                    textRect = p.boundingRect(QtCore.QRectF(0, 0, 100, 100), QtCore.Qt.AlignCenter, vstr)
-                    height = textRect.height()
-                    self.textHeight = height
-                    if self.orientation == 'left':
-                        textFlags = QtCore.Qt.AlignRight|QtCore.Qt.AlignVCenter
-                        rect = QtCore.QRectF(tickStop-100, x-(height/2), 99-max(0,self.tickLength), height)
-                    elif self.orientation == 'right':
-                        textFlags = QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter
-                        rect = QtCore.QRectF(tickStop+max(0,self.tickLength)+1, x-(height/2), 100-max(0,self.tickLength), height)
-                    elif self.orientation == 'top':
-                        textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignBottom
-                        rect = QtCore.QRectF(x-100, tickStop-max(0,self.tickLength)-height, 200, height)
-                    elif self.orientation == 'bottom':
-                        textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignTop
-                        rect = QtCore.QRectF(x-100, tickStop+max(0,self.tickLength), 200, height)
-                    
-                    p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100)))
-                    #p.drawText(rect, textFlags, vstr)
-                    texts.append((rect, textFlags, vstr))
+                        #p.setPen(QtGui.QPen(QtGui.QColor(150, 150, 150, a)))
+                        #p.drawText(rect, textFlags, vstr)
+                        texts.append((rect, textFlags, vstr, a))
                     
         prof.mark('draw ticks')
         for args in texts:
-            p.drawText(*args)
+            p.setPen(QtGui.QPen(QtGui.QColor(150, 150, 150, args[3])))
+            p.drawText(*args[:3])
         prof.mark('draw text')
         prof.finish()
         

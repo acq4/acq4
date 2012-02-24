@@ -197,7 +197,9 @@ class LinearRegionItem(UIGraphicsItem):
 
     def hoverEvent(self, ev):
         if (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
-            self.currentBrush = fn.mkBrush(255, 0,0,100)
+            c = self.brush.color()
+            c.setAlpha(c.alpha() * 2)
+            self.currentBrush = fn.mkBrush(c)
         else:
             self.currentBrush = self.brush
         self.update()

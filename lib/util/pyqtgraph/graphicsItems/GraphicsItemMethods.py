@@ -237,3 +237,20 @@ class GraphicsItemMethods:
             return self.transform()
         else:
             return QtGui.QGraphicsObject.sceneTransform(self)
+
+
+    def transformAngle(self, relativeItem=None):
+        """Return the rotation produced by this item's transform (this assumes there is no shear in the transform)
+        If relativeItem is given, then the angle is determined relative to that item.
+        """
+        if relativeItem is None:
+            relativeItem = self.parentItem()
+            
+        tr = self.itemTransform(relativeItem)[0]
+        vec = tr.map(Point(1,0)) - tr.map(Point(0,0))
+        return Point(vec).angle(Point(1,0))
+        
+        
+        
+        
+        

@@ -10,6 +10,7 @@ from ViewBox import *
 from GradientEditorItem import *
 from LinearRegionItem import *
 from PlotDataItem import *
+from AxisItem import *
 from GridItem import *
 from pyqtgraph.Point import Point
 import pyqtgraph.functions as fn
@@ -36,14 +37,17 @@ class HistogramLUTItem(GraphicsWidget):
         self.vb = ViewBox()
         self.vb.setMaximumWidth(152)
         self.vb.setMinimumWidth(52)
+        self.vb.setMouseEnabled(x=False, y=True)
         self.gradient = GradientEditorItem()
         self.gradient.setOrientation('right')
         self.gradient.loadPreset('grey')
         self.region = LinearRegionItem([0, 1], LinearRegionItem.Horizontal)
         self.region.setZValue(1000)
         self.vb.addItem(self.region)
-        self.layout.addItem(self.vb, 0, 0)
-        self.layout.addItem(self.gradient, 0, 1)
+        self.axis = AxisItem('left', linkView=self.vb, maxTickLength=-10, showValues=False)
+        self.layout.addItem(self.axis, 0, 0)
+        self.layout.addItem(self.vb, 0, 1)
+        self.layout.addItem(self.gradient, 0, 2)
         self.range = None
         self.gradient.setFlag(self.gradient.ItemStacksBehindParent)
         self.vb.setFlag(self.gradient.ItemStacksBehindParent)
@@ -102,11 +106,11 @@ class HistogramLUTItem(GraphicsWidget):
         #self.updateRange()
         #self.vb.setMouseEnabled(False, False)
             
-    def updateRange(self):
-        self.vb.autoRange()
-        if self.range is not None:
-            self.vb.setYRange(*self.range)
-        vr = self.vb.viewRect()
+    #def updateRange(self):
+        #self.vb.autoRange()
+        #if self.range is not None:
+            #self.vb.setYRange(*self.range)
+        #vr = self.vb.viewRect()
         
         #self.region.setBounds([vr.top(), vr.bottom()])
 
@@ -116,7 +120,8 @@ class HistogramLUTItem(GraphicsWidget):
         img.setLookupTable(self.getLookupTable)  ## send function pointer, not the result
         #self.gradientChanged()
         self.regionChanged()
-        self.imageChanged(autoLevel=True, autoRange=True)
+        self.imageChanged(autoLevel=True)
+        #self.vb.autoRange()
         
     def viewRangeChanged(self):
         self.update()
@@ -161,9 +166,9 @@ class HistogramLUTItem(GraphicsWidget):
             mn = h[0][0]
             mx = h[0][-1]
             self.region.setRegion([mn, mx])
-            self.updateRange()
-        if autoRange:
-            self.updateRange()
+            #self.updateRange()
+        #if autoRange:
+            #self.updateRange()
             
     def getLevels(self):
         return self.region.getRegion()

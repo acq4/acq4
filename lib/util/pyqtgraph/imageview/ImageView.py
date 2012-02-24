@@ -465,7 +465,8 @@ class ImageView(QtGui.QWidget):
         self.roiClicked()
         prof.mark('7')
         prof.finish()
-            
+
+
     def autoLevels(self):
         image = self.getProcessedImage()
         
@@ -490,6 +491,8 @@ class ImageView(QtGui.QWidget):
             image = self.normalize(self.image)
             self.imageDisp = image
             self.levelMin, self.levelMax = map(float, ImageView.quickMinMax(self.imageDisp))
+            self.ui.histogram.setHistogramRange(self.levelMin, self.levelMax)
+            
         return self.imageDisp
 
     @staticmethod
