@@ -18,6 +18,9 @@ import pyqtgraph as pg
 #import pyqtgraph.ProgressDialog as ProgressDialog
 from HelpfulException import HelpfulException
 
+### Error IDs:
+###  1: Could not find spot size from calibration. (from ScannerProtoGui.pointSize)
+
 class ScannerProtoGui(ProtocolGui):
     
     #sigSequenceChanged = QtCore.Signal(object)  ## inherited from Device
@@ -108,8 +111,11 @@ class ScannerProtoGui(ProtocolGui):
         self.spotMarker.setPen(pg.mkPen(color=(255,255,255), width = 2))
         try:
             self.updateSpotSizes()
-        except HelpfulException:
-            self.testTarget.hide()
+        except HelpfulException as exc:
+            if exc.kwargs.get('errId',None) == 1:  ## no calibration for the current objective
+                self.testTarget.hide()
+            else:
+                raise
         self.spotMarker.hide()
         
         #camMod = self.cameraModule()
@@ -211,9 +217,12 @@ class ScannerProtoGui(ProtocolGui):
                 self.testTarget.setPointSize()
                 self.spotMarker.setPointSize()
                 self.testTarget.show()
-            except:
-                logMsg("Could not update scanner spot sizes for %s objective" %str(obj), msgType='warning', importance=2)
-                self.testTarget.hide()
+            except HelpfulException as exc:
+                if exc.kwargs.get('errId', None) == 1:
+                    #logMsg("Could not update scanner spot sizes for %s objective because no calibration could be found." %str(obj), msgType='warning', importance=2)
+                    self.testTarget.hide()
+                else:
+                    raise
                 
             for i in self.items.values():
                 li = self.listItem(i.name) ## actually a tree item
@@ -279,7 +288,7 @@ class ScannerProtoGui(ProtocolGui):
             print "Could not find spot size from calibration."
             #logMsg("Could not find spot size from calibration.", msgType='error') ### This should turn into a HelpfulException.
             exc = sys.exc_info()
-            raise HelpfulException("Could not find spot size from calibration. ", exc=exc, reasons=["Correct camera and/or laser device are not selected.", "There is no calibration file for selected camera and laser."])
+            raise HelpfulException("Could not find spot size from calibration. ", exc=exc, reasons=["Correct camera and/or laser device are not selected.", "There is no calibration file for selected camera and laser."], errId=1)
             
         if self.ui.sizeFromCalibrationRadio.isChecked():
             displaySize = ss
@@ -402,9 +411,12 @@ class ScannerProtoGui(ProtocolGui):
             autoName = True
         try:
             ptSize, dispSize = self.pointSize()
-        except:
+        except HelpfulException as ex:
             exc = sys.exc_info()
-            raise HelpfulException('Scanner is unable to find the size of grid points, so cannot add a grid.', exc=exc)
+            if ex.kwargs.get('errId', None) == 1:
+                raise HelpfulException('%s has no calibration for %s, so cannot add a grid.' %(str(self.ui.laserCombo.currentText()), self.currentObjective), exc=exc)
+            else:
+                raise HelpfulException('Scanner is unable to find the size of grid points, so cannot add a grid.', exc=exc)
         autoPos = False
         if pos is None:
             pos = [0,0]

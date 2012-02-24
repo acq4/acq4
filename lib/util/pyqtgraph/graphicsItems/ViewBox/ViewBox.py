@@ -56,6 +56,7 @@ class ViewBox(GraphicsWidget):
         GraphicsWidget.__init__(self, parent)
         self.name = None
         self.linksBlocked = False
+        self.addedItems = []
         #self.gView = view
         #self.showGrid = showGrid
         
@@ -68,7 +69,7 @@ class ViewBox(GraphicsWidget):
         
             'yInverted': invertY,
             'aspectLocked': False,    ## False if aspect is unlocked, otherwise float specifies the locked ratio.
-            'autoRange': [False, False],  ## False if auto range is disabled, 
+            'autoRange': [True, True],  ## False if auto range is disabled, 
                                           ## otherwise float gives the fraction of data that is visible
             'linkedViews': [None, None],
             
@@ -200,13 +201,17 @@ class ViewBox(GraphicsWidget):
         if item.zValue() < self.zValue():
             item.setZValue(self.zValue()+1)
         item.setParentItem(self.childGroup)
+        self.updateAutoRange()
+        self.addedItems.append(item)
         #print "addItem:", item, item.boundingRect()
         
     def removeItem(self, item):
+        self.addedItems.remove(item)
         self.scene().removeItem(item)
 
     def resizeEvent(self, ev):
         #self.setRange(self.range, padding=0)
+        self.updateAutoRange()
         self.updateMatrix()
         self.sigStateChanged.emit(self)
         
@@ -760,7 +765,8 @@ class ViewBox(GraphicsWidget):
         Values may be None if there are no specific bounds for an axis.
         """
         
-        items = self.allChildren()
+        #items = self.allChildren()
+        items = self.addedItems
         
         #if item is None:
             ##print "children bounding rect:"
@@ -929,7 +935,6 @@ class ViewBox(GraphicsWidget):
             p.end()
 
     def updateViewLists(self):
-        return
         def cmpViews(a, b):
             wins = 100 * cmp(a.window() is self.window(), b.window() is self.window())
             alpha = cmp(a.name, b.name)

@@ -48,11 +48,13 @@ class EventFitter(CtrlNode):
         dt = waveform.xvals(0)[1] - waveform.xvals(0)[0]
         output = np.empty(len(events), dtype=dtype + [
             ('fitAmplitude', float), 
-            ('fitTime', float), 
+            ('fitTime', float),
             ('fitRiseTau', float), 
             ('fitDecayTau', float), 
+            ('fitTimeToPeak', float),
             ('fitError', float),
             ('fitFractionalError', float),
+            ('fitLengthOverDecay', float),
         ])
         
         offset = 0 ## not all input events will produce output events; offset keeps track of the difference.
@@ -87,10 +89,10 @@ class EventFitter(CtrlNode):
             mx = eventData.max()
             mn = eventData.min()
             if mx > -mn:
-                guessAmp = mx
+                peakVal = mx
             else:
-                guessAmp = mn
-            guessAmp *= 2  ## fit converges more reliably if we start too large
+                peakVal = mn
+            guessAmp = peakVal * 2  ## fit converges more reliably if we start too large
             guessRise = guessLen/4.
             guessDecay = guessLen/2.
             guessStart = times[0]
@@ -101,7 +103,8 @@ class EventFitter(CtrlNode):
             #print "Event", i, times[0]
             #print "   amp:", guessAmp
             
-            zc = functions.zeroCrossingEvents(eventData - (guessAmp/3.))
+            zc = functions.zeroCrossingEvents(eventData - (peakVal/3.))
+            
             ## eliminate events going the wrong direction
             if len(zc) > 0:
                 if guessAmp > 0:
@@ -119,25 +122,43 @@ class EventFitter(CtrlNode):
                 #guessLen = dt*zc[zcInd]['len']
                 guessRise = dt*zcEv['len'] * 0.2
                 guessDecay = dt*zcEv['len'] * 0.8 
-                guessStart = times[0] + dt*zcEv['index']
+                guessStart = times[0] + dt*zcEv['index'] - guessRise
                 
                 ## cull down the data set if possible
                 cullLen = zcEv['index'] + zcEv['len']*3
                 if len(eventData) > cullLen:
                     eventData = eventData[:cullLen]
                     times = times[:cullLen]
+                    
+            #print "===== event %d: %f =====" % (i, events[i]['time'])
+            #print zc
+            #print "rise:", guessRise
+            #print 'decay:', guessDecay
+            #if len(zc) == 0:
+                #print "  ---> no zero-crossing events:"
+                #print "  guessAmp:", guessAmp
+                #print eventData - (guessAmp/3.)
                 
             ## fitting to exponential rise * decay
             ## parameters are [amplitude, x-offset, rise tau, fall tau]
             guess = [guessAmp, guessStart, guessRise, guessDecay]
             #guess = [amp, times[0], guessLen/4., guessLen/2.]  ## careful! 
+            bounds = [
+                sorted((guessAmp * 0.1, guessAmp)),
+                sorted((guessStart-guessRise*2, guessStart+guessRise*2)), 
+                sorted((dt*0.5, guessDecay)),
+                sorted((dt*0.5, guessDecay * 50.))
+            ]
             yVals = eventData.view(np.ndarray)
-            fit = functions.fitPsp(times, yVals, guess)
+            
+            fit = functions.fitPsp(times, yVals, guess=guess, bounds=bounds)
             
             computed = functions.pspFunc(fit, times)
+            peakTime = functions.pspMaxTime(fit[2], fit[3])
             err = abs(yVals - computed).sum()
             fracError = err / abs(computed).sum()
-            output[i-offset] = tuple(events[i]) + tuple(fit) + (err, fracError)
+            lengthOverDecay = (times[-1] - fit[1]) / fit[3]  # ratio of (length of data that was fit : decay constant)
+            output[i-offset] = tuple(events[i]) + tuple(fit) + (peakTime, err, fracError, lengthOverDecay)
             #output['fitTime'] += output['time']
                 
             #print fit

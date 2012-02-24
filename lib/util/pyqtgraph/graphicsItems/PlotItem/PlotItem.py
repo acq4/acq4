@@ -184,7 +184,9 @@ class PlotItem(GraphicsWidget):
         #self.ctrlMenu.addAction(self.menuAction)
         
         #if HAVE_WIDGETGROUP:
-        self.stateGroup = WidgetGroup(w)
+        self.stateGroup = WidgetGroup()
+        for name, w in menuItems:
+            self.stateGroup.autoAdd(w)
         
         self.fileDialog = None
         

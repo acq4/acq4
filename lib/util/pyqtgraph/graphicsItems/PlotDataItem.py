@@ -136,6 +136,8 @@ class PlotDataItem(GraphicsObject):
         | *pen* can be a QPen or any argument accepted by :func:`pyqtgraph.mkPen() <pyqtgraph.mkPen>`
         """
         self.opts['pen'] = fn.mkPen(pen)
+        for c in self.curves:
+            c.setPen(pen)
         self.update()
         
     def setShadowPen(self, pen):
@@ -147,6 +149,8 @@ class PlotDataItem(GraphicsObject):
         | *pen* can be a QPen or any argument accepted by :func:`pyqtgraph.mkPen() <pyqtgraph.mkPen>`
         """
         self.opts['shadowPen'] = pen
+        for c in self.curves:
+            c.setPen(pen)
         self.update()
 
     def setDownsampling(self, ds):

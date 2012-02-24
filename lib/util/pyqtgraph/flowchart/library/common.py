@@ -64,7 +64,7 @@ def generateUi(opts):
         else:
             raise Exception("Unknown widget type '%s'" % str(t))
         if 'tip' in o:
-            w.setTooltip(o['tip'])
+            w.setToolTip(o['tip'])
         w.setObjectName(k)
         l.addRow(k, w)
         if o.get('hidden', False):
