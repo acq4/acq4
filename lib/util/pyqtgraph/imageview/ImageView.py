@@ -468,17 +468,14 @@ class ImageView(QtGui.QWidget):
 
 
     def autoLevels(self):
-        image = self.getProcessedImage()
+        #image = self.getProcessedImage()
+        self.setLevels(self.levelMin, self.levelMax)
         
-        #self.ui.whiteSlider.setValue(self.ui.whiteSlider.maximum())
-        #self.ui.blackSlider.setValue(0)
-        
-        #self.ui.gradientWidget.setTickValue(self.ticks[0], 0.0)
-        #self.ui.gradientWidget.setTickValue(self.ticks[1], 1.0)
-        #self.imageItem.setLevels([self.blackLevel(), self.whiteLevel()])
-        
-        self.ui.histogram.imageChanged(autoLevel=True)
+        #self.ui.histogram.imageChanged(autoLevel=True)
             
+
+    def setLevels(self, min, max):
+        self.ui.histogram.setLevels(min, max)
 
     def autoRange(self):
         image = self.getProcessedImage()

@@ -653,8 +653,10 @@ class CameraWindow(QtGui.QMainWindow):
     def toggleAutoGain(self, b):
         if b:
             self.lastAGCMax = None
+            self.ui.histogram.vb.setMouseEnabled(x=False, y=False)
             #self.ui.histogram.setLevels(*self.lastMinMax)
-            
+        else:
+            self.ui.histogram.vb.setMouseEnabled(x=False, y=True)
             
 
     #@trace
@@ -892,12 +894,12 @@ class CameraWindow(QtGui.QMainWindow):
                     self.ui.histogram.setHistogramRange(minVal, maxVal, padding=0.05)
                 finally:
                     self.ignoreLevelChange = False
-            else:
-                self.ignoreLevelChange = True
-                try:
-                    self.ui.histogram.setHistogramRange(0, 2**self.bitDepth)
-                finally:
-                    self.ignoreLevelChange = False
+            #else:
+                #self.ignoreLevelChange = True
+                #try:
+                    #self.ui.histogram.setHistogramRange(0, 2**self.bitDepth)
+                #finally:
+                    #self.ignoreLevelChange = False
             
             ## Update histogram plot
             #self.updateHistogram(self.currentFrame[0], wl, bl)

@@ -53,7 +53,7 @@ def update():
     global curve, data, ptr, p6
     curve.setData(data[ptr%10])
     if ptr == 0:
-        p6.enableManualScale()
+        p6.enableAutoRange('xy', False)
     ptr += 1
 timer = QtCore.QTimer()
 timer.timeout.connect(update)

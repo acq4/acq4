@@ -67,6 +67,7 @@ class HistogramLUTItem(GraphicsWidget):
         if image is not None:
             self.setImageItem(image)
         #self.setSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding)
+        
 
     #def sizeHint(self, *args):
         #return QtCore.QSizeF(115, 200)
@@ -86,7 +87,7 @@ class HistogramLUTItem(GraphicsWidget):
         #p.drawRect(self.boundingRect())
         
         
-    def setHistogramRange(self, mn, mx, padding=0.0):
+    def setHistogramRange(self, mn, mx, padding=0.1):
         """Set the Y range on the histogram plot. This disables auto-scaling."""
         self.vb.enableAutoRange(self.vb.YAxis, False)
         self.vb.setYRange(mn, mx, padding)

@@ -201,13 +201,14 @@ class ViewBox(GraphicsWidget):
         if item.zValue() < self.zValue():
             item.setZValue(self.zValue()+1)
         item.setParentItem(self.childGroup)
-        self.updateAutoRange()
         self.addedItems.append(item)
+        self.updateAutoRange()
         #print "addItem:", item, item.boundingRect()
         
     def removeItem(self, item):
         self.addedItems.remove(item)
         self.scene().removeItem(item)
+        self.updateAutoRange()
 
     def resizeEvent(self, ev):
         #self.setRange(self.range, padding=0)
@@ -379,12 +380,15 @@ class ViewBox(GraphicsWidget):
         if enable is True:
             enable = 1.0
         
-        if axis == ViewBox.XYAxes:
+        if axis is None:
+            axis = ViewBox.XYAxes
+        
+        if axis == ViewBox.XYAxes or axis == 'xy':
             self.state['autoRange'][0] = enable
             self.state['autoRange'][1] = enable
-        elif axis == ViewBox.XAxis:
+        elif axis == ViewBox.XAxis or axis == 'x':
             self.state['autoRange'][0] = enable
-        elif axis == ViewBox.YAxis:
+        elif axis == ViewBox.YAxis or axis == 'y':
             self.state['autoRange'][1] = enable
         else:
             raise Exception('axis argument must be ViewBox.XAxis, ViewBox.YAxis, or ViewBox.XYAxes.')
@@ -392,6 +396,9 @@ class ViewBox(GraphicsWidget):
         if enable:
             self.updateAutoRange()
         self.sigStateChanged.emit(self)
+
+    def disableAutoRange(self, axis=None):
+        self.enableAutoRange(axis, enable=False)
 
     def autoRangeEnabled(self):
         return self.state['autoRange'][:]
