@@ -27,13 +27,18 @@ class TableWidget(QtGui.QTableWidget):
     def __init__(self, *args):
         QtGui.QTableWidget.__init__(self, *args)
         self.setVerticalScrollMode(self.ScrollPerPixel)
+        self.setSelectionMode(QtGui.QAbstractItemView.ContiguousSelection)
         self.clear()
         self.contextMenu = QtGui.QMenu()
-        self.contextMenu.addAction('copy').triggered.connect(self.copy)
+        self.contextMenu.addAction('Copy Selection').triggered.connect(self.copySel)
+        self.contextMenu.addAction('Copy All').triggered.connect(self.copyAll)
+        self.contextMenu.addAction('Save Selection').triggered.connect(self.saveSel)
+        self.contextMenu.addAction('Save All').triggered.connect(self.saveAll)
         
     def clear(self):
         QtGui.QTableWidget.clear(self)
-        self.headersSet = False
+        self.verticalHeadersSet = False
+        self.horizontalHeadersSet = False
         self.items = []
         self.setRowCount(0)
         self.setColumnCount(0)
@@ -69,15 +74,16 @@ class TableWidget(QtGui.QTableWidget):
         firstVals = [x for x in fn1(first)]
         self.setColumnCount(len(firstVals))
         
-        if not self.headersSet:
-            if header0 is not None:
-                #print "set header 0:", header0
-                self.setRowCount(len(header0))
-                self.setVerticalHeaderLabels(header0)
-            if header1 is not None:
-                #print "set header 1:", header1
-                self.setHorizontalHeaderLabels(header1)
-            self.headersSet = True
+        #print header0, header1
+        if not self.verticalHeadersSet and header0 is not None:
+            #print "set header 0:", header0
+            self.setRowCount(len(header0))
+            self.setVerticalHeaderLabels(header0)
+            self.verticalHeadersSet = True
+        if not self.horizontalHeadersSet and header1 is not None:
+            #print "set header 1:", header1
+            self.setHorizontalHeaderLabels(header1)
+            self.horizontalHeadersSet = True
         
         self.setRow(0, firstVals)
         i = 1
@@ -140,20 +146,66 @@ class TableWidget(QtGui.QTableWidget):
             self.items.append(item)
             self.setItem(row, col, item)
             
+    def serialize(self, useSelection=False):
+        """Convert entire table (or just selected area) into tab-separated text values"""
+        if useSelection:
+            selection = self.selectedRanges()[0]
+            rows = range(selection.topRow(), selection.bottomRow()+1)
+            columns = range(selection.leftColumn(), selection.rightColumn()+1)        
+        else:
+            rows = range(self.rowCount())
+            columns = range(self.columnCount())
 
-    def copy(self):
-        """Copy selected data to clipboard."""
-        s = u''
-        for r in range(self.rowCount()):
+
+        data = []
+        if self.horizontalHeadersSet:
             row = []
-            for c in range(self.columnCount()):
+            if self.verticalHeadersSet:
+                row.append(u'')
+            
+            for c in columns:
+                row.append(unicode(self.horizontalHeaderItem(c).text()))
+            data.append(row)
+        
+        for r in rows:
+            row = []
+            if self.verticalHeadersSet:
+                row.append(unicode(self.verticalHeaderItem(r).text()))
+            for c in columns:
                 item = self.item(r, c)
                 if item is not None:
                     row.append(unicode(item.value))
                 else:
                     row.append(u'')
+            data.append(row)
+            
+        s = u''
+        for row in data:
             s += (u'\t'.join(row) + u'\n')
-        QtGui.QApplication.clipboard().setText(s)
+        return s
+
+    def copySel(self):
+        """Copy selected data to clipboard."""
+        QtGui.QApplication.clipboard().setText(self.serialize(useSelection=True))
+
+    def copyAll(self):
+        """Copy all data to clipboard."""
+        QtGui.QApplication.clipboard().setText(self.serialize(useSelection=False))
+
+    def saveSel(self):
+        """Save selected data to file."""
+        self.save(self.serialize(useSelection=True))
+
+    def saveAll(self):
+        """Save all data to file."""
+        self.save(self.serialize(useSelection=False))
+
+    def save(self, data):
+        fileName = QtGui.QFileDialog.getSaveFileName(self, "Save As..", "", "Tab-separated values (*.tsv)")
+        if fileName == '':
+            return
+        open(fileName, 'w').write(data)
+        
 
     def contextMenuEvent(self, ev):
         self.contextMenu.popup(ev.globalPos())
@@ -182,6 +234,8 @@ if __name__ == '__main__':
     a = np.ones((20, 5))
     ra = np.ones((20,), dtype=[('x', int), ('y', int), ('z', int)])
     
+    t.setData(ll)
+    
     if HAVE_METAARRAY:
         ma = metaarray.MetaArray(np.ones((20, 3)), info=[
             {'values': np.linspace(1, 5, 20)}, 
@@ -191,6 +245,5 @@ if __name__ == '__main__':
                 {'name': 'z'},
             ]}
         ])
-    
-    t.setData(ll)
+        t.setData(ma)
     
