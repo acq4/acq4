@@ -42,10 +42,13 @@ class GraphicsView(QtGui.QGraphicsView):
         self.closed = False
         
         QtGui.QGraphicsView.__init__(self, parent)
+        
+        ## in general openGL is poorly supported in Qt. 
+        ## we only enable it where the performance benefit is critical.
         if useOpenGL is None:
-            if 'linux' in sys.platform:  ## linux has bugs in opengl implementation
-                useOpenGL = True
-            elif 'darwin' in sys.platform: ## openGL speeds up display on mac
+            if 'linux' in sys.platform:  ## linux has numerous bugs in opengl implementation
+                useOpenGL = False
+            elif 'darwin' in sys.platform: ## openGL greatly speeds up display on mac
                 useOpenGL = True
             else:
                 useOpenGL = False
@@ -161,37 +164,6 @@ class GraphicsView(QtGui.QGraphicsView):
         else:
             self.fitInView(self.range, QtCore.Qt.IgnoreAspectRatio)
             
-        ##print "udpateMatrix:"
-        #translate = Point(self.range.center())
-        #if self.range.width() == 0 or self.range.height() == 0:
-            #return
-        #scale = Point(self.size().width()/self.range.width(), self.size().height()/self.range.height())
-        
-        #m = QtGui.QTransform()
-        
-        ### First center the viewport at 0
-        #self.resetMatrix()
-        #center = self.viewportTransform().inverted()[0].map(Point(self.width()/2., self.height()/2.))
-        #if self.yInverted:
-            #m.translate(center.x(), center.y())
-            ##print "  inverted; translate", center.x(), center.y()
-        #else:
-            #m.translate(center.x(), -center.y())
-            ##print "  not inverted; translate", center.x(), -center.y()
-            
-        ### Now scale and translate properly
-        #if self.aspectLocked:
-            #scale = Point(scale.min())
-        #if not self.yInverted:
-            #scale = scale * Point(1, -1)
-        #m.scale(scale[0], scale[1])
-        ##print "  scale:", scale
-        #st = translate
-        #m.translate(-st[0], -st[1])
-        ##print "  translate:", st
-        #self.setTransform(m)
-        #self.currentScale = scale
-        ##self.emit(QtCore.SIGNAL('viewChanged'), self.range)
         self.sigRangeChanged.emit(self, self.range)
         
         if propagate:

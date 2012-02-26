@@ -5,6 +5,9 @@
 ## between PyQt4 and PySide.
 from Qt import QtGui 
 
+## not really safe.
+#if QtGui.QApplication.instance() is None:
+    #app = QtGui.QApplication([])
 
 CONFIG_OPTIONS = {
     'leftButtonPan': True

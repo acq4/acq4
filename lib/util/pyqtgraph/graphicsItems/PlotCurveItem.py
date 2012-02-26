@@ -212,14 +212,15 @@ class PlotCurveItem(GraphicsObject):
         else:
             self.yData = y.view(np.ndarray)
             
-        if copy and x is not None:
-            self.xData = x.view(np.ndarray).copy()
-        else:
-            self.xData = x.view(np.ndarray)
-        prof.mark('copy')
-        
         if x is None:
             self.xData = np.arange(0, self.yData.shape[0])
+        else:
+            if copy:
+                self.xData = x.view(np.ndarray).copy()
+            else:
+                self.xData = x.view(np.ndarray)
+        prof.mark('copy')
+        
 
         if self.xData.shape != self.yData.shape:
             raise Exception("X and Y arrays must be the same shape--got %s and %s." % (str(x.shape), str(y.shape)))
