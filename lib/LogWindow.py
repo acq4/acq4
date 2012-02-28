@@ -303,18 +303,19 @@ class LogWindow(QtGui.QMainWindow):
         self.logMsg('Moved log storage from %s to %s.' % (oldfName, self.fileName()))
         self.wid.ui.dirLabel.setText("Current Storage Directory: " + self.fileName())
         self.manager.sigLogDirChanged.emit(dh)
-        
+    
     def getLogDir(self):
         if self.logFile is None:
             return None
         else:
             return self.logFile.parent()
-        
+    
     def saveEntry(self, entry):  
         with self.lock:
             configfile.appendConfigFile(entry, self.fileName())
-            
-
+    
+    def disablePopups(self, disable):
+        self.errorDialog.disable(disable)
 
 
 class LogWidget(QtGui.QWidget):
@@ -902,7 +903,10 @@ class ErrorDialog(QtGui.QDialog):
         if len(self.messages) == 0:
             self.nextBtn.setEnabled(False)
         
-        
+    def disable(self, disable):
+        self.disableCheck.setChecked(disable)
+    
+    
 if __name__ == "__main__":
     #import sys
     #import os.path as osp

@@ -74,7 +74,7 @@ class ViewBox(GraphicsWidget):
             'linkedViews': [None, None],
             
             'mouseEnabled': [enableMouse, enableMouse],
-            'mouseMode': ViewBox.PanMode,  
+            'mouseMode': ViewBox.PanMode if pyqtgraph.getConfigOption('leftButtonPan') else ViewBox.RectMode,  
             'wheelScaleFactor': -1.0 / 8.0,
         }
         

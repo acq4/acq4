@@ -10,7 +10,7 @@ from Qt import QtGui
     #app = QtGui.QApplication([])
 
 CONFIG_OPTIONS = {
-    'leftButtonPan': True
+    'leftButtonPan': True  ## if false, left button drags a rubber band for zooming in viewbox
 }
 
 def setConfigOption(opt, value):

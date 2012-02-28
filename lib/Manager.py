@@ -36,6 +36,7 @@ from debug import *
 import getopt, glob
 import ptime
 from collections import OrderedDict
+import pyqtgraph as pg
 from pyqtgraph import ProgressDialog
 from LogWindow import LogWindow
 from HelpfulException import HelpfulException
@@ -287,6 +288,23 @@ class Manager(QtCore.QObject):
                         QtGui.QApplication.instance().setStyleSheet(css)
                     except:
                         raise
+                
+                elif key == 'disableErrorPopups':
+                    if cfg[key] is True:
+                        self.logWindow.disablePopups(True)
+                    elif cfg[key] is False:
+                        self.logWindow.disablePopups(False)
+                    else:
+                        print "Warning: ignored config option 'disableErrorPopups'; value must be either True or False." 
+                    
+                elif key == 'defaultMouseMode':
+                    mode = cfg[key].lower()
+                    if mode == 'onebutton':
+                        pg.setConfigOption('leftButtonPan', False)
+                    elif mode == 'threebutton':
+                        pg.setConfigOption('leftButtonPan', True)
+                    else:
+                        print "Warning: ignored config option 'defaultMouseMode'; value must be either 'oneButton' or 'threeButton'." 
                     
                 ## Copy in any other configurations.
                 ## dicts are extended, all others are overwritten.
