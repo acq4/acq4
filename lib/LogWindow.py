@@ -843,7 +843,7 @@ class ErrorDialog(QtGui.QDialog):
         self.btnLayoutWidget.setLayout(self.btnLayout)
         self.btnLayout.addStretch()
         
-        self.okBtn.clicked.connect(self.accept)
+        self.okBtn.clicked.connect(self.okClicked)
         self.nextBtn.clicked.connect(self.nextMessage)
         self.logBtn.clicked.connect(self.logClicked)
         
@@ -892,10 +892,19 @@ class ErrorDialog(QtGui.QDialog):
         self.raise_()
             
         
+    def closeEvent(self):
+        QtGui.QDialog.closeEvent(self)
+        self.messages = []
+        
+    def okClicked(self):
+        self.accept()
+        self.messages = []
+        
     def logClicked(self):
         global WIN
         self.accept()
         WIN.show()
+        self.messages = []
         
     def nextMessage(self):
         self.msgLabel.setText(self.messages.pop(0))
