@@ -54,6 +54,8 @@ class ROI(GraphicsObject):
         self.translatable = movable
         self.rotateAllowed = True
         
+        self.freeHandleMoved = False ## keep track of whether free handles have moved since last change signal was emitted.
+        
         if pen is None:
             pen = (255, 255, 255)
         self.setPen(pen)
@@ -79,7 +81,14 @@ class ROI(GraphicsObject):
         #self.setFlag(self.ItemIsSelectable, True)
     
     def getState(self):
-        return self.state.copy()
+        return self.stateCopy()
+
+    def stateCopy(self):
+        sc = {}
+        sc['pos'] = Point(self.state['pos'])
+        sc['size'] = Point(self.state['size'])
+        sc['angle'] = self.state['angle']
+        return sc
         
     def saveState(self):
         """Return the state of the widget in a format suitable for storing to disk. (Points are converted to tuple)"""
@@ -144,12 +153,6 @@ class ROI(GraphicsObject):
         self.state['size'] = size
         if update:
             self.stateChanged(finish=finish)
-        #if update:
-            #self.updateHandles()
-            #self.stateChanged()
-            #self.sigRegionChanged.emit(self)
-            #if finish:
-                #self.sigRegionChangeFinished.emit(self)
         
     def setAngle(self, angle, update=True, finish=True):
         """Set the angle of rotation (in degrees) for this ROI.
@@ -162,12 +165,6 @@ class ROI(GraphicsObject):
         self.setTransform(tr)
         if update:
             self.stateChanged(finish=finish)
-        #if update:
-            #self.updateHandles()
-            #self.stateChanged()
-            #self.sigRegionChanged.emit(self)
-            #if finish:
-                #self.sigRegionChangeFinished.emit(self)
         
     def scale(self, s, center=[0,0], update=True, finish=True):
         """
@@ -240,7 +237,7 @@ class ROI(GraphicsObject):
         #if 'update' not in kargs or kargs['update'] is True:
         #self.stateChanged()
 
-    def rotate(self, angle, center=(0,0), update=True, finish=True):
+    def rotate(self, angle, center=(0,0), angleSnap=False, update=True, finish=True):
         pass
         #self.setAngle(self.angle()+angle, update=update, finish=finish)
 
@@ -335,47 +332,6 @@ class ROI(GraphicsObject):
             for h in self.handles:
                 h['item'].hide()
 
-    #def mousePressEvent(self, ev):
-        ### Bug: sometimes we get events we shouldn't.
-        #p = ev.pos()
-        #if not self.isMoving and not self.shape().contains(p):
-            #ev.ignore()
-            #return        
-        #if ev.button() == QtCore.Qt.LeftButton:
-            #self.setSelected(True)
-            #if self.translatable:
-                #self.isMoving = True
-                #self.preMoveState = self.getState()
-                #self.cursorOffset = self.scenePos() - ev.scenePos()
-                ##self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
-                #self.sigRegionChangeStarted.emit(self)
-                #ev.accept()
-            #else:
-                #ev.ignore()
-        #elif ev.button() == QtCore.Qt.RightButton:
-            #if self.isMoving:
-                #ev.accept()
-                #self.cancelMove()
-            #else:
-                #ev.ignore()
-        #else:
-            #ev.ignore()
-        
-    #def mouseMoveEvent(self, ev):
-        ##print "mouse move", ev.pos()
-        #if self.translatable and self.isMoving and ev.buttons() == QtCore.Qt.LeftButton:
-            #snap = True if (ev.modifiers() & QtCore.Qt.ControlModifier) else None
-            ##if self.translateSnap or (ev.modifiers() & QtCore.Qt.ControlModifier):
-                ##snap = Point(self.snapSize, self.snapSize)
-            #newPos = ev.scenePos() + self.cursorOffset
-            #newPos = self.mapSceneToParent(newPos)
-            #self.translate(newPos - self.pos(), snap=snap)
-    
-    #def mouseReleaseEvent(self, ev):
-        #if self.translatable:
-            #self.isMoving = False
-            ##self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
-            #self.sigRegionChangeFinished.emit(self)
 
     def hoverEvent(self, ev):
         if self.translatable and (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
@@ -397,7 +353,6 @@ class ROI(GraphicsObject):
                     self.isMoving = True
                     self.preMoveState = self.getState()
                     self.cursorOffset = self.pos() - self.mapToParent(ev.buttonDownPos())
-                    #self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
                     self.sigRegionChangeStarted.emit(self)
                     ev.accept()
                 else:
@@ -415,8 +370,6 @@ class ROI(GraphicsObject):
             newPos = self.mapToParent(ev.pos()) + self.cursorOffset
             self.translate(newPos - self.pos(), snap=snap, finish=False)
         
-        
-
     def mouseClickEvent(self, ev):
         if ev.button() == QtCore.Qt.RightButton:
             if self.isMoving:
@@ -425,25 +378,24 @@ class ROI(GraphicsObject):
             else:
                 ev.ignore()
 
-
     def cancelMove(self):
         self.isMoving = False
         self.setState(self.preMoveState)
 
 
-    def pointDragEvent(self, pt, ev):
-        ## just for handling drag start/stop.
-        ## drag moves are handled through movePoint()
+    #def pointDragEvent(self, pt, ev):
+        ### just for handling drag start/stop.
+        ### drag moves are handled through movePoint()
         
-        if ev.isStart():
-            self.isMoving = True
-            self.preMoveState = self.getState()
+        #if ev.isStart():
+            #self.isMoving = True
+            #self.preMoveState = self.getState()
             
-            self.sigRegionChangeStarted.emit(self)
-        elif ev.isFinish():
-            self.isMoving = False
-            self.sigRegionChangeFinished.emit(self)
-            return
+            #self.sigRegionChangeStarted.emit(self)
+        #elif ev.isFinish():
+            #self.isMoving = False
+            #self.sigRegionChangeFinished.emit(self)
+            #return
         
         
     #def pointPressEvent(self, pt, ev):
@@ -465,13 +417,6 @@ class ROI(GraphicsObject):
     #def pointMoveEvent(self, pt, ev):
         #self.movePoint(pt, ev.scenePos(), ev.modifiers())
         
-    def stateCopy(self):
-        sc = {}
-        sc['pos'] = Point(self.state['pos'])
-        sc['size'] = Point(self.state['size'])
-        sc['angle'] = self.state['angle']
-        return sc
-    
     
     def checkPointMove(self, pt, pos, modifiers):
         """When handles move, they must ask the ROI if the move is acceptable.
@@ -508,6 +453,7 @@ class ROI(GraphicsObject):
         
         elif h['type'] == 'f':
             h['item'].setPos(self.mapFromScene(pos))
+            self.freeHandleMoved = True
             #self.sigRegionChanged.emit(self)  ## should be taken care of by call to stateChanged()
             
         elif h['type'] == 's':
@@ -565,6 +511,9 @@ class ROI(GraphicsObject):
             self.setSize(newState['size'], update=False)
         
         elif h['type'] in ['r', 'rf']:
+            if h['type'] == 'rf':
+                self.freeHandleMoved = True
+            
             if not self.rotateAllowed:
                 return
             ## If the handle is directly over its center point, we can't compute an angle.
@@ -668,6 +617,10 @@ class ROI(GraphicsObject):
                     
             self.update()
             self.sigRegionChanged.emit(self)
+        elif self.freeHandleMoved:
+            self.sigRegionChanged.emit(self)
+            
+        self.freeHandleMoved = False
             
         if finish:
             self.stateChangeFinished()
