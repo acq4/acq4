@@ -71,19 +71,13 @@ class CellHealthTracker(AnalysisModule):
                     if len(dh.subDirs()) > 80:
                         limitTraces=True
                     for f in dh.subDirs():
-                        fh = self.dataModel.getClampFile(dh.getDir(f))
-                        if fh is not None:
-                            #plot = False
-                            if i==0:
+                        if i==0 or i%20==0 or not limitTraces:
+                            fh = self.dataModel.getClampFile(dh.getDir(f))
+                            if fh is not None:
                                 self.loadClampData(fh, dh, plot=True)
-                            elif i%20 == 0 and limitTraces:
-                                #plot = True
-                                self.loadClampData(fh, dh, plot=True)
-                            elif not limitTraces:
-                                self.loadClampData(fh, dh, plot=True)
-                            #traces.append(trace)
-                            i+=1
-                    #self.processSequence(traces, dh)
+                            else:
+                                break ## assume that once we get one empty protocolDir, all the following ones will be empty too
+                        i+=1
             return True
         except:
             raise
@@ -104,7 +98,11 @@ class CellHealthTracker(AnalysisModule):
     
         
     def loadClampData(self, f, dh, plot=True):
-        data = f.read()
+        try:
+            data = f.read()
+        except:
+            print f
+            raise
         #print f.info()
         time = f.info()['__timestamp__']
         #self.files[dh]['traces'].append((data, time))
@@ -195,7 +193,7 @@ class CellHealthTracker(AnalysisModule):
     def measureParams(self, data, display=None):
         cmd = data['command']['Time':self.ctrl.startSpin.value():self.ctrl.stopSpin.value()]
         #data = waveform['primary']['Time':self.ctrls['start'].value():self.ctrls['stop'].value()]
-        print np.argwhere(cmd != cmd[0])
+        #print np.argwhere(cmd != cmd[0])
         pulseStart = cmd.axisValues('Time')[np.argwhere(cmd != cmd[0])[0][0]]
         pulseStop = cmd.axisValues('Time')[np.argwhere(cmd != cmd[0])[-1][0]]
         
@@ -210,7 +208,7 @@ class CellHealthTracker(AnalysisModule):
         pulseAmp = pulse['command'].mean() - base['command'].mean()
         
         method = str(self.ctrl.methodCombo.currentText())
-        print method
+        #print method
         if method == "Simple Ohm's law":
             print 'using simple method'
             if pulseAmp < 0:
