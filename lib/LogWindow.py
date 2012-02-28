@@ -160,7 +160,7 @@ class LogWindow(QtGui.QMainWindow):
         #self.wid.displayEntry(entry)
         
         if entry['msgType'] == 'error':
-            if self.errorDialog.show(entry['message']) is False:
+            if self.errorDialog.show(entry) is False:
                 self.flashButtons()
         
     def logExc(self, *args, **kwargs):
@@ -215,12 +215,12 @@ class LogWindow(QtGui.QMainWindow):
         if hasattr(exc, 'oldExc'):
             excDict['oldExc'] = self.exceptionToDict(*exc.oldExc, topTraceback=[])
         return excDict
-        
+    
     def flashButtons(self):
         for b in self.buttons:
             if b() is not None:
                 b().failure(tip='An error occurred. Please see the log.', limitedTime = False)
-            
+    
     def resetButtons(self):
         for b in self.buttons:
             if b() is not None:
@@ -230,8 +230,8 @@ class LogWindow(QtGui.QMainWindow):
             #except RuntimeError:
                 #self.buttons.remove(b)
                 #print "Removed a logButton from logWindow's list. button:", b
-            
-        
+    
+    
     def makeError1(self):
         try:
             self.makeError2()
@@ -244,7 +244,7 @@ class LogWindow(QtGui.QMainWindow):
                 #raise
             #else:
             raise HelpfulException(message='This button does not work.', exc=(t, exc, tb), reasons=["It's supposed to raise an error for testing purposes", "You're doing it wrong."])
-        
+    
     def makeErrorLogExc(self):
         try:
             print y
@@ -257,13 +257,13 @@ class LogWindow(QtGui.QMainWindow):
         except:
             t, exc, tb = sys.exc_info()
             raise HelpfulException(message='msg from makeError', exc=(t, exc, tb), reasons=["reason one", "reason 2"], docs=['what, you expect documentation?'])
-            
+    
     def show(self):
         QtGui.QMainWindow.show(self)
         self.activateWindow()
         self.raise_()
         self.resetButtons()
-        
+    
     def fileName(self):
         ## return the log file currently used
         if self.logFile is None:
@@ -811,15 +811,20 @@ class ErrorDialog(QtGui.QDialog):
     def __init__(self):
         QtGui.QDialog.__init__(self)
         #self.setModal(False)
-        #self.setWindowFlags(QtCore.Qt.Tool)
+        self.setWindowFlags(QtCore.Qt.Window)
         #self.setWindowModality(QtCore.Qt.NonModal)
+        self.setWindowTitle('ACQ4 Error')
         self.layout = QtGui.QVBoxLayout()
+        self.layout.setContentsMargins(3,3,3,3)
         self.setLayout(self.layout)
         self.messages = []
         
         self.msgLabel = QtGui.QLabel()
         self.msgLabel.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        #self.msgLabel.setFrameStyle(QtGui.QFrame.Box)
+        #self.msgLabel.setStyleSheet('QLabel { font-weight: bold }')
         self.layout.addWidget(self.msgLabel)
+        self.layout.addStretch()
         self.disableCheck = QtGui.QCheckBox('Disable error message popups')
         self.layout.addWidget(self.disableCheck)
         
@@ -842,18 +847,49 @@ class ErrorDialog(QtGui.QDialog):
         self.logBtn.clicked.connect(self.logClicked)
         
         
-    def show(self, message):
+    def show(self, entry):
+        
+        ## rules are:
+        ##   - Try to show friendly error messages
+        ##   - If there are any helpfulExceptions, ONLY show those
+        ##     otherwise, show everything
+        
+        
+        ## extract list of exceptions
+        exceptions = []
+        helpful = []
+        key = 'exception'
+        exc = entry
+        while key in exc:
+            exc = exc[key]
+            key = 'oldExc'
+            exceptions.append(exc['message'])
+            if exc['message'].startswith('HelpfulException'):
+                helpful.append(exc['message'].lstrip('HelpfulException: '))
+        
+        if len(helpful) > 0:
+            msg = '<b>' + '<br>'.join(helpful) + '</b>'
+        else:
+            msg = '<b>' + entry['message'] + '</b><br>' + '<br>'.join(exceptions)
+        
+        
         if self.disableCheck.isChecked():
             return False
         if self.isVisible():
-            self.messages.append(message)
+            self.messages.append(msg)
             self.nextBtn.show()
             self.nextBtn.setEnabled(True)
             self.nextBtn.setText('Show next error (%d more)' % len(self.messages))
         else:
+            w = QtGui.QApplication.activeWindow()
             self.nextBtn.hide()
-            self.msgLabel.setText(message)
+            self.msgLabel.setText(msg)
             self.open()
+            cp = w.geometry().center()
+            self.setGeometry(cp.x() - self.width()/2., cp.y() - self.height()/2., self.width(), self.height())
+        #self.activateWindow()
+        self.raise_()
+            
         
     def logClicked(self):
         global WIN
