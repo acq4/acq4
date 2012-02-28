@@ -56,18 +56,24 @@ class MosaicEditor(AnalysisModule):
 
     def atlasComboChanged(self, ind):
         if ind == 0:
+            self.closeAtlas()
             return
         name = self.ui.atlasCombo.currentText()
         self.loadAtlas(name)
 
-    def loadAtlas(self, name):
-        name = str(name)
+    def closeAtlas(self):
         if self.atlas is not None:
             self.atlas.close()
+            self.atlas = None
+        
+    def loadAtlas(self, name):
+        name = str(name)
+        self.closeAtlas()
         
         cls = atlas.getAtlasClass(name)
         obj = cls(self.getElement('Canvas'))
         ctrl = obj.ctrlWidget()
+        self.ui.atlasLayout.clear()
         self.ui.atlasLayout.addWidget(ctrl, 0, 0)
         self.atlas = obj
         
