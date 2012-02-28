@@ -104,7 +104,7 @@ class LogWindow(QtGui.QMainWindow):
         configfile.writeConfigFile('', self.fileName())  ## start a new temp log file, destroying anything left over from the last session.
         self.buttons = [] ## weak references to all Log Buttons get added to this list, so it's easy to make them all do things, like flash red.
         self.lock = Mutex()
-    
+        self.errorDialog = ErrorDialog()
         
         self.wid.ui.input.returnPressed.connect(self.textEntered)
         
@@ -160,8 +160,8 @@ class LogWindow(QtGui.QMainWindow):
         #self.wid.displayEntry(entry)
         
         if entry['msgType'] == 'error':
-            self.flashButtons()
-        
+            if self.errorDialog.show(entry['message']) is False:
+                self.flashButtons()
         
     def logExc(self, *args, **kwargs):
         """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
@@ -805,6 +805,67 @@ class LogWidget(QtGui.QWidget):
         self.ui.output.clear()
         self.displayedEntryies = []
 
+        
+        
+class ErrorDialog(QtGui.QDialog):
+    def __init__(self):
+        QtGui.QDialog.__init__(self)
+        #self.setModal(False)
+        #self.setWindowFlags(QtCore.Qt.Tool)
+        #self.setWindowModality(QtCore.Qt.NonModal)
+        self.layout = QtGui.QVBoxLayout()
+        self.setLayout(self.layout)
+        self.messages = []
+        
+        self.msgLabel = QtGui.QLabel()
+        self.msgLabel.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        self.layout.addWidget(self.msgLabel)
+        self.disableCheck = QtGui.QCheckBox('Disable error message popups')
+        self.layout.addWidget(self.disableCheck)
+        
+        self.btnLayout = QtGui.QHBoxLayout()
+        self.btnLayout.addStretch()
+        self.okBtn = QtGui.QPushButton('OK')
+        self.btnLayout.addWidget(self.okBtn)
+        self.nextBtn = QtGui.QPushButton('Show next error')
+        self.btnLayout.addWidget(self.nextBtn)
+        self.nextBtn.hide()
+        self.logBtn = QtGui.QPushButton('Show Log...')
+        self.btnLayout.addWidget(self.logBtn)
+        self.btnLayoutWidget = QtGui.QWidget()
+        self.layout.addWidget(self.btnLayoutWidget)
+        self.btnLayoutWidget.setLayout(self.btnLayout)
+        self.btnLayout.addStretch()
+        
+        self.okBtn.clicked.connect(self.accept)
+        self.nextBtn.clicked.connect(self.nextMessage)
+        self.logBtn.clicked.connect(self.logClicked)
+        
+        
+    def show(self, message):
+        if self.disableCheck.isChecked():
+            return False
+        if self.isVisible():
+            self.messages.append(message)
+            self.nextBtn.show()
+            self.nextBtn.setEnabled(True)
+            self.nextBtn.setText('Show next error (%d more)' % len(self.messages))
+        else:
+            self.nextBtn.hide()
+            self.msgLabel.setText(message)
+            self.open()
+        
+    def logClicked(self):
+        global WIN
+        self.accept()
+        WIN.show()
+        
+    def nextMessage(self):
+        self.msgLabel.setText(self.messages.pop(0))
+        self.nextBtn.setText('Show next error (%d more)' % len(self.messages))
+        if len(self.messages) == 0:
+            self.nextBtn.setEnabled(False)
+        
         
 if __name__ == "__main__":
     #import sys
