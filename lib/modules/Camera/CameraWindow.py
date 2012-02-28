@@ -724,7 +724,7 @@ class CameraWindow(QtGui.QMainWindow):
             r['times'].append(frame[1]['time'])
             prof.mark('append')
             if draw:
-                r['plot'].setData(array(r['times'])-minTime, r['vals'])
+                r['plot'].setData(np.array(r['times'])-minTime, r['vals'])
                 prof.mark('draw')
         prof.finish()
     
