@@ -2,6 +2,7 @@
 import template
 from PyQt4 import QtCore, QtGui
 from lib.Manager import logMsg, logExc
+from HelpfulException import HelpfulException
 
 class FileLoader(QtGui.QWidget):
     """Interface for 1) displaying directory tree and 2) loading a file from the tree.
@@ -79,7 +80,10 @@ class FileLoader(QtGui.QWidget):
         
     def selectedFile(self):
         """Returns the file selected from the list of already loaded files"""
-        return self.ui.fileTree.currentItem().file
+        if self.ui.fileTree.currentItem() is not None:
+            return self.ui.fileTree.currentItem().file
+        else:
+            raise HelpfulException("There is currently no item selected in File Loader's list of loaded files.")
         
     def updateNotes(self, current, previous):
         #sFile = self.ui.dirTree.selectedFile()
