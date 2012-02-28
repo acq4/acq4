@@ -74,8 +74,8 @@ class ImageCanvasItem(CanvasItem):
         self.layout.addWidget(self.histogram, self.layout.rowCount(), 0, 1, 2)
         
         self.timeSlider = QtGui.QSlider(QtCore.Qt.Horizontal)
-        self.timeSlider.setMinimum(0)
-        self.timeSlider.setMaximum(self.data.shape[0]-1)
+        #self.timeSlider.setMinimum(0)
+        #self.timeSlider.setMaximum(self.data.shape[0]-1)
         self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 2)
         self.timeSlider.valueChanged.connect(self.timeChanged)
         self.timeSlider.sliderPressed.connect(self.timeSliderPressed)
