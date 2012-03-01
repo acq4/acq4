@@ -569,7 +569,8 @@ class ROI(GraphicsObject):
             
             hs = abs(h['pos'][scaleAxis] - c[scaleAxis])
             newState['size'][scaleAxis] = lp1.length() / hs
-            if self.scaleSnap or (modifiers & QtCore.Qt.ControlModifier):
+            #if self.scaleSnap or (modifiers & QtCore.Qt.ControlModifier):
+            if self.scaleSnap:  ## use CTRL only for angular snap here.
                 newState['size'][scaleAxis] = round(newState['size'][scaleAxis] / self.snapSize) * self.snapSize
             if newState['size'][scaleAxis] == 0:
                 newState['size'][scaleAxis] = 1
