@@ -79,7 +79,14 @@ class FileLoader(QtGui.QWidget):
         
     def selectedFile(self):
         """Returns the file selected from the list of already loaded files"""
-        return self.ui.fileTree.currentItem().file
+        item = self.ui.fileTree.currentItem()
+        if item is None:
+            return None
+        return item.file
+        
+    def selectedFiles(self):
+        """Returns the files selected in the file tree."""
+        return self.ui.dirTree.selectedFiles()
         
     def updateNotes(self, current, previous):
         #sFile = self.ui.dirTree.selectedFile()
