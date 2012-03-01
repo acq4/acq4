@@ -72,7 +72,7 @@ class CellHealthTracker(AnalysisModule):
                         limitTraces=True
                     for f in dh.subDirs():
                         if i==0 or i%20==0 or not limitTraces:
-                            fh = self.dataModel.getClampFile(dh.getDir(f))
+                            fh = self.dataModel.getClampFile(dh[f])
                             if fh is not None:
                                 self.loadClampData(fh, dh, plot=True)
                             else:
@@ -88,7 +88,7 @@ class CellHealthTracker(AnalysisModule):
         if dh.isDir():
             traces = []
             for f in dh.subDirs():
-                fh = self.dataModel.getClampFile(dh.getDir(f))
+                fh = self.dataModel.getClampFile(dh[f])
                 if fh is not None:
                     trace = self.loadClampData(fh, dh, plot=False)
                     traces.append(trace)
@@ -161,30 +161,21 @@ class CellHealthTracker(AnalysisModule):
         self.saveMA()
         
     def saveMA(self, fileName=None):
-        #print "fileName", fileName
         if fileName is None:
-            #print "showing file dialog"
             dh = self.getElement("File Loader").baseDir().name()
             self.fileDialog = FileDialog(None, "Save traces", dh, '*.ma')
-            #self.fileDialog = QtGui.QFileDialog(None, "Save traces", dh, '*.ma')
-            #if sys.platform == 'darwin':
-                #self.fileDialog.setOption(QtGui.QFileDialog.DontUseNativeDialog)
             self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
             self.fileDialog.show()
             self.fileDialog.fileSelected.connect(self.saveMA)
-            #print "returning"
             return  
         
-        arr = MetaArray(self.currentData) ### need to format this with axes and info
+        #arr = MetaArray(self.currentData) ### need to format this with axes and info
         arr = MetaArray([self.currentData['Rs'], self.currentData['Rm'], self.currentData['Ih']], info=[
             {'name':'vals', 'cols':[
                 {'name':'Rs', 'units':'Ohms'},
                 {'name':'Rm', 'units':'Ohms'},
                 {'name':'Ih', 'units':'A'}]},
             {'name':'time', 'units':'s', 'values':self.currentData['time']}]) 
-        
-        ### still need to get timeVals in
-            
         
         arr.write(fileName)
         
