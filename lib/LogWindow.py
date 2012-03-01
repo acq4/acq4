@@ -863,6 +863,8 @@ class ErrorDialog(QtGui.QDialog):
         exc = entry
         while key in exc:
             exc = exc[key]
+            if exc is None:
+                break
             key = 'oldExc'
             exceptions.append(exc['message'])
             if exc['message'].startswith('HelpfulException'):
