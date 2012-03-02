@@ -23,8 +23,6 @@ class FileAnalysisView(QtGui.QWidget):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.man = lib.Manager.getManager()
-        #print self.window().objectName()
-        #self.dm = self.window().dm  ## get module from window
         self.mod = mod
         self.dbFile = None
         self.db = None
@@ -34,16 +32,13 @@ class FileAnalysisView(QtGui.QWidget):
         self.populateModuleList()
         self.populateModelList()
         
-        #self.connect(self.ui.openDbBtn, QtCore.SIGNAL('clicked()'), self.openDbClicked)
         self.ui.openDbBtn.clicked.connect(self.openDbClicked)
-        #self.connect(self.ui.createDbBtn, QtCore.SIGNAL('clicked()'), self.createDbClicked)
         self.ui.createDbBtn.clicked.connect(self.createDbClicked)
-        #self.connect(self.ui.addFileBtn, QtCore.SIGNAL('clicked()'), self.addFileClicked)
-        #self.connect(self.ui.analysisCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.loadModule)
         self.ui.loadModuleBtn.clicked.connect(self.loadModule)
         self.ui.refreshDbBtn.clicked.connect(self.refreshDb)
         self.ui.dataModelCombo.currentIndexChanged.connect(self.loadModel)
         self.ui.analysisModuleList.currentItemChanged.connect(self.showModuleDescription)
+        self.ui.analysisModuleList.itemDoubleClicked.connect(self.loadModule)
         
 
     def openDbClicked(self):
