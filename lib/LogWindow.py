@@ -888,8 +888,9 @@ class ErrorDialog(QtGui.QDialog):
             self.nextBtn.hide()
             self.msgLabel.setText(msg)
             self.open()
-            cp = w.geometry().center()
-            self.setGeometry(cp.x() - self.width()/2., cp.y() - self.height()/2., self.width(), self.height())
+            if w is not None:
+                cp = w.geometry().center()
+                self.setGeometry(cp.x() - self.width()/2., cp.y() - self.height()/2., self.width(), self.height())
         #self.activateWindow()
         self.raise_()
             
