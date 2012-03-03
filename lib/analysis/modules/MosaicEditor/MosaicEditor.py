@@ -78,7 +78,7 @@ class MosaicEditor(AnalysisModule):
         self.closeAtlas()
         
         cls = atlas.getAtlasClass(name)
-        obj = cls(canvas=self.getElement('Canvas'), loader=self.getElement('File Loader'), dataModel=self.dataModel)
+        obj = cls(canvas=self.getElement('Canvas'), loader=self.getElement('File Loader'), dataManager=self.dataManager())
         ctrl = obj.ctrlWidget()
         self.ui.atlasLayout.addWidget(ctrl, 0, 0)
         self.atlas = obj

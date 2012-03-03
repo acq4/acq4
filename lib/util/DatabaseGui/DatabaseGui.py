@@ -12,7 +12,7 @@ class DatabaseGui(QtGui.QWidget):
     sigTableChanged = QtCore.Signal(str, str)  ## table purpose, table name
     #sigStoreToDB = QtCore.Signal()
     
-    def __init__(self, dm, tables):  ## datamanager tells us which DB is currently loaded.
+    def __init__(self, parent=None, dm=None, tables=None):  ## datamanager tells us which DB is currently loaded.
         """tables should be a dict like {'owner': 'default', ...}"""
         QtGui.QWidget.__init__(self)
         self.dm = dm
@@ -23,17 +23,31 @@ class DatabaseGui(QtGui.QWidget):
         self.ui.setupUi(self)
         #self.ui.dbLabel.setText("[No DB Loaded]")
         self.tableWidgets = {}
-        self.dbChanged()
-        
-        self.dm.sigAnalysisDbChanged.connect(self.dbChanged)
+        if dm is not None:
+            self.setDataManager(dm)
         
     def getTableName(self, ident):
         return str(self.tableWidgets[ident][1].currentText())
+        
+    def setDataManager(self, dm):
+        self.dm = dm
+        self.dm.sigAnalysisDbChanged.connect(self.dbChanged)
+        self.dbChanged()
+        
+    def setTables(self, tables):
+        """
+        Set the list of tables to request from the user.
+        Format is {owner: defaultTableName, ...}
+        """
+        self.tables = tables
+        self.generateTableLists()
         
     def getDb(self):
         return self.db
         
     def dbChanged(self):
+        if self.dm is None:
+            return
         self.db = self.dm.currentDatabase()
         if self.db is None:
             return
@@ -45,6 +59,9 @@ class DatabaseGui(QtGui.QWidget):
             self.ui.tableArea.layout().removeWidget(l)
             self.ui.tableArea.layout().removeWidget(c)
         self.tableWidgets = {}
+        
+        if self.db is None or self.tables is None:
+            return
             
         for ident, default in self.tables.iteritems():
             label = QtGui.QLabel(ident)

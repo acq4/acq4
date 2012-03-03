@@ -131,6 +131,9 @@ class FileAnalysisView(QtGui.QWidget):
     
     def currentDatabase(self):
         return self.db
+        
+    def currentDataModel(self):
+        return self.currentModel
 
     def showModuleDescription(self):
         mod = self.ui.analysisModuleList.currentItem()
