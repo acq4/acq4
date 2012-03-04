@@ -78,10 +78,10 @@ class MosaicEditor(AnalysisModule):
         self.closeAtlas()
         
         cls = atlas.getAtlasClass(name)
-        obj = cls(canvas=self.getElement('Canvas'), loader=self.getElement('File Loader'), dataManager=self.dataManager())
-        ctrl = obj.ctrlWidget()
+        obj = cls()
+        ctrl = obj.ctrlWidget(host=self)
         self.ui.atlasLayout.addWidget(ctrl, 0, 0)
-        self.atlas = obj
+        self.atlas = ctrl
         
 
     def loadFileRequested(self, files):

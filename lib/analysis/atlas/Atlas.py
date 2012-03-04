@@ -3,13 +3,12 @@ from PyQt4 import QtCore
 class Atlas(QtCore.QObject):
     """An Atlas is responsible for determining the position of images, cells, scan data, etc relative
     to a common coordinate system."""
-    def __init__(self, canvas, state=None, loader=None, dataModel=None):
+    def __init__(self, state=None):
         QtCore.QObject.__init__(self)
-        self.canvas = canvas
         if state is not None:
             self.restoreState(state)
     
-    def getCtrlWidget(self):
+    def getCtrlWidget(self, host):
         raise Exception("Must be reimplemented in subclass.")
     
     def mapToAtlas(self, obj):
@@ -22,6 +21,6 @@ class Atlas(QtCore.QObject):
     def restoreState(self):
         raise Exception("Must be reimplemented in subclass.")
 
-    def close(self):
-        pass
+    #def close(self):
+        #pass
         
