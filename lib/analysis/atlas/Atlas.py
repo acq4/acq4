@@ -15,10 +15,10 @@ class Atlas(QtCore.QObject):
         """Maps obj into atlas coordinates. Obj can be any object mappable by QMatrix4x4"""
         raise Exception("Must be reimplemented in subclass.")
 
-    def saveState(self):
+    def getState(self):
         raise Exception("Must be reimplemented in subclass.")
 
-    def restoreState(self):
+    def setState(self):
         raise Exception("Must be reimplemented in subclass.")
 
     #def close(self):
