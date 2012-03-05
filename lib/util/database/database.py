@@ -436,8 +436,8 @@ class TableData:
                Note: if all the values in this record are lists, it will be interpreted as multiple records
         
     Data can be accessed and modified by column, by row, or by value
-        data[columnName]
-        data[rowId]
+        data[columnName]                        # returns list or array
+        data[rowId]                             # returns dict or ordereddict
         data[columnName, rowId] = value
         data[columnName] = [value, value, ...]
         data[rowId] = {columnName: value, ...}
@@ -462,7 +462,7 @@ class TableData:
             self.data = data.data
             self.mode = data.mode
         else:
-            raise TypeError(type(data))
+            raise Exception("Cannot create TableData from object '%s' (type='%s')" % (str(data), type(data)))
         
         for fn in ['__getitem__', '__setitem__']:
             setattr(self, fn, getattr(self, '_TableData'+fn+self.mode))
@@ -486,10 +486,14 @@ class TableData:
         return arr
             
     def __getitem__array(self, arg):
-        if isinstance(arg, tuple):
+        if isinstance(arg, basestring):
+            return self.data[arg]
+        elif isinstance(arg, int):
+            return collections.OrderedDict([(k, self.data[k][arg]) for k in self.columnNames()])
+        elif isinstance(arg, tuple):
             return self.data[arg[0]][arg[1]]
         else:
-            return self.data[arg]
+            raise Exception("Cannot index TableData with object '%s' (type='%s')" % (str(arg), type(arg)))
             
     def __getitem__list(self, arg):
         if isinstance(arg, basestring):
@@ -500,7 +504,7 @@ class TableData:
             arg = self._orderArgs(arg)
             return self.data[arg[0]][arg[1]]
         else:
-            raise TypeError(type(arg))
+            raise Exception("Cannot index TableData with object '%s' (type='%s')" % (str(arg), type(arg)))
         
     def __getitem__dict(self, arg):
         if isinstance(arg, basestring):
@@ -511,7 +515,7 @@ class TableData:
             arg = self._orderArgs(arg)
             return self.data[arg[1]][arg[0]]
         else:
-            raise TypeError(type(arg))
+            raise Exception("Cannot index TableData with object '%s' (type='%s')" % (str(arg), type(arg)))
 
     def __setitem__array(self, arg, val):
         if isinstance(arg, tuple):
@@ -605,7 +609,7 @@ def parseColumnDefs(defs, keyOrder=None):
         return d
         
     if isSequence(defs) and all(map(isSequence, defs)):
-        return dict([(c[0], toDict(c[1:])) for c in defs])
+        return collections.OrderedDict([(c[0], toDict(c[1:])) for c in defs])
         
     if isinstance(defs, dict):
         ret = collections.OrderedDict()
