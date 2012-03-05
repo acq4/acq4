@@ -21,6 +21,7 @@ class CellCanvasItem(CanvasItem):
         opts['scalable'] = False
         opts['rotatable'] = False
         CanvasItem.__init__(self, item, **opts)
+        self.selectBox.addTranslateHandle([0.5,0.5])
     
     @classmethod
     def checkFile(cls, fh):
