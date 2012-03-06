@@ -6,6 +6,7 @@ class GLGraphicsItem(QtCore.QObject):
         self.__parent = None
         self.__view = None
         self.__children = set()
+        self.__transform = None
         self.setParentItem(parentItem)
         self.setDepthValue(0)
         
@@ -42,6 +43,13 @@ class GLGraphicsItem(QtCore.QObject):
         """Return the depth value of this item. See setDepthValue for mode information."""
         return self.__depthValue
         
+    def setTransform(self, tr):
+        self.__transform = tr
+        self.update()
+        
+    def transform(self):
+        return self.__transform
+        
     def initializeGL(self):
         """
         Called after an item is added to a GLViewWidget. 
@@ -58,3 +66,14 @@ class GLGraphicsItem(QtCore.QObject):
         """
         pass
         
+    def update(self):
+        v = self.view()
+        if v is None:
+            return
+        v.updateGL()
+        
+    def mapFromParent(self, point):
+        tr = self.transform()
+        if tr is None:
+            return point
+        return tr.inverted()[0].map(point)

@@ -15,8 +15,10 @@ class GLVolumeItem(GLGraphicsItem):
         glEnable(GL_TEXTURE_3D)
         self.texture = glGenTextures(1)
         glBindTexture(GL_TEXTURE_3D, self.texture)
-        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        #glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        #glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER)
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER)
@@ -48,7 +50,8 @@ class GLVolumeItem(GLGraphicsItem):
         glColor4f(1,1,1,1)
 
         view = self.view()
-        cam = view.cameraPosition()
+        center = QtGui.QVector3D(*[x/2. for x in self.data.shape[:3]])
+        cam = self.mapFromParent(view.cameraPosition()) - center
         cam = np.array([cam.x(), cam.y(), cam.z()])
         ax = np.argmax(abs(cam))
         d = 1 if cam[ax] > 0 else -1

@@ -33,6 +33,12 @@ class GLViewWidget(QtOpenGL.QGLWidget):
         #print "set view", item, self, item.view()
         self.updateGL()
         
+    def removeItem(self, item):
+        self.items.remove(item)
+        item._setView(None)
+        self.updateGL()
+        
+        
     def initializeGL(self):
         glClearColor(0.0, 0.0, 0.0, 0.0)
         glEnable(GL_DEPTH_TEST)
@@ -97,6 +103,11 @@ class GLViewWidget(QtOpenGL.QGLWidget):
             if i is item:
                 glMatrixMode(GL_MODELVIEW)
                 glPushMatrix()
+                tr = i.transform()
+                if tr is not None:
+                    a = np.array(tr.copyDataTo()).reshape((4,4))
+                    
+                    glMultMatrixf(a.transpose())
                 i.paint()
                 glMatrixMode(GL_MODELVIEW)
                 glPopMatrix()
