@@ -6,23 +6,22 @@ import numpy as np
 __all__ = ['GLVolumeItem']
 
 class GLVolumeItem(GLGraphicsItem):
+    def __init__(self, data, slices=256):
+        self.numSlices = slices
+        self.data = data
+        GLGraphicsItem.__init__(self)
+        
     def initializeGL(self):
-        n = 128
-        self.data = np.random.randint(0, 255, size=4*n**3).astype(np.uint8).reshape((n,n,n,4))
-        self.data[...,3] *= 0.1
-        for i in range(n):
-            self.data[i,:,:,0] = i*256./n
         glEnable(GL_TEXTURE_3D)
         self.texture = glGenTextures(1)
         glBindTexture(GL_TEXTURE_3D, self.texture)
-        #glTexImage3D( GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, void *data );
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER)
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER)
-        #glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_BORDER_COLOR, )  ## black/transparent by default
-        glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, n, n, n, 0, GL_RGBA, GL_UNSIGNED_BYTE, self.data)
+        shape = self.data.shape
+        glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, shape[2], shape[1], shape[0], 0, GL_RGBA, GL_UNSIGNED_BYTE, self.data.flatten())
         glDisable(GL_TEXTURE_3D)
         
         self.lists = {}
@@ -40,11 +39,12 @@ class GLVolumeItem(GLGraphicsItem):
         glEnable(GL_TEXTURE_3D)
         glBindTexture(GL_TEXTURE_3D, self.texture)
         
-        glDisable(GL_DEPTH_TEST)
+        glEnable(GL_DEPTH_TEST)
         #glDisable(GL_CULL_FACE)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         glEnable( GL_BLEND )
         glEnable( GL_ALPHA_TEST )
+        glColor4f(1,1,1,1)
 
         view = self.view()
         cam = view.cameraPosition()
@@ -55,7 +55,7 @@ class GLVolumeItem(GLGraphicsItem):
         glDisable(GL_TEXTURE_3D)
                 
     def drawVolume(self, ax, d):
-        slices = 256
+        slices = self.numSlices
         N = 5
         
         imax = [0,1,2]
@@ -72,14 +72,14 @@ class GLVolumeItem(GLGraphicsItem):
         tp[3][imax[0]] = 0
         tp[3][imax[1]] = 1
         
-        vp[0][imax[0]] = -N
-        vp[0][imax[1]] = -N
-        vp[1][imax[0]] = N
-        vp[1][imax[1]] = -N
-        vp[2][imax[0]] = N
-        vp[2][imax[1]] = N
-        vp[3][imax[0]] = -N
-        vp[3][imax[1]] = N
+        vp[0][imax[0]] = 0
+        vp[0][imax[1]] = 0
+        vp[1][imax[0]] = self.data.shape[imax[0]]
+        vp[1][imax[1]] = 0
+        vp[2][imax[0]] = self.data.shape[imax[0]]
+        vp[2][imax[1]] = self.data.shape[imax[1]]
+        vp[3][imax[0]] = 0
+        vp[3][imax[1]] = self.data.shape[imax[1]]
         r = range(slices)
         if d == -1:
             r = r[::-1]
@@ -87,7 +87,8 @@ class GLVolumeItem(GLGraphicsItem):
         glBegin(GL_QUADS)
         for i in r:
             z = float(i)/(slices-1.)
-            w = float(i)*10./(slices-1.) - 5.
+            #w = float(i)*10./(slices-1.) - 5.
+            w = float(i) * self.data.shape[ax]/slices
             
             tp[0][ax] = z
             tp[1][ax] = z
