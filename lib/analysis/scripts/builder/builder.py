@@ -2,8 +2,8 @@ import sys, os
 md = os.path.abspath(os.path.split(__file__)[0])
 sys.path = [os.path.join(md, '..', '..', 'util')] + sys.path
 
-dataFile = "CochlearNucleus/images/cochlear_nucleus.ma"
-labelFile = "CochlearNucleus/images/cochlear_nucleus_label.ma"
+dataFile = "../../atlas/CochlearNucleus/images/cochlear_nucleus.ma"
+labelFile = "../../atlas/CochlearNucleus/images/cochlear_nucleus_label.ma"
 
 from PyQt4 import QtCore, QtGui
 import pyqtgraph as pg

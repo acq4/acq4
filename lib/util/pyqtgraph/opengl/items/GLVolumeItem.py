@@ -6,8 +6,8 @@ import numpy as np
 __all__ = ['GLVolumeItem']
 
 class GLVolumeItem(GLGraphicsItem):
-    def __init__(self, data, slices=256):
-        self.numSlices = slices
+    def __init__(self, data, sliceDensity=1):
+        self.sliceDensity = sliceDensity
         self.data = data
         GLGraphicsItem.__init__(self)
         
@@ -21,7 +21,8 @@ class GLVolumeItem(GLGraphicsItem):
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER)
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER)
         shape = self.data.shape
-        glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, shape[2], shape[1], shape[0], 0, GL_RGBA, GL_UNSIGNED_BYTE, self.data.flatten())
+        
+        glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, shape[0], shape[1], shape[2], 0, GL_RGBA, GL_UNSIGNED_BYTE, self.data.transpose((2,1,0,3)))
         glDisable(GL_TEXTURE_3D)
         
         self.lists = {}
@@ -55,7 +56,6 @@ class GLVolumeItem(GLGraphicsItem):
         glDisable(GL_TEXTURE_3D)
                 
     def drawVolume(self, ax, d):
-        slices = self.numSlices
         N = 5
         
         imax = [0,1,2]
@@ -63,14 +63,15 @@ class GLVolumeItem(GLGraphicsItem):
         
         tp = [[0,0,0],[0,0,0],[0,0,0],[0,0,0]]
         vp = [[0,0,0],[0,0,0],[0,0,0],[0,0,0]]
-        tp[0][imax[0]] = 0
-        tp[0][imax[1]] = 0
-        tp[1][imax[0]] = 1
-        tp[1][imax[1]] = 0
-        tp[2][imax[0]] = 1
-        tp[2][imax[1]] = 1
-        tp[3][imax[0]] = 0
-        tp[3][imax[1]] = 1
+        nudge = [0.5/x for x in self.data.shape]
+        tp[0][imax[0]] = 0+nudge[imax[0]]
+        tp[0][imax[1]] = 0+nudge[imax[1]]
+        tp[1][imax[0]] = 1-nudge[imax[0]]
+        tp[1][imax[1]] = 0+nudge[imax[1]]
+        tp[2][imax[0]] = 1-nudge[imax[0]]
+        tp[2][imax[1]] = 1-nudge[imax[1]]
+        tp[3][imax[0]] = 0+nudge[imax[0]]
+        tp[3][imax[1]] = 1-nudge[imax[1]]
         
         vp[0][imax[0]] = 0
         vp[0][imax[1]] = 0
@@ -80,15 +81,17 @@ class GLVolumeItem(GLGraphicsItem):
         vp[2][imax[1]] = self.data.shape[imax[1]]
         vp[3][imax[0]] = 0
         vp[3][imax[1]] = self.data.shape[imax[1]]
+        slices = self.data.shape[ax] * self.sliceDensity
         r = range(slices)
         if d == -1:
             r = r[::-1]
             
         glBegin(GL_QUADS)
+        tzVals = np.linspace(nudge[ax], 1.0-nudge[ax], slices)
+        vzVals = np.linspace(0, self.data.shape[ax], slices)
         for i in r:
-            z = float(i)/(slices-1.)
-            #w = float(i)*10./(slices-1.) - 5.
-            w = float(i) * self.data.shape[ax]/slices
+            z = tzVals[i]
+            w = vzVals[i]
             
             tp[0][ax] = z
             tp[1][ax] = z
