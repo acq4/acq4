@@ -3,13 +3,16 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
+
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>Installation &mdash; ACQ4 v1.0 documentation</title>
+    <title>Installation &mdash; ACQ4 1.0 documentation</title>
+    
     <link rel="stylesheet" href="../_static/default.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    '../',
@@ -22,7 +25,7 @@
     <script type="text/javascript" src="../_static/jquery.js"></script>
     <script type="text/javascript" src="../_static/underscore.js"></script>
     <script type="text/javascript" src="../_static/doctools.js"></script>
-    <link rel="top" title="ACQ4 v1.0 documentation" href="../index.html" />
+    <link rel="top" title="ACQ4 1.0 documentation" href="../index.html" />
     <link rel="up" title="User’s Guide" href="index.html" />
     <link rel="next" title="Configuration" href="configuration.html" />
     <link rel="prev" title="Hardware Configuration" href="hardware.html" /> 
@@ -40,7 +43,7 @@
         <li class="right" >
           <a href="hardware.html" title="Hardware Configuration"
              accesskey="P">previous</a> |</li>
-        <li><a href="../index.html">ACQ4 v1.0 documentation</a> &raquo;</li>
+        <li><a href="../index.html">ACQ4 1.0 documentation</a> &raquo;</li>
           <li><a href="index.html" accesskey="U">User&#8217;s Guide</a> &raquo;</li> 
       </ul>
     </div>  
@@ -94,9 +97,10 @@ Once all prerequisites are installed, download ACQ4 (stable or development branc
 <div class="section" id="linux-installation">
 <h2>Linux Installation<a class="headerlink" href="#linux-installation" title="Permalink to this headline">¶</a></h2>
 <p>Make all your windows-using friends jealous:</p>
-<div class="highlight-python"><pre>$ sudo apt-get install python-qt4 python-qt4-gl python-qt4-gl python-pyserial python-scipy python-pyparsing python-h5py python-imaging bzr
+<div class="highlight-python"><pre>$ sudo apt-get install python-qt4 python-qt4-gl python-qt4-sql python-pyserial python-scipy python-pyparsing python-h5py python-imaging bzr python2.7-dev
 $ bzr branch lp:acq4</pre>
 </div>
+<p>If you wish to develop modules / devices / analysis, you will probably need a few more packages: qt4-designer pyqt4-dev-tools</p>
 </div>
 <div class="section" id="osx-installation">
 <h2>OSX Installation<a class="headerlink" href="#osx-installation" title="Permalink to this headline">¶</a></h2>
@@ -132,8 +136,8 @@ $ bzr branch lp:acq4</pre>
 </li>
 </ol>
 </div>
-<div class="section" id="osx-alternate-installation-method">
-<h2>OSX Alternate Installation Method<a class="headerlink" href="#osx-alternate-installation-method" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="osx-alternate-installation-method-1">
+<h2>OSX Alternate Installation Method #1<a class="headerlink" href="#osx-alternate-installation-method-1" title="Permalink to this headline">¶</a></h2>
 <p>These instructions are for building on MacOSX 10.5. If you&#8217;re building on 10.6 or 10.7 some of these libraries will be available as binaries.</p>
 <p>You will need to have xcode installed on your machine.</p>
 <p>Download and install the following packages in order:</p>
@@ -224,6 +228,93 @@ $ python setup.py install</pre>
 </ol>
 <p>That&#8217;s it, you&#8217;re done and ready to setup configuration files.</p>
 </div>
+<div class="section" id="osx-alternate-method-2-for-building-without-enthought-or-active-state-python-on-mac-osx-lion">
+<h2>OSX Alternate Method #2 (for building without Enthought or Active State Python on Mac OSX Lion):<a class="headerlink" href="#osx-alternate-method-2-for-building-without-enthought-or-active-state-python-on-mac-osx-lion" title="Permalink to this headline">¶</a></h2>
+<ol class="arabic">
+<li><p class="first">Remove all previous installations of python, with the possible exception of the basic Apple version 2.6</p>
+</li>
+<li><dl class="first docutils">
+<dt>Install &#8220;Brew&#8221;:</dt>
+<dd><div class="first last line-block">
+<div class="line">/usr/bin/ruby -e &#8220;$(curl -fsSL <a class="reference external" href="https://raw.github.com/gist/323731">https://raw.github.com/gist/323731</a>)&#8221;</div>
+<div class="line">export PATH=/usr/local/bin:$PATH</div>
+<div class="line">source ~/.bash_profile</div>
+<div class="line">brew update</div>
+</div>
+</dd>
+</dl>
+</li>
+<li><div class="first line-block">
+<div class="line">Now install some support libraries and Python:
+| (follow the directions to set things up at www.thisisthegreenroom.com)
+| brew install readline sqlite gdbm pkg-config
+| brew install python &#8211;framework &#8211;universal
+| export PATH=/usr/local/share/python:$PATH &amp;&amp; source ~/.bash_profile
+| cd /System/Library/Frameworks/Python.framework/Versions
+| sudo rm Current
+| ln -s /usr/local/Cellar/python/2.7.2/Frameworks/Python.framework/Versions/Current</div>
+</div>
+</li>
+<li><dl class="first docutils">
+<dt>Install pip as some packages are not in brew format:</dt>
+<dd><div class="first last line-block">
+<div class="line">easy_install pip</div>
+</div>
+</dd>
+</dl>
+</li>
+<li><div class="first line-block">
+<div class="line">Now we get to work:
+<a href="#id1"><span class="problematic" id="id2">|sudo pip install numpy
+| go to http://gcc.gnu.org/wiki/GFortranBinaries to get the gfortran binary for mac os x Lion. These are needed to compile scipy.
+| sudo pip install scipy
+||</span></a> (if that fails, get the dev branch: -e git+https://github.com/scipy/scipy#egg=scipy-dev)
+| brew install Qt (or install the standard Qt Libraries, but not the SDK).</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line">Get ready and build PyQt:
+| sip: I had a problem with sip 4.13.2, so, first, get rid of potential conflicting versions.
+| brew remove sip (only needed if you have installed sip before)
+| brew remove pyqt (may fail; it might not be installed)
+| cd <cite>brew &#8211;prefix</cite>
+| brew versions sip
+| git checkout 042cf7a Library/Formula/sip.rb (gets 4.13.1)
+| brew install sip
+| git checkout 2bf9bba Library/Formula/pyqt.rb (gets pyqt 4.9.1)
+| brew install pyqt
+|| (remarkably, this finally ran to completion and I was able to import PyQt4 in python!)</div>
+</div>
+<blockquote>
+<div><div class="line-block">
+<div class="line">Make sure to export (put these in your bash profile file):</div>
+<div class="line">export PYTHONPATH=/usr/local/lib/python:$PYTHONPATH</div>
+<div class="line">export PYTHONPATH=/usr/local/lib/python2.7/site-packages:$PYTHONPATH</div>
+<div class="line">source ~/.bash_profile</div>
+</div>
+</div></blockquote>
+</li>
+<li><dl class="first docutils">
+<dt>Get the remaining packages using pip and brew:</dt>
+<dd><div class="first last line-block">
+<div class="line">sudo pip install matplotlib</div>
+<div class="line">sudo pip install h5py</div>
+<div class="line">brew install PIL</div>
+<div class="line">sudo pip install pyparsing==1.5.2</div>
+</div>
+</dd>
+</dl>
+</li>
+<li><p class="first">Finally, navigate to the place where you would like to store acq4.</p>
+<div class="highlight-python"><pre>bzr branch lp:acq4</pre>
+</div>
+</li>
+</ol>
+<p>That&#8217;s it, you&#8217;re done and ready to setup configuration files.</p>
+<p>Resources:
+<a class="reference external" href="http://www.thisisthegreenroom.com/2011/installing-python-numpy-scipy-matplotlib-and-ipython-on-lion/">http://www.thisisthegreenroom.com/2011/installing-python-numpy-scipy-matplotlib-and-ipython-on-lion/</a>
+<a class="reference external" href="http://luke.campagnola.me/code/acq4/download.html">http://luke.campagnola.me/code/acq4/download.html</a></p>
+</div>
 </div>
 
 
@@ -238,7 +329,8 @@ $ python setup.py install</pre>
 <li><a class="reference internal" href="#windows-installation">Windows Installation</a></li>
 <li><a class="reference internal" href="#linux-installation">Linux Installation</a></li>
 <li><a class="reference internal" href="#osx-installation">OSX Installation</a></li>
-<li><a class="reference internal" href="#osx-alternate-installation-method">OSX Alternate Installation Method</a></li>
+<li><a class="reference internal" href="#osx-alternate-installation-method-1">OSX Alternate Installation Method #1</a></li>
+<li><a class="reference internal" href="#osx-alternate-method-2-for-building-without-enthought-or-active-state-python-on-mac-osx-lion">OSX Alternate Method #2 (for building without Enthought or Active State Python on Mac OSX Lion):</a></li>
 </ul>
 </li>
 </ul>
@@ -257,7 +349,7 @@ $ python setup.py install</pre>
 <div id="searchbox" style="display: none">
   <h3>Quick search</h3>
     <form class="search" action="../search.html" method="get">
-      <input type="text" name="q" size="18" />
+      <input type="text" name="q" />
       <input type="submit" value="Go" />
       <input type="hidden" name="check_keywords" value="yes" />
       <input type="hidden" name="area" value="default" />
@@ -283,13 +375,13 @@ $ python setup.py install</pre>
         <li class="right" >
           <a href="hardware.html" title="Hardware Configuration"
              >previous</a> |</li>
-        <li><a href="../index.html">ACQ4 v1.0 documentation</a> &raquo;</li>
+        <li><a href="../index.html">ACQ4 1.0 documentation</a> &raquo;</li>
           <li><a href="index.html" >User&#8217;s Guide</a> &raquo;</li> 
       </ul>
     </div>
     <div class="footer">
         &copy; Copyright 2011; University of North Carolina at Chapel Hill.
-      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.1.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
     </div>
   </body>
 </html>

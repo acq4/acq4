@@ -49,8 +49,10 @@ Linux Installation
 
 Make all your windows-using friends jealous::
 
-    $ sudo apt-get install python-qt4 python-qt4-gl python-qt4-gl python-pyserial python-scipy python-pyparsing python-h5py python-imaging bzr qt4-dev-tools pyqt4-dev-tools
+    $ sudo apt-get install python-qt4 python-qt4-gl python-qt4-sql python-pyserial python-scipy python-pyparsing python-h5py python-imaging bzr python2.7-dev
     $ bzr branch lp:acq4
+    
+If you wish to develop modules / devices / analysis, you will probably need a few more packages: qt4-designer pyqt4-dev-tools
     
     
 OSX Installation

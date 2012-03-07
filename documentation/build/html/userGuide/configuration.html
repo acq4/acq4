@@ -3,13 +3,16 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
+
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>Configuration &mdash; ACQ4 v1.0 documentation</title>
+    <title>Configuration &mdash; ACQ4 1.0 documentation</title>
+    
     <link rel="stylesheet" href="../_static/default.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    '../',
@@ -22,7 +25,7 @@
     <script type="text/javascript" src="../_static/jquery.js"></script>
     <script type="text/javascript" src="../_static/underscore.js"></script>
     <script type="text/javascript" src="../_static/doctools.js"></script>
-    <link rel="top" title="ACQ4 v1.0 documentation" href="../index.html" />
+    <link rel="top" title="ACQ4 1.0 documentation" href="../index.html" />
     <link rel="up" title="User’s Guide" href="index.html" />
     <link rel="next" title="Modules" href="modules/index.html" />
     <link rel="prev" title="Installation" href="installation.html" /> 
@@ -40,7 +43,7 @@
         <li class="right" >
           <a href="installation.html" title="Installation"
              accesskey="P">previous</a> |</li>
-        <li><a href="../index.html">ACQ4 v1.0 documentation</a> &raquo;</li>
+        <li><a href="../index.html">ACQ4 1.0 documentation</a> &raquo;</li>
           <li><a href="index.html" accesskey="U">User&#8217;s Guide</a> &raquo;</li> 
       </ul>
     </div>  
@@ -54,13 +57,13 @@
 <h1>Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h1>
 <p>Configuring ACQ4 involves editing &#8216;.cfg&#8217; files in the <em>config</em> directory. In these files, you may define:</p>
 <blockquote>
-<ul class="simple">
+<div><ul class="simple">
 <li>The devices in your system</li>
 <li>The list of loadable modules</li>
 <li>Data storage locations</li>
 <li>Per-user configurations</li>
 </ul>
-</blockquote>
+</div></blockquote>
 <p>The easiest way to get started might be to look in the <strong>config/backups</strong> directory at examples of the .cfg files from other systems.</p>
 <div class="section" id="cfg-file-syntax">
 <h2>.cfg File Syntax<a class="headerlink" href="#cfg-file-syntax" title="Permalink to this headline">¶</a></h2>
@@ -84,13 +87,13 @@ Values may also contain nested lists of name:value pairs:</p>
 <p>This example would read the entire contents of &#8216;folderTypes.cfg&#8217; and insert that as the value for &#8216;folderTypes&#8217;.</p>
 <p>Further notes about this syntax:</p>
 <blockquote>
-<ul class="simple">
+<div><ul class="simple">
 <li>You can use &#8220;double&#8221; or &#8216;single&#8217; quotes, but not &#8220;both&#8217;</li>
 <li>File or directory names should be quoted and use forward slashes (/) on Linux and OSX or double-back slashes (\\) on Windows (eg &#8220;/home/user/data&#8221; or &#8220;C:\\data\\user&#8221;).</li>
 <li>Some options will call for a list of values. This can be given just by separating the values with commas inline like <tt class="docutils literal"><span class="pre">value1,</span> <span class="pre">value2</span></tt> or with brackets like <tt class="docutils literal"><span class="pre">[value1,</span> <span class="pre">value2]</span></tt></li>
 <li>Finally, you may add comments to .cfg if they are preceded with a hash (#) symbol</li>
 </ul>
-</blockquote>
+</div></blockquote>
 </div>
 <div class="section" id="configuration-structure">
 <h2>Configuration Structure<a class="headerlink" href="#configuration-structure" title="Permalink to this headline">¶</a></h2>
@@ -220,7 +223,7 @@ fieldName2: 'list', ['option1', 'option2', 'option3']</pre>
 <div id="searchbox" style="display: none">
   <h3>Quick search</h3>
     <form class="search" action="../search.html" method="get">
-      <input type="text" name="q" size="18" />
+      <input type="text" name="q" />
       <input type="submit" value="Go" />
       <input type="hidden" name="check_keywords" value="yes" />
       <input type="hidden" name="area" value="default" />
@@ -246,13 +249,13 @@ fieldName2: 'list', ['option1', 'option2', 'option3']</pre>
         <li class="right" >
           <a href="installation.html" title="Installation"
              >previous</a> |</li>
-        <li><a href="../index.html">ACQ4 v1.0 documentation</a> &raquo;</li>
+        <li><a href="../index.html">ACQ4 1.0 documentation</a> &raquo;</li>
           <li><a href="index.html" >User&#8217;s Guide</a> &raquo;</li> 
       </ul>
     </div>
     <div class="footer">
         &copy; Copyright 2011; University of North Carolina at Chapel Hill.
-      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.1.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
     </div>
   </body>
 </html>

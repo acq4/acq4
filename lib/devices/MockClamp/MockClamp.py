@@ -481,12 +481,18 @@ class MockClampProtoGui(DAQGenericProtoGui):
         
     def restoreState(self, state):
         """Restore the state of the widget from a dictionary previously generated using saveState"""
-        self.modeCombo.setCurrentIndex(self.modeCombo.findText(state['mode']))
+        #print 'state: ', state
+        #print 'DaqGeneric : ', dir(DAQGenericProtoGui)
+        if 'mode' in state:
+            self.modeCombo.setCurrentIndex(self.modeCombo.findText(state['mode']))
         #self.ctrl.holdingCheck.setChecked(state['holdingEnabled'])
         #if state['holdingEnabled']:
         #    self.ctrl.holdingSpin.setValue(state['holding'])
-        return DAQGenericProtoGui.restoreState(self, state['daqState'])
-    
+        if 'daqState' in state:
+            return DAQGenericProtoGui.restoreState(self, state['daqState'])
+        else:
+            return None
+            
     def generateProtocol(self, params=None):
         daqProto = DAQGenericProtoGui.generateProtocol(self, params)
         
@@ -517,7 +523,7 @@ class MockClampProtoGui(DAQGenericProtoGui):
         self.cmdWidget.setUnits(cmdUnits)
         self.inputPlot.setLabel('left', units=inpUnits)
         self.cmdPlot.setLabel('left', units=cmdUnits)
-        w.setScale(scale)
+        #w.setScale(scale)
         for s in w.getSpins():
             s.setOpts(minStep=scale)
                 

@@ -41,7 +41,7 @@ class DBCtrl(QtGui.QWidget):
         
         self.layout = QtGui.QVBoxLayout()
         self.setLayout(self.layout)
-        self.dbgui = DatabaseGui.DatabaseGui(self.dm, tables={})
+        self.dbgui = DatabaseGui.DatabaseGui(dm=self.dm, tables={})
 
         self.layout.addWidget(self.dbgui)
         #self.layout.addWidget(self.storeBtn)

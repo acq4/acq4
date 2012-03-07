@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/devices/MultiClamp/ProtocolTemplate.ui'
 #
-# Created: Mon Feb  6 23:48:22 2012
+# Created: Sun Mar  4 09:45:54 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

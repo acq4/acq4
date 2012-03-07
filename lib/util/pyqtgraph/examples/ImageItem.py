@@ -2,11 +2,11 @@
 ## Add path to library (just for examples; you do not need this)
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-import ptime
 
-from PyQt4 import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui
 import numpy as np
 import pyqtgraph as pg
+import pyqtgraph.ptime as ptime
 
 app = QtGui.QApplication([])
 
@@ -14,14 +14,14 @@ app = QtGui.QApplication([])
 win = QtGui.QMainWindow()
 win.resize(600,600)
 view = pg.GraphicsView()
-#view.useOpenGL(True)
 win.setCentralWidget(view)
 win.show()
 
-## Allow mouse scale/pan
+## Allow mouse scale/pan. Normally we use a ViewBox for this, but
+## for simple examples this is easier.
 view.enableMouse()
 
-## ..But lock the aspect ratio
+## lock the aspect ratio so pixels are always square
 view.setAspectLocked(True)
 
 ## Create image item
@@ -54,26 +54,7 @@ def updateData():
     #print "%0.1f fps" % fps
     
 
-# update image data every 20ms (or so)
-#t = QtCore.QTimer()
-#t.timeout.connect(updateData)
-#t.start(20)
 updateData()
-
-#view.scaleToImage(img)
-
-#img.setFlag(img.ItemIgnoresTransformations, True)
-
-#def doWork():
-    #while True:
-        #x = '.'.join(['%f'%i for i in range(100)])  ## some work for the thread to do
-        #if time is None:  ## main thread has started cleaning up, bail out now
-            #break
-        #time.sleep(1e-3)
-
-#import thread
-#thread.start_new_thread(doWork, ())
-
 
 ## Start Qt event loop unless running in interactive mode.
 if sys.flags.interactive != 1:

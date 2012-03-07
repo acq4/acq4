@@ -5,9 +5,12 @@
 ## between PyQt4 and PySide.
 from Qt import QtGui 
 
+## not really safe.
+#if QtGui.QApplication.instance() is None:
+    #app = QtGui.QApplication([])
 
 CONFIG_OPTIONS = {
-    'leftButtonPan': True
+    'leftButtonPan': True  ## if false, left button drags a rubber band for zooming in viewbox
 }
 
 def setConfigOption(opt, value):

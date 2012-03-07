@@ -17,7 +17,7 @@ class Microscope(Device):
     
     sigObjectiveChanged = QtCore.Signal(object) ## (objective, index, lastObjective)
     sigObjectiveListChanged = QtCore.Signal()
-    sigPositionChanged = QtCore.Signal(object)
+    sigPositionChanged = QtCore.Signal(object)  ## {'abs': pos, 'rel': pos}
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)

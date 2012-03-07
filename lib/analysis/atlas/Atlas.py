@@ -3,7 +3,7 @@ from PyQt4 import QtCore
 class Atlas(QtCore.QObject):
     """An Atlas is responsible for determining the position of images, cells, scan data, etc relative
     to a common coordinate system."""
-    def __init__(self, canvas, state=None):
+    def __init__(self, canvas, state=None, loader=None, dataModel=None):
         QtCore.QObject.__init__(self)
         self.canvas = canvas
         if state is not None:

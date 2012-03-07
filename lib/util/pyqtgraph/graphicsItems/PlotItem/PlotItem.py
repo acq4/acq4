@@ -24,6 +24,7 @@ from pyqtgraph.widgets.FileDialog import FileDialog
 import weakref
 #from types import *
 import numpy as np
+import os
 #from .. PlotCurveItem import PlotCurveItem
 #from .. ScatterPlotItem import ScatterPlotItem
 from .. PlotDataItem import PlotDataItem
@@ -130,7 +131,10 @@ class PlotItem(GraphicsWidget):
         
 
         ## Wrap a few methods from viewBox
-        for m in ['setXRange', 'setYRange', 'setXLink', 'setYLink', 'setRange', 'autoRange', 'viewRect', 'setMouseEnabled']:
+        for m in [
+            'setXRange', 'setYRange', 'setXLink', 'setYLink', 
+            'setRange', 'autoRange', 'viewRect', 'setMouseEnabled',
+            'enableAutoRange', 'disableAutoRange']:
             setattr(self, m, getattr(self.vb, m))
             
         self.items = []
@@ -262,7 +266,7 @@ class PlotItem(GraphicsWidget):
         if len(kargs) > 0:
             self.plot(**kargs)
         
-        self.enableAutoScale()
+        self.enableAutoRange()
         
     def implements(self, interface=None):
         return interface in ['ViewBoxWrapper']
@@ -585,14 +589,15 @@ class PlotItem(GraphicsWidget):
 
     def autoBtnClicked(self):
         if self.autoBtn.mode == 'auto':
-            self.enableAutoScale()
+            self.enableAutoRange()
         else:
-            self.enableManualScale()
+            self.disableAutoRange()
             
     def enableAutoScale(self):
         """
         Enable auto-scaling. The plot will continuously scale to fit the boundaries of its data.
         """
+        print "Warning: enableAutoScale is deprecated. Use enableAutoRange(axis, enable) instead."
         self.vb.enableAutoRange(self.vb.XYAxes)
         #self.ctrl.xAutoRadio.setChecked(True)
         #self.ctrl.yAutoRadio.setChecked(True)
@@ -1105,7 +1110,7 @@ class PlotItem(GraphicsWidget):
             b = self.ctrl.powerSpectrumGroup.isChecked()
         for c in self.curves:
             c.setFftMode(b)
-        self.enableAutoScale()
+        self.enableAutoRange()
         self.recomputeAverages()
             
         

@@ -10,7 +10,8 @@ Troubleshoot Electrical Noise
 7. next, remove the foil and check again
 8. remove the model cell, replace with an ACSF-loaded pipette, check again
 9. place the pipette in the recording chamber with ACSF flowing
-10. experiment with different grounding conditions
+10. experiment with different grounding/shielding conditions
+11. experiment with different sampling rates, downsampling, and possibly lowpass filters (we commonly sample at 400kHz and downsample 10x to 40kHz)
 
 
 Common noise sources
@@ -23,7 +24,7 @@ Common noise sources
 * brush motor pumps
 * any cables running parallel to the headstage cables
 * cell phones. just turn 'em off.
-* 60Hz. It's everywhere; use a faraday cage. Sutter MP-285s can be particularly bad; I keep them separated from all the other equipment by ~5 feet.
+* 60Hz. It's everywhere! Most important is to ground your microscope. Make sure the headstage has good contact with electrodes and that both electrodes are in good condition. 60Hx noise is often radiated directly to the electrode by the experimenter (your body makes an efficient antenna). To avoid this, either move all noise sources (power supplies, laptops, noisy screens/keyboards) away from the rig and experimenter or put a grounded metal screen between the preparation and experimenter.
 
 
 In general, noise can be reduced significantly by oversampling and then downsampling. See the DAQ interface in the prorocol runner [link]. 

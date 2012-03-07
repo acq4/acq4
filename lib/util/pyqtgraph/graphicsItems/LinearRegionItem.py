@@ -97,7 +97,13 @@ class LinearRegionItem(UIGraphicsItem):
         UIGraphicsItem.paint(self, p, *args)
         p.setBrush(self.currentBrush)
         p.drawRect(self.boundingRect())
-            
+
+    def dataBounds(self, axis, frac=1.0):
+        if axis == self.orientation:
+            return self.getRegion()
+        else:
+            return None
+
     def lineMoved(self):
         if self.blockLineSignal:
             return
@@ -191,7 +197,9 @@ class LinearRegionItem(UIGraphicsItem):
 
     def hoverEvent(self, ev):
         if (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
-            self.currentBrush = fn.mkBrush(255, 0,0,100)
+            c = self.brush.color()
+            c.setAlpha(c.alpha() * 2)
+            self.currentBrush = fn.mkBrush(c)
         else:
             self.currentBrush = self.brush
         self.update()

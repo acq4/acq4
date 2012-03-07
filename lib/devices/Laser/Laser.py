@@ -486,6 +486,8 @@ class Laser(DAQGeneric):
                 powerOk = self.checkPowerValidity(powerOn)
                 self.sigOutputPowerChanged.emit(powerOn, powerOk)
                 self.updateSamplePower()
+                if powerOn < 0:
+                    powerOn = 0.0
                 return powerOn, powerOk
             else:
                 logMsg("No laser pulse detected by power indicator '%s' while measuring Laser.outputPower()" % powerInd[0], msgType='warning')

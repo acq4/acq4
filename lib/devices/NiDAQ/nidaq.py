@@ -85,6 +85,9 @@ class NiDAQ(Device):
         return Device.release(self)
 
     def getChannelValue(self, chan, mode=None, block=True):
+        if mode is None:
+            mode = self.config.get('defaultAIMode', None)
+        
         res = self.reserve(block=block)
         if not res:  ## False means non-blocking lock attempt failed.
             return False

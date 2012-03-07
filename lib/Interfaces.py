@@ -59,8 +59,14 @@ class InterfaceDirectory(QtCore.QObject):
                 
             self.sigInterfaceListChanged.emit(types)
         
-    def listInterfaces(self, types):
+    def listInterfaces(self, types=None):
+        """Return a list of the names of interfaces with a given type.
+        if type is None, instead return a dict tree of all interfaces.
+        """
         with self.lock:
+            if types is None:
+                return dict([(k, dict(v)) for k,v in self.typeList.iteritems()])
+                
             if isinstance(types, basestring):
                 types = [types]
             ints = []

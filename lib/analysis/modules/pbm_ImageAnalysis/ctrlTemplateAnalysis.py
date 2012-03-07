@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/pbm_ImageAnalysis/ctrlTemplateAnalysis.ui'
 #
-# Created: Mon Feb  6 23:48:18 2012
+# Created: Sun Mar  4 09:45:51 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -303,7 +303,7 @@ class Ui_Form(object):
         self.IAFuncs_XCorrThreshold.setProperty(_fromUtf8("value"), 0.25)
         self.IAFuncs_XCorrThreshold.setObjectName(_fromUtf8("IAFuncs_XCorrThreshold"))
         self.IAFuncs_MatplotlibCheckBox = QtGui.QCheckBox(self.IAFuncs_widget)
-        self.IAFuncs_MatplotlibCheckBox.setGeometry(QtCore.QRect(15, 350, 176, 20))
+        self.IAFuncs_MatplotlibCheckBox.setGeometry(QtCore.QRect(10, 270, 156, 20))
         font = QtGui.QFont()
         font.setPointSize(11)
         self.IAFuncs_MatplotlibCheckBox.setFont(font)

@@ -65,14 +65,15 @@ class ThresholdEvents(CtrlNode):
     """Detects regions of a waveform that cross a threshold (positive or negative) and returns the time, length, sum, and peak of each event."""
     nodeName = 'ThresholdEvents'
     uiTemplate = [
-        ('threshold', 'spin', {'value': 1e-12, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
-        ('adjustTimes', 'check', {'value': True}),
+        ('threshold', 'spin', {'value': 1e-12, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Events are detected only if they cross this threshold.'}),
+        ('adjustTimes', 'check', {'value': True, 'tip': 'If False, then event times are reported where the trace crosses threshold. If True, the event time is adjusted to estimate when the trace would have crossed 0.'}),
         #('index', 'combo', {'values':['start','peak'], 'index':0}), 
-        ('minLength', 'intSpin', {'value': 0, 'min': 0, 'max': 1e9}),
+        ('minLength', 'intSpin', {'value': 0, 'min': 0, 'max': 1e9, 'tip': 'Events must contain this many samples to be detected.'}),
         ('minSum', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
-        ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
-        ('eventLimit', 'intSpin', {'value': 100, 'min': 1, 'max': 1e9}),
-        ('deadTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [0,None], 'siPrefix': True, 'suffix': 's'}),
+        ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Events must reach this threshold to be detected.'}),
+        ('eventLimit', 'intSpin', {'value': 100, 'min': 1, 'max': 1e9, 'tip': 'Limits the number of events that may be detected in a single trace. This prevents runaway processes due to over-sensitive detection criteria.'}),
+        ('deadTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [0,None], 'siPrefix': True, 'suffix': 's', 'tip': 'Ignore events that occur too quickly following another event.'}),
+        ('reverseTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [0,None], 'siPrefix': True, 'suffix': 's', 'tip': 'Ignore events that 1) have the opposite sign of the event immediately prior and 2) occur within the given time window after the prior event. This is useful for ignoring rebound signals.'}),
     ]
 
     def __init__(self, name, **opts):
@@ -124,8 +125,12 @@ class ThresholdEvents(CtrlNode):
         mask = np.ones(len(events), dtype=bool)
         last = 0
         dt = s['deadTime']
+        rt = s['reverseTime']
         for i in xrange(1, len(events)):
-            if events[i]['time'] - events[last]['time'] < dt:
+            tdiff = events[i]['time'] - events[last]['time']
+            if tdiff < dt:  ## check dead time
+                mask[i] = False
+            elif tdiff < rt and (events[i]['peak'] * events[last]['peak'] < 0):  ## check reverse time
                 mask[i] = False
             else:
                 last = i

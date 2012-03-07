@@ -376,8 +376,6 @@ class StimGenerator(QtGui.QWidget):
         """
         if params is None:
             params = {}
-        if not re.search(r'\w', self.functionString()):
-            return None
             
         if self.cacheRate != rate or self.cacheNPts != nPts:
             self.clearCache()
@@ -426,7 +424,12 @@ class StimGenerator(QtGui.QWidget):
         gns = {}
         exec('from numpy import *', gns)
         
-        ret = eval(fn, gns, ns)
+        #print "function: '%s'" % fn
+        if fn.strip() == '':
+            ret = np.zeros(nPts)
+        else:
+            ret = eval(fn, gns, ns)
+            
         if isinstance(ret, ndarray):
             #ret *= self.scale
             ret += self.offset
