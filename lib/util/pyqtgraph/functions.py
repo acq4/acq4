@@ -632,8 +632,6 @@ def rescaleData(data, scale, offset):
     data = newData.reshape(data.shape)
     return data
     
-    import numpy as np
-
 
 def isosurface(data, level):
     """
@@ -644,11 +642,82 @@ def isosurface(data, level):
     *level*  The level at which to generate an isosurface
     """
     
+    facets = []
+    
     ## mark everything below the isosurface level
     mask = data < level
     
-    ## create an array of the values around each tetrahedron
+    ### make eight sub-fields 
+    fields = np.empty((2,2,2), dtype=object)
+    slices = [slice(0,-1), slice(1,None)]
+    for i in [0,1]:
+        for j in [0,1]:
+            for k in [0,1]:
+                fields[i,j,k] = mask[slices[i], slices[j], slices[k]]
     
+    
+    
+    ## split each cell into 6 tetrahedra
+    ## these all have the same 'orienation'; points 1,2,3 circle 
+    ## clockwise around point 0
+    tetrahedra = [
+        [(0,1,0), (1,1,1), (0,1,1), (1,0,1)],
+        [(0,1,0), (0,1,1), (0,0,1), (1,0,1)],
+        [(0,1,0), (0,0,1), (0,0,0), (1,0,1)],
+        [(0,1,0), (0,0,0), (1,0,0), (1,0,1)],
+        [(0,1,0), (1,0,0), (1,1,0), (1,0,1)],
+        [(0,1,0), (1,1,0), (1,1,1), (1,0,1)]
+    ]
+    
+    ## each tetrahedron will be assigned an index
+    ## which determines how to generate its facets.
+    ## this structure is: 
+    ##    facets[index][facet1, facet2, ...]
+    ## where each facet is triangular and its points are each 
+    ## interpolated between two points on the tetrahedron
+    ##    facet = [(p1a, p1b), (p2a, p2b), (p3a, p3b)]
+    ## facet points always circle clockwise if you are looking 
+    ## at them from below the isosurface.
+    indexFacets = [
+        [],  ## all above
+        [[(0,1), (0,2), (0,3)]],  # 0 below
+        [[(1,0), (1,3), (1,2)]],   # 1 below
+        [[(0,2), (1,3), (1,2)], [(0,2), (0,3), (1,3)]],   # 0,1 below
+        [[(2,0), (2,1), (2,3)]],   # 2 below
+        [[(0,3), (1,2), (2,3)], [(0,3), (0,1), (1,2)]],   # 0,2 below
+        [[(1,0), (2,3), (2,0)], [(1,0), (1,3), (2,3)]],   # 1,2 below
+        [[(3,0), (3,1), (3,2)]],   # 3 above
+        [[(3,0), (3,2), (3,1)]],   # 3 below
+        [[(1,0), (2,0), (2,3)], [(1,0), (2,3), (1,3)]],   # 0,3 below
+        [[(0,3), (2,3), (1,2)], [(0,3), (1,2), (0,1)]],   # 1,3 below
+        [[(2,0), (2,3), (2,1)]], # 0,1,3 below
+        [[(0,2), (1,2), (1,3)], [(0,2), (1,3), (0,3)]],   # 2,3 below
+        [[(1,0), (1,2), (1,3)]], # 0,2,3 below
+        [[(0,1), (0,3), (0,2)]], # 1,2,3 below
+        []  ## all below
+    ]
+    
+    for tet in tetrahedra:
+        
+        ## get the 4 fields for this tetrahedron
+        tetFields = [fields[c] for c in tet]
+        
+        ## generate an index for each grid cell
+        index = tetFields[0] + tetFields[1]*2 + tetFields[2]*4 + tetFields[3]*8
+        
+        ## add facets
+        for i in xrange(index.shape[0]):                 # data x-axis
+            for j in xrange(index.shape[1]):             # data y-axis
+                for k in xrange(index.shape[2]):         # data z-axis
+                    for f in indexFacets[index[i,j,k]]:  # faces to generate for this tet
+                        pts = []
+                        for l in [0,1,2]:      # points in this face
+                            p1 = tet[f[l][0]]  # tet corner 1
+                            p2 = tet[f[l][1]]  # tet corner 2
+                            pts.append([(p1[x]+p2[x])*0.5+[i,j,k][x]+0.5 for x in [0,1,2]]) ## interpolate between tet corners
+                        facets.append(pts)
+
+    return facets
     
     
     
