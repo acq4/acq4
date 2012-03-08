@@ -104,10 +104,8 @@ class GLViewWidget(QtOpenGL.QGLWidget):
                 glMatrixMode(GL_MODELVIEW)
                 glPushMatrix()
                 tr = i.transform()
-                if tr is not None:
-                    a = np.array(tr.copyDataTo()).reshape((4,4))
-                    
-                    glMultMatrixf(a.transpose())
+                a = np.array(tr.copyDataTo()).reshape((4,4))
+                glMultMatrixf(a.transpose())
                 i.paint()
                 glMatrixMode(GL_MODELVIEW)
                 glPopMatrix()
