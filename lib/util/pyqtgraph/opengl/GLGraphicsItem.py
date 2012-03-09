@@ -7,6 +7,7 @@ class GLGraphicsItem(QtCore.QObject):
         self.__view = None
         self.__children = set()
         self.__transform = QtGui.QMatrix4x4()
+        self.__visible = True
         self.setParentItem(parentItem)
         self.setDepthValue(0)
         
@@ -16,6 +17,10 @@ class GLGraphicsItem(QtCore.QObject):
         if item is not None:
             item.__children.add(self)
         self.__parent = item
+        
+        if self.__parent is not None and self.view() is not self.__parent.view():
+            self.view().removeItem(self)
+            self.__parent.view().addItem(self)
         
     def parentItem(self):
         return self.__parent
@@ -91,7 +96,21 @@ class GLGraphicsItem(QtCore.QObject):
         tr.scale(x, y, z)
         self.applyTransform(tr, local=local)
     
+    
+    def hide(self):
+        self.setVisible(False)
         
+    def show(self):
+        self.setVisible(True)
+    
+    def setVisible(self, vis):
+        self.__visible = vis
+        self.update()
+        
+    def visible(self):
+        return self.__visible
+    
+    
     def initializeGL(self):
         """
         Called after an item is added to a GLViewWidget. 

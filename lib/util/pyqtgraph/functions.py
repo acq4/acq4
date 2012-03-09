@@ -120,6 +120,18 @@ def siEval(s):
     return v * 1000**n
     
 
+class Color(QtGui.QColor):
+    def __init__(self, *args):
+        QtGui.QColor.__init__(self, mkColor(*args))
+        
+    def glColor(self):
+        """Return (r,g,b,a) normalized for use in opengl"""
+        return (self.red()/255., self.green()/255., self.blue()/255., self.alpha()/255.)
+        
+    def __getitem__(self, ind):
+        return (self.red, self.green, self.blue, self.alpha)[ind]()
+        
+    
 def mkColor(*args):
     """
     Convenience function for constructing QColor from a variety of argument types. Accepted arguments are:
