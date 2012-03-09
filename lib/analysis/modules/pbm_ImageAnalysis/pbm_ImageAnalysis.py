@@ -30,7 +30,7 @@ from collections import OrderedDict
 import os, shutil
 import operator
 import pyqtgraph as pg
-import Image
+import PIL as Image
 from metaarray import MetaArray
 import numpy
 import scipy
@@ -439,6 +439,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             px = [1.0, 1.0] # scaling is now in pixels directly
             self.imageScaleUnit = 'pixels'
             sf = 1.0
+            pixelsize = [1.0, 1.0]
         sx = region[2]-region[0]
         sy = region[3]-region[1]
         px = [0, 0]
