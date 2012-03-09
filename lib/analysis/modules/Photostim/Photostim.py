@@ -264,9 +264,6 @@ class Photostim(AnalysisModule):
             pass
     
 
-    def storeToDB(self):
-        pass
-
     def scanPointClicked(self, plotItem, points):
         try:
             point = points[0]

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/modules/ProtocolRunner/analysisModules/Uncaging/UncagingTemplate.ui'
 #
-# Created: Sun Mar  4 09:45:57 2012
+# Created: Fri Mar  9 11:10:27 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

@@ -15,6 +15,7 @@ class FileLoader(QtGui.QWidget):
     def __init__(self, dataManager, host=None, showFileTree=True):
         self._baseDir = None
         self.dataManager = dataManager
+        self.loaded = []
         QtGui.QWidget.__init__(self)
         self.ui = template.Ui_Form()
         self.ui.setupUi(self)
@@ -63,13 +64,14 @@ class FileLoader(QtGui.QWidget):
             for fh in files:
                 if self.host is None:
                     self.sigFileLoaded.emit(fh)
-
+                    self.loaded.append(fh)
                 elif self.host.loadFileRequested([fh]):
                     name = fh.name(relativeTo=self.ui.dirTree.baseDirHandle())
                     item = QtGui.QTreeWidgetItem([name])
                     item.file = fh
                     self.ui.fileTree.addTopLevelItem(item)
                     self.sigFileLoaded.emit(fh)
+                    self.loaded.append(fh)
             #self.emit(QtCore.SIGNAL('fileLoaded'), fh)
         finally:
             QtGui.QApplication.restoreOverrideCursor()
@@ -98,4 +100,7 @@ class FileLoader(QtGui.QWidget):
         #print fh
         #print fh.info()
         
+    def loadedFiles(self):
+        """Return a list of loaded file handles"""
+        return self.loaded[:]
         

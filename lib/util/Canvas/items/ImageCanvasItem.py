@@ -44,12 +44,25 @@ class ImageCanvasItem(CanvasItem):
                 if 'imagePosition' in self.handle.info():
                     opts['scale'] = self.handle.info()['pixelSize']
                     opts['pos'] = self.handle.info()['imagePosition']
+                elif 'Downsample' in self.handle.info():
+                    opts['scale'] = self.handle.info()['pixelSize']
+                    if 'microscope' in self.handle.info():
+                        m = self.handle.info()['microscope']
+                        print 'm: ',m
+                        print 'mpos: ', m['position']
+                        opts['pos'] = m['position'][0:2]
+                    else:
+                        info = self.data._info[-1]
+                        opts['pos'] = info.get('imagePosition', None)
                 else:
                     info = self.data._info[-1]
                     opts['scale'] = info.get('pixelSize', None)
                     opts['pos'] = info.get('imagePosition', None)
             except:
-                pass
+                print 'uga uga boom'
+                #pass
+
+        print opts
 
         if item is None:
             item = pg.ImageItem()

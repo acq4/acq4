@@ -588,7 +588,8 @@ class LogWidget(QtGui.QWidget):
             #return self.generateSimple(entry['message'], entry, color, timeStamp=entry['timestamp'])
             ##self.displayText(entry['message'], entry, color, timeStamp=entry['timestamp'])
     
-    def cleanText(self, text):
+    @staticmethod
+    def cleanText(text):
         text = re.sub(r'&', '&amp;', text)
         text = re.sub(r'>','&gt;', text)
         text = re.sub(r'<', '&lt;', text)
@@ -866,9 +867,9 @@ class ErrorDialog(QtGui.QDialog):
             if exc is None:
                 break
             key = 'oldExc'
-            exceptions.append(exc['message'])
+            exceptions.append(self.cleanText(exc['message']))
             if exc['message'].startswith('HelpfulException'):
-                helpful.append(exc['message'].lstrip('HelpfulException: '))
+                helpful.append(self.cleanText(exc['message'].lstrip('HelpfulException: ')))
         
         if len(helpful) > 0:
             msg = '<b>' + '<br>'.join(helpful) + '</b>'
@@ -894,6 +895,13 @@ class ErrorDialog(QtGui.QDialog):
         #self.activateWindow()
         self.raise_()
             
+    @staticmethod
+    def cleanText(text):
+        text = re.sub(r'&', '&amp;', text)
+        text = re.sub(r'>','&gt;', text)
+        text = re.sub(r'<', '&lt;', text)
+        text = re.sub(r'\n', '<br/>\n', text)
+        return text
         
     def closeEvent(self):
         QtGui.QDialog.closeEvent(self)

@@ -33,6 +33,7 @@ class MosaicEditor(AnalysisModule):
         self.ui.canvas = self.getElement('Canvas', create=True)
         self.items = {}
         self.cells = {}
+        #self.loaded = []
         
         #addScanImagesBtn = QtGui.QPushButton()
         #addScanImagesBtn.setText('Add Scan Image')
@@ -78,10 +79,10 @@ class MosaicEditor(AnalysisModule):
         self.closeAtlas()
         
         cls = atlas.getAtlasClass(name)
-        obj = cls(canvas=self.getElement('Canvas'), loader=self.getElement('File Loader'), dataManager=self.dataManager())
-        ctrl = obj.ctrlWidget()
+        obj = cls()
+        ctrl = obj.ctrlWidget(host=self)
         self.ui.atlasLayout.addWidget(ctrl, 0, 0)
-        self.atlas = obj
+        self.atlas = ctrl
         
 
     def loadFileRequested(self, files):
@@ -99,6 +100,9 @@ class MosaicEditor(AnalysisModule):
             except:
                 item.timestamp = None
 
+            #self.loaded.append(f)
+            
+            ## load or guess user transform for this item
             if not item.hasUserTransform() and item.timestamp is not None:
                 ## Record the timestamp for this file, see what is the most recent transformation to copy
                 best = None
@@ -117,6 +121,7 @@ class MosaicEditor(AnalysisModule):
                 trans = best.saveTransform()
                 item.restoreTransform(trans)
                 
+            
         canvas.selectItem(item)
         canvas.autoRange()
     
@@ -135,3 +140,8 @@ class MosaicEditor(AnalysisModule):
                 return
             raise
 
+    def getLoadedFiles(self):
+        """Return a list of all file handles that have been loaded"""
+        return self.items.values()
+        
+        

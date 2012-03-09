@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/util/pyqtgraph/graphicsItems/ViewBox/axisCtrlTemplate.ui'
 #
-# Created: Sun Mar  4 09:46:00 2012
+# Created: Fri Mar  9 11:10:29 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

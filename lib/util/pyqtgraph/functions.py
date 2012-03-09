@@ -632,4 +632,44 @@ def rescaleData(data, scale, offset):
     data = newData.reshape(data.shape)
     return data
     
+#    import numpy as np
+
+
+def isosurface(data, level):
+    """
+    Generate isosurface from volumetric data using marching tetrahedra algorithm.
+    See Paul Bourke, "Polygonising a Scalar Field Using Tetrahedrons"  (http://local.wasp.uwa.edu.au/~pbourke/geometry/polygonise/)
     
+    *data*   3D numpy array of scalar values
+    *level*  The level at which to generate an isosurface
+    """
+    
+    ## mark everything below the isosurface level
+    mask = data < level
+    
+    ## create an array of the values around each tetrahedron
+    
+    
+    
+    
+#def isosurface(data, level):
+    #"""
+    #Generate isosurface from volumetric data using marching cubes algorithm.
+    #See Paul Bourke, "Polygonising a scalar field"  (http://local.wasp.uwa.edu.au/~pbourke/geometry/polygonise/)
+    
+    #*data*   3D numpy array of scalar values
+    #*level*  The level at which to generate an isosurface
+    #"""
+    
+    ### mark everything below the isosurface level
+    #mask = data < level
+    
+    ### make eight sub-fields 
+    #fields = np.empty((2,2,2), dtype=object)
+    #slices = [slice(0,-1), slice(1,None)]
+    #for i in slices:
+        #for j in slices:
+            #for k in slices:
+                #fields[i,j,k] = mask[i, j, k]
+                
+    #cubeindex = fields[0,0,0]*1 + fields[
