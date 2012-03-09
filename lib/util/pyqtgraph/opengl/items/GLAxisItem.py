@@ -36,14 +36,6 @@ class GLAxisItem(GLGraphicsItem):
         #glDisable( GL_DEPTH_TEST )
         glBegin( GL_LINES )
         
-        glColor4f(1, 1, 1, .3)
-        for x in range(-10, 11):
-            glVertex3f(x, -10, 0)
-            glVertex3f(x,  10, 0)
-        for y in range(-10, 11):
-            glVertex3f(-10, y, 0)
-            glVertex3f( 10, y, 0)
-        
         x,y,z = self.size()
         glColor4f(0, 1, 0, .6)  # z is green
         glVertex3f(0, 0, 0)

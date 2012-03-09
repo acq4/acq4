@@ -41,12 +41,7 @@ class GLViewWidget(QtOpenGL.QGLWidget):
         
     def initializeGL(self):
         glClearColor(0.0, 0.0, 0.0, 0.0)
-        glEnable(GL_DEPTH_TEST)
-
-        glEnable( GL_ALPHA_TEST )
         self.resizeGL(self.width(), self.height())
-        self.generateAxes()
-        #self.generatePoints()
         
     def resizeGL(self, w, h):
         glViewport(0, 0, w, h)
@@ -95,16 +90,16 @@ class GLViewWidget(QtOpenGL.QGLWidget):
             if not i.visible():
                 continue
             if i is item:
+                i.paint()
+            else:
                 glMatrixMode(GL_MODELVIEW)
                 glPushMatrix()
                 tr = i.transform()
                 a = np.array(tr.copyDataTo()).reshape((4,4))
                 glMultMatrixf(a.transpose())
-                i.paint()
+                self.drawItemTree(i)
                 glMatrixMode(GL_MODELVIEW)
                 glPopMatrix()
-            else:
-                self.drawItemTree(i)
             
         
     def cameraPosition(self):

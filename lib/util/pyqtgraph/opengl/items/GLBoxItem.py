@@ -1,6 +1,7 @@
 from OpenGL.GL import *
 from .. GLGraphicsItem import GLGraphicsItem
-from pyqtgraph import QtGui
+from pyqtgraph.Qt import QtGui
+import pyqtgraph as pg
 
 __all__ = ['GLBoxItem']
 

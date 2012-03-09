@@ -742,6 +742,8 @@ def isosurface(data, level):
     
     *data*   3D numpy array of scalar values
     *level*  The level at which to generate an isosurface
+    
+    This function is SLOW; plenty of room for optimization here.
     """
 
     ## map from grid cell index to edge index.
