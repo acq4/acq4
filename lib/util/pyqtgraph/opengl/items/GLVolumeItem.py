@@ -6,8 +6,9 @@ import numpy as np
 __all__ = ['GLVolumeItem']
 
 class GLVolumeItem(GLGraphicsItem):
-    def __init__(self, data, sliceDensity=1):
+    def __init__(self, data, sliceDensity=1, smooth=True):
         self.sliceDensity = sliceDensity
+        self.smooth = smooth
         self.data = data
         GLGraphicsItem.__init__(self)
         
@@ -15,10 +16,12 @@ class GLVolumeItem(GLGraphicsItem):
         glEnable(GL_TEXTURE_3D)
         self.texture = glGenTextures(1)
         glBindTexture(GL_TEXTURE_3D, self.texture)
-        #glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        #glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        if self.smooth:
+            glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+            glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        else:
+            glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+            glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER)
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER)
