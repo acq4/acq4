@@ -53,7 +53,6 @@ for i in np.linspace(data.min(), data.max(), 3)[1:-1]:
 #w.addItem(m)
 #m.setTransform(tr)
 
-
 ## Start Qt event loop unless running in interactive mode.
 if sys.flags.interactive != 1:
     app.exec_()
