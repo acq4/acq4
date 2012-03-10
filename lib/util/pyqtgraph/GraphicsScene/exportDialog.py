@@ -28,9 +28,10 @@ class ExportDialog(QtGui.QWidget):
         
 
     def show(self, item=None):
-        self.updateItemList()
         if item is not None:
-            self.selectItem(item)
+            while not isinstance(item, pg.ViewBox) and not isinstance(item, pg.PlotItem) and item is not None:
+                item = item.parentItem()
+            self.updateItemList(select=item)
         self.setVisible(True)
         self.activateWindow()
         self.raise_()
@@ -41,7 +42,7 @@ class ExportDialog(QtGui.QWidget):
             vcenter = self.scene.getViewWidget().geometry().center()
             self.setGeometry(vcenter.x()-self.width()/2, vcenter.y()-self.height()/2, self.width(), self.height())
         
-    def updateItemList(self):
+    def updateItemList(self, select=None):
         self.ui.itemTree.clear()
         si = QtGui.QTreeWidgetItem(["Entire Scene"])
         si.gitem = self.scene
@@ -50,9 +51,9 @@ class ExportDialog(QtGui.QWidget):
         si.setExpanded(True)
         for child in self.scene.items():
             if child.parentItem() is None:
-                self.updateItemTree(child, si)
+                self.updateItemTree(child, si, select=select)
                 
-    def updateItemTree(self, item, treeItem):
+    def updateItemTree(self, item, treeItem, select=None):
         si = None
         if isinstance(item, pg.ViewBox):
             si = QtGui.QTreeWidgetItem(['ViewBox'])
@@ -63,16 +64,14 @@ class ExportDialog(QtGui.QWidget):
             si.gitem = item
             treeItem.addChild(si)
             treeItem = si
+            print si.gitem, select
+            if si.gitem is select:
+                self.ui.itemTree.setCurrentItem(si)
             
         for ch in item.childItems():
-            self.updateItemTree(ch, treeItem)
+            self.updateItemTree(ch, treeItem, select=select)
         
             
-        
-    def selectItem(self, item):
-        pass
-        
-        
     def exportItemChanged(self, item, prev):
         if item.gitem is self.scene:
             newBounds = self.scene.views()[0].viewRect()

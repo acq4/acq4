@@ -509,12 +509,13 @@ class GraphicsScene(QtGui.QGraphicsScene):
         return menu
 
     def getContextMenus(self, event):
+        self.contextMenuItem = event.acceptedItem
         return self.contextMenu
 
     def showExportDialog(self):
         if self.exportDialog is None:
             self.exportDialog = exportDialog.ExportDialog(self)
-        self.exportDialog.show()
+        self.exportDialog.show(self.contextMenuItem)
 
     @staticmethod
     def translateGraphicsItem(item):
