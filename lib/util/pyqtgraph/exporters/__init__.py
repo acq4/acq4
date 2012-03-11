@@ -1,4 +1,5 @@
-from Exporter import SVGExporter, ImageExporter
+from SVGExporter import *
+from ImageExporter import *
 Exporters = [SVGExporter, ImageExporter]
 
 def listExporters():

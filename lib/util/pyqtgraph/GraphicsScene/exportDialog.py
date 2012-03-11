@@ -64,7 +64,6 @@ class ExportDialog(QtGui.QWidget):
             si.gitem = item
             treeItem.addChild(si)
             treeItem = si
-            print si.gitem, select
             if si.gitem is select:
                 self.ui.itemTree.setCurrentItem(si)
             
