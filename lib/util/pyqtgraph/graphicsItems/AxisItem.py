@@ -380,7 +380,7 @@ class AxisItem(GraphicsWidget):
             ## Number of decimal places to print
             maxVal = max(abs(start), abs(last))
             places = max(0, np.ceil(-np.log10(sp*self.scale)))
-            print i, sp, sp*self.scale, np.log10(sp*self.scale), places
+            #print i, sp, sp*self.scale, np.log10(sp*self.scale), places
         
             ## length of tick
             #h = np.clip((self.tickLength*3 / num) - 1., min(0, self.tickLength), max(0, self.tickLength))
@@ -436,7 +436,7 @@ class AxisItem(GraphicsWidget):
                         vstr = "%g" % (v * self.scale)
                     else:
                         vstr = ("%%0.%df" % places) % (v * self.scale)
-                    print "    ", v*self.scale, places, vstr
+                    #print "    ", v*self.scale, places, vstr
                         
                     textRect = p.boundingRect(QtCore.QRectF(0, 0, 100, 100), QtCore.Qt.AlignCenter, vstr)
                     height = textRect.height()
