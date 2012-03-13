@@ -40,7 +40,7 @@ class LaserDevGui(QtGui.QWidget):
         self.ui.measurementSpin.setOpts(suffix='s', siPrefix=True, bounds=[0.0, 5.0], dec=True, step=1, minStep=0.01)
         self.ui.settlingSpin.setOpts(suffix='s', siPrefix=True, value=0.1, dec=True, step=1, minStep=0.01)
         self.ui.expectedPowerSpin.setOpts(suffix='W', siPrefix=True, bounds=[0.0, None], value=self.dev.getParam('expectedPower'), dec=True, step=0.1, minStep=0.01)
-        self.ui.toleranceSpin.setOpts(step=1, suffix='%', bounds=[0.1, 100.0], value=self.dev.getParam('tolerance'))
+        self.ui.toleranceSpin.setOpts(step=1, suffix='%', bounds=[0.1, None], value=self.dev.getParam('tolerance'))
         
         
         if not self.dev.hasShutter:
