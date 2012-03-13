@@ -745,7 +745,8 @@ class ProtocolRunner(Module):
                 self.lastQtProcessTime = ptime.time()
                 prot = runSequence(lambda p: self.generateProtocol(dh, p, progressDlg), paramInds, paramInds.keys(), linkedParams=linkedParams)
                 #progressDlg.setValue(pLen)
-            dh.flushSignals()  ## do this now rather than later as protocol is running
+            if dh is not None:
+                dh.flushSignals()  ## do this now rather than later as protocol is running
             
             #print "==========Sequence Protocol=============="
             #print prot
