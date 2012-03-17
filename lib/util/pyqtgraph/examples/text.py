@@ -14,7 +14,7 @@ y = np.sin(x) / x
 plot = pg.plot(x, y)
 
 ## Create text object, use HTML tags to specify color (default is black; won't be visible)
-text = pg.TextItem('Peak')
+text = pg.TextItem(html='<div style="text-align: center"><span style="color: #FFF;">This is the</span><br><span style="color: #FF0;">PEAK</span></div>')
 plot.addItem(text)
 text.setPos(0, y.max())
 

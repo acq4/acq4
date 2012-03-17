@@ -1,9 +1,10 @@
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
+from UIGraphicsItem import *
 
-class TextItem(QtGui.QGraphicsTextItem):
+class TextItem(UIGraphicsItem):
     """
-    QGraphicsTextItem displaying unscaled text (the text will always appear normal even inside a scaled ViewBox). 
+    GraphicsItem displaying unscaled text (the text will always appear normal even inside a scaled ViewBox). 
     """
     def __init__(self, text='', color=(200,200,200), html=None, anchor=(0,0)):
         """
@@ -16,39 +17,82 @@ class TextItem(QtGui.QGraphicsTextItem):
                  of the text box to be at the position specified by setPos(), while a value of (1,1)
                  sets the lower-right corner.
         """
-        QtGui.QGraphicsTextItem.__init__(self)
+        UIGraphicsItem.__init__(self)
+        self.textItem = QtGui.QGraphicsTextItem()
+        self._bounds = QtCore.QRectF()
         if html is None:
-            color = pg.colorStr(pg.mkColor(color))[:6]
-            html = '<span style="color: #%s;">%s</span>' % (color, text)
-        self.setHtml(html)
+            self.setText(text, color)
+        else:
+            self.setHtml(html)
         self.anchor = pg.Point(anchor)
-        self.setFlag(self.ItemIgnoresTransformations)  ## This is required to keep the text unscaled inside the viewport
+        #self.setFlag(self.ItemIgnoresTransformations)  ## This is required to keep the text unscaled inside the viewport
 
     def setText(self, text, color=(200,200,200)):
-        color = pg.colorStr(pg.mkColor(color))[:6]
-        html = '<span style="color: #%s;">%s</span>' % (color, text)
-        self.setHtml(html)
+        color = pg.mkColor(color)
+        self.textItem.setDefaultTextColor(color)
+        self.textItem.setPlainText(text)
+        #html = '<span style="color: #%s; text-align: center;">%s</span>' % (color, text)
+        #self.setHtml(html)
         
     def updateAnchor(self):
-        self.resetTransform()
-        self.translate(0, 20)
+        pass
+        #self.resetTransform()
+        #self.translate(0, 20)
         
     def setPlainText(self, *args):
-        QtGui.QGraphicsTextItem.setPlainText(self, *args)
-        self.updateAnchor()
+        self.textItem.setPlainText(*args)
+        self.updateText()
         
     def setHtml(self, *args):
-        QtGui.QGraphicsTextItem.setPlainText(self, *args)
-        self.updateAnchor()
+        self.textItem.setHtml(*args)
+        self.updateText()
         
     def setTextWidth(self, *args):
-        QtGui.QGraphicsTextItem.setTextWidth(self, *args)
-        self.updateAnchor()
+        self.textItem.setTextWidth(*args)
+        self.updateText()
         
     def setFont(self, *args):
-        QtGui.QGraphicsTextItem.setFont(self, *args)
-        self.updateAnchor()
+        self.textItem.setFont(*args)
+        self.updateText()
         
-    
+    def updateText(self):
+        self.img = None
 
+    def getImage(self):
+        if self.img is None:
+            br = self.textItem.boundingRect()
+            img = QtGui.QImage(int(br.width()), int(br.height()), QtGui.QImage.Format_ARGB32)
+            p = QtGui.QPainter(img)
+            self.textItem.paint(p, QtGui.QStyleOptionGraphicsItem(), None)
+            p.end()
+            self.img = img
+        return self.img
+        
+    def sceneTransform(self):
+        pos = self.scenePos()
+        tr = self.transform()
+        tr.translate(pos.x(), pos.y())
+        return tr
+
+    def viewRangeChanged(self):
+        img = self.getImage()
+        pos = self.scenePos()
+        br = QtCore.QRectF(0, 0, img.width(), img.height())
+        self._bounds = self.sceneTransform().mapRect(br)
+
+    def boundingRect(self):
+        return self._bounds
+    
+    def paint(self, p, *args):
+        p.setPen(pg.mkPen('w'))
+        #p.drawRect(self.boundingRect())
+        p.setTransform(self.sceneTransform())
+        img = self.getImage()
+        #pos = self.scenePos()
+        #p.drawRect(pos.x(), pos.y(), 1, 1)
+        br = QtCore.QRectF(0, 0, img.width(), img.height())
+        #p.drawRect(self.boundingRect())
+        #p.setTransform(self.transform())
+        p.drawRect(br)
+        p.drawImage(br, img)
         
