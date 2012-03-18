@@ -128,7 +128,7 @@ class UncagingModule(AnalysisModule):
 
     def quit(self):
         #QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
-        getManager().sigModulesChanged.disconnect(self.fillModuleList)
+        #getManager().sigModulesChanged.disconnect(self.fillModuleList)
         AnalysisModule.quit(self)
         for p in self.prots.values():
             p.close()

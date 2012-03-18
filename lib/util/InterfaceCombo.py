@@ -29,7 +29,8 @@ class InterfaceCombo(QtGui.QComboBox):
         self.interfaceMap = []
         objects = set()
         
-        current = self.preferredValue()
+        preferred = self.preferredValue()
+        current = self.currentText()
         try:
             self.blockSignals(True)
             self.clear()
@@ -42,10 +43,14 @@ class InterfaceCombo(QtGui.QComboBox):
                     objects.add(obj)
                     self.interfaceMap.append((typ, name))
                     self.addItem(name)
-                    if name == current:
+                    if name == preferred:
                         self.setCurrentIndex(self.count()-1)
         finally:
             self.blockSignals(False)
+        
+        if self.currentText() != current:
+            self.currentIndexChanged.emit(self.currentIndex())
+            
             
             
     def preferredValue(self):
@@ -57,8 +62,8 @@ class InterfaceCombo(QtGui.QComboBox):
         
             
     def getSelectedObj(self):
-        if self.currentIndex() == 0:
-            return None
+        #if self.currentIndex() == 0:
+            #return None
         return self.dir.getInterface(*self.interfaceMap[self.currentIndex()])
 
     def currentText(self):

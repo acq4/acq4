@@ -797,10 +797,10 @@ class ScannerProtoGui(ProtocolGui):
             self.testTarget.scene().removeItem(self.testTarget)
             self.spotMarker.scene().removeItem(self.spotMarker)
         #QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
-        try:
-            getManager().sigModulesChanged.disconnect(self.fillModuleList)
-        except TypeError:
-            pass
+        #try:
+            #getManager().sigModulesChanged.disconnect(self.fillModuleList)
+        #except TypeError:
+            #pass
             
         if self.currentCamMod is not None:
             try:
