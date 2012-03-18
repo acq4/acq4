@@ -16,26 +16,25 @@ class UncagingModule(AnalysisModule):
         self.ui.setupUi(self)
         self.postGuiInit()
         self.man = getManager()
-        devs = self.man.listDevices()
-        for d in devs:
-            self.ui.scannerDevCombo.addItem(d)
-            self.ui.clampDevCombo.addItem(d)
+        #devs = self.man.listDevices()
+        #for d in devs:
+            #self.ui.scannerDevCombo.addItem(d)
+            #self.ui.clampDevCombo.addItem(d)
             
-        self.fillModuleList()
+        #self.fillModuleList()
+        self.ui.scannerDevCombo.setTypes('scanner')
+        self.ui.clampDevCombo.setTypes('clamp')
+        self.ui.cameraModCombo.setTypes('cameraModule')
+        
+        
         self.prots = {}
         self.currentProt = None
-        #QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteSelected)
         self.ui.deleteBtn.clicked.connect(self.deleteSelected)
-        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
         self.stateGroup.sigChanged.connect(self.stateChanged)
-        #QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*, QListWidgetItem*)'), self.itemSelected)
         self.ui.protList.currentItemChanged.connect(self.itemSelected)
-        #QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemClicked)
         self.ui.protList.itemClicked.connect(self.itemClicked)
-        #QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.recompute)
         self.ui.recomputeBtn.clicked.connect(self.recompute)
-        #QtCore.QObject.connect(self.man, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
-        self.man.sigModulesChanged.connect(self.fillModuleList)
+        #self.man.sigModulesChanged.connect(self.fillModuleList)
         
     def quit(self):
         AnalysisModule.quit(self)
@@ -45,11 +44,11 @@ class UncagingModule(AnalysisModule):
         self.currentProt = None
         
         
-    def fillModuleList(self):
-        mods = self.man.listModules()
-        self.ui.cameraModCombo.clear()
-        for m in mods:
-            self.ui.cameraModCombo.addItem(m)
+    #def fillModuleList(self):
+        #mods = self.man.listModules()
+        #self.ui.cameraModCombo.clear()
+        #for m in mods:
+            #self.ui.cameraModCombo.addItem(m)
         
     def protocolStarted(self, *args):
         #print "start:",args

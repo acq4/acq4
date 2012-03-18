@@ -129,6 +129,7 @@ class MockClamp(DAQGeneric):
             #stderr=subprocess.PIPE
         #) 
             
+        dm.declareInterface(name, ['clamp'], self)
 
     def createTask(self, cmd):
         return MockClampTask(self, cmd)

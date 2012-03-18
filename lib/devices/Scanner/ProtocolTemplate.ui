@@ -41,7 +41,7 @@
         </widget>
        </item>
        <item>
-        <widget class="QComboBox" name="cameraCombo">
+        <widget class="InterfaceCombo" name="cameraCombo">
          <property name="toolTip">
           <string>Selects the camera module to use with the scanner. This, along with the laser device, determines which calibration files will be used.</string>
          </property>
@@ -59,7 +59,7 @@
         </widget>
        </item>
        <item>
-        <widget class="QComboBox" name="laserCombo">
+        <widget class="InterfaceCombo" name="laserCombo">
          <property name="toolTip">
           <string>Selects the laser to be used.</string>
          </property>
@@ -517,6 +517,11 @@ p, li { white-space: pre-wrap; }
    <extends>QWidget</extends>
    <header>pyqtgraph</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>InterfaceCombo</class>
+   <extends>QComboBox</extends>
+   <header>InterfaceCombo</header>
   </customwidget>
  </customwidgets>
  <resources/>

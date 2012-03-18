@@ -3,19 +3,13 @@ from ProtocolTemplate import Ui_Form
 from lib.devices.Device import ProtocolGui
 from PyQt4 import QtCore, QtGui
 from lib.Manager import getManager, logMsg, logExc
-#from pyqtgraph.WidgetGroup import WidgetGroup
-#import pyqtgraph.graphicsItems as graphicsItems
 import random
 import numpy as np
 from debug import Profiler
 import optimize ## for determining random scan patterns
-import ForkedIterator
+#import ForkedIterator
 import sys
-#from pyqtgraph import SpinBox, Point, mkPen, ProgressDialog
 import pyqtgraph as pg
-#from pyqtgraph.Point import *
-#from pyqtgraph.functions import mkPen
-#import pyqtgraph.ProgressDialog as ProgressDialog
 from HelpfulException import HelpfulException
 
 ### Error IDs:
@@ -45,13 +39,17 @@ class ScannerProtoGui(ProtocolGui):
         if 'defaultLaser' in self.dev.config:
             defLaser = self.dev.config['defaultLaser']
 
-        devs = dm.listDevices()
-        for d in devs:
-            self.ui.laserCombo.addItem(d)
-            if d == defLaser:
-                self.ui.laserCombo.setCurrentIndex(self.ui.laserCombo.count()-1)
+        #devs = dm.listDevices()
+        #for d in devs:
+            #self.ui.laserCombo.addItem(d)
+            #if d == defLaser:
+                #self.ui.laserCombo.setCurrentIndex(self.ui.laserCombo.count()-1)
 
-        self.fillModuleList()
+        #self.fillModuleList()
+        
+        self.ui.cameraCombo.setTypes(['cameraModule'])
+        self.ui.laserCombo.setTypes(['laser'])
+        
         
         ## Set up SpinBoxes
         self.ui.minTimeSpin.setOpts(dec=True, step=1, minStep=1e-3, siPrefix=True, suffix='s', bounds=[0, 50])
@@ -96,7 +94,7 @@ class ScannerProtoGui(ProtocolGui):
         self.ui.minTimeSpin.valueChanged.connect(self.sequenceChanged)
         self.ui.minDistSpin.valueChanged.connect(self.sequenceChanged)
         self.ui.recomputeBtn.clicked.connect(self.recomputeClicked)
-        dm.sigModulesChanged.connect(self.fillModuleList)
+        #dm.sigModulesChanged.connect(self.fillModuleList)
 
         #self.currentTargetMarker = QtGui.QGraphicsEllipseItem(0, 0, 1, 1)
         #pen = QtGui.QPen(QtGui.QBrush(QtGui.QColor(255, 255, 255)), 3.0)
@@ -155,18 +153,18 @@ class ScannerProtoGui(ProtocolGui):
             #self.protDuration = val
         
         
-    def fillModuleList(self):
-        man = getManager()
-        self.ui.cameraCombo.clear()
-        mods = man.listModules()
-        for m in mods:
-            self.ui.cameraCombo.addItem(m)
-            mod = man.getModule(m)
-            try:
-                if 'camDev' in mod.config and mod.config['camDev'] == self.defCam:
-                    self.ui.cameraCombo.setCurrentIndex(self.ui.cameraCombo.count()-1)
-            except (KeyError,AttributeError):
-                continue
+    #def fillModuleList(self):
+        #man = getManager()
+        #self.ui.cameraCombo.clear()
+        #mods = man.listModules()
+        #for m in mods:
+            #self.ui.cameraCombo.addItem(m)
+            #mod = man.getModule(m)
+            #try:
+                #if 'camDev' in mod.config and mod.config['camDev'] == self.defCam:
+                    #self.ui.cameraCombo.setCurrentIndex(self.ui.cameraCombo.count()-1)
+            #except (KeyError,AttributeError):
+                #continue
         
         
     def camModChanged(self):
@@ -280,7 +278,7 @@ class ScannerProtoGui(ProtocolGui):
             if camMod is None:
                 return (1,1)
             cam = camMod.config['camDev']
-            laser = str(self.ui.laserCombo.currentText())
+            laser = self.ui.laserCombo.currentText()
             cal = self.dev.getCalibration(cam, laser)
             ss = cal['spot'][1]
            
@@ -305,11 +303,8 @@ class ScannerProtoGui(ProtocolGui):
         #return (0.0001, packing)
         
     def cameraModule(self):
-        modName = str(self.ui.cameraCombo.currentText())
-        if modName == '':
-            return None
-        mod = getManager().getModule(modName)
-        if not hasattr(mod.ui, 'addItem'): ## silly. should check to see if this is a camera 
+        mod = self.ui.cameraCombo.getSelectedObj()
+        if mod is None:
             return None
         return mod
         

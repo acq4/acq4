@@ -7,43 +7,78 @@ import pyqtgraph.parametertree.parameterTypes as ptypes
 ### TODO: inherit from util/ComboBox instead.
 
 class InterfaceCombo(QtGui.QComboBox):
-    def __init__(self, types=None, parent=None):
+    def __init__(self, parent=None, types=None):
         self.dir = getManager().interfaceDir
+        self.interfaceMap = []
+        self.preferred = None
         QtGui.QComboBox.__init__(self, parent)
         #QtCore.QObject.connect(self.dir, QtCore.SIGNAL('interfaceListChanged'), self.updateList)
         self.dir.sigInterfaceListChanged.connect(self.updateList)
-        if self.count() > 0:
-            self.firstItem = str(self.itemText(0))
-        else:
-            self.firstItem = "Select.."
-            
+        
         if types is not None:
             self.setTypes(types)
         
     def setTypes(self, types):
+        if isinstance(types, basestring):
+            types = [types]
         self.types = types
         self.updateList()
         
     def updateList(self):
         ints = self.dir.listInterfaces(self.types)
-        if self.currentIndex() == 0:
-            current = None
-        else:
-            current = str(self.currentText())
-        self.blockSignals(True)
-        self.clear()
-        self.addItem(self.firstItem)
-        for n in ints:
-            self.addItem(n)
-        self.blockSignals(False)
+        self.interfaceMap = []
+        objects = set()
+        
+        current = self.preferredValue()
+        try:
+            self.blockSignals(True)
+            self.clear()
+            man = getManager()
+            for typ,intList in ints.iteritems():
+                for name in intList:
+                    obj = man.getInterface(typ, name)
+                    if obj in objects:
+                        continue
+                    objects.add(obj)
+                    self.interfaceMap.append((typ, name))
+                    self.addItem(name)
+                    if name == current:
+                        self.setCurrentIndex(self.count()-1)
+        finally:
+            self.blockSignals(False)
             
+            
+    def preferredValue(self):
+        ## return the value we would most like to have selected if available
+        if self.preferred is not None:
+            return self.preferred
+        else:
+            return self.currentText()
+        
             
     def getSelectedObj(self):
         if self.currentIndex() == 0:
             return None
-        return self.dir.getInterface(str(self.currentText()))
+        return self.dir.getInterface(*self.interfaceMap[self.currentIndex()])
 
-
+    def currentText(self):
+        return str(QtGui.QComboBox.currentText(self))
+        
+    def setCurrentText(self, text):
+        """Set the current item by name"""
+        self.preferred = text
+        index = self.findText(text)
+        if index == -1:
+            return
+        self.setCurrentIndex(index)
+        
+    def setCurrentObject(self, obj):
+        pass
+        
+    def widgetGroupInterface(self):
+        return (self.currentIndexChanged, InterfaceCombo.currentText, InterfaceCombo.setCurrentText)
+        
+        
 #class InterfaceParameterItem(ptypes.ListParameterItem):
     #def makeWidget(self):
         #w = InterfaceCombo(types=self.param.opts['interfaceTypes'])
