@@ -639,7 +639,7 @@ class LogWidget(QtGui.QWidget):
         indent = 10
         
         text = self.cleanText(exception['message'])
-        text = text.lstrip('HelpfulException:')
+        text = re.sub(r'^HelpfulException: ', '', text)
         #if exception.has_key('oldExc'):  
             #self.displayText("&nbsp;"*indent + str(count)+'. ' + text, entry, color, clean=False)
         #else:
@@ -850,7 +850,6 @@ class ErrorDialog(QtGui.QDialog):
         
         
     def show(self, entry):
-        
         ## rules are:
         ##   - Try to show friendly error messages
         ##   - If there are any helpfulExceptions, ONLY show those
@@ -859,7 +858,7 @@ class ErrorDialog(QtGui.QDialog):
         
         ## extract list of exceptions
         exceptions = []
-        helpful = []
+        #helpful = []
         key = 'exception'
         exc = entry
         while key in exc:
@@ -867,14 +866,16 @@ class ErrorDialog(QtGui.QDialog):
             if exc is None:
                 break
             key = 'oldExc'
-            exceptions.append(self.cleanText(exc['message']))
             if exc['message'].startswith('HelpfulException'):
-                helpful.append(self.cleanText(exc['message'].lstrip('HelpfulException: ')))
-        
-        if len(helpful) > 0:
-            msg = '<b>' + '<br>'.join(helpful) + '</b>'
-        else:
-            msg = '<b>' + entry['message'] + '</b><br>' + '<br>'.join(exceptions)
+                exceptions.append('<b>' + self.cleanText(re.sub(r'^HelpfulException: ', '', exc['message'])) + '</b>')
+            else:
+                exceptions.append(self.cleanText(exc['message']))
+                
+        msg = "<br>".join(exceptions)
+        #if len(helpful) > 0:
+            #msg = '<b>' + '<br>'.join(helpful) + '</b>'
+        #else:
+            #msg = '<b>' + entry['message'] + '</b><br>' + '<br>'.join(exceptions)
         
         
         if self.disableCheck.isChecked():
@@ -903,8 +904,8 @@ class ErrorDialog(QtGui.QDialog):
         text = re.sub(r'\n', '<br/>\n', text)
         return text
         
-    def closeEvent(self):
-        QtGui.QDialog.closeEvent(self)
+    def closeEvent(self, ev):
+        QtGui.QDialog.closeEvent(self, ev)
         self.messages = []
         
     def okClicked(self):
