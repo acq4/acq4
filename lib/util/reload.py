@@ -30,7 +30,7 @@ def reloadAll(prefix=None, debug=False):
     - Skips reload if the file has not been updated (if .pyc is newer than .py)
     - if prefix is None, checks all loaded modules
     """
-    for modName, mod in sys.modules.iteritems():
+    for modName, mod in sys.modules.items():  ## don't use iteritems; size may change during reload
         if not inspect.ismodule(mod):
             continue
         if modName == '__main__':
