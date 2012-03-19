@@ -5,7 +5,7 @@ from PyQt4 import QtCore, QtGui
 from UncagingTemplate import Ui_Form
 #from pyqtgraph import ImageItem
 from numpy import *
-#from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage.filters import gaussian_filter
 from metaarray import MetaArray
 from debug import *
 
@@ -134,13 +134,14 @@ class UncagingModule(AnalysisModule):
             p.close()
             
     def cameraModule(self):
-        return str(self.ui.cameraModCombo.currentText())
+        return self.ui.cameraModCombo.getSelectedObj()
+        #return str(self.ui.cameraModCombo.currentText())
         
     def cameraDevice(self):
         camMod = self.cameraModule()
-        mod = self.man.getModule(camMod)
-        if 'camDev' in mod.config:
-            return mod.config['camDev']
+        #mod = self.man.getModule(camMod)
+        if 'camDev' in camMod.config:
+            return camMod.config['camDev']
         else:
             return None
 
@@ -233,11 +234,11 @@ class Prot:
         if allFrames:
             ## Clear out old displays
             #self.img = None
-            for (i, p, s) in self.items[1:]:
+            for (i, p, s) in self.items:
                 s = i.scene()
                 if s is not None:
                     s.removeItem(i)
-            self.items = self.items[:1]
+            self.items = []
             
             ## Compute for all frames
             frames = self.frames
@@ -360,7 +361,7 @@ class Prot:
         #if self.state['displayImageCheck']:
             #self.imgItem.show()
         #else:
-        for (i, p, s) in self.items[1:]:
+        for (i, p, s) in self.items:
             i.show()
         
     def hide(self):

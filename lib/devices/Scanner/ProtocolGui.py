@@ -86,6 +86,7 @@ class ScannerProtoGui(ProtocolGui):
         self.ui.hideCheck.toggled.connect(self.showInterface)
         self.ui.hideMarkerBtn.clicked.connect(self.hideSpotMarker)
         self.ui.cameraCombo.currentIndexChanged.connect(self.camModChanged)
+        self.ui.laserCombo.currentIndexChanged.connect(self.laserDevChanged)
         #self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
         self.ui.sizeFromCalibrationRadio.toggled.connect(self.updateSpotSizes)
         self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
@@ -243,6 +244,14 @@ class ScannerProtoGui(ProtocolGui):
         #camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
         #camMod.ui.addItem(self.spotMarker, None, [1,1], 1010)
 
+    def laserDevChanged(self):
+        ## called when laser device combo is changed
+        ## need to update spot size
+        self.updateSpotSizes()
+        self.testTarget.setPointSize()
+        self.spotMarker.setPointSize()
+        #self.testTarget.show()
+
     def sizeSpinChanged(self):
         #print "packingSpinChanged."
         #self.updateSpotSizes()
@@ -264,8 +273,8 @@ class ScannerProtoGui(ProtocolGui):
 
     def showInterface(self, b):
         for k in self.items:
-            if self.listItem(k).checkState(0) == QtCore.Qt.Checked:
-                self.items[k].setVisible(not b)
+            #if self.listItem(k).checkState(0) == QtCore.Qt.Checked:
+            self.items[k].setVisible(not b)
         self.testTarget.setVisible(not b)
 
     def listItem(self, name):
@@ -512,24 +521,31 @@ class ScannerProtoGui(ProtocolGui):
             logMsg("No item is selected, nothing was deleted.", msgType='error')
             return
         parent = item.parent()
+        
+        ## If this item has chilren, they are NOT deleted, but instead propagated to the next parent
         if item.childCount() > 0:
             for i in range(item.childCount()):
+                
+                ## Move item up in the tree
                 child = item.child(i)
                 self.ui.itemTree.prepareMove(child)
                 item.removeChild(child)
-                cgi = child.graphicsItem
-                if cgi.parentItem().parentItem() is not None:
-                    pos = cgi.parentItem().parentItem().mapFromScene(cgi.scenePos())
-                else:
-                    pos = cgi.scenePos()
-                cgi.setParentItem(cgi.parentItem().parentItem())
-                cgi.setPos(pos, update=False)
                 if parent is not None:
                     parent.addChild(child)
-                    self.ui.itemTree.recoverMove(child)
                 else:
                     self.ui.itemTree.addTopLevelItem(child)
-                    self.ui.itemTree.recoverMove(child)
+                self.ui.itemTree.recoverMove(child)
+                
+                ## reparent and reposition the graphics item
+                cgi = child.graphicsItem
+                pgi = cgi.parentItem()
+                pState = pgi.stateCopy()
+                transform = pg.Transform({'pos': pState['pos'], 'angle': pState['angle']})
+                
+                #pos = cgi.parentItem().parentItem().mapFromScene(cgi.scenePos())
+                cgi.setParentItem(cgi.parentItem().parentItem())
+                cgi.applyGlobalTransform(transform)
+                #cgi.setPos(pos, update=False)
                 child.graphicsItem.updateFamily()
                     
         if parent == None:
@@ -562,14 +578,19 @@ class ScannerProtoGui(ProtocolGui):
         self.sequenceChanged()
         
     def treeItemMoved(self, item, parent, index):
+        ## called when items are dragged in the item tree
+        
         g = item.graphicsItem
         if parent is not self.ui.itemTree.invisibleRootItem():
-            newPos = parent.graphicsItem.mapFromScene(g.scenePos())
+            newPos = parent.graphicsItem.mapFromItem(g.parentItem(), g.pos())
             g.setParentItem(parent.graphicsItem)
-            
         else:
-            newPos = g.scenePos()
-            item.graphicsItem.setParentItem(None)
+            newPos = g.viewPos()
+            print g.pos(), g.viewPos()
+            view = g.getViewBox()
+            g.scene().removeItem(g)
+            view.addItem(g)
+            
         g.setPos(newPos)
         item.graphicsItem.updateFamily()
         #print "tree Item Moved"
@@ -578,8 +599,8 @@ class ScannerProtoGui(ProtocolGui):
     def itemToggled(self, item, column=None):
         name = str(item.text(0))
         i = self.items[name]
-        if item.checkState(0) == QtCore.Qt.Checked and not self.ui.hideCheck.isChecked():
-            i.setOpacity(1.0)
+        if item.checkState(0) == QtCore.Qt.Checked:
+            i.setOpacity(1.0)  ## have to hide this way since we still want the children to be visible
             for h in i.handles:
                 h['item'].setOpacity(1.0)
             self.cameraModule().ui.update()
@@ -790,12 +811,11 @@ class ScannerProtoGui(ProtocolGui):
         #self.currentTargetMarker.setRect
     
     def quit(self):
-        #print "scanner dock quit"
         self.deleteAll(clearHistory = False)
         s = self.testTarget.scene()
         if s is not None:
-            self.testTarget.scene().removeItem(self.testTarget)
-            self.spotMarker.scene().removeItem(self.spotMarker)
+            s.removeItem(self.testTarget)
+            s.removeItem(self.spotMarker)
         #QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
         #try:
             #getManager().sigModulesChanged.disconnect(self.fillModuleList)
@@ -804,18 +824,16 @@ class ScannerProtoGui(ProtocolGui):
             
         if self.currentCamMod is not None:
             try:
-                #QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
                 self.currentCamMod.ui.sigCameraScaleChanged.disconnect(self.objectiveChanged)
             except:
                 pass
         if self.currentScope is not None:
             try:
-                #QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
                 self.currentScope.sigObjectiveChanged.disconnect(self.objectiveChanged)
             except:
                 pass
-        #print "  ..done."
-    
+
+
 class TargetPoint(pg.EllipseROI):
     
     sigPointsChanged = QtCore.Signal(object)
@@ -974,6 +992,7 @@ class TargetGrid(pg.ROI):
         #self.updateSnapSize()
         
     def parentValueChanged(self):
+        ## called when any of the parent's grid parameters has changed (spacing, layout)
         if self.treeItem.parent() is not None:
             self.gridSpacingSpin.setValue(self.parentGridSpacingSpin.value())
             self.gridLayoutCombo.setCurrentIndex(self.parentGridLayoutCombo.currentIndex())
@@ -1075,8 +1094,8 @@ class TargetGrid(pg.ROI):
         self.update()
 
     def generateGrid(self, start, sep):
-        nx = 1 + int(((self.state['size'][0] - start[0]) - self.pointSize*0.5) / sep[0])
-        ny = 1 + int(((self.state['size'][1] - start[1]) - self.pointSize*0.5) / sep[1])
+        nx = int((self.state['size'][0] - (start[0] + self.pointSize*0.5) + sep[0]) / sep[0])
+        ny = int((self.state['size'][1] - (start[1] + self.pointSize*0.5) + sep[1]) / sep[1])
         x = start[0]
         for i in range(nx):
             y = start[1]
