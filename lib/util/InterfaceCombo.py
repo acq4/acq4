@@ -64,6 +64,8 @@ class InterfaceCombo(QtGui.QComboBox):
     def getSelectedObj(self):
         #if self.currentIndex() == 0:
             #return None
+        if self.currentIndex() == -1:
+            return None
         return self.dir.getInterface(*self.interfaceMap[self.currentIndex()])
 
     def currentText(self):
@@ -81,7 +83,7 @@ class InterfaceCombo(QtGui.QComboBox):
         pass
         
     def widgetGroupInterface(self):
-        return (self.currentIndexChanged, InterfaceCombo.currentText, InterfaceCombo.setCurrentText)
+        return (self.currentIndexChanged, self.currentText, self.setCurrentText)
         
         
 #class InterfaceParameterItem(ptypes.ListParameterItem):
