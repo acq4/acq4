@@ -397,12 +397,12 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
 
 
 
-def makeARGB(data, lut=None, levels=None):
+def makeARGB(data, lut=None, levels=None, useRGBA=False): 
     """
     Convert a 2D or 3D array into an ARGB array suitable for building QImages
     Will optionally do scaling and/or table lookups to determine final colors.
     
-    Returns the ARGB array and a boolean indicating whether there is alpha channel data.
+    Returns the ARGB array (values 0-255) and a boolean indicating whether there is alpha channel data.
     
     Arguments:
         data  - 2D or 3D numpy array of int/float types
@@ -568,8 +568,11 @@ def makeARGB(data, lut=None, levels=None):
 
     prof.mark('4')
 
-
-    order = [2,1,0,3] ## for some reason, the colors line up as BGR in the final image.
+    if useRGBA:
+        order = [0,1,2,3] ## array comes out RGBA
+    else:
+        order = [2,1,0,3] ## for some reason, the colors line up as BGR in the final image.
+        
     if data.shape[2] == 1:
         for i in xrange(3):
             imgData[..., order[i]] = data[..., 0]    
