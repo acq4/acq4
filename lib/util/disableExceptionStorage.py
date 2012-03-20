@@ -24,7 +24,7 @@ def excepthook(*args):
     if not logging:
         try:
             logging = True
-            logMsg("Unhandled exception: ", exception=args, msgType='error')
+            logMsg("Unexpected error: ", exception=args, msgType='error')
         except:
             print "Error: Exception could no be logged."
             original_excepthook(*sys.exc_info())

@@ -272,9 +272,6 @@ class Camera(DAQGeneric):
             return self.camConfig['triggerOutChannel']['channel']
         
 
-    def isRunning(self):
-        with MutexLocker(self.lock):
-            return self.acqThread.isRunning()
 
     def protocolInterface(self, prot):
         return CameraProtoGui(self, prot)
@@ -407,6 +404,10 @@ class Camera(DAQGeneric):
         
     def isRunning(self):
         return self.acqThread.isRunning()
+
+    #def isRunning(self):
+        #with MutexLocker(self.lock):
+            #return self.acqThread.isRunning()
     
     def wait(self, *args, **kargs):
         return self.acqThread.wait(*args, **kargs)

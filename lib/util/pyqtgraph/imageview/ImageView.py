@@ -23,9 +23,9 @@ from pyqtgraph.graphicsItems.ViewBox import *
 from pyqtgraph.Qt import QtCore, QtGui
 import sys
 #from numpy import ndarray
-import ptime
+import pyqtgraph.ptime as ptime
 import numpy as np
-import debug
+import pyqtgraph.debug as debug
 
 from pyqtgraph.SignalProxy import SignalProxy
 
@@ -465,19 +465,17 @@ class ImageView(QtGui.QWidget):
         self.roiClicked()
         prof.mark('7')
         prof.finish()
-            
+
+
     def autoLevels(self):
-        image = self.getProcessedImage()
+        #image = self.getProcessedImage()
+        self.setLevels(self.levelMin, self.levelMax)
         
-        #self.ui.whiteSlider.setValue(self.ui.whiteSlider.maximum())
-        #self.ui.blackSlider.setValue(0)
-        
-        #self.ui.gradientWidget.setTickValue(self.ticks[0], 0.0)
-        #self.ui.gradientWidget.setTickValue(self.ticks[1], 1.0)
-        #self.imageItem.setLevels([self.blackLevel(), self.whiteLevel()])
-        
-        self.ui.histogram.imageChanged(autoLevel=True)
+        #self.ui.histogram.imageChanged(autoLevel=True)
             
+
+    def setLevels(self, min, max):
+        self.ui.histogram.setLevels(min, max)
 
     def autoRange(self):
         image = self.getProcessedImage()
@@ -490,6 +488,8 @@ class ImageView(QtGui.QWidget):
             image = self.normalize(self.image)
             self.imageDisp = image
             self.levelMin, self.levelMax = map(float, ImageView.quickMinMax(self.imageDisp))
+            self.ui.histogram.setHistogramRange(self.levelMin, self.levelMax)
+            
         return self.imageDisp
 
     @staticmethod

@@ -23,8 +23,6 @@ class FileAnalysisView(QtGui.QWidget):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.man = lib.Manager.getManager()
-        #print self.window().objectName()
-        #self.dm = self.window().dm  ## get module from window
         self.mod = mod
         self.dbFile = None
         self.db = None
@@ -34,15 +32,13 @@ class FileAnalysisView(QtGui.QWidget):
         self.populateModuleList()
         self.populateModelList()
         
-        #self.connect(self.ui.openDbBtn, QtCore.SIGNAL('clicked()'), self.openDbClicked)
         self.ui.openDbBtn.clicked.connect(self.openDbClicked)
-        #self.connect(self.ui.createDbBtn, QtCore.SIGNAL('clicked()'), self.createDbClicked)
         self.ui.createDbBtn.clicked.connect(self.createDbClicked)
-        #self.connect(self.ui.addFileBtn, QtCore.SIGNAL('clicked()'), self.addFileClicked)
-        #self.connect(self.ui.analysisCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.loadModule)
-        self.ui.analysisCombo.currentIndexChanged.connect(self.loadModule)
+        self.ui.loadModuleBtn.clicked.connect(self.loadModule)
         self.ui.refreshDbBtn.clicked.connect(self.refreshDb)
         self.ui.dataModelCombo.currentIndexChanged.connect(self.loadModel)
+        self.ui.analysisModuleList.currentItemChanged.connect(self.showModuleDescription)
+        self.ui.analysisModuleList.itemDoubleClicked.connect(self.loadModule)
         
 
     def openDbClicked(self):
@@ -98,13 +94,17 @@ class FileAnalysisView(QtGui.QWidget):
         
     def populateModuleList(self):
         for m in analysis.listModules():
-            self.ui.analysisCombo.addItem(m)
+            self.ui.analysisModuleList.addItem(m)
     
     def loadModule(self):
-        if self.ui.analysisCombo.currentIndex() == 0:
+        mod = self.ui.analysisModuleList.currentItem()
+        if mod is None:
             return
-        modName = str(self.ui.analysisCombo.currentText())
-        self.ui.analysisCombo.setCurrentIndex(0)
+        modName = str(mod.text())
+        #if self.ui.analysisCombo.currentIndex() == 0:
+            #return
+        #modName = str(self.ui.analysisCombo.currentText())
+        #self.ui.analysisCombo.setCurrentIndex(0)
         mod = AnalysisHost.AnalysisHost(dataManager=self.mod, dataModel=self.currentModel, module=modName)
         self.mods.append(mod)
         self.man.modules[modName] = mod
@@ -131,5 +131,15 @@ class FileAnalysisView(QtGui.QWidget):
     
     def currentDatabase(self):
         return self.db
+        
+    def currentDataModel(self):
+        return self.currentModel
 
-
+    def showModuleDescription(self):
+        mod = self.ui.analysisModuleList.currentItem()
+        if mod is None:
+            return
+        modName = str(mod.text())
+        cls = analysis.getModuleClass(modName)
+        doc = cls.__doc__
+        self.ui.modDescriptionText.setPlainText(doc)

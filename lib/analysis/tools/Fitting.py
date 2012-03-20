@@ -441,10 +441,10 @@ class Fitting():
         fac = 2.0/n
         c=numpy.zeros(n)
         for j in range(0, n):
-           sum=0.0
-           for k in range(0, n):
-              sum = sum + f[k]*numpy.cos(numpy.pi*j*(k+0.5)/n)
-           c[j]=fac*sum
+            sum=0.0
+            for k in range(0, n):
+                sum = sum + f[k]*numpy.cos(numpy.pi*j*(k+0.5)/n)
+            c[j]=fac*sum
         return(c)
 
     def chebint(self, a, b, c, n):

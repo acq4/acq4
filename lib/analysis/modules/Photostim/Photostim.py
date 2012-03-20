@@ -17,6 +17,13 @@ from Canvas import items
 import Canvas
 
 class Photostim(AnalysisModule):
+    """
+    This module analyzes raw data from photostimulation scanning protocols to produce colored maps of features detected in the data. This analysis consists of multiple components:
+      1) Data is (optionally) processed through an event detector to determine the time, amplitude, and other characteristics of the recroded events. The exact analysis in this stage is fully customizable by a flowchart. Results of this analysis are stored to a DB table (named 'photostim_events' by default) for use in further analysis.
+      2) Each photostimulation is analyzed to determine the strength of evoked events, probability of presynaptic connection, probability of direct stimulation, etc. The exact analysis in this stage is fully customizable by a flowchart and results are stored to a DB table (named 'photostim_sites' by default) for use in further analysis.
+      3) Multiple scans may (optionally) be combined to produce a single map with repeated measures and/or extended area.
+      4) The values generated in steps 2 and 3 are mapped to colors which are displayed in a canvas.
+    """
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         if self.dataModel is None:
@@ -256,9 +263,6 @@ class Photostim(AnalysisModule):
         except TypeError:
             pass
     
-
-    def storeToDB(self):
-        pass
 
     def scanPointClicked(self, plotItem, points):
         try:

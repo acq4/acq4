@@ -46,9 +46,10 @@ class ViewBoxMenu(QtGui.QMenu):
             for sig, fn in connects:
                 sig.connect(getattr(self, axis.lower()+fn))
             
-        self.export = QtGui.QMenu("Export")
-        self.setExportMethods(view.exportMethods)
-        self.addMenu(self.export)
+        ## exporting is handled by GraphicsScene now
+        #self.export = QtGui.QMenu("Export")
+        #self.setExportMethods(view.exportMethods)
+        #self.addMenu(self.export)
         
         self.leftMenu = QtGui.QMenu("Mouse Mode")
         group = QtGui.QActionGroup(self)
@@ -78,7 +79,7 @@ class ViewBoxMenu(QtGui.QMenu):
     def subMenus(self):
         if not self.valid:
             self.updateState()
-        return [self.viewAll] + self.axes + [self.export, self.leftMenu]
+        return [self.viewAll] + self.axes + [self.leftMenu]
 
 
     def setExportMethods(self, methods):
@@ -148,7 +149,7 @@ class ViewBoxMenu(QtGui.QMenu):
         self.view.setXRange(float(self.ctrl[0].minText.text()), float(self.ctrl[0].maxText.text()), padding=0)
         
     def xAutoClicked(self):
-        val = self.ctrl[0].autoSpin.value() * 0.01
+        val = self.ctrl[0].autoPercentSpin.value() * 0.01
         self.view.enableAutoRange(ViewBox.XAxis, val)
         
     def xAutoSpinChanged(self, val):
@@ -175,7 +176,7 @@ class ViewBoxMenu(QtGui.QMenu):
         self.view.setYRange(float(self.ctrl[1].minText.text()), float(self.ctrl[1].maxText.text()), padding=0)
         
     def yAutoClicked(self):
-        val = self.ctrl[1].autoSpin.value() * 0.01
+        val = self.ctrl[1].autoPercentSpin.value() * 0.01
         self.view.enableAutoRange(ViewBox.YAxis, val)
         
     def yAutoSpinChanged(self, val):

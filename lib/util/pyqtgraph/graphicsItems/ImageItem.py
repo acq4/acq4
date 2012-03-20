@@ -125,6 +125,12 @@ class ImageItem(GraphicsObject):
         if 'border' in kargs:
             self.setBorder(kargs['border'])
 
+    def setRect(self, rect):
+        """Scale and translate the image to fit within rect."""
+        self.resetTransform()
+        self.translate(rect.left(), rect.top())
+        self.scale(rect.width() / self.width(), rect.height() / self.height())
+
     def setImage(self, image=None, autoLevels=None, **kargs):
         """
         Update the image displayed by this item.

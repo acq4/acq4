@@ -1,11 +1,14 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
-## Add path to library (just for examples; you do not need this)
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+
+## This example demonstrates many of the 2D plotting capabilities
+## in pyqtgraph. All of the plots may be panned/scaled by dragging with 
+## the left/right mouse buttons. Right click on any plot to show a context menu.
 
 
-from PyQt4 import QtGui, QtCore
+import initExample ## Add path to library (just for examples; you do not need this)
+
+
+from pyqtgraph.Qt import QtGui, QtCore
 import numpy as np
 import pyqtgraph as pg
 
@@ -53,7 +56,7 @@ def update():
     global curve, data, ptr, p6
     curve.setData(data[ptr%10])
     if ptr == 0:
-        p6.enableManualScale()
+        p6.enableAutoRange('xy', False)  ## stop auto-scaling after the first data set is plotted
     ptr += 1
 timer = QtCore.QTimer()
 timer.timeout.connect(update)
@@ -67,6 +70,23 @@ y = np.sin(np.linspace(0, 10, 1000)) + np.random.normal(size=1000, scale=0.1)
 p7.plot(y, fillLevel=-0.3, brush=(50,50,200,100))
 
 
-## Start Qt event loop unless running in interactive mode.
-if sys.flags.interactive != 1:
+x2 = np.linspace(-100, 100, 1000)
+data2 = np.sin(x2) / x2
+p8 = win.addPlot(title="Region Selection")
+p8.plot(data2, pen=(255,255,255,200))
+lr = pg.LinearRegionItem([400,700])
+lr.setZValue(-10)
+p8.addItem(lr)
+
+p9 = win.addPlot(title="Zoom on selected region")
+p9.plot(data2)
+def update():
+    p9.setXRange(*lr.getRegion())
+lr.sigRegionChanged.connect(update)
+update()
+
+## Start Qt event loop unless running in interactive mode or using pyside.
+import sys
+if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
     app.exec_()
+

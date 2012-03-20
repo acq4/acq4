@@ -56,6 +56,7 @@ class ViewBox(GraphicsWidget):
         GraphicsWidget.__init__(self, parent)
         self.name = None
         self.linksBlocked = False
+        self.addedItems = []
         #self.gView = view
         #self.showGrid = showGrid
         
@@ -68,12 +69,12 @@ class ViewBox(GraphicsWidget):
         
             'yInverted': invertY,
             'aspectLocked': False,    ## False if aspect is unlocked, otherwise float specifies the locked ratio.
-            'autoRange': [False, False],  ## False if auto range is disabled, 
+            'autoRange': [True, True],  ## False if auto range is disabled, 
                                           ## otherwise float gives the fraction of data that is visible
             'linkedViews': [None, None],
             
             'mouseEnabled': [enableMouse, enableMouse],
-            'mouseMode': ViewBox.PanMode,  
+            'mouseMode': ViewBox.PanMode if pyqtgraph.getConfigOption('leftButtonPan') else ViewBox.RectMode,  
             'wheelScaleFactor': -1.0 / 8.0,
         }
         
@@ -200,13 +201,21 @@ class ViewBox(GraphicsWidget):
         if item.zValue() < self.zValue():
             item.setZValue(self.zValue()+1)
         item.setParentItem(self.childGroup)
+        self.addedItems.append(item)
+        self.updateAutoRange()
         #print "addItem:", item, item.boundingRect()
         
     def removeItem(self, item):
+        try:
+            self.addedItems.remove(item)
+        except:
+            pass
         self.scene().removeItem(item)
+        self.updateAutoRange()
 
     def resizeEvent(self, ev):
         #self.setRange(self.range, padding=0)
+        self.updateAutoRange()
         self.updateMatrix()
         self.sigStateChanged.emit(self)
         
@@ -367,16 +376,22 @@ class ViewBox(GraphicsWidget):
         The argument *enable* may optionally be a float (0.0-1.0) which indicates the fraction of the data that should
         be visible (this only works with items implementing a dataRange method, such as PlotDataItem).
         """
-        
+        #print "autorange:", axis, enable
+        #if not enable:
+            #import traceback
+            #traceback.print_stack()
         if enable is True:
             enable = 1.0
         
-        if axis == ViewBox.XYAxes:
+        if axis is None:
+            axis = ViewBox.XYAxes
+        
+        if axis == ViewBox.XYAxes or axis == 'xy':
             self.state['autoRange'][0] = enable
             self.state['autoRange'][1] = enable
-        elif axis == ViewBox.XAxis:
+        elif axis == ViewBox.XAxis or axis == 'x':
             self.state['autoRange'][0] = enable
-        elif axis == ViewBox.YAxis:
+        elif axis == ViewBox.YAxis or axis == 'y':
             self.state['autoRange'][1] = enable
         else:
             raise Exception('axis argument must be ViewBox.XAxis, ViewBox.YAxis, or ViewBox.XYAxes.')
@@ -384,6 +399,9 @@ class ViewBox(GraphicsWidget):
         if enable:
             self.updateAutoRange()
         self.sigStateChanged.emit(self)
+
+    def disableAutoRange(self, axis=None):
+        self.enableAutoRange(axis, enable=False)
 
     def autoRangeEnabled(self):
         return self.state['autoRange'][:]
@@ -644,7 +662,8 @@ class ViewBox(GraphicsWidget):
         #return [self.getMenu(event)]
         
 
-    def mouseDragEvent(self, ev):
+    def mouseDragEvent(self, ev, axis=None):
+        ## if axis is specified, event will only affect that axis.
         ev.accept()  ## we accept all buttons
         
         pos = ev.pos()
@@ -654,6 +673,8 @@ class ViewBox(GraphicsWidget):
 
         ## Ignore axes if mouse is disabled
         mask = np.array(self.state['mouseEnabled'], dtype=np.float)
+        if axis is not None:
+            mask[1-axis] = 0.0
 
         ## Scale or translate based on mouse button
         if ev.button() & (QtCore.Qt.LeftButton | QtCore.Qt.MidButton):
@@ -760,7 +781,8 @@ class ViewBox(GraphicsWidget):
         Values may be None if there are no specific bounds for an axis.
         """
         
-        items = self.allChildren()
+        #items = self.allChildren()
+        items = self.addedItems
         
         #if item is None:
             ##print "children bounding rect:"
@@ -806,7 +828,15 @@ class ViewBox(GraphicsWidget):
                 continue
             
             if useX != useY:  ##   !=  means  xor
-                continue  ## need to check for item rotations and decide how best to apply this boundary. 
+                ang = item.transformAngle()
+                if ang == 0 or ang == 180:
+                    pass
+                elif ang == 90 or ang == 270:
+                    tmp = useX
+                    useY = useX
+                    useX = tmp
+                else:
+                    continue  ## need to check for item rotations and decide how best to apply this boundary. 
             
             
             if useY:

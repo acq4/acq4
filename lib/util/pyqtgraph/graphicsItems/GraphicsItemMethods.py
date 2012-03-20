@@ -3,7 +3,7 @@ from pyqtgraph.GraphicsScene import GraphicsScene
 from pyqtgraph.Point import Point
 import weakref
 
-class GraphicsItemMethods:
+class GraphicsItemMethods(object):
     """
     Class providing useful methods to GraphicsObject and GraphicsWidget.
     """
@@ -51,7 +51,6 @@ class GraphicsItemMethods:
                 if hasattr(p, 'implements') and p.implements('ViewBox'):
                     self._viewBox = weakref.ref(p)
                     break
-                    
         return self._viewBox()  ## If we made it this far, _viewBox is definitely not None
 
     def forgetViewBox(self):
@@ -78,7 +77,10 @@ class GraphicsItemMethods:
         if view is None:
             return None
         if hasattr(view, 'implements') and view.implements('ViewBox'):
-            return self.itemTransform(view.innerSceneItem())[0]
+            tr = self.itemTransform(view.innerSceneItem())
+            if isinstance(tr, tuple):
+                tr = tr[0]   ## difference between pyside and pyqt
+            return tr
         else:
             return self.sceneTransform()
             #return self.deviceTransform(view.viewportTransform())
@@ -102,7 +104,11 @@ class GraphicsItemMethods:
         view = self.getViewBox()
         if view is None:
             return None
-        bounds = self.mapRectFromView(view.viewRect()).normalized()
+        bounds = self.mapRectFromView(view.viewRect())
+        if bounds is None:
+            return None
+
+        bounds = bounds.normalized()
         
         ## nah.
         #for p in self.getBoundingParents():
@@ -154,6 +160,7 @@ class GraphicsItemMethods:
     def mapToDevice(self, obj):
         """
         Return *obj* mapped from local coordinates to device coordinates (pixels).
+        If there is no device mapping available, return None.
         """
         vt = self.deviceTransform()
         if vt is None:
@@ -163,6 +170,7 @@ class GraphicsItemMethods:
     def mapFromDevice(self, obj):
         """
         Return *obj* mapped from device coordinates (pixels) to local coordinates.
+        If there is no device mapping available, return None.
         """
         vt = self.deviceTransform()
         if vt is None:
@@ -170,6 +178,27 @@ class GraphicsItemMethods:
         vt = vt.inverted()[0]
         return vt.map(obj)
 
+    def mapRectToDevice(self, rect):
+        """
+        Return *rect* mapped from local coordinates to device coordinates (pixels).
+        If there is no device mapping available, return None.
+        """
+        vt = self.deviceTransform()
+        if vt is None:
+            return None
+        return vt.mapRect(rect)
+
+    def mapRectFromDevice(self, rect):
+        """
+        Return *rect* mapped from device coordinates (pixels) to local coordinates.
+        If there is no device mapping available, return None.
+        """
+        vt = self.deviceTransform()
+        if vt is None:
+            return None
+        vt = vt.inverted()[0]
+        return vt.mapRect(rect)
+    
     def mapToView(self, obj):
         vt = self.viewTransform()
         if vt is None:
@@ -200,7 +229,7 @@ class GraphicsItemMethods:
         return Point(QtGui.QGraphicsObject.pos(self))
     
     def viewPos(self):
-        return self.mapToView(self.pos())
+        return self.mapToView(self.mapFromParent(self.pos()))
     
     #def itemChange(self, change, value):
         #ret = QtGui.QGraphicsObject.itemChange(self, change, value)
@@ -237,3 +266,23 @@ class GraphicsItemMethods:
             return self.transform()
         else:
             return QtGui.QGraphicsObject.sceneTransform(self)
+
+
+    def transformAngle(self, relativeItem=None):
+        """Return the rotation produced by this item's transform (this assumes there is no shear in the transform)
+        If relativeItem is given, then the angle is determined relative to that item.
+        """
+        if relativeItem is None:
+            relativeItem = self.parentItem()
+            
+
+        tr = self.itemTransform(relativeItem)
+        if isinstance(tr, tuple):  ## difference between pyside and pyqt
+            tr = tr[0]  
+        vec = tr.map(Point(1,0)) - tr.map(Point(0,0))
+        return Point(vec).angle(Point(1,0))
+        
+        
+        
+        
+        

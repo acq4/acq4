@@ -31,6 +31,9 @@ class EventFilter(CtrlNode):
         ('fitFractionalError', 'check', {'value': False}),        
         ('minFitFractionalError', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'range': [None,None], 'siPrefix': True, 'hidden': True}),
         ('maxFitFractionalError', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'range': [None,None], 'siPrefix': True, 'hidden': True}),
+        ('fitLengthOverDecay', 'check', {'value': False}),
+        ('minFitLengthOverDecay', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'range': [None,None], 'siPrefix': True, 'hidden': True}),
+        ('maxFitLengthOverDecay', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'range': [None,None], 'siPrefix': True, 'hidden': True}),
         ('fitTime', 'check', {'value': False}),
         ('minFitTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
         ('maxFitTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
@@ -44,6 +47,7 @@ class EventFilter(CtrlNode):
         ('fitRiseTime', 'minFitRiseTime', 'maxFitRiseTime'),
         ('fitMaxRiseSlope', 'minFitMaxRiseSlope', 'maxFitMaxRiseSlope'),
         ('fitFractionalError', 'minFitFractionalError', 'maxFitFractionalError'),
+        ('fitLengthOverDecay', 'minFitLengthOverDecay', 'maxFitLengthOverDecay'),
         ('fitTime', 'minFitTime', 'maxFitTime'),
     ]
 

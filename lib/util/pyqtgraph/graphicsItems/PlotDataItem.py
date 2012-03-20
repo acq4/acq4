@@ -41,8 +41,7 @@ class PlotDataItem(GraphicsObject):
                                           OR 2D array with a column 'y' and extra columns as needed.
             ===========================   =========================================
         
-        Line style keyword arguments:
-        
+        Line style keyword         
             ==========   ================================================
             pen          pen to use for drawing line between points. Default is solid grey, 1px width. Use None to disable line drawing.
             shadowPen    pen for secondary line to draw behind the primary line. disabled by default.
@@ -79,9 +78,16 @@ class PlotDataItem(GraphicsObject):
         self.setFlag(self.ItemHasNoContents)
         self.xData = None
         self.yData = None
-        self.curves = []
-        self.scatters = []
-        self.clear()
+        self.xDisp = None
+        self.yDisp = None
+        #self.curves = []
+        #self.scatters = []
+        self.curve = PlotCurveItem()
+        self.scatter = ScatterPlotItem()
+        self.curve.setParentItem(self)
+        self.scatter.setParentItem(self)
+        
+        #self.clear()
         self.opts = {
             'fftMode': False,
             'logMode': [False, False],
@@ -131,17 +137,20 @@ class PlotDataItem(GraphicsObject):
         self.opts['pointMode'] = mode
         self.update()
         
-    def setPen(self, pen):
+    def setPen(self, *args, **kargs):
         """
         | Sets the pen used to draw lines between points.
         | *pen* can be a QPen or any argument accepted by :func:`pyqtgraph.mkPen() <pyqtgraph.mkPen>`
         """
-        self.opts['pen'] = fn.mkPen(pen)
-        for c in self.curves:
-            c.setPen(pen)
-        self.update()
+        pen = fn.mkPen(*args, **kargs)
+        self.opts['pen'] = pen
+        #self.curve.setPen(pen)
+        #for c in self.curves:
+            #c.setPen(pen)
+        #self.update()
+        self.updateItems()
         
-    def setShadowPen(self, pen):
+    def setShadowPen(self, *args, **kargs):
         """
         | Sets the shadow pen used to draw lines between points (this is for enhancing contrast or 
           emphacizing data). 
@@ -149,10 +158,46 @@ class PlotDataItem(GraphicsObject):
           and should generally be assigned greater width than the primary pen.
         | *pen* can be a QPen or any argument accepted by :func:`pyqtgraph.mkPen() <pyqtgraph.mkPen>`
         """
+        pen = fn.mkPen(*args, **kargs)
         self.opts['shadowPen'] = pen
-        for c in self.curves:
-            c.setPen(pen)
-        self.update()
+        #for c in self.curves:
+            #c.setPen(pen)
+        #self.update()
+        self.updateItems()
+        
+    def setBrush(self, *args, **kargs):
+        brush = fn.mkBrush(*args, **kargs)
+        self.opts['brush'] = brush
+        self.updateItems()
+    
+    def setFillLevel(self, level):
+        self.opts['fillLevel'] = level
+        self.updateItems()
+
+    def setSymbol(self, symbol):
+        self.opts['symbol'] = symbol
+        #self.scatter.setSymbol(symbol)
+        self.updateItems()
+        
+    def setSymbolPen(self, *args, **kargs):
+        pen = fn.mkPen(*args, **kargs)
+        self.opts['symbolPen'] = pen
+        #self.scatter.setSymbolPen(pen)
+        self.updateItems()
+        
+    
+    
+    def setSymbolBrush(self, *args, **kargs):
+        brush = fn.mkBrush(*args, **kargs)
+        self.opts['symbolBrush'] = brush
+        #self.scatter.setSymbolBrush(brush)
+        self.updateItems()
+    
+    
+    def setSymbolSize(self, size):
+        self.opts['symbolSize'] = size
+        #self.scatter.setSymbolSize(symbolSize)
+        self.updateItems()
 
     def setDownsampling(self, ds):
         if self.opts['downsample'] != ds:
@@ -166,7 +211,7 @@ class PlotDataItem(GraphicsObject):
         See :func:`__init__() <pyqtgraph.PlotDataItem.__init__>` for details; it accepts the same arguments.
         """
         
-        self.clear()
+        #self.clear()
         
         y = None
         x = None
@@ -220,7 +265,7 @@ class PlotDataItem(GraphicsObject):
         
 
         ## if symbol pen/brush are given with no symbol, then assume symbol is 'o'
-        if 'symbol' not in kargs and ('symbolPen' in kargs or 'symbolBrush' in kargs):
+        if 'symbol' not in kargs and ('symbolPen' in kargs or 'symbolBrush' in kargs or 'symbolSize' in kargs):
             kargs['symbol'] = 'o'
             
         for k in self.opts.keys():
@@ -252,6 +297,8 @@ class PlotDataItem(GraphicsObject):
         
         self.xData = x.view(np.ndarray)  ## one last check to make sure there are no MetaArrays getting by
         self.yData = y.view(np.ndarray)
+        self.xDisp = None
+        self.yDisp = None
         
         self.updateItems()
         view = self.getViewBox()
@@ -261,29 +308,37 @@ class PlotDataItem(GraphicsObject):
 
 
     def updateItems(self):
-        for c in self.curves+self.scatters:
-            if c.scene() is not None:
-                c.scene().removeItem(c)
+        #for c in self.curves+self.scatters:
+            #if c.scene() is not None:
+                #c.scene().removeItem(c)
             
         curveArgs = {}
         for k in ['pen', 'shadowPen', 'fillLevel', 'brush']:
             curveArgs[k] = self.opts[k]
         
         scatterArgs = {}
-        for k,v in [('symbolPen','pen'), ('symbolBrush','brush'), ('symbol','symbol')]:
+        for k,v in [('symbolPen','pen'), ('symbolBrush','brush'), ('symbol','symbol'), ('symbolSize', 'size')]:
             scatterArgs[v] = self.opts[k]
         
         x,y = self.getData()
         
-        if curveArgs['pen'] is not None or curveArgs['brush'] is not None:
-            curve = PlotCurveItem(x=x, y=y, **curveArgs)
-            curve.setParentItem(self)
-            self.curves.append(curve)
+        if curveArgs['pen'] is not None or (curveArgs['brush'] is not None and curveArgs['fillLevel'] is not None):
+            self.curve.setData(x=x, y=y, **curveArgs)
+            self.curve.show()
+        else:
+            self.curve.hide()
+            #curve = PlotCurveItem(x=x, y=y, **curveArgs)
+            #curve.setParentItem(self)
+            #self.curves.append(curve)
         
         if scatterArgs['symbol'] is not None:
-            sp = ScatterPlotItem(x=x, y=y, **scatterArgs)
-            sp.setParentItem(self)
-            self.scatters.append(sp)
+            self.scatter.setData(x=x, y=y, **scatterArgs)
+            self.scatter.show()
+        else:
+            self.scatter.hide()
+            #sp = ScatterPlotItem(x=x, y=y, **scatterArgs)
+            #sp.setParentItem(self)
+            #self.scatters.append(sp)
 
 
     def getData(self):
@@ -336,15 +391,17 @@ class PlotDataItem(GraphicsObject):
 
 
     def clear(self):
-        for i in self.curves+self.scatters:
-            if i.scene() is not None:
-                i.scene().removeItem(i)
-        self.curves = []
-        self.scatters = []
+        #for i in self.curves+self.scatters:
+            #if i.scene() is not None:
+                #i.scene().removeItem(i)
+        #self.curves = []
+        #self.scatters = []
         self.xData = None
         self.yData = None
         self.xDisp = None
         self.yDisp = None
+        self.curve.setData([])
+        self.scatter.setData([])
             
     def appendData(self, *args, **kargs):
         pass
@@ -380,156 +437,156 @@ def isSequence(obj):
     
             
             
-class TableData:
-    """
-    Class for presenting multiple forms of tabular data through a consistent interface.
-    May contain:
-        - numpy record array
-        - list-of-dicts (all dicts are _not_ required to have the same keys)
-        - dict-of-lists
-        - dict (single record)
-               Note: if all the values in this record are lists, it will be interpreted as multiple records
+#class TableData:
+    #"""
+    #Class for presenting multiple forms of tabular data through a consistent interface.
+    #May contain:
+        #- numpy record array
+        #- list-of-dicts (all dicts are _not_ required to have the same keys)
+        #- dict-of-lists
+        #- dict (single record)
+               #Note: if all the values in this record are lists, it will be interpreted as multiple records
         
-    Data can be accessed and modified by column, by row, or by value
-        data[columnName]
-        data[rowId]
-        data[columnName, rowId] = value
-        data[columnName] = [value, value, ...]
-        data[rowId] = {columnName: value, ...}
-    """
+    #Data can be accessed and modified by column, by row, or by value
+        #data[columnName]
+        #data[rowId]
+        #data[columnName, rowId] = value
+        #data[columnName] = [value, value, ...]
+        #data[rowId] = {columnName: value, ...}
+    #"""
     
-    def __init__(self, data):
-        self.data = data
-        if isinstance(data, np.ndarray):
-            self.mode = 'array'
-        elif isinstance(data, list):
-            self.mode = 'list'
-        elif isinstance(data, dict):
-            types = set(map(type, data.values()))
-            ## dict may be a dict-of-lists or a single record
-            types -= set([list, np.ndarray]) ## if dict contains any non-sequence values, it is probably a single record.
-            if len(types) != 0:
-                self.data = [self.data]
-                self.mode = 'list'
-            else:
-                self.mode = 'dict'
-        elif isinstance(data, TableData):
-            self.data = data.data
-            self.mode = data.mode
-        else:
-            raise TypeError(type(data))
+    #def __init__(self, data):
+        #self.data = data
+        #if isinstance(data, np.ndarray):
+            #self.mode = 'array'
+        #elif isinstance(data, list):
+            #self.mode = 'list'
+        #elif isinstance(data, dict):
+            #types = set(map(type, data.values()))
+            ### dict may be a dict-of-lists or a single record
+            #types -= set([list, np.ndarray]) ## if dict contains any non-sequence values, it is probably a single record.
+            #if len(types) != 0:
+                #self.data = [self.data]
+                #self.mode = 'list'
+            #else:
+                #self.mode = 'dict'
+        #elif isinstance(data, TableData):
+            #self.data = data.data
+            #self.mode = data.mode
+        #else:
+            #raise TypeError(type(data))
         
-        for fn in ['__getitem__', '__setitem__']:
-            setattr(self, fn, getattr(self, '_TableData'+fn+self.mode))
+        #for fn in ['__getitem__', '__setitem__']:
+            #setattr(self, fn, getattr(self, '_TableData'+fn+self.mode))
         
-    def originalData(self):
-        return self.data
+    #def originalData(self):
+        #return self.data
     
-    def toArray(self):
-        if self.mode == 'array':
-            return self.data
-        if len(self) < 1:
-            #return np.array([])  ## need to return empty array *with correct columns*, but this is very difficult, so just return None
-            return None
-        rec1 = self[0]
-        dtype = functions.suggestRecordDType(rec1)
-        #print rec1, dtype
-        arr = np.empty(len(self), dtype=dtype)
-        arr[0] = tuple(rec1.values())
-        for i in xrange(1, len(self)):
-            arr[i] = tuple(self[i].values())
-        return arr
+    #def toArray(self):
+        #if self.mode == 'array':
+            #return self.data
+        #if len(self) < 1:
+            ##return np.array([])  ## need to return empty array *with correct columns*, but this is very difficult, so just return None
+            #return None
+        #rec1 = self[0]
+        #dtype = functions.suggestRecordDType(rec1)
+        ##print rec1, dtype
+        #arr = np.empty(len(self), dtype=dtype)
+        #arr[0] = tuple(rec1.values())
+        #for i in xrange(1, len(self)):
+            #arr[i] = tuple(self[i].values())
+        #return arr
             
-    def __getitem__array(self, arg):
-        if isinstance(arg, tuple):
-            return self.data[arg[0]][arg[1]]
-        else:
-            return self.data[arg]
+    #def __getitem__array(self, arg):
+        #if isinstance(arg, tuple):
+            #return self.data[arg[0]][arg[1]]
+        #else:
+            #return self.data[arg]
             
-    def __getitem__list(self, arg):
-        if isinstance(arg, basestring):
-            return [d.get(arg, None) for d in self.data]
-        elif isinstance(arg, int):
-            return self.data[arg]
-        elif isinstance(arg, tuple):
-            arg = self._orderArgs(arg)
-            return self.data[arg[0]][arg[1]]
-        else:
-            raise TypeError(type(arg))
+    #def __getitem__list(self, arg):
+        #if isinstance(arg, basestring):
+            #return [d.get(arg, None) for d in self.data]
+        #elif isinstance(arg, int):
+            #return self.data[arg]
+        #elif isinstance(arg, tuple):
+            #arg = self._orderArgs(arg)
+            #return self.data[arg[0]][arg[1]]
+        #else:
+            #raise TypeError(type(arg))
         
-    def __getitem__dict(self, arg):
-        if isinstance(arg, basestring):
-            return self.data[arg]
-        elif isinstance(arg, int):
-            return dict([(k, v[arg]) for k, v in self.data.iteritems()])
-        elif isinstance(arg, tuple):
-            arg = self._orderArgs(arg)
-            return self.data[arg[1]][arg[0]]
-        else:
-            raise TypeError(type(arg))
+    #def __getitem__dict(self, arg):
+        #if isinstance(arg, basestring):
+            #return self.data[arg]
+        #elif isinstance(arg, int):
+            #return dict([(k, v[arg]) for k, v in self.data.iteritems()])
+        #elif isinstance(arg, tuple):
+            #arg = self._orderArgs(arg)
+            #return self.data[arg[1]][arg[0]]
+        #else:
+            #raise TypeError(type(arg))
 
-    def __setitem__array(self, arg, val):
-        if isinstance(arg, tuple):
-            self.data[arg[0]][arg[1]] = val
-        else:
-            self.data[arg] = val
+    #def __setitem__array(self, arg, val):
+        #if isinstance(arg, tuple):
+            #self.data[arg[0]][arg[1]] = val
+        #else:
+            #self.data[arg] = val
 
-    def __setitem__list(self, arg, val):
-        if isinstance(arg, basestring):
-            if len(val) != len(self.data):
-                raise Exception("Values (%d) and data set (%d) are not the same length." % (len(val), len(self.data)))
-            for i, rec in enumerate(self.data):
-                rec[arg] = val[i]
-        elif isinstance(arg, int):
-            self.data[arg] = val
-        elif isinstance(arg, tuple):
-            arg = self._orderArgs(arg)
-            self.data[arg[0]][arg[1]] = val
-        else:
-            raise TypeError(type(arg))
+    #def __setitem__list(self, arg, val):
+        #if isinstance(arg, basestring):
+            #if len(val) != len(self.data):
+                #raise Exception("Values (%d) and data set (%d) are not the same length." % (len(val), len(self.data)))
+            #for i, rec in enumerate(self.data):
+                #rec[arg] = val[i]
+        #elif isinstance(arg, int):
+            #self.data[arg] = val
+        #elif isinstance(arg, tuple):
+            #arg = self._orderArgs(arg)
+            #self.data[arg[0]][arg[1]] = val
+        #else:
+            #raise TypeError(type(arg))
         
-    def __setitem__dict(self, arg, val):
-        if isinstance(arg, basestring):
-            if len(val) != len(self.data[arg]):
-                raise Exception("Values (%d) and data set (%d) are not the same length." % (len(val), len(self.data[arg])))
-            self.data[arg] = val
-        elif isinstance(arg, int):
-            for k in self.data:
-                self.data[k][arg] = val[k]
-        elif isinstance(arg, tuple):
-            arg = self._orderArgs(arg)
-            self.data[arg[1]][arg[0]] = val
-        else:
-            raise TypeError(type(arg))
+    #def __setitem__dict(self, arg, val):
+        #if isinstance(arg, basestring):
+            #if len(val) != len(self.data[arg]):
+                #raise Exception("Values (%d) and data set (%d) are not the same length." % (len(val), len(self.data[arg])))
+            #self.data[arg] = val
+        #elif isinstance(arg, int):
+            #for k in self.data:
+                #self.data[k][arg] = val[k]
+        #elif isinstance(arg, tuple):
+            #arg = self._orderArgs(arg)
+            #self.data[arg[1]][arg[0]] = val
+        #else:
+            #raise TypeError(type(arg))
 
-    def _orderArgs(self, args):
-        ## return args in (int, str) order
-        if isinstance(args[0], basestring):
-            return (args[1], args[0])
-        else:
-            return args
+    #def _orderArgs(self, args):
+        ### return args in (int, str) order
+        #if isinstance(args[0], basestring):
+            #return (args[1], args[0])
+        #else:
+            #return args
         
-    def __iter__(self):
-        for i in xrange(len(self)):
-            yield self[i]
+    #def __iter__(self):
+        #for i in xrange(len(self)):
+            #yield self[i]
 
-    def __len__(self):
-        if self.mode == 'array' or self.mode == 'list':
-            return len(self.data)
-        else:
-            return max(map(len, self.data.values()))
+    #def __len__(self):
+        #if self.mode == 'array' or self.mode == 'list':
+            #return len(self.data)
+        #else:
+            #return max(map(len, self.data.values()))
 
-    def columnNames(self):
-        """returns column names in no particular order"""
-        if self.mode == 'array':
-            return self.data.dtype.names
-        elif self.mode == 'list':
-            names = set()
-            for row in self.data:
-                names.update(row.keys())
-            return list(names)
-        elif self.mode == 'dict':
-            return self.data.keys()
+    #def columnNames(self):
+        #"""returns column names in no particular order"""
+        #if self.mode == 'array':
+            #return self.data.dtype.names
+        #elif self.mode == 'list':
+            #names = set()
+            #for row in self.data:
+                #names.update(row.keys())
+            #return list(names)
+        #elif self.mode == 'dict':
+            #return self.data.keys()
             
-    def keys(self):
-        return self.columnNames()
+    #def keys(self):
+        #return self.columnNames()

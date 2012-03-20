@@ -108,17 +108,20 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.graphicsView.setCentralItem(self.view)
         
         ## set up item groups
-        self.cameraItemGroup = pg.ItemGroup()
-        self.scopeItemGroup = pg.ItemGroup()
+        self.scopeItemGroup = pg.ItemGroup()   ## translated as scope moves
+        self.cameraItemGroup = pg.ItemGroup()  ## translated with scope, scaled with camera objective
+        self.imageItemGroup = pg.ItemGroup()   ## translated and scaled as each frame arrives
+        self.view.addItem(self.imageItemGroup)
         self.view.addItem(self.cameraItemGroup)
         self.view.addItem(self.scopeItemGroup)
         self.scopeItemGroup.setZValue(10)
         self.cameraItemGroup.setZValue(0)
+        self.imageItemGroup.setZValue(0)
         
         ## video image item
         self.imageItem = pg.ImageItem()
         self.view.addItem(self.imageItem)
-        self.imageItem.setParentItem(self.cameraItemGroup)
+        self.imageItem.setParentItem(self.imageItemGroup)
         self.imageItem.setZValue(-10)
         self.ui.histogram.setImageItem(self.imageItem)
         
@@ -197,6 +200,7 @@ class CameraWindow(QtGui.QMainWindow):
         scope = self.module.cam.getScopeDevice()
         if scope is not None:
             scope.sigObjectiveListChanged.connect(self.updateBorders)
+            scope.sigPositionChanged.connect(self.scopeMoved)
             self.cameraCenter = self.cam.getPosition()
             self.cameraScale = self.cam.getPixelSize()
             self.scopeCenter = self.cam.getPosition(justScope=True)
@@ -256,6 +260,18 @@ class CameraWindow(QtGui.QMainWindow):
         #QtCore.QTimer.singleShot(1, self.drawFrame)
         ## avoiding possible singleShot-induced crashes
         
+    def scopeMoved(self, p):
+        ## scope has moved; update viewport and camera outlines.
+        ## This is only used when the camera is not running--
+        ## if the camera is running, then this is taken care of in drawFrame to
+        ## ensure that the image remains stationary on screen.
+        if not self.cam.isRunning():
+            ss = self.cam.getScopeState()
+            self.cameraCenter = ss['centerPosition']
+            self.scopeCenter = ss['scopePosition']
+            self.updateCameraDecorations()
+            self.view.translateBy(p['rel'])
+            
     #@trace
     def updateBorders(self):
         """Draw the camera boundaries for each objective"""
@@ -637,8 +653,10 @@ class CameraWindow(QtGui.QMainWindow):
     def toggleAutoGain(self, b):
         if b:
             self.lastAGCMax = None
+            self.ui.histogram.vb.setMouseEnabled(x=False, y=False)
             #self.ui.histogram.setLevels(*self.lastMinMax)
-            
+        else:
+            self.ui.histogram.vb.setMouseEnabled(x=False, y=True)
             
 
     #@trace
@@ -706,7 +724,7 @@ class CameraWindow(QtGui.QMainWindow):
             r['times'].append(frame[1]['time'])
             prof.mark('append')
             if draw:
-                r['plot'].setData(array(r['times'])-minTime, r['vals'])
+                r['plot'].setData(np.array(r['times'])-minTime, r['vals'])
                 prof.mark('draw')
         prof.finish()
     
@@ -876,12 +894,12 @@ class CameraWindow(QtGui.QMainWindow):
                     self.ui.histogram.setHistogramRange(minVal, maxVal, padding=0.05)
                 finally:
                     self.ignoreLevelChange = False
-            else:
-                self.ignoreLevelChange = True
-                try:
-                    self.ui.histogram.setHistogramRange(0, 2**self.bitDepth)
-                finally:
-                    self.ignoreLevelChange = False
+            #else:
+                #self.ignoreLevelChange = True
+                #try:
+                    #self.ui.histogram.setHistogramRange(0, 2**self.bitDepth)
+                #finally:
+                    #self.ignoreLevelChange = False
             
             ## Update histogram plot
             #self.updateHistogram(self.currentFrame[0], wl, bl)
@@ -912,6 +930,12 @@ class CameraWindow(QtGui.QMainWindow):
                 self.cameraScale = newScale
                 self.updateCameraDecorations()
 
+            ## move and scale image item group  - sets image to correct position/scale based on scope position and objective
+            m = QtGui.QTransform()
+            m.translate(*self.cameraCenter)
+            m.scale(*self.cameraScale)
+            m.translate(-self.camSize[0]*0.5, -self.camSize[1]*0.5)
+            self.imageItemGroup.setTransform(m)
 
             ## update info for pixel under mouse pointer
             self.updateMouse()

@@ -352,6 +352,9 @@ class DataManager(Module):
     def currentDatabase(self):
         return self.ui.analysisWidget.currentDatabase()
         
+    def dataModel(self):
+        return self.ui.analysisWidget.currentDataModel()
+        
     def analysisDbChanged(self):
         self.sigAnalysisDbChanged.emit()
         

@@ -1,4 +1,8 @@
-from PyQt4 import QtCore, QtGui
+import sys, os
+## make sure this pyqtgraph is importable before any others
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+from pyqtgraph.Qt import QtCore, QtGui
+
 from exampleLoaderTemplate import Ui_Form
 import os, sys
 from collections import OrderedDict
@@ -7,12 +11,13 @@ examples = OrderedDict([
     ('Command-line usage', 'CLIexample.py'),
     ('Basic Plotting', 'Plotting.py'),
     ('GraphicsItems', OrderedDict([
-        ('PlotItem', 'PlotItem.py'),
+        #('PlotItem', 'PlotItem.py'),
         ('ImageItem - video', 'ImageItem.py'),
         ('ImageItem - draw', 'Draw.py'),
         ('Region-of-Interest', 'ROItypes.py'),
         ('GraphicsLayout', 'GraphicsLayout.py'),
         ('Scatter Plot', 'ScatterPlot.py'),
+        ('Text Item', 'text.py'),
         ('ViewBox', 'ViewBox.py'),
         ('Arrow', 'Arrow.py'),
     ])),

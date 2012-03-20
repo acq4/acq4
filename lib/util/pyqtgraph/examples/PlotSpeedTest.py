@@ -5,7 +5,7 @@ import sys, os, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 
-from PyQt4 import QtGui, QtCore
+from pyqtgraph.Qt import QtGui, QtCore
 import numpy as np
 import pyqtgraph as pg
 
@@ -15,9 +15,10 @@ app = QtGui.QApplication([])
 #mw.resize(800,800)
 
 p = pg.plot()
-
+p.setRange(QtCore.QRectF(0, -10, 5000, 20)) 
+p.setLabel('bottom', 'Index', units='B')
 curve = p.plot()
-data = np.random.normal(size=(10,50000))
+data = np.random.normal(size=(50,5000))
 ptr = 0
 lastTime = time.time()
 fps = None
