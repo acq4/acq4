@@ -868,6 +868,8 @@ class ErrorDialog(QtGui.QDialog):
             key = 'oldExc'
             if exc['message'].startswith('HelpfulException'):
                 exceptions.append('<b>' + self.cleanText(re.sub(r'^HelpfulException: ', '', exc['message'])) + '</b>')
+            elif exc['message'] == 'None':
+                continue
             else:
                 exceptions.append(self.cleanText(exc['message']))
                 
