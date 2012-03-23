@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>382</width>
-    <height>173</height>
+    <width>504</width>
+    <height>237</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -79,17 +79,22 @@
      </column>
      <column>
       <property name="text">
-       <string>Convolution Type</string>
+       <string>Method</string>
       </property>
      </column>
      <column>
       <property name="text">
-       <string>sigma</string>
+       <string>Sigma</string>
       </property>
      </column>
      <column>
       <property name="text">
-       <string>remove</string>
+       <string>Interpolation type</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Remove</string>
       </property>
      </column>
     </widget>

@@ -5,7 +5,7 @@ import numpy as np
 #import functions as fn
 import MapConvolverTemplate
 import scipy
-
+from lib.analysis.tools import functions as afn
 
 class MapConvolver(QtGui.QWidget):
     
@@ -35,9 +35,12 @@ class MapConvolver(QtGui.QWidget):
         
     def setData(self, data):
         self.data = data
+        self.blockSignals = True
         for i in self.items:
             i.updateParamCombo(data.dtype.names)
-            
+        self.blockSignals = False
+        self.processClicked()
+        
     def addItem(self):
         item = ConvolverItem(self)
         self.ui.tree.insertTopLevelItem(self.ui.tree.topLevelItemCount()-1, item)
@@ -60,6 +63,8 @@ class MapConvolver(QtGui.QWidget):
         self.fieldsChanged()
        
     def fieldsChanged(self):
+        if self.blockSignals:
+            return
         fields = []
         for i in self.items:
             fields.append(str(i.paramCombo.currentText()))
@@ -87,38 +92,8 @@ class MapConvolver(QtGui.QWidget):
                            ex: {'postCharge': {'sigma':80e-6}, 'dirCharge':{'kernel': ndarray to use as the convolution kernel}}
                spacing - the size of each pixel in the returned grid (default is 5um)
             """
-    
-        if params==None:
-            raise Exception("Don't know which parameters to process. Options are: %s" %str(data.dtype.names))
-        if 'xPos' not in data.dtype.names or 'yPos' not in data.dtype.names:
-            raise Exception("Data needs to have fields for 'xPos' and 'yPos'. Current fields are: %s" %str(data.dtype.names))
         
-        
-        
-        ### Project data from current spacing onto finer grid, averaging data from duplicate spots
-        xmin = data['xPos'].min()
-        ymin = data['yPos'].min()
-        xdim = int((data['xPos'].max()-xmin)/spacing)+5
-        ydim = int((data['yPos'].max()-ymin)/spacing)+5
-        dtype = []
-        for p in params.keys():
-            dtype.append((p, float))
-        dtype.append(('stimNumber', int))
-        arr = np.zeros((xdim, ydim), dtype=dtype)
-        for s in data:
-            x, y = (int((s['xPos']-xmin)/spacing), int((s['yPos']-ymin)/spacing))
-            for p in params:
-                arr[x,y][p] += s[p]
-            arr[x,y]['stimNumber'] += 1
-        arr['stimNumber'][arr['stimNumber']==0] = 1
-        for f in arr.dtype.names:
-            arr[f] = arr[f]/arr['stimNumber']
-        #arr = arr/arr['stimNumber']
-        arr = np.ascontiguousarray(arr)  
-        
-        ## get values before convolution for normalization after
-        x, y = (int((data[0]['xPos']-xmin)/spacing), int((data[0]['yPos']-ymin)/spacing))
-        vals = arr[x,y]
+        arr = afn.convertPtsToSparseImage(data, params.keys(), spacing)
         
                                        
         ## convolve image using either given kernel or gaussian kernel with sigma=sigma
@@ -128,11 +103,9 @@ class MapConvolver(QtGui.QWidget):
                     raise Exception("Please specify either a kernel to use for convolution, or sigma for a gaussian kernel for %s param." %p)                    
                 arr[p] = scipy.ndimage.filters.gaussian_filter(arr[p], int(params[p]['sigma']/spacing))
             else:
-                arr[p] = scipy.ndimage.filters.convolve(arr[p], params[p]['kernel'])
+                raise Exception("Convolving by a non-gaussian kernel is not yet supported.")
+                #arr[p] = scipy.ndimage.filters.convolve(arr[p], params[p]['kernel'])
                 
-        ## do amplitude correction
-        factor = vals/arr[x,y]
-        arr *= factor
                 
         return arr
         

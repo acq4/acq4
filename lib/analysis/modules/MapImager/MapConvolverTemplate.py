@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'MapConvolverTemplate.ui'
 #
-# Created: Tue Mar  6 14:17:16 2012
+# Created: Wed Mar 21 12:21:40 2012
 #      by: PyQt4 UI code generator 4.9
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(382, 173)
+        Form.resize(504, 237)
         self.gridLayout = QtGui.QGridLayout(Form)
         self.gridLayout.setMargin(3)
         self.gridLayout.setSpacing(3)
@@ -53,9 +53,10 @@ class Ui_Form(object):
         self.spacingSpin.setToolTip(QtGui.QApplication.translate("Form", "Spacing of the grid that the map will be projected onto.", None, QtGui.QApplication.UnicodeUTF8))
         self.processBtn.setText(QtGui.QApplication.translate("Form", "Process", None, QtGui.QApplication.UnicodeUTF8))
         self.tree.headerItem().setText(0, QtGui.QApplication.translate("Form", "Parameter", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(1, QtGui.QApplication.translate("Form", "Convolution Type", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(2, QtGui.QApplication.translate("Form", "sigma", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(3, QtGui.QApplication.translate("Form", "remove", None, QtGui.QApplication.UnicodeUTF8))
+        self.tree.headerItem().setText(1, QtGui.QApplication.translate("Form", "Method", None, QtGui.QApplication.UnicodeUTF8))
+        self.tree.headerItem().setText(2, QtGui.QApplication.translate("Form", "Sigma", None, QtGui.QApplication.UnicodeUTF8))
+        self.tree.headerItem().setText(3, QtGui.QApplication.translate("Form", "Interpolation type", None, QtGui.QApplication.UnicodeUTF8))
+        self.tree.headerItem().setText(4, QtGui.QApplication.translate("Form", "Remove", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph import TreeWidget
 from pyqtgraph.widgets.SpinBox import SpinBox
