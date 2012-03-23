@@ -101,8 +101,8 @@ class ViewBox(GraphicsWidget):
         self.rbScaleBox = QtGui.QGraphicsRectItem(0, 0, 1, 1)
         self.rbScaleBox.setPen(fn.mkPen((255,0,0), width=1))
         self.rbScaleBox.setBrush(fn.mkBrush(255,255,0,100))
-        self.addItem(self.rbScaleBox)
         self.rbScaleBox.hide()
+        self.addItem(self.rbScaleBox)
         
         self.axHistory = [] # maintain a history of zoom locations
         self.axHistoryPointer = -1 # pointer into the history. Allows forward/backward movement, not just "undo"
@@ -218,6 +218,8 @@ class ViewBox(GraphicsWidget):
         self.updateAutoRange()
         self.updateMatrix()
         self.sigStateChanged.emit(self)
+        #self.linkedXChanged()
+        #self.linkedYChanged()
         
     def viewRange(self):
         return [x[:] for x in self.state['viewRange']]  ## return copy
@@ -467,7 +469,7 @@ class ViewBox(GraphicsWidget):
         
         if view is not None:
             getattr(view, signal).connect(slot)
-            if view.autoRangeEnabled()[axis] is True:
+            if view.autoRangeEnabled()[axis] is not False:
                 self.enableAutoRange(axis, False)
                 slot()
             else:
@@ -480,16 +482,18 @@ class ViewBox(GraphicsWidget):
         self.linksBlocked = b  ## prevents recursive plot-change propagation
 
     def linkedXChanged(self):
+        ## called when x range of linked view has changed
         view = self.state['linkedViews'][0]
         self.linkedViewChanged(view, ViewBox.XAxis)
 
     def linkedYChanged(self):
-        view = self.state['linkedViews'][0]
+        ## called when y range of linked view has changed
+        view = self.state['linkedViews'][1]
         self.linkedViewChanged(view, ViewBox.YAxis)
         
 
     def linkedViewChanged(self, view, axis):
-        if self.linksBlocked:
+        if self.linksBlocked or view is None:
             return
         
         vr = view.viewRect()
@@ -502,15 +506,27 @@ class ViewBox(GraphicsWidget):
         view.blockLink(True)
         try:
             if axis == ViewBox.XAxis:
-                upp = float(vr.width()) / vg.width()
-                x1 = vr.left() + (sg.x()-vg.x()) * upp
-                x2 = x1 + sg.width() * upp
+                overlap = min(sg.right(), vg.right()) - max(sg.left(), vg.left())
+                if overlap < min(vg.width()/3, sg.width()/3):  ## if less than 1/3 of views overlap, 
+                                                               ## then just replicate the view
+                    x1 = vr.left()
+                    x2 = vr.right()
+                else:  ## views overlap; line them up
+                    upp = float(vr.width()) / vg.width()
+                    x1 = vr.left() + (sg.x()-vg.x()) * upp
+                    x2 = x1 + sg.width() * upp
                 self.enableAutoRange(ViewBox.XAxis, False)
                 self.setXRange(x1, x2, padding=0)
             else:
-                upp = float(vr.height()) / vg.height()
-                x1 = vr.bottom() + (sg.y()-vg.y()) * upp
-                x2 = x1 + sg.height() * upp
+                overlap = min(sg.bottom(), vg.bottom()) - max(sg.top(), vg.top())
+                if overlap < min(vg.height()/3, sg.height()/3):  ## if less than 1/3 of views overlap, 
+                                                               ## then just replicate the view
+                    x1 = vr.top()
+                    x2 = vr.bottom()
+                else:  ## views overlap; line them up
+                    upp = float(vr.height()) / vg.height()
+                    x1 = vr.top() + (sg.y()-vg.y()) * upp
+                    x2 = x1 + sg.height() * upp
                 self.enableAutoRange(ViewBox.YAxis, False)
                 self.setYRange(x1, x2, padding=0)
         finally:
