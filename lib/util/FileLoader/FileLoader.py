@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 import template
 from PyQt4 import QtCore, QtGui
+from HelpfulException import HelpfulException
 from lib.Manager import logMsg, logExc, getManager
+
 
 class FileLoader(QtGui.QWidget):
     """Interface for 1) displaying directory tree and 2) loading a file from the tree.
@@ -87,6 +89,7 @@ class FileLoader(QtGui.QWidget):
     def selectedFiles(self):
         """Returns the files selected in the file tree."""
         return self.ui.dirTree.selectedFiles()
+
         
     def updateNotes(self, current, previous):
         #sFile = self.ui.dirTree.selectedFile()

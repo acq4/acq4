@@ -789,6 +789,7 @@ class MetaArray(np.ndarray):
         #meta = H5MetaList(f['info'])
         subarr = arr.view(subtype)
         subarr._info = meta
+        f.close()
         return subarr
 
     @staticmethod

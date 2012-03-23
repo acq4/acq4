@@ -4,6 +4,7 @@ if __name__ == '__main__':
     sys.path.append('..')
     
 from PyQt4 import QtCore, QtGui
+import pyqtgraph as pg
 from pyqtgraph import SpinBox
 from pyqtgraph import GradientWidget
 import numpy as np
@@ -16,20 +17,7 @@ class ColorMapper(QtGui.QWidget):
     sigChanged = QtCore.Signal()
     
     def __init__(self, parent=None, filePath=None):
-        QtGui.QWidget.__init__(self, parent)
-        #self.layout = QtGui.QGridLayout()
-        #self.addBtn = QtGui.QPushButton('+')
-        #self.remBtn = QtGui.QPushButton('-')
-        #self.tree = QtGui.QTreeWidget()
-        #self.setLayout(self.layout)
-        #self.layout.addWidget(self.tree, 0, 0, 1, 2)
-        #self.layout.addWidget(self.addBtn, 1, 0)
-        #self.layout.addWidget(self.remBtn, 1, 1)
-        #self.layout.setSpacing(0)
-        
-        #self.tree.setColumnCount(5)
-        #self.tree.setHeaderLabels(['  ', 'arg', 'op', 'min', 'max', 'colors'])
-        
+        QtGui.QWidget.__init__(self, parent)      
         
         self.ui = CMTemplate.Ui_Form()
         self.ui.setupUi(self)
@@ -203,7 +191,20 @@ class ColorMapper(QtGui.QWidget):
             #print color, c
         color = np.clip(color*255, 0, 255).astype(int)
         return QtGui.QColor(*color)
-
+    
+    def getColorArray(self, data):
+        colors = np.zeros(data.shape+(4,), dtype=float)
+        for item in self.items:
+            c = item.getColorArray(data) / 255.
+            op = item.getOp()
+            if op == '+':
+                colors += c
+            elif op == '*':
+                colors *= c
+            colors = np.clip(colors, 0, 1.)
+        colors = np.clip(colors*255, 0, 255).astype(int)
+        return colors
+    
     def addClicked(self):
         self.addItem()
         self.emitChanged()
@@ -243,13 +244,15 @@ class ColorMapper(QtGui.QWidget):
 
 
 class ColorMapperItem(QtGui.QTreeWidgetItem):
+    
+    
     def __init__(self, cm):
         self.cm = cm
         QtGui.QTreeWidgetItem.__init__(self)
         self.argCombo = QtGui.QComboBox()
         self.opCombo = QtGui.QComboBox()
-        self.minSpin = SpinBox(value=0.0)
-        self.maxSpin = SpinBox(value=1.0)
+        self.minSpin = SpinBox(value=0.0, dec=True, step=1)
+        self.maxSpin = SpinBox(value=1.0, dec=True, step=1)
         self.gradient = GradientWidget()
         self.updateArgList()
         self.opCombo.addItem('+')
@@ -257,6 +260,15 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
         self.remBtn = QtGui.QPushButton('Remove')
         self.remBtn.clicked.connect(self.delete)
         
+        self.minSpin.sigValueChanged.connect(self.emitChanged)
+        self.maxSpin.sigValueChanged.connect(self.emitChanged)
+        self.opCombo.currentIndexChanged.connect(self.emitChanged)
+        self.argCombo.currentIndexChanged.connect(self.emitChanged)
+        self.gradient.sigGradientChanged.connect(self.emitChanged)
+        
+    def emitChanged(self):
+        self.cm.emitChanged()
+    
     def postAdd(self):
         t = self.treeWidget()
         #self.setText(0, "-")
@@ -285,6 +297,14 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
         mx = self.maxSpin.value()
         norm = np.clip((val - mn) / (mx - mn), 0.0, 1.0)
         return self.gradient.getColor(norm)
+
+    def getColorArray(self, data):
+        arg = str(self.argCombo.currentText())
+        vals = data[arg]
+        mn = self.minSpin.value()
+        mx = self.maxSpin.value()        
+        #norm = np.clip((vals - mn) / (mx - mn), 0.0, 1.0)
+        return pg.makeARGB(vals, self.gradient.getLookupTable(512), levels=[mn, mx], useRGBA=True)[0]
 
     def getOp(self):
         return self.opCombo.currentText()

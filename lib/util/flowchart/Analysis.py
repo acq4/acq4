@@ -618,7 +618,10 @@ class CellHealthAnalyzer(CtrlNode):
                 Rs = 0
                 Rm = 0
                 Cm = 0
-            aRes = Rs
+                
+            #aRes = Rs
+            RsPeak = iPulse.min()
+            aRes = vStep/(RsPeak-iBase.mean()) ## just using Ohm's law
             cap = Cm
             
         if self.ctrls['mode'].currentText() == 'IC':
