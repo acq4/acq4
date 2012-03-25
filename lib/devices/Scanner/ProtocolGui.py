@@ -141,13 +141,13 @@ class ScannerProtoGui(ProtocolGui):
         self.spotMarker = TargetPoint(name="Last", ptSize=100e-6, movable=False)
         self.spotMarker.setPen(pg.mkPen(color=(255,255,255), width = 2))
         self.spotMarker.hide()
-        try:
-            self.updateSpotSizes()
-        except HelpfulException as ex:
-            if ex.kwargs.get('errId', None) == 1:
-                self.setHaveCalibration(False)
-            else:
-                raise
+        #try:
+        self.updateSpotSizes()
+        #except HelpfulException as ex:
+            #if ex.kwargs.get('errId', None) == 1:
+                #self.setHaveCalibration(False)
+            #else:
+                #raise
         
         #camMod = self.cameraModule()
         self.camModChanged()
@@ -269,16 +269,16 @@ class ScannerProtoGui(ProtocolGui):
                 self.ui.sizeSpin.setValue(dispSize)
             
             ## update spots
-            try:
-                self.updateSpotSizes()
-                self.testTarget.show()
-                self.setHaveCalibration(True)
-            except HelpfulException as exc:
-                if exc.kwargs.get('errId', None) == 1:
-                    #logMsg("Could not update scanner spot sizes for %s objective because no calibration could be found." %str(obj), msgType='warning', importance=2)
-                    self.setHaveCalibration(False)
-                else:
-                    raise
+            #try:
+            self.updateSpotSizes()
+                #self.testTarget.show()
+                #self.setHaveCalibration(True)
+            #except HelpfulException as exc:
+                #if exc.kwargs.get('errId', None) == 1:
+                    ##logMsg("Could not update scanner spot sizes for %s objective because no calibration could be found." %str(obj), msgType='warning', importance=2)
+                    #self.setHaveCalibration(False)
+                #else:
+                    #raise
                 
             for i in self.items.values():
                 active = (i.objective == obj)
@@ -288,14 +288,14 @@ class ScannerProtoGui(ProtocolGui):
     def laserDevChanged(self):
         ## called when laser device combo is changed
         ## need to update spot size
-        try:
-            self.updateSpotSizes()
-            self.setHaveCalibration(True)
-        except HelpfulException as ex:
-            if ex.kwargs.get('errId', None) == 1:
-                self.setHaveCalibration(False)
-            else:
-                raise
+        #try:
+        self.updateSpotSizes()
+            #self.setHaveCalibration(True)
+        #except HelpfulException as ex:
+            #if ex.kwargs.get('errId', None) == 1:
+                #self.setHaveCalibration(False)
+            #else:
+                #raise
         #self.testTarget.setPointSize()
         #self.spotMarker.setPointSize()
 
@@ -311,11 +311,19 @@ class ScannerProtoGui(ProtocolGui):
     def updateSpotSizes(self):
         #size, displaySize = self.pointSize()
         ##pd = self.pointSize()[1]
-        size, display = self.pointSize()
-        for i in self.items.values():
-            i.setPointSize(display, size)
-        self.testTarget.setPointSize(size)
-        self.spotMarker.setPointSize(size)
+        try:
+            size, display = self.pointSize()
+            for i in self.items.values():
+                i.setPointSize(display, size)
+            self.testTarget.setPointSize(size)
+            self.spotMarker.setPointSize(size)
+            
+            self.setHaveCalibration(True)
+        except HelpfulException as exc:
+            if exc.kwargs.get('errId', None) == 1:
+                self.setHaveCalibration(False)
+            else:
+                raise
         
         
         
