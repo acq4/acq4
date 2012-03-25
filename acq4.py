@@ -56,6 +56,14 @@ import disableExceptionStorage
 #QtGui.QApplication.setGraphicsSystem('raster')  ## needed for specific composition modes
 app = QtGui.QApplication(sys.argv)
 
+## Install a simple message handler for Qt errors:
+def messageHandler(msgType, msg):
+    import traceback
+    print "Qt Error: (traceback follows)"
+    print msg
+    traceback.print_stack()
+QtCore.qInstallMsgHandler(messageHandler)
+
 ## For logging ALL python activity
 #import pyconquer
 #tr = pyconquer.Logger(fileregex="(Manager|DataManager|modules|devices|drivers)")
