@@ -1,1 +1,1 @@
-from MapAnalyzer import *
+from MapImager import MapImager

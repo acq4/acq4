@@ -22,7 +22,7 @@ from ContourPlotter.ContourPlotter import ContourPlotter
 
 
 
-class MapAnalyzer(AnalysisModule):
+class MapImager(AnalysisModule):
     
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
