@@ -45,9 +45,12 @@ class MapConvolver(QtGui.QWidget):
         item = ConvolverItem(self)
         self.ui.tree.insertTopLevelItem(self.ui.tree.topLevelItemCount()-1, item)
         item.postAdd()
-        self.items.append(item) 
-        item.updateParamCombo(self.data.dtype.names)
-        self.fieldsChanged()
+        self.items.append(item)
+        self.blockSignals = True
+        if self.data is not None:
+            item.updateParamCombo(self.data.dtype.names)
+            self.fieldsChanged()
+        self.blockSignals = False
     
     def remClicked(self, item):
         #item = self.ui.tree.currentItem()
@@ -74,31 +77,81 @@ class MapConvolver(QtGui.QWidget):
         if self.data == None:
             return
         params = {}
-        for i in self.items:
-            if str(i.convolutionCombo.currentText()) == "Gaussian":
-                params[str(i.paramCombo.currentText())] = {'sigma':i.sigmaSpin.value()}
-            else:
-                raise Exception("Loading custom kernels is not yet fully supported.")
         spacing = self.ui.spacingSpin.value()
-        self.output = MapConvolver.convolveMaptoImage(self.data, params, spacing=spacing)
+        for i in self.items:
+            if str(i.convolutionCombo.currentText()) == "Gaussian convolution":
+                params[str(i.paramCombo.currentText())] = {'sigma':i.sigmaSpin.value()}
+                
+            elif str(i.convolutionCombo.currentText()) == "interpolation":
+                params[str(i.paramCombo.currentText())]= {'mode':i.modeCombo.currentText()}
+            else:
+                pass
+                
+        
+        arr = MapConvolver.convolveMaptoImage(self.data, params, spacing=spacing)
+        arrs = MapConvolver.interpolateMapToImage(self.data, params, spacing)
+        
+        dtype = arr.dtype.descr
+        for p in arrs.keys():
+            if p not in arr.dtype.names:
+                dtype.append((p, float))
+            
+        self.output = np.zeros(arr.shape, dtype=dtype)
+        self.output[:] = arr
+        for p in arrs:
+            self.output[p] = arrs[p]
+        
         self.sigOutputChanged.emit(self.output, spacing)
         
     @staticmethod
+    def interpolateMapToImage(data, params, spacing=0.000005):
+        """Function for interpolating a list of stimulation spots and their associated values into a fine-scale smoothed image.
+                data - a numpy record array which includes fields for 'xPos', 'yPos' and the parameters specified in params.
+                params - a dict of parameters to project and their corresponding interpolation modes. Mode options are:
+                    'nearest', 'linear', 'cubic' (see documentation for scipy.interpolate.griddata)
+                            ex: {'postCharge': {'mode':'nearest'}, 'dirCharge':{'mode':'cubic'}}
+                spacing - the size of each pixel in the returned grids (default is 5um)
+             """        
+        
+        xmin = data['xPos'].min()
+        ymin = data['yPos'].min()
+        xdim = int((data['xPos'].max()-xmin)/spacing)+5
+        ydim = int((data['yPos'].max()-ymin)/spacing)+5
+        
+        pts = np.array([data['xPos'], data['yPos']], dtype=float)
+        pts[0] = pts[0]-xmin
+        pts[1] = pts[1]-ymin
+        pts = pts.transpose()/spacing
+        
+        xi = np.indices((xdim, ydim))
+        xi = xi.transpose(1,2,0)
+        
+        arrs = {}
+        
+        for p in params:
+            if 'mode' in params[p].keys():
+                arrs[p] = scipy.interpolate.griddata(pts, data[p], xi, method=params[p]['mode'])
+                arrs[p][np.isnan(arrs[p])] = 0
+        return arrs
+        
+    @staticmethod
     def convolveMaptoImage(data, params, spacing=5e-6):
-        """Function for converting a list of stimulation spots and their associated values into a fine-scale smoothed image.
+        """Function for converting a list of stimulation spots and their associated values into a fine-scale smoothed image using a gaussian convolution.
                data - a numpy record array which includes fields for 'xPos', 'yPos' and the parameters specified in params.
                params - a dict of parameters to project and their corresponding convolution kernels - if 'sigma' is specified it will be used
                         as the stdev of a gaussian kernel, otherwise a custom kernel can be specified.
                            ex: {'postCharge': {'sigma':80e-6}, 'dirCharge':{'kernel': ndarray to use as the convolution kernel}}
                spacing - the size of each pixel in the returned grid (default is 5um)
             """
-        
+        #arr = data
         arr = afn.convertPtsToSparseImage(data, params.keys(), spacing)
         
                                        
         ## convolve image using either given kernel or gaussian kernel with sigma=sigma
         for p in params:
-            if params[p].get('kernel', None) is None:
+            if 'mode' in params[p].keys():
+                continue
+            elif params[p].get('kernel', None) is None:
                 if params[p].get('sigma', None) is None:
                     raise Exception("Please specify either a kernel to use for convolution, or sigma for a gaussian kernel for %s param." %p)                    
                 arr[p] = scipy.ndimage.filters.gaussian_filter(arr[p], int(params[p]['sigma']/spacing))
@@ -115,17 +168,21 @@ class ConvolverItem(QtGui.QTreeWidgetItem):
         QtGui.QTreeWidgetItem.__init__(self)
         self.paramCombo = QtGui.QComboBox()
         self.convolutionCombo = QtGui.QComboBox()
-        self.convolutionCombo.addItem("Gaussian")
+        self.convolutionCombo.addItems(["Gaussian convolution", "interpolation"])
         self.sigmaSpin = pg.widgets.SpinBox.SpinBox(value=80e-6, siPrefix=True, suffix='m', dec=True, step=0.1)
         #self.maxSpin = SpinBox(value=1.0)
         #self.gradient = GradientWidget()
         #self.updateArgList()
         #self.opCombo.addItem('+')
         #self.opCombo.addItem('*')
+        self.modeCombo = QtGui.QComboBox()
+        self.modeCombo.addItems(['nearest', 'linear', 'cubic'])
+        self.modeCombo.setEnabled(False)
         self.remBtn = QtGui.QPushButton('Remove')
         
         self.remBtn.clicked.connect(self.delete)
         self.paramCombo.currentIndexChanged.connect(self.mc.fieldsChanged)
+        self.convolutionCombo.currentIndexChanged.connect(self.methodChanged)
         
     def postAdd(self):
         t = self.treeWidget()
@@ -133,9 +190,8 @@ class ConvolverItem(QtGui.QTreeWidgetItem):
         t.setItemWidget(self, 0, self.paramCombo)
         t.setItemWidget(self, 1, self.convolutionCombo)
         t.setItemWidget(self, 2, self.sigmaSpin)
-        #t.setItemWidget(self, 3, self.maxSpin)
-        #t.setItemWidget(self, 4, self.gradient)
-        t.setItemWidget(self, 3, self.remBtn)
+        t.setItemWidget(self, 3, self.modeCombo)
+        t.setItemWidget(self, 4, self.remBtn)
         
     def delete(self):
         self.mc.remClicked(self)
@@ -147,3 +203,12 @@ class ConvolverItem(QtGui.QTreeWidgetItem):
             self.paramCombo.addItem(p)
             if p == prev:
                 self.paramCombo.setCurrentIndex(self.paramCombo.count()-1)        
+
+    def methodChanged(self):
+        method = str(self.convolutionCombo.currentText())
+        if method == 'Gaussian convolution':
+            self.sigmaSpin.setEnabled(True)
+            self.modeCombo.setEnabled(False)
+        elif method == 'interpolation':
+            self.sigmaSpin.setEnabled(False)
+            self.modeCombo.setEnabled(True)
