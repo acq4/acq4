@@ -70,7 +70,7 @@ class ContourPlotter(QtGui.QWidget):
         self.setArgList(self.argList)
       
     def adjustContours(self, data=None, parentItem=None):
-        print "adjustContours called."
+        #print "adjustContours called."
         if data is not None:
             self.data = data
         if parentItem is not None:
@@ -127,9 +127,9 @@ class ContourItem(QtGui.QTreeWidgetItem):
                 self.paramCombo.setCurrentIndex(self.paramCombo.count()-1) 
  
     def updateContour(self, data, parentItem):
-        print "updateContour called."
+        #print "updateContour called."
         param = str(self.paramCombo.currentText())
-        print param
+        #print param
         if param == '':
             return
         #if param == 'Probability': ## fix for compatability with Spatial correlator
@@ -142,8 +142,8 @@ class ContourItem(QtGui.QTreeWidgetItem):
         pen = self.colorBtn.color()
         self.curveItem.setPen(pen)
         self.curveItem.updateLines(data, level)
-        print "boundingrect:", self.curveItem.boundingRect()
-        print data.min(), data.max()
+        #print "boundingrect:", self.curveItem.boundingRect()
+        #print data.min(), data.max()
         if hasattr(parentItem, 'graphicsItem'):
             self.curveItem.setParentItem(parentItem.graphicsItem())
         else:
