@@ -267,7 +267,8 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
         self.gradient.sigGradientChanged.connect(self.emitChanged)
         
     def emitChanged(self):
-        self.cm.emitChanged()
+        if not self.blockSignals:
+            self.cm.emitChanged()
     
     def postAdd(self):
         t = self.treeWidget()
@@ -284,11 +285,13 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
 
     def updateArgList(self):
         prev = str(self.argCombo.currentText())
+        self.blockSignals = True
         self.argCombo.clear()
         for a in self.cm.argList:
             self.argCombo.addItem(a)
             if a == prev:
                 self.argCombo.setCurrentIndex(self.argCombo.count()-1)
+        self.blockSignals = False
 
     def getColor(self, args):
         arg = str(self.argCombo.currentText())
