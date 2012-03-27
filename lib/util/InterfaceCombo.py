@@ -115,8 +115,15 @@ class InterfaceParameter(ptypes.ListParameter):
 
     def updateList(self):
         ints = self.dir.listInterfaces(self.opts['interfaceTypes'])
+        if isinstance(ints, dict):
+            interfaces = []
+            for i in ints.itervalues():
+                interfaces.extend(i)
+        else:
+            interfaces = ints
+        
         #print "set limits:", ints
-        self.setLimits(ints)
+        self.setLimits(tuple(interfaces))
 
 
 parametertree.registerParameterType('interface', InterfaceParameter, override=True)
