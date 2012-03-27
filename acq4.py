@@ -62,6 +62,26 @@ def messageHandler(msgType, msg):
     print "Qt Error: (traceback follows)"
     print msg
     traceback.print_stack()
+    try:
+        logf = os.path.join(os.path.split(__file__)[0], "crash.log")
+        fh = open(logf, 'a')
+        fh.write(msg+'\n')
+        fh.write('\n'.join(traceback.format_stack()))
+        fh.close()
+    except:
+        print "Failed to write crash log:"
+        traceback.print_exc()
+        
+    
+    if msgType == QtCore.QtFatalMsg:
+        try:
+            print "Fatal error occurred; asking manager to quit."
+            global man, app
+            man.quit()
+            app.processEvents()
+        except:
+            pass
+    
 QtCore.qInstallMsgHandler(messageHandler)
 
 ## For logging ALL python activity
