@@ -9,7 +9,19 @@ from Qt import QtGui
 #if QtGui.QApplication.instance() is None:
     #app = QtGui.QApplication([])
 
+## in general openGL is poorly supported in Qt. 
+## we only enable it where the performance benefit is critical.
+## Note this only applies to 2D graphics; 3D graphics always use OpenGL.
+import sys
+if 'linux' in sys.platform:  ## linux has numerous bugs in opengl implementation
+    useOpenGL = False
+elif 'darwin' in sys.platform: ## openGL greatly speeds up display on mac
+    useOpenGL = True
+else:
+    useOpenGL = True  ## on windows there's a more even performance / bugginess tradeoff. 
+                
 CONFIG_OPTIONS = {
+    'useOpenGL': None,   ## by default, this is platform-dependent (see widgets/GraphicsView). Set to True or False to explicitly enable/disable opengl.
     'leftButtonPan': True  ## if false, left button drags a rubber band for zooming in viewbox
 }
 
@@ -57,7 +69,7 @@ renamePyc(path)
 ## don't import the more complex systems--canvas, parametertree, flowchart, dockarea
 ## these must be imported separately.
 
-def importAll(path):
+def importAll(path, excludes=()):
     d = os.path.join(os.path.split(__file__)[0], path)
     files = []
     for f in os.listdir(d):
@@ -67,6 +79,8 @@ def importAll(path):
             files.append(f[:-3])
         
     for modName in files:
+        if modName in excludes:
+            continue
         mod = __import__(path+"."+modName, globals(), locals(), fromlist=['*'])
         if hasattr(mod, '__all__'):
             names = mod.__all__
@@ -77,7 +91,7 @@ def importAll(path):
                 globals()[k] = getattr(mod, k)
 
 importAll('graphicsItems')
-importAll('widgets')
+importAll('widgets', excludes=['MatplotlibWidget'])
 
 from imageview import *
 from WidgetGroup import *
@@ -105,13 +119,25 @@ def plot(*args, **kargs):
     | All other arguments are used to plot data. (see :func:`PlotItem.plot() <pyqtgraph.PlotItem.plot>`)
     """
     mkQApp()
-    if 'title' in kargs:
-        w = PlotWindow(title=kargs['title'])
-        del kargs['title']
-    else:
-        w = PlotWindow()
-    if len(args)+len(kargs) > 0:
-        w.plot(*args, **kargs)
+    #if 'title' in kargs:
+        #w = PlotWindow(title=kargs['title'])
+        #del kargs['title']
+    #else:
+        #w = PlotWindow()
+    #if len(args)+len(kargs) > 0:
+        #w.plot(*args, **kargs)
+        
+    pwArgList = ['title', 'label', 'name', 'left', 'right', 'top', 'bottom']
+    pwArgs = {}
+    dataArgs = {}
+    for k in kargs:
+        if k in pwArgList:
+            pwArgs[k] = kargs[k]
+        else:
+            dataArgs[k] = kargs[k]
+        
+    w = PlotWindow(**pwArgs)
+    w.plot(*args, **dataArgs)
     plots.append(w)
     w.show()
     return w

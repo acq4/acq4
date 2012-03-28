@@ -246,7 +246,10 @@ class SutterMP285Thread(QtCore.QThread):
         #if self.sp.inWaiting() > 0:
             #print "Discarding %d bytes" % self.sp.inWaiting()
             #self.sp.read(self.sp.inWaiting())
-            
+        #import wingdbstub
+        print "  Starting MP285 thread: 0x%x" % int(QtCore.QThread.currentThreadId())
+        import sip
+        print "    also known as 0x%x" % sip.unwrapinstance(self)
         velocity = np.array([0,0,0])
         pos = [0,0,0]
         
@@ -327,6 +330,7 @@ class SutterMP285Thread(QtCore.QThread):
                     ## moving; make a guess about the current position
                     pass
             except:
+                pass
                 debug.printExc("Error in MP285 thread:")
                 
             self.lock.lock()

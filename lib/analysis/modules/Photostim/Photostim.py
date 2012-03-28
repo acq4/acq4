@@ -268,7 +268,7 @@ class Photostim(AnalysisModule):
         try:
             point = points[0]
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-            #print "click!", point.data
+            print "clicked:", point.data
             plot = self.getElement("Data Plot")
             plot.clear()
             self.selectedSpot = point

@@ -51,8 +51,7 @@ class EventFitter(CtrlNode):
             ('fitTime', float),
             ('fitRiseTau', float), 
             ('fitDecayTau', float), 
-            ('fitRiseTime', float),
-            ('fitMaxRiseSlope', float),            
+            ('fitTimeToPeak', float),
             ('fitError', float),
             ('fitFractionalError', float),
             ('fitLengthOverDecay', float),
@@ -155,21 +154,11 @@ class EventFitter(CtrlNode):
             fit = functions.fitPsp(times, yVals, guess=guess, bounds=bounds)
             
             computed = functions.pspFunc(fit, times)
-            
-            ### Luke, I kept my version to keep it compatible with the database that I have, not cause I think it's better
-            if guessAmp > 0:
-                peakTime = times[np.argwhere(computed == computed.max())[0][0]]
-                fitMaxRiseSlope = (computed[1:]-computed[:-1]).max()/dt
-            else:
-                peakTime = times[np.argwhere(computed == computed.min())[0][0]]
-                fitMaxRiseSlope = (computed[1:]-computed[:-1]).min()/dt
-            fitRiseTime = peakTime-fit[1]
-
+            peakTime = functions.pspMaxTime(fit[2], fit[3])
             err = abs(yVals - computed).sum()
             fracError = err / abs(computed).sum()
-            output[i-offset] = tuple(events[i]) + tuple(fit) +(fitRiseTime, fitMaxRiseSlope) + (err, fracError)
-
-
+            lengthOverDecay = (times[-1] - fit[1]) / fit[3]  # ratio of (length of data that was fit : decay constant)
+            output[i-offset] = tuple(events[i]) + tuple(fit) + (peakTime, err, fracError, lengthOverDecay)
             #output['fitTime'] += output['time']
                 
             #print fit
@@ -177,18 +166,18 @@ class EventFitter(CtrlNode):
             
             if display and self.plot.isConnected():
                 if self.ctrls['plotFits'].isChecked():
-                    item = pg.PlotCurveItem(computed, times, pen=(0, 0, 255), clickable=True)
+                    item = pg.PlotDataItem(x=times, y=computed, pen=(0, 0, 255), clickable=True)
                     item.setZValue(100)
                     self.plotItems.append(item)
                     item.eventIndex = i
                     item.sigClicked.connect(self.fitClicked)
                     item.deleted = False
                 if self.ctrls['plotGuess'].isChecked():
-                    item2 = pg.PlotCurveItem(functions.pspFunc(guess, times), times, pen=(255, 0, 0))
+                    item2 = pg.PlotDataItem(x=times, y=functions.pspFunc(guess, times), pen=(255, 0, 0))
                     item2.setZValue(100)
                     self.plotItems.append(item2)
                 if self.ctrls['plotEvents'].isChecked():
-                    item2 = pg.PlotCurveItem(eventData, times, pen=(0, 255, 0))
+                    item2 = pg.PlotDataItem(x=times, y=eventData, pen=(0, 255, 0))
                     item2.setZValue(100)
                     self.plotItems.append(item2)
                 #plot = self.plot.connections().keys()[0].node().getPlot()

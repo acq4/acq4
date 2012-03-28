@@ -541,7 +541,7 @@ class CameraWindow(QtGui.QMainWindow):
     #@trace
     def setBinning(self, ind=None, autoRestart=True):
         """Set camera's binning value. If ind is specified, it is the index from binningCombo from which to grab the new binning value."""
-        self.backgroundFrame = None
+        #self.backgroundFrame = None
         if ind is not None:
             self.binning = int(self.ui.binningCombo.itemText(ind))
         self.cam.setParam('binning', (self.binning, self.binning), autoRestart=autoRestart)
@@ -610,7 +610,7 @@ class CameraWindow(QtGui.QMainWindow):
 
     #@trace
     def setRegion(self, rgn=None):
-        self.backgroundFrame = None
+        #self.backgroundFrame = None
         if rgn is None:
             rgn = [0, 0, self.camSize[0]-1, self.camSize[1]-1]
         self.roi.setPos([rgn[0], rgn[1]])
@@ -774,7 +774,7 @@ class CameraWindow(QtGui.QMainWindow):
                 x = float(self.bgFrameCount)/(self.bgFrameCount + 1)
                 self.bgFrameCount += 1
                 
-            if self.backgroundFrame == None:
+            if self.backgroundFrame == None or self.backgroundFrame.shape != frame[0].shape:
                 self.backgroundFrame = frame[0].astype(float)
             else:
                 #print "mix:", x
@@ -858,7 +858,7 @@ class CameraWindow(QtGui.QMainWindow):
             ## divide the background out of the current frame if needed
             if self.ui.divideBgBtn.isChecked():
                 bg = self.getBackgroundFrame()
-                if bg is not None:
+                if bg is not None and bg.shape == data.shape:
                     data = data / bg
             
             ## Set new levels if auto gain is enabled

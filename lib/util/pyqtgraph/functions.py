@@ -433,9 +433,10 @@ def makeARGB(data, lut=None, levels=None, useRGBA=False):
                 Lookup tables can be built using GradientWidget.
         levels - List [min, max]; optionally rescale data before converting through the
                 lookup table.   rescaled = (data-min) * len(lut) / (max-min)
+        useRGBA - If True, the data is returned in RGBA order. The default is 
+                  False, which returns in BGRA order for use with QImage.
                 
-    """
-    
+    """    
     prof = debug.Profiler('functions.makeARGB', disabled=True)
     
     ## sanity checks
@@ -813,7 +814,7 @@ def isocurve(data, level):
                 lines.append(pts)
 
     return lines ## a list of pairs of points
-
+    
     
 def isosurface(data, level):
     """
@@ -1191,55 +1192,55 @@ def isosurface(data, level):
 
     return facets
 
+## code has moved to opengl/MeshData.py    
+#def meshNormals(data):
+    #"""
+    #Return list of normal vectors and list of faces which reference the normals
+    #data must be list of triangles; each triangle is a list of three points
+        #[ [(x,y,z), (x,y,z), (x,y,z)], ...]
+    #Return values are
+        #normals:   [(x,y,z), ...]
+        #faces:     [(n1, n2, n3), ...]
+    #"""
     
-def meshNormals(data):
-    """
-    Return list of normal vectors and list of faces which reference the normals
-    data must be list of triangles; each triangle is a list of three points
-        [ [(x,y,z), (x,y,z), (x,y,z)], ...]
-    Return values are
-        normals:   [(x,y,z), ...]
-        faces:     [(n1, n2, n3), ...]
-    """
-    
-    normals = []
-    points = {}
-    for i, face in enumerate(data):
-        ## compute face normal
-        pts = [QtGui.QVector3D(*x) for x in face]
-        norm = QtGui.QVector3D.crossProduct(pts[1]-pts[0], pts[2]-pts[0])
-        normals.append(norm)
+    #normals = []
+    #points = {}
+    #for i, face in enumerate(data):
+        ### compute face normal
+        #pts = [QtGui.QVector3D(*x) for x in face]
+        #norm = QtGui.QVector3D.crossProduct(pts[1]-pts[0], pts[2]-pts[0])
+        #normals.append(norm)
         
-        ## remember each point was associated with this normal
-        for p in face:
-            p = tuple(map(lambda x: np.round(x, 8), p))
-            if p not in points:
-                points[p] = []
-            points[p].append(i)
+        ### remember each point was associated with this normal
+        #for p in face:
+            #p = tuple(map(lambda x: np.round(x, 8), p))
+            #if p not in points:
+                #points[p] = []
+            #points[p].append(i)
         
-    ## compute averages
-    avgLookup = {}
-    avgNorms = []
-    for k,v in points.iteritems():
-        norms = [normals[i] for i in v]
-        a = norms[0]
-        if len(v) > 1:
-            for n in norms[1:]:
-                a = a + n
-            a = a / len(v)
-        avgLookup[k] = len(avgNorms)
-        avgNorms.append(a)
+    ### compute averages
+    #avgLookup = {}
+    #avgNorms = []
+    #for k,v in points.iteritems():
+        #norms = [normals[i] for i in v]
+        #a = norms[0]
+        #if len(v) > 1:
+            #for n in norms[1:]:
+                #a = a + n
+            #a = a / len(v)
+        #avgLookup[k] = len(avgNorms)
+        #avgNorms.append(a)
 
-    ## generate return array
-    faces = []
-    for i, face in enumerate(data):
-        f = []
-        for p in face:
-            p = tuple(map(lambda x: np.round(x, 8), p))
-            f.append(avgLookup[p])
-        faces.append(tuple(f))
+    ### generate return array
+    #faces = []
+    #for i, face in enumerate(data):
+        #f = []
+        #for p in face:
+            #p = tuple(map(lambda x: np.round(x, 8), p))
+            #f.append(avgLookup[p])
+        #faces.append(tuple(f))
         
-    return avgNorms, faces
+    #return avgNorms, faces
         
     
     

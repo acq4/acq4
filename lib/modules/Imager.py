@@ -103,8 +103,8 @@ class Imager(Module):
         self.tree = PT.ParameterTree()
         self.l2.addWidget(self.tree)
         self.snap_button = QtGui.QPushButton('Snap')
-        self.run_button = QtGui.QPushButton('Run')
-        self.stop_button = QtGui.QPushButton('Stop')
+        #self.run_button = QtGui.QPushButton('Run')
+        #self.stop_button = QtGui.QPushButton('Stop')
         self.video_button = QtGui.QPushButton('Video')
         self.record_button = QtGui.QPushButton('Record Stack')
         self.record_button.setCheckable(True)
@@ -112,8 +112,8 @@ class Imager(Module):
         self.cameraSnapBtn = QtGui.QPushButton('Camera Snap')
         
         self.l2.addWidget(self.snap_button)
-        self.l2.addWidget(self.run_button)
-        self.l2.addWidget(self.stop_button)
+        #self.l2.addWidget(self.run_button)
+        #self.l2.addWidget(self.stop_button)
         self.l2.addWidget(self.video_button)
         self.l2.addWidget(self.record_button)
         self.l2.addWidget(self.cameraSnapBtn)
@@ -163,9 +163,9 @@ class Imager(Module):
         self.tree.setParameters(self.param)
         self.param.sigTreeStateChanged.connect(self.update)
         self.update()
-        self.run_button.clicked.connect(self.PMT_Run)
+        #self.run_button.clicked.connect(self.PMT_Run)
         self.snap_button.clicked.connect(self.PMT_Snap)
-        self.stop_button.clicked.connect(self.PMT_Stop)
+        #self.stop_button.clicked.connect(self.PMT_Stop)
         self.video_button.clicked.connect(self.toggleVideo)
         self.record_button.toggled.connect(self.recordToggled)
         self.cameraSnapBtn.clicked.connect(self.cameraSnap)
@@ -377,7 +377,7 @@ class Imager(Module):
                 imgData, shift = self.decomb(imgData, minShift=0*sampleRate, maxShift=200e-6*sampleRate)  ## correct for mirror lag up to 200us
                 self.param['Decomb', 'Shift'] = shift / sampleRate
             else:
-                print self.param['Decomb', 'Shift'], sampleRate
+                #print self.param['Decomb', 'Shift'], sampleRate
                 imgData, shift = self.decomb(imgData, auto=False, shift=self.param['Decomb', 'Shift']*sampleRate)
             
         
@@ -468,7 +468,9 @@ class Imager(Module):
                 return
         
     def recordToggled(self, b):
-        if not b:
+        if b:
+            self.param['Store'] = True
+        else:
             self.currentStack = None
             self.currentStackLength = 0
             self.record_button.setText('Record Stack')
@@ -575,7 +577,7 @@ class Imager(Module):
                 imgData, shift = self.decomb(imgData, minShift=0*sampleRate, maxShift=200e-6*sampleRate)  ## correct for mirror lag up to 200us
                 self.param['Decomb', 'Shift'] = shift / sampleRate
             else:
-                print self.param['Decomb', 'Shift'], sampleRate
+                #print self.param['Decomb', 'Shift'], sampleRate
                 imgData, shift = self.decomb(imgData, auto=False, shift=self.param['Decomb', 'Shift']*sampleRate)
             
         

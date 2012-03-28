@@ -64,6 +64,20 @@ class PlotItem(GraphicsWidget):
     managers = {}
     
     def __init__(self, parent=None, name=None, labels=None, title=None, **kargs):
+        """
+        Create a new PlotItem. All arguments are optional.
+        Any extra keyword arguments are passed to PlotItem.plot().
+        
+        Arguments:
+            *title*   - Title to display at the top of the item. Html is allowed.
+            *labels*  - A dictionary specifying the axis labels to display. 
+                        {'left': (args), 'bottom': (args), ...}
+                        The name of each axis and the corresponding arguments are passed to PlotItem.setLabel()
+                        Optionally, PlotItem my also be initialized with the keyword arguments left,
+                        right, top, or bottom to achieve the same effect.
+            *name*    - Registers a name for this view so that others may link to it  
+        """
+        
         GraphicsWidget.__init__(self, parent)
         
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
@@ -85,8 +99,9 @@ class PlotItem(GraphicsWidget):
         self.layout.setVerticalSpacing(0)
         
         self.vb = ViewBox(name=name)
-        #self.vb.sigXRangeChanged.connect(self.xRangeChanged)
-        #self.vb.sigYRangeChanged.connect(self.yRangeChanged)
+        self.vb.sigRangeChanged.connect(self.sigRangeChanged)
+        self.vb.sigXRangeChanged.connect(self.sigXRangeChanged)
+        self.vb.sigYRangeChanged.connect(self.sigYRangeChanged)
         #self.vb.sigRangeChangedManually.connect(self.enableManualScale)
         #self.vb.sigRangeChanged.connect(self.viewRangeChanged)
         
@@ -134,7 +149,8 @@ class PlotItem(GraphicsWidget):
         for m in [
             'setXRange', 'setYRange', 'setXLink', 'setYLink', 
             'setRange', 'autoRange', 'viewRect', 'setMouseEnabled',
-            'enableAutoRange', 'disableAutoRange', 'setAspectLocked']:
+            'enableAutoRange', 'disableAutoRange', 'setAspectLocked',
+            'register', 'unregister']:
             setattr(self, m, getattr(self.vb, m))
             
         self.items = []
@@ -250,12 +266,16 @@ class PlotItem(GraphicsWidget):
         
         #if name is not None:
             #self.registerPlot(name)
-        
-        if labels is not None:
-            for k in labels:
-                if isinstance(labels[k], basestring):
-                    labels[k] = (labels[k],)
-                self.setLabel(k, *labels[k])
+        if labels is None:
+            labels = {}
+        for label in self.scales.keys():
+            if label in kargs:
+                labels[label] = kargs[label]
+                del kargs[label]
+        for k in labels:
+            if isinstance(labels[k], basestring):
+                labels[k] = (labels[k],)
+            self.setLabel(k, *labels[k])
                 
         if title is not None:
             self.setTitle(title)
@@ -263,7 +283,7 @@ class PlotItem(GraphicsWidget):
         if len(kargs) > 0:
             self.plot(**kargs)
         
-        self.enableAutoRange()
+        #self.enableAutoRange()
         
     def implements(self, interface=None):
         return interface in ['ViewBoxWrapper']
@@ -277,6 +297,9 @@ class PlotItem(GraphicsWidget):
         #QtGui.QGraphicsWidget.paint(self, *args)
         #prof.finish()
         
+    ## bad idea. 
+    #def __getattr__(self, attr):  ## wrap ms
+        #return getattr(self.vb, attr)
         
     def close(self):
         #print "delete", self
@@ -364,6 +387,8 @@ class PlotItem(GraphicsWidget):
             #print "  error during update of", self
             #print "  Referrers are:", refs
             #raise
+        
+        
         
     def updateGrid(self, *args):
         g = self.ctrl.gridGroup.isChecked()
@@ -1313,18 +1338,24 @@ class PlotItem(GraphicsWidget):
             
         return c
 
-    def saveSvgClicked(self):
-        self.writeSvg()
+    #def saveSvgClicked(self):
+        #self.writeSvg()
         
-    def saveSvgCurvesClicked(self):
-        self.writeSvgCurves()
+    #def saveSvgCurvesClicked(self):
+        #self.writeSvgCurves()
         
-    def saveImgClicked(self):
-        self.writeImage()
+    #def saveImgClicked(self):
+        #self.writeImage()
             
-    def saveCsvClicked(self):
-        self.writeCsv()
+    #def saveCsvClicked(self):
+        #self.writeCsv()
       
+    def setExportMode(self, export, opts):
+        if export:
+            self.autoBtn.hide()
+        else:
+            self.autoBtn.show()
+    
 
 #class PlotWidgetManager(QtCore.QObject):
     

@@ -26,14 +26,16 @@ class GraphicsLayout(GraphicsWidget):
         self.currentRow += 1
         self.currentCol = 0
         
-    def nextCol(self, colspan=1):
+    def nextColumn(self, colspan=1):
         """Advance to next column, while returning the current column number 
         (generally only for internal use--called by addItem)"""
         self.currentCol += colspan
         return self.currentCol-colspan
         
+    def nextCol(self, *args, **kargs):
+        return self.nextColumn(*args, **kargs)
+        
     def addPlot(self, row=None, col=None, rowspan=1, colspan=1, **kargs):
-        from PlotItem import PlotItem
         plot = PlotItem(**kargs)
         self.addItem(plot, row, col, rowspan, colspan)
         return plot
@@ -43,7 +45,16 @@ class GraphicsLayout(GraphicsWidget):
         self.addItem(vb, row, col, rowspan, colspan)
         return vb
         
-
+    def addLabel(self, text, row=None, col=None, rowspan=1, colspan=1, **kargs):
+        text = LabelItem(text, **kargs)
+        self.addItem(text, row, col, rowspan, colspan)
+        return text
+        
+    def addLayout(self, row=None, col=None, rowspan=1, colspan=1, **kargs):
+        layout = GraphicsLayout(**kargs)
+        self.addItem(layout, row, col, rowspan, colspan)
+        return layout
+        
     def addItem(self, item, row=None, col=None, rowspan=1, colspan=1):
         if row is None:
             row = self.currentRow
@@ -95,3 +106,4 @@ class GraphicsLayout(GraphicsWidget):
 ## Must be imported at the end to avoid cyclic-dependency hell:
 from ViewBox import ViewBox
 from PlotItem import PlotItem
+from LabelItem import LabelItem

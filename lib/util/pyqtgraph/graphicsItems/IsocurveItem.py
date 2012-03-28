@@ -6,6 +6,12 @@ from pyqtgraph.Qt import QtGui
 
 
 class IsocurveItem(GraphicsObject):
+    """
+    Item displaying an isocurve of a 2D array.
+    
+    To align this item correctly with an ImageItem,
+    call isocurve.setParentItem(image)
+    """
     
     def __init__(self, data=None, level=None, pen='w', parent=None):
         GraphicsObject.__init__(self)

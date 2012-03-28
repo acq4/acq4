@@ -48,7 +48,15 @@ class ScannerProtoGui(ProtocolGui):
         self.items = {}
         #self.occlusions = {}
         #self.nextId = 0
-        self.defaultGridSpacing = 1.0
+        #self.defaultGridSpacing = 1.0
+        self.haveCalibration = True   ## whether there is a calibration for the current combination of laser/camera/objective
+        self.currentObjective = None
+        self.currentScope = None
+        self.currentCamMod = None
+        
+        
+        self.displaySize = {}  ## maps (camera,objective) : display size
+                               ## since this setting is remembered for each objective.
         
         ## Populate module/device lists, auto-select based on device defaults 
         self.defCam = None
@@ -100,7 +108,7 @@ class ScannerProtoGui(ProtocolGui):
         #self.ui.addGridBtn.clicked.connect(lambda: self.addGrid())
         #self.ui.addOcclusionBtn.clicked.connect(lambda: self.addOcclusion())
         #self.ui.addProgramBtn.clicked.connect(lambda: self.addProgram())
-        self.ui.addSpiralScanBtn.clicked.connect(lambda: self.addSpiral())
+        #self.ui.addSpiralScanBtn.clicked.connect(lambda: self.addSpiral())
         #self.ui.deleteBtn.clicked.connect(lambda: self.delete())
         #self.ui.deleteAllBtn.clicked.connect(lambda: self.deleteAll())
         #self.ui.itemTree.itemClicked.connect(self.itemToggled)
@@ -112,7 +120,7 @@ class ScannerProtoGui(ProtocolGui):
         self.ui.laserCombo.currentIndexChanged.connect(self.laserDevChanged)
         #self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
         self.ui.sizeFromCalibrationRadio.toggled.connect(self.updateSpotSizes)
-        #self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
+        self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
         #self.ui.sizeSpin.valueChanged.connect(self.sizeSpinChanged)
         #QtCore.QObject.connect(self.ui.minTimeSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
         self.ui.minTimeSpin.valueChanged.connect(self.sequenceChanged)
@@ -132,23 +140,19 @@ class ScannerProtoGui(ProtocolGui):
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
         self.spotMarker = TargetPoint(name="Last", ptSize=100e-6, movable=False)
         self.spotMarker.setPen(pg.mkPen(color=(255,255,255), width = 2))
-        try:
-            self.updateSpotSizes()
-        except HelpfulException as exc:
-            if exc.kwargs.get('errId',None) == 1:  ## no calibration for the current objective
-                self.testTarget.hide()
-            else:
-                raise
         self.spotMarker.hide()
+        #try:
+        self.updateSpotSizes()
+        #except HelpfulException as ex:
+            #if ex.kwargs.get('errId', None) == 1:
+                #self.setHaveCalibration(False)
+            #else:
+                #raise
         
         #camMod = self.cameraModule()
-        
-        self.currentObjective = None
-        self.currentScope = None
-        self.currentCamMod = None
         self.camModChanged()
         self.updateTDPlot()
-
+        
         
         ## load target list from device, allowing targets to persist across protocols
         #oldTargetList = self.dev.getTargetList()
@@ -198,7 +202,19 @@ class ScannerProtoGui(ProtocolGui):
                     #self.ui.cameraCombo.setCurrentIndex(self.ui.cameraCombo.count()-1)
             #except (KeyError,AttributeError):
                 #continue
+
+    def setHaveCalibration(self, have):
+        self.haveCalibration = have
+        self.updateVisibility()
         
+    def showInterface(self, b):
+        self.updateVisibility()
+        
+    def updateVisibility(self):
+        b = self.haveCalibration and not self.ui.hideCheck.isChecked()
+        for k in self.items:
+            self.items[k].setVisible(b)
+        self.testTarget.setVisible(b)
         
     def camModChanged(self):
         camDev = self.cameraDevice()
@@ -238,46 +254,48 @@ class ScannerProtoGui(ProtocolGui):
     def objectiveChanged(self):
         
         camDev = self.cameraDevice()
+        camMod = self.cameraModule()
         if camDev is None:
             return
         obj = camDev.getObjective()
         if self.currentObjective != obj:
             self.currentObjective = obj
-            try:
-                self.updateSpotSizes()
-                self.testTarget.show()
-            except HelpfulException as exc:
-                if exc.kwargs.get('errId', None) == 1:
-                    #logMsg("Could not update scanner spot sizes for %s objective because no calibration could be found." %str(obj), msgType='warning', importance=2)
-                    self.testTarget.hide()
-                else:
-                    raise
+            
+            ## recall display size settings for this objective
+            dispSize = self.displaySize.get((), None)
+            if dispSize is None:
+                self.ui.sizeFromCalibrationRadio.setChecked(True)
+            else:
+                self.ui.sizeSpin.setValue(dispSize)
+            
+            ## update spots
+            #try:
+            self.updateSpotSizes()
+                #self.testTarget.show()
+                #self.setHaveCalibration(True)
+            #except HelpfulException as exc:
+                #if exc.kwargs.get('errId', None) == 1:
+                    ##logMsg("Could not update scanner spot sizes for %s objective because no calibration could be found." %str(obj), msgType='warning', importance=2)
+                    #self.setHaveCalibration(False)
+                #else:
+                    #raise
                 
             for i in self.items.values():
-                li = self.listItem(i.name) ## actually a tree item
-                if i.objective == obj:
-                    li.setCheckState(0, QtCore.Qt.Checked)
-                    li.graphicsItem.setVisible(True)
-                else:
-                    li.setCheckState(0, QtCore.Qt.Unchecked)
-                    li.graphicsItem.setVisible(False)
+                active = (i.objective == obj)
+                i.parameters().setValue(active)
                     
-                #self.itemToggled(li)
-                
-            #self.testTarget.setPointSize(self.pointSize()[0])
-            #self.testTarget.setPointSize()
-            #self.spotMarker.setPointSize()
-            #self.cameraModule().ui.centerItem(self.testTarget)
-        camMod = self.cameraModule()
-        #camMod.ui.removeItem(self.testTarget)
-        #camMod.ui.removeItem(self.spotMarker)
-        #camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
-        #camMod.ui.addItem(self.spotMarker, None, [1,1], 1010)
 
     def laserDevChanged(self):
         ## called when laser device combo is changed
         ## need to update spot size
+        #try:
         self.updateSpotSizes()
+            #self.setHaveCalibration(True)
+        #except HelpfulException as ex:
+            #if ex.kwargs.get('errId', None) == 1:
+                #self.setHaveCalibration(False)
+            #else:
+                #raise
         #self.testTarget.setPointSize()
         #self.spotMarker.setPointSize()
 
@@ -293,17 +311,22 @@ class ScannerProtoGui(ProtocolGui):
     def updateSpotSizes(self):
         #size, displaySize = self.pointSize()
         ##pd = self.pointSize()[1]
-        size, display = self.pointSize()
-        for i in self.items.values():
-            i.setPointSize(display, size)
-        self.testTarget.setPointSize(size)
-        self.spotMarker.setPointSize(size)
-
-    def showInterface(self, b):
-        for k in self.items:
-            #if self.listItem(k).checkState(0) == QtCore.Qt.Checked:
-            self.items[k].setVisible(not b)
-        self.testTarget.setVisible(not b)
+        try:
+            size, display = self.pointSize()
+            for i in self.items.values():
+                i.setPointSize(display, size)
+            self.testTarget.setPointSize(size)
+            self.spotMarker.setPointSize(size)
+            
+            self.setHaveCalibration(True)
+        except HelpfulException as exc:
+            if exc.kwargs.get('errId', None) == 1:
+                self.setHaveCalibration(False)
+            else:
+                raise
+        
+        
+        
 
     #def listItem(self, name):
         #return self.ui.itemTree.findItems(name, QtCore.Qt.MatchRecursive)[0]
@@ -319,9 +342,9 @@ class ScannerProtoGui(ProtocolGui):
             laser = self.ui.laserCombo.currentText()
             cal = self.dev.getCalibration(cam, laser)
             ss = cal['spot'][1]
-           
+            
+            
         except:
-            print "Could not find spot size from calibration."
             #logMsg("Could not find spot size from calibration.", msgType='error') ### This should turn into a HelpfulException.
             exc = sys.exc_info()
             raise HelpfulException("Could not find spot size from calibration. ", exc=exc, reasons=["Correct camera and/or laser device are not selected.", "There is no calibration file for selected camera and laser."], errId=1)
@@ -329,14 +352,17 @@ class ScannerProtoGui(ProtocolGui):
         if self.ui.sizeFromCalibrationRadio.isChecked():
             displaySize = ss
             ## reconnecting before this to get around reload errors, breaks the disconnect
-            try:
-                self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
-            except TypeError:
-                logExc("A TypeError was caught in ScannerProtoGui.pointSize(). It was probably caused by a reload.", msgType='status', importance=0)
+            #try:
+                #self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
+            #except TypeError:
+                #logExc("A TypeError was caught in ScannerProtoGui.pointSize(). It was probably caused by a reload.", msgType='status', importance=0)
             self.stateGroup.setState({'spotSize':ss})
-            self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
+            #self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
+            self.displaySize[(cam, self.currentObjective)] = None
         elif self.ui.sizeCustomRadio.isChecked():
             displaySize = self.ui.sizeSpin.value()
+            self.displaySize[(cam, self.currentObjective)] = displaySize
+            
         return (ss, displaySize)
         #return (0.0001, packing)
         
@@ -559,7 +585,7 @@ class ScannerProtoGui(ProtocolGui):
             else:
                 raise
             
-        state['ptSize'] = ptSize
+        state['ptSize'] = dispSize
         
         cls = {'Grid': TargetGrid, 'Point': TargetPoint, 'Occlusion': TargetOcclusion}[itemType]
         item = cls(**state)
@@ -715,7 +741,7 @@ class ScannerProtoGui(ProtocolGui):
         self.itemChanged()
        
 
-    def itemChanged(self, item):
+    def itemChanged(self, item=None):
         self.targets = None
         self.sequenceChanged()
         self.storeConfiguration()
@@ -944,7 +970,7 @@ class TargetPoint(pg.EllipseROI):
         #if 'host' in args:
             #self.host = args.pop('host')
         
-        pg.ROI.__init__(self, (0,0), [ptSize/2.] * 2, movable=args.get('movable', True))
+        pg.ROI.__init__(self, (0,0), [ptSize] * 2, movable=args.get('movable', True))
         self.aspectLocked = True
         self.overPen = None
         self.underPen = self.pen
@@ -1042,7 +1068,6 @@ class TargetGrid(pg.ROI):
         self.params.item = self
         self.params.layout.sigStateChanged.connect(self.regeneratePoints)
         self.params.spacing.sigStateChanged.connect(self.regeneratePoints)
-        
         pg.ROI.__init__(self, pos=(0,0), size=args.get('size', [ptSize*4]*2), angle=args.get('angle', 0))
         self.addScaleHandle([0, 0], [1, 1])
         self.addScaleHandle([1, 1], [0, 0])
