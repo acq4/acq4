@@ -31,14 +31,14 @@ class MapImager(AnalysisModule):
         modPath = os.path.abspath(os.path.split(__file__)[0])
         
         self._elements_ = OrderedDict([
-            ('Database Query', {'type':'ctrl', 'object': DatabaseQueryWidget(self.dataManager()), 'size':(200,200), 'host':self}),
+            ('Database Query', {'type':'ctrl', 'object': DatabaseQueryWidget(self.dataManager()), 'size':(300,200), 'host':self}),
             ('File Loader', {'type':'fileInput', 'pos':('below', 'Database Query'), 'host':self, 'showFileTree':False}),
             
-            ('Color Mapper', {'type':'ctrl', 'object': ColorMapper(filePath=os.path.join(modPath, "colorMaps")), 'size': (200,200), 'pos':('right', 'Database Query')}),
+            ('Color Mapper', {'type':'ctrl', 'object': ColorMapper(filePath=os.path.join(modPath, "colorMaps")), 'size': (200,300), 'pos':('right', 'Database Query')}),
             ('Contour Plotter', {'type':'ctrl', 'object':ContourPlotter(host=self), 'pos':('below', 'Color Mapper')}),
-            ('Canvas', {'type': 'canvas', 'pos': ('bottom', 'Color Mapper'), 'size': (700,800), 'allowTransforms': False, 'hideCtrl': True, 'args': {'name': 'Map Analyzer'}}),
+            ('Canvas', {'type': 'canvas', 'pos': ('bottom', 'Color Mapper'), 'size': (700,600), 'allowTransforms': False, 'hideCtrl': True, 'args': {'name': 'Map Analyzer'}}),
             ('Map Convolver', {'type':'ctrl', 'object': MapConvolver(), 'size': (200, 200), 'pos':('bottom', 'File Loader')}),
-            ('Spatial Correlator', {'type':'ctrl', 'object':SpatialCorrelator(), 'size':(100,200), 'pos': ('left', 'Canvas')})          
+            ('Spatial Correlator', {'type':'ctrl', 'object':SpatialCorrelator(), 'size':(100,100), 'pos': ('bottom', 'Map Convolver')})          
             #('File Loader', {'type': 'fileInput', 'size': (100, 300), 'host': self, 'args': {'showFileTree': True}}),
             #('ctrl', {'type': 'ctrl', 'object': self.ctrlWidget, 'pos': ('bottom', 'File Loader'), 'size': (100, 100)}),
             #('Rs Plot', {'type': 'plot', 'pos':('right', 'File Loader'), 'size':(200, 600), 'labels':{'left':(None,'Ohms'), 'bottom':(None,'s')}}),
@@ -83,7 +83,7 @@ class MapImager(AnalysisModule):
         data = self.dbquery.table()
         self.data = data
         self.getElement("Spatial Correlator").setData(data)
-        self.getElement("Map Convolver").setData(data)
+        #self.getElement("Map Convolver").setData(data)
         
     def convolverOutputChanged(self, data, spacing):
         self.spacing = spacing
@@ -96,15 +96,14 @@ class MapImager(AnalysisModule):
             self.recolorMap(self.colorMapper.getColorArray(self.imgData))
             
     def correlatorOutputChanged(self, data):
-        newFields= [f for f in data.dtype.descr if f not in self.data.dtype.descr]
-        if len(newFields) > 0:
-            arr = np.zeros(len(data), dtype=self.data.dtype.descr+newFields)
-            arr[:] = self.data
-            arr[:] = data
-            self.data = arr
+        #newFields= [f for f in data.dtype.descr if f not in self.data.dtype.descr]
+        #if len(newFields) > 0:
+            #arr = np.zeros(len(data), dtype=self.data.dtype.descr+newFields)
+            #arr[:] = self.data
+            #arr[:] = data
+            #self.data = arr
+        self.data = data
         self.mapConvolver.setData(self.data)
-        
-        
         
             
     def adjustContours(self, data, parentItem=None):

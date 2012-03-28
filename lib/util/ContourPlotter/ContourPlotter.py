@@ -27,6 +27,7 @@ class ContourPlotter(QtGui.QWidget):
         self.argList=[]
         self.items = []
         self.parentItem = None
+        self.data = None
         
         self.addBtn.clicked.connect(self.addItem)
         
@@ -75,8 +76,9 @@ class ContourPlotter(QtGui.QWidget):
             self.data = data
         if parentItem is not None:
             self.parentItem = parentItem
-        for i in self.items:
-            i.updateContour(self.data, parentItem=self.parentItem)
+        if self.data is not None:
+            for i in self.items:
+                i.updateContour(self.data, parentItem=self.parentItem)
             
 
     
@@ -84,8 +86,8 @@ class ContourItem(QtGui.QTreeWidgetItem):
     def __init__(self, cp, parentImage=None):
         self.cp = cp
         QtGui.QTreeWidgetItem.__init__(self)
-        self.paramCombo = QtGui.QComboBox()
-        self.thresholdSpin = SpinBox(value=0.05, dec=True, step=0.1)
+        self.paramCombo = pg.ComboBox()
+        self.thresholdSpin = pg.SpinBox(value=0.05, dec=True, step=0.1)
         self.maxCheck = QtGui.QCheckBox()
         self.colorBtn = ColorButton(color=(255,255,255))
         self.remBtn = QtGui.QPushButton('Remove')
@@ -119,12 +121,13 @@ class ContourItem(QtGui.QTreeWidgetItem):
         self.cp.remClicked(self)
         
     def updateParamCombo(self, paramList):
-        prev = str(self.paramCombo.currentText())
-        self.paramCombo.clear()
-        for p in paramList:
-            self.paramCombo.addItem(p)
-            if p == prev:
-                self.paramCombo.setCurrentIndex(self.paramCombo.count()-1) 
+        #prev = str(self.paramCombo.currentText())
+        #self.paramCombo.clear()
+        #for p in paramList:
+            #self.paramCombo.addItem(p)
+            #if p == prev:
+                #self.paramCombo.setCurrentIndex(self.paramCombo.count()-1) 
+        self.paramCombo.updateList(paramList)
  
     def updateContour(self, data, parentItem):
         #print "updateContour called."

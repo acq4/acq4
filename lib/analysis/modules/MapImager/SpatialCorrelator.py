@@ -29,7 +29,13 @@ class SpatialCorrelator(QtGui.QWidget):
         #self.outline = SpatialOutline()
         self.data = None ## will be a record array with 1 row per stimulation - needs to contain fields xpos, ypos, numOfPostEvents, significance
         
+        self.ctrl.processBtn.hide()
         self.ctrl.processBtn.clicked.connect(self.process)
+        self.ctrl.deltaTSpin.sigValueChanged.connect(self.paramChanged)
+        self.ctrl.radiusSpin.sigValueChanged.connect(self.paramChanged)
+        self.ctrl.spontSpin.sigValueChanged.connect(self.paramChanged)
+        self.ctrl.thresholdSpin.sigValueChanged.connect(self.paramChanged)
+        self.ctrl.probabilityRadio.toggled.connect(self.paramChanged)
         
         
     #def getOutline(self):
@@ -59,6 +65,8 @@ class SpatialCorrelator(QtGui.QWidget):
         spontRate = float(self.data['numOfPreEvents'].sum())/self.data['PreRegionLen'].sum()
         self.ctrl.spontSpin.setValue(spontRate)
     
+    def paramChanged(self, *args):
+        self.process()
     
     def process(self):
         #print "process called."
@@ -66,18 +74,18 @@ class SpatialCorrelator(QtGui.QWidget):
             return
         
         #print "calculating Probs"
-        fn.bendelsSpatialCorrelationAlgorithm(self.data, self.ctrl.radiusSpin.value(), self.ctrl.spontSpin.value(), self.ctrl.deltaTSpin.value(), printProcess=True)
+        fn.bendelsSpatialCorrelationAlgorithm(self.data, self.ctrl.radiusSpin.value(), self.ctrl.spontSpin.value(), self.ctrl.deltaTSpin.value(), printProcess=False)
         #print "probs calculated"
         self.data['prob'] = 1-self.data['prob'] ## give probability that events are not spontaneous
         
         if self.ctrl.probabilityRadio.isChecked():
-            self.sigOutputChanged.emit(self.data)
+            self.emitOutputChanged(self.data)
         elif self.ctrl.thresholdRadio.isChecked():
             arr = self.data['prob']
             arr[1-arr < self.ctrl.thresholdSpin.value()] = 1
             arr[(1-arr > self.ctrl.thresholdSpin.value())*(arr!=1)] = 0
             self.data['prob'] = arr
-            self.sigOutputChanged.emit(self.data)
+            self.emitOutputChanged(self.data)
         #spacing = 5e-6
         #arr = fn.convertPtsToSparseImage(self.data, ['prob'], spacing)
         #arr = arr['prob']
@@ -91,6 +99,8 @@ class SpatialCorrelator(QtGui.QWidget):
             #self.outline.setRadius(self.data[1]['spotSize']/2.)
         #self.outline.setData(spots)
         
+    def emitOutputChanged(self, obj):
+        self.sigOutputChanged.emit(obj)
     
     #@staticmethod
     def checkArrayInput(self, arr):

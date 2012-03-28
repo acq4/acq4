@@ -29,28 +29,39 @@ class MapConvolver(QtGui.QWidget):
         self.data = data
         self.output = None
         
+        self.ui.processBtn.hide()
         self.addBtn.clicked.connect(self.addItem)
         self.ui.processBtn.clicked.connect(self.processClicked)
         
         
     def setData(self, data):
         self.data = data
-        self.blockSignals = True
-        for i in self.items:
-            i.updateParamCombo(data.dtype.names)
-        self.blockSignals = False
-        self.processClicked()
+        fields = []
+        #self.blockSignals = True
+        try:
+            self.blockSignals(True)
+            for i in self.items:
+                fields.append(i.getParamName())
+                i.updateParamCombo(data.dtype.names)
+        finally:
+            self.blockSignals(False)
+            
+        newFields = [i.getParamName() for i in self.items]
+        if fields != newFields:
+            self.fieldsChanged()
+        #self.blockSignals = False
+        self.process()
         
     def addItem(self):
         item = ConvolverItem(self)
         self.ui.tree.insertTopLevelItem(self.ui.tree.topLevelItemCount()-1, item)
         item.postAdd()
         self.items.append(item)
-        self.blockSignals = True
+        #self.blockSignals = True
         if self.data is not None:
             item.updateParamCombo(self.data.dtype.names)
             self.fieldsChanged()
-        self.blockSignals = False
+        #self.blockSignals = False
     
     def remClicked(self, item):
         #item = self.ui.tree.currentItem()
@@ -66,14 +77,21 @@ class MapConvolver(QtGui.QWidget):
         self.fieldsChanged()
        
     def fieldsChanged(self):
-        if self.blockSignals:
-            return
+        #if self.blockSignals:
+         #   return
         fields = []
         for i in self.items:
-            fields.append(str(i.paramCombo.currentText()))
+            fields.append(i.getParamName())
         self.sigFieldsChanged.emit(fields)
         
-    def processClicked(self):
+       
+    def itemChanged(self):
+        self.process()
+        
+    def processClicked():
+        self.process()
+        
+    def process(self):
         if self.data == None:
             return
         params = {}
@@ -166,23 +184,23 @@ class ConvolverItem(QtGui.QTreeWidgetItem):
     def __init__(self, mc):
         self.mc = mc
         QtGui.QTreeWidgetItem.__init__(self)
-        self.paramCombo = QtGui.QComboBox()
-        self.convolutionCombo = QtGui.QComboBox()
-        self.convolutionCombo.addItems(["Gaussian convolution", "interpolation"])
-        self.sigmaSpin = pg.widgets.SpinBox.SpinBox(value=80e-6, siPrefix=True, suffix='m', dec=True, step=0.1)
-        #self.maxSpin = SpinBox(value=1.0)
-        #self.gradient = GradientWidget()
-        #self.updateArgList()
-        #self.opCombo.addItem('+')
-        #self.opCombo.addItem('*')
-        self.modeCombo = QtGui.QComboBox()
-        self.modeCombo.addItems(['nearest', 'linear', 'cubic'])
+        self.paramCombo = pg.ComboBox()
+        self.convolutionCombo = pg.ComboBox(items=["Gaussian convolution", "interpolation"], default="Gaussian convolution")
+        #self.convolutionCombo.addItems(["Gaussian convolution", "interpolation"])
+        self.sigmaSpin = pg.SpinBox(value=80e-6, siPrefix=True, suffix='m', dec=True, step=0.1)
+        self.modeCombo = pg.ComboBox(items=['nearest', 'linear', 'cubic'], default='nearest')
+        #self.modeCombo.addItems(['nearest', 'linear', 'cubic'])
         self.modeCombo.setEnabled(False)
         self.remBtn = QtGui.QPushButton('Remove')
         
         self.remBtn.clicked.connect(self.delete)
         self.paramCombo.currentIndexChanged.connect(self.mc.fieldsChanged)
         self.convolutionCombo.currentIndexChanged.connect(self.methodChanged)
+        self.paramCombo.currentIndexChanged.connect(self.itemChanged)
+        self.sigmaSpin.sigValueChanged.connect(self.itemChanged)
+        self.modeCombo.currentIndexChanged.connect(self.itemChanged)
+        
+        
         
     def postAdd(self):
         t = self.treeWidget()
@@ -193,16 +211,23 @@ class ConvolverItem(QtGui.QTreeWidgetItem):
         t.setItemWidget(self, 3, self.modeCombo)
         t.setItemWidget(self, 4, self.remBtn)
         
+    def itemChanged(self):
+        self.mc.itemChanged()
+        
     def delete(self):
         self.mc.remClicked(self)
         
+    def getParamName(self):
+        return str(self.paramCombo.currentText())
+    
     def updateParamCombo(self, paramList):
-        prev = str(self.paramCombo.currentText())
-        self.paramCombo.clear()
-        for p in paramList:
-            self.paramCombo.addItem(p)
-            if p == prev:
-                self.paramCombo.setCurrentIndex(self.paramCombo.count()-1)        
+        #prev = str(self.paramCombo.currentText())
+        #self.paramCombo.clear()
+        #for p in paramList:
+            #self.paramCombo.addItem(p)
+            #if p == prev:
+                #self.paramCombo.setCurrentIndex(self.paramCombo.count()-1)     
+        self.paramCombo.updateList(paramList)
 
     def methodChanged(self):
         method = str(self.convolutionCombo.currentText())
@@ -212,3 +237,4 @@ class ConvolverItem(QtGui.QTreeWidgetItem):
         elif method == 'interpolation':
             self.sigmaSpin.setEnabled(False)
             self.modeCombo.setEnabled(True)
+        self.itemChanged()
