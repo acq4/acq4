@@ -293,7 +293,8 @@ class Laser(DAQGeneric):
                 ch = 'qSwitch'
                 daqName = DAQGeneric.getDAQName(self, 'qSwitch')
             else:
-                raise HelpfulException("LaserTask can't find name of DAQ device to use for this protocol.")
+                return (None, None)
+            #raise HelpfulException("LaserTask can't find name of DAQ device to use for this protocol.")
             return (daqName, ch)
         else:
             return DAQGeneric.getDAQName(self, channel)
@@ -698,16 +699,17 @@ class LaserTask(DAQGenericTask):
         
         if cmd.get('alignMode', False):
             alignConfig = self.dev.config.get('alignmentMode', None)
-            if alignConfig is None:
-                raise Exception("Laser alignment mode requested, but this laser has no 'alignmentMode' in its configuration.")
-            if 'shutter' in alignConfig:
-                cmd['daqProtocol']['shutter']['preset'] = 1 if alignConfig['shutter'] else 0
-            if 'qSwitch' in alignConfig:
-                cmd['daqProtocol']['qSwitch']['preset'] = 1 if alignConfig['qSwitch'] else 0
-            if 'pCell' in alignConfig:
-                cmd['daqProtocol']['pCell']['preset'] = alignConfig['pCell']
-            elif 'power' in alignConfig:
-                raise Exception("Alignment mode by power not implemented yet.")
+            #if alignConfig is None:
+            #    raise Exception("Laser alignment mode requested, but this laser has no 'alignmentMode' in its configuration.")
+            if alignConfig is not None:
+                if 'shutter' in alignConfig:
+                    cmd['daqProtocol']['shutter']['preset'] = 1 if alignConfig['shutter'] else 0
+                if 'qSwitch' in alignConfig:
+                    cmd['daqProtocol']['qSwitch']['preset'] = 1 if alignConfig['qSwitch'] else 0
+                if 'pCell' in alignConfig:
+                    cmd['daqProtocol']['pCell']['preset'] = alignConfig['pCell']
+                elif 'power' in alignConfig:
+                    raise Exception("Alignment mode by power not implemented yet.")
                 
 
         DAQGenericTask.__init__(self, dev, cmd['daqProtocol'])
@@ -715,6 +717,8 @@ class LaserTask(DAQGenericTask):
     def configure(self, tasks, startOrder):
         ##  Get rate: first get name of DAQ, then ask the DAQ task for its rate
         daqName, ch = self.dev.getDAQName()
+        if daqName is None:
+            return
         daqTask = tasks[daqName]
         rate = daqTask.getChanSampleRate(self.dev.config[ch]['channel'][1])
         
