@@ -73,7 +73,8 @@ class CameraWindow(QtGui.QMainWindow):
         self.backgroundFrame = None
         self.blurredBackgroundFrame = None
         self.lastDrawTime = None
-        self.fps = None
+        #self.fps = None
+        #self.displayFps = None
         self.bgStartTime = None
         self.bgFrameCount = 0
         #self.levelMax = 1
@@ -134,7 +135,8 @@ class CameraWindow(QtGui.QMainWindow):
 
         ### Set up status bar labels
         self.recLabel = QtGui.QLabel()
-        self.fpsLabel = QtGui.QLabel()
+        self.fpsLabel = pg.ValueLabel(averageTime=2.0, formatStr='{avgValue:.1f} fps')
+        self.displayFpsLabel = pg.ValueLabel(averageTime=2.0, formatStr='(displaying {avgValue:.1f} fps)')
         self.rgnLabel = QtGui.QLabel()
         self.xyLabel = QtGui.QLabel()
         self.tLabel = QtGui.QLabel()
@@ -147,30 +149,22 @@ class CameraWindow(QtGui.QMainWindow):
         self.tLabel.setFont(font)
         self.vLabel.setFont(font)
         self.fpsLabel.setFont(font)
+        self.displayFpsLabel.setFont(font)
         self.fpsLabel.setFixedWidth(50)
+        self.displayFpsLabel.setFixedWidth(100)
         self.vLabel.setFixedWidth(50)
         self.logBtn = LogButton('Log')
         self.setStatusBar(StatusBar())
-        #self.statusBar().addPermanentWidget(self.recLabel)
         self.statusBar().insertPermanentWidget(0, self.recLabel)
-        #self.statusBar().addPermanentWidget(self.xyLabel)
         self.statusBar().insertPermanentWidget(0, self.xyLabel)
-        #self.statusBar().addPermanentWidget(self.rgnLabel)
         self.statusBar().insertPermanentWidget(0, self.rgnLabel)
-        #self.statusBar().addPermanentWidget(self.tLabel)
         self.statusBar().insertPermanentWidget(0, self.tLabel)
-        #self.statusBar().addPermanentWidget(self.vLabel)
         self.statusBar().insertPermanentWidget(0, self.vLabel)
-        #self.statusBar().addPermanentWidget(self.fpsLabel)
+        self.statusBar().insertPermanentWidget(0, self.displayFpsLabel)
         self.statusBar().insertPermanentWidget(0, self.fpsLabel)
-        #self.statusBar().addPermanentWidget(self.logBtn)
-        #self.logBtn.clicked.connect(module.manager.showLogWindow)
         
         ## done with UI
         self.show()
-        #self.ui.plotWidget.resize(self.ui.plotWidget.size().width(), 40)
-        
-        
         
         ## set up recording thread
         self.recordThread = RecordThread(self, self.module.manager)
@@ -232,6 +226,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.bgBlurSpin.valueChanged.connect(self.updateBackgroundBlur)
         self.ui.collectBgBtn.clicked.connect(self.collectBgClicked)
         self.ui.divideBgBtn.clicked.connect(self.divideClicked)
+        self.ui.subtractBgBtn.clicked.connect(self.subtractClicked)
         self.ui.bgBlurSpin.valueChanged.connect(self.requestFrameUpdate)
         
         ## Connect ROI dock
@@ -419,13 +414,14 @@ class CameraWindow(QtGui.QMainWindow):
 
     #@trace
     def divideClicked(self):
-        #self.AGCLastMax = None
-        #self.AGCLastMin = None
         self.lastMinMax = None
-        #self.setLevelRange()
-        #if self.ui.divideBgBtn.isChecked() and not self.ui.btnLockBackground.isChecked():
-            #self.backgroundFrame = None
-        #self.requestFrameUpdate()
+        self.ui.subtractBgBtn.setChecked(False)
+        
+    def subtractClicked(self):
+        self.lastMinMax = None
+        self.ui.divideBgBtn.setChecked(False)
+        
+    
             
     #@trace
     def showMessage(self, msg):
@@ -743,11 +739,12 @@ class CameraWindow(QtGui.QMainWindow):
             fps = frame[1]['fps']
             if fps is not None:
                 #print self.fps, 1.0/dt
-                if self.fps is None:
-                    self.fps = fps
-                else:
-                    self.fps = 1.0 / (0.9/self.fps + 0.1/fps)  ## inversion is necessary because dt varies linearly, but fps varies hyperbolically
-                self.fpsLabel.setText('%02.2ffps' % self.fps)
+                #if self.fps is None:
+                    #self.fps = fps
+                #else:
+                    #self.fps = 1.0 / (0.9/self.fps + 0.1/fps)  ## inversion is necessary because dt varies linearly, but fps varies hyperbolically
+                #self.fpsLabel.setText('%02.2ffps' % self.fps)
+                self.fpsLabel.setValue(fps)
         
         ## Update ROI plots, if any
         if self.ui.checkEnableROIs.isChecked():
@@ -833,6 +830,14 @@ class CameraWindow(QtGui.QMainWindow):
                 return
             
             ## We will now draw a new frame (even if the frame is unchanged)
+            if self.lastDrawTime is not None:
+                fps = 1.0 / (t - self.lastDrawTime)
+                #if self.displayFps is None:
+                    #self.displayFps = fps
+                #else:
+                    #self.fps = 1.0 / (0.9/self.displayFps + 0.1/fps)  ## inversion is necessary because dt varies linearly, but fps varies hyperbolically
+                #self.displayFpsLabel.setText('(displaying %02.2ffps)' % self.displayFps)
+                self.displayFpsLabel.setValue(fps)
             self.lastDrawTime = t
             
             ## Handle the next available frame, if there is one.
@@ -860,6 +865,10 @@ class CameraWindow(QtGui.QMainWindow):
                 bg = self.getBackgroundFrame()
                 if bg is not None and bg.shape == data.shape:
                     data = data / bg
+            elif self.ui.subtractBgBtn.isChecked():
+                bg = self.getBackgroundFrame()
+                if bg is not None and bg.shape == data.shape:
+                    data = data - bg
             
             ## Set new levels if auto gain is enabled
             if self.ui.btnAutoGain.isChecked():
