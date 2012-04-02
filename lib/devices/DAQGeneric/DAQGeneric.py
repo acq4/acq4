@@ -50,7 +50,8 @@ class ChannelHandle(object):
         self.channel = channel
         
 
-class DAQGeneric(Device):
+class DAQGeneric(RigidDevice):  ## we use rigiddevice here because multiple inheritance is not allowed with QObject.
+                                ## (and some subclasses may wish to use rigiddevice's methods)
     """
     Config format:
     
@@ -77,7 +78,7 @@ class DAQGeneric(Device):
     sigHoldingChanged = QtCore.Signal(object, object)
     
     def __init__(self, dm, config, name):
-        Device.__init__(self, dm, config, name)
+        RigidDevice.__init__(self, dm, config, name)
         self._DGLock = Mutex(QtCore.QMutex.Recursive)  ## protects access to _DGHolding, _DGConfig
         ## Do some sanity checks here on the configuration
         self._DGConfig = config

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.devices.Device import *
+from lib.devices.RigidDevice import *
 #import serial, struct
 from lib.drivers.SutterMP285 import *
 from lib.drivers.SutterMP285 import SutterMP285 as SutterMP285Driver  ## name collision with device class
@@ -13,13 +13,13 @@ import pyqtgraph as pg
 import numpy as np
 from copy import deepcopy
 
-class SutterMP285(Device):
+class SutterMP285(RigidDevice):
 
     sigPositionChanged = QtCore.Signal(object)
     sigLimitsChanged = QtCore.Signal(object)
 
     def __init__(self, dm, config, name):
-        Device.__init__(self, dm, config, name)
+        RigidDevice.__init__(self, dm, config, name)
         self.config = config
         self.configFile = os.path.join('devices', self.name + '_config.cfg')
         self.lock = Mutex(QtCore.QMutex.Recursive)
@@ -85,6 +85,10 @@ class SutterMP285(Device):
             rel = [0] * len(self.pos)
             rel[:len(data['rel'])] = data['rel']
         self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
+        
+        tr = QtGui.QMatrix4x4()
+        tr.translate(*self.pos)
+        self.setDeviceTransform(tr) ## this informs rigidly-connected devices that they have moved
 
     def getPosition(self):
         with self.lock:

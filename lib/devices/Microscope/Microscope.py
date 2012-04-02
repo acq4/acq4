@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.devices.Device import *
+from lib.devices.RigidDevice import *
 from deviceTemplate import Ui_Form
 from Mutex import Mutex
 from pyqtgraph import SpinBox
@@ -13,42 +13,44 @@ def ftrace(func):
         return rv
     return w
 
-class Microscope(Device):
+class Microscope(RigidDevice):
     
     sigObjectiveChanged = QtCore.Signal(object) ## (objective, index, lastObjective)
     sigObjectiveListChanged = QtCore.Signal()
-    sigPositionChanged = QtCore.Signal(object)  ## {'abs': pos, 'rel': pos}
+    
+    ## we now use RigidDevice.sigTransformChanged instead.
+    #sigPositionChanged = QtCore.Signal(object)  ## {'abs': pos, 'rel': pos}
     
     def __init__(self, dm, config, name):
-        Device.__init__(self, dm, config, name)
+        RigidDevice.__init__(self, dm, config, name)
         self.config = config
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.posDev = None
         self.objDev = None
         self.currentObjective = None
-        if 'positionDevice' in config:
-            if 'axisOrder' not in config:
-                self.axisOrder = [0,1]
-            else:
-                self.axisOrder = config['axisOrder']
+        
+        #if 'positionDevice' in config:
+            #if 'axisOrder' not in config:
+                #self.axisOrder = [0,1]
+            #else:
+                #self.axisOrder = config['axisOrder']
                 
-            self.posDev = dm.getDevice(config['positionDevice'])
-            pos = self.posDev.getPosition()
-            nax = len(pos)
-            self.position = [0.0,] * nax
-            if 'positionScale' in config:
-                ps = config['positionScale']
-                if type(ps) in [tuple, list]:
-                    self.positionScale = ps
-                else:
-                    self.positionScale = (ps,) * nax
-            else:
-                self.positionScale = (1.0,) * nax
-            self.positionChanged({'abs': pos, 'rel': pos})
-            #QtCore.QObject.connect(self.posDev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
-            self.posDev.sigPositionChanged.connect(self.positionChanged)
-        else:
-            self.position = [0.0, 0.0, 0.0]
+            #self.posDev = dm.getDevice(config['positionDevice'])
+            #pos = self.posDev.getPosition()
+            #nax = len(pos)
+            #self.position = [0.0,] * nax
+            #if 'positionScale' in config:
+                #ps = config['positionScale']
+                #if type(ps) in [tuple, list]:
+                    #self.positionScale = ps
+                #else:
+                    #self.positionScale = (ps,) * nax
+            #else:
+                #self.positionScale = (1.0,) * nax
+            #self.positionChanged({'abs': pos, 'rel': pos})
+            #self.posDev.sigPositionChanged.connect(self.positionChanged)
+        #else:
+            #self.position = [0.0, 0.0, 0.0]
         
         self.allObjectives = config['objectives']  ## all available objectives
         for l in self.allObjectives.itervalues():  ## Set default values for each objective
@@ -80,20 +82,20 @@ class Microscope(Device):
         pass
     
     #@ftrace
-    def positionChanged(self, p):
-        with self.lock:
-            #rel = []
-            #for i in range(len(self.position)):
-                #rel.append(p['rel'][i] * self.positionScale[i])
-                #self.position[i] += rel[i]
-            #print p['abs'], self.axisOrder, self.positionScale, self.position
-            self.position = [p['abs'][self.axisOrder[i]] * self.positionScale[i] for i in range(len(self.position))]
-            rel = [p['rel'][self.axisOrder[i]] * self.positionScale[i] for i in range(len(self.position))]
-            p = self.position[:]
+    #def positionChanged(self, p):
+        #with self.lock:
+            ##rel = []
+            ##for i in range(len(self.position)):
+                ##rel.append(p['rel'][i] * self.positionScale[i])
+                ##self.position[i] += rel[i]
+            ##print p['abs'], self.axisOrder, self.positionScale, self.position
+            #self.position = [p['abs'][self.axisOrder[i]] * self.positionScale[i] for i in range(len(self.position))]
+            #rel = [p['rel'][self.axisOrder[i]] * self.positionScale[i] for i in range(len(self.position))]
+            #p = self.position[:]
 
-        ## Mutex must be released before emitting!
-        #self.emit(QtCore.SIGNAL('positionChanged'), {'abs': p, 'rel': rel})
-        self.sigPositionChanged.emit({'abs': p, 'rel': rel})
+        ### Mutex must be released before emitting!
+        ##self.emit(QtCore.SIGNAL('positionChanged'), {'abs': p, 'rel': rel})
+        #self.sigPositionChanged.emit({'abs': p, 'rel': rel})
         
     def objectiveSwitched(self, sw, change):
         """Called when the switch device has changed, NOT when the user has selected a different objective."""
@@ -115,11 +117,11 @@ class Microscope(Device):
             self.sigObjectiveChanged.emit((obj, index, lastObj))
         
     #@ftrace
-    def getPosition(self):
-        """Return x,y,z position of microscope stage"""
-        with self.lock:
-            #print "Microscope:getPosition locked"
-            return self.position[:]
+    #def getPosition(self):
+        #"""Return x,y,z position of microscope stage"""
+        #with self.lock:
+            ##print "Microscope:getPosition locked"
+            #return self.position[:]
         
     #@ftrace
     def getObjective(self):
@@ -142,14 +144,15 @@ class Microscope(Device):
                 return l
         
     #@ftrace
-    def getState(self):
-        with self.lock:
-            return {'position': self.position[:], 'objective': self.getObjective()}
+    ## will need a suitable replacement for this..
+    #def getState(self):
+        #with self.lock:
+            #return {'position': self.position[:], 'objective': self.getObjective()}
     
     def deviceInterface(self, win):
         iface = ScopeGUI(self, win)
         iface.objectiveChanged((None, self.currentObjective, None))
-        iface.positionChanged({'abs': self.getPosition()})
+        #iface.positionChanged({'abs': self.getPosition()})
         return iface
 
     def selectObjectives(self, sel):
@@ -174,21 +177,16 @@ class ScopeGUI(QtGui.QWidget):
         QtGui.QWidget.__init__(self)
         self.win = win
         self.dev = dev
-        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
         self.dev.sigObjectiveChanged.connect(self.objectiveChanged)
-        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
-        self.dev.sigPositionChanged.connect(self.positionChanged)
+        #self.dev.sigPositionChanged.connect(self.positionChanged)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.objList = self.dev.listObjectives()
         self.switchN = len(self.objList)
-        #self.objCombos = {}
-        #self.objRadios = {}
         self.objWidgets = {}
         row = 1
         for i in self.objList:
             ## For each objective, create a set of widgets for selecting and updating.
-            #print self.objList[i]
             c = QtGui.QComboBox()
             r = QtGui.QRadioButton(i)
             first = self.objList[i].keys()[0]
@@ -203,7 +201,6 @@ class ScopeGUI(QtGui.QWidget):
             self.objWidgets[i] = widgets
             
             for o in self.objList[i]:
-                #c.addItem(self.objList[i][o]['name'], QtCore.QVariant(QtCore.QString(o)))
                 c.addItem(self.objList[i][o]['name'], o)
             r.clicked.connect(self.objRadioClicked)
             c.currentIndexChanged.connect(self.objComboChanged)
@@ -216,8 +213,8 @@ class ScopeGUI(QtGui.QWidget):
         (obj, oid, old) = obj
         self.objWidgets[oid][0].setChecked(True)
                 
-    def positionChanged(self, p):
-        self.ui.positionLabel.setText('%0.2f, %0.2f' % (p['abs'][0] * 1e6, p['abs'][1] * 1e6))
+    #def positionChanged(self, p):
+        #self.ui.positionLabel.setText('%0.2f, %0.2f' % (p['abs'][0] * 1e6, p['abs'][1] * 1e6))
                 
     def objRadioClicked(self):
         checked = None

@@ -68,25 +68,33 @@ class Camera(DAQGeneric):
         ## Default values for scope state. These will be used if there is no scope defined.
         self.scopeState = {
             'id': 0,
-            'scale': self.camConfig['scaleFactor'],
-            'scopePosition': [0, 0],   ## position of scope in global coords
-            'centerPosition': [0, 0],  ## position of objective in global coords (objective may be offset from center of scope)
-            'offset': [0, 0],
-            'objScale': 1,
-            'pixelSize': filter(abs, self.camConfig['scaleFactor']),
-            'objective': ''
+            #'scopePosition': [0, 0],   ## position of scope in global coords
+            #'centerPosition': [0, 0],  ## position of objective in global coords (objective may be offset from center of scope)
+            #'offset': [0, 0],
+            #'objScale': 1,
+            'pixelSize': (1, 1),
+            'objective': '',
+            'transform': None,
         }
         
+
+        self.scopeDev = None
+        p = self
+        while True:
+            p = p.parentDevice()
+            if isinstance(p, Microscope):
+                self.scopeDev = p
+                self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged)
+                break
         
-        if 'scopeDevice' in config:
-            self.scopeDev = self.dm.getDevice(config['scopeDevice'])
-            self.scopeDev.sigPositionChanged.connect(self.positionChanged)
-            self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged)
-            ## Cache microscope state for fast access later
-            self.objectiveChanged()
-            self.positionChanged()
-        else:
-            self.scopeDev = None
+        #if 'scopeDevice' in config:
+            #self.scopeDev = self.dm.getDevice(config['scopeDevice'])
+            #self.scopeDev.sigPositionChanged.connect(self.positionChanged)
+            ### Cache microscope state for fast access later
+            #self.objectiveChanged()
+            #self.positionChanged()
+        #else:
+            #self.scopeDev = None
         
         
         self.setupCamera() 
@@ -281,20 +289,20 @@ class Camera(DAQGeneric):
     
     ### Scope interface functions below
 
-    def getPosition(self, justScope=False):
-        """Return the coordinate of the center of the sensor area
-        If justScope is True, return the scope position, uncorrected for the objective offset"""
-        with MutexLocker(self.lock):
-            if justScope:
-                return self.scopeState['scopePosition']
-            else:
-                return self.scopeState['centerPosition']
+    #def getPosition(self, justScope=False):
+        #"""Return the coordinate of the center of the sensor area
+        #If justScope is True, return the scope position, uncorrected for the objective offset"""
+        #with MutexLocker(self.lock):
+            #if justScope:
+                #return self.scopeState['scopePosition']
+            #else:
+                #return self.scopeState['centerPosition']
 
     #@ftrace
-    def getScale(self):
-        """Return the dimensions of 1 pixel with signs if the image is flipped"""
-        with MutexLocker(self.lock):
-            return self.scopeState['scale']
+    #def getScale(self):
+        #"""Return the dimensions of 1 pixel with signs if the image is flipped"""
+        #with MutexLocker(self.lock):
+            #return self.scopeState['scale']
         
     #@ftrace
     def getPixelSize(self):
@@ -414,10 +422,16 @@ class Camera(DAQGeneric):
 
         
 class Frame(object):
-    def __init__(self, data, meta):
+    def __init__(self, data, info):
         object.__init__(self)
-        self.data = data
-        self.meta = meta
+        self._data = data
+        self._info = info
+        
+    def data(self):
+        return self._data
+    
+    def info(self):
+        return self._info
         
     def mapFromFrameToScope(obj):
         """
