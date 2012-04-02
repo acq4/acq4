@@ -412,6 +412,35 @@ class Camera(DAQGeneric):
     def wait(self, *args, **kargs):
         return self.acqThread.wait(*args, **kargs)
 
+        
+class Frame(object):
+    def __init__(self, data, meta):
+        object.__init__(self)
+        self.data = data
+        self.meta = meta
+        
+    def mapFromFrameToScope(obj):
+        """
+        Map from the frame's data coordinates to scope coordinates
+        """
+        pass
+    
+    
+    def mapFromFrameToGlobal(obj):
+        """
+        Map from the frame's data coordinates to global coordinates
+        """
+        pass
+    
+    
+    def mapFromFrameToSensor(obj):
+        """
+        Map from the frame's data coordinates to the camera's sensor coordinates
+        """
+        pass
+    
+    
+        
 class CameraTask(DAQGenericTask):
     """Default implementation of camera protocol task.
     Some of these functions may need to be reimplemented for subclasses."""
@@ -637,14 +666,14 @@ class CameraTask(DAQGenericTask):
         with MutexLocker(self.lock):
             data = self.frames
             if len(data) > 0:
-                arr = concatenate([f[0][newaxis,...] for f in data])
+                arr = concatenate([f.data()[newaxis,...] for f in data])
                 try:
-                    times = array([f[1]['time'] for f in data])
+                    times = array([f.info()['time'] for f in data])
                 except:
                     print f
                     raise
                 times -= times[0]
-                info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), data[0][1]]
+                info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), data[0].info()]
                 #print info
                 marr = MetaArray(arr, info=info)
                 #print "returning frames:", marr.shape
@@ -855,7 +884,7 @@ class AcquireThread(QtCore.QThread):
                         #print data
                         del frame['data']
                         frameInfo.update(frame)
-                        out = (data, frameInfo)
+                        out = Frame(data, frameInfo)
                         with MutexLocker(self.connectMutex):
                             conn = list(self.connections)
                         for c in conn:

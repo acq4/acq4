@@ -118,7 +118,7 @@ class ScannerDeviceGui(QtGui.QWidget):
     def calibrateClicked(self):
         cam = str(self.ui.cameraCombo.currentText())
         laser = str(self.ui.laserCombo.currentText())
-        obj = self.dev.getObjective(cam)
+        obj = self.dev.getObjective()
         
         ## Run calibration
         (cal, spot) = self.runCalibration()
@@ -129,11 +129,9 @@ class ScannerDeviceGui(QtGui.QWidget):
         #fileName = cam + '_' + laser + '_' + obj + '.ma'
         index = self.dev.getCalibrationIndex()
         
-        if cam not in index:
-            index[cam] = {}
-        if laser not in index[cam]:
-            index[cam][laser] = {}
-        index[cam][laser][obj] = {'spot': spot, 'date': date, 'params': cal}
+        if laser not in index:
+            index[laser] = {}
+        index[laser][obj] = {'spot': spot, 'date': date, 'params': cal}
 
         self.dev.writeCalibrationIndex(index)
         
@@ -306,6 +304,9 @@ class ScannerDeviceGui(QtGui.QWidget):
             ## convert image location to absolute sensor pixel
             x = region[0] + (x+0.5) * binning[0]
             y = region[1] + (y+0.5) * binning[1]
+            
+            ## convert sensor location to scope-centric coordinates
+            (x,y) = someFrame.mapSensorToScope([x,y])
             
             spotLocations.append([x, y])
             spotCommands.append(positions[i])

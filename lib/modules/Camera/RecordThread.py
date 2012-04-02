@@ -102,7 +102,8 @@ class RecordThread(QtCore.QThread):
         recFrames = []
         newRec = False
         for frame in frames:
-            (data, info) = frame['frame']
+            data = frame['frame'].data()
+            info = frame['frame'].info()
             if frame['record']:
                 recFrames.append((data, info))
                 if frame['newRec']:

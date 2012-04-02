@@ -309,7 +309,8 @@ class CameraWindow(QtGui.QMainWindow):
         else:
             z = self.persistentFrames[-1].zValue() + 1
         
-        (img, info) = self.currentFrame
+        img = self.currentFrame.data()
+        info = self.currentFrame.info()
         s = info['pixelSize']
         p = info['imagePosition']
         self.persistentFrames.append(im)
@@ -697,7 +698,7 @@ class CameraWindow(QtGui.QMainWindow):
             if len(r['times']) > 0 and (minTime is None or r['times'][0] < minTime):
                 minTime = r['times'][0]
         if minTime is None:
-            minTime = frame[1]['time']
+            minTime = frame.info()['time']
                 
         prof.mark('remove old frames')
             
@@ -708,7 +709,7 @@ class CameraWindow(QtGui.QMainWindow):
             self.lastPlotTime = now
             
         for r in self.ROIs:
-            d = r['roi'].getArrayRegion(frame[0], self.imageItem, axes=(0,1))
+            d = r['roi'].getArrayRegion(frame.data(), self.imageItem, axes=(0,1))
             prof.mark('get array rgn')
             if d is None:
                 continue
@@ -717,7 +718,7 @@ class CameraWindow(QtGui.QMainWindow):
             else:
                 val = d.mean()
             r['vals'].append(val)
-            r['times'].append(frame[1]['time'])
+            r['times'].append(frame.info()['time'])
             prof.mark('append')
             if draw:
                 r['plot'].setData(np.array(r['times'])-minTime, r['vals'])
@@ -736,7 +737,7 @@ class CameraWindow(QtGui.QMainWindow):
             lf = self.currentFrame
             
         if lf is not None:
-            fps = frame[1]['fps']
+            fps = frame.info()['fps']
             if fps is not None:
                 #print self.fps, 1.0/dt
                 #if self.fps is None:
@@ -771,11 +772,11 @@ class CameraWindow(QtGui.QMainWindow):
                 x = float(self.bgFrameCount)/(self.bgFrameCount + 1)
                 self.bgFrameCount += 1
                 
-            if self.backgroundFrame == None or self.backgroundFrame.shape != frame[0].shape:
-                self.backgroundFrame = frame[0].astype(float)
+            if self.backgroundFrame == None or self.backgroundFrame.shape != frame.data().shape:
+                self.backgroundFrame = frame.data().astype(float)
             else:
                 #print "mix:", x
-                self.backgroundFrame = x * self.backgroundFrame + (1-x)*frame[0].astype(float)
+                self.backgroundFrame = x * self.backgroundFrame + (1-x)*frame.data().astype(float)
     
     def collectBgClicked(self, checked):
         ###self.backgroundFrame = ### an average of frames collected -- how to do this?
@@ -857,7 +858,8 @@ class CameraWindow(QtGui.QMainWindow):
                 #if self.ui.continuousBgBtn.isChecked() or self.ui.staticBgBtn.isChecked():
                 #if self.ui.divideBgBtn.isChecked():
                     #self.updateBackgroundBlur()
-            (data, info) = self.currentFrame
+            data = self.currentFrame.data()
+            info = self.currentFrame.info()
 
             
             ## divide the background out of the current frame if needed

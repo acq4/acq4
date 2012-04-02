@@ -122,54 +122,65 @@ class Scanner(Device):
             return self.currentVoltage
 
     
-    def getObjective(self, camera):
-        """Return the objective currently in use for camera"""
-        with MutexLocker(self.lock):
-            camDev = self.dm.getDevice(camera)
-        scope = camDev.scopeDev
-        return scope.getObjective()['name']
+    def getObjective(self):
+        """Return the name of the objective currently in use by the scanner's microscope device"""
+        return self.getScope().getObjective['name']
+
+    def getScope(self):
+        ## return the scope device for this scanner
+        name = self.config['scopeDevice']
+        return self.dm.getDevice(name)
+        
+    #def getObjective(self, camera):
+        #"""Return the objective currently in use for camera"""
+        #with MutexLocker(self.lock):
+            #camDev = self.dm.getDevice(camera)
+        #scope = camDev.scopeDev
+        #return scope.getObjective()['name']
     
     def getDaqName(self):
         return self.config['XAxis']['device']
         
-    def mapToScanner(self, x, y, camera, laser):
-        """Convert global coordinates to voltages required to set scan mirrors"""
-        obj = self.getObjective(camera)
-        cam = self.dm.getDevice(camera)
-        camPos = cam.getPosition()
-        
-        ## first convert position to sensor coords
-        #print "global:", x, y
-        (x, y) = cam.mapToSensor((x, y))
+    def mapToScanner(self, x, y, laser, objective=None):
+        """Convert global coordinates to voltages required to set scan mirrors
+        *laser* and *objective* must be strings indicating how the scanner is to be used.
+        If *objective* is not specified, then the objective currently in use is assumed.
+        """
         
         #print "camera:", x, y
-        cal = self.getCalibration(camera, laser, obj)
+        cal = self.getCalibration(laser, objective)
         
         if cal is None:
-            raise HelpfulException("The scanner device '%s' is not calibrated for this combination of laser, objective, and camera (%s, %s, %s)" % (self.name, laser, obj, camera))
-            #raise Exception("No calibration found for this combination of laser, camera, and objective:\n  %s\n  %s\n  %s" % (laser, camera, obj))
+            raise HelpfulException("The scanner device '%s' is not calibrated for this combination of laser and objective (%s, %s)" % (self.name, laser, objective))
             
         cal = cal['params']
         x1 = cal[0][0] + cal[0][1] * x + cal[0][2] * y + cal[0][3] * x**2 + cal[0][4] * y**2
         y1 = cal[1][0] + cal[1][1] * x + cal[1][2] * y + cal[1][3] * x**2 + cal[1][4] * y**2
         #print "voltage:", x1, y1
         return [x1, y1]
-    
-    #def mapToScanner(self, x, y, cam, laser=None, cal=None):
-        #"""Convert global coordinates to voltages required to set scan mirrors"""
-        #if cal is None:
-            #cal = self.getCalibration(cam, laser)['params']
-        #if cal is None:
-            #raise Exception("No calibration found for this combination of laser, camera, and objective:\n  %s\n  %s\n  %s" % (laser, camera, obj))
         
+    #def mapToScanner(self, x, y, camera, laser):
+        #"""Convert global coordinates to voltages required to set scan mirrors"""
+        #obj = self.getObjective(camera)
+        #cam = self.dm.getDevice(camera)
+        #camPos = cam.getPosition()
         
         ### first convert position to sensor coords
+        ##print "global:", x, y
         #(x, y) = cam.mapToSensor((x, y))
+        
+        ##print "camera:", x, y
+        #cal = self.getCalibration(camera, laser, obj)
+        
+        #if cal is None:
+            #raise HelpfulException("The scanner device '%s' is not calibrated for this combination of laser, objective, and camera (%s, %s, %s)" % (self.name, laser, obj, camera))
+            ##raise Exception("No calibration found for this combination of laser, camera, and objective:\n  %s\n  %s\n  %s" % (laser, camera, obj))
+            
+        #cal = cal['params']
         #x1 = cal[0][0] + cal[0][1] * x + cal[0][2] * y + cal[0][3] * x**2 + cal[0][4] * y**2
         #y1 = cal[1][0] + cal[1][1] * x + cal[1][2] * y + cal[1][3] * x**2 + cal[1][4] * y**2
         ##print "voltage:", x1, y1
         #return [x1, y1]
-    
     
     def getCalibrationIndex(self):
         with MutexLocker(self.lock):
@@ -210,44 +221,65 @@ class Scanner(Device):
             self.dm.writeConfigFile(index, fileName)
             #configfile.writeConfigFile(index, fileName)
             self.calibrationIndex = index
-        
-    def getCalibration(self, camera, laser, objective=None):
+            
+    def getCalibration(self, laser, objective=None):
         with MutexLocker(self.lock):
             index = self.getCalibrationIndex()
             
         if objective is None:
-            objective = self.getObjective(camera)
+            objective = self.getObjective()
         
-        if camera in index:
-            index1 = index[camera]
+        if laser in index:
+            index1 = index[laser]
         else:
-            print "Warning: No calibration found for camera %s" % camera
-            logMsg("Warning:No calibration found for camera %s" % camera, msgType='warning')
+            logMsg("Warning: No calibration found for laser %s" % laser, msgType='warning')
             return None
             
-        if laser in index1:
-            index2 = index1[laser]
+        if objective in index1:
+            index2 = index1[objective]
         else:
-            print "Warning: No calibration found for laser %s" % laser
-            logMsg("Warning:No calibration found for laser %s" % laser, msgType='warning')
+            logMsg("Warning: No calibration found for objective %s" % objective, msgType='warning')
             return None
+        
+        return index2.copy()
+        
+    #def getCalibration(self, camera, laser, objective=None):
+        #with MutexLocker(self.lock):
+            #index = self.getCalibrationIndex()
             
-        if objective in index2:
-            index3 = index2[objective]
-        else:
-            print "Warning: No calibration found for objective %s" % objective
-            logMsg("Warning:No calibration found for objective %s" % objective, msgType='warning')
-            return None
+        #if objective is None:
+            #objective = self.getObjective(camera)
         
-        #calFile = os.path.join(calDir, index3['fileName'])
+        #if camera in index:
+            #index1 = index[camera]
+        #else:
+            #print "Warning: No calibration found for camera %s" % camera
+            #logMsg("Warning:No calibration found for camera %s" % camera, msgType='warning')
+            #return None
+            
+        #if laser in index1:
+            #index2 = index1[laser]
+        #else:
+            #print "Warning: No calibration found for laser %s" % laser
+            #logMsg("Warning:No calibration found for laser %s" % laser, msgType='warning')
+            #return None
+            
+        #if objective in index2:
+            #index3 = index2[objective]
+        #else:
+            #print "Warning: No calibration found for objective %s" % objective
+            #logMsg("Warning:No calibration found for objective %s" % objective, msgType='warning')
+            #return None
         
-        #try:
-            #cal = MetaArray(file=calFile)
-        #except:
-            #print "Error loading calibration file for:\n  %s\n  %s\n  %s" % (laser, camera, obj)
-            #raise
+        ##calFile = os.path.join(calDir, index3['fileName'])
         
-        return index3.copy()
+        ##try:
+            ##cal = MetaArray(file=calFile)
+        ##except:
+            ##print "Error loading calibration file for:\n  %s\n  %s\n  %s" % (laser, camera, obj)
+            ##raise
+        
+        #return index3.copy()
         
     def storeCameraConfig(self, camera):
         """Store the configuration to be used when calibrating this camera"""
