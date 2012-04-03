@@ -420,6 +420,7 @@ class Profiler:
     
     def __init__(self, msg="Profiler", disabled=False, delayed=True, globalDelay=True):
         self.disabled = disabled
+        self.markCount = 0
         if disabled: 
             return
         self.finished = False
@@ -437,7 +438,11 @@ class Profiler:
         self.t0 = ptime.time()
         self.t1 = self.t0
     
-    def mark(self, msg=''):
+    def mark(self, msg=None):
+        if msg is None:
+            msg = str(self.markCount)
+        self.markCount += 1
+        
         if self.disabled: 
             return
         t1 = ptime.time()
