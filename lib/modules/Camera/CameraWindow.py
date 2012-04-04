@@ -11,6 +11,7 @@ from Mutex import Mutex, MutexLocker
 import numpy as np
 import scipy.ndimage
 from debug import *
+import debug
 from metaarray import *
 import lib.Manager as Manager
 from RecordThread import RecordThread
@@ -103,6 +104,7 @@ class CameraWindow(QtGui.QMainWindow):
             self.restoreState(ws)
         
         ## set up ViewBox
+        #self.ui.graphicsView.useOpenGL(True)  ## a bit buggy, but we need the speed.
         self.view = pg.ViewBox()
         self.view.setAspectLocked(True)
         self.view.invertY()
@@ -125,6 +127,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.imageItem.setParentItem(self.imageItemGroup)
         self.imageItem.setZValue(-10)
         self.ui.histogram.setImageItem(self.imageItem)
+        self.ui.histogram.fillHistogram(False)  ## for speed
         
         #grid = Grid(self.gv)
         #self.scene.addItem(grid)
@@ -136,32 +139,26 @@ class CameraWindow(QtGui.QMainWindow):
         ### Set up status bar labels
         self.recLabel = QtGui.QLabel()
         self.fpsLabel = pg.ValueLabel(averageTime=2.0, formatStr='{avgValue:.1f} fps')
-        self.displayFpsLabel = pg.ValueLabel(averageTime=2.0, formatStr='(displaying {avgValue:.1f} fps)')
+        self.displayFpsLabel = pg.ValueLabel(averageTime=2.0, formatStr='(displaying {avgValue:.1f} fps')
+        self.displayPercentLabel = pg.ValueLabel(averageTime=4.0, formatStr='{avgValue:.1f}%)')
         self.rgnLabel = QtGui.QLabel()
         self.xyLabel = QtGui.QLabel()
         self.tLabel = QtGui.QLabel()
         self.vLabel = QtGui.QLabel()
-        font = self.xyLabel.font()
-        font.setPointSize(8)
-        self.recLabel.setFont(font)
-        self.rgnLabel.setFont(font)
-        self.xyLabel.setFont(font)
-        self.tLabel.setFont(font)
-        self.vLabel.setFont(font)
-        self.fpsLabel.setFont(font)
-        self.displayFpsLabel.setFont(font)
+        
         self.fpsLabel.setFixedWidth(50)
         self.displayFpsLabel.setFixedWidth(100)
+        self.displayFpsLabel.setFixedWidth(100)
         self.vLabel.setFixedWidth(50)
-        self.logBtn = LogButton('Log')
+        
+        #self.logBtn = LogButton('Log')
         self.setStatusBar(StatusBar())
-        self.statusBar().insertPermanentWidget(0, self.recLabel)
-        self.statusBar().insertPermanentWidget(0, self.xyLabel)
-        self.statusBar().insertPermanentWidget(0, self.rgnLabel)
-        self.statusBar().insertPermanentWidget(0, self.tLabel)
-        self.statusBar().insertPermanentWidget(0, self.vLabel)
-        self.statusBar().insertPermanentWidget(0, self.displayFpsLabel)
-        self.statusBar().insertPermanentWidget(0, self.fpsLabel)
+        font = self.xyLabel.font()
+        font.setPointSize(8)
+        labels = [self.recLabel, self.xyLabel, self.rgnLabel, self.tLabel, self.vLabel, self.displayPercentLabel, self.displayFpsLabel, self.fpsLabel]
+        for label in labels:
+            label.setFont(font)
+            self.statusBar().insertPermanentWidget(0, label)
         
         ## done with UI
         self.show()
@@ -752,6 +749,11 @@ class CameraWindow(QtGui.QMainWindow):
             self.addPlotFrame(frame)
             
         ## self.nextFrame gets picked up by drawFrame() at some point
+        if self.nextFrame is not None:
+            self.displayPercentLabel.setValue(0.)
+        else:
+            self.displayPercentLabel.setValue(100.)
+            
         self.nextFrame = frame
         
         ## stop collecting bg frames if we are in static mode and time is up
@@ -811,9 +813,6 @@ class CameraWindow(QtGui.QMainWindow):
         #sys.stdout.write('+')
         try:
             
-            
-            
-            
             ## If we last drew a frame < 1/30s ago, return.
             t = ptime.time()
             if (self.lastDrawTime is not None) and (t - self.lastDrawTime < .033333):
@@ -830,6 +829,8 @@ class CameraWindow(QtGui.QMainWindow):
                 #sys.stdout.write('-')
                 return
             
+            prof = debug.Profiler('CameraWindow.drawFrame', disabled=True)
+            prof.mark() 
             ## We will now draw a new frame (even if the frame is unchanged)
             if self.lastDrawTime is not None:
                 fps = 1.0 / (t - self.lastDrawTime)
@@ -840,6 +841,7 @@ class CameraWindow(QtGui.QMainWindow):
                 #self.displayFpsLabel.setText('(displaying %02.2ffps)' % self.displayFps)
                 self.displayFpsLabel.setValue(fps)
             self.lastDrawTime = t
+            prof.mark() 
             
             ## Handle the next available frame, if there is one.
             if self.nextFrame is not None:
@@ -860,6 +862,7 @@ class CameraWindow(QtGui.QMainWindow):
                     #self.updateBackgroundBlur()
             data = self.currentFrame.data()
             info = self.currentFrame.info()
+            prof.mark() 
 
             
             ## divide the background out of the current frame if needed
@@ -871,6 +874,7 @@ class CameraWindow(QtGui.QMainWindow):
                 bg = self.getBackgroundFrame()
                 if bg is not None and bg.shape == data.shape:
                     data = data - bg
+            prof.mark() 
             
             ## Set new levels if auto gain is enabled
             if self.ui.btnAutoGain.isChecked():
@@ -895,22 +899,13 @@ class CameraWindow(QtGui.QMainWindow):
                 bl = self.autoGainLevels[0] * (maxVal-minVal) + minVal
                 wl = self.autoGainLevels[1] * (maxVal-minVal) + minVal
                 
-                #self.AGCLastMax = maxVal
-                #self.AGCLastMin = minVal
-                
-                #self.lastMinMax = minVal, maxVal
                 self.ignoreLevelChange = True
                 try:
                     self.ui.histogram.setLevels(bl, wl)
                     self.ui.histogram.setHistogramRange(minVal, maxVal, padding=0.05)
                 finally:
                     self.ignoreLevelChange = False
-            #else:
-                #self.ignoreLevelChange = True
-                #try:
-                    #self.ui.histogram.setHistogramRange(0, 2**self.bitDepth)
-                #finally:
-                    #self.ignoreLevelChange = False
+            prof.mark() 
             
             ## Update histogram plot
             #self.updateHistogram(self.currentFrame[0], wl, bl)
@@ -919,10 +914,12 @@ class CameraWindow(QtGui.QMainWindow):
             m = QtGui.QTransform()
             m.translate(info['region'][0], info['region'][1])
             m.scale(*info['binning'])
+            prof.mark() 
             
             ## update image in viewport
             self.imageItem.updateImage(data)#, levels=[bl, wl])
             self.imageItem.setTransform(m)
+            prof.mark() 
 
             ## Update viewport to correct for scope movement/scaling
             newPos = info['centerPosition']
@@ -933,6 +930,7 @@ class CameraWindow(QtGui.QMainWindow):
                 self.cameraCenter = newPos
                 self.scopeCenter = info['scopePosition']
                 self.updateCameraDecorations()
+            prof.mark() 
             
             newScale = [info['pixelSize'][0] / info['binning'][0], info['pixelSize'][1] / info['binning'][1]]
             if newScale != self.cameraScale:  ## If scale has changed, re-center on new objective.
@@ -940,6 +938,7 @@ class CameraWindow(QtGui.QMainWindow):
                 self.centerView()
                 self.cameraScale = newScale
                 self.updateCameraDecorations()
+            prof.mark() 
 
             ## move and scale image item group  - sets image to correct position/scale based on scope position and objective
             m = QtGui.QTransform()
@@ -947,12 +946,14 @@ class CameraWindow(QtGui.QMainWindow):
             m.scale(*self.cameraScale)
             m.translate(-self.camSize[0]*0.5, -self.camSize[1]*0.5)
             self.imageItemGroup.setTransform(m)
+            prof.mark() 
 
             ## update info for pixel under mouse pointer
             self.updateMouse()
             self.updateRgnLabel()
-
             
+            prof.mark() 
+            prof.finish()
             #if self.ui.checkEnableROIs.isChecked():
                 #self.ui.plotWidget.replot()
            

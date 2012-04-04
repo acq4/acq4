@@ -187,7 +187,7 @@ def updateClass(old, new, debug):
                     print "    Skipping method update for %s; new class does not have this attribute" % attr
                 continue
                 
-            if oa.im_func is not na.im_func:
+            if hasattr(oa, 'im_func') and hasattr(na, 'im_func') and oa.im_func is not na.im_func:
                 depth = updateFunction(oa.im_func, na.im_func, debug)
                 #oa.im_class = new  ## bind old method to new class  ## not allowed
                 if debug:
