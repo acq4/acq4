@@ -897,22 +897,12 @@ class CameraWindow(QtGui.QMainWindow):
                 bl = self.autoGainLevels[0] * (maxVal-minVal) + minVal
                 wl = self.autoGainLevels[1] * (maxVal-minVal) + minVal
                 
-                #self.AGCLastMax = maxVal
-                #self.AGCLastMin = minVal
-                
-                #self.lastMinMax = minVal, maxVal
                 self.ignoreLevelChange = True
                 try:
                     self.ui.histogram.setLevels(bl, wl)
                     self.ui.histogram.setHistogramRange(minVal, maxVal, padding=0.05)
                 finally:
                     self.ignoreLevelChange = False
-            #else:
-                #self.ignoreLevelChange = True
-                #try:
-                    #self.ui.histogram.setHistogramRange(0, 2**self.bitDepth)
-                #finally:
-                    #self.ignoreLevelChange = False
             prof.mark() 
             
             ## Update histogram plot

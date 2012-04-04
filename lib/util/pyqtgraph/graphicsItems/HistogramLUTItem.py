@@ -15,6 +15,7 @@ from GridItem import *
 from pyqtgraph.Point import Point
 import pyqtgraph.functions as fn
 import numpy as np
+import pyqtgraph.debug as debug
 
 
 __all__ = ['HistogramLUTItem']
@@ -182,14 +183,19 @@ class HistogramLUTItem(GraphicsWidget):
         self.update()
 
     def imageChanged(self, autoLevel=False, autoRange=False):
+        prof = debug.Profiler('HistogramLUTItem.imageChanged', disabled=True)
         h = self.imageItem.getHistogram()
+        prof.mark('get histogram')
         if h[0] is None:
             return
         self.plot.setData(*h)
+        prof.mark('set plot')
         if autoLevel:
             mn = h[0][0]
             mx = h[0][-1]
             self.region.setRegion([mn, mx])
+            prof.mark('set region')
+        prof.finish()
             
     def getLevels(self):
         return self.region.getRegion()
