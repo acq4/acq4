@@ -3,6 +3,7 @@ from __future__ import with_statement
 from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from Mutex import Mutex
 #from lib.devices.Device import *
+from lib.devices.Microscope import Microscope
 from PyQt4 import QtCore
 import time
 from numpy import *
@@ -80,7 +81,7 @@ class Camera(DAQGeneric):
 
         self.scopeDev = None
         p = self
-        while True:
+        while p is not None:
             p = p.parentDevice()
             if isinstance(p, Microscope):
                 self.scopeDev = p
@@ -869,15 +870,21 @@ class AcquireThread(QtCore.QThread):
                         scopeState = ss['id']
                         ## regenerate frameInfo here
                         ps = ss['pixelSize']  ## size of CCD pixel
-                        pos = ss['centerPosition']
-                        pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
+                        #pos = ss['centerPosition']
+                        #pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
+                        
+                        transform = pg.Transform(ss['transform'])
+                        transform.scale(*ps)
+                        transform.translate(0,0)  ## correct for ROI here
                         
                         frameInfo = {
                             'pixelSize': [ps[0] * binning[0], ps[1] * binning[1]],  ## size of image pixel
-                            'scopePosition': ss['scopePosition'],
-                            'centerPosition': pos,
+                            #'scopePosition': ss['scopePosition'],
+                            #'centerPosition': pos,
                             'objective': ss['objective'],
-                            'imagePosition': pos2
+                            #'imagePosition': pos2
+                            'cameraTransform': ss['transform'],
+                            'transform': transform,
                         }
                         
                     ## Copy frame info to info array

@@ -922,30 +922,31 @@ class CameraWindow(QtGui.QMainWindow):
             prof.mark() 
 
             ## Update viewport to correct for scope movement/scaling
-            newPos = info['centerPosition']
-            if newPos != self.cameraCenter:
-                self.sigCameraPosChanged.emit()
-                diff = [newPos[0] - self.cameraCenter[0], newPos[1] - self.cameraCenter[1]]
-                self.view.translateBy([diff[0], diff[1]])
-                self.cameraCenter = newPos
-                self.scopeCenter = info['scopePosition']
-                self.updateCameraDecorations()
-            prof.mark() 
+            ## TODO: fix these
+            #newPos = info['centerPosition']
+            #if newPos != self.cameraCenter:
+                #self.sigCameraPosChanged.emit()
+                #diff = [newPos[0] - self.cameraCenter[0], newPos[1] - self.cameraCenter[1]]
+                #self.view.translateBy([diff[0], diff[1]])
+                #self.cameraCenter = newPos
+                #self.scopeCenter = info['scopePosition']
+                #self.updateCameraDecorations()
+            #prof.mark() 
             
-            newScale = [info['pixelSize'][0] / info['binning'][0], info['pixelSize'][1] / info['binning'][1]]
-            if newScale != self.cameraScale:  ## If scale has changed, re-center on new objective.
-                self.sigCameraScaleChanged.emit()
-                self.centerView()
-                self.cameraScale = newScale
-                self.updateCameraDecorations()
-            prof.mark() 
+            #newScale = [info['pixelSize'][0] / info['binning'][0], info['pixelSize'][1] / info['binning'][1]]
+            #if newScale != self.cameraScale:  ## If scale has changed, re-center on new objective.
+                #self.sigCameraScaleChanged.emit()
+                #self.centerView()
+                #self.cameraScale = newScale
+                #self.updateCameraDecorations()
+            #prof.mark() 
 
             ## move and scale image item group  - sets image to correct position/scale based on scope position and objective
-            m = QtGui.QTransform()
-            m.translate(*self.cameraCenter)
-            m.scale(*self.cameraScale)
-            m.translate(-self.camSize[0]*0.5, -self.camSize[1]*0.5)
-            self.imageItemGroup.setTransform(m)
+            #m = QtGui.QTransform()
+            #m.translate(*self.cameraCenter)
+            #m.scale(*self.cameraScale)
+            #m.translate(-self.camSize[0]*0.5, -self.camSize[1]*0.5)
+            self.imageItemGroup.setTransform(info['transform'])
             prof.mark() 
 
             ## update info for pixel under mouse pointer
