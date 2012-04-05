@@ -308,10 +308,11 @@ class CameraWindow(QtGui.QMainWindow):
         
         img = self.currentFrame.data()
         info = self.currentFrame.info()
-        s = info['pixelSize']
-        p = info['imagePosition']
+        #s = info['pixelSize']
+        #p = info['imagePosition']
         self.persistentFrames.append(im)
-        self.addItem(im, p, s, z)
+        self.addItem(im, z=z)
+        im.setTransform(info['transform'])
         
     #@trace
     def addItem(self, item, pos=(0,0), scale=(1,1), z=0):

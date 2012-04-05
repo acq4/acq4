@@ -101,7 +101,7 @@ class Transform3D(QtGui.QMatrix4x4):
         self._state['pos'] = Vector(state.get('pos', (0.,0.,0.)))
         self._state['scale'] = Vector(state.get('scale', (1.,1.,1.)))
         self._state['angle'] = state.get('angle', 0.)
-        self._state['axis'] = state.get('axis', 0.)
+        self._state['axis'] = state.get('axis', (0, 0, 1))
         self.update()
 
     def update(self):
