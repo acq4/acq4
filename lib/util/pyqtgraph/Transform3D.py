@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from Qt import QtCore, QtGui
 from Vector import Vector
+from Transform import Transform
 import numpy as np
 
 class Transform3D(QtGui.QMatrix4x4):

@@ -29,6 +29,9 @@ class MockStage(RigidDevice):
         
     def setPosition(self, pos):
         self.pos = pos
+        tr = pg.Transform3D()
+        tr.translate(pos)
+        self.setDeviceTransform(tr)
         self.sigPositionChanged.emit(self)
 
     def deviceInterface(self, win):

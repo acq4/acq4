@@ -13,6 +13,7 @@ from deviceGUI import *
 import ptime as ptime
 from Mutex import Mutex, MutexLocker
 from debug import *
+from pyqtgraph import Vector
 
 class Camera(DAQGeneric):
     """Generic camera device class. All cameras should extend from this interface.
@@ -73,9 +74,9 @@ class Camera(DAQGeneric):
             #'centerPosition': [0, 0],  ## position of objective in global coords (objective may be offset from center of scope)
             #'offset': [0, 0],
             #'objScale': 1,
-            'pixelSize': (1, 1),
-            'objective': '',
-            'transform': None,
+            #'pixelSize': (1, 1),
+            #'objective': '',
+            #'transform': None,
         }
         
 
@@ -96,6 +97,9 @@ class Camera(DAQGeneric):
             #self.positionChanged()
         #else:
             #self.scopeDev = None
+        self.transformChanged()
+        if self.scopeDev is not None:
+            self.objectiveChanged()
         
         
         self.setupCamera() 
@@ -109,6 +113,8 @@ class Camera(DAQGeneric):
         self.acqThread.sigShowMessage.connect(self.showMessage)
         self.acqThread.sigNewFrame.connect(self.newFrame)
         #print "Camera: signals connected:"
+        
+        self.sigGlobalTransformChanged.connect(self.transformChanged)
         
         if config != None and 'params' in config:
             #print "Camera: setting configuration params."
@@ -357,17 +363,10 @@ class Camera(DAQGeneric):
         with MutexLocker(self.lock):
             return self.scopeState
         
-    def positionChanged(self, pos=None):
-        if pos is None:
-            pos = self.scopeDev.getPosition()
-        else:
-            pos = pos['abs']
-        with MutexLocker(self.lock):
-            self.scopeState['scopePosition'] = pos
-            offset = self.scopeState['offset']
-            self.scopeState['centerPosition'] = [pos[0] + offset[0], pos[1] + offset[1]]
-            self.scopeState['id'] += 1
-        #print self.scopeState
+    def transformChanged(self):  ## called then this device's global transform changes.
+        self.scopeState['transform'] = self.globalTransform()
+        self.scopeState['centerPosition'] = self.scopeState['transform'].map(Vector(0,0,0))
+        self.scopeState['pixelSize'] = self.scopeState['transform'].map(Vector(1, 1)) - self.scopeState['centerPosition']
         
     def objectiveChanged(self, obj=None):
         if obj is None:
@@ -375,16 +374,16 @@ class Camera(DAQGeneric):
         else:
             obj = obj[0]
         with MutexLocker(self.lock):
-            scale = obj['scale']
-            offset = obj['offset']
-            pos = self.scopeState['scopePosition']
+            #scale = obj['scale']
+            #offset = obj['offset']
+            #pos = self.scopeState['scopePosition']
             self.scopeState['objective'] = obj['name']
-            self.scopeState['objScale'] = scale
-            self.scopeState['offset'] = offset
-            self.scopeState['centerPosition'] = [pos[0] + offset[0], pos[1] + offset[1]]
-            sf = self.camConfig['scaleFactor']
-            self.scopeState['scale'] = [sf[0] * scale, sf[1] * scale]
-            self.scopeState['pixelSize'] = filter(abs, self.scopeState['scale'])
+            #self.scopeState['objScale'] = scale
+            #self.scopeState['offset'] = offset
+            #self.scopeState['centerPosition'] = [pos[0] + offset[0], pos[1] + offset[1]]
+            #sf = self.camConfig['scaleFactor']
+            #self.scopeState['scale'] = [sf[0] * scale, sf[1] * scale]
+            #self.scopeState['pixelSize'] = filter(abs, self.scopeState['scale'])
             self.scopeState['id'] += 1
         #print self.scopeState
         
@@ -864,7 +863,7 @@ class AcquireThread(QtCore.QThread):
                     
                     ## frameInfo includes pixelSize, objective, centerPosition, scopePosition, imagePosition
                     ss = self.dev.getScopeState()
-                    #print ss
+                    print ss
                     if ss['id'] != scopeState:
                         #print "scope state changed"
                         scopeState = ss['id']
@@ -873,8 +872,8 @@ class AcquireThread(QtCore.QThread):
                         #pos = ss['centerPosition']
                         #pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
                         
-                        transform = pg.Transform(ss['transform'])
-                        transform.scale(*ps)
+                        transform = pg.Transform3D(ss['transform'])
+                        transform.scale(ps)
                         transform.translate(0,0)  ## correct for ROI here
                         
                         frameInfo = {

@@ -33,7 +33,7 @@ class RigidDevice(Device):
         self.__parent = None
         self.__globalTransform = 0  ## 0 indicates the cache is invalid. None indicates the transform is non-affine.
         self.__inverseGlobalTransform = 0
-        self.__transform = None
+        self.__transform = Transform3D()
         self.__inverseTransform = 0
         self.__lock = Mutex(recursive=True)
         if 'parentDevice' in config:
@@ -45,7 +45,7 @@ class RigidDevice(Device):
         """Return this device's parent, or None if there is no parent."""
         with self.__lock:
             return self.__parent
-    
+            
     def setParentDevice(self, parent):
         with self.__lock:
             if self.__parent is not None:
@@ -119,7 +119,7 @@ class RigidDevice(Device):
         transformation is non-affine, and thus the mapTo/mapFrom methods must be used instead.)
         """
         with self.__lock:
-            return self.__deviceTransform
+            return self.__transform
     
     def inverseDeviceTransform(self):
         with self.__lock:
@@ -136,7 +136,7 @@ class RigidDevice(Device):
     
     def setDeviceTransform(self, tr):
         with self.__lock:
-            self.__deviceTransform = Transform3D(tr)
+            self.__transform = Transform3D(tr)
             self.invalidateCachedTransforms()
             self.sigTransformChanged.emit(self)
 
@@ -148,7 +148,7 @@ class RigidDevice(Device):
         """
         with self.__lock:
             if self.__globalTransform == 0:
-                devices = [self] + self.getParentDevices()
+                devices = [self] + self.parentDevices()
                 transform = Transform3D()
                 for d in devices:
                     tr = d.deviceTransform()
@@ -184,7 +184,7 @@ class RigidDevice(Device):
             if p is None:
                 break
             parents.append(p)
-        return p
+        return parents
 
     def parentDeviceTransformChanged(self, p):
         ## called when any (grand)parent's transform has changed.
