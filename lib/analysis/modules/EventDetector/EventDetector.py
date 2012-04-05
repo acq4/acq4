@@ -7,7 +7,7 @@ from collections import OrderedDict
 import debug
 import FileLoader
 import DatabaseGui
-import FeedbackButton
+import pyqtgraph as pg
 
 class EventDetector(AnalysisModule):
     """
@@ -273,7 +273,7 @@ class DBCtrl(QtGui.QWidget):
         self.layout = QtGui.QVBoxLayout()
         self.setLayout(self.layout)
         self.dbgui = DatabaseGui.DatabaseGui(dm=host.dataManager(), tables={identity: 'EventDetector_events'})
-        self.storeBtn = FeedbackButton.FeedbackButton("Store to DB")
+        self.storeBtn = pg.FeedbackButton("Store to DB")
         #self.storeBtn.clicked.connect(self.storeClicked)
         self.layout.addWidget(self.dbgui)
         self.layout.addWidget(self.storeBtn)

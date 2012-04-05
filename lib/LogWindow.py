@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
 from PyQt4 import QtGui, QtCore
 import LogWidgetTemplate
-from FeedbackButton import FeedbackButton
+from pyqtgraph import FeedbackButton
 import configfile
 from DataManager import DirHandle
 from HelpfulException import HelpfulException

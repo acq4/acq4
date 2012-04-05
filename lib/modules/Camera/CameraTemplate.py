@@ -366,4 +366,4 @@ class Ui_MainWindow(object):
 from pyqtgraph.widgets.GraphicsView import GraphicsView
 from pyqtgraph.widgets.PlotWidget import PlotWidget
 from pyqtgraph import HistogramLUTWidget, SpinBox
-from FeedbackButton import FeedbackButton
+from pyqtgraph import FeedbackButton
