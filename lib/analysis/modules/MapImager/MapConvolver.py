@@ -106,8 +106,9 @@ class MapConvolver(QtGui.QWidget):
                 pass
                 
         
-        arr = MapConvolver.convolveMaptoImage(self.data, params, spacing=spacing)
+        arr = MapConvolver.convolveMaptoImage(self.data, params, spacing=spacing) ## TODO: why is arr sometimes None
         arrs = MapConvolver.interpolateMapToImage(self.data, params, spacing)
+    
         
         dtype = arr.dtype.descr
         for p in arrs.keys():
@@ -187,7 +188,7 @@ class ConvolverItem(QtGui.QTreeWidgetItem):
         self.paramCombo = pg.ComboBox()
         self.convolutionCombo = pg.ComboBox(items=["Gaussian convolution", "interpolation"], default="Gaussian convolution")
         #self.convolutionCombo.addItems(["Gaussian convolution", "interpolation"])
-        self.sigmaSpin = pg.SpinBox(value=80e-6, siPrefix=True, suffix='m', dec=True, step=0.1)
+        self.sigmaSpin = pg.SpinBox(value=45e-6, siPrefix=True, suffix='m', dec=True, step=0.1)
         self.modeCombo = pg.ComboBox(items=['nearest', 'linear', 'cubic'], default='nearest')
         #self.modeCombo.addItems(['nearest', 'linear', 'cubic'])
         self.modeCombo.setEnabled(False)

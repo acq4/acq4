@@ -22,7 +22,7 @@ class SpatialCorrelator(QtGui.QWidget):
         self.ctrl.setupUi(self)
         
         self.ctrl.deltaTSpin.setOpts(suffix='s', value=50e-3, dec=True, step=0.1, siPrefix=True)
-        self.ctrl.radiusSpin.setOpts(suffix='m', value=80e-6, dec=True, step=0.1, siPrefix=True)
+        self.ctrl.radiusSpin.setOpts(suffix='m', value=90e-6, dec=True, step=0.1, siPrefix=True)
         self.ctrl.spontSpin.setOpts(suffix='Hz', value=0, step=0.1, siPrefix=True)
         self.ctrl.thresholdSpin.setOpts(value=0.05)
         

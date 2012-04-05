@@ -17,6 +17,7 @@ from MapConvolver import MapConvolver
 from ColorMapper import ColorMapper
 from Canvas.items.ImageCanvasItem import ImageCanvasItem
 from ContourPlotter.ContourPlotter import ContourPlotter
+import debug
 
 
 

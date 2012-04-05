@@ -11,7 +11,8 @@ def convertPtsToSparseImage(data, params, spacing=5e-6):
         Return a 2D record array with fields for each param in params - if 2 or more data points fall in the same grid location
         their values are averaged.
         """
-    
+    if len(params) == 0:
+        return
     ## sanity checks
     if params==None:
         raise Exception("Don't know which parameters to process. Options are: %s" %str(data.dtype.names))
@@ -27,6 +28,10 @@ def convertPtsToSparseImage(data, params, spacing=5e-6):
     for p in params:
         dtype.append((p, float))
     dtype.append(('stimNumber', int))
+    #print xmin, data['xPos'].max(), spacing
+    #print len(data[data['xPos'] > 0.002]) + len(data[data['xPos'] < -0.002])
+    #print np.argwhere(data['xPos'] > 0.002)
+    #print xdim, ydim
     arr = np.zeros((xdim, ydim), dtype=dtype)
     for s in data:
         x, y = (int((s['xPos']-xmin)/spacing), int((s['yPos']-ymin)/spacing))

@@ -87,7 +87,7 @@ class ContourItem(QtGui.QTreeWidgetItem):
         self.cp = cp
         QtGui.QTreeWidgetItem.__init__(self)
         self.paramCombo = pg.ComboBox()
-        self.thresholdSpin = pg.SpinBox(value=0.05, dec=True, step=0.1)
+        self.thresholdSpin = pg.SpinBox(value=0.98, dec=True, step=0.1)
         self.maxCheck = QtGui.QCheckBox()
         self.colorBtn = ColorButton(color=(255,255,255))
         self.remBtn = QtGui.QPushButton('Remove')
