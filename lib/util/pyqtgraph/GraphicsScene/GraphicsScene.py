@@ -47,7 +47,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
        items to function properly if they are expecting the usual press/move/release sequence of events.
        (It is recommended that items do NOT accept press events, and instead use click/drag events)
        Note: The default implementation of QGraphicsItem.mousePressEvent will ACCEPT the event if the 
-       item is has its Selectable or Movable flags enabled. You may need to override this behavior.
+       item has its Selectable or Movable flags enabled. You may need to override this behavior.
     3) If no item accepts the mousePressEvent, then the scene will begin delivering mouseDrag and/or mouseClick events.
        If the mouse is moved a sufficient distance (or moved slowly enough) before the button is released, 
        then a mouseDragEvent is generated.
