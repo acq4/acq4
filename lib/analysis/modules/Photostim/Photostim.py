@@ -545,8 +545,17 @@ class Photostim(AnalysisModule):
     def rewriteSpotPositions(self, scan):
         ## for now, let's just rewrite everything.
         #self.storeDBScan(scan)
-        pass
-
+        ## attempt to actually make this work
+        dbui = self.getElement('Database')
+        db = dbui.getDb()   
+        identity = self.dbIdentity+'.sites'
+        table = dbui.getTableName(identity)        
+        #dh = scan.source()
+        for spot in scan.spots():
+            protocolID = db('Select rowid from DirTable_Protocol where Dir="%s"'%(spot.data.name(relativeTo=db.baseDir())))[0]['rowid']
+            pos = spot.viewPos()
+            db('UPDATE %s SET xPos=%f, yPos=%f WHERE ProtocolDir=%i' % (table, pos.x(), pos.y(), protocolID))
+            
     def clearDBScan(self, scan):
         dbui = self.getElement('Database')
         db = dbui.getDb()
