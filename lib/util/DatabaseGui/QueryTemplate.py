@@ -42,4 +42,4 @@ class Ui_Form(object):
         self.queryBtn.setText(QtGui.QApplication.translate("Form", "Query", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph import TableWidget
-from FeedbackButton import FeedbackButton
+from pyqtgraph import FeedbackButton

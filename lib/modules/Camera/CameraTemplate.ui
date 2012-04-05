@@ -660,7 +660,7 @@ p, li { white-space: pre-wrap; }
   <customwidget>
    <class>FeedbackButton</class>
    <extends>QPushButton</extends>
-   <header>FeedbackButton</header>
+   <header>pyqtgraph</header>
   </customwidget>
   <customwidget>
    <class>HistogramLUTWidget</class>

@@ -105,4 +105,4 @@ class Ui_Form(object):
         self.removeScanBtn.setText(QtGui.QApplication.translate("Form", "Remove Scan", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph import TreeWidget
-from FeedbackButton import FeedbackButton
+from pyqtgraph import FeedbackButton
