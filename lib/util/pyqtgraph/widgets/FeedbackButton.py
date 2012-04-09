@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui
+
+__all__ = ['FeedbackButton']
+
 class FeedbackButton(QtGui.QPushButton):
+    """
+    QPushButton which flashes success/failure indication for slow or asynchronous procedures.
+    """
+    
     
     ### For thread-safetyness
     sigCallSuccess = QtCore.Signal(object, object, object)

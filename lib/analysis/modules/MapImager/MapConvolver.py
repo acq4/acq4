@@ -94,6 +94,9 @@ class MapConvolver(QtGui.QWidget):
     def process(self):
         if self.data == None:
             return
+        if len(self.items) == 0:
+            return
+        
         params = {}
         spacing = self.ui.spacingSpin.value()
         for i in self.items:
@@ -105,6 +108,7 @@ class MapConvolver(QtGui.QWidget):
             else:
                 pass
                 
+        
         
         arr = MapConvolver.convolveMaptoImage(self.data, params, spacing=spacing) ## TODO: why is arr sometimes None
         arrs = MapConvolver.interpolateMapToImage(self.data, params, spacing)

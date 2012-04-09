@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Mon Mar 19 15:07:42 2012
+# Created: Tue Mar 27 14:33:55 2012
 #      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(1053, 444)
+        Form.resize(703, 428)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(4)
         sizePolicy.setVerticalStretch(1)
@@ -127,6 +127,7 @@ class Ui_Form(object):
         self.gridLayout_5.setObjectName(_fromUtf8("gridLayout_5"))
         self.itemTree = ParameterTree(self.groupBox_3)
         self.itemTree.setObjectName(_fromUtf8("itemTree"))
+        self.itemTree.headerItem().setText(0, _fromUtf8("1"))
         self.itemTree.header().setVisible(False)
         self.gridLayout_5.addWidget(self.itemTree, 0, 0, 1, 1)
         self.horizontalLayout_5 = QtGui.QHBoxLayout()
@@ -153,30 +154,6 @@ class Ui_Form(object):
         self.gridLayout_6 = QtGui.QGridLayout(self.groupBox_4)
         self.gridLayout_6.setMargin(5)
         self.gridLayout_6.setObjectName(_fromUtf8("gridLayout_6"))
-        self.programTable = QtGui.QTableWidget(self.groupBox_4)
-        self.programTable.setObjectName(_fromUtf8("programTable"))
-        self.programTable.setColumnCount(0)
-        self.programTable.setRowCount(0)
-        self.gridLayout_6.addWidget(self.programTable, 1, 0, 1, 1)
-        self.gridLayout_7 = QtGui.QGridLayout()
-        self.gridLayout_7.setObjectName(_fromUtf8("gridLayout_7"))
-        self.addLineScanBtn = QtGui.QPushButton(self.groupBox_4)
-        self.addLineScanBtn.setEnabled(False)
-        self.addLineScanBtn.setObjectName(_fromUtf8("addLineScanBtn"))
-        self.gridLayout_7.addWidget(self.addLineScanBtn, 0, 0, 1, 1)
-        self.addCircleScanBtn = QtGui.QPushButton(self.groupBox_4)
-        self.addCircleScanBtn.setEnabled(False)
-        self.addCircleScanBtn.setObjectName(_fromUtf8("addCircleScanBtn"))
-        self.gridLayout_7.addWidget(self.addCircleScanBtn, 0, 1, 1, 1)
-        self.addSpiralScanBtn = QtGui.QPushButton(self.groupBox_4)
-        self.addSpiralScanBtn.setEnabled(False)
-        self.addSpiralScanBtn.setObjectName(_fromUtf8("addSpiralScanBtn"))
-        self.gridLayout_7.addWidget(self.addSpiralScanBtn, 1, 0, 1, 1)
-        self.deleteStepBtn = QtGui.QPushButton(self.groupBox_4)
-        self.deleteStepBtn.setEnabled(False)
-        self.deleteStepBtn.setObjectName(_fromUtf8("deleteStepBtn"))
-        self.gridLayout_7.addWidget(self.deleteStepBtn, 1, 1, 1, 1)
-        self.gridLayout_6.addLayout(self.gridLayout_7, 0, 0, 1, 1)
         self.gridLayout_9 = QtGui.QGridLayout()
         self.gridLayout_9.setObjectName(_fromUtf8("gridLayout_9"))
         spacerItem3 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
@@ -185,7 +162,12 @@ class Ui_Form(object):
         self.previewBtn.setEnabled(False)
         self.previewBtn.setObjectName(_fromUtf8("previewBtn"))
         self.gridLayout_9.addWidget(self.previewBtn, 0, 2, 1, 1)
-        self.gridLayout_6.addLayout(self.gridLayout_9, 2, 0, 1, 1)
+        self.gridLayout_6.addLayout(self.gridLayout_9, 1, 0, 1, 1)
+        self.programTree = ParameterTree(self.groupBox_4)
+        self.programTree.setObjectName(_fromUtf8("programTree"))
+        self.programTree.headerItem().setText(0, _fromUtf8("1"))
+        self.programTree.header().setVisible(False)
+        self.gridLayout_6.addWidget(self.programTree, 0, 0, 1, 1)
         self.gridLayout_4.addWidget(self.groupBox_4, 1, 2, 1, 1)
 
         self.retranslateUi(Form)
@@ -225,11 +207,6 @@ class Ui_Form(object):
         self.hideCheck.setText(QtGui.QApplication.translate("Form", "Hide items", None, QtGui.QApplication.UnicodeUTF8))
         self.hideMarkerBtn.setText(QtGui.QApplication.translate("Form", "Hide Spot Marker", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox_4.setTitle(QtGui.QApplication.translate("Form", "Program Controls", None, QtGui.QApplication.UnicodeUTF8))
-        self.programTable.setSortingEnabled(True)
-        self.addLineScanBtn.setText(QtGui.QApplication.translate("Form", "Add Line Scan", None, QtGui.QApplication.UnicodeUTF8))
-        self.addCircleScanBtn.setText(QtGui.QApplication.translate("Form", "Add Circle Scan", None, QtGui.QApplication.UnicodeUTF8))
-        self.addSpiralScanBtn.setText(QtGui.QApplication.translate("Form", "Add Spiral Scan", None, QtGui.QApplication.UnicodeUTF8))
-        self.deleteStepBtn.setText(QtGui.QApplication.translate("Form", "Delete Step", None, QtGui.QApplication.UnicodeUTF8))
         self.previewBtn.setText(QtGui.QApplication.translate("Form", "Preview", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph import SpinBox, PlotWidget

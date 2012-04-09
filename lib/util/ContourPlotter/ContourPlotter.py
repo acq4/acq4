@@ -91,7 +91,8 @@ class ContourItem(QtGui.QTreeWidgetItem):
         self.maxCheck = QtGui.QCheckBox()
         self.colorBtn = ColorButton(color=(255,255,255))
         self.remBtn = QtGui.QPushButton('Remove')
-        self.curveItem = pg.IsocurveItem(parent=parentImage)
+        self.curveItem = pg.IsocurveItem()
+        self.curveItem.setParentItem(parentImage)
         
         
         self.paramCombo.currentIndexChanged.connect(self.emitChanged)
