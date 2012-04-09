@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from Qt import QtCore, QtGui
 from Vector import Vector
+from Transform import Transform
 import numpy as np
 
 class Transform3D(QtGui.QMatrix4x4):
@@ -10,6 +11,10 @@ class Transform3D(QtGui.QMatrix4x4):
     def __init__(self, init=None):
         QtGui.QMatrix4x4.__init__(self)
         self.reset()
+        if init is None:
+            return
+        if init.__class__ is QtGui.QTransform:
+            init = Transform(init)
         
         if isinstance(init, dict):
             self.restoreState(init)
@@ -29,6 +34,8 @@ class Transform3D(QtGui.QMatrix4x4):
                 'axis': Vector(0, 0, 1),
             }
             self.update()
+        else:
+            raise Exception("Cannot build Transform3D from argument type:", type(init))
 
         
     def getScale(self):

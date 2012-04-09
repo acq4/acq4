@@ -6,6 +6,7 @@ from lib.drivers.SutterMP285 import *
 from lib.drivers.SutterMP285 import SutterMP285 as SutterMP285Driver  ## name collision with device class
 from Mutex import Mutex
 import debug
+import os, time
 #import pdb
 import devTemplate
 #import functions as fn
@@ -79,14 +80,14 @@ class SutterMP285(RigidDevice):
         #print "serial SutterMP285 requesting thread exit.."
         self.mThread.stop(block=True)
 
-    def posChanged(self, data):  #potentially have to modify this
+    def posChanged(self, data): 
         with self.lock:
             self.pos[:len(data['abs'])] = data['abs']
             rel = [0] * len(self.pos)
             rel[:len(data['rel'])] = data['rel']
         self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
         
-        tr = QtGui.QMatrix4x4()
+        tr = pg.Transform3D()
         tr.translate(*self.pos)
         self.setDeviceTransform(tr) ## this informs rigidly-connected devices that they have moved
 
