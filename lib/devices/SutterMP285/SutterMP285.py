@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
+from lib.devices.Device import *
 from lib.devices.RigidDevice import *
 #import serial, struct
 from lib.drivers.SutterMP285 import *
@@ -14,12 +15,13 @@ import pyqtgraph as pg
 import numpy as np
 from copy import deepcopy
 
-class SutterMP285(RigidDevice):
+class SutterMP285(Device, RigidDevice):
 
     sigPositionChanged = QtCore.Signal(object)
     sigLimitsChanged = QtCore.Signal(object)
 
     def __init__(self, dm, config, name):
+        Device.__init__(self, dm, config, name)
         RigidDevice.__init__(self, dm, config, name)
         self.config = config
         self.configFile = os.path.join('devices', self.name + '_config.cfg')

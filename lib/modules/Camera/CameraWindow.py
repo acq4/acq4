@@ -188,15 +188,17 @@ class CameraWindow(QtGui.QMainWindow):
         
         ## Set up microscope objective borders
         self.borders = []
-        scope = self.module.cam.getScopeDevice()
-        if scope is not None:
-            scope.sigObjectiveListChanged.connect(self.updateBorders)
-            scope.sigPositionChanged.connect(self.scopeMoved)
-            self.cameraCenter = self.cam.getPosition()
-            self.cameraScale = self.cam.getPixelSize()
-            self.scopeCenter = self.cam.getPosition(justScope=True)
-            self.centerView()
-        self.updateBorders()
+        self.cam.sigGlobalTransformChanged.connect(self.cameraMoved)
+        
+        #scope = self.cam.getScopeDevice()
+        #if scope is not None:
+            #scope.sigObjectiveListChanged.connect(self.updateBorders)
+            ##scope.sigPositionChanged.connect(self.scopeMoved)
+            #self.cameraCenter = self.cam.getPosition()
+            #self.cameraScale = self.cam.getPixelSize()
+            #self.scopeCenter = self.cam.getPosition(justScope=True)
+            #self.centerView()
+        #self.updateBorders()
         
         ## Initialize values/connections in Camera Dock
         self.setUiBinning(self.binning)
@@ -251,6 +253,31 @@ class CameraWindow(QtGui.QMainWindow):
         self.frameTimer.start(16) ## draw frames no faster than 60Hz
         #QtCore.QTimer.singleShot(1, self.drawFrame)
         ## avoiding possible singleShot-induced crashes
+
+
+    #@trace
+    def openCamera(self, ind=0):
+        try:
+            self.bitDepth = self.cam.getParam('bitDepth')
+            #self.setLevelRange()
+            self.camSize = self.cam.getParam('sensorSize')
+            self.statusBar().showMessage("Opened camera %s" % self.cam, 5000)
+            self.scope = self.module.cam.getScopeDevice()
+            
+            try:
+                bins = self.cam.listParams('binning')[0][0]
+            except:
+                bins = self.cam.listParams('binningX')[0]
+            bins.sort()
+            bins.reverse()
+            for b in bins:
+                self.ui.binningCombo.addItem(str(b))
+            
+            
+        except:
+            self.statusBar().showMessage("Error opening camera")
+            raise
+
         
     def scopeMoved(self, p):
         ## scope has moved; update viewport and camera outlines.
@@ -288,6 +315,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.updateCameraDecorations()
 
     def centerView(self):
+        
         center = self.cam.getPosition(justScope=True)
         bounds = self.cam.getBoundary().adjusted(center[0], center[1], center[0], center[1])
         self.view.setRange(bounds)
@@ -555,28 +583,6 @@ class CameraWindow(QtGui.QMainWindow):
             self.exposure = e
         self.cam.setParam('exposure', self.exposure, autoRestart=autoRestart)
         
-    #@trace
-    def openCamera(self, ind=0):
-        try:
-            self.bitDepth = self.cam.getParam('bitDepth')
-            #self.setLevelRange()
-            self.camSize = self.cam.getParam('sensorSize')
-            self.statusBar().showMessage("Opened camera %s" % self.cam, 5000)
-            self.scope = self.module.cam.getScopeDevice()
-            
-            try:
-                bins = self.cam.listParams('binning')[0][0]
-            except:
-                bins = self.cam.listParams('binningX')[0]
-            bins.sort()
-            bins.reverse()
-            for b in bins:
-                self.ui.binningCombo.addItem(str(b))
-            
-            
-        except:
-            self.statusBar().showMessage("Error opening camera")
-            raise
     
 
     #@trace
