@@ -3,9 +3,9 @@ from Device import Device
 from Mutex import Mutex
 from pyqtgraph import Transform3D
 
-class RigidDevice(Device):
+class RigidDevice(object):
     """
-    Rigid devices are devices which affect the mapping between an imaging/stimulation device 
+    Rigid devices are extenstions to devices which affect the mapping between an imaging/stimulation device 
     and the global coordinate system. For example: movable stages, changeable objective lenses, and
     the imaging/stimulation devices themselves are all considered rigid devices.
     
@@ -23,12 +23,22 @@ class RigidDevice(Device):
     
     """
     
-    sigTransformChanged = QtCore.Signal(object)        # emitted when this device's transform changes
-    sigGlobalTransformChanged = QtCore.Signal(object)  # emitted when the transform for this device or any of its parents changes
+    ## these signals are proxied from the RigidDevice object
+    ## we do this to avoid QObject double-inheritance issues.
+    class SignalProxyObject(QtCore.QObject):
+        sigTransformChanged = QtCore.Signal(object)        # emitted when this device's transform changes
+        sigGlobalTransformChanged = QtCore.Signal(object)  # emitted when the transform for this device or any of its parents changes
     
     def __init__(self, dm, config, name):
-        Device.__init__(self, dm, config, name)
-        self.sigTransformChanged.connect(self.sigGlobalTransformChanged)
+        object.__init__(self)
+        
+        ## create proxy object and wrap in its signals
+        self.__sigProxy = RigidDevice.SignalProxyObject()
+        self.sigTransformChanged = self.__sigProxy.sigTransformChanged
+        self.sigGlobalTransformChanged = self.__sigProxy.sigGlobalTransformChanged
+        
+        self.__devManager = dm
+        self.__config = config
         self.__children = []
         self.__parent = None
         self.__globalTransform = 0  ## 0 indicates the cache is invalid. None indicates the transform is non-affine.
@@ -36,6 +46,7 @@ class RigidDevice(Device):
         self.__transform = Transform3D()
         self.__inverseTransform = 0
         self.__lock = Mutex(recursive=True)
+        self.sigTransformChanged.connect(self.sigGlobalTransformChanged)
         if 'parentDevice' in config:
             self.setParentDevice(config['parentDevice'])
         if 'transform' in config:
@@ -51,7 +62,7 @@ class RigidDevice(Device):
             if self.__parent is not None:
                 self.__parent.sigGlobalTransformChanged.disconnect(self.parentDeviceTransformChanged)
             if isinstance(parent, basestring):
-                parent = self.dm.getDevice(parent)
+                parent = self.__devManager.getDevice(parent)
             
             parent.sigGlobalTransformChanged.connect(self.parentDeviceTransformChanged)
             self.__parent = parent
@@ -197,4 +208,4 @@ class RigidDevice(Device):
             self.__globalTransform = 0
             self.__inverseGlobalTransform = 0
 
-        
+    

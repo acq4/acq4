@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
 from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask
+from lib.devices.RigidDevice import RigidDevice
 from Mutex import Mutex
 #from lib.devices.Device import *
 from lib.devices.Microscope import Microscope
@@ -15,7 +16,7 @@ from Mutex import Mutex, MutexLocker
 from debug import *
 from pyqtgraph import Vector
 
-class Camera(DAQGeneric):
+class Camera(DAQGeneric, RigidDevice):
     """Generic camera device class. All cameras should extend from this interface.
      - The class handles protocol tasks, scope integration, expose/trigger lines
      - Subclasses should handle the connection to the camera driver by overriding
@@ -49,8 +50,9 @@ class Camera(DAQGeneric):
     sigParamsChanged = QtCore.Signal(object)
 
     def __init__(self, dm, config, name):
-        self.lock = Mutex(Mutex.Recursive)
+        RigidDevice.__init__(self, dm, config, name)
         
+        self.lock = Mutex(Mutex.Recursive)
         
         # Generate config to use for DAQ 
         daqConfig = {}
@@ -84,7 +86,9 @@ class Camera(DAQGeneric):
         p = self
         while p is not None:
             p = p.parentDevice()
+            print "parent:", p
             if isinstance(p, Microscope):
+                print "  got it"
                 self.scopeDev = p
                 self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged)
                 break
@@ -365,15 +369,17 @@ class Camera(DAQGeneric):
         
     def transformChanged(self):  ## called then this device's global transform changes.
         self.scopeState['transform'] = self.globalTransform()
-        self.scopeState['centerPosition'] = self.scopeState['transform'].map(Vector(0,0,0))
-        self.scopeState['pixelSize'] = self.scopeState['transform'].map(Vector(1, 1)) - self.scopeState['centerPosition']
+        o = Vector(self.scopeState['transform'].map(Vector(0,0,0)))
+        p = Vector(self.scopeState['transform'].map(Vector(1, 1)) - o)
+        self.scopeState['centerPosition'] = o
+        self.scopeState['pixelSize'] = p
         
     def objectiveChanged(self, obj=None):
         if obj is None:
             obj = self.scopeDev.getObjective()
         else:
             obj = obj[0]
-        with MutexLocker(self.lock):
+        with self.lock:
             #scale = obj['scale']
             #offset = obj['offset']
             #pos = self.scopeState['scopePosition']
@@ -385,6 +391,8 @@ class Camera(DAQGeneric):
             #self.scopeState['scale'] = [sf[0] * scale, sf[1] * scale]
             #self.scopeState['pixelSize'] = filter(abs, self.scopeState['scale'])
             self.scopeState['id'] += 1
+            print "HERE", obj
+        print self.scopeState
         #print self.scopeState
         
     #def getCamera(self):

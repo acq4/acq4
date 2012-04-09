@@ -2,12 +2,14 @@
 from lib.devices.RigidDevice import *
 import pyqtgraph as pg
 
-class MockStage(RigidDevice):
+class MockStage(Device, RigidDevice):
 
     sigPositionChanged = QtCore.Signal(object)
 
     def __init__(self, dm, config, name):
+        Device.__init__(self, dm, config, name)
         RigidDevice.__init__(self, dm, config, name)
+        
         self.config = config
         self.pos = [0, 0, 0]
         self.speed = [0,0]

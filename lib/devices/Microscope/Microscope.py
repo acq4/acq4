@@ -13,7 +13,7 @@ def ftrace(func):
         return rv
     return w
 
-class Microscope(RigidDevice):
+class Microscope(Device, RigidDevice):
     
     sigObjectiveChanged = QtCore.Signal(object) ## (objective, index, lastObjective)
     sigObjectiveListChanged = QtCore.Signal()
@@ -22,6 +22,7 @@ class Microscope(RigidDevice):
     #sigPositionChanged = QtCore.Signal(object)  ## {'abs': pos, 'rel': pos}
     
     def __init__(self, dm, config, name):
+        Device.__init__(self, dm, config, name)
         RigidDevice.__init__(self, dm, config, name)
         self.config = config
         self.lock = Mutex(QtCore.QMutex.Recursive)
