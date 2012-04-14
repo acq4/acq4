@@ -41,7 +41,7 @@ class MeshData(object):
     def setMeshColor(self, color):
         """Set the color of the entire mesh. This removes any per-face or per-vertex colors."""
         color = fn.Color(color)
-        self.meshColor = color.glColor()
+        self._meshColor = color.glColor()
         self._vertexColors = None
         self._faceColors = None
     
@@ -114,7 +114,8 @@ class MeshData(object):
             for i, face in enumerate(self._faces):
                 ## compute face normal
                 pts = [self._vertexes[vind] for vind in face]
-                norm = QtGui.QVector3D.crossProduct(pts[1]-pts[0], pts[2]-pts[0]).normalized()
+                norm = QtGui.QVector3D.crossProduct(pts[1]-pts[0], pts[2]-pts[0])
+                norm = norm / norm.length()  ## don't use .normalized(); doesn't work for small values.
                 self._faceNormals.append(norm)
         return self._faceNormals
     
@@ -133,7 +134,7 @@ class MeshData(object):
                 norm = QtGui.QVector3D()
                 for fn in norms:
                     norm += fn
-                norm.normalize()
+                norm = norm / norm.length()  ## don't use .normalize(); doesn't work for small values.
                 self._vertexNormals.append(norm)
         return self._vertexNormals
         
