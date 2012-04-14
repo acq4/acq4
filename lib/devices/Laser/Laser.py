@@ -481,14 +481,14 @@ class Laser(DAQGeneric):
             t, prob = stats.ttest_ind(laserOn, laserOff)
             if prob < 0.01: ### if powerOn is statistically different from powerOff
                 powerOn = laserOn.mean()
+                if powerOn < 0:
+                    powerOn = 0.0
                 powerOff = laserOff.mean()
                 #self.devGui.ui.outputPowerLabel.setText(siFormat(powerOn, suffix='W')) ## NO! device does not talk to GUI!
                 self.setParam(currentPower=powerOn)
                 powerOk = self.checkPowerValidity(powerOn)
                 self.sigOutputPowerChanged.emit(powerOn, powerOk)
                 self.updateSamplePower()
-                if powerOn < 0:
-                    powerOn = 0.0
                 return powerOn, powerOk
             else:
                 logMsg("No laser pulse detected by power indicator '%s' while measuring Laser.outputPower()" % powerInd[0], msgType='warning')

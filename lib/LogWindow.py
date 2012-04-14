@@ -837,6 +837,8 @@ class ErrorDialog(QtGui.QDialog):
         self.messages = []
         
         self.msgLabel = QtGui.QLabel()
+        #self.msgLabel.setWordWrap(False)
+        #self.msgLabel.setMaximumWidth(800)
         self.msgLabel.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         #self.msgLabel.setFrameStyle(QtGui.QFrame.Box)
         #self.msgLabel.setStyleSheet('QLabel { font-weight: bold }')
