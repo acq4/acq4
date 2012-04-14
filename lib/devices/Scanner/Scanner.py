@@ -59,14 +59,19 @@ class Scanner(Device):
 
     def setPosition(self, pos, camera, laser):
         """Set the position of the xy mirrors to a point in the image"""
-        with MutexLocker(self.lock):
+        prof = Profiler('Scanner.setPosition', disabled=True)
+        with self.lock:
             (x, y) = pos
+            prof.mark()
             #cam = self.dm.getDevice(camera)
             #camPos = cam.getPosition()
             #vals = self.mapToScanner(x - camPos[0], y - camPos[1], camera, laser)
             vals = self.mapToScanner(x, y, camera, laser)
+            prof.mark()
             #print "Setting position", pos, " values are", vals
             self.setCommand(vals)
+            prof.mark()
+        prof.finish()
         
     def setShutterOpen(self, o):
         """Immediately move mirrors 'off' position or back."""
@@ -97,7 +102,7 @@ class Scanner(Device):
           2) The current command is outside the allowed limits
           3) Someone has called setVoltage when they should have called setCommand"""
         vals = []
-        with MutexLocker(self.lock):
+        with self.lock:
             vals = self.currentCommand[:]
             #for x in ['XAxis', 'YAxis']:
                 #(daq, chan) = self.config[x]
@@ -108,7 +113,7 @@ class Scanner(Device):
     def setVoltage(self, vals):
         '''Immediately sets the voltage value on the mirrors.
         Does NOT do shutter or limit checking; most likely you want to use setCommand instead.'''
-        with MutexLocker(self.lock):
+        with self.lock:
             for i in [0,1]:
                 x = ['XAxis', 'YAxis'][i]
                 daq = self.config[x]['device']
@@ -124,7 +129,7 @@ class Scanner(Device):
     
     def getObjective(self, camera):
         """Return the objective currently in use for camera"""
-        with MutexLocker(self.lock):
+        with self.lock:
             camDev = self.dm.getDevice(camera)
         scope = camDev.scopeDev
         return scope.getObjective()['name']
@@ -172,7 +177,7 @@ class Scanner(Device):
     
     
     def getCalibrationIndex(self):
-        with MutexLocker(self.lock):
+        with self.lock:
             if self.calibrationIndex is None:
                 calDir = self.configDir()
                 fileName = os.path.join(calDir, 'index')
@@ -191,20 +196,20 @@ class Scanner(Device):
             return self.calibrationIndex
         
     def writeCalibrationDefaults(self, state):
-        with MutexLocker(self.lock):
+        with self.lock:
             calDir = self.configDir()
             fileName = os.path.join(calDir, 'defaults')
             self.dm.writeConfigFile(state, fileName)
         
     def loadCalibrationDefaults(self):
-        with MutexLocker(self.lock):
+        with self.lock:
             calDir = self.configDir()
             fileName = os.path.join(calDir, 'defaults')
             state = self.dm.readConfigFile(fileName)
             return state
         
     def writeCalibrationIndex(self, index):
-        with MutexLocker(self.lock):
+        with self.lock:
             calDir = self.configDir()
             fileName = os.path.join(calDir, 'index')
             self.dm.writeConfigFile(index, fileName)
@@ -212,7 +217,7 @@ class Scanner(Device):
             self.calibrationIndex = index
         
     def getCalibration(self, camera, laser, objective=None):
-        with MutexLocker(self.lock):
+        with self.lock:
             index = self.getCalibrationIndex()
             
         if objective is None:
@@ -269,15 +274,15 @@ class Scanner(Device):
         
     
     def createTask(self, cmd):
-        with MutexLocker(self.lock):
+        with self.lock:
             return ScannerTask(self, cmd)
     
     def protocolInterface(self, prot):
-        with MutexLocker(self.lock):
+        with self.lock:
             return ScannerProtoGui(self, prot)
     
     def deviceInterface(self, win):
-        with MutexLocker(self.lock):
+        with self.lock:
             if self.devGui is None:
                 self.devGui = ScannerDeviceGui(self, win)
             return self.devGui
@@ -338,7 +343,9 @@ class ScannerTask(DeviceTask):
             return ([],[])
 
     def configure(self, tasks, startOrder):
-        with MutexLocker(self.dev.lock):
+        prof = Profiler('ScannerTask.configure', disabled=True)
+        with self.dev.lock:
+            prof.mark('got lock')
             ## If shuttering is requested, make sure the (virtual) shutter is closed now
             if self.cmd.get('simulateShutter', False):
                 self.dev.setShutterOpen(False)
@@ -346,26 +353,34 @@ class ScannerTask(DeviceTask):
             ## Set position of mirrors now
             if 'command' in self.cmd:
                 self.dev.setCommand(self.cmd['command'])
+                prof.mark('set command')
             elif 'position' in self.cmd:  ## 'command' overrides 'position'
                 #print " set position:", self.cmd['position']
                 self.dev.setPosition(self.cmd['position'], self.cmd['camera'], self.cmd['laser'])
+                prof.mark('set pos')
 
             ## record spot size from calibration data
             if 'camera' in self.cmd and 'laser' in self.cmd:
                 self.spotSize = self.dev.getCalibration(self.cmd['camera'], self.cmd['laser'])['spot'][1]
+                prof.mark('getSpotSize')
             
             ## If position arrays are given, translate into voltages
             if 'xPosition' in self.cmd or 'yPosition' in self.cmd:
                 if 'xPosition' not in self.cmd or 'yPosition' not in self.cmd:
                     raise Exception('xPosition and yPosition must be given together or not at all.')
                 self.cmd['xCommand'], self.cmd['yCommand'] = self.dev.mapToScanner(self.cmd['xPosition'], self.cmd['yPosition'], self.cmd['camera'], self.cmd['laser'])
+                prof.mark('position arrays')
+            
             ## Otherwise if program is specified, generate the command arrays now
             elif 'program' in self.cmd:
                 self.generateProgramArrays(self.cmd)    
+                prof.mark('program')
                 
             ## If shuttering is requested, generate proper arrays and shutter the laser now
             if self.cmd.get('simulateShutter', False):
                 self.generateShutterArrays(tasks[self.cmd['laser']], self.cmd['duration'])
+                prof.mark('shutter')
+            prof.finish()
         
     def generateShutterArrays(self, laserTask, duration):
         """In the absence of a shutter, use this to direct the beam 'off-screen' when shutter would normally be closed."""
