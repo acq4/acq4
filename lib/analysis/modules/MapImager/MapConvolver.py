@@ -110,7 +110,7 @@ class MapConvolver(QtGui.QWidget):
                 
         
         
-        arr = MapConvolver.convolveMaptoImage(self.data, params, spacing=spacing) ## TODO: why is arr sometimes None
+        arr = MapConvolver.convolveMaptoImage(self.data, params, spacing=spacing)
         arrs = MapConvolver.interpolateMapToImage(self.data, params, spacing)
     
         
@@ -153,7 +153,7 @@ class MapConvolver(QtGui.QWidget):
         
         for p in params:
             if 'mode' in params[p].keys():
-                arrs[p] = scipy.interpolate.griddata(pts, data[p], xi, method=params[p]['mode'])
+                arrs[p] = scipy.interpolate.griddata(pts, data[p], xi, method=params[p]['mode']) ## griddata function hangs when method='linear' in scipy versions earlier than 0.10.0
                 arrs[p][np.isnan(arrs[p])] = 0
         return arrs
         

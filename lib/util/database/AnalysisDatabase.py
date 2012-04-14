@@ -1,6 +1,7 @@
 from database import *
 from pyqtgraph.widgets.ProgressDialog import ProgressDialog
 import debug
+from lib.Manager import logExc, logMsg
 
 
 class AnalysisDatabase(SqliteDatabase):
@@ -471,7 +472,9 @@ class AnalysisDatabase(SqliteDatabase):
         ## Return a DirHandle given table, rowid
         res = self.select(table, ['Dir'], sql='where rowid=%d'%rowid)
         if len(res) < 1:
-            raise Exception('rowid %d does not exist in %s' % (rowid, table))
+            #raise Exception('rowid %d does not exist in %s' % (rowid, table))
+            logMsg('rowid %d does not exist in %s' % (rowid, table), msgType='error')
+            return None
         #print res
         #return self.baseDir()[res[0]['Dir']]
         return res[0]['Dir']

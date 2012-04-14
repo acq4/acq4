@@ -552,7 +552,10 @@ class Photostim(AnalysisModule):
         table = dbui.getTableName(identity)        
         #dh = scan.source()
         for spot in scan.spots():
-            protocolID = db('Select rowid from DirTable_Protocol where Dir="%s"'%(spot.data.name(relativeTo=db.baseDir())))[0]['rowid']
+            protocolID = db('Select rowid from DirTable_Protocol where Dir="%s"'%(spot.data.name(relativeTo=db.baseDir())))
+            if len(protocolID) <1:
+                continue
+            protocolID = protocolID[0]['rowid']
             pos = spot.viewPos()
             db('UPDATE %s SET xPos=%f, yPos=%f WHERE ProtocolDir=%i' % (table, pos.x(), pos.y(), protocolID))
             

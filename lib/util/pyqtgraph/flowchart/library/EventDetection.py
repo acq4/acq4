@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
 from ..Node import Node
-import functions
+#import functions
+import lib.util.functions as functions
 from common import *
 
 class Threshold(CtrlNode):
