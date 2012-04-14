@@ -1,4 +1,5 @@
 from pyqtgraph.Qt import QtGui
+import pyqtgraph.functions as fn
 
 class MeshData(object):
     """
@@ -37,6 +38,12 @@ class MeshData(object):
         else:
             self._setIndexedFaces(faces, vertexes)
     
+    def setMeshColor(self, color):
+        """Set the color of the entire mesh. This removes any per-face or per-vertex colors."""
+        color = fn.Color(color)
+        self.meshColor = color.glColor()
+        self._vertexColors = None
+        self._faceColors = None
     
     def _setUnindexedFaces(self, faces):
         verts = {}
@@ -151,4 +158,20 @@ class MeshData(object):
         Useful for displaying wireframe meshes.
         """
         pass
+        
+    def save(self):
+        """Serialize this mesh to a string appropriate for disk storage"""
+        import pickle
+        names = ['_vertexes', '_edges', '_faces', '_vertexFaces', '_vertexNormals', '_faceNormals', '_vertexColors', '_edgeColors', '_faceColors', '_meshColor']
+        state = {n:getattr(self, n) for n in names}
+        return pickle.dumps(state)
+        
+    def restore(self, state):
+        """Restore the state of a mesh previously saved using save()"""
+        import pickle
+        state = pickle.loads(state)
+        for k in state:
+            setattr(self, k, state[k])
+        
+        
         
