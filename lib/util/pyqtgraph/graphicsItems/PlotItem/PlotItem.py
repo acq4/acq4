@@ -56,10 +56,12 @@ except:
 class PlotItem(GraphicsWidget):
     
     """
-    Plot graphics item that can be added to any graphics scene. Implements axis titles, scales, interactive viewbox.
+    **Bases:** :class:`GraphicsWidget <pyqtgraph.GraphicsWidget>`
     
+    Plot graphics item that can be added to any graphics scene. Implements axes, titles, and interactive viewbox. 
+    PlotItem also provides some basic analysis functionality that may be accessed from the context menu.
     Use :func:`plot() <pyqtgraph.PlotItem.plot>` to create a new PlotDataItem and add it to the view.
-    Use :func:`addItem() <pyqtgraph.PlotItem.addItem>` to add any QGraphicsItem to the view
+    Use :func:`addItem() <pyqtgraph.PlotItem.addItem>` to add any QGraphicsItem to the view.
     
     This class wraps several methods from its internal ViewBox:
     :func:`setXRange <pyqtgraph.ViewBox.setXRange>`,
@@ -728,6 +730,11 @@ class PlotItem(GraphicsWidget):
         ##self.replot()
 
     def addItem(self, item, *args, **kargs):
+        """
+        Add a graphics item to the view box. 
+        If the item has plot data (PlotDataItem, PlotCurveItem, ScatterPlotItem), it may
+        be included in analysis performed by the PlotItem.
+        """
         self.items.append(item)
         vbargs = {}
         if 'ignoreBounds' in kargs:
