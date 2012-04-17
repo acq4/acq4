@@ -453,8 +453,10 @@ class GradientEditorItem(TickSliderItem):
             else:
                 return (c.red(), c.green(), c.blue(), c.alpha())
                     
-    def getLookupTable(self, nPts, alpha=True):
-        """Return an RGB/A lookup table."""
+    def getLookupTable(self, nPts, alpha=None):
+        """Return an RGB/A lookup table. If alpha is None, alpha will be automatically determined."""
+        if alpha is None:
+            alpha = self.usesAlpha()
         if alpha:
             table = np.empty((nPts,4), dtype=np.ubyte)
         else:
@@ -466,6 +468,14 @@ class GradientEditorItem(TickSliderItem):
             table[i] = color[:table.shape[1]]
             
         return table
+    
+    def usesAlpha(self):
+        ticks = self.listTicks()
+        for t in ticks:
+            if t[0].color.alpha() < 255:
+                return True
+            
+        return False
             
     def isLookupTrivial(self):
         """Return true if the gradient has exactly two stops in it: black at 0.0 and white at 1.0"""
