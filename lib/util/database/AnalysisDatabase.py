@@ -101,6 +101,8 @@ class AnalysisDatabase(SqliteDatabase):
             for table in ['Photostim_events', 'Photostim_sites', 'Photostim_events2', 'Photostim_sites2']:
                 if prog.wasCanceled():
                     break
+                if not oldDb.hasTable(table):
+                    continue
                 schema = oldDb.tableSchema(table)
                 ## SourceDir -> ProtocolSequenceDir     type='directory:ProtocolSequence'
                 del schema['SourceDir']

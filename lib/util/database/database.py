@@ -42,7 +42,19 @@ class SqliteDatabase:
     regardless of the type specified by its column.
     """
     def __init__(self, fileName=':memory:'):
-        self.db = QtSql.QSqlDatabase.addDatabase("QSQLITE", os.path.abspath(fileName))
+        ## decide on an appropriate name for this connection.
+        ## For file connections, the name should always be the name of the file
+        ## to avoid opening more than one connection to the same file.
+        if fileName == ':memory:':
+            c = 0
+            while True:
+                self._connectionName = ':memory:%d' % c
+                if self._connectionName not in QtSql.QSqlDatabase.connectionNames():
+                    break
+                c += 1
+        else:
+            self._connectionName = os.path.abspath(fileName)
+        self.db = QtSql.QSqlDatabase.addDatabase("QSQLITE", self._connectionName)
         self.db.setDatabaseName(fileName)
         self.db.open()
         self.tables = {}
@@ -50,6 +62,10 @@ class SqliteDatabase:
         
     def close(self):
         self.db.close()
+        self.db = None
+        import gc
+        gc.collect()  ## try to convince python to clean up the db immediately so we can remove the connection
+        QtSql.QSqlDatabase.removeDatabase(self._connectionName)
 
     def exe(self, cmd, data=None, batch=False, toDict=True, toArray=False):
         """Execute an SQL query. If data is provided, it should be a list of dicts and each will 
