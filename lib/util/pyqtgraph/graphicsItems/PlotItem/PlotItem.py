@@ -55,11 +55,44 @@ except:
 
 class PlotItem(GraphicsWidget):
     
-    sigYRangeChanged = QtCore.Signal(object, object)
-    sigXRangeChanged = QtCore.Signal(object, object)
-    sigRangeChanged = QtCore.Signal(object, object)
+    """
+    **Bases:** :class:`GraphicsWidget <pyqtgraph.GraphicsWidget>`
     
-    """Plot graphics item that can be added to any graphics scene. Implements axis titles, scales, interactive viewbox."""
+    Plot graphics item that can be added to any graphics scene. Implements axes, titles, and interactive viewbox. 
+    PlotItem also provides some basic analysis functionality that may be accessed from the context menu.
+    Use :func:`plot() <pyqtgraph.PlotItem.plot>` to create a new PlotDataItem and add it to the view.
+    Use :func:`addItem() <pyqtgraph.PlotItem.addItem>` to add any QGraphicsItem to the view.
+    
+    This class wraps several methods from its internal ViewBox:
+    :func:`setXRange <pyqtgraph.ViewBox.setXRange>`,
+    :func:`setYRange <pyqtgraph.ViewBox.setYRange>`,
+    :func:`setRange <pyqtgraph.ViewBox.setRange>`,
+    :func:`autoRange <pyqtgraph.ViewBox.autoRange>`,
+    :func:`setXLink <pyqtgraph.ViewBox.setXLink>`,
+    :func:`setYLink <pyqtgraph.ViewBox.setYLink>`,
+    :func:`viewRect <pyqtgraph.ViewBox.viewRect>`,
+    :func:`setMouseEnabled <pyqtgraph.ViewBox.setMouseEnabled>`,
+    :func:`enableAutoRange <pyqtgraph.ViewBox.enableAutoRange>`,
+    :func:`disableAutoRange <pyqtgraph.ViewBox.disableAutoRange>`,
+    :func:`setAspectLocked <pyqtgraph.ViewBox.setAspectLocked>`,
+    :func:`register <pyqtgraph.ViewBox.register>`,
+    :func:`unregister <pyqtgraph.ViewBox.unregister>`
+    
+    The ViewBox itself can be accessed by calling :func:`getViewBox() <pyqtgraph.PlotItem.getViewBox>` 
+    
+    ==================== =======================================================================
+    **Signals**
+    sigYRangeChanged     wrapped from :class:`ViewBox <pyqtgraph.ViewBox>`
+    sigXRangeChanged     wrapped from :class:`ViewBox <pyqtgraph.ViewBox>`
+    sigRangeChanged      wrapped from :class:`ViewBox <pyqtgraph.ViewBox>`
+    ==================== =======================================================================
+    """
+    
+    sigRangeChanged = QtCore.Signal(object, object)    ## Emitted when the ViewBox range has changed
+    sigYRangeChanged = QtCore.Signal(object, object)   ## Emitted when the ViewBox Y range has changed
+    sigXRangeChanged = QtCore.Signal(object, object)   ## Emitted when the ViewBox X range has changed
+    
+    
     lastFileDir = None
     managers = {}
     
@@ -68,14 +101,21 @@ class PlotItem(GraphicsWidget):
         Create a new PlotItem. All arguments are optional.
         Any extra keyword arguments are passed to PlotItem.plot().
         
-        Arguments:
-            *title*   - Title to display at the top of the item. Html is allowed.
-            *labels*  - A dictionary specifying the axis labels to display. 
-                        {'left': (args), 'bottom': (args), ...}
-                        The name of each axis and the corresponding arguments are passed to PlotItem.setLabel()
-                        Optionally, PlotItem my also be initialized with the keyword arguments left,
-                        right, top, or bottom to achieve the same effect.
-            *name*    - Registers a name for this view so that others may link to it  
+        =============  ==========================================================================================
+        **Arguments**
+        *title*        Title to display at the top of the item. Html is allowed.
+        *labels*       A dictionary specifying the axis labels to display::
+                   
+                           {'left': (args), 'bottom': (args), ...}
+                     
+                       The name of each axis and the corresponding arguments are passed to 
+                       :func:`PlotItem.setLabel() <pyqtgraph.PlotItem.setLabel>`
+                       Optionally, PlotItem my also be initialized with the keyword arguments left,
+                       right, top, or bottom to achieve the same effect.
+        *name*         Registers a name for this view so that others may link to it  
+        =============  ==========================================================================================
+            
+            
         """
         
         GraphicsWidget.__init__(self, parent)
@@ -150,7 +190,7 @@ class PlotItem(GraphicsWidget):
             'setXRange', 'setYRange', 'setXLink', 'setYLink', 
             'setRange', 'autoRange', 'viewRect', 'setMouseEnabled',
             'enableAutoRange', 'disableAutoRange', 'setAspectLocked',
-            'register', 'unregister']:
+            'register', 'unregister']:  ## NOTE: If you update this list, please update the class docstring as well.
             setattr(self, m, getattr(self.vb, m))
             
         self.items = []
@@ -289,6 +329,7 @@ class PlotItem(GraphicsWidget):
         return interface in ['ViewBoxWrapper']
 
     def getViewBox(self):
+        """Return the ViewBox within."""
         return self.vb
     
         
@@ -346,7 +387,7 @@ class PlotItem(GraphicsWidget):
         #else:
             #print "no manager"
 
-    def registerPlot(self, name):
+    def registerPlot(self, name):   ## for backward compatibility
         self.vb.register(name)
         #self.name = name
         #win = str(self.window())
@@ -398,7 +439,7 @@ class PlotItem(GraphicsWidget):
             self.scales[k]['item'].setGrid(g)
 
     def viewGeometry(self):
-        """return the screen geometry of the viewbox"""
+        """Return the screen geometry of the viewbox"""
         v = self.scene().views()[0]
         b = self.vb.mapRectToScene(self.vb.boundingRect())
         wr = v.mapFromScene(b).boundingRect()
@@ -514,7 +555,7 @@ class PlotItem(GraphicsWidget):
         self.replot()
         
     def addAvgCurve(self, curve):
-        """Add a single curve into the pool of curves averaged together"""
+        ## Add a single curve into the pool of curves averaged together
         
         ## If there are plot parameters, then we need to determine which to average together.
         remKeys = []
@@ -689,6 +730,11 @@ class PlotItem(GraphicsWidget):
         ##self.replot()
 
     def addItem(self, item, *args, **kargs):
+        """
+        Add a graphics item to the view box. 
+        If the item has plot data (PlotDataItem, PlotCurveItem, ScatterPlotItem), it may
+        be included in analysis performed by the PlotItem.
+        """
         self.items.append(item)
         vbargs = {}
         if 'ignoreBounds' in kargs:
@@ -763,7 +809,7 @@ class PlotItem(GraphicsWidget):
     def plot(self, *args, **kargs):
         """
         Add and return a new plot.
-        See PlotDataItem.__init__ for data arguments
+        See :func:`PlotDataItem.__init__ <pyqtgraph.PlotDataItem.__init__>` for data arguments
         
         Extra allowed arguments are:
             clear    - clear all plots before displaying new data
@@ -1205,9 +1251,9 @@ class PlotItem(GraphicsWidget):
             mode = False
         return mode
         
-    def wheelEvent(self, ev):
-        # disables default panning the whole scene by mousewheel
-        ev.accept()
+    #def wheelEvent(self, ev):
+        ## disables default panning the whole scene by mousewheel
+        #ev.accept()
 
     def resizeEvent(self, ev):
         if self.autoBtn is None:  ## already closed down
@@ -1246,13 +1292,16 @@ class PlotItem(GraphicsWidget):
     def setLabel(self, axis, text=None, units=None, unitPrefix=None, **args):
         """
         Set the label for an axis. Basic HTML formatting is allowed.
-        Arguments:
-            axis  - must be one of 'left', 'bottom', 'right', or 'top'
-            text  - text to display along the axis. HTML allowed.
-            units - units to display after the title. If units are given, 
-                    then an SI prefix will be automatically appended
-                    and the axis values will be scaled accordingly.
-                    (ie, use 'V' instead of 'mV'; 'm' will be added automatically)
+        
+        ============= =================================================================
+        **Arguments**
+        axis          must be one of 'left', 'bottom', 'right', or 'top'
+        text          text to display along the axis. HTML allowed.
+        units         units to display after the title. If units are given, 
+                      then an SI prefix will be automatically appended
+                      and the axis values will be scaled accordingly.
+                      (ie, use 'V' instead of 'mV'; 'm' will be added automatically)
+        ============= =================================================================
         """
         self.getScale(axis).setLabel(text=text, units=units, **args)
         
