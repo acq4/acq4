@@ -16,11 +16,14 @@ mod = man.dataModel
     #print d, typ
 
 ##Make DB view linking photostim_sites -> ProtocolSequence -> Cell
-#db('CREATE VIEW "sites" AS select * from photostim_sites inner join ProtocolSequence on photostim_sites.sourceDir = ProtocolSequence.rowid inner join Cell on ProtocolSequence.source = Cell.rowid')
-
+  # db('create view "sites" as select * from photostim_sites inner join DirTable_Protocol on photostim_sites.ProtocolDir=DirTable_Protocol.rowid inner join DirTable_Cell on DirTable_Protocol.CellDir=DirTable_Cell.rowid')
+  
+  # for old DB format: db('CREATE VIEW "sites" AS select * from photostim_sites inner join ProtocolSequence on photostim_sites.sourceDir = ProtocolSequence.rowid inner join Cell on ProtocolSequence.source = Cell.rowid')
 
 ##Make DB view linking events -> ProtocolSequence -> Cell
-#db('CREATE VIEW "events" AS select * from photostim_events inner join ProtocolSequence on photostim_events.sourceDir = ProtocolSequence.rowid inner join Cell on ProtocolSequence.source = Cell.rowid')
+  # db('create view "events" as select * from photostim_events inner join DirTable_Protocol on photostim_events.ProtocolDir=DirTable_Protocol.rowid inner join DirTable_Cell on DirTable_Protocol.CellDir=DirTable_Cell.rowid') 
+
+  # for old db format: db('CREATE VIEW "events" AS select * from photostim_events inner join ProtocolSequence on photostim_events.sourceDir = ProtocolSequence.rowid inner join Cell on ProtocolSequence.source = Cell.rowid')
 
 ## Get events
 firstRun = False
