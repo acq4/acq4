@@ -1,9 +1,7 @@
-from pyqtgraph.parametertree import Parameter
 from pyqtgraph.widgets.FileDialog import FileDialog
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore, QtSvg
 import os
-import numpy as np
 LastExportDirectory = None
 
 
@@ -77,99 +75,74 @@ class Exporter(object):
         else:
             return self.item.mapRectToDevice(self.item.boundingRect())
         
+    def setExportMode(self, export, opts=None):
+        """
+        Call setExportMode(export, opts) on all items that will 
+        be painted during the export. This informs the item
+        that it is about to be painted for export, allowing it to 
+        alter its appearance temporarily
         
-class SVGExporter(Exporter):
-    Name = "Scalable Vector Graphics (SVG)"
-    def __init__(self, item):
-        Exporter.__init__(self, item)
-        tr = self.getTargetRect()
-        self.params = Parameter(name='params', type='group', children=[
-            {'name': 'width', 'type': 'float', 'value': tr.width(), 'limits': (0, None)},
-            {'name': 'height', 'type': 'float', 'value': tr.height(), 'limits': (0, None)},
-        ])
-        self.params.param('width').sigValueChanged.connect(self.widthChanged)
-        self.params.param('height').sigValueChanged.connect(self.heightChanged)
+        
+        *export*  - bool; must be True before exporting and False afterward
+        *opts*    - dict; common parameters are 'antialias' and 'background'
+        """
+        if opts is None:
+            opts = {}
+        for item in self.getPaintItems():
+            if hasattr(item, 'setExportMode'):
+                item.setExportMode(export, opts)
+    
+    def getPaintItems(self, root=None):
+        """Return a list of all items that should be painted in the correct order."""
+        if root is None:
+            root = self.item
+        preItems = []
+        postItems = []
+        if isinstance(root, QtGui.QGraphicsScene):
+            childs = [i for i in root.items() if i.parentItem() is None]
+            rootItem = []
+        else:
+            childs = root.childItems()
+            rootItem = [root]
+        childs.sort(lambda a,b: cmp(a.zValue(), b.zValue()))
+        while len(childs) > 0:
+            ch = childs.pop(0)
+            tree = self.getPaintItems(ch)
+            if int(ch.flags() & ch.ItemStacksBehindParent) > 0 or (ch.zValue() < 0 and int(ch.flags() & ch.ItemNegativeZStacksBehindParent) > 0):
+                preItems.extend(tree)
+            else:
+                postItems.extend(tree)
+                
+        return preItems + rootItem + postItems
 
-    def widthChanged(self):
-        sr = self.getSourceRect()
-        ar = sr.height() / sr.width()
-        self.params.param('height').setValue(self.params['width'] * ar, blockSignal=self.heightChanged)
-        
-    def heightChanged(self):
-        sr = self.getSourceRect()
-        ar = sr.width() / sr.height()
-        self.params.param('width').setValue(self.params['height'] * ar, blockSignal=self.widthChanged)
-        
-    def parameters(self):
-        return self.params
+    def render(self, painter, targetRect, sourceRect, item=None):
     
-    def export(self, fileName=None):
-        if fileName is None:
-            self.fileSaveDialog(filter="Scalable Vector Graphics (*.svg)")
-            return
-        self.svg = QtSvg.QSvgGenerator()
-        self.svg.setFileName(fileName)
-        self.svg.setSize(QtCore.QSize(100,100))
-        #self.svg.setResolution(600)
-        #self.svg.setViewBox()
-        targetRect = QtCore.QRect(0, 0, self.params['width'], self.params['height'])
-        sourceRect = self.getSourceRect()
-        painter = QtGui.QPainter(self.svg)
-        self.getScene().render(painter, QtCore.QRectF(targetRect), sourceRect)
-            
-class ImageExporter(Exporter):
-    Name = "Image File (PNG, TIF, JPG, ...)"
-    def __init__(self, item):
-        Exporter.__init__(self, item)
-        tr = self.getTargetRect()
+        #if item is None:
+            #item = self.item
+        #preItems = []
+        #postItems = []
+        #if isinstance(item, QtGui.QGraphicsScene):
+            #childs = [i for i in item.items() if i.parentItem() is None]
+            #rootItem = []
+        #else:
+            #childs = item.childItems()
+            #rootItem = [item]
+        #childs.sort(lambda a,b: cmp(a.zValue(), b.zValue()))
+        #while len(childs) > 0:
+            #ch = childs.pop(0)
+            #if int(ch.flags() & ch.ItemStacksBehindParent) > 0 or (ch.zValue() < 0 and int(ch.flags() & ch.ItemNegativeZStacksBehindParent) > 0):
+                #preItems.extend(tree)
+            #else:
+                #postItems.extend(tree)
+                
+        #for ch in preItems:
+            #self.render(painter, sourceRect, targetRect, item=ch)
+        ### paint root here
+        #for ch in postItems:
+            #self.render(painter, sourceRect, targetRect, item=ch)
         
-        self.params = Parameter(name='params', type='group', children=[
-            {'name': 'width', 'type': 'int', 'value': tr.width(), 'limits': (0, None)},
-            {'name': 'height', 'type': 'int', 'value': tr.height(), 'limits': (0, None)},
-            {'name': 'antialias', 'type': 'bool', 'value': True},
-            {'name': 'background', 'type': 'color', 'value': (0,0,0,255)},
-        ])
-        self.params.param('width').sigValueChanged.connect(self.widthChanged)
-        self.params.param('height').sigValueChanged.connect(self.heightChanged)
-        
-    def widthChanged(self):
-        sr = self.getSourceRect()
-        ar = sr.height() / sr.width()
-        self.params.param('height').setValue(self.params['width'] * ar, blockSignal=self.heightChanged)
-        
-    def heightChanged(self):
-        sr = self.getSourceRect()
-        ar = sr.width() / sr.height()
-        self.params.param('width').setValue(self.params['height'] * ar, blockSignal=self.widthChanged)
-        
-    def parameters(self):
-        return self.params
     
-    def export(self, fileName=None):
-        if fileName is None:
-            filter = ["*."+str(f) for f in QtGui.QImageWriter.supportedImageFormats()]
-            preferred = ['*.png', '*.tif', '*.jpg']
-            for p in preferred[::-1]:
-                if p in filter:
-                    filter.remove(p)
-                    filter.insert(0, p)
-            self.fileSaveDialog(filter=filter)
-            return
-            
-        targetRect = QtCore.QRect(0, 0, self.params['width'], self.params['height'])
-        sourceRect = self.getSourceRect()
-        #self.png = QtGui.QImage(targetRect.size(), QtGui.QImage.Format_ARGB32)
-        #self.png.fill(pyqtgraph.mkColor(self.params['background']))
-        bg = np.empty((self.params['width'], self.params['height'], 4), dtype=np.ubyte)
-        color = self.params['background']
-        bg[:,:,0] = color.blue()
-        bg[:,:,1] = color.green()
-        bg[:,:,2] = color.red()
-        bg[:,:,3] = color.alpha()
-        self.png = pg.makeQImage(bg, alpha=True)
-        painter = QtGui.QPainter(self.png)
-        self.getScene().render(painter, QtCore.QRectF(targetRect), sourceRect)
-        self.png.save(fileName)
+        self.getScene().render(painter, QtCore.QRectF(targetRect), QtCore.QRectF(sourceRect))
         
     #def writePs(self, fileName=None, item=None):
         #if fileName is None:

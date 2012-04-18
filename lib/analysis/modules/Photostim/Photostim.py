@@ -139,6 +139,8 @@ class Photostim(AnalysisModule):
         if dh is None:
             return ## should clear out map list here?
         
+        if 'dirType' not in dh.info():
+            return
         typ = dh.info()['dirType']
         if typ == 'Slice':
             cells = [dh[d] for d in dh.subDirs() if dh[d].info().get('dirType',None) == 'Cell']
@@ -268,7 +270,7 @@ class Photostim(AnalysisModule):
         try:
             point = points[0]
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-            #print "click!", point.data
+            print "clicked:", point.data
             plot = self.getElement("Data Plot")
             plot.clear()
             self.selectedSpot = point

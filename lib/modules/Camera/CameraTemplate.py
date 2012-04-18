@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/modules/Camera/CameraTemplate.ui'
 #
-# Created: Fri Mar  9 11:18:41 2012
+# Created: Wed Apr 18 12:58:57 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -241,55 +241,43 @@ class Ui_MainWindow(object):
         self.gridLayout_3.setMargin(0)
         self.gridLayout_3.setSpacing(0)
         self.gridLayout_3.setObjectName(_fromUtf8("gridLayout_3"))
-        self.frame_2 = QtGui.QFrame(self.dockWidgetContents_3)
-        self.frame_2.setFrameShape(QtGui.QFrame.StyledPanel)
-        self.frame_2.setFrameShadow(QtGui.QFrame.Raised)
-        self.frame_2.setObjectName(_fromUtf8("frame_2"))
-        self.hboxlayout2 = QtGui.QHBoxLayout(self.frame_2)
-        self.hboxlayout2.setSpacing(0)
-        self.hboxlayout2.setMargin(0)
-        self.hboxlayout2.setObjectName(_fromUtf8("hboxlayout2"))
-        self.gridLayout_3.addWidget(self.frame_2, 0, 0, 1, 1)
         self.label_4 = QtGui.QLabel(self.dockWidgetContents_3)
         self.label_4.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.label_4.setObjectName(_fromUtf8("label_4"))
-        self.gridLayout_3.addWidget(self.label_4, 2, 0, 1, 1)
-        self.frame_3 = QtGui.QFrame(self.dockWidgetContents_3)
-        self.frame_3.setFrameShape(QtGui.QFrame.StyledPanel)
-        self.frame_3.setFrameShadow(QtGui.QFrame.Raised)
-        self.frame_3.setObjectName(_fromUtf8("frame_3"))
-        self.hboxlayout3 = QtGui.QHBoxLayout(self.frame_3)
-        self.hboxlayout3.setSpacing(2)
-        self.hboxlayout3.setMargin(0)
-        self.hboxlayout3.setObjectName(_fromUtf8("hboxlayout3"))
-        self.label_5 = QtGui.QLabel(self.frame_3)
-        self.label_5.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
-        self.label_5.setObjectName(_fromUtf8("label_5"))
-        self.hboxlayout3.addWidget(self.label_5)
-        self.bgBlurSpin = QtGui.QDoubleSpinBox(self.frame_3)
-        self.bgBlurSpin.setProperty(_fromUtf8("value"), 0.0)
-        self.bgBlurSpin.setObjectName(_fromUtf8("bgBlurSpin"))
-        self.hboxlayout3.addWidget(self.bgBlurSpin)
-        self.gridLayout_3.addWidget(self.frame_3, 4, 0, 1, 4)
+        self.gridLayout_3.addWidget(self.label_4, 1, 0, 1, 1)
         spacerItem3 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.gridLayout_3.addItem(spacerItem3, 6, 1, 1, 1)
         self.contAvgBgCheck = QtGui.QCheckBox(self.dockWidgetContents_3)
         self.contAvgBgCheck.setObjectName(_fromUtf8("contAvgBgCheck"))
-        self.gridLayout_3.addWidget(self.contAvgBgCheck, 3, 0, 1, 4)
+        self.gridLayout_3.addWidget(self.contAvgBgCheck, 2, 0, 1, 4)
         self.bgTimeSpin = QtGui.QDoubleSpinBox(self.dockWidgetContents_3)
         self.bgTimeSpin.setDecimals(1)
         self.bgTimeSpin.setSingleStep(1.0)
-        self.bgTimeSpin.setProperty(_fromUtf8("value"), 5.0)
+        self.bgTimeSpin.setProperty(_fromUtf8("value"), 3.0)
         self.bgTimeSpin.setObjectName(_fromUtf8("bgTimeSpin"))
-        self.gridLayout_3.addWidget(self.bgTimeSpin, 2, 2, 1, 2)
+        self.gridLayout_3.addWidget(self.bgTimeSpin, 1, 2, 1, 2)
         self.collectBgBtn = QtGui.QPushButton(self.dockWidgetContents_3)
         self.collectBgBtn.setCheckable(True)
         self.collectBgBtn.setObjectName(_fromUtf8("collectBgBtn"))
-        self.gridLayout_3.addWidget(self.collectBgBtn, 1, 0, 1, 4)
+        self.gridLayout_3.addWidget(self.collectBgBtn, 0, 0, 1, 4)
         self.divideBgBtn = QtGui.QPushButton(self.dockWidgetContents_3)
         self.divideBgBtn.setCheckable(True)
+        self.divideBgBtn.setAutoExclusive(False)
         self.divideBgBtn.setObjectName(_fromUtf8("divideBgBtn"))
         self.gridLayout_3.addWidget(self.divideBgBtn, 5, 0, 1, 4)
+        self.label_5 = QtGui.QLabel(self.dockWidgetContents_3)
+        self.label_5.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.label_5.setObjectName(_fromUtf8("label_5"))
+        self.gridLayout_3.addWidget(self.label_5, 3, 0, 1, 1)
+        self.bgBlurSpin = QtGui.QDoubleSpinBox(self.dockWidgetContents_3)
+        self.bgBlurSpin.setProperty(_fromUtf8("value"), 0.0)
+        self.bgBlurSpin.setObjectName(_fromUtf8("bgBlurSpin"))
+        self.gridLayout_3.addWidget(self.bgBlurSpin, 3, 2, 1, 2)
+        self.subtractBgBtn = QtGui.QPushButton(self.dockWidgetContents_3)
+        self.subtractBgBtn.setCheckable(True)
+        self.subtractBgBtn.setAutoExclusive(False)
+        self.subtractBgBtn.setObjectName(_fromUtf8("subtractBgBtn"))
+        self.gridLayout_3.addWidget(self.subtractBgBtn, 4, 0, 1, 4)
         self.dockWidget_3.setWidget(self.dockWidgetContents_3)
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(2), self.dockWidget_3)
 
@@ -356,13 +344,6 @@ class Ui_MainWindow(object):
         self.clearFramesBtn.setText(QtGui.QApplication.translate("MainWindow", "Clear", None, QtGui.QApplication.UnicodeUTF8))
         self.dockWidget_3.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Background Subtraction", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("MainWindow", "Average", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("MainWindow", "Blur Background.", None, QtGui.QApplication.UnicodeUTF8))
-        self.bgBlurSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
-"<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
-"p, li { white-space: pre-wrap; }\n"
-"</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Blurs the background frame before dividing it from the current frame.</span></p>\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Large blur values may cause performance to degrade.</span></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
         self.contAvgBgCheck.setText(QtGui.QApplication.translate("MainWindow", "Continuous Average", None, QtGui.QApplication.UnicodeUTF8))
         self.bgTimeSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "Sets the approximate number of frames to be averaged for\n"
 "background division.", None, QtGui.QApplication.UnicodeUTF8))
@@ -372,8 +353,15 @@ class Ui_MainWindow(object):
 "Either a set of static background frames need to have already by collected\n"
 "(by pressing \'Static\' above) or \'Continuous\' needs to be pressed.", None, QtGui.QApplication.UnicodeUTF8))
         self.divideBgBtn.setText(QtGui.QApplication.translate("MainWindow", "Divide Background", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_5.setText(QtGui.QApplication.translate("MainWindow", "Blur Background.", None, QtGui.QApplication.UnicodeUTF8))
+        self.bgBlurSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
+"p, li { white-space: pre-wrap; }\n"
+"</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Blurs the background frame before dividing it from the current frame.</span></p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Large blur values may cause performance to degrade.</span></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
+        self.subtractBgBtn.setText(QtGui.QApplication.translate("MainWindow", "Subtract Background", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph.widgets.GraphicsView import GraphicsView
 from pyqtgraph.widgets.PlotWidget import PlotWidget
-from pyqtgraph import HistogramLUTWidget, SpinBox
-from FeedbackButton import FeedbackButton
+from pyqtgraph import HistogramLUTWidget, SpinBox, FeedbackButton

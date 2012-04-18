@@ -171,7 +171,7 @@
   <customwidget>
    <class>FeedbackButton</class>
    <extends>QPushButton</extends>
-   <header>FeedbackButton</header>
+   <header>pyqtgraph</header>
   </customwidget>
   <customwidget>
    <class>TreeWidget</class>

@@ -56,6 +56,34 @@ import disableExceptionStorage
 #QtGui.QApplication.setGraphicsSystem('raster')  ## needed for specific composition modes
 app = QtGui.QApplication(sys.argv)
 
+## Install a simple message handler for Qt errors:
+def messageHandler(msgType, msg):
+    import traceback
+    print "Qt Error: (traceback follows)"
+    print msg
+    traceback.print_stack()
+    try:
+        logf = os.path.join(os.path.split(__file__)[0], "crash.log")
+        fh = open(logf, 'a')
+        fh.write(msg+'\n')
+        fh.write('\n'.join(traceback.format_stack()))
+        fh.close()
+    except:
+        print "Failed to write crash log:"
+        traceback.print_exc()
+        
+    
+    if msgType == QtCore.QtFatalMsg:
+        try:
+            print "Fatal error occurred; asking manager to quit."
+            global man, app
+            man.quit()
+            app.processEvents()
+        except:
+            pass
+    
+QtCore.qInstallMsgHandler(messageHandler)
+
 ## For logging ALL python activity
 #import pyconquer
 #tr = pyconquer.Logger(fileregex="(Manager|DataManager|modules|devices|drivers)")
@@ -73,12 +101,19 @@ man = Manager(config, sys.argv[1:])
 #QtCore.pyqtRemoveInputHook()
 
 ## Start Qt event loop unless running in interactive mode.
-try:
-    if sys.flags.interactive != 1:
-        raise Exception('non-interactive; start event loop')
-    if 'lib.util.PySideImporter' in sys.modules:
-        raise Exception('using pyside; start event loop')
-    
+interactive = (sys.flags.interactive == 1) and ('lib.util.PySideImporter' not in sys.modules)
+
+## Run python code periodically to allow interactive debuggers to interrupt the qt event loop
+timer = QtCore.QTimer()
+def donothing(*args):
+    x = 0
+    for i in range(0, 100):
+        x += i
+timer.timeout.connect(donothing)
+timer.start(1000)
+
+
+if interactive:
     print "Interactive mode; not starting event loop."
     
     ## import some things useful on the command line
@@ -108,21 +143,11 @@ try:
         else:
             readline.write_history_file(historyPath)
     atexit.register(save_history)
-
-
-except:
-    ## Run python code periodically to allow interactive debuggers to interrupt the qt event loop
-    timer = QtCore.QTimer()
-    def donothing(*args):
-        x = 0
-        for i in range(0, 100):
-            x += i
-    timer.timeout.connect(donothing)
-    timer.start(1000)
-    
-    print "Starting Qt event loop.."
+else:
     app.exec_()
-    print "Qt event loop exited."
+    
+    
+    
     
     
 #tr.stop()

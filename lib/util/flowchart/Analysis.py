@@ -166,18 +166,18 @@ class EventFitter(CtrlNode):
             
             if display and self.plot.isConnected():
                 if self.ctrls['plotFits'].isChecked():
-                    item = pg.PlotCurveItem(computed, times, pen=(0, 0, 255), clickable=True)
+                    item = pg.PlotDataItem(x=times, y=computed, pen=(0, 0, 255), clickable=True)
                     item.setZValue(100)
                     self.plotItems.append(item)
                     item.eventIndex = i
                     item.sigClicked.connect(self.fitClicked)
                     item.deleted = False
                 if self.ctrls['plotGuess'].isChecked():
-                    item2 = pg.PlotCurveItem(functions.pspFunc(guess, times), times, pen=(255, 0, 0))
+                    item2 = pg.PlotDataItem(x=times, y=functions.pspFunc(guess, times), pen=(255, 0, 0))
                     item2.setZValue(100)
                     self.plotItems.append(item2)
                 if self.ctrls['plotEvents'].isChecked():
-                    item2 = pg.PlotCurveItem(eventData, times, pen=(0, 255, 0))
+                    item2 = pg.PlotDataItem(x=times, y=eventData, pen=(0, 255, 0))
                     item2.setZValue(100)
                     self.plotItems.append(item2)
                 #plot = self.plot.connections().keys()[0].node().getPlot()
@@ -618,7 +618,10 @@ class CellHealthAnalyzer(CtrlNode):
                 Rs = 0
                 Rm = 0
                 Cm = 0
-            aRes = Rs
+                
+            #aRes = Rs
+            RsPeak = iPulse.min()
+            aRes = vStep/(RsPeak-iBase.mean()) ## just using Ohm's law
             cap = Cm
             
         if self.ctrls['mode'].currentText() == 'IC':

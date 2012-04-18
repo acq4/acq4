@@ -40,7 +40,7 @@ class LaserDevGui(QtGui.QWidget):
         self.ui.measurementSpin.setOpts(suffix='s', siPrefix=True, bounds=[0.0, 5.0], dec=True, step=1, minStep=0.01)
         self.ui.settlingSpin.setOpts(suffix='s', siPrefix=True, value=0.1, dec=True, step=1, minStep=0.01)
         self.ui.expectedPowerSpin.setOpts(suffix='W', siPrefix=True, bounds=[0.0, None], value=self.dev.getParam('expectedPower'), dec=True, step=0.1, minStep=0.01)
-        self.ui.toleranceSpin.setOpts(step=1, suffix='%', bounds=[0.1, 100.0], value=self.dev.getParam('tolerance'))
+        self.ui.toleranceSpin.setOpts(step=1, suffix='%', bounds=[0.1, None], value=self.dev.getParam('tolerance'))
         
         
         if not self.dev.hasShutter:
@@ -53,16 +53,20 @@ class LaserDevGui(QtGui.QWidget):
         
         
         ### Populate device lists
+        self.ui.microscopeCombo.setTypes('microscope')
+        self.ui.meterCombo.setTypes('daqChannelGroup')
         defMicroscope = self.dev.config.get('scope', None)     
         defPowerMeter = self.dev.config.get('defaultPowerMeter', None)
-        devs = self.dev.dm.listDevices()
-        for d in devs:
-            self.ui.microscopeCombo.addItem(d)
-            self.ui.meterCombo.addItem(d)
-            if d == defMicroscope:
-                self.ui.microscopeCombo.setCurrentIndex(self.ui.microscopeCombo.count()-1)
-            if d == defPowerMeter:
-                self.ui.meterCombo.setCurrentIndex(self.ui.meterCombo.count()-1)
+        self.ui.microscopeCombo.setCurrentText(defMicroscope)
+        self.ui.meterCombo.setCurrentText(defPowerMeter)
+        #devs = self.dev.dm.listDevices()
+        #for d in devs:
+            #self.ui.microscopeCombo.addItem(d)
+            #self.ui.meterCombo.addItem(d)
+            #if d == defMicroscope:
+                #self.ui.microscopeCombo.setCurrentIndex(self.ui.microscopeCombo.count()-1)
+            #if d == defPowerMeter:
+                #self.ui.meterCombo.setCurrentIndex(self.ui.meterCombo.count()-1)
          
         ## get scope device to connect objective changed signal
         #self.scope = getManager().getDevice(self.dev.config['scope'])

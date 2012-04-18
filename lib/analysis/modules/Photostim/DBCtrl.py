@@ -261,8 +261,24 @@ class DBCtrl(QtGui.QWidget):
     def clearDBSpot(self):
         ## remove all events referencing this spot
         ## remove stats for this spot
-        raise Exception("Clearing spot data from a db is not yet implemented.")
-    
+        #raise Exception("Clearing spot data from a db is not yet implemented.")
+        
+        ### This clearly needs to change because it only works with the default tables -- but I wasn't sure how to get the right table names
+        dbui = self.host.getElement('Database')
+        db = dbui.getDb()        
+        spot = self.host.selectedSpot
+        dh = spot.data.name(relativeTo=db.baseDir())  
+        protocolID = db('Select rowid, Dir from DirTable_Protocol where Dir="%s"' %dh)
+        if len(protocolID) > 0:
+            protocolID = protocolID[0]['rowid']
+        else:
+            return
+        db('Delete from Photostim_events where ProtocolDir=%i' %protocolID)
+        db('Delete from Photostim_sites where ProtocolDir=%i' %protocolID)
+        db('Delete from DirTable_Protocol where Dir="%s"' %dh)
+        print "Removed data for %s" %dh
+        
+        
     
     def storeDBSpot(self):
         try:

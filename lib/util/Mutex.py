@@ -14,7 +14,9 @@ class Mutex(QtCore.QMutex):
     QMutexLocker.
     """
     
-    def __init__(self, *args):
+    def __init__(self, *args, **kargs):
+        if kargs.get('recursive', False):
+            args = (QtCore.QMutex.Recursive,)
         QtCore.QMutex.__init__(self, *args)
         self.l = QtCore.QMutex()  ## for serializing access to self.tb
         self.tb = []

@@ -129,6 +129,7 @@ class MockClamp(DAQGeneric):
             #stderr=subprocess.PIPE
         #) 
             
+        dm.declareInterface(name, ['clamp'], self)
 
     def createTask(self, cmd):
         return MockClampTask(self, cmd)
@@ -304,6 +305,11 @@ class MockClamp(DAQGeneric):
             #if 'SecondaryICSignal' in self.config:
                 #self.reconfigureChannel('secondary', self.config['SecondaryICSignal'])
         
+    def restartNeuron(self):
+        self.process.send(None)
+        self.process = NeuronProc()
+        self.process.start()
+        
     def quit(self):
         self.process.send(None)
         DAQGeneric.quit(self)
@@ -451,6 +457,8 @@ class MockClampProtoGui(DAQGenericProtoGui):
         self.inputWidget = w1
         self.cmdPlot = p2
         self.inputPlot = p1
+        self.cmdWidget.setMeta('x', siPrefix=True, suffix='s', dec=True)
+        self.cmdWidget.setMeta('y', siPrefix=True, dec=True)
         
         self.splitter1.addWidget(self.splitter2)
         self.splitter1.addWidget(self.splitter3)
@@ -521,11 +529,12 @@ class MockClampProtoGui(DAQGenericProtoGui):
             
         self.inputWidget.setUnits(inpUnits)
         self.cmdWidget.setUnits(cmdUnits)
+        self.cmdWidget.setMeta('y', minStep=scale, step=scale*10, value=0.)
         self.inputPlot.setLabel('left', units=inpUnits)
         self.cmdPlot.setLabel('left', units=cmdUnits)
         #w.setScale(scale)
-        for s in w.getSpins():
-            s.setOpts(minStep=scale)
+        #for s in w.getSpins():
+            #s.setOpts(minStep=scale)
                 
         self.cmdWidget.updateHolding()
     

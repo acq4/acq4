@@ -16,6 +16,8 @@ from FileDialog import FileDialog
 from pyqtgraph.GraphicsScene import GraphicsScene
 import numpy as np
 import pyqtgraph.functions as fn
+import pyqtgraph.debug as debug
+import pyqtgraph 
 
 __all__ = ['GraphicsView']
 
@@ -38,20 +40,14 @@ class GraphicsView(QtGui.QGraphicsView):
         autoPixelRange=False. The exact visible range can be set with setRange().
         
         The view can be panned using the middle mouse button and scaled using the right mouse button if
-        enabled via enableMouse()."""
+        enabled via enableMouse()  (but ordinarily, we use ViewBox for this functionality)."""
         self.closed = False
         
         QtGui.QGraphicsView.__init__(self, parent)
         
-        ## in general openGL is poorly supported in Qt. 
-        ## we only enable it where the performance benefit is critical.
         if useOpenGL is None:
-            if 'linux' in sys.platform:  ## linux has numerous bugs in opengl implementation
-                useOpenGL = False
-            elif 'darwin' in sys.platform: ## openGL greatly speeds up display on mac
-                useOpenGL = True
-            else:
-                useOpenGL = False
+            useOpenGL = pyqtgraph.getConfigOption('useOpenGL')
+        
         self.useOpenGL(useOpenGL)
         
         self.setCacheMode(self.CacheBackground)
@@ -154,7 +150,7 @@ class GraphicsView(QtGui.QGraphicsView):
             return
         if self.autoPixelRange:
             self.range = QtCore.QRectF(0, 0, self.size().width(), self.size().height())
-        self.setRange(self.range, padding=0, disableAutoPixel=False)
+        GraphicsView.setRange(self, self.range, padding=0, disableAutoPixel=False)
         self.updateMatrix()
     
     def updateMatrix(self, propagate=True):
@@ -241,7 +237,7 @@ class GraphicsView(QtGui.QGraphicsView):
         w = self.size().width() * pxSize[0]
         h = self.size().height() * pxSize[1]
         range = QtCore.QRectF(tl.x(), tl.y(), w, h)
-        self.setRange(range, padding=0)
+        GraphicsView.setRange(self, range, padding=0)
         self.sigScaleChanged.connect(image.setScaledMode)
         
         
@@ -254,13 +250,13 @@ class GraphicsView(QtGui.QGraphicsView):
         r1 = QtCore.QRectF(self.range)
         r1.setLeft(r.left())
         r1.setRight(r.right())
-        self.setRange(r1, padding=[padding, 0], propagate=False)
+        GraphicsView.setRange(self, r1, padding=[padding, 0], propagate=False)
         
     def setYRange(self, r, padding=0.05):
         r1 = QtCore.QRectF(self.range)
         r1.setTop(r.top())
         r1.setBottom(r.bottom())
-        self.setRange(r1, padding=[0, padding], propagate=False)
+        GraphicsView.setRange(self, r1, padding=[0, padding], propagate=False)
         
     #def invertY(self, invert=True):
         ##if self.yInverted != invert:
@@ -399,6 +395,11 @@ class GraphicsView(QtGui.QGraphicsView):
             #pev = self.graphicsSceneEvent(ev, self.pev, self.fev)
             #self.pev = pev
             #self.currentItem.mouseMoveEvent(pev)
+        
+    #def paintEvent(self, ev):
+        #prof = debug.Profiler('GraphicsView.paintEvent (0x%x)' % id(self))
+        #QtGui.QGraphicsView.paintEvent(self, ev)
+        #prof.finish()
         
         
     def pixelSize(self):

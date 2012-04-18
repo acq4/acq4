@@ -3,7 +3,7 @@ from lib.modules.ProtocolRunner.analysisModules import AnalysisModule
 from lib.Manager import getManager
 from PyQt4 import QtCore, QtGui
 from UncagingTemplate import Ui_Form
-from pyqtgraph import ImageItem
+#from pyqtgraph import ImageItem
 from numpy import *
 from scipy.ndimage.filters import gaussian_filter
 from metaarray import MetaArray
@@ -16,26 +16,25 @@ class UncagingModule(AnalysisModule):
         self.ui.setupUi(self)
         self.postGuiInit()
         self.man = getManager()
-        devs = self.man.listDevices()
-        for d in devs:
-            self.ui.scannerDevCombo.addItem(d)
-            self.ui.clampDevCombo.addItem(d)
+        #devs = self.man.listDevices()
+        #for d in devs:
+            #self.ui.scannerDevCombo.addItem(d)
+            #self.ui.clampDevCombo.addItem(d)
             
-        self.fillModuleList()
+        #self.fillModuleList()
+        self.ui.scannerDevCombo.setTypes('scanner')
+        self.ui.clampDevCombo.setTypes('clamp')
+        self.ui.cameraModCombo.setTypes('cameraModule')
+        
+        
         self.prots = {}
         self.currentProt = None
-        #QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteSelected)
         self.ui.deleteBtn.clicked.connect(self.deleteSelected)
-        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
         self.stateGroup.sigChanged.connect(self.stateChanged)
-        #QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*, QListWidgetItem*)'), self.itemSelected)
         self.ui.protList.currentItemChanged.connect(self.itemSelected)
-        #QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemClicked)
         self.ui.protList.itemClicked.connect(self.itemClicked)
-        #QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.recompute)
         self.ui.recomputeBtn.clicked.connect(self.recompute)
-        #QtCore.QObject.connect(self.man, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
-        self.man.sigModulesChanged.connect(self.fillModuleList)
+        #self.man.sigModulesChanged.connect(self.fillModuleList)
         
     def quit(self):
         AnalysisModule.quit(self)
@@ -45,11 +44,11 @@ class UncagingModule(AnalysisModule):
         self.currentProt = None
         
         
-    def fillModuleList(self):
-        mods = self.man.listModules()
-        self.ui.cameraModCombo.clear()
-        for m in mods:
-            self.ui.cameraModCombo.addItem(m)
+    #def fillModuleList(self):
+        #mods = self.man.listModules()
+        #self.ui.cameraModCombo.clear()
+        #for m in mods:
+            #self.ui.cameraModCombo.addItem(m)
         
     def protocolStarted(self, *args):
         #print "start:",args
@@ -129,19 +128,20 @@ class UncagingModule(AnalysisModule):
 
     def quit(self):
         #QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
-        getManager().sigModulesChanged.disconnect(self.fillModuleList)
+        #getManager().sigModulesChanged.disconnect(self.fillModuleList)
         AnalysisModule.quit(self)
         for p in self.prots.values():
             p.close()
             
     def cameraModule(self):
-        return str(self.ui.cameraModCombo.currentText())
+        return self.ui.cameraModCombo.getSelectedObj()
+        #return str(self.ui.cameraModCombo.currentText())
         
     def cameraDevice(self):
         camMod = self.cameraModule()
-        mod = self.man.getModule(camMod)
-        if 'camDev' in mod.config:
-            return mod.config['camDev']
+        #mod = self.man.getModule(camMod)
+        if 'camDev' in camMod.config:
+            return camMod.config['camDev']
         else:
             return None
 
@@ -154,15 +154,16 @@ class UncagingModule(AnalysisModule):
         
 class Prot:
     z = 500
-    params = ['alphaSlider', 'frame1Spin', 'frame2Spin', 'clampBaseStartSpin', 'clampBaseStopSpin', 'clampTestStartSpin', 'clampTestStopSpin', 'pspToleranceSpin', 'spotToleranceSpin', 'displayImageCheck']
+    #params = ['alphaSlider', 'frame1Spin', 'frame2Spin', 'clampBaseStartSpin', 'clampBaseStopSpin', 'clampTestStartSpin', 'clampTestStopSpin', 'pspToleranceSpin', 'spotToleranceSpin', 'displayImageCheck']
+    params = ['alphaSlider', 'clampBaseStartSpin', 'clampBaseStopSpin', 'clampTestStartSpin', 'clampTestStopSpin', 'pspToleranceSpin']
     
     def __init__(self, name, ui):
         self.name = name
         self.ui = weakref.ref(ui)
         self.frames = []
-        self.imgItem = ImageItem()
-        self.items = [[self.imgItem, [0,0], [1,1]]]
-        self.img = None
+        #self.imgItem = ImageItem()
+        self.items = [] #[self.imgItem, [0,0], [1,1]]]
+        #self.img = None
         self.updateParams()
         self.z = Prot.z
         Prot.z += 1
@@ -181,21 +182,21 @@ class Prot:
             printExc('The device "%s" does not appear to be a scanner; skipping analysis.' % scannerDev)
         pointSize = scanUi.pointSize()
         
-        if self.state['displayImageCheck']:
-            camFrame1 = frame['result'][camDev]['frames'][self.state['frame1Spin']]
-            camFrame2 = frame['result'][camDev]['frames'][self.state['frame2Spin']]
-            camInfo = camFrame1.infoCopy()
-            camFrame = MetaArray(camFrame2.astype(float32) - camFrame1.astype(float32), info=camInfo)
-        else:
-            #camInfo = frame['result'][camDev]['frames'][self.state['frame1Spin']].infoCopy()
-            camInfo = None
-            camFrame = None
+        #if self.state['displayImageCheck']:
+            #camFrame1 = frame['result'][camDev]['frames'][self.state['frame1Spin']]
+            #camFrame2 = frame['result'][camDev]['frames'][self.state['frame2Spin']]
+            #camInfo = camFrame1.infoCopy()
+            #camFrame = MetaArray(camFrame2.astype(float32) - camFrame1.astype(float32), info=camInfo)
+        #else:
+            ##camInfo = frame['result'][camDev]['frames'][self.state['frame1Spin']].infoCopy()
+            #camInfo = None
+            #camFrame = None
             
         data = {
-            'cam': camFrame,
+            #'cam': camFrame,
             'clamp': frame['result'][clampDev]['primary'].copy(),
             'scanner': frame['result'][scannerDev],
-            'camInfo': camInfo
+            #'camInfo': camInfo
         }
         data['scanner']['spot'] = pointSize
         #print "============\n", data
@@ -215,13 +216,13 @@ class Prot:
             #self.recalculate(allFrames=True)
 
     def updateAlpha(self):
-        if self.state['displayImageCheck']:
-            self.updateImage()
-        else:
-            for (i, p, s) in self.items[1:]:
-                c = i.brush().color()
-                c.setAlpha(self.state['alphaSlider'])
-                i.setBrush(QtGui.QBrush(c))
+        #if self.state['displayImageCheck']:
+            #self.updateImage()
+        #else:
+        for (i, p, s) in self.items[1:]:
+            c = i.brush().color()
+            c.setAlpha(self.state['alphaSlider'])
+            i.setBrush(QtGui.QBrush(c))
             
 
     def recalculate(self, allFrames=False):
@@ -232,12 +233,12 @@ class Prot:
         ## calculate image
         if allFrames:
             ## Clear out old displays
-            self.img = None
-            for (i, p, s) in self.items[1:]:
+            #self.img = None
+            for (i, p, s) in self.items:
                 s = i.scene()
                 if s is not None:
                     s.removeItem(i)
-            self.items = self.items[:1]
+            self.items = []
             
             ## Compute for all frames
             frames = self.frames
@@ -245,50 +246,51 @@ class Prot:
             frames = self.frames[-1:]
         
         
-        if self.state['displayImageCheck'] and frames[0]['cam'] is not None:
-            if self.img is None:
-                self.img = zeros(frames[0]['cam'].shape + (4,), dtype=float32)
+        #if self.state['displayImageCheck'] and frames[0]['cam'] is not None:
+            #if self.img is None:
+                #self.img = zeros(frames[0]['cam'].shape + (4,), dtype=float32)
         
         for f in frames:
             (r, g, b) = self.evaluateTrace(f['clamp'])
             
-            if self.state['displayImageCheck'] and f['cam'] is not None and self.img is not None and f['cam'].shape == self.img.shape:
-                alpha = gaussian_filter((f['cam'] - f['cam'].min()), (5, 5))
-                tol = self.state['spotToleranceSpin']
-                alpha = clip(alpha-tol, 0, 2**32)
-                alpha *= 256. / alpha.max()
-                newImg = empty(frames[0]['cam'].shape + (4,), dtype=uint16)
-                newImg[..., 0] = b * alpha
-                newImg[..., 1] = g * alpha
-                newImg[..., 2] = r * alpha
-                newImg[..., 3] = alpha
+            #if self.state['displayImageCheck'] and f['cam'] is not None and self.img is not None and f['cam'].shape == self.img.shape:
+                #alpha = gaussian_filter((f['cam'] - f['cam'].min()), (5, 5))
+                #tol = self.state['spotToleranceSpin']
+                #alpha = clip(alpha-tol, 0, 2**32)
+                #alpha *= 256. / alpha.max()
+                #newImg = empty(frames[0]['cam'].shape + (4,), dtype=uint16)
+                #newImg[..., 0] = b * alpha
+                #newImg[..., 1] = g * alpha
+                #newImg[..., 2] = r * alpha
+                #newImg[..., 3] = alpha
                 
-                self.img = clip(self.img + (newImg.astype(uint16)), 0, 255)
-            else:
-                alpha = self.state['alphaSlider']
-                spot = QtGui.QGraphicsEllipseItem(QtCore.QRectF(-0.5, -0.5, 1, 1))
-                spot.setBrush(QtGui.QBrush(QtGui.QColor(r*255, g*255, b*255, alpha)))
-                spot.setPen(QtGui.QPen(QtCore.Qt.NoPen))
-                p = f['scanner']['position']
-                s = f['scanner']['spotSize']
-                self.items.append([spot, p, [s, s]])
+                #self.img = clip(self.img + (newImg.astype(uint16)), 0, 255)
+            #else:
+            alpha = self.state['alphaSlider']
+            spot = QtGui.QGraphicsEllipseItem(QtCore.QRectF(-0.5, -0.5, 1, 1))
+            spot.setBrush(QtGui.QBrush(QtGui.QColor(r*255, g*255, b*255, alpha)))
+            spot.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+            p = f['scanner']['position']
+            s = f['scanner']['spotSize']
+            self.items.append([spot, p, [s, s]])
             
         self.hide()  ## Make sure only correct items are displayed
         self.show()
         
-        if self.state['displayImageCheck']:
-            self.updateImage()
+        #if self.state['displayImageCheck']:
+            #self.updateImage()
 
-            # update location of image
-            info = frames[-1]['camInfo'][-1]
-            s = info['pixelSize']
-            p = info['imagePosition']
-            self.items[0][1] = p
-            self.items[0][2] = s
+            ## update location of image
+            #info = frames[-1]['camInfo'][-1]
+            #s = info['pixelSize']
+            #p = info['imagePosition']
+            #self.items[0][1] = p
+            #self.items[0][2] = s
         
         ## Set correct scene
-        cModName = str(self.ui().ui.cameraModCombo.currentText())
-        camMod = self.ui().man.getModule(cModName)
+        #cModName = str(self.ui().ui.cameraModCombo.currentText())
+        #camMod = self.ui().man.getModule(cModName)
+        camMod = self.ui().ui.cameraModCombo.getSelectedObj()
         scene = camMod.ui.view.scene()
         for i in self.items:
             (item, p, s) = i
@@ -296,12 +298,12 @@ class Prot:
                 camMod.ui.addItem(item, p, s, self.z)
 
 
-    def updateImage(self):
-        #print "updateImage", self.img.shape, self.img.max(axis=0).max(axis=0), self.img.min(axis=0).min(axis=0)
-        #print "scene:", self.imgItem.scene(), "z", self.imgItem.zValue(), 'visible', self.imgItem.isVisible()
-        aImg = self.img.astype(uint8)
-        aImg[..., 3] *= float(self.state['alphaSlider']) / self.ui().ui.alphaSlider.maximum()
-        self.imgItem.updateImage(aImg)
+    #def updateImage(self):
+        ##print "updateImage", self.img.shape, self.img.max(axis=0).max(axis=0), self.img.min(axis=0).min(axis=0)
+        ##print "scene:", self.imgItem.scene(), "z", self.imgItem.zValue(), 'visible', self.imgItem.isVisible()
+        #aImg = self.img.astype(uint8)
+        #aImg[..., 3] *= float(self.state['alphaSlider']) / self.ui().ui.alphaSlider.maximum()
+        #self.imgItem.updateImage(aImg)
 
     def evaluateTrace(self, data):
         bstart = self.state['clampBaseStartSpin'] * 1e-3
@@ -356,11 +358,11 @@ class Prot:
         
     def show(self):
         #self.visible = True
-        if self.state['displayImageCheck']:
-            self.imgItem.show()
-        else:
-            for (i, p, s) in self.items[1:]:
-                i.show()
+        #if self.state['displayImageCheck']:
+            #self.imgItem.show()
+        #else:
+        for (i, p, s) in self.items:
+            i.show()
         
     def hide(self):
         #self.visible = False

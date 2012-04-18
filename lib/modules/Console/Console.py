@@ -179,6 +179,8 @@ class Console(Module):
         self.input.setHistory(index)
         self.input.execCmd()
         
+    def flush(self):
+        pass
     
     
     

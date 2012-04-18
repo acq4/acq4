@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/devices/MultiClamp/RackTemplate.ui'
 #
-# Created: Fri Mar  9 11:18:40 2012
+# Created: Wed Apr 18 12:58:56 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

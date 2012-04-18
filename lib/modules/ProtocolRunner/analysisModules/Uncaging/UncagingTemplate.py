@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/modules/ProtocolRunner/analysisModules/Uncaging/UncagingTemplate.ui'
 #
-# Created: Fri Mar  9 11:18:43 2012
+# Created: Wed Apr 18 12:58:59 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(240, 287)
+        Form.resize(292, 355)
         self.horizontalLayout = QtGui.QHBoxLayout(Form)
         self.horizontalLayout.setMargin(0)
         self.horizontalLayout.setObjectName(_fromUtf8("horizontalLayout"))
@@ -27,13 +27,13 @@ class Ui_Form(object):
         self.label = QtGui.QLabel(Form)
         self.label.setObjectName(_fromUtf8("label"))
         self.gridLayout.addWidget(self.label, 1, 0, 1, 1)
-        self.cameraModCombo = QtGui.QComboBox(Form)
+        self.cameraModCombo = InterfaceCombo(Form)
         self.cameraModCombo.setObjectName(_fromUtf8("cameraModCombo"))
         self.gridLayout.addWidget(self.cameraModCombo, 1, 1, 1, 2)
         self.label_3 = QtGui.QLabel(Form)
         self.label_3.setObjectName(_fromUtf8("label_3"))
         self.gridLayout.addWidget(self.label_3, 4, 0, 1, 1)
-        self.clampDevCombo = QtGui.QComboBox(Form)
+        self.clampDevCombo = InterfaceCombo(Form)
         self.clampDevCombo.setObjectName(_fromUtf8("clampDevCombo"))
         self.gridLayout.addWidget(self.clampDevCombo, 4, 1, 1, 2)
         self.protList = QtGui.QListWidget(Form)
@@ -54,7 +54,7 @@ class Ui_Form(object):
         self.alphaSlider.setOrientation(QtCore.Qt.Horizontal)
         self.alphaSlider.setObjectName(_fromUtf8("alphaSlider"))
         self.gridLayout.addWidget(self.alphaSlider, 6, 1, 1, 2)
-        self.scannerDevCombo = QtGui.QComboBox(Form)
+        self.scannerDevCombo = InterfaceCombo(Form)
         self.scannerDevCombo.setObjectName(_fromUtf8("scannerDevCombo"))
         self.gridLayout.addWidget(self.scannerDevCombo, 3, 1, 1, 2)
         self.label_4 = QtGui.QLabel(Form)
@@ -97,30 +97,7 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.pspToleranceSpin, 10, 1, 1, 2)
         self.recomputeBtn = QtGui.QPushButton(Form)
         self.recomputeBtn.setObjectName(_fromUtf8("recomputeBtn"))
-        self.gridLayout.addWidget(self.recomputeBtn, 17, 1, 1, 1)
-        self.displayImageCheck = QtGui.QCheckBox(Form)
-        self.displayImageCheck.setChecked(True)
-        self.displayImageCheck.setObjectName(_fromUtf8("displayImageCheck"))
-        self.gridLayout.addWidget(self.displayImageCheck, 13, 1, 1, 2)
-        self.spotToleranceSpin = QtGui.QDoubleSpinBox(Form)
-        self.spotToleranceSpin.setMinimum(0.01)
-        self.spotToleranceSpin.setMaximum(100000000.0)
-        self.spotToleranceSpin.setSingleStep(0.1)
-        self.spotToleranceSpin.setProperty(_fromUtf8("value"), 1000.0)
-        self.spotToleranceSpin.setObjectName(_fromUtf8("spotToleranceSpin"))
-        self.gridLayout.addWidget(self.spotToleranceSpin, 15, 1, 1, 1)
-        self.label_7 = QtGui.QLabel(Form)
-        self.label_7.setObjectName(_fromUtf8("label_7"))
-        self.gridLayout.addWidget(self.label_7, 15, 0, 1, 1)
-        self.label_2 = QtGui.QLabel(Form)
-        self.label_2.setObjectName(_fromUtf8("label_2"))
-        self.gridLayout.addWidget(self.label_2, 14, 0, 1, 1)
-        self.frame1Spin = QtGui.QSpinBox(Form)
-        self.frame1Spin.setObjectName(_fromUtf8("frame1Spin"))
-        self.gridLayout.addWidget(self.frame1Spin, 14, 1, 1, 1)
-        self.frame2Spin = QtGui.QSpinBox(Form)
-        self.frame2Spin.setObjectName(_fromUtf8("frame2Spin"))
-        self.gridLayout.addWidget(self.frame2Spin, 14, 2, 1, 1)
+        self.gridLayout.addWidget(self.recomputeBtn, 13, 1, 1, 1)
         self.horizontalLayout.addLayout(self.gridLayout)
 
         self.retranslateUi(Form)
@@ -137,7 +114,5 @@ class Ui_Form(object):
         self.enabledCheck.setText(QtGui.QApplication.translate("Form", "Enabled", None, QtGui.QApplication.UnicodeUTF8))
         self.label_6.setText(QtGui.QApplication.translate("Form", "PSP Tolerance", None, QtGui.QApplication.UnicodeUTF8))
         self.recomputeBtn.setText(QtGui.QApplication.translate("Form", "Recompute", None, QtGui.QApplication.UnicodeUTF8))
-        self.displayImageCheck.setText(QtGui.QApplication.translate("Form", "Display images", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_7.setText(QtGui.QApplication.translate("Form", "Spot Cutoff", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Frame:", None, QtGui.QApplication.UnicodeUTF8))
 
+from InterfaceCombo import InterfaceCombo

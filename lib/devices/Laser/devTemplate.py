@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/devices/Laser/devTemplate.ui'
 #
-# Created: Fri Mar  9 11:18:40 2012
+# Created: Wed Apr 18 12:58:55 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -135,7 +135,7 @@ class Ui_Form(object):
         self.label_2.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.label_2.setObjectName(_fromUtf8("label_2"))
         self.gridLayout_2.addWidget(self.label_2, 1, 0, 1, 1)
-        self.microscopeCombo = QtGui.QComboBox(self.groupBox)
+        self.microscopeCombo = InterfaceCombo(self.groupBox)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(4)
         sizePolicy.setVerticalStretch(0)
@@ -162,7 +162,7 @@ class Ui_Form(object):
         self.label_3.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.label_3.setObjectName(_fromUtf8("label_3"))
         self.gridLayout_2.addWidget(self.label_3, 2, 0, 1, 1)
-        self.meterCombo = QtGui.QComboBox(self.groupBox)
+        self.meterCombo = InterfaceCombo(self.groupBox)
         self.meterCombo.setObjectName(_fromUtf8("meterCombo"))
         self.gridLayout_2.addWidget(self.meterCombo, 2, 1, 1, 1)
         self.label = QtGui.QLabel(self.groupBox)
@@ -292,3 +292,4 @@ class Ui_Form(object):
         self.qSwitchBtn.setText(QtGui.QApplication.translate("Form", "Turn On QSwitch", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph import SpinBox
+from InterfaceCombo import InterfaceCombo

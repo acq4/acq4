@@ -64,7 +64,6 @@ class ExportDialog(QtGui.QWidget):
             si.gitem = item
             treeItem.addChild(si)
             treeItem = si
-            print si.gitem, select
             if si.gitem is select:
                 self.ui.itemTree.setCurrentItem(si)
             
@@ -73,6 +72,8 @@ class ExportDialog(QtGui.QWidget):
         
             
     def exportItemChanged(self, item, prev):
+        if item is None:
+            return
         if item.gitem is self.scene:
             newBounds = self.scene.views()[0].viewRect()
         else:
@@ -106,7 +107,10 @@ class ExportDialog(QtGui.QWidget):
         expClass = self.exporterClasses[str(item.text())]
         exp = expClass(item=self.ui.itemTree.currentItem().gitem)
         params = exp.parameters()
-        self.ui.paramTree.setParameters(params)
+        if params is None:
+            self.ui.paramTree.clear()
+        else:
+            self.ui.paramTree.setParameters(params)
         self.currentExporter = exp
         
     def exportClicked(self):

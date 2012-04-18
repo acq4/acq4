@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/util/pyqtgraph/graphicsItems/ViewBox/axisCtrlTemplate.ui'
 #
-# Created: Fri Mar  9 11:18:45 2012
+# Created: Wed Apr 18 12:59:01 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -51,6 +51,7 @@ class Ui_Form(object):
         self.autoPanCheck.setObjectName(_fromUtf8("autoPanCheck"))
         self.gridLayout.addWidget(self.autoPanCheck, 3, 1, 1, 2)
         self.linkCombo = QtGui.QComboBox(Form)
+        self.linkCombo.setSizeAdjustPolicy(QtGui.QComboBox.AdjustToContents)
         self.linkCombo.setObjectName(_fromUtf8("linkCombo"))
         self.gridLayout.addWidget(self.linkCombo, 4, 1, 1, 2)
         self.label = QtGui.QLabel(Form)

@@ -854,8 +854,6 @@ class ScannerProtoGui(ProtocolGui):
                 occArea |= i.mapToView(i.shape())
             
         for i in items:
-            if isinstance(i, TargetOcclusion) or isinstance(i, TargetProgram) or isinstance(i, pg.SpiralROI):
-                continue
             pts = i.listPoints()
             #for x in self.occlusions.keys():  ##can we just join the occlusion areas together?
                 #area = self.occlusions[x].mapToScene(self.occlusions[x].shape())
@@ -1435,6 +1433,7 @@ class TargetOcclusion(pg.PolygonROI):
     def saveState(self):
         return {'type':'Occlusion', 'pos': (self.pos().x(), self.pos().y()), 'points': [(p.x(), p.y()) for p in self.listPoints()]}
     
+    
 class ProgramLineScan(QtCore.QObject):
     
     sigStateChanged = QtCore.Signal(object)
@@ -1524,7 +1523,10 @@ class ProgramRectScan(QtCore.QObject):
         #self.oldDisplaySize = self.pointSize
         #self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         
-        self.roi = pg.RectangleROI([self.params['width'], self.params['height']], pos=[0.0, 0.0] )
+        #self.roi = pg.RectangleROI([self.params['width'], self.params['height']], pos=[0.0, 0.0] )
+        self.roi = pg.ROI(size=[self.params['width'], self.params['height']], pos=[0.0, 0.0])
+        self.roi.addScaleHandle([1,1], [0.5, 0.5])
+        self.roi.addRotateHandle([0,0], [0.5, 0.5])
         
     def getGraphicsItems(self):
         return [self.roi]
