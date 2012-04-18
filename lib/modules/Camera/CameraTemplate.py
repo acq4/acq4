@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/modules/Camera/CameraTemplate.ui'
 #
-# Created: Wed Apr 18 12:58:57 2012
+# Created: Wed Apr 18 13:40:16 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
