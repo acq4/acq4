@@ -28,7 +28,7 @@ from UIGraphicsItem import UIGraphicsItem
 __all__ = [
     'ROI', 
     'TestROI', 'RectROI', 'EllipseROI', 'CircleROI', 'PolygonROI', 
-    'LineROI', 'MultiLineROI', 'LineSegmentROI', 'SpiralROI'
+    'LineROI', 'MultiLineROI', 'LineSegmentROI', 'SpiralROI',
 ]
 
 
@@ -62,11 +62,11 @@ class ROI(GraphicsObject):
         
         self.handlePen = QtGui.QPen(QtGui.QColor(150, 255, 255))
         self.handles = []
-        self.state = {'pos': pos, 'size': size, 'angle': angle}  ## angle is in degrees for ease of Qt integration
+        self.state = {'pos': Point(0,0), 'size': Point(1,1), 'angle': 0}  ## angle is in degrees for ease of Qt integration
         self.lastState = None
         self.setPos(pos)
-        #self.rotate(-angle * 180. / np.pi)
-        self.rotate(angle)
+        self.setAngle(angle)
+        self.setSize(size)
         self.setZValue(10)
         self.isMoving = False
         
@@ -237,9 +237,8 @@ class ROI(GraphicsObject):
         #if 'update' not in kargs or kargs['update'] is True:
         #self.stateChanged()
 
-    def rotate(self, angle, center=(0,0), angleSnap=False, update=True, finish=True):
-        pass
-        #self.setAngle(self.angle()+angle, update=update, finish=finish)
+    def rotate(self, angle, update=True, finish=True):
+        self.setAngle(self.angle()+angle, update=update, finish=finish)
 
     
     def addTranslateHandle(self, pos, axes=None, item=None, name=None):
@@ -1072,13 +1071,14 @@ class TestROI(ROI):
         #QtGui.QGraphicsRectItem.__init__(self, pos[0], pos[1], size[0], size[1])
         ROI.__init__(self, pos, size, **args)
         #self.addTranslateHandle([0, 0])
-        self.addTranslateHandle([0.5, 0.5])
-        self.addScaleHandle([1, 1], [0, 0])
-        self.addScaleHandle([0, 0], [1, 1])
-        self.addScaleRotateHandle([1, 0.5], [0.5, 0.5])
-        self.addScaleHandle([0.5, 1], [0.5, 0.5])
-        self.addRotateHandle([1, 0], [0, 0])
-        self.addRotateHandle([0, 1], [1, 1])
+#        self.addTranslateHandle([0.5, 0.5]) # center of item; obvious to translate only
+#        self.addScaleHandle([1, 1], [0, 0]) # in one corner; scale in both directions
+#        self.addScaleHandle([0, 0], [1, 1]) # opposite corner
+        self.addScaleRotateHandle([1, 0.5], [0.5, 0.5]) # Rotation is about center; handle on one side
+        self.addScaleHandle([1, 0], [0.5, 0.5]) # Rotation is about center; handle on one side
+#        self.addScaleHandle([0.5, 1], [0.5, 0.5]) # along one side in the middle; only works in opposite direction
+#        self.addRotateHandle([1, 0], [0, 0]) # anchored rotation, handle on the corner
+#        self.addRotateHandle([0, 1], [1, 1]) # opposite anchored rotation
 
 
 

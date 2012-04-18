@@ -3,23 +3,49 @@ from ProtocolTemplate import Ui_Form
 from lib.devices.Device import ProtocolGui
 from PyQt4 import QtCore, QtGui
 from lib.Manager import getManager, logMsg, logExc
-#from pyqtgraph.WidgetGroup import WidgetGroup
-#import pyqtgraph.graphicsItems as graphicsItems
 import random
 import numpy as np
 from debug import Profiler
 import optimize ## for determining random scan patterns
-import ForkedIterator
-import sys
-#from pyqtgraph import SpinBox, Point, mkPen, ProgressDialog
+#import ForkedIterator
+import os, sys
 import pyqtgraph as pg
-#from pyqtgraph.Point import *
-#from pyqtgraph.functions import mkPen
-#import pyqtgraph.ProgressDialog as ProgressDialog
 from HelpfulException import HelpfulException
+import pyqtgraph.parametertree.parameterTypes as pTypes
+from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
+
 
 ### Error IDs:
 ###  1: Could not find spot size from calibration. (from ScannerProtoGui.pointSize)
+
+
+class PositionCtrlGroup(pTypes.GroupParameter):
+    sigAddNewRequested = QtCore.Signal(object, object)
+    def __init__(self):
+        opts = {
+            'name': 'Position Controls',
+            'type': 'group',
+            'addText': "Add Control..",
+            'addList': ['Point', 'Grid', 'Occlusion']
+        }
+        pTypes.GroupParameter.__init__(self, **opts)
+    
+    def addNew(self, typ):
+        self.sigAddNewRequested.emit(self, typ)
+
+class ProgramCtrlGroup(pTypes.GroupParameter):
+    sigAddNewRequested = QtCore.Signal(object, object)
+    def __init__(self):
+        opts = {
+            'name': 'Program Controls',
+            'type': 'group',
+            'addText': "Add Control..",
+            'addList': ['lineScan', 'rectangleScan']
+        }
+        pTypes.GroupParameter.__init__(self, **opts)
+    
+    def addNew(self, typ):
+        self.sigAddNewRequested.emit(self, typ)
 
 class ScannerProtoGui(ProtocolGui):
     
@@ -34,8 +60,17 @@ class ScannerProtoGui(ProtocolGui):
         self.targets = None
         self.items = {}
         #self.occlusions = {}
-        self.nextId = 0
-        self.defaultGridSpacing = 1.0
+        #self.nextId = 0
+        #self.defaultGridSpacing = 1.0
+        self.haveCalibration = True   ## whether there is a calibration for the current combination of laser/camera/objective
+        self.currentObjective = None
+        self.currentScope = None
+        self.currentCamMod = None
+        self.programCtrls = []
+        
+        
+        self.displaySize = {}  ## maps (camera,objective) : display size
+                               ## since this setting is remembered for each objective.
         
         ## Populate module/device lists, auto-select based on device defaults 
         self.defCam = None
@@ -45,14 +80,27 @@ class ScannerProtoGui(ProtocolGui):
         if 'defaultLaser' in self.dev.config:
             defLaser = self.dev.config['defaultLaser']
 
-        devs = dm.listDevices()
-        for d in devs:
-            self.ui.laserCombo.addItem(d)
-            if d == defLaser:
-                self.ui.laserCombo.setCurrentIndex(self.ui.laserCombo.count()-1)
+        #devs = dm.listDevices()
+        #for d in devs:
+            #self.ui.laserCombo.addItem(d)
+            #if d == defLaser:
+                #self.ui.laserCombo.setCurrentIndex(self.ui.laserCombo.count()-1)
 
-        self.fillModuleList()
+        #self.fillModuleList()
         
+        self.ui.cameraCombo.setTypes(['cameraModule'])
+        self.ui.laserCombo.setTypes(['laser'])
+        
+        self.positionCtrlGroup = PositionCtrlGroup()
+        self.positionCtrlGroup.sigAddNewRequested.connect(self.addPositionCtrl)
+        self.ui.itemTree.setParameters(self.positionCtrlGroup, showTop=False)
+        self.positionCtrlGroup.sigChildRemoved.connect(self.positionCtrlRemoved)
+        
+        self.programCtrlGroup = ProgramCtrlGroup()
+        self.programCtrlGroup.sigAddNewRequested.connect(self.addProgramCtrl)
+        self.ui.programTree.setParameters(self.programCtrlGroup, showTop=False)
+        self.programCtrlGroup.sigChildRemoved.connect(self.programCtrlRemoved)
+
         ## Set up SpinBoxes
         self.ui.minTimeSpin.setOpts(dec=True, step=1, minStep=1e-3, siPrefix=True, suffix='s', bounds=[0, 50])
         self.ui.minDistSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[0, 10e-3])
@@ -75,28 +123,30 @@ class ScannerProtoGui(ProtocolGui):
         ## Note we use lambda functions for all these clicks to strip out the arg sent with the signal
         
         #self.prot.sigProtocolChanged.connect(self.protocolChanged)
-        self.ui.addPointBtn.clicked.connect(lambda: self.addPoint())
-        self.ui.addGridBtn.clicked.connect(lambda: self.addGrid())
-        self.ui.addOcclusionBtn.clicked.connect(lambda: self.addOcclusion())
-        self.ui.addProgramBtn.clicked.connect(lambda: self.addProgram())
-        self.ui.addSpiralScanBtn.clicked.connect(lambda: self.addSpiral())
-        self.ui.deleteBtn.clicked.connect(lambda: self.delete())
-        self.ui.deleteAllBtn.clicked.connect(lambda: self.deleteAll())
-        self.ui.itemTree.itemClicked.connect(self.itemToggled)
-        self.ui.itemTree.currentItemChanged.connect(self.itemSelected)
-        self.ui.itemTree.sigItemMoved.connect(self.treeItemMoved)
+        #self.ui.addPointBtn.clicked.connect(lambda: self.addPoint())
+        #self.ui.addGridBtn.clicked.connect(lambda: self.addGrid())
+        #self.ui.addOcclusionBtn.clicked.connect(lambda: self.addOcclusion())
+        #self.ui.addProgramBtn.clicked.connect(lambda: self.addProgram())
+        #self.ui.addSpiralScanBtn.clicked.connect(lambda: self.addSpiral())
+        #self.ui.deleteBtn.clicked.connect(lambda: self.delete())
+        #self.ui.deleteAllBtn.clicked.connect(lambda: self.deleteAll())
+        #self.ui.itemTree.itemClicked.connect(self.itemToggled)
+        #self.ui.itemTree.currentItemChanged.connect(self.itemSelected)
+        #self.ui.itemTree.sigItemMoved.connect(self.treeItemMoved)
         self.ui.hideCheck.toggled.connect(self.showInterface)
         self.ui.hideMarkerBtn.clicked.connect(self.hideSpotMarker)
         self.ui.cameraCombo.currentIndexChanged.connect(self.camModChanged)
+        self.ui.laserCombo.currentIndexChanged.connect(self.laserDevChanged)
         #self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
         self.ui.sizeFromCalibrationRadio.toggled.connect(self.updateSpotSizes)
         self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
-        self.ui.sizeSpin.valueChanged.connect(self.sizeSpinChanged)
+        #self.ui.sizeSpin.valueChanged.connect(self.sizeSpinChanged)
         #QtCore.QObject.connect(self.ui.minTimeSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
         self.ui.minTimeSpin.valueChanged.connect(self.sequenceChanged)
         self.ui.minDistSpin.valueChanged.connect(self.sequenceChanged)
         self.ui.recomputeBtn.clicked.connect(self.recomputeClicked)
-        dm.sigModulesChanged.connect(self.fillModuleList)
+        self.ui.loadConfigBtn.clicked.connect(self.loadConfiguration)
+        #dm.sigModulesChanged.connect(self.fillModuleList)
 
         #self.currentTargetMarker = QtGui.QGraphicsEllipseItem(0, 0, 1, 1)
         #pen = QtGui.QPen(QtGui.QBrush(QtGui.QColor(255, 255, 255)), 3.0)
@@ -105,46 +155,50 @@ class ScannerProtoGui(ProtocolGui):
         
         #self.currentTargetMarker.hide()
         
-        self.testTarget = TargetPoint([0,0], 100e-6, host=self)
+        self.testTarget = TargetPoint(name="Test", ptSize=100e-6)
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
-        self.spotMarker = TargetPoint([0,0], 100e-6, host=self, movable=False)
+        self.spotMarker = TargetPoint(name="Last", ptSize=100e-6, movable=False)
         self.spotMarker.setPen(pg.mkPen(color=(255,255,255), width = 2))
-        try:
-            self.updateSpotSizes()
-        except HelpfulException as exc:
-            if exc.kwargs.get('errId',None) == 1:  ## no calibration for the current objective
-                self.testTarget.hide()
-            else:
-                raise
         self.spotMarker.hide()
+        #try:
+        self.updateSpotSizes()
+        #except HelpfulException as ex:
+            #if ex.kwargs.get('errId', None) == 1:
+                #self.setHaveCalibration(False)
+            #else:
+                #raise
         
         #camMod = self.cameraModule()
-        
-        self.currentObjective = None
-        self.currentScope = None
-        self.currentCamMod = None
         self.camModChanged()
         self.updateTDPlot()
-
+        
         
         ## load target list from device, allowing targets to persist across protocols
-        oldTargetList = self.dev.getTargetList()
-        self.ui.sizeSpin.setValue(oldTargetList[0])
-        for k in oldTargetList[1].keys():
-            t = oldTargetList[1][k]
-            if t['type'] == 'point':
-                pos = t['pos']
-                self.addPoint(pos=pos,  name=k)
-                #pt.setPos(pos)
-            elif t['type'] == 'grid':
-                self.addGrid(pos = t['pos'], size = t['size'], angle = t['angle'],  name=k, rebuildOpts = t )
-                #gr.setPos(pos)
-                #gr.setSize(size)
-                #gr.setAngle(angle)
-            elif t['type'] == 'occlusion':
-                self.addOcclusion(points = t['points'], pos = t['pos'], name=k)
-        for item in self.items.values():
-            item.resetParents()
+        #oldTargetList = self.dev.getTargetList()
+        #self.ui.sizeSpin.setValue(oldTargetList[0])
+        #targetNames = oldTargetList[1].keys()
+        #namesAdded = set([None])
+        #while len(targetNames) > 0:
+            #k = targetNames.pop(0)
+            #t = oldTargetList[1][k]
+            #parentName = t.get('parentName', None)
+            #if parentName not in namesAdded:
+                #targetNames.append(k)  ## parent hasn't been placed yet; delay this for later
+                #continue
+            #namesAdded.add(k)
+            #if t['type'] == 'point':
+                #pos = t['pos']
+                #self.addPoint(pos=pos,  name=k, parent=parentName)
+                ##pt.setPos(pos)
+            #elif t['type'] == 'grid':
+                #self.addGrid(pos = t['pos'], size = t['size'], angle = t['angle'],  name=k, parent=parentName)
+                ##gr.setPos(pos)
+                ##gr.setSize(size)
+                ##gr.setAngle(angle)
+            #elif t['type'] == 'occlusion':
+                #self.addOcclusion(points = t['points'], pos = t['pos'], name=k, parent=parentName)
+        #for item in self.items.values():
+            #item.resetParents()
             
         if 'offVoltage' not in self.dev.config: ## we don't have a voltage for virtual shuttering
             self.ui.simulateShutterCheck.setChecked(False)
@@ -155,19 +209,31 @@ class ScannerProtoGui(ProtocolGui):
             #self.protDuration = val
         
         
-    def fillModuleList(self):
-        man = getManager()
-        self.ui.cameraCombo.clear()
-        mods = man.listModules()
-        for m in mods:
-            self.ui.cameraCombo.addItem(m)
-            mod = man.getModule(m)
-            try:
-                if 'camDev' in mod.config and mod.config['camDev'] == self.defCam:
-                    self.ui.cameraCombo.setCurrentIndex(self.ui.cameraCombo.count()-1)
-            except (KeyError,AttributeError):
-                continue
+    #def fillModuleList(self):
+        #man = getManager()
+        #self.ui.cameraCombo.clear()
+        #mods = man.listModules()
+        #for m in mods:
+            #self.ui.cameraCombo.addItem(m)
+            #mod = man.getModule(m)
+            #try:
+                #if 'camDev' in mod.config and mod.config['camDev'] == self.defCam:
+                    #self.ui.cameraCombo.setCurrentIndex(self.ui.cameraCombo.count()-1)
+            #except (KeyError,AttributeError):
+                #continue
+
+    def setHaveCalibration(self, have):
+        self.haveCalibration = have
+        self.updateVisibility()
         
+    def showInterface(self, b):
+        self.updateVisibility()
+        
+    def updateVisibility(self):
+        b = self.haveCalibration and not self.ui.hideCheck.isChecked()
+        for k in self.items:
+            self.items[k].setVisible(b)
+        self.testTarget.setVisible(b)
         
     def camModChanged(self):
         camDev = self.cameraDevice()
@@ -207,48 +273,53 @@ class ScannerProtoGui(ProtocolGui):
     def objectiveChanged(self):
         
         camDev = self.cameraDevice()
+        camMod = self.cameraModule()
         if camDev is None:
             return
         obj = camDev.getObjective()
         if self.currentObjective != obj:
             self.currentObjective = obj
-            try:
-                self.updateSpotSizes()
-                self.testTarget.setPointSize()
-                self.spotMarker.setPointSize()
-                self.testTarget.show()
-            except HelpfulException as exc:
-                if exc.kwargs.get('errId', None) == 1:
-                    #logMsg("Could not update scanner spot sizes for %s objective because no calibration could be found." %str(obj), msgType='warning', importance=2)
-                    self.testTarget.hide()
-                else:
-                    raise
+            
+            ## recall display size settings for this objective
+            dispSize = self.displaySize.get((), None)
+            if dispSize is None:
+                self.ui.sizeFromCalibrationRadio.setChecked(True)
+            else:
+                self.ui.sizeSpin.setValue(dispSize)
+            
+            ## update spots
+            #try:
+            self.updateSpotSizes()
+                #self.testTarget.show()
+                #self.setHaveCalibration(True)
+            #except HelpfulException as exc:
+                #if exc.kwargs.get('errId', None) == 1:
+                    ##logMsg("Could not update scanner spot sizes for %s objective because no calibration could be found." %str(obj), msgType='warning', importance=2)
+                    #self.setHaveCalibration(False)
+                #else:
+                    #raise
                 
             for i in self.items.values():
-                li = self.listItem(i.name) ## actually a tree item
-                if i.objective == obj:
-                    li.setCheckState(0, QtCore.Qt.Checked)
-                    li.graphicsItem.setVisible(True)
-                else:
-                    li.setCheckState(0, QtCore.Qt.Unchecked)
-                    li.graphicsItem.setVisible(False)
+                active = (i.objective == obj)
+                i.parameters().setValue(active)
                     
-                #self.itemToggled(li)
-                
-            #self.testTarget.setPointSize(self.pointSize()[0])
-            #self.testTarget.setPointSize()
-            #self.spotMarker.setPointSize()
-            #self.cameraModule().ui.centerItem(self.testTarget)
-        camMod = self.cameraModule()
-        #camMod.ui.removeItem(self.testTarget)
-        #camMod.ui.removeItem(self.spotMarker)
-        #camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
-        #camMod.ui.addItem(self.spotMarker, None, [1,1], 1010)
 
-    def sizeSpinChanged(self):
-        #print "packingSpinChanged."
-        #self.updateSpotSizes()
-        self.dev.updateTargetDisplaySize(self.ui.sizeSpin.value())
+    def laserDevChanged(self):
+        ## called when laser device combo is changed
+        ## need to update spot size
+        #try:
+        self.updateSpotSizes()
+            #self.setHaveCalibration(True)
+        #except HelpfulException as ex:
+            #if ex.kwargs.get('errId', None) == 1:
+                #self.setHaveCalibration(False)
+            #else:
+                #raise
+        #self.testTarget.setPointSize()
+        #self.spotMarker.setPointSize()
+
+    #def sizeSpinChanged(self):
+        #self.dev.updateTargetDisplaySize(self.ui.sizeSpin.value())
         
         
     def sizeSpinEdited(self):
@@ -259,33 +330,40 @@ class ScannerProtoGui(ProtocolGui):
     def updateSpotSizes(self):
         #size, displaySize = self.pointSize()
         ##pd = self.pointSize()[1]
-        for i in self.items.values():
-            i.setPointSize()
-        self.testTarget.setPointSize()
-        self.spotMarker.setPointSize()
+        try:
+            size, display = self.pointSize()
+            for i in self.items.values():
+                i.setPointSize(display, size)
+            self.testTarget.setPointSize(size)
+            self.spotMarker.setPointSize(size)
+            
+            self.setHaveCalibration(True)
+        except HelpfulException as exc:
+            if exc.kwargs.get('errId', None) == 1:
+                self.setHaveCalibration(False)
+            else:
+                raise
+        
+        
+        
 
-    def showInterface(self, b):
-        for k in self.items:
-            if self.listItem(k).checkState(0) == QtCore.Qt.Checked:
-                self.items[k].setVisible(not b)
-        self.testTarget.setVisible(not b)
-
-    def listItem(self, name):
-        return self.ui.itemTree.findItems(name, QtCore.Qt.MatchRecursive)[0]
+    #def listItem(self, name):
+        #return self.ui.itemTree.findItems(name, QtCore.Qt.MatchRecursive)[0]
 
     def pointSize(self):
+        ## returns (calibrated spot size, requested display size)
         #packing = self.ui.packingSpin.value()
         try:
             camMod = self.cameraModule()
             if camMod is None:
                 return (1,1)
             cam = camMod.config['camDev']
-            laser = str(self.ui.laserCombo.currentText())
+            laser = self.ui.laserCombo.currentText()
             cal = self.dev.getCalibration(cam, laser)
             ss = cal['spot'][1]
-           
+            
+            
         except:
-            print "Could not find spot size from calibration."
             #logMsg("Could not find spot size from calibration.", msgType='error') ### This should turn into a HelpfulException.
             exc = sys.exc_info()
             raise HelpfulException("Could not find spot size from calibration. ", exc=exc, reasons=["Correct camera and/or laser device are not selected.", "There is no calibration file for selected camera and laser."], errId=1)
@@ -293,23 +371,23 @@ class ScannerProtoGui(ProtocolGui):
         if self.ui.sizeFromCalibrationRadio.isChecked():
             displaySize = ss
             ## reconnecting before this to get around reload errors, breaks the disconnect
-            try:
-                self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
-            except TypeError:
-                logExc("A TypeError was caught in ScannerProtoGui.pointSize(). It was probably caused by a reload.", msgType='status', importance=0)
+            #try:
+                #self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
+            #except TypeError:
+                #logExc("A TypeError was caught in ScannerProtoGui.pointSize(). It was probably caused by a reload.", msgType='status', importance=0)
             self.stateGroup.setState({'spotSize':ss})
-            self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
+            #self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
+            self.displaySize[(cam, self.currentObjective)] = None
         elif self.ui.sizeCustomRadio.isChecked():
             displaySize = self.ui.sizeSpin.value()
+            self.displaySize[(cam, self.currentObjective)] = displaySize
+            
         return (ss, displaySize)
         #return (0.0001, packing)
         
     def cameraModule(self):
-        modName = str(self.ui.cameraCombo.currentText())
-        if modName == '':
-            return None
-        mod = getManager().getModule(modName)
-        if not hasattr(mod.ui, 'addItem'): ## silly. should check to see if this is a camera 
+        mod = self.ui.cameraCombo.getSelectedObj()
+        if mod is None:
             return None
         return mod
         
@@ -325,12 +403,28 @@ class ScannerProtoGui(ProtocolGui):
     def calibrationChanged(self):
         pass
 
-    def saveState(self):
-        return self.stateGroup.state()
+    def saveState(self, saveItems=False):
+        state = self.stateGroup.state()
+        if saveItems:
+            state['items'] = [param.item.saveState() for param in self.positionCtrlGroup.children()]
+        return state
         
     def restoreState(self, state):
         self.stateGroup.setState(state)
-        pass
+        if 'items' in state:
+            for itemState in state['items']:
+                typ = itemState['type']
+                self.addItem(typ, itemState)
+    
+    def storeConfiguration(self):
+        state = self.saveState(saveItems=True)
+        fileName = os.path.join(self.dev.configDir(), 'lastConfig')
+        self.dev.dm.writeConfigFile(state, fileName)
+
+    def loadConfiguration(self):
+        fileName = os.path.join(self.dev.configDir(), 'lastConfig')
+        state = self.dev.dm.readConfigFile(fileName)
+        self.restoreState(state)
         
     def listSequence(self):
         items = self.activeItems()
@@ -343,7 +437,7 @@ class ScannerProtoGui(ProtocolGui):
     def generateProtocol(self, params=None):
         if self.cameraModule() is None:
             raise Exception('No camera module selected, can not build protocol.')
-            
+        
         if params is None or 'targets' not in params:
             target = self.testTarget.listPoints()[0]
             delay = 0
@@ -353,14 +447,34 @@ class ScannerProtoGui(ProtocolGui):
             #print "targets:", len(self.targets), params['targets']
             (target, delay) = self.targets[params['targets']]
             
-        prot = {
-            'position': target, 
-            'minWaitTime': delay,
-            'camera': self.cameraModule().config['camDev'], 
-            'laser': str(self.ui.laserCombo.currentText()),
-            'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
-            'duration': self.prot.getParam('duration')
-        }
+        if len(self.programCtrls) == 0: # doing regular position mapping
+            prot = {
+                'position': target, 
+                'minWaitTime': delay,
+                'camera': self.cameraModule().config['camDev'], 
+                'laser': self.ui.laserCombo.currentText(),
+                'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
+                'duration': self.prot.getParam('duration')
+            }
+        else: # doing programmed scans
+            daqName = self.dev.getDaqName()
+            prot = {
+               # 'position': target, 
+                'minWaitTime': delay,
+                'camera': self.cameraModule().config['camDev'], 
+                'laser': self.ui.laserCombo.currentText(),
+                #'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
+                'duration': self.prot.getParam('duration'),
+                'numPts': self.prot.getDevice(daqName).currentState()['numPts'],
+                'program': [],
+                   #('step', 0.0, None),           ## start with step to "off" position 
+                   #('step', 0.2, (1.3e-6, 4e-6)), ## step to the given location after 200ms
+                   #('line', (0.2, 0.205), (1.3e-6, 4e-6))  ## 5ms sweep to the new position 
+                   #('step', 0.205, None),           ## finish step to "off" position at 205ms
+               #]
+            }
+            for ctrl in self.programCtrls:
+                prot['program'].append(ctrl.generateProtocol())
         return prot
     
     def hideSpotMarker(self):
@@ -370,79 +484,129 @@ class ScannerProtoGui(ProtocolGui):
     def handleResult(self, result, params):
         if not self.spotMarker.isVisible():
             self.spotMarker.show()
-        pos = result['position']
-        ss = result['spotSize']
-        self.spotMarker.setPos((pos[0]-ss*0.5, pos[1]-ss*0.5))
+        if 'position' in result:
+            pos = result['position']
+            ss = result['spotSize']
+            self.spotMarker.setPos((pos[0]-ss*0.5, pos[1]-ss*0.5))
         #print 'handleResult'
     
-    def addSpiral(self, pos=None, name=None):
-        autoName = False
-        if name is None:
-            name = 'Point'
-            autoName = True
-        autoPos = False
-        if pos is None:
-            pos = [0,0]
-            autoPos = True
-        pt = pg.SpiralROI(pos)
-        self.addItem(pt, name,  autoPos,  autoName)
-        return pt
+    def addPositionCtrl(self, param, typ):
+        ## called when "Add Control.." combo is changed
+        self.addItem(typ)
 
-    def addPoint(self, pos=None,  name=None):
-        autoName = False
-        if name is None:
-            name = 'Point'
-            autoName = True
-        autoPos = False
-        if pos is None:
-            pos = [0,0]
-            autoPos = True
-        else:
-            s = self.pointSize()[0]
-            pos = [pos[i] - s/2.0 for i in [0, 1]]
-        pt = TargetPoint(pos, self.pointSize()[0])
-        self.addItem(pt, name,  autoPos,  autoName)
-        return pt
+    def positionCtrlRemoved(self, param, ctrl):
+        item = ctrl.item
+        item.scene().removeItem(item)
+        item.parameters().sigValueChanged.disconnect(self.itemActivationChanged)
+        del self.items[item.name]
+        self.itemChanged()
         
-    def addGrid(self, pos=None, size=None, angle=0,  name=None, rebuildOpts = {}):
-        autoName = False
-        if name is None:
-            name = 'Grid'
-            autoName = True
-        try:
-            ptSize, dispSize = self.pointSize()
-        except HelpfulException as ex:
-            exc = sys.exc_info()
-            if ex.kwargs.get('errId', None) == 1:
-                raise HelpfulException('%s has no calibration for %s, so cannot add a grid.' %(str(self.ui.laserCombo.currentText()), self.currentObjective), exc=exc)
-            else:
-                raise HelpfulException('Scanner is unable to find the size of grid points, so cannot add a grid.', exc=exc)
-        autoPos = False
-        if pos is None:
-            pos = [0,0]
-            autoPos = True
-        if size is None:
-            size = [ptSize*4, ptSize*4]
-        pt = TargetGrid(pos, size, ptSize, angle, rebuildOpts=rebuildOpts)
-        self.addItem(pt, name,  autoPos,  autoName)
-        return pt
+    def addProgramCtrl(self, param, itemType):
+        ## called when "Add Control.." combo is changed
+        cls = {'lineScan': ProgramLineScan, 'rectangleScan': ProgramRectScan}[itemType]
+        state = {}
+        ctrl = cls(**state)
+        self.programCtrlGroup.addChild(ctrl.parameters())
+        self.programCtrls.append(ctrl)
+        camMod = self.cameraModule()
+        if camMod is None:
+            raise HelpfulException("Cannot add control items until a camera module is available to display them.")
+            return False
+        for item in ctrl.getGraphicsItems():
+            camMod.ui.addItem(item, None, [1, 1], 1000)
+
+    def programCtrlRemoved(self, parent, param):
+        ctrl = param.ctrl
+        for item in ctrl.getGraphicsItems():
+            item.scene().removeItem(item)
+        self.programCtrls.remove(ctrl)
+        
+        #item.parameters().sigValueChanged.disconnect(self.itemActivationChanged)
+        #del self.items[item.name]
+        #self.itemChanged()
+            
+    #def addSpiral(self, pos=None, name=None):
+        #autoName = False
+        #if name is None:
+            #name = 'Point'
+            #autoName = True
+        #autoPos = False
+        #if pos is None:
+            #pos = [0,0]
+            #autoPos = True
+        #pt = pg.SpiralROI(pos)
+        #self.addItem(pt, name,  autoPos,  autoName)
+        #return pt
+
+    #def addPoint(self, state=None):
+        #if state is None:
+            #state = {}
+        #if state.get('name', None) is None:
+            #state['name'] = self.getNextItemName('Point')
+            
+            
+        #autoPos = False
+        #if pos is None:
+            #pos = [0,0]
+            #autoPos = True
+        #else:
+            #s = self.pointSize()[0]
+            #pos = [pos[i] - s/2.0 for i in [0, 1]]
+        #pt = TargetPoint(name, pos, self.pointSize()[0], **opts)
+        #self.addItem(pt, autoPosition=autoPos, parent=parent)
+        #return pt
+        
+    #def addGrid(self, state=None):
+        #if state is None:
+            #state = {}
+        #if name is None:
+            #name = self.getNextItemName('Grid')
+            
+        #try:
+            #ptSize, dispSize = self.pointSize()
+        #except HelpfulException as ex:
+            #exc = sys.exc_info()
+            #if ex.kwargs.get('errId', None) == 1:
+                #raise HelpfulException('%s has no calibration for %s, so cannot add a grid.' %(str(self.ui.laserCombo.currentText()), self.currentObjective), exc=exc)
+            #else:
+                #raise HelpfulException('Scanner is unable to find the size of grid points, so cannot add a grid.', exc=exc)
+        #autoPos = False
+        #if pos is None:
+            #pos = [0,0]
+            #autoPos = True
+        #if size is None:
+            #size = [ptSize*4, ptSize*4]
+        #pt = TargetGrid(name, pos, size, ptSize, angle, **opts)
+        #self.addItem(pt, autoPosition=autoPos, parent=parent)
+        #return pt
     
-    def addOcclusion(self, pos=None, points=None, name=None):
-        auto = False
-        if name is None:
-            name = 'Occlusion'
-            auto = True
-        if points is None:
-            s = self.pointSize()[0]
-            points = ([0,0], [0,s*3], [s*3,0])
-        if pos is None:
-            pos = [0,0]
-        item =TargetOcclusion(points, pos=pos)
-        self.addItem(item, name, autoName=auto, autoPosition=auto)
-        return item
+    #def addOcclusion(self, state=None):
+        #if state is None:
+            #state = {}
+        #auto = pos is None
+        #if name is None:
+            #name = self.getNextItemName('Occlusion')
+            
+        #if points is None:
+            #s = self.pointSize()[0]
+            #points = ([0,0], [0,s*3], [s*3,0])
+        #if pos is None:
+            #pos = [0,0]
+        #item = TargetOcclusion(name, points, pos=pos, **opts)
+        #self.addItem(item, autoPosition=auto, parent=parent)
+        #return item
+
+    def getNextItemName(self, base):
+        ## Return the next available item name starting with base
+        names = [item.name for item in self.items.values()]
+        num = 1
+        while True:
+            name = base + str(num)
+            if name not in names:
+                return name
+            num += 1
         
-    def addProgram(self, name=None): 
-        pass
+    #def addProgram(self, name=None): 
         #camMod = self.cameraModule()
         #if camMod is None:
             #return False
@@ -467,179 +631,219 @@ class ScannerProtoGui(ProtocolGui):
         
         
 
-    def addItem(self, item, name0,  autoPosition=True,  autoName=True):
+    def addItem(self, itemType, state=None):
+        
+        if state is None:
+            state = {}
+            
+        if state.get('name', None) is None:
+            state['name'] = self.getNextItemName(itemType)
+            
+        try:
+            ptSize, dispSize = self.pointSize()
+        except HelpfulException as ex:
+            exc = sys.exc_info()
+            if ex.kwargs.get('errId', None) == 1:
+                raise HelpfulException('Cannot add items: %s is not calibrated for %s.' %(str(self.ui.laserCombo.currentText()), self.currentObjective), exc=exc)
+            else:
+                raise
+            
+        state['ptSize'] = dispSize
+        
+        cls = {'Grid': TargetGrid, 'Point': TargetPoint, 'Occlusion': TargetOcclusion}[itemType]
+        item = cls(**state)
+        
         camMod = self.cameraModule()
         if camMod is None:
+            raise HelpfulException("Cannot add control items until a camera module is available to display them.")
             return False
-        if autoName:
-            name = name0 + str(self.nextId)
-            while name in self.items.keys():
-                self.nextId += 1
-                name = name0 + str(self.nextId) 
-        else:
-            name=name0
-        item.name = name
+
         item.objective = self.currentObjective
-        self.items[name] = item
-        #if isinstance(item, TargetOcclusion):
-            #self.occlusions[name] = item
-        item.treeItem = QtGui.QTreeWidgetItem([name])
+        self.items[item.name] = item
         
-        item.treeItem.setCheckState(0, QtCore.Qt.Checked)
-        self.ui.itemTree.addTopLevelItem(item.treeItem)
-        
-        item.updateInit(self)
-        self.nextId += 1
-        self.updateItemColor(item.treeItem)
-        if autoPosition:
-            pos = None
-        else:
-            pos = item.stateCopy()['pos'] 
+        #if autoPosition:
+            #pos = None
+        #else:
+            #pos = item.pos()
+        pos = state.get('pos', None)  ## if no position is given, the camera will automatically place the item in the middle fo the view
         camMod.ui.addItem(item, pos, [1, 1], 1000)
+        #if parent is not None:
+            #item.setParentItem(self.items[parent])
+            
+        self.positionCtrlGroup.addChild(item.parameters())
         
-        item.sigRegionChangeFinished.connect(self.itemMoved)
-        item.sigRegionChanged.connect(self.getTargetList)
-        item.sigPointsChanged.connect(self.itemChanged)
-        
+        item.sigStateChanged.connect(self.itemChanged)
+        item.parameters().sigValueChanged.connect(self.itemActivationChanged)
         
         self.itemChanged(item)
-        self.updateDeviceTargetList(item)
+        #self.updateDeviceTargetList(item)
+        self.storeConfiguration()
 
-    def addTarget(self, t, name):
-        self.sequenceChanged()
+    #def addTarget(self, t, name):
+        #self.sequenceChanged()
 
-    def removeTarget(self, name):
-        pass
+    #def removeTarget(self, name):
+        #pass
     
-    def delete(self):
-        item = self.ui.itemTree.currentItem()
-        if item is None:
-            logMsg("No item is selected, nothing was deleted.", msgType='error')
-            return
-        parent = item.parent()
-        if item.childCount() > 0:
-            for i in range(item.childCount()):
-                child = item.child(i)
-                self.ui.itemTree.prepareMove(child)
-                item.removeChild(child)
-                cgi = child.graphicsItem
-                if cgi.parentItem().parentItem() is not None:
-                    pos = cgi.parentItem().parentItem().mapFromScene(cgi.scenePos())
-                else:
-                    pos = cgi.scenePos()
-                cgi.setParentItem(cgi.parentItem().parentItem())
-                cgi.setPos(pos, update=False)
-                if parent is not None:
-                    parent.addChild(child)
-                    self.ui.itemTree.recoverMove(child)
-                else:
-                    self.ui.itemTree.addTopLevelItem(child)
-                    self.ui.itemTree.recoverMove(child)
-                child.graphicsItem.updateFamily()
+    #def delete(self):
+        #item = self.ui.itemTree.currentItem()
+        #if item is None:
+            #logMsg("No item is selected, nothing was deleted.", msgType='error')
+            #return
+        #parent = item.parent()
+        
+        ### If this item has chilren, they are NOT deleted, but instead propagated to the next parent
+        #if item.childCount() > 0:
+            #for i in range(item.childCount()):
+                
+                ### Move item up in the tree
+                #child = item.child(i)
+                #self.ui.itemTree.prepareMove(child)
+                #item.removeChild(child)
+                #if parent is not None:
+                    #parent.addChild(child)
+                #else:
+                    #self.ui.itemTree.addTopLevelItem(child)
+                #self.ui.itemTree.recoverMove(child)
+                
+                ### reparent and reposition the graphics item
+                #cgi = child.graphicsItem
+                #pgi = cgi.parentItem()
+                #pState = pgi.stateCopy()
+                #transform = pg.Transform({'pos': pState['pos'], 'angle': pState['angle']})
+                
+                ##pos = cgi.parentItem().parentItem().mapFromScene(cgi.scenePos())
+                #cgi.setParentItem(cgi.parentItem().parentItem())
+                #cgi.applyGlobalTransform(transform)
+                ##cgi.setPos(pos, update=False)
+                #child.graphicsItem.updateFamily()
                     
-        if parent == None:
-            item = self.ui.itemTree.takeTopLevelItem(self.ui.itemTree.indexOfTopLevelItem(item))
-        else:
-            item = parent.takeChild(parent.indexOfChild(item))
-        #item = self.ui.itemTree.takeItem(row)
-        if item is None:
-            return
-        name = str(item.text(0))
-        self.dev.updateTarget(name, None)  ## inform the device that this target is no more
-        i = self.items[name]
-        #self.removeItemPoints(i)
-        i.scene().removeItem(i)
-        del self.items[name]
-        #self.occlusions.get(name)
-        self.sequenceChanged()
+        #if parent == None:
+            #item = self.ui.itemTree.takeTopLevelItem(self.ui.itemTree.indexOfTopLevelItem(item))
+        #else:
+            #item = parent.takeChild(parent.indexOfChild(item))
+        ##item = self.ui.itemTree.takeItem(row)
+        #if item is None:
+            #return
+        #name = str(item.text(0))
+        ##self.dev.updateTarget(name, None)  ## inform the device that this target is no more
+        #i = self.items[name]
+        ##self.removeItemPoints(i)
+        #i.scene().removeItem(i)
+        #del self.items[name]
+        ##self.occlusions.get(name)
+        #self.sequenceChanged()
+        #self.storeConfiguration()
 
-    def deleteAll(self, clearHistory=True):
-        self.ui.itemTree.clear()
-        for k in self.items:
-            if clearHistory == True:
-                self.dev.updateTarget(k, None)  ## inform the device that this target is no more
-            i = self.items[k]
-            if i.scene() is not None:
-                i.scene().removeItem(i)
-            #self.removeItemPoints(i)
-        self.items = {}
-        #self.occlusions = {}
-        self.sequenceChanged()
+    #def deleteAll(self, clearHistory=True):
+        #self.ui.itemTree.clear()
+        #for k in self.items:
+            ##if clearHistory == True:
+                ##self.dev.updateTarget(k, None)  ## inform the device that this target is no more
+            #i = self.items[k]
+            #if i.scene() is not None:
+                #i.scene().removeItem(i)
+            ##self.removeItemPoints(i)
+        #self.items = {}
+        ##self.occlusions = {}
+        #self.sequenceChanged()
+        #self.storeConfiguration()
         
-    def treeItemMoved(self, item, parent, index):
-        g = item.graphicsItem
-        if parent is not self.ui.itemTree.invisibleRootItem():
-            newPos = parent.graphicsItem.mapFromScene(g.scenePos())
-            g.setParentItem(parent.graphicsItem)
+    #def treeItemMoved(self, item, parent, index):
+        ### called when items are dragged in the item tree
+        
+        #g = item.graphicsItem
+        #if parent is not self.ui.itemTree.invisibleRootItem():
+            #newPos = parent.graphicsItem.mapFromItem(g.parentItem(), g.pos())
+            #g.setParentItem(parent.graphicsItem)
+        #else:
+            #newPos = g.viewPos()
+            #print g.pos(), g.viewPos()
+            #view = g.getViewBox()
+            #g.scene().removeItem(g)
+            #view.addItem(g)
             
-        else:
-            newPos = g.scenePos()
-            item.graphicsItem.setParentItem(None)
-        g.setPos(newPos)
-        item.graphicsItem.updateFamily()
-        #print "tree Item Moved"
+        #g.setPos(newPos)
+        #item.graphicsItem.updateFamily()
+        ##print "tree Item Moved"
+        #self.storeConfiguration()
         
         
-    def itemToggled(self, item, column=None):
-        name = str(item.text(0))
-        i = self.items[name]
-        if item.checkState(0) == QtCore.Qt.Checked and not self.ui.hideCheck.isChecked():
-            i.setOpacity(1.0)
+    #def itemToggled(self, item, column=None):
+        #name = str(item.text(0))
+        #i = self.items[name]
+        #if item.checkState(0) == QtCore.Qt.Checked:
+            #i.setOpacity(1.0)  ## have to hide this way since we still want the children to be visible
+            #for h in i.handles:
+                #h['item'].setOpacity(1.0)
+            #self.cameraModule().ui.update()
+        #else:
+            #i.setOpacity(0.0)
+            #self.cameraModule().ui.update()
+            #for h in i.handles:
+                #h['item'].setOpacity(0.0)
+            
+        ##self.updateItemColor(item)
+        #self.sequenceChanged()
+        
+    #def itemSelected(self, item, prev):
+        #self.updateItemColor(item)
+        #self.updateItemColor(prev)
+        
+    #def updateItemColor(self, item):
+        #if item is None:
+            #return
+        #if item is self.ui.itemTree.currentItem():
+            #color = QtGui.QColor(255, 255, 200)
+        #else:
+            #color = QtGui.QColor(200, 255, 100)
+        #name = str(item.text(0))
+        #self.items[name].setPen(QtGui.QPen(color))
+
+    def itemMoved(self, item):
+        self.itemChanged()
+       
+
+    def itemChanged(self, item=None):
+        self.targets = None
+        self.sequenceChanged()
+        self.storeConfiguration()
+        
+    def itemActivationChanged(self, param, val):
+        i = param.item
+        if val:
+            i.setOpacity(1.0)  ## have to hide this way since we still want the children to be visible
             for h in i.handles:
                 h['item'].setOpacity(1.0)
-            self.cameraModule().ui.update()
         else:
             i.setOpacity(0.0)
-            self.cameraModule().ui.update()
             for h in i.handles:
                 h['item'].setOpacity(0.0)
+        self.cameraModule().ui.update()
             
         #self.updateItemColor(item)
         self.sequenceChanged()
         
-    def itemSelected(self, item, prev):
-        self.updateItemColor(item)
-        self.updateItemColor(prev)
-        
-    def updateItemColor(self, item):
-        if item is None:
-            return
-        if item is self.ui.itemTree.currentItem():
-            color = QtGui.QColor(255, 255, 200)
-        else:
-            color = QtGui.QColor(200, 255, 100)
-        name = str(item.text(0))
-        self.items[name].setPen(QtGui.QPen(color))
-
-    def itemMoved(self, item):
-        self.targets = None
-        self.updateDeviceTargetList(item)
-        self.sequenceChanged()
-        
-
-    def itemChanged(self, item):
-        self.targets = None
-        self.sequenceChanged()
-        self.updateDeviceTargetList(item)
     
-    def updateDeviceTargetList(self, item):
-        """For keeping track of items outside of an individual scanner device. Allows multiple protocols to access the same items."""
-        name = str(item.name)
-        state = item.stateCopy()
-        if isinstance(item, TargetPoint):
-            pos = state['pos']
-            pos[0] += state['size'][0]/2.0
-            pos[1] += state['size'][1]/2.0
-            info = {'type': 'point', 'pos':pos }
-        elif isinstance(item, TargetGrid):
-            state['type'] = 'grid'
-            info = state
-        elif isinstance(item, TargetOcclusion):
-            info = {'type':'occlusion', 'pos':item.pos(), 'points': item.listPoints()}
-        elif isinstance(item, pg.SpiralROI):
-            info = {'type': 'spiral', 'pos': item.pos()}
+    #def updateDeviceTargetList(self, item):
+        #"""For keeping track of items outside of an individual scanner device. Allows multiple protocols to access the same items."""
+        #name = str(item.name)
+        #state = item.stateCopy()
+        #if isinstance(item, TargetPoint):
+            #pos = state['pos']
+            #pos[0] += state['size'][0]/2.0
+            #pos[1] += state['size'][1]/2.0
+            #info = {'type': 'point', 'pos':pos }
+        #elif isinstance(item, TargetGrid):
+            #state['type'] = 'grid'
+            #info = state
+        #elif isinstance(item, TargetOcclusion):
+            #info = {'type':'occlusion', 'pos':item.pos(), 'points': item.listPoints()}
+        #elif isinstance(item, pg.SpiralROI):
+            #info = {'type': 'spiral', 'pos': item.pos()}
         
-        self.dev.updateTarget(name, info)
+        ##self.dev.updateTarget(name, info)
+
     
     def getTargetList(self):  ## should probably do some caching here.
         items = self.activeItems()
@@ -784,7 +988,7 @@ class ScannerProtoGui(ProtocolGui):
         #)
 
     def activeItems(self):
-        return [self.items[i] for i in self.items if self.listItem(i).checkState(0) == QtCore.Qt.Checked]
+        return [self.items[i] for i in self.items if self.items[i].isActive()]
 
     
     def taskStarted(self, params):
@@ -795,77 +999,86 @@ class ScannerProtoGui(ProtocolGui):
         #self.currentTargetMarker.setRect
     
     def quit(self):
-        #print "scanner dock quit"
-        self.deleteAll(clearHistory = False)
+        #self.deleteAll(clearHistory = False)
         s = self.testTarget.scene()
         if s is not None:
-            self.testTarget.scene().removeItem(self.testTarget)
-            self.spotMarker.scene().removeItem(self.spotMarker)
+            for item in self.items.values():
+                s.removeItem(item)
+            s.removeItem(self.testTarget)
+            s.removeItem(self.spotMarker)
+            for ctrl in self.programCtrls:
+                for item in ctrl.getGraphicsItems():
+                    s.removeItem(item)
+
+
         #QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
-        try:
-            getManager().sigModulesChanged.disconnect(self.fillModuleList)
-        except TypeError:
-            pass
+        #try:
+            #getManager().sigModulesChanged.disconnect(self.fillModuleList)
+        #except TypeError:
+            #pass
             
         if self.currentCamMod is not None:
             try:
-                #QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
                 self.currentCamMod.ui.sigCameraScaleChanged.disconnect(self.objectiveChanged)
             except:
                 pass
         if self.currentScope is not None:
             try:
-                #QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
                 self.currentScope.sigObjectiveChanged.disconnect(self.objectiveChanged)
             except:
                 pass
-        #print "  ..done."
-    
+
+
 class TargetPoint(pg.EllipseROI):
     
-    sigPointsChanged = QtCore.Signal(object)
+    sigStateChanged = QtCore.Signal(object)
     
-    def __init__(self, pos, radius, **args):
-        if 'host' in args:
-            self.host = args.pop('host')
-        pg.ROI.__init__(self, pos, [radius] * 2, **args)
+    def __init__(self, name, ptSize, **args):
+        self.name = name
+        #if 'host' in args:
+            #self.host = args.pop('host')
+        
+        pg.ROI.__init__(self, (0,0), [ptSize] * 2, movable=args.get('movable', True))
         self.aspectLocked = True
         self.overPen = None
         self.underPen = self.pen
-        self.treeItem = None
+        #self.treeItem = None
         self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         #self.host = args.get('host', None)
-        self.rebuildOpts = args.get('rebuildOpts', {})
+        #self.rebuildOpts = args.get('rebuildOpts', {})
+        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=args.get('active', True), removable=True, renamable=True, children=[
+        ])
+        self.params.item = self
+
+    def isActive(self):
+        return self.params.value()
+
+    def parameters(self):
+        return self.params
         
+    #def updateInit(self, host):
+        #self.treeItem.graphicsItem = self
+        #self.treeItem.setText(3, "1")
+        #self.host = host
         
-    def updateInit(self, host):
-        self.treeItem.graphicsItem = self
-        self.treeItem.setText(3, "1")
-        self.host = host
-        
-    def updateFamily(self):
-        pass
+    #def updateFamily(self):
+        #pass
     
-    def resetParents(self):
-        """For use when rebuilding scanner targets from the deviceTargetList"""
-        if self.rebuildOpts.get('parentName', None) is not None:
-            tw = self.treeItem.treeWidget()
-            parent = tw.findItems(self.rebuildOpts['parentName'], QtCore.Qt.MatchRecursive)[0]
-            tw.prepareMove(self.treeItem)
-            tw.invisibleRootItem().removeChild(self.treeItem)
-            parent.insertChild(0, self.treeItem)
-            tw.recoverMove(self.treeItem)
-            parent.setExpanded(True)
-            self.host.treeItemMoved(self.treeItem, parent, 0)
+    #def resetParents(self):
+        #"""For use when rebuilding scanner targets from the deviceTargetList"""
+        #if self.rebuildOpts.get('parentName', None) is not None:
+            #tw = self.treeItem.treeWidget()
+            #parent = tw.findItems(self.rebuildOpts['parentName'], QtCore.Qt.MatchRecursive)[0]
+            #tw.prepareMove(self.treeItem)
+            #tw.invisibleRootItem().removeChild(self.treeItem)
+            #parent.insertChild(0, self.treeItem)
+            #tw.recoverMove(self.treeItem)
+            #parent.setExpanded(True)
+            #self.host.treeItemMoved(self.treeItem, parent, 0)
         
-    def setPointSize(self):
-        size, displaySize = self.host.pointSize()
-        if self.treeItem is None: ## then you're the target point and should be the size from calibration
-            s = size / self.state['size'][0]
-            self.scale(s, [0.5, 0.5])
-        else:
-            s = displaySize / self.state['size'][0]
-            self.scale(s, [0.5, 0.5])
+    def setPointSize(self, displaySize, realSize=None):
+        s = displaySize / self.state['size'][0]
+        self.scale(s, [0.5, 0.5])
         
     def listPoints(self):
         p = self.mapToView(self.boundingRect().center())
@@ -881,113 +1094,140 @@ class TargetPoint(pg.EllipseROI):
             pen = self.underPen
         pg.EllipseROI.setPen(self, pen)
         
-    def stateCopy(self):
-        sc = pg.ROI.stateCopy(self)
-        #sc['displaySize'] = self.displaySize
-        return sc
+    #def stateCopy(self):
+        #sc = pg.ROI.stateCopy(self)
+        ##sc['displaySize'] = self.displaySize
+        #return sc
     
     def resetParents(self):
         pass
         
+    
+    def saveState(self):
+        pos = self.listPoints()[0]
+        #pos = state['pos']
+        #pos[0] += state['size'][0]/2.0
+        #pos[1] += state['size'][1]/2.0
+        return {'type': 'Point', 'pos': pos, 'active': self.params.value()}
+
 
 class TargetGrid(pg.ROI):
     
-    sigPointsChanged = QtCore.Signal(object)
+    sigStateChanged = QtCore.Signal(object)
     
-    def __init__(self, pos, size, ptSize, angle, rebuildOpts = {}):
+    def __init__(self, name, ptSize, **args):
+        self.name = name
+            
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         #self.gridSpacingSpin = SpinBox(step=0.1)
         #self.gridSpacingSpin.setValue(pd)
-        self.gridSpacingSpin = pg.SpinBox(value=ptSize, dec=True, step=0.1, suffix='m', siPrefix=True)
-        self.gridSpacing = self.gridSpacingSpin.value()
-        self.gridLayoutCombo = QtGui.QComboBox()
-        self.gridLayoutCombo.addItems(["Hexagonal", "Square"])
-        self.gridSpacingSpin.valueChanged.connect(self.updateGridSpacing)
-        self.gridLayoutCombo.currentIndexChanged.connect(self.regeneratePoints)
-        self.treeItem = None ## will become a QTreeWidgetItem when ScannerProtoGui runs addItem()
+        #self.gridSpacingSpin = pg.SpinBox(value=ptSize, dec=True, step=0.1, suffix='m', siPrefix=True)
+        #self.gridSpacing = self.gridSpacingSpin.value()
+        #self.gridLayoutCombo = QtGui.QComboBox()
+        #self.gridLayoutCombo.addItems(["Hexagonal", "Square"])
+        #self.gridSpacingSpin.valueChanged.connect(self.updateGridSpacing)
+        #self.gridLayoutCombo.currentIndexChanged.connect(self.regeneratePoints)
+        #self.treeItem = None ## will become a QTreeWidgetItem when ScannerProtoGui runs addItem()
         
-        pg.ROI.__init__(self, pos=pos, size=size, angle=angle)
+        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
+            dict(name='layout', type='list', value=args.get('layout', 'Hexagonal'), values=['Square', 'Hexagonal']),
+            dict(name='spacing', type='float', value=args.get('spacing', ptSize), suffix='m', siPrefix=True, bounds=[1e-9, None], step=10e-6),
+        ])
+        self.params.item = self
+        self.params.layout.sigStateChanged.connect(self.regeneratePoints)
+        self.params.spacing.sigStateChanged.connect(self.regeneratePoints)
+        pg.ROI.__init__(self, pos=(0,0), size=args.get('size', [ptSize*4]*2), angle=args.get('angle', 0))
         self.addScaleHandle([0, 0], [1, 1])
         self.addScaleHandle([1, 1], [0, 0])
         self.addRotateHandle([0, 1], [0.5, 0.5])
         self.addRotateHandle([1, 0], [0.5, 0.5])
         self.lastSize = self.state['size']
         #self.connect(QtCore.SIGNAL('regionChanged'), self.rgnChanged)
-        self.sigRegionChanged.connect(self.rgnChanged)
+        self.sigRegionChanged.connect(self.rgnChanging)
+        self.sigRegionChangeFinished.connect(self.rgnChanged)
         self.points = []
         self.pens = []
         self.pointSize = ptSize
-        self.pointDisplaySize = self.pointSize
+        #self.pointDisplaySize = self.pointSize
         self.oldDisplaySize = self.pointSize
         self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         
         
-        ## cache is not working in qt 4.7
-        self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
-        self.regeneratePoints()
-        self.rebuildOpts = rebuildOpts
         
-    def updateInit(self, host):
-        self.treeItem.graphicsItem = self ## make grid accessible from tree
-        self.treeItem.treeWidget().setItemWidget(self.treeItem, 1, self.gridSpacingSpin)
-        self.treeItem.treeWidget().setItemWidget(self.treeItem, 2, self.gridLayoutCombo)
-        self.treeItem.setText(3, "14")
-        self.host = host
-        self.pointSize, self.pointDisplaySize = self.host.pointSize()
-        if len(self.rebuildOpts) > 0:
-            self.gridSpacingSpin.setValue(self.rebuildOpts.get('gridSpacing', self.gridSpacing))
-            layout = self.rebuildOpts.get('gridLayout', "Hexagonal")
-            if layout == "Hexagonal":
-                self.gridLayoutCombo.setCurrentIndex(0)
-            elif layout == "Square":
-                self.gridLayoutCombo.setCurrentIndex(1)       
-        self.host.updateDeviceTargetList(self)
+        ## cache is not working in qt 4.7
+        #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
+        self.regeneratePoints()
+        #self.rebuildOpts = rebuildOpts
+
+    def isActive(self):
+        return self.params.value()
     
-    def resetParents(self):
-        """For use when rebuilding scanner targets from the deviceTargetList"""
-        if self.rebuildOpts.get('parentName', None) is not None:
-            tw = self.treeItem.treeWidget()
-            parent = tw.findItems(self.rebuildOpts['parentName'], QtCore.Qt.MatchRecursive)[0]
-            tw.prepareMove(self.treeItem)
-            tw.invisibleRootItem().removeChild(self.treeItem)
-            parent.insertChild(0, self.treeItem)
-            tw.recoverMove(self.treeItem)
-            parent.setExpanded(True)
-            self.host.treeItemMoved(self.treeItem, parent, 0)
+    def parameters(self):
+        return self.params
+        
+    #def updateInit(self, host):
+        #self.treeItem.graphicsItem = self ## make grid accessible from tree
+        #self.treeItem.treeWidget().setItemWidget(self.treeItem, 1, self.gridSpacingSpin)
+        #self.treeItem.treeWidget().setItemWidget(self.treeItem, 2, self.gridLayoutCombo)
+        #self.treeItem.setText(3, "14")
+        #self.host = host
+        #self.pointSize, self.pointDisplaySize = self.host.pointSize()
+        #if len(self.rebuildOpts) > 0:
+            #self.gridSpacingSpin.setValue(self.rebuildOpts.get('gridSpacing', self.gridSpacing))
+            #layout = self.rebuildOpts.get('gridLayout', "Hexagonal")
+            #if layout == "Hexagonal":
+                #self.gridLayoutCombo.setCurrentIndex(0)
+            #elif layout == "Square":
+                #self.gridLayoutCombo.setCurrentIndex(1)       
+        #self.host.updateDeviceTargetList(self)
+        #self.host.storeConfiguration()
+    
+    #def resetParents(self):
+        #"""For use when rebuilding scanner targets from the deviceTargetList"""
+        #if self.rebuildOpts.get('parentName', None) is not None:
+            #tw = self.treeItem.treeWidget()
+            #parent = tw.findItems(self.rebuildOpts['parentName'], QtCore.Qt.MatchRecursive)[0]
+            #tw.prepareMove(self.treeItem)
+            #tw.invisibleRootItem().removeChild(self.treeItem)
+            #parent.insertChild(0, self.treeItem)
+            #tw.recoverMove(self.treeItem)
+            #parent.setExpanded(True)
+            #self.host.treeItemMoved(self.treeItem, parent, 0)
             
            
             
-    def updateFamily(self):
-        if self.treeItem.parent() is not None:
-            self.gridSpacingSpin.setEnabled(False)
-            self.gridLayoutCombo.setEnabled(False)
-            self.parentGridSpacingSpin = self.treeItem.treeWidget().itemWidget(self.treeItem.parent(), 1)
-            self.parentGridSpacingSpin.valueChanged.connect(self.parentValueChanged)
-            self.parentGridLayoutCombo = self.treeItem.treeWidget().itemWidget(self.treeItem.parent(), 2)
-            self.parentGridLayoutCombo.currentIndexChanged.connect(self.parentValueChanged)
-            self.translateSnap = True
-            self.rotateAllowed = False
-            self.setAngle(0)
-            #self.setAngle(self.treeItem.parent().graphicsItem.stateCopy()['angle'])
-            self.parentValueChanged()
-        if self.treeItem.parent() is None:
-            self.gridSpacingSpin.setEnabled(True)
-            self.gridLayoutCombo.setEnabled(True)
-            self.translateSnap = False
-            self.rotateAllowed = True
-        self.host.updateDeviceTargetList(self)
-        #self.updateSnapSize()
+    #def updateFamily(self):
+        #if self.treeItem.parent() is not None:
+            #self.gridSpacingSpin.setEnabled(False)
+            #self.gridLayoutCombo.setEnabled(False)
+            #self.parentGridSpacingSpin = self.treeItem.treeWidget().itemWidget(self.treeItem.parent(), 1)
+            #self.parentGridSpacingSpin.valueChanged.connect(self.parentValueChanged)
+            #self.parentGridLayoutCombo = self.treeItem.treeWidget().itemWidget(self.treeItem.parent(), 2)
+            #self.parentGridLayoutCombo.currentIndexChanged.connect(self.parentValueChanged)
+            #self.translateSnap = True
+            #self.rotateAllowed = False
+            #self.setAngle(0)
+            ##self.setAngle(self.treeItem.parent().graphicsItem.stateCopy()['angle'])
+            #self.parentValueChanged()
+        #if self.treeItem.parent() is None:
+            #self.gridSpacingSpin.setEnabled(True)
+            #self.gridLayoutCombo.setEnabled(True)
+            #self.translateSnap = False
+            #self.rotateAllowed = True
+        #self.host.updateDeviceTargetList(self)
+        ##self.updateSnapSize()
         
     def parentValueChanged(self):
+        ## called when any of the parent's grid parameters has changed (spacing, layout)
         if self.treeItem.parent() is not None:
             self.gridSpacingSpin.setValue(self.parentGridSpacingSpin.value())
             self.gridLayoutCombo.setCurrentIndex(self.parentGridLayoutCombo.currentIndex())
             
         
-    def updateGridSpacing(self):
-        self.gridSpacing = self.gridSpacingSpin.value()
-        #self.updateSnapSize()
-        self.regeneratePoints()
+    #def updateGridSpacing(self):
+        #self.gridSpacing = self.gridSpacingSpin.value()
+        ##self.updateSnapSize()
+        #self.regeneratePoints()
         
     #def updateSnapSize(self):
         #self.snapSizeX = self.pointSize * self.gridPacking
@@ -996,16 +1236,22 @@ class TargetGrid(pg.ROI):
         #elif self.gridLayoutCombo.currentText() == "Hexagonal":
             #self.snapSizeY = 0.5 * self.snapSizeX * 3.**0.5
         
-    def setPointSize(self):
-        size, displaySize = self.host.pointSize()
-        self.pointSize = size
-        self.pointDisplaySize = displaySize
-        self.regeneratePoints()
+    def setPointSize(self, displaySize, realSize):
+        #size, displaySize = self.host.pointSize()
+        self.pointSize = displaySize
+        #self.pointDisplaySize = displaySize
+        self.params.spacing.setDefault(displaySize)
+        self.regeneratePoints()  ## point size changes the position of grid points even though spacing is unaffected.
+        #self.update()
+        
+    def rgnChanging(self):
+        if self.state['size'] != self.lastSize:
+            self.regeneratePoints(emit=False)
+            self.lastSize = self.state['size']
+        
         
     def rgnChanged(self):
-        if self.state['size'] != self.lastSize:
-            self.regeneratePoints()
-            self.lastSize = self.state['size']
+        self.sigStateChanged.emit(self)
             
     def getSnapPosition(self, pos, snap=None):
         ## Given that pos has been requested, return the nearest snap-to position
@@ -1015,7 +1261,8 @@ class TargetGrid(pg.ROI):
         if snap is None:
             if self.snapSize is None:
                 return pos
-        layout = self.gridLayoutCombo.currentText()
+        layout = self.params['layout']
+        #layout = self.gridLayoutCombo.currentText()
         
         if layout == 'Square':
             #snap = Point(self.pointSize * self.gridPacking, self.pointSize*self.gridPacking)
@@ -1042,16 +1289,17 @@ class TargetGrid(pg.ROI):
                 return pg.Point(w2, h2)
         
 
-    def regeneratePoints(self):
-        if self.treeItem is None:
-            layout = "Hexagonal"
-        else:
-            layout = self.gridLayoutCombo.currentText()
+    def regeneratePoints(self, emit=True):
+        #if self.treeItem is None:
+            #layout = "Hexagonal"
+        #else:
+            #layout = self.gridLayoutCombo.currentText()
+        layout = self.params['layout']
         self.points = []
         self.pens = []
         sq3 = 3. ** 0.5
         #sepx = self.pointSize * self.gridPacking
-        sepx = self.gridSpacing
+        sepx = self.params['spacing']
         sepy = sq3 * sepx
 
         if layout == "Hexagonal":
@@ -1062,9 +1310,10 @@ class TargetGrid(pg.ROI):
       
         self.update()
         #self.emit(QtCore.SIGNAL('pointsChanged'), self)
-        if self.treeItem is not None:
-            self.treeItem.setText(3, str(len(self.points)))
-        self.sigPointsChanged.emit(self)
+        #if self.treeItem is not None:
+            #self.treeItem.setText(3, str(len(self.points)))
+        if emit:
+            self.sigStateChanged.emit(self)
         
         
     def listPoints(self):
@@ -1080,8 +1329,8 @@ class TargetGrid(pg.ROI):
         self.update()
 
     def generateGrid(self, start, sep):
-        nx = 1 + int(((self.state['size'][0] - start[0]) - self.pointSize*0.5) / sep[0])
-        ny = 1 + int(((self.state['size'][1] - start[1]) - self.pointSize*0.5) / sep[1])
+        nx = int((self.state['size'][0] - (start[0] + self.pointSize*0.5) + sep[0]) / sep[0])
+        ny = int((self.state['size'][1] - (start[1] + self.pointSize*0.5) + sep[1]) / sep[1])
         x = start[0]
         for i in range(nx):
             y = start[1]
@@ -1092,12 +1341,12 @@ class TargetGrid(pg.ROI):
             x += sep[0]
         
     def boundingRect(self):
-        displaySize = max([self.oldDisplaySize, self.pointDisplaySize])
-        a = displaySize-self.pointSize
-        if a <= 0:
-            a = 0
-        self.oldDisplaySize = self.pointDisplaySize
-        return QtCore.QRectF(0, 0, self.state['size'][0], self.state['size'][1]).adjusted(-a, -a, a, a)
+        #displaySize = max([self.oldDisplaySize, self.pointSize])
+        #a = displaySize-self.pointSize
+        #if a <= 0:
+            #a = 0
+        #self.oldDisplaySize = self.pointSize
+        return QtCore.QRectF(0, 0, self.state['size'][0], self.state['size'][1]) #.adjusted(-a, -a, a, a)
 
 
     def paint(self, p, opt, widget):
@@ -1113,8 +1362,8 @@ class TargetGrid(pg.ROI):
         p.restore()
         
         ## draw circles
-        ps2 = self.pointSize * 0.5
-        radius = self.pointDisplaySize*0.5
+        #ps2 = self.pointSize * 0.5
+        #radius = self.pointSize*0.5
         #ps2 = self.pointSize * 0.5 * self.gridPacking
         #p.setPen(self.pen)
         p.scale(self.pointSize, self.pointSize) ## do scaling here because otherwise we end up with squares instead of circles (GL bug)
@@ -1125,51 +1374,173 @@ class TargetGrid(pg.ROI):
             else:
                 p.setPen(self.pen)
             #p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
-            p.drawEllipse(QtCore.QPointF(pt[0]/self.pointSize, pt[1]/self.pointSize), radius/self.pointSize, radius/self.pointSize)
+            p.drawEllipse(QtCore.QPointF(pt[0]/self.pointSize, pt[1]/self.pointSize), 0.5, 0.5)
             
-    def stateCopy(self):
-        sc = pg.ROI.stateCopy(self)
-        sc['gridSpacing'] = self.gridSpacing
-        
-
-        sc['gridLayout'] = str(self.gridLayoutCombo.currentText())
-        if self.treeItem is not None:
-            if self.treeItem.parent() is None:
-                sc['parentName'] = None
-            else:
-                sc['parentName'] = self.treeItem.parent().text(0)
-        return sc
+    #def stateCopy(self):
+        #sc = pg.ROI.stateCopy(self)
+        #sc['gridSpacing'] = self.params['spacing']
+        #sc['gridLayout'] = self.params['layout']
+        #sc['active'] = self.params['active']
+        ##if self.treeItem is not None:
+            ##if self.treeItem.parent() is None:
+                ##sc['parentName'] = None
+            ##else:
+                ##sc['parentName'] = self.treeItem.parent().text(0)
+        #return sc
         #sc['displaySize'] = self.displaySize
+        
+    def saveState(self):
+        state = pg.ROI.saveState(self)
+        state['spacing'] = self.params['spacing']
+        state['layout'] = self.params['layout']
+        state['active'] = self.params.value()
+        state['type'] = 'Grid'
+        return state
         
 class TargetOcclusion(pg.PolygonROI):
     
     
-    sigPointsChanged = QtCore.Signal(object)
+    sigStateChanged = QtCore.Signal(object)
     
-    def __init__(self, points, pos=None):
+    def __init__(self, name, ptSize, **args):
+        self.name = name
+        points = args.get('points', ([0,0], [0,ptSize*3], [ptSize*3,0]))
+        pos = (0,0)
         pg.PolygonROI.__init__(self, points, pos)
         self.setZValue(10000000)
+        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
+        ])
+        self.params.item = self
+        self.sigRegionChanged.connect(self.rgnChanged)
+
+    def isActive(self):
+        return self.params.value()
+
+    def rgnChanged(self):
+        self.sigStateChanged.emit(self)
+
+    def parameters(self):
+        return self.params
         
-    def updateInit(self, host):
-        self.treeItem.graphicsItem = self
-        self.host = host
+    #def updateInit(self, host):
+        #self.treeItem.graphicsItem = self
+        #self.host = host
         
-    def setPointSize(self):
+    def setPointSize(self, size, realSize):
         pass
     
     def resetParents(self):
         pass
     
-class TargetProgram(QtCore.QObject):
+    def saveState(self):
+        return {'type':'Occlusion', 'pos': (self.pos().x(), self.pos().y()), 'points': [(p.x(), p.y()) for p in self.listPoints()]}
+    
+class ProgramLineScan(QtCore.QObject):
+    
+    sigStateChanged = QtCore.Signal(object)
     
     def __init__(self):
-        self.origin = QtGui.QGraphicsEllipseItem(0,0,1,1)
-        self.paths = []
+        QtCore.QObject.__init__(self)
+        self.name = 'lineScan'
+        ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         
-    def setPen(self, pen):
-        self.origin.setPen(pen)
+        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
+            dict(name='length', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='startTime', type='float', value=1e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='endTime', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='nScans', type='int', value=100, bounds=[1, None]),
+        ])
+        self.params.ctrl = self
+        #self.params.layout.sigStateChanged.connect(self.regeneratePoints)
+        #self.params.spacing.sigStateChanged.connect(self.regeneratePoints)
+        #pg.ROI.__init__(self, pos=(0,0), size=args.get('size', [ptSize*4]*2), angle=args.get('angle', 0))
+        #self.addScaleHandle([0, 0], [1, 1])
+        #self.addScaleHandle([1, 1], [0, 0])
+        #self.addRotateHandle([0, 1], [0.5, 0.5])
+        #self.addRotateHandle([1, 0], [0.5, 0.5])
+        #self.lastSize = self.state['size']
+        ##self.connect(QtCore.SIGNAL('regionChanged'), self.rgnChanged)
+        #self.sigRegionChanged.connect(self.rgnChanging)
+        #self.sigRegionChangeFinished.connect(self.rgnChanged)
+        #self.points = []
+        #self.pens = []
+        #self.pointSize = ptSize
+        ##self.pointDisplaySize = self.pointSize
+        #self.oldDisplaySize = self.pointSize
+        #self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         
-    def listPoints(self):
-        pass
+        self.roi = pg.LineSegmentROI([[0.0, 0.0], [self.params['length'], self.params['length']]])
         
+        
+    def getGraphicsItems(self):
+        return [self.roi]
+
+    def isActive(self):
+        return self.params.value()
+    
+    def parameters(self):
+        return self.params
+    
+    def generateProtocol(self):
+        points = self.roi.listPoints() # in local coordinates local to roi.
+        points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
+        return {'type': 'lineScan', 'points': points, 'startTime': self.params['startTime'], 
+                'endTime': self.params['endTime'], 'nScans': self.params['nScans']}
+        
+    
+class ProgramRectScan(QtCore.QObject):
+    
+    sigStateChanged = QtCore.Signal(object)
+    
+    def __init__(self):
+        QtCore.QObject.__init__(self)
+        self.name = 'rectScan'
+        ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
+        
+        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
+            dict(name='width', type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='height', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='linespacing', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[2e-7, None], step=2e-7),
+            dict(name='startTime', type='float', value=1e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='endTime', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='nScans', type='int', value=10, bounds=[1, None]),
+        ])
+        self.params.ctrl = self
+        #self.params.layout.sigStateChanged.connect(self.regeneratePoints)
+        #self.params.spacing.sigStateChanged.connect(self.regeneratePoints)
+        #pg.ROI.__init__(self, pos=(0,0), size=args.get('size', [ptSize*4]*2), angle=args.get('angle', 0))
+        #self.addScaleHandle([0, 0], [1, 1])
+        #self.addScaleHandle([1, 1], [0, 0])
+        #self.addRotateHandle([0, 1], [0.5, 0.5])
+        #self.addRotateHandle([1, 0], [0.5, 0.5])
+        #self.lastSize = self.state['size']
+        ##self.connect(QtCore.SIGNAL('regionChanged'), self.rgnChanged)
+        #self.sigRegionChanged.connect(self.rgnChanging)
+        #self.sigRegionChangeFinished.connect(self.rgnChanged)
+        #self.points = []
+        #self.pens = []
+        #self.pointSize = ptSize
+        ##self.pointDisplaySize = self.pointSize
+        #self.oldDisplaySize = self.pointSize
+        #self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
+        
+        self.roi = pg.RectangleROI([self.params['width'], self.params['height']], pos=[0.0, 0.0] )
+        
+    def getGraphicsItems(self):
+        return [self.roi]
+
+    def isActive(self):
+        return self.params.value()
+    
+    def parameters(self):
+        return self.params
+    
+    def generateProtocol(self):
+        points = self.roi.listPoints() # in local coordinates local to roi.
+        points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
+        return {'type': self.name, 'points': points, 'startTime': self.params['startTime'], 
+                'endTime': self.params['endTime'], 'nScans': self.params['nScans'],
+                'lineSpacing': self.params['linespacing']}
+        
+
 

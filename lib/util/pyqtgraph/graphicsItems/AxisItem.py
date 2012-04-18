@@ -300,8 +300,16 @@ class AxisItem(GraphicsWidget):
         try:
             i1 = np.argwhere(scaledTickCounts < optimalTickCount)[0,0]
         except:
+            print "AxisItem can't determine tick spacing:"
+            print "scaledTickCounts", scaledTickCounts
+            print "optimalTickCount", optimalTickCount
+            print "dif", dif
+            print "scaledIntervals", scaledIntervals
+            print "intervals", intervals
+            print "pw", pw
+            print "pixelSpacing", pixelSpacing
             i1 = 1
-            
+        
         distBetweenIntervals = (optimalTickCount-scaledTickCounts[i1]) / (scaledTickCounts[i1-1]-scaledTickCounts[i1])
         
         #print optimalTickCount, i1, scaledIntervals, distBetweenIntervals
