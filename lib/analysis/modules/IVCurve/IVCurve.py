@@ -165,7 +165,7 @@ class IVCurve(AnalysisModule):
                     fsl[i] = spike[0]-self.tstart
                 if len(spike) > 1:
                     fisi[i] = spike[1]-spike[0]
-                if len(spike) >= minspk: # for Adaptation ratio analysis
+                if len(spike) >= minspk and len(spike) <= maxspk: # for Adaptation ratio analysis
                     misi = numpy.mean(numpy.diff(spike[-3:]))
                     ar[i] = misi/fisi[i]
                 (rmp[i], r2) = Utility.measure('mean', cmd.xvals('Time'), tr[i], 0.0, self.tstart)
