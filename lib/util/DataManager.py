@@ -106,6 +106,16 @@ class DataManager(QtCore.QObject):
         else:
             return self.getDirHandle(fileName)
 
+    def cleanup(self):
+        """Attempt to free memory by allowing python to collect handles that are not in use."""
+        import gc
+        tmp = weakref.WeakValueDictionary(self.cache)
+        self.cache = {}
+        gc.collect()
+        self.cache = dict(tmp)
+        
+        
+        
     def _addHandle(self, fileName, handle):
         """Cache a handle and watch it for changes"""
         #print "*******data manager caching new handle", handle
@@ -451,9 +461,6 @@ class DirHandle(FileHandle):
             pass
         
         
-    def __del__(self):
-        pass
-    
     def _indexFile(self):
         """Return the name of the index file for this directory. NOT the same as indexFile()"""
         return os.path.join(self.path, '.index')
