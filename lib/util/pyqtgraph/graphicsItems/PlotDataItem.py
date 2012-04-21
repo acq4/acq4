@@ -244,7 +244,7 @@ class PlotDataItem(GraphicsObject):
             data = args[0]
             dt = dataType(data)
             if dt == 'empty':
-                return
+                pass
             elif dt == 'listOfValues':
                 y = np.array(data)
             elif dt == 'Nx2array':

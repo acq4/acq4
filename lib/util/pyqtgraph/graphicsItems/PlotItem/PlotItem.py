@@ -864,7 +864,18 @@ class PlotItem(GraphicsWidget):
         return item
 
     def scatterPlot(self, *args, **kargs):
-        print "PlotItem.scatterPlot is deprecated. Use PlotItem.plot instead."
+        if 'pen' in kargs:
+            kargs['symbolPen'] = kargs['pen']
+        kargs['pen'] = None
+            
+        if 'brush' in kargs:
+            kargs['symbolBrush'] = kargs['brush']
+            del kargs['brush']
+            
+        if 'size' in kargs:
+            kargs['symbolSize'] = kargs['size']
+            del kargs['size']
+
         return self.plot(*args, **kargs)
         #sp = ScatterPlotItem(*args, **kargs)
         #self.addItem(sp)
