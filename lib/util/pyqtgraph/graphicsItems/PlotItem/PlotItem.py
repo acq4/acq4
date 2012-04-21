@@ -335,7 +335,7 @@ class PlotItem(GraphicsWidget):
         """Return the ViewBox within."""
         return self.vb
     
-    def setLogMode(self, xMode, yMode):
+    def setLogMode(self, x, y):
         """
         Set log scaling for x and y axes.
         This informs PlotDataItems to transform logarithmically and switches
@@ -346,8 +346,8 @@ class PlotItem(GraphicsWidget):
         with log coordinates.
         
         """
-        self.ctrl.logXCheck.setChecked(xMode)
-        self.ctrl.logYCheck.setChecked(yMode)
+        self.ctrl.logXCheck.setChecked(x)
+        self.ctrl.logYCheck.setChecked(y)
         
     def showGrid(self, x=None, y=None, alpha=None):
         """
