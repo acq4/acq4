@@ -166,6 +166,9 @@ class ScatterPlotItem(GraphicsObject):
             if k in kargs:
                 setMethod = getattr(self, 'set' + k[0].upper() + k[1:])
                 setMethod(kargs[k])
+                
+        if 'data' in kargs:  
+            self.setPointData(kargs['data'])
             
         self.updateSpots()
         
@@ -277,6 +280,16 @@ class ScatterPlotItem(GraphicsObject):
             self.opts['size'] = size
         self.updateSpots()
         
+    def setPointData(self, data):
+        if isinstance(data, np.ndarray) or isinstance(data, list):
+            if self.data is None:
+                raise Exception("Must set xy data before setting meta data.")
+            if len(data) != len(self.data):
+                raise Exception("Length of meta data does not match number of points (%d != %d)" % (len(data), len(self.data)))
+        self.data['data'] = data
+        self.updateSpots()
+        
+        
     def setIdentical(self, ident):
         self.opts['identical'] = ident
         self.updateSpots()
@@ -371,6 +384,12 @@ class ScatterPlotItem(GraphicsObject):
         
         symbol = self.data['symbol'].copy()
         symbol[symbol==''] = self.opts['symbol']
+
+        data = self.data['data'].copy()
+        if 'data' in self.opts:
+            data[data==None] = self.opts['data']
+
+        
         
         for i in xrange(len(self.data)):
             s = self.data[i]
@@ -391,7 +410,7 @@ class ScatterPlotItem(GraphicsObject):
                 #ymn = min(ymn, pos[1]-psize)
                 #ymx = max(ymx, pos[1]+psize)
                 
-            item = self.mkSpot(pos, size[i], self.opts['pxMode'], brush[i], pen[i], s['data'], symbol=symbol[i], index=len(self.spots))
+            item = self.mkSpot(pos, size[i], self.opts['pxMode'], brush[i], pen[i], data[i], symbol=symbol[i], index=len(self.spots))
             self.spots.append(item)
             self.data[i]['spot'] = item
             #if self.optimize:

@@ -152,7 +152,7 @@ def init():
     separateCheck.toggled.connect(showCell)
     colorCheck.toggled.connect(showCell)
     for s in [sp1, sp2, sp3, sp4]:
-        s.sigClicked.connect(plotClicked)
+        s.sigPointsClicked.connect(plotClicked)
 
 def plotClicked(plt, pts):
     pt = pts[0]
@@ -163,6 +163,11 @@ def plotClicked(plt, pts):
     p = pw2.plot(data, clear=True)
     pos = time / data.xvals('Time')[-1]
     arrow = pg.CurveArrow(p, pos=pos)
+    xr = pw2.viewRect().left(), pw2.viewRect().right()
+    if time < xr[0] or time > xr[1]:
+        w = xr[1]-xr[0]
+        pw2.setXRange(time-w/5., time+4*w/5., padding=0)
+        
     #plot.addItem(arrow)
 
 
