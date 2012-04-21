@@ -57,7 +57,7 @@ class SqliteDatabase:
         self.db = QtSql.QSqlDatabase.addDatabase("QSQLITE", self._connectionName)
         self.db.setDatabaseName(fileName)
         self.db.open()
-        self.tables = {}
+        self.tables = None
         self._readTableList()
         
     def close(self):
@@ -181,9 +181,9 @@ class SqliteDatabase:
             
         while True:
             res = self.select(*args, **kargs)
-            yield res
-            if len(res) == 0:
+            if res is None or len(res) == 0:
                 break
+            yield res
             kargs['offset'] += kargs['limit']
         
         
@@ -313,16 +313,29 @@ class SqliteDatabase:
         self._readTableList()
  
     def listTables(self):
+        """
+        Return a list of the names of tables in the DB.
+        """
+        if self.tables is None:
+            self._readTableList()
         return self.tables.keys()
  
     def removeTable(self, table):
         self('DROP TABLE "%s"' % table)
 
     def hasTable(self, table):
-        return table in self.tables  ## this is a case-insensitive operation
+        return table in self.listTables()  ## this is a case-insensitive operation
     
     def tableSchema(self, table):
+        """
+        Return a dict {'columnName': 'type', ...} for the specified table.
+        """
+        if self.tables is None:
+            self._readTableList()
         return self.tables[table].copy()  ## this is a case-insensitive operation
+    
+    def tableLength(self, table):
+        return self('select count(*) from "%s"' % table)[0]['count(*)']
     
     def _exe(self, query, cmd=None, batch=False):
         """Execute an SQL query, raising an exception if there was an error. (internal use only)"""
@@ -343,7 +356,7 @@ class SqliteDatabase:
                 raise Exception("Error executing SQL: %s" % str(query.lastError().text()))
                 
         if str(query.executedQuery())[:6].lower() == 'create':
-            self._readTableList()
+            self.tables = None  ## clear table cache
     
     def _buildWhereClause(self, where, table):
         if where is None or len(where) == 0:
@@ -476,31 +489,43 @@ class SqliteDatabase:
     def _readTableList(self):
         """Reads the schema for each table, extracting the column names and types."""
         
-        res = self.select('sqlite_master', ['name', 'sql'], sql="where type = 'table'")
-        ident = r"(\w+|'[^']+'|\"[^\"]+\")"
-        #print "READ:"
+        ### Removed: use pragma table_info rather than parsing sqlite_master manually.
+        #res = self.select('sqlite_master', ['name', 'sql'], sql="where type = 'table'")
+        #ident = r"(\w+|'[^']+'|\"[^\"]+\")"
+        ##print "READ:"
+        #tables = advancedTypes.CaselessDict()
+        #for rec in res:
+            ##print rec
+            #sql = rec['sql'].replace('\n', ' ')
+            ##print sql
+            #m = re.match(r"\s*create\s+table\s+%s\s*\(([^\)]+)\)" % ident, sql, re.I)
+            ##print m.groups()
+            #columnstr = m.groups()[1].split(',')
+            #columns = advancedTypes.CaselessDict()
+            ##print columnstr
+            ##print columnstr
+            #for f in columnstr:
+                ##print "   ", f
+                #m = re.findall(ident, f)
+                ##print "   ", m
+                #if len(m) < 2:
+                    #typ = ''
+                #else:
+                    #typ = m[1].strip('\'"')
+                #column = m[0].strip('\'"')
+                #columns[column] = typ
+            #tables[rec['name']] = columns
+        
+        names = self("select name from sqlite_master where type='table' or type='view'")
         tables = advancedTypes.CaselessDict()
-        for rec in res:
-            #print rec
-            sql = rec['sql'].replace('\n', ' ')
-            #print sql
-            m = re.match(r"\s*create\s+table\s+%s\s*\(([^\)]+)\)" % ident, sql, re.I)
-            #print m.groups()
-            columnstr = m.groups()[1].split(',')
+        for table in names:
+            table = table['name']
             columns = advancedTypes.CaselessDict()
-            #print columnstr
-            #print columnstr
-            for f in columnstr:
-                #print "   ", f
-                m = re.findall(ident, f)
-                #print "   ", m
-                if len(m) < 2:
-                    typ = ''
-                else:
-                    typ = m[1].strip('\'"')
-                column = m[0].strip('\'"')
-                columns[column] = typ
-            tables[rec['name']] = columns
+            recs = self('PRAGMA table_info(%s)' % table)
+            for rec in recs:
+                columns[rec['name']] = rec['type']
+            tables[table] = columns
+            
         self.tables = tables
         #print tables
 

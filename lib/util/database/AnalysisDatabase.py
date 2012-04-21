@@ -28,7 +28,7 @@ class AnalysisDatabase(SqliteDatabase):
     def __init__(self, dbFile, dataModel, baseDir=None):
         create = False
         self.tableConfigCache = None
-        self.columnConfigCache = {}
+        self.columnConfigCache = advancedTypes.CaselessDict()
         
         self.setDataModel(dataModel)
         self._baseDir = None
@@ -413,6 +413,47 @@ class AnalysisDatabase(SqliteDatabase):
         return table, self.lastInsertRow()
 
 
+    def createView(self, viewName, tables):
+        """Create a view which joins the tables listed."""
+        # db('create view "sites" as select * from photostim_sites inner join DirTable_Protocol on photostim_sites.ProtocolDir=DirTable_Protocol.rowid inner join DirTable_Cell on DirTable_Protocol.CellDir=DirTable_Cell.rowid')
+        
+        cmd = 'create view "%s" as select * from "%s"' % (viewName, tables[0])
+        for i in range(len(tables)-1):
+            t1 = tables[i]
+            t2 = tables[i+1]
+            
+            linkCol = None
+            for colName, config in self.getColumnConfig(t1).iteritems():
+                if str(config['Link']).lower() == t2.lower():
+                    linkCol = config['Column']
+                    break
+                    
+            if linkCol is None:
+                for c in self.getColumnConfig(t1):
+                    print "  ", c
+                raise Exception("No column linking table %s to %s.rowid" % (t1, t2))
+            
+            cmd += ' inner join "%s" on %s.%s=%s.rowid' % (t2, t1, linkCol, t2)
+        
+        self(cmd)
+        
+        ## Create column config records for this view
+        colNames = self.tableSchema(viewName).keys()
+        colDesc = []
+        colIndex = 0
+        for table in tables:
+            cols = self.getColumnConfig(table)
+            for col, config in cols.iteritems():
+                config = config.copy()
+                config['Column'] = colNames[colIndex]
+                config['Table'] = viewName
+                colDesc.append(config)
+                colIndex += 1
+        self.insert('ColumnConfig', colDesc)
+        
+        
+        
+        
 
     #def linkTables(self, table1, col, table2):
         #"""Declare a key relationship between two tables. Values in table1.column are ROWIDs from table 2"""
@@ -438,17 +479,17 @@ class AnalysisDatabase(SqliteDatabase):
         if table not in self.columnConfigCache:
             if not self.hasTable('ColumnConfig'):
                 return {}
-            recs = SqliteDatabase.select(self, 'ColumnConfig', ['Column', 'Type', 'Constraints', 'Link'], sql="where \"Table\"='%s'" % table)
+            recs = SqliteDatabase.select(self, 'ColumnConfig', ['Column', 'Type', 'Constraints', 'Link'], sql="where lower(\"Table\")=lower('%s') order by rowid" % table)
             if len(recs) == 0:
                 return {}
             
-            self.columnConfigCache[table] = dict([(r['Column'], r) for r in recs])
+            self.columnConfigCache[table] = collections.OrderedDict([(r['Column'], r) for r in recs])
         return self.columnConfigCache[table]
         
     def getTableConfig(self, table):
         if self.tableConfigCache is None:
             recs = SqliteDatabase.select(self, 'TableConfig')
-            self.tableConfigCache = {}
+            self.tableConfigCache = advancedTypes.CaselessDict()
             for rec in recs:
                 self.tableConfigCache[rec['Table']] = rec
         #recs = self.select('TableConfig', sql="where \"Table\"='%s'" % table)
@@ -575,11 +616,11 @@ class AnalysisDatabase(SqliteDatabase):
             raise Exception("Can not describe data of type '%s'" % type(data))
         return columns
 
-    def select(self, table, columns='*', where=None, sql='', toDict=True, toArray=False):
+    def select(self, table, columns='*', where=None, sql='', limit=None, offset=None, toDict=True, toArray=False):
         """Extends select to convert directory/file columns back into Dir/FileHandles"""
         
         
-        data = SqliteDatabase.select(self, table, columns, where=where, sql=sql, toDict=True, toArray=False)
+        data = SqliteDatabase.select(self, table, columns, where=where, sql=sql, limit=limit, offset=offset, toDict=True, toArray=False)
         data = TableData(data)
         
         config = self.getColumnConfig(table)
