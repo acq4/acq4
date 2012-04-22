@@ -625,7 +625,7 @@ class Photostim(AnalysisModule):
         #fields.update(db.describeData(data))
         
         ## Make sure target table exists and has correct columns, links to input file
-        db.checkTable(table, owner=identity, columns=fields, create=True)
+        db.checkTable(table, owner=identity, columns=fields, create=True, addUnknownColumns=True)
         
         # delete old
         for source in set([d['ProtocolDir'] for d in data]):

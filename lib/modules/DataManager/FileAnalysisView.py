@@ -2,6 +2,7 @@
 #import lib.util.PySideImporter  ## Use PySide instead of PyQt
 
 from PyQt4 import QtCore, QtGui
+import os
 import database
 from AnalysisTemplate import *
 import lib.Manager
@@ -32,6 +33,13 @@ class FileAnalysisView(QtGui.QWidget):
         self.populateModuleList()
         self.populateModelList()
         
+        stateFile = os.path.join('modules', self.mod.name + '_db_file_list')
+        files = self.mod.manager.readConfigFile(stateFile).get('db_file_list', [])
+        self.ui.databaseCombo.addItem('')
+        for f in files:
+            self.ui.databaseCombo.addItem(f)
+        
+        
         self.ui.openDbBtn.clicked.connect(self.openDbClicked)
         self.ui.createDbBtn.clicked.connect(self.createDbClicked)
         self.ui.loadModuleBtn.clicked.connect(self.loadModule)
@@ -39,6 +47,7 @@ class FileAnalysisView(QtGui.QWidget):
         self.ui.dataModelCombo.currentIndexChanged.connect(self.loadModel)
         self.ui.analysisModuleList.currentItemChanged.connect(self.showModuleDescription)
         self.ui.analysisModuleList.itemDoubleClicked.connect(self.loadModule)
+        self.ui.databaseCombo.currentIndexChanged.connect(self.dbComboChanged)
         
 
     def openDbClicked(self):
@@ -55,11 +64,31 @@ class FileAnalysisView(QtGui.QWidget):
         
         #if not fileName[-7:] == '.sqlite' and '.' not in fileName:
         #    fileName =+ '.sqlite'
+        self.ui.databaseCombo.blockSignals(True)
+        try:
+            ## put fileName at the top of the list, write to disk
+            files = [self.ui.databaseCombo.itemText(i) for i in range(self.ui.databaseCombo.count())]
+            files.remove('')
+            if fileName in files:
+                files.remove(fileName)
+            files = [fileName] + files
+            self.ui.databaseCombo.clear()
+            self.ui.databaseCombo.addItem('')
+            for f in files:
+                self.ui.databaseCombo.addItem(f)
+            stateFile = os.path.join('modules', self.mod.name + '_db_file_list')
+            self.mod.manager.writeConfigFile({'db_file_list': files}, stateFile)
+            self.ui.databaseCombo.setCurrentIndex(1)
+        finally:
+            self.ui.databaseCombo.blockSignals(False)
             
-        self.ui.databaseText.setText(fileName)
+        
         self.dbFile = fileName
         self.db = database.AnalysisDatabase(self.dbFile, dataModel=self.currentModel)
         self.sigDbChanged.emit()
+        
+    def dbComboChanged(self):
+        self.openDb(self.ui.databaseCombo.currentText())
         
     def quit(self):
         if self.db is not None:

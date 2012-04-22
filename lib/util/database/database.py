@@ -179,6 +179,7 @@ class SqliteDatabase:
         if 'limit' not in kargs:
             kargs['limit'] = 1000
             
+            
         while True:
             res = self.select(*args, **kargs)
             if res is None or len(res) == 0:
@@ -577,7 +578,7 @@ class TableData:
                 self.mode = 'list'
             else:
                 self.mode = 'dict'
-        elif isinstance(data, TableData):
+        elif isinstance(data, TableData) or 'TableData' in str(type(data)):
             self.data = data.data
             self.mode = data.mode
         else:
@@ -585,6 +586,7 @@ class TableData:
         
         for fn in ['__getitem__', '__setitem__']:
             setattr(self, fn, getattr(self, '_TableData'+fn+self.mode))
+        self.copy = getattr(self, 'copy_' + self.mode)
         
     def originalData(self):
         return self.data
@@ -682,6 +684,16 @@ class TableData:
             return (args[1], args[0])
         else:
             return args
+        
+    def copy_array(self):
+        return TableData(self.data.copy())
+        
+    def copy_list(self):
+        return TableData([rec.copy() for rec in self.data])
+        
+    def copy_dict(self):
+        return TableData({k:v[:] for k,v in self.data.iteritems()})
+        
         
     def __iter__(self):
         for i in xrange(len(self)):

@@ -13,13 +13,16 @@ man = lib.Manager.getManager()
     #db.update('Cell', {'type': typ}, rowid=i[0])
     #print d, typ
 
-  
-
+global eventView, siteView, cells
+eventView = 'events_view'
+siteView = 'sites_view'
 
 
 ## Get events
 firstRun = False
-if 'ev' not in locals():
+if 'events' not in locals():
+    global events
+    events = {}
     firstRun = True
 
     win = QtGui.QMainWindow()
@@ -73,71 +76,29 @@ if 'ev' not in locals():
     
 
 
-    print "Loading events..."
+    print "Reading cell list..."
     
-    import os, pickle
-    md = os.path.abspath(os.path.split(__file__)[0])
-    cacheFile = os.path.join(md, 'eventCache.p')
-    if os.path.isfile(cacheFile):
-        print "Read from cache..."
-        ev = pickle.load(open(cacheFile, 'r'))
-    else:
-        db = man.getModule('Data Manager').currentDatabase()
-        mod = man.dataModel
-        ## create views that link cell information to events/sites
-        #siteView = 'sites_view'
-        eventView = 'events_view'
-        if not db.hasTable(eventView):
-            print "Creating DB views."
-            #db.createView(siteView, ['photostim_sites', 'DirTable_Protocol', 'DirTable_Cell'])  ## seems to be unused.
-            db.createView(eventView, ['photostim_events', 'DirTable_Protocol', 'DirTable_Cell'])
-        allEvents = []
-        hvals = {}
-        nEv = 0
-        pcache = {}
-        tcache = {}
-        print "Loading all events.."
-        tot = db.tableLength(eventView)
-        for ev in db.iterSelect(eventView, ['ProtocolSequenceDir', 'SourceFile', 'fitAmplitude', 'fitTime', 'fitDecayTau', 'userTransform', 'type', 'CellDir', 'ProtocolDir'], toArray=True):
-            extra = np.empty(ev.shape, dtype=[('x', float), ('y', float), ('holding', float)])
-            
-            ## insert holding levels
-            for i in range(len(ev)):
-                sd = ev[i]['ProtocolSequenceDir']
-                if sd not in hvals:
-                    cf = ev[i]['SourceFile']
-                    hvals[sd] = mod.getClampHoldingLevel(cf)
-                    #print hvals[sd], cf
-                extra[i]['holding'] = hvals[sd]
-                
-            ## insert positions
-
-            for i in range(len(ev)):
-                key = (ev[i]['ProtocolSequenceDir'], ev[i]['SourceFile'])
-                if key not in pcache:
-                    try:
-                        dh = ev[i]['ProtocolDir']
-                        p1 = pg.Point(dh.info()['Scanner']['position'])
-                        if key[0] not in tcache:
-                            tr = pg.Transform()
-                            tr.restoreState(dh.parent().info()['userTransform'])
-                            tcache[key[0]] = tr
-                        trans = tcache[key[0]]
-                        p2 = trans.map(p1)
-                        pcache[key] = (p2.x(),p2.y())
-                    except:
-                        print key
-                        raise
-                extra[i]['x'] = pcache[key][0]
-                extra[i]['y'] = pcache[key][1]
-            ev = fn.concatenateColumns([ev, extra])
-            allEvents.append(ev)
-            nEv += len(ev)
-            print "    Loaded %d / %d events" % (nEv, tot)
-        print "Done. Storing events to cache.."
-        ev = np.concatenate(allEvents)
-        pickle.dump(ev, open(cacheFile, 'w'))
-    cells = list(set(ev['CellDir']))
+    #import os, pickle
+    #md = os.path.abspath(os.path.split(__file__)[0])
+    #cacheFile = os.path.join(md, 'eventCache.p')
+    #if os.path.isfile(cacheFile):
+        #print "Read from cache..."
+        #ev = pickle.load(open(cacheFile, 'r'))
+    #else:
+    
+    
+    
+        #pickle.dump(ev, open(cacheFile, 'w'))
+    ## create views that link cell information to events/sites
+    db = man.getModule('Data Manager').currentDatabase()
+    if not db.hasTable(siteView):
+        print "Creating DB views."
+        db.createView(siteView, ['photostim_sites', 'DirTable_Protocol', 'DirTable_Cell'])  ## seems to be unused.
+    if not db.hasTable(eventView):
+        db.createView(eventView, ['photostim_events', 'DirTable_Protocol', 'DirTable_Cell'])
+        
+    cells = db.select(siteView, ['CellDir'], distinct=True)
+    cells = [c['CellDir'] for c in cells]
     #for c in cells:
         #print c, db.getDir('Cell', c)
     #cells.sort(lambda a,b: cmp(db.getDir('DirType_Cell', a).name(), db.getDir('DirType_Cell', b).name()))
@@ -145,6 +106,60 @@ if 'ev' not in locals():
     cellSpin.setMaximum(len(cells)-1)
     print "Done."
 
+def loadCell(cell):
+    global events
+    if cell in events:
+        return
+    db = man.getModule('Data Manager').currentDatabase()
+    mod = man.dataModel
+    
+    allEvents = []
+    hvals = {}
+    nEv = 0
+    pcache = {}
+    tcache = {}
+    print "Loading all events for cell", cell
+    tot = db.tableLength(eventView)
+    for ev in db.iterSelect(eventView, ['ProtocolSequenceDir', 'SourceFile', 'fitAmplitude', 'fitTime', 'fitDecayTau', 'fitRiseTau', 'userTransform', 'type', 'CellDir', 'ProtocolDir'], where={'CellDir': cell}, toArray=True):
+        extra = np.empty(ev.shape, dtype=[('x', float), ('y', float), ('holding', float)])
+        
+        ## insert holding levels
+        for i in range(len(ev)):
+            sd = ev[i]['ProtocolSequenceDir']
+            if sd not in hvals:
+                cf = ev[i]['SourceFile']
+                hvals[sd] = mod.getClampHoldingLevel(cf)
+                #print hvals[sd], cf
+            extra[i]['holding'] = hvals[sd]
+            
+        ## insert positions
+
+        for i in range(len(ev)):
+            key = (ev[i]['ProtocolSequenceDir'], ev[i]['SourceFile'])
+            if key not in pcache:
+                try:
+                    dh = ev[i]['ProtocolDir']
+                    p1 = pg.Point(dh.info()['Scanner']['position'])
+                    if key[0] not in tcache:
+                        tr = pg.Transform()
+                        tr.restoreState(dh.parent().info()['userTransform'])
+                        tcache[key[0]] = tr
+                    trans = tcache[key[0]]
+                    p2 = trans.map(p1)
+                    pcache[key] = (p2.x(),p2.y())
+                except:
+                    print key
+                    raise
+            extra[i]['x'] = pcache[key][0]
+            extra[i]['y'] = pcache[key][1]
+        ev = fn.concatenateColumns([ev, extra])
+        allEvents.append(ev)
+        nEv += len(ev)
+        print "    Loaded %d / %d events" % (nEv, tot)
+    ev = np.concatenate(allEvents)
+    events[cell] = ev
+    
+    
 def init():
     if not firstRun:
         return
@@ -156,9 +171,14 @@ def init():
 
 def plotClicked(plt, pts):
     pt = pts[0]
-    (id, fn, time) = pt.data
+    #(id, fn, time) = pt.data
+    
+    #[['SourceFile', 'ProtocolSequenceDir', 'fitTime']]
     #fh = db.getDir('ProtocolSequence', id)[fn]
-    fh = fn
+    fh = pt.data['SourceFile']
+    id = pt.data['ProtocolSequenceDir']
+    time = pt.data['fitTime']
+    
     data = fh.read()['Channel':'primary']
     p = pw2.plot(data, clear=True)
     pos = time / data.xvals('Time')[-1]
@@ -167,13 +187,17 @@ def plotClicked(plt, pts):
     if time < xr[0] or time > xr[1]:
         w = xr[1]-xr[0]
         pw2.setXRange(time-w/5., time+4*w/5., padding=0)
-        
+    
+    x = np.linspace(time, time+pt.data['fitDecayTau']*5, 1000)
+    v = [pt.data['fitAmplitude'], pt.data['fitTime'], pt.data['fitRiseTau'], pt.data['fitDecayTau']]
+    y = fn.pspFunc(v, x, risePower=1.0) + data[np.argwhere(data.xvals('Time')>time)[0]]
+    pw2.plot(x, y, pen='b')
     #plot.addItem(arrow)
 
 
-def select(ev, source=None, ex=True):
-    if source is not None:
-        ev = ev[ev['CellDir']==source]
+def select(ev, ex=True):
+    #if source is not None:
+        #ev = ev[ev['CellDir']==source]
     if ex:
         ev = ev[ev['holding'] < -0.04]         # excitatory events
         ev = ev[(ev['fitAmplitude'] < 0) * (ev['fitAmplitude'] > -2e-10)]
@@ -195,6 +219,8 @@ def showCell():
     cell = cells[cellSpin.value()]
     
     dh = cell #db.getDir('Cell', cell)
+    loadCell(dh)
+    
     try:
         image.setImage(dh['morphology.png'].read())
         gv.setRange(image.sceneBoundingRect())
@@ -202,8 +228,10 @@ def showCell():
         image.setImage(np.zeros((2,2)))
         pass
     
-    ev2 = select(ev, source=cell)
-    ev3 = select(ev, source=cell, ex=False)
+    ev = events[cell]
+    
+    ev2 = select(ev, ex=True)
+    ev3 = select(ev, ex=False)
     
     if colorCheck.isChecked():
         sp1.hide()
@@ -224,7 +252,7 @@ def showCell():
             pts.append({
                 'pos': (ev4[i]['fitDecayTau'], ev4[i]['fitAmplitude']),
                 'brush': pg.hsvColor(hue, 1, 1, 0.3),
-                'data': (ev4[i]['ProtocolSequenceDir'], ev4[i]['SourceFile'], ev4[i]['fitTime'])
+                'data': ev4[i]
             })
         sp4.setData(pts)
         
@@ -233,28 +261,30 @@ def showCell():
         sp2.show()
         #sp3.show()
         sp4.hide()
+        
+        ## excitatory
         if separateCheck.isChecked():
             pre = ev2[ev2['fitTime']< 0.498]
             post = ev2[(ev2['fitTime'] > 0.502) * (ev2['fitTime'] < 0.7)]
         else:
             pre = ev2
         
-        sp1.setData(x=pre['fitDecayTau'], y=pre['fitAmplitude'], data=pre[['SourceFile', 'ProtocolSequenceDir', 'fitTime']]);
+        sp1.setData(x=pre['fitDecayTau'], y=pre['fitAmplitude'], data=pre);
         #print "Cell ", cell
         #print "  excitatory:", np.median(ev2['fitDecayTau']), np.median(ev2['fitAmplitude'])
         
-        
+        ## inhibitory
         if separateCheck.isChecked():
             pre = ev3[ev3['fitTime']< 0.498]
             post2 = ev3[(ev3['fitTime'] > 0.502) * (ev3['fitTime'] < 0.7)]
             post = np.concatenate([post, post2])
         else:
             pre = ev3
-        sp2.setData(x=pre['fitDecayTau'], y=pre['fitAmplitude'], data=pre[['SourceFile', 'ProtocolSequenceDir', 'fitTime']]);
+        sp2.setData(x=pre['fitDecayTau'], y=pre['fitAmplitude'], data=pre);
         #print "  inhibitory:", np.median(ev2['fitDecayTau']), np.median(ev2['fitAmplitude'])
         
         if separateCheck.isChecked():
-            sp3.setData(x=post['fitDecayTau'], y=post['fitAmplitude'], data=post[['SourceFile', 'ProtocolSequenceDir', 'fitTime']])
+            sp3.setData(x=post['fitDecayTau'], y=post['fitAmplitude'], data=post)
             sp3.show()
         else:
             sp3.hide()

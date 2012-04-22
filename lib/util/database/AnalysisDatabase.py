@@ -337,7 +337,6 @@ class AnalysisDatabase(SqliteDatabase):
         that are not also in the table will be created in the table.
         """
         columns = parseColumnDefs(columns, keyOrder=['Type', 'Constraints', 'Link'])
-        print columns
         ## Make sure target table exists and has correct columns, links to input file
         if not self.hasTable(table):
             if create:
@@ -405,7 +404,6 @@ class AnalysisDatabase(SqliteDatabase):
 
     def addDir(self, handle):
         """Create a record based on a DirHandle and its meta-info."""
-        print "addDir:", handle
         info = handle.info().deepcopy()
         for k in info:  ## replace tuple keys with strings
             if isinstance(k, tuple):
@@ -656,11 +654,10 @@ class AnalysisDatabase(SqliteDatabase):
             raise Exception("Can not describe data of type '%s'" % type(data))
         return columns
 
-    def select(self, table, columns='*', where=None, sql='', limit=None, offset=None, toDict=True, toArray=False):
+    def select(self, table, columns='*', where=None, sql='', toDict=True, toArray=False, distinct=False, limit=None, offset=None):
         """Extends select to convert directory/file columns back into Dir/FileHandles"""
         
-        
-        data = SqliteDatabase.select(self, table, columns, where=where, sql=sql, limit=limit, offset=offset, toDict=True, toArray=False)
+        data = SqliteDatabase.select(self, table, columns, where=where, sql=sql, distinct=distinct, limit=limit, offset=offset, toDict=True, toArray=False)
         data = TableData(data)
         
         config = self.getColumnConfig(table)
@@ -698,7 +695,7 @@ class AnalysisDatabase(SqliteDatabase):
         #links = self.listTableLinks(table)
         config = self.getColumnConfig(table)
         
-        data = TableData(data)
+        data = TableData(data).copy()  ## have to copy here since we might be changing some values
         dataCols = set(data.columnNames())
         for colName, colConf in config.iteritems():
             if colName not in dataCols:

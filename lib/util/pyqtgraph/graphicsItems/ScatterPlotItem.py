@@ -128,12 +128,12 @@ class ScatterPlotItem(GraphicsObject):
             numPts = 0
         
         ## create empty record array
-        self.data = np.empty(numPts, dtype=[('x', float), ('y', float), ('size', float), ('symbol', 'S1'), ('pen', object), ('brush', object), ('data', object), ('spot', object)])
+        self.data = np.empty(numPts, dtype=[('x', float), ('y', float), ('size', float), ('symbol', 'S1'), ('pen', object), ('brush', object), ('spot', object)])
         self.data['size'] = -1  ## indicates use default size
         self.data['symbol'] = ''
         self.data['pen'] = None
         self.data['brush'] = None
-        self.data['data'] = None
+        self.pointData = None
         
         if 'spots' in kargs:
             spots = kargs['spots']
@@ -167,7 +167,7 @@ class ScatterPlotItem(GraphicsObject):
                 setMethod = getattr(self, 'set' + k[0].upper() + k[1:])
                 setMethod(kargs[k])
                 
-        if 'data' in kargs:  
+        if 'data' in kargs:
             self.setPointData(kargs['data'])
             
         self.updateSpots()
@@ -286,7 +286,7 @@ class ScatterPlotItem(GraphicsObject):
                 raise Exception("Must set xy data before setting meta data.")
             if len(data) != len(self.data):
                 raise Exception("Length of meta data does not match number of points (%d != %d)" % (len(data), len(self.data)))
-        self.data['data'] = data
+        self.pointData = data
         self.updateSpots()
         
         
@@ -385,11 +385,6 @@ class ScatterPlotItem(GraphicsObject):
         symbol = self.data['symbol'].copy()
         symbol[symbol==''] = self.opts['symbol']
 
-        data = self.data['data'].copy()
-        if 'data' in self.opts:
-            data[data==None] = self.opts['data']
-
-        
         
         for i in xrange(len(self.data)):
             s = self.data[i]
@@ -398,6 +393,11 @@ class ScatterPlotItem(GraphicsObject):
                 psize = 0
             else:
                 psize = size[i]
+                
+            if self.pointData is None or self.pointData[i] is None:
+                data = self.opts['data']
+            else:
+                data = self.pointData[i]
                 
             #if xmn is None:
                 #xmn = pos[0]-psize
@@ -410,7 +410,7 @@ class ScatterPlotItem(GraphicsObject):
                 #ymn = min(ymn, pos[1]-psize)
                 #ymx = max(ymx, pos[1]+psize)
                 
-            item = self.mkSpot(pos, size[i], self.opts['pxMode'], brush[i], pen[i], data[i], symbol=symbol[i], index=len(self.spots))
+            item = self.mkSpot(pos, size[i], self.opts['pxMode'], brush[i], pen[i], data, symbol=symbol[i], index=len(self.spots))
             self.spots.append(item)
             self.data[i]['spot'] = item
             #if self.optimize:

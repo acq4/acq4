@@ -165,7 +165,7 @@ class EventDetector(AnalysisModule):
         
         ## Make sure target table exists and has correct columns, links to input file
         #links = [('ProtocolDir', 'Protocol'), ('ProtocolSequenceDir', 'ProtocolSequence')]
-        db.checkTable(table, owner=self.dbIdentity, columns=columns, create=True)
+        db.checkTable(table, owner=self.dbIdentity, columns=columns, create=True, addUnknownColumns=True)
         
         ## convert source file handles to strings relative to the parent dir
         #names = [fh.name(relativeTo=parentDir) for fh in data['SourceFile']]
