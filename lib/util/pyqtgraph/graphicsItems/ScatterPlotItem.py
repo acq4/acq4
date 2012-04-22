@@ -133,7 +133,8 @@ class ScatterPlotItem(GraphicsObject):
         self.data['symbol'] = ''
         self.data['pen'] = None
         self.data['brush'] = None
-        self.pointData = None
+        self.pointData = np.empty(numPts, dtype=object)
+        self.pointData[:] = None
         
         if 'spots' in kargs:
             spots = kargs['spots']
@@ -152,8 +153,10 @@ class ScatterPlotItem(GraphicsObject):
                             x,y = pos[0], pos[1]
                         self.data[i]['x'] = x
                         self.data[i]['y'] = y
-                    elif k in ['x', 'y', 'size', 'symbol', 'data']:
+                    elif k in ['x', 'y', 'size', 'symbol']:
                         self.data[i][k] = spot[k]
+                    elif k == 'data':
+                        self.pointData[i] = spot[k]
                     else:
                         raise Exception("Unknown spot parameter: %s" % k)
         elif 'y' in kargs:

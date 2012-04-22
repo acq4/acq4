@@ -82,6 +82,10 @@ class SqliteDatabase:
         """
         p = debug.Profiler('SqliteDatabase.exe', disabled=True)
         p.mark('Command: %s' % cmd)
+        #print cmd
+        #import traceback
+        #traceback.print_stack()
+        
         q = QtSql.QSqlQuery(self.db)
         if data is None:
             self._exe(q, cmd)
