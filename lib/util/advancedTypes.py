@@ -318,7 +318,9 @@ class CaselessDict(OrderedDict):
     def __deepcopy__(self, memo):
         raise Exception("deepcopy not implemented")
 
-
+    def clear(self):
+        OrderedDict.clear(self)
+        self.keyMap.clear()
 
 
 

@@ -201,15 +201,13 @@ class SqliteDatabase:
                               pre-existing data. This occurs, for example, when a column has a 'unique' 
                               constraint.
         ignoreExtraColumns    If True, ignore any extra columns in the data that do not exist in the table
-        addExtraColumns       If True, add any columns that exist in the data but do not yet exist in the table
-                              (NOT IMPLEMENTED YET)
         ====================  =======================================
         """
-        for n,nmax in self.iterInsert(table=table, records=records, replaceOnConflict=replaceOnConflict, ignoreExtraColumns=ignoreExtraColumns, addExtraColumns=addExtraColumns, chunkAll=True, **args):
+        for n,nmax in self.iterInsert(table=table, records=records, replaceOnConflict=replaceOnConflict, ignoreExtraColumns=ignoreExtraColumns, chunkAll=True, **args):
             pass
         
         
-    def iterInsert(self, table, records=None, replaceOnConflict=False, ignoreExtraColumns=False, addExtraColumns=False, chunkSize=500, chunkAll=False, **args):
+    def iterInsert(self, table, records=None, replaceOnConflict=False, ignoreExtraColumns=False, chunkSize=500, chunkAll=False, **args):
         """
         Iteratively insert chunks of data into a table while yielding a tuple (n, max)
         indicating progress. This *must* be used inside a for loop::
@@ -231,7 +229,7 @@ class SqliteDatabase:
         ret = []
         
         ## Rememember that _prepareData may change the number of columns!
-        records = TableData(self._prepareData(table, records, removeUnknownColumns=ignoreExtraColumns, batch=True))
+        records = TableData(self._prepareData(table, records, ignoreUnknownColumns=ignoreExtraColumns, batch=True))
         p.mark("prepared data")
         
         columns = records.keys()
@@ -309,8 +307,17 @@ class SqliteDatabase:
             columnStr.append('"%s" %s %s' % (name, conf['Type'], conf.get('Constraints', '')))
         columnStr = ','.join(columnStr)
 
-        self('CREATE TABLE %s (%s) %s' % (table, columnStr, sql))
+        self('CREATE TABLE "%s" (%s) %s' % (table, columnStr, sql))
         self._readTableList()
+ 
+    def addColumn(self, table, colName, colType, constraints=None):
+        """
+        Add a column to a table.
+        """
+        if constraints is None:
+            constraints = ''
+        self('ALTER TABLE "%s" ADD COLUMN "%s" %s %s' % (table, colName, colType, constraints))
+        self.tables = None
  
     def listTables(self):
         """
@@ -373,7 +380,7 @@ class SqliteDatabase:
         return whereStr
 
     
-    def _prepareData(self, table, data, removeUnknownColumns=False, batch=False):
+    def _prepareData(self, table, data, ignoreUnknownColumns=False, batch=False):
         ## Massage data so it is ready for insert into the DB. (internal use only)
         ##   - data destined for BLOB columns is pickled
         ##   - numerical columns convert to int or float
@@ -407,15 +414,19 @@ class SqliteDatabase:
                 converters[k] = lambda obj: obj
                 
         if batch:
-            newData = dict([(k,[]) for k in data.columnNames() if not (removeUnknownColumns and (k not in schema))])
+            newData = dict([(k,[]) for k in data.columnNames() if not (ignoreUnknownColumns and (k not in schema))])
         else:
             newData = []
             
         for rec in data:
             newRec = {}
             for k in rec:
-                if removeUnknownColumns and (k not in schema):
-                    continue
+                if k not in schema:
+                    if ignoreUnknownColumns:
+                        continue
+                    #if addUnknownColumns:  ## Is this just a bad idea?
+                        #dtyp = self.suggestColumnType(rec[k])
+                        #self.addColumn(table, k, dtyp)
                 if rec[k] is None:
                     newRec[k] = None
                 else:

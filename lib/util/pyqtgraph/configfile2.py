@@ -252,14 +252,17 @@ class ConfigFile(ConfigData):
         return -1
         
     def name(self):
-        return "TOP"
+        if self._first is None:
+            return None
+        else:
+            return self._first.key()
         
     def fileName(self):
         return self._fileName
-    
-            
-        
-        
+
+
+
+
 if __name__ == '__main__':
     import tempfile, os
     
