@@ -203,7 +203,12 @@ class EventDetector(AnalysisModule):
         p.mark("record list assembled")
             
         ## insert all data to DB
-        db.insert(table, records)
+        with pg.ProgressDialog("Storing events...", 0, 100) as dlg:
+            for n, nmax in db.iterInsert(table, records):
+                dlg.setMaximum(nmax)
+                dlg.setValue(n)
+                if dlg.wasCanceled():
+                    raise HelpfulException("Scan store canceled by user.", msgType='status')
         p.mark("records inserted")
         p.finish()
 

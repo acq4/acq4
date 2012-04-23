@@ -210,6 +210,172 @@ def fitPsp(x, y, guess, bounds=None, risePower=2.0):
 
 
 
+def doublePspFunc(v, x, risePower=2.0):
+    """Function approximating a PSP shape with double exponential decay. 
+    v = [amp1, amp2, x offset, rise tau, decay tau 1, decay tau 2]
+    Uses absolute value of both taus, so fits may indicate negative tau.
+    """
+    amp1, amp2, xoff, rise, decay1, decay2 = v
+    
+    x = x-xoff
+    
+    ### determine scaling factor needed to achieve correct amplitude
+    #v[2] = abs(v[2])
+    #v[3] = abs(v[3])
+    #maxX = pspMaxTime(v[2], v[3], risePower)
+    #maxVal = (1.0 - np.exp(-maxX / v[2]))**risePower * np.exp(-maxX / v[3])
+    ##maxVal = pspInnerFunc(np.array([maxX]), v[2], v[3], risePower)[0]
+    try:
+        out = np.zeros(x.shape, x.dtype)
+        mask = x >= 0
+        x = x[mask]
+        
+        riseExp = (1.0 - np.exp(-x / rise))**risePower
+        decayExp1 = amp1 * np.exp(-x / decay1)
+        decayExp2 = amp2 * np.exp(-x / decay2)
+        out[mask] =  riseExp * (decayExp1 + decayExp2)
+    except:
+        print v, x.shape, x.dtype
+        raise
+    return out
+
+def fitDoublePsp(x, y, guess, bounds=None, risePower=2.0):
+    """
+    Fit a PSP shape with double exponential decay.
+    guess: [amp1, amp2, xoffset, rise, fall1, fall2]
+    bounds: [[amp1Min, amp1Max], ...]
+    
+    NOTE: This fit is more likely to converge correctly if the guess amplitude 
+    is larger (about 2x) than the actual amplitude.
+    """
+    ## normalize scale to assist fit
+    yScale = y.max() - y.min()
+    y = y / yScale
+    for i in [0, 1]:
+        guess[i] /= yScale
+        if bounds[i][0] is not None:
+            bounds[i][0] /= yScale
+        if bounds[i][1] is not None:
+            bounds[i][1] /= yScale
+    
+    #if guess is None:
+        #guess = [
+            #(y.max()-y.min()) * 2,
+            #0, 
+            #x[-1]*0.25,
+            #x[-1]
+        #]
+    
+    ### pick some reasonable default bounds
+    #if bounds is None:
+        #bounds = [[None,None]] * 4
+        #minTau = (x[1]-x[0]) * 0.5
+        ##bounds[2] = [minTau, None]
+        ##bounds[3] = [minTau, None]
+    #trials = []
+    errs = {}
+    def errFn(v, x, y):
+        key = tuple(v)
+        if key not in errs:
+            ## enforce max rise/fall ratio
+            #v[2] = min(v[2], v[3] / 2.)
+            f = doublePspFunc(v,x,risePower)
+            err = y - f
+            #trials.append(f)
+            errs[key] = err
+            
+            for i in range(len(v)):
+                if bounds[i][0] is not None and v[i] < bounds[i][0]:
+                    v[i] = bounds[i][0]
+                if bounds[i][1] is not None and v[i] > bounds[i][1]:
+                    v[i] = bounds[i][1]
+               
+            ## both amps must be either positive or negative
+            if (v[0] > 0 and v[1] < 0) or (v[0] < 0 and v[1] > 0):
+                if abs(v[0]) > abs(v[1]):
+                    v[1] = 0
+                else:
+                    v[0] = 0
+            
+        #else:
+            #print "return cached err"
+        return errs[key] #+ extra
+        
+    #fit = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-3, factor=0.1, full_output=1)
+    fit = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-2)
+    #print fit[2:]
+    fit = fit[0]
+    
+    ## try fixing some common errors
+    #corrected = False
+    #err = (errFn(fit, x, y)**2).sum()
+    #fit2 = fit.copy()
+    #for i in range(10):
+        #fit2[0] *= 0.5
+        #fit2[1] *= 0.5
+        #err2 = (errFn(fit2, x, y)**2).sum()
+        #if err2 < err:
+            #print "Made amp correction"
+            #err = err2.copy()
+            #fit = fit2.copy()
+            #corrected = True
+        #else:
+            #break
+    
+    #for i in range(10):
+        #fit2[0] *= 1.3
+        #fit2[1] *= 1.3
+        #fit2[4] /= 1.3
+        #fit2[5] /= 1.3
+        #err2 = (errFn(fit2, x, y)**2).sum()
+        #if err2 < err:
+            #print "Made amp/tau tradeoff"
+            #err = err2.copy()
+            #fit = fit2.copy()
+            #corrected = True
+        #else:
+            #break
+        
+    #if corrected:  ## try fitting again
+        #fit2 = scipy.optimize.leastsq(errFn, fit, args=(x, y), ftol=1e-3, factor=0.1)[0]
+        #err2 = (errFn(fit2, x, y)**2).sum()
+        #if err2 < err:
+            #print "  -> refit helped further"
+            #fit = fit2
+            #err = err2
+            
+    ## kick the fitter to see if we can do any better
+    #import pyqtgraph as pg
+    #p = pg.plot()
+    #for i in range(len(trials)):
+        #p.plot(trials[i], pen=(i,len(trials)*1.5))
+    #print "Ran %d times" % len(errs)
+    #print 'guess:', guess
+    
+    err = (errFn(fit, x, y)**2).sum()
+    print "initial fit:", fit, err
+    
+    guess = fit.copy()
+    bestFit = fit
+    for ampx in (0.5, 2.0):
+        for taux in (0.5, 2.0):
+            guess[:2] = fit[:2] * ampx
+            guess[4:6] = fit[4:6] * taux
+            fit2 = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-2, factor=0.1)[0]
+            err2 = (errFn(fit2, x, y)**2).sum()
+            if err2 < err:
+                print "Improved fit:", ampx, taux, err2
+                bestFit = fit2
+                err = err2
+    fit = bestFit
+    print "final fit:", fit, err
+    fit[0] *= yScale
+    fit[1] *= yScale
+    return tuple(fit[:4]) + (min(*fit[4:]), max(*fit[4:]))
+
+
+
+
 STRNCMP_REGEX = re.compile(r'(-?\d+(\.\d*)?((e|E)-?\d+)?)')
 def strncmp(a, b):
     """Compare strings based on the numerical values they represent (for sorting). Each string may have multiple numbers."""
@@ -1378,7 +1544,7 @@ def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshol
       - baseline is centered at 0 (high-pass filtering may be required to achieve this).
       - no 0 crossings within an event due to noise (low-pass filtering may be required to achieve this)
       - Events last more than minLength samples
-      Return an array of events where each row is (start, length, sum)
+      Return an array of events where each row is (start, length, sum, peak)
     """
     ## just make sure this is an ndarray and not a MetaArray before operating..
     #p = Profiler('findEvents')
@@ -1395,7 +1561,12 @@ def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshol
     ## find all 0 crossings
     mask = data1 > 0
     diff = mask[1:] - mask[:-1]  ## mask is True every time the trace crosses 0 between i and i+1
-    times = np.argwhere(diff)[:, 0]  ## index of each point immediately before crossing.
+    times1 = np.argwhere(diff)[:, 0]  ## index of each point immediately before crossing.
+    
+    times = np.empty(len(times1)+2, dtype=times1.dtype)  ## add first/last indexes to list of crossing times
+    times[0] = 0                                         ## this is a bit suspicious, but we'd rather know
+    times[-1] = len(data1)                               ## about large events at the beginning/end
+    times[1:-1] = times1                                 ## rather than ignore them.
     #p.mark('find crossings')
     
     ## select only events longer than minLength.

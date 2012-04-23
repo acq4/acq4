@@ -61,6 +61,8 @@ class SqliteDatabase:
         self._readTableList()
         
     def close(self):
+        if self.db is None:
+            return
         self.db.close()
         self.db = None
         import gc
