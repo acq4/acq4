@@ -10,5 +10,6 @@ for path, sd, files in os.walk('.'):
             continue
         ui = os.path.join(path, f)
         py = os.path.join(path, base + '.py')
-        os.system('%s %s > %s' % (uic, ui, py))
-        print py
+        if not os.path.exists(py) or os.stat(py).st_mtime < os.stat(ui).st_mtime:
+            os.system('%s %s > %s' % (uic, ui, py))
+            print py

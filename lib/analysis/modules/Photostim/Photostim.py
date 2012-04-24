@@ -139,6 +139,8 @@ class Photostim(AnalysisModule):
         if dh is None:
             return ## should clear out map list here?
         
+        if 'dirType' not in dh.info():
+            return
         typ = dh.info()['dirType']
         if typ == 'Slice':
             cells = [dh[d] for d in dh.subDirs() if dh[d].info().get('dirType',None) == 'Cell']
@@ -270,7 +272,7 @@ class Photostim(AnalysisModule):
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
             print "clicked:", point.data
             plot = self.getElement("Data Plot")
-            plot.clear()
+            #plot.clear()
             self.selectedSpot = point
             self.selectedScan = plotItem.scan
             fh = self.dataModel.getClampFile(point.data)
@@ -523,21 +525,16 @@ class Photostim(AnalysisModule):
                     raise HelpfulException("Scan store canceled by user.", msgType='status')
                 
             p.mark("Prepared data")
-            dlg.setLabelText("Storing events..")
-            dlg.setValue(0)
-            dlg.setMaximum(100)
             
-            ## Store all events for this scan
-            ev = np.concatenate(events)
-            p.mark("concatenate events")
-            self.detector.storeToDB(ev)
-            dlg.setValue(70)
-            dlg.setLabelText("Storing stats..")
-            p.mark("stored all events")
-            
-            ## Store spot data
-            self.storeStats(stats)
-            p.mark("stored all stats")
+        ## Store all events for this scan
+        ev = np.concatenate(events)
+        p.mark("concatenate events")
+        self.detector.storeToDB(ev)
+        p.mark("stored all events")
+        
+        ## Store spot data
+        self.storeStats(stats)
+        p.mark("stored all stats")
         p.finish()
         print "   scan %s is now locked" % scan.source().name()
         scan.lock()
@@ -635,7 +632,7 @@ class Photostim(AnalysisModule):
         #fields.update(db.describeData(data))
         
         ## Make sure target table exists and has correct columns, links to input file
-        db.checkTable(table, owner=identity, columns=fields, create=True)
+        db.checkTable(table, owner=identity, columns=fields, create=True, addUnknownColumns=True)
         
         # delete old
         for source in set([d['ProtocolDir'] for d in data]):
@@ -643,7 +640,13 @@ class Photostim(AnalysisModule):
             db.delete(table, where={'ProtocolDir': source})
 
         # write new
-        db.insert(table, data)
+        with pg.ProgressDialog("Storing spot stats...", 0, 100) as dlg:
+            for n, nmax in db.iterInsert(table, data):
+                dlg.setMaximum(nmax)
+                dlg.setValue(n)
+                if dlg.wasCanceled():
+                    raise HelpfulException("Scan store canceled by user.", msgType='status')
+            
 
     def loadSpotFromDB(self, dh):
         dbui = self.getElement('Database')
