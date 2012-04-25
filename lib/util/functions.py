@@ -186,21 +186,52 @@ def fitPsp(x, y, guess, bounds=None, risePower=2.0):
         #bounds[2] = [minTau, None]
         #bounds[3] = [minTau, None]
         
+    errCache = {}
     def errFn(v, x, y):
-        for i in range(len(v)):
-            if bounds[i][0] is not None:
-                v[i] = max(v[i], bounds[i][0])
-            if bounds[i][1] is not None:
-                v[i] = min(v[i], bounds[i][1])
-                
-        ## enforce max rise/fall ratio
-        #v[2] = min(v[2], v[3] / 2.)
-            
-        err = y - v[0] * pspInnerFunc(x-v[1], abs(v[2]), abs(v[3]), risePower)
-        #print "ERR: ", v, (abs(err)**2).sum()
+        key = tuple(v)
+        if key not in errCache:
+            for i in range(len(v)):
+                if bounds[i][0] is not None:
+                    v[i] = max(v[i], bounds[i][0])
+                if bounds[i][1] is not None:
+                    v[i] = min(v[i], bounds[i][1])
+            err = y - v[0] * pspInnerFunc(x-v[1], abs(v[2]), abs(v[3]), risePower)
+                    
+            errCache[key] = (err, v.copy())
+            return err
+        err, v2 = errCache[key]
+        v[:] = v2
         return err
         
-    fit = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-3, factor=0.1)[0]
+    ## initial fit
+    fit = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-2, factor=0.1)[0]
+    
+    ## try on a few more fits
+    #err = (errFn(fit, x, y)**2).sum()
+    #print "fit:", err
+    #bestFit = fit
+    #for da in [0.5, 1.0, 2.0]:
+        #for dt in [0.5, 1.0, 2.0]:
+            #for dr in [0.5, 1.0, 2.0]:
+                #for do in [0.002, .0, 0.002]:
+                    #if da == 1.0 and dt == 1.0 and dr == 1.0 and do == 0.0:
+                        #continue
+                    #guess = fit.copy()            
+                    #guess[0] *= da
+                    #guess[1] += do
+                    #guess[3] *= dt
+                    #guess[2] *= dr
+                    #fit2 = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-1, factor=0.1)[0]
+                    #err2 = (errFn(fit2, x, y)**2).sum()
+                    #if err2 < err:
+                        #bestFit = fit2
+                        #print "   found better PSP fit: %s -> %s" % (err, err2), da, dt, dr, do
+                        #err = err2
+    
+    #fit = bestFit
+    
+    
+    
     fit[2:] = abs(fit[2:])
     maxX = fit[2] * np.log(1 + (fit[3]*risePower / fit[2]))
     maxVal = (1.0 - np.exp(-maxX / fit[2]))**risePower * np.exp(-maxX / fit[3])
@@ -239,6 +270,20 @@ def doublePspFunc(v, x, risePower=2.0):
         raise
     return out
 
+def doublePspMax(v, risePower=2.0):
+    """
+    Return the time and value of the peak of a PSP with double-exponential decay.
+    """
+    ## create same params with negative amplitudes
+    v2 = list(v)[:]
+    if v2[0] > 0:
+        v2[0] *= -1
+    if v2[1] > 0:
+        v2[1] *= -1
+    xMax = scipy.optimize.fmin(lambda x: doublePspFunc(v2, x), [v[2]], disp=False)
+    yMax = doublePspFunc(v, xMax)
+    return xMax[0], yMax[0]
+    
 def fitDoublePsp(x, y, guess, bounds=None, risePower=2.0):
     """
     Fit a PSP shape with double exponential decay.
@@ -282,7 +327,6 @@ def fitDoublePsp(x, y, guess, bounds=None, risePower=2.0):
             f = doublePspFunc(v,x,risePower)
             err = y - f
             #trials.append(f)
-            errs[key] = err
             
             for i in range(len(v)):
                 if bounds[i][0] is not None and v[i] < bounds[i][0]:
@@ -296,10 +340,11 @@ def fitDoublePsp(x, y, guess, bounds=None, risePower=2.0):
                     v[1] = 0
                 else:
                     v[0] = 0
-            
-        #else:
-            #print "return cached err"
-        return errs[key] #+ extra
+            errs[key] = (err, v.copy())
+            return err
+        err, v2 = errs[key]
+        v[:] = v2
+        return err
         
     #fit = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-3, factor=0.1, full_output=1)
     fit = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-2)

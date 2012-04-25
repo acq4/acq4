@@ -41,10 +41,22 @@ if 'events' not in locals():
     
     colorCheck = QtGui.QCheckBox("color y position")
     layout.addWidget(colorCheck, 0, 2)
+    
+    errLimitSpin = pg.SpinBox(value=0.7, step=0.1)
+    layout.addWidget(errLimitSpin, 0, 3)
+
+    lengthRatioLimitSpin = pg.SpinBox(value=1.5, step=0.1)
+    layout.addWidget(lengthRatioLimitSpin, 0, 4)
+
+    postRgnStartSpin = pg.SpinBox(value=0.300, step=0.01, siPrefix=True, suffix='s')
+    layout.addWidget(postRgnStartSpin, 0, 5)
+
+    postRgnStopSpin = pg.SpinBox(value=0.400, step=0.01, siPrefix=True, suffix='s')
+    layout.addWidget(postRgnStopSpin, 0, 6)
 
     spl1 = QtGui.QSplitter()
     spl1.setOrientation(QtCore.Qt.Vertical)
-    layout.addWidget(spl1, 1, 0, 1, 3)
+    layout.addWidget(spl1, 1, 0, 1, 7)
 
     pw1 = pg.PlotWidget()
     spl1.addWidget(pw1)
@@ -55,7 +67,7 @@ if 'events' not in locals():
     spl2.setOrientation(QtCore.Qt.Horizontal)
     spl1.addWidget(spl2)
 
-    pw2 = pg.PlotWidget()
+    pw2 = pg.PlotWidget(labels={'bottom': ('time', 's')})
     gv = pg.GraphicsView()
     gv.setBackgroundBrush(pg.mkBrush('w'))
     image = pg.ImageItem()
@@ -119,8 +131,10 @@ def loadCell(cell):
     pcache = {}
     tcache = {}
     print "Loading all events for cell", cell
-    tot = db.tableLength(eventView)
-    for ev in db.iterSelect(eventView, ['ProtocolSequenceDir', 'SourceFile', 'fitAmplitude', 'fitTime', 'fitDecayTau', 'fitRiseTau', 'userTransform', 'type', 'CellDir', 'ProtocolDir'], where={'CellDir': cell}, toArray=True):
+    tot = db.select(eventView, 'count()', where={'CellDir': cell})[0]['count()']
+    print tot, "total events.."
+    
+    for ev in db.iterSelect(eventView, ['ProtocolSequenceDir', 'SourceFile', 'fitAmplitude', 'fitTime', 'fitDecayTau', 'fitRiseTau', 'fitLengthOverDecay', 'fitFractionalError', 'userTransform', 'type', 'CellDir', 'ProtocolDir'], where={'CellDir': cell}, toArray=True):
         extra = np.empty(ev.shape, dtype=[('x', float), ('y', float), ('holding', float)])
         
         ## insert holding levels
@@ -166,6 +180,8 @@ def init():
     cellSpin.valueChanged.connect(showCell)
     separateCheck.toggled.connect(showCell)
     colorCheck.toggled.connect(showCell)
+    errLimitSpin.valueChanged.connect(showCell)
+    lengthRatioLimitSpin.valueChanged.connect(showCell)
     for s in [sp1, sp2, sp3, sp4]:
         s.sigPointsClicked.connect(plotClicked)
 
@@ -188,9 +204,10 @@ def plotClicked(plt, pts):
         w = xr[1]-xr[0]
         pw2.setXRange(time-w/5., time+4*w/5., padding=0)
     
-    x = np.linspace(time, time+pt.data['fitDecayTau']*5, 1000)
+    fitLen = pt.data['fitDecayTau']*pt.data['fitLengthOverDecay']
+    x = np.linspace(time, time+fitLen, fitLen * 50e3)
     v = [pt.data['fitAmplitude'], pt.data['fitTime'], pt.data['fitRiseTau'], pt.data['fitDecayTau']]
-    y = fn.pspFunc(v, x, risePower=1.0) + data[np.argwhere(data.xvals('Time')>time)[0]]
+    y = fn.pspFunc(v, x, risePower=1.0) + data[np.argwhere(data.xvals('Time')>time)[0]-1]
     pw2.plot(x, y, pen='b')
     #plot.addItem(arrow)
 
@@ -205,6 +222,9 @@ def select(ev, ex=True):
         ev = ev[(ev['holding'] >= -0.01) * (ev['holding'] <= 0.01)]  ## inhibitory events
         ev = ev[(ev['fitAmplitude'] > 0) * (ev['fitAmplitude'] < 2e-10)]
     ev = ev[(0 < ev['fitDecayTau']) * (ev['fitDecayTau'] < 0.2)]   # select decay region
+    
+    ev = ev[ev['fitFractionalError'] < errLimitSpin.value()]
+    ev = ev[ev['fitLengthOverDecay'] > lengthRatioLimitSpin.value()]
     return ev
     
 
@@ -239,8 +259,10 @@ def showCell():
         sp3.hide()
         sp4.show()
         
-        ev2 = ev2[(ev2['fitTime']>0.502) * (ev2['fitTime']<0.7)]
-        ev3 = ev3[(ev3['fitTime']>0.502) * (ev3['fitTime']<0.7)]
+        start = postRgnStart()
+        stop = postRgnStop()
+        ev2 = ev2[(ev2['fitTime']>start) * (ev2['fitTime']<stop)]
+        ev3 = ev3[(ev3['fitTime']>start) * (ev3['fitTime']<stop)]
         ev4 = np.concatenate([ev2, ev3])
         
         yMax = ev4['y'].max()
@@ -264,8 +286,8 @@ def showCell():
         
         ## excitatory
         if separateCheck.isChecked():
-            pre = ev2[ev2['fitTime']< 0.498]
-            post = ev2[(ev2['fitTime'] > 0.502) * (ev2['fitTime'] < 0.7)]
+            pre = ev2[ev2['fitTime']< preRgnStop()]
+            post = ev2[(ev2['fitTime'] > postRgnStart()) * (ev2['fitTime'] < postRgnStop())]
         else:
             pre = ev2
         
@@ -275,8 +297,8 @@ def showCell():
         
         ## inhibitory
         if separateCheck.isChecked():
-            pre = ev3[ev3['fitTime']< 0.498]
-            post2 = ev3[(ev3['fitTime'] > 0.502) * (ev3['fitTime'] < 0.7)]
+            pre = ev3[ev3['fitTime']< preRgnStop()]
+            post2 = ev3[(ev3['fitTime'] > postRgnStart()) * (ev3['fitTime'] < postRgnStop())]
             post = np.concatenate([post, post2])
         else:
             pre = ev3
@@ -308,14 +330,23 @@ def showCell():
     ))
 
 def spontRate(ev):
-    ev = ev[ev['fitTime'] < 0.498]
+    ev = ev[ev['fitTime'] < preRgnStop()]
     count = {}
     for i in range(len(ev)):
         key = (ev[i]['ProtocolSequenceDir'], ev[i]['SourceFile'])
         if key not in count:
             count[key] = 0
         count[key] += 1
-    sr = np.mean([v/0.498 for v in count.itervalues()])
+    sr = np.mean([v/(preRgnStop()) for v in count.itervalues()])
     return sr
 
+def preRgnStop():
+    return postRgnStartSpin.value() - 0.002
+    
+def postRgnStart():
+    return postRgnStartSpin.value() + 0.002
+    
+def postRgnStop():
+    return postRgnStartSpin.value()
+    
 init()

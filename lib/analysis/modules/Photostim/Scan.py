@@ -186,7 +186,7 @@ class Scan(QtCore.QObject):
         if fh not in self.events:
             if process:
                 print "No event cache for", fh.name(), "compute.."
-                events = self.host.processEvents(fh)
+                events = self.host.processEvents(fh)  ## need ALL output from the flowchart; not just events
                 self.events[fh] = events
                 if signal:
                     self.sigEventsChanged.emit(self)
