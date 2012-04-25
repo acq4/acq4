@@ -16,12 +16,14 @@ from SpatialCorrelator import SpatialCorrelator
 from MapConvolver import MapConvolver
 from ColorMapper import ColorMapper
 from Canvas.items.ImageCanvasItem import ImageCanvasItem
+from ContourPlotter.ContourPlotter import ContourPlotter
+import debug
 
 
 
 
 
-class MapAnalyzer(AnalysisModule):
+class MapImager(AnalysisModule):
     
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
@@ -30,12 +32,14 @@ class MapAnalyzer(AnalysisModule):
         modPath = os.path.abspath(os.path.split(__file__)[0])
         
         self._elements_ = OrderedDict([
-            ('Database Query', {'type':'ctrl', 'object': DatabaseQueryWidget(self.dataManager()), 'size':(200,200), 'host':self}),
+            ('Database Query', {'type':'ctrl', 'object': DatabaseQueryWidget(self.dataManager()), 'size':(300,200), 'host':self}),
             ('File Loader', {'type':'fileInput', 'pos':('below', 'Database Query'), 'host':self, 'showFileTree':False}),
-            ('Map Convolver', {'type':'ctrl', 'object': MapConvolver(), 'size': (200, 200), 'pos':('bottom', 'Database Query')}),
-            ('Color Mapper', {'type':'ctrl', 'object': ColorMapper(filePath=os.path.join(modPath, "colorMaps")), 'size': (200,200), 'pos':('right', 'Database Query')}),
-            ('Spatial Correlator', {'type':'ctrl', 'object':SpatialCorrelator(), 'size':(100,200), 'pos': ('bottom', 'Map Convolver')}),
-            ('Canvas', {'type': 'canvas', 'pos': ('bottom', 'Color Mapper'), 'size': (700,400), 'allowTransforms': False, 'hideCtrl': True, 'args': {'name': 'Map Analyzer'}})
+            
+            ('Color Mapper', {'type':'ctrl', 'object': ColorMapper(filePath=os.path.join(modPath, "colorMaps")), 'size': (200,300), 'pos':('right', 'Database Query')}),
+            ('Contour Plotter', {'type':'ctrl', 'object':ContourPlotter(host=self), 'pos':('below', 'Color Mapper')}),
+            ('Canvas', {'type': 'canvas', 'pos': ('bottom', 'Color Mapper'), 'size': (700,600), 'allowTransforms': False, 'hideCtrl': True, 'args': {'name': 'Map Analyzer'}}),
+            ('Map Convolver', {'type':'ctrl', 'object': MapConvolver(), 'size': (200, 200), 'pos':('bottom', 'File Loader')}),
+            ('Spatial Correlator', {'type':'ctrl', 'object':SpatialCorrelator(), 'size':(100,100), 'pos': ('bottom', 'Map Convolver')})          
             #('File Loader', {'type': 'fileInput', 'size': (100, 300), 'host': self, 'args': {'showFileTree': True}}),
             #('ctrl', {'type': 'ctrl', 'object': self.ctrlWidget, 'pos': ('bottom', 'File Loader'), 'size': (100, 100)}),
             #('Rs Plot', {'type': 'plot', 'pos':('right', 'File Loader'), 'size':(200, 600), 'labels':{'left':(None,'Ohms'), 'bottom':(None,'s')}}),
@@ -59,31 +63,54 @@ class MapAnalyzer(AnalysisModule):
         self.mapConvolver = self.getElement("Map Convolver")
         self.colorMapper = self.getElement("Color Mapper")
         self.spatialCorrelator = self.getElement("Spatial Correlator")
+        self.contourPlotter = self.getElement("Contour Plotter")
         
-        self.outline = self.spatialCorrelator.getOutline()
-        self.canvas.addGraphicsItem(self.outline)
+        self.contourPlotter.setCanvas(self.canvas)
+        
+        #self.outline = self.spatialCorrelator.getOutline()
+        #self.canvas.addGraphicsItem(self.outline)
         
         
         self.dbquery.sigTableChanged.connect(self.setData)
         self.mapConvolver.sigOutputChanged.connect(self.convolverOutputChanged)
         self.mapConvolver.sigFieldsChanged.connect(self.giveOptsToCM)
+        self.spatialCorrelator.sigOutputChanged.connect(self.correlatorOutputChanged)
         self.colorMapper.sigChanged.connect(self.computeColors)
+        
         
         
         
     def setData(self):
         data = self.dbquery.table()
+        self.data = data
         self.getElement("Spatial Correlator").setData(data)
-        self.getElement("Map Convolver").setData(data)
+        #self.getElement("Map Convolver").setData(data)
         
     def convolverOutputChanged(self, data, spacing):
         self.spacing = spacing
         self.imgData = data
         self.recolorMap(self.colorMapper.getColorArray(data))
+        self.adjustContours(data, self.imgItem)
         
     def computeColors(self):
         if self.imgData is not None:
             self.recolorMap(self.colorMapper.getColorArray(self.imgData))
+            
+    def correlatorOutputChanged(self, data):
+        #newFields= [f for f in data.dtype.descr if f not in self.data.dtype.descr]
+        #if len(newFields) > 0:
+            #arr = np.zeros(len(data), dtype=self.data.dtype.descr+newFields)
+            #arr[:] = self.data
+            #arr[:] = data
+            #self.data = arr
+        self.data = data
+        self.mapConvolver.setData(self.data)
+        
+            
+    def adjustContours(self, data, parentItem=None):
+        if data is None:
+            return
+        self.contourPlotter.adjustContours(data, parentItem=self.imgItem)
         
     def recolorMap(self, data):
         if self.imgItem is None:
@@ -99,6 +126,7 @@ class MapAnalyzer(AnalysisModule):
             
     def giveOptsToCM(self, fields):
         self.colorMapper.setArgList(fields)
+        self.contourPlotter.setArgList(fields)
         
     def saveMA(self, fileName=None):
         if self.imgData is None:

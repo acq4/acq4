@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'SpatialCorrelatorCtrlTemplate.ui'
 #
-# Created: Thu Mar  8 20:42:05 2012
+# Created: Wed Mar 21 12:21:56 2012
 #      by: PyQt4 UI code generator 4.9
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(254, 152)
+        Form.resize(273, 211)
         self.gridLayout = QtGui.QGridLayout(Form)
         self.gridLayout.setMargin(3)
         self.gridLayout.setSpacing(3)
@@ -53,22 +53,34 @@ class Ui_Form(object):
         self.radiusSpin.setObjectName(_fromUtf8("radiusSpin"))
         self.horizontalLayout_3.addWidget(self.radiusSpin)
         self.gridLayout.addLayout(self.horizontalLayout_3, 2, 0, 1, 2)
-        self.horizontalLayout_4 = QtGui.QHBoxLayout()
-        self.horizontalLayout_4.setSpacing(1)
-        self.horizontalLayout_4.setObjectName(_fromUtf8("horizontalLayout_4"))
-        self.label_4 = QtGui.QLabel(Form)
-        self.label_4.setObjectName(_fromUtf8("label_4"))
-        self.horizontalLayout_4.addWidget(self.label_4)
-        self.significanceSpin = SpinBox(Form)
-        self.significanceSpin.setObjectName(_fromUtf8("significanceSpin"))
-        self.horizontalLayout_4.addWidget(self.significanceSpin)
-        self.gridLayout.addLayout(self.horizontalLayout_4, 3, 0, 1, 2)
         self.disableChk = QtGui.QCheckBox(Form)
         self.disableChk.setObjectName(_fromUtf8("disableChk"))
-        self.gridLayout.addWidget(self.disableChk, 4, 0, 1, 1)
+        self.gridLayout.addWidget(self.disableChk, 5, 0, 1, 1)
         self.processBtn = QtGui.QPushButton(Form)
         self.processBtn.setObjectName(_fromUtf8("processBtn"))
-        self.gridLayout.addWidget(self.processBtn, 4, 1, 1, 1)
+        self.gridLayout.addWidget(self.processBtn, 5, 1, 1, 1)
+        self.groupBox = QtGui.QGroupBox(Form)
+        self.groupBox.setObjectName(_fromUtf8("groupBox"))
+        self.gridLayout_2 = QtGui.QGridLayout(self.groupBox)
+        self.gridLayout_2.setMargin(3)
+        self.gridLayout_2.setSpacing(3)
+        self.gridLayout_2.setObjectName(_fromUtf8("gridLayout_2"))
+        self.probabilityRadio = QtGui.QRadioButton(self.groupBox)
+        self.probabilityRadio.setChecked(True)
+        self.probabilityRadio.setObjectName(_fromUtf8("probabilityRadio"))
+        self.gridLayout_2.addWidget(self.probabilityRadio, 0, 0, 1, 2)
+        self.thresholdSpin = SpinBox(self.groupBox)
+        self.thresholdSpin.setEnabled(True)
+        self.thresholdSpin.setObjectName(_fromUtf8("thresholdSpin"))
+        self.gridLayout_2.addWidget(self.thresholdSpin, 2, 1, 1, 1)
+        self.label_4 = QtGui.QLabel(self.groupBox)
+        self.label_4.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.label_4.setObjectName(_fromUtf8("label_4"))
+        self.gridLayout_2.addWidget(self.label_4, 2, 0, 1, 1)
+        self.thresholdRadio = QtGui.QRadioButton(self.groupBox)
+        self.thresholdRadio.setObjectName(_fromUtf8("thresholdRadio"))
+        self.gridLayout_2.addWidget(self.thresholdRadio, 1, 0, 1, 2)
+        self.gridLayout.addWidget(self.groupBox, 4, 0, 1, 2)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
@@ -78,8 +90,11 @@ class Ui_Form(object):
         self.label.setText(QtGui.QApplication.translate("Form", "Spontaneous Event Rate:", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("Form", "Post-stimulus time window:", None, QtGui.QApplication.UnicodeUTF8))
         self.label_3.setText(QtGui.QApplication.translate("Form", "Correlation Radius:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("Form", "Significance Threshold:", None, QtGui.QApplication.UnicodeUTF8))
         self.disableChk.setText(QtGui.QApplication.translate("Form", "Disable", None, QtGui.QApplication.UnicodeUTF8))
-        self.processBtn.setText(QtGui.QApplication.translate("Form", "Process", None, QtGui.QApplication.UnicodeUTF8))
+        self.processBtn.setText(QtGui.QApplication.translate("Form", "re-Process", None, QtGui.QApplication.UnicodeUTF8))
+        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Output data:", None, QtGui.QApplication.UnicodeUTF8))
+        self.probabilityRadio.setText(QtGui.QApplication.translate("Form", "Probability values (float)", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_4.setText(QtGui.QApplication.translate("Form", "Threshold:", None, QtGui.QApplication.UnicodeUTF8))
+        self.thresholdRadio.setText(QtGui.QApplication.translate("Form", "Spots that cross threshold (boolean)", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph.widgets.SpinBox import SpinBox
