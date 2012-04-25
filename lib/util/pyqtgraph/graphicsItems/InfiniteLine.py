@@ -94,9 +94,6 @@ class InfiniteLine(UIGraphicsItem):
         self.update()
         
     def setPos(self, pos):
-        """Set the position of the line. If line is horizontal or vertical, pos can be 
-        a single value. Otherwise, a 2D coordinate must be specified (list, tuple and 
-        QPointF are all acceptable)."""
         
         if type(pos) in [list, tuple]:
             newPos = pos
@@ -148,7 +145,9 @@ class InfiniteLine(UIGraphicsItem):
             return self.getPos()
                 
     def setValue(self, v):
-        """See :func:`setPos <pyqtgraph.InfiniteLine.setPos>`"""
+        """Set the position of the line. If line is horizontal or vertical, v can be 
+        a single value. Otherwise, a 2D coordinate must be specified (list, tuple and 
+        QPointF are all acceptable)."""
         self.setPos(v)
 
     ## broken in 4.7

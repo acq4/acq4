@@ -115,7 +115,7 @@ class LinearRegionItem(UIGraphicsItem):
         """Optional [min, max] bounding values for the region. To have no bounds on the
         region use [None, None].
         Does not affect the current position of the region unless it is outside the new bounds. 
-        See :func:`setValues<pyqtgraph.LinearRegionItem.setValues` to set the position 
+        See :func:`setRegion <pyqtgraph.LinearRegionItem.setRegion>` to set the position 
         of the region."""
         for l in self.lines:
             l.setBounds(bounds)
