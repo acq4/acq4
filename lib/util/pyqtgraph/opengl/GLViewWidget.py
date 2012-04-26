@@ -90,7 +90,12 @@ class GLViewWidget(QtOpenGL.QGLWidget):
             if not i.visible():
                 continue
             if i is item:
-                i.paint()
+                try:
+                    i.paint()
+                except:
+                    import sys
+                    sys.excepthook(*sys.exc_info())
+                    print "Error while drawing item", i
             else:
                 glMatrixMode(GL_MODELVIEW)
                 glPushMatrix()
