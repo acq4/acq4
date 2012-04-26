@@ -3,7 +3,7 @@ import lib.Manager
 import pyqtgraph as pg
 import numpy as np
 import functions as fn
-
+import re
 man = lib.Manager.getManager() 
 
 ## update DB field to reflect dir meta info
@@ -33,8 +33,9 @@ if 'events' not in locals():
     cw.setLayout(layout)
     win.setCentralWidget(cw)
 
-    cellSpin = QtGui.QSpinBox()
-    layout.addWidget(cellSpin, 0, 0)
+    cellCombo = QtGui.QComboBox()
+    cellCombo.setSizeAdjustPolicy(cellCombo.AdjustToContents)
+    layout.addWidget(cellCombo, 0, 0)
     
     separateCheck = QtGui.QCheckBox("color pre/post")
     layout.addWidget(separateCheck, 0, 1)
@@ -111,11 +112,12 @@ if 'events' not in locals():
         
     cells = db.select(siteView, ['CellDir'], distinct=True)
     cells = [c['CellDir'] for c in cells]
-    #for c in cells:
-        #print c, db.getDir('Cell', c)
-    #cells.sort(lambda a,b: cmp(db.getDir('DirType_Cell', a).name(), db.getDir('DirType_Cell', b).name()))
     cells.sort(lambda a,b: cmp(a.name(), b.name()))
-    cellSpin.setMaximum(len(cells)-1)
+    
+    cellCombo.addItem('')
+    for c in cells:
+        cellCombo.addItem(c.name(relativeTo=man.baseDir))
+    #cellSpin.setMaximum(len(cells)-1)
     print "Done."
 
 def loadCell(cell):
@@ -177,7 +179,7 @@ def loadCell(cell):
 def init():
     if not firstRun:
         return
-    cellSpin.valueChanged.connect(showCell)
+    cellCombo.currentIndexChanged.connect(showCell)
     separateCheck.toggled.connect(showCell)
     colorCheck.toggled.connect(showCell)
     errLimitSpin.valueChanged.connect(showCell)
@@ -236,7 +238,7 @@ def showCell():
     #lock = True
     QtGui.QApplication.processEvents() ## prevents double-spin
     #lock = False
-    cell = cells[cellSpin.value()]
+    cell = cells[cellCombo.currentIndex()-1]
     
     dh = cell #db.getDir('Cell', cell)
     loadCell(dh)
@@ -261,9 +263,9 @@ def showCell():
         
         start = postRgnStart()
         stop = postRgnStop()
-        ev2 = ev2[(ev2['fitTime']>start) * (ev2['fitTime']<stop)]
-        ev3 = ev3[(ev3['fitTime']>start) * (ev3['fitTime']<stop)]
-        ev4 = np.concatenate([ev2, ev3])
+        ev2post = ev2[(ev2['fitTime']>start) * (ev2['fitTime']<stop)]
+        ev3post = ev3[(ev3['fitTime']>start) * (ev3['fitTime']<stop)]
+        ev4 = np.concatenate([ev2post, ev3post])
         
         yMax = ev4['y'].max()
         yMin = ev4['y'].min()
@@ -317,17 +319,20 @@ def showCell():
         typ = ev3[0]['type']
         
     sr = spontRate(ev2)
+    sri = spontRate(ev3)
         
-    pw1.setTitle(
-        "%s -- %s --- <span style='color: #99F;'>ex:</span> %s %s %0.1fHz --- <span style='color: #F99;'>in:</span> %s %s" % (
+    title = "%s -- %s --- <span style='color: #99F;'>ex:</span> %s %s %0.1fHz --- <span style='color: #F99;'>in:</span> %s %s %0.1fHz" % (
         dh.name(relativeTo=dh.parent().parent().parent()), 
         typ,
-        pg.siFormat(np.median(ev2['fitDecayTau']), space=False, suffix='s'),
-        pg.siFormat(np.median(ev2['fitAmplitude']), space=False, suffix='A'),
+        pg.siFormat(np.median(ev2['fitDecayTau']), error=np.std(ev2['fitDecayTau']), space=False, suffix='s'),
+        pg.siFormat(np.median(ev2['fitAmplitude']), error=np.std(ev2['fitAmplitude']), space=False, suffix='A'),
         sr,
-        pg.siFormat(np.median(ev3['fitDecayTau']), space=False, suffix='s'),
-        pg.siFormat(np.median(ev3['fitAmplitude']), space=False, suffix='A'),
-    ))
+        pg.siFormat(np.median(ev3['fitDecayTau']), error=np.std(ev3['fitDecayTau']), space=False, suffix='s'),
+        pg.siFormat(np.median(ev3['fitAmplitude']), error=np.std(ev3['fitAmplitude']), space=False, suffix='A'),
+        sri)
+    print re.sub(r'<[^>]+>', '', title)
+    
+    pw1.setTitle(title)
 
 def spontRate(ev):
     ev = ev[ev['fitTime'] < preRgnStop()]
