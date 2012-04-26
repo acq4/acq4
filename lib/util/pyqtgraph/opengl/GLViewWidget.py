@@ -14,6 +14,8 @@ class GLViewWidget(QtOpenGL.QGLWidget):
     """
     def __init__(self, parent=None):
         QtOpenGL.QGLWidget.__init__(self, parent)
+        self.setFocusPolicy(QtCore.Qt.ClickFocus)
+        
         self.opts = {
             'center': Vector(0,0,0),  ## will always appear at the center of the widget
             'distance': 10.0,         ## distance of camera from center
@@ -129,6 +131,16 @@ class GLViewWidget(QtOpenGL.QGLWidget):
         
         return pos
 
+    def pixelSize(self, pos):
+        """
+        Return the approximate size of a screen pixel at the location pos
+        
+        """
+        cam = self.cameraPosition()
+        dist = (pos-cam).length()
+        xDist = dist * 2. * np.tan(0.5 * self.opts['fov'] * np.pi / 180.)
+        return xDist / self.width()
+        
     def orbit(self, azim, elev):
         """Orbits the camera around the center position. *azim* and *elev* are given in degrees."""
         self.opts['azimuth'] += azim
@@ -171,7 +183,10 @@ class GLViewWidget(QtOpenGL.QGLWidget):
             self.orbit(-diff.x(), diff.y())
             #print self.opts['azimuth'], self.opts['elevation']
         elif ev.buttons() == QtCore.Qt.MidButton:
-            self.pan(diff.x(), diff.y(), 0, relative=True)
+            if (ev.modifiers() & QtCore.Qt.ControlModifier):
+                self.pan(diff.x(), 0, diff.y(), relative=True)
+            else:
+                self.pan(diff.x(), diff.y(), 0, relative=True)
         
     def mouseReleaseEvent(self, ev):
         pass

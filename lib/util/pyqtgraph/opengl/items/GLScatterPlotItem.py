@@ -33,12 +33,14 @@ class GLScatterPlotItem(GLGraphicsItem):
 
         
     def initializeGL(self):
+        w = 64
         def fn(x,y):
-            r = ((x-15)**2 + (y-15)**2) ** 0.5
-            return 200 * (14 - np.clip(r, 13., 14.))
-        pData = np.empty((30, 30, 4))
+            r = ((x-w/2.)**2 + (y-w/2.)**2) ** 0.5
+            return 200 * (w/2. - np.clip(r, w/2.-1.0, w/2.))
+        pData = np.empty((w, w, 4))
         pData[:] = 255
-        pData[:,:,3] = np.fromfunction(fn, (30, 30))
+        pData[:,:,3] = np.fromfunction(fn, pData.shape[:2])
+        #print pData.shape, pData.min(), pData.max()
         pData = pData.astype(np.ubyte)
         
         self.pointTexture = glGenTextures(1)
@@ -54,24 +56,23 @@ class GLScatterPlotItem(GLGraphicsItem):
         glEnable( GL_POINT_SMOOTH )
 
         glHint(GL_POINT_SMOOTH_HINT, GL_NICEST)
-        glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (0, 0, -1e-3))
-        glPointParameterfv(GL_POINT_SIZE_MAX, (65500,))
+        #glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (0, 0, -1e-3))
+        #glPointParameterfv(GL_POINT_SIZE_MAX, (65500,))
         #glPointParameterfv(GL_POINT_SIZE_MIN, (0,))
         
-        #glActiveTexture(GL_TEXTURE0)
-        #glEnable( GL_TEXTURE_2D )
-        ##glTexEnv(GL_POINT_SPRITE, GL_COORD_REPLACE, GL_TRUE)
-        ##glTexEnv(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE)
-        #glBindTexture(GL_TEXTURE_2D, self.pointTexture)
+        glEnable(GL_POINT_SPRITE)
+        glActiveTexture(GL_TEXTURE0)
+        glEnable( GL_TEXTURE_2D )
+        glBindTexture(GL_TEXTURE_2D, self.pointTexture)
     
-        #glEnable(GL_POINT_SPRITE)
-        #glTexEnvi(GL_POINT_SPRITE, GL_COORD_REPLACE, GL_TRUE)
-        #glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE)
-        #glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        #glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        ##glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-        ##glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
-    
+        glTexEnvi(GL_POINT_SPRITE, GL_COORD_REPLACE, GL_TRUE)
+        #glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE)    ## use texture color exactly
+        glTexEnvf( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE )  ## texture modulates current color
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        
         for pt in self.data:
             pos = pt['pos']
             try:
@@ -86,7 +87,9 @@ class GLScatterPlotItem(GLGraphicsItem):
             if isinstance(color, QtGui.QColor):
                 color = fn.glColor(color)
                 
-            glPointSize(size * self.view().width() * .05)
+            pxSize = self.view().pixelSize(QtGui.QVector3D(*pos))
+            
+            glPointSize(size / pxSize)
             glBegin( GL_POINTS )
             glColor4f(*color)  # x is blue
             #glNormal3f(size, 0, 0)

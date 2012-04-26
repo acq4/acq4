@@ -1,6 +1,8 @@
 from PyQt4 import QtCore, QtGui
 import lib.Manager
 import pyqtgraph as pg
+import pyqtgraph.opengl as gl
+
 import numpy as np
 import functions as fn
 import re
@@ -69,15 +71,32 @@ if 'events' not in locals():
     spl1.addWidget(spl2)
 
     pw2 = pg.PlotWidget(labels={'bottom': ('time', 's')})
+    spl2.addWidget(pw2)
+    
+    tab = QtGui.QTabWidget()
+    spl2.addWidget(tab)
+    
+    
+    ## For viewing cell morphology
     gv = pg.GraphicsView()
     gv.setBackgroundBrush(pg.mkBrush('w'))
     image = pg.ImageItem()
     gv.addItem(image)
     gv.enableMouse()
     gv.setAspectLocked(True)
-    spl2.addWidget(pw2)
-    spl2.addWidget(gv)
+    tab.addTab(gv, 'Morphology')
 
+    ## 3D atlas
+    import lib.analysis.atlas.CochlearNucleus as CN
+    atlas = CN.CNAtlasDisplayWidget()
+    atlas.showLabel('DCN')
+    atlas.showLabel('AVCN')
+    atlas.showLabel('PVCN')
+    tab.addTab(atlas, 'Atlas')
+    
+    atlasPoints = gl.GLScatterPlotItem()
+    atlas.addItem(atlasPoints)
+    
     win.show()
     win.resize(1000,800)
 
@@ -137,7 +156,7 @@ def loadCell(cell):
     print tot, "total events.."
     
     for ev in db.iterSelect(eventView, ['ProtocolSequenceDir', 'SourceFile', 'fitAmplitude', 'fitTime', 'fitDecayTau', 'fitRiseTau', 'fitLengthOverDecay', 'fitFractionalError', 'userTransform', 'type', 'CellDir', 'ProtocolDir'], where={'CellDir': cell}, toArray=True):
-        extra = np.empty(ev.shape, dtype=[('x', float), ('y', float), ('holding', float)])
+        extra = np.empty(ev.shape, dtype=[('right', float), ('anterior', float), ('dorsal', float), ('holding', float)])
         
         ## insert holding levels
         for i in range(len(ev)):
@@ -150,30 +169,42 @@ def loadCell(cell):
             
         ## insert positions
 
-        for i in range(len(ev)):
-            key = (ev[i]['ProtocolSequenceDir'], ev[i]['SourceFile'])
-            if key not in pcache:
-                try:
-                    dh = ev[i]['ProtocolDir']
-                    p1 = pg.Point(dh.info()['Scanner']['position'])
-                    if key[0] not in tcache:
-                        tr = pg.Transform()
-                        tr.restoreState(dh.parent().info()['userTransform'])
-                        tcache[key[0]] = tr
-                    trans = tcache[key[0]]
-                    p2 = trans.map(p1)
-                    pcache[key] = (p2.x(),p2.y())
-                except:
-                    print key
-                    raise
-            extra[i]['x'] = pcache[key][0]
-            extra[i]['y'] = pcache[key][1]
+        #for i in range(len(ev)):
+            #key = (ev[i]['ProtocolSequenceDir'], ev[i]['SourceFile'])
+            #if key not in pcache:
+                #try:
+                    #dh = ev[i]['ProtocolDir']
+                    #p1 = pg.Point(dh.info()['Scanner']['position'])
+                    #if key[0] not in tcache:
+                        #tr = pg.Transform()
+                        #tr.restoreState(dh.parent().info()['userTransform'])
+                        #tcache[key[0]] = tr
+                    #trans = tcache[key[0]]
+                    #p2 = trans.map(p1)
+                    #pcache[key] = (p2.x(),p2.y())
+                #except:
+                    #print key
+                    #raise
+            #extra[i]['x'] = pcache[key][0]
+            #extra[i]['y'] = pcache[key][1]
+        
+            
         ev = fn.concatenateColumns([ev, extra])
         allEvents.append(ev)
         nEv += len(ev)
         print "    Loaded %d / %d events" % (nEv, tot)
     ev = np.concatenate(allEvents)
     events[cell] = ev
+    
+    ## show cell in atlas
+    rec = db.select('CochlearNucleus_Cell', where={'CellDir': cell})
+    pts = []
+    if len(rec) > 0:
+        pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
+        pts = [{'pos': pos, 'size': 100e-6, 'color': (1.0, 1.0, 1.0, 0.8)}]
+        print pos
+    atlasPoints.setData(pts)
+    
     
     
 def init():
