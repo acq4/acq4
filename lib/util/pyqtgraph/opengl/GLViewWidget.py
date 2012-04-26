@@ -59,7 +59,7 @@ class GLViewWidget(QtOpenGL.QGLWidget):
         nearClip = dist * 0.001
         farClip = dist * 1000.
         
-        r = nearClip * np.tan(fov)
+        r = nearClip * np.tan(fov * 0.5 * np.pi / 180.)
         t = r * h / w
         glFrustum( -r, r, -t, t, nearClip, farClip)
         
@@ -131,16 +131,30 @@ class GLViewWidget(QtOpenGL.QGLWidget):
     def mouseMoveEvent(self, ev):
         diff = ev.pos() - self.mousePos
         self.mousePos = ev.pos()
-        self.opts['azimuth'] -= diff.x()
-        self.opts['elevation'] = np.clip(self.opts['elevation'] + diff.y(), -90, 90)
-        #print self.opts['azimuth'], self.opts['elevation']
+        
+        if ev.buttons() == QtCore.Qt.LeftButton:
+            self.opts['azimuth'] -= diff.x()
+            self.opts['elevation'] = np.clip(self.opts['elevation'] + diff.y(), -90, 90)
+            #print self.opts['azimuth'], self.opts['elevation']
+        elif ev.buttons() == QtCore.Qt.MidButton:
+            cPos = self.cameraPosition()
+            cVec = self.opts['center'] - cPos
+            dist = cVec.length()  ## distance from camera to center
+            xDist = dist * 2. * np.tan(0.5 * self.opts['fov'] * np.pi / 180.)  ## approx. width of view at distance of center point
+            xScale = xDist / self.width()
+            xVec = QtGui.QVector3D.crossProduct(cVec, QtGui.QVector3D(0,0,1)).normalized()
+            yVec = QtGui.QVector3D.crossProduct(xVec, QtGui.QVector3D(0,0,1)).normalized()
+            self.opts['center'] = self.opts['center'] + xVec * xScale * diff.x() + yVec * xScale * diff.y()
         self.updateGL()
         
     def mouseReleaseEvent(self, ev):
         pass
         
     def wheelEvent(self, ev):
-        self.opts['distance'] *= 0.999**ev.delta()
+        if (ev.modifiers() & QtCore.Qt.ControlModifier):
+            self.opts['fov'] *= 0.999**ev.delta()
+        else:
+            self.opts['distance'] *= 0.999**ev.delta()
         self.updateGL()
 
 
