@@ -95,10 +95,13 @@ class EventDetector(AnalysisModule):
         """Called by file loader when a file load is requested."""
         self.flowchart.setInput(dataIn=fh)
         self.currentFile = fh
+        #self.flowchart.nodes()['Plot_001'].redisplay()
         return True
 
     def process(self, fh):
-        return self.flowchart.process(dataIn=fh)
+        ret = self.flowchart.process(dataIn=fh)
+        print "Return:", ret.keys()
+        return ret
 
     def outputChanged(self):
         table = self.getElement('Output Table')

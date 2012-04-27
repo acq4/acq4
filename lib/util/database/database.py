@@ -138,7 +138,9 @@ class SqliteDatabase:
         ============== ================================================================
         **Arguments:**
         table          The name of the table from which to read data
-        columns        List of column names to read from table. The default is '*', which reads all columns
+        columns        (list or str) List of column names to read from table. The default is '*', which reads all columns
+                       If *columns* is given as a string, it is inserted verbatim into the SQL command.
+                       If *columns* is given as a list, it is converted to a string of comma-separated, quoted names.
         where          Optional dict of {column: value} pairs. only results where column=value will be returned
         distinct       (bool) If true, omit all redundant results
         limit          (int) Limit the number of results that may be returned (best used with offset argument)
@@ -150,15 +152,16 @@ class SqliteDatabase:
         """
         p = debug.Profiler("SqliteDatabase.select", disabled=True)
         if columns != '*':
-            if isinstance(columns, basestring):
-                columns = columns.split(',')
-            qf = []
-            for f in columns:
-                if f == '*':
-                    qf.append(f)
-                else:
-                    qf.append('"'+f+'"')
-            columns = ','.join(qf)
+            #if isinstance(columns, basestring):
+                #columns = columns.split(',')
+            if not isinstance(columns, basestring):
+                qf = []
+                for f in columns:
+                    if f == '*':
+                        qf.append(f)
+                    else:
+                        qf.append('"'+f+'"')
+                columns = ','.join(qf)
             #columns = quoteList(columns)
             
         whereStr = self._buildWhereClause(where, table)

@@ -272,7 +272,7 @@ class Photostim(AnalysisModule):
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
             print "clicked:", point.data
             plot = self.getElement("Data Plot")
-            #plot.clear()
+            plot.clear()
             self.selectedSpot = point
             self.selectedScan = plotItem.scan
             fh = self.dataModel.getClampFile(point.data)
@@ -329,7 +329,8 @@ class Photostim(AnalysisModule):
                 stats = scan.getStats(fh.parent())
                 statList.append(stats)
                 events = scan.getEvents(fh)['events']
-                evList.append(events)
+                if len(events) > 0:
+                    evList.append(events)
 
                 ## mark location of event if an event index was given
                 if len(points[i]) == 3:
@@ -350,16 +351,22 @@ class Photostim(AnalysisModule):
                     self.mapTicks.append(ticks)
             
             sTable.setData(statList)
-            try:
-                eTable.setData(np.concatenate(evList))
-            except:
-                for i in range(1,len(evList)):
-                    for j in range(len(evList[i].dtype)):
-                        if evList[i-1].dtype[j] != evList[i].dtype[j]:
-                            for l in evList:
-                                print l
-                            print "Warning: can not concatenate--field '%s' has inconsistent types %s, %s  (data printed above)" % (evList[i].dtype.names[j], str(evList[i-1].dtype[j]), str(evList[i].dtype[j]))
-                raise
+            if len(evList) > 0:
+                try:
+                    eTable.setData(np.concatenate(evList))
+                except:
+                    for i in range(1,len(evList)):
+                        if len(evList[i].dtype) != len(evList[i-1].dtype):
+                            print "Cannot concatenate; event lists have different dtypes:"
+                            print evList[i].dtype
+                            print evList[i-1].dtype
+                        else:
+                            for j in range(len(evList[i].dtype)):
+                                if evList[i-1].dtype[j] != evList[i].dtype[j]:
+                                    for l in evList:
+                                        print l
+                                    print "Warning: can not concatenate--field '%s' has inconsistent types %s, %s  (data printed above)" % (evList[i].dtype.names[j], str(evList[i-1].dtype[j]), str(evList[i].dtype[j]))
+                    raise
         finally:
             QtGui.QApplication.restoreOverrideCursor()
     
@@ -376,6 +383,9 @@ class Photostim(AnalysisModule):
         output = self.detector.flowchart.output()
         output['fileHandle']=self.selectedSpot.data
         self.flowchart.setInput(**output)
+        errs = output['events']['fitFractionalError']
+        if len(errs) > 0:
+            print "Detector events error mean / median / max:", errs.mean(), np.median(errs), errs.max()
 
     def analyzerStateChanged(self):
         #print "Analyzer state changed."
@@ -418,7 +428,9 @@ class Photostim(AnalysisModule):
 
     def processEvents(self, fh):
         print "Process Events:", fh
-        return self.detector.process(fh)
+        ret = self.detector.process(fh)
+        return ret
+        
 
     def processStats(self, data=None, spot=None):
         ## Process output of stats flowchart for a single spot, add spot position fields.
@@ -556,6 +568,11 @@ class Photostim(AnalysisModule):
             pos = spot.viewPos()
             db('UPDATE %s SET xPos=%f, yPos=%f WHERE ProtocolDir=%i' % (table, pos.x(), pos.y(), protocolID))
             
+            ## Should look like this:
+            # pos = spot.viewPos()
+            # db.update(table, {'xPos': pos.x(), 'yPos': pos.y()}, where={'ProtocolDir': spot.data})
+
+
     def clearDBScan(self, scan):
         dbui = self.getElement('Database')
         db = dbui.getDb()
@@ -580,6 +597,8 @@ class Photostim(AnalysisModule):
         #db.delete(table, "SourceDir=%d" % pRow)
             
         scan.unlock()
+        scan.forgetEvents()
+        
 
 
     def storeStats(self, data):

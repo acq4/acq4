@@ -120,9 +120,9 @@ class EventFitter(CtrlNode):
                     zcInd = np.argmin(zc['sum']) ## the largest event in this clip
                 zcEv = zc[zcInd]
                 #guessLen = dt*zc[zcInd]['len']
-                guessRise = dt*zcEv['len'] * 0.2
+                guessRise = .1e-3 #dt*zcEv['len'] * 0.2
                 guessDecay = dt*zcEv['len'] * 0.8 
-                guessStart = times[0] + dt*zcEv['index'] - guessRise
+                guessStart = times[0] + dt*zcEv['index'] - guessRise*3.
                 
                 ## cull down the data set if possible
                 cullLen = zcEv['index'] + zcEv['len']*3
@@ -155,8 +155,9 @@ class EventFitter(CtrlNode):
             
             computed = functions.pspFunc(fit, times)
             peakTime = functions.pspMaxTime(fit[2], fit[3])
-            err = abs(yVals - computed).sum()
-            fracError = err / abs(computed).sum()
+            diff = (yVals - computed)
+            err = (diff**2).sum()
+            fracError = diff.std() / computed.std()
             lengthOverDecay = (times[-1] - fit[1]) / fit[3]  # ratio of (length of data that was fit : decay constant)
             output[i-offset] = tuple(events[i]) + tuple(fit) + (peakTime, err, fracError, lengthOverDecay)
             #output['fitTime'] += output['time']
@@ -830,11 +831,18 @@ class RemoveDirect(CtrlNode):
         #if len(cross) == 0: ## must be a single large event
             #gotEvent = (0, len(data2)-stimInd)
         
+        fitParams = dict(
+            directFitAmp1=0., directFitAmp2=0., directFitTime=0., 
+            directFitRise=0., directFitDecay1=0., directFitDecay2=0.,
+            directFitPeakTime=0., directFitPeak=0., directFitSubtracted=False,
+            directFitValid=False,
+            )
+        
         # 3. if there is no large event near stimulus, return original data
         if gotEvent is None:
             if display:
                 self.plotItem.clear()
-            return {'output': data, 'fitParams': (0,0,0,0,0,0), 'plot': self.plotItem}
+            return {'output': data, 'fitParams': fitParams, 'plot': self.plotItem}
         
         #print "============"
         #print stimInd
@@ -877,10 +885,23 @@ class RemoveDirect(CtrlNode):
         if display:
             self.plotItem.setData(x=fitXData, y=y[stimInd:endInd], pen=self.ctrls['plotColor'].color())        
             
+        ## prepare list of fit params for output
+        (xMax, yMax) = functions.doublePspMax(fit)
+        xMax -= fit[2]  ## really interested in time-to-peak, not the exact peak time.
+        
+        fitParams = dict(
+            directFitAmp1=fit[0], directFitAmp2=fit[1], directFitTime=fit[2], 
+            directFitRise=fit[3], directFitDecay1=fit[4], directFitDecay2=fit[5],
+            directFitPeakTime=xMax, directFitPeak=yMax, directFitSubtracted=None, directFitValid=True,
+            )
+            
         if self.ctrls['subtractDirect'].isChecked():
             out = metaarray.MetaArray(data-y, info=data.infoCopy())
+            fitParams['directFitSubtracted'] = True
         else:
             out = data
+            fitParams['directFitSubtracted'] = False
             
-        return {'fitParams': fit, 'output': out, 'plot': self.plotItem}
+            
+        return {'fitParams': fitParams, 'output': out, 'plot': self.plotItem}
 
