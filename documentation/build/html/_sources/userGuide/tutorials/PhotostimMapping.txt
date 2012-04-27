@@ -1,2 +1,0 @@
-Record a Photostimulation Map
-=============================

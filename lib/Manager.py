@@ -959,6 +959,8 @@ class Task:
             self.abort()
             self.releaseAll()
             raise
+        finally:
+            prof.finish()
         
         
     def isDone(self):

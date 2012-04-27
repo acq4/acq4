@@ -42,7 +42,19 @@ class SqliteDatabase:
     regardless of the type specified by its column.
     """
     def __init__(self, fileName=':memory:'):
-        self.db = QtSql.QSqlDatabase.addDatabase("QSQLITE", os.path.abspath(fileName))
+        ## decide on an appropriate name for this connection.
+        ## For file connections, the name should always be the name of the file
+        ## to avoid opening more than one connection to the same file.
+        if fileName == ':memory:':
+            c = 0
+            while True:
+                self._connectionName = ':memory:%d' % c
+                if self._connectionName not in QtSql.QSqlDatabase.connectionNames():
+                    break
+                c += 1
+        else:
+            self._connectionName = os.path.abspath(fileName)
+        self.db = QtSql.QSqlDatabase.addDatabase("QSQLITE", self._connectionName)
         self.db.setDatabaseName(fileName)
         self.db.open()
         self.tables = {}
@@ -50,6 +62,10 @@ class SqliteDatabase:
         
     def close(self):
         self.db.close()
+        self.db = None
+        import gc
+        gc.collect()  ## try to convince python to clean up the db immediately so we can remove the connection
+        QtSql.QSqlDatabase.removeDatabase(self._connectionName)
 
     def exe(self, cmd, data=None, batch=False, toDict=True, toArray=False):
         """Execute an SQL query. If data is provided, it should be a list of dicts and each will 
@@ -109,16 +125,22 @@ class SqliteDatabase:
     def __call__(self, *args, **kargs):
         return self.exe(*args, **kargs)
             
-    def select(self, table, columns='*', where=None, sql='', toDict=True, toArray=False):
+    def select(self, table, columns='*', where=None, sql='', toDict=True, toArray=False, distinct=False, limit=None, offset=None):
         """
         Construct and execute a SELECT statement, returning the results.
-        Arguments:
-            table   - the name of the table from which to read data
-            columns - list of column names to read from table. The default is '*', which reads all columns
-            where   - optional dict of {column: value} pairs. only results where column=value will be returned
-            sql     - optional string to be appended to the SQL query
-            toDict  - If True, return a list-of-dicts (this is the default)
-            toArray - if True, return a numpy record array
+        
+        ============== ================================================================
+        **Arguments:**
+        table          The name of the table from which to read data
+        columns        List of column names to read from table. The default is '*', which reads all columns
+        where          Optional dict of {column: value} pairs. only results where column=value will be returned
+        distinct       (bool) If true, omit all redundant results
+        limit          (int) Limit the number of results that may be returned (best used with offset argument)
+        offset         (int) Omit a certain number of results from the beginning of the list
+        sql            Optional string to be appended to the SQL query (will be inserted before limit/offset arguments)
+        toDict         If True, return a list-of-dicts (this is the default)
+        toArray        if True, return a numpy record array
+        ============== ================================================================
         """
         p = debug.Profiler("SqliteDatabase.select", disabled=True)
         if columns != '*':
@@ -134,24 +156,70 @@ class SqliteDatabase:
             #columns = quoteList(columns)
             
         whereStr = self._buildWhereClause(where, table)
-            
-        cmd = "SELECT %s FROM %s %s %s" % (columns, table, whereStr, sql)
+        distinct = "distinct" if (distinct is True) else ""
+        limit = ("limit %d" % limit) if (limit is not None) else ""
+        offset = ("offset %d" % offset) if (offset is not None) else ""
+        
+        cmd = "SELECT %s %s FROM %s %s %s %s %s" % (distinct, columns, table, whereStr, sql, limit, offset)
         p.mark("generated command")
         q = self.exe(cmd, toDict=toDict, toArray=toArray)
         p.finish("Execution finished.")
         return q
         
+    def iterSelect(self, *args, **kargs):
+        """
+        Return a generator that iterates through the results of a select query using limit/offset arguments.
+        This is useful for select queries that would otherwise return a very large list of results.
+        
+        All arguments are passed through to select(). By default, limit=1000 and offset=0.
+        Note that if you specify limit or offset, they MUST be given as keyword arguments.
+        """
+        if 'offset' not in kargs:
+            kargs['offset'] = 0
+        if 'limit' not in kargs:
+            kargs['limit'] = 1000
+            
+        while True:
+            res = self.select(*args, **kargs)
+            yield res
+            if len(res) == 0:
+                break
+            kargs['offset'] += kargs['limit']
+        
+        
+        
     def insert(self, table, records=None, replaceOnConflict=False, ignoreExtraColumns=False, addExtraColumns=False, **args):
         """Insert records (a dict or list of dicts) into table.
         If records is None, a single record may be specified via keyword arguments.
         
-        Arguments:
-            ignoreExtraColumns:  If True, ignore any extra columns in the data that do not exist in the table
-            addExtraColumns:   If True, add any columns that exist in the data but do not yet exist in the table
+        ====================  =======================================
+        **Arguments:**
+        table                 Name of the table to insert into
+        records               Data to insert. May be a variety of formats: numpy record array, list of dicts,
+                              dict of lists, dict of values (single record)
+        replaceOnConflict     If True, inserts which conflict with pre-existing data will overwrite the
+                              pre-existing data. This occurs, for example, when a column has a 'unique' 
+                              constraint.
+        ignoreExtraColumns    If True, ignore any extra columns in the data that do not exist in the table
+        addExtraColumns       If True, add any columns that exist in the data but do not yet exist in the table
                               (NOT IMPLEMENTED YET)
+        ====================  =======================================
         """
+        for n,nmax in self.iterInsert(table=table, records=records, replaceOnConflict=replaceOnConflict, ignoreExtraColumns=ignoreExtraColumns, addExtraColumns=addExtraColumns, chunkAll=True, **args):
+            pass
         
-        ## can we optimize this by using batch execution?
+        
+    def iterInsert(self, table, records=None, replaceOnConflict=False, ignoreExtraColumns=False, addExtraColumns=False, chunkSize=500, chunkAll=False, **args):
+        """
+        Iteratively insert chunks of data into a table while yielding a tuple (n, max)
+        indicating progress. This *must* be used inside a for loop::
+        
+            for n,nmax in db.iterInsert(table, data):
+                print "Insert %d%% complete" % (100. * n / nmax)
+        
+        Use the chunkSize argument to determine how many records are inserted at per iteration.
+        See insert() for a description of all other options.
+        """
         
         p = debug.Profiler("SqliteDatabase.insert", disabled=True)
         if records is None:
@@ -163,7 +231,7 @@ class SqliteDatabase:
         ret = []
         
         ## Rememember that _prepareData may change the number of columns!
-        records = self._prepareData(table, records, removeUnknownColumns=ignoreExtraColumns, batch=True)
+        records = TableData(self._prepareData(table, records, removeUnknownColumns=ignoreExtraColumns, batch=True))
         p.mark("prepared data")
         
         columns = records.keys()
@@ -172,9 +240,24 @@ class SqliteDatabase:
             insert += " OR REPLACE"
         #print "Insert:", columns
         cmd = "%s INTO %s (%s) VALUES (%s)" % (insert, table, quoteList(columns), ','.join([':'+f for f in columns]))
+
+        numRecs = len(records)
+        if chunkAll: ## insert all records in one go.
+            self.exe(cmd, records, batch=True)
+            yield (numRecs, numRecs)
+            return
+            
         
-        #print len(columns), len(records[0]), len(self.tableSchema(table))
-        self.exe(cmd, records, batch=True)
+        chunkSize = int(chunkSize) ## just make sure
+        offset = 0
+        i = 0
+        while offset < len(records)-1:
+            #print len(columns), len(records[0]), len(self.tableSchema(table))
+            chunk = records[offset:offset+chunkSize]
+            self.exe(cmd, chunk, batch=True)
+            offset += len(chunk)
+            yield (offset, numRecs)
+            
         p.finish("Executed.")
 
     def delete(self, table, where):
@@ -285,7 +368,7 @@ class SqliteDatabase:
         ## converters may be a dict of {'columnName': function} 
         ## that overrides the default conversion funcitons.
         
-        ## Returns a TableData object
+        ## Returns a dict-of-lists if batch=True, otherwise list-of-dicts
         
         
         data = TableData(data)
@@ -492,6 +575,8 @@ class TableData:
             return collections.OrderedDict([(k, self.data[k][arg]) for k in self.columnNames()])
         elif isinstance(arg, tuple):
             return self.data[arg[0]][arg[1]]
+        elif isinstance(arg, slice):
+            return TableData(self.data[arg])
         else:
             raise Exception("Cannot index TableData with object '%s' (type='%s')" % (str(arg), type(arg)))
             
@@ -503,6 +588,8 @@ class TableData:
         elif isinstance(arg, tuple):
             arg = self._orderArgs(arg)
             return self.data[arg[0]][arg[1]]
+        elif isinstance(arg, slice):
+            return TableData(self.data[arg])
         else:
             raise Exception("Cannot index TableData with object '%s' (type='%s')" % (str(arg), type(arg)))
         
@@ -514,6 +601,8 @@ class TableData:
         elif isinstance(arg, tuple):
             arg = self._orderArgs(arg)
             return self.data[arg[1]][arg[0]]
+        elif isinstance(arg, slice):
+            return TableData(collections.OrderedDict([(k, v[arg]) for k, v in self.data.iteritems()]))
         else:
             raise Exception("Cannot index TableData with object '%s' (type='%s')" % (str(arg), type(arg)))
 

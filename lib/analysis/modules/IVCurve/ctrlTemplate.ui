@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>179</width>
+    <width>281</width>
     <height>292</height>
    </rect>
   </property>
@@ -441,6 +441,19 @@
         </property>
         <property name="text">
          <string>Adapt Ratio</string>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="3">
+       <widget class="QPushButton" name="IVCurve_PrintResults">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="text">
+         <string>Print Results</string>
         </property>
        </widget>
       </item>

@@ -1,4 +1,0 @@
-.. _userDevices:
-
-Devices
-=======
