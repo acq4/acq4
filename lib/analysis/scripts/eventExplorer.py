@@ -149,7 +149,7 @@ def loadCell(cell):
     allEvents = []
     hvals = {}
     nEv = 0
-    pcache = {}
+    positionCache = {}
     tcache = {}
     print "Loading all events for cell", cell
     tot = db.select(eventView, 'count()', where={'CellDir': cell})[0]['count()']
@@ -169,9 +169,11 @@ def loadCell(cell):
             
         ## insert positions
 
-        #for i in range(len(ev)):
+        for i in range(len(ev)):
+            protoDir = ev['SourceFile'].parentDir()
+            key = protoDir
             #key = (ev[i]['ProtocolSequenceDir'], ev[i]['SourceFile'])
-            #if key not in pcache:
+            if key not in positionCache:
                 #try:
                     #dh = ev[i]['ProtocolDir']
                     #p1 = pg.Point(dh.info()['Scanner']['position'])
@@ -185,8 +187,17 @@ def loadCell(cell):
                 #except:
                     #print key
                     #raise
-            #extra[i]['x'] = pcache[key][0]
-            #extra[i]['y'] = pcache[key][1]
+                rec = db.select('CochlearNucleus_Protocol', where={'ProtocolDir': protoDir})
+                if len(rec) == 0:
+                    pos = (None, None, None)
+                elif len(rec) == 1:
+                    pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
+                elif len(rec) == 2:
+                    raise Exception("Multiple position records for %s!" % str(protoDir))
+                positionCache[key] = pos
+            extra[i]['right'] = positionCache[key][0]
+            extra[i]['anterior'] = positionCache[key][1]
+            extra[i]['dorsal'] = positionCache[key][2]
         
             
         ev = fn.concatenateColumns([ev, extra])
@@ -203,6 +214,13 @@ def loadCell(cell):
         pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
         pts = [{'pos': pos, 'size': 100e-6, 'color': (1.0, 1.0, 1.0, 0.8)}]
         print pos
+    ## show event positions
+    evSpots = {}
+    for pos in extra:
+        p = (pos['right'], pos['anterior'], pos['dorsal'])
+        evSpots[p] = None
+    for pos in evSpots:
+        pts.append({'pos': pos, 'size': 90e-6, 'color': ((1.0, 1.0, 1.0, 0.5))})
     atlasPoints.setData(pts)
     
     

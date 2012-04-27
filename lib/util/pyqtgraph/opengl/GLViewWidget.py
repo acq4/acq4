@@ -76,7 +76,7 @@ class GLViewWidget(QtOpenGL.QGLWidget):
         glRotatef(self.opts['elevation']-90, 1, 0, 0)
         glRotatef(self.opts['azimuth']+90, 0, 0, -1)
         center = self.opts['center']
-        glTranslatef(center.x(), center.y(), center.z())
+        glTranslatef(-center.x(), -center.y(), -center.z())
         
         
     def paintGL(self):
@@ -167,7 +167,7 @@ class GLViewWidget(QtOpenGL.QGLWidget):
             xDist = dist * 2. * np.tan(0.5 * self.opts['fov'] * np.pi / 180.)  ## approx. width of view at distance of center point
             xScale = xDist / self.width()
             zVec = QtGui.QVector3D(0,0,1)
-            xVec = QtGui.QVector3D.crossProduct(cVec, zVec).normalized()
+            xVec = QtGui.QVector3D.crossProduct(zVec, cVec).normalized()
             yVec = QtGui.QVector3D.crossProduct(xVec, zVec).normalized()
             self.opts['center'] = self.opts['center'] + xVec * xScale * dx + yVec * xScale * dy + zVec * xScale * dz
         self.updateGL()
