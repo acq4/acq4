@@ -15,6 +15,7 @@ from DBCtrl import DBCtrl
 from ScatterPlotter import ScatterPlotter
 from Canvas import items
 import Canvas
+import functions as fn
 
 class Photostim(AnalysisModule):
     """
@@ -323,6 +324,7 @@ class Photostim(AnalysisModule):
                 
                 ## plot all data, incl. events
                 data = fh.read()['primary']
+                data = fn.besselFilter(data, 10e3)
                 pc = plot.plot(data, pen=color, clear=False)
                 
                 ## show stats

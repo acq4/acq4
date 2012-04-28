@@ -170,7 +170,7 @@ def loadCell(cell):
         ## insert positions
 
         for i in range(len(ev)):
-            protoDir = ev['SourceFile'].parentDir()
+            protoDir = ev[i]['SourceFile'].parent()
             key = protoDir
             #key = (ev[i]['ProtocolSequenceDir'], ev[i]['SourceFile'])
             if key not in positionCache:
@@ -207,21 +207,6 @@ def loadCell(cell):
     ev = np.concatenate(allEvents)
     events[cell] = ev
     
-    ## show cell in atlas
-    rec = db.select('CochlearNucleus_Cell', where={'CellDir': cell})
-    pts = []
-    if len(rec) > 0:
-        pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
-        pts = [{'pos': pos, 'size': 100e-6, 'color': (1.0, 1.0, 1.0, 0.8)}]
-        print pos
-    ## show event positions
-    evSpots = {}
-    for pos in extra:
-        p = (pos['right'], pos['anterior'], pos['dorsal'])
-        evSpots[p] = None
-    for pos in evSpots:
-        pts.append({'pos': pos, 'size': 90e-6, 'color': ((1.0, 1.0, 1.0, 0.5))})
-    atlasPoints.setData(pts)
     
     
     
@@ -247,6 +232,7 @@ def plotClicked(plt, pts):
     time = pt.data['fitTime']
     
     data = fh.read()['Channel':'primary']
+    data = fn.besselFilter(data, 8e3)
     p = pw2.plot(data, clear=True)
     pos = time / data.xvals('Time')[-1]
     arrow = pg.CurveArrow(p, pos=pos)
@@ -316,12 +302,12 @@ def showCell():
         ev3post = ev3[(ev3['fitTime']>start) * (ev3['fitTime']<stop)]
         ev4 = np.concatenate([ev2post, ev3post])
         
-        yMax = ev4['y'].max()
-        yMin = ev4['y'].min()
+        yMax = ev4['dorsal'].max()
+        yMin = ev4['dorsal'].min()
         
         pts = []
         for i in range(len(ev4)):
-            hue = 0.6*((ev4[i]['y']-yMin) / (yMax-yMin))
+            hue = 0.6*((ev4[i]['dorsal']-yMin) / (yMax-yMin))
             pts.append({
                 'pos': (ev4[i]['fitDecayTau'], ev4[i]['fitAmplitude']),
                 'brush': pg.hsvColor(hue, 1, 1, 0.3),
@@ -383,6 +369,24 @@ def showCell():
     
     pw1.setTitle(title)
 
+    
+    ## show cell in atlas
+    rec = db.select('CochlearNucleus_Cell', where={'CellDir': cell})
+    pts = []
+    if len(rec) > 0:
+        pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
+        pts = [{'pos': pos, 'size': 100e-6, 'color': (0.7, 0.7, 1.0, 1.0)}]
+        print pos
+    ## show event positions
+    evSpots = {}
+    for rec in ev:
+        p = (rec['right'], rec['anterior'], rec['dorsal'])
+        evSpots[p] = None
+    for pos in evSpots:
+        pts.append({'pos': pos, 'size': 90e-6, 'color': ((1.0, 1.0, 1.0, 0.5))})
+    atlasPoints.setData(pts)
+    
+    
 def spontRate(ev):
     ev = ev[ev['fitTime'] < preRgnStop()]
     count = {}
@@ -401,6 +405,6 @@ def postRgnStart():
     return postRgnStartSpin.value() + 0.002
     
 def postRgnStop():
-    return postRgnStartSpin.value()
+    return postRgnStopSpin.value()
     
 init()

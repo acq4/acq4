@@ -37,12 +37,12 @@ class GLViewWidget(QtOpenGL.QGLWidget):
             item.initializeGL()
         item._setView(self)
         #print "set view", item, self, item.view()
-        self.updateGL()
+        self.update()
         
     def removeItem(self, item):
         self.items.remove(item)
         item._setView(None)
-        self.updateGL()
+        self.update()
         
         
     def initializeGL(self):
@@ -51,7 +51,7 @@ class GLViewWidget(QtOpenGL.QGLWidget):
         
     def resizeGL(self, w, h):
         glViewport(0, 0, w, h)
-        #self.updateGL()
+        #self.update()
 
     def setProjection(self):
         ## Create the projection matrix
@@ -131,25 +131,15 @@ class GLViewWidget(QtOpenGL.QGLWidget):
         
         return pos
 
-    def pixelSize(self, pos):
-        """
-        Return the approximate size of a screen pixel at the location pos
-        
-        """
-        cam = self.cameraPosition()
-        dist = (pos-cam).length()
-        xDist = dist * 2. * np.tan(0.5 * self.opts['fov'] * np.pi / 180.)
-        return xDist / self.width()
-        
     def orbit(self, azim, elev):
         """Orbits the camera around the center position. *azim* and *elev* are given in degrees."""
         self.opts['azimuth'] += azim
         self.opts['elevation'] = np.clip(self.opts['elevation'] + elev, -90, 90)
-        self.updateGL()
+        self.update()
         
     def pan(self, dx, dy, dz, relative=False):
         """
-        Moves the center position while holding the camera in place. 
+        Moves the center (look-at) position while holding the camera in place. 
         
         If relative=True, then the coordinates are interpreted such that x
         if in the global xy plane and points to the right side of the view, y is
@@ -170,7 +160,17 @@ class GLViewWidget(QtOpenGL.QGLWidget):
             xVec = QtGui.QVector3D.crossProduct(zVec, cVec).normalized()
             yVec = QtGui.QVector3D.crossProduct(xVec, zVec).normalized()
             self.opts['center'] = self.opts['center'] + xVec * xScale * dx + yVec * xScale * dy + zVec * xScale * dz
-        self.updateGL()
+        self.update()
+        
+    def pixelSize(self, pos):
+        """
+        Return the approximate size of a screen pixel at the location pos
+        
+        """
+        cam = self.cameraPosition()
+        dist = (pos-cam).length()
+        xDist = dist * 2. * np.tan(0.5 * self.opts['fov'] * np.pi / 180.)
+        return xDist / self.width()
         
     def mousePressEvent(self, ev):
         self.mousePos = ev.pos()
@@ -196,7 +196,7 @@ class GLViewWidget(QtOpenGL.QGLWidget):
             self.opts['fov'] *= 0.999**ev.delta()
         else:
             self.opts['distance'] *= 0.999**ev.delta()
-        self.updateGL()
+        self.update()
 
     def keyPressEvent(self, ev):
         if ev.key() in self.noRepeatKeys:

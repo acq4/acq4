@@ -16,6 +16,8 @@ class EventFitter(CtrlNode):
     Plots fits of reconstructed events if the plot output is connected."""
     nodeName = "EventFitter"
     uiTemplate = [
+        
+        ('multiFit', 'check', {'value': False}),
         ('plotFits', 'check', {'value': True}),
         ('plotGuess', 'check', {'value': False}),
         ('plotEvents', 'check', {'value': False}),
@@ -151,7 +153,7 @@ class EventFitter(CtrlNode):
             ]
             yVals = eventData.view(np.ndarray)
             
-            fit = functions.fitPsp(times, yVals, guess=guess, bounds=bounds)
+            fit = functions.fitPsp(times, yVals, guess=guess, bounds=bounds, multiFit=self.ctrls['multiFit'].isChecked())
             
             computed = functions.pspFunc(fit, times)
             peakTime = functions.pspMaxTime(fit[2], fit[3])
