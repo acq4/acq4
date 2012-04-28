@@ -107,7 +107,8 @@ class FileAnalysisView(QtGui.QWidget):
         fileName = str(fileName)
         if fileName is '':
             return
-        self.ui.databaseText.setText(fileName)
+        self.ui.databaseCombo.addItem(fileName)
+        self.ui.databaseCombo.setCurrentIndex(self.ui.databaseCombo.count())
         self.dbFile = fileName
         self.db = database.AnalysisDatabase(self.dbFile, dataModel=self.currentModel, baseDir=self.man.getBaseDir())
         self.sigDbChanged.emit()
