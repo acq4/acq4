@@ -372,7 +372,13 @@ class ScatterPlotItem(GraphicsObject):
         self.sigPlotChanged.emit(self)
     
     
-    def generateSpots(self):
+    def generateSpots(self, clear=True):
+        if clear:
+            for spot in self.spots:
+                self.scene().removeItem(spot)
+            self.spots = []
+        
+        
         xmn = ymn = xmx = ymx = None
         
         ## apply defaults

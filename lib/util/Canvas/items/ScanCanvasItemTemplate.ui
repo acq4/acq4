@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>242</width>
-    <height>149</height>
+    <height>159</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -63,7 +63,7 @@
      </property>
     </widget>
    </item>
-   <item row="4" column="0" colspan="3">
+   <item row="6" column="0" colspan="3">
     <widget class="QPushButton" name="loadSpotImagesBtn">
      <property name="toolTip">
       <string>Generates a single frame which combines the photostimulation spot images from each scan point. </string>
@@ -73,21 +73,21 @@
      </property>
     </widget>
    </item>
-   <item row="5" column="0">
+   <item row="7" column="0">
     <widget class="QLabel" name="label">
      <property name="text">
       <string>Spot Frame Number</string>
      </property>
     </widget>
    </item>
-   <item row="5" column="1" colspan="2">
+   <item row="7" column="1" colspan="2">
     <widget class="QSpinBox" name="spotFrameSpin">
      <property name="value">
       <number>1</number>
      </property>
     </widget>
    </item>
-   <item row="6" column="0">
+   <item row="8" column="0">
     <widget class="QCheckBox" name="bgFrameCheck">
      <property name="text">
       <string>Background Frame</string>
@@ -97,13 +97,34 @@
      </property>
     </widget>
    </item>
-   <item row="6" column="1" colspan="2">
+   <item row="8" column="1" colspan="2">
     <widget class="QSpinBox" name="bgFrameSpin"/>
    </item>
-   <item row="3" column="0" colspan="3">
+   <item row="5" column="0" colspan="3">
     <widget class="Line" name="line">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="0" colspan="3">
+    <widget class="Line" name="line_2">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="0">
+    <widget class="QLabel" name="label_2">
+     <property name="text">
+      <string>Outline Color</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="1" colspan="2">
+    <widget class="ColorButton" name="outlineColorBtn">
+     <property name="text">
+      <string/>
      </property>
     </widget>
    </item>
@@ -113,6 +134,11 @@
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
+   <header>pyqtgraph</header>
+  </customwidget>
+  <customwidget>
+   <class>ColorButton</class>
+   <extends>QPushButton</extends>
    <header>pyqtgraph</header>
   </customwidget>
  </customwidgets>

@@ -244,7 +244,8 @@ def plotClicked(plt, pts):
     fitLen = pt.data['fitDecayTau']*pt.data['fitLengthOverDecay']
     x = np.linspace(time, time+fitLen, fitLen * 50e3)
     v = [pt.data['fitAmplitude'], pt.data['fitTime'], pt.data['fitRiseTau'], pt.data['fitDecayTau']]
-    y = fn.pspFunc(v, x, risePower=1.0) + data[np.argwhere(data.xvals('Time')>time)[0]-1]
+    print "Event fit params:", v
+    y = fn.pspFunc(v, x, risePower=2.0) + data[np.argwhere(data.xvals('Time')>time)[0]-1]
     pw2.plot(x, y, pen='b')
     #plot.addItem(arrow)
 
@@ -304,16 +305,17 @@ def showCell():
         
         yMax = ev4['dorsal'].max()
         yMin = ev4['dorsal'].min()
-        
-        pts = []
+        brushes = []
         for i in range(len(ev4)):
             hue = 0.6*((ev4[i]['dorsal']-yMin) / (yMax-yMin))
-            pts.append({
-                'pos': (ev4[i]['fitDecayTau'], ev4[i]['fitAmplitude']),
-                'brush': pg.hsvColor(hue, 1, 1, 0.3),
-                'data': ev4[i]
-            })
-        sp4.setData(pts)
+            brushes.append(pg.hsvColor(hue, 1.0, 1.0, 0.3))
+            #pts.append({
+                #'pos': (ev4[i]['fitDecayTau'], ev4[i]['fitAmplitude']),
+                #'brush': pg.hsvColor(hue, 1, 1, 0.3),
+                #'data': ev4[i]
+            #})
+            
+        sp4.setData(x=ev4['fitDecayTau'], y=ev4['fitAmplitude'], symbolBrush=brushes, data=ev4)
         
     else:
         sp1.show()
