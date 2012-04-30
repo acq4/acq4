@@ -16,6 +16,8 @@ class EventFitter(CtrlNode):
     Plots fits of reconstructed events if the plot output is connected."""
     nodeName = "EventFitter"
     uiTemplate = [
+        
+        ('multiFit', 'check', {'value': False}),
         ('plotFits', 'check', {'value': True}),
         ('plotGuess', 'check', {'value': False}),
         ('plotEvents', 'check', {'value': False}),
@@ -120,9 +122,9 @@ class EventFitter(CtrlNode):
                     zcInd = np.argmin(zc['sum']) ## the largest event in this clip
                 zcEv = zc[zcInd]
                 #guessLen = dt*zc[zcInd]['len']
-                guessRise = dt*zcEv['len'] * 0.2
+                guessRise = .1e-3 #dt*zcEv['len'] * 0.2
                 guessDecay = dt*zcEv['len'] * 0.8 
-                guessStart = times[0] + dt*zcEv['index'] - guessRise
+                guessStart = times[0] + dt*zcEv['index'] - guessRise*3.
                 
                 ## cull down the data set if possible
                 cullLen = zcEv['index'] + zcEv['len']*3
@@ -151,12 +153,13 @@ class EventFitter(CtrlNode):
             ]
             yVals = eventData.view(np.ndarray)
             
-            fit = functions.fitPsp(times, yVals, guess=guess, bounds=bounds)
+            fit = functions.fitPsp(times, yVals, guess=guess, bounds=bounds, multiFit=self.ctrls['multiFit'].isChecked())
             
             computed = functions.pspFunc(fit, times)
             peakTime = functions.pspMaxTime(fit[2], fit[3])
-            err = abs(yVals - computed).sum()
-            fracError = err / abs(computed).sum()
+            diff = (yVals - computed)
+            err = (diff**2).sum()
+            fracError = diff.std() / computed.std()
             lengthOverDecay = (times[-1] - fit[1]) / fit[3]  # ratio of (length of data that was fit : decay constant)
             output[i-offset] = tuple(events[i]) + tuple(fit) + (peakTime, err, fracError, lengthOverDecay)
             #output['fitTime'] += output['time']
@@ -686,3 +689,221 @@ class CellHealthAnalyzer(CtrlNode):
         #CtrlNode.restoreState(self, state)
         #self.defaultState = state
         #self.ui.restoreState(state['ui'])
+        
+        
+class PSPFitter(CtrlNode):
+    """Fit data to a PSP template"""
+    nodeName = "PSPFitter"
+    uiTemplate = [
+        #('prePadding', 'spin', {'value': 0, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
+        #('postPadding', 'spin', {'value': 0.1, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
+        ('computeWaveform', 'check', {'value': True}),
+        ('risePower', 'spin', {'min': 0, 'max': 10}),
+        ('guessAmp1', 'spin', {'min': None, 'max': None}),
+        ('guessAmp2', 'spin', {'min': None, 'max': None}),
+        ('guessTime', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('guessRise', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('guessDecay', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('guessDecay2', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('minAmp1', 'spin', {'min': None, 'max': None}),
+        ('maxAmp1', 'spin', {'min': None, 'max': None}),
+        ('minAmp2', 'spin', {'min': None, 'max': None}),
+        ('maxAmp2', 'spin', {'min': None, 'max': None}),
+        ('minTime', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('maxTime', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('minRise', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('maxRise', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('minDecay', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('maxDecay', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('minDecay2', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('maxDecay2', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+    ]
+    
+    def __init__(self, name):
+        CtrlNode.__init__(self, name, terminals={
+            'data': {'io': 'in'},
+            'fitParams': {'io': 'out'},
+            'fitXData': {'io': 'out'},
+            'fitYData': {'io': 'out'},
+        })
+    
+    def process(self, data, display=True):
+        params = ['Amp1', 'Amp2', 'Time', 'Rise', 'Decay', 'Decay2']
+        guess = tuple([self.ctrls['guess' + name].value() for name in params])
+        bounds = [(self.ctrls['min' + name].value(), self.ctrls['max' + name].value()) for name in params]
+        rp = self.ctrls['risePower'].value()
+        
+        minTime = self.ctrls['minTime'].value()
+        times = data.xvals('Time')
+        fullTimes = times
+        data = data.view(np.ndarray)
+        
+        startInd = np.argwhere(times>=minTime)[0]
+        
+        times = times[startInd:]
+        data = data[startInd:]
+        
+        ## Ignore specified guess amplitude; make a better guess.
+        mx = data.max()
+        mn = data.min()
+        if abs(mn) > abs(mx):
+            amp = mn
+        else:
+            amp = mx
+        params[0] = amp
+        params[1] = amp
+        
+        
+        
+        fit = functions.fitDoublePsp(x=times, y=data, guess=guess, bounds=bounds, risePower=rp)
+        
+        if self.ctrls['computeWaveform'].isChecked():
+            fitData = functions.doublePspFunc(fit, fullTimes, rp)
+        else:
+            fitData = None
+        return {'fitParams': fit, 'fitYData': fitData, 'fitXData': fullTimes}
+
+
+
+class RemoveDirect(CtrlNode):
+    """Remove direct stimulation from trace and report fit parameters."""
+    nodeName = "RemoveDirect"
+    uiTemplate = [
+        #('prePadding', 'spin', {'value': 0, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
+        #('postPadding', 'spin', {'value': 0.1, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
+        ('stimulusTime', 'spin', {'min': 0, 'max': None, 'value': 0.5, 'siPrefix': True, 'suffix': 's'}),
+        ('subtractDirect', 'check', {'value': True}),
+        ('risePower', 'spin', {'min': 0, 'max': 10, 'value': 2.0}),
+        ('plotColor', 'color'),
+        ('minDirectDuration', 'spin', {'min': 0, 'max': None, 'value': 0.01, 'siPrefix': True, 'suffix': 's'}),
+        #('guessTime', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('guessRise', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('guessDecay', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('guessDecay2', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('minAmp1', 'spin', {'min': None, 'max': None}),
+        #('maxAmp1', 'spin', {'min': None, 'max': None}),
+        #('minAmp2', 'spin', {'min': None, 'max': None}),
+        #('maxAmp2', 'spin', {'min': None, 'max': None}),
+        #('minTime', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('maxTime', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('minRise', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('maxRise', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('minDecay', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('maxDecay', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('minDecay2', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('maxDecay2', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+    ]
+    
+    def __init__(self, name):
+        CtrlNode.__init__(self, name, terminals={
+            'data': {'io': 'in'},
+            'fitParams': {'io': 'out'},
+            'output': {'io': 'out', 'bypass': 'data'},
+            'plot': {'io': 'out'},
+        })
+        self.plotItem = pg.PlotDataItem()
+    
+    def process(self, data, display=True):
+        
+        rp = self.ctrls['risePower'].value()
+        stimTime = self.ctrls['stimulusTime'].value()
+        times = data.xvals('Time')
+        dt = times[1] - times[0]
+        data1 = data.view(np.ndarray)
+        if stimTime > times[-1]:
+            raise Exception("stimulusTime is larger than length of input data.")
+        stimInd = np.argwhere(times>=stimTime)[0][0]
+        
+        # 1. make sure offset is removed
+        offset = np.median(data1[:stimInd])
+        data2 = data1 - offset
+        
+        # 2. check for zero-crossing events within 4ms after stimulus
+        cross = functions.zeroCrossingEvents(data2[stimInd:])
+        maxInd = 4e-3 / dt
+        minLength = self.ctrls['minDirectDuration'].value() / dt
+        gotEvent = None
+        for start, length, sum, peak in cross:
+            if start > maxInd:
+                break
+            if length < minLength:
+                continue
+            if gotEvent is None or length > gotEvent[1]:
+                gotEvent = (start+stimInd, length)
+        #if len(cross) == 0: ## must be a single large event
+            #gotEvent = (0, len(data2)-stimInd)
+        
+        fitParams = dict(
+            directFitAmp1=0., directFitAmp2=0., directFitTime=0., 
+            directFitRise=0., directFitDecay1=0., directFitDecay2=0.,
+            directFitPeakTime=0., directFitPeak=0., directFitSubtracted=False,
+            directFitValid=False,
+            )
+        
+        # 3. if there is no large event near stimulus, return original data
+        if gotEvent is None:
+            if display:
+                self.plotItem.clear()
+            return {'output': data, 'fitParams': fitParams, 'plot': self.plotItem}
+        
+        #print "============"
+        #print stimInd
+        #print gotEvent
+        #print cross[:20]
+        
+        # 4. guess amplitude, tau from detected event
+        evStart = gotEvent[0]
+        evEnd = evStart + gotEvent[1]
+        evRgn = data2[evStart:evEnd]
+        #pg.plot(evRgn)
+        mx = evRgn.max()
+        mn = evRgn.min()
+        ampGuess = mx if abs(mx) > abs(mn) else mn
+        tauGuess = gotEvent[1] * dt
+        if ampGuess < 0:
+            ampBound = [None, 0]
+        else:
+            ampBound = [0, None]
+        
+        # 5. fit
+        guess = [ampGuess*2, ampGuess*2, stimTime, 1e-3, tauGuess*0.5, tauGuess*2]
+        bounds = [
+            ampBound, ampBound,
+            [stimTime, stimTime+4e-3],
+            [1e-4, 100e-3],
+            [1e-3, 1],
+            [5e-3, 10],
+        ]
+        #print guess
+        #print bounds
+        endInd = evStart + gotEvent[1] * 10
+        fitYData = data2[stimInd:endInd]
+        fitXData = times[stimInd:endInd]
+        fit = functions.fitDoublePsp(x=fitXData, y=fitYData, guess=guess, bounds=bounds, risePower=rp)
+        
+        # 6. subtract fit from original data (offset included), return
+        y = functions.doublePspFunc(fit, times, rp)
+        
+        if display:
+            self.plotItem.setData(x=fitXData, y=y[stimInd:endInd], pen=self.ctrls['plotColor'].color())        
+            
+        ## prepare list of fit params for output
+        (xMax, yMax) = functions.doublePspMax(fit)
+        xMax -= fit[2]  ## really interested in time-to-peak, not the exact peak time.
+        
+        fitParams = dict(
+            directFitAmp1=fit[0], directFitAmp2=fit[1], directFitTime=fit[2], 
+            directFitRise=fit[3], directFitDecay1=fit[4], directFitDecay2=fit[5],
+            directFitPeakTime=xMax, directFitPeak=yMax, directFitSubtracted=None, directFitValid=True,
+            )
+            
+        if self.ctrls['subtractDirect'].isChecked():
+            out = metaarray.MetaArray(data-y, info=data.infoCopy())
+            fitParams['directFitSubtracted'] = True
+        else:
+            out = data
+            fitParams['directFitSubtracted'] = False
+            
+            
+        return {'fitParams': fitParams, 'output': out, 'plot': self.plotItem}
+

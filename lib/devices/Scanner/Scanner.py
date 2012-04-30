@@ -24,6 +24,7 @@ class Scanner(Device):
         self.targetList = [1.0, {}]  ## stores the grids and points used by ProtocolGui so that they persist
         self._configDir = os.path.join('devices', self.name + '_config')
         self.currentCommand = [0,0] ## The last requested voltage values (but not necessarily the current voltage applied to the mirrors)
+        self.currentVoltage = [0, 0]
         self.shutterOpen = True ## indicates whether the virtual shutter is closed (the beam is steered to its 'off' position).
         if 'offVoltage' in config:
             self.setShutterOpen(False)
@@ -58,14 +59,19 @@ class Scanner(Device):
 
     def setPosition(self, pos, camera, laser):
         """Set the position of the xy mirrors to a point in the image"""
-        with MutexLocker(self.lock):
+        prof = Profiler('Scanner.setPosition', disabled=True)
+        with self.lock:
             (x, y) = pos
+            prof.mark()
             #cam = self.dm.getDevice(camera)
             #camPos = cam.getPosition()
             #vals = self.mapToScanner(x - camPos[0], y - camPos[1], camera, laser)
             vals = self.mapToScanner(x, y, camera, laser)
+            prof.mark()
             #print "Setting position", pos, " values are", vals
             self.setCommand(vals)
+            prof.mark()
+        prof.finish()
         
     def setShutterOpen(self, o):
         """Immediately move mirrors 'off' position or back."""
@@ -96,7 +102,7 @@ class Scanner(Device):
           2) The current command is outside the allowed limits
           3) Someone has called setVoltage when they should have called setCommand"""
         vals = []
-        with MutexLocker(self.lock):
+        with self.lock:
             vals = self.currentCommand[:]
             #for x in ['XAxis', 'YAxis']:
                 #(daq, chan) = self.config[x]
@@ -107,21 +113,30 @@ class Scanner(Device):
     def setVoltage(self, vals):
         '''Immediately sets the voltage value on the mirrors.
         Does NOT do shutter or limit checking; most likely you want to use setCommand instead.'''
-        with MutexLocker(self.lock):
+        with self.lock:
             for i in [0,1]:
                 x = ['XAxis', 'YAxis'][i]
                 daq = self.config[x]['device']
                 chan = self.config[x]['channel']
                 dev = self.dm.getDevice(daq)
                 dev.setChannelValue(chan, vals[i], block=True)
+            self.currentVoltage = vals
+
+    def getVoltage(self):
+        with self.lock:
+            return self.currentVoltage
+
     
     def getObjective(self, camera):
         """Return the objective currently in use for camera"""
-        with MutexLocker(self.lock):
+        with self.lock:
             camDev = self.dm.getDevice(camera)
         scope = camDev.scopeDev
         return scope.getObjective()['name']
     
+    def getDaqName(self):
+        return self.config['XAxis']['device']
+        
     def mapToScanner(self, x, y, camera, laser):
         """Convert global coordinates to voltages required to set scan mirrors"""
         obj = self.getObjective(camera)
@@ -162,7 +177,7 @@ class Scanner(Device):
     
     
     def getCalibrationIndex(self):
-        with MutexLocker(self.lock):
+        with self.lock:
             if self.calibrationIndex is None:
                 calDir = self.configDir()
                 fileName = os.path.join(calDir, 'index')
@@ -181,20 +196,20 @@ class Scanner(Device):
             return self.calibrationIndex
         
     def writeCalibrationDefaults(self, state):
-        with MutexLocker(self.lock):
+        with self.lock:
             calDir = self.configDir()
             fileName = os.path.join(calDir, 'defaults')
             self.dm.writeConfigFile(state, fileName)
         
     def loadCalibrationDefaults(self):
-        with MutexLocker(self.lock):
+        with self.lock:
             calDir = self.configDir()
             fileName = os.path.join(calDir, 'defaults')
             state = self.dm.readConfigFile(fileName)
             return state
         
     def writeCalibrationIndex(self, index):
-        with MutexLocker(self.lock):
+        with self.lock:
             calDir = self.configDir()
             fileName = os.path.join(calDir, 'index')
             self.dm.writeConfigFile(index, fileName)
@@ -202,7 +217,7 @@ class Scanner(Device):
             self.calibrationIndex = index
         
     def getCalibration(self, camera, laser, objective=None):
-        with MutexLocker(self.lock):
+        with self.lock:
             index = self.getCalibrationIndex()
             
         if objective is None:
@@ -259,15 +274,15 @@ class Scanner(Device):
         
     
     def createTask(self, cmd):
-        with MutexLocker(self.lock):
+        with self.lock:
             return ScannerTask(self, cmd)
     
     def protocolInterface(self, prot):
-        with MutexLocker(self.lock):
+        with self.lock:
             return ScannerProtoGui(self, prot)
     
     def deviceInterface(self, win):
-        with MutexLocker(self.lock):
+        with self.lock:
             if self.devGui is None:
                 self.devGui = ScannerDeviceGui(self, win)
             return self.devGui
@@ -322,13 +337,15 @@ class ScannerTask(DeviceTask):
         #print "Scanner task:", cmd
         
     def getConfigOrder(self):
-        if self.cmd.get('simulateShutter', False):
-            return ([], [self.cmd['laser']]) ### need to do this so we can get the waveform from the laser later
+        if self.cmd.get('simulateShutter', False) or 'program' in self.cmd:
+            return ([], [self.cmd['laser'], self.dev.getDaqName()]) ### need to do this so we can get the waveform from the laser later
         else:
             return ([],[])
 
     def configure(self, tasks, startOrder):
-        with MutexLocker(self.dev.lock):
+        prof = Profiler('ScannerTask.configure', disabled=True)
+        with self.dev.lock:
+            prof.mark('got lock')
             ## If shuttering is requested, make sure the (virtual) shutter is closed now
             if self.cmd.get('simulateShutter', False):
                 self.dev.setShutterOpen(False)
@@ -336,26 +353,34 @@ class ScannerTask(DeviceTask):
             ## Set position of mirrors now
             if 'command' in self.cmd:
                 self.dev.setCommand(self.cmd['command'])
+                prof.mark('set command')
             elif 'position' in self.cmd:  ## 'command' overrides 'position'
                 #print " set position:", self.cmd['position']
                 self.dev.setPosition(self.cmd['position'], self.cmd['camera'], self.cmd['laser'])
+                prof.mark('set pos')
 
             ## record spot size from calibration data
             if 'camera' in self.cmd and 'laser' in self.cmd:
                 self.spotSize = self.dev.getCalibration(self.cmd['camera'], self.cmd['laser'])['spot'][1]
+                prof.mark('getSpotSize')
             
             ## If position arrays are given, translate into voltages
             if 'xPosition' in self.cmd or 'yPosition' in self.cmd:
                 if 'xPosition' not in self.cmd or 'yPosition' not in self.cmd:
                     raise Exception('xPosition and yPosition must be given together or not at all.')
                 self.cmd['xCommand'], self.cmd['yCommand'] = self.dev.mapToScanner(self.cmd['xPosition'], self.cmd['yPosition'], self.cmd['camera'], self.cmd['laser'])
+                prof.mark('position arrays')
+            
             ## Otherwise if program is specified, generate the command arrays now
             elif 'program' in self.cmd:
-                self.generateProgramArrays(self.cmd['program'])    
+                self.generateProgramArrays(self.cmd)    
+                prof.mark('program')
                 
             ## If shuttering is requested, generate proper arrays and shutter the laser now
             if self.cmd.get('simulateShutter', False):
                 self.generateShutterArrays(tasks[self.cmd['laser']], self.cmd['duration'])
+                prof.mark('shutter')
+            prof.finish()
         
     def generateShutterArrays(self, laserTask, duration):
         """In the absence of a shutter, use this to direct the beam 'off-screen' when shutter would normally be closed."""
@@ -386,7 +411,7 @@ class ScannerTask(DeviceTask):
         self.cmd['xCommand'][~mask] = offPos[0]
         self.cmd['yCommand'][~mask] = offPos[1]
         
-    def generateProgramArrays(self, prg):
+    def generateProgramArrays(self, command):
         """LASER LOGO
         Turn a list of movement commands into arrays of x and y values.
         prg looks like:
@@ -394,10 +419,10 @@ class ScannerTask(DeviceTask):
             numPts: 10000,
             duration: 1.0,
             commands: [
-               ('step', 0.0, None),           ## start with step to "off" position 
-               ('step', 0.2, (1.3e-6, 4e-6)), ## step to the given location after 200ms
-               ('line', (0.2, 0.205), (1.3e-6, 4e-6))  ## 5ms sweep to the new position 
-               ('step', 0.205, None),           ## finish step to "off" position at 205ms
+               {'type': 'step', 'time': 0.0, 'pos': None),           ## start with step to "off" position 
+               ('type': 'step', 'time': 0.2, 'pos': (1.3e-6, 4e-6)), ## step to the given location after 200ms
+               ('type': 'line', 'time': (0.2, 0.205), 'pos': (1.3e-6, 4e-6))  ## 5ms sweep to the new position 
+               ('type': 'step', 'time': 0.205, 'pos': None),           ## finish step to "off" position at 205ms
            ]
         }
         
@@ -405,40 +430,42 @@ class ScannerTask(DeviceTask):
           - circle
           - spiral
         """
-        dt = prg['duration'] / prg['numPts']
-        arr = numpy.empty((2, prg['numPts']))
-        cmds = prg['commands']
+        dt = command['duration'] / command['numPts']
+        arr = np.empty((2, command['numPts']))
+        cmds = command['program']
         lastPos = None
+                
+        lastValue = np.array(self.dev.getVoltage())
+        lastStopInd = 0
         for i in range(len(cmds)):
             cmd = cmds[i]
-            if cmd[0] == 'step':
+            startInd = cmd['startTime'] / dt
+            stopInd = cmd['endTime'] / dt
+            arr[:,lastStopInd:startInd] = lastValue[:,np.newaxis]
+            if cmd['type'] == 'step':
                 ## determine when to end the step
-                if i+1 < len(cmds):
-                    nextTime = cmds[i+1][1]
-                    if type(nextTime) is tuple:
-                        nextTime = nextTime[0]
-                    stopInd = nextTime / dt
-                else:
-                    stopInd = -1
+                #if i+1 < len(cmds):
+                    #nextTime = cmds[i+1]['time']
+                    #if type(nextTime) is tuple:
+                        #nextTime = nextTime[0]
+                    #stopInd = nextTime / dt
+                #else:
+                    #stopInd = -1
                 
-                startInd = cmd[1] / dt
-                
-                pos = cmd[2]
+                pos = cmd['pos']
                 if pos == None:
                     pos = self.dev.getOffVoltage()
                 else:
                     pos = self.dev.mapToScanner(pos[0], pos[1], self.cmd['camera'], self.cmd['laser'])
                 lastPos = pos
                 
-                arr[0, startInd:stopInd] = pos[0]
-                arr[1, startInd:stopInd] = pos[1]
+                arr[0, startInd] = pos[0]
+                arr[1, startInd] = pos[1]
                 
-            elif cmd[0] == 'line':
+            elif cmd['type'] == 'line':
                 if lastPos is None:
                     raise Exception("'line' command with no defined starting position")
-                startInd = cmd[1][0] / dt
-                stopInd = cmd[1][1] / dt
-                pos = cmd[2]
+                pos = cmd['pos']
                 
                 xPos = linspace(lastPos[0], pos[0], stopInd-startInd)
                 yPos = linspace(lastPos[1], pos[1], stopInd-startInd)
@@ -446,8 +473,66 @@ class ScannerTask(DeviceTask):
                 arr[0, startInd:stopInd] = x
                 arr[1, startInd:stopInd] = y
                 lastPos = pos
+                
+            elif cmd['type'] == 'lineScan':
+                startPos = cmd['points'][0]                
+                stopPos = cmd['points'][1]               
+                scanLength = (stopInd - startInd)/cmd['nScans'] # in point indices, not time.
+                
+                xPos = np.linspace(startPos.x(), stopPos.x(), scanLength)
+                yPos = np.linspace(startPos.y(), stopPos.y(), scanLength)
+                x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['camera'], self.cmd['laser'])
+                x = np.tile(x, cmd['nScans'])
+                y = np.tile(y, cmd['nScans'])
+                arr[0, startInd:startInd + len(x)] = x
+                arr[1, startInd:startInd + len(y)] = y
+                arr[0, startInd + len(x):stopInd] = arr[0, startInd + len(x)-1]
+                arr[1, startInd + len(y):stopInd] = arr[1, startInd + len(y)-1]
+                lastPos = (x[-1], y[-1])
+
+            elif cmd['type'] == 'rectScan':
+                startPos = cmd['points'][0] # lower left corner or so               
+                stopPos = cmd['points'][1]  # diagonal opposite corner
+
+                ylen = stopPos.y() - startPos.y()
+                yDir = 1;
+                if ylen < 0:
+                    ylen = 1
+                    yDir = -1
+                nYScans = int(ylen/cmd['lineSpacing'])
+                scanLength = (stopInd - startInd)/(cmd['nScans']*nYScans) # in point indices, not time.
+                xPos = np.linspace(startPos.x(), stopPos.x(), scanLength)
+                yPos = np.linspace(startPos.y(), startPos.y(), scanLength)
+                yStep = yDir*cmd['lineSpacing']
+                for nsc in range(0, cmd['nScans']):
+                    for yp in range(0,nYScans):
+                        yPos = yPos + yStep
+                        #yPos = np.linspace(startPos.y(), stopPos.y(), scanLength)
+                        xl, yl = self.dev.mapToScanner(xPos, yPos, self.cmd['camera'], self.cmd['laser'])
+                        if nsc == 0 and yp == 0:
+                            y = yl
+                            x = xl
+                        else:
+                            y = np.append(y, yl)
+                            x = np.append(x, xl)
+                #x = np.tile(x, cmd['nScans']*nYScans)
+                #y = np.tile(y, cmd['nScans'])
+                #print x.shape
+                #print y.shape
+                arr[0, startInd:startInd + len(x)] = x
+                arr[1, startInd:startInd + len(y)] = y
+                arr[0, startInd + len(x):stopInd] = arr[0, startInd + len(x)-1]
+                arr[1, startInd + len(y):stopInd] = arr[1, startInd + len(y)-1]
+                lastPos = (x[-1], y[-1])
+
+            lastValue = arr[:,stopInd-1]
+            lastStopInd = stopInd
+        arr[:,lastStopInd:] = lastValue[:,np.newaxis]             
+        self.dev.dm.somename = arr
+
         self.cmd['xCommand'] = arr[0] ## arrays of voltage values
         self.cmd['yCommand'] = arr[1]
+
         
     def createChannels(self, daqTask):
         self.daqTasks = []
@@ -458,10 +543,12 @@ class ScannerTask(DeviceTask):
                 #channel = axis[1]
                 if cmdName not in self.cmd:
                     continue
+                #print 'adding channel1: ', channel
                 chConf = self.dev.config[channel]
                 #if chConf[0] != daqTask.devName():
                 if chConf['device'] != daqTask.devName():
                     continue
+                #print 'adding channel2: ', channel
                 
                 daqTask.addChannel(chConf['channel'], 'ao')
                 self.daqTasks.append(daqTask)  ## remember task so we can stop it later on

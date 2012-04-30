@@ -15,7 +15,32 @@ class PlotWidget(GraphicsView):
     
     #sigRangeChanged = QtCore.Signal(object, object)  ## already defined in GraphicsView
     
-    """Widget implementing a graphicsView with a single PlotItem inside."""
+    """
+    :class:`GraphicsView <pyqtgraph.GraphicsView>` widget with a single 
+    :class:`PlotItem <pyqtgraph.PlotItem>` inside.
+    
+    The following methods are wrapped directly from PlotItem: 
+    :func:`addItem <pyqtgraph.PlotItem.addItem>`, 
+    :func:`removeItem <pyqtgraph.PlotItem.removeItem>`, 
+    :func:`clear <pyqtgraph.PlotItem.clear>`, 
+    :func:`setXRange <pyqtgraph.ViewBox.setXRange>`,
+    :func:`setYRange <pyqtgraph.ViewBox.setYRange>`,
+    :func:`setRange <pyqtgraph.ViewBox.setRange>`,
+    :func:`autoRange <pyqtgraph.ViewBox.autoRange>`,
+    :func:`setXLink <pyqtgraph.ViewBox.setXLink>`,
+    :func:`setYLink <pyqtgraph.ViewBox.setYLink>`,
+    :func:`viewRect <pyqtgraph.ViewBox.viewRect>`,
+    :func:`setMouseEnabled <pyqtgraph.ViewBox.setMouseEnabled>`,
+    :func:`enableAutoRange <pyqtgraph.ViewBox.enableAutoRange>`,
+    :func:`disableAutoRange <pyqtgraph.ViewBox.disableAutoRange>`,
+    :func:`setAspectLocked <pyqtgraph.ViewBox.setAspectLocked>`,
+    :func:`register <pyqtgraph.ViewBox.register>`,
+    :func:`unregister <pyqtgraph.ViewBox.unregister>`
+    
+    
+    For all 
+    other methods, use :func:`getPlotItem <pyqtgraph.PlotWidget.getPlotItem>`.
+    """
     def __init__(self, parent=None, **kargs):
         GraphicsView.__init__(self, parent)
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
@@ -23,18 +48,12 @@ class PlotWidget(GraphicsView):
         self.plotItem = PlotItem(**kargs)
         self.setCentralItem(self.plotItem)
         ## Explicitly wrap methods from plotItem
-        for m in ['addItem', 'removeItem', 'autoRange', 'clear', 'setXRange', 'setYRange', 'setRange', 'setAspectLocked', 'setMouseEnabled']:
+        ## NOTE: If you change this list, update the documentation above as well.
+        for m in ['addItem', 'removeItem', 'autoRange', 'clear', 'setXRange', 'setYRange', 'setRange', 'setAspectLocked', 'setMouseEnabled', 'setXLink', 'setYLink', 'enableAutoRange', 'disableAutoRange', 'register', 'unregister', 'viewRect']:
             setattr(self, m, getattr(self.plotItem, m))
         #QtCore.QObject.connect(self.plotItem, QtCore.SIGNAL('viewChanged'), self.viewChanged)
         self.plotItem.sigRangeChanged.connect(self.viewRangeChanged)
-                
-    #def __dtor__(self):
-        ##print "Called plotWidget sip destructor"
-        #self.quit()
-        
-        
-    #def quit(self):
-
+    
     def close(self):
         self.plotItem.close()
         self.plotItem = None
@@ -49,7 +68,7 @@ class PlotWidget(GraphicsView):
             if hasattr(m, '__call__'):
                 return m
         raise exceptions.NameError(attr)
-            
+    
     def viewRangeChanged(self, view, range):
         #self.emit(QtCore.SIGNAL('viewChanged'), *args)
         self.sigRangeChanged.emit(self, range)
@@ -64,6 +83,7 @@ class PlotWidget(GraphicsView):
         return self.plotItem.restoreState(state)
         
     def getPlotItem(self):
+        """Return the PlotItem contained within."""
         return self.plotItem
         
         

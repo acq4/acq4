@@ -27,27 +27,34 @@
         </property>
        </widget>
       </item>
-      <item row="0" column="1" colspan="2">
-       <widget class="QLineEdit" name="databaseText"/>
-      </item>
-      <item row="0" column="3">
+      <item row="0" column="2">
        <widget class="QPushButton" name="openDbBtn">
         <property name="text">
          <string>Open</string>
         </property>
        </widget>
       </item>
-      <item row="0" column="4">
+      <item row="0" column="3">
        <widget class="QPushButton" name="createDbBtn">
         <property name="text">
          <string>Create</string>
         </property>
        </widget>
       </item>
-      <item row="0" column="5">
+      <item row="0" column="4">
        <widget class="QPushButton" name="refreshDbBtn">
         <property name="text">
          <string>Refresh</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="databaseCombo">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
         </property>
        </widget>
       </item>

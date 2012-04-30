@@ -13,15 +13,20 @@ from Qt import QtGui
 ## we only enable it where the performance benefit is critical.
 ## Note this only applies to 2D graphics; 3D graphics always use OpenGL.
 import sys
+
+## check python version
+if sys.version_info[0] != 2 or sys.version_info[1] != 7:
+    raise Exception("Pyqtgraph requires Python version 2.7 (this is %d.%d)" % (sys.version_info[0], sys.version_info[1]))
+
 if 'linux' in sys.platform:  ## linux has numerous bugs in opengl implementation
     useOpenGL = False
 elif 'darwin' in sys.platform: ## openGL greatly speeds up display on mac
     useOpenGL = True
 else:
-    useOpenGL = True  ## on windows there's a more even performance / bugginess tradeoff. 
+    useOpenGL = False  ## on windows there's a more even performance / bugginess tradeoff. 
                 
 CONFIG_OPTIONS = {
-    'useOpenGL': None,   ## by default, this is platform-dependent (see widgets/GraphicsView). Set to True or False to explicitly enable/disable opengl.
+    'useOpenGL': useOpenGL,   ## by default, this is platform-dependent (see widgets/GraphicsView). Set to True or False to explicitly enable/disable opengl.
     'leftButtonPan': True  ## if false, left button drags a rubber band for zooming in viewbox
 }
 
@@ -114,9 +119,10 @@ QAPP = None
 
 def plot(*args, **kargs):
     """
-    | Create and return a PlotWindow (this is just a window with PlotWidget inside), plot data in it.
-    | Accepts a *title* argument to set the title of the window.
-    | All other arguments are used to plot data. (see :func:`PlotItem.plot() <pyqtgraph.PlotItem.plot>`)
+    Create and return a :class:`PlotWindow <pyqtgraph.PlotWindow>` 
+    (this is just a window with :class:`PlotWidget <pyqtgraph.PlotWidget>` inside), plot data in it.
+    Accepts a *title* argument to set the title of the window.
+    All other arguments are used to plot data. (see :func:`PlotItem.plot() <pyqtgraph.PlotItem.plot>`)
     """
     mkQApp()
     #if 'title' in kargs:
@@ -144,10 +150,11 @@ def plot(*args, **kargs):
     
 def image(*args, **kargs):
     """
-    | Create and return an ImageWindow (this is just a window with ImageView widget inside), show image data inside.
-    | Will show 2D or 3D image data.
-    | Accepts a *title* argument to set the title of the window.
-    | All other arguments are used to show data. (see :func:`ImageView.setImage() <pyqtgraph.ImageView.setImage>`)
+    Create and return an :class:`ImageWindow <pyqtgraph.ImageWindow>` 
+    (this is just a window with :class:`ImageView <pyqtgraph.ImageView>` widget inside), show image data inside.
+    Will show 2D or 3D image data.
+    Accepts a *title* argument to set the title of the window.
+    All other arguments are used to show data. (see :func:`ImageView.setImage() <pyqtgraph.ImageView.setImage>`)
     """
     mkQApp()
     w = ImageWindow(*args, **kargs)

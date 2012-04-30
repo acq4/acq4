@@ -33,6 +33,19 @@ class PositionCtrlGroup(pTypes.GroupParameter):
     def addNew(self, typ):
         self.sigAddNewRequested.emit(self, typ)
 
+class ProgramCtrlGroup(pTypes.GroupParameter):
+    sigAddNewRequested = QtCore.Signal(object, object)
+    def __init__(self):
+        opts = {
+            'name': 'Program Controls',
+            'type': 'group',
+            'addText': "Add Control..",
+            'addList': ['lineScan', 'rectangleScan']
+        }
+        pTypes.GroupParameter.__init__(self, **opts)
+    
+    def addNew(self, typ):
+        self.sigAddNewRequested.emit(self, typ)
 
 class ScannerProtoGui(ProtocolGui):
     
@@ -53,6 +66,7 @@ class ScannerProtoGui(ProtocolGui):
         self.currentObjective = None
         self.currentScope = None
         self.currentCamMod = None
+        self.programCtrls = []
         
         
         self.displaySize = {}  ## maps (camera,objective) : display size
@@ -82,6 +96,11 @@ class ScannerProtoGui(ProtocolGui):
         self.ui.itemTree.setParameters(self.positionCtrlGroup, showTop=False)
         self.positionCtrlGroup.sigChildRemoved.connect(self.positionCtrlRemoved)
         
+        self.programCtrlGroup = ProgramCtrlGroup()
+        self.programCtrlGroup.sigAddNewRequested.connect(self.addProgramCtrl)
+        self.ui.programTree.setParameters(self.programCtrlGroup, showTop=False)
+        self.programCtrlGroup.sigChildRemoved.connect(self.programCtrlRemoved)
+
         ## Set up SpinBoxes
         self.ui.minTimeSpin.setOpts(dec=True, step=1, minStep=1e-3, siPrefix=True, suffix='s', bounds=[0, 50])
         self.ui.minDistSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[0, 10e-3])
@@ -418,7 +437,7 @@ class ScannerProtoGui(ProtocolGui):
     def generateProtocol(self, params=None):
         if self.cameraModule() is None:
             raise Exception('No camera module selected, can not build protocol.')
-            
+        
         if params is None or 'targets' not in params:
             target = self.testTarget.listPoints()[0]
             delay = 0
@@ -428,14 +447,34 @@ class ScannerProtoGui(ProtocolGui):
             #print "targets:", len(self.targets), params['targets']
             (target, delay) = self.targets[params['targets']]
             
-        prot = {
-            'position': target, 
-            'minWaitTime': delay,
-            'camera': self.cameraModule().config['camDev'], 
-            'laser': self.ui.laserCombo.currentText(),
-            'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
-            'duration': self.prot.getParam('duration')
-        }
+        if len(self.programCtrls) == 0: # doing regular position mapping
+            prot = {
+                'position': target, 
+                'minWaitTime': delay,
+                'camera': self.cameraModule().config['camDev'], 
+                'laser': self.ui.laserCombo.currentText(),
+                'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
+                'duration': self.prot.getParam('duration')
+            }
+        else: # doing programmed scans
+            daqName = self.dev.getDaqName()
+            prot = {
+               # 'position': target, 
+                'minWaitTime': delay,
+                'camera': self.cameraModule().config['camDev'], 
+                'laser': self.ui.laserCombo.currentText(),
+                #'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
+                'duration': self.prot.getParam('duration'),
+                'numPts': self.prot.getDevice(daqName).currentState()['numPts'],
+                'program': [],
+                   #('step', 0.0, None),           ## start with step to "off" position 
+                   #('step', 0.2, (1.3e-6, 4e-6)), ## step to the given location after 200ms
+                   #('line', (0.2, 0.205), (1.3e-6, 4e-6))  ## 5ms sweep to the new position 
+                   #('step', 0.205, None),           ## finish step to "off" position at 205ms
+               #]
+            }
+            for ctrl in self.programCtrls:
+                prot['program'].append(ctrl.generateProtocol())
         return prot
     
     def hideSpotMarker(self):
@@ -445,9 +484,10 @@ class ScannerProtoGui(ProtocolGui):
     def handleResult(self, result, params):
         if not self.spotMarker.isVisible():
             self.spotMarker.show()
-        pos = result['position']
-        ss = result['spotSize']
-        self.spotMarker.setPos((pos[0]-ss*0.5, pos[1]-ss*0.5))
+        if 'position' in result:
+            pos = result['position']
+            ss = result['spotSize']
+            self.spotMarker.setPos((pos[0]-ss*0.5, pos[1]-ss*0.5))
         #print 'handleResult'
     
     def addPositionCtrl(self, param, typ):
@@ -461,7 +501,30 @@ class ScannerProtoGui(ProtocolGui):
         del self.items[item.name]
         self.itemChanged()
         
-    
+    def addProgramCtrl(self, param, itemType):
+        ## called when "Add Control.." combo is changed
+        cls = {'lineScan': ProgramLineScan, 'rectangleScan': ProgramRectScan}[itemType]
+        state = {}
+        ctrl = cls(**state)
+        self.programCtrlGroup.addChild(ctrl.parameters())
+        self.programCtrls.append(ctrl)
+        camMod = self.cameraModule()
+        if camMod is None:
+            raise HelpfulException("Cannot add control items until a camera module is available to display them.")
+            return False
+        for item in ctrl.getGraphicsItems():
+            camMod.ui.addItem(item, None, [1, 1], 1000)
+
+    def programCtrlRemoved(self, parent, param):
+        ctrl = param.ctrl
+        for item in ctrl.getGraphicsItems():
+            item.scene().removeItem(item)
+        self.programCtrls.remove(ctrl)
+        
+        #item.parameters().sigValueChanged.disconnect(self.itemActivationChanged)
+        #del self.items[item.name]
+        #self.itemChanged()
+            
     #def addSpiral(self, pos=None, name=None):
         #autoName = False
         #if name is None:
@@ -791,8 +854,6 @@ class ScannerProtoGui(ProtocolGui):
                 occArea |= i.mapToView(i.shape())
             
         for i in items:
-            if isinstance(i, TargetOcclusion) or isinstance(i, TargetProgram) or isinstance(i, pg.SpiralROI):
-                continue
             pts = i.listPoints()
             #for x in self.occlusions.keys():  ##can we just join the occlusion areas together?
                 #area = self.occlusions[x].mapToScene(self.occlusions[x].shape())
@@ -943,6 +1004,11 @@ class ScannerProtoGui(ProtocolGui):
                 s.removeItem(item)
             s.removeItem(self.testTarget)
             s.removeItem(self.spotMarker)
+            for ctrl in self.programCtrls:
+                for item in ctrl.getGraphicsItems():
+                    s.removeItem(item)
+
+
         #QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
         #try:
             #getManager().sigModulesChanged.disconnect(self.fillModuleList)
@@ -1367,16 +1433,118 @@ class TargetOcclusion(pg.PolygonROI):
     def saveState(self):
         return {'type':'Occlusion', 'pos': (self.pos().x(), self.pos().y()), 'points': [(p.x(), p.y()) for p in self.listPoints()]}
     
-class TargetProgram(QtCore.QObject):
+    def listPoints(self):
+        return []
+    
+class ProgramLineScan(QtCore.QObject):
+    
+    sigStateChanged = QtCore.Signal(object)
     
     def __init__(self):
-        self.origin = QtGui.QGraphicsEllipseItem(0,0,1,1)
-        self.paths = []
+        QtCore.QObject.__init__(self)
+        self.name = 'lineScan'
+        ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         
-    def setPen(self, pen):
-        self.origin.setPen(pen)
+        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
+            dict(name='length', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='startTime', type='float', value=1e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='endTime', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='nScans', type='int', value=100, bounds=[1, None]),
+        ])
+        self.params.ctrl = self
+        #self.params.layout.sigStateChanged.connect(self.regeneratePoints)
+        #self.params.spacing.sigStateChanged.connect(self.regeneratePoints)
+        #pg.ROI.__init__(self, pos=(0,0), size=args.get('size', [ptSize*4]*2), angle=args.get('angle', 0))
+        #self.addScaleHandle([0, 0], [1, 1])
+        #self.addScaleHandle([1, 1], [0, 0])
+        #self.addRotateHandle([0, 1], [0.5, 0.5])
+        #self.addRotateHandle([1, 0], [0.5, 0.5])
+        #self.lastSize = self.state['size']
+        ##self.connect(QtCore.SIGNAL('regionChanged'), self.rgnChanged)
+        #self.sigRegionChanged.connect(self.rgnChanging)
+        #self.sigRegionChangeFinished.connect(self.rgnChanged)
+        #self.points = []
+        #self.pens = []
+        #self.pointSize = ptSize
+        ##self.pointDisplaySize = self.pointSize
+        #self.oldDisplaySize = self.pointSize
+        #self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         
-    def listPoints(self):
-        pass
+        self.roi = pg.LineSegmentROI([[0.0, 0.0], [self.params['length'], self.params['length']]])
         
+        
+    def getGraphicsItems(self):
+        return [self.roi]
+
+    def isActive(self):
+        return self.params.value()
+    
+    def parameters(self):
+        return self.params
+    
+    def generateProtocol(self):
+        points = self.roi.listPoints() # in local coordinates local to roi.
+        points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
+        return {'type': 'lineScan', 'points': points, 'startTime': self.params['startTime'], 
+                'endTime': self.params['endTime'], 'nScans': self.params['nScans']}
+        
+    
+class ProgramRectScan(QtCore.QObject):
+    
+    sigStateChanged = QtCore.Signal(object)
+    
+    def __init__(self):
+        QtCore.QObject.__init__(self)
+        self.name = 'rectScan'
+        ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
+        
+        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
+            dict(name='width', type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='height', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='linespacing', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[2e-7, None], step=2e-7),
+            dict(name='startTime', type='float', value=1e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='endTime', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='nScans', type='int', value=10, bounds=[1, None]),
+        ])
+        self.params.ctrl = self
+        #self.params.layout.sigStateChanged.connect(self.regeneratePoints)
+        #self.params.spacing.sigStateChanged.connect(self.regeneratePoints)
+        #pg.ROI.__init__(self, pos=(0,0), size=args.get('size', [ptSize*4]*2), angle=args.get('angle', 0))
+        #self.addScaleHandle([0, 0], [1, 1])
+        #self.addScaleHandle([1, 1], [0, 0])
+        #self.addRotateHandle([0, 1], [0.5, 0.5])
+        #self.addRotateHandle([1, 0], [0.5, 0.5])
+        #self.lastSize = self.state['size']
+        ##self.connect(QtCore.SIGNAL('regionChanged'), self.rgnChanged)
+        #self.sigRegionChanged.connect(self.rgnChanging)
+        #self.sigRegionChangeFinished.connect(self.rgnChanged)
+        #self.points = []
+        #self.pens = []
+        #self.pointSize = ptSize
+        ##self.pointDisplaySize = self.pointSize
+        #self.oldDisplaySize = self.pointSize
+        #self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
+        
+        #self.roi = pg.RectangleROI([self.params['width'], self.params['height']], pos=[0.0, 0.0] )
+        self.roi = pg.ROI(size=[self.params['width'], self.params['height']], pos=[0.0, 0.0])
+        self.roi.addScaleHandle([1,1], [0.5, 0.5])
+        self.roi.addRotateHandle([0,0], [0.5, 0.5])
+        
+    def getGraphicsItems(self):
+        return [self.roi]
+
+    def isActive(self):
+        return self.params.value()
+    
+    def parameters(self):
+        return self.params
+    
+    def generateProtocol(self):
+        points = self.roi.listPoints() # in local coordinates local to roi.
+        points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
+        return {'type': self.name, 'points': points, 'startTime': self.params['startTime'], 
+                'endTime': self.params['endTime'], 'nScans': self.params['nScans'],
+                'lineSpacing': self.params['linespacing']}
+        
+
 

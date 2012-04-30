@@ -72,7 +72,6 @@ def siFormat(x, precision=3, suffix='', space=True, error=None, minVal=1e-25, al
     Return the number x formatted in engineering notation with SI prefix.
     
     Example::
-    
         siFormat(0.0001, suffix='V')  # returns "100 μV"
     """
     
@@ -90,8 +89,11 @@ def siFormat(x, precision=3, suffix='', space=True, error=None, minVal=1e-25, al
         fmt = "%." + str(precision) + "g%s%s"
         return fmt % (x*p, pref, suffix)
     else:
-        plusminus = space + u"±" + space
-        fmt = "%." + str(precision) + u"g%s%s%s%s"
+        if allowUnicode:
+            plusminus = space + u"±" + space
+        else:
+            plusminus = " +/- "
+        fmt = "%." + str(precision) + "g%s%s%s%s"
         return fmt % (x*p, pref, suffix, plusminus, siFormat(error, precision=precision, suffix=suffix, space=space, minVal=minVal))
     
 def siEval(s):
@@ -275,10 +277,10 @@ def mkPen(*args, **kargs):
         pen.setStyle(style)
     return pen
 
-def hsvColor(h, s=1.0, v=1.0, a=1.0):
-    """Generate a QColor from HSVa values."""
+def hsvColor(hue, sat=1.0, val=1.0, alpha=1.0):
+    """Generate a QColor from HSVa values. (all arguments are float 0.0-1.0)"""
     c = QtGui.QColor()
-    c.setHsvF(h, s, v, a)
+    c.setHsvF(hue, sat, val, alpha)
     return c
 
     
@@ -314,6 +316,13 @@ def intColor(index, hues=9, values=1, maxValue=255, minValue=150, maxHue=360, mi
     c.setAlpha(alpha)
     return c
 
+def glColor(*args, **kargs):
+    """
+    Convert a color to OpenGL color format (r,g,b,a) floats 0.0-1.0
+    Accepts same arguments as :func:`mkColor <pyqtgraph.mkColor>`.
+    """
+    c = mkColor(*args, **kargs)
+    return (c.red()/255., c.green()/255., c.blue()/255., c.alpha()/255.)
 
 def affineSlice(data, shape, origin, vectors, axes, **kargs):
     """
@@ -738,13 +747,13 @@ def rescaleData(data, scale, offset):
 
 def isocurve(data, level):
     """
-        Generate isocurve from 2D data using marching squares algorithm.
-        
-        *data*   2D numpy array of scalar values
-        *level*  The level at which to generate an isosurface
-        
-        This function is SLOW; plenty of room for optimization here.
-        """    
+    Generate isocurve from 2D data using marching squares algorithm.
+    
+    *data*   2D numpy array of scalar values
+    *level*  The level at which to generate an isosurface
+    
+    This function is SLOW; plenty of room for optimization here.
+    """    
     
     sideTable = [
     [],
@@ -818,12 +827,14 @@ def isocurve(data, level):
     
 def isosurface(data, level):
     """
-    Generate isosurface from volumetric data using marching tetrahedra algorithm.
+    Generate isosurface from volumetric data using marching cubes algorithm.
     See Paul Bourke, "Polygonising a Scalar Field"  
     (http://local.wasp.uwa.edu.au/~pbourke/geometry/polygonise/)
     
     *data*   3D numpy array of scalar values
     *level*  The level at which to generate an isosurface
+    
+    Returns a list of faces; each face is a list of three vertexes and each vertex is a tuple of three floats.
     
     This function is SLOW; plenty of room for optimization here.
     """
@@ -1192,60 +1203,3 @@ def isosurface(data, level):
 
     return facets
 
-## code has moved to opengl/MeshData.py    
-#def meshNormals(data):
-    #"""
-    #Return list of normal vectors and list of faces which reference the normals
-    #data must be list of triangles; each triangle is a list of three points
-        #[ [(x,y,z), (x,y,z), (x,y,z)], ...]
-    #Return values are
-        #normals:   [(x,y,z), ...]
-        #faces:     [(n1, n2, n3), ...]
-    #"""
-    
-    #normals = []
-    #points = {}
-    #for i, face in enumerate(data):
-        ### compute face normal
-        #pts = [QtGui.QVector3D(*x) for x in face]
-        #norm = QtGui.QVector3D.crossProduct(pts[1]-pts[0], pts[2]-pts[0])
-        #normals.append(norm)
-        
-        ### remember each point was associated with this normal
-        #for p in face:
-            #p = tuple(map(lambda x: np.round(x, 8), p))
-            #if p not in points:
-                #points[p] = []
-            #points[p].append(i)
-        
-    ### compute averages
-    #avgLookup = {}
-    #avgNorms = []
-    #for k,v in points.iteritems():
-        #norms = [normals[i] for i in v]
-        #a = norms[0]
-        #if len(v) > 1:
-            #for n in norms[1:]:
-                #a = a + n
-            #a = a / len(v)
-        #avgLookup[k] = len(avgNorms)
-        #avgNorms.append(a)
-
-    ### generate return array
-    #faces = []
-    #for i, face in enumerate(data):
-        #f = []
-        #for p in face:
-            #p = tuple(map(lambda x: np.round(x, 8), p))
-            #f.append(avgLookup[p])
-        #faces.append(tuple(f))
-        
-    #return avgNorms, faces
-        
-    
-    
-    
-    
-    
-    
-    

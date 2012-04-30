@@ -422,6 +422,8 @@ class Profiler:
         self.disabled = disabled
         if disabled: 
             return
+        
+        self.markCount = 0
         self.finished = False
         self.depth = Profiler.depth 
         Profiler.depth += 1
@@ -437,9 +439,14 @@ class Profiler:
         self.t0 = ptime.time()
         self.t1 = self.t0
     
-    def mark(self, msg=''):
+    def mark(self, msg=None):
         if self.disabled: 
             return
+        
+        if msg is None:
+            msg = str(self.markCount)
+        self.markCount += 1
+        
         t1 = ptime.time()
         msg2 = "  "+self.msg+" "+msg+" "+"%gms" % ((t1-self.t1)*1000)
         if self.delayed:
@@ -449,10 +456,11 @@ class Profiler:
         self.t1 = ptime.time()  ## don't measure time it took to print
         
     def finish(self, msg=None):
+        if self.disabled or self.finished: 
+            return
+        
         if msg is not None:
             self.mark(msg)
-        if self.disabled: 
-            return
         t1 = ptime.time()
         msg = self.msg + ' <<< Finished, total time: %gms' % ((t1-self.t0)*1000)
         if self.delayed:

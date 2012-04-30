@@ -16,9 +16,9 @@ Contents:
     how_to_use
     plotting
     images
+    3dgraphics
     style
     region_of_interest
-    graphicswindow
     parametertree
     internals
     apireference

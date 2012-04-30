@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
 from PyQt4 import QtGui, QtCore
 import LogWidgetTemplate
-from FeedbackButton import FeedbackButton
+from pyqtgraph import FeedbackButton
 import configfile
 from DataManager import DirHandle
 from HelpfulException import HelpfulException
@@ -837,6 +837,8 @@ class ErrorDialog(QtGui.QDialog):
         self.messages = []
         
         self.msgLabel = QtGui.QLabel()
+        #self.msgLabel.setWordWrap(False)
+        #self.msgLabel.setMaximumWidth(800)
         self.msgLabel.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         #self.msgLabel.setFrameStyle(QtGui.QFrame.Box)
         #self.msgLabel.setStyleSheet('QLabel { font-weight: bold }')

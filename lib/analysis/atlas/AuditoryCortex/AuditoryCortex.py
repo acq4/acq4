@@ -48,10 +48,10 @@ class AuditoryCortex(Atlas.Atlas):
             #self.connect(canvas, QtCore.SIGNAL('itemTransformChangeFinished'), self.itemMoved) ## old style
             self.canvas.sigItemTransformChangeFinished.connect(self.itemMoved) ## new style
             
-        Atlas.Atlas.__init__(self, canvas, state)
+        Atlas.Atlas.__init__(self, state)
         self.uiChanged()
         
-    def ctrlWidget(self):
+    def ctrlWidget(self, **args):
         return self.ctrl
         
     def saveState(self):
