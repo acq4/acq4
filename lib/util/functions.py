@@ -2123,12 +2123,14 @@ def expDeconvolve(data, tau):
         return d
 
     
-def expReconvolve(data, tau=None):
-    dt = 1
+def expReconvolve(data, tau=None, dt=None):
     if isinstance(data, MetaArray):
-        dt = data.xvals(0)[1] - data.xvals(0)[0]
+        if dt is None:
+            dt = data.xvals(0)[1] - data.xvals(0)[0]
         if tau is None:
             tau = data._info[-1].get('expDeconvolveTau', None)
+    if dt is None: 
+        dt = 1
     if tau is None:
         raise Exception("Must specify tau.")
     # x(k+1) = x(k) + dt * (f(k) - x(k)) / tau
