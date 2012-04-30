@@ -9,7 +9,6 @@ import pyqtgraph as pg
 import metaarray
 #import pyqtgraph.CheckTable as CheckTable
 from collections import OrderedDict
-import multiprocessing as mp
 
 class EventFitter(CtrlNode):
     """Takes a waveform and event list as input, returns extra information about each event.
@@ -18,11 +17,13 @@ class EventFitter(CtrlNode):
     nodeName = "EventFitter"
     uiTemplate = [
         ('multiFit', 'check', {'value': False}),
-        ('parallel', 'spin', {'value': 1, 'min': 1}),
+        ('parallel', 'check', {'value': False}),
+        ('nProcesses', 'spin', {'value': 1, 'min': 1, 'int': True}),
         ('plotFits', 'check', {'value': True}),
         ('plotGuess', 'check', {'value': False}),
         ('plotEvents', 'check', {'value': False}),
     ]
+    
     
     def __init__(self, name):
         CtrlNode.__init__(self, name, terminals={
@@ -34,7 +35,26 @@ class EventFitter(CtrlNode):
         self.plotItems = []
         self.selectedFit = None
         self.deletedFits = []
-        
+        self.pool = None  ## multiprocessing pool
+        self.poolSize = 0
+        self.ctrls['parallel'].toggled.connect(self.setupPool)
+        self.ctrls['nProcesses'].valueChanged.connect(self.setupPool)
+    
+    def setupPool(self):
+        import multiprocessing as mp
+        if self.ctrls['parallel'].isChecked():
+            nProc = self.ctrls['nProcesses'].value()
+            if self.pool is not None and self.poolSize != nProc:
+                self.pool.terminate()
+                self.pool = None
+            if self.pool is None:
+                self.pool = mp.Pool(processes=nProc)
+                self.poolSize = nProc
+        else:
+            if self.pool is not None:
+                self.pool.terminate()
+                self.pool = None
+    
     def process(self, waveform, events, display=True):
         self.deletedFits = []
         for item in self.plotItems:
@@ -52,9 +72,8 @@ class EventFitter(CtrlNode):
             'tvals': waveform.xvals('Time'),
         }
         
-        nProcesses = int(self.ctrls['parallel'].value())
         
-        if nProcesses == 1:
+        if not self.ctrls['parallel'].isChecked():
             output = processEventFits(events, startEvent=0, stopEvent=len(events), opts=opts)
             guesses = output['guesses']
             eventData = output['eventData']
@@ -63,37 +82,35 @@ class EventFitter(CtrlNode):
             yVals = output['yVals']
             output = output['output']
         else:
-            try:
-                pool = mp.Pool(processes=nProcesses)
-                results = []
-                evPerProcess = int(len(events) / nProcesses)
-                start = 0
-                for i in range(nProcesses):
-                    stop = start + evPerProcess
-                    if stop > len(events):
-                        stop = len(events)
-                    args = (events, start, stop, opts)
-                    results.append(pool.apply_async(processEventFits, args))
-                    print "started process", start, stop
-                    start = stop
-                data = []
-                guesses = []
-                eventData = []
-                indexes = []
-                xVals = []
-                yVals = []
-                for res in results:  ## reconstruct results here
-                    print "getting result", res
-                    output = res.get(10)
-                    data.append(output['output'])
-                    guesses.extend(output['guesses'])
-                    eventData.extend(output['eventData'])
-                    indexes.extend(output['indexes'])
-                    xVals.extend(output['xVals'])
-                    yVals.extend(output['yVals'])
-                output = np.concatenate(data)
-            finally:
-                pool.terminate()
+            print "parallel:", self.pool, self.poolSize
+            results = []
+            nProcesses = self.ctrls['nProcesses'].value()
+            evPerProcess = int(len(events) / nProcesses)
+            start = 0
+            for i in range(nProcesses):
+                stop = start + evPerProcess
+                if stop > len(events):
+                    stop = len(events)
+                args = (events, start, stop, opts)
+                results.append(self.pool.apply_async(processEventFits, args))
+                print "started process", start, stop
+                start = stop
+            data = []
+            guesses = []
+            eventData = []
+            indexes = []
+            xVals = []
+            yVals = []
+            for res in results:  ## reconstruct results here
+                print "getting result", res
+                output = res.get(10)
+                data.append(output['output'])
+                guesses.extend(output['guesses'])
+                eventData.extend(output['eventData'])
+                indexes.extend(output['indexes'])
+                xVals.extend(output['xVals'])
+                yVals.extend(output['yVals'])
+            output = np.concatenate(data)
             
         for i in range(len(indexes)):            
             if display and self.plot.isConnected():
