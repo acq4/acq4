@@ -5,8 +5,6 @@ import numpy as np
 import functions as fn
 
 man = lib.Manager.getManager() 
-db = man.getModule('Data Manager').currentDatabase()
-mod = man.dataModel
 
 ## update DB field to reflect dir meta info
 #for i in db.select('Cell', ['rowid']):                                                                                                          
@@ -15,19 +13,16 @@ mod = man.dataModel
     #db.update('Cell', {'type': typ}, rowid=i[0])
     #print d, typ
 
-##Make DB view linking photostim_sites -> ProtocolSequence -> Cell
-  # db('create view "sites" as select * from photostim_sites inner join DirTable_Protocol on photostim_sites.ProtocolDir=DirTable_Protocol.rowid inner join DirTable_Cell on DirTable_Protocol.CellDir=DirTable_Cell.rowid')
-  
-  # for old DB format: db('CREATE VIEW "sites" AS select * from photostim_sites inner join ProtocolSequence on photostim_sites.sourceDir = ProtocolSequence.rowid inner join Cell on ProtocolSequence.source = Cell.rowid')
+global eventView, siteView, cells
+eventView = 'events_view'
+siteView = 'sites_view'
 
-##Make DB view linking events -> ProtocolSequence -> Cell
-  # db('create view "events" as select * from photostim_events inner join DirTable_Protocol on photostim_events.ProtocolDir=DirTable_Protocol.rowid inner join DirTable_Cell on DirTable_Protocol.CellDir=DirTable_Cell.rowid') 
-
-  # for old db format: db('CREATE VIEW "events" AS select * from photostim_events inner join ProtocolSequence on photostim_events.sourceDir = ProtocolSequence.rowid inner join Cell on ProtocolSequence.source = Cell.rowid')
 
 ## Get events
 firstRun = False
-if 'ev' not in locals():
+if 'events' not in locals():
+    global events
+    events = {}
     firstRun = True
 
     win = QtGui.QMainWindow()
@@ -78,41 +73,68 @@ if 'ev' not in locals():
     sp3 = pw1.scatterPlot([], pen=pg.mkPen(None), brush=(100,255,100,70), identical=True, size=8)
     sp4 = pw1.scatterPlot([], pen=pg.mkPen(None), size=8)
 
-
-
-    print "Loading events..."
     
-    import os, pickle
-    md = os.path.abspath(os.path.split(__file__)[0])
-    cacheFile = os.path.join(md, 'eventCache.p')
-    if os.path.isfile(cacheFile):
-        print "Read from cache..."
-        ev = pickle.load(open(cacheFile, 'r'))
-    else:
-        ev = db.select('events', ['ProtocolSequenceDir', 'SourceFile', 'fitAmplitude', 'fitTime', 'fitDecayTau', 'userTransform', 'type', 'Source', 'ProtocolDir'], toArray=True)
 
 
+    print "Reading cell list..."
+    
+    #import os, pickle
+    #md = os.path.abspath(os.path.split(__file__)[0])
+    #cacheFile = os.path.join(md, 'eventCache.p')
+    #if os.path.isfile(cacheFile):
+        #print "Read from cache..."
+        #ev = pickle.load(open(cacheFile, 'r'))
+    #else:
+    
+    
+    
+        #pickle.dump(ev, open(cacheFile, 'w'))
+    ## create views that link cell information to events/sites
+    db = man.getModule('Data Manager').currentDatabase()
+    if not db.hasTable(siteView):
+        print "Creating DB views."
+        db.createView(siteView, ['photostim_sites', 'DirTable_Protocol', 'DirTable_Cell'])  ## seems to be unused.
+    if not db.hasTable(eventView):
+        db.createView(eventView, ['photostim_events', 'DirTable_Protocol', 'DirTable_Cell'])
+        
+    cells = db.select(siteView, ['CellDir'], distinct=True)
+    cells = [c['CellDir'] for c in cells]
+    #for c in cells:
+        #print c, db.getDir('Cell', c)
+    #cells.sort(lambda a,b: cmp(db.getDir('DirType_Cell', a).name(), db.getDir('DirType_Cell', b).name()))
+    cells.sort(lambda a,b: cmp(a.name(), b.name()))
+    cellSpin.setMaximum(len(cells)-1)
+    print "Done."
+
+def loadCell(cell):
+    global events
+    if cell in events:
+        return
+    db = man.getModule('Data Manager').currentDatabase()
+    mod = man.dataModel
+    
+    allEvents = []
+    hvals = {}
+    nEv = 0
+    pcache = {}
+    tcache = {}
+    print "Loading all events for cell", cell
+    tot = db.tableLength(eventView)
+    for ev in db.iterSelect(eventView, ['ProtocolSequenceDir', 'SourceFile', 'fitAmplitude', 'fitTime', 'fitDecayTau', 'fitRiseTau', 'userTransform', 'type', 'CellDir', 'ProtocolDir'], where={'CellDir': cell}, toArray=True):
+        extra = np.empty(ev.shape, dtype=[('x', float), ('y', float), ('holding', float)])
+        
         ## insert holding levels
-        print "Reading holding levels..."
-        holding = np.empty(ev.shape)
-        hvals = {}
         for i in range(len(ev)):
             sd = ev[i]['ProtocolSequenceDir']
             if sd not in hvals:
                 cf = ev[i]['SourceFile']
                 hvals[sd] = mod.getClampHoldingLevel(cf)
                 #print hvals[sd], cf
-            holding[i] = hvals[sd]
+            extra[i]['holding'] = hvals[sd]
             
         ## insert positions
-        pos = np.empty(ev.shape, dtype=[('x', float), ('y', float)])
 
-        print "Reading event positions..."
-        pcache = {}
-        tcache = {}
         for i in range(len(ev)):
-            if i%1000 == 0:
-                print i
             key = (ev[i]['ProtocolSequenceDir'], ev[i]['SourceFile'])
             if key not in pcache:
                 try:
@@ -128,17 +150,16 @@ if 'ev' not in locals():
                 except:
                     print key
                     raise
-            pos[i] = pcache[key]
-
-        ev = fn.concatenateColumns([ev, ('holding', holding.dtype, holding), pos])   
-        pickle.dump(ev, open(cacheFile, 'w'))
-    cells = list(set(ev['Source']))
-    #for c in cells:
-        #print c, db.getDir('Cell', c)
-    cells.sort(lambda a,b: cmp(db.getDir('DirType_Cell', a).name(), db.getDir('DirType_Cell', b).name()))
-    cellSpin.setMaximum(len(cells)-1)
-    print "Done."
-
+            extra[i]['x'] = pcache[key][0]
+            extra[i]['y'] = pcache[key][1]
+        ev = fn.concatenateColumns([ev, extra])
+        allEvents.append(ev)
+        nEv += len(ev)
+        print "    Loaded %d / %d events" % (nEv, tot)
+    ev = np.concatenate(allEvents)
+    events[cell] = ev
+    
+    
 def init():
     if not firstRun:
         return
@@ -146,22 +167,37 @@ def init():
     separateCheck.toggled.connect(showCell)
     colorCheck.toggled.connect(showCell)
     for s in [sp1, sp2, sp3, sp4]:
-        s.sigClicked.connect(plotClicked)
+        s.sigPointsClicked.connect(plotClicked)
 
 def plotClicked(plt, pts):
     pt = pts[0]
-    (id, fn, time) = pt.data
-    fh = db.getDir('ProtocolSequence', id)[fn]
+    #(id, fn, time) = pt.data
+    
+    #[['SourceFile', 'ProtocolSequenceDir', 'fitTime']]
+    #fh = db.getDir('ProtocolSequence', id)[fn]
+    fh = pt.data['SourceFile']
+    id = pt.data['ProtocolSequenceDir']
+    time = pt.data['fitTime']
+    
     data = fh.read()['Channel':'primary']
     p = pw2.plot(data, clear=True)
     pos = time / data.xvals('Time')[-1]
     arrow = pg.CurveArrow(p, pos=pos)
+    xr = pw2.viewRect().left(), pw2.viewRect().right()
+    if time < xr[0] or time > xr[1]:
+        w = xr[1]-xr[0]
+        pw2.setXRange(time-w/5., time+4*w/5., padding=0)
+    
+    x = np.linspace(time, time+pt.data['fitDecayTau']*5, 1000)
+    v = [pt.data['fitAmplitude'], pt.data['fitTime'], pt.data['fitRiseTau'], pt.data['fitDecayTau']]
+    y = fn.pspFunc(v, x, risePower=1.0) + data[np.argwhere(data.xvals('Time')>time)[0]]
+    pw2.plot(x, y, pen='b')
     #plot.addItem(arrow)
 
 
-def select(ev, source=None, ex=True):
-    if source is not None:
-        ev = ev[ev['Source']==source]
+def select(ev, ex=True):
+    #if source is not None:
+        #ev = ev[ev['CellDir']==source]
     if ex:
         ev = ev[ev['holding'] < -0.04]         # excitatory events
         ev = ev[(ev['fitAmplitude'] < 0) * (ev['fitAmplitude'] > -2e-10)]
@@ -182,7 +218,9 @@ def showCell():
     #lock = False
     cell = cells[cellSpin.value()]
     
-    dh = db.getDir('Cell', cell)
+    dh = cell #db.getDir('Cell', cell)
+    loadCell(dh)
+    
     try:
         image.setImage(dh['morphology.png'].read())
         gv.setRange(image.sceneBoundingRect())
@@ -190,8 +228,10 @@ def showCell():
         image.setImage(np.zeros((2,2)))
         pass
     
-    ev2 = select(ev, source=cell)
-    ev3 = select(ev, source=cell, ex=False)
+    ev = events[cell]
+    
+    ev2 = select(ev, ex=True)
+    ev3 = select(ev, ex=False)
     
     if colorCheck.isChecked():
         sp1.hide()
@@ -212,37 +252,39 @@ def showCell():
             pts.append({
                 'pos': (ev4[i]['fitDecayTau'], ev4[i]['fitAmplitude']),
                 'brush': pg.hsvColor(hue, 1, 1, 0.3),
-                'data': (ev4[i]['sourceDir'], ev4[i]['SourceFile'], ev4[i]['fitTime'])
+                'data': ev4[i]
             })
-        sp4.setPoints(pts)
+        sp4.setData(pts)
         
     else:
         sp1.show()
         sp2.show()
         #sp3.show()
         sp4.hide()
+        
+        ## excitatory
         if separateCheck.isChecked():
             pre = ev2[ev2['fitTime']< 0.498]
             post = ev2[(ev2['fitTime'] > 0.502) * (ev2['fitTime'] < 0.7)]
         else:
             pre = ev2
         
-        sp1.setPoints(x=pre['fitDecayTau'], y=pre['fitAmplitude'], data=pre[['SourceFile', 'sourceDir', 'fitTime']]);
+        sp1.setData(x=pre['fitDecayTau'], y=pre['fitAmplitude'], data=pre);
         #print "Cell ", cell
         #print "  excitatory:", np.median(ev2['fitDecayTau']), np.median(ev2['fitAmplitude'])
         
-        
+        ## inhibitory
         if separateCheck.isChecked():
             pre = ev3[ev3['fitTime']< 0.498]
             post2 = ev3[(ev3['fitTime'] > 0.502) * (ev3['fitTime'] < 0.7)]
             post = np.concatenate([post, post2])
         else:
             pre = ev3
-        sp2.setPoints(x=pre['fitDecayTau'], y=pre['fitAmplitude'], data=pre[['SourceFile', 'sourceDir', 'fitTime']]);
+        sp2.setData(x=pre['fitDecayTau'], y=pre['fitAmplitude'], data=pre);
         #print "  inhibitory:", np.median(ev2['fitDecayTau']), np.median(ev2['fitAmplitude'])
         
         if separateCheck.isChecked():
-            sp3.setPoints(x=post['fitDecayTau'], y=post['fitAmplitude'], data=post[['SourceFile', 'sourceDir', 'fitTime']])
+            sp3.setData(x=post['fitDecayTau'], y=post['fitAmplitude'], data=post)
             sp3.show()
         else:
             sp3.hide()
@@ -269,7 +311,7 @@ def spontRate(ev):
     ev = ev[ev['fitTime'] < 0.498]
     count = {}
     for i in range(len(ev)):
-        key = (ev[i]['sourceDir'], ev[i]['SourceFile'])
+        key = (ev[i]['ProtocolSequenceDir'], ev[i]['SourceFile'])
         if key not in count:
             count[key] = 0
         count[key] += 1

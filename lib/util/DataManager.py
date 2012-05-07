@@ -476,7 +476,6 @@ class DirHandle(FileHandle):
             pass
         
         
-
     def _indexFile(self):
         """Return the name of the index file for this directory. NOT the same as indexFile()"""
         return os.path.join(self.path, '.index')
@@ -976,6 +975,9 @@ class DirHandle(FileHandle):
             return self._index
         
     def _writeIndex(self, newIndex, lock=True):
+        #print "write index:", self
+        #import traceback
+        #traceback.print_stack()
         with self.lock:
             
             writeConfigFile(newIndex, self._indexFile())
@@ -1002,7 +1004,8 @@ class DirHandle(FileHandle):
                 del ind[f]
                 #ind.remove(f)
                 changed = True
-        self._writeIndex(ind)
+        if changed:
+            self._writeIndex(ind)
             
         
     def _childChanged(self):

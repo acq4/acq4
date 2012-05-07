@@ -165,7 +165,7 @@ class EventDetector(AnalysisModule):
         
         ## Make sure target table exists and has correct columns, links to input file
         #links = [('ProtocolDir', 'Protocol'), ('ProtocolSequenceDir', 'ProtocolSequence')]
-        db.checkTable(table, owner=self.dbIdentity, columns=columns, create=True)
+        db.checkTable(table, owner=self.dbIdentity, columns=columns, create=True, addUnknownColumns=True)
         
         ## convert source file handles to strings relative to the parent dir
         #names = [fh.name(relativeTo=parentDir) for fh in data['SourceFile']]
@@ -203,7 +203,12 @@ class EventDetector(AnalysisModule):
         p.mark("record list assembled")
             
         ## insert all data to DB
-        db.insert(table, records)
+        with pg.ProgressDialog("Storing events...", 0, 100) as dlg:
+            for n, nmax in db.iterInsert(table, records):
+                dlg.setMaximum(nmax)
+                dlg.setValue(n)
+                if dlg.wasCanceled():
+                    raise HelpfulException("Scan store canceled by user.", msgType='status')
         p.mark("records inserted")
         p.finish()
 
