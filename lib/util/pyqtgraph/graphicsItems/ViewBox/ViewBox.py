@@ -97,6 +97,8 @@ class ViewBox(GraphicsWidget):
             'aspectLocked': False,    ## False if aspect is unlocked, otherwise float specifies the locked ratio.
             'autoRange': [True, True],  ## False if auto range is disabled, 
                                           ## otherwise float gives the fraction of data that is visible
+            'autoPan': [False, False],         ## whether to only pan (do not change scaling) when auto-range is enabled
+            'autoVisibleOnly': [False, False], ## whether to auto-range only to the visible portion of a plot 
             'linkedViews': [None, None],
             
             'mouseEnabled': [enableMouse, enableMouse],
