@@ -468,6 +468,27 @@ class ViewBox(GraphicsWidget):
     def autoRangeEnabled(self):
         return self.state['autoRange'][:]
 
+    def setAutoPan(self, x=None, y=None):
+        if x is not None:
+            self.state['autoPan'][0] = x
+        if y is not None:
+            self.state['autoPan'][1] = y
+        if None not in [x,y]:
+            self.updateAutoRange()
+
+    def setAutoVisible(self, x=None, y=None):
+        if x is not None:
+            self.state['autoVisibleOnly'][0] = x
+            if x is True:
+                self.state['autoVisibleOnly'][1] = False
+        if y is not None:
+            self.state['autoVisibleOnly'][1] = y
+            if y is True:
+                self.state['autoVisibleOnly'][0] = False
+        
+        if None not in [x,y]:
+            self.updateAutoRange()
+
     def updateAutoRange(self):
         tr = self.viewRect()
         if not any(self.state['autoRange']):
@@ -478,9 +499,28 @@ class ViewBox(GraphicsWidget):
             if type(fractionVisible[i]) is bool:
                 fractionVisible[i] = 1.0
         cr = self.childrenBoundingRect(frac=fractionVisible)
-        wp = cr.width() * 0.02
-        hp = cr.height() * 0.02
-        cr = cr.adjusted(-wp, -hp, wp, hp)
+
+        ## Make corrections to X range
+        if self.state['autoPan'][0]:
+            x = cr.center().x()
+            vr = self.visibleRange()
+            w2 = (vr[0][1]-vr[0][0]) / 2.
+            cr.setLeft(x-w2)
+            cr.setRight(x+w2)
+        else:
+            wp = cr.width() * 0.02
+            cr = cr.adjusted(-wp, 0, wp, 0)
+
+        ## Make corrections to Y range
+        if self.state['autoPan'][1]:
+            y = cr.center().y()
+            vr = self.viewRange()
+            h2 = (vr[1][1]-vr[1][0]) / 2.
+            cr.setTop(y-h2)
+            cr.setBottom(y+h2)
+        else:
+            hp = cr.height() * 0.02
+            cr = cr.adjusted(0, -hp, 0, hp)
         
         if self.state['autoRange'][0] is not False:
             tr.setLeft(cr.left())
