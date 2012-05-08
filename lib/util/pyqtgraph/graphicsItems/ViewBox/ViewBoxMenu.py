@@ -204,7 +204,7 @@ class ViewBoxMenu(QtGui.QMenu):
         self.view.setAutoPan(y=b)
     
     def yVisibleOnlyToggled(self, b):
-        self.view.setAutoVisible(x=b)
+        self.view.setAutoVisible(y=b)
 
 
 
