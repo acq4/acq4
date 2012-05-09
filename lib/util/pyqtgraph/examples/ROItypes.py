@@ -99,7 +99,6 @@ rois.append(pg.MultiLineROI([[0, 50], [50, 60], [60, 30]], width=5, pen=(2,9)))
 rois.append(pg.EllipseROI([110, 10], [30, 20], pen=(3,9)))
 rois.append(pg.CircleROI([110, 50], [20, 20], pen=(4,9)))
 rois.append(pg.PolygonROI([[2,0], [2.1,0], [2,.1]], pen=(5,9)))
-rois.append(pg.RectangleROI([10,10],[30,30], pen=(6,9)))
 #rois.append(SpiralROI([20,30], [1,1], pen=mkPen(0)))
 
 ## Add each ROI to the scene and link its data to a plot curve with the same color

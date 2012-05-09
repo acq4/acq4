@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/util/DatabaseGui/DatabaseTemplate.ui'
 #
-# Created: Wed Apr 18 13:40:18 2012
+# Created: Wed May 18 20:44:17 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

@@ -193,6 +193,8 @@ class Element(QtCore.QObject):
             obj = pg.parametertree.ParameterTree(**args)
         elif typ == 'graphicsView':
             obj = pg.GraphicsView(**args)
+        elif typ == 'graphicsLayout':
+            obj = pg.GraphicsLayoutWidget(**args)
         elif typ == 'viewBox':
             obj = pg.GraphicsView()
             obj.setCentralItem(pg.ViewBox(**args))

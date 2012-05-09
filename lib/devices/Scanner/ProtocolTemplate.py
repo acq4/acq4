@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/devices/Scanner/ProtocolTemplate.ui'
+# Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Wed Apr 18 13:40:15 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Tue Mar 27 14:33:55 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -96,7 +96,7 @@ class Ui_Form(object):
         self.sizeSpin.setMinimum(0.0)
         self.sizeSpin.setMaximum(100000.0)
         self.sizeSpin.setSingleStep(1e-06)
-        self.sizeSpin.setProperty(_fromUtf8("value"), 0.0)
+        self.sizeSpin.setProperty("value", 0.0)
         self.sizeSpin.setObjectName(_fromUtf8("sizeSpin"))
         self.gridLayout_2.addWidget(self.sizeSpin, 1, 1, 1, 1)
         self.gridLayout.addWidget(self.groupBox_2, 4, 0, 1, 2)

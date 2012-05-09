@@ -1,2 +1,0 @@
-Analyze Photostimulation Maps
-=============================

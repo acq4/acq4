@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/LogWidgetTemplate.ui'
+# Form implementation generated from reading ui file 'LogWidgetTemplate.ui'
 #
-# Created: Wed Apr 18 13:40:09 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Tue Jan 17 16:45:29 2012
+#      by: PyQt4 UI code generator 4.9
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -73,7 +73,7 @@ class Ui_Form(object):
         self.filterTree.setMinimumSize(QtCore.QSize(210, 0))
         self.filterTree.setMaximumSize(QtCore.QSize(8777205, 16777215))
         self.filterTree.setEditTriggers(QtGui.QAbstractItemView.NoEditTriggers)
-        self.filterTree.setProperty(_fromUtf8("showDropIndicator"), False)
+        self.filterTree.setProperty("showDropIndicator", False)
         self.filterTree.setDragEnabled(True)
         self.filterTree.setSelectionMode(QtGui.QAbstractItemView.NoSelection)
         self.filterTree.setSelectionBehavior(QtGui.QAbstractItemView.SelectItems)
@@ -127,7 +127,7 @@ class Ui_Form(object):
         self.importanceSlider.setSizePolicy(sizePolicy)
         self.importanceSlider.setMaximum(9)
         self.importanceSlider.setPageStep(0)
-        self.importanceSlider.setProperty(_fromUtf8("value"), 4)
+        self.importanceSlider.setProperty("value", 4)
         self.importanceSlider.setTracking(True)
         self.importanceSlider.setOrientation(QtCore.Qt.Horizontal)
         self.importanceSlider.setTickPosition(QtGui.QSlider.TicksAbove)

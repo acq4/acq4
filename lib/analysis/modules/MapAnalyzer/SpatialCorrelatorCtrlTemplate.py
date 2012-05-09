@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/analysis/modules/MapAnalyzer/SpatialCorrelatorCtrlTemplate.ui'
+# Form implementation generated from reading ui file 'SpatialCorrelatorCtrlTemplate.ui'
 #
-# Created: Wed Apr 18 13:40:11 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Thu Mar  8 20:42:05 2012
+#      by: PyQt4 UI code generator 4.9
 #
 # WARNING! All changes made in this file will be lost!
 

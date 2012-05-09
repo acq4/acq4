@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/devices/DAQGeneric/InputChannelTemplate.ui'
+# Form implementation generated from reading ui file 'InputChannelTemplate.ui'
 #
-# Created: Wed Apr 18 13:40:14 2012
+# Created: Sun Dec 18 19:22:37 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

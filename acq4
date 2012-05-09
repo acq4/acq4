@@ -1,3 +1,0 @@
-#!/bin/bash
-python acq4.py -m "Data Manager" -m "Console"
-

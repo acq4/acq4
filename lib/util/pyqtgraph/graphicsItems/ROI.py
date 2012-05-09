@@ -1082,14 +1082,13 @@ class TestROI(ROI):
         #QtGui.QGraphicsRectItem.__init__(self, pos[0], pos[1], size[0], size[1])
         ROI.__init__(self, pos, size, **args)
         #self.addTranslateHandle([0, 0])
-#        self.addTranslateHandle([0.5, 0.5]) # center of item; obvious to translate only
-#        self.addScaleHandle([1, 1], [0, 0]) # in one corner; scale in both directions
-#        self.addScaleHandle([0, 0], [1, 1]) # opposite corner
-        self.addScaleRotateHandle([1, 0.5], [0.5, 0.5]) # Rotation is about center; handle on one side
-        self.addScaleHandle([1, 0], [0.5, 0.5]) # Rotation is about center; handle on one side
-#        self.addScaleHandle([0.5, 1], [0.5, 0.5]) # along one side in the middle; only works in opposite direction
-#        self.addRotateHandle([1, 0], [0, 0]) # anchored rotation, handle on the corner
-#        self.addRotateHandle([0, 1], [1, 1]) # opposite anchored rotation
+        self.addTranslateHandle([0.5, 0.5])
+        self.addScaleHandle([1, 1], [0, 0])
+        self.addScaleHandle([0, 0], [1, 1])
+        self.addScaleRotateHandle([1, 0.5], [0.5, 0.5])
+        self.addScaleHandle([0.5, 1], [0.5, 0.5])
+        self.addRotateHandle([1, 0], [0, 0])
+        self.addRotateHandle([0, 1], [1, 1])
 
 
 

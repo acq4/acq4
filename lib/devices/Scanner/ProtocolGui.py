@@ -1433,6 +1433,8 @@ class TargetOcclusion(pg.PolygonROI):
     def saveState(self):
         return {'type':'Occlusion', 'pos': (self.pos().x(), self.pos().y()), 'points': [(p.x(), p.y()) for p in self.listPoints()]}
     
+    def listPoints(self):
+        return []
     
 class ProgramLineScan(QtCore.QObject):
     

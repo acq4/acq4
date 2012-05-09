@@ -24,14 +24,24 @@ class IVCurve(AnalysisModule):
         self.ctrlWidget = QtGui.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
+        self.main_layout =  pg.GraphicsView()
+        
+        # make fixed widget for the module output
+        self.widget = QtGui.QWidget()
+        self.gridLayout = QtGui.QGridLayout()
+        self.widget.setLayout(self.gridLayout)
+        self.gridLayout.setContentsMargins(0,0,0,0)
+        self.gridLayout.setSpacing(1)
         # Setup basic GUI
         self._elements_ = OrderedDict([
             ('File Loader', {'type': 'fileInput', 'size': (100, 300), 'host': self}),
             ('Parameters', {'type': 'ctrl', 'object': self.ctrlWidget, 'host': self, 'size': (100,300)}),
-            ('Data Plot', {'type': 'plot', 'pos': ('right', 'File Loader'), 'size': (400, 300)}),
-            ('IV Plot', {'type': 'plot', 'pos': ('right', 'Data Plot'), 'size': (400, 300)}),
-            ('FI Plot', {'type': 'plot', 'pos': ('right', 'Parameters'), 'size': (400, 300)}),
-            ('FSL/FISI Plot', {'type': 'plot', 'pos': ('right', 'FI Plot'), 'size': (400, 300)}),
+            ('Plots', {'type': 'ctrl', 'object': self.widget, 'pos': ('right',), 'size': (800, 600)}),
+#            ('Plots', {'type': 'graphicsLayout', 'pos': ('right',), 'size': (800, 600)}),
+#            ('Data Plot', {'type': 'plot', 'pos': ('right', 'File Loader'), 'size': (400, 300)}),
+#            ('IV Plot', {'type': 'plot', 'pos': ('right', 'Data Plot'), 'size': (400, 300)}),
+#            ('FI Plot', {'type': 'plot', 'pos': ('right', 'Parameters'), 'size': (400, 300)}),
+#            ('FSL/FISI Plot', {'type': 'plot', 'pos': ('right', 'FI Plot'), 'size': (400, 300)}),
         ])
         self.initializeElements()
         # grab input form the "Ctrl" window
@@ -42,10 +52,24 @@ class IVCurve(AnalysisModule):
 #        self.ctrl.IVCurve_pkTStart.valueChanged.connect(self.readParameters)
 #        self.ctrl.IVCurve_pkTStop.valueChanged.connect(self.readParameters)
         self.clearResults()
-        self.data_plot = self.getElement('Data Plot', create=True)
-        self.IV_plot = self.getElement('IV Plot', create=True)
-        self.fiPlot = self.getElement('FI Plot', create=True)
-        self.fslPlot = self.getElement('FSL/FISI Plot', create = True)
+        self.layout = self.getElement('Plots', create=True)
+#        print dir(self.plotView)
+#        mainLayout = pg.GraphicsLayout(border=pg.mkPen(0, 0, 255))
+        #print dir(mainLayout)
+#        self.data_plot = self.getElement('Data Plot', create=True)
+ 
+        self.data_plot = pg.PlotWidget()
+        self.gridLayout.addWidget(self.data_plot, 0, 0)# (row=0, col=0) # self.getElement('Data Plot', create=True)
+        self.labelUp(self.data_plot, 'T (ms)', 'V (mV)', 'Data')
+        self.IV_plot = pg.PlotWidget()
+        self.gridLayout.addWidget(self.IV_plot, 0, 1) # self.getElement('IV Plot', create=True)
+        self.labelUp(self.IV_plot, 'I (nA)', 'V (mV)', 'I-V')
+        self.fiPlot = pg.PlotWidget()
+        self.gridLayout.addWidget(self.fiPlot, 1, 0) # self.getElement('FI Plot', create=True)
+        self.labelUp(self.fiPlot, 'I (nA)', 'Spikes (#)', 'F-I')
+        self.fslPlot =  pg.PlotWidget()
+        self.gridLayout.addWidget(self.fslPlot, 1, 1) # self.getElement('FSL/FISI Plot', create = True)
+        self.labelUp(self.fslPlot, 'I (nA)', 'Fsl/Fisi (ms)', 'FSL/FISI')
         self.IVScatterPlot_ss = pg.ScatterPlotItem(size=6, pen=pg.mkPen('w'), brush=pg.mkBrush(255, 255, 255, 255), identical=True)
         self.IVScatterPlot_pk = pg.ScatterPlotItem(size=6, pen=pg.mkPen('r'), brush=pg.mkBrush(255, 0, 0, 255), identical=True)
 
@@ -336,4 +360,14 @@ class IVCurve(AnalysisModule):
         rgnx2 = self.ctrl.IVCurve_pkTStop.value()/1.0e3
         self.lrpk.setRegion([rgnx1, rgnx2])
         self.update_pkAnalysis(clear=False, pw = pw)
+
+
+#---- Helpers ---
+# Some of these would normally live in a pyqtgraph-related module, but are just stuck here to get the job done.
+    def labelUp(self, plot, xtext, ytext, title):
+        """helper to label up the plot"""
+        plot.setLabel('bottom', xtext)
+        plot.setLabel('left', ytext)
+        plot.setTitle(title)
+
 

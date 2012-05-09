@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/analysis/modules/MapAnalyzer/MapConvolverTemplate.ui'
+# Form implementation generated from reading ui file 'MapConvolverTemplate.ui'
 #
-# Created: Wed Apr 18 13:40:10 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Tue Mar  6 14:17:16 2012
+#      by: PyQt4 UI code generator 4.9
 #
 # WARNING! All changes made in this file will be lost!
 
