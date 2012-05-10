@@ -1,6 +1,7 @@
 from database import *
 from pyqtgraph.widgets.ProgressDialog import ProgressDialog
 import debug
+from lib.Manager import logExc, logMsg
 
 
 class AnalysisDatabase(SqliteDatabase):
@@ -28,7 +29,7 @@ class AnalysisDatabase(SqliteDatabase):
     def __init__(self, dbFile, dataModel, baseDir=None):
         create = False
         self.tableConfigCache = None
-        self.columnConfigCache = {}
+        self.columnConfigCache = advancedTypes.CaselessDict()
         
         self.setDataModel(dataModel)
         self._baseDir = None
@@ -274,11 +275,15 @@ class AnalysisDatabase(SqliteDatabase):
             rec.update(col)
             
             typ = rec['Type']
-            if typ.startswith('directory'):
-                rec['Link'] = self.dirTableName(typ.lstrip('directory:'))
-                typ = 'int'
-            elif typ == 'file':
-                typ = 'text'
+            typ, link = self.interpretColumnType(typ)
+            if link is not None:
+                rec['Link'] = link
+            #if typ.startswith('directory'):
+                #rec['Link'] = self.dirTableName(typ.lstrip('directory:'))
+                #typ = 'int'
+            #elif typ == 'file':
+                #typ = 'text'
+            
             tup = (rec['Column'], typ)
             if 'Constraints' in rec:
                 tup = tup + (rec['Constraints'],)
@@ -295,16 +300,44 @@ class AnalysisDatabase(SqliteDatabase):
         self.tableConfigCache = None
         
         return ret
+        
+    def interpretColumnType(self, typ):
+        ## returns: (Sqlite type, Link)
+        link = None
+        if typ.startswith('directory'):
+            link = self.dirTableName(typ.lstrip('directory:'))
+            typ = 'int'
+        elif typ == 'file':
+            typ = 'text'
+        return typ, link
+    
 
-    def checkTable(self, table, owner, columns, create=False):
+    def addColumn(self, table, colName, colType, constraints=None):
+        """
+        Add a new column to a table.
+        """
+        typ, link = self.interpretColumnType(colType)
+        SqliteDatabase.addColumn(self, table, colName, typ, constraints)
+        self.insert('ColumnConfig', {'Column': colName, 'Table': table, 'Type': colType, 'Link': link})
+        if table in self.columnConfigCache:
+            del self.columnConfigCache[table]
+    
+    
+    def checkTable(self, table, owner, columns, create=False, ignoreUnknownColumns=False, addUnknownColumns=False):
         """
         Checks to be sure that a table has been created with the correct fields and ownership.
         This should generally be run before attempting to access a table.
         If the table does not exist and create==True, then the table will be created with the 
         given columns and owner. 
+        
+        If ignoreUnknownColumns==True, then any columns in the data
+        that are not also in the table will be ignored. (Note: in this case, an insert may fail
+        unless ignoreUnknownColumns=True is also specified when calling insert())
+        
+        If addUnknownColumns==True, then any columns in the data
+        that are not also in the table will be created in the table.
         """
         columns = parseColumnDefs(columns, keyOrder=['Type', 'Constraints', 'Link'])
-            
         ## Make sure target table exists and has correct columns, links to input file
         if not self.hasTable(table):
             if create:
@@ -324,7 +357,14 @@ class AnalysisDatabase(SqliteDatabase):
             for colName, col in columns.iteritems():
                 colType = col['Type']
                 if colName not in ts:  ## <-- this is a case-insensitive operation
-                    raise Exception("Table has different data structure: Missing column %s" % colName)
+                    if ignoreUnknownColumns:
+                        continue
+                    elif addUnknownColumns:
+                        self.addColumn(table, colName, colType)
+                        ts = self.tableSchema(table) ## re-read schema and column config
+                        config = self.getColumnConfig(table)
+                    else:
+                        raise Exception("Table has different data structure: Missing column %s" % colName)
                 specType = ts[colName]
                 if specType.lower() != colType.lower():  ## type names are case-insensitive too
                     ## requested column type does not match schema; check for directory / file types
@@ -365,7 +405,6 @@ class AnalysisDatabase(SqliteDatabase):
 
     def addDir(self, handle):
         """Create a record based on a DirHandle and its meta-info."""
-        print "addDir:", handle
         info = handle.info().deepcopy()
         for k in info:  ## replace tuple keys with strings
             if isinstance(k, tuple):
@@ -413,6 +452,47 @@ class AnalysisDatabase(SqliteDatabase):
         return table, self.lastInsertRow()
 
 
+    def createView(self, viewName, tables):
+        """Create a view which joins the tables listed."""
+        # db('create view "sites" as select * from photostim_sites inner join DirTable_Protocol on photostim_sites.ProtocolDir=DirTable_Protocol.rowid inner join DirTable_Cell on DirTable_Protocol.CellDir=DirTable_Cell.rowid')
+        
+        cmd = 'create view "%s" as select * from "%s"' % (viewName, tables[0])
+        for i in range(len(tables)-1):
+            t1 = tables[i]
+            t2 = tables[i+1]
+            
+            linkCol = None
+            for colName, config in self.getColumnConfig(t1).iteritems():
+                if str(config['Link']).lower() == t2.lower():
+                    linkCol = config['Column']
+                    break
+                    
+            if linkCol is None:
+                for c in self.getColumnConfig(t1):
+                    print "  ", c
+                raise Exception("No column linking table %s to %s.rowid" % (t1, t2))
+            
+            cmd += ' inner join "%s" on %s.%s=%s.rowid' % (t2, t1, linkCol, t2)
+        
+        self(cmd)
+        
+        ## Create column config records for this view
+        colNames = self.tableSchema(viewName).keys()
+        colDesc = []
+        colIndex = 0
+        for table in tables:
+            cols = self.getColumnConfig(table)
+            for col, config in cols.iteritems():
+                config = config.copy()
+                config['Column'] = colNames[colIndex]
+                config['Table'] = viewName
+                colDesc.append(config)
+                colIndex += 1
+        self.insert('ColumnConfig', colDesc)
+        
+        
+        
+        
 
     #def linkTables(self, table1, col, table2):
         #"""Declare a key relationship between two tables. Values in table1.column are ROWIDs from table 2"""
@@ -438,17 +518,17 @@ class AnalysisDatabase(SqliteDatabase):
         if table not in self.columnConfigCache:
             if not self.hasTable('ColumnConfig'):
                 return {}
-            recs = SqliteDatabase.select(self, 'ColumnConfig', ['Column', 'Type', 'Constraints', 'Link'], sql="where \"Table\"='%s'" % table)
+            recs = SqliteDatabase.select(self, 'ColumnConfig', ['Column', 'Type', 'Constraints', 'Link'], sql="where lower(\"Table\")=lower('%s') order by rowid" % table)
             if len(recs) == 0:
                 return {}
             
-            self.columnConfigCache[table] = dict([(r['Column'], r) for r in recs])
+            self.columnConfigCache[table] = collections.OrderedDict([(r['Column'], r) for r in recs])
         return self.columnConfigCache[table]
         
     def getTableConfig(self, table):
         if self.tableConfigCache is None:
             recs = SqliteDatabase.select(self, 'TableConfig')
-            self.tableConfigCache = {}
+            self.tableConfigCache = advancedTypes.CaselessDict()
             for rec in recs:
                 self.tableConfigCache[rec['Table']] = rec
         #recs = self.select('TableConfig', sql="where \"Table\"='%s'" % table)
@@ -474,6 +554,8 @@ class AnalysisDatabase(SqliteDatabase):
         res = self.select(table, ['Dir'], sql='where rowid=%d'%rowid)
         if len(res) < 1:
             raise Exception('rowid %d does not exist in %s' % (rowid, table))
+            #logMsg('rowid %d does not exist in %s' % (rowid, table), msgType='error')
+            #return None
         #print res
         #return self.baseDir()[res[0]['Dir']]
         return res[0]['Dir']
@@ -575,11 +657,10 @@ class AnalysisDatabase(SqliteDatabase):
             raise Exception("Can not describe data of type '%s'" % type(data))
         return columns
 
-    def select(self, table, columns='*', where=None, sql='', toDict=True, toArray=False):
+    def select(self, table, columns='*', where=None, sql='', toDict=True, toArray=False, distinct=False, limit=None, offset=None):
         """Extends select to convert directory/file columns back into Dir/FileHandles"""
         
-        
-        data = SqliteDatabase.select(self, table, columns, where=where, sql=sql, toDict=True, toArray=False)
+        data = SqliteDatabase.select(self, table, columns, where=where, sql=sql, distinct=distinct, limit=limit, offset=offset, toDict=True, toArray=False)
         data = TableData(data)
         
         config = self.getColumnConfig(table)
@@ -604,7 +685,7 @@ class AnalysisDatabase(SqliteDatabase):
             ret = data.toArray()
         return ret
     
-    def _prepareData(self, table, data, removeUnknownColumns=False, batch=False):
+    def _prepareData(self, table, data, ignoreUnknownColumns=False, batch=False):
         """
         Extends SqliteDatabase._prepareData():
             - converts DirHandles to the correct rowid for any linked columns
@@ -617,7 +698,7 @@ class AnalysisDatabase(SqliteDatabase):
         #links = self.listTableLinks(table)
         config = self.getColumnConfig(table)
         
-        data = TableData(data)
+        data = TableData(data).copy()  ## have to copy here since we might be changing some values
         dataCols = set(data.columnNames())
         for colName, colConf in config.iteritems():
             if colName not in dataCols:
@@ -656,7 +737,7 @@ class AnalysisDatabase(SqliteDatabase):
                             raise
                 data[colName] = files
 
-        newData = SqliteDatabase._prepareData(self, table, data, removeUnknownColumns, batch)
+        newData = SqliteDatabase._prepareData(self, table, data, ignoreUnknownColumns, batch)
         
         return newData
         

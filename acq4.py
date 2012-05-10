@@ -63,7 +63,8 @@ def messageHandler(msgType, msg):
     print msg
     traceback.print_stack()
     try:
-        logf = os.path.join(os.path.split(__file__)[0], "crash.log")
+        logf = "crash.log"
+            
         fh = open(logf, 'a')
         fh.write(msg+'\n')
         fh.write('\n'.join(traceback.format_stack()))

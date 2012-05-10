@@ -8,14 +8,26 @@ from GraphicsWidget import GraphicsWidget
 
 __all__ = ['AxisItem']
 class AxisItem(GraphicsWidget):
+    """
+    GraphicsItem showing a single plot axis with ticks, values, and label.
+    Can be configured to fit on any side of a plot, and can automatically synchronize its displayed scale with ViewBox items.
+    Ticks can be extended to draw a grid.
+    If maxTickLength is negative, ticks point into the plot. 
+    """
+    
     def __init__(self, orientation, pen=None, linkView=None, parent=None, maxTickLength=-5, showValues=True):
         """
-        GraphicsItem showing a single plot axis with ticks, values, and label.
-        Can be configured to fit on any side of a plot, and can automatically synchronize its displayed scale with ViewBox items.
-        Ticks can be extended to make a grid.
-        If maxTickLength is negative, ticks point into the plot. 
+        ==============  ===============================================================
+        **Arguments:**
+        orientation     one of 'left', 'right', 'top', or 'bottom'
+        maxTickLength   (px) maximum length of ticks to draw. Negative values draw
+                        into the plot, positive values draw outward.
+        linkView        (ViewBox) causes the range of values displayed in the axis
+                        to be linked to the visible range of a ViewBox.
+        showValues      (bool) Whether to display values adjacent to ticks 
+        pen             (QPen) Pen used when drawing ticks.
+        ==============  ===============================================================
         """
-        
         
         GraphicsWidget.__init__(self, parent)
         self.label = QtGui.QGraphicsTextItem(self)
@@ -43,6 +55,7 @@ class AxisItem(GraphicsWidget):
         self.labelUnits = ''
         self.labelUnitPrefix=''
         self.labelStyle = {'color': '#CCC'}
+        self.logMode = False
         
         self.textHeight = 18
         self.tickLength = maxTickLength
@@ -76,6 +89,15 @@ class AxisItem(GraphicsWidget):
         self.prepareGeometryChange()
         self.update()
         
+    def setLogMode(self, log):
+        """
+        If *log* is True, then ticks are displayed on a logarithmic scale and values
+        are adjusted accordingly. (This is usually accessed by changing the log mode 
+        of a :func:`PlotItem <pyqtgraph.PlotItem.setLogMode>`)
+        """
+        self.logMode = log
+        self.picture = None
+        self.update()
         
     def resizeEvent(self, ev=None):
         #s = self.size()
@@ -105,6 +127,7 @@ class AxisItem(GraphicsWidget):
         self.picture = None
         
     def showLabel(self, show=True):
+        """Show/hide the label text for this axis."""
         #self.drawLabel = show
         self.label.setVisible(show)
         if self.orientation in ['left', 'right']:
@@ -115,6 +138,7 @@ class AxisItem(GraphicsWidget):
             self.setScale()
         
     def setLabel(self, text=None, units=None, unitPrefix=None, **args):
+        """Set the text displayed adjacent to the axis."""
         if text is not None:
             self.labelText = text
             self.showLabel()
@@ -174,10 +198,11 @@ class AxisItem(GraphicsWidget):
         Set the value scaling for this axis. 
         The scaling value 1) multiplies the values displayed along the axis
         and 2) changes the way units are displayed in the label. 
-        For example:
-            If the axis spans values from -0.1 to 0.1 and has units set to 'V'
-            then a scale of 1000 would cause the axis to display values -100 to 100
-            and the units would appear as 'mV'
+        
+        For example: If the axis spans values from -0.1 to 0.1 and has units set 
+        to 'V' then a scale of 1000 would cause the axis to display values -100 to 100
+        and the units would appear as 'mV'
+        
         If scale is None, then it will be determined automatically based on the current 
         range displayed by the axis.
         """
@@ -202,6 +227,7 @@ class AxisItem(GraphicsWidget):
             self.update()
         
     def setRange(self, mn, mx):
+        """Set the range of values displayed by the axis"""
         if mn in [np.nan, np.inf, -np.inf] or mx in [np.nan, np.inf, -np.inf]:
             raise Exception("Not setting range to [%s, %s]" % (str(mn), str(mx)))
         self.range = [mn, mx]
@@ -218,6 +244,7 @@ class AxisItem(GraphicsWidget):
             return self._linkedView()
         
     def linkToView(self, view):
+        """Link this axis to a ViewBox, causing its displayed range to match the visible range of the view."""
         oldView = self.linkedView()
         self._linkedView = weakref.ref(view)
         if self.orientation in ['right', 'left']:
@@ -267,7 +294,8 @@ class AxisItem(GraphicsWidget):
         This method is called whenever the axis needs to be redrawn and is a 
         good method to override in subclasses that require control over tick locations.
         
-        The return value must be a list of three tuples:
+        The return value must be a list of three tuples::
+        
             [
                 (major tick spacing, offset),
                 (minor tick spacing, offset),
@@ -306,16 +334,20 @@ class AxisItem(GraphicsWidget):
 
     def tickValues(self, minVal, maxVal, size):
         """
-        Return the values and spacing of ticks to draw
-        [  
-            (spacing, [major ticks]), 
-            (spacing, [minor ticks]), 
-            ... 
-        ]
+        Return the values and spacing of ticks to draw::
+        
+            [  
+                (spacing, [major ticks]), 
+                (spacing, [minor ticks]), 
+                ... 
+            ]
         
         By default, this method calls tickSpacing to determine the correct tick locations.
         This is a good method to override in subclasses.
         """
+        if self.logMode:
+            return self.logTickValues(minVal, maxVal, size)
+            
         ticks = []
         tickLevels = self.tickSpacing(minVal, maxVal, size)
         for i in range(len(tickLevels)):
@@ -329,6 +361,16 @@ class AxisItem(GraphicsWidget):
             ticks.append((spacing, np.arange(num) * spacing + start))
         return ticks
     
+    def logTickValues(self, minVal, maxVal, size):
+        v1 = int(np.floor(minVal))
+        v2 = int(np.ceil(maxVal))
+        major = range(v1+1, v2)
+        
+        minor = []
+        for v in range(v1, v2):
+            minor.extend(v + np.log10(np.arange(1, 10)))
+        minor = filter(lambda x: x>minVal and x<maxVal, minor)
+        return [(1.0, major), (None, minor)]
 
     def tickStrings(self, values, scale, spacing):
         """Return the strings that should be placed next to ticks. This method is called 
@@ -343,6 +385,9 @@ class AxisItem(GraphicsWidget):
         be accompanied by a scale value of 1000. This indicates that the label is displaying 'mV', and 
         thus the tick should display 0.001 * 1000 = 1.
         """
+        if self.logMode:
+            return self.logTickStrings(values, scale, spacing)
+        
         places = max(0, np.ceil(-np.log10(spacing*scale)))
         strings = []
         for v in values:
@@ -353,6 +398,9 @@ class AxisItem(GraphicsWidget):
                 vstr = ("%%0.%df" % places) % vs
             strings.append(vstr)
         return strings
+        
+    def logTickStrings(self, values, scale, spacing):
+        return ["%0.1g"%x for x in 10 ** np.array(values).astype(float)]
         
     def drawPicture(self, p):
         
@@ -457,7 +505,9 @@ class AxisItem(GraphicsWidget):
         for i in range(len(tickLevels)):
             ## take a small sample of strings and measure their rendered text
             spacing, values = tickLevels[i]
-            strings = self.tickStrings(values[:2], self.scale, spacing)
+            strings = self.tickStrings(values, self.scale, spacing)
+            if len(strings) == 0:
+                continue
             textRects = [p.boundingRect(QtCore.QRectF(0, 0, 100, 100), QtCore.Qt.AlignCenter, s) for s in strings]
             if axis == 0:
                 textSize = np.max([r.height() for r in textRects])
