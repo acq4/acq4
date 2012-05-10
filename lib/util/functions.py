@@ -163,13 +163,16 @@ def pspFunc(v, x, risePower=2.0):
         raise
     return out
 
-def fitPsp(x, y, guess, bounds=None, risePower=2.0):
+def fitPsp(x, y, guess, bounds=None, risePower=2.0, multiFit=False):
     """
         guess: [amp, xoffset, rise, fall]
         bounds: [[ampMin, ampMax], ...]
         
         NOTE: This fit is more likely to converge correctly if the guess amplitude 
         is larger (about 2x) than the actual amplitude.
+        
+        if multiFit is True, then attempt to improve the fit by brute-force searching
+        and re-fitting. (this is very slow)
     """
     if guess is None:
         guess = [
@@ -206,29 +209,31 @@ def fitPsp(x, y, guess, bounds=None, risePower=2.0):
     ## initial fit
     fit = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-2, factor=0.1)[0]
     
-    ## try on a few more fits
-    #err = (errFn(fit, x, y)**2).sum()
-    #print "fit:", err
-    #bestFit = fit
-    #for da in [0.5, 1.0, 2.0]:
-        #for dt in [0.5, 1.0, 2.0]:
-            #for dr in [0.5, 1.0, 2.0]:
-                #for do in [0.002, .0, 0.002]:
-                    #if da == 1.0 and dt == 1.0 and dr == 1.0 and do == 0.0:
-                        #continue
-                    #guess = fit.copy()            
-                    #guess[0] *= da
-                    #guess[1] += do
-                    #guess[3] *= dt
-                    #guess[2] *= dr
-                    #fit2 = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-1, factor=0.1)[0]
-                    #err2 = (errFn(fit2, x, y)**2).sum()
-                    #if err2 < err:
-                        #bestFit = fit2
-                        #print "   found better PSP fit: %s -> %s" % (err, err2), da, dt, dr, do
-                        #err = err2
     
-    #fit = bestFit
+    ## try on a few more fits
+    if multiFit:
+        err = (errFn(fit, x, y)**2).sum()
+        print "fit:", err
+        bestFit = fit
+        for da in [0.5, 1.0, 2.0]:
+            for dt in [0.5, 1.0, 2.0]:
+                for dr in [0.5, 1.0, 2.0]:
+                    for do in [0.002, .0, 0.002]:
+                        if da == 1.0 and dt == 1.0 and dr == 1.0 and do == 0.0:
+                            continue
+                        guess = fit.copy()            
+                        guess[0] *= da
+                        guess[1] += do
+                        guess[3] *= dt
+                        guess[2] *= dr
+                        fit2 = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-1, factor=0.1)[0]
+                        err2 = (errFn(fit2, x, y)**2).sum()
+                        if err2 < err:
+                            bestFit = fit2
+                            print "   found better PSP fit: %s -> %s" % (err, err2), da, dt, dr, do
+                            err = err2
+        
+        fit = bestFit
     
     
     
@@ -2118,12 +2123,14 @@ def expDeconvolve(data, tau):
         return d
 
     
-def expReconvolve(data, tau=None):
-    dt = 1
+def expReconvolve(data, tau=None, dt=None):
     if isinstance(data, MetaArray):
-        dt = data.xvals(0)[1] - data.xvals(0)[0]
+        if dt is None:
+            dt = data.xvals(0)[1] - data.xvals(0)[0]
         if tau is None:
             tau = data._info[-1].get('expDeconvolveTau', None)
+    if dt is None: 
+        dt = 1
     if tau is None:
         raise Exception("Must specify tau.")
     # x(k+1) = x(k) + dt * (f(k) - x(k)) / tau

@@ -149,7 +149,7 @@ def loadCell(cell):
     allEvents = []
     hvals = {}
     nEv = 0
-    pcache = {}
+    positionCache = {}
     tcache = {}
     print "Loading all events for cell", cell
     tot = db.select(eventView, 'count()', where={'CellDir': cell})[0]['count()']
@@ -169,9 +169,11 @@ def loadCell(cell):
             
         ## insert positions
 
-        #for i in range(len(ev)):
+        for i in range(len(ev)):
+            protoDir = ev[i]['SourceFile'].parent()
+            key = protoDir
             #key = (ev[i]['ProtocolSequenceDir'], ev[i]['SourceFile'])
-            #if key not in pcache:
+            if key not in positionCache:
                 #try:
                     #dh = ev[i]['ProtocolDir']
                     #p1 = pg.Point(dh.info()['Scanner']['position'])
@@ -185,8 +187,17 @@ def loadCell(cell):
                 #except:
                     #print key
                     #raise
-            #extra[i]['x'] = pcache[key][0]
-            #extra[i]['y'] = pcache[key][1]
+                rec = db.select('CochlearNucleus_Protocol', where={'ProtocolDir': protoDir})
+                if len(rec) == 0:
+                    pos = (None, None, None)
+                elif len(rec) == 1:
+                    pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
+                elif len(rec) == 2:
+                    raise Exception("Multiple position records for %s!" % str(protoDir))
+                positionCache[key] = pos
+            extra[i]['right'] = positionCache[key][0]
+            extra[i]['anterior'] = positionCache[key][1]
+            extra[i]['dorsal'] = positionCache[key][2]
         
             
         ev = fn.concatenateColumns([ev, extra])
@@ -196,14 +207,6 @@ def loadCell(cell):
     ev = np.concatenate(allEvents)
     events[cell] = ev
     
-    ## show cell in atlas
-    rec = db.select('CochlearNucleus_Cell', where={'CellDir': cell})
-    pts = []
-    if len(rec) > 0:
-        pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
-        pts = [{'pos': pos, 'size': 100e-6, 'color': (1.0, 1.0, 1.0, 0.8)}]
-        print pos
-    atlasPoints.setData(pts)
     
     
     
@@ -229,6 +232,7 @@ def plotClicked(plt, pts):
     time = pt.data['fitTime']
     
     data = fh.read()['Channel':'primary']
+    data = fn.besselFilter(data, 8e3)
     p = pw2.plot(data, clear=True)
     pos = time / data.xvals('Time')[-1]
     arrow = pg.CurveArrow(p, pos=pos)
@@ -240,7 +244,8 @@ def plotClicked(plt, pts):
     fitLen = pt.data['fitDecayTau']*pt.data['fitLengthOverDecay']
     x = np.linspace(time, time+fitLen, fitLen * 50e3)
     v = [pt.data['fitAmplitude'], pt.data['fitTime'], pt.data['fitRiseTau'], pt.data['fitDecayTau']]
-    y = fn.pspFunc(v, x, risePower=1.0) + data[np.argwhere(data.xvals('Time')>time)[0]-1]
+    print "Event fit params:", v
+    y = fn.pspFunc(v, x, risePower=2.0) + data[np.argwhere(data.xvals('Time')>time)[0]-1]
     pw2.plot(x, y, pen='b')
     #plot.addItem(arrow)
 
@@ -298,18 +303,19 @@ def showCell():
         ev3post = ev3[(ev3['fitTime']>start) * (ev3['fitTime']<stop)]
         ev4 = np.concatenate([ev2post, ev3post])
         
-        yMax = ev4['y'].max()
-        yMin = ev4['y'].min()
-        
-        pts = []
+        yMax = ev4['dorsal'].max()
+        yMin = ev4['dorsal'].min()
+        brushes = []
         for i in range(len(ev4)):
-            hue = 0.6*((ev4[i]['y']-yMin) / (yMax-yMin))
-            pts.append({
-                'pos': (ev4[i]['fitDecayTau'], ev4[i]['fitAmplitude']),
-                'brush': pg.hsvColor(hue, 1, 1, 0.3),
-                'data': ev4[i]
-            })
-        sp4.setData(pts)
+            hue = 0.6*((ev4[i]['dorsal']-yMin) / (yMax-yMin))
+            brushes.append(pg.hsvColor(hue, 1.0, 1.0, 0.3))
+            #pts.append({
+                #'pos': (ev4[i]['fitDecayTau'], ev4[i]['fitAmplitude']),
+                #'brush': pg.hsvColor(hue, 1, 1, 0.3),
+                #'data': ev4[i]
+            #})
+            
+        sp4.setData(x=ev4['fitDecayTau'], y=ev4['fitAmplitude'], symbolBrush=brushes, data=ev4)
         
     else:
         sp1.show()
@@ -365,6 +371,24 @@ def showCell():
     
     pw1.setTitle(title)
 
+    
+    ## show cell in atlas
+    rec = db.select('CochlearNucleus_Cell', where={'CellDir': cell})
+    pts = []
+    if len(rec) > 0:
+        pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
+        pts = [{'pos': pos, 'size': 100e-6, 'color': (0.7, 0.7, 1.0, 1.0)}]
+        print pos
+    ## show event positions
+    evSpots = {}
+    for rec in ev:
+        p = (rec['right'], rec['anterior'], rec['dorsal'])
+        evSpots[p] = None
+    for pos in evSpots:
+        pts.append({'pos': pos, 'size': 90e-6, 'color': ((1.0, 1.0, 1.0, 0.5))})
+    atlasPoints.setData(pts)
+    
+    
 def spontRate(ev):
     ev = ev[ev['fitTime'] < preRgnStop()]
     count = {}
@@ -383,6 +407,6 @@ def postRgnStart():
     return postRgnStartSpin.value() + 0.002
     
 def postRgnStop():
-    return postRgnStartSpin.value()
+    return postRgnStopSpin.value()
     
 init()
