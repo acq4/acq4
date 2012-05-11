@@ -38,10 +38,15 @@ s1.addPoints(spots)
 w1.addItem(s1)
 
 ## Make all plots clickable
+lastClicked = []
 def clicked(plot, points):
+    global lastClicked
+    for p in lastClicked:
+        p.resetPen()
     print "clicked points", points
     for p in points:
         p.setPen('b', width=2)
+    lastClicked = points
 s1.sigClicked.connect(clicked)
 
 
