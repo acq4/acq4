@@ -12,48 +12,61 @@ __all__ = ['PlotCurveItem']
 class PlotCurveItem(GraphicsObject):
     
     
-    """Class representing a single plot curve. Provides:
-        - Fast data update
-        - FFT display mode
-        - shadow pen
-        - mouse interaction
+    """
+    Class representing a single plot curve. Instances of this class are created
+    automatically as part of PlotDataItem; these rarely need to be instantiated
+    directly.
+    
+    Features:
+    
+    - Fast data update
+    - FFT display mode (accessed via PlotItem context menu)
+    - Fill under curve
+    - Mouse interaction
+    
+    ====================  ===============================================
+    **Signals:**
+    sigPlotChanged(self)  Emitted when the data being plotted has changed
+    sigClicked(self)      Emitted when the curve is clicked
+    ====================  ===============================================
     """
     
     sigPlotChanged = QtCore.Signal(object)
     sigClicked = QtCore.Signal(object)
     
-    def __init__(self, y=None, x=None, fillLevel=None, copy=False, pen=None, shadowPen=None, brush=None, parent=None, clickable=False):
-        GraphicsObject.__init__(self, parent)
+    def __init__(self, *args, **kargs):
+        """
+        Forwards all arguments to :func:`setData <pyqtgraph.PlotCurveItem.setData>`.
+        
+        Some extra arguments are accepted as well:
+        
+        ==============  =======================================================
+        **Arguments:**
+        parent          The parent GraphicsObject (optional)
+        clickable       If True, the item will emit sigClicked when it is 
+                        clicked on. Defaults to False.
+        ==============  =======================================================
+        """
+        GraphicsObject.__init__(self, kargs.get('parent', None))
         self.clear()
         self.path = None
         self.fillPath = None
         self.exportOpts = False
         self.antialias = False
         
-        if y is not None:
-            self.updateData(y, x)
             
         ## this is disastrous for performance.
         #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         
         self.metaData = {}
         self.opts = {
-            #'spectrumMode': False,
-            #'logMode': [False, False],
-            #'downsample': False,
-            #'alphaHint': 1.0,
-            #'alphaMode': False,
-            'pen': 'w',
+            'pen': fn.mkPen('w'),
             'shadowPen': None,
-            'fillLevel': fillLevel,
-            'brush': brush,
+            'fillLevel': None,
+            'brush': None,
         }
-        self.setPen(pen)
-        self.setShadowPen(shadowPen)
-        self.setFillLevel(fillLevel)
-        self.setBrush(brush)
-        self.setClickable(clickable)
-        #self.fps = None
+        self.setClickable(kargs.get('clickable', False))
+        self.setData(*args, **kargs)
         
     def implements(self, interface=None):
         ints = ['plotData']
@@ -62,56 +75,30 @@ class PlotCurveItem(GraphicsObject):
         return interface in ints
     
     def setClickable(self, s):
+        """Sets whether the item responds to mouse clicks."""
         self.clickable = s
         
         
     def getData(self):
         return self.xData, self.yData
-        #if self.xData is None:
-            #return (None, None)
-        #if self.xDisp is None:
-            #nanMask = np.isnan(self.xData) | np.isnan(self.yData)
-            #if any(nanMask):
-                #x = self.xData[~nanMask]
-                #y = self.yData[~nanMask]
-            #else:
-                #x = self.xData
-                #y = self.yData
-            #ds = self.opts['downsample']
-            #if ds > 1:
-                #x = x[::ds]
-                ##y = resample(y[:len(x)*ds], len(x))  ## scipy.signal.resample causes nasty ringing
-                #y = y[::ds]
-            #if self.opts['spectrumMode']:
-                #f = fft(y) / len(y)
-                #y = abs(f[1:len(f)/2])
-                #dt = x[-1] - x[0]
-                #x = np.linspace(0, 0.5*len(x)/dt, len(y))
-            #if self.opts['logMode'][0]:
-                #x = np.log10(x)
-            #if self.opts['logMode'][1]:
-                #y = np.log10(y)
-            #self.xDisp = x
-            #self.yDisp = y
-        ##print self.yDisp.shape, self.yDisp.min(), self.yDisp.max()
-        ##print self.xDisp.shape, self.xDisp.min(), self.xDisp.max()
-        #return self.xDisp, self.yDisp
-            
-    #def generateSpecData(self):
-        #f = fft(self.yData) / len(self.yData)
-        #self.ySpec = abs(f[1:len(f)/2])
-        #dt = self.xData[-1] - self.xData[0]
-        #self.xSpec = linspace(0, 0.5*len(self.xData)/dt, len(self.ySpec))
         
-    def dataBounds(self, ax, frac=1.0):
+    def dataBounds(self, ax, frac=1.0, orthoRange=None):
         (x, y) = self.getData()
         if x is None or len(x) == 0:
             return (0, 0)
             
         if ax == 0:
             d = x
+            d2 = y
         elif ax == 1:
             d = y
+            d2 = x
+
+        if orthoRange is not None:
+            mask = (d2 >= orthoRange[0]) * (d2 <= orthoRange[1])
+            d = d[mask]
+            d2 = d2[mask]
+
             
         if frac >= 1.0:
             return (d.min(), d.max())
@@ -120,25 +107,26 @@ class PlotCurveItem(GraphicsObject):
         else:
             return (scipy.stats.scoreatpercentile(d, 50 - (frac * 50)), scipy.stats.scoreatpercentile(d, 50 + (frac * 50)))
             
-    #def setMeta(self, data):
-        #self.metaData = data
-        
-    #def meta(self):
-        #return self.metaData
-        
     def setPen(self, *args, **kargs):
+        """Set the pen used to draw the curve."""
         self.opts['pen'] = fn.mkPen(*args, **kargs)
         self.update()
         
     def setShadowPen(self, *args, **kargs):
+        """Set the shadow pen used to draw behind tyhe primary pen.
+        This pen must have a larger width than the primary 
+        pen to be visible.
+        """
         self.opts['shadowPen'] = fn.mkPen(*args, **kargs)
         self.update()
 
     def setBrush(self, *args, **kargs):
+        """Set the brush used when filling the area under the curve"""
         self.opts['brush'] = fn.mkBrush(*args, **kargs)
         self.update()
         
     def setFillLevel(self, level):
+        """Set the level filled to when filling under the curve"""
         self.opts['fillLevel'] = level
         self.fillPath = None
         self.update()
@@ -177,7 +165,28 @@ class PlotCurveItem(GraphicsObject):
             #self.update()
 
     def setData(self, *args, **kargs):
-        """Same as updateData()"""
+        """
+        ==============  =======================================================
+        **Arguments:**
+        x, y            (numpy arrays) Data to show 
+        pen             Pen to use when drawing. Any single argument accepted by
+                        :func:`mkPen <pyqtgraph.mkPen>` is allowed.
+        shadowPen       Pen for drawing behind the primary pen. Usually this
+                        is used to emphasize the curve by providing a 
+                        high-contrast border. Any single argument accepted by
+                        :func:`mkPen <pyqtgraph.mkPen>` is allowed.
+        fillLevel       (float or None) Fill the area 'under' the curve to
+                        *fillLevel*
+        brush           QBrush to use when filling. Any single argument accepted
+                        by :func:`mkBrush <pyqtgraph.mkBrush>` is allowed.
+        ==============  =======================================================
+        
+        If non-keyword arguments are used, they will be interpreted as
+        setData(y) for a single argument and setData(x, y) for two
+        arguments.
+        
+        
+        """
         self.updateData(*args, **kargs)
         
     def updateData(self, *args, **kargs):

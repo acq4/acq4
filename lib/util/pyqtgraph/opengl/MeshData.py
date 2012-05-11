@@ -1,13 +1,15 @@
 from pyqtgraph.Qt import QtGui
+import pyqtgraph.functions as fn
 
 class MeshData(object):
     """
-    Class for storing 3D mesh data. May contain:
-        - list of vertex locations
-        - list of edges
-        - list of triangles
-        - colors per vertex, edge, or tri
-        - normals per vertex or tri
+    Class for storing and operating on 3D mesh data. May contain:
+    
+    - list of vertex locations
+    - list of edges
+    - list of triangles
+    - colors per vertex, edge, or tri
+    - normals per vertex or tri
     """
 
     def __init__(self):
@@ -25,11 +27,15 @@ class MeshData(object):
     def setFaces(self, faces, vertexes=None):
         """
         Set the faces in this data set.
-        Data may be provided either as an Nx3x3 list of floats (9 float coordinate values per face)
-            *faces* = [ [(x, y, z), (x, y, z), (x, y, z)], ... ] 
-        or as an Nx3 list of ints (vertex integers) AND an Mx3 list of floats (3 float coordinate values per vertex)
-            *faces* = [ (p1, p2, p3), ... ]
-            *vertexes* = [ (x, y, z), ... ]
+        Data may be provided either as an Nx3x3 list of floats (9 float coordinate values per face)::
+        
+            faces = [ [(x, y, z), (x, y, z), (x, y, z)], ... ] 
+            
+        or as an Nx3 list of ints (vertex integers) AND an Mx3 list of floats (3 float coordinate values per vertex)::
+        
+            faces = [ (p1, p2, p3), ... ]
+            vertexes = [ (x, y, z), ... ]
+            
         """
         
         if vertexes is None:
@@ -37,6 +43,12 @@ class MeshData(object):
         else:
             self._setIndexedFaces(faces, vertexes)
     
+    def setMeshColor(self, color):
+        """Set the color of the entire mesh. This removes any per-face or per-vertex colors."""
+        color = fn.Color(color)
+        self._meshColor = color.glColor()
+        self._vertexColors = None
+        self._faceColors = None
     
     def _setUnindexedFaces(self, faces):
         verts = {}
@@ -107,7 +119,8 @@ class MeshData(object):
             for i, face in enumerate(self._faces):
                 ## compute face normal
                 pts = [self._vertexes[vind] for vind in face]
-                norm = QtGui.QVector3D.crossProduct(pts[1]-pts[0], pts[2]-pts[0]).normalized()
+                norm = QtGui.QVector3D.crossProduct(pts[1]-pts[0], pts[2]-pts[0])
+                norm = norm / norm.length()  ## don't use .normalized(); doesn't work for small values.
                 self._faceNormals.append(norm)
         return self._faceNormals
     
@@ -126,7 +139,7 @@ class MeshData(object):
                 norm = QtGui.QVector3D()
                 for fn in norms:
                     norm += fn
-                norm.normalize()
+                norm = norm / norm.length()  ## don't use .normalize(); doesn't work for small values.
                 self._vertexNormals.append(norm)
         return self._vertexNormals
         
@@ -139,16 +152,32 @@ class MeshData(object):
     def edgeColors(self):
         return self._edgeColors
         
-    def reverseNormals(self):
-        """
-        Reverses the direction of all normal vectors.
-        """
-        pass
+    #def reverseNormals(self):
+        #"""
+        #Reverses the direction of all normal vectors.
+        #"""
+        #pass
         
-    def generateEdgesFromFaces(self):
-        """
-        Generate a set of edges by listing all the edges of faces and removing any duplicates.
-        Useful for displaying wireframe meshes.
-        """
-        pass
+    #def generateEdgesFromFaces(self):
+        #"""
+        #Generate a set of edges by listing all the edges of faces and removing any duplicates.
+        #Useful for displaying wireframe meshes.
+        #"""
+        #pass
+        
+    def save(self):
+        """Serialize this mesh to a string appropriate for disk storage"""
+        import pickle
+        names = ['_vertexes', '_edges', '_faces', '_vertexFaces', '_vertexNormals', '_faceNormals', '_vertexColors', '_edgeColors', '_faceColors', '_meshColor']
+        state = {n:getattr(self, n) for n in names}
+        return pickle.dumps(state)
+        
+    def restore(self, state):
+        """Restore the state of a mesh previously saved using save()"""
+        import pickle
+        state = pickle.loads(state)
+        for k in state:
+            setattr(self, k, state[k])
+        
+        
         

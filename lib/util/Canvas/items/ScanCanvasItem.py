@@ -67,6 +67,7 @@ class ScanCanvasItem(CanvasItem):
         self.ui = ScanCanvasItemTemplate.Ui_Form()
         self.ui.setupUi(self._ctrlWidget)
         self.layout.addWidget(self._ctrlWidget, self.layout.rowCount(), 0, 1, 2)
+        self.ui.outlineColorBtn.setColor((255,255,255,200))
         
         self.addScanImageBtn = self.ui.loadSpotImagesBtn
         
@@ -75,6 +76,7 @@ class ScanCanvasItem(CanvasItem):
         self.ui.sizeSpin.setValue(self.originalSpotSize)
         self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
         self.ui.sizeFromCalibrationRadio.clicked.connect(self.updateSpotSize)
+        self.ui.outlineColorBtn.sigColorChanging.connect(self.updateOutline)
         
         self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
 
@@ -258,6 +260,10 @@ class ScanCanvasItem(CanvasItem):
             self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
             size = self.originalSpotSize
         return size
+
+    def updateOutline(self):
+        color = self.ui.outlineColorBtn.color()
+        self.graphicsItem().setPen(color)
         
 class ScanImageCanvasItem(ImageCanvasItem):
     def __init__(self, img, handles, **kargs):

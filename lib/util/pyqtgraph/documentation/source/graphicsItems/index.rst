@@ -10,8 +10,6 @@ Contents:
     :maxdepth: 2
 
     plotdataitem
-    plotcurveitem
-    scatterplotitem
     plotitem
     imageitem
     viewbox
@@ -19,6 +17,9 @@ Contents:
     infiniteline
     roi
     graphicslayout
+    plotcurveitem
+    scatterplotitem
+    isocurveitem
     axisitem
     arrowitem
     curvepoint
@@ -33,5 +34,6 @@ Contents:
     buttonitem
     graphicsobject
     graphicswidget
+    graphicsitem
     uigraphicsitem
 

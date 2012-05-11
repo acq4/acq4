@@ -12,16 +12,19 @@ __all__ = ['GLMeshItem']
 
 class GLMeshItem(GLGraphicsItem):
     """
-    Displays a 3D triangle mesh. 
+    **Bases:** :class:`GLGraphicsItem <pyqtgraph.opengl.GLGraphicsItem>`
     
+    Displays a 3D triangle mesh. 
     """
     def __init__(self, faces, vertexes=None):
-        
         """
-        See MeshData for initialization arguments.
+        See :class:`MeshData <pyqtgraph.opengl.MeshData>` for initialization arguments.
         """
-        self.data = MeshData()
-        self.data.setFaces(faces, vertexes)
+        if isinstance(faces, MeshData):
+            self.data = faces
+        else:
+            self.data = MeshData()
+            self.data.setFaces(faces, vertexes)
         GLGraphicsItem.__init__(self)
         
     def initializeGL(self):
