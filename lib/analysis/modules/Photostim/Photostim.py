@@ -347,10 +347,11 @@ class Photostim(AnalysisModule):
 
                 ## draw ticks over all detected events
                 if len(events) > 0:
-                    times = events['fitTime']
-                    ticks = pg.VTickGroup(times, [0.85, 1.0], pen=color)
-                    plot.addItem(ticks)
-                    self.mapTicks.append(ticks)
+                    if 'fitTime' in events.dtype.names:
+                        times = events['fitTime']
+                        ticks = pg.VTickGroup(times, [0.85, 1.0], pen=color)
+                        plot.addItem(ticks)
+                        self.mapTicks.append(ticks)
             
             sTable.setData(statList)
             if len(evList) > 0:
@@ -548,7 +549,7 @@ class Photostim(AnalysisModule):
             p.mark("concatenate events")
             self.detector.storeToDB(ev)
             p.mark("stored all events")
-        
+            
         ## Store spot data
         self.storeStats(stats)
         p.mark("stored all stats")
