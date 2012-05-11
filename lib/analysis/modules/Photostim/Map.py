@@ -85,7 +85,7 @@ class Map:
         for pt in scan.spots():
             pos = pt.viewPos()
             size = pt.size  #sceneBoundingRect().width()
-            dh = pt.data
+            dh = pt.data()
             
             added = False
             for pt2 in self.spots:     ## check all previously added points for position match
@@ -96,13 +96,13 @@ class Map:
                     pt2['data'].append((scan, pt.data))
                     #pt2[2]['data'].append((scan, dh))
                     added = True
-                    self.pointsByFile[pt.data] = pt2
+                    self.pointsByFile[pt.data()] = pt2
                     break
             if not added:               ## ..otherwise, add a new site
                 newSpot = {'pos': pos, 'size': size, 'data': [(scan, dh)]}
                 self.spots.append(newSpot)
                 #self.points.append((pos, [(scan, dh)], self.spots[-1]))
-                self.pointsByFile[pt.data] = newSpot
+                self.pointsByFile[pt.data()] = newSpot
 
     def addScans(self, scanList):
         #print "Map.addScans:", scanList
@@ -229,7 +229,7 @@ class Map:
             for i in xrange(len(spots)):
                 s = spots[i]
                 data = []
-                sources = s.data
+                sources = s.data()
                 for scan, dh in sources:
                     data.append(scan.getStats(dh))
                 
