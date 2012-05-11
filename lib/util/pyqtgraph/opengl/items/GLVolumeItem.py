@@ -6,7 +6,23 @@ import numpy as np
 __all__ = ['GLVolumeItem']
 
 class GLVolumeItem(GLGraphicsItem):
+    """
+    **Bases:** :class:`GLGraphicsItem <pyqtgraph.opengl.GLGraphicsItem>`
+    
+    Displays volumetric data. 
+    """
+    
+    
     def __init__(self, data, sliceDensity=1, smooth=True):
+        """
+        ==============  =======================================================================================
+        **Arguments:**
+        data            Volume data to be rendered. *Must* be 4D numpy array (x, y, z, RGBA) with dtype=ubyte.
+        sliceDensity    Density of slices to render through the volume. A value of 1 means one slice per voxel.
+        smooth          (bool) If True, the volume slices are rendered with linear interpolation 
+        ==============  =======================================================================================
+        """
+        
         self.sliceDensity = sliceDensity
         self.smooth = smooth
         self.data = data
@@ -55,6 +71,7 @@ class GLVolumeItem(GLGraphicsItem):
         view = self.view()
         center = QtGui.QVector3D(*[x/2. for x in self.data.shape[:3]])
         cam = self.mapFromParent(view.cameraPosition()) - center
+        #print "center", center, "cam", view.cameraPosition(), self.mapFromParent(view.cameraPosition()), "diff", cam
         cam = np.array([cam.x(), cam.y(), cam.z()])
         ax = np.argmax(abs(cam))
         d = 1 if cam[ax] > 0 else -1

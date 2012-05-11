@@ -7,7 +7,8 @@ from pyqtgraph.Transform import Transform
 from pyqtgraph.Point import Point
 from pyqtgraph.widgets.TreeWidget import TreeWidget
 from pyqtgraph.graphicsItems.LinearRegionItem import LinearRegionItem
-import lib.util.functions as functions
+import functions
+
 
 try:
     import metaarray

@@ -104,11 +104,11 @@ class LinearRegionItem(UIGraphicsItem):
         self.lineMoved()
         self.lineMoveFinished()
 
-    def setBrush(self, *br):
+    def setBrush(self, *br, **kargs):
         """Set the brush that fills the region. Can have any arguments that are valid
         for :func:`mkBrush <pyqtgraph.mkBrush>`.
         """
-        self.brush = fn.mkBrush(*br)
+        self.brush = fn.mkBrush(*br, **kargs)
         self.currentBrush = self.brush
 
     def setBounds(self, bounds):

@@ -276,12 +276,14 @@ class EventFilter(CtrlNode):
         data=events
         mask = np.ones(len(data), dtype=bool)
 
-        newReg = ['all']
-        if regions is None:
-            regions = {}
-        for r in regions.keys():
-            newReg.append(r.node().name())
-        self.updateRegions(newReg)
+            
+        if display:
+            newReg = ['all']
+            if regions is None:
+                regions = {}
+            for r in regions.keys():
+                newReg.append(r.node().name())
+            self.updateRegions(newReg)
             
             
         for b, mn, mx in self.ranges:
@@ -289,7 +291,7 @@ class EventFilter(CtrlNode):
                 try:
                     mask *= data[b] < s[mx]
                     mask *= data[b] > s[mn]
-                except ValueError:  ## If the data doesn't kave this key, don't fret; just ignore it.
+                except ValueError:  ## If the data doesn't have this key, don't fret; just ignore it.
                     pass
         #print "  filter 1:", mask.sum()  
         region = s['region']
