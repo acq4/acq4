@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-from __future__ import with_statement
 from lib.devices.RigidDevice import *
 from deviceTemplate import Ui_Form
 from Mutex import Mutex
-from pyqtgraph import SpinBox
+import pyqtgraph as pg
+import collections
 
 def ftrace(func):
     def w(*args, **kargs):
@@ -26,9 +26,9 @@ class Microscope(Device, RigidDevice):
         RigidDevice.__init__(self, dm, config, name)
         self.config = config
         self.lock = Mutex(QtCore.QMutex.Recursive)
-        self.posDev = None
-        self.objDev = None
-        self.currentObjective = None
+        #self.posDev = None
+        self.switchDevice = None
+        self.currentSwitchPosition = None
         
         #if 'positionDevice' in config:
             #if 'axisOrder' not in config:
@@ -53,30 +53,29 @@ class Microscope(Device, RigidDevice):
         #else:
             #self.position = [0.0, 0.0, 0.0]
         
-        self.allObjectives = config['objectives']  ## all available objectives
-        for l in self.allObjectives.itervalues():  ## Set default values for each objective
-            for o in l:
-                if 'offset' not in l[o]:
-                    l[o]['offset'] = [0,0]
-                else:
-                    l[o]['offset'] = list(l[o]['offset'])
+        #self.objectives = config['objectives']  ## all available objectives
+        self.objectives = collections.OrderedDict()
+        for k1,objs in config['objectives'].iteritems():  ## Set default values for each objective
+            self.objectives[k1] = collections.OrderedDict()
+            for k2,o in objs:
+                self.objectives[k1][k2] = Objective(o, self, (k1, k2))
 
-        ### Keep track of the objective currently in use for each position
-        self.objectives = {}                      ## objective to use for each switch state
-        for i in self.allObjectives:
-            self.objectives[i] = self.allObjectives[i].keys()[0]  ## Default to first obj in each list
-            
-        currentObj = self.objectives.keys()[0]  ## Just guess that the first position is correct
+        ## Keep track of the objective currently in use for each position
+        self.selectedObjectives = collections.OrderedDict(
+            [(i, self.objectives[i].keys()[0]) for i in self.objectives]
+        )
+        
         
         ## If there is a switch device, configure it here
         if 'objectiveSwitch' in config:
-            self.objDev = dm.getDevice(config['objectiveSwitch'][0])  ## Switch device
+            self.switchDevice = dm.getDevice(config['objectiveSwitch'][0])  ## Switch device
             self.objSwitchId = config['objectiveSwitch'][1]           ## Switch ID
-            currentObj = str(self.objDev.getSwitch(self.objSwitchId))           ## Get current switch state
-            #QtCore.QObject.connect(self.posDev, QtCore.SIGNAL('switchChanged'), self.objectiveSwitched)
-            self.objDev.sigSwitchChanged.connect(self.objectiveSwitched)
+            #self.currentSwitchPosition = str(self.switchDevice.getSwitch(self.objSwitchId))
+            self.switchDevice.sigSwitchChanged.connect(self.objectiveSwitched)
+            self.objectiveSwitched()
+        else:
+            self.setObjective(0)
         
-        self.setObjective(currentObj)
         dm.declareInterface(name, ['microscope'], self)
 
     def quit(self):
@@ -99,24 +98,33 @@ class Microscope(Device, RigidDevice):
         #self.sigPositionChanged.emit({'abs': p, 'rel': rel})
         
     def objectiveSwitched(self, sw, change):
-        """Called when the switch device has changed, NOT when the user has selected a different objective."""
+        ## Called when the switch device has changed, NOT when the user has selected a different objective.
         if self.objSwitchId not in change:
             return
         state = str(change[self.objSwitchId])
         self.setObjective(state)
         
     def setObjective(self, index):
-        """Selects the objective currently in position 'index'"""
-        if index != self.currentObjective:
-            if index not in self.objectives:
-                print "WARNING: objective position index '%s' invalid, not selecting" % index
-                return
-            lastObj = self.getObjective()
-            self.currentObjective = index
-            obj = self.getObjective()
-            #self.emit(QtCore.SIGNAL('objectiveChanged'), (obj, index, lastObj))
-            self.sigObjectiveChanged.emit((obj, index, lastObj))
+        """Selects the objective currently in position *index*"""
+        index = str(index)
+        if index == self.currentSwitchPosition:
+            return
+            
+        if index not in self.selectedObjectives:
+            raise Exception("Requested invalid objective switch position: %s (options are %s)" % (index, ', '.join(self.objectives.keys())))
+            
+        lastObj = self.getObjective()
+        self.currentSwitchPosition = index
+        obj = self.getObjective()
+        self.updateDeviceTransform()
+        #self.emit(QtCore.SIGNAL('objectiveChanged'), (obj, index, lastObj))
+        self.sigObjectiveChanged.emit((obj, index, lastObj))
+
+    def updateDeviceTransform(self):
+        obj = self.currentObjective()
+        self.setDeviceTransform(obj.transform())
         
+            
     #@ftrace
     #def getPosition(self):
         #"""Return x,y,z position of microscope stage"""
@@ -129,19 +137,19 @@ class Microscope(Device, RigidDevice):
         """Return a dict {'name': , 'scale': , 'offset': } for the current objective"""
         with self.lock:
             #print "Microscope:getObjective locked"
-            if self.currentObjective not in self.objectives:
+            if self.currentSwitchPosition not in self.selectedObjectives:
                 return None
-            obj = self.objectives[self.currentObjective]
-            return self.allObjectives[self.currentObjective][obj].copy()
+            obj = self.selectedObjectives[self.currentSwitchPosition]
+            return self.objectives[self.currentSwitchPosition][obj].copy()
         
     def listObjectives(self, allObjs=True):
         with self.lock:
             if allObjs:
-                return self.allObjectives
+                return self.objectives
             else:
                 l = {}
-                for i in self.objectives:
-                    l[i] = self.allObjectives[i][self.objectives[i]]
+                for i in self.selectedObjectives:
+                    l[i] = self.objectives[i][self.selectedObjectives[i]]
                 return l
         
     #@ftrace
@@ -152,25 +160,62 @@ class Microscope(Device, RigidDevice):
     
     def deviceInterface(self, win):
         iface = ScopeGUI(self, win)
-        iface.objectiveChanged((None, self.currentObjective, None))
+        iface.objectiveChanged((None, self.currentSwitchPosition, None))
         #iface.positionChanged({'abs': self.getPosition()})
         return iface
 
     def selectObjectives(self, sel):
         """Set the objective to be picked from each list when the switch changes"""
         with self.lock:
-            for i in self.allObjectives:
+            for i in self.objectives:
                 if i in sel:
-                    self.objectives[i] = sel[i]
+                    self.selectedObjectives[i] = sel[i]
         #self.emit(QtCore.SIGNAL('objectiveListChanged'))
+        self.updateDeviceTransform()
         self.sigObjectiveListChanged.emit()
-                
-    def updateObjectives(self, objs):
-        with self.lock:
-            self.allObjectives = objs.copy()
-        #self.emit(QtCore.SIGNAL('objectiveListChanged'))
-        self.sigObjectiveListChanged.emit()
+        
+    #def updateObjectives(self, objs):
+        #with self.lock:
+            #self.objectives = objs.copy()
+        ##self.emit(QtCore.SIGNAL('objectiveListChanged'))
+        #self.updateDeviceTransform()
+        #self.sigObjectiveListChanged.emit()
+
+
+class Objective(QtCore.QObject):
     
+    sigTransformChanged = QtCore.Signal(object) ## self
+    
+    def __init__(self, config, scope, key):
+        QtCore.QObject.__init__(self)
+        self.config = config
+        self.scope = scope
+        self.key = key
+                if 'offset' not in l[o]:
+                    l[o]['offset'] = pg.Vector(0,0)
+                else:
+                    l[o]['offset'] = pg.Vector(l[o]['offset'])
+                if 'scale' not in l[o]:
+                    l[o]['scale'] = pg.Vector(1,1,1)
+                else:
+                    
+                    l[o]['scale'] = pg.Vector(l[o]['scale'])
+    
+    def transform(self):
+            obj = self.getObjective()
+            tr = pg.Transform3D()
+            tr.translate(*obj['offset'])
+            tr.scale(*obj['scale'])
+            return tr
+            
+    def setOffset(self, pos):
+        pass
+    
+    def setScale(self, scale):
+        pass
+
+
+
 class ScopeGUI(QtGui.QWidget):
     
     
@@ -192,9 +237,9 @@ class ScopeGUI(QtGui.QWidget):
             r = QtGui.QRadioButton(i)
             first = self.objList[i].keys()[0]
             first = self.objList[i][first]
-            xs = SpinBox(value=first['offset'][0], step=1e-6, suffix='m', siPrefix=True)
-            ys = SpinBox(value=first['offset'][1], step=1e-6, suffix='m', siPrefix=True)
-            ss = SpinBox(value=first['scale']    , step=1e-7, bounds=(1e-10, None))
+            xs = pg.SpinBox(value=first['offset'][0], step=1e-6, suffix='m', siPrefix=True)
+            ys = pg.SpinBox(value=first['offset'][1], step=1e-6, suffix='m', siPrefix=True)
+            ss = pg.SpinBox(value=first['scale']    , step=1e-7, bounds=(1e-10, None))
             xs.obj = ys.obj = ss.obj = i
             widgets = (r, c, xs, ys, ss)
             for col in range(5):
