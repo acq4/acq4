@@ -333,10 +333,17 @@ class ROI(GraphicsObject):
 
 
     def hoverEvent(self, ev):
+        print "Hover event:", self
+        #print "   translatable:", self.translatable
+        #print "   not ev.isExit():", (not ev.isExit())
+        #print "   ev.acceptDrags:", ev.acceptDrags(QtCore.Qt.LeftButton)
+        #print "   ev.acceptDrags:", ev.acceptDrags(QtCore.Qt.LeftButton)
         if self.translatable and (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
+            print "       setHover: True"
             self.setMouseHover(True)
             self.sigHoverEvent.emit(self)
         else:
+            print "       setHover: False"
             self.setMouseHover(False)
 
     def setMouseHover(self, hover):
@@ -929,6 +936,7 @@ class Handle(UIGraphicsItem):
         self.setZValue(11)
             
     def connectROI(self, roi, i):
+        ### roi is the "parent" roi, i is the index of the handle in roi.handles
         self.roi.append((roi, i))
     
     #def boundingRect(self):
@@ -1130,7 +1138,7 @@ class MultiLineROI(QtGui.QGraphicsObject):
     sigRegionChangeStarted = QtCore.Signal(object)
     sigRegionChanged = QtCore.Signal(object)
     
-    def __init__(self, points, width, pen=None, **args):
+    def __init__(self, points, width, pen=None, closed=False, **args):
         QtGui.QGraphicsObject.__init__(self)
         self.pen = pen
         self.roiArgs = args
@@ -1254,6 +1262,7 @@ class PolygonROI(ROI):
         for p in positions:
             self.addFreeHandle(p)
         self.setZValue(1000)
+        
             
     def listPoints(self):
         return [p['item'].pos() for p in self.handles]
@@ -1293,18 +1302,74 @@ class PolygonROI(ROI):
         #sc['handles'] = self.handles
         return sc
 
+class PolyLineROI(ROI):
+    """Container class for multiple connected LineSegmentROIs. Responsible for adding new 
+    line segments, and for translation/(rotation?) of multiple lines together."""
+    def __init__(self, positions, closed=False, pos=None, **args):
+        if pos is None:
+            pos = [0,0]
+        pen=args.get('pen', fn.mkPen((100,100,255)))
+        ROI.__init__(self, pos, [1,1], **args)
+        
+        
+        self.segments = []
+        
+        for i, p in enumerate(positions[:-1]):
+            h = None
+            if len(self.segments) > 0:
+                h = self.segments[-1].handles[-1]['item']
+            self.segments.append(LineSegmentROI([p, positions[i+1]], pos=pos, handles=(h, None), pen=pen, parent=self))
+            
+        
+        for i, s in enumerate(self.segments):
+            h = s.handles[0]
+            self.addFreeHandle(h['pos'], item=h['item'])
+            s.setZValue(self.zValue() +1)
+           
+        h = self.segments[-1].handles[-1]
+        self.addFreeHandle(h['pos'], item=h['item'])
+            
+        h1 = self.segments[-1].handles[-1]['item']
+        h2 = self.segments[0].handles[0]['item']
+        if closed:
+            self.segments.append(LineSegmentROI([positions[-1], positions[0]], pos=pos, handles=(h1, h2), pen=pen, parent=self))
+        
+        
+    def paint(self, p, *args):
+        #for s in self.segments:
+            #s.update()
+        p.setPen(self.currentPen)
+        p.drawRect(self.boundingRect())
+    
+    def boundingRect(self):
+        r = QtCore.QRectF()
+        for h in self.handles:
+            r |= self.mapFromItem(h['item'], h['item'].boundingRect()).boundingRect()   ## |= gives the union of the two QRectFs
+        return r 
+
+    def shape(self):
+        p = QtGui.QPainterPath()
+        p.moveTo(self.handles[0]['item'].pos())
+        for i in range(len(self.handles)):
+            p.lineTo(self.handles[i]['item'].pos())
+        return p    
 
 class LineSegmentROI(ROI):
     """
-    ROI subclass with two or more freely-moving handles connecting lines.
+    ROI subclass with two freely-moving handles defining a line.
     """
-    def __init__(self, positions, pos=None, **args):
+    
+    def __init__(self, positions, pos=None, handles=(None,None), **args):
         if pos is None:
             pos = [0,0]
         ROI.__init__(self, pos, [1,1], **args)
         #ROI.__init__(self, positions[0])
-        for p in positions:
-            self.addFreeHandle(p)
+        if len(positions) > 2:
+            raise Exception("LineSegmentROI can only be defined by 2 positions. This is an API change.")
+        
+        for i, p in enumerate(positions):
+            self.addFreeHandle(p, item=handles[i])
+                
         self.setZValue(1000)
             
     def listPoints(self):
@@ -1319,10 +1384,16 @@ class LineSegmentROI(ROI):
     def paint(self, p, *args):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         p.setPen(self.currentPen)
-        for i in range(len(self.handles)-1):
-            h1 = self.handles[i]['item'].pos()
-            h2 = self.handles[i+1]['item'].pos()
-            p.drawLine(h1, h2)
+        h1 = self.handles[0]['item'].pos()
+        h2 = self.handles[1]['item'].pos()
+        p.drawLine(h1, h2)
+        #p.setPen(fn.mkPen('w'))
+        #p.drawPath(self.shape())
+        
+        #for i in range(len(self.handles)-1):
+            #h1 = self.handles[i]['item'].pos()
+            #h2 = self.handles[i+1]['item'].pos()
+            #p.drawLine(h1, h2)
         
     def boundingRect(self):
         r = QtCore.QRectF()
@@ -1330,11 +1401,52 @@ class LineSegmentROI(ROI):
             r |= self.mapFromItem(h['item'], h['item'].boundingRect()).boundingRect()   ## |= gives the union of the two QRectFs
         return r
     
+    def getShapeRect(self):
+        br = ROI.boundingRect(self)
+            
+        ## add a 4-pixel radius around the line for mouse interaction.
+        
+        #print "line bounds:", self, br
+        dt = self.deviceTransform()
+        if dt is None:
+            return QtCore.QRectF()
+        lineDir = Point(dt.map(Point(1, 0)) - dt.map(Point(0,0)))  ## direction of line in pixel-space
+        orthoDir = Point(lineDir[1], -lineDir[0])  ## orthogonal to line in pixel-space
+        try:
+            norm = orthoDir.norm()  ## direction of one pixel orthogonal to line
+        except ZeroDivisionError:
+            return br
+        
+        dti = dt.inverted()[0]
+        px = Point(dti.map(norm)-dti.map(Point(0,0)))  ## orthogonal pixel mapped back to item coords
+        px = px[1]  ## project to y-direction
+        
+        br.setBottom(-px*4)
+        br.setTop(px*4)
+        return br.normalized()    
+    
     def shape(self):
         p = QtGui.QPainterPath()
-        p.moveTo(self.handles[0]['item'].pos())
-        for i in range(len(self.handles)):
-            p.lineTo(self.handles[i]['item'].pos())
+        pw, ph = self.pixelSize()
+        pHyp = 4 * (pw**2 + ph**2)**0.5
+    
+        h1 = self.handles[0]['item'].pos()
+        h2 = self.handles[1]['item'].pos()
+        lineAngle = Point(1,0).angle(h2-h1)
+        orthoAngle = lineAngle - 90.
+        
+        px = cos(orthoAngle)*pHyp
+        py = sin(orthoAngle)*pHyp
+        
+        p.moveTo(h1-(px, py))
+        p.lineTo(h1 + (px, py))
+        p.lineTo(h2 + (px, py))
+        p.lineTo(h2 - (px, py))
+        p.lineTo(h1 - (px, py))
+        
+        #for i in range(len(self.handles)):
+            #p.lineTo(self.handles[i]['item'].pos())
+        #p.addRect(self.getShapeRect())
         return p
     
     def stateCopy(self):
