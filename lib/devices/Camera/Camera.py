@@ -12,7 +12,7 @@ from metaarray import *
 from protoGUI import *
 from deviceGUI import *
 import ptime as ptime
-from Mutex import Mutex, MutexLocker
+from Mutex import Mutex
 from debug import *
 from pyqtgraph import Vector
 
@@ -272,18 +272,18 @@ class Camera(DAQGeneric, RigidDevice):
         
     #@ftrace
     def devName(self):
-        with MutexLocker(self.lock):
+        with self.lock:
             return self.name
     
     
     #@ftrace
     def createTask(self, cmd):
-        with MutexLocker(self.lock):
+        with self.lock:
             return CameraTask(self, cmd)
     
     #@ftrace
     def getTriggerChannel(self, daq):
-        with MutexLocker(self.lock):
+        with self.lock:
             if not 'triggerOutChannel' in self.camConfig:
                 return None
             if self.camConfig['triggerOutChannel']['device'] != daq:
@@ -318,27 +318,27 @@ class Camera(DAQGeneric, RigidDevice):
     #@ftrace
     def getPixelSize(self):
         """Return the absolute size of 1 pixel"""
-        with MutexLocker(self.lock):
+        with self.lock:
             return self.scopeState['pixelSize']
         
     #@ftrace
     def getObjective(self):
-        with MutexLocker(self.lock):
+        with self.lock:
             return self.scopeState['objective']
 
     def getScopeDevice(self):
-        with MutexLocker(self.lock):
+        with self.lock:
             return self.scopeDev
             
     def getBoundary(self, obj=None):
-        """Return the boundaries of the camera in coordinates relative to the scope center.
+        """Return the boundaries of the camera sensor in coordinates relative to the scope center.
         If obj is specified, then the boundary is computed for that objective."""
         if obj is None:
             obj = self.scopeDev.getObjective()
         if obj is None:
             return None
         
-        with MutexLocker(self.lock):
+        with self.lock:
             sf = self.camConfig['scaleFactor']
             size = self.getParam('sensorSize')
             sx = size[0] * obj['scale'] * sf[0]
@@ -348,8 +348,8 @@ class Camera(DAQGeneric, RigidDevice):
         
     def getBoundaries(self):
         """Return a list of camera boundaries for all objectives"""
-        objs = self.scopeDev.listObjectives(allObjs=False)
-        return [self.getBoundary(objs[o]) for o in objs]
+        objs = self.scopeDev.listObjectives()
+        return [self.getBoundary(o) for o in objs]
     
     def mapToSensor(self, pos):
         """Return the sub-pixel location on the sensor that corresponds to global position pos"""
@@ -364,7 +364,7 @@ class Camera(DAQGeneric, RigidDevice):
         
     def getScopeState(self):
         """Return meta information to be included with each frame. This function must be FAST."""
-        with MutexLocker(self.lock):
+        with self.lock:
             return self.scopeState
         
     def transformChanged(self):  ## called then this device's global transform changes.
@@ -378,12 +378,13 @@ class Camera(DAQGeneric, RigidDevice):
         if obj is None:
             obj = self.scopeDev.getObjective()
         else:
-            obj = obj[0]
+            obj, oldObj = obj
+        
         with self.lock:
             #scale = obj['scale']
             #offset = obj['offset']
             #pos = self.scopeState['scopePosition']
-            self.scopeState['objective'] = obj['name']
+            self.scopeState['objective'] = obj.name()
             #self.scopeState['objScale'] = scale
             #self.scopeState['offset'] = offset
             #self.scopeState['centerPosition'] = [pos[0] + offset[0], pos[1] + offset[1]]
@@ -577,7 +578,7 @@ class CameraTask(DAQGenericTask):
             
     def newFrame(self, frame):
         disconnect = False
-        with MutexLocker(self.lock):
+        with self.lock:
             if self.recording:
                 #print "New frame"
                 #if self.stopRecording:
@@ -644,7 +645,7 @@ class CameraTask(DAQGenericTask):
         
         ## should return false if recording is required to run for a specific time.
         if 'minFrames' in self.camCmd:
-            with MutexLocker(self.lock):
+            with self.lock:
                 if len(self.frames) < self.camCmd['minFrames']:
                     return False
         return DAQGenericTask.isDone(self)  ## Should return True.
@@ -654,7 +655,7 @@ class CameraTask(DAQGenericTask):
         #print "Stop camera task"
         DAQGenericTask.stop(self)
         
-        with MutexLocker(self.lock):
+        with self.lock:
             self.stopRecording = True
         #if self.stopAfter:
             #self.dev.stopAcquire()
@@ -684,7 +685,7 @@ class CameraTask(DAQGenericTask):
         ## generate MetaArray of images collected during recording
         #data = self.recordHandle.data()
         times = None
-        with MutexLocker(self.lock):
+        with self.lock:
             data = self.frames
             if len(data) > 0:
                 arr = concatenate([f.data()[newaxis,...] for f in data])
@@ -808,11 +809,11 @@ class AcquireThread(QtCore.QThread):
         
     
     def connectCallback(self, method):
-        with MutexLocker(self.connectMutex):
+        with self.connectMutex:
             self.connections.add(method)
     
     def disconnectCallback(self, method):
-        with MutexLocker(self.connectMutex):
+        with self.connectMutex:
             if method in self.connections:
                 self.connections.remove(method)
     #
@@ -912,7 +913,7 @@ class AcquireThread(QtCore.QThread):
                         del frame['data']
                         frameInfo.update(frame)
                         out = Frame(data, frameInfo)
-                        with MutexLocker(self.connectMutex):
+                        with self.connectMutex:
                             conn = list(self.connections)
                         for c in conn:
                             c(out)
@@ -968,7 +969,7 @@ class AcquireThread(QtCore.QThread):
         
     def stop(self, block=False):
         #print "AcquireThread.stop: Requesting thread stop, acquiring lock first.."
-        with MutexLocker(self.lock):
+        with self.lock:
             self.stopThread = True
         #print "AcquireThread.stop: got lock, requested stop."
         #print "AcquireThread.stop: Unlocked, waiting for thread exit (%s)" % block

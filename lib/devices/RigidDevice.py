@@ -167,7 +167,7 @@ class RigidDevice(object):
                         self.__globalTransform = None
                         return None
                     transform = tr * transform
-                self.__globalTransform = tr
+                self.__globalTransform = transform
             return self.__globalTransform
 
     def inverseGlobalTransform(self):
