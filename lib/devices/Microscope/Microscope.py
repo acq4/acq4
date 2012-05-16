@@ -201,6 +201,7 @@ class ScopeGUI(QtGui.QWidget):
         self.objList = self.dev._allObjectives()
         self.switchN = len(self.objList)
         self.objWidgets = {}
+        self.blockSpinChange = False
         row = 1
         for i in self.objList:
             ## For each objective, create a set of widgets for selecting and updating.
@@ -252,14 +253,23 @@ class ScopeGUI(QtGui.QWidget):
     def objComboChanged(self):
         combo = self.sender()
         self.dev.selectObjective(combo.itemData(combo.currentIndex()))
+        self.blockSpinChange = True
+        try:
+            self.updateSpins()
+        finally:
+            self.blockSpinChange = False
     
     def offsetSpinChanged(self, spin):
+        if self.blockSpinChange:
+            return
         index = spin.index
         (r, combo, xs, ys, ss) = self.objWidgets[index]
         obj = combo.itemData(combo.currentIndex())
         obj.setOffset((xs.value(), ys.value()))
     
     def scaleSpinChanged(self, spin):
+        if self.blockSpinChange:
+            return
         index = spin.index
         (r, combo, xs, ys, ss) = self.objWidgets[index]
         obj = combo.itemData(combo.currentIndex())
@@ -273,6 +283,5 @@ class ScopeGUI(QtGui.QWidget):
             xs.setValue(offset.x())
             ys.setValue(offset.y())
             ss.setValue(obj.scale().x())
-            
-            
-            
+
+
