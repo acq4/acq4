@@ -341,7 +341,7 @@ class CameraWindow(QtGui.QMainWindow):
         #p = info['imagePosition']
         self.persistentFrames.append(im)
         self.addItem(im, z=z)
-        im.setTransform(info['transform'])
+        im.setTransform(self.currentFrame.globalTransform().as2D())
         
     #@trace
     def addItem(self, item, pos=(0,0), scale=(1,1), z=0):
@@ -920,14 +920,14 @@ class CameraWindow(QtGui.QMainWindow):
             #self.updateHistogram(self.currentFrame[0], wl, bl)
             
             ## Translate and scale image based on ROI and binning
-            m = QtGui.QTransform()
-            m.translate(info['region'][0], info['region'][1])
-            m.scale(*info['binning'])
+            #m = QtGui.QTransform()
+            #m.translate(info['region'][0], info['region'][1])
+            #m.scale(*info['binning'])
             prof.mark() 
             
             ## update image in viewport
             self.imageItem.updateImage(data)#, levels=[bl, wl])
-            self.imageItem.setTransform(m)
+            self.imageItem.setTransform(self.currentFrame.transform().as2D())
             prof.mark() 
 
             ## Update viewport to correct for scope movement/scaling
