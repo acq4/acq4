@@ -73,6 +73,12 @@ class Transform3D(QtGui.QMatrix4x4):
         
     def scale(self, *args):
         """adjust the scale of this transform"""
+        ## try to prevent accidentally setting 0 scale on z axis
+        if len(args) == 1 and hasattr(args[0], '__len__'):
+            args = args[0]
+        if len(args) == 2:
+            args = args + (1,)
+            
         s = Vector(*args)
         self.setScale(self._state['scale'] * s)
         
@@ -141,7 +147,9 @@ class Transform3D(QtGui.QMatrix4x4):
         if self._state['angle'] == 0:
             self._state['axis'] = (0,0,1)
         
-        
+    def as2D(self):
+        """Return a QTransform representing the x,y portion of this transform (if possible)"""
+        return pg.Transform(self)
 
     #def __div__(self, t):
         #"""A / B  ==  B^-1 * A"""

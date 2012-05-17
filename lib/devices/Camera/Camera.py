@@ -14,7 +14,7 @@ from deviceGUI import *
 import ptime as ptime
 from Mutex import Mutex
 from debug import *
-from pyqtgraph import Vector
+from pyqtgraph import Vector, Transform3D
 
 class Camera(DAQGeneric, RigidDevice):
     """Generic camera device class. All cameras should extend from this interface.
@@ -435,12 +435,36 @@ class Frame(object):
         object.__init__(self)
         self._data = data
         self._info = info
+        self._transform = None
+        self._globalTransform = None
         
     def data(self):
         return self._data
     
     def info(self):
         return self._info
+    
+    def transform(self):
+        """Return the transform that maps from this frame's image coordinates
+        to its source camera coordinates.
+        """
+        if self._transform is None:
+            rgn = self._info['region']
+            binn = self._info['binning']
+            self._transform = Transform3D()
+            self._transform.translate(*rgn[:2])
+            self._transform.scale(binn[0], binn[1], 1)
+        return self._transform
+        
+    def globalTransform(self):
+        """
+        Return the transform that maps this frame's image coordinates
+        to global coordinates.
+        """
+        if self._globalTransform is None:
+            self._globalTransform = Transform3D(self._info['transform'] * self.transform())
+        return self._globalTransform
+        
         
     def mapFromFrameToScope(obj):
         """

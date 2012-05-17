@@ -68,10 +68,12 @@ class Microscope(Device, RigidDevice):
     def quit(self):
         pass
     
-    def objectiveSwitchChanged(self, sw, change):
+    def objectiveSwitchChanged(self, sw=None, change=None):
         ## Called when the switch device has changed, NOT when the user has selected a different objective.
         ## *change* looks like { switchId1: newValue, switchId2: newValue, ... }
-        
+        if sw is None:
+            change = {self.objSwitchId: self.switchDevice.getSwitch(self.objSwitchId)}
+            
         if self.objSwitchId not in change: ## the switch(es) that changed are not relevant to this device
             return
         state = str(change[self.objSwitchId])
