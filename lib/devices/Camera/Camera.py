@@ -373,6 +373,7 @@ class Camera(DAQGeneric, RigidDevice):
         p = Vector(self.scopeState['transform'].map(Vector(1, 1)) - o)
         self.scopeState['centerPosition'] = o
         self.scopeState['pixelSize'] = p
+        self.scopeState['id'] += 1  ## hint to acquisition thread that state has changed
         
     def objectiveChanged(self, obj=None):
         if obj is None:
@@ -871,7 +872,7 @@ class AcquireThread(QtCore.QThread):
                     
                     ## frameInfo includes pixelSize, objective, centerPosition, scopePosition, imagePosition
                     ss = self.dev.getScopeState()
-                    print ss
+                    #print ss
                     if ss['id'] != scopeState:
                         #print "scope state changed"
                         scopeState = ss['id']
@@ -881,8 +882,7 @@ class AcquireThread(QtCore.QThread):
                         #pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
                         
                         transform = pg.Transform3D(ss['transform'])
-                        transform.scale(ps)
-                        transform.translate(0,0)  ## correct for ROI here
+                        transform.translate(region[0]*ps[0], region[1]*ps[1])  ## correct for ROI here
                         
                         frameInfo = {
                             'pixelSize': [ps[0] * binning[0], ps[1] * binning[1]],  ## size of image pixel

@@ -12,6 +12,7 @@ import functions as fn
 import numpy as np
 import scipy
 from collections import OrderedDict
+import pyqtgraph as pg
 
 class MockCamera(Camera):
     
@@ -22,6 +23,7 @@ class MockCamera(Camera):
         self.ringSize = 100
         self.frameId = 0
         self.noise = np.random.normal(size=10000000, loc=100, scale=50)  ## pre-generate noise for use in images
+        self.background = None
         
         self.params = OrderedDict([
             ('triggerMode',     'Normal'),
@@ -73,6 +75,8 @@ class MockCamera(Camera):
         self.lastFrameTime = None
         self.stopOk = False
         
+        self.sigGlobalTransformChanged.connect(self.globalTransformChanged)
+        
     
     def setupCamera(self):
         pass
@@ -92,6 +96,8 @@ class MockCamera(Camera):
         #print "Selected camera:", cams[ind]
         #self.cam = self.pvc.getCamera(cams[ind])
         
+    def globalTransformChanged(self):
+        self.background = None
     
     def startCamera(self):
         self.cameraStarted = True
@@ -131,6 +137,29 @@ class MockCamera(Camera):
         d.shape = shape
         return d.copy()
         
+    def getBackground(self):
+        if self.background is None:
+            w,h = self.params['sensorSize']
+            
+            tr = self.globalTransform()
+            tr = pg.Transform(tr)
+            m = QtGui.QTransform()
+            m.scale(20e3, 20e3)
+            tr = tr * m
+            m = pg.Transform(tr).matrix()
+            
+            tr = np.array([[1,0,0],[0,1,0],[0,0,1]])
+            xy = xy = np.ones((3,w,h))
+            xy[:2] = np.mgrid[0:w, 0:h]
+            xy = np.dot(xy.transpose(1,2,0), m[:,:2])
+            xy = xy.transpose(2,0,1)
+            print xy
+            
+            self.background = mandelbrot(xy)
+            
+            
+        return self.background
+        
     def newFrames(self):
         """Return a list of all frames acquired since the last call to newFrames."""
         now = ptime.time()
@@ -138,6 +167,8 @@ class MockCamera(Camera):
         dt = now - self.lastFrameTime
         exp = self.getParam('exposure')
         region = self.getParam('region') 
+        bg = self.getBackground()[region[0]:region[0]+region[2], region[1]:region[1]+region[3]]
+        
         shape = region[2:]
         bin = self.getParam('binning')
         nf = int(dt / (exp+(40e-3/(bin[0]*bin[1]))))
@@ -147,8 +178,8 @@ class MockCamera(Camera):
             data = self.getNoise(shape)
             data[data<0] = 0
             
-            sig = self.signal[region[0]:region[0]+region[2], region[1]:region[1]+region[3]]
-            data += sig * (exp*1000)
+            #sig = self.signal[region[0]:region[0]+region[2], region[1]:region[1]+region[3]]
+            data += bg * (exp*1000)
             
             data = fn.downsample(data, bin[0], axis=0)
             data = fn.downsample(data, bin[1], axis=1)
@@ -293,3 +324,39 @@ class MockCamera(Camera):
             #return self.cam.getParam(param)
         return self.getParams([param])[param]
 
+
+        
+def mandelbrot(xy, maxIter=20):
+    ## use (w,h,2) array of x,y values instead of automatically generating a grid
+    x, y = xy
+    w, h = xy.shape[1:]
+    
+    ## speed up with a clever initial mask:
+    x14 = x-0.25
+    y2 = y**2
+    q = (x14)**2 + y2
+    mask = q * (q + x14) > 0.25 * y2
+    mask &= (x+1)**2 + y2 > 1/16.
+    mask &= x > -2
+    mask &= x < 0.7
+    mask &= y > -1.2
+    mask &= y < 1.2
+
+    img = np.zeros((w,h), dtype=int)
+    xInd, yInd = np.mgrid[0:w, 0:h]
+    z0 = np.empty((w,h), dtype=np.complex64)
+    z0.real = x
+    z0.imag = y
+    z = z0.copy()
+
+    for i in xrange(maxIter):
+        z = z[mask]
+        z0 = z0[mask]
+        xInd = xInd[mask]
+        yInd = yInd[mask]
+        z *= z
+        z += z0
+        mask = np.abs(z) < 2.
+        img[xInd[mask], yInd[mask]] = i % (maxIter-1)
+        
+    return img

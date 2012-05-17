@@ -129,8 +129,8 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.histogram.setImageItem(self.imageItem)
         self.ui.histogram.fillHistogram(False)  ## for speed
         
-        #grid = Grid(self.gv)
-        #self.scene.addItem(grid)
+        grid = pg.GridItem()
+        self.view.addItem(grid)
         
         ## Scale bar
         self.scaleBar = pg.ScaleBar(100e-6)
@@ -176,7 +176,8 @@ class CameraWindow(QtGui.QMainWindow):
         self.openCamera()
         
         ## Initialize values
-        self.cameraCenter = self.scopeCenter = [self.camSize[0]*0.5, self.camSize[1]*0.5]
+        self.lastFramePosition = Point(self.camSize[0]*0.5, self.camSize[1]*0.5)
+        self.scopeCenter = [self.camSize[0]*0.5, self.camSize[1]*0.5]
         self.cameraScale = [1, 1]
         self.view.setRange(QtCore.QRectF(0, 0, self.camSize[0], self.camSize[1]))
         
@@ -188,13 +189,13 @@ class CameraWindow(QtGui.QMainWindow):
         
         ## Set up microscope objective borders
         self.borders = []
-        self.cam.sigGlobalTransformChanged.connect(self.cameraMoved)
+        #self.cam.sigGlobalTransformChanged.connect(self.cameraMoved)
         
         #scope = self.cam.getScopeDevice()
         #if scope is not None:
             #scope.sigObjectiveListChanged.connect(self.updateBorders)
             ##scope.sigPositionChanged.connect(self.scopeMoved)
-            #self.cameraCenter = self.cam.getPosition()
+            #self.lastFramePosition = self.cam.getPosition()
             #self.cameraScale = self.cam.getPixelSize()
             #self.scopeCenter = self.cam.getPosition(justScope=True)
             #self.centerView()
@@ -286,7 +287,7 @@ class CameraWindow(QtGui.QMainWindow):
         ## ensure that the image remains stationary on screen.
         if not self.cam.isRunning():
             ss = self.cam.getScopeState()
-            self.cameraCenter = ss['centerPosition']
+            self.lastFramePosition = ss['centerPosition']
             self.scopeCenter = ss['scopePosition']
             self.updateCameraDecorations()
             self.view.translateBy(p['rel'])
@@ -349,7 +350,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.view.addItem(item)
         
         if pos is None:
-            pos = self.cameraCenter
+            pos = self.lastFramePosition
         item.setPos(QtCore.QPointF(pos[0], pos[1]))
         item.scale(scale[0], scale[1])
         item.setZValue(z)
@@ -366,7 +367,7 @@ class CameraWindow(QtGui.QMainWindow):
     #@trace
     def addROI(self):
         pen = pg.mkPen(pg.intColor(len(self.ROIs)))
-        roi = PlotROI(self.cameraCenter, self.cameraScale[0] * 10)
+        roi = PlotROI(self.lastFramePosition, self.cameraScale[0] * 10)
         roi.setZValue(40000)
         roi.setPen(pen)
         self.view.addItem(roi)
@@ -588,22 +589,23 @@ class CameraWindow(QtGui.QMainWindow):
     #@trace
     def updateCameraDecorations(self):
         ps = self.cameraScale
-        pos = self.cameraCenter
+        pos = self.lastFramePosition
         cs = self.camSize
         if ps is None:
             return
         
         ## move scope group
-        m = QtGui.QTransform()
-        m.translate(self.scopeCenter[0], self.scopeCenter[1])
-        self.scopeItemGroup.setTransform(m)
+        #m = QtGui.QTransform()
+        #m.translate(self.scopeCenter[0], self.scopeCenter[1])
+        #self.scopeItemGroup.setTransform(m)
         
         ## move and scale camera group
-        m = QtGui.QTransform()
-        m.translate(pos[0], pos[1])
-        m.scale(ps[0], ps[1])
-        m.translate(-cs[0]*0.5, -cs[1]*0.5)
-        self.cameraItemGroup.setTransform(m)
+        #m = QtGui.QTransform()
+        #m.translate(pos[0], pos[1])
+        #m.scale(ps[0], ps[1])
+        #m.translate(-cs[0]*0.5, -cs[1]*0.5)
+        m = self.cam.globalTransform()
+        self.cameraItemGroup.setTransform(pg.Transform(m))
         
         
         
@@ -835,7 +837,7 @@ class CameraWindow(QtGui.QMainWindow):
             if self.currentFrame is None and self.nextFrame is None:
                 #sys.stdout.write('-')
                 return
-            
+
             prof = debug.Profiler('CameraWindow.drawFrame', disabled=True)
             prof.mark() 
             ## We will now draw a new frame (even if the frame is unchanged)
@@ -930,15 +932,16 @@ class CameraWindow(QtGui.QMainWindow):
 
             ## Update viewport to correct for scope movement/scaling
             ## TODO: fix these
-            #newPos = info['centerPosition']
-            #if newPos != self.cameraCenter:
+            newPos = info['transform'].map(Point(0,0))
+            if newPos != self.lastFramePosition:
                 #self.sigCameraPosChanged.emit()
-                #diff = [newPos[0] - self.cameraCenter[0], newPos[1] - self.cameraCenter[1]]
-                #self.view.translateBy([diff[0], diff[1]])
-                #self.cameraCenter = newPos
+                diff = newPos - self.lastFramePosition
+                self.view.translateBy(diff)
+                self.lastFramePosition = newPos
                 #self.scopeCenter = info['scopePosition']
-                #self.updateCameraDecorations()
-            #prof.mark() 
+                self.updateCameraDecorations()
+            #prof.mark()
+            
             
             #newScale = [info['pixelSize'][0] / info['binning'][0], info['pixelSize'][1] / info['binning'][1]]
             #if newScale != self.cameraScale:  ## If scale has changed, re-center on new objective.
@@ -950,10 +953,10 @@ class CameraWindow(QtGui.QMainWindow):
 
             ## move and scale image item group  - sets image to correct position/scale based on scope position and objective
             #m = QtGui.QTransform()
-            #m.translate(*self.cameraCenter)
+            #m.translate(*self.lastFramePosition)
             #m.scale(*self.cameraScale)
             #m.translate(-self.camSize[0]*0.5, -self.camSize[1]*0.5)
-            self.imageItemGroup.setTransform(info['transform'])
+            self.imageItemGroup.setTransform(pg.Transform(info['transform']))
             prof.mark() 
 
             ## update info for pixel under mouse pointer

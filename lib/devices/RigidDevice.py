@@ -130,7 +130,7 @@ class RigidDevice(object):
         transformation is non-affine, and thus the mapTo/mapFrom methods must be used instead.)
         """
         with self.__lock:
-            return self.__transform
+            return QtGui.QMatrix4x4(self.__transform)
     
     def inverseDeviceTransform(self):
         with self.__lock:
@@ -143,13 +143,13 @@ class RigidDevice(object):
                     if not invertible:
                         raise Exception("Transform is not invertible.")
                     self.__inverseTransform = inv
-            return self.__inverseTransform
+            return QtGui.QMatrix4x4(self.__inverseTransform)
     
     def setDeviceTransform(self, tr):
         with self.__lock:
             self.__transform = Transform3D(tr)
             self.invalidateCachedTransforms()
-            self.sigTransformChanged.emit(self)
+        self.sigTransformChanged.emit(self)
 
     def globalTransform(self):
         """
@@ -168,7 +168,7 @@ class RigidDevice(object):
                         return None
                     transform = tr * transform
                 self.__globalTransform = transform
-            return self.__globalTransform
+            return QtGui.QMatrix4x4(self.__globalTransform)
 
     def inverseGlobalTransform(self):
         with self.__lock:
@@ -181,7 +181,7 @@ class RigidDevice(object):
                     if not invertible:
                         raise Exception("Transform is not invertible.")
                     self.__inverseGlobalTransform = inv
-            return self.__inverseGlobalTransform
+            return QtGui.QMatrix4x4(self.__inverseGlobalTransform)
     
     def parentDevices(self):
         """

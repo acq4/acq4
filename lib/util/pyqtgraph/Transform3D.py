@@ -2,7 +2,9 @@
 from Qt import QtCore, QtGui
 from Vector import Vector
 from Transform import Transform
+import pyqtgraph as pg
 import numpy as np
+import scipy.linalg
 
 class Transform3D(QtGui.QMatrix4x4):
     """4x4 Transform matrix that can always be represented as a combination of 3 matrices: scale * rotate * translate
@@ -34,19 +36,21 @@ class Transform3D(QtGui.QMatrix4x4):
                 'axis': Vector(0, 0, 1),
             }
             self.update()
+        elif isinstance(init, QtGui.QMatrix4x4):
+            self.setFromMatrix(init)
         else:
             raise Exception("Cannot build Transform3D from argument type:", type(init))
 
         
     def getScale(self):
-        return self._state['scale']
+        return pg.Vector(self._state['scale'])
         
-    def getOrientation(self):
+    def getRotation(self):
         """Return (angle, axis) of rotation"""
-        return self._state['angle'], self._state['axis']
+        return self._state['angle'], pg.Vector(self._state['axis'])
         
     def getTranslation(self):
-        return self._state['pos']
+        return pg.Vector(self._state['pos'])
     
     def reset(self):
         self._state = {
@@ -58,23 +62,37 @@ class Transform3D(QtGui.QMatrix4x4):
         self.update()
         
     def translate(self, *args):
+        """Adjust the translation of this transform"""
         t = Vector(*args)
         self.setTranslate(self._state['pos']+t)
         
     def setTranslate(self, *args):
+        """Set the translation of this transform"""
         self._state['pos'] = Vector(*args)
         self.update()
         
     def scale(self, *args):
+        """adjust the scale of this transform"""
         s = Vector(*args)
         self.setScale(self._state['scale'] * s)
         
     def setScale(self, *args):
+        """Set the scale of this transform"""
         self._state['scale'] = Vector(*args)
         self.update()
         
-    #def rotate(self, angle, axis):
-        #self.setRotate(self._state['angle'] + angle)
+    def rotate(self, angle, axis=(0,0,1)):
+        """Adjust the rotation of this transform"""
+        origAxis = self._state['axis']
+        if axis[0] == origAxis[0] and axis[1] == origAxis[1] and axis[2] == origAxis[2]:
+            self.setRotate(self._state['angle'] + angle)
+        else:
+            m = QtGui.QMatrix4x4()
+            m.translate(*self._state['pos'])
+            m.rotate(self._state['angle'], *self._state['axis'])
+            m.rotate(angle, *axis)
+            m.scale(*self._state['scale'])
+            self.setFromMatrix(m)
         
     def setRotate(self, angle, axis=(0,0,1)):
         """Set the transformation rotation to angle (in degrees)"""
@@ -82,6 +100,48 @@ class Transform3D(QtGui.QMatrix4x4):
         self._state['angle'] = angle
         self._state['axis'] = Vector(axis)
         self.update()
+    
+    def setFromMatrix(self, m):
+        """
+        Set this transform mased on the elements of *m*
+        The input matrix must be affine AND have no shear,
+        otherwise the conversion will most likely fail.
+        """
+        for i in range(4):
+            self.setRow(i, m.row(i))
+        m = self.matrix().reshape(4,4)
+        ## translation is 4th column
+        self._state['pos'] = m[:3,3] 
+        
+        ## scale is vector-length of first three columns
+        scale = (m[:3,:3]**2).sum(axis=0)**0.5
+        self._state['scale'] = scale
+        
+        ## rotation axis is the eigenvector with eigenvalue=1
+        r = m[:3, :3] / scale[:, np.newaxis]
+        try:
+            evals, evecs = scipy.linalg.eig(r)
+        except:
+            print "Rotation matrix:", r
+            print "Scale:", scale
+            print "Original matrix:", m
+            raise
+        eigIndex = np.argwhere(np.abs(evals-1) < 1e-7)
+        if len(eigIndex) < 1:
+            print "eigenvalues:", evals
+            print "eigenvectors:", evecs
+            print "index:", eigIndex, evals-1
+            raise Exception("Could not determine rotation axis.")
+        axis = evecs[eigIndex[0,0]].real
+        axis /= ((axis**2).sum())**0.5
+        self._state['axis'] = axis
+        
+        ## trace(r) == 2 cos(angle) + 1, so:
+        self._state['angle'] = np.arccos((r.trace()-1)*0.5) * 180 / np.pi
+        if self._state['angle'] == 0:
+            self._state['axis'] = (0,0,1)
+        
+        
 
     #def __div__(self, t):
         #"""A / B  ==  B^-1 * A"""
@@ -106,7 +166,9 @@ class Transform3D(QtGui.QMatrix4x4):
 
     def restoreState(self, state):
         self._state['pos'] = Vector(state.get('pos', (0.,0.,0.)))
-        self._state['scale'] = Vector(state.get('scale', (1.,1.,1.)))
+        scale = state.get('scale', (1.,1.,1.))
+        scale = scale + (1.,) * (3-len(scale))
+        self._state['scale'] = Vector(scale)
         self._state['angle'] = state.get('angle', 0.)
         self._state['axis'] = state.get('axis', (0, 0, 1))
         self.update()
@@ -121,8 +183,16 @@ class Transform3D(QtGui.QMatrix4x4):
     def __repr__(self):
         return str(self.saveState())
         
-    def matrix(self):
-        return np.array(self.copyDataTo())
+    def matrix(self, nd=3):
+        if nd == 3:
+            return np.array(self.copyDataTo())
+        elif nd == 2:
+            m = np.array(self.copyDataTo())
+            m[2] = m[3]
+            m[:,2] = n[:,3]
+            return m[:3,:3]
+        else:
+            raise Exception("Argument 'nd' must be 2 or 3")
         
 if __name__ == '__main__':
     import widgets

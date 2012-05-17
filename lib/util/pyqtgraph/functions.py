@@ -415,7 +415,34 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
     return output.transpose(tr2)
 
 
-
+def solve3DTransform(points1, points2):
+    """
+    Find a 3D transformation matrix that maps points1 onto points2
+    points must be specified as a list of 4 Vectors.
+    """
+    
+    A = np.array([
+        [points1[0].x(), points1[0].y(), points1[0].z(), 1],
+        [points1[1].x(), points1[1].y(), points1[1].z(), 1],
+        [points1[2].x(), points1[2].y(), points1[2].z(), 1],
+        [points1[3].x(), points1[3].y(), points1[3].z(), 1]
+    ])
+        
+    B = np.array([
+        [points2[0].x(), points2[0].y(), points2[0].z(), 1],
+        [points2[1].x(), points2[1].y(), points2[1].z(), 1],
+        [points2[2].x(), points2[2].y(), points2[2].z(), 1],
+        [points2[3].x(), points2[3].y(), points2[3].z(), 1]
+    ])
+    
+    ## solve 3 sets of linear equations to determine transformation matrix elements
+    matrix = np.zeros((4,4))
+    for i in range(3):
+        row = scipy.linalg.solve(A, B[:,i])  ## solve Ax = B; x is one row of the desired transformation matrix
+        matrix[i] = row
+    
+    return matrix
+    
 
 
 def makeARGB(data, lut=None, levels=None, useRGBA=False): 

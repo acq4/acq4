@@ -18,7 +18,7 @@ class MockStage(Device, RigidDevice):
         dm.declareInterface(name, ['stage'], self)
 
     def updatePosition(self):
-        if self.speed == [0,0]:
+        if self.speed[0] == 0 and self.speed[1] == 0:
             self.timer.stop()
         self.setPosition([self.pos[0]+self.speed[0], self.pos[1]+self.speed[1], self.pos[2]])
         
