@@ -1379,14 +1379,14 @@ class PolyLineROI(ROI):
             self.addFreeHandle(h['pos'], item=h['item'])
             s.setZValue(self.zValue() +1)
            
-        h = self.segments[-1].handles[-1]
+        h = self.segments[-1].handles[1]
         self.addFreeHandle(h['pos'], item=h['item'])
             
         h1 = self.segments[-1].handles[-1]['item']
         h2 = self.segments[0].handles[0]['item']
         if closed:
             self.segments.append(LineSegmentROI([positions[-1], positions[0]], pos=pos, handles=(h1, h2), pen=pen, parent=self, movable=False))
-        
+            h2.setParentItem(self.segments[-1])
         for s in self.segments:
             self.setSegmentSettings(s)
             
@@ -1415,13 +1415,15 @@ class PolyLineROI(ROI):
         
         for i, s in enumerate(self.segments):
             if s == segment:
-                newSegment = LineSegmentROI([pos, h2['pos']], [0,0], handles=(None, h2['item']), pen=segment.pen, movable=False, acceptsHandles=True, parent=self)
+                #newSegment = LineSegmentROI([pos, h2['pos']], [0,0], handles=(None, h2['item']), pen=segment.pen, movable=False, acceptsHandles=True, parent=self)
+                newSegment = LineSegmentROI([h1['pos'], pos], [0,0], handles=(h1['item'], None), pen=segment.pen, movable=False, acceptsHandles=True, parent=self)
                 self.setSegmentSettings(newSegment)
-                self.segments.insert(i+1, newSegment)
+                self.segments.insert(i, newSegment)
                 break
             
-        segment.replaceHandle(1, newSegment.handles[0])
-        self.handles.insert(i+1, newSegment.handles[0])
+        segment.replaceHandle(0, newSegment.handles[1])
+        
+        self.handles.insert(i+1, newSegment.handles[1])
         
       
     def handleRemoved(self, segment, handle):
@@ -1429,12 +1431,16 @@ class PolyLineROI(ROI):
         for i, s in enumerate(self.segments):
             if s == segment:
                 #s.replaceHandle(0, self.segments[i-1].handles[0])
-                self.segments[i-1].replaceHandle(1, segment.handles[1])
+                if s != self.segments[-1]:
+                    j = i+1
+                else:
+                    j=0
+                self.segments[j].replaceHandle(0, segment.handles[0])
                 break
                 
-        handle.disconnectROI(self.segments[i-1])
+        handle.disconnectROI(self.segments[j])
         #handle.disconnectROI(self)
-        self.handles.pop(i)
+        self.handles.pop(j)
         #segment.handles[1]['item'].setParentItem(self.segments[(i+1)%len(self.segments)])
         self.segments.remove(segment)
         segment.close()
@@ -1444,7 +1450,7 @@ class PolyLineROI(ROI):
         #for s in self.segments:
             #s.update()
         #p.setPen(self.currentPen)
-        #p.setPen(fn.mkPen('r'))
+        #p.setPen(fn.mkPen('w'))
         #p.drawRect(self.boundingRect())
         #p.drawPath(self.shape())
         pass
@@ -1460,6 +1466,7 @@ class PolyLineROI(ROI):
         p.moveTo(self.handles[0]['item'].pos())
         for i in range(len(self.handles)):
             p.lineTo(self.handles[i]['item'].pos())
+        p.lineTo(self.handles[0]['item'].pos())
         return p    
 
 class LineSegmentROI(ROI):
@@ -1491,11 +1498,11 @@ class LineSegmentROI(ROI):
             self.hasParentROI = False
             
     def close(self):
-        for h in self.handles:
-            if len(h['item'].roi) == 1:
-                h['item'].scene().removeItem(h['item'])
-            elif h['item'].parentItem() == self:
-                h['item'].setParentItem(self.parentItem()) 
+        #for h in self.handles:
+            #if len(h['item'].roi) == 1:
+                #h['item'].scene().removeItem(h['item'])
+            #elif h['item'].parentItem() == self:
+                #h['item'].setParentItem(self.parentItem()) 
                 
         self.scene().removeItem(self)
             
@@ -1521,9 +1528,11 @@ class LineSegmentROI(ROI):
                 #ev.ignore()
                 
     def newHandleRequested(self, evPos):
-        print "newHandleRequested"
-        self.parentROI.newHandleRequested(self, self.mapToParent(evPos)) ## so now evPos should be passed in in the parents coordinate system
+        #print "newHandleRequested"
         
+        if evPos - self.handles[0].pos() == Point(0.,0.) or evPos-handles[1].pos() == Point(0.,0.):
+            return
+        self.parentROI.newHandleRequested(self, self.mapToParent(evPos)) ## so now evPos should be passed in in the parents coordinate system
         
     def listPoints(self):
         return [p['item'].pos() for p in self.handles]
