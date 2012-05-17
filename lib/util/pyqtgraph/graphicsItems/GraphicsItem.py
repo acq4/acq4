@@ -121,24 +121,41 @@ class GraphicsItem(object):
         
         
         
-    def pixelVectors(self):
-        """Return vectors in local coordinates representing the width and height of a view pixel."""
-        vt = self.deviceTransform()
-        if vt is None:
-            return None
-        vt = vt.inverted()[0]
-        orig = vt.map(QtCore.QPointF(0, 0))
-        return vt.map(QtCore.QPointF(1, 0))-orig, vt.map(QtCore.QPointF(0, 1))-orig
-        
-    def pixelLength(self, direction):
-        """Return the length of one pixel in the direction indicated (in local coordinates)"""
+    def pixelVectors(self, direction=None):
+        """Return vectors in local coordinates representing the width and height of a view pixel.
+        If direction is specified, then return vectors parallel and orthogonal to it."""
         dt = self.deviceTransform()
         if dt is None:
             return None
+        if direction is None:
+            direction = Point(1, 0)
         viewDir = Point(dt.map(direction) - dt.map(Point(0,0)))
-        norm = viewDir.norm()
+        
+        orthoDir = Point(viewDir[1], -viewDir[0])  ## orthogonal to line in pixel-space
+            
+        
+        normView = viewDir.norm()  ## direction of one pixel orthogonal to line
+        normOrtho = orthoDir.norm()
+        
         dti = dt.inverted()[0]
-        return Point(dti.map(norm)-dti.map(Point(0,0))).length()
+        return Point(dti.map(normView)-dti.map(Point(0,0))), Point(dti.map(normOrtho)-dti.map(Point(0,0)))  
+    
+        #vt = self.deviceTransform()
+        #if vt is None:
+            #return None
+        #vt = vt.inverted()[0]
+        #orig = vt.map(QtCore.QPointF(0, 0))
+        #return vt.map(QtCore.QPointF(1, 0))-orig, vt.map(QtCore.QPointF(0, 1))-orig
+        
+    def pixelLength(self, direction, ortho=False):
+        """Return the length of one pixel in the direction indicated (in local coordinates)
+        If ortho=True, then return the length of one pixel orthogonal to the direction indicated.
+        """
+        normV, orthoV = self.pixelVectors(direction)
+        if ortho:
+            return orthoV.length()
+        return normV.length()
+        
         
 
     def pixelSize(self):
