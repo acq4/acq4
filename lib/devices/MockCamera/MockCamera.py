@@ -23,6 +23,7 @@ class MockCamera(Camera):
         self.ringSize = 100
         self.frameId = 0
         self.noise = np.random.normal(size=10000000, loc=100, scale=50)  ## pre-generate noise for use in images
+        self.bgData = mandelbrot(w=2000).astype(np.float32)
         self.background = None
         
         self.params = OrderedDict([
@@ -74,6 +75,11 @@ class MockCamera(Camera):
         self.lastIndex = None
         self.lastFrameTime = None
         self.stopOk = False
+        
+        tr = pg.Transform3D()
+        ss = self.params['sensorSize']
+        tr.translate(-ss[0], -ss[1])
+        self.setDeviceTransform(tr)
         
         self.sigGlobalTransformChanged.connect(self.globalTransformChanged)
         
@@ -144,19 +150,28 @@ class MockCamera(Camera):
             tr = self.globalTransform()
             tr = pg.Transform(tr)
             m = QtGui.QTransform()
-            m.scale(20e3, 20e3)
+            m.scale(2e6, 2e6)
             tr = tr * m
-            m = pg.Transform(tr).matrix()
+            #m = pg.Transform(tr).matrix()
             
-            tr = np.array([[1,0,0],[0,1,0],[0,0,1]])
-            xy = xy = np.ones((3,w,h))
-            xy[:2] = np.mgrid[0:w, 0:h]
-            xy = np.dot(xy.transpose(1,2,0), m[:,:2])
-            xy = xy.transpose(2,0,1)
-            print xy
+            #tr = np.array([[1,0,0],[0,1,0],[0,0,1]])
+            #xy = xy = np.ones((3,w,h))
+            #xy[:2] = np.mgrid[0:w, 0:h]
+            #xy = np.dot(xy.transpose(1,2,0), m[:,:2])
+            #xy = xy.transpose(2,0,1)
+            origin = tr.map(pg.Point(0,0))
+            x = (tr.map(pg.Point(1,0)) - origin)
+            y = (tr.map(pg.Point(0,1)) - origin)
+            origin = np.array([origin.x(), origin.y()])
+            x = np.array([x.x(), x.y()])
+            y = np.array([y.x(), y.y()])
             
-            self.background = mandelbrot(xy)
+            vectors = [x,y]
+            #print xy
+            print origin, vectors
             
+            #self.background = mandelbrot(xy)
+            self.background = pg.affineSlice(self.bgData, (w,h), origin, vectors, (0,1))
             
         return self.background
         
@@ -325,11 +340,14 @@ class MockCamera(Camera):
         return self.getParams([param])[param]
 
 
+def mandelbrot(w=500, h=None, maxIter=20, xRange=(-2.0, 1.0), yRange=(-1.2, 1.2)):
+    x0,x1 = xRange
+    y0,y1 = yRange
+    if h is None:
+        h = int(w * (y1-y0)/(x1-x0))
         
-def mandelbrot(xy, maxIter=20):
-    ## use (w,h,2) array of x,y values instead of automatically generating a grid
-    x, y = xy
-    w, h = xy.shape[1:]
+    x = np.linspace(x0, x1, w).reshape(w,1)
+    y = np.linspace(y0, y1, h).reshape(1,h)
     
     ## speed up with a clever initial mask:
     x14 = x-0.25
@@ -344,6 +362,8 @@ def mandelbrot(xy, maxIter=20):
 
     img = np.zeros((w,h), dtype=int)
     xInd, yInd = np.mgrid[0:w, 0:h]
+    x = x.reshape(w)[xInd]
+    y = y.reshape(h)[yInd]
     z0 = np.empty((w,h), dtype=np.complex64)
     z0.real = x
     z0.imag = y
