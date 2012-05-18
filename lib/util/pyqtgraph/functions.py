@@ -345,6 +345,8 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
             
         *axes*: the axes in the original dataset which correspond to the slice *vectors*
         
+        All extra keyword arguments are passed to scipy.ndimage.map_coordinates
+        
     Example: start with a 4D fMRI data set, take a diagonal-planar slice out of the last 3 axes
         
         * data = array with dims (time, x, y, z) = (100, 40, 40, 40)

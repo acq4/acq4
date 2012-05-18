@@ -327,6 +327,7 @@ class ViewBox(GraphicsWidget):
             changes[1] = yRange
 
         if len(changes) == 0:
+            print rect
             raise Exception("Must specify at least one of rect, xRange, or yRange.")
         
         changed = [False, False]

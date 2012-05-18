@@ -23,7 +23,7 @@ class MockCamera(Camera):
         self.ringSize = 100
         self.frameId = 0
         self.noise = np.random.normal(size=10000000, loc=100, scale=50)  ## pre-generate noise for use in images
-        self.bgData = mandelbrot(w=2000).astype(np.float32)
+        self.bgData = mandelbrot(w=1000, maxIter=60).astype(np.float32)
         self.background = None
         
         self.params = OrderedDict([
@@ -78,7 +78,7 @@ class MockCamera(Camera):
         
         tr = pg.Transform3D()
         ss = self.params['sensorSize']
-        tr.translate(-ss[0], -ss[1])
+        tr.translate(-ss[0]*0.5, -ss[1]*0.5)
         self.setDeviceTransform(tr)
         
         self.sigGlobalTransformChanged.connect(self.globalTransformChanged)
@@ -152,13 +152,17 @@ class MockCamera(Camera):
             m = QtGui.QTransform()
             m.scale(2e6, 2e6)
             tr = tr * m
-            #m = pg.Transform(tr).matrix()
             
+            ## render fractal on the fly
+            #m = pg.Transform(tr).matrix()
             #tr = np.array([[1,0,0],[0,1,0],[0,0,1]])
             #xy = xy = np.ones((3,w,h))
             #xy[:2] = np.mgrid[0:w, 0:h]
             #xy = np.dot(xy.transpose(1,2,0), m[:,:2])
             #xy = xy.transpose(2,0,1)
+            #self.background = mandelbrot(xy)
+            
+            ## slice fractal from pre-rendered data
             origin = tr.map(pg.Point(0,0))
             x = (tr.map(pg.Point(1,0)) - origin)
             y = (tr.map(pg.Point(0,1)) - origin)
@@ -167,11 +171,8 @@ class MockCamera(Camera):
             y = np.array([y.x(), y.y()])
             
             vectors = [x,y]
-            #print xy
-            print origin, vectors
             
-            #self.background = mandelbrot(xy)
-            self.background = pg.affineSlice(self.bgData, (w,h), origin, vectors, (0,1))
+            self.background = pg.affineSlice(self.bgData, (w,h), origin, vectors, (0,1), order=1)
             
         return self.background
         

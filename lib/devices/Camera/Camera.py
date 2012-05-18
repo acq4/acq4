@@ -333,18 +333,21 @@ class Camera(DAQGeneric, RigidDevice):
     def getBoundary(self, obj=None):
         """Return the boundaries of the camera sensor in coordinates relative to the scope center.
         If obj is specified, then the boundary is computed for that objective."""
-        if obj is None:
-            obj = self.scopeDev.getObjective()
-        if obj is None:
-            return None
+        size = self.getParam('sensorSize')
+        bounds = pg.Transform(self.globalTransform()).mapRect(QtCore.QRectF(0, 0, *size))
+        return bounds
+        #if obj is None:
+            #obj = self.scopeDev.getObjective()
+        #if obj is None:
+            #return None
         
-        with self.lock:
-            sf = self.camConfig['scaleFactor']
-            size = self.getParam('sensorSize')
-            sx = size[0] * obj['scale'] * sf[0]
-            sy = size[1] * obj['scale'] * sf[1]
-            bounds = QtCore.QRectF(-sx * 0.5 + obj['offset'][0], -sy * 0.5 + obj['offset'][1], sx, sy)
-            return bounds
+        #with self.lock:
+            #sf = self.camConfig['scaleFactor']
+            #size = self.getParam('sensorSize')
+            #sx = size[0] * obj['scale'] * sf[0]
+            #sy = size[1] * obj['scale'] * sf[1]
+            #bounds = QtCore.QRectF(-sx * 0.5 + obj['offset'][0], -sy * 0.5 + obj['offset'][1], sx, sy)
+            #return bounds
         
     def getBoundaries(self):
         """Return a list of camera boundaries for all objectives"""
@@ -906,7 +909,7 @@ class AcquireThread(QtCore.QThread):
                         #pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
                         
                         transform = pg.Transform3D(ss['transform'])
-                        transform.translate(region[0]*ps[0], region[1]*ps[1])  ## correct for ROI here
+                        #transform.translate(region[0]*ps[0], region[1]*ps[1])  ## correct for ROI here
                         
                         frameInfo = {
                             'pixelSize': [ps[0] * binning[0], ps[1] * binning[1]],  ## size of image pixel
@@ -914,7 +917,7 @@ class AcquireThread(QtCore.QThread):
                             #'centerPosition': pos,
                             'objective': ss['objective'],
                             #'imagePosition': pos2
-                            'cameraTransform': ss['transform'],
+                            #'cameraTransform': ss['transform'],
                             'transform': transform,
                         }
                         

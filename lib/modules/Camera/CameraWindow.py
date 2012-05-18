@@ -177,6 +177,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         ## Initialize values
         self.lastFramePosition = Point(self.camSize[0]*0.5, self.camSize[1]*0.5)
+        self.lastFrameScale = Point(1.0, 1.0)
         self.scopeCenter = [self.camSize[0]*0.5, self.camSize[1]*0.5]
         self.cameraScale = [1, 1]
         self.view.setRange(QtCore.QRectF(0, 0, self.camSize[0], self.camSize[1]))
@@ -317,10 +318,11 @@ class CameraWindow(QtGui.QMainWindow):
 
     def centerView(self):
         
-        center = self.cam.getPosition(justScope=True)
-        bounds = self.cam.getBoundary().adjusted(center[0], center[1], center[0], center[1])
+        #center = self.cam.getPosition(justScope=True)
+        #bounds = self.cam.getBoundary().adjusted(center[0], center[1], center[0], center[1])
+        bounds = self.cam.getBoundary()
         self.view.setRange(bounds)
-        self.updateCameraDecorations()
+        #self.updateCameraDecorations()
         
     #@trace
     def addPersistentFrame(self):
@@ -932,14 +934,24 @@ class CameraWindow(QtGui.QMainWindow):
 
             ## Update viewport to correct for scope movement/scaling
             ## TODO: fix these
-            newPos = info['transform'].map(Point(0,0))
-            if newPos != self.lastFramePosition:
+            tr = pg.Transform(info['transform'])
+            newPos = tr.getTranslation()
+            diff = newPos - self.lastFramePosition
+            self.view.translateBy(diff)
+            self.lastFramePosition = newPos
+            
+            newScale = tr.getScale()
+            if newScale != self.lastFrameScale:
+                self.centerView()
+            self.lastFrameScale = newScale
+            
+            #if tr.pos() != self.lastFramePosition:
                 #self.sigCameraPosChanged.emit()
-                diff = newPos - self.lastFramePosition
-                self.view.translateBy(diff)
-                self.lastFramePosition = newPos
+                #diff = newPos - self.lastFramePosition
+                #self.view.translateBy(diff)
+                #self.lastFramePosition = newPos
                 #self.scopeCenter = info['scopePosition']
-                self.updateCameraDecorations()
+                #self.updateCameraDecorations()
             #prof.mark()
             
             
@@ -956,7 +968,8 @@ class CameraWindow(QtGui.QMainWindow):
             #m.translate(*self.lastFramePosition)
             #m.scale(*self.cameraScale)
             #m.translate(-self.camSize[0]*0.5, -self.camSize[1]*0.5)
-            self.imageItemGroup.setTransform(pg.Transform(info['transform']))
+            self.cameraItemGroup.setTransform(tr)
+            self.imageItemGroup.setTransform(tr)
             prof.mark() 
 
             ## update info for pixel under mouse pointer
