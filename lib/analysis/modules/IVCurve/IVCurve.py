@@ -140,11 +140,15 @@ class IVCurve(AnalysisModule):
             #self.lr.setRegion([end *0.5, end * 0.6])
             
             for i in range(len(dirs)):
+                #print tr[i].data().view()
                 spike = Utility.findspikes(cmd.xvals('Time'), tr[i], 
                     0, t0=self.tstart, t1=self.tend, dt=sampInterval,
-                    mode = 'peak', interpolate=True)
+                    mode = 'peak', interpolate=True, debug=True)
+                print spike
                 if len(spike) > 0:
                     self.spikecount[i] = len(spike)
+                    print self.tstart
+                    print spike[0]
                     fsl[i] = spike[0]-self.tstart
                 if len(spike) > 1:
                     fisi[i] = spike[1]-spike[0]
