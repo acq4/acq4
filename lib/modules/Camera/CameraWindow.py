@@ -45,6 +45,9 @@ class PlotROI(pg.ROI):
         pg.ROI.__init__(self, pos, size=size)
         self.addScaleHandle([1, 1], [0, 0])
 
+
+        
+        
 class CameraWindow(QtGui.QMainWindow):
     
     sigCameraPosChanged = QtCore.Signal()
@@ -107,7 +110,7 @@ class CameraWindow(QtGui.QMainWindow):
         #self.ui.graphicsView.useOpenGL(True)  ## a bit buggy, but we need the speed.
         self.view = pg.ViewBox()
         self.view.setAspectLocked(True)
-        self.view.invertY()
+        #self.view.invertY()
         self.ui.graphicsView.setCentralItem(self.view)
         
         ## set up item groups
@@ -129,8 +132,8 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.histogram.setImageItem(self.imageItem)
         self.ui.histogram.fillHistogram(False)  ## for speed
         
-        grid = pg.GridItem()
-        self.view.addItem(grid)
+        #grid = pg.GridItem()
+        #self.view.addItem(grid)
         
         ## Scale bar
         self.scaleBar = pg.ScaleBar(100e-6)
@@ -176,8 +179,8 @@ class CameraWindow(QtGui.QMainWindow):
         self.openCamera()
         
         ## Initialize values
-        self.lastFramePosition = Point(self.camSize[0]*0.5, self.camSize[1]*0.5)
-        self.lastFrameScale = Point(1.0, 1.0)
+        self.lastCameraPosition = Point(self.camSize[0]*0.5, self.camSize[1]*0.5)
+        self.lastCameraScale = Point(1.0, 1.0)
         self.scopeCenter = [self.camSize[0]*0.5, self.camSize[1]*0.5]
         self.cameraScale = [1, 1]
         self.view.setRange(QtCore.QRectF(0, 0, self.camSize[0], self.camSize[1]))
@@ -192,15 +195,20 @@ class CameraWindow(QtGui.QMainWindow):
         self.borders = []
         #self.cam.sigGlobalTransformChanged.connect(self.cameraMoved)
         
+        self.cam.sigGlobalTransformChanged.connect(self.scopeMoved)
+        self.scopeMoved()
+        self.centerView()
         #scope = self.cam.getScopeDevice()
         #if scope is not None:
             #scope.sigObjectiveListChanged.connect(self.updateBorders)
             ##scope.sigPositionChanged.connect(self.scopeMoved)
-            #self.lastFramePosition = self.cam.getPosition()
+            #self.lastCameraPosition = self.cam.getPosition()
             #self.cameraScale = self.cam.getPixelSize()
             #self.scopeCenter = self.cam.getPosition(justScope=True)
             #self.centerView()
         #self.updateBorders()
+        
+        
         
         ## Initialize values/connections in Camera Dock
         self.setUiBinning(self.binning)
@@ -281,17 +289,22 @@ class CameraWindow(QtGui.QMainWindow):
             raise
 
         
-    def scopeMoved(self, p):
+    def scopeMoved(self, p=None):
         ## scope has moved; update viewport and camera outlines.
         ## This is only used when the camera is not running--
         ## if the camera is running, then this is taken care of in drawFrame to
         ## ensure that the image remains stationary on screen.
         if not self.cam.isRunning():
-            ss = self.cam.getScopeState()
-            self.lastFramePosition = ss['centerPosition']
-            self.scopeCenter = ss['scopePosition']
-            self.updateCameraDecorations()
-            self.view.translateBy(p['rel'])
+            tr = pg.Transform(self.cam.globalTransform())
+            pos = tr.getTranslation()
+            diff = pos - self.lastCameraPosition
+            self.lastCameraPosition = pos
+            scale = tr.getScale()
+            if scale == self.lastCameraScale:
+                self.view.translateBy(diff) 
+            else:  ## if objective has changed, don't translate to follow it.
+                self.lastCameraScale = scale
+            self.cameraItemGroup.setTransform(tr)
             
     #@trace
     def updateBorders(self):
@@ -320,7 +333,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         #center = self.cam.getPosition(justScope=True)
         #bounds = self.cam.getBoundary().adjusted(center[0], center[1], center[0], center[1])
-        bounds = self.cam.getBoundary()
+        bounds = self.cam.getBoundary().boundingRect()
         self.view.setRange(bounds)
         #self.updateCameraDecorations()
         
@@ -352,7 +365,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.view.addItem(item)
         
         if pos is None:
-            pos = self.lastFramePosition
+            pos = self.lastCameraPosition
         item.setPos(QtCore.QPointF(pos[0], pos[1]))
         item.scale(scale[0], scale[1])
         item.setZValue(z)
@@ -369,7 +382,9 @@ class CameraWindow(QtGui.QMainWindow):
     #@trace
     def addROI(self):
         pen = pg.mkPen(pg.intColor(len(self.ROIs)))
-        roi = PlotROI(self.lastFramePosition, self.cameraScale[0] * 10)
+        center = self.view.viewRect().center()
+        size = [x*50 for x in self.view.viewPixelSize()]
+        roi = PlotROI(center, size)
         roi.setZValue(40000)
         roi.setPen(pen)
         self.view.addItem(roi)
@@ -591,7 +606,7 @@ class CameraWindow(QtGui.QMainWindow):
     #@trace
     def updateCameraDecorations(self):
         ps = self.cameraScale
-        pos = self.lastFramePosition
+        pos = self.lastCameraPosition
         cs = self.camSize
         if ps is None:
             return
@@ -929,27 +944,27 @@ class CameraWindow(QtGui.QMainWindow):
             
             ## update image in viewport
             self.imageItem.updateImage(data)#, levels=[bl, wl])
-            self.imageItem.setTransform(self.currentFrame.transform().as2D())
+            self.imageItem.setTransform(self.currentFrame.frameTransform().as2D())
             prof.mark() 
 
             ## Update viewport to correct for scope movement/scaling
             ## TODO: fix these
-            tr = pg.Transform(info['transform'])
+            tr = pg.Transform(self.currentFrame.cameraTransform())
             newPos = tr.getTranslation()
-            diff = newPos - self.lastFramePosition
+            diff = newPos - self.lastCameraPosition
             self.view.translateBy(diff)
-            self.lastFramePosition = newPos
+            self.lastCameraPosition = newPos
             
             newScale = tr.getScale()
-            if newScale != self.lastFrameScale:
+            if newScale != self.lastCameraScale:
                 self.centerView()
-            self.lastFrameScale = newScale
+            self.lastCameraScale = newScale
             
-            #if tr.pos() != self.lastFramePosition:
+            #if tr.pos() != self.lastCameraPosition:
                 #self.sigCameraPosChanged.emit()
-                #diff = newPos - self.lastFramePosition
+                #diff = newPos - self.lastCameraPosition
                 #self.view.translateBy(diff)
-                #self.lastFramePosition = newPos
+                #self.lastCameraPosition = newPos
                 #self.scopeCenter = info['scopePosition']
                 #self.updateCameraDecorations()
             #prof.mark()
@@ -965,7 +980,7 @@ class CameraWindow(QtGui.QMainWindow):
 
             ## move and scale image item group  - sets image to correct position/scale based on scope position and objective
             #m = QtGui.QTransform()
-            #m.translate(*self.lastFramePosition)
+            #m.translate(*self.lastCameraPosition)
             #m.scale(*self.cameraScale)
             #m.translate(-self.camSize[0]*0.5, -self.camSize[1]*0.5)
             self.cameraItemGroup.setTransform(tr)
@@ -1005,3 +1020,14 @@ class CameraWindow(QtGui.QMainWindow):
             ##self.lastHistogramUpdate = now
 
 
+class CameraInterface(QtCore.QObject):
+    """
+    This class provides all the functionality necessary for a camera to display images and controls within the camera module's main window. Each camera that connects to the window must implement an instance of this interface.
+    """
+    def __init__(self):
+        QtCore.QObject.__init__(self)
+        
+        
+    
+    
+    

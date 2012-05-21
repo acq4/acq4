@@ -2,6 +2,7 @@ from PyQt4 import QtCore, QtGui
 from Device import Device
 from Mutex import Mutex
 from pyqtgraph import Transform3D
+import collections
 
 class RigidDevice(object):
     """
@@ -28,6 +29,7 @@ class RigidDevice(object):
     class SignalProxyObject(QtCore.QObject):
         sigTransformChanged = QtCore.Signal(object)        # emitted when this device's transform changes
         sigGlobalTransformChanged = QtCore.Signal(object)  # emitted when the transform for this device or any of its parents changes
+        #sigCalibrationStateChanged = QtCore.Signal(object) # emitted when calibration state changes by calling setCalibrationState
     
     def __init__(self, dm, config, name):
         object.__init__(self)
@@ -46,6 +48,7 @@ class RigidDevice(object):
         self.__transform = Transform3D()
         self.__inverseTransform = 0
         self.__lock = Mutex(recursive=True)
+        self.__calibrationState = {}
         self.sigTransformChanged.connect(self.sigGlobalTransformChanged)
         if 'parentDevice' in config:
             self.setParentDevice(config['parentDevice'])
@@ -209,3 +212,25 @@ class RigidDevice(object):
             self.__inverseGlobalTransform = 0
 
     
+    #def setCalibrationState(self, state):
+        #self.__calibrationState = state
+        
+    #def calibrationState(self):
+        #return self.__calibrationState.copy()
+        
+    #def globalCalibrationState(self):
+        #parent = self.parentDevice()
+        #if parent is None:
+            #pstate = collections.OrderedDict()
+        #else:
+            #pstate = parent.globalCalibrationState()
+        #if len(self.__calibrationState) > 0:
+            #name = self.name()
+            #for k, v in self.__calibrationState.iteritems():
+                #pstate[self.name() + "_" + k] = v
+        #return pstate        
+
+
+
+
+

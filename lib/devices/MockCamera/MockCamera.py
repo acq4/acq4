@@ -76,11 +76,6 @@ class MockCamera(Camera):
         self.lastFrameTime = None
         self.stopOk = False
         
-        tr = pg.Transform3D()
-        ss = self.params['sensorSize']
-        tr.translate(-ss[0]*0.5, -ss[1]*0.5)
-        self.setDeviceTransform(tr)
-        
         self.sigGlobalTransformChanged.connect(self.globalTransformChanged)
         
     

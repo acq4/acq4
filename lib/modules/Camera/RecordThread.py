@@ -8,7 +8,9 @@ import numpy as np
 import ptime
 
 class RecordThread(QtCore.QThread):
-    
+    """
+    Thread class used by camera module for storing data to disk.
+    """
     sigShowMessage = QtCore.Signal(object)
     sigRecordingFailed = QtCore.Signal()
     sigRecordingFinished = QtCore.Signal()
@@ -17,12 +19,9 @@ class RecordThread(QtCore.QThread):
         QtCore.QThread.__init__(self)
         self.ui = ui
         self.m = manager
-        #QtCore.QObject.connect(self.ui.cam, QtCore.SIGNAL('newFrame'), self.newCamFrame)
         self.ui.cam.sigNewFrame.connect(self.newCamFrame)
         
-        #QtCore.QObject.connect(ui.ui.btnRecord, QtCore.SIGNAL('toggled(bool)'), self.toggleRecord)
         ui.ui.btnRecord.toggled.connect(self.toggleRecord)
-        #QtCore.QObject.connect(ui.ui.btnSnap, QtCore.SIGNAL('clicked()'), self.snapClicked)
         ui.ui.btnSnap.clicked.connect(self.snapClicked)
         self.recording = False
         self.recordStart = False

@@ -86,9 +86,7 @@ class Camera(DAQGeneric, RigidDevice):
         p = self
         while p is not None:
             p = p.parentDevice()
-            print "parent:", p
             if isinstance(p, Microscope):
-                print "  got it"
                 self.scopeDev = p
                 self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged)
                 break
@@ -109,6 +107,10 @@ class Camera(DAQGeneric, RigidDevice):
         self.setupCamera() 
         #print "Camera: setupCamera returned, about to create acqThread"
         self.sensorSize = self.getParam('sensorSize')
+        tr = pg.Transform3D()
+        tr.translate(-self.sensorSize[0]*0.5, -self.sensorSize[1]*0.5)
+        self.setDeviceTransform(self.deviceTransform() * tr)
+        
         
         self.acqThread = AcquireThread(self)
         #print "Camera: acqThread created, about to connect signals."
@@ -331,10 +333,9 @@ class Camera(DAQGeneric, RigidDevice):
             return self.scopeDev
             
     def getBoundary(self, obj=None):
-        """Return the boundaries of the camera sensor in coordinates relative to the scope center.
-        If obj is specified, then the boundary is computed for that objective."""
+        """Return the boundaries of the camera sensor in global coordinates."""
         size = self.getParam('sensorSize')
-        bounds = pg.Transform(self.globalTransform()).mapRect(QtCore.QRectF(0, 0, *size))
+        bounds = pg.Transform(self.globalTransform()).map(QtGui.QPolygonF(QtCore.QRectF(0, 0, *size)))
         return bounds
         #if obj is None:
             #obj = self.scopeDev.getObjective()
@@ -385,50 +386,29 @@ class Camera(DAQGeneric, RigidDevice):
             obj, oldObj = obj
         
         with self.lock:
-            #scale = obj['scale']
-            #offset = obj['offset']
-            #pos = self.scopeState['scopePosition']
             self.scopeState['objective'] = obj.name()
-            #self.scopeState['objScale'] = scale
-            #self.scopeState['offset'] = offset
-            #self.scopeState['centerPosition'] = [pos[0] + offset[0], pos[1] + offset[1]]
-            #sf = self.camConfig['scaleFactor']
-            #self.scopeState['scale'] = [sf[0] * scale, sf[1] * scale]
-            #self.scopeState['pixelSize'] = filter(abs, self.scopeState['scale'])
             self.scopeState['id'] += 1
-            #print "HERE", obj
-        #print self.scopeState
         
-    #def getCamera(self):
-        #return self.cam
         
         
     ### Proxy signals and functions for acqThread:
     ###############################################
     
     def acqThreadFinished(self):
-        #self.emit(QtCore.SIGNAL('cameraStopped'))
         self.sigCameraStopped.emit()
 
     def acqThreadStarted(self):
-        #self.emit(QtCore.SIGNAL('cameraStarted'))
         self.sigCameraStarted.emit()
 
     def showMessage(self, msg):
-        #self.emit(QtCore.SIGNAL('showMessage'), msg)
         self.sigShowMessage.emit(msg)
 
     def newFrame(self, data):
-        #self.emit(QtCore.SIGNAL('newFrame'), *args)
         self.sigNewFrame.emit(data)
         
     def isRunning(self):
         return self.acqThread.isRunning()
 
-    #def isRunning(self):
-        #with MutexLocker(self.lock):
-            #return self.acqThread.isRunning()
-    
     def wait(self, *args, **kargs):
         return self.acqThread.wait(*args, **kargs)
 
@@ -438,8 +418,16 @@ class Frame(object):
         object.__init__(self)
         self._data = data
         self._info = info
-        self._transform = None
-        self._globalTransform = None
+        
+        ## make frame transform
+        rgn = self._info['region']
+        binn = self._info['binning']
+        tr = Transform3D()
+        tr.translate(*rgn[:2])
+        tr.scale(binn[0], binn[1], 1)
+        self._frameTransform = tr
+        self._info['transform'] = self.cameraTransform() * tr
+        
         
     def data(self):
         return self._data
@@ -447,26 +435,21 @@ class Frame(object):
     def info(self):
         return self._info
     
-    def transform(self):
+    def cameraTransform(self):
+        return Transform3D(self._info['cameraTransform'])
+    
+    def frameTransform(self):
         """Return the transform that maps from this frame's image coordinates
         to its source camera coordinates.
         """
-        if self._transform is None:
-            rgn = self._info['region']
-            binn = self._info['binning']
-            self._transform = Transform3D()
-            self._transform.translate(*rgn[:2])
-            self._transform.scale(binn[0], binn[1], 1)
-        return self._transform
+        return Transform3D(self._frameTransform)
         
     def globalTransform(self):
         """
         Return the transform that maps this frame's image coordinates
-        to global coordinates.
+        to global coordinates. This is equivalent to cameraTransform * frameTransform
         """
-        if self._globalTransform is None:
-            self._globalTransform = Transform3D(self._info['transform'] * self.transform())
-        return self._globalTransform
+        return Transform3D(self._info['transform'])
         
         
     def mapFromFrameToScope(obj):
@@ -918,7 +901,7 @@ class AcquireThread(QtCore.QThread):
                             'objective': ss['objective'],
                             #'imagePosition': pos2
                             #'cameraTransform': ss['transform'],
-                            'transform': transform,
+                            'cameraTransform': transform,
                         }
                         
                     ## Copy frame info to info array

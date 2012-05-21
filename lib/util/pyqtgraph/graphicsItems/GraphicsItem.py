@@ -30,10 +30,10 @@ class GraphicsItem(object):
                 return None
             self._viewWidget = weakref.ref(self.scene().views()[0])
         return self._viewWidget()
-        
+    
     def forgetViewWidget(self):
         self._viewWidget = None
-        
+    
     def getViewBox(self):
         """
         Return the first ViewBox or GraphicsView which bounds this item's visible space.
