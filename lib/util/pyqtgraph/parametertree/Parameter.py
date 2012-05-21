@@ -1,6 +1,6 @@
 from pyqtgraph.Qt import QtGui, QtCore
 import collections, os, weakref, re
-from ParameterItem import ParameterItem
+from .ParameterItem import ParameterItem
 
 PARAM_TYPES = {}
 
@@ -283,6 +283,10 @@ class Parameter(QtCore.QObject):
     def clearChildren(self):
         for ch in self.childs[:]:
             self.removeChild(ch)
+
+    def children(self):  
+        ## warning -- this overrides QObject.children
+        return self.childs[:]
 
     def parentChanged(self, parent):
         self._parent = parent

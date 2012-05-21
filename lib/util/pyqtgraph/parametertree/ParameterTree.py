@@ -23,7 +23,11 @@ class ParameterTree(TreeWidget):
         self.lastSel = None
         self.setRootIsDecorated(False)
         
-    def setParameters(self, param, root=None, depth=0, showTop=True):
+    def setParameters(self, param, showTop=True):
+        self.clear()
+        self.addParameters(param, showTop=showTop)
+        
+    def addParameters(self, param, root=None, depth=0, showTop=True):
         item = param.makeTreeItem(depth=depth)
         if root is None:
             root = self.invisibleRootItem()
@@ -37,7 +41,11 @@ class ParameterTree(TreeWidget):
         item.treeWidgetChanged()
             
         for ch in param:
-            self.setParameters(ch, root=item, depth=depth+1)
+            self.addParameters(ch, root=item, depth=depth+1)
+
+    def clear(self):
+        self.invisibleRootItem().takeChildren()
+        
             
     def focusNext(self, item, forward=True):
         ## Give input focus to the next (or previous) item after 'item'
@@ -68,9 +76,9 @@ class ParameterTree(TreeWidget):
                 index = root.indexOfChild(startItem) - 1
             
         if forward:
-            inds = range(index, root.childCount())
+            inds = list(range(index, root.childCount()))
         else:
-            inds = range(index, -1, -1)
+            inds = list(range(index, -1, -1))
             
         for i in inds:
             item = root.child(i)

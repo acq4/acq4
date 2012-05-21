@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
 from PyQt4 import QtGui, QtCore
 import LogWidgetTemplate
-from FeedbackButton import FeedbackButton
+from pyqtgraph import FeedbackButton
 import configfile
 from DataManager import DirHandle
 from HelpfulException import HelpfulException
@@ -81,7 +81,7 @@ class LogWindow(QtGui.QMainWindow):
     should not call the LogWindow functions directly.
     
     """
-
+    sigLogMessage = QtCore.Signal(object)
     
     def __init__(self, manager):
         QtGui.QMainWindow.__init__(self)
@@ -107,9 +107,12 @@ class LogWindow(QtGui.QMainWindow):
         self.errorDialog = ErrorDialog()
         
         self.wid.ui.input.returnPressed.connect(self.textEntered)
+        self.sigLogMessage.connect(self.queuedLogMsg, QtCore.Qt.QueuedConnection)
         
         #self.sigDisplayEntry.connect(self.displayEntry)
-        
+
+    def queuedLogMsg(self, args):  ## called indirectly when logMsg is called from a non-gui thread
+        self.logMsg(*args[0], **args[1])
         
     def logMsg(self, msg, importance=5, msgType='status', **kwargs):
         """msg: the text of the log message
@@ -123,6 +126,11 @@ class LogWindow(QtGui.QMainWindow):
            Feel free to add your own keyword arguments. These will be saved in the log.txt file, but will not affect the content or way that messages are displayed.
         """
 
+        ## for thread-safetyness:
+        isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
+        if not isGuiThread:
+            self.sigLogMessage.emit(((msg, importance, msgType), kwargs))
+            return
         
         try:
             currentDir = self.manager.getCurrentDir()
@@ -321,6 +329,7 @@ class LogWindow(QtGui.QMainWindow):
 class LogWidget(QtGui.QWidget):
     
     sigDisplayEntry = QtCore.Signal(object) ## for thread-safetyness
+    sigAddEntry = QtCore.Signal(object) ## for thread-safetyness
     
     def __init__(self, parent, manager):
         QtGui.QWidget.__init__(self, parent)
@@ -348,7 +357,8 @@ class LogWidget(QtGui.QWidget):
         
         self.filtersChanged()
         
-        self.sigDisplayEntry.connect(self.displayEntry)
+        self.sigDisplayEntry.connect(self.displayEntry, QtCore.Qt.QueuedConnection)
+        self.sigAddEntry.connect(self.addEntry, QtCore.Qt.QueuedConnection)
         self.ui.exportHtmlBtn.clicked.connect(self.exportHtml)
         self.ui.filterTree.itemChanged.connect(self.setCheckStates)
         self.ui.importanceSlider.valueChanged.connect(self.filtersChanged)
@@ -382,6 +392,12 @@ class LogWidget(QtGui.QWidget):
         
     def addEntry(self, entry):
         ## All incoming messages begin here
+
+        ## for thread-safetyness:
+        isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
+        if not isGuiThread:
+            self.sigAddEntry.emit(entry)
+            return
         
         self.entries.append(entry)
         i = len(self.entryArray)
@@ -501,47 +517,46 @@ class LogWidget(QtGui.QWidget):
             self.sigDisplayEntry.emit(entries)
             return
         
-        else:
-            for entry in entries:
-                if not self.cache.has_key(id(entry)):
-                    self.cache[id(entry)] = self.generateEntryHtml(entry)
-                    
-                    ## determine message color:
-                    #if entry['msgType'] == 'status':
-                        #color = 'green'
-                    #elif entry['msgType'] == 'user':
-                        #color = 'blue'
-                    #elif entry['msgType'] == 'error':
-                        #color = 'red'
-                    #elif entry['msgType'] == 'warning':
-                        #color = '#DD4400' ## orange
-                    #else:
-                        #color = 'black'
-                        
-                    #if entry.has_key('exception') or entry.has_key('docs') or entry.has_key('reasons'):
-                        ##self.displayComplexMessage(entry, color)
-                        #self.displayComplexMessage(entry)
-                    #else: 
-                        #self.displayText(entry['message'], entry, color, timeStamp=entry['timestamp'])
-                        
-                #for x in self.cache[id(entry)]:
-                    #self.ui.output.appendHtml(x)
-                    
-                html = self.cache[id(entry)]
-                #frame = self.ui.logView.page().currentFrame()
-                #isMax = frame.scrollBarValue(QtCore.Qt.Vertical) == frame.scrollBarMaximum(QtCore.Qt.Vertical)
-                sb = self.ui.output.verticalScrollBar()
-                isMax = sb.value() == sb.maximum()
+        for entry in entries:
+            if not self.cache.has_key(id(entry)):
+                self.cache[id(entry)] = self.generateEntryHtml(entry)
                 
-                #frame.findFirstElement('body').appendInside(html)
-                self.ui.output.append(html)
-                self.displayedEntries.append(entry)
+                ## determine message color:
+                #if entry['msgType'] == 'status':
+                    #color = 'green'
+                #elif entry['msgType'] == 'user':
+                    #color = 'blue'
+                #elif entry['msgType'] == 'error':
+                    #color = 'red'
+                #elif entry['msgType'] == 'warning':
+                    #color = '#DD4400' ## orange
+                #else:
+                    #color = 'black'
+                    
+                #if entry.has_key('exception') or entry.has_key('docs') or entry.has_key('reasons'):
+                    ##self.displayComplexMessage(entry, color)
+                    #self.displayComplexMessage(entry)
+                #else: 
+                    #self.displayText(entry['message'], entry, color, timeStamp=entry['timestamp'])
+                    
+            #for x in self.cache[id(entry)]:
+                #self.ui.output.appendHtml(x)
                 
-                if isMax:
-                    QtGui.QApplication.processEvents()  ## can't scroll to end until the web frame has processed the html change
-                    self.ui.output.scrollToAnchor(str(entry['id']))
-                    #frame.setScrollBarValue(QtCore.Qt.Vertical, frame.scrollBarMaximum(QtCore.Qt.Vertical))
-                #self.ui.logView.update()
+            html = self.cache[id(entry)]
+            #frame = self.ui.logView.page().currentFrame()
+            #isMax = frame.scrollBarValue(QtCore.Qt.Vertical) == frame.scrollBarMaximum(QtCore.Qt.Vertical)
+            sb = self.ui.output.verticalScrollBar()
+            isMax = sb.value() == sb.maximum()
+            
+            #frame.findFirstElement('body').appendInside(html)
+            self.ui.output.append(html)
+            self.displayedEntries.append(entry)
+            
+            if isMax:
+                QtGui.QApplication.processEvents()  ## can't scroll to end until the web frame has processed the html change
+                self.ui.output.scrollToAnchor(str(entry['id']))
+                #frame.setScrollBarValue(QtCore.Qt.Vertical, frame.scrollBarMaximum(QtCore.Qt.Vertical))
+            #self.ui.logView.update()
                 
     def generateEntryHtml(self, entry):
         msg = self.cleanText(entry['message'])
@@ -639,7 +654,7 @@ class LogWidget(QtGui.QWidget):
         indent = 10
         
         text = self.cleanText(exception['message'])
-        text = text.lstrip('HelpfulException:')
+        text = re.sub(r'^HelpfulException: ', '', text)
         #if exception.has_key('oldExc'):  
             #self.displayText("&nbsp;"*indent + str(count)+'. ' + text, entry, color, clean=False)
         #else:
@@ -822,6 +837,8 @@ class ErrorDialog(QtGui.QDialog):
         self.messages = []
         
         self.msgLabel = QtGui.QLabel()
+        #self.msgLabel.setWordWrap(False)
+        #self.msgLabel.setMaximumWidth(800)
         self.msgLabel.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         #self.msgLabel.setFrameStyle(QtGui.QFrame.Box)
         #self.msgLabel.setStyleSheet('QLabel { font-weight: bold }')
@@ -850,7 +867,6 @@ class ErrorDialog(QtGui.QDialog):
         
         
     def show(self, entry):
-        
         ## rules are:
         ##   - Try to show friendly error messages
         ##   - If there are any helpfulExceptions, ONLY show those
@@ -859,7 +875,7 @@ class ErrorDialog(QtGui.QDialog):
         
         ## extract list of exceptions
         exceptions = []
-        helpful = []
+        #helpful = []
         key = 'exception'
         exc = entry
         while key in exc:
@@ -867,14 +883,18 @@ class ErrorDialog(QtGui.QDialog):
             if exc is None:
                 break
             key = 'oldExc'
-            exceptions.append(self.cleanText(exc['message']))
             if exc['message'].startswith('HelpfulException'):
-                helpful.append(self.cleanText(exc['message'].lstrip('HelpfulException: ')))
-        
-        if len(helpful) > 0:
-            msg = '<b>' + '<br>'.join(helpful) + '</b>'
-        else:
-            msg = '<b>' + entry['message'] + '</b><br>' + '<br>'.join(exceptions)
+                exceptions.append('<b>' + self.cleanText(re.sub(r'^HelpfulException: ', '', exc['message'])) + '</b>')
+            elif exc['message'] == 'None':
+                continue
+            else:
+                exceptions.append(self.cleanText(exc['message']))
+                
+        msg = "<br>".join(exceptions)
+        #if len(helpful) > 0:
+            #msg = '<b>' + '<br>'.join(helpful) + '</b>'
+        #else:
+            #msg = '<b>' + entry['message'] + '</b><br>' + '<br>'.join(exceptions)
         
         
         if self.disableCheck.isChecked():
@@ -903,8 +923,8 @@ class ErrorDialog(QtGui.QDialog):
         text = re.sub(r'\n', '<br/>\n', text)
         return text
         
-    def closeEvent(self):
-        QtGui.QDialog.closeEvent(self)
+    def closeEvent(self, ev):
+        QtGui.QDialog.closeEvent(self, ev)
         self.messages = []
         
     def okClicked(self):

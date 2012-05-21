@@ -209,6 +209,8 @@ def getClampFile(protoDH):
     """Given a protocol directory handle, return the clamp file handle within. 
     If there are multiple clamps, only the first is returned.
     Return None if no clamps are found."""
+    if protoDH.name()[-8:] == 'DS_Store': ## OS X filesystem puts .DS_Store files in all directories
+        return None
     files = protoDH.ls()
     names = deviceNames['Clamp']
     for n in names:

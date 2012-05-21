@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/analysis/atlas/AuditoryCortex/CtrlTemplate.ui'
+# Form implementation generated from reading ui file 'CtrlTemplate.ui'
 #
-# Created: Fri Mar  9 11:18:36 2012
+# Created: Sun Dec 18 19:21:40 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

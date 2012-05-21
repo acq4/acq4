@@ -8,26 +8,20 @@ import pyqtgraph.opengl as gl
 
 app = QtGui.QApplication([])
 w = gl.GLViewWidget()
-w.opts['distance'] = 800
+w.opts['distance'] = 20
 w.show()
 
+ax = gl.GLAxisItem()
+ax.setSize(5,5,5)
+w.addItem(ax)
 
 b = gl.GLBoxItem()
 w.addItem(b)
 
-import numpy as np
-n = 128
-data = np.random.randint(0, 255, size=4*n**3).astype(np.uint8).reshape((n*2,n,n/2,4))
-data[...,3] *=0.5
-for i in range(data.shape[0]):
-    data[i,:,:,0] *= float(i)/data.shape[0]
-for i in range(data.shape[1]):
-    data[:,i,:,1] *= float(i)/data.shape[1]
-for i in range(data.shape[2]):
-    data[:,:,i,2] *= float(i)/data.shape[1]
-v = gl.GLVolumeItem(data)
-w.addItem(v)
+ax2 = gl.GLAxisItem()
+ax2.setParentItem(b)
 
+b.translate(1,1,1)
 
 ## Start Qt event loop unless running in interactive mode.
 if sys.flags.interactive != 1:

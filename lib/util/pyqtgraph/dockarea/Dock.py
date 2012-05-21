@@ -1,6 +1,6 @@
 from pyqtgraph.Qt import QtCore, QtGui
 
-from DockDrop import *
+from .DockDrop import *
 from pyqtgraph.widgets.VerticalLabel import VerticalLabel
 
 class Dock(QtGui.QWidget, DockDrop):
@@ -64,6 +64,12 @@ class Dock(QtGui.QWidget, DockDrop):
         
         self.setStretch(*size)
 
+    def implements(self, name=None):
+        if name is None:
+            return ['dock']
+        else:
+            return name == 'dock'
+        
     def setStretch(self, x=None, y=None):
         #print "setStretch", self, x, y
         #self._stretch = (x, y)

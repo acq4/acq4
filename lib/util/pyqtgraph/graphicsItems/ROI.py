@@ -22,13 +22,13 @@ from pyqtgraph.Point import *
 from pyqtgraph.Transform import Transform
 from math import cos, sin
 import pyqtgraph.functions as fn
-from GraphicsObject import GraphicsObject
-from UIGraphicsItem import UIGraphicsItem
+from .GraphicsObject import GraphicsObject
+from .UIGraphicsItem import UIGraphicsItem
 
 __all__ = [
     'ROI', 
     'TestROI', 'RectROI', 'EllipseROI', 'CircleROI', 'PolygonROI', 
-    'LineROI', 'MultiLineROI', 'LineSegmentROI', 'SpiralROI'
+    'LineROI', 'MultiLineROI', 'LineSegmentROI', 'SpiralROI',
 ]
 
 
@@ -55,18 +55,18 @@ class ROI(GraphicsObject):
         self.rotateAllowed = True
         
         self.freeHandleMoved = False ## keep track of whether free handles have moved since last change signal was emitted.
-        
+        self.mouseHovering = False
         if pen is None:
             pen = (255, 255, 255)
         self.setPen(pen)
         
         self.handlePen = QtGui.QPen(QtGui.QColor(150, 255, 255))
         self.handles = []
-        self.state = {'pos': pos, 'size': size, 'angle': angle}  ## angle is in degrees for ease of Qt integration
+        self.state = {'pos': Point(0,0), 'size': Point(1,1), 'angle': 0}  ## angle is in degrees for ease of Qt integration
         self.lastState = None
         self.setPos(pos)
-        #self.rotate(-angle * 180. / np.pi)
-        self.rotate(angle)
+        self.setAngle(angle)
+        self.setSize(size)
         self.setZValue(10)
         self.isMoving = False
         
@@ -237,9 +237,8 @@ class ROI(GraphicsObject):
         #if 'update' not in kargs or kargs['update'] is True:
         #self.stateChanged()
 
-    def rotate(self, angle, center=(0,0), angleSnap=False, update=True, finish=True):
-        pass
-        #self.setAngle(self.angle()+angle, update=update, finish=finish)
+    def rotate(self, angle, update=True, finish=True):
+        self.setAngle(self.angle()+angle, update=update, finish=finish)
 
     
     def addTranslateHandle(self, pos, axes=None, item=None, name=None):
@@ -278,7 +277,7 @@ class ROI(GraphicsObject):
         return self.addHandle({'name': name, 'type': 'rf', 'center': center, 'pos': pos, 'item': item})
     
     def addHandle(self, info):
-        if not info.has_key('item') or info['item'] is None:
+        if 'item' not in info or info['item'] is None:
             #print "BEFORE ADD CHILD:", self.childItems()
             h = Handle(self.handleSize, typ=info['type'], pen=self.handlePen, parent=self)
             #print "AFTER ADD CHILD:", self.childItems()
@@ -335,11 +334,22 @@ class ROI(GraphicsObject):
 
     def hoverEvent(self, ev):
         if self.translatable and (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
-            self.currentPen = fn.mkPen(255, 255, 0)
+            self.setMouseHover(True)
             self.sigHoverEvent.emit(self)
+        else:
+            self.setMouseHover(False)
+
+    def setMouseHover(self, hover):
+        ## Inform the ROI that the mouse is(not) hovering over it
+        if self.mouseHovering == hover:
+            return
+        self.mouseHovering = hover
+        if hover:
+            self.currentPen = fn.mkPen(255, 255, 0)
         else:
             self.currentPen = self.pen
         self.update()
+        
             
     def mouseDragEvent(self, ev):
         if ev.isStart():
@@ -439,7 +449,7 @@ class ROI(GraphicsObject):
         p1 = self.mapSceneToParent(p1)
 
         ## Handles with a 'center' need to know their local position relative to the center point (lp0, lp1)
-        if h.has_key('center'):
+        if 'center' in h:
             c = h['center']
             cs = c * self.state['size']
             lp0 = self.mapFromParent(p0) - cs
@@ -604,7 +614,7 @@ class ROI(GraphicsObject):
         if self.lastState is None:
             changed = True
         else:
-            for k in self.state.keys():
+            for k in list(self.state.keys()):
                 if self.state[k] != self.lastState[k]:
                     changed = True
         self.lastState = self.stateCopy()
@@ -1058,7 +1068,8 @@ class Handle(UIGraphicsItem):
         return dti.map(tr.map(self.path))
         
         
-    def viewChangedEvent(self):
+    def viewRangeChanged(self):
+        GraphicsObject.viewRangeChanged(self)
         self._shape = None  ## invalidate shape, recompute later if requested.
         #self.updateShape()
         

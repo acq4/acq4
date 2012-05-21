@@ -55,7 +55,13 @@ def getDirHandle(fileName, create=False):
 def getFileHandle(fileName):
     return getDataManager().getFileHandle(fileName)
 
-
+def cleanup():
+    """
+    Free memory by deleting cached handles that are not in use elsewhere.
+    This is useful in situations where a very large number of handles are
+    being created, such as when scanning through large data sets.
+    """
+    getDataManager().cleanup()
 
 
 class DataManager(QtCore.QObject):
@@ -105,6 +111,15 @@ class DataManager(QtCore.QObject):
             return self.getFileHandle(fileName)
         else:
             return self.getDirHandle(fileName)
+            
+    def cleanup(self):
+        """Attempt to free memory by allowing python to collect any unused handles."""
+        import gc
+        with self.lock:
+            tmp = weakref.WeakValueDictionary(self.cache)
+            self.cache = None
+            gc.collect()
+            self.cache = dict(tmp)
 
     def _addHandle(self, fileName, handle):
         """Cache a handle and watch it for changes"""
@@ -451,8 +466,8 @@ class DirHandle(FileHandle):
             pass
         
         
-    def __del__(self):
-        pass
+    #def __del__(self):
+        #pass
     
     def _indexFile(self):
         """Return the name of the index file for this directory. NOT the same as indexFile()"""
@@ -953,6 +968,9 @@ class DirHandle(FileHandle):
             return self._index
         
     def _writeIndex(self, newIndex, lock=True):
+        #print "write index:", self
+        #import traceback
+        #traceback.print_stack()
         with self.lock:
             
             writeConfigFile(newIndex, self._indexFile())
@@ -979,7 +997,8 @@ class DirHandle(FileHandle):
                 del ind[f]
                 #ind.remove(f)
                 changed = True
-        self._writeIndex(ind)
+        if changed:
+            self._writeIndex(ind)
             
         
     def _childChanged(self):

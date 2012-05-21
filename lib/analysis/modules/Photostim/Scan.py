@@ -87,7 +87,7 @@ class Scan(QtCore.QObject):
                 self.stats[st['ProtocolDir']] = st
                 
             for spot in self.spots():
-                dh = spot.data
+                dh = spot.data()
                 #fh = self.host.getClampFile(dh)
                 fh = self.dataModel.getClampFile(dh)
                 #events, stats = self.host.loadSpotFromDB(dh)
@@ -139,7 +139,7 @@ class Scan(QtCore.QObject):
             for i in range(len(spots)):
                 spot = spots[i]
                 #fh = self.dataModel.getClampFile(spot.data)  ## fh should be the protocol dir, not clamp file.
-                dh = spot.data
+                dh = spot.data()
                 stats = self.getStats(dh, signal=False)
                 #print "stats:", stats
                 color = self.host.getColor(stats)
@@ -186,7 +186,7 @@ class Scan(QtCore.QObject):
         if fh not in self.events:
             if process:
                 print "No event cache for", fh.name(), "compute.."
-                events = self.host.processEvents(fh)
+                events = self.host.processEvents(fh)  ## need ALL output from the flowchart; not just events
                 self.events[fh] = events
                 if signal:
                     self.sigEventsChanged.emit(self)
@@ -223,7 +223,7 @@ class Scan(QtCore.QObject):
     def getSpot(self, dh):
         if dh not in self.spotDict:
             for s in self.spots():
-                self.spotDict[s.data] = s
+                self.spotDict[s.data()] = s
         return self.spotDict[dh]
     
     @staticmethod

@@ -16,10 +16,14 @@ class EventFitter(CtrlNode):
     Plots fits of reconstructed events if the plot output is connected."""
     nodeName = "EventFitter"
     uiTemplate = [
+        ('multiFit', 'check', {'value': False}),
+        ('parallel', 'check', {'value': False}),
+        ('nProcesses', 'spin', {'value': 1, 'min': 1, 'int': True}),
         ('plotFits', 'check', {'value': True}),
         ('plotGuess', 'check', {'value': False}),
         ('plotEvents', 'check', {'value': False}),
     ]
+    
     
     def __init__(self, name):
         CtrlNode.__init__(self, name, terminals={
@@ -31,7 +35,26 @@ class EventFitter(CtrlNode):
         self.plotItems = []
         self.selectedFit = None
         self.deletedFits = []
-        
+        self.pool = None  ## multiprocessing pool
+        self.poolSize = 0
+        self.ctrls['parallel'].toggled.connect(self.setupPool)
+        self.ctrls['nProcesses'].valueChanged.connect(self.setupPool)
+    
+    def setupPool(self):
+        import multiprocessing as mp
+        if self.ctrls['parallel'].isChecked():
+            nProc = self.ctrls['nProcesses'].value()
+            if self.pool is not None and self.poolSize != nProc:
+                self.pool.terminate()
+                self.pool = None
+            if self.pool is None:
+                self.pool = mp.Pool(processes=nProc)
+                self.poolSize = nProc
+        else:
+            if self.pool is not None:
+                self.pool.terminate()
+                self.pool = None
+    
     def process(self, waveform, events, display=True):
         self.deletedFits = []
         for item in self.plotItems:
@@ -42,149 +65,72 @@ class EventFitter(CtrlNode):
         self.plotItems = []
         
         tau = waveform.infoCopy(-1).get('expDeconvolveTau', None)
-        nFields = len(events.dtype.fields)
-        
-        dtype = [(n, events[n].dtype) for n in events.dtype.names]
         dt = waveform.xvals(0)[1] - waveform.xvals(0)[0]
-        output = np.empty(len(events), dtype=dtype + [
-            ('fitAmplitude', float), 
-            ('fitTime', float),
-            ('fitRiseTau', float), 
-            ('fitDecayTau', float), 
-            ('fitTimeToPeak', float),
-            ('fitError', float),
-            ('fitFractionalError', float),
-            ('fitLengthOverDecay', float),
-        ])
+        opts = {
+            'dt': dt, 'tau': tau, 'multiFit': self.ctrls['multiFit'].isChecked(),
+            'waveform': waveform.view(np.ndarray),
+            'tvals': waveform.xvals('Time'),
+        }
         
-        offset = 0 ## not all input events will produce output events; offset keeps track of the difference.
         
-        for i in range(len(events)):
-            start = events[i]['time']
-            sliceLen = 50e-3
-            if i+1 < len(events):
-                nextStart = events[i+1]['time']
-                sliceLen = min(sliceLen, nextStart-start)
-                    
-            guessLen = events[i]['len']*dt
+        if not self.ctrls['parallel'].isChecked():
+            output = processEventFits(events, startEvent=0, stopEvent=len(events), opts=opts)
+            guesses = output['guesses']
+            eventData = output['eventData']
+            indexes = output['indexes']
+            xVals = output['xVals']
+            yVals = output['yVals']
+            output = output['output']
+        else:
+            print "parallel:", self.pool, self.poolSize
+            results = []
+            nProcesses = self.ctrls['nProcesses'].value()
+            evPerProcess = int(len(events) / nProcesses)
+            start = 0
+            for i in range(nProcesses):
+                stop = start + evPerProcess
+                if stop > len(events):
+                    stop = len(events)
+                args = (events, start, stop, opts)
+                results.append(self.pool.apply_async(processEventFits, args))
+                print "started process", start, stop
+                start = stop
+            data = []
+            guesses = []
+            eventData = []
+            indexes = []
+            xVals = []
+            yVals = []
+            for res in results:  ## reconstruct results here
+                print "getting result", res
+                output = res.get(10)
+                data.append(output['output'])
+                guesses.extend(output['guesses'])
+                eventData.extend(output['eventData'])
+                indexes.extend(output['indexes'])
+                xVals.extend(output['xVals'])
+                yVals.extend(output['yVals'])
+            output = np.concatenate(data)
             
-            if tau is None:
-                tau = waveform._info[-1].get('expDeconvolveTau', None)
-            if tau is not None:
-                guessLen += tau*2.
-            
-            sliceLen = min(guessLen*3., sliceLen)
-            
-            eventData = waveform['Time':start:start+sliceLen]
-            times = eventData.xvals(0)
-            if len(times) < 4:  ## PSP fit requires at least 4 points; skip this one
-                offset += 1
-                continue
-            
-            ## reconvolve this chunk of the signal if it was previously deconvolved
-            if tau is not None:
-                eventData = functions.expReconvolve(eventData, tau=tau)
-
-            ## Make guesses as to the shape of the event
-            mx = eventData.max()
-            mn = eventData.min()
-            if mx > -mn:
-                peakVal = mx
-            else:
-                peakVal = mn
-            guessAmp = peakVal * 2  ## fit converges more reliably if we start too large
-            guessRise = guessLen/4.
-            guessDecay = guessLen/2.
-            guessStart = times[0]
-                
-            ## guess how large the event is
-            ## we're trying to measure the size of the event at 1/3 peak value
-            
-            #print "Event", i, times[0]
-            #print "   amp:", guessAmp
-            
-            zc = functions.zeroCrossingEvents(eventData - (peakVal/3.))
-            
-            ## eliminate events going the wrong direction
-            if len(zc) > 0:
-                if guessAmp > 0:
-                    zc = zc[zc['peak']>0]
-                else:
-                    zc = zc[zc['peak']<0]
-            #print zc    
-            ## measure properties for the largest event
-            if len(zc) > 0:
-                if guessAmp > 0:
-                    zcInd = np.argmax(zc['sum']) ## the largest event in this clip
-                else:
-                    zcInd = np.argmin(zc['sum']) ## the largest event in this clip
-                zcEv = zc[zcInd]
-                #guessLen = dt*zc[zcInd]['len']
-                guessRise = dt*zcEv['len'] * 0.2
-                guessDecay = dt*zcEv['len'] * 0.8 
-                guessStart = times[0] + dt*zcEv['index'] - guessRise
-                
-                ## cull down the data set if possible
-                cullLen = zcEv['index'] + zcEv['len']*3
-                if len(eventData) > cullLen:
-                    eventData = eventData[:cullLen]
-                    times = times[:cullLen]
-                    
-            #print "===== event %d: %f =====" % (i, events[i]['time'])
-            #print zc
-            #print "rise:", guessRise
-            #print 'decay:', guessDecay
-            #if len(zc) == 0:
-                #print "  ---> no zero-crossing events:"
-                #print "  guessAmp:", guessAmp
-                #print eventData - (guessAmp/3.)
-                
-            ## fitting to exponential rise * decay
-            ## parameters are [amplitude, x-offset, rise tau, fall tau]
-            guess = [guessAmp, guessStart, guessRise, guessDecay]
-            #guess = [amp, times[0], guessLen/4., guessLen/2.]  ## careful! 
-            bounds = [
-                sorted((guessAmp * 0.1, guessAmp)),
-                sorted((guessStart-guessRise*2, guessStart+guessRise*2)), 
-                sorted((dt*0.5, guessDecay)),
-                sorted((dt*0.5, guessDecay * 50.))
-            ]
-            yVals = eventData.view(np.ndarray)
-            
-            fit = functions.fitPsp(times, yVals, guess=guess, bounds=bounds)
-            
-            computed = functions.pspFunc(fit, times)
-            peakTime = functions.pspMaxTime(fit[2], fit[3])
-            err = abs(yVals - computed).sum()
-            fracError = err / abs(computed).sum()
-            lengthOverDecay = (times[-1] - fit[1]) / fit[3]  # ratio of (length of data that was fit : decay constant)
-            output[i-offset] = tuple(events[i]) + tuple(fit) + (peakTime, err, fracError, lengthOverDecay)
-            #output['fitTime'] += output['time']
-                
-            #print fit
-            #self.events.append(eventData)
-            
+        for i in range(len(indexes)):            
             if display and self.plot.isConnected():
                 if self.ctrls['plotFits'].isChecked():
-                    item = pg.PlotCurveItem(computed, times, pen=(0, 0, 255), clickable=True)
+                    item = pg.PlotDataItem(x=xVals[i], y=yVals[i], pen=(0, 0, 255), clickable=True)
                     item.setZValue(100)
                     self.plotItems.append(item)
-                    item.eventIndex = i
+                    item.eventIndex = indexes[i]
                     item.sigClicked.connect(self.fitClicked)
                     item.deleted = False
                 if self.ctrls['plotGuess'].isChecked():
-                    item2 = pg.PlotCurveItem(functions.pspFunc(guess, times), times, pen=(255, 0, 0))
+                    item2 = pg.PlotDataItem(x=xVals[i], y=functions.pspFunc(guesses[i], xVals[i]), pen=(255, 0, 0))
                     item2.setZValue(100)
                     self.plotItems.append(item2)
                 if self.ctrls['plotEvents'].isChecked():
-                    item2 = pg.PlotCurveItem(eventData, times, pen=(0, 255, 0))
+                    item2 = pg.PlotDataItem(x=xVals[i], y=eventData[i], pen=(0, 255, 0))
                     item2.setZValue(100)
                     self.plotItems.append(item2)
                 #plot = self.plot.connections().keys()[0].node().getPlot()
                 #plot.addItem(item)
-            
-        if offset > 0:
-            output = output[:-offset]
             
         self.outputData = output
         return {'output': output, 'plot': self.plotItems}
@@ -250,6 +196,148 @@ class EventFitter(CtrlNode):
             return True
         return False
 
+        
+def processEventFits(events, startEvent, stopEvent, opts):
+    ## This function does all the processing work for EventFitter.
+    ## It is a static method to facilitate parallel processing 
+    dt = opts['dt']
+    origTau = opts['tau']
+    multiFit = opts['multiFit']
+    waveform = opts['waveform']
+    tvals = opts['tvals']
+    
+    nFields = len(events.dtype.fields)
+    
+    dtype = [(n, events[n].dtype) for n in events.dtype.names]
+    output = np.empty(len(events), dtype=dtype + [
+        ('fitAmplitude', float), 
+        ('fitTime', float),
+        ('fitRiseTau', float), 
+        ('fitDecayTau', float), 
+        ('fitTimeToPeak', float),
+        ('fitError', float),
+        ('fitFractionalError', float),
+        ('fitLengthOverDecay', float),
+    ])
+    
+    offset = 0 ## not all input events will produce output events; offset keeps track of the difference.
+
+    outputState = {
+        'guesses': [],
+        'eventData': [], 
+        'indexes': [], 
+        'xVals': [],
+        'yVals': []
+    }
+    
+    for i in range(startEvent, stopEvent):
+        start = events[i]['time']
+        sliceLen = 50e-3
+        if i+1 < len(events):
+            nextStart = events[i+1]['time']
+            sliceLen = min(sliceLen, nextStart-start)
+                
+        guessLen = events[i]['len']*dt
+        
+        tau = origTau
+        if tau is not None:
+            guessLen += tau*2.
+        
+        sliceLen = min(guessLen*3., sliceLen)
+        
+        ## Figure out from where to pull waveform data that will be fitted
+        startIndex = np.argwhere(tvals>=start)[0][0]
+        stopIndex = startIndex + int(sliceLen/dt)
+        eventData = waveform[startIndex:stopIndex]
+        times = tvals[startIndex:stopIndex]
+        
+        if len(times) < 4:  ## PSP fit requires at least 4 points; skip this one
+            offset += 1
+            continue
+        
+        ## reconvolve this chunk of the signal if it was previously deconvolved
+        if tau is not None:
+            eventData = functions.expReconvolve(eventData, tau=tau, dt=dt)
+
+        ## Make guesses as to the shape of the event
+        mx = eventData.max()
+        mn = eventData.min()
+        if mx > -mn:
+            peakVal = mx
+        else:
+            peakVal = mn
+        guessAmp = peakVal * 2  ## fit converges more reliably if we start too large
+        guessRise = guessLen/4.
+        guessDecay = guessLen/2.
+        guessStart = times[0]
+        
+        zc = functions.zeroCrossingEvents(eventData - (peakVal/3.))
+        
+        ## eliminate events going the wrong direction
+        if len(zc) > 0:
+            if guessAmp > 0:
+                zc = zc[zc['peak']>0]
+            else:
+                zc = zc[zc['peak']<0]
+        #print zc    
+        ## measure properties for the largest event
+        if len(zc) > 0:
+            if guessAmp > 0:
+                zcInd = np.argmax(zc['sum']) ## the largest event in this clip
+            else:
+                zcInd = np.argmin(zc['sum']) ## the largest event in this clip
+            zcEv = zc[zcInd]
+            #guessLen = dt*zc[zcInd]['len']
+            guessRise = .1e-3 #dt*zcEv['len'] * 0.2
+            guessDecay = dt*zcEv['len'] * 0.8 
+            guessStart = times[0] + dt*zcEv['index'] - guessRise*3.
+            
+            ## cull down the data set if possible
+            cullLen = zcEv['index'] + zcEv['len']*3
+            if len(eventData) > cullLen:
+                eventData = eventData[:cullLen]
+                times = times[:cullLen]
+                
+            
+        ## fitting to exponential rise * decay
+        ## parameters are [amplitude, x-offset, rise tau, fall tau]
+        guess = [guessAmp, guessStart, guessRise, guessDecay]
+        #guess = [amp, times[0], guessLen/4., guessLen/2.]  ## careful! 
+        bounds = [
+            sorted((guessAmp * 0.1, guessAmp)),
+            sorted((guessStart-guessRise*2, guessStart+guessRise*2)), 
+            sorted((dt*0.5, guessDecay)),
+            sorted((dt*0.5, guessDecay * 50.))
+        ]
+        yVals = eventData.view(np.ndarray)
+        
+        fit = functions.fitPsp(times, yVals, guess=guess, bounds=bounds, multiFit=multiFit)
+        
+        computed = functions.pspFunc(fit, times)
+        peakTime = functions.pspMaxTime(fit[2], fit[3])
+        diff = (yVals - computed)
+        err = (diff**2).sum()
+        fracError = diff.std() / computed.std()
+        lengthOverDecay = (times[-1] - fit[1]) / fit[3]  # ratio of (length of data that was fit : decay constant)
+        output[i-offset] = tuple(events[i]) + tuple(fit) + (peakTime, err, fracError, lengthOverDecay)
+        #output['fitTime'] += output['time']
+            
+        #print fit
+        #self.events.append(eventData)
+        
+        outputState['guesses'].append(guess)
+        outputState['eventData'].append(eventData)
+        outputState['indexes'].append(i)
+        outputState['xVals'].append(times)
+        outputState['yVals'].append(computed)
+        
+
+    if offset > 0:
+        output = output[:-offset]
+        
+    outputState['output'] = output
+        
+    return outputState
 
         
 class Histogram(CtrlNode):
@@ -618,7 +706,10 @@ class CellHealthAnalyzer(CtrlNode):
                 Rs = 0
                 Rm = 0
                 Cm = 0
-            aRes = Rs
+                
+            #aRes = Rs
+            RsPeak = iPulse.min()
+            aRes = vStep/(RsPeak-iBase.mean()) ## just using Ohm's law
             cap = Cm
             
         if self.ctrls['mode'].currentText() == 'IC':
@@ -683,3 +774,221 @@ class CellHealthAnalyzer(CtrlNode):
         #CtrlNode.restoreState(self, state)
         #self.defaultState = state
         #self.ui.restoreState(state['ui'])
+        
+        
+class PSPFitter(CtrlNode):
+    """Fit data to a PSP template"""
+    nodeName = "PSPFitter"
+    uiTemplate = [
+        #('prePadding', 'spin', {'value': 0, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
+        #('postPadding', 'spin', {'value': 0.1, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
+        ('computeWaveform', 'check', {'value': True}),
+        ('risePower', 'spin', {'min': 0, 'max': 10}),
+        ('guessAmp1', 'spin', {'min': None, 'max': None}),
+        ('guessAmp2', 'spin', {'min': None, 'max': None}),
+        ('guessTime', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('guessRise', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('guessDecay', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('guessDecay2', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('minAmp1', 'spin', {'min': None, 'max': None}),
+        ('maxAmp1', 'spin', {'min': None, 'max': None}),
+        ('minAmp2', 'spin', {'min': None, 'max': None}),
+        ('maxAmp2', 'spin', {'min': None, 'max': None}),
+        ('minTime', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('maxTime', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('minRise', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('maxRise', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('minDecay', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('maxDecay', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('minDecay2', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        ('maxDecay2', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+    ]
+    
+    def __init__(self, name):
+        CtrlNode.__init__(self, name, terminals={
+            'data': {'io': 'in'},
+            'fitParams': {'io': 'out'},
+            'fitXData': {'io': 'out'},
+            'fitYData': {'io': 'out'},
+        })
+    
+    def process(self, data, display=True):
+        params = ['Amp1', 'Amp2', 'Time', 'Rise', 'Decay', 'Decay2']
+        guess = tuple([self.ctrls['guess' + name].value() for name in params])
+        bounds = [(self.ctrls['min' + name].value(), self.ctrls['max' + name].value()) for name in params]
+        rp = self.ctrls['risePower'].value()
+        
+        minTime = self.ctrls['minTime'].value()
+        times = data.xvals('Time')
+        fullTimes = times
+        data = data.view(np.ndarray)
+        
+        startInd = np.argwhere(times>=minTime)[0]
+        
+        times = times[startInd:]
+        data = data[startInd:]
+        
+        ## Ignore specified guess amplitude; make a better guess.
+        mx = data.max()
+        mn = data.min()
+        if abs(mn) > abs(mx):
+            amp = mn
+        else:
+            amp = mx
+        params[0] = amp
+        params[1] = amp
+        
+        
+        
+        fit = functions.fitDoublePsp(x=times, y=data, guess=guess, bounds=bounds, risePower=rp)
+        
+        if self.ctrls['computeWaveform'].isChecked():
+            fitData = functions.doublePspFunc(fit, fullTimes, rp)
+        else:
+            fitData = None
+        return {'fitParams': fit, 'fitYData': fitData, 'fitXData': fullTimes}
+
+
+
+class RemoveDirect(CtrlNode):
+    """Remove direct stimulation from trace and report fit parameters."""
+    nodeName = "RemoveDirect"
+    uiTemplate = [
+        #('prePadding', 'spin', {'value': 0, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
+        #('postPadding', 'spin', {'value': 0.1, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
+        ('stimulusTime', 'spin', {'min': 0, 'max': None, 'value': 0.5, 'siPrefix': True, 'suffix': 's'}),
+        ('subtractDirect', 'check', {'value': True}),
+        ('risePower', 'spin', {'min': 0, 'max': 10, 'value': 2.0}),
+        ('plotColor', 'color'),
+        ('minDirectDuration', 'spin', {'min': 0, 'max': None, 'value': 0.01, 'siPrefix': True, 'suffix': 's'}),
+        #('guessTime', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('guessRise', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('guessDecay', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('guessDecay2', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('minAmp1', 'spin', {'min': None, 'max': None}),
+        #('maxAmp1', 'spin', {'min': None, 'max': None}),
+        #('minAmp2', 'spin', {'min': None, 'max': None}),
+        #('maxAmp2', 'spin', {'min': None, 'max': None}),
+        #('minTime', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('maxTime', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('minRise', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('maxRise', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('minDecay', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('maxDecay', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('minDecay2', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+        #('maxDecay2', 'spin', {'min': 0, 'max': None, 'siPrefix': True, 'suffix': 's'}),
+    ]
+    
+    def __init__(self, name):
+        CtrlNode.__init__(self, name, terminals={
+            'data': {'io': 'in'},
+            'fitParams': {'io': 'out'},
+            'output': {'io': 'out', 'bypass': 'data'},
+            'plot': {'io': 'out'},
+        })
+        self.plotItem = pg.PlotDataItem()
+    
+    def process(self, data, display=True):
+        
+        rp = self.ctrls['risePower'].value()
+        stimTime = self.ctrls['stimulusTime'].value()
+        times = data.xvals('Time')
+        dt = times[1] - times[0]
+        data1 = data.view(np.ndarray)
+        if stimTime > times[-1]:
+            raise Exception("stimulusTime is larger than length of input data.")
+        stimInd = np.argwhere(times>=stimTime)[0][0]
+        
+        # 1. make sure offset is removed
+        offset = np.median(data1[:stimInd])
+        data2 = data1 - offset
+        
+        # 2. check for zero-crossing events within 4ms after stimulus
+        cross = functions.zeroCrossingEvents(data2[stimInd:])
+        maxInd = 4e-3 / dt
+        minLength = self.ctrls['minDirectDuration'].value() / dt
+        gotEvent = None
+        for start, length, sum, peak in cross:
+            if start > maxInd:
+                break
+            if length < minLength:
+                continue
+            if gotEvent is None or length > gotEvent[1]:
+                gotEvent = (start+stimInd, length)
+        #if len(cross) == 0: ## must be a single large event
+            #gotEvent = (0, len(data2)-stimInd)
+        
+        fitParams = dict(
+            directFitAmp1=0., directFitAmp2=0., directFitTime=0., 
+            directFitRise=0., directFitDecay1=0., directFitDecay2=0.,
+            directFitPeakTime=0., directFitPeak=0., directFitSubtracted=False,
+            directFitValid=False,
+            )
+        
+        # 3. if there is no large event near stimulus, return original data
+        if gotEvent is None:
+            if display:
+                self.plotItem.clear()
+            return {'output': data, 'fitParams': fitParams, 'plot': self.plotItem}
+        
+        #print "============"
+        #print stimInd
+        #print gotEvent
+        #print cross[:20]
+        
+        # 4. guess amplitude, tau from detected event
+        evStart = gotEvent[0]
+        evEnd = evStart + gotEvent[1]
+        evRgn = data2[evStart:evEnd]
+        #pg.plot(evRgn)
+        mx = evRgn.max()
+        mn = evRgn.min()
+        ampGuess = mx if abs(mx) > abs(mn) else mn
+        tauGuess = gotEvent[1] * dt
+        if ampGuess < 0:
+            ampBound = [None, 0]
+        else:
+            ampBound = [0, None]
+        
+        # 5. fit
+        guess = [ampGuess*2, ampGuess*2, stimTime, 1e-3, tauGuess*0.5, tauGuess*2]
+        bounds = [
+            ampBound, ampBound,
+            [stimTime, stimTime+4e-3],
+            [1e-4, 100e-3],
+            [1e-3, 1],
+            [5e-3, 10],
+        ]
+        #print guess
+        #print bounds
+        endInd = evStart + gotEvent[1] * 10
+        fitYData = data2[stimInd:endInd]
+        fitXData = times[stimInd:endInd]
+        fit = functions.fitDoublePsp(x=fitXData, y=fitYData, guess=guess, bounds=bounds, risePower=rp)
+        
+        # 6. subtract fit from original data (offset included), return
+        y = functions.doublePspFunc(fit, times, rp)
+        
+        if display:
+            self.plotItem.setData(x=fitXData, y=y[stimInd:endInd], pen=self.ctrls['plotColor'].color())        
+            
+        ## prepare list of fit params for output
+        (xMax, yMax) = functions.doublePspMax(fit)
+        xMax -= fit[2]  ## really interested in time-to-peak, not the exact peak time.
+        
+        fitParams = dict(
+            directFitAmp1=fit[0], directFitAmp2=fit[1], directFitTime=fit[2], 
+            directFitRise=fit[3], directFitDecay1=fit[4], directFitDecay2=fit[5],
+            directFitPeakTime=xMax, directFitPeak=yMax, directFitSubtracted=None, directFitValid=True,
+            )
+            
+        if self.ctrls['subtractDirect'].isChecked():
+            out = metaarray.MetaArray(data-y, info=data.infoCopy())
+            fitParams['directFitSubtracted'] = True
+        else:
+            out = data
+            fitParams['directFitSubtracted'] = False
+            
+            
+        return {'fitParams': fitParams, 'output': out, 'plot': self.plotItem}
+

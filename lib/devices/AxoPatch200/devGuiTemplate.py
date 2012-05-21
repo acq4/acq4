@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/devices/AxoPatch200/devGuiTemplate.ui'
+# Form implementation generated from reading ui file 'devGuiTemplate.ui'
 #
-# Created: Fri Mar  9 11:18:38 2012
+# Created: Sun Dec 18 19:23:01 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

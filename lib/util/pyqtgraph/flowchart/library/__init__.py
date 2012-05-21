@@ -3,7 +3,7 @@ from collections import OrderedDict
 import os, types
 from pyqtgraph.debug import printExc
 from ..Node import Node
-import reload
+import pyqtgraph.reload as reload
 
 
 NODE_LIST = OrderedDict()  ## maps name:class for all registered Node subclasses
@@ -67,7 +67,7 @@ def loadLibrary(reloadLibs=False, libPath=None):
     
     for f in os.listdir(libPath):
         pathName, ext = os.path.splitext(f)
-        if ext != '.py' or '__init__' in pathName:
+        if ext != '.py' or '__init__' in pathName or '__pycache__' in pathName:
             continue
         try:
             #print "importing from", f

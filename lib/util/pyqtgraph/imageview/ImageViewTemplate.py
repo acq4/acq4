@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/util/pyqtgraph/imageview/ImageViewTemplate.ui'
+# Form implementation generated from reading ui file 'ImageViewTemplate.ui'
 #
-# Created: Fri Mar  9 11:18:45 2012
+# Created: Tue Jan 17 23:09:04 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

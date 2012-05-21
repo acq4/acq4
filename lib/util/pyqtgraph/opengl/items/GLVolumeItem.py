@@ -6,8 +6,25 @@ import numpy as np
 __all__ = ['GLVolumeItem']
 
 class GLVolumeItem(GLGraphicsItem):
-    def __init__(self, data, sliceDensity=1):
+    """
+    **Bases:** :class:`GLGraphicsItem <pyqtgraph.opengl.GLGraphicsItem>`
+    
+    Displays volumetric data. 
+    """
+    
+    
+    def __init__(self, data, sliceDensity=1, smooth=True):
+        """
+        ==============  =======================================================================================
+        **Arguments:**
+        data            Volume data to be rendered. *Must* be 4D numpy array (x, y, z, RGBA) with dtype=ubyte.
+        sliceDensity    Density of slices to render through the volume. A value of 1 means one slice per voxel.
+        smooth          (bool) If True, the volume slices are rendered with linear interpolation 
+        ==============  =======================================================================================
+        """
+        
         self.sliceDensity = sliceDensity
+        self.smooth = smooth
         self.data = data
         GLGraphicsItem.__init__(self)
         
@@ -15,10 +32,12 @@ class GLVolumeItem(GLGraphicsItem):
         glEnable(GL_TEXTURE_3D)
         self.texture = glGenTextures(1)
         glBindTexture(GL_TEXTURE_3D, self.texture)
-        #glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        #glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        if self.smooth:
+            glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+            glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        else:
+            glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+            glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER)
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER)
@@ -52,6 +71,7 @@ class GLVolumeItem(GLGraphicsItem):
         view = self.view()
         center = QtGui.QVector3D(*[x/2. for x in self.data.shape[:3]])
         cam = self.mapFromParent(view.cameraPosition()) - center
+        #print "center", center, "cam", view.cameraPosition(), self.mapFromParent(view.cameraPosition()), "diff", cam
         cam = np.array([cam.x(), cam.y(), cam.z()])
         ax = np.argmax(abs(cam))
         d = 1 if cam[ax] > 0 else -1
@@ -85,7 +105,7 @@ class GLVolumeItem(GLGraphicsItem):
         vp[3][imax[0]] = 0
         vp[3][imax[1]] = self.data.shape[imax[1]]
         slices = self.data.shape[ax] * self.sliceDensity
-        r = range(slices)
+        r = list(range(slices))
         if d == -1:
             r = r[::-1]
             

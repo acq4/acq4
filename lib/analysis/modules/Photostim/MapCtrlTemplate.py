@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/analysis/modules/Photostim/MapCtrlTemplate.ui'
+# Form implementation generated from reading ui file 'MapCtrlTemplate.ui'
 #
-# Created: Fri Mar  9 11:18:37 2012
+# Created: Sun Dec 18 18:44:11 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -105,4 +105,4 @@ class Ui_Form(object):
         self.removeScanBtn.setText(QtGui.QApplication.translate("Form", "Remove Scan", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph import TreeWidget
-from FeedbackButton import FeedbackButton
+from pyqtgraph import FeedbackButton

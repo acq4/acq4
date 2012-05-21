@@ -22,13 +22,14 @@ Lockups, bus errors, segmentation faults
 ----------------------------------------
 
 Things that crash PyQt4 (of which there are many):
-    - Model/View anything. TableView, TreeView, etc. They are too hard to program correctly, and any mistakes lead to untraceable crashing.
+    - Model/View anything. TableView, TreeView, etc. They are too hard to program correctly, and any mistakes lead to untraceable crashing. Use PyQt's modeltest if needed.
     - Changing the bounds of graphicsitems without calling preparegeometrychange first
     - Situations where Qt auto-deletes objects, leaving the python wrapper alive. Make sure you keep references to the objects you want to stay alive, and remove bad references before they cause trouble.
         - joined widgets such as a scrollarea and its scroll bars. When the scrollarea is deleted, the scrollbars go as well, but any references to the scrollbars are NOT informed of this, so accessing those objects causes crash (Pyside does not have this problem)
         - parents auto-deleting children, tree items deleting child widgets when moved
         - GraphicsItems should NEVER keep a reference to the view they live in. (weakrefs are ok)
-    - As always, be careful with multi-threading. Never access GUI objects outside the main thread.
+        - QMenus must not be deleted while they are executing an action (this commonly occurs if you have a 'delete' option in a context menu). Use a timer to delete the menu after exiting the action.
+    - As always, be careful with multi-threading. Never access GUI objects outside the main thread. QTimers must only be accessed from the thread which owns them.
     - If graphicsView seems to be involved, try disabling OpenGL
         on 2.6+, OpenGL-enabled graphicsviews can crawl to a halt over time.
     - using QTimer.singleShot repeatedly can cause lockups

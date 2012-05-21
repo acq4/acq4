@@ -1,6 +1,6 @@
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.WidgetGroup import WidgetGroup
-from axisCtrlTemplate import Ui_Form as AxisCtrlTemplate
+from .axisCtrlTemplate import Ui_Form as AxisCtrlTemplate
 
 class ViewBoxMenu(QtGui.QMenu):
     def __init__(self, view):
@@ -41,14 +41,17 @@ class ViewBoxMenu(QtGui.QMenu):
                 (ui.autoRadio.clicked, 'AutoClicked'),
                 (ui.autoPercentSpin.valueChanged, 'AutoSpinChanged'),
                 (ui.linkCombo.currentIndexChanged, 'LinkComboChanged'),
+                (ui.autoPanCheck.toggled, 'AutoPanToggled'),
+                (ui.visibleOnlyCheck.toggled, 'VisibleOnlyToggled')
             ]
             
             for sig, fn in connects:
                 sig.connect(getattr(self, axis.lower()+fn))
             
-        self.export = QtGui.QMenu("Export")
-        self.setExportMethods(view.exportMethods)
-        self.addMenu(self.export)
+        ## exporting is handled by GraphicsScene now
+        #self.export = QtGui.QMenu("Export")
+        #self.setExportMethods(view.exportMethods)
+        #self.addMenu(self.export)
         
         self.leftMenu = QtGui.QMenu("Mouse Mode")
         group = QtGui.QActionGroup(self)
@@ -78,13 +81,13 @@ class ViewBoxMenu(QtGui.QMenu):
     def subMenus(self):
         if not self.valid:
             self.updateState()
-        return [self.viewAll] + self.axes + [self.export, self.leftMenu]
+        return [self.viewAll] + self.axes + [self.leftMenu]
 
 
     def setExportMethods(self, methods):
         self.exportMethods = methods
         self.export.clear()
-        for opt, fn in methods.iteritems():
+        for opt, fn in methods.items():
             self.export.addAction(opt, self.exportMethod)
         
 
@@ -107,6 +110,8 @@ class ViewBoxMenu(QtGui.QMenu):
             self.ctrl[i].maxText.setText("%0.5g" % tr[1])
             if state['autoRange'][i] is not False:
                 self.ctrl[i].autoRadio.setChecked(True)
+                if state['autoRange'][i] is not True:
+                    self.ctrl[i].autoPercentSpin.setValue(state['autoRange'][i]*100)
             else:
                 self.ctrl[i].manualRadio.setChecked(True)
             self.ctrl[i].mouseCheck.setChecked(state['mouseEnabled'][i])
@@ -117,13 +122,20 @@ class ViewBoxMenu(QtGui.QMenu):
                 view = state['linkedViews'][i]
                 if view is None:
                     view = ''
-                ind = c.findText(view)
+                    
+                if isinstance(view, basestring):
+                    ind = c.findText(view)
+                else:
+                    ind = c.findText(view.name)
+                    
                 if ind == -1:
                     ind = 0
                 c.setCurrentIndex(ind)
             finally:
                 c.blockSignals(False)
             
+            self.ctrl[i].autoPanCheck.setChecked(state['autoPan'][i])
+            self.ctrl[i].visibleOnlyCheck.setChecked(state['autoVisibleOnly'][i])
             
         self.valid = True
         
@@ -156,6 +168,11 @@ class ViewBoxMenu(QtGui.QMenu):
     def xLinkComboChanged(self, ind):
         self.view.setXLink(str(self.ctrl[0].linkCombo.currentText()))
 
+    def xAutoPanToggled(self, b):
+        self.view.setAutoPan(x=b)
+    
+    def xVisibleOnlyToggled(self, b):
+        self.view.setAutoVisible(x=b)
 
 
     def yMouseToggled(self, b):
@@ -183,6 +200,13 @@ class ViewBoxMenu(QtGui.QMenu):
     def yLinkComboChanged(self, ind):
         self.view.setYLink(str(self.ctrl[1].linkCombo.currentText()))
 
+    def yAutoPanToggled(self, b):
+        self.view.setAutoPan(y=b)
+    
+    def yVisibleOnlyToggled(self, b):
+        self.view.setAutoVisible(y=b)
+
+
 
     def exportMethod(self):
         act = self.sender()
@@ -200,7 +224,7 @@ class ViewBoxMenu(QtGui.QMenu):
         views = [''] + views
         for i in [0,1]:
             c = self.ctrl[i].linkCombo
-            current = unicode(c.currentText())
+            current = asUnicode(c.currentText())
             c.blockSignals(True)
             changed = True
             try:
@@ -217,6 +241,6 @@ class ViewBoxMenu(QtGui.QMenu):
                 c.setCurrentIndex(0)
                 c.currentIndexChanged.emit(c.currentIndex())
         
-from ViewBox import ViewBox
+from .ViewBox import ViewBox
         
     

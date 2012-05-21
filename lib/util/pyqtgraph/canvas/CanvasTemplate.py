@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/util/pyqtgraph/canvas/CanvasTemplate.ui'
 #
-# Created: Fri Mar  9 11:18:44 2012
+# Created: Wed Apr 18 13:40:19 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -96,5 +96,5 @@ class Ui_Form(object):
         self.reflectSelectionBtn.setText(QtGui.QApplication.translate("Form", "MirrorXY", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph.widgets.GraphicsView import GraphicsView
-from CanvasManager import CanvasCombo
+from .CanvasManager import CanvasCombo
 from pyqtgraph.widgets.TreeWidget import TreeWidget

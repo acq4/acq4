@@ -11,11 +11,8 @@ import pyqtgraph.ptime as ptime
 app = QtGui.QApplication([])
 
 ## Create window with GraphicsView widget
-win = QtGui.QMainWindow()
-win.resize(600,600)
 view = pg.GraphicsView()
-win.setCentralWidget(view)
-win.show()
+view.show()  ## show view alone in its own window
 
 ## Allow mouse scale/pan. Normally we use a ViewBox for this, but
 ## for simple examples this is easier.
@@ -32,7 +29,7 @@ view.scene().addItem(img)
 view.setRange(QtCore.QRectF(0, 0, 600, 600))
 
 ## Create random image
-data = np.random.normal(size=(15, 400, 400), loc=1024, scale=64).astype(np.uint16)
+data = np.random.normal(size=(15, 600, 600), loc=1024, scale=64).astype(np.uint16)
 i = 0
 
 updateTime = ptime.time()

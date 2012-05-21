@@ -28,18 +28,10 @@ class ComplexParameter(Parameter):
         self.b.sigValueChanged.connect(self.bChanged)
         
     def aChanged(self):
-        try:
-            self.b.sigValueChanged.disconnect(self.bChanged)
-            self.b.setValue(1.0 / self.a.value())
-        finally:
-            self.b.sigValueChanged.connect(self.bChanged)
+        self.b.setValue(1.0 / self.a.value(), blockSignal=self.bChanged)
 
     def bChanged(self):
-        try:
-            self.a.sigValueChanged.disconnect(self.aChanged)
-            self.a.setValue(1.0 / self.b.value())
-        finally:
-            self.a.sigValueChanged.connect(self.aChanged)
+        self.a.setValue(1.0 / self.b.value(), blockSignal=self.aChanged)
 
 
 ## test add/remove
@@ -119,9 +111,9 @@ params = [
 #p = pTypes.ParameterSet("params", params)
 p = Parameter(name='params', type='group', children=params)
 def change(param, changes):
-    print "tree changes:"
+    print("tree changes:")
     for param, change, data in changes:
-        print "  [" + '.'.join(p.childPath(param))+ "]   ", change, data
+        print("  [" + '.'.join(p.childPath(param))+ "]   ", change, data)
     
 p.sigTreeStateChanged.connect(change)
 

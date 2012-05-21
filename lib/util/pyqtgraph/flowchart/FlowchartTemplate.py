@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/util/pyqtgraph/flowchart/FlowchartTemplate.ui'
+# Form implementation generated from reading ui file 'FlowchartTemplate.ui'
 #
-# Created: Fri Mar  9 11:18:45 2012
+# Created: Sun Dec 18 20:55:57 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -56,4 +56,4 @@ class Ui_Form(object):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph.widgets.DataTreeWidget import DataTreeWidget
-from FlowchartGraphicsView import FlowchartGraphicsView
+from .FlowchartGraphicsView import FlowchartGraphicsView

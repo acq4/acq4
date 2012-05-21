@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/IVCurve/ctrlTemplate.ui'
 #
-# Created: Fri Mar  9 11:18:36 2012
+# Created: Wed Apr 18 13:40:10 2012
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(179, 292)
+        Form.resize(281, 292)
         self.gridLayout = QtGui.QGridLayout(Form)
         self.gridLayout.setMargin(0)
         self.gridLayout.setSpacing(0)
@@ -237,6 +237,14 @@ class Ui_Form(object):
         self.label_11.setFont(font)
         self.label_11.setObjectName(_fromUtf8("label_11"))
         self.gridLayout_2.addWidget(self.label_11, 14, 0, 1, 1)
+        self.IVCurve_PrintResults = QtGui.QPushButton(self.groupBox)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.IVCurve_PrintResults.sizePolicy().hasHeightForWidth())
+        self.IVCurve_PrintResults.setSizePolicy(sizePolicy)
+        self.IVCurve_PrintResults.setObjectName(_fromUtf8("IVCurve_PrintResults"))
+        self.gridLayout_2.addWidget(self.IVCurve_PrintResults, 9, 3, 1, 1)
         self.gridLayout.addWidget(self.groupBox, 0, 0, 1, 1)
 
         self.retranslateUi(Form)
@@ -258,4 +266,5 @@ class Ui_Form(object):
         self.label_9.setText(QtGui.QApplication.translate("Form", "Tau (ms)", None, QtGui.QApplication.UnicodeUTF8))
         self.IVCurve_Update.setText(QtGui.QApplication.translate("Form", "Update", None, QtGui.QApplication.UnicodeUTF8))
         self.label_11.setText(QtGui.QApplication.translate("Form", "Adapt Ratio", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_PrintResults.setText(QtGui.QApplication.translate("Form", "Print Results", None, QtGui.QApplication.UnicodeUTF8))
 

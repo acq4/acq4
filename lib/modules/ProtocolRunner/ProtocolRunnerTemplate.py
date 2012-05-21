@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/modules/ProtocolRunner/ProtocolRunnerTemplate.ui'
+# Form implementation generated from reading ui file 'ProtocolRunnerTemplate.ui'
 #
-# Created: Fri Mar  9 11:18:43 2012
+# Created: Sun Dec 18 19:23:34 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

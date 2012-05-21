@@ -8,7 +8,7 @@ This class addresses the problem of having to save and restore the state
 of a large group of widgets. 
 """
 
-from Qt import QtCore, QtGui
+from .Qt import QtCore, QtGui
 import weakref, inspect
 
 
@@ -24,7 +24,7 @@ def restoreSplitter(w, s):
     elif type(s) is str:
         w.restoreState(QtCore.QByteArray.fromPercentEncoding(s))
     else:
-        print "Can't configure QSplitter using object of type", type(s)
+        print("Can't configure QSplitter using object of type", type(s))
     if w.count() > 0:   ## make sure at least one item is not collapsed
         for i in w.sizes():
             if i > 0:
@@ -44,7 +44,7 @@ def comboState(w):
         except AttributeError:
             pass
     if data is None:
-        return unicode(w.itemText(ind))
+        return asUnicode(w.itemText(ind))
     else:
         return data
     
@@ -133,7 +133,7 @@ class WidgetGroup(QtCore.QObject):
             for w in widgetList:
                 self.addWidget(*w)
         elif isinstance(widgetList, dict):
-            for name, w in widgetList.iteritems():
+            for name, w in widgetList.items():
                 self.addWidget(w, name)
         elif widgetList is None:
             return
@@ -255,7 +255,14 @@ class WidgetGroup(QtCore.QObject):
         if getFunc is None:
             return None
             
-        val = getFunc(w)
+        ## if the getter function provided in the interface is a bound method,
+        ## then just call the method directly. Otherwise, pass in the widget as the first arg
+        ## to the function.
+        if inspect.ismethod(getFunc) and getFunc.__self__ is not None:  
+            val = getFunc()
+        else:
+            val = getFunc(w)
+            
         if self.scales[w] is not None:
             val /= self.scales[w]
         #if isinstance(val, QtCore.QString):
@@ -273,7 +280,15 @@ class WidgetGroup(QtCore.QObject):
             setFunc = WidgetGroup.classes[type(w)][2]
         else:
             setFunc = w.widgetGroupInterface()[2]
-        setFunc(w, v)
+            
+        ## if the setter function provided in the interface is a bound method,
+        ## then just call the method directly. Otherwise, pass in the widget as the first arg
+        ## to the function.
+        if inspect.ismethod(setFunc) and setFunc.__self__ is not None:  
+            setFunc(v)
+        else:
+            setFunc(w, v)
+            
         #name = self.widgetList[w]
         #if name in self.cache and (self.cache[name] != v1):
             #print "%s: Cached value %s != set value %s" % (name, str(self.cache[name]), str(v1))

@@ -59,8 +59,8 @@ class ImageCanvasItem(CanvasItem):
                     opts['scale'] = info.get('pixelSize', None)
                     opts['pos'] = info.get('imagePosition', None)
             except:
-                print 'uga uga boom'
-                #pass
+                #print 'uga uga boom'
+                pass
 
         print opts
 

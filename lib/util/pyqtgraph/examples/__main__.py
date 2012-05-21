@@ -10,34 +10,46 @@ from collections import OrderedDict
 examples = OrderedDict([
     ('Command-line usage', 'CLIexample.py'),
     ('Basic Plotting', 'Plotting.py'),
+    ('ImageView', 'ImageView.py'),
+    ('ParameterTree', '../parametertree'),
+    ('Crosshair / Mouse interaction', 'crosshair.py'),
+    ('Video speed test', 'VideoSpeedTest.py'),
+    ('Plot speed test', 'PlotSpeedTest.py'),
+    ('Data Slicing', 'DataSlicing.py'),
     ('GraphicsItems', OrderedDict([
-        ('PlotItem', 'PlotItem.py'),
+        ('Scatter Plot', 'ScatterPlot.py'),
+        #('PlotItem', 'PlotItem.py'),
+        ('IsocurveItem', 'isocurve.py'),
         ('ImageItem - video', 'ImageItem.py'),
         ('ImageItem - draw', 'Draw.py'),
         ('Region-of-Interest', 'ROItypes.py'),
         ('GraphicsLayout', 'GraphicsLayout.py'),
-        ('Scatter Plot', 'ScatterPlot.py'),
-        ('ViewBox', 'ViewBox.py'),
+        ('Text Item', 'text.py'),
+        ('Linked Views', 'linkedViews.py'),
         ('Arrow', 'Arrow.py'),
+        ('ViewBox', 'ViewBox.py'),
+    ])),
+    ('3D Graphics', OrderedDict([
+        ('Volumetric', 'GLVolumeItem.py'),
+        ('Isosurface', 'GLMeshItem.py'),
     ])),
     ('Widgets', OrderedDict([
         ('PlotWidget', 'PlotWidget.py'),
-        ('SpinBox', '../widgets/SpinBox.py'),
+        #('SpinBox', '../widgets/SpinBox.py'),
         ('TreeWidget', '../widgets/TreeWidget.py'),
         ('DataTreeWidget', '../widgets/DataTreeWidget.py'),
-        ('GradientWidget', '../widgets/GradientWidget.py'),
-        ('TableWidget', '../widgets/TableWidget.py'),
+        ('GradientWidget', 'GradientWidget.py'),
+        #('TableWidget', '../widgets/TableWidget.py'),
         ('ColorButton', '../widgets/ColorButton.py'),
-        ('CheckTable', '../widgets/CheckTable.py'),
-        ('VerticalLabel', '../widgets/VerticalLabel.py'),
-        ('JoystickButton', '../widgets/JoystickButton.py'),
+        #('CheckTable', '../widgets/CheckTable.py'),
+        #('VerticalLabel', '../widgets/VerticalLabel.py'),
+        ('JoystickButton', 'JoystickButton.py'),
     ])),
-    ('ImageView', 'ImageView.py'),
+   
     ('GraphicsScene', 'GraphicsScene.py'),
     ('Flowcharts', 'Flowchart.py'),
-    ('ParameterTree', '../parametertree'),
-    ('Canvas', '../canvas'),
-    ('MultiPlotWidget', 'MultiPlotWidget.py'),
+    #('Canvas', '../canvas'),
+    #('MultiPlotWidget', 'MultiPlotWidget.py'),
 ])
 
 path = os.path.abspath(os.path.dirname(__file__))
@@ -63,7 +75,7 @@ class ExampleLoader(QtGui.QMainWindow):
 
 
     def populateTree(self, root, examples):
-        for key, val in examples.iteritems():
+        for key, val in examples.items():
             item = QtGui.QTreeWidgetItem([key])
             if isinstance(val, basestring):
                 item.file = val
@@ -83,7 +95,10 @@ class ExampleLoader(QtGui.QMainWindow):
         fn = self.currentFile()
         if fn is None:
             return
-        os.spawnl(os.P_NOWAIT, sys.executable, sys.executable, fn)
+        if sys.platform.startswith('win'):
+            os.spawnl(os.P_NOWAIT, sys.executable, sys.executable, '"' + fn + '"')
+        else:
+            os.spawnl(os.P_NOWAIT, sys.executable, sys.executable, fn)
         
             
     def showFile(self):
@@ -91,6 +106,8 @@ class ExampleLoader(QtGui.QMainWindow):
         if fn is None:
             self.ui.codeView.clear()
             return
+        if os.path.isdir(fn):
+            fn = os.path.join(fn, '__main__.py')
         text = open(fn).read()
         self.ui.codeView.setPlainText(text)
 
@@ -98,8 +115,7 @@ def run():
     app = QtGui.QApplication([])
     loader = ExampleLoader()
     
-    if sys.flags.interactive != 1:
-        app.exec_()
+    app.exec_()
 
 if __name__ == '__main__':
     run()

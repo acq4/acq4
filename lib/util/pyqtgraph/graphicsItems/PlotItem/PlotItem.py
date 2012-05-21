@@ -17,7 +17,7 @@ This class is very heavily featured:
     display, power spectrum, svg/png export, plot linking, and more.
 """
 #from graphicsItems import *
-from plotConfigTemplate import *
+from .plotConfigTemplate import *
 from pyqtgraph.Qt import QtGui, QtCore, QtSvg
 import pyqtgraph.functions as fn
 from pyqtgraph.widgets.FileDialog import FileDialog
@@ -55,15 +55,72 @@ except:
 
 class PlotItem(GraphicsWidget):
     
-    sigYRangeChanged = QtCore.Signal(object, object)
-    sigXRangeChanged = QtCore.Signal(object, object)
-    sigRangeChanged = QtCore.Signal(object, object)
+    """
+    **Bases:** :class:`GraphicsWidget <pyqtgraph.GraphicsWidget>`
     
-    """Plot graphics item that can be added to any graphics scene. Implements axis titles, scales, interactive viewbox."""
+    Plot graphics item that can be added to any graphics scene. Implements axes, titles, and interactive viewbox. 
+    PlotItem also provides some basic analysis functionality that may be accessed from the context menu.
+    Use :func:`plot() <pyqtgraph.PlotItem.plot>` to create a new PlotDataItem and add it to the view.
+    Use :func:`addItem() <pyqtgraph.PlotItem.addItem>` to add any QGraphicsItem to the view.
+    
+    This class wraps several methods from its internal ViewBox:
+    :func:`setXRange <pyqtgraph.ViewBox.setXRange>`,
+    :func:`setYRange <pyqtgraph.ViewBox.setYRange>`,
+    :func:`setRange <pyqtgraph.ViewBox.setRange>`,
+    :func:`autoRange <pyqtgraph.ViewBox.autoRange>`,
+    :func:`setXLink <pyqtgraph.ViewBox.setXLink>`,
+    :func:`setYLink <pyqtgraph.ViewBox.setYLink>`,
+    :func:`setAutoPan <pyqtgraph.ViewBox.setAutoPan>`,
+    :func:`setAutoVisible <pyqtgraph.ViewBox.setAutoVisible>`,
+    :func:`viewRect <pyqtgraph.ViewBox.viewRect>`,
+    :func:`viewRange <pyqtgraph.ViewBox.viewRange>`,
+    :func:`setMouseEnabled <pyqtgraph.ViewBox.setMouseEnabled>`,
+    :func:`enableAutoRange <pyqtgraph.ViewBox.enableAutoRange>`,
+    :func:`disableAutoRange <pyqtgraph.ViewBox.disableAutoRange>`,
+    :func:`setAspectLocked <pyqtgraph.ViewBox.setAspectLocked>`,
+    :func:`register <pyqtgraph.ViewBox.register>`,
+    :func:`unregister <pyqtgraph.ViewBox.unregister>`
+    
+    The ViewBox itself can be accessed by calling :func:`getViewBox() <pyqtgraph.PlotItem.getViewBox>` 
+    
+    ==================== =======================================================================
+    **Signals**
+    sigYRangeChanged     wrapped from :class:`ViewBox <pyqtgraph.ViewBox>`
+    sigXRangeChanged     wrapped from :class:`ViewBox <pyqtgraph.ViewBox>`
+    sigRangeChanged      wrapped from :class:`ViewBox <pyqtgraph.ViewBox>`
+    ==================== =======================================================================
+    """
+    
+    sigRangeChanged = QtCore.Signal(object, object)    ## Emitted when the ViewBox range has changed
+    sigYRangeChanged = QtCore.Signal(object, object)   ## Emitted when the ViewBox Y range has changed
+    sigXRangeChanged = QtCore.Signal(object, object)   ## Emitted when the ViewBox X range has changed
+    
+    
     lastFileDir = None
     managers = {}
     
     def __init__(self, parent=None, name=None, labels=None, title=None, **kargs):
+        """
+        Create a new PlotItem. All arguments are optional.
+        Any extra keyword arguments are passed to PlotItem.plot().
+        
+        =============  ==========================================================================================
+        **Arguments**
+        *title*        Title to display at the top of the item. Html is allowed.
+        *labels*       A dictionary specifying the axis labels to display::
+                   
+                           {'left': (args), 'bottom': (args), ...}
+                     
+                       The name of each axis and the corresponding arguments are passed to 
+                       :func:`PlotItem.setLabel() <pyqtgraph.PlotItem.setLabel>`
+                       Optionally, PlotItem my also be initialized with the keyword arguments left,
+                       right, top, or bottom to achieve the same effect.
+        *name*         Registers a name for this view so that others may link to it  
+        =============  ==========================================================================================
+            
+            
+        """
+        
         GraphicsWidget.__init__(self, parent)
         
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
@@ -85,8 +142,9 @@ class PlotItem(GraphicsWidget):
         self.layout.setVerticalSpacing(0)
         
         self.vb = ViewBox(name=name)
-        #self.vb.sigXRangeChanged.connect(self.xRangeChanged)
-        #self.vb.sigYRangeChanged.connect(self.yRangeChanged)
+        self.vb.sigRangeChanged.connect(self.sigRangeChanged)
+        self.vb.sigXRangeChanged.connect(self.sigXRangeChanged)
+        self.vb.sigYRangeChanged.connect(self.sigYRangeChanged)
         #self.vb.sigRangeChangedManually.connect(self.enableManualScale)
         #self.vb.sigRangeChanged.connect(self.viewRangeChanged)
         
@@ -132,9 +190,10 @@ class PlotItem(GraphicsWidget):
 
         ## Wrap a few methods from viewBox
         for m in [
-            'setXRange', 'setYRange', 'setXLink', 'setYLink', 
-            'setRange', 'autoRange', 'viewRect', 'setMouseEnabled',
-            'enableAutoRange', 'disableAutoRange']:
+            'setXRange', 'setYRange', 'setXLink', 'setYLink', 'setAutoPan', 'setAutoVisible',
+            'setRange', 'autoRange', 'viewRect', 'viewRange', 'setMouseEnabled',
+            'enableAutoRange', 'disableAutoRange', 'setAspectLocked',
+            'register', 'unregister']:  ## NOTE: If you update this list, please update the class docstring as well.
             setattr(self, m, getattr(self.vb, m))
             
         self.items = []
@@ -152,7 +211,7 @@ class PlotItem(GraphicsWidget):
         dv = QtGui.QDoubleValidator(self)
         
         menuItems = [
-            ('Fourier Transform', c.powerSpectrumGroup),
+            ('Transforms', c.transformGroup),
             ('Downsample', c.decimateGroup),
             ('Average', c.averageGroup),
             ('Alpha', c.alphaGroup),
@@ -173,19 +232,16 @@ class PlotItem(GraphicsWidget):
             self.subMenus.append(sm)
             self.ctrlMenu.addMenu(sm)
         
+        ## exporting is handled by GraphicsScene now
+        #exportOpts = collections.OrderedDict([
+            #('SVG - Full Plot', self.saveSvgClicked),
+            #('SVG - Curves Only', self.saveSvgCurvesClicked),
+            #('Image', self.saveImgClicked),
+            #('CSV', self.saveCsvClicked),
+        #])
         
-        exportOpts = collections.OrderedDict([
-            ('SVG - Full Plot', self.saveSvgClicked),
-            ('SVG - Curves Only', self.saveSvgCurvesClicked),
-            ('Image', self.saveImgClicked),
-            ('CSV', self.saveCsvClicked),
-        ])
+        #self.vb.menu.setExportMethods(exportOpts)
         
-        self.vb.menu.setExportMethods(exportOpts)
-        
-        #self.menuAction = QtGui.QWidgetAction(self)
-        #self.menuAction.setDefaultWidget(w)
-        #self.ctrlMenu.addAction(self.menuAction)
         
         #if HAVE_WIDGETGROUP:
         self.stateGroup = WidgetGroup()
@@ -219,10 +275,13 @@ class PlotItem(GraphicsWidget):
         c.alphaSlider.valueChanged.connect(self.updateAlpha)
         c.autoAlphaCheck.toggled.connect(self.updateAlpha)
 
-        c.gridGroup.toggled.connect(self.updateGrid)
+        c.xGridCheck.toggled.connect(self.updateGrid)
+        c.yGridCheck.toggled.connect(self.updateGrid)
         c.gridAlphaSlider.valueChanged.connect(self.updateGrid)
 
-        c.powerSpectrumGroup.toggled.connect(self.updateSpectrumMode)
+        c.fftCheck.toggled.connect(self.updateSpectrumMode)
+        c.logXCheck.toggled.connect(self.updateLogMode)
+        c.logYCheck.toggled.connect(self.updateLogMode)
         #c.saveSvgBtn.clicked.connect(self.saveSvgClicked)
         #c.saveSvgCurvesBtn.clicked.connect(self.saveSvgCurvesClicked)
         #c.saveImgBtn.clicked.connect(self.saveImgClicked)
@@ -253,12 +312,16 @@ class PlotItem(GraphicsWidget):
         
         #if name is not None:
             #self.registerPlot(name)
-        
-        if labels is not None:
-            for k in labels:
-                if isinstance(labels[k], basestring):
-                    labels[k] = (labels[k],)
-                self.setLabel(k, *labels[k])
+        if labels is None:
+            labels = {}
+        for label in list(self.scales.keys()):
+            if label in kargs:
+                labels[label] = kargs[label]
+                del kargs[label]
+        for k in labels:
+            if isinstance(labels[k], basestring):
+                labels[k] = (labels[k],)
+            self.setLabel(k, *labels[k])
                 
         if title is not None:
             self.setTitle(title)
@@ -266,20 +329,59 @@ class PlotItem(GraphicsWidget):
         if len(kargs) > 0:
             self.plot(**kargs)
         
-        self.enableAutoRange()
+        #self.enableAutoRange()
         
     def implements(self, interface=None):
         return interface in ['ViewBoxWrapper']
 
     def getViewBox(self):
+        """Return the ViewBox within."""
         return self.vb
     
+    def setLogMode(self, x, y):
+        """
+        Set log scaling for x and y axes.
+        This informs PlotDataItems to transform logarithmically and switches
+        the axes to use log ticking. 
+        
+        Note that *no other items* in the scene will be affected by
+        this; there is no generic way to redisplay a GraphicsItem
+        with log coordinates.
+        
+        """
+        self.ctrl.logXCheck.setChecked(x)
+        self.ctrl.logYCheck.setChecked(y)
+        
+    def showGrid(self, x=None, y=None, alpha=None):
+        """
+        Show or hide the grid for either axis.
+        
+        ==============  =====================================
+        **Arguments:**
+        x               (bool) Whether to show the X grid
+        y               (bool) Whether to show the Y grid
+        alpha           (0.0-1.0) Opacity of the grid
+        ==============  =====================================
+        """
+        if x is None and y is None and alpha is None:
+            raise Exception("Must specify at least one of x, y, or alpha.")  ## prevent people getting confused if they just call showGrid()
+        
+        if x is not None:
+            self.ctrl.xGridCheck.setChecked(x)
+        if y is not None:
+            self.ctrl.yGridCheck.setChecked(y)
+        if alpha is not None:
+            v = np.clip(alpha, 0, 1)*self.ctrl.gridAlphaSlider.maximum()
+            self.ctrl.gridAlphaSlider.setValue(v)
         
     #def paint(self, *args):
         #prof = debug.Profiler('PlotItem.paint', disabled=True)
         #QtGui.QGraphicsWidget.paint(self, *args)
         #prof.finish()
         
+    ## bad idea. 
+    #def __getattr__(self, attr):  ## wrap ms
+        #return getattr(self.vb, attr)
         
     def close(self):
         #print "delete", self
@@ -326,7 +428,7 @@ class PlotItem(GraphicsWidget):
         #else:
             #print "no manager"
 
-    def registerPlot(self, name):
+    def registerPlot(self, name):   ## for backward compatibility
         self.vb.register(name)
         #self.name = name
         #win = str(self.window())
@@ -368,15 +470,19 @@ class PlotItem(GraphicsWidget):
             #print "  Referrers are:", refs
             #raise
         
+        
+        
     def updateGrid(self, *args):
-        g = self.ctrl.gridGroup.isChecked()
-        if g:
-            g = self.ctrl.gridAlphaSlider.value()
-        for k in self.scales:
-            self.scales[k]['item'].setGrid(g)
+        alpha = self.ctrl.gridAlphaSlider.value()
+        x = alpha if self.ctrl.xGridCheck.isChecked() else False
+        y = alpha if self.ctrl.yGridCheck.isChecked() else False
+        self.getAxis('top').setGrid(x)
+        self.getAxis('bottom').setGrid(x)
+        self.getAxis('left').setGrid(y)
+        self.getAxis('right').setGrid(y)
 
     def viewGeometry(self):
-        """return the screen geometry of the viewbox"""
+        """Return the screen geometry of the viewbox"""
         v = self.scene().views()[0]
         b = self.vb.mapRectToScene(self.vb.boundingRect())
         wr = v.mapFromScene(b).boundingRect()
@@ -492,7 +598,7 @@ class PlotItem(GraphicsWidget):
         self.replot()
         
     def addAvgCurve(self, curve):
-        """Add a single curve into the pool of curves averaged together"""
+        ## Add a single curve into the pool of curves averaged together
         
         ## If there are plot parameters, then we need to determine which to average together.
         remKeys = []
@@ -597,7 +703,7 @@ class PlotItem(GraphicsWidget):
         """
         Enable auto-scaling. The plot will continuously scale to fit the boundaries of its data.
         """
-        print "Warning: enableAutoScale is deprecated. Use enableAutoRange(axis, enable) instead."
+        print("Warning: enableAutoScale is deprecated. Use enableAutoRange(axis, enable) instead.")
         self.vb.enableAutoRange(self.vb.XYAxes)
         #self.ctrl.xAutoRadio.setChecked(True)
         #self.ctrl.yAutoRadio.setChecked(True)
@@ -667,8 +773,16 @@ class PlotItem(GraphicsWidget):
         ##self.replot()
 
     def addItem(self, item, *args, **kargs):
+        """
+        Add a graphics item to the view box. 
+        If the item has plot data (PlotDataItem, PlotCurveItem, ScatterPlotItem), it may
+        be included in analysis performed by the PlotItem.
+        """
         self.items.append(item)
-        self.vb.addItem(item, *args)
+        vbargs = {}
+        if 'ignoreBounds' in kargs:
+            vbargs['ignoreBounds'] = kargs['ignoreBounds']
+        self.vb.addItem(item, *args, **vbargs)
         if hasattr(item, 'implements') and item.implements('plotData'):
             self.dataItems.append(item)
             #self.plotChanged()
@@ -683,7 +797,8 @@ class PlotItem(GraphicsWidget):
             ## configure curve for this plot
             (alpha, auto) = self.alphaState()
             item.setAlpha(alpha, auto)
-            item.setFftMode(self.ctrl.powerSpectrumGroup.isChecked())
+            item.setFftMode(self.ctrl.fftCheck.isChecked())
+            item.setLogMode(self.ctrl.logXCheck.isChecked(), self.ctrl.logYCheck.isChecked())
             item.setDownsampling(self.downsampleMode())
             item.setPointMode(self.pointMode())
             
@@ -700,15 +815,17 @@ class PlotItem(GraphicsWidget):
             #self.plotChanged()
 
     def addDataItem(self, item, *args):
-        print "PlotItem.addDataItem is deprecated. Use addItem instead."
+        print("PlotItem.addDataItem is deprecated. Use addItem instead.")
         self.addItem(item, *args)
         
     def addCurve(self, c, params=None):
-        print "PlotItem.addCurve is deprecated. Use addItem instead."
-        self.addItem(item, params)
-
+        print("PlotItem.addCurve is deprecated. Use addItem instead.")
+        self.addItem(c, params)
 
     def removeItem(self, item):
+        """
+        Remove an item from the internal ViewBox.
+        """
         if not item in self.items:
             return
         self.items.remove(item)
@@ -725,6 +842,9 @@ class PlotItem(GraphicsWidget):
             #item.sigPlotChanged.connect(self.plotChanged)
 
     def clear(self):
+        """
+        Remove all items from the ViewBox.
+        """
         for i in self.items[:]:
             self.removeItem(i)
         self.avgCurves = {}
@@ -738,7 +858,7 @@ class PlotItem(GraphicsWidget):
     def plot(self, *args, **kargs):
         """
         Add and return a new plot.
-        See PlotDataItem.__init__ for data arguments
+        See :func:`PlotDataItem.__init__ <pyqtgraph.PlotDataItem.__init__>` for data arguments
         
         Extra allowed arguments are:
             clear    - clear all plots before displaying new data
@@ -788,7 +908,18 @@ class PlotItem(GraphicsWidget):
         return item
 
     def scatterPlot(self, *args, **kargs):
-        print "PlotItem.scatterPlot is deprecated. Use PlotItem.plot instead."
+        if 'pen' in kargs:
+            kargs['symbolPen'] = kargs['pen']
+        kargs['pen'] = None
+            
+        if 'brush' in kargs:
+            kargs['symbolBrush'] = kargs['brush']
+            del kargs['brush']
+            
+        if 'size' in kargs:
+            kargs['symbolSize'] = kargs['size']
+            del kargs['size']
+
         return self.plot(*args, **kargs)
         #sp = ScatterPlotItem(*args, **kargs)
         #self.addItem(sp)
@@ -839,7 +970,7 @@ class PlotItem(GraphicsWidget):
         #print "paramList:", self.paramList
         for c in self.curves:
             #print "  curve:", c
-            for p in self.itemMeta.get(c, {}).keys():
+            for p in list(self.itemMeta.get(c, {}).keys()):
                 #print "    param:", p
                 if type(p) is tuple:
                     p = '.'.join(p)
@@ -923,7 +1054,7 @@ class PlotItem(GraphicsWidget):
                 
                 #fh.write('<g fill="none" stroke="#%s" stroke-opacity="1" stroke-width="1">\n' % color)
                 fh.write('<path fill="none" stroke="#%s" stroke-opacity="%f" stroke-width="1" d="M%f,%f ' % (color, opacity, x[0], y[0]))
-                for i in xrange(1, len(x)):
+                for i in range(1, len(x)):
                     fh.write('L%f,%f ' % (x[i], y[i]))
                 
                 fh.write('"/>')
@@ -990,7 +1121,7 @@ class PlotItem(GraphicsWidget):
             if m is not None:
                 #print "Matched group:", line
                 g = m.groups()
-                matrix = map(float, g[2].split(','))
+                matrix = list(map(float, g[2].split(',')))
                 #print "matrix:", matrix
                 scale = max(abs(matrix[0]), abs(matrix[3]))
                 if scale == 0 or scale == 1.0:
@@ -1079,6 +1210,12 @@ class PlotItem(GraphicsWidget):
         self.updateAlpha()
         self.updateDecimation()
         
+        if 'powerSpectrumGroup' in state:
+            state['fftCheck'] = state['powerSpectrumGroup']
+        if 'gridGroup' in state:
+            state['xGridCheck'] = state['gridGroup']
+            state['yGridCheck'] = state['gridGroup']
+            
         self.stateGroup.setState(state)
         #self.updateXScale()
         #self.updateYScale()
@@ -1107,12 +1244,24 @@ class PlotItem(GraphicsWidget):
       
     def updateSpectrumMode(self, b=None):
         if b is None:
-            b = self.ctrl.powerSpectrumGroup.isChecked()
+            b = self.ctrl.fftCheck.isChecked()
         for c in self.curves:
             c.setFftMode(b)
         self.enableAutoRange()
         self.recomputeAverages()
             
+    def updateLogMode(self):
+        x = self.ctrl.logXCheck.isChecked()
+        y = self.ctrl.logYCheck.isChecked()
+        for c in self.curves:
+            c.setLogMode(x,y)
+        self.getAxis('bottom').setLogMode(x)
+        self.getAxis('top').setLogMode(x)
+        self.getAxis('left').setLogMode(y)
+        self.getAxis('right').setLogMode(y)
+        self.enableAutoRange()
+        self.recomputeAverages()
+        
         
     def updateDownsampling(self):
         ds = self.downsampleMode()
@@ -1180,9 +1329,9 @@ class PlotItem(GraphicsWidget):
             mode = False
         return mode
         
-    def wheelEvent(self, ev):
-        # disables default panning the whole scene by mousewheel
-        ev.accept()
+    #def wheelEvent(self, ev):
+        ## disables default panning the whole scene by mousewheel
+        #ev.accept()
 
     def resizeEvent(self, ev):
         if self.autoBtn is None:  ## already closed down
@@ -1212,22 +1361,30 @@ class PlotItem(GraphicsWidget):
         
     def _checkScaleKey(self, key):
         if key not in self.scales:
-            raise Exception("Scale '%s' not found. Scales are: %s" % (key, str(self.scales.keys())))
+            raise Exception("Scale '%s' not found. Scales are: %s" % (key, str(list(self.scales.keys()))))
         
     def getScale(self, key):
-        self._checkScaleKey(key)
-        return self.scales[key]['item']
+        return self.getAxis(key)
+        
+    def getAxis(self, name):
+        """Return the specified AxisItem. 
+        *name* should be 'left', 'bottom', 'top', or 'right'."""
+        self._checkScaleKey(name)
+        return self.scales[name]['item']
         
     def setLabel(self, axis, text=None, units=None, unitPrefix=None, **args):
         """
         Set the label for an axis. Basic HTML formatting is allowed.
-        Arguments:
-            axis  - must be one of 'left', 'bottom', 'right', or 'top'
-            text  - text to display along the axis. HTML allowed.
-            units - units to display after the title. If units are given, 
-                    then an SI prefix will be automatically appended
-                    and the axis values will be scaled accordingly.
-                    (ie, use 'V' instead of 'mV'; 'm' will be added automatically)
+        
+        ============= =================================================================
+        **Arguments**
+        axis          must be one of 'left', 'bottom', 'right', or 'top'
+        text          text to display along the axis. HTML allowed.
+        units         units to display after the title. If units are given, 
+                      then an SI prefix will be automatically appended
+                      and the axis values will be scaled accordingly.
+                      (ie, use 'V' instead of 'mV'; 'm' will be added automatically)
+        ============= =================================================================
         """
         self.getScale(axis).setLabel(text=text, units=units, **args)
         
@@ -1269,7 +1426,7 @@ class PlotItem(GraphicsWidget):
         self.showAxis(axis, False)
             
     def showScale(self, *args, **kargs):
-        print "Deprecated. use showAxis() instead"
+        print("Deprecated. use showAxis() instead")
         return self.showAxis(*args, **kargs)
             
     def hideButtons(self):
@@ -1316,18 +1473,24 @@ class PlotItem(GraphicsWidget):
             
         return c
 
-    def saveSvgClicked(self):
-        self.writeSvg()
+    #def saveSvgClicked(self):
+        #self.writeSvg()
         
-    def saveSvgCurvesClicked(self):
-        self.writeSvgCurves()
+    #def saveSvgCurvesClicked(self):
+        #self.writeSvgCurves()
         
-    def saveImgClicked(self):
-        self.writeImage()
+    #def saveImgClicked(self):
+        #self.writeImage()
             
-    def saveCsvClicked(self):
-        self.writeCsv()
+    #def saveCsvClicked(self):
+        #self.writeCsv()
       
+    def setExportMode(self, export, opts):
+        if export:
+            self.autoBtn.hide()
+        else:
+            self.autoBtn.show()
+    
 
 #class PlotWidgetManager(QtCore.QObject):
     

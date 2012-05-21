@@ -2,8 +2,8 @@
 from pyqtgraph.Qt import QtGui, QtCore, QtSvg
 from pyqtgraph.graphicsItems.ROI import ROI
 import pyqtgraph as pg
-import TransformGuiTemplate
-import debug
+from . import TransformGuiTemplate
+from pyqtgraph import debug
 
 class SelectBox(ROI):
     def __init__(self, scalable=False, rotatable=True):
@@ -225,13 +225,13 @@ class CanvasItem(QtCore.QObject):
     def mirrorXY(self):
         if not self.isMovable():
             return
-        
-        inv = pg.Transform()
-        inv.scale(-1, -1)
-        self.userTransform = self.userTransform * inv #flip lr/ud
-        s=self.updateTransform()
-        self.setTranslate(-2*s['pos'][0], -2*s['pos'][1])
-        self.selectBoxFromUser()
+        self.rotate(180.)
+        # inv = pg.Transform()
+        # inv.scale(-1, -1)
+        # self.userTransform = self.userTransform * inv #flip lr/ud
+        # s=self.updateTransform()
+        # self.setTranslate(-2*s['pos'][0], -2*s['pos'][1])
+        # self.selectBoxFromUser()
         
  
     def hasUserTransform(self):

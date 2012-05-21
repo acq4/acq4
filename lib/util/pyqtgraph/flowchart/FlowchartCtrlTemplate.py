@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/util/pyqtgraph/flowchart/FlowchartCtrlTemplate.ui'
+# Form implementation generated from reading ui file 'FlowchartCtrlTemplate.ui'
 #
-# Created: Fri Mar  9 11:18:45 2012
+# Created: Sun Dec 18 20:55:57 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -67,5 +67,5 @@ class Ui_Form(object):
         self.reloadBtn.setText(QtGui.QApplication.translate("Form", "Reload Libs", None, QtGui.QApplication.UnicodeUTF8))
         self.showChartBtn.setText(QtGui.QApplication.translate("Form", "Flowchart", None, QtGui.QApplication.UnicodeUTF8))
 
-from FeedbackButton import FeedbackButton
+from pyqtgraph.widgets.FeedbackButton import FeedbackButton
 from pyqtgraph.widgets.TreeWidget import TreeWidget
