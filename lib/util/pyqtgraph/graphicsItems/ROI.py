@@ -243,6 +243,8 @@ class ROI(GraphicsObject):
     def rotate(self, angle, update=True, finish=True):
         self.setAngle(self.angle()+angle, update=update, finish=finish)
 
+    def handleMoveStarted(self):
+        self.preMoveState = self.getState()
     
     def addTranslateHandle(self, pos, axes=None, item=None, name=None):
         pos = Point(pos)
@@ -1060,6 +1062,8 @@ class Handle(UIGraphicsItem):
                     r[0].stateChangeFinished()
             self.isMoving = False
         elif ev.isStart():
+            for r in self.roi:
+                r[0].handleMoveStarted()
             self.isMoving = True
             self.startPos = self.scenePos()
             self.cursorOffset = self.scenePos() - ev.buttonDownScenePos()
