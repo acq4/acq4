@@ -1,12 +1,12 @@
 from pyqtgraph.Qt import QtGui, QtCore
-from UIGraphicsItem import *
+from .UIGraphicsItem import *
 import numpy as np
 from pyqtgraph.Point import Point
 
 __all__ = ['GridItem']
 class GridItem(UIGraphicsItem):
     """
-    **Bases:** `UIGraphicsItem <pyqtgraph.UIGraphicsItem>'
+    **Bases:** :class:`UIGraphicsItem <pyqtgraph.UIGraphicsItem>`
     
     Displays a rectangular grid of lines indicating major divisions within a coordinate system.
     Automatically determines what divisions to use.
@@ -21,7 +21,8 @@ class GridItem(UIGraphicsItem):
         self.picture = None
         
         
-    def viewChangedEvent(self):
+    def viewRangeChanged(self):
+        UIGraphicsItem.viewRangeChanged(self)
         self.picture = None
         #UIGraphicsItem.viewRangeChanged(self)
         #self.update()

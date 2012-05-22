@@ -5,9 +5,9 @@ except:
     HAVE_METAARRAY = False
 
 from pyqtgraph.Qt import QtCore
-from GraphicsObject import GraphicsObject
-from PlotCurveItem import PlotCurveItem
-from ScatterPlotItem import ScatterPlotItem
+from .GraphicsObject import GraphicsObject
+from .PlotCurveItem import PlotCurveItem
+from .ScatterPlotItem import ScatterPlotItem
 import numpy as np
 import scipy
 import pyqtgraph.functions as fn
@@ -89,7 +89,7 @@ class PlotDataItem(GraphicsObject):
         **Optimization keyword arguments:**
         
             ==========   ================================================
-            identical    spots are all identical. The spot image will be rendered only once and repeated for every point
+            identical    *deprecated*
             decimate     (int) decimate data
             ==========   ================================================
         
@@ -307,7 +307,7 @@ class PlotDataItem(GraphicsObject):
         if 'brush' in kargs:
             kargs['fillBrush'] = kargs['brush']
             
-        for k in self.opts.keys():
+        for k in list(self.opts.keys()):
             if k in kargs:
                 self.opts[k] = kargs[k]
                 
@@ -424,7 +424,8 @@ class PlotDataItem(GraphicsObject):
     def dataBounds(self, ax, frac=1.0, orthoRange=None):
         """
         Returns the range occupied by the data (along a specific axis) in this item.
-        Tis method is called by ViewBox when auto-scaling.
+        This method is called by ViewBox when auto-scaling.
+
         =============== =============================================================
         **Arguments:**
         ax              (0 or 1) the axis for which to return this item's data range

@@ -10,10 +10,12 @@ class GraphicsItem(object):
     Abstract class providing useful methods to GraphicsObject and GraphicsWidget.
     (This is required because we cannot have multiple inheritance with QObject subclasses.)
     """
-    def __init__(self):
+    def __init__(self, register=True):
         self._viewWidget = None
         self._viewBox = None
-        GraphicsScene.registerObject(self)  ## workaround for pyqt bug in graphicsscene.items()
+        self._connectedView = None
+        if register:
+            GraphicsScene.registerObject(self)  ## workaround for pyqt bug in graphicsscene.items()
     
     def getViewWidget(self):
         """
@@ -121,19 +123,19 @@ class GraphicsItem(object):
         
         
         
+
     def pixelVectors(self, direction=None):
         """Return vectors in local coordinates representing the width and height of a view pixel.
         If direction is specified, then return vectors parallel and orthogonal to it."""
+
         dt = self.deviceTransform()
         if dt is None:
-            return None
+            return None, None
         if direction is None:
             direction = Point(1, 0)
         viewDir = Point(dt.map(direction) - dt.map(Point(0,0)))
-        
         orthoDir = Point(viewDir[1], -viewDir[0])  ## orthogonal to line in pixel-space
             
-        
         normView = viewDir.norm()  ## direction of one pixel orthogonal to line
         normOrtho = orthoDir.norm()
         
@@ -152,6 +154,8 @@ class GraphicsItem(object):
         If ortho=True, then return the length of one pixel orthogonal to the direction indicated.
         """
         normV, orthoV = self.pixelVectors(direction)
+        if normV == None or orthoV == None:
+            return None
         if ortho:
             return orthoV.length()
         return normV.length()
@@ -251,23 +255,6 @@ class GraphicsItem(object):
     def viewPos(self):
         return self.mapToView(self.mapFromParent(self.pos()))
     
-    #def itemChange(self, change, value):
-        #ret = QtGui.QGraphicsObject.itemChange(self, change, value)
-        #if change == self.ItemParentHasChanged or change == self.ItemSceneHasChanged:
-            #print "Item scene changed:", self
-            #self.setChildScene(self)  ## This is bizarre. 
-        #return ret
-    
-    #def setChildScene(self, ch):
-        #scene = self.scene()
-        #for ch2 in ch.childItems():
-            #if ch2.scene() is not scene:
-                #print "item", ch2, "has different scene:", ch2.scene(), scene
-                #scene.addItem(ch2)
-                #QtGui.QApplication.processEvents()
-                #print "   --> ", ch2.scene()
-            #self.setChildScene(ch2)
-            
     def parentItem(self):
         ## PyQt bug -- some items are returned incorrectly.
         return GraphicsScene.translateGraphicsItem(QtGui.QGraphicsObject.parentItem(self))
@@ -275,7 +262,7 @@ class GraphicsItem(object):
     
     def childItems(self):
         ## PyQt bug -- some child items are returned incorrectly.
-        return map(GraphicsScene.translateGraphicsItem, QtGui.QGraphicsObject.childItems(self))
+        return list(map(GraphicsScene.translateGraphicsItem, QtGui.QGraphicsObject.childItems(self)))
 
 
     def sceneTransform(self):
@@ -303,6 +290,57 @@ class GraphicsItem(object):
         return Point(vec).angle(Point(1,0))
         
         
+    #def itemChange(self, change, value):
+        #ret = QtGui.QGraphicsObject.itemChange(self, change, value)
+        #if change == self.ItemParentHasChanged or change == self.ItemSceneHasChanged:
+            #print "Item scene changed:", self
+            #self.setChildScene(self)  ## This is bizarre.
+        #return ret
+
+    #def setChildScene(self, ch):
+        #scene = self.scene()
+        #for ch2 in ch.childItems():
+            #if ch2.scene() is not scene:
+                #print "item", ch2, "has different scene:", ch2.scene(), scene
+                #scene.addItem(ch2)
+                #QtGui.QApplication.processEvents()
+                #print "   --> ", ch2.scene()
+            #self.setChildScene(ch2)
+
+    def _updateView(self):
+        ## called to see whether this item has a new view to connect to
+        ## NOTE: This is called from GraphicsObject.itemChange or GraphicsWidget.itemChange.
+
+        ## It is possible this item has moved to a different ViewBox or widget;
+        ## clear out previously determined references to these.
+        self.forgetViewBox()
+        self.forgetViewWidget()
         
-        
-        
+        ## check for this item's current viewbox or view widget
+        view = self.getViewBox()
+        if view is None:
+            #print "  no view"
+            return
+
+        if self._connectedView is not None and view is self._connectedView():
+            #print "  already have view", view
+            return
+
+        ## disconnect from previous view
+        if self._connectedView is not None:
+            cv = self._connectedView()
+            if cv is not None:
+                #print "disconnect:", self
+                cv.sigRangeChanged.disconnect(self.viewRangeChanged)
+
+        ## connect to new view
+        #print "connect:", self
+        view.sigRangeChanged.connect(self.viewRangeChanged)
+        self._connectedView = weakref.ref(view)
+        self.viewRangeChanged()
+
+    def viewRangeChanged(self):
+        """
+        Called whenever the view coordinates of the ViewBox containing this item have changed.
+        """
+        pass

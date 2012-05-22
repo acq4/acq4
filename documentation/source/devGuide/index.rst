@@ -19,3 +19,4 @@ Contents:
     fileTypes
     analysis
     debugging
+    APIReference/index

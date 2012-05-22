@@ -22,6 +22,27 @@ class AuditoryCortex(Atlas.Atlas):
     def mapToAtlas(self, obj):
             """Maps obj into atlas coordinates."""
             raise Exception("Must be reimplemented in subclass.")
+        
+    def solveBilinearTransform(self, points1, points2):
+        """
+        Find a bilinear transformation matrix (2x4) that maps points1 onto points2
+        points must be specified as a list of 4 Vector, Point, QPointF, etc.
+        
+        To use this matrix to map a point [x,y]::
+        
+            mapped = np.dot(matrix, [x*y, x, y, 1])
+        """
+        ## A is 4 rows (points) x 4 columns (xy, x, y, 1)
+        ## B is 4 rows (points) x 2 columns (x, y)
+        A = np.array([[points1[i].x()*points1[i].y(), points1[i].x(), points1[i].y(), 1] for i in range(4)])
+        B = np.array([[points2[i].x(), points2[i].y()] for i in range(4)])
+        
+        ## solve 2 sets of linear equations to determine transformation matrix elements
+        matrix = np.zeros((2,4))
+        for i in range(2):
+            matrix[i] = scipy.linalg.solve(A, B[:,i])  ## solve Ax = B; x is one row of the desired transformation matrix
+        
+        return matrix    
     
     def getState(self):
         raise Exception("Must be reimplemented in subclass.")
