@@ -2,7 +2,7 @@
 
 import time, types, os.path, re, sys
 from PyQt4 import QtGui, QtCore
-#from CameraTemplate import Ui_MainWindow
+#from CameraTemplate import Ui_Form
 from lib.LogWindow import LogButton
 from StatusBar import StatusBar
 import pyqtgraph as pg
@@ -39,22 +39,33 @@ class CameraWindow(QtGui.QMainWindow):
         self.cw = dockarea.DockArea()
         self.setCentralWidget(self.cw)
         self.gv = pg.GraphicsView()
+        self.gvDock = dockarea.Dock(name="View", widget=self.gv, hideTitle=True)
+        self.cw.addDock(self.gvDock)
+
+        #self.ui = Ui_Form()
+        #self.ctrl = QtGui.QWidget()
+        #self.ui.setupUi(self.ctrl)
         
         ## set up ViewBox
-        #self.ui.graphicsView.useOpenGL(True)  ## a bit buggy, but we need the speed.
         self.view = pg.ViewBox()
         self.view.setAspectLocked(True)
-        #self.view.invertY()
         self.gv.setCentralItem(self.view)
 
 
         man = Manager.getManager()
         camNames = man.listInterfaces('camera')
         self.cameras = []
+        self.cameraDocks = []
         for name in camNames:
-            camera = man.getInterface('camera', name))
-            self.cameras.append(camera.makeCameraModuleInterface())
-            
+            camera = man.getInterface('camera', name)
+            iface = camera.cameraModuleInterface(self)
+            self.cameras.append(iface)
+            dock = dockarea.Dock(name=name, widget=iface.controlWidget())
+            if len(self.cameraDocks) == 0:
+                self.cw.addDock(dock, 'left', self.gvDock)
+            else:
+                self.cw.addDock(dock, 'below', self.cameraDocks[0])
+            self.cameraDocks.append(dock)
         
         
         ## Load previous window state
@@ -76,24 +87,24 @@ class CameraWindow(QtGui.QMainWindow):
         
         ### Set up status bar labels
         self.recLabel = QtGui.QLabel()
-        self.fpsLabel = pg.ValueLabel(averageTime=2.0, formatStr='{avgValue:.1f} fps')
-        self.displayFpsLabel = pg.ValueLabel(averageTime=2.0, formatStr='(displaying {avgValue:.1f} fps')
-        self.displayPercentLabel = pg.ValueLabel(averageTime=4.0, formatStr='{avgValue:.1f}%)')
+        #self.fpsLabel = pg.ValueLabel(averageTime=2.0, formatStr='{avgValue:.1f} fps')
+        #self.displayFpsLabel = pg.ValueLabel(averageTime=2.0, formatStr='(displaying {avgValue:.1f} fps')
+        #self.displayPercentLabel = pg.ValueLabel(averageTime=4.0, formatStr='{avgValue:.1f}%)')
         self.rgnLabel = QtGui.QLabel()
         self.xyLabel = QtGui.QLabel()
         self.tLabel = QtGui.QLabel()
         self.vLabel = QtGui.QLabel()
         
-        self.fpsLabel.setFixedWidth(50)
-        self.displayFpsLabel.setFixedWidth(100)
-        self.displayFpsLabel.setFixedWidth(100)
+        #self.fpsLabel.setFixedWidth(50)
+        #self.displayFpsLabel.setFixedWidth(100)
+        #self.displayFpsLabel.setFixedWidth(100)
         self.vLabel.setFixedWidth(50)
         
         #self.logBtn = LogButton('Log')
         self.setStatusBar(StatusBar())
         font = self.xyLabel.font()
         font.setPointSize(8)
-        labels = [self.recLabel, self.xyLabel, self.rgnLabel, self.tLabel, self.vLabel, self.displayPercentLabel, self.displayFpsLabel, self.fpsLabel]
+        labels = [self.recLabel, self.xyLabel, self.rgnLabel, self.tLabel, self.vLabel]
         for label in labels:
             label.setFont(font)
             self.statusBar().insertPermanentWidget(0, label)
@@ -102,26 +113,26 @@ class CameraWindow(QtGui.QMainWindow):
         self.show()
         self.centerView()
         
+        self.gv.scene().sigMouseMoved.connect(self.updateMouse)
+        
         ## Connect ROI dock
-        self.ui.btnAddROI.clicked.connect(self.addROI)
-        self.ui.btnClearROIs.clicked.connect(self.clearROIs)
-        self.ui.checkEnableROIs.stateChanged.connect(self.enableROIsChanged)
-        self.ui.spinROITime.valueChanged.connect(self.setROITime)
+        #self.ui.btnAddROI.clicked.connect(self.addROI)
+        #self.ui.btnClearROIs.clicked.connect(self.clearROIs)
+        #self.ui.checkEnableROIs.stateChanged.connect(self.enableROIsChanged)
+        #self.ui.spinROITime.valueChanged.connect(self.setROITime)
         
         ## Connect Persistent Frames dock
-        self.ui.addFrameBtn.clicked.connect(self.addPersistentFrame)
-        self.ui.clearFramesBtn.clicked.connect(self.clearPersistentFrames)
+        #self.ui.addFrameBtn.clicked.connect(self.addPersistentFrame)
+        #self.ui.clearFramesBtn.clicked.connect(self.clearPersistentFrames)
 
-
+    def getView(self):
+        return self.view
 
     def centerView(self):
-        
-        #center = self.cam.getPosition(justScope=True)
-        #bounds = self.cam.getBoundary().adjusted(center[0], center[1], center[0], center[1])
-        bounds = self.cam.getBoundary().boundingRect()
-        self.view.setRange(bounds)
-        #self.updateCameraDecorations()
-        
+        pass
+        #bounds = self.cam.getBoundary().boundingRect()
+        #self.view.setRange(bounds)
+        self.view.autoRange()
 
     def addPersistentFrame(self):
         """Make a copy of the current camera frame and store it in the background"""
@@ -196,8 +207,8 @@ class CameraWindow(QtGui.QMainWindow):
     def setROITime(self, val):
         pass
 
-    def showMessage(self, msg):
-        self.statusBar().showMessage(str(msg))
+    def showMessage(self, msg, delay=2000):
+        self.statusBar().showMessage(str(msg), delay)
         
     def closeEvent(self, ev):
         self.quit()
@@ -223,23 +234,23 @@ class CameraWindow(QtGui.QMainWindow):
         self.mouse = pos
         self.xyLabel.setText("X:%0.1fum Y:%0.1fum" % (pos.x() * 1e6, pos.y() * 1e6))
         
-        img = self.imageItem.image
-        if img is None:
-            return
-        pos = self.imageItem.mapFromView(pos)
-        if pos.x() < 0 or pos.y() < 0:
-            z = ""
-        else:
-            try:
-                z = img[int(pos.x()), int(pos.y())]
-                if hasattr(z, 'shape') and len(z.shape) > 0:
-                    z = "Z:(%s, %s, %s)" % (str(z[0]), str(z[1]), str(z[2]))
-                else:
-                    z = "Z:%s" % str(z)
-            except IndexError:
-                z = ""
+        #img = self.imageItem.image
+        #if img is None:
+            #return
+        #pos = self.imageItem.mapFromView(pos)
+        #if pos.x() < 0 or pos.y() < 0:
+            #z = ""
+        #else:
+            #try:
+                #z = img[int(pos.x()), int(pos.y())]
+                #if hasattr(z, 'shape') and len(z.shape) > 0:
+                    #z = "Z:(%s, %s, %s)" % (str(z[0]), str(z[1]), str(z[2]))
+                #else:
+                    #z = "Z:%s" % str(z)
+            #except IndexError:
+                #z = ""
         
-        self.vLabel.setText(z)
+        #self.vLabel.setText(z)
     
 
     def addPlotFrame(self, frame):

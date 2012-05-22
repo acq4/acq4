@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>203</width>
+    <width>220</width>
     <height>791</height>
    </rect>
   </property>
@@ -32,20 +32,27 @@
       <property name="spacing">
        <number>0</number>
       </property>
-      <item row="0" column="0">
-       <widget class="QLabel" name="label_2">
+      <item row="2" column="0" colspan="2">
+       <widget class="QPushButton" name="btnFullFrame">
+        <property name="toolTip">
+         <string>Set the region of interest to the maximum possible area.</string>
+        </property>
         <property name="text">
-         <string>Binning</string>
+         <string>Full Frame</string>
         </property>
        </widget>
-      </item>
-      <item row="0" column="1">
-       <widget class="QComboBox" name="binningCombo"/>
       </item>
       <item row="1" column="0">
        <widget class="QLabel" name="label_3">
         <property name="text">
          <string>Exposure</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_2">
+        <property name="text">
+         <string>Binning</string>
         </property>
        </widget>
       </item>
@@ -62,15 +69,8 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0" colspan="2">
-       <widget class="QPushButton" name="btnFullFrame">
-        <property name="toolTip">
-         <string>Set the region of interest to the maximum possible area.</string>
-        </property>
-        <property name="text">
-         <string>Full Frame</string>
-        </property>
-       </widget>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="binningCombo"/>
       </item>
      </layout>
     </widget>
@@ -113,7 +113,7 @@ possible intensity given the bit depth of the camera.</string>
       <item row="2" column="0">
        <widget class="QLabel" name="label_6">
         <property name="text">
-         <string>Slow</string>
+         <string>Auto Gain Delay</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -136,7 +136,7 @@ indicate more smoothing.
       <item row="3" column="0">
        <widget class="QLabel" name="label_8">
         <property name="text">
-         <string>Center Weight</string>
+         <string>Frame Center Weight</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -277,15 +277,6 @@ Either a set of static background frames need to have already by collected
        </widget>
       </item>
      </layout>
-     <zorder>collectBgBtn</zorder>
-     <zorder>collectBgBtn</zorder>
-     <zorder>label_4</zorder>
-     <zorder>bgTimeSpin</zorder>
-     <zorder>contAvgBgCheck</zorder>
-     <zorder>label_5</zorder>
-     <zorder>bgBlurSpin</zorder>
-     <zorder>subtractBgBtn</zorder>
-     <zorder>divideBgBtn</zorder>
     </widget>
    </item>
    <item row="0" column="0">
@@ -300,14 +291,7 @@ Either a set of static background frames need to have already by collected
       <property name="spacing">
        <number>0</number>
       </property>
-      <item row="6" column="0">
-       <widget class="QCheckBox" name="recordXframesCheck">
-        <property name="text">
-         <string>Stack Limit</string>
-        </property>
-       </widget>
-      </item>
-      <item row="6" column="1">
+      <item row="7" column="1" colspan="2">
        <widget class="QSpinBox" name="recordXframesSpin">
         <property name="enabled">
          <bool>true</bool>
@@ -326,7 +310,35 @@ Either a set of static background frames need to have already by collected
         </property>
        </widget>
       </item>
+      <item row="9" column="0">
+       <widget class="QLabel" name="label_7">
+        <property name="text">
+         <string>Displaying:</string>
+        </property>
+       </widget>
+      </item>
       <item row="0" column="0">
+       <widget class="QPushButton" name="btnAcquire">
+        <property name="toolTip">
+         <string>Start/stop camera acquisition.
+In general, this can just stay on always.</string>
+        </property>
+        <property name="text">
+         <string>Start Video</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="0">
+       <widget class="QCheckBox" name="recordXframesCheck">
+        <property name="text">
+         <string>Stack Limit</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
        <widget class="FeedbackButton" name="btnSnap">
         <property name="toolTip">
          <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
@@ -342,28 +354,7 @@ p, li { white-space: pre-wrap; }
         </property>
        </widget>
       </item>
-      <item row="3" column="0">
-       <widget class="QPushButton" name="btnAcquire">
-        <property name="toolTip">
-         <string>Start/stop camera acquisition.
-In general, this can just stay on always.</string>
-        </property>
-        <property name="text">
-         <string>Start Video</string>
-        </property>
-        <property name="checkable">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="1">
-       <widget class="QPushButton" name="pushButton">
-        <property name="text">
-         <string>Record Frame</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="1">
+      <item row="0" column="1" colspan="2">
        <widget class="QPushButton" name="btnRecord">
         <property name="toolTip">
          <string>Start/stop recording frames as they are acquired. 
@@ -378,6 +369,41 @@ the data manager window.</string>
         </property>
         <property name="flat">
          <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="0">
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Acquiring:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="1">
+       <widget class="ValueLabel" name="displayFpsLabel">
+        <property name="text">
+         <string>0 fps</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1" colspan="2">
+       <widget class="QPushButton" name="pushButton">
+        <property name="text">
+         <string>Record Frame</string>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="2">
+       <widget class="ValueLabel" name="displayPercentLabel">
+        <property name="text">
+         <string>(0%)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="1" colspan="2">
+       <widget class="ValueLabel" name="fpsLabel">
+        <property name="text">
+         <string>0 fps</string>
         </property>
        </widget>
       </item>
@@ -400,6 +426,11 @@ the data manager window.</string>
   <customwidget>
    <class>HistogramLUTWidget</class>
    <extends>QGraphicsView</extends>
+   <header>pyqtgraph</header>
+  </customwidget>
+  <customwidget>
+   <class>ValueLabel</class>
+   <extends>QLabel</extends>
    <header>pyqtgraph</header>
   </customwidget>
  </customwidgets>

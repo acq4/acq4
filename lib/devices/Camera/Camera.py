@@ -16,6 +16,8 @@ from Mutex import Mutex
 from debug import *
 from pyqtgraph import Vector, Transform3D
 
+from CameraInterface import CameraInterface
+
 class Camera(DAQGeneric, RigidDevice):
     """Generic camera device class. All cameras should extend from this interface.
      - The class handles protocol tasks, scope integration, expose/trigger lines
@@ -299,6 +301,9 @@ class Camera(DAQGeneric, RigidDevice):
 
     def deviceInterface(self, win):
         return CameraDeviceGui(self, win)
+
+    def cameraModuleInterface(self, mod):
+        return CameraInterface(self, mod)
     
     ### Scope interface functions below
 

@@ -6,6 +6,7 @@ import debug
 from metaarray import MetaArray
 import numpy as np
 import ptime
+import lib.Manager
 
 class RecordThread(QtCore.QThread):
     """
@@ -15,10 +16,10 @@ class RecordThread(QtCore.QThread):
     sigRecordingFailed = QtCore.Signal()
     sigRecordingFinished = QtCore.Signal()
     
-    def __init__(self, ui, manager):
+    def __init__(self, ui):
         QtCore.QThread.__init__(self)
         self.ui = ui
-        self.m = manager
+        self.m = lib.Manager.getManager()
         self.ui.cam.sigNewFrame.connect(self.newCamFrame)
         
         ui.ui.btnRecord.toggled.connect(self.toggleRecord)

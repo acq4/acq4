@@ -7,7 +7,7 @@ class Dock(QtGui.QWidget, DockDrop):
     
     sigStretchChanged = QtCore.Signal()
     
-    def __init__(self, name, area=None, size=(10, 10)):
+    def __init__(self, name, area=None, size=(10, 10), widget=None, hideTitle=False):
         QtGui.QWidget.__init__(self)
         DockDrop.__init__(self)
         self.area = area
@@ -63,6 +63,12 @@ class Dock(QtGui.QWidget, DockDrop):
         self.widgetArea.setStyleSheet(self.hStyle)
         
         self.setStretch(*size)
+        
+        if widget is not None:
+            self.addWidget(widget)
+
+        if hideTitle:
+            self.hideTitleBar()
 
     def setStretch(self, x=None, y=None):
         #print "setStretch", self, x, y
