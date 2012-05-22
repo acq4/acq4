@@ -81,6 +81,7 @@ class ROI(GraphicsObject):
         self.rotateSnap = rotateSnap
         self.scaleSnap = scaleSnap
         #self.setFlag(self.ItemIsSelectable, True)
+        self.preMoveState = self.getState()
     
     def getState(self):
         return self.stateCopy()
@@ -875,7 +876,8 @@ class ROI(GraphicsObject):
         #return arr5.transpose(tr2)
 
     def getGlobalTransform(self, relativeTo=None):
-        """Return global transformation (rotation angle+translation) required to move from relative state to current state. If relative state isn't specified,
+        """Return global transformation (rotation angle+translation) required to move 
+        from relative state to current state. If relative state isn't specified,
         then we use the state of the ROI when mouse is pressed."""
         if relativeTo == None:
             relativeTo = self.preMoveState
@@ -948,10 +950,13 @@ class Handle(UIGraphicsItem):
         self.sides, self.startAng = self.types[typ]
         self.buildPath()
         self._shape = None
-        self.deletable = deletable
         self.menu = self.buildMenu()
         
         UIGraphicsItem.__init__(self, parent=parent)
+        self.setAcceptedMouseButtons(QtCore.Qt.NoButton)
+        self.deletable = deletable
+        if deletable:
+            self.setAcceptedMouseButtons(QtCore.Qt.RightButton)        
         #self.updateShape()
         self.setZValue(11)
             
@@ -969,33 +974,56 @@ class Handle(UIGraphicsItem):
             
     def setDeletable(self, b):
         self.deletable = b
-    
+        if b:
+            self.setAcceptedMouseButtons(self.acceptedMouseButtons() | QtCore.Qt.RightButton)
+        else:
+            self.setAcceptedMouseButtons(self.acceptedMouseButtons() & ~QtCore.Qt.RightButton)
     #def boundingRect(self):
         #return self.bounds
 
     def hoverEvent(self, ev):
-        if (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
+        hover = False
+        if not ev.isExit():
+            if ev.acceptDrags(QtCore.Qt.LeftButton):
+                hover=True
+            for btn in [QtCore.Qt.LeftButton, QtCore.Qt.RightButton, QtCore.Qt.MidButton]:
+                if int(self.acceptedMouseButtons() & btn) > 0 and ev.acceptClicks(btn):
+                    hover=True
+                    
+        if hover:
             self.currentPen = fn.mkPen(255, 255,0)
         else:
             self.currentPen = self.pen
         self.update()
+        #if (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
+            #self.currentPen = fn.mkPen(255, 255,0)
+        #else:
+            #self.currentPen = self.pen
+        #self.update()
             
 
 
     def mouseClickEvent(self, ev):
         ## right-click cancels drag
-        if ev.button() == QtCore.Qt.RightButton:
-            if self.isMoving:
-                self.isMoving = False  ## prevents any further motion
-                self.movePoint(self.startPos, finish=True)
-                #for r in self.roi:
-                    #r[0].cancelMove()
-                ev.accept()
-            elif self.deletable:
-                ev.accept()
+        if ev.button() == QtCore.Qt.RightButton and self.isMoving:
+            self.isMoving = False  ## prevents any further motion
+            self.movePoint(self.startPos, finish=True)
+            #for r in self.roi:
+                #r[0].cancelMove()
+            ev.accept()
+        elif int(ev.button() & self.acceptedMouseButtons()) > 0:
+            ev.accept()
+            if ev.button() == QtCore.Qt.RightButton and self.deletable:
                 self.raiseContextMenu(ev)
-            else:
-                ev.ignore()
+            self.sigClicked.emit(self, ev)
+        else:
+            ev.ignore()        
+            
+            #elif self.deletable:
+                #ev.accept()
+                #self.raiseContextMenu(ev)
+            #else:
+                #ev.ignore()
                 
     def buildMenu(self):
         menu = QtGui.QMenu()
@@ -1105,6 +1133,12 @@ class Handle(UIGraphicsItem):
         return self._shape
     
     def boundingRect(self):
+        #print 'roi:', self.roi
+        s1 = self.shape()
+        #print "   s1:", s1
+        #s2 = self.shape()
+        #print "   s2:", s2
+        
         return self.shape().boundingRect()
             
     def generateShape(self):
@@ -1359,11 +1393,11 @@ class PolygonROI(ROI):
 class PolyLineROI(ROI):
     """Container class for multiple connected LineSegmentROIs. Responsible for adding new 
     line segments, and for translation/(rotation?) of multiple lines together."""
-    def __init__(self, positions, closed=False, pos=None, **args):
+    def __init__(self, positions, size=[1,1], closed=False, pos=None, **args):
         if pos is None:
             pos = [0,0]
         pen=args.get('pen', fn.mkPen((100,100,255)))
-        ROI.__init__(self, pos, [1,1], **args)
+        ROI.__init__(self, pos, size, **args)
         
         self.segments = []
         
@@ -1390,7 +1424,8 @@ class PolyLineROI(ROI):
         for s in self.segments:
             self.setSegmentSettings(s)
             
-            
+    def movePoint(self, *args, **kargs):
+        pass
     #def segmentChanged(self, obj):
         #pass
     def setSegmentSettings(self, s):
@@ -1399,6 +1434,7 @@ class PolyLineROI(ROI):
         s.setAcceptedMouseButtons(QtCore.Qt.LeftButton)
         for h in s.handles:
             h['item'].setDeletable(True)
+            h['item'].setAcceptedMouseButtons(h['item'].acceptedMouseButtons() | QtCore.Qt.LeftButton) ## have these handles take left clicks too, so that handles cannot be added on top of other handles
         
     def setMouseHover(self, hover):
         ## Inform all the ROI's segments that the mouse is(not) hovering over it
@@ -1408,8 +1444,13 @@ class PolyLineROI(ROI):
         for s in self.segments:
             s.setMouseHover(hover)
             
-    def newHandleRequested(self, segment, ev): 
-        pos = segment.mapToParent(ev.pos())
+    def newHandleRequested(self, segment, ev=None, pos=None): ## pos should be in this item's coordinate system
+        if ev != None:
+            pos = segment.mapToParent(ev.pos())
+        elif pos != None:
+            pos = pos
+        else:
+            raise Exception("Either an event or a position must be given.")
         h1 = segment.handles[0]
         h2 = segment.handles[1]
         
@@ -1488,7 +1529,7 @@ class LineSegmentROI(ROI):
         self.setZValue(1000)
         self.parentROI = None
         self.hasParentROI = False
-        self.acceptsHandles = acceptsHandles
+        self.setAcceptsHandles(acceptsHandles)
         
     def setParentROI(self, parent):
         self.parentROI = parent
@@ -1496,6 +1537,12 @@ class LineSegmentROI(ROI):
             self.hasParentROI = True
         else:
             self.hasParentROI = False
+            
+    def setAcceptsHandles(self, b):
+        if b:
+            self.setAcceptedMouseButtons(QtCore.Qt.LeftButton)
+        else:
+            self.setAcceptedMouseButtons(QtCore.Qt.NoButton)
             
     def close(self):
         #for h in self.handles:
@@ -1530,8 +1577,8 @@ class LineSegmentROI(ROI):
     def newHandleRequested(self, evPos):
         #print "newHandleRequested"
         
-        if evPos - self.handles[0].pos() == Point(0.,0.) or evPos-handles[1].pos() == Point(0.,0.):
-            return
+        #if evPos - self.handles[0].pos() == Point(0.,0.) or evPos-handles[1].pos() == Point(0.,0.):
+        #    return
         self.parentROI.newHandleRequested(self, self.mapToParent(evPos)) ## so now evPos should be passed in in the parents coordinate system
         
     def listPoints(self):
