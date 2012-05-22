@@ -7,8 +7,54 @@ import lib.analysis.atlas.Atlas as Atlas
 import os
 from PyQt4 import QtCore, QtGui
 import DataManager
+from lib.analysis.atlas.AuditoryCortex.CortexROI import CortexROI
+
+
 
 class AuditoryCortex(Atlas.Atlas):
+    
+    DBIdentity = "AuditoryCortexAtlas" ## owner key used for asking DB which tables are safe to use
+    
+    def __init__(self, state=None):
+        Atlas.Atlas.__init__(self, state)
+        #self.setState(state)        
+
+    def mapToAtlas(self, obj):
+            """Maps obj into atlas coordinates."""
+            raise Exception("Must be reimplemented in subclass.")
+    
+    def getState(self):
+        raise Exception("Must be reimplemented in subclass.")
+
+    def setState(self, state):
+        raise Exception("Must be reimplemented in subclass.")
+
+    def restoreState(self, state):
+        raise Exception("Must be reimplemented in subclass.")
+        
+    def name(self):
+        return "AuditoryCortexAtlas"
+        
+    def ctrlWidget(self, host):
+        return A1AtlasCtrlWidget(self, host)
+    
+    
+class A1AtlasCtrlWidget(Atlas.AtlasCtrlWidget):
+    
+    def __init__(self, atlas, host):
+        Atlas.AtlasCtrlWidget.__init__(self, atlas, host)
+        
+        self.atlasDir = os.path.split(os.path.abspath(__file__))[0]
+        
+        ## add ThalamocorticalMarker to canvas
+        fh = DataManager.getHandle(os.path.join(self.atlasDir, 'images', 'ThalamocorticalMarker.svg'))
+        self.canvas.addFile(fh, pos=(-0.001283, -0.000205), scale=[3.78e-6, 3.78e-6], index=0, movable=False, z=10000)        
+     
+        ## add CortexROI
+        self.roi = CortexROI([-1e-3, 0])
+        self.canvas.addGraphicsItem(self.roi, pos=(-1e-3, 1e-3), scale=[1e-3, 1e-3], name='CortexROI', movable=False)
+        
+class PreviousAuditoryCortex(Atlas.Atlas):
     def __init__(self, canvas=None, state=None):
         ## define slice planes and the atlas images to use for each
         scale = 3.78e-6
