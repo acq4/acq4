@@ -13,7 +13,7 @@ Widget used for displaying 2D or 3D data. Features:
   - Image normalization through a variety of methods
 """
 
-from ImageViewTemplate import *
+from .ImageViewTemplate import *
 from pyqtgraph.graphicsItems.ImageItem import *
 from pyqtgraph.graphicsItems.ROI import *
 from pyqtgraph.graphicsItems.LinearRegionItem import *
@@ -28,6 +28,13 @@ import numpy as np
 import pyqtgraph.debug as debug
 
 from pyqtgraph.SignalProxy import SignalProxy
+
+try:
+    import pyqtgraph.metaarray as metaarray
+    HAVE_METAARRAY = True
+except:
+    HAVE_METAARRAY = False
+    
 
 class PlotROI(ROI):
     def __init__(self, size):
@@ -188,6 +195,9 @@ class ImageView(QtGui.QWidget):
         """
         prof = debug.Profiler('ImageView.setImage', disabled=True)
         
+        if HAVE_METAARRAY and isinstance(img, metaarray.MetaArray):
+            img = img.asarray()
+        
         if not isinstance(img, np.ndarray):
             raise Exception("Image must be specified as ndarray.")
         self.image = img
@@ -322,7 +332,7 @@ class ImageView(QtGui.QWidget):
         if self.imageDisp is None:
             image = self.normalize(self.image)
             self.imageDisp = image
-            self.levelMin, self.levelMax = map(float, ImageView.quickMinMax(self.imageDisp))
+            self.levelMin, self.levelMax = list(map(float, ImageView.quickMinMax(self.imageDisp)))
             self.ui.histogram.setHistogramRange(self.levelMin, self.levelMax)
             
         return self.imageDisp
@@ -383,7 +393,7 @@ class ImageView(QtGui.QWidget):
         
     def evalKeyState(self):
         if len(self.keysPressed) == 1:
-            key = self.keysPressed.keys()[0]
+            key = list(self.keysPressed.keys())[0]
             if key == QtCore.Qt.Key_Right:
                 self.play(20)
                 self.jumpFrames(1)
@@ -526,7 +536,7 @@ class ImageView(QtGui.QWidget):
             if image.ndim == 3:
                 self.roiCurve.setData(y=data, x=self.tVals)
             else:
-                self.roiCurve.setData(y=data, x=range(len(data)))
+                self.roiCurve.setData(y=data, x=list(range(len(data))))
                 
             #self.ui.roiPlot.replot()
 
