@@ -116,7 +116,8 @@ class MetaArray(object):
   
     def __init__(self, data=None, info=None, dtype=None, file=None, copy=False, **kwargs):
         object.__init__(self)
-        self._infoOwned = False
+        #self._infoOwned = False
+        self._isHDF = False
         
         if file is not None:
             self._data = None
@@ -258,7 +259,7 @@ class MetaArray(object):
                     #a._info[-1][newInfo['name']] = newInfo
         info.append(extraInfo)
         
-        self._infoOwned = False
+        #self._infoOwned = False
         #while None in a._info:
             #a._info.remove(None)
         return MetaArray(a, info=info)
@@ -661,7 +662,10 @@ class MetaArray(object):
         order = order + list(range(len(order), self.ndim))
         
         try:
-            return MetaArray(self._data.transpose(order), info=info)
+            if self._isHDF:
+                return MetaArray(np.array(self._data).transpose(order), info=info)
+            else:
+                return MetaArray(self._data.transpose(order), info=info)
         except:
             print(order)
             raise
@@ -675,6 +679,7 @@ class MetaArray(object):
         if magic == '\x89HDF\r\n\x1a\n':
             fd.close()
             self._readHDF5(filename, **kwargs)
+            self._isHDF = True
         else:
             fd.seek(0)
             meta = MetaArray._readMeta(fd)
@@ -687,6 +692,7 @@ class MetaArray(object):
                 raise Exception("This MetaArray library does not support array version '%s'" % ver)
             rFunc = getattr(self, rFuncName)
             rFunc(fd, meta, **kwargs)
+            self._isHDF = False
 
     @staticmethod
     def _readMeta(fd):
