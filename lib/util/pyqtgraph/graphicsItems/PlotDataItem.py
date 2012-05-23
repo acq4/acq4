@@ -514,7 +514,7 @@ def dataType(obj):
         
         
 def isSequence(obj):
-    return isinstance(obj, list) or isinstance(obj, np.ndarray)
+    return isinstance(obj, list) or isinstance(obj, np.ndarray) or (HAVE_METAARRAY and isinstance(obj, metaarray.MetaArray))
     
             
             
