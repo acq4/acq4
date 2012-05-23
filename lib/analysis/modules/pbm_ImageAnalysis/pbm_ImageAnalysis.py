@@ -42,7 +42,9 @@ from lib.analysis.tools import Fitting
 from lib.analysis.tools import PlotHelpers as PH # matlab plotting helpers
 from lib.util import functions as FN
 
-# import ImageP # avaialable as part of the STXMPy package
+from lib.analysis.tools import ImageP # avaialable as part of the STXMPy package
+# at http://www.rzuser.uni-heidelberg.de/~ge6/Programing/STXMPy.html
+# https://launchpad.net/imagep  
 
 
 #import smc as SMC # Vogelstein's OOPSI analysis for calcium transients
@@ -150,6 +152,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrl.ImagePhys_SaveROI.clicked.connect(self.saveROI)
         self.ctrl.ImagePhys_CorrTool_BL1.clicked.connect(self.Baseline1)
         self.ctrl.ImagePhys_CorrTool_HPF.clicked.connect(self.BaselineHPF)
+        self.ctrl.ImagePhys_RegisterStack.clicked.connect(self.RegisterStack)
  #       self.ctrl.ImagePhys_CorrTool_:PF.clicked.connect(self.SignalLPF)
         self.ctrl.ImagePhys_ExportTiff.clicked.connect(self.ExportTiff)
         
@@ -447,30 +450,37 @@ class pbm_ImageAnalysis(AnalysisModule):
         px[1] = pixelsize[1] * sf
         sx = sx*px[0]
         sy = sy*px[1]
-        print "sx, sy, px", sx, sy, px
+        #print "sx, sy, px", sx, sy, px
         return(sx, sy, px)
 
     def getfileSize(self, fileName, msg=False):
         """ Measure the dimensions of an image MetaArray file."""
-        try:
-            im = MetaArray(file = fileName, subset=(slice(None), slice(0,1), slice(0,1)))
-            info = im.infoCopy()
-            sh = im.shape
-            nframes = sh[0]
-            im = MetaArray(file = fileName, subset=(slice(0,1), slice(None), slice(None)))
-            sh = im.shape
-            xdim = sh[1]
-            ydim = sh[2]
-            if msg:
-                print "File %s has %d frames, of %d x %d pixels" % (fileName,nframes, xdim, ydim)
-                return((nframes, xdim, ydim), info)
-        except:
-            return((),[])
+   # try:
+        print '0'
+        print fileName
+        im = MetaArray(file = fileName, subset=(slice(None), slice(0,1), slice(0,1)))
+        print '1'
+        info = im.infoCopy()
+        print '2'
+        sh = im.shape
+        nframes = sh[0]
+        print '3'
+        im = MetaArray(file = fileName, subset=(slice(0,1), slice(None), slice(None)))
+        sh = im.shape
+        print '4'
+        xdim = sh[1]
+        ydim = sh[2]
+        if msg:
+            print "File %s has %d frames, of %d x %d pixels" % (fileName,nframes, xdim, ydim)
+            return((nframes, xdim, ydim), info)
+   # except:
+   #     return((),[])
 
     def tryDownSample(self, dh):
         print "Trying downsampling file at %d" % (self.downSample)
         (sh, info) = self.getfileSize(dh.name(), msg=True) # get the file length
         block_size = self.downSample*100
+        print sh
         totframes = int(sh[0]/self.downSample)
         block_loop = int(sh[0]/block_size)
         leftover = sh[0] - block_loop*block_size
@@ -943,8 +953,8 @@ class pbm_ImageAnalysis(AnalysisModule):
         (sx, sy, px) = self.getImageScaling()
         maxStr = numpy.nanmax(self.IXC_Strength)
         minStr = numpy.nanmin(self.IXC_Strength)
-        maxline = 4096.0
-        minline = 0.25
+        maxline = 4.0
+        minline = 0.20
         threshold = self.ctrlImageFunc.IAFuncs_XCorrThreshold.value()
         nd = len(self.AllRois)
         print px
@@ -960,7 +970,7 @@ class pbm_ImageAnalysis(AnalysisModule):
                 y2 = (wpos2[1]+0.5*wpos2[3])*px[1]
                 if self.IXC_Strength[i,j] < threshold:
                     self.MPL_plots.plot([x1, x2], [y1, y2], 
-                    linestyle = '', color='tomato', marker='o')
+                    linestyle = '--', color='grey', marker='o', linewidth=minline)
                 else:
                     lw = maxline*(self.IXC_Strength[i,j]-threshold)/(maxStr-threshold)+minline
                     if lw < 0:
@@ -1357,7 +1367,7 @@ class pbm_ImageAnalysis(AnalysisModule):
     #     return numpy.atleast_2d(outstack)
     # #end of AlignStack
 
-    def RegisterStack(self, imgstack, imgi, thresh = 0.0,
+    def RegisterStack(self, imgstack = None, imgi = None, thresh = 0.0,
             invert=True, cut=True, ROI=None, verbose = False):
         """ Align a stack to one of its images using recursiveRegisterImages
             from util/functions.py
@@ -1377,7 +1387,12 @@ class pbm_ImageAnalysis(AnalysisModule):
             Return:
             a list of the aligned images
         """
-    
+
+        if imgstack is None or imgstack is False:
+            imgstack = self.imageData
+
+        if imgi == None:
+            imgi = 0 # use first image as reference
         N = len(imgstack)
         (newWin1, view1, imgwin1) = self.newpgImageWindow(title = 'original')
         for img in imgstack:
@@ -1436,19 +1451,28 @@ class pbm_ImageAnalysis(AnalysisModule):
         #     imgwin1.updateImage()
         #     imgwin2.updateImage()
         #             
-        for img, imgN in imgstack:
+        imgN = 0
+      #  print imgstack.shape
+        for img in imgstack:
             x = 0
             y = 0
             if imgN != imgi:
                 if invert is True:
-                    img = img.max() - img
-                c = FN.recursiveRegisterImages(img, imgstack[imgi], maxDist=10)
-                print 'C: ' , c
-            continue
+                #invert the image as well (a is already inverted):
+                    c = ImageP.ConvFilter(a > thresh, img.max() - img)
+                else:
+                    c = ImageP.ConvFilter(a > thresh, img)
+                #end if                if invert is True:
+                 #   img = img.max() - img
+                
+                #c = FN.recursiveRegisterImages(img, imgstack[imgi], maxDist=10)
+               # print 'C: ' , c
+            imgN = imgN + 1
+           # continue
             img2 = ImageP.shift(img, x, y)
            # print img2[0:10,0:10]
         #    print img[0:10,0:10]
-            print 'shift: x %d y %d' % (x, y)
+         #   print 'shift: x %d y %d' % (x, y)
          #   print 'img2: ', img2.shape
          #   print 'img:  ', img.shape
             outstack.append(img2)
@@ -1470,7 +1494,9 @@ class pbm_ImageAnalysis(AnalysisModule):
             print "Common boundaries:",i0,i1,j0,j1
     
             #cut the list elements:
+          #  print i0, i1, j0, j1
             for i in xrange(N):
+            #    print outstack[i].shape
                 outstack[i] = outstack[i][i0:i1,j0:j1]
     
         return numpy.atleast_2d(outstack)
@@ -1878,8 +1904,17 @@ class pbm_ImageAnalysis(AnalysisModule):
         if self.nROI > 8:
             gridFlag = False
         if not self.use_MPL:
-            self.newWindow = pyqtgrwindow(title = 'Analog_Xcorr_Individual')
-            self.pgwin = pg.GraphicsLayoutWidget()
+            try:
+                del(self.pgwin)
+                self.pgwin = pg.GraphicsLayoutWidget()
+            except:
+                self.pgwin = pg.GraphicsLayoutWidget()
+            try:
+                del(self.newWindow) # try to destroy the window object
+                self.newWindow = pyqtgrwindow(title = 'Analog_Xcorr_Individual')
+                
+            except:
+                self.newWindow = pyqtgrwindow(title = 'Analog_Xcorr_Individual')
             self.newWindow.setCentralWidget(self.pgwin)
             self.newWindow.show()
         else:
@@ -1912,7 +1947,7 @@ class pbm_ImageAnalysis(AnalysisModule):
                 #MPlots.PlotLine(self.IXC_plots[xtrace], self.lags, self.IXC_corr[xtrace],
                 #                color = 'k', dataID = ('Xcorr_%d_%d' % (xtrace1, xtrace2)))
                 if plottype == 'traces':
-                    if not self.use_MPL:
+                    if not self.use_MPL: # pyqtgraph
                         self.IXC_plots[xtrace] = self.pgwin.addPlot(xtrace1, xtrace2)
                         self.IXC_plots[xtrace].plot(self.lags, self.IXC_corr[xtrace])
                         if xtrace == 0:
@@ -1925,12 +1960,15 @@ class pbm_ImageAnalysis(AnalysisModule):
                         plx.hold = True
                         plx.plot(self.lags,numpy.zeros(self.lags.shape), color = '0.5')
                         plx.plot([0,0], [-0.5, 1.0], color = '0.5')
-                        plx.set_title('ROIs: %d, %d' % (xtrace1, xtrace2), fontsize=10)
-                        plx.set_xlabel('T (sec)', fontsize=10)
-                        plx.set_ylabel('Corr (R)', fontsize=10)
+                        if xtrace1 == 0:
+                            plx.set_title('ROI: %d' % (xtrace2), fontsize=8)
+                            #plx.set_xlabel('T (sec)', fontsize=10)
+                        #if xtrace2 == 0:
+                            #plx.set_ylabel('Corr (R)', fontsize=10)
                         PH.cleanAxes(plx) 
                         
                 xtrace = xtrace + 1
+        
         # now rescale all the plot Y axes by getting the min/max "viewRange" across all, then setting them all the same
 
         if not self.use_MPL and plottype == 'traces':
@@ -1960,8 +1998,10 @@ class pbm_ImageAnalysis(AnalysisModule):
             for xtrace1 in range(0, nROI-1):
                 for xtrace2 in range(0, xtrace1):
                     plx = self.IXC_plots[xtrace1-1, xtrace2]
-                    plx.set_xlabel('T (sec)', fontsize=10)
-                    plx.set_ylabel('Corr (R)', fontsize=10)
+                    if xtrace1 == nROI-1:
+                        plx.set_xlabel('T (sec)', fontsize=10)
+                    if xtrace2 == 0:
+                        plx.set_ylabel('R (%d)' % xtrace1, fontsize=10)
                     PH.cleanAxes(self.IXC_plots[xtrace1, xtrace2])
             PL.show()
         elif plottype == 'image':
