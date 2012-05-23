@@ -2112,7 +2112,8 @@ def expDeconvolve(data, tau):
     dt = 1
     if isinstance(data, MetaArray):
         dt = data.xvals(0)[1] - data.xvals(0)[0]
-    d = data[:-1] + (tau / dt) * (data[1:] - data[:-1])
+    arr = data.view(np.ndarray)
+    d = arr[:-1] + (tau / dt) * (arr[1:] - arr[:-1])
     if isinstance(data, MetaArray):
         info = data.infoCopy()
         if 'values' in info[0]:

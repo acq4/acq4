@@ -204,9 +204,11 @@ class MetaArray(object):
         
         #a = np.ndarray.__getitem__(self, nInd)
         a = self._data[nInd]
-        
-        if type(a) != type(self._data):  ## indexing returned single value
-            return a
+        if len(nInd) == self.ndim:
+            if np.all([not isinstance(ind, slice) for ind in nInd]):  ## no slices; we have requested a single value from the array
+                return a
+        #if type(a) != type(self._data) and not isinstance(a, np.ndarray):  ## indexing returned single value
+            #return a
         
         ## indexing returned a sub-array; generate new info array to go with it
         #print "   new MA:", type(a), a.shape
