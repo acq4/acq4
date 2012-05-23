@@ -827,7 +827,7 @@ class MetaArray(object):
         #raise Exception()  ## stress-testing
         #return subarr
 
-    def _readHDF5(self, fileName, mmap=False, writable=False):
+    def _readHDF5(self, fileName, close=False, writable=False):
         if not HAVE_HDF5:
             raise Exception("The file '%s' is HDF5-formatted, but the HDF5 library (h5py) was not found." % fileName)
         f = h5py.File(fileName, 'r')
@@ -837,13 +837,12 @@ class MetaArray(object):
         meta = MetaArray.readHDF5Meta(f['info'])
         self._info = meta
         
-        if mmap:
-            #arr = MetaArray.mapHDF5Array(f['data'], writable=writable)
-            self._data = f['data']
-            self._openFile = f
-        else:
+        if close:
             self._data = f['data'][:]
             f.close()
+        else:
+            self._data = f['data']
+            self._openFile = f
         #meta = H5MetaList(f['info'])
         #subarr = arr.view(subtype)
         #subarr._info = meta
