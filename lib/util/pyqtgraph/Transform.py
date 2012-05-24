@@ -12,7 +12,9 @@ class Transform(QtGui.QTransform):
         QtGui.QTransform.__init__(self)
         self.reset()
         
-        if isinstance(init, dict):
+        if init is None:
+            return
+        elif isinstance(init, dict):
             self.restoreState(init)
         elif isinstance(init, Transform):
             self._state = {
