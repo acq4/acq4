@@ -1,8 +1,8 @@
 from pyqtgraph.Qt import QtGui, QtCore
 from pyqtgraph.Point import Point
 import pyqtgraph.functions as fn
-from GraphicsItem import GraphicsItem
-from GraphicsObject import GraphicsObject
+from .GraphicsItem import GraphicsItem
+from .GraphicsObject import GraphicsObject
 import numpy as np
 import scipy.stats
 import weakref
@@ -26,7 +26,7 @@ coords = {
         (0.05, -0.05), (0.05, -0.5), (-0.05, -0.5), (-0.05, -0.05)
     ],
 }
-for k, c in coords.iteritems():
+for k, c in coords.items():
     Symbols[k].moveTo(*c[0])
     for x,y in c[1:]:
         Symbols[k].lineTo(x, y)
@@ -35,11 +35,12 @@ for k, c in coords.iteritems():
 
 def makeSymbolPixmap(size, pen, brush, symbol):
     ## Render a spot with the given parameters to a pixmap
-    image = QtGui.QImage(size+2, size+2, QtGui.QImage.Format_ARGB32_Premultiplied)
+    penPxWidth = max(np.ceil(pen.width()), 1)
+    image = QtGui.QImage(size+penPxWidth, size+penPxWidth, QtGui.QImage.Format_ARGB32_Premultiplied)
     image.fill(0)
     p = QtGui.QPainter(image)
     p.setRenderHint(p.Antialiasing)
-    p.translate(size*0.5+1, size*0.5+1)
+    p.translate(image.width()*0.5, image.height()*0.5)
     p.scale(size, size)
     p.setPen(pen)
     p.setBrush(brush)
@@ -79,19 +80,16 @@ class ScatterPlotItem(GraphicsObject):
         GraphicsObject.__init__(self)
         self.setFlag(self.ItemHasNoContents, True)
         self.data = np.empty(0, dtype=[('x', float), ('y', float), ('size', float), ('symbol', 'S1'), ('pen', object), ('brush', object), ('item', object), ('data', object)])
-        #self.spots = []
-        #self.fragments = None
-        self.bounds = [None, None]
-        self.opts = {'pxMode': True}
-        #self.spotsValid = False
-        #self.itemsValid = False
+        self.bounds = [None, None]  ## caches data bounds
+        self._maxSpotWidth = 0      ## maximum size of the scale-variant portion of all spots
+        self._maxSpotPxWidth = 0    ## maximum size of the scale-invariant portion of all spots
         self._spotPixmap = None
+        self.opts = {'pxMode': True}
         
         self.setPen(200,200,200, update=False)
         self.setBrush(100,100,150, update=False)
         self.setSymbol('o', update=False)
         self.setSize(7, update=False)
-        #self.setIdentical(False, update=False)
         prof.mark('1')
         self.setData(*args, **kargs)
         prof.mark('setData')
@@ -190,7 +188,7 @@ class ScatterPlotItem(GraphicsObject):
         
         if 'spots' in kargs:
             spots = kargs['spots']
-            for i in xrange(len(spots)):
+            for i in range(len(spots)):
                 spot = spots[i]
                 for k in spot:
                     #if k == 'pen':
@@ -228,6 +226,7 @@ class ScatterPlotItem(GraphicsObject):
             self.setPointData(kargs['data'], dataSet=newData)
         
         #self.updateSpots()
+        self.bounds = [None, None]
         self.generateSpotItems()
         self.sigPlotChanged.emit(self)
         
@@ -345,9 +344,31 @@ class ScatterPlotItem(GraphicsObject):
     def updateSpots(self, dataSet=None):
         if dataSet is None:
             dataSet = self.data
+        self._maxSpotWidth = 0
+        self._maxSpotPxWidth = 0
         for spot in dataSet['item']:
             spot.updateItem()
-        
+        self.measureSpotSizes(dataSet)
+
+    def measureSpotSizes(self, dataSet):
+        for spot in dataSet['item']:
+            ## keep track of the maximum spot size and pixel size
+            width = 0
+            pxWidth = 0
+            pen = spot.pen()
+            if self.opts['pxMode']:
+                pxWidth = spot.size() + pen.width()
+            else:
+                width = spot.size()
+                if pen.isCosmetic():
+                    pxWidth += pen.width()
+                else:
+                    width += pen.width()
+            self._maxSpotWidth = max(self._maxSpotWidth, width)
+            self._maxSpotPxWidth = max(self._maxSpotPxWidth, pxWidth)
+        self.bounds = [None, None]
+    
+    
     def clear(self):
         """Remove all spots from the scatter plot"""
         self.clearItems()
@@ -368,6 +389,7 @@ class ScatterPlotItem(GraphicsObject):
         if frac >= 1.0 and self.bounds[ax] is not None:
             return self.bounds[ax]
         
+        self.prepareGeometryChange()
         if self.data is None or len(self.data) == 0:
             return (None, None)
         
@@ -384,14 +406,16 @@ class ScatterPlotItem(GraphicsObject):
             d2 = d2[mask]
             
         if frac >= 1.0:
+            ## increase size of bounds based on spot size and pen width
+            px = self.pixelLength(Point(1, 0) if ax == 0 else Point(0, 1))  ## determine length of pixel along this axis
+            if px is None:
+                px = 0
             minIndex = np.argmin(d)
             maxIndex = np.argmax(d)
             minVal = d[minIndex]
             maxVal = d[maxIndex]
-            if not self.opts['pxMode']:
-                minVal -= self.data[minIndex]['size']
-                maxVal += self.data[maxIndex]['size']
-            self.bounds[ax] = (minVal, maxVal)
+            spotSize = 0.5 * (self._maxSpotWidth + px * self._maxSpotPxWidth)
+            self.bounds[ax] = (minVal-spotSize, maxVal+spotSize)
             return self.bounds[ax]
         elif frac <= 0.0:
             raise Exception("Value for parameter 'frac' must be > 0. (got %s)" % str(frac))
@@ -412,6 +436,7 @@ class ScatterPlotItem(GraphicsObject):
             for rec in self.data:
                 if rec['item'] is None:
                     rec['item'] = PathSpotItem(rec, self)
+        self.measureSpotSizes(self.data)
         self.sigPlotChanged.emit(self)
 
     def defaultSpotPixmap(self):
@@ -430,6 +455,17 @@ class ScatterPlotItem(GraphicsObject):
             ymn = 0
             ymx = 0
         return QtCore.QRectF(xmn, ymn, xmx-xmn, ymx-ymn)
+
+    def viewRangeChanged(self):
+        GraphicsObject.viewRangeChanged(self)
+        self.bounds = [None, None]
+        
+    def paint(self, p, *args):
+        ## NOTE: self.paint is disabled by this line in __init__:
+        ## self.setFlag(self.ItemHasNoContents, True)
+        p.setPen(fn.mkPen('r'))
+        p.drawRect(self.boundingRect())
+
         
     def points(self):
         return self.data['item']
@@ -518,7 +554,7 @@ class SpotItem(GraphicsItem):
             symbol = self._plot.opts['symbol']
         try:
             n = int(symbol)
-            symbol = Symbols.keys()[n % len(Symbols)]
+            symbol = list(Symbols.keys())[n % len(Symbols)]
         except:
             pass
         return symbol
