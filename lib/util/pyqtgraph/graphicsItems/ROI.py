@@ -319,7 +319,7 @@ class ROI(GraphicsObject):
         else:
             return (self.handles[index]['name'], self.handles[index]['pos'])
             
-    def getSceneHandlePositions(self, index = None):
+    def getSceneHandlePositions(self, index=None):
         if index == None:
             positions = []
             for h in self.handles:
@@ -1648,26 +1648,16 @@ class LineSegmentROI(ROI):
         h2 = self.handles[1]['item'].pos()
         pxv = self.pixelVectors(h2-h1)[1] * 4
         
+        if pxv == (None, None):
+            p.addRect(self.boundingRect())
+            return p
+        
         p.moveTo(h1+pxv)
         p.lineTo(h2+pxv)
         p.lineTo(h2-pxv)
         p.lineTo(h1-pxv)
         p.lineTo(h1+pxv)
-        #lineAngle = Point(1,0).angle(h2-h1)
-        #orthoAngle = lineAngle - 90.
-        
-        #px = cos(orthoAngle)*pHyp
-        #py = sin(orthoAngle)*pHyp
-        
-        #p.moveTo(h1-(px, py))
-        #p.lineTo(h1 + (px, py))
-        #p.lineTo(h2 + (px, py))
-        #p.lineTo(h2 - (px, py))
-        #p.lineTo(h1 - (px, py))
-        
-        #for i in range(len(self.handles)):
-            #p.lineTo(self.handles[i]['item'].pos())
-        #p.addRect(self.getShapeRect())
+      
         return p
     
     def stateCopy(self):

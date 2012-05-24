@@ -72,7 +72,11 @@ class GraphicsItem(object):
             if view is None:
                 return None
             viewportTransform = view.viewportTransform()
-        return QtGui.QGraphicsObject.deviceTransform(self, viewportTransform)
+        dt = QtGui.QGraphicsObject.deviceTransform(self, viewportTransform)
+        if dt.m11() * dt.m22() == 0: ## occurs when deviceTransform is invalid because widget has not been displayed
+            return None
+        else:
+            return dt
         
     def viewTransform(self):
         """Return the transform that maps from local coordinates to the item's ViewBox coordinates
@@ -126,18 +130,26 @@ class GraphicsItem(object):
 
     def pixelVectors(self, direction=None):
         """Return vectors in local coordinates representing the width and height of a view pixel.
-        If direction is specified, then return vectors parallel and orthogonal to it."""
+        If direction is specified, then return vectors parallel and orthogonal to it.
+        
+        Return (None, None) if pixel size is not yet defined (usually because the item has not yet been displayed)."""
 
         dt = self.deviceTransform()
         if dt is None:
             return None, None
+        
         if direction is None:
             direction = Point(1, 0)
+            
         viewDir = Point(dt.map(direction) - dt.map(Point(0,0)))
         orthoDir = Point(viewDir[1], -viewDir[0])  ## orthogonal to line in pixel-space
+        
+        try:  
+            normView = viewDir.norm()  ## direction of one pixel orthogonal to line
+            normOrtho = orthoDir.norm()
+        except:
+            raise Exception("Invalid direction %s" %direction)
             
-        normView = viewDir.norm()  ## direction of one pixel orthogonal to line
-        normOrtho = orthoDir.norm()
         
         dti = dt.inverted()[0]
         return Point(dti.map(normView)-dti.map(Point(0,0))), Point(dti.map(normOrtho)-dti.map(Point(0,0)))  
@@ -152,6 +164,8 @@ class GraphicsItem(object):
     def pixelLength(self, direction, ortho=False):
         """Return the length of one pixel in the direction indicated (in local coordinates)
         If ortho=True, then return the length of one pixel orthogonal to the direction indicated.
+        
+        Return None if pixel size is not yet defined (usually because the item has not yet been displayed).
         """
         normV, orthoV = self.pixelVectors(direction)
         if normV == None or orthoV == None:
@@ -164,6 +178,8 @@ class GraphicsItem(object):
 
     def pixelSize(self):
         v = self.pixelVectors()
+        if v == (None, None):
+            return None, None
         return (v[0].x()**2+v[0].y()**2)**0.5, (v[1].x()**2+v[1].y()**2)**0.5
 
     def pixelWidth(self):
