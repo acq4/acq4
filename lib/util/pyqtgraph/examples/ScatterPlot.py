@@ -21,26 +21,32 @@ w2.setAspectLocked(True)
 view.nextRow()
 w3 = view.addPlot()
 w4 = view.addPlot()
-print "Generating data, this takes a few seconds..."
+print("Generating data, this takes a few seconds...")
 
 ## There are a few different ways we can draw scatter plots; each is optimized for different types of data:
 
 
 ## 1) All spots identical and transform-invariant (top-left plot). 
 ## In this case we can get a huge performance boost by pre-rendering the spot 
-## image and just drawing that image repeatedly. (use identical=True in the constructor)
-## (An even faster approach might be to use QPainter.drawPixmapFragments)
+## image and just drawing that image repeatedly.
 
 n = 300
-s1 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 20), identical=True)
+s1 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
 pos = np.random.normal(size=(2,n), scale=1e-5)
 spots = [{'pos': pos[:,i], 'data': 1} for i in range(n)] + [{'pos': [0,0], 'data': 1}]
 s1.addPoints(spots)
 w1.addItem(s1)
 
-## This plot is clickable
+## Make all plots clickable
+lastClicked = []
 def clicked(plot, points):
-    print "clicked points", points
+    global lastClicked
+    for p in lastClicked:
+        p.resetPen()
+    print("clicked points", points)
+    for p in points:
+        p.setPen('b', width=2)
+    lastClicked = points
 s1.sigClicked.connect(clicked)
 
 
@@ -51,7 +57,7 @@ s1.sigClicked.connect(clicked)
 
 s2 = pg.ScatterPlotItem(size=10, pen=pg.mkPen('w'), pxMode=True)
 pos = np.random.normal(size=(2,n), scale=1e-5)
-spots = [{'pos': pos[:,i], 'data': 1, 'brush':pg.intColor(i, n), 'symbol': i%5, 'size': 5+i/10.} for i in xrange(n)]
+spots = [{'pos': pos[:,i], 'data': 1, 'brush':pg.intColor(i, n), 'symbol': i%5, 'size': 5+i/10.} for i in range(n)]
 s2.addPoints(spots)
 w2.addItem(s2)
 w2.setRange(s2.boundingRect())
@@ -72,12 +78,13 @@ w3.addItem(s3)
 s3.sigClicked.connect(clicked)
 
 
-## Coming: use qpainter.drawpixmapfragments for scatterplots which do not require mouse interaction
+## Test performance of large scatterplots
 
-s4 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 20), identical=True)
+s4 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 20))
 pos = np.random.normal(size=(2,10000), scale=1e-9)
 s4.addPoints(x=pos[0], y=pos[1])
 w4.addItem(s4)
+s4.sigClicked.connect(clicked)
 
 
 

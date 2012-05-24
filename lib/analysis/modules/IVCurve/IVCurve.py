@@ -16,6 +16,7 @@ import lib.analysis.tools.Utility as Utility # pbm's utilities...
 import lib.analysis.tools.Fitting as Fitting # pbm's fitting stuff... 
 
 import ctrlTemplate
+import debug
 
 class IVCurve(AnalysisModule):
     def __init__(self, host):
@@ -129,6 +130,7 @@ class IVCurve(AnalysisModule):
             try:
                 data = self.dataModel.getClampFile(d).read()
             except:
+                debug.printExc("Error loading data for protocol %s:" % d.name() )
                 continue  ## If something goes wrong here, we'll just try to carry on
             cmd = self.dataModel.getClampCommand(data)
             data = self.dataModel.getClampPrimary(data)

@@ -1,5 +1,5 @@
 from pyqtgraph.Qt import QtGui, QtCore  
-from GraphicsItem import GraphicsItem
+from .GraphicsItem import GraphicsItem
 
 __all__ = ['GraphicsObject']
 class GraphicsObject(GraphicsItem, QtGui.QGraphicsObject):
@@ -12,4 +12,10 @@ class GraphicsObject(GraphicsItem, QtGui.QGraphicsObject):
         QtGui.QGraphicsObject.__init__(self, *args)
         GraphicsItem.__init__(self)
         
+    def itemChange(self, change, value):
+        ret = QtGui.QGraphicsObject.itemChange(self, change, value)
+        if change in [self.ItemParentHasChanged, self.ItemSceneHasChanged]:
+            self._updateView()
+        return ret
+
         

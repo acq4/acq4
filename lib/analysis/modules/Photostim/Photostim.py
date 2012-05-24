@@ -271,12 +271,12 @@ class Photostim(AnalysisModule):
         try:
             point = points[0]
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-            print "clicked:", point.data
+            print "clicked:", point.data()
             plot = self.getElement("Data Plot")
             plot.clear()
             self.selectedSpot = point
             self.selectedScan = plotItem.scan
-            fh = self.dataModel.getClampFile(point.data)
+            fh = self.dataModel.getClampFile(point.data())
             self.detector.loadFileRequested(fh)
             #self.dbCtrl.scanSpotClicked(fh)
         finally:
@@ -286,7 +286,7 @@ class Photostim(AnalysisModule):
     def mapPointClicked(self, scan, points):
         data = []
         for p in points:
-            for source in p.data:
+            for source in p.data():
                 data.append([source[0], self.dataModel.getClampFile(source[1])])
             #data.extend(p.data)
         self.redisplayData(data)
@@ -294,7 +294,7 @@ class Photostim(AnalysisModule):
 
     def scatterPlotClicked(self, plot, points):
         #scan, fh, time = point.data
-        self.redisplayData([p.data for p in points])
+        self.redisplayData([p.data() for p in points])
         #self.scatterLine =
 
     def redisplayData(self, points):  ## data must be [(scan, fh, <event time>), ...]  
@@ -383,7 +383,7 @@ class Photostim(AnalysisModule):
         if self.selectedSpot==None:
             return
         output = self.detector.flowchart.output()
-        output['fileHandle']=self.selectedSpot.data
+        output['fileHandle']=self.selectedSpot.data()
         self.flowchart.setInput(**output)
         errs = output['events']['fitFractionalError']
         if len(errs) > 0:
@@ -445,11 +445,11 @@ class Photostim(AnalysisModule):
             spot = self.selectedSpot
             if spot is None:
                 return
-            dh = spot.data
+            dh = spot.data()
         else:
             if 'regions' not in data:
                 data['regions'] = self.detector.flowchart.output()['regions']
-            dh = spot.data
+            dh = spot.data()
             data['fileHandle'] = dh
             #if dh is None:
                 #data['fileHandle'] = self.selectedSpot.data
@@ -508,7 +508,7 @@ class Photostim(AnalysisModule):
         self.storeStats(stats)
         
         ## update data in Map
-        self.selectedScan.updateSpot(spot.data, events, stats)
+        self.selectedScan.updateSpot(spot.data(), events, stats)
         
 
     def storeDBScan(self, scan):
@@ -525,14 +525,14 @@ class Photostim(AnalysisModule):
             ## collect events and stats from all spots in the scan
             for i in xrange(len(spots)):
                 s = spots[i]
-                fh = self.dataModel.getClampFile(s.data)
+                fh = self.dataModel.getClampFile(s.data())
                 try:
                     ev = scan.getEvents(fh)['events']
                     events.append(ev)
                 except:
                     print fh, scan.getEvents(fh)
                     raise
-                st = scan.getStats(s.data)
+                st = scan.getStats(s.data())
                 stats.append(st)
                 dlg.setValue(i)
                 if dlg.wasCanceled():
@@ -563,7 +563,7 @@ class Photostim(AnalysisModule):
         table = dbui.getTableName(identity)        
         #dh = scan.source()
         for spot in scan.spots():
-            protocolID = db('Select rowid from DirTable_Protocol where Dir="%s"'%(spot.data.name(relativeTo=db.baseDir())))
+            protocolID = db('Select rowid from DirTable_Protocol where Dir="%s"'%(spot.data().name(relativeTo=db.baseDir())))
             if len(protocolID) <1:
                 continue
             protocolID = protocolID[0]['rowid']

@@ -227,9 +227,9 @@ def plotClicked(plt, pts):
     
     #[['SourceFile', 'ProtocolSequenceDir', 'fitTime']]
     #fh = db.getDir('ProtocolSequence', id)[fn]
-    fh = pt.data['SourceFile']
-    id = pt.data['ProtocolSequenceDir']
-    time = pt.data['fitTime']
+    fh = pt.data()['SourceFile']
+    id = pt.data()['ProtocolSequenceDir']
+    time = pt.data()['fitTime']
     
     data = fh.read()['Channel':'primary']
     data = fn.besselFilter(data, 8e3)
@@ -241,9 +241,9 @@ def plotClicked(plt, pts):
         w = xr[1]-xr[0]
         pw2.setXRange(time-w/5., time+4*w/5., padding=0)
     
-    fitLen = pt.data['fitDecayTau']*pt.data['fitLengthOverDecay']
+    fitLen = pt.data()['fitDecayTau']*pt.data()['fitLengthOverDecay']
     x = np.linspace(time, time+fitLen, fitLen * 50e3)
-    v = [pt.data['fitAmplitude'], pt.data['fitTime'], pt.data['fitRiseTau'], pt.data['fitDecayTau']]
+    v = [pt.data()['fitAmplitude'], pt.data()['fitTime'], pt.data()['fitRiseTau'], pt.data()['fitDecayTau']]
     print "Event fit params:", v
     y = fn.pspFunc(v, x, risePower=2.0) + data[np.argwhere(data.xvals('Time')>time)[0]-1]
     pw2.plot(x, y, pen='b')

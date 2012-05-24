@@ -160,7 +160,7 @@ class SpikeDetector(CtrlNode):
         s = self.stateGroup.state()
         radius = s['radius']
         d1 = data.view(np.ndarray)
-        d2 = data[radius:] - data[:-radius] #a derivative
+        d2 = d1[radius:] - d1[:-radius] #a derivative
         mask1 = d2 > s['minDiff']  #where derivative is large and positive
         mask2 = d2 < -s['minDiff'] #where derivative is large and negative
         maskpos = mask1[:-radius] * mask2[radius:] #both need to be true
