@@ -7,14 +7,14 @@ class Dock(QtGui.QWidget, DockDrop):
     
     sigStretchChanged = QtCore.Signal()
     
-    def __init__(self, name, area=None, size=(10, 10), widget=None, hideTitle=False):
+    def __init__(self, name, area=None, size=(10, 10), widget=None, hideTitle=False, autoOrientation=True):
         QtGui.QWidget.__init__(self)
         DockDrop.__init__(self)
         self.area = area
         self.label = DockLabel(name, self)
         self.labelHidden = False
         self.moveLabel = True  ## If false, the dock is no longer allowed to move the label.
-        self.autoOrient = True
+        self.autoOrient = autoOrientation
         self.orientation = 'horizontal'
         #self.label.setAlignment(QtCore.Qt.AlignHCenter)
         self.topLayout = QtGui.QGridLayout()
@@ -114,7 +114,7 @@ class Dock(QtGui.QWidget, DockDrop):
         
     def setOrientation(self, o='auto', force=False):
         #print self.name(), "setOrientation", o, force
-        if o == 'auto':
+        if o == 'auto' and self.autoOrient:
             if self.container().type() == 'tab':
                 o = 'horizontal'
             elif self.width() > self.height()*1.5:

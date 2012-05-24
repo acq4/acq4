@@ -38,7 +38,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.cw = dockarea.DockArea()
         self.setCentralWidget(self.cw)
         self.gv = pg.GraphicsView()
-        self.gvDock = dockarea.Dock(name="View", widget=self.gv, hideTitle=True)
+        self.gvDock = dockarea.Dock(name="View", widget=self.gv, hideTitle=True, size=(600,600))
         self.cw.addDock(self.gvDock)
 
         #self.ui = Ui_Form()
@@ -59,7 +59,7 @@ class CameraWindow(QtGui.QMainWindow):
             camera = man.getInterface('camera', name)
             iface = camera.cameraModuleInterface(self)
             self.cameras.append(iface)
-            dock = dockarea.Dock(name=name, widget=iface.controlWidget())
+            dock = dockarea.Dock(name=name, widget=iface.controlWidget(), size=(10, 500), hideTitle=(len(camNames)==1))
             if len(self.cameraDocks) == 0:
                 self.cw.addDock(dock, 'left', self.gvDock)
             else:

@@ -2,6 +2,7 @@ import time, types, os.path, re, sys
 from PyQt4 import QtGui, QtCore
 import pyqtgraph as pg
 from pyqtgraph import SignalProxy, Point
+import pyqtgraph.dockarea as dockarea
 import ptime
 from Mutex import Mutex
 import numpy as np
@@ -35,8 +36,21 @@ class CameraInterface(QtCore.QObject):
 
         ## setup UI
         self.ui = CameraInterfaceTemplate()
-        self.widget = QtGui.QWidget()
-        self.ui.setupUi(self.widget)
+        self.widget = dockarea.DockArea()
+        w = QtGui.QWidget()
+        self.ui.setupUi(w)
+
+        ## Move control panels into docks
+        recDock = dockarea.Dock(name="Recording", widget=self.ui.recordCtrlWidget, size=(100, 10), autoOrientation=False)
+        devDock = dockarea.Dock(name="Device Control", widget=self.ui.devCtrlWidget, size=(100, 10), autoOrientation=False)
+        dispDock = dockarea.Dock(name="Display Control", widget=self.ui.displayCtrlWidget, size=(100, 600), autoOrientation=False)
+        bgDock = dockarea.Dock(name="Background Subtraction", widget=self.ui.bgSubtractWidget, size=(100, 10), autoOrientation=False)
+        self.widget.addDock(recDock)
+        self.widget.addDock(devDock, 'bottom', recDock)
+        self.widget.addDock(dispDock, 'bottom', devDock)
+        self.widget.addDock(bgDock, 'bottom', dispDock)
+        
+        ## format labels
         self.ui.fpsLabel.setFormatStr('{avgValue:.1f} fps')
         self.ui.fpsLabel.setAverageTime(2.0)
         self.ui.displayFpsLabel.setFormatStr('{avgValue:.1f} fps')
