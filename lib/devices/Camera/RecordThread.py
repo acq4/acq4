@@ -22,8 +22,8 @@ class RecordThread(QtCore.QThread):
         self.m = lib.Manager.getManager()
         self.ui.cam.sigNewFrame.connect(self.newCamFrame)
         
-        ui.ui.btnRecord.toggled.connect(self.toggleRecord)
-        ui.ui.btnSnap.clicked.connect(self.snapClicked)
+        ui.ui.recordStackBtn.toggled.connect(self.toggleRecord)
+        ui.ui.saveFrameBtn.clicked.connect(self.snapClicked)
         self.recording = False
         self.recordStart = False
         self.recordStop = False
@@ -132,9 +132,9 @@ class RecordThread(QtCore.QThread):
                     self.showMessage("Saved image %s" % fn)
                     with self.lock:
                         self.takeSnap = False
-                    self.ui.ui.btnSnap.success("Saved.")
+                    self.ui.ui.saveFrameBtn.success("Saved.")
                 except:
-                    self.ui.ui.btnSnap.failure("Error.")
+                    self.ui.ui.saveFrameBtn.failure("Error.")
                     raise
                     
         if len(recFrames) > 0:

@@ -31,7 +31,6 @@ class CameraWindow(QtGui.QMainWindow):
         self.ROIs = []
         self.plotCurves = []
         
-        self.persistentFrames = []
         
         
         ## Start building UI
@@ -121,9 +120,6 @@ class CameraWindow(QtGui.QMainWindow):
         #self.ui.checkEnableROIs.stateChanged.connect(self.enableROIsChanged)
         #self.ui.spinROITime.valueChanged.connect(self.setROITime)
         
-        ## Connect Persistent Frames dock
-        #self.ui.addFrameBtn.clicked.connect(self.addPersistentFrame)
-        #self.ui.clearFramesBtn.clicked.connect(self.clearPersistentFrames)
 
     def getView(self):
         return self.view
@@ -134,26 +130,6 @@ class CameraWindow(QtGui.QMainWindow):
         #self.view.setRange(bounds)
         self.view.autoRange()
 
-    def addPersistentFrame(self):
-        """Make a copy of the current camera frame and store it in the background"""
-        px = self.imageItem.getPixmap()
-        if px is None:
-            return
-        im = QtGui.QGraphicsPixmapItem(px.copy())
-        im.setCacheMode(im.NoCache)
-        if len(self.persistentFrames) == 0:
-            z = -10000
-        else:
-            z = self.persistentFrames[-1].zValue() + 1
-        
-        img = self.currentFrame.data()
-        info = self.currentFrame.info()
-        #s = info['pixelSize']
-        #p = info['imagePosition']
-        self.persistentFrames.append(im)
-        self.addItem(im, z=z)
-        im.setTransform(self.currentFrame.globalTransform().as2D())
-        
 
     def addItem(self, item, pos=(0,0), scale=(1,1), z=0):
         """Adds an item into the scene. The image will be automatically scaled and translated when the scope moves."""

@@ -31,6 +31,7 @@ class CameraInterface(QtCore.QObject):
         self.module = module
         self.view = module.getView()
         self.hasQuit = False
+        self.persistentFrames = []
 
         ## setup UI
         self.ui = CameraInterfaceTemplate()
@@ -120,9 +121,9 @@ class CameraInterface(QtCore.QObject):
         self.ui.spinExposure.setOpts(dec=True, step=1, minStep=100e-6, siPrefix=True, suffix='s', bounds=[0, 10])
 
         ## connect UI signals
-        self.ui.btnAcquire.clicked.connect(self.toggleAcquire)
-        self.ui.btnRecord.toggled.connect(self.toggleRecord)
-        #Signals from self.ui.btnSnap and self.ui.btnRecord are caught by the RecordThread
+        self.ui.acquireVideoBtn.clicked.connect(self.toggleAcquire)
+        self.ui.recordStackBtn.toggled.connect(self.toggleRecord)
+        #Signals from self.ui.btnSnap and self.ui.recordStackBtn are caught by the RecordThread
         self.ui.btnFullFrame.clicked.connect(lambda: self.setRegion())
         #self.ui.scaleToImageBtn.clicked.connect(self.scaleToImage)
         self.proxy1 = SignalProxy(self.ui.binningCombo.currentIndexChanged, slot=self.binningComboChanged)
@@ -156,6 +157,11 @@ class CameraInterface(QtCore.QObject):
         #QtCore.QTimer.singleShot(1, self.drawFrame)
         ## avoiding possible singleShot-induced crashes
 
+        ## Connect Persistent Frames dock
+        self.ui.frameToBgBtn.clicked.connect(self.addPersistentFrame)
+        #self.ui.clearFramesBtn.clicked.connect(self.clearPersistentFrames)
+
+        
     def controlWidget(self):
         return self.widget
         
@@ -225,12 +231,12 @@ class CameraInterface(QtCore.QObject):
 
     def toggleRecord(self, b):
         if b:
-            self.ui.btnRecord.setChecked(True)
+            self.ui.recordStackBtn.setChecked(True)
             self.ui.recordXframesCheck.setEnabled(False)
             self.ui.recordXframesSpin.setEnabled(False)
             #self.ui.framesLabel.setEnabled(False)
         else:
-            self.ui.btnRecord.setChecked(False)
+            self.ui.recordStackBtn.setChecked(False)
             self.ui.recordXframesCheck.setEnabled(True)
             self.ui.recordXframesSpin.setEnabled(True)
             #self.ui.framesLabel.setEnabled(True)
@@ -240,7 +246,7 @@ class CameraInterface(QtCore.QObject):
 
     def recordThreadStopped(self):
         self.toggleRecord(False)
-        self.ui.btnRecord.setEnabled(False)  ## Recording thread has stopped, can't record anymore.
+        self.ui.recordStackBtn.setEnabled(False)  ## Recording thread has stopped, can't record anymore.
         self.showMessage("Recording thread died! See console for error message.")
 
     def recordingFailed(self):
@@ -327,15 +333,15 @@ class CameraInterface(QtCore.QObject):
     def cameraStopped(self):
         self.toggleRecord(False)
         #self.backgroundFrame = None
-        self.ui.btnAcquire.setChecked(False)
-        self.ui.btnAcquire.setEnabled(True)
+        self.ui.acquireVideoBtn.setChecked(False)
+        self.ui.acquireVideoBtn.setEnabled(True)
 
 
     def cameraStarted(self):
         #self.AGCLastMax = None
         #self.AGCLastMin = None
-        self.ui.btnAcquire.setChecked(True)
-        self.ui.btnAcquire.setEnabled(True)
+        self.ui.acquireVideoBtn.setChecked(True)
+        self.ui.acquireVideoBtn.setEnabled(True)
 
     def binningComboChanged(self, args):
         self.setBinning(*args)
@@ -421,7 +427,7 @@ class CameraInterface(QtCore.QObject):
 
 
     def toggleAcquire(self):
-        if self.ui.btnAcquire.isChecked():
+        if self.ui.acquireVideoBtn.isChecked():
             try:
                 self.cam.setParam('triggerMode', 'Normal', autoRestart=False)
                 self.setBinning(autoRestart=False)
@@ -430,7 +436,7 @@ class CameraInterface(QtCore.QObject):
                 self.cam.start()
                 Manager.logMsg("Camera started aquisition.", importance=0)
             except:
-                self.ui.btnAcquire.setChecked(False)
+                self.ui.acquireVideoBtn.setChecked(False)
                 printExc("Error starting camera:")
         
         else:
@@ -627,3 +633,25 @@ class CameraInterface(QtCore.QObject):
 
     def showMessage(self, msg, delay=2000):
         self.module.showMessage(msg, delay)
+
+
+    def addPersistentFrame(self):
+        """Make a copy of the current camera frame and store it in the background"""
+        px = self.imageItem.getPixmap()
+        if px is None:
+            return
+        im = QtGui.QGraphicsPixmapItem(px.copy())
+        im.setCacheMode(im.NoCache)
+        if len(self.persistentFrames) == 0:
+            z = -10000
+        else:
+            z = self.persistentFrames[-1].zValue() + 1
+
+        img = self.currentFrame.data()
+        info = self.currentFrame.info()
+        #s = info['pixelSize']
+        #p = info['imagePosition']
+        self.persistentFrames.append(im)
+        self.module.addItem(im, z=z)
+        im.setTransform(self.currentFrame.globalTransform().as2D())
+
