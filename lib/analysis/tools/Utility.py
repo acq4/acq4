@@ -403,6 +403,7 @@ def findspikes(x, v, thresh, t0=None, t1= None, dt=1.0, mode=None, interpolate=F
     if True, the returned time is interpolated, based on a spline fit
     if False, the returned time is just taken as the data time. 
     """
+    print 'x, v: ', len(x), len(v)
     if debug:
     # this does not work with pyside...
         import matplotlib
@@ -422,9 +423,12 @@ def findspikes(x, v, thresh, t0=None, t1= None, dt=1.0, mode=None, interpolate=F
         xt = numpy.array(x)
         v = numpy.array(v)
     if debug:
-        f = figure(1)
-        plot(xt, v, 'k-')
-        show()
+        f = pylab.figure(1)
+        print "xt: ", xt
+        print "v: ", v
+        pylab.plot(numpy.array(xt), v, 'k-')
+        pylab.draw()
+        pylab.show()
     dv = numpy.diff(v)/dt # compute slope
     st=numpy.array([])
     spk = []

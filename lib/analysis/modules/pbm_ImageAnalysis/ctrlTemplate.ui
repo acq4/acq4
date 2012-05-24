@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>391</width>
-    <height>410</height>
+    <width>377</width>
+    <height>322</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -15,6 +15,12 @@
     <horstretch>0</horstretch>
     <verstretch>0</verstretch>
    </sizepolicy>
+  </property>
+  <property name="maximumSize">
+   <size>
+    <width>391</width>
+    <height>410</height>
+   </size>
   </property>
   <property name="font">
    <font>
@@ -37,6 +43,12 @@
    </property>
    <item row="0" column="0">
     <widget class="QGroupBox" name="groupBox">
+     <property name="maximumSize">
+      <size>
+       <width>392</width>
+       <height>410</height>
+      </size>
+     </property>
      <property name="title">
       <string>Corrections, ROI's and Filtering</string>
      </property>
@@ -53,7 +65,7 @@
       <property name="margin">
        <number>0</number>
       </property>
-      <item row="9" column="0">
+      <item row="10" column="0">
        <widget class="QLabel" name="label">
         <property name="font">
          <font>
@@ -66,7 +78,7 @@
         </property>
        </widget>
       </item>
-      <item row="10" column="0">
+      <item row="11" column="0">
        <widget class="QLabel" name="label_3">
         <property name="font">
          <font>
@@ -193,7 +205,7 @@
         </property>
        </widget>
       </item>
-      <item row="9" column="1">
+      <item row="10" column="1">
        <widget class="QDoubleSpinBox" name="ImagePhys_BaseStart">
         <property name="font">
          <font>
@@ -212,7 +224,7 @@
         </property>
        </widget>
       </item>
-      <item row="10" column="1">
+      <item row="11" column="1">
        <widget class="QDoubleSpinBox" name="ImagePhys_BaseEnd">
         <property name="font">
          <font>
@@ -231,7 +243,7 @@
         </property>
        </widget>
       </item>
-      <item row="11" column="1">
+      <item row="12" column="1">
        <widget class="QDoubleSpinBox" name="ImagePhys_ImgLPF">
         <property name="font">
          <font>
@@ -243,23 +255,23 @@
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
         </property>
         <property name="decimals">
-         <number>1</number>
+         <number>2</number>
         </property>
         <property name="minimum">
-         <double>1.000000000000000</double>
+         <double>0.100000000000000</double>
         </property>
         <property name="maximum">
-         <double>1000.000000000000000</double>
+         <double>5000.000000000000000</double>
         </property>
         <property name="singleStep">
-         <double>10.000000000000000</double>
+         <double>20.000000000000000</double>
         </property>
         <property name="value">
          <double>200.000000000000000</double>
         </property>
        </widget>
       </item>
-      <item row="9" column="3">
+      <item row="10" column="3">
        <widget class="QPushButton" name="ImagePhys_addRoi">
         <property name="font">
          <font>
@@ -271,7 +283,7 @@
         </property>
        </widget>
       </item>
-      <item row="10" column="3">
+      <item row="11" column="3">
        <widget class="QPushButton" name="ImagePhys_clearRoi">
         <property name="font">
          <font>
@@ -284,7 +296,7 @@
         </property>
        </widget>
       </item>
-      <item row="11" column="3">
+      <item row="12" column="3">
        <widget class="QPushButton" name="ImagePhys_RetrieveROI">
         <property name="font">
          <font>
@@ -297,7 +309,7 @@
         </property>
        </widget>
       </item>
-      <item row="14" column="1">
+      <item row="16" column="1">
        <widget class="QPushButton" name="ImagePhys_Update">
         <property name="font">
          <font>
@@ -374,13 +386,16 @@
         </property>
        </widget>
       </item>
-      <item row="12" column="1">
+      <item row="13" column="1">
        <widget class="QDoubleSpinBox" name="ImagePhys_ImgHPF">
         <property name="alignment">
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
         </property>
         <property name="decimals">
-         <number>1</number>
+         <number>3</number>
+        </property>
+        <property name="minimum">
+         <double>0.001000000000000</double>
         </property>
         <property name="maximum">
          <double>100.000000000000000</double>
@@ -389,11 +404,11 @@
          <double>0.100000000000000</double>
         </property>
         <property name="value">
-         <double>0.500000000000000</double>
+         <double>0.100000000000000</double>
         </property>
        </widget>
       </item>
-      <item row="12" column="3">
+      <item row="13" column="3">
        <widget class="QPushButton" name="ImagePhys_SaveROI">
         <property name="font">
          <font>
@@ -410,6 +425,9 @@
        <widget class="QComboBox" name="ImagePhys_Downsample">
         <property name="editable">
          <bool>true</bool>
+        </property>
+        <property name="maxCount">
+         <number>5000</number>
         </property>
         <property name="sizeAdjustPolicy">
          <enum>QComboBox::AdjustToContentsOnFirstShow</enum>
@@ -439,9 +457,34 @@
           <string>20</string>
          </property>
         </item>
+        <item>
+         <property name="text">
+          <string>50</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>100</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>200</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>500</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>1000</string>
+         </property>
+        </item>
        </widget>
       </item>
-      <item row="13" column="3">
+      <item row="15" column="3">
        <widget class="QPushButton" name="ImagePhys_CorrTool_BL1">
         <property name="font">
          <font>
@@ -454,31 +497,7 @@
         </property>
        </widget>
       </item>
-      <item row="13" column="0">
-       <widget class="QLabel" name="label_9">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-          <horstretch>0</horstretch>
-          <verstretch>20</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="font">
-         <font>
-          <family>Arial</family>
-          <pointsize>12</pointsize>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="text">
-         <string>Preferences</string>
-        </property>
-       </widget>
-      </item>
-      <item row="14" column="3">
+      <item row="16" column="3">
        <widget class="QPushButton" name="ImagePhys_ExportTiff">
         <property name="font">
          <font>
@@ -491,7 +510,7 @@
         </property>
        </widget>
       </item>
-      <item row="14" column="0">
+      <item row="16" column="0">
        <widget class="QCheckBox" name="ImagePhys_RectSelect">
         <property name="text">
          <string>Select with 
@@ -502,7 +521,7 @@ rectangle  box</string>
         </property>
        </widget>
       </item>
-      <item row="12" column="0">
+      <item row="13" column="0">
        <widget class="QPushButton" name="ImagePhys_CorrTool_HPF">
         <property name="font">
          <font>
@@ -511,14 +530,14 @@ rectangle  box</string>
          </font>
         </property>
         <property name="text">
-         <string>HPF Baseline</string>
+         <string>BPF Baseline</string>
         </property>
        </widget>
       </item>
-      <item row="11" column="0">
+      <item row="12" column="0">
        <widget class="QPushButton" name="ImagePhys_CorrTool_LPF">
         <property name="enabled">
-         <bool>false</bool>
+         <bool>true</bool>
         </property>
         <property name="font">
          <font>
@@ -569,6 +588,66 @@ rectangle  box</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="0">
+       <widget class="QPushButton" name="ImagePhys_RegisterStack">
+        <property name="font">
+         <font>
+          <pointsize>11</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>Register Stack</string>
+        </property>
+       </widget>
+      </item>
+      <item row="15" column="1">
+       <widget class="QPushButton" name="ImagePhys_DisplayTraces">
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>Display dF/F</string>
+        </property>
+       </widget>
+      </item>
+      <item row="15" column="0">
+       <widget class="QLabel" name="label_9">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>20</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="font">
+         <font>
+          <family>Arial</family>
+          <pointsize>12</pointsize>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string>Preferences</string>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="3">
+       <widget class="QPushButton" name="ImagePhys_RecalculateROIs">
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>Recalculate ROIs</string>
         </property>
        </widget>
       </item>

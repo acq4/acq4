@@ -21,7 +21,7 @@ if sys.version_info[0] != 2 or sys.version_info[1] != 7:
 if 'linux' in sys.platform:  ## linux has numerous bugs in opengl implementation
     useOpenGL = False
 elif 'darwin' in sys.platform: ## openGL greatly speeds up display on mac
-    useOpenGL = True
+    useOpenGL = False # True
 else:
     useOpenGL = False  ## on windows there's a more even performance / bugginess tradeoff. 
                 

@@ -1,7 +1,7 @@
 from PyQt4 import QtCore, QtGui
 import lib.Manager
 import pyqtgraph as pg
-import pyqtgraph.opengl as gl
+#import pyqtgraph.opengl as gl
 
 import numpy as np
 import functions as fn
