@@ -3,7 +3,7 @@ from pyqtgraph.graphicsItems import ROI
 
 class CortexROI(ROI.PolyLineROI):
     
-    def __init__(self, pos):
+    def __init__(self, pos, state=None):
         ROI.PolyLineROI.__init__(self, [[0,0], [2,0], [2,1], [0,1]], size=(1e-3, 1e-3), pos=pos, closed=True)
         
         ## don't let the user add handles to the sides, only to the top and bottom
@@ -53,4 +53,18 @@ class CortexROI(ROI.PolyLineROI):
             ROI.LineSegmentROI([mirrorPos, pos], [0,0], handles=(self.segments[mirrorInd].handles[1]['item'], self.segments[ind+1].handles[1]['item']), pen=pg.mkPen(50,50,255,100), movable=False, acceptsHandles=False, parent=self)
         
         
-        
+    def getQuadrilaterals(self):
+        """Return a list of quadrilaterals (each a list of 4 points, in scene coordinates) formed by the ROI."""
+        n = len(self.handles)
+        quads = []
+        positions = self.getSceneHandlePositions()
+        for i in range(n/2-1):
+            quad=[]
+            quad.append(positions[i][1]) 
+            quad.append(positions[i+1][1])
+            quad.append(positions[-(i+2)][1])
+            quad.append(positions[-(i+1)][1])
+            quads.append(quad)
+            
+        return quads
+            

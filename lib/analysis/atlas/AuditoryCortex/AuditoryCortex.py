@@ -17,6 +17,7 @@ class AuditoryCortex(Atlas.Atlas):
     
     def __init__(self, state=None):
         Atlas.Atlas.__init__(self, state)
+        self._ctrl = None
         #self.setState(state)        
 
     def mapToAtlas(self, obj):
@@ -56,8 +57,12 @@ class AuditoryCortex(Atlas.Atlas):
     def name(self):
         return "AuditoryCortexAtlas"
         
-    def ctrlWidget(self, host):
-        return A1AtlasCtrlWidget(self, host)
+    def ctrlWidget(self, host=None):
+        if self._ctrl is None:
+            if host is None:
+                raise Exception("To initialize an A1AtlasCtrlWidget a host must be specified.")
+            self._ctrl = A1AtlasCtrlWidget(self, host)
+        return self._ctrl
     
     
 class A1AtlasCtrlWidget(Atlas.AtlasCtrlWidget):
@@ -75,6 +80,89 @@ class A1AtlasCtrlWidget(Atlas.AtlasCtrlWidget):
         self.roi = CortexROI([-1e-3, 0])
         self.canvas.addGraphicsItem(self.roi, pos=(-1e-3, 1e-3), scale=[1e-3, 1e-3], name='CortexROI', movable=False)
         
+    def generateDataArray(self, positions, dirType):
+        dirColumn = dirType + 'Dir'
+        if dirType == 'Protocol':
+            data = np.empty(len(positions), dtype=[('SliceDir', object), 
+                                                   (dirColumn, object), 
+                                                   #('layer', float),
+                                                   #('depth', float), 
+                                                   ('yPosSlice', float),
+                                                   ('yPosCell', float),
+                                                   ('percentDepth', float), 
+                                                   ('xPosSlice', float), 
+                                                   ('xPosCell', float), 
+                                                   ('modXPosSlice', float), 
+                                                   ('modXPosCell', float)])
+            fields = collections.OrderedDict([
+                           ('SliceDir', 'directory:Slice'),
+                           (dirColumn, 'directory:'+dirType),
+                           ('yPosSlice', real),
+                           ('yPosCell', real),
+                           ('percentDepth', real),
+                           ('xPosSlice', real),
+                           ('xPosCell', real),
+                           ('modXPosSlice', real),
+                           ('modXPosCell', real)])            
+            
+            for i in range(len(positions)):
+                dh, pos = positions[i]
+                cellPos = self.dataModel.getCellInfo(dh)['pos']
+                mapped = self.atlas.mapToAtlas(pg.Point(pos)) ## needs to return %depth and modXPosSlice 
+                #data[i] = (self.sliceDir, dh, mapped.x(), mapped.y(), mapped.z())
+                data['SliceDir'] = self.sliceDir
+                data[dirColumn] = dh
+                data['yPosSlice'] = pos[1]
+                data['yPosCell'] = pos[1]-cellPos[1]
+                data['percentDepth'] = mapped[1]
+                data['xPosSlice'] = pos[0]
+                data['xPosCell'] = pos[0]-cellPos[0]
+                data['modXPosSlice'] = mapped[0]
+                data['modXPosCell'] = mapped[0]-self.atlas.mapToAtlas(pg.Point(cellPos))[0]            
+            
+        elif dirType == 'Cell':
+            data = np.empty(len(positions), dtype=[('SliceDir', object), 
+                                                    (dirColumn, object), 
+                                                    #('layer', float),
+                                                    #('depth', float), 
+                                                    ('yPosSlice', float),
+                                                    #('yPosCell', float),
+                                                    ('percentDepth', float), 
+                                                    ('xPosSlice', float), 
+                                                    #('xPosCell', float), 
+                                                    ('modXPosSlice', float), 
+                                                    #('modXPosCell', float)
+                                                    ]) 
+            fields = collections.OrderedDict([
+                ('SliceDir', 'directory:Slice'),
+                (dirColumn, 'directory:'+dirType),
+                ('yPosSlice', real),
+                ('percentDepth', real),
+                ('xPosSlice', real),
+                ('modXPosSlice', real)])
+ 
+            for i in range(len(positions)):
+                dh, pos = positions[i]
+                #cellPos = self.dataModel.getCellInfo(dh)['pos']
+                mapped = self.atlas.mapToAtlas(pg.Point(pos)) ## needs to return %depth and modXPosSlice 
+                #data[i] = (self.sliceDir, dh, mapped.x(), mapped.y(), mapped.z())
+                data['SliceDir'] = self.sliceDir
+                data[dirColumn] = dh
+                data['yPosSlice'] = pos[1]
+                #data['yPosCell'] = pos[1]-cellPos[1]
+                data['percentDepth'] = mapped[1]
+                data['xPosSlice'] = pos[0]
+                #data['xPosCell'] = pos[0]-cellPos[0]
+                data['modXPosSlice'] = mapped[0]
+                #data['modXPosCell'] = mapped[0]-self.atlas.mapToAtlas(pg.Point(cellPos))[0]              
+        else:
+            raise Exception("Not sure how to structure data array for dirType=%s"%dirType)
+        
+        return data, fields
+                
+            
+            
+            
 class PreviousAuditoryCortex(Atlas.Atlas):
     def __init__(self, canvas=None, state=None):
         ## define slice planes and the atlas images to use for each

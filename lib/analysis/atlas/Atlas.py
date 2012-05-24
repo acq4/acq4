@@ -77,7 +77,7 @@ class AtlasCtrlWidget(QtGui.QWidget):
     def saveState(self):
         raise Exception("Must be re-implemented in subclass.")     
  
-    def generateDataArray(positions, dirType):
+    def generateDataArray(self, positions, dirType):
         """Return a tuple (data, fields). Data should be a record array with the column names/values to be stored. 
         Fields should be an OrderedDict of column names : sql datatype."""
         raise Exception("Must be re-implemented in subclass")    
