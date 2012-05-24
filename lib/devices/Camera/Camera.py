@@ -431,7 +431,7 @@ class Frame(object):
         tr.translate(*rgn[:2])
         tr.scale(binn[0], binn[1], 1)
         self._frameTransform = tr
-        self._info['transform'] = self.cameraTransform() * tr
+        self._info['transform'] = Transform3D(self.cameraTransform() * tr)
         
         
     def data(self):
