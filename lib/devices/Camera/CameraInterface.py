@@ -624,8 +624,8 @@ class CameraInterface(QtCore.QObject):
             self.lastCameraPosition = newPos
             
             newScale = tr.getScale()
-            #if newScale != self.lastCameraScale:
-                #self.centerView()
+            if newScale != self.lastCameraScale:
+                self.module.centerView()
             self.lastCameraScale = newScale
             
             self.cameraItemGroup.setTransform(tr)
@@ -679,6 +679,11 @@ class CameraInterface(QtCore.QObject):
     def getImageItem(self):
         return self.imageItem
 
+    def boundingRect(self):
+        """
+        Return bounding rect of this imaging device in global coordinates
+        """
+        return self.cam.getBoundary().boundingRect()
 
 class CamROI(pg.ROI):
     """Used for specifying the ROI for a camera to acquire from"""

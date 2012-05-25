@@ -391,13 +391,17 @@ class ViewBox(GraphicsWidget):
         """
         self.setRange(xRange=[min, max], update=update, padding=padding)
 
-    def autoRange(self, padding=0.02):
+    def autoRange(self, padding=0.02, item=None):
         """
         Set the range of the view box to make all children visible.
         Note that this is not the same as enableAutoRange, which causes the view to 
         automatically auto-range whenever its contents are changed.
         """
-        bounds = self.childrenBoundingRect()
+        if item is None:
+            bounds = self.childrenBoundingRect()
+        else:
+            bounds = self.mapFromItemToView(item, item.boundingRect()).boundingRect()
+            
         if bounds is not None:
             self.setRange(bounds, padding=padding)
             

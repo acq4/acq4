@@ -148,7 +148,9 @@ class CameraWindow(QtGui.QMainWindow):
         
         ## done with UI
         self.show()
+        #self.autoRange()
         self.centerView()
+        
         
         self.gv.scene().sigMouseMoved.connect(self.updateMouse)
         
@@ -163,11 +165,19 @@ class CameraWindow(QtGui.QMainWindow):
         return self.view
 
     def centerView(self):
-        pass
-        #bounds = self.cam.getBoundary().boundingRect()
-        #self.view.setRange(bounds)
-        self.view.autoRange()
-
+        bounds = None
+        for cam in self.cameras:
+            if bounds is None:
+                bounds = cam.boundingRect()
+            else:
+                bounds |= cam.boundingRect()
+        self.setRange(bounds)
+        
+    def autoRange(self, item=None):
+        self.view.autoRange(item=item)
+    
+    def setRange(self, *args, **kargs):
+        self.view.setRange(*args, **kargs)
 
     def addItem(self, item, pos=(0,0), scale=(1,1), z=0):
         """Adds an item into the scene. The image will be automatically scaled and translated when the scope moves."""
