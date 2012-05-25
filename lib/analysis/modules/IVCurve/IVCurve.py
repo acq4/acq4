@@ -185,23 +185,28 @@ class IVCurve(AnalysisModule):
             self.spk = numpy.where(self.spikecount > 0)
             self.icmd = current[self.nospk]
             self.spcmd = current[self.spk]
-            # plot with lines and symbols:
-            self.fiScatterPlot = pg.ScatterPlotItem(size=10, pen=pg.mkPen('b'), brush=pg.mkBrush(0, 0, 255, 200), 
-                symbol='s', identical=True)
-            self.fslScatterPlot = pg.ScatterPlotItem(size=6, pen=pg.mkPen('g'), brush=pg.mkBrush(0, 255, 0, 200), 
-                symbol = 't', identical=True)
-            self.fisiScatterPlot = pg.ScatterPlotItem(size=6, pen=pg.mkPen('y'), brush=pg.mkBrush(255, 255, 0, 200),
-                symbol = 's', identical=True)
-            self.fiPlot.plot(x=current*1e12, y = self.spikecount, clear=True)
-            #self.fiPlot.setXRange(-0.5, 0.5)
-            self.fiScatterPlot.addPoints(x=current*iscale, y=self.spikecount )# plot the spike counts
-            self.fslPlot.plot(x=self.spcmd*iscale, y = fsl[self.spk], clear=True)
-            self.fslPlot.plot(x=self.spcmd*iscale, y = fisi[self.spk])
-            self.fslScatterPlot.addPoints(x=self.spcmd*iscale, y=fsl[self.spk])# plot the spike counts
-            self.fisiScatterPlot.addPoints(x=self.spcmd*iscale, y=fisi[self.spk])# plot the spike counts
-            self.fiPlot.addItem(self.fiScatterPlot)
-            self.fslPlot.addItem(self.fslScatterPlot)
-            self.fslPlot.addItem(self.fisiScatterPlot)
+            ### plot with lines and symbols:
+            #self.fiScatterPlot = pg.ScatterPlotItem(size=10, pen=pg.mkPen('b'), brush=pg.mkBrush(0, 0, 255, 200), symbol='s', identical=True)
+            #self.fiScatterPlot = pg.PlotDataItem(x=current*iscale, y=self.spikecount, pen='w', symbolSize=10, symbolPen='b', symbolBrush=pg.mkBrush(0, 0, 255, 200), symbol='s', identical=True)
+            #self.fiScatterPlot.addPoints(x=current*iscale, y=self.spikecount )# plot the spike counts
+            #self.fiPlot.plot(x=current*1e12, y = self.spikecount, clear=True)
+            #self.fiPlot.setXRange(-0.5, 0.5)   
+            #self.fiPlot.addItem(self.fiScatterPlot)
+            self.fiPlot.plot(x=current*iscale, y=self.spikecount, pen='w', symbolSize=10, symbolPen='b', symbolBrush=pg.mkBrush(0, 0, 255, 200), symbol='s', identical=True)
+            
+            self.fslPlot.plot(x=self.spcmd*iscale, y = fsl[self.spk], pen='w', clear=True, symbolSize=6, symbolPen=pg.mkPen('g'), symbolBrush=pg.mkBrush(0, 255, 0, 200), symbol = 't', identical=True)
+            #self.fslScatterPlot = pg.ScatterPlotItem(size=6, pen=pg.mkPen('g'), brush=pg.mkBrush(0, 255, 0, 200), symbol = 't', identical=True)
+            
+            #self.fslPlot.plot(x=self.spcmd*iscale, y = fsl[self.spk], clear=True)
+            self.fslPlot.plot(x=self.spcmd*iscale, y = fisi[self.spk], pen='w', symbolSize=6, symbolPen='y', symbolBrush=pg.mkBrush(255, 255, 0, 200), symbol = 's', identical=True)
+            #self.fslScatterPlot.addPoints(x=self.spcmd*iscale, y=fsl[self.spk])# plot the spike counts            
+            
+            
+            #self.fisiScatterPlot = pg.ScatterPlotItem(size=6, pen=pg.mkPen('y'), brush=pg.mkBrush(255, 255, 0, 200),symbol = 's', identical=True)
+            #self.fisiScatterPlot.addPoints(x=self.spcmd*iscale, y=fisi[self.spk])# plot the spike counts
+            
+            #self.fslPlot.addItem(self.fslScatterPlot)
+            #self.fslPlot.addItem(self.fisiScatterPlot)
             if len(self.spcmd) > 0:
                 self.fslPlot.setXRange(0.0, numpy.max(self.spcmd*iscale))
             self.lrss.setRegion([(self.tend-(self.tdur/2.0)), self.tend]) # steady-state

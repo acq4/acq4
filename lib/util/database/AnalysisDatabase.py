@@ -553,8 +553,8 @@ class AnalysisDatabase(SqliteDatabase):
         ## Return a DirHandle given table, rowid
         res = self.select(table, ['Dir'], sql='where rowid=%d'%rowid)
         if len(res) < 1:
-            raise Exception('rowid %d does not exist in %s' % (rowid, table))
-            #logMsg('rowid %d does not exist in %s' % (rowid, table), msgType='error')
+            raise Exception('rowid %d does not exist in %s' % (rowid, table)) 
+            #logMsg('rowid %d does not exist in %s' % (rowid, table), msgType='error') ### This needs to be caught further up in Photostim or somewhere, not here
             #return None
         #print res
         #return self.baseDir()[res[0]['Dir']]
