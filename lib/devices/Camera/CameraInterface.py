@@ -587,6 +587,14 @@ class CameraInterface(QtCore.QObject):
                 center = data[w/2.-w/6.:w/2.+w/6., h/2.-h/6.:h/2.+h/6.]
                 minVal = data.min() * (1.0-cw) + center.min() * cw
                 maxVal = data.max() * (1.0-cw) + center.max() * cw
+
+                ## If there is inf/nan in the image, strip it out before computing min/max
+                if any([np.isnan(minVal), np.isinf(minVal),  np.isnan(minVal), np.isinf(minVal)]):
+                    nanMask = np.isnan(data)
+                    infMask = np.isinf(data)
+                    valid = data[~nanMask * ~infMask]
+                    minVal = valid.min() * (1.0-cw) + center.min() * cw
+                    maxVal = valid.max() * (1.0-cw) + center.max() * cw
                 
                 ## Smooth min/max range to avoid noise
                 if self.lastMinMax is None:

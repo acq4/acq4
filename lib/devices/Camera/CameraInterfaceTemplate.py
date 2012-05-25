@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'CameraInterfaceTemplate.ui'
 #
-# Created: Thu May 24 15:48:22 2012
+# Created: Fri May 25 14:24:21 2012
 #      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
@@ -147,41 +147,37 @@ class Ui_Form(object):
         self.gridLayout_5.setSpacing(0)
         self.gridLayout_5.setContentsMargins(-1, 0, -1, -1)
         self.gridLayout_5.setObjectName(_fromUtf8("gridLayout_5"))
+        self.bgBlurSpin = QtGui.QDoubleSpinBox(self.bgSubtractWidget)
+        self.bgBlurSpin.setProperty("value", 0.0)
+        self.bgBlurSpin.setObjectName(_fromUtf8("bgBlurSpin"))
+        self.gridLayout_5.addWidget(self.bgBlurSpin, 2, 1, 1, 1)
+        self.divideBgBtn = QtGui.QPushButton(self.bgSubtractWidget)
+        self.divideBgBtn.setCheckable(True)
+        self.divideBgBtn.setAutoExclusive(False)
+        self.divideBgBtn.setObjectName(_fromUtf8("divideBgBtn"))
+        self.gridLayout_5.addWidget(self.divideBgBtn, 4, 0, 1, 2)
+        self.label_5 = QtGui.QLabel(self.bgSubtractWidget)
+        self.label_5.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.label_5.setObjectName(_fromUtf8("label_5"))
+        self.gridLayout_5.addWidget(self.label_5, 2, 0, 1, 1)
+        self.contAvgBgCheck = QtGui.QCheckBox(self.bgSubtractWidget)
+        self.contAvgBgCheck.setObjectName(_fromUtf8("contAvgBgCheck"))
+        self.gridLayout_5.addWidget(self.contAvgBgCheck, 1, 0, 1, 2)
+        self.subtractBgBtn = QtGui.QPushButton(self.bgSubtractWidget)
+        self.subtractBgBtn.setCheckable(True)
+        self.subtractBgBtn.setAutoExclusive(False)
+        self.subtractBgBtn.setObjectName(_fromUtf8("subtractBgBtn"))
+        self.gridLayout_5.addWidget(self.subtractBgBtn, 3, 0, 1, 2)
         self.collectBgBtn = QtGui.QPushButton(self.bgSubtractWidget)
         self.collectBgBtn.setCheckable(True)
         self.collectBgBtn.setObjectName(_fromUtf8("collectBgBtn"))
-        self.gridLayout_5.addWidget(self.collectBgBtn, 0, 0, 1, 2)
-        self.label_4 = QtGui.QLabel(self.bgSubtractWidget)
-        self.label_4.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
-        self.label_4.setObjectName(_fromUtf8("label_4"))
-        self.gridLayout_5.addWidget(self.label_4, 1, 0, 1, 1)
+        self.gridLayout_5.addWidget(self.collectBgBtn, 0, 0, 1, 1)
         self.bgTimeSpin = QtGui.QDoubleSpinBox(self.bgSubtractWidget)
         self.bgTimeSpin.setDecimals(1)
         self.bgTimeSpin.setSingleStep(1.0)
         self.bgTimeSpin.setProperty("value", 3.0)
         self.bgTimeSpin.setObjectName(_fromUtf8("bgTimeSpin"))
-        self.gridLayout_5.addWidget(self.bgTimeSpin, 1, 1, 1, 1)
-        self.contAvgBgCheck = QtGui.QCheckBox(self.bgSubtractWidget)
-        self.contAvgBgCheck.setObjectName(_fromUtf8("contAvgBgCheck"))
-        self.gridLayout_5.addWidget(self.contAvgBgCheck, 2, 0, 1, 2)
-        self.label_5 = QtGui.QLabel(self.bgSubtractWidget)
-        self.label_5.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
-        self.label_5.setObjectName(_fromUtf8("label_5"))
-        self.gridLayout_5.addWidget(self.label_5, 3, 0, 1, 1)
-        self.bgBlurSpin = QtGui.QDoubleSpinBox(self.bgSubtractWidget)
-        self.bgBlurSpin.setProperty("value", 0.0)
-        self.bgBlurSpin.setObjectName(_fromUtf8("bgBlurSpin"))
-        self.gridLayout_5.addWidget(self.bgBlurSpin, 3, 1, 1, 1)
-        self.subtractBgBtn = QtGui.QPushButton(self.bgSubtractWidget)
-        self.subtractBgBtn.setCheckable(True)
-        self.subtractBgBtn.setAutoExclusive(False)
-        self.subtractBgBtn.setObjectName(_fromUtf8("subtractBgBtn"))
-        self.gridLayout_5.addWidget(self.subtractBgBtn, 4, 0, 1, 2)
-        self.divideBgBtn = QtGui.QPushButton(self.bgSubtractWidget)
-        self.divideBgBtn.setCheckable(True)
-        self.divideBgBtn.setAutoExclusive(False)
-        self.divideBgBtn.setObjectName(_fromUtf8("divideBgBtn"))
-        self.gridLayout_5.addWidget(self.divideBgBtn, 5, 0, 1, 2)
+        self.gridLayout_5.addWidget(self.bgTimeSpin, 0, 1, 1, 1)
         self.verticalLayout.addWidget(self.bgSubtractWidget)
 
         self.retranslateUi(Form)
@@ -191,7 +187,7 @@ class Ui_Form(object):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
         self.acquireVideoBtn.setToolTip(QtGui.QApplication.translate("Form", "Start/stop camera acquisition.\n"
 "In general, this can just stay on always.", None, QtGui.QApplication.UnicodeUTF8))
-        self.acquireVideoBtn.setText(QtGui.QApplication.translate("Form", "Display Video", None, QtGui.QApplication.UnicodeUTF8))
+        self.acquireVideoBtn.setText(QtGui.QApplication.translate("Form", "Acquire Video", None, QtGui.QApplication.UnicodeUTF8))
         self.acquireFrameBtn.setText(QtGui.QApplication.translate("Form", "Acquire Frame", None, QtGui.QApplication.UnicodeUTF8))
         self.recordStackBtn.setToolTip(QtGui.QApplication.translate("Form", "Start/stop recording frames as they are acquired. \n"
 "Frames are written to the current storage directory set in \n"
@@ -228,23 +224,22 @@ class Ui_Form(object):
         self.spinAutoGainCenterWeight.setToolTip(QtGui.QApplication.translate("Form", "Weights the auto gain measurement to the center 1/3 of\n"
 "the frame when set to 1.0. A value of 0.0 meters from \n"
 "the entire frame.", None, QtGui.QApplication.UnicodeUTF8))
-        self.collectBgBtn.setText(QtGui.QApplication.translate("Form", "Collect Background", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("Form", "Average", None, QtGui.QApplication.UnicodeUTF8))
-        self.bgTimeSpin.setToolTip(QtGui.QApplication.translate("Form", "Sets the approximate number of frames to be averaged for\n"
-"background division.", None, QtGui.QApplication.UnicodeUTF8))
-        self.bgTimeSpin.setSuffix(QtGui.QApplication.translate("Form", " s", None, QtGui.QApplication.UnicodeUTF8))
-        self.contAvgBgCheck.setText(QtGui.QApplication.translate("Form", "Continuous Average", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("Form", "Blur Background.", None, QtGui.QApplication.UnicodeUTF8))
         self.bgBlurSpin.setToolTip(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Blurs the background frame before dividing it from the current frame.</span></p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Large blur values may cause performance to degrade.</span></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.subtractBgBtn.setText(QtGui.QApplication.translate("Form", "Subtract Background", None, QtGui.QApplication.UnicodeUTF8))
         self.divideBgBtn.setToolTip(QtGui.QApplication.translate("Form", "Enables background division. \n"
 "Either a set of static background frames need to have already by collected\n"
 "(by pressing \'Static\' above) or \'Continuous\' needs to be pressed.", None, QtGui.QApplication.UnicodeUTF8))
         self.divideBgBtn.setText(QtGui.QApplication.translate("Form", "Divide Background", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_5.setText(QtGui.QApplication.translate("Form", "Blur Background.", None, QtGui.QApplication.UnicodeUTF8))
+        self.contAvgBgCheck.setText(QtGui.QApplication.translate("Form", "Continuous Average", None, QtGui.QApplication.UnicodeUTF8))
+        self.subtractBgBtn.setText(QtGui.QApplication.translate("Form", "Subtract Background", None, QtGui.QApplication.UnicodeUTF8))
+        self.collectBgBtn.setText(QtGui.QApplication.translate("Form", "Collect Background", None, QtGui.QApplication.UnicodeUTF8))
+        self.bgTimeSpin.setToolTip(QtGui.QApplication.translate("Form", "Sets the approximate number of frames to be averaged for\n"
+"background division.", None, QtGui.QApplication.UnicodeUTF8))
+        self.bgTimeSpin.setSuffix(QtGui.QApplication.translate("Form", " s", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph import HistogramLUTWidget, ValueLabel, FeedbackButton, SpinBox
