@@ -328,6 +328,35 @@ def glColor(*args, **kargs):
     c = mkColor(*args, **kargs)
     return (c.red()/255., c.green()/255., c.blue()/255., c.alpha()/255.)
 
+    
+
+def makeArrowPath(headLen=20, tipAngle=20, tailLen=20, tailWidth=3, baseAngle=0):
+    """
+    Construct a path outlining an arrow with the given dimensions.
+    The arrow points in the -x direction with tip positioned at 0,0.
+    If *tipAngle* is supplied (in degrees), it overrides *headWidth*.
+    If *tailLen* is None, no tail will be drawn.
+    """
+    headWidth = headLen * np.tan(tipAngle * 0.5 * np.pi/180.)
+    path = QtGui.QPainterPath()
+    path.moveTo(0,0)
+    path.lineTo(headLen, -headWidth)
+    if tailLen is None:
+        innerY = headLen - headWidth * np.tan(baseAngle*np.pi/180.)
+        path.lineTo(innerY, 0)
+    else:
+        tailWidth *= 0.5
+        innerY = headLen - (headWidth-tailWidth) * np.tan(baseAngle*np.pi/180.)
+        path.lineTo(innerY, -tailWidth)
+        path.lineTo(headLen + tailLen, -tailWidth)
+        path.lineTo(headLen + tailLen, tailWidth)
+        path.lineTo(innerY, tailWidth)
+    path.lineTo(headLen, headWidth)
+    path.lineTo(0,0)
+    return path
+    
+    
+    
 def affineSlice(data, shape, origin, vectors, axes, **kargs):
     """
     Take a slice of any orientation through an array. This is useful for extracting sections of multi-dimensional arrays such as MRI images for viewing as 1D or 2D data.

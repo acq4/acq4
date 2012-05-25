@@ -25,13 +25,11 @@ class CameraWindow(QtGui.QMainWindow):
     def __init__(self, module):
         self.hasQuit = False
         self.module = module ## handle to the rest of the application
-        
+
         ## ROI state variables
         self.lastPlotTime = None
         self.ROIs = []
         self.plotCurves = []
-        
-        
         
         ## Start building UI
         QtGui.QMainWindow.__init__(self)
@@ -40,17 +38,24 @@ class CameraWindow(QtGui.QMainWindow):
         self.gv = pg.GraphicsView()
         self.gvDock = dockarea.Dock(name="View", widget=self.gv, hideTitle=True, size=(600,600))
         self.cw.addDock(self.gvDock)
-
-        #self.ui = Ui_Form()
-        #self.ctrl = QtGui.QWidget()
-        #self.ui.setupUi(self.ctrl)
+        
+        ## Load previous window state
+        self.stateFile = os.path.join('modules', self.module.name + '_ui.cfg')
+        uiState = module.manager.readConfigFile(self.stateFile)
+        if 'geometry' in uiState:
+            geom = QtCore.QRect(*uiState['geometry'])
+            self.setGeometry(geom)
+        if 'window' in uiState:
+            ws = QtCore.QByteArray.fromPercentEncoding(uiState['window'])
+            self.restoreState(ws)
+        self.show()
         
         ## set up ViewBox
         self.view = pg.ViewBox()
         self.view.setAspectLocked(True)
         self.gv.setCentralItem(self.view)
-
-
+        
+        ## build camera control panels
         man = Manager.getManager()
         camNames = man.listInterfaces('camera')
         self.cameras = []
@@ -66,16 +71,41 @@ class CameraWindow(QtGui.QMainWindow):
                 self.cw.addDock(dock, 'below', self.cameraDocks[0])
             self.cameraDocks.append(dock)
         
+        ## ROI plot ctrls
+        self.roiWidget = QtGui.QWidget()
+        self.roiLayout = QtGui.QGridLayout()
+        self.roiLayout.setSpacing(0)
+        self.roiLayout.setContentsMargins(0,0,0,0)
+        self.roiWidget.setLayout(self.roiLayout)
+        rectPath = QtGui.QPainterPath()
+        rectPath.addRect(0, 0, 1, 1)
+        self.rectBtn = pg.PathButton(path=rectPath)
+        ellPath = QtGui.QPainterPath()
+        ellPath.addEllipse(0, 0, 1, 1)
+        self.ellipseBtn = pg.PathButton(path=ellPath)
+        polyPath = QtGui.QPainterPath()
+        polyPath.moveTo(0,0)
+        polyPath.lineTo(2,3)
+        polyPath.lineTo(3,1)
+        polyPath.lineTo(5,0)
+        polyPath.lineTo(2, -2)
+        polyPath.lineTo(0,0)
+        self.polygonBtn = pg.PathButton(path=polyPath)
+        polyPath = QtGui.QPainterPath()
+        polyPath.moveTo(0,0)
+        polyPath.lineTo(2,3)
+        polyPath.lineTo(3,1)
+        polyPath.lineTo(5,0)
+        self.polylineBtn = pg.PathButton(path=polyPath)
+        self.roiLayout.addWidget(self.rectBtn, 0, 0)
+        self.roiLayout.addWidget(self.ellipseBtn, 0, 1)
+        self.roiLayout.addWidget(self.polygonBtn, 1, 0)
+        self.roiLayout.addWidget(self.polylineBtn, 1, 1)
+        self.roiPlot = pg.PlotWidget()
+        self.roiLayout.addWidget(self.roiPlot, 0, 2, 2, 1)
+        self.roiDock = dockarea.Dock(name='ROI Plot', widget=self.roiWidget, size=(600, 10))
+        self.cw.addDock(self.roiDock, 'bottom', self.gvDock)
         
-        ## Load previous window state
-        self.stateFile = os.path.join('modules', self.module.name + '_ui.cfg')
-        uiState = module.manager.readConfigFile(self.stateFile)
-        if 'geometry' in uiState:
-            geom = QtCore.QRect(*uiState['geometry'])
-            self.setGeometry(geom)
-        if 'window' in uiState:
-            ws = QtCore.QByteArray.fromPercentEncoding(uiState['window'])
-            self.restoreState(ws)
         
         #grid = pg.GridItem()
         #self.view.addItem(grid)
