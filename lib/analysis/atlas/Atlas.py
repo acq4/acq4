@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import atlasCtrlTemplate
+import pyqtgraph as pg
 
 class Atlas(QtCore.QObject):
     
@@ -183,8 +184,8 @@ class AtlasCtrlWidget(QtGui.QWidget):
             db.checkTable(table, owner=self.atlas.DBIdentity+ident, columns=fields, create=True)
             
             # delete old
-            for source in set(data[dirColumn]):
-                db.delete(table, where={dirColumn: source})
+            for source in set(data[dirType+'Dir']):
+                db.delete(table, where={dirType+'Dir': source})
             
             # write new
             db.insert(table, data)

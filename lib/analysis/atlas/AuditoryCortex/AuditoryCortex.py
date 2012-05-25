@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
-import CtrlTemplate
-import pyqtgraph.WidgetGroup
-import advancedTypes
+#import CtrlTemplate
+#import pyqtgraph.WidgetGroup
+#import advancedTypes
+import collections
 import lib.analysis.atlas.Atlas as Atlas
-#import DataManager
 import os
 from PyQt4 import QtCore, QtGui
 import DataManager
 from lib.analysis.atlas.AuditoryCortex.CortexROI import CortexROI
+import numpy as np
+import pyqtgraph as pg
+import scipy
 
 
 
@@ -16,14 +19,42 @@ class AuditoryCortex(Atlas.Atlas):
     DBIdentity = "AuditoryCortexAtlas" ## owner key used for asking DB which tables are safe to use
     
     def __init__(self, state=None):
-        Atlas.Atlas.__init__(self, state)
+        Atlas.Atlas.__init__(self, state=None)
         self._ctrl = None
-        #self.setState(state)        
+        #self.setState(state)  
+        self.state = state
 
-    def mapToAtlas(self, obj):
-            """Maps obj into atlas coordinates."""
-            raise Exception("Must be reimplemented in subclass.")
+    def mapToAtlas(self, pos):
+        """Maps obj into atlas coordinates."""
+        matrix = self.getMatrix(pos)
+        mapped = np.dot(matrix, [pos[0]*pos[1], pos[0], pos[1], 1])
+        return mapped
         
+    def getMatrix(self, pos):
+        """Return the transformMatrix to use for the given pos."""
+        quads = self.state['quadrilaterals']
+        ind=None
+        for i, q in enumerate(quads):
+            if QtGui.QPolygonF([QtCore.QPointF(x) for x in q]).containsPoint(QtCore.QPointF(pos), QtCore.Qt.OddEvenFill):
+                ind = i
+        if ind == None: ## in case pos is outside the quadrilaterals
+            bestMin = 1000
+            for i, q in enumerate(quads):
+                dist = [pg.Point(x-pos).length() for x in q]
+                minDist = min(dist)
+                dist.remove(minDist)
+                minDist += min(dist)
+                if minDist < bestMin:
+                    bestMin = minDist
+                    ind = i    
+            
+        m = self.state['transformMatrices'][ind]
+        return np.array([m[0], m[1]])
+      
+    def setState(self, state):
+        #self._matrix = None
+        self.state = state
+    
     def solveBilinearTransform(self, points1, points2):
         """
         Find a bilinear transformation matrix (2x4) that maps points1 onto points2
@@ -46,9 +77,6 @@ class AuditoryCortex(Atlas.Atlas):
         return matrix    
     
     def getState(self):
-        raise Exception("Must be reimplemented in subclass.")
-
-    def setState(self, state):
         raise Exception("Must be reimplemented in subclass.")
 
     def restoreState(self, state):
@@ -79,8 +107,53 @@ class A1AtlasCtrlWidget(Atlas.AtlasCtrlWidget):
         ## add CortexROI
         self.roi = CortexROI([-1e-3, 0])
         self.canvas.addGraphicsItem(self.roi, pos=(-1e-3, 1e-3), scale=[1e-3, 1e-3], name='CortexROI', movable=False)
+        self.roi.sigRegionChangeFinished.connect(self.roiChanged)
+        
+    def loadState(self):
+        if self.sliceDir is None:
+            return
+            
+        state = self.sliceDir.info()['atlas'][self.atlas.name()]      
+        self.roi.setState(state['cortexROI'])
+        self.atlas.setState(state)
+        
+    def saveState(self):
+        ## Saves the position/configuration of the cortexROI, as well as transforms for mapping to atlas coordinates
+        
+        if self.sliceDir is None:
+            return       
+       
+        ## get state of ROI
+        cortexROI = self.roi.saveState()
+        quads = self.roi.getQuadrilaterals()
+        newQuads = []
+        for q in quads:
+            newQuads.append([(p.x(), p.y()) for p in q])
+        rects = self.roi.getNormalizedRects()
+        matrices = []
+        for i, q in enumerate(quads):
+            matrix = self.atlas.solveBilinearTransform([pg.Point(x) for x in q], [pg.Point(x) for x in rects[i]])
+            matrices.append([list(matrix[0]), list(matrix[1])])
+        
+        state = {
+            'cortexROI':cortexROI,
+            'quadrilaterals':newQuads,
+            'normalizedRects': rects,
+            'transformMatrices': matrices
+        }
+        
+        ## write to slice directory meta-info
+        atlasInfo = self.sliceDir.info().get('atlas', {}).deepcopy()
+        atlasInfo[self.atlas.name()] = state
+        self.sliceDir.setInfo(atlas=atlasInfo)
+        
+        ## set state for atlas object
+        self.atlas.setState(state)       
         
     def generateDataArray(self, positions, dirType):
+        if self.atlas.state is None:
+            self.saveState()
+        
         dirColumn = dirType + 'Dir'
         if dirType == 'Protocol':
             data = np.empty(len(positions), dtype=[('SliceDir', object), 
@@ -97,28 +170,28 @@ class A1AtlasCtrlWidget(Atlas.AtlasCtrlWidget):
             fields = collections.OrderedDict([
                            ('SliceDir', 'directory:Slice'),
                            (dirColumn, 'directory:'+dirType),
-                           ('yPosSlice', real),
-                           ('yPosCell', real),
-                           ('percentDepth', real),
-                           ('xPosSlice', real),
-                           ('xPosCell', real),
-                           ('modXPosSlice', real),
-                           ('modXPosCell', real)])            
+                           ('yPosSlice', 'real'),
+                           ('yPosCell', 'real'),
+                           ('percentDepth', 'real'),
+                           ('xPosSlice', 'real'),
+                           ('xPosCell', 'real'),
+                           ('modXPosSlice', 'real'),
+                           ('modXPosCell', 'real')])            
             
             for i in range(len(positions)):
                 dh, pos = positions[i]
-                cellPos = self.dataModel.getCellInfo(dh)['pos']
+                cellPos = self.dataModel.getCellInfo(dh)['userTransform']['pos']
                 mapped = self.atlas.mapToAtlas(pg.Point(pos)) ## needs to return %depth and modXPosSlice 
                 #data[i] = (self.sliceDir, dh, mapped.x(), mapped.y(), mapped.z())
-                data['SliceDir'] = self.sliceDir
-                data[dirColumn] = dh
-                data['yPosSlice'] = pos[1]
-                data['yPosCell'] = pos[1]-cellPos[1]
-                data['percentDepth'] = mapped[1]
-                data['xPosSlice'] = pos[0]
-                data['xPosCell'] = pos[0]-cellPos[0]
-                data['modXPosSlice'] = mapped[0]
-                data['modXPosCell'] = mapped[0]-self.atlas.mapToAtlas(pg.Point(cellPos))[0]            
+                data[i]['SliceDir'] = self.sliceDir
+                data[i][dirColumn] = dh
+                data[i]['yPosSlice'] = pos[1]
+                data[i]['yPosCell'] = pos[1]-cellPos[1]
+                data[i]['percentDepth'] = mapped[1]
+                data[i]['xPosSlice'] = pos[0]
+                data[i]['xPosCell'] = pos[0]-cellPos[0]
+                data[i]['modXPosSlice'] = mapped[0]
+                data[i]['modXPosCell'] = mapped[0]-self.atlas.mapToAtlas(pg.Point(cellPos))[0]            
             
         elif dirType == 'Cell':
             data = np.empty(len(positions), dtype=[('SliceDir', object), 
@@ -136,10 +209,10 @@ class A1AtlasCtrlWidget(Atlas.AtlasCtrlWidget):
             fields = collections.OrderedDict([
                 ('SliceDir', 'directory:Slice'),
                 (dirColumn, 'directory:'+dirType),
-                ('yPosSlice', real),
-                ('percentDepth', real),
-                ('xPosSlice', real),
-                ('modXPosSlice', real)])
+                ('yPosSlice', 'real'),
+                ('percentDepth', 'real'),
+                ('xPosSlice', 'real'),
+                ('modXPosSlice', 'real')])
  
             for i in range(len(positions)):
                 dh, pos = positions[i]
@@ -160,6 +233,8 @@ class A1AtlasCtrlWidget(Atlas.AtlasCtrlWidget):
         
         return data, fields
                 
+    def roiChanged(self):
+        self.saveState()
             
             
             
