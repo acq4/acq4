@@ -14,15 +14,8 @@ import lib.Manager as Manager
 from RecordThread import RecordThread
 from CameraInterfaceTemplate import Ui_Form as CameraInterfaceTemplate
 
-class CamROI(pg.ROI):
-    """Used for specifying the ROI for a camera to acquire from"""
-    def __init__(self, size, parent=None):
-        pg.ROI.__init__(self, pos=[0,0], size=size, maxBounds=QtCore.QRectF(0, 0, size[0], size[1]), scaleSnap=True, translateSnap=True, parent=parent)
-        self.addScaleHandle([0, 0], [1, 1])
-        self.addScaleHandle([1, 0], [0, 1])
-        self.addScaleHandle([0, 1], [1, 0])
-        self.addScaleHandle([1, 1], [0, 0])
 
+        
 class CameraInterface(QtCore.QObject):
     """
     This class provides all the functionality necessary for a camera to display images and controls within the camera module's main window. Each camera that connects to the window must implement an instance of this interface.
@@ -658,18 +651,20 @@ class CameraInterface(QtCore.QObject):
 
     def addPersistentFrame(self):
         """Make a copy of the current camera frame and store it in the background"""
-        px = self.imageItem.getPixmap()
-        if px is None:
+        #px = self.imageItem.getPixmap()
+        #if px is None:
+        if self.currentFrame is None:
             return
-        im = QtGui.QGraphicsPixmapItem(px.copy())
-        im.setCacheMode(im.NoCache)
+        #im = QtGui.QGraphicsPixmapItem(px.copy())
+        im = pg.ImageItem(self.currentFrame.data(), levels=self.histogram.getLevels(), removable=True)
+        #im.setCacheMode(im.NoCache)
         if len(self.persistentFrames) == 0:
             z = -10000
         else:
             z = self.persistentFrames[-1].zValue() + 1
 
-        img = self.currentFrame.data()
-        info = self.currentFrame.info()
+        #img = self.currentFrame.data()
+        #info = self.currentFrame.info()
         #s = info['pixelSize']
         #p = info['imagePosition']
         self.persistentFrames.append(im)
@@ -678,3 +673,13 @@ class CameraInterface(QtCore.QObject):
 
     def getImageItem(self):
         return self.imageItem
+
+
+class CamROI(pg.ROI):
+    """Used for specifying the ROI for a camera to acquire from"""
+    def __init__(self, size, parent=None):
+        pg.ROI.__init__(self, pos=[0,0], size=size, maxBounds=QtCore.QRectF(0, 0, size[0], size[1]), scaleSnap=True, translateSnap=True, parent=parent)
+        self.addScaleHandle([0, 0], [1, 1])
+        self.addScaleHandle([1, 0], [0, 1])
+        self.addScaleHandle([0, 1], [1, 0])
+        self.addScaleHandle([1, 1], [0, 0])
