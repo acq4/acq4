@@ -30,6 +30,7 @@ class ImageItem(GraphicsObject):
     
     
     sigImageChanged = QtCore.Signal()
+    sigRemoveRequested = QtCore.Signal(object)  # self; emitted when 'remove' is selected from context menu
     
     def __init__(self, image=None, **kargs):
         """
@@ -370,7 +371,7 @@ class ImageItem(GraphicsObject):
             self.menu = QtGui.QMenu()
             self.menu.setTitle("Image")
             remAct = QtGui.QAction("Remove image", self.menu)
-            remAct.triggered.connect(self.removeSelf)
+            remAct.triggered.connect(self.removeClicked)
             self.menu.addAction(remAct)
             self.menu.remAct = remAct
         return self.menu
@@ -440,3 +441,6 @@ class ImageItem(GraphicsObject):
         self.drawKernelCenter = center
         self.drawMode = mode
         self.drawMask = mask
+
+    def removeClicked(self):
+        self.sigRemoveRequested.emit(self)
