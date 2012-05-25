@@ -78,6 +78,17 @@ class MockCamera(Camera):
         
         self.sigGlobalTransformChanged.connect(self.globalTransformChanged)
         
+        ## generate list of mock cells
+        cells = np.zeros(20, dtype=[('x', float), ('y', float), ('size', float), ('value', float), ('rate', float), ('intensity', float), ('decayTau', float)])
+        cells['x'] = np.random.normal(size=cells.shape, scale=100e-6, loc=100e-6)
+        cells['y'] = np.random.normal(size=cells.shape, scale=100e-6)
+        cells['size'] = np.random.normal(size=cells.shape, scale=2e-6, loc=10e-6)
+        cells['rate'] = np.random.lognormal(size=cells.shape, mean=0, sigma=1)
+        cells['intensity'] = np.random.uniform(size=cells.shape, low=1000, high=10000)
+        cells['decayTau'] = np.random.uniform(size=cells.shape, low=15e-3, high=500e-3)
+        self.cells = cells
+        
+        
     
     def setupCamera(self):
         pass
@@ -148,6 +159,13 @@ class MockCamera(Camera):
             m.scale(2e6, 2e6)
             tr = tr * m
             
+            origin = tr.map(pg.Point(0,0))
+            x = (tr.map(pg.Point(1,0)) - origin)
+            y = (tr.map(pg.Point(0,1)) - origin)
+            origin = np.array([origin.x(), origin.y()])
+            x = np.array([x.x(), x.y()])
+            y = np.array([y.x(), y.y()])
+            
             ## render fractal on the fly
             #m = pg.Transform(tr).matrix()
             #tr = np.array([[1,0,0],[0,1,0],[0,0,1]])
@@ -158,18 +176,21 @@ class MockCamera(Camera):
             #self.background = mandelbrot(xy)
             
             ## slice fractal from pre-rendered data
-            origin = tr.map(pg.Point(0,0))
-            x = (tr.map(pg.Point(1,0)) - origin)
-            y = (tr.map(pg.Point(0,1)) - origin)
-            origin = np.array([origin.x(), origin.y()])
-            x = np.array([x.x(), x.y()])
-            y = np.array([y.x(), y.y()])
-            
-            vectors = [x,y]
-            
+            vectors = (x,y)
             self.background = pg.affineSlice(self.bgData, (w,h), origin, vectors, (0,1), order=1)
             
         return self.background
+        
+    def pixelVectors(self):
+        tr = self.globalTransform()
+        origin = tr.map(pg.Point(0,0))
+        x = (tr.map(pg.Point(1,0)) - origin)
+        y = (tr.map(pg.Point(0,1)) - origin)
+        origin = np.array([origin.x(), origin.y()])
+        x = np.array([x.x(), x.y()])
+        y = np.array([y.x(), y.y()])
+        
+        return x,y
         
     def newFrames(self):
         """Return a list of all frames acquired since the last call to newFrames."""
@@ -179,6 +200,11 @@ class MockCamera(Camera):
         exp = self.getParam('exposure')
         region = self.getParam('region') 
         bg = self.getBackground()[region[0]:region[0]+region[2], region[1]:region[1]+region[3]]
+        
+        ## update cells
+        spikes = np.random.poisson(max(dt, 0.4) * self.cells['rate'])
+        self.cells['value'] *= np.exp(-dt / self.cells['decayTau'])
+        self.cells['value'] = np.clip(self.cells['value'] + spikes * 0.2, 0, 1)
         
         shape = region[2:]
         bin = self.getParam('binning')
@@ -192,9 +218,25 @@ class MockCamera(Camera):
             #sig = self.signal[region[0]:region[0]+region[2], region[1]:region[1]+region[3]]
             data += bg * (exp*1000)
             
+            ## draw cells
+            px = (self.pixelVectors()[0]**2).sum() ** 0.5
+            tr = pg.Transform(self.inverseGlobalTransform())
+            for cell in self.cells:
+                w = cell['size'] / px
+                pos = pg.Point(cell['x'], cell['y'])
+                imgPos = tr.map(pos)
+                start = (int(imgPos.x()), int(imgPos.y()))
+                stop = (start[0]+w, start[1]+w)
+                val = cell['intensity'] * cell['value'] * self.getParam('exposure')
+                data[start[0]:stop[0], start[1]:stop[1]] += val
+            
+            
             data = fn.downsample(data, bin[0], axis=0)
             data = fn.downsample(data, bin[1], axis=1)
             data = data.astype(np.uint16)
+            
+            
+            
             
             self.frameId += 1
             frames = []

@@ -27,6 +27,9 @@ class CameraInterface(QtCore.QObject):
     """
     This class provides all the functionality necessary for a camera to display images and controls within the camera module's main window. Each camera that connects to the window must implement an instance of this interface.
     """
+    
+    sigNewFrame = QtCore.Signal(object, object)  # self, frame
+    
     def __init__(self, camera, module):
         QtCore.QObject.__init__(self)
         self.module = module
@@ -460,6 +463,7 @@ class CameraInterface(QtCore.QObject):
             Manager.logMsg("Camera stopped acquisition.", importance=0)
 
     def newFrame(self, frame):
+        
         lf = None
         if self.nextFrame is not None:
             lf = self.nextFrame
@@ -503,7 +507,10 @@ class CameraInterface(QtCore.QObject):
                 self.backgroundFrame = frame.data().astype(float)
             else:
                 self.backgroundFrame = x * self.backgroundFrame + (1-x)*frame.data().astype(float)
-
+        
+        self.sigNewFrame.emit(self, frame)
+    
+    
     def collectBgClicked(self, checked):
         if checked:
             if not self.ui.contAvgBgCheck.isChecked():
@@ -669,3 +676,5 @@ class CameraInterface(QtCore.QObject):
         self.module.addItem(im, z=z)
         im.setTransform(self.currentFrame.globalTransform().as2D())
 
+    def getImageItem(self):
+        return self.imageItem

@@ -8,6 +8,8 @@ from StatusBar import StatusBar
 import pyqtgraph as pg
 import pyqtgraph.dockarea as dockarea
 import lib.Manager as Manager
+from debug import Profiler
+import numpy as np
 
 class PlotROI(pg.ROI):
     def __init__(self, pos, size):
@@ -70,7 +72,8 @@ class CameraWindow(QtGui.QMainWindow):
             else:
                 self.cw.addDock(dock, 'below', self.cameraDocks[0])
             self.cameraDocks.append(dock)
-        
+            iface.sigNewFrame.connect(self.newFrame)
+            
         ## ROI plot ctrls
         self.roiWidget = QtGui.QWidget()
         self.roiLayout = QtGui.QGridLayout()
@@ -101,8 +104,13 @@ class CameraWindow(QtGui.QMainWindow):
         self.roiLayout.addWidget(self.ellipseBtn, 0, 1)
         self.roiLayout.addWidget(self.polygonBtn, 1, 0)
         self.roiLayout.addWidget(self.polylineBtn, 1, 1)
+        self.roiTimeSpin = pg.SpinBox(value=5.0, suffix='s', siPrefix=True, dec=True, step=0.5, bounds=(0,None))
+        self.roiLayout.addWidget(self.roiTimeSpin, 2, 0, 1, 2)
+        self.roiPlotCheck = QtGui.QCheckBox('Plot')
+        self.roiLayout.addWidget(self.roiPlotCheck, 3, 0, 1, 2)
+        
         self.roiPlot = pg.PlotWidget()
-        self.roiLayout.addWidget(self.roiPlot, 0, 2, 2, 1)
+        self.roiLayout.addWidget(self.roiPlot, 0, 2, self.roiLayout.rowCount(), 1)
         self.roiDock = dockarea.Dock(name='ROI Plot', widget=self.roiWidget, size=(600, 10))
         self.cw.addDock(self.roiDock, 'bottom', self.gvDock)
         
@@ -145,10 +153,10 @@ class CameraWindow(QtGui.QMainWindow):
         self.gv.scene().sigMouseMoved.connect(self.updateMouse)
         
         ## Connect ROI dock
-        #self.ui.btnAddROI.clicked.connect(self.addROI)
+        self.rectBtn.clicked.connect(self.addROI)
         #self.ui.btnClearROIs.clicked.connect(self.clearROIs)
-        #self.ui.checkEnableROIs.stateChanged.connect(self.enableROIsChanged)
-        #self.ui.spinROITime.valueChanged.connect(self.setROITime)
+        #self.roiPlotCheck.stateChanged.connect(self.enableROIsChanged)
+        self.roiTimeSpin.valueChanged.connect(self.setROITime)
         
 
     def getView(self):
@@ -190,13 +198,13 @@ class CameraWindow(QtGui.QMainWindow):
         roi.setZValue(40000)
         roi.setPen(pen)
         self.view.addItem(roi)
-        plot = self.ui.plotWidget.plot(pen=pen)
+        plot = self.roiPlot.plot(pen=pen)
         self.ROIs.append({'roi': roi, 'plot': plot, 'vals': [], 'times': []})
         
     def clearROIs(self):
         for r in self.ROIs:
             self.view.removeItem(r['roi'])
-            self.ui.plotWidget.removeItem(r['plot'])
+            self.roiPlot.removeItem(r['plot'])
         self.ROIs = []
         
 
@@ -205,10 +213,6 @@ class CameraWindow(QtGui.QMainWindow):
             r['vals'] = []
             r['times'] = []
 
-
-    def enableROIsChanged(self, b):
-        pass
-    
 
     def setROITime(self, val):
         pass
@@ -259,21 +263,25 @@ class CameraWindow(QtGui.QMainWindow):
         #self.vLabel.setText(z)
     
 
-    def addPlotFrame(self, frame):
+    def newFrame(self, iface, frame):
         #sys.stdout.write('+')
+        if not self.roiPlotCheck.isChecked():
+            return
+        imageItem = iface.getImageItem()
+        
         prof = Profiler('CameraWindow.addPlotFrame', disabled=True)
-        if self.imageItem.width() is None:
+        if imageItem.width() is None:
             return
         
         ## Get rid of old frames
         minTime = None
-        now = ptime.time()
+        now = pg.time()
         #if len(self.frameBuffer) > 0:
             #while len(self.frameBuffer) > 0 and self.frameBuffer[0][1]['time'] < (now-self.ui.spinROITime.value()):
                 #self.frameBuffer.pop(0)
         for r in self.ROIs:
             #print " >>", r['times'], now, frame[1]['time'], self.ui.spinROITime.value(), now-self.ui.spinROITime.value()
-            while len(r['times']) > 0 and r['times'][0] < (now-self.ui.spinROITime.value()):
+            while len(r['times']) > 0 and r['times'][0] < (now-self.roiTimeSpin.value()):
                 r['times'].pop(0)
                 r['vals'].pop(0)
             #print " <<", r['times']
@@ -291,7 +299,7 @@ class CameraWindow(QtGui.QMainWindow):
             self.lastPlotTime = now
             
         for r in self.ROIs:
-            d = r['roi'].getArrayRegion(frame.data(), self.imageItem, axes=(0,1))
+            d = r['roi'].getArrayRegion(frame.data(), imageItem, axes=(0,1))
             prof.mark('get array rgn')
             if d is None:
                 continue
@@ -307,5 +315,5 @@ class CameraWindow(QtGui.QMainWindow):
                 prof.mark('draw')
         prof.finish()
     
-
+    
 
