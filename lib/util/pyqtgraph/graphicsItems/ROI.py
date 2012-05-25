@@ -45,8 +45,9 @@ class ROI(GraphicsObject):
     sigRegionChanged = QtCore.Signal(object)
     sigHoverEvent = QtCore.Signal(object)
     sigClicked = QtCore.Signal(object, object)
+    sigRemoveRequested = QtCore.Signal(object)
     
-    def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None, pen=None, movable=True):
+    def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None, pen=None, movable=True, removable=False):
         #QObjectWorkaround.__init__(self)
         GraphicsObject.__init__(self, parent)
         self.setAcceptedMouseButtons(QtCore.Qt.NoButton)
@@ -55,6 +56,8 @@ class ROI(GraphicsObject):
         self.aspectLocked = False
         self.translatable = movable
         self.rotateAllowed = True
+        self.removable = removable
+        self.menu = None
         
         self.freeHandleMoved = False ## keep track of whether free handles have moved since last change signal was emitted.
         self.mouseHovering = False
@@ -347,13 +350,19 @@ class ROI(GraphicsObject):
         if not ev.isExit():
             if self.translatable and ev.acceptDrags(QtCore.Qt.LeftButton):
                 hover=True
+                
             for btn in [QtCore.Qt.LeftButton, QtCore.Qt.RightButton, QtCore.Qt.MidButton]:
                 if int(self.acceptedMouseButtons() & btn) > 0 and ev.acceptClicks(btn):
                     hover=True
-                    
+            if self.contextMenuEnabled():
+                ev.acceptClicks(QtCore.Qt.RightButton)
+                
         if hover:
             self.setMouseHover(True)
             self.sigHoverEvent.emit(self)
+            ev.acceptClicks(QtCore.Qt.LeftButton)  ## If the ROI is hilighted, we should accept all clicks to avoid confusion.
+            ev.acceptClicks(QtCore.Qt.RightButton)
+            ev.acceptClicks(QtCore.Qt.MidButton)
         else:
             self.setMouseHover(False)
 
@@ -367,8 +376,36 @@ class ROI(GraphicsObject):
         else:
             self.currentPen = self.pen
         self.update()
+
+    def contextMenuEnabled(self):
+        return self.removable
+    
+    def raiseContextMenu(self, ev):
+        if not self.contextMenuEnabled():
+            return
+        menu = self.getMenu()
+        menu = self.scene().addParentContextMenus(self, menu, ev)
+        pos = ev.screenPos()
+        menu.popup(QtCore.QPoint(pos.x(), pos.y()))
+
+    def getMenu(self):
+        if self.menu is None:
+            self.menu = QtGui.QMenu()
+            self.menu.setTitle("ROI")
+            remAct = QtGui.QAction("Remove ROI", self.menu)
+            remAct.triggered.connect(self.removeClicked)
+            self.menu.addAction(remAct)
+            self.menu.remAct = remAct
+        return self.menu
+
+    def removeClicked(self):
+        ## Send remove event only after we have exited the menu event handler
+        self.removeTimer = QtCore.QTimer()
+        self.removeTimer.timeout.connect(lambda: self.sigRemoveRequested.emit(self))
+        self.removeTimer.start(0)
         
-            
+
+    
     def mouseDragEvent(self, ev):
         if ev.isStart():
             #p = ev.pos()
@@ -402,6 +439,9 @@ class ROI(GraphicsObject):
         if ev.button() == QtCore.Qt.RightButton and self.isMoving:
             ev.accept()
             self.cancelMove()
+        if ev.button() == QtCore.Qt.RightButton and self.contextMenuEnabled():
+            self.raiseContextMenu(ev)
+            ev.accept()
         elif int(ev.button() & self.acceptedMouseButtons()) > 0:
             ev.accept()
             self.sigClicked.emit(self, ev)

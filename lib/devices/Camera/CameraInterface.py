@@ -683,6 +683,7 @@ class CameraInterface(QtCore.QObject):
     def removePersistentFrame(self, fr):
         self.persistentFrames.remove(fr)
         self.module.removeItem(fr)
+        fr.sigRemoveRequested.disconnect(self.removePersistentFrame)
         
     def getImageItem(self):
         return self.imageItem
