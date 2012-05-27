@@ -242,10 +242,10 @@ class RigidDevice(object):
             subdev = {}
             
         with self.__lock:
-            dev = self.getSubdevice(subdev)
-            if dev is None or dev is self.__subdevice: ## return cached transform
+            #dev = self.getSubdevice(subdev)
+            if subdev is None: ## return cached transform
                 if self.__globalTransform == 0:
-                    self.__globalTransform = self.__computeGlobalTransform(subdev)
+                    self.__globalTransform = self.__computeGlobalTransform()
                 return QtGui.QMatrix4x4(self.__globalTransform)
             else:
                 return self.__computeGlobalTransform(subdev)
@@ -275,10 +275,10 @@ class RigidDevice(object):
         See globalTransform; this method returns the inverse.
         """
         with self.__lock:
-            dev = self.getSubdevice(subdev)
-            if dev is None or dev is self.__subdevice: ## return cached transform
+            #dev = self.getSubdevice(subdev)
+            if subdev is None: ## return cached transform
                 if self.__inverseGlobalTransform == 0:
-                    tr = self.globalTransform(subdev)
+                    tr = self.globalTransform()
                     if tr is None:
                         self.__inverseGlobalTransform = None
                     else:
@@ -385,7 +385,7 @@ class RigidDevice(object):
         if isinstance(dev, dict):
             return dev
         if dev is None:
-            dev = self.__subdevices.get(self.__subdevice, None)
+            dev = self.__subdevice
             return {self.name(): dev}
         if isinstance(dev, basestring):
             return {self.name(): self.__subdevices[dev]}
@@ -398,10 +398,10 @@ class RigidDevice(object):
                 self.__subdevice = None
             else:
                 dev = self.getSubdevice(dev)
-                self.__subdevice = dev.name()
+                self.__subdevice = dev
             self.sigSubdeviceChanged.emit(self, dev, oldDev)
         
-    def listTreeSubdevices(self):
+    def treeSubdeviceState(self):
         """return a dict of {devName: subdevName} pairs indicating the currently
         selected subdevices throughout the tree."""
         devices = [self] + self.parentDevices()
@@ -411,7 +411,20 @@ class RigidDevice(object):
             if subdev is not None:
                 subdevs[dev.name()] = subdev.name()
         return subdevs
-    
+
+    def listTreeSubdevices(self):
+        """return a dict of {devName: [subdevName1, ...]} pairs listing
+        all available subdevices in the tree."""
+        devices = [self] + self.parentDevices()
+        subdevs = collections.OrderedDict()
+        for dev in devices:
+            subdev = dev.listSubdevices()
+            if len(subdev) > 0:
+                subdevs[dev.name()] = subdev
+        return subdevs
+        
+        
+        
     def __subdeviceChanged(self, dev):
         self.invalidateCachedTransforms()
         self.sigTransformChanged.emit(self)
