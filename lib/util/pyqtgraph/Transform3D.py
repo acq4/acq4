@@ -84,6 +84,10 @@ class Transform3D(QtGui.QMatrix4x4):
         
     def setScale(self, *args):
         """Set the scale of this transform"""
+        if len(args) == 1 and hasattr(args[0], '__len__'):
+            args = args[0]
+        if len(args) == 2:
+            args = args + (1,)
         self._state['scale'] = Vector(*args)
         self.update()
         

@@ -15,7 +15,10 @@ class Device(QtCore.QObject):
         self.dm = deviceManager
         self.dm.declareInterface(name, ['device'], self)
         #self.config = config
-        self.name = name
+        self._name = name
+    
+    def name(self):
+        return self._name
     
     def createTask(self, cmd):
         ### Read configuration, configure tasks

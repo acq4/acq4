@@ -84,6 +84,7 @@ class RigidDevice(object):
         self.__lock = Mutex(recursive=True)
         self.__subdevices = collections.OrderedDict()
         self.__subdevice = None
+        self.__name = name
         
         
         self.sigTransformChanged.connect(self.__emitGlobalTransformChanged)
@@ -93,6 +94,9 @@ class RigidDevice(object):
             self.setParentDevice(config['parentDevice'])
         if 'transform' in config:
             self.setDeviceTransform(config['transform'])
+            
+    def name(self):
+        return self.__name
             
     def parentDevice(self):
         """Return this device's parent, or None if there is no parent."""
@@ -308,7 +312,7 @@ class RigidDevice(object):
     def __parentSubdeviceChanged(self, parent, newDev, oldDev):
         ## called when any (grand)parent's current subdevice has changed.
         self.invalidateCachedTransforms()
-        self.sigGlobalTransformChanged.emit(self, parent, newDev, oldDev)
+        self.sigGlobalSubdeviceChanged.emit(self, parent, newDev, oldDev)
         
     def parentDevices(self):
         """
@@ -336,7 +340,7 @@ class RigidDevice(object):
         self.invalidateCachedTransforms()
         dev.sigTransformChanged.connect(self.__subdeviceChanged)
         with self.__lock:
-            self.__subdevices[dev.name] = dev
+            self.__subdevices[dev.name()] = dev
             if self.__subdevice is None:
                 self.setCurrentSubdevice(dev)
     
@@ -345,7 +349,7 @@ class RigidDevice(object):
         dev = self.getSubdevice(dev)
         dev.sigTransformChanged.disconnect(self.__subdeviceChanged)
         with self.__lock:
-            del self.__subdevices[dev.name]
+            del self.__subdevices[dev.name()]
             if len(self.__subdevices) == 0:
                 self.setCurrentSubdevice(None)
     
@@ -361,10 +365,13 @@ class RigidDevice(object):
         """
         with self.__lock:
             if isinstance(dev, dict):
-                dev = dev.get(self.name, None)
+                dev = dev.get(self.name(), None)
             
             if dev is None:
-                return self.__subdevice
+                dev = self.__subdevice
+                
+            if dev is None:
+                return None
             elif isinstance(dev, RigidDevice):
                 return dev
             elif isinstance(dev, basestring):
@@ -379,9 +386,9 @@ class RigidDevice(object):
             return dev
         if dev is None:
             dev = self.__subdevices.get(self.__subdevice, None)
-            return {self.name: dev}
+            return {self.name(): dev}
         if isinstance(dev, basestring):
-            return {self.name: self.__subdevices[dev]}
+            return {self.name(): self.__subdevices[dev]}
             
     def setCurrentSubdevice(self, dev):
         self.invalidateCachedTransforms()
@@ -391,7 +398,7 @@ class RigidDevice(object):
                 self.__subdevice = None
             else:
                 dev = self.getSubdevice(dev)
-                self.__subdevice = dev.name
+                self.__subdevice = dev.name()
             self.sigSubdeviceChanged.emit(self, dev, oldDev)
         
     def listTreeSubdevices(self):
@@ -402,7 +409,7 @@ class RigidDevice(object):
         for dev in devices:
             subdev = dev.getSubdevice()
             if subdev is not None:
-                subdevs[dev.name] = subdev.name
+                subdevs[dev.name()] = subdev.name()
         return subdevs
     
     def __subdeviceChanged(self, dev):
