@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
 from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask
-from lib.devices.RigidDevice import RigidDevice
+from lib.devices.OptomechDevice import OptomechDevice
 from Mutex import Mutex
 #from lib.devices.Device import *
 from lib.devices.Microscope import Microscope
@@ -18,7 +18,7 @@ from pyqtgraph import Vector, Transform3D
 
 from CameraInterface import CameraInterface
 
-class Camera(DAQGeneric, RigidDevice):
+class Camera(DAQGeneric, OptomechDevice):
     """Generic camera device class. All cameras should extend from this interface.
      - The class handles protocol tasks, scope integration, expose/trigger lines
      - Subclasses should handle the connection to the camera driver by overriding
@@ -52,7 +52,7 @@ class Camera(DAQGeneric, RigidDevice):
     sigParamsChanged = QtCore.Signal(object)
 
     def __init__(self, dm, config, name):
-        RigidDevice.__init__(self, dm, config, name)
+        OptomechDevice.__init__(self, dm, config, name)
         
         self.lock = Mutex(Mutex.Recursive)
         

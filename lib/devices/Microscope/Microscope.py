@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-from lib.devices.RigidDevice import *
+from lib.devices.OptomechDevice import *
 from deviceTemplate import Ui_Form
 from Mutex import Mutex
 import pyqtgraph as pg
 import collections
 
 
-class Microscope(Device, RigidDevice):
+class Microscope(Device, OptomechDevice):
     """
     The Microscope device class is used primarily to manage the transformation and calibration changes associated with multi-objective scopes.
     
@@ -24,7 +24,7 @@ class Microscope(Device, RigidDevice):
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        RigidDevice.__init__(self, dm, config, name)
+        OptomechDevice.__init__(self, dm, config, name)
         self.config = config
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.switchDevice = None
@@ -148,7 +148,7 @@ class Microscope(Device, RigidDevice):
             #self.updateDeviceTransform()
 
 
-class Objective(RigidDevice):
+class Objective(OptomechDevice):
     
     #class SignalProxyObject(QtCore.QObject):
         #sigTransformChanged = QtCore.Signal(object) ## self
@@ -164,8 +164,7 @@ class Objective(RigidDevice):
         scale = config.get('scale', pg.Vector(1,1,1))
         name = config['name']
         
-        ## translate config for rigidDevice init
-        RigidDevice.__init__(self, scope.dm, {}, name)
+        OptomechDevice.__init__(self, scope.dm, {}, name)
         
         if 'offset' in config:
             self.setOffset(config['offset'])
@@ -179,7 +178,7 @@ class Objective(RigidDevice):
         #self.setDeviceTransform(tr)
     
     def deviceTransform(self):
-        return pg.Transform3D(RigidDevice.deviceTransform(self))
+        return pg.Transform3D(OptomechDevice.deviceTransform(self))
     
     def setOffset(self, pos):
         tr = self.deviceTransform()

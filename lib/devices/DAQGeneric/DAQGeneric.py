@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from lib.devices.RigidDevice import RigidDevice
 from lib.devices.Device import *
 from metaarray import MetaArray, axis
 from Mutex import Mutex

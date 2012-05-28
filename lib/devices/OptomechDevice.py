@@ -5,11 +5,11 @@ from Mutex import Mutex
 import pyqtgraph as pg
 import collections
 
-class RigidDevice(object):
+class OptomechDevice(object):
     """
-    Rigid devices are extenstions to devices which affect the mapping between an imaging/stimulation device 
-    and the global coordinate system. For example: movable stages, changeable objective lenses, and
-    the imaging/stimulation devices themselves are all considered rigid devices.
+    OptomechDevice is an extenstion to the Device class which manages coordinate system mapping between
+    rigidly-connected optomechanical devices. For example: movable stages, changeable objective lenses, and
+    the imaging/stimulation devices themselves are all considered optomechanical devices.
     
     These devices are organized hierarchically with each optionally having a parent device and multiple child
     devices. Each device defines its own coordinate transformation which maps from its own local coordinate system
@@ -21,7 +21,7 @@ class RigidDevice(object):
     physical location.
     
     In most cases, the transformation will be in the form of an affine matrix multiplication.
-    Devices are free, however, to define a non-affine transformation as well.
+    Devices are free, however, to define an arbitrary transformation as well.
     
     Devices may also have selectable sub-devices, providing a set of interchangeable transforms.
     For example, a microscope with multiple objectives may define one sub-device per objective.
@@ -44,7 +44,7 @@ class RigidDevice(object):
              (per-objective voltage calibration)
     """
     
-    ## these signals are proxied from the RigidDevice object
+    ## these signals are proxied from the OptomechDevice object
     ## we do this to avoid QObject double-inheritance issues.
     class SignalProxyObject(QtCore.QObject):
         sigTransformChanged = QtCore.Signal(object)        # self
@@ -71,7 +71,7 @@ class RigidDevice(object):
         object.__init__(self)
         
         ## create proxy object and wrap in its signals
-        self.__sigProxy = RigidDevice.SignalProxyObject()
+        self.__sigProxy = OptomechDevice.SignalProxyObject()
         self.sigTransformChanged = self.__sigProxy.sigTransformChanged
         self.sigGlobalTransformChanged = self.__sigProxy.sigGlobalTransformChanged
         self.sigSubdeviceTransformChanged = self.__sigProxy.sigSubdeviceTransformChanged
@@ -105,7 +105,7 @@ class RigidDevice(object):
             self.setDeviceTransform(config['transform'])
             
     def implements(self, interface=None):
-        ints = ['RigidDevice']
+        ints = ['OptomechDevice']
         if interface is None:
             return ints
         return interface in ints
@@ -405,7 +405,7 @@ class RigidDevice(object):
                 
             if dev is None:
                 return None
-            elif hasattr(dev, 'implements') and dev.implements('RigidDevice'):
+            elif hasattr(dev, 'implements') and dev.implements('OptomechDevice'):
                 return dev
             elif isinstance(dev, basestring):
                 return self.__subdevices[dev]
@@ -481,7 +481,7 @@ class DeviceTreeItemGroup(pg.ItemGroup):
     
     def __init__(self, device, includeSubdevices=True):
         """
-        *item* must be a RigidDevice instance. For the device and each
+        *item* must be a OptomechDevice instance. For the device and each
         of its (grand)parent devices, at least one item group
         will be created which automatically tracks the transform 
         of its device. By default, any devices which have subdevices

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from lib.devices.Device import *
+from lib.devices.OptomechDevice import *
 from lib.Manager import logMsg, logExc
 from Mutex import Mutex, MutexLocker
 from DeviceGui import ScannerDeviceGui

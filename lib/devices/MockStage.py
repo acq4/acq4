@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-from lib.devices.RigidDevice import *
+from lib.devices.OptomechDevice import *
 import pyqtgraph as pg
 
-class MockStage(Device, RigidDevice):
+class MockStage(Device, OptomechDevice):
 
     sigPositionChanged = QtCore.Signal(object)
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        RigidDevice.__init__(self, dm, config, name)
+        OptomechDevice.__init__(self, dm, config, name)
         
         self.config = config
         self.pos = [0, 0, 0]

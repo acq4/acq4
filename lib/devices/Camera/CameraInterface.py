@@ -13,7 +13,7 @@ from metaarray import *
 import lib.Manager as Manager
 from RecordThread import RecordThread
 from CameraInterfaceTemplate import Ui_Form as CameraInterfaceTemplate
-from lib.devices.RigidDevice import DeviceTreeItemGroup
+from lib.devices.OptomechDevice import DeviceTreeItemGroup
 
         
 class CameraInterface(QtCore.QObject):
