@@ -2,6 +2,7 @@
 from PyQt4 import QtCore, QtGui
 import atlasCtrlTemplate
 import pyqtgraph as pg
+from debug import Profiler
 
 class Atlas(QtCore.QObject):
     
@@ -56,7 +57,7 @@ class AtlasCtrlWidget(QtGui.QWidget):
         self.ui = atlasCtrlTemplate.Ui_Form()
         self.ui.setupUi(self)        
         self.ui.setSliceBtn.clicked.connect(self.setSliceClicked)
-        self.ui.storeBtn.clicked.connect(self.storeToDB)        
+        self.ui.storeBtn.clicked.connect(self.storeBtnClicked)        
         
         #self.baseDirChanged()
                 
@@ -116,10 +117,20 @@ class AtlasCtrlWidget(QtGui.QWidget):
             self.loadState()
         #else:
         #    self.updateAtlas()
+        
+    def storeBtnClicked(self):
+        self.ui.storeBtn.processing("Storing...")
+        try:
+            self.storeToDB()
+            self.ui.storeBtn.success("Stored!")
+        except:
+            self.ui.storeBtn.failure()
+            raise
     
     def storeToDB(self):
         ## collect list of cells and scans under this slice,
         ## read all positions with userTransform corrections
+        prof = Profiler("Atlas.storeToDB", disabled=True)
         loaded = self.host.getLoadedFiles()
         cells = []
         prots = []
@@ -150,12 +161,14 @@ class AtlasCtrlWidget(QtGui.QWidget):
                     pos = tr.map(*scanInfo['position'])
                     prots.append((subf, pos))
         
+        prof.mark("made list of positions")
         
         
         for ident, dirType, positions in [('_cell', 'Cell', cells), ('_protocol', 'Protocol', prots)]:
             
             ## map positions, build data tables
             data, fields = self.generateDataArray(positions, dirType)
+            prof.mark("got data arrays for %s" %dirType)
             #dirColumn = dirType + 'Dir'
             #data = np.empty(len(positions), dtype=[('SliceDir', object), (dirColumn, object), ('right', float), ('anterior', float), ('dorsal', float)])
             
@@ -170,7 +183,9 @@ class AtlasCtrlWidget(QtGui.QWidget):
             
             ## write to DB
             db = self.ui.dbWidget.getDb()
+            prof.mark('got db')
             table = self.ui.dbWidget.getTableName(self.atlas.DBIdentity+ident)
+            prof.mark('got table')
             
             #fields = collections.OrderedDict([
                 #('SliceDir', 'directory:Slice'),
@@ -182,13 +197,21 @@ class AtlasCtrlWidget(QtGui.QWidget):
             
             ## Make sure target table exists and has correct columns
             db.checkTable(table, owner=self.atlas.DBIdentity+ident, columns=fields, create=True)
+            prof.mark('checked table')
             
-            # delete old
-            for source in set(data[dirType+'Dir']):
-                db.delete(table, where={dirType+'Dir': source})
+            ## delete old -- This is the slow part!
+            old = db.select(table, where={'SliceDir':self.sliceDir}, toArray=True)
+            if old is not None: ## only do deleting if there is already data stored for this slice -- try to speed things up
+                for source in set(data[dirType+'Dir']):
+                    if source in old[dirType+'Dir']: ## check that source is in the old data before we delete it - try to speed things up
+                        db.delete(table, where={dirType+'Dir': source})
+            prof.mark('deleted old data') 
             
-            # write new
+            ## write new
             db.insert(table, data)
+            prof.mark("added %s data to db" %dirType)
+            
+        prof.finish()
             
     
             

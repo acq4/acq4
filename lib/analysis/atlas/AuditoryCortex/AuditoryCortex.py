@@ -11,6 +11,7 @@ from lib.analysis.atlas.AuditoryCortex.CortexROI import CortexROI
 import numpy as np
 import pyqtgraph as pg
 import scipy
+from debug import Profiler
 
 
 
@@ -35,7 +36,7 @@ class AuditoryCortex(Atlas.Atlas):
         quads = self.state['quadrilaterals']
         ind=None
         for i, q in enumerate(quads):
-            if QtGui.QPolygonF([QtCore.QPointF(x) for x in q]).containsPoint(QtCore.QPointF(pos), QtCore.Qt.OddEvenFill):
+            if QtGui.QPolygonF([QtCore.QPointF(*x) for x in q]).containsPoint(QtCore.QPointF(pos), QtCore.Qt.OddEvenFill):
                 ind = i
         if ind == None: ## in case pos is outside the quadrilaterals
             bestMin = 1000
@@ -151,8 +152,11 @@ class A1AtlasCtrlWidget(Atlas.AtlasCtrlWidget):
         self.atlas.setState(state)       
         
     def generateDataArray(self, positions, dirType):
+        prof = Profiler("A1Atlas.generateDataArray", disabled=True)
+        
         if self.atlas.state is None:
             self.saveState()
+        prof.mark('saved atlas state')
         
         dirColumn = dirType + 'Dir'
         if dirType == 'Protocol':
@@ -177,6 +181,7 @@ class A1AtlasCtrlWidget(Atlas.AtlasCtrlWidget):
                            ('xPosCell', 'real'),
                            ('modXPosSlice', 'real'),
                            ('modXPosCell', 'real')])            
+            prof.mark("defined Protocol data array")
             
             for i in range(len(positions)):
                 dh, pos = positions[i]
@@ -191,7 +196,8 @@ class A1AtlasCtrlWidget(Atlas.AtlasCtrlWidget):
                 data[i]['xPosSlice'] = pos[0]
                 data[i]['xPosCell'] = pos[0]-cellPos[0]
                 data[i]['modXPosSlice'] = mapped[0]
-                data[i]['modXPosCell'] = mapped[0]-self.atlas.mapToAtlas(pg.Point(cellPos))[0]            
+                data[i]['modXPosCell'] = mapped[0]-self.atlas.mapToAtlas(pg.Point(cellPos))[0]   
+            prof.mark("filled protocol data array")
             
         elif dirType == 'Cell':
             data = np.empty(len(positions), dtype=[('SliceDir', object), 
@@ -213,7 +219,7 @@ class A1AtlasCtrlWidget(Atlas.AtlasCtrlWidget):
                 ('percentDepth', 'real'),
                 ('xPosSlice', 'real'),
                 ('modXPosSlice', 'real')])
- 
+            prof.mark("defined cell data array")
             for i in range(len(positions)):
                 dh, pos = positions[i]
                 #cellPos = self.dataModel.getCellInfo(dh)['pos']
@@ -227,10 +233,13 @@ class A1AtlasCtrlWidget(Atlas.AtlasCtrlWidget):
                 data['xPosSlice'] = pos[0]
                 #data['xPosCell'] = pos[0]-cellPos[0]
                 data['modXPosSlice'] = mapped[0]
-                #data['modXPosCell'] = mapped[0]-self.atlas.mapToAtlas(pg.Point(cellPos))[0]              
+                #data['modXPosCell'] = mapped[0]-self.atlas.mapToAtlas(pg.Point(cellPos))[0]   
+            prof.mark("filled cell data array")
         else:
+            prof.finish()
             raise Exception("Not sure how to structure data array for dirType=%s"%dirType)
         
+        prof.finish()
         return data, fields
                 
     def roiChanged(self):
