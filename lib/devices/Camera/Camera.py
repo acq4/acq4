@@ -337,23 +337,17 @@ class Camera(DAQGeneric, RigidDevice):
         with self.lock:
             return self.scopeDev
             
-    def getBoundary(self, obj=None):
-        """Return the boundaries of the camera sensor in global coordinates."""
+    def getBoundary(self, globalCoords=True):
+        """Return the boundaries of the camera sensor in global coordinates.
+        If globalCoords==False, return in local coordinates.
+        """
         size = self.getParam('sensorSize')
-        bounds = pg.Transform(self.globalTransform()).map(QtGui.QPolygonF(QtCore.QRectF(0, 0, *size)))
-        return bounds
-        #if obj is None:
-            #obj = self.scopeDev.getObjective()
-        #if obj is None:
-            #return None
-        
-        #with self.lock:
-            #sf = self.camConfig['scaleFactor']
-            #size = self.getParam('sensorSize')
-            #sx = size[0] * obj['scale'] * sf[0]
-            #sy = size[1] * obj['scale'] * sf[1]
-            #bounds = QtCore.QRectF(-sx * 0.5 + obj['offset'][0], -sy * 0.5 + obj['offset'][1], sx, sy)
-            #return bounds
+        bounds = QtGui.QPainterPath()
+        bounds.addRect(QtCore.QRectF(0, 0, *size))
+        if globalCoords:
+            return pg.Transform(self.globalTransform()).map(bounds)
+        else:
+            return bounds
         
     def getBoundaries(self):
         """Return a list of camera boundaries for all objectives"""
@@ -389,7 +383,6 @@ class Camera(DAQGeneric, RigidDevice):
             obj = self.scopeDev.getObjective()
         else:
             obj, oldObj = obj
-        
         with self.lock:
             self.scopeState['objective'] = obj.name()
             self.scopeState['id'] += 1
@@ -887,7 +880,6 @@ class AcquireThread(QtCore.QThread):
                     
                     ## frameInfo includes pixelSize, objective, centerPosition, scopePosition, imagePosition
                     ss = self.dev.getScopeState()
-                    #print ss
                     if ss['id'] != scopeState:
                         #print "scope state changed"
                         scopeState = ss['id']

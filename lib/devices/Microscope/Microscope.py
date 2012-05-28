@@ -216,9 +216,15 @@ class Objective(RigidDevice):
 
     def scope(self):
         return self._scope
+        
+    def __repr__(self):
+        return "<Objective %s.%s offset=%0.2g,%0.2g scale=%0.2g>" % (self._scope.name(), self.name(), self.offset().x(), self.offset().y(), self.scale().x())
+
+
 
 class ScopeGUI(QtGui.QWidget):
-    
+    """Microscope GUI displayed in Manager window.
+    Shows selection of objectives and allows scale/offset to be changed for each."""
     
     def __init__(self, dev, win):
         QtGui.QWidget.__init__(self)
@@ -295,7 +301,11 @@ class ScopeGUI(QtGui.QWidget):
         index = spin.index
         (r, combo, xs, ys, ss) = self.objWidgets[index]
         obj = combo.itemData(combo.currentIndex())
-        obj.setOffset((xs.value(), ys.value()))
+        obj.sigTransformChanged.disconnect(self.updateSpins)
+        try:
+            obj.setOffset((xs.value(), ys.value()))
+        finally:
+            obj.sigTransformChanged.connect(self.updateSpins)
     
     def scaleSpinChanged(self, spin):
         if self.blockSpinChange:
@@ -303,7 +313,11 @@ class ScopeGUI(QtGui.QWidget):
         index = spin.index
         (r, combo, xs, ys, ss) = self.objWidgets[index]
         obj = combo.itemData(combo.currentIndex())
-        obj.setScale(ss.value())
+        obj.sigTransformChanged.disconnect(self.updateSpins)
+        try:
+            obj.setScale(ss.value())
+        finally:
+            obj.sigTransformChanged.connect(self.updateSpins)
         
     def updateSpins(self):
         for k, w in self.objWidgets.iteritems():

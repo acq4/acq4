@@ -1,7 +1,8 @@
 from PyQt4 import QtCore, QtGui
 from Device import Device
 from Mutex import Mutex
-from pyqtgraph import Transform3D
+#from pyqtgraph import Transform3D, Transform
+import pyqtgraph as pg
 import collections
 
 class RigidDevice(object):
@@ -32,9 +33,9 @@ class RigidDevice(object):
     Example device hierarchy:
     
             [Motorized Stage]
-                 |
+                  |
          [Microscope focus drive]
-                 |
+                  |
          [Microscope objectives] ---- subdevices: [ 5x objective ], [ 63x objective ]
           |       |       |
        [Camera]   |    [Laser] (per-objective power calibration)
@@ -57,9 +58,14 @@ class RigidDevice(object):
             ## Emitted when the transform of a subdevice or any (grand)parent's subdevice has changed
             
         sigSubdeviceChanged = QtCore.Signal(object, object, object) ## self, new subdev, old subdev
-            ## Emitted when this device changes its subdevice
+            ## Emitted when this device changes its current subdevice
         sigGlobalSubdeviceChanged = QtCore.Signal(object, object, object, object) ## self, dev, new subdev, old subdev
-            ## Emitted when this device or any (grand)parent changes its subdevice
+            ## Emitted when this device or any (grand)parent changes its current subdevice
+    
+        sigSubdeviceListChanged = QtCore.Signal(object) ## self
+            ## Emitted when this device changes its list of available subdevices
+        sigGlobalSubdeviceListChanged = QtCore.Signal(object, object) ## self, dev
+            ## Emitted when this device or any (grand)parent changes its list of available subdevices
     
     def __init__(self, dm, config, name):
         object.__init__(self)
@@ -72,6 +78,8 @@ class RigidDevice(object):
         self.sigGlobalSubdeviceTransformChanged = self.__sigProxy.sigGlobalSubdeviceTransformChanged
         self.sigSubdeviceChanged = self.__sigProxy.sigSubdeviceChanged
         self.sigGlobalSubdeviceChanged = self.__sigProxy.sigGlobalSubdeviceChanged
+        self.sigSubdeviceListChanged = self.__sigProxy.sigSubdeviceListChanged
+        self.sigGlobalSubdeviceListChanged = self.__sigProxy.sigGlobalSubdeviceListChanged
         
         self.__devManager = dm
         self.__config = config
@@ -79,7 +87,7 @@ class RigidDevice(object):
         self.__parent = None
         self.__globalTransform = 0  ## 0 indicates the cache is invalid. None indicates the transform is non-affine.
         self.__inverseGlobalTransform = 0
-        self.__transform = Transform3D()
+        self.__transform = pg.Transform3D()
         self.__inverseTransform = 0
         self.__lock = Mutex(recursive=True)
         self.__subdevices = collections.OrderedDict()
@@ -90,10 +98,18 @@ class RigidDevice(object):
         self.sigTransformChanged.connect(self.__emitGlobalTransformChanged)
         self.sigSubdeviceTransformChanged.connect(self.__emitGlobalSubdeviceTransformChanged)
         self.sigSubdeviceChanged.connect(self.__emitGlobalSubdeviceChanged)
+        self.sigSubdeviceListChanged.connect(self.__emitGlobalSubdeviceListChanged)
         if 'parentDevice' in config:
             self.setParentDevice(config['parentDevice'])
         if 'transform' in config:
             self.setDeviceTransform(config['transform'])
+            
+    def implements(self, interface=None):
+        ints = ['RigidDevice']
+        if interface is None:
+            return ints
+        return interface in ints
+            
             
     def name(self):
         return self.__name
@@ -109,12 +125,14 @@ class RigidDevice(object):
                 self.__parent.sigGlobalTransformChanged.disconnect(self.__parentDeviceTransformChanged)
                 self.__parent.sigGlobalSubdeviceTransformChanged.disconnect(self.__parentSubdeviceTransformChanged)
                 self.__parent.sigGlobalSubdeviceChanged.disconnect(self.__parentSubdeviceChanged)
+                self.__parent.sigGlobalSubdeviceListChanged.disconnect(self.__parentSubdeviceListChanged)
             if isinstance(parent, basestring):
                 parent = self.__devManager.getDevice(parent)
             
             parent.sigGlobalTransformChanged.connect(self.__parentDeviceTransformChanged)
             parent.sigGlobalSubdeviceTransformChanged.connect(self.__parentSubdeviceTransformChanged)
             parent.sigGlobalSubdeviceChanged.connect(self.__parentSubdeviceChanged)
+            parent.sigGlobalSubdeviceListChanged.connect(self.__parentSubdeviceListChanged)
             self.__parent = parent
         
     def mapToParentDevice(self, obj, subdev=None):
@@ -225,8 +243,13 @@ class RigidDevice(object):
     
     def setDeviceTransform(self, tr):
         with self.__lock:
-            self.__transform = Transform3D(tr)
+            self.__transform = pg.Transform3D(tr)
             self.invalidateCachedTransforms()
+        #print "setDeviceTransform", self
+        #print "   -> emit sigTransformChanged"
+        #import traceback
+        #traceback.print_stack()
+        
         self.sigTransformChanged.emit(self)
 
     def globalTransform(self, subdev=None):
@@ -253,8 +276,8 @@ class RigidDevice(object):
     def __computeGlobalTransform(self, subdev=None, inverse=False):
         ## subdev must be a dict
         with self.__lock:
-            devices = [self] + self.parentDevices()
-            transform = Transform3D()
+            devices = self.parentDevices()
+            transform = pg.Transform3D()
             for d in devices:
                 tr = d.deviceTransform(subdev)
                 if tr is None:
@@ -293,33 +316,41 @@ class RigidDevice(object):
     def __emitGlobalTransformChanged(self):
         self.sigGlobalTransformChanged.emit(self, self)
     
-    def __emitGlobalSubdeviceTransformChanged(self, subdev):
+    def __emitGlobalSubdeviceTransformChanged(self, sender, subdev):
+        #print "emit sigGlobalSubdeviceTransformChanged", sender, self, subdev
         self.sigGlobalSubdeviceTransformChanged.emit(self, self, subdev)
     
-    def __emitGlobalSubdeviceChanged(self, newDev, oldDev):
+    def __emitGlobalSubdeviceChanged(self, sender, newDev, oldDev):
         self.sigGlobalSubdeviceChanged.emit(self, self, newDev, oldDev)
     
-    def __parentDeviceTransformChanged(self, p):
+    def __emitGlobalSubdeviceListChanged(self, device):
+        self.sigGlobalSubdeviceListChanged.emit(self, device)
+    
+    def __parentDeviceTransformChanged(self, sender, changed):
         ## called when any (grand)parent's transform has changed.
         self.invalidateCachedTransforms()
-        self.sigGlobalTransformChanged.emit(self, p)
+        self.sigGlobalTransformChanged.emit(self, changed)
         
-    def __parentSubdeviceTransformChanged(self, parent, subdev):
+    def __parentSubdeviceTransformChanged(self, sender, parent, subdev):
         ## called when any (grand)parent's subdevice transform has changed.
         self.invalidateCachedTransforms()
         self.sigGlobalSubdeviceTransformChanged.emit(self, parent, subdev)
         
-    def __parentSubdeviceChanged(self, parent, newDev, oldDev):
+    def __parentSubdeviceChanged(self, sender, parent, newDev, oldDev):
         ## called when any (grand)parent's current subdevice has changed.
         self.invalidateCachedTransforms()
         self.sigGlobalSubdeviceChanged.emit(self, parent, newDev, oldDev)
         
+    def __parentSubdeviceListChanged(self, sender, device):
+        ## called when any (grand)parent's subdevice list has changed.
+        self.sigGlobalSubdeviceListChanged.emit(self, device)
+        
     def parentDevices(self):
         """
-        Return a list of parent devices in hierarchical order:
-        [parent, grandparent, ...]
+        Return a list of this device and its parent devices in hierarchical order:
+        [self, parent, grandparent, ...]
         """
-        parents = []
+        parents = [self]
         p = self
         while True:
             p = p.parentDevice()
@@ -335,27 +366,29 @@ class RigidDevice(object):
             self.__inverseGlobalTransform = 0
 
             
-    def addSubdevice(self, dev):
-        dev.setParentDevice(self)
+    def addSubdevice(self, subdev):
+        subdev.setParentDevice(self)
         self.invalidateCachedTransforms()
-        dev.sigTransformChanged.connect(self.__subdeviceChanged)
+        subdev.sigTransformChanged.connect(self.__subdeviceTransformChanged)
         with self.__lock:
-            self.__subdevices[dev.name()] = dev
+            self.__subdevices[subdev.name()] = subdev
             if self.__subdevice is None:
-                self.setCurrentSubdevice(dev)
+                self.setCurrentSubdevice(subdev)
+        self.sigSubdeviceListChanged.emit(self)
     
-    def removeSubdevice(self, dev):
+    def removeSubdevice(self, subdev):
         self.invalidateCachedTransforms()
-        dev = self.getSubdevice(dev)
-        dev.sigTransformChanged.disconnect(self.__subdeviceChanged)
+        subdev = self.getSubdevice(subdev)
+        subdev.sigTransformChanged.disconnect(self.__subdeviceTransformChanged)
         with self.__lock:
-            del self.__subdevices[dev.name()]
+            del self.__subdevices[subdev.name()]
             if len(self.__subdevices) == 0:
                 self.setCurrentSubdevice(None)
+        self.sigSubdeviceListChanged.emit(self)
     
     def listSubdevices(self):
         with self.__lock:
-            return self.__subdevices.keys()
+            return self.__subdevices.values()
 
     def getSubdevice(self, dev=None):
         """
@@ -372,7 +405,7 @@ class RigidDevice(object):
                 
             if dev is None:
                 return None
-            elif isinstance(dev, RigidDevice):
+            elif hasattr(dev, 'implements') and dev.implements('RigidDevice'):
                 return dev
             elif isinstance(dev, basestring):
                 return self.__subdevices[dev]
@@ -399,7 +432,8 @@ class RigidDevice(object):
             else:
                 dev = self.getSubdevice(dev)
                 self.__subdevice = dev
-            self.sigSubdeviceChanged.emit(self, dev, oldDev)
+        self.sigSubdeviceChanged.emit(self, dev, oldDev)
+        self.sigTransformChanged.emit(self)
         
     def treeSubdeviceState(self):
         """return a dict of {devName: subdevName} pairs indicating the currently
@@ -413,19 +447,138 @@ class RigidDevice(object):
         return subdevs
 
     def listTreeSubdevices(self):
-        """return a dict of {devName: [subdevName1, ...]} pairs listing
+        """return a dict of {device: [subdev1, ...]} pairs listing
         all available subdevices in the tree."""
         devices = [self] + self.parentDevices()
         subdevs = collections.OrderedDict()
         for dev in devices:
             subdev = dev.listSubdevices()
             if len(subdev) > 0:
-                subdevs[dev.name()] = subdev
+                subdevs[dev] = subdev
         return subdevs
         
         
         
-    def __subdeviceChanged(self, dev):
+    def __subdeviceTransformChanged(self, subdev):
+        #print "Subdevice transform changed", self, subdev
+        #print "   -> emit sigSubdeviceTransformChanged"
         self.invalidateCachedTransforms()
         self.sigTransformChanged.emit(self)
-        self.sigSubdeviceTransformChanged.emit(self, dev)
+        self.sigSubdeviceTransformChanged.emit(self, subdev)
+        
+        
+        
+class DeviceTreeItemGroup(pg.ItemGroup):
+    """
+    Extension of QGraphicsItemGroup that maintains a hierarchy of item groups
+    with transforms taken from their associated devices.
+    
+    This makes it simpler to display graphics that are automatically positioned and scaled relative to 
+    devices.
+    
+    
+    """
+    
+    def __init__(self, device, includeSubdevices=True):
+        """
+        *item* must be a RigidDevice instance. For the device and each
+        of its (grand)parent devices, at least one item group
+        will be created which automatically tracks the transform 
+        of its device. By default, any devices which have subdevices
+        will have one item group per subdevice.
+        """
+        pg.ItemGroup.__init__(self)
+        self.groups = {}  ## {device: {subdevice: items}}
+        self.device = device
+        self.includeSubdevs = includeSubdevices
+        self.topItem = None
+        
+        device.sigGlobalTransformChanged.connect(self.transformChanged)
+        device.sigGlobalSubdeviceTransformChanged.connect(self.subdevTransformChanged)
+        device.sigGlobalSubdeviceChanged.connect(self.subdevChanged)
+        device.sigGlobalSubdeviceListChanged.connect(self.subdevListChanged)
+        self.rebuildGroups()
+        
+    def makeGroup(self, dev, subdev):
+        """Construct a QGraphicsItemGroup for the specified device/subdevice.
+        This is a good method to extend in subclasses."""
+        newGroup = QtGui.QGraphicsItemGroup()
+        newGroup.setTransform(pg.Transform(dev.deviceTransform(subdev)))
+        return newGroup
+        
+        
+        
+    def transformChanged(self, sender, device):
+        for subdev, items in self.groups[device].iteritems():
+            tr = pg.Transform(device.deviceTransform(subdev))
+            for item in items:
+                item.setTransform(tr)
+        
+        
+    def subdevTransformChanged(self, sender, device, subdev):
+        tr = pg.Transform(device.deviceTransform(subdev))
+        #print "subdevTransformChanged:", sender, device, subdev
+        for item in self.groups[device][subdev]:
+            item.setTransform(tr)
+
+    def subdevChanged(self, sender, device, newSubdev, oldSubdev):
+        pass
+            
+    def subdevListChanged(self, sender, device):
+        self.rebuildGroups()
+    
+    
+    #def removeGroups(self, device, subdev, parentGroup=None):
+        #rem = []
+        #for group in self.groups[device][subdev]:
+            #if parentGroup is None or group.parentItem() is parentGroup:
+                #rem.append(group)
+                #for child in device.childDevices():
+                    #if child in self.groups:
+                        #self.removeGroups(child, subdev=None, parentGroup=group)
+        #for group in rem:
+            #self.groups[device][subdev].remove(group)
+            #scene = group.scene()
+            #if scene is not None:
+                #scene.removeItem(group)
+    
+    def rebuildGroups(self):
+        """Create the tree of graphics items needed to display camera boundaries"""
+        if self.topItem is not None:
+            scene = self.topItem.scene()
+            if scene is not None:
+                scene.removeItem(self.topItem)
+                self.topItem = None
+        self.groups = {}
+        
+        devices = self.device.parentDevices()
+        parentItems = [self]
+        for dev in devices[::-1]:
+            self.groups[dev] = {}
+            subdevs = dev.listSubdevices()
+            if len(subdevs) == 0:
+                subdevs = [None]
+            newItems = []
+            for subdev in subdevs:
+                ## create one new group per parent group
+                self.groups[dev][subdev] = []
+                
+                for parent in parentItems:
+                    newGroup = self.makeGroup(dev, subdev)
+                    self.groups[dev][subdev].append(newGroup)
+                    newItems.append(newGroup)
+                    newGroup.setParentItem(parent)
+                    if parent is self:
+                        self.topItem = newGroup
+                    
+            parentItems = newItems
+            
+    def getGroups(self, device):
+        """Return a list of all item groups for the given device"""
+        groups = []
+        for subdev, items in self.groups[device].iteritems():
+            groups.extend(items)
+        return groups
+    
+
+        
