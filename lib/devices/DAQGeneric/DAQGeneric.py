@@ -483,7 +483,7 @@ class DAQGenericTask(DeviceTask):
         for ch in self._DAQCmd:
             if self._DAQCmd[ch].get('recordInit', False):
             #if 'recordInit' in self._DAQCmd[ch] and self._DAQCmd[ch]['recordInit']:
-                dirHandle.setInfo({(self.dev.name, ch): self.initialState[ch]})
+                dirHandle.setInfo({(self.dev.name(), ch): self.initialState[ch]})
            
                 
 class DAQDevGui(QtGui.QWidget):

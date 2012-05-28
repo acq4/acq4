@@ -128,7 +128,7 @@ class Laser(DAQGeneric):
         DAQGeneric.__init__(self, manager, daqConfig, name)
         
        
-        self._configDir = os.path.join('devices', self.name + '_config')
+        self._configDir = os.path.join('devices', self.name() + '_config')
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.variableLock = Mutex(QtCore.QMutex.Recursive)
         self.calibrationIndex = None
@@ -207,7 +207,7 @@ class Laser(DAQGeneric):
         """Set the laser's wavelength (if tunable).
         Arguments:
           wl:  """
-        raise HelpfulException("%s device does not support wavelength tuning." %str(self.name), reasons=["Hardware doesn't support tuning.", "setWavelenth function is not reimplemented in subclass."])
+        raise HelpfulException("%s device does not support wavelength tuning." %str(self.name()), reasons=["Hardware doesn't support tuning.", "setWavelenth function is not reimplemented in subclass."])
     
     def getWavelength(self):
         return self.config.get('wavelength', 0)
@@ -256,7 +256,7 @@ class Laser(DAQGeneric):
 
         ## look up transmission value for this objective in calibration list
         index = self.getCalibrationIndex()
-        vals = index.get(self.scope.name, {}).get(obj, None)
+        vals = index.get(self.scope.name(), {}).get(obj, None)
         if vals is None:
             return None
         wl = siFormat(wl, suffix='m')
@@ -355,7 +355,7 @@ class Laser(DAQGeneric):
         nPts = int(rate * duration)
         
         cmdOff = {'protocol': {'duration': duration, 'timeout': duration+5.0},
-                self.name: {'shutterMode':'closed', 'switchWaveform':np.zeros(nPts, dtype=np.byte)},
+                self.name(): {'shutterMode':'closed', 'switchWaveform':np.zeros(nPts, dtype=np.byte)},
                 powerMeter: {x: {'record':True, 'recordInit':False} for x in getManager().getDevice(powerMeter).listChannels()},
                 daqName: {'numPts': nPts, 'rate':rate}
                 }
@@ -368,16 +368,16 @@ class Laser(DAQGeneric):
             if self.hasPCell:
                 a = np.zeros(nPts, dtype=float)
                 a[:] = pCellVoltage
-                cmdOff[self.name]['pCell'] = a
+                cmdOff[self.name()]['pCell'] = a
             else:
-                raise Exception("Laser device %s does not have a pCell, therefore no pCell voltage can be set." %self.name)
+                raise Exception("Laser device %s does not have a pCell, therefore no pCell voltage can be set." %self.name())
             
         cmdOn = cmdOff.copy()
         wave = np.ones(nPts, dtype=np.byte)
         wave[-1] = 0
         shutterDelay = self.config.get('shutter', {}).get('delay', 0)
         wave[:shutterDelay*rate] = 0
-        cmdOn[self.name]={'shutterMode':'open', 'switchWaveform':wave}
+        cmdOn[self.name()]={'shutterMode':'open', 'switchWaveform':wave}
         
         #print "cmdOff: ", cmdOff
         taskOff = getManager().createTask(cmdOff)
@@ -444,7 +444,7 @@ class Laser(DAQGeneric):
             mTime = pConfig.get('measurementTime', None)
             
             if mTime is None or sTime is None:
-                raise Exception("The power indicator (%s) specified for %s needs to be configured with both a 'settlingTime' value and a 'measurementTime' value." %(self.config['powerIndicator']['channel'], self.name))
+                raise Exception("The power indicator (%s) specified for %s needs to be configured with both a 'settlingTime' value and a 'measurementTime' value." %(self.config['powerIndicator']['channel'], self.name()))
             
             dur = 0.1 + (sTime+mTime)
             nPts = int(dur*rate)
@@ -457,7 +457,7 @@ class Laser(DAQGeneric):
             
             cmd = {
                 'protocol': {'duration': dur},
-                self.name: {'switchWaveform':waveform, 'shutterMode':'closed'},
+                self.name(): {'switchWaveform':waveform, 'shutterMode':'closed'},
                 powerInd[0]: {powerInd[1]: {'record':True, 'recordInit':False}},
                 daqName: {'numPts': nPts, 'rate': rate}
             }
@@ -542,7 +542,7 @@ class Laser(DAQGeneric):
             expected = self.params['expectedPower']
         return  abs(power-expected) <= diff
             #if self.getParam('powerAlert'):
-                #logMsg("%s power is outside expected range. Please adjust expected value or adjust the tuning of the laser." %self.name, msgType='error')
+                #logMsg("%s power is outside expected range. Please adjust expected value or adjust the tuning of the laser." %self.name(), msgType='error')
         
     def getPCellWaveform(self, powerCmd):
         ### return a waveform of pCell voltages to give the power in powerCmd
@@ -557,7 +557,7 @@ class Laser(DAQGeneric):
             cmdWaveform = cmd['switchWaveform']
             vals = np.unique(cmd['switchWaveform'])
             if not self.hasPCell and len(vals)==2 and (1 or 1.0) not in vals: ## check to make sure we can give the specified power.
-                raise Exception('An analog power modulator is neccessary to get power values other than zero and one (full power). The following values (as percentages of full power) were requested: %s. This %s device does not have an analog power modulator.' %(str(vals), self.name))
+                raise Exception('An analog power modulator is neccessary to get power values other than zero and one (full power). The following values (as percentages of full power) were requested: %s. This %s device does not have an analog power modulator.' %(str(vals), self.name()))
         elif 'powerWaveform' in cmd:
             cmdWaveform = cmd['powerWaveform']
         else:
@@ -582,7 +582,7 @@ class Laser(DAQGeneric):
             daqCmd['pCell'] = self.getPCellWaveform(powerCmd)
         else:
             if len(np.unique(cmdWaveform)) > 2: ## check to make sure command doesn't specify powers we can't do
-                raise Exception("%s device does not have an analog power modulator, so can only have a binary power command." %str(self.name))
+                raise Exception("%s device does not have an analog power modulator, so can only have a binary power command." %str(self.name()))
             
         if self.hasQSwitch:
         #if self.dev.config.get('qSwitch', None) is not None:
@@ -628,7 +628,7 @@ class Laser(DAQGeneric):
         
         cmd = {
             'protocol': {'duration': dur},
-            self.name: {'switchWaveform':waveform, 'shutterMode':'closed'},
+            self.name(): {'switchWaveform':waveform, 'shutterMode':'closed'},
             powerInd[0]: {powerInd[1]: {'record':True, 'recordInit':False}},
             daqName: {'numPts': nPts, 'rate': rate}
         }
