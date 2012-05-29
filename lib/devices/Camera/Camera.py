@@ -598,11 +598,12 @@ class CameraTask(DAQGenericTask):
         
     def storeResult(self, dirHandle):
         result = self.getResult()
-        result = {'frames': result.toArray(), 'daqResult': result.daqResult()}
+        result = {'frames': (result.asMetaArray(), result.info()), 'daqResult': (result.daqResult(), {})}
         dh = dirHandle.mkdir(self.dev.name())
         for k in result:
-            if result[k] is not None:
-                dh.writeFile(result[k], k)
+            data, info = result[k]
+            if data is not None:
+                dh.writeFile(data, k, info=info)
 
 class CameraTaskResult:
     def __init__(self, task, frames, daqResult):
@@ -618,7 +619,13 @@ class CameraTaskResult:
         """Return a list of Frame instances collected during the task"""
         return self._frames[:]
     
-    def toArray(self):
+    def info(self):
+        """Return meta-info for the first frame recorded or {} if there were no frames."""
+        if len(self._frames) == 0:
+            return {}
+        return self._frames[0].info()
+    
+    def asArray(self):
         with self.lock:
             if self._arr is None:
                 data = self._frames
@@ -626,14 +633,14 @@ class CameraTaskResult:
                     self._arr = concatenate([f.data()[newaxis,...] for f in self._frames])
         return self._arr
     
-    def toMetaArray(self):
+    def asMetaArray(self):
         """Return a MetaArray containing all frame and timing data"""
         with self.lock:
             if self._marr is None:
-                arr = self.toArray()
+                arr = self.asArray()
                 if arr is not None:
                     times = self.frameTimes()[:arr.shape[0]]
-                    info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), self._frames[0].info()]
+                    info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), self.info()]
                     #print info
                     self._marr = MetaArray(arr, info=info)
             

@@ -109,6 +109,7 @@ class ScannerDeviceGui(QtGui.QWidget):
                 spot = '%0.0f, %0.1f um' % (cal['spot'][0], cal['spot'][1]*1e6)
                 date = cal['date']
                 item = QtGui.QTreeWidgetItem([', '.join(obj), laser, str(spot), date])
+                item.opticState = obj
                 self.ui.calibrationList.addTopLevelItem(item)
         
         
@@ -144,24 +145,11 @@ class ScannerDeviceGui(QtGui.QWidget):
 
     def deleteClicked(self):
         cur = self.ui.calibrationList.currentItem()
-        cam = str(cur.text(0))
-        obj = str(cur.text(1))
-        laser = str(cur.text(2))
-        
+        optState = cur.opticState
+        laser = str(cur.text(1))
         index = self.dev.getCalibrationIndex()
-        
-        cal = index[cam][laser][obj]
-        del index[cam][laser][obj]
-        #fileName = cal['fileName']
-        #calDir = self.dev.config['calibrationDir']
-        #fileName = os.path.join(calDir, fileName)
-        #try:
-            #os.remove(fileName)
-        #except:
-            #print "Error while removing file %s:" % fileName
-            #sys.excepthook(*sys.exc_info())
+        del index[laser][optState]
         self.dev.writeCalibrationIndex(index)
-        
         self.updateCalibrationList()
 
 
@@ -199,10 +187,8 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## Do fast scan of entire allowed command range
         (background, cameraResult, positions) = self.scan()
 
-        self.updatePrgDlg(25, "Calibrating scanner: Computing spot size...")
-        
         ## Forget first 2 frames since some cameras can't seem to get these right.
-        origFrames = cameraResult.toArray()
+        origFrames = cameraResult.asArray()
         origFrames = origFrames[2:]
         positions = positions[2:]
         
@@ -402,7 +388,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         task.execute()
         result = task.getResult()
         ## pull result, convert to ndarray float, take average over all frames
-        background = result[camera].toArray().astype(float).mean(axis=0)
+        background = result[camera].asArray().astype(float).mean(axis=0)
         #print "Background shape:", result[camera]['frames'].shape
         
         ## Record full scan.
@@ -430,7 +416,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         result = task.getResult()
 
-        frames = result[camera].toMetaArray()
+        frames = result[camera].asMetaArray()
         
         #print "scan shape:", frames.shape
         #print "parameters:", camParams

@@ -152,7 +152,7 @@ class CameraProtoGui(DAQGenericProtoGui):
             if result is None or len(result.frames()) == 0:
                 print "No images returned from camera protocol."
             else:
-                self.ui.imageView.setImage(result.toMetaArray())
+                self.ui.imageView.setImage(result.asMetaArray())
                 #print "  frame times:", list(result['frames'].xvals('Time'))
                 self.frameTicks.setXVals(result.frameTimes())
                 

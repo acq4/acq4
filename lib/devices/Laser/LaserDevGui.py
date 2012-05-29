@@ -53,11 +53,11 @@ class LaserDevGui(QtGui.QWidget):
         
         
         ### Populate device lists
-        self.ui.microscopeCombo.setTypes('microscope')
+        #self.ui.microscopeCombo.setTypes('microscope')
         self.ui.meterCombo.setTypes('daqChannelGroup')
-        defMicroscope = self.dev.config.get('scope', None)     
+        #defMicroscope = self.dev.config.get('scope', None)     
         defPowerMeter = self.dev.config.get('defaultPowerMeter', None)
-        self.ui.microscopeCombo.setCurrentText(defMicroscope)
+        #self.ui.microscopeCombo.setCurrentText(defMicroscope)
         self.ui.meterCombo.setCurrentText(defPowerMeter)
         #devs = self.dev.dm.listDevices()
         #for d in devs:

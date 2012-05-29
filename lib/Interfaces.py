@@ -59,6 +59,23 @@ class InterfaceDirectory(QtCore.QObject):
                 
             self.sigInterfaceListChanged.emit(types)
         
+    def removeObject(self, obj):
+        """Remove all occurrences of object from the interface directory"""
+        changedTypes = set()
+        
+        for typeName, objList in self.typeList.iteritems():
+            rem = []
+            for objName, obj2 in objList.iteritems():
+                if obj is obj2:
+                    rem.append(objName)
+                    changedTypes.add(typeName)
+            for objName in rem:
+                del objList[objName]
+                del self.nameList[objName][typeName]
+                if len(self.nameList[objName]) == 0:
+                    del self.nameList[objName]
+        self.sigInterfaceListChanged.emit(list(changedTypes))
+        
     def listInterfaces(self, types=None):
         """
         Return a list or dictionary of interface names for specific types.

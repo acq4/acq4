@@ -516,6 +516,7 @@ class Manager(QtCore.QObject):
         with self.lock:
             if mod.name in self.modules:
                 del self.modules[mod.name]
+                self.interfaceDir.removeObject(mod)
             else:
                 return
         self.sigModulesChanged.emit()

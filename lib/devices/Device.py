@@ -41,24 +41,24 @@ class Device(QtCore.QObject):
         
 
     def reserve(self, block=True, timeout=20):
-        #print "Device %s attempting lock.." % self.name
+        #print "Device %s attempting lock.." % self.name()
         if block:
             l = self._lock_.tryLock(int(timeout*1000))
             if not l:
-                print "Timeout waiting for device lock for %s" % self.name
+                print "Timeout waiting for device lock for %s" % self.name()
                 print "  Device is currently locked from:"
                 print self._lock_tb_
-                raise Exception("Timed out waiting for device lock for %s" % self.name)
+                raise Exception("Timed out waiting for device lock for %s" % self.name())
         else:
             l = self._lock_.tryLock()
             if not l:
-                #print "Device %s lock failed." % self.name
+                #print "Device %s lock failed." % self.name()
                 return False
                 #print "  Device is currently locked from:"
                 #print self._lock_tb_
                 #raise Exception("Could not acquire lock", 1)  ## 1 indicates failed non-blocking attempt
         self._lock_tb_ = ''.join(traceback.format_stack()[:-1])
-        #print "Device %s lock ok" % self.name
+        #print "Device %s lock ok" % self.name()
         return True
         
     def release(self):
@@ -66,7 +66,7 @@ class Device(QtCore.QObject):
             self._lock_.unlock()
             self._lock_tb_ = None
         except:
-            printExc("WARNING: Failed to release device lock for %s" % self.name)
+            printExc("WARNING: Failed to release device lock for %s" % self.name())
             
     def getTriggerChannel(self, daq):
         """Return the name of the channel on daq that this device raises when it starts.
@@ -109,9 +109,9 @@ class DeviceTask:
             return
         elif isinstance(result, dict):
             for k in result:
-                dirHandle.writeFile(result, self.dev.name+'_'+str(k))
+                dirHandle.writeFile(result, self.dev.name()+'_'+str(k))
         else:
-            dirHandle.writeFile(result, self.dev.name)
+            dirHandle.writeFile(result, self.dev.name())
     
     def abort(self):
         self.stop(abort=True)
