@@ -277,7 +277,7 @@ class ScannerProtoGui(ProtocolGui):
         self.restoreState(state)
         
     def listSequence(self):
-        items = self.activeItems()
+        #items = self.activeItems()
         targets = self.getTargetList()
         if targets > 0:
             return {'targets': targets}
@@ -721,7 +721,7 @@ class ScannerProtoGui(ProtocolGui):
     def sequenceChanged(self):
         self.targets = None
         #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
-        self.sigSequenceChanged.emit(self.dev.name)
+        self.sigSequenceChanged.emit(self.dev.name())
         self.updateTDPlot()
         
     def updateTDPlot(self):
