@@ -55,21 +55,14 @@ class ScannerProtoGui(ProtocolGui):
         ProtocolGui.__init__(self, dev, prot)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        #self.ui.programControlsLayout.setEnabled(False)
         dm = getManager()
         self.targets = None
         self.items = {}
-        #self.occlusions = {}
-        #self.nextId = 0
-        #self.defaultGridSpacing = 1.0
-        self.haveCalibration = True   ## whether there is a calibration for the current combination of laser/camera/objective
-        self.currentObjective = None
-        self.currentScope = None
+        self.haveCalibration = True   ## whether there is a calibration for the current combination of laser/optics
+        self.currentOpticState = None
         self.currentCamMod = None
         self.programCtrls = []
-        
-        
-        self.displaySize = {}  ## maps (camera,objective) : display size
+        self.displaySize = {}  ## maps (laser,opticState) : display size
                                ## since this setting is remembered for each objective.
         
         ## Populate module/device lists, auto-select based on device defaults 
@@ -80,14 +73,6 @@ class ScannerProtoGui(ProtocolGui):
         if 'defaultLaser' in self.dev.config:
             defLaser = self.dev.config['defaultLaser']
 
-        #devs = dm.listDevices()
-        #for d in devs:
-            #self.ui.laserCombo.addItem(d)
-            #if d == defLaser:
-                #self.ui.laserCombo.setCurrentIndex(self.ui.laserCombo.count()-1)
-
-        #self.fillModuleList()
-        
         self.ui.cameraCombo.setTypes(['cameraModule'])
         self.ui.laserCombo.setTypes(['laser'])
         
@@ -122,106 +107,34 @@ class ScannerProtoGui(ProtocolGui):
 
         ## Note we use lambda functions for all these clicks to strip out the arg sent with the signal
         
-        #self.prot.sigProtocolChanged.connect(self.protocolChanged)
-        #self.ui.addPointBtn.clicked.connect(lambda: self.addPoint())
-        #self.ui.addGridBtn.clicked.connect(lambda: self.addGrid())
-        #self.ui.addOcclusionBtn.clicked.connect(lambda: self.addOcclusion())
-        #self.ui.addProgramBtn.clicked.connect(lambda: self.addProgram())
-        #self.ui.addSpiralScanBtn.clicked.connect(lambda: self.addSpiral())
-        #self.ui.deleteBtn.clicked.connect(lambda: self.delete())
-        #self.ui.deleteAllBtn.clicked.connect(lambda: self.deleteAll())
-        #self.ui.itemTree.itemClicked.connect(self.itemToggled)
-        #self.ui.itemTree.currentItemChanged.connect(self.itemSelected)
-        #self.ui.itemTree.sigItemMoved.connect(self.treeItemMoved)
         self.ui.hideCheck.toggled.connect(self.showInterface)
         self.ui.hideMarkerBtn.clicked.connect(self.hideSpotMarker)
         self.ui.cameraCombo.currentIndexChanged.connect(self.camModChanged)
         self.ui.laserCombo.currentIndexChanged.connect(self.laserDevChanged)
-        #self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
         self.ui.sizeFromCalibrationRadio.toggled.connect(self.updateSpotSizes)
         self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
-        #self.ui.sizeSpin.valueChanged.connect(self.sizeSpinChanged)
-        #QtCore.QObject.connect(self.ui.minTimeSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
         self.ui.minTimeSpin.valueChanged.connect(self.sequenceChanged)
         self.ui.minDistSpin.valueChanged.connect(self.sequenceChanged)
         self.ui.recomputeBtn.clicked.connect(self.recomputeClicked)
         self.ui.loadConfigBtn.clicked.connect(self.loadConfiguration)
-        #dm.sigModulesChanged.connect(self.fillModuleList)
-
-        #self.currentTargetMarker = QtGui.QGraphicsEllipseItem(0, 0, 1, 1)
-        #pen = QtGui.QPen(QtGui.QBrush(QtGui.QColor(255, 255, 255)), 3.0)
-        #pen.setCosmetic(True)
-        #self.currentTargetMarker.setPen(pen)
         
-        #self.currentTargetMarker.hide()
+        self.dev.sigGlobalSubdeviceChanged.connect(self.opticStateChanged)
         
         self.testTarget = TargetPoint(name="Test", ptSize=100e-6)
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
         self.spotMarker = TargetPoint(name="Last", ptSize=100e-6, movable=False)
         self.spotMarker.setPen(pg.mkPen(color=(255,255,255), width = 2))
         self.spotMarker.hide()
-        #try:
         self.updateSpotSizes()
-        #except HelpfulException as ex:
-            #if ex.kwargs.get('errId', None) == 1:
-                #self.setHaveCalibration(False)
-            #else:
-                #raise
-        
-        #camMod = self.cameraModule()
+
         self.camModChanged()
         self.updateTDPlot()
         
-        
-        ## load target list from device, allowing targets to persist across protocols
-        #oldTargetList = self.dev.getTargetList()
-        #self.ui.sizeSpin.setValue(oldTargetList[0])
-        #targetNames = oldTargetList[1].keys()
-        #namesAdded = set([None])
-        #while len(targetNames) > 0:
-            #k = targetNames.pop(0)
-            #t = oldTargetList[1][k]
-            #parentName = t.get('parentName', None)
-            #if parentName not in namesAdded:
-                #targetNames.append(k)  ## parent hasn't been placed yet; delay this for later
-                #continue
-            #namesAdded.add(k)
-            #if t['type'] == 'point':
-                #pos = t['pos']
-                #self.addPoint(pos=pos,  name=k, parent=parentName)
-                ##pt.setPos(pos)
-            #elif t['type'] == 'grid':
-                #self.addGrid(pos = t['pos'], size = t['size'], angle = t['angle'],  name=k, parent=parentName)
-                ##gr.setPos(pos)
-                ##gr.setSize(size)
-                ##gr.setAngle(angle)
-            #elif t['type'] == 'occlusion':
-                #self.addOcclusion(points = t['points'], pos = t['pos'], name=k, parent=parentName)
-        #for item in self.items.values():
-            #item.resetParents()
             
         if 'offVoltage' not in self.dev.config: ## we don't have a voltage for virtual shuttering
             self.ui.simulateShutterCheck.setChecked(False)
             self.ui.simulateShutterCheck.setEnabled(False)
             
-    #def protocolChanged(self, name, val):
-        #if name == 'duration':
-            #self.protDuration = val
-        
-        
-    #def fillModuleList(self):
-        #man = getManager()
-        #self.ui.cameraCombo.clear()
-        #mods = man.listModules()
-        #for m in mods:
-            #self.ui.cameraCombo.addItem(m)
-            #mod = man.getModule(m)
-            #try:
-                #if 'camDev' in mod.config and mod.config['camDev'] == self.defCam:
-                    #self.ui.cameraCombo.setCurrentIndex(self.ui.cameraCombo.count()-1)
-            #except (KeyError,AttributeError):
-                #continue
-
     def setHaveCalibration(self, have):
         self.haveCalibration = have
         self.updateVisibility()
@@ -236,91 +149,49 @@ class ScannerProtoGui(ProtocolGui):
         self.testTarget.setVisible(b)
         
     def camModChanged(self):
-        camDev = self.cameraDevice()
         camMod = self.cameraModule()
         if self.currentCamMod is not None:
             self.currentCamMod.ui.removeItem(self.testTarget)
             self.currentCamMod.ui.removeItem(self.spotMarker)
-            #self.currentCamMod.ui.removeItem(self.currentTargetMarker)
-            try:
-                self.currentCamMod.ui.sigCameraScaleChanged.disconnect(self.objectiveChanged)
-            except TypeError:
-                pass
-            
-        if self.currentScope is not None:
-            try:
-                self.currentScope.sigObjectiveChanged.disconnect(self.objectiveChanged)
-            except TypeError:
-                pass
             
         self.currentCamMod = camMod
-        if camDev is None or camMod is None:
-            self.currentScope = None
+        if camMod is None:
             return
-        self.currentScope = camDev.getScopeDevice()
         self.currentCamMod = camMod
-        self.currentCamMod.ui.sigCameraScaleChanged.connect(self.objectiveChanged)
-        
-        if self.currentScope is not None:
-            self.currentScope.sigObjectiveChanged.connect(self.objectiveChanged)
             
         camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
         camMod.ui.addItem(self.spotMarker, None, [1,1], 1010)
-        #camMod.ui.addItem(self.currentTargetMarker, None, [1,1], 1010)
-        self.objectiveChanged()
         
+        self.opticStateChanged()
         
-    def objectiveChanged(self):
-        
-        camDev = self.cameraDevice()
-        camMod = self.cameraModule()
-        if camDev is None:
-            return
-        obj = camDev.getObjective()
-        if self.currentObjective != obj:
-            self.currentObjective = obj
+    def getLaser(self):
+        return self.ui.laserCombo.currentText()
+    
+    def opticStateChanged(self):
+        opticState = self.dev.getDeviceStateKey()
+        laser = self.getLaser()
+        if self.currentOpticState != opticState:
+            self.currentOpticState = opticState
             
             ## recall display size settings for this objective
-            dispSize = self.displaySize.get((), None)
+            dispSize = self.displaySize.get((laser,opticState), None)
             if dispSize is None:
                 self.ui.sizeFromCalibrationRadio.setChecked(True)
             else:
                 self.ui.sizeSpin.setValue(dispSize)
             
             ## update spots
-            #try:
-            self.updateSpotSizes()
-                #self.testTarget.show()
-                #self.setHaveCalibration(True)
-            #except HelpfulException as exc:
-                #if exc.kwargs.get('errId', None) == 1:
-                    ##logMsg("Could not update scanner spot sizes for %s objective because no calibration could be found." %str(obj), msgType='warning', importance=2)
-                    #self.setHaveCalibration(False)
-                #else:
-                    #raise
+            #self.updateSpotSizes()  Do we need this??
                 
             for i in self.items.values():
-                active = (i.objective == obj)
+                active = (i.opticState == opticState)
                 i.parameters().setValue(active)
                     
 
     def laserDevChanged(self):
         ## called when laser device combo is changed
         ## need to update spot size
-        #try:
         self.updateSpotSizes()
-            #self.setHaveCalibration(True)
-        #except HelpfulException as ex:
-            #if ex.kwargs.get('errId', None) == 1:
-                #self.setHaveCalibration(False)
-            #else:
-                #raise
-        #self.testTarget.setPointSize()
-        #self.spotMarker.setPointSize()
-
-    #def sizeSpinChanged(self):
-        #self.dev.updateTargetDisplaySize(self.ui.sizeSpin.value())
-        
         
     def sizeSpinEdited(self):
         self.ui.sizeCustomRadio.setChecked(True)
@@ -328,8 +199,6 @@ class ScannerProtoGui(ProtocolGui):
         
       
     def updateSpotSizes(self):
-        #size, displaySize = self.pointSize()
-        ##pd = self.pointSize()[1]
         try:
             size, display = self.pointSize()
             for i in self.items.values():
@@ -343,23 +212,16 @@ class ScannerProtoGui(ProtocolGui):
                 self.setHaveCalibration(False)
             else:
                 raise
-        
-        
-        
-
-    #def listItem(self, name):
-        #return self.ui.itemTree.findItems(name, QtCore.Qt.MatchRecursive)[0]
 
     def pointSize(self):
         ## returns (calibrated spot size, requested display size)
-        #packing = self.ui.packingSpin.value()
         try:
             camMod = self.cameraModule()
             if camMod is None:
                 return (1,1)
             cam = camMod.config['camDev']
-            laser = self.ui.laserCombo.currentText()
-            cal = self.dev.getCalibration(cam, laser)
+            laser = self.getLaser()
+            cal = self.dev.getCalibration(laser)
             ss = cal['spot'][1]
             
             
@@ -377,10 +239,10 @@ class ScannerProtoGui(ProtocolGui):
                 #logExc("A TypeError was caught in ScannerProtoGui.pointSize(). It was probably caused by a reload.", msgType='status', importance=0)
             self.stateGroup.setState({'spotSize':ss})
             #self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
-            self.displaySize[(cam, self.currentObjective)] = None
+            self.displaySize[(laser, self.currentOpticState)] = None
         elif self.ui.sizeCustomRadio.isChecked():
             displaySize = self.ui.sizeSpin.value()
-            self.displaySize[(cam, self.currentObjective)] = displaySize
+            self.displaySize[(laser, self.currentOpticState)] = displaySize
             
         return (ss, displaySize)
         #return (0.0001, packing)
@@ -391,18 +253,6 @@ class ScannerProtoGui(ProtocolGui):
             return None
         return mod
         
-    def cameraDevice(self):
-        mod = self.cameraModule()
-        if mod is None:
-            return None
-        if 'camDev' not in mod.config:
-            return None
-        cam = mod.config['camDev']
-        return getManager().getDevice(cam)
-        
-    def calibrationChanged(self):
-        pass
-
     def saveState(self, saveItems=False):
         state = self.stateGroup.state()
         if saveItems:
@@ -451,7 +301,7 @@ class ScannerProtoGui(ProtocolGui):
             prot = {
                 'position': target, 
                 'minWaitTime': delay,
-                'camera': self.cameraModule().config['camDev'], 
+                #'camera': self.cameraModule().config['camDev'], 
                 'laser': self.ui.laserCombo.currentText(),
                 'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
                 'duration': self.prot.getParam('duration')
@@ -461,7 +311,7 @@ class ScannerProtoGui(ProtocolGui):
             prot = {
                # 'position': target, 
                 'minWaitTime': delay,
-                'camera': self.cameraModule().config['camDev'], 
+                #'camera': self.cameraModule().config['camDev'], 
                 'laser': self.ui.laserCombo.currentText(),
                 #'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
                 'duration': self.prot.getParam('duration'),
@@ -644,7 +494,7 @@ class ScannerProtoGui(ProtocolGui):
         except HelpfulException as ex:
             exc = sys.exc_info()
             if ex.kwargs.get('errId', None) == 1:
-                raise HelpfulException('Cannot add items: %s is not calibrated for %s.' %(str(self.ui.laserCombo.currentText()), self.currentObjective), exc=exc)
+                raise HelpfulException('Cannot add items: %s is not calibrated for %s.' %(str(self.ui.laserCombo.currentText()), self.currentOpticState), exc=exc)
             else:
                 raise
             
@@ -658,7 +508,7 @@ class ScannerProtoGui(ProtocolGui):
             raise HelpfulException("Cannot add control items until a camera module is available to display them.")
             return False
 
-        item.objective = self.currentObjective
+        item.opticState = self.currentOpticState
         self.items[item.name] = item
         
         #if autoPosition:
@@ -991,8 +841,9 @@ class ScannerProtoGui(ProtocolGui):
     
     def taskStarted(self, params):
         """Task has started; color the current and previous targets"""
-        if 'targets' not in params:
-            return
+        pass
+        #if 'targets' not in params:
+            #return
         #t = params['targets']
         #self.currentTargetMarker.setRect
     
@@ -1015,16 +866,16 @@ class ScannerProtoGui(ProtocolGui):
         #except TypeError:
             #pass
             
-        if self.currentCamMod is not None:
-            try:
-                self.currentCamMod.ui.sigCameraScaleChanged.disconnect(self.objectiveChanged)
-            except:
-                pass
-        if self.currentScope is not None:
-            try:
-                self.currentScope.sigObjectiveChanged.disconnect(self.objectiveChanged)
-            except:
-                pass
+        #if self.currentCamMod is not None:
+            #try:
+                #self.currentCamMod.ui.sigCameraScaleChanged.disconnect(self.opticStateChanged)
+            #except:
+                #pass
+        #if self.currentScope is not None:
+            #try:
+                #self.currentScope.sigObjectiveChanged.disconnect(self.objectiveChanged)
+            #except:
+                #pass
 
 
 class TargetPoint(pg.EllipseROI):

@@ -273,13 +273,6 @@ class Camera(DAQGeneric, OptomechDevice):
         DAQGeneric.quit(self)
         #print "Camera device quit."
         
-        
-    #@ftrace
-    def devName(self):
-        with self.lock:
-            return self.name
-    
-    
     #@ftrace
     def createTask(self, cmd):
         with self.lock:
@@ -434,11 +427,13 @@ class Frame(object):
         return self._info
     
     def cameraTransform(self):
+        """Returns the transform that maps from camera coordinates to global."""
         return Transform3D(self._info['cameraTransform'])
     
     def frameTransform(self):
         """Return the transform that maps from this frame's image coordinates
-        to its source camera coordinates.
+        to its source camera coordinates. This transform takes into account
+        the camera's region and binning settings.
         """
         return Transform3D(self._frameTransform)
         
@@ -456,12 +451,11 @@ class Frame(object):
         """
         pass
     
-    
     def mapFromFrameToGlobal(obj):
         """
         Map from the frame's data coordinates to global coordinates
         """
-        pass
+        return self.globalTransform().map(obj)
     
     
     def mapFromFrameToSensor(obj):
@@ -493,7 +487,7 @@ class CameraTask(DAQGenericTask):
         self.frames = []
         self.recording = False
         self.stopRecording = False
-        
+        self.resultObj = None
         
     def configure(self, tasks, startOrder):
         ## Merge command into default values:
@@ -503,54 +497,24 @@ class CameraTask(DAQGenericTask):
         ## set default parameters, load params from command
         params = {
             'triggerMode': 'Normal',
-            #'recordExposeChannel': False
         }
         params.update(self.camCmd['params'])
         
-        #print "pushState..."
         if 'pushState' in self.camCmd:
             stateName = self.camCmd['pushState']
             self.dev.pushState(stateName)
-        #time.sleep(0.5)
-        
-        #nonCameraParams = ['channels', 'record', 'triggerProtocol', 'pushState', 'popState', 'minFrames']
-        #for k in self.camCmd:
-            #if k not in nonCameraParams:
-                #params[k] = self.camCmd[k]
-        #for k in defaults:
-            #if k not in self.camCmd:
-                #self.camCmd[k] = defaults[k]
-        
         prof.mark('collect params')
-                
-        ## Determine whether to restart acquisition after protocol
-        #self.stopAfter = (not self.dev.isRunning())
-
-        ## are we requesting any parameter changes?
-        #paramSet = False
-        #for k in ['binning', 'exposure', 'region', 'params']:
-            #if k in self.camCmd:
-                #paramSet = True
-                
-        ## if the camera is being triggered by the daq or if there are parameters to be set, stop it now
-        #if self.camCmd['triggerMode'] != 'No Trigger' or paramSet:
-            #self.dev.stopAcquire(block=True)  
 
         ## If we are sending a one-time trigger to start the camera, then it must be restarted to arm the trigger        
         if params['triggerMode'] == 'TriggerStart':
             restart = True
-            
-        #print params
-        #print "Camera.configure: setParams"
         (newParams, restart) = self.dev.setParams(params, autoCorrect=True, autoRestart=False)  ## we'll restart in a moment if needed..
-        #print "restart:", restart
         
         prof.mark('set params')
         ## If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
         ##   (daq must be started first so that it is armed to received the camera trigger)
-        name = self.dev.devName()
+        name = self.dev.name()
         if self.camCmd.get('triggerProtocol', False):
-            #print "Camera triggering protocol; restart needed"
             restart = True
             daqName = self.dev.camConfig['triggerOutChannel']['device']
             startOrder.remove(name)
@@ -564,16 +528,9 @@ class CameraTask(DAQGenericTask):
             startOrder.insert(0, name)
             prof.mark('conf 2')
             
-            
-        #if 'forceStop' in self.camCmd and self.camCmd['forceStop'] is True:
-            #restart = True
-            
-            
         ## We want to avoid this if at all possible since it may be very expensive
-        #print "CameraTask: configure: restart camera:", restart
         if restart:
             self.dev.stop(block=True)
-            #self.stoppedCam = True
         prof.mark('stop')
             
         ## connect using acqThread's connect method because there may be no event loop
@@ -589,9 +546,6 @@ class CameraTask(DAQGenericTask):
         disconnect = False
         with self.lock:
             if self.recording:
-                #print "New frame"
-                #if self.stopRecording:
-                    #print "Adding in last frame %d" % len(self.frames)
                 self.frames.append(frame)
             if self.stopRecording:
                 self.recording = False
@@ -605,46 +559,12 @@ class CameraTask(DAQGenericTask):
         self.frames = []
         self.stopRecording = False
         self.recording = True
-        
-        #print "CameraTask start"
-        #time.sleep(0.5)
-        #self.recordHandle = CameraTask(self.dev.acqThread)  #self.dev.acqThread.startRecord()
-        ## start acquisition if needed
-        #print "Camera start:", self.camCmd
-        
-        ## all extra parameters should be passed on to the camera..
-        #camState = {'mode': self.camCmd['triggerMode']}
-        #for k in ['binning', 'exposure', 'region']:
-            #if k in self.camCmd:
-                #camState[k] = self.camCmd[k]
-        
-        ## set special camera parameters
-        #if 'params' in self.camCmd:
-            #params = self.camCmd['params']
-            #self.returnState = {}
-            #for k in params:
-                #self.returnState[k] = self.dev.getParam(k)
-            ##print "Set camera params:", params
-            #self.dev.setParams(params)
-            ##print "   set done"
-                
-        
-        #if self.stoppedCam:
-            #print "  CameraTask start: waiting for camera to stop.."
-            #self.dev.wait()
             
         if not self.dev.isRunning():
-            #print "  CameraTask start: Starting camera.."
-            #self.dev.setParams(camState)
             self.dev.start(block=True)  ## wait until camera is actually ready to acquire
-                
             
         ## Last I checked, this does nothing. It should be here anyway, though..
-        #print "  start daq task"
         DAQGenericTask.start(self)
-        #time.sleep(0.5)
-        
-        #print "  done"
         
         
     def isDone(self):
@@ -666,118 +586,138 @@ class CameraTask(DAQGenericTask):
         
         with self.lock:
             self.stopRecording = True
-        #if self.stopAfter:
-            #self.dev.stopAcquire()
         
         if 'popState' in self.camCmd:
-            #print "  pop state"
             self.dev.popState(self.camCmd['popState'])  ## restores previous settings, stops/restarts camera if needed
-        
-        ## If this task made any changes to the camera state, return them now
-        #for k in self.returnState:
-            #self.dev.setParam(k, self.returnState[k])
-            
-        #if not self.stopAfter and (not self.dev.isRunning() or self.camCmd['triggerMode'] != 'No Trigger'):
-            #self.dev.startAcquire({'mode': 'No Trigger'})
                 
     def getResult(self):
-        #print "get result from camera task.."
-        #expose = None
-        ## generate MetaArray of expose channel if it was recorded
-        #if ('recordExposeChannel' in self.camCmd) and self.camCmd['recordExposeChannel']:
-            #expose = self.daqTask.getData(self.dev.camConfig['exposeChannel'][1])
-            #timeVals = linspace(0, float(expose['info']['numPts']-1) / float(expose['info']['rate']), expose['info']['numPts'])
-            #info = [axis(name='Time', values=timeVals), expose['info']]
-            #expose = MetaArray(expose['data'], info=info)
-        daqResult = DAQGenericTask.getResult(self)
-            
-        ## generate MetaArray of images collected during recording
-        #data = self.recordHandle.data()
-        times = None
-        with self.lock:
-            data = self.frames
-            if len(data) > 0:
-                arr = concatenate([f.data()[newaxis,...] for f in data])
-                try:
-                    times = array([f.info()['time'] for f in data])
-                except:
-                    print f
-                    raise
-                times -= times[0]
-                info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), data[0].info()]
-                #print info
-                marr = MetaArray(arr, info=info)
-                #print "returning frames:", marr.shape
-            else:
-                #print "returning no frames"
-                marr = None
-            
-        expose = None
-        if daqResult is not None and daqResult.hasColumn('Channel', 'exposure'):
-            expose = daqResult['Channel':'exposure']
-            
-        ## Correct times for each frame based on data recorded from exposure channel.
-        if expose is not None and marr is not None: 
-        
-            ## Extract times from trace
-            ex = expose.view(ndarray).astype(int32)
-            exd = ex[1:] - ex[:-1]
-
-            
-            timeVals = expose.xvals('Time')
-            inds = argwhere(exd > 0.5)[:, 0] + 1
-            onTimes = timeVals[inds]
-            
-            ## If camera triggered DAQ, then it is likely we missed the first 0->1 transition
-            if self.camCmd.get('triggerProtocol', False) and ex[0] > 0.5:
-                onTimes = array([timeVals[0]] + list(onTimes))
-            
-            #print "onTimes:", onTimes
-            inds = argwhere(exd < 0.5)[:, 0] + 1
-            offTimes = timeVals[inds]
-            
-            ## Determine average frame transfer time
-            txLen = (offTimes[:len(times)] - times[:len(offTimes)]).mean()
-            
-            ## Determine average exposure time (excluding first frame, which is often shorter)
-            expLen = (offTimes[1:len(onTimes)] - onTimes[1:len(offTimes)]).mean()
-            
-            
-            if self.camCmd['params']['triggerMode'] == 'Normal' and not self.camCmd.get('triggerProtocol', False):
-                ## Can we make a good guess about frame times even without having triggered the first frame?
-                ## frames are marked with their arrival time. We will assume that a frame most likely 
-                ## corresponds to the last complete exposure signal. 
-                pass
-                
-            elif len(onTimes) > 0:
-                ## If we triggered the camera (or if the camera triggered the DAQ), 
-                ## then we know frame 0 occurred at the same time as the first expose signal.
-                ## New times list is onTimes, any extra frames just increment by tx+exp time
-                vals = marr.xvals('Time')
-                #print "Original times:", vals
-                vals[:len(onTimes)] = onTimes[:len(vals)]
-                lastTime = onTimes[-1]
-                if len(onTimes) > 1:
-                    framePeriod = (onTimes[-1] - onTimes[0]) / (len(onTimes) - 1)
-                elif times is not None:
-                    framePeriod = (times[-1] - times[0]) / (len(times) - 1)
-                else:
-                    framePeriod = None
-                    
-                if framePeriod is not None:
-                    for i in range(len(onTimes), len(vals)):
-                        lastTime += framePeriod
-                        vals[i] = lastTime 
-            
-        ## Generate final result, incorporating data from DAQ
-        return {'frames': marr, 'channels': daqResult}
+        if self.resultObj is None:
+            daqResult = DAQGenericTask.getResult(self)
+            self.resultObj = CameraTaskResult(self, self.frames, daqResult)
+        return self.resultObj
         
     def storeResult(self, dirHandle):
         result = self.getResult()
-        dh = dirHandle.mkdir(self.dev.name)
+        result = {'frames': result.toArray(), 'daqResult': result.daqResult()}
+        dh = dirHandle.mkdir(self.dev.name())
         for k in result:
             if result[k] is not None:
                 dh.writeFile(result[k], k)
+
+class CameraTaskResult:
+    def __init__(self, task, frames, daqResult):
+        self.lock = Mutex(recursive=True)
+        self._task = task
+        self._frames = frames
+        self._daqResult = daqResult
+        self._marr = None
+        self._arr = None
+        self._frameTimes = None
+        
+    def frames(self):
+        """Return a list of Frame instances collected during the task"""
+        return self._frames[:]
+    
+    def toArray(self):
+        with self.lock:
+            if self._arr is None:
+                data = self._frames
+                if len(data) > 0:
+                    self._arr = concatenate([f.data()[newaxis,...] for f in self._frames])
+        return self._arr
+    
+    def toMetaArray(self):
+        """Return a MetaArray containing all frame and timing data"""
+        with self.lock:
+            if self._marr is None:
+                arr = self.toArray()
+                if arr is not None:
+                    times = self.frameTimes()
+                    info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), self._frames[0].info()]
+                    #print info
+                    self._marr = MetaArray(arr, info=info)
+            
+        return self._marr
+            
+    def daqResult(self):
+        """Return results of DAQ channel recordings"""
+        return self._daqResult
+
+    def frameTimes(self):
+        if self._frameTimes is None:
+            ## generate MetaArray of images collected during recording
+            times = None
+            with self.lock:
+                if len(self._frames) > 0:  ## extract frame times as reported by camera. This is a first approximation.
+                    try:
+                        times = array([f.info()['time'] for f in self._frames])
+                    except:
+                        print f
+                        raise
+                    times -= times[0]
+                else:
+                    return None
+                
+                expose = None
+                daqResult = self._daqResult
+                if daqResult is not None and daqResult.hasColumn('Channel', 'exposure'):
+                    expose = daqResult['Channel':'exposure']
+                
+            ## Correct times for each frame based on data recorded from exposure channel.
+            if expose is not None: 
+            
+                ## Extract times from trace
+                ex = expose.view(ndarray).astype(int32)
+                exd = ex[1:] - ex[:-1]
+                
+                timeVals = expose.xvals('Time')
+                inds = argwhere(exd > 0.5)[:, 0] + 1
+                onTimes = timeVals[inds]
+                
+                ## If camera triggered DAQ, then it is likely we missed the first 0->1 transition
+                if self._task.camCmd.get('triggerProtocol', False) and ex[0] > 0.5:
+                    onTimes = array([timeVals[0]] + list(onTimes))
+                
+                #print "onTimes:", onTimes
+                inds = argwhere(exd < 0.5)[:, 0] + 1
+                offTimes = timeVals[inds]
+                
+                ## Determine average frame transfer time
+                txLen = (offTimes[:len(times)] - times[:len(offTimes)]).mean()
+                
+                ## Determine average exposure time (excluding first frame, which is often shorter)
+                expLen = (offTimes[1:len(onTimes)] - onTimes[1:len(offTimes)]).mean()
+                
+                if self._task.camCmd['params']['triggerMode'] == 'Normal' and not self._task.camCmd.get('triggerProtocol', False):
+                    ## Can we make a good guess about frame times even without having triggered the first frame?
+                    ## frames are marked with their arrival time. We will assume that a frame most likely 
+                    ## corresponds to the last complete exposure signal. 
+                    pass
+                    
+                elif len(onTimes) > 0:
+                    ## If we triggered the camera (or if the camera triggered the DAQ), 
+                    ## then we know frame 0 occurred at the same time as the first expose signal.
+                    ## New times list is onTimes, any extra frames just increment by tx+exp time
+                    times[:len(onTimes)] = onTimes[:len(times)]  ## set the times for which we detected an exposure pulse
+                    
+                    ## Try to determine mean framerate
+                    if len(onTimes) > 1:
+                        framePeriod = (onTimes[-1] - onTimes[0]) / (len(onTimes) - 1)
+                    else:
+                        framePeriod = (times[-1] - times[0]) / (len(times) - 1)
+                        
+                    ## For any extra frames that did not have an exposure signal, just try
+                    ## to guess the correct time based on the average framerate.
+                    lastTime = onTimes[-1]
+                    if framePeriod is not None:
+                        for i in range(len(onTimes), len(times)):
+                            lastTime += framePeriod
+                            times[i] = lastTime 
+                
+            self._frameTimes = times
+            
+        return self._frameTimes
+        
         
 class AcquireThread(QtCore.QThread):
     

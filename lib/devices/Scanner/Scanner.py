@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from lib.devices.Device import *
-from lib.devices.OptomechDevice import *
+from lib.devices.OptomechDevice import OptomechDevice
 from lib.Manager import logMsg, logExc
 from Mutex import Mutex, MutexLocker
 from DeviceGui import ScannerDeviceGui
@@ -9,34 +9,29 @@ import os, pickle
 import ptime
 from debug import *
 import numpy as np
+import pyqtgraph as pg
 from HelpfulException import HelpfulException
 
-class Scanner(Device):
+class Scanner(Device, OptomechDevice):
     
     sigShutterChanged = QtCore.Signal()
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        OptomechDevice.__init__(self, dm, config, name)
+        
         self.config = config
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.devGui = None
         self.lastRunTime = None
         self.calibrationIndex = None
         self.targetList = [1.0, {}]  ## stores the grids and points used by ProtocolGui so that they persist
-        self._configDir = os.path.join('devices', self.name + '_config')
+        self._configDir = os.path.join('devices', self.name() + '_config')
         self.currentCommand = [0,0] ## The last requested voltage values (but not necessarily the current voltage applied to the mirrors)
         self.currentVoltage = [0, 0]
         self.shutterOpen = True ## indicates whether the virtual shutter is closed (the beam is steered to its 'off' position).
         if 'offVoltage' in config:
             self.setShutterOpen(False)
-        #if not os.path.isdir(config['calibrationDir']):
-            #print "Calibration directory '%s' does not exist, creating.." % config['calibrationDir']
-            #os.mkdir(config['calibrationDir'])
-        #self.targetFileName = os.path.join(self.config['calibrationDir'], 'targetList.pickle')
-        #if os.path.isfile(self.targetFileName):
-            #fd = open(self.targetFileName)
-            #self.targetList = pickle.load(fd)
-            #fd.close()
         dm.declareInterface(name, ['scanner'], self)
     
     #def quit(self):
@@ -58,18 +53,14 @@ class Scanner(Device):
             else:
                 logMsg("Virtual shutter closed, not setting mirror position.", msgType='warning')
 
-    def setPosition(self, pos, camera, laser):
+    def setPosition(self, pos, laser):
         """Set the position of the xy mirrors to a point in the image"""
         prof = Profiler('Scanner.setPosition', disabled=True)
         with self.lock:
             (x, y) = pos
             prof.mark()
-            #cam = self.dm.getDevice(camera)
-            #camPos = cam.getPosition()
-            #vals = self.mapToScanner(x - camPos[0], y - camPos[1], camera, laser)
-            vals = self.mapToScanner(x, y, camera, laser)
+            vals = self.mapToScanner(x, y, laser)
             prof.mark()
-            #print "Setting position", pos, " values are", vals
             self.setCommand(vals)
             prof.mark()
         prof.finish()
@@ -127,14 +118,14 @@ class Scanner(Device):
         with self.lock:
             return self.currentVoltage
 
-    def getObjective(self):
-        """Return the name of the objective currently in use by the scanner's microscope device"""
-        return self.getScope().getObjective['name']
+    #def getObjective(self):
+        #"""Return the name of the objective currently in use by the scanner's microscope device"""
+        #return self.getScope().getObjective['name']
 
-    def getScope(self):
-        ## return the scope device for this scanner
-        name = self.config['scopeDevice']
-        return self.dm.getDevice(name)
+    #def getScope(self):
+        ### return the scope device for this scanner
+        #name = self.config['scopeDevice']
+        #return self.dm.getDevice(name)
         
     #def getObjective(self, camera):
         #"""Return the objective currently in use for camera"""
@@ -146,21 +137,30 @@ class Scanner(Device):
     def getDaqName(self):
         return self.config['XAxis']['device']
         
-    def mapToScanner(self, x, y, laser, objective=None):
+    def mapToScanner(self, x, y, laser, opticState=None):
         """Convert global coordinates to voltages required to set scan mirrors
-        *laser* and *objective* must be strings indicating how the scanner is to be used.
-        If *objective* is not specified, then the objective currently in use is assumed.
+        *laser* and *opticState* are used to look up the correct calibration data.
+        If *opticState* is not given, then the current optical state is used instead.
         """
-        
+        if opticState is None:
+            opticState = self.getDeviceStateKey() ## this tells us about objectives, filters, etc
         #print "camera:", x, y
-        cal = self.getCalibration(laser, objective)
+        cal = self.getCalibration(laser, opticState)
         
         if cal is None:
-            raise HelpfulException("The scanner device '%s' is not calibrated for this combination of laser and objective (%s, %s)" % (self.name, laser, objective))
+            raise HelpfulException("The scanner device '%s' is not calibrated for this combination of laser and objective (%s, %s)" % (self.name(), laser, str(opticState)))
             
+        ## map from global coordinates to parent
+        parentPos = self.mapGlobalToParent(pg.Point(x,y))
+        x = parentPos.x()
+        y = parentPos.y()
+            
+        ## map to voltages using calibration
         cal = cal['params']
-        x1 = cal[0][0] + cal[0][1] * x + cal[0][2] * y + cal[0][3] * x**2 + cal[0][4] * y**2
-        y1 = cal[1][0] + cal[1][1] * x + cal[1][2] * y + cal[1][3] * x**2 + cal[1][4] * y**2
+        x2 = x**2
+        y2 = y**2
+        x1 = cal[0][0] + cal[0][1] * x + cal[0][2] * y + cal[0][3] * x2 + cal[0][4] * y2
+        y1 = cal[1][0] + cal[1][1] * x + cal[1][2] * y + cal[1][3] * x2 + cal[1][4] * y2
         #print "voltage:", x1, y1
         return [x1, y1]
         
@@ -227,12 +227,12 @@ class Scanner(Device):
             #configfile.writeConfigFile(index, fileName)
             self.calibrationIndex = index
 
-    def getCalibration(self, laser, objective=None):
+    def getCalibration(self, laser, opticState=None):
         with self.lock:
             index = self.getCalibrationIndex()
             
-        if objective is None:
-            objective = self.getObjective()
+        if opticState is None:
+            opticState = self.getDeviceStateKey() ## this tells us about objectives, filters, etc
         
         if laser in index:
             index1 = index[laser]
@@ -240,10 +240,10 @@ class Scanner(Device):
             logMsg("Warning: No calibration found for laser %s" % laser, msgType='warning')
             return None
             
-        if objective in index1:
-            index2 = index1[objective]
+        if opticState in index1:
+            index2 = index1[opticState]
         else:
-            logMsg("Warning: No calibration found for objective %s" % objective, msgType='warning')
+            logMsg("Warning: No calibration found for state: %s" % opticState, msgType='warning')
             return None
         
         return index2.copy()
@@ -388,19 +388,19 @@ class ScannerTask(DeviceTask):
                 prof.mark('set command')
             elif 'position' in self.cmd:  ## 'command' overrides 'position'
                 #print " set position:", self.cmd['position']
-                self.dev.setPosition(self.cmd['position'], self.cmd['camera'], self.cmd['laser'])
+                self.dev.setPosition(self.cmd['position'], self.cmd['laser'])
                 prof.mark('set pos')
 
             ## record spot size from calibration data
-            if 'camera' in self.cmd and 'laser' in self.cmd:
-                self.spotSize = self.dev.getCalibration(self.cmd['camera'], self.cmd['laser'])['spot'][1]
+            if 'laser' in self.cmd:
+                self.spotSize = self.dev.getCalibration(self.cmd['laser'])['spot'][1]
                 prof.mark('getSpotSize')
             
             ## If position arrays are given, translate into voltages
             if 'xPosition' in self.cmd or 'yPosition' in self.cmd:
                 if 'xPosition' not in self.cmd or 'yPosition' not in self.cmd:
                     raise Exception('xPosition and yPosition must be given together or not at all.')
-                self.cmd['xCommand'], self.cmd['yCommand'] = self.dev.mapToScanner(self.cmd['xPosition'], self.cmd['yPosition'], self.cmd['camera'], self.cmd['laser'])
+                self.cmd['xCommand'], self.cmd['yCommand'] = self.dev.mapToScanner(self.cmd['xPosition'], self.cmd['yPosition'], self.cmd['laser'])
                 prof.mark('position arrays')
             
             ## Otherwise if program is specified, generate the command arrays now
@@ -631,6 +631,6 @@ class ScannerTask(DeviceTask):
     
     def storeResult(self, dirHandle):
         result = self.getResult()
-        dirHandle.setInfo({self.dev.name: result})
+        dirHandle.setInfo({self.dev.name(): result})
         
         

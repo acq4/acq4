@@ -193,6 +193,27 @@ class OptomechDevice(object):
             subdev = self._subdevDict(subdev)
             return self.mapFromGlobal(device.mapToGlobal(obj, subdev), subdev)
     
+    def mapGlobalToParent(self, obj, subdev=None):
+        """Map *obj* from global coordinates to the parent device coordinates.
+        If this device has no parent, then *obj* is returned unchanged.
+        """
+        with self.__lock:
+            if self.parentDevice() is None:
+                return obj
+            else:
+                return self.parentDevice().mapFromGlobal(obj, subdev)
+            
+    def mapParentToGlobal(self, obj, subdev=None):
+        """Map *obj* from parent device coordinates to global coordinates.
+        If this device has no parent, then *obj* is returned unchanged.
+        """
+        with self.__lock:
+            if self.parentDevice() is None:
+                return obj
+            else:
+                return self.parentDevice().mapToGlobal(obj, subdev)
+        
+    
     def deviceTransform(self, subdev=None):
         """
         Return this device's affine transformation matrix. 
@@ -466,6 +487,15 @@ class OptomechDevice(object):
         self.sigTransformChanged.emit(self)
         self.sigSubdeviceTransformChanged.emit(self, subdev)
         
+    def getDeviceStateKey(self):
+        """
+        Return a tuple that uniquely identifies the state of all subdevice selections in the system.
+        This may be used as a key for storing/retrieving calibration data.
+        """
+        state = self.treeSubdeviceState()
+        devs = state.keys()
+        devs.sort()
+        return tuple([dev + "__" + state[dev] for dev in devs])
         
         
 class DeviceTreeItemGroup(pg.ItemGroup):
