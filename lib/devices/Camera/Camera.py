@@ -593,7 +593,7 @@ class CameraTask(DAQGenericTask):
     def getResult(self):
         if self.resultObj is None:
             daqResult = DAQGenericTask.getResult(self)
-            self.resultObj = CameraTaskResult(self, self.frames, daqResult)
+            self.resultObj = CameraTaskResult(self, self.frames[:], daqResult)
         return self.resultObj
         
     def storeResult(self, dirHandle):
@@ -632,7 +632,7 @@ class CameraTaskResult:
             if self._marr is None:
                 arr = self.toArray()
                 if arr is not None:
-                    times = self.frameTimes()
+                    times = self.frameTimes()[:arr.shape[0]]
                     info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), self._frames[0].info()]
                     #print info
                     self._marr = MetaArray(arr, info=info)
