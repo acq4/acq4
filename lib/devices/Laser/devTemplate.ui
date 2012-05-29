@@ -219,12 +219,7 @@
         </attribute>
         <column>
          <property name="text">
-          <string>Microscope</string>
-         </property>
-        </column>
-        <column>
-         <property name="text">
-          <string>Objective</string>
+          <string>Optics</string>
          </property>
         </column>
         <column>

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'devTemplate.ui'
 #
-# Created: Sun Mar 18 17:23:50 2012
+# Created: Tue May 29 01:21:49 2012
 #      by: PyQt4 UI code generator 4.8.5
 #
 # WARNING! All changes made in this file will be lost!
@@ -130,12 +130,11 @@ class Ui_Form(object):
         self.calibrationList.setRootIsDecorated(False)
         self.calibrationList.setItemsExpandable(False)
         self.calibrationList.setObjectName(_fromUtf8("calibrationList"))
-        self.calibrationList.headerItem().setText(0, QtGui.QApplication.translate("Form", "Microscope", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(1, QtGui.QApplication.translate("Form", "Objective", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(2, QtGui.QApplication.translate("Form", "Wavelength", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(3, QtGui.QApplication.translate("Form", "Transmission", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(4, QtGui.QApplication.translate("Form", "Power at Sample", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(5, QtGui.QApplication.translate("Form", "Date", None, QtGui.QApplication.UnicodeUTF8))
+        self.calibrationList.headerItem().setText(0, QtGui.QApplication.translate("Form", "Optics", None, QtGui.QApplication.UnicodeUTF8))
+        self.calibrationList.headerItem().setText(1, QtGui.QApplication.translate("Form", "Wavelength", None, QtGui.QApplication.UnicodeUTF8))
+        self.calibrationList.headerItem().setText(2, QtGui.QApplication.translate("Form", "Transmission", None, QtGui.QApplication.UnicodeUTF8))
+        self.calibrationList.headerItem().setText(3, QtGui.QApplication.translate("Form", "Power at Sample", None, QtGui.QApplication.UnicodeUTF8))
+        self.calibrationList.headerItem().setText(4, QtGui.QApplication.translate("Form", "Date", None, QtGui.QApplication.UnicodeUTF8))
         self.calibrationList.header().setStretchLastSection(True)
         self.gridLayout_6.addWidget(self.calibrationList, 0, 0, 1, 5)
         self.groupBox = QtGui.QGroupBox(self.groupBox_2)

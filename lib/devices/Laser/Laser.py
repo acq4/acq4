@@ -3,6 +3,7 @@ from PyQt4 import QtGui, QtCore
 from lib.Manager import getManager, logExc, logMsg
 from Mutex import Mutex
 from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask
+from lib.devices.OptomechDevice import OptomechDevice
 from LaserDevGui import LaserDevGui
 from LaserProtocolGui import LaserProtoGui
 import os
@@ -16,7 +17,7 @@ import metaarray
 from lib.devices.NiDAQ.nidaq import NiDAQ
 
 
-class Laser(DAQGeneric):
+class Laser(DAQGeneric, OptomechDevice):
     """The laser device accomplishes a few tasks:
        - Calibration of laser power so that the power at the specimen can be controlled
          (via pockels cell or Q-switch PWM)
@@ -30,7 +31,7 @@ class Laser(DAQGeneric):
     Laser-blue:
         driver: 'Laser'
         config:
-            scope: 'Microscope'
+            parentDevice: 'Microscope'
             shutter:
                 channel: 'DAQ', '/Dev3/line14'
                 delay: 10*ms
@@ -42,7 +43,7 @@ class Laser(DAQGeneric):
     Laser-UV:
         driver: 'Laser'
         config: 
-            scope: 'Microscope'
+            parentDevice: 'Microscope'
             pulseRate: 100*kHz                      ## Laser's pulse rate
             powerIndicator: 
                 channel: 'DAQ', '/Dev1/ai11'      ## photocell channel for immediate recalibration
@@ -63,7 +64,7 @@ class Laser(DAQGeneric):
         driver: 'CoherentLaser'
         config: 
             serialPort: 6                         ## serial port connected to laser
-            scope: 'Microscope'
+            parentDevice: 'Microscope'
             pulseRate: 100*kHz                      ## Laser's pulse rate; limits minimum pulse duration
             pCell:
                 channel: 'DAQ', '/Dev2/ao1'       ## channel for pockels cell control
@@ -126,7 +127,7 @@ class Laser(DAQGeneric):
                         
         daqConfig['power'] = {'type': 'ao', 'units': 'W'}  ## virtual channel used for creating control widgets
         DAQGeneric.__init__(self, manager, daqConfig, name)
-        
+        OptomechDevice.__init__(self, manager, config, name)
        
         self._configDir = os.path.join('devices', self.name() + '_config')
         self.lock = Mutex(QtCore.QMutex.Recursive)
@@ -135,9 +136,9 @@ class Laser(DAQGeneric):
         self.pCellCalibration = None
         self.getPowerHistory()
         
-        self.scope = manager.getDevice(self.config['scope'])
-        self.scope.sigObjectiveChanged.connect(self.objectiveChanged)
-        
+        #self.scope = manager.getDevice(self.config['scope'])
+        #self.scope.sigObjectiveChanged.connect(self.objectiveChanged)
+        self.sigGlobalSubdeviceChanged.connect(self.opticStateChanged) ## called when objectives/filters have been switched
         
         manager.declareInterface(name, ['laser'], self)
         
@@ -239,15 +240,13 @@ class Laser(DAQGeneric):
         if self.hasQSwitch:
             self.setChanHolding('qSwitch', 0)
             
-    def getCalibration(self, objective=None, wavelength=None):
+    def getCalibration(self, opticState=None, wavelength=None):
         """Return the calibrated laser transmission for the given objective and wavelength.
         If either argument is None, then it will be replaced with the currently known value.
         Returns None if there is no calibration."""
         
-        if objective is None:
-            obj = self.scope.getObjective()['name']
-        else:
-            obj = objective
+        if opticState is None:
+            opticState = self.getDeviceStateKey()
             
         if wavelength is None:
             wl = self.getWavelength()
@@ -256,7 +255,7 @@ class Laser(DAQGeneric):
 
         ## look up transmission value for this objective in calibration list
         index = self.getCalibrationIndex()
-        vals = index.get(self.scope.name(), {}).get(obj, None)
+        vals = index.get(opticState, None)
         if vals is None:
             return None
         wl = siFormat(wl, suffix='m')
@@ -267,7 +266,7 @@ class Laser(DAQGeneric):
         return vals['transmission']
             
             
-    def objectiveChanged(self, change):
+    def opticStateChanged(self, change):
         self.updateSamplePower()
         
     
@@ -299,9 +298,10 @@ class Laser(DAQGeneric):
         else:
             return DAQGeneric.getDAQName(self, channel)
         
-    def calibrate(self, scope, powerMeter, mTime, sTime):
+    def calibrate(self, powerMeter, mTime, sTime):
         #meter = str(self.ui.meterCombo.currentText())
-        obj = self.manager.getDevice(scope).getObjective()['name']
+        #obj = self.manager.getDevice(scope).getObjective()['name']
+        opticState = self.getDeviceStateKey()
         wavelength = siFormat(self.getWavelength(), suffix='m')
         date = time.strftime('%Y.%m.%d %H:%M', time.localtime())
         index = self.getCalibrationIndex()
@@ -340,11 +340,11 @@ class Laser(DAQGeneric):
                 
             
               
-        if scope not in index:
-            index[scope] = {}
-        if obj not in index[scope]:
-            index[scope][obj] = {}
-        index[scope][obj][wavelength] = {'power': power, 'transmission':transmission, 'date': date}
+        #if scope not in index:
+            #index[scope] = {}
+        if opticState not in index:
+            index[opticState] = {}
+        index[opticState][wavelength] = {'power': power, 'transmission':transmission, 'date': date}
 
         self.writeCalibrationIndex(index)
         self.updateSamplePower()
@@ -412,15 +412,14 @@ class Laser(DAQGeneric):
         index = self.getCalibrationIndex()
         if index.has_key('pCellCalibration'):
             index.pop('pCellCalibration')
-        for scope in index:
-            #self.microscopes.append(scope)
-            for obj in index[scope]:
-                for wavelength in index[scope][obj]:
-                    cal = index[scope][obj][wavelength]
-                    power = cal['power']
-                    trans = cal['transmission']
-                    date = cal['date']
-                    calList.append((scope, obj, wavelength, trans, power, date))
+        #self.microscopes.append(scope)
+        for opticState in index:
+            for wavelength in index[opticState]:
+                cal = index[opticState][wavelength]
+                power = cal['power']
+                trans = cal['transmission']
+                date = cal['date']
+                calList.append((opticState, wavelength, trans, power, date))
         return calList
         
     def outputPower(self):
