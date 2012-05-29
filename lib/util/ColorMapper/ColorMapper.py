@@ -174,8 +174,18 @@ class ColorMapper(QtGui.QWidget):
     def setArgList(self, args):
         """Sets the list of variable names available for computing colors"""
         self.argList = args
-        for i in self.items:
-            i.updateArgList()
+        prev = []
+        try:
+            self.blockSignals(True)
+            for i in self.items:
+                prev.append(i.getParamName())
+                i.updateArgList()
+        finally:
+            self.blockSignals(False)
+        current = [i.getParamName() for i in self.items]
+        
+        if current != prev:
+            self.emitChanged()
         
     def getColor(self, args):
         color = np.array([0.,0.,0.,0.])
@@ -249,8 +259,8 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
     def __init__(self, cm):
         self.cm = cm
         QtGui.QTreeWidgetItem.__init__(self)
-        self.argCombo = QtGui.QComboBox()
-        self.opCombo = QtGui.QComboBox()
+        self.argCombo = pg.ComboBox()
+        self.opCombo = pg.ComboBox()
         self.minSpin = SpinBox(value=0.0, dec=True, step=1)
         self.maxSpin = SpinBox(value=1.0, dec=True, step=1)
         self.gradient = GradientWidget()
@@ -265,6 +275,9 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
         self.opCombo.currentIndexChanged.connect(self.emitChanged)
         self.argCombo.currentIndexChanged.connect(self.emitChanged)
         self.gradient.sigGradientChanged.connect(self.emitChanged)
+        
+    def getParamName(self):
+        return str(self.argCombo.currentText())
         
     def emitChanged(self):
         self.cm.emitChanged()
@@ -283,16 +296,21 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
         self.cm.remClicked(self)
 
     def updateArgList(self):
-        prev = str(self.argCombo.currentText())
-        self.argCombo.clear()
-        for a in self.cm.argList:
-            self.argCombo.addItem(a)
-            if a == prev:
-                self.argCombo.setCurrentIndex(self.argCombo.count()-1)
-
+        #prev = str(self.argCombo.currentText())
+        #self.argCombo.clear()
+        #for a in self.cm.argList:
+            #self.argCombo.addItem(a)
+            #if a == prev:
+                #self.argCombo.setCurrentIndex(self.argCombo.count()-1)
+        self.argCombo.updateList(self.cm.argList)
+        
     def getColor(self, args):
         arg = str(self.argCombo.currentText())
+        if arg not in args:
+            raise Exception('Cannot generate color; value "%s" is not present in this data.' % arg)
         val = args[arg]
+        if val is None:
+            raise Exception('Cannot generate color; value "%s" is empty (None).' % arg)
         mn = self.minSpin.value()
         mx = self.maxSpin.value()
         norm = np.clip((val - mn) / (mx - mn), 0.0, 1.0)

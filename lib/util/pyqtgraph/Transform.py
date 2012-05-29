@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-from Qt import QtCore, QtGui
-from Point import Point
+from .Qt import QtCore, QtGui
+from .Point import Point
 import numpy as np
+import pyqtgraph as pg
 
 class Transform(QtGui.QTransform):
     """Transform that can always be represented as a combination of 3 matrices: scale * rotate * translate
@@ -11,7 +12,9 @@ class Transform(QtGui.QTransform):
         QtGui.QTransform.__init__(self)
         self.reset()
         
-        if isinstance(init, dict):
+        if init is None:
+            return
+        elif isinstance(init, dict):
             self.restoreState(init)
         elif isinstance(init, Transform):
             self._state = {
@@ -22,6 +25,10 @@ class Transform(QtGui.QTransform):
             self.update()
         elif isinstance(init, QtGui.QTransform):
             self.setFromQTransform(init)
+        elif isinstance(init, QtGui.QMatrix4x4):
+            self.setFromMatrix4x4(init)
+        else:
+            raise Exception("Cannot create Transform from input type: %s" % str(type(init)))
 
         
     def getScale(self):
@@ -62,6 +69,18 @@ class Transform(QtGui.QTransform):
             'pos': Point(p1),
             'scale': Point(dp2.length(), dp3.length() * sy),
             'angle': (np.arctan2(dp2[1], dp2[0]) * 180. / np.pi) + da
+        }
+        self.update()
+        
+    def setFromMatrix4x4(self, m):
+        m = pg.Transform3D(m)
+        angle, axis = m.getRotation()
+        if angle != 0 and (axis[0] != 0 or axis[1] != 0 or axis[2] != 1):
+            raise Exception("Can only convert 4x4 matrix to 3x3 if rotation is around Z-axis.")
+        self._state = {
+            'pos': Point(m.getTranslation()),
+            'scale': Point(m.getScale()),
+            'angle': angle
         }
         self.update()
         
@@ -141,9 +160,9 @@ class Transform(QtGui.QTransform):
         return np.array([[self.m11(), self.m12(), self.m13()],[self.m21(), self.m22(), self.m23()],[self.m31(), self.m32(), self.m33()]])
         
 if __name__ == '__main__':
-    import widgets
+    from . import widgets
     import GraphicsView
-    from functions import *
+    from .functions import *
     app = QtGui.QApplication([])
     win = QtGui.QMainWindow()
     win.show()
@@ -189,23 +208,23 @@ if __name__ == '__main__':
     tr3 = QtGui.QTransform()
     tr3.translate(20, 0)
     tr3.rotate(45)
-    print "QTransform -> Transform:", Transform(tr3)
+    print("QTransform -> Transform:", Transform(tr3))
     
-    print "tr1:", tr1
+    print("tr1:", tr1)
     
     tr2.translate(20, 0)
     tr2.rotate(45)
-    print "tr2:", tr2
+    print("tr2:", tr2)
     
     dt = tr2/tr1
-    print "tr2 / tr1 = ", dt
+    print("tr2 / tr1 = ", dt)
     
-    print "tr2 * tr1 = ", tr2*tr1
+    print("tr2 * tr1 = ", tr2*tr1)
     
     tr4 = Transform()
     tr4.scale(-1, 1)
     tr4.rotate(30)
-    print "tr1 * tr4 = ", tr1*tr4
+    print("tr1 * tr4 = ", tr1*tr4)
     
     w1 = widgets.TestROI((19,19), (22, 22), invertible=True)
     #w2 = widgets.TestROI((0,0), (150, 150))

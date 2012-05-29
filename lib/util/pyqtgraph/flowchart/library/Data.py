@@ -2,13 +2,13 @@
 from ..Node import Node
 from pyqtgraph.Qt import QtGui, QtCore
 import numpy as np
-from common import *
+from .common import *
 from pyqtgraph.Transform import Transform
 from pyqtgraph.Point import Point
 from pyqtgraph.widgets.TreeWidget import TreeWidget
 from pyqtgraph.graphicsItems.LinearRegionItem import LinearRegionItem
 
-import functions
+from . import functions
 
 try:
     import metaarray
@@ -55,7 +55,7 @@ class ColumnSelectNode(Node):
                     cols = set(cols[ax])
                     break
         else:
-            cols = data.dtype.fields.keys()
+            cols = list(data.dtype.fields.keys())
                 
         rem = set()
         for c in self.columns:
@@ -124,11 +124,11 @@ class RegionSelectNode(CtrlNode):
         self.ctrls['movable'].toggled.connect(self.movableToggled)
         
     def displayToggled(self, b):
-        for item in self.items.itervalues():
+        for item in self.items.values():
             item.setVisible(b)
             
     def movableToggled(self, b):
-        for item in self.items.itervalues():
+        for item in self.items.values():
             item.setMovable(b)
             
         
@@ -195,37 +195,39 @@ class EvalNode(Node):
         
         self.ui = QtGui.QWidget()
         self.layout = QtGui.QGridLayout()
-        self.addInBtn = QtGui.QPushButton('+Input')
-        self.addOutBtn = QtGui.QPushButton('+Output')
+        #self.addInBtn = QtGui.QPushButton('+Input')
+        #self.addOutBtn = QtGui.QPushButton('+Output')
         self.text = QtGui.QTextEdit()
         self.text.setTabStopWidth(30)
-        self.layout.addWidget(self.addInBtn, 0, 0)
-        self.layout.addWidget(self.addOutBtn, 0, 1)
+        self.text.setPlainText("# Access inputs as args['input_name']\nreturn {'output': None} ## one key per output terminal")
+        #self.layout.addWidget(self.addInBtn, 0, 0)
+        #self.layout.addWidget(self.addOutBtn, 0, 1)
         self.layout.addWidget(self.text, 1, 0, 1, 2)
         self.ui.setLayout(self.layout)
         
         #QtCore.QObject.connect(self.addInBtn, QtCore.SIGNAL('clicked()'), self.addInput)
-        self.addInBtn.clicked.connect(self.addInput)
+        #self.addInBtn.clicked.connect(self.addInput)
         #QtCore.QObject.connect(self.addOutBtn, QtCore.SIGNAL('clicked()'), self.addOutput)
-        self.addOutBtn.clicked.connect(self.addOutput)
-        self.ui.focusOutEvent = lambda ev: self.focusOutEvent(ev)
+        #self.addOutBtn.clicked.connect(self.addOutput)
+        self.text.focusOutEvent = self.focusOutEvent
         self.lastText = None
         
     def ctrlWidget(self):
         return self.ui
         
-    def addInput(self):
-        Node.addInput(self, 'input', renamable=True)
+    #def addInput(self):
+        #Node.addInput(self, 'input', renamable=True)
         
-    def addOutput(self):
-        Node.addOutput(self, 'output', renamable=True)
+    #def addOutput(self):
+        #Node.addOutput(self, 'output', renamable=True)
         
     def focusOutEvent(self, ev):
         text = str(self.text.toPlainText())
         if text != self.lastText:
             self.lastText = text
-            print "eval node update"
+            print("eval node update")
             self.update()
+        return QtGui.QTextEdit.focusOutEvent(self.text, ev)
         
     def process(self, display=True, **args):
         l = locals()

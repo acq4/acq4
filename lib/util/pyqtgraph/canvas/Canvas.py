@@ -5,7 +5,7 @@ if __name__ == '__main__':
     sys.path = [os.path.dirname(md), os.path.join(md, '..', '..', '..')] + sys.path
     #print md
     
-from CanvasTemplate import *
+from .CanvasTemplate import *
 #from pyqtgraph.GraphicsView import GraphicsView
 #import pyqtgraph.graphicsItems as graphicsItems
 #from pyqtgraph.PlotWidget import PlotWidget
@@ -18,9 +18,9 @@ import numpy as np
 from pyqtgraph import debug
 #import pyqtgraph as pg
 import weakref
-from CanvasManager import CanvasManager
+from .CanvasManager import CanvasManager
 #import items
-from CanvasItem import CanvasItem, GroupCanvasItem
+from .CanvasItem import CanvasItem, GroupCanvasItem
 
 class Canvas(QtGui.QWidget):
     
@@ -43,6 +43,7 @@ class Canvas(QtGui.QWidget):
         self.multiSelectBox.hide()
         self.multiSelectBox.setZValue(1e6)
         self.ui.mirrorSelectionBtn.hide()
+        self.ui.reflectSelectionBtn.hide()
         self.ui.resetTransformsBtn.hide()
         
         self.redirect = None  ## which canvas to redirect items to
@@ -50,7 +51,7 @@ class Canvas(QtGui.QWidget):
         
         #self.view.enableMouse()
         self.view.setAspectLocked(True)
-        self.view.invertY()
+        #self.view.invertY()
         
         grid = GridItem()
         self.grid = CanvasItem(grid, name='Grid', movable=False)
@@ -75,6 +76,7 @@ class Canvas(QtGui.QWidget):
         self.multiSelectBox.sigRegionChanged.connect(self.multiSelectBoxChanged)
         self.multiSelectBox.sigRegionChangeFinished.connect(self.multiSelectBoxChangeFinished)
         self.ui.mirrorSelectionBtn.clicked.connect(self.mirrorSelectionClicked)
+        self.ui.reflectSelectionBtn.clicked.connect(self.reflectSelectionClicked)
         self.ui.resetTransformsBtn.clicked.connect(self.resetTransformsClicked)
         
         self.resizeEvent()
@@ -152,7 +154,7 @@ class Canvas(QtGui.QWidget):
             if parent is None:
                 tree = li.treeWidget()
                 if tree is None:
-                    print "Skipping item", i, i.name
+                    print("Skipping item", i, i.name)
                     continue
                 tree.removeTopLevelItem(li)
             else:
@@ -211,6 +213,7 @@ class Canvas(QtGui.QWidget):
             #item.ctrlWidget().show()
             self.multiSelectBox.hide()
             self.ui.mirrorSelectionBtn.hide()
+            self.ui.reflectSelectionBtn.hide()
             self.ui.resetTransformsBtn.hide()
         elif len(sel) > 1:
             self.showMultiSelectBox()
@@ -265,12 +268,18 @@ class Canvas(QtGui.QWidget):
         self.multiSelectBox.show()
         
         self.ui.mirrorSelectionBtn.show()
+        self.ui.reflectSelectionBtn.show()
         self.ui.resetTransformsBtn.show()
         #self.multiSelectBoxBase = self.multiSelectBox.getState().copy()
 
     def mirrorSelectionClicked(self):
         for ci in self.selectedItems():
             ci.mirrorY()
+        self.showMultiSelectBox()
+
+    def reflectSelectionClicked(self):
+        for ci in self.selectedItems():
+            ci.mirrorXY()
         self.showMultiSelectBox()
             
     def resetTransformsClicked(self):
@@ -356,14 +365,20 @@ class Canvas(QtGui.QWidget):
             parent = parent.listItem
         
         ## set Z value above all other siblings if none was specified
-        siblings = [parent.child(i).canvasItem for i in xrange(parent.childCount())]
+        siblings = [parent.child(i).canvasItem for i in range(parent.childCount())]
         z = citem.zValue()
         if z is None:
             zvals = [i.zValue() for i in siblings]
-            if len(zvals) == 0:
-                z = 0
+            if parent == self.itemList.invisibleRootItem():
+                if len(zvals) == 0:
+                    z = 0
+                else:
+                    z = max(zvals)+10
             else:
-                z = max(zvals)+10
+                if len(zvals) == 0:
+                    z = parent.canvasItem.zValue()
+                else:
+                    z = max(zvals)+1
             citem.setZValue(z)
             
         ## determine location to insert item relative to its siblings
@@ -447,7 +462,7 @@ class Canvas(QtGui.QWidget):
             item.canvasItem.setParentItem(self.view.childGroup)
         else:
             item.canvasItem.setParentItem(parent.canvasItem)
-        siblings = [parent.child(i).canvasItem for i in xrange(parent.childCount())]
+        siblings = [parent.child(i).canvasItem for i in range(parent.childCount())]
         
         zvals = [i.zValue() for i in siblings]
         zvals.sort(reverse=True)

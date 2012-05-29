@@ -16,18 +16,22 @@ Colors = {
     'w': (255,255,255,255),
 }  
 
-SI_PREFIXES = u'yzafpnµm kMGTPEZY'
+SI_PREFIXES = asUnicode('yzafpnµm kMGTPEZY')
 SI_PREFIXES_ASCII = 'yzafpnum kMGTPEZY'
 
-USE_WEAVE = True
 
 
-from Qt import QtGui, QtCore
+from .Qt import QtGui, QtCore
 import numpy as np
 import scipy.ndimage
 import decimal, re
-import scipy.weave
-import debug
+try:
+    import scipy.weave
+    USE_WEAVE = True
+except ImportError:
+    USE_WEAVE = False
+
+from . import debug
 
 def siScale(x, minVal=1e-25, allowUnicode=True):
     """
@@ -46,7 +50,7 @@ def siScale(x, minVal=1e-25, allowUnicode=True):
         if np.isnan(x) or np.isinf(x):
             return(1, '')
     except:
-        print x, type(x)
+        print(x, type(x))
         raise
     if abs(x) < minVal:
         m = 0
@@ -90,7 +94,7 @@ def siFormat(x, precision=3, suffix='', space=True, error=None, minVal=1e-25, al
         return fmt % (x*p, pref, suffix)
     else:
         if allowUnicode:
-            plusminus = space + u"±" + space
+            plusminus = space + asUnicode("±") + space
         else:
             plusminus = " +/- "
         fmt = "%." + str(precision) + "g%s%s%s%s"
@@ -105,7 +109,7 @@ def siEval(s):
         siEval("100 μV")  # returns 0.0001
     """
     
-    s = unicode(s)
+    s = asUnicode(s)
     m = re.match(r'(-?((\d+(\.\d*)?)|(\.\d+))([eE]-?\d+)?)\s*([u' + SI_PREFIXES + r']?)$', s)
     if m is None:
         raise Exception("Can't convert string '%s' to number." % s)
@@ -208,8 +212,8 @@ def mkColor(*args):
         raise Exception(err)
     
     args = [r,g,b,a]
-    args = map(lambda a: 0 if np.isnan(a) or np.isinf(a) else a, args)
-    args = map(int, args)
+    args = [0 if np.isnan(a) or np.isinf(a) else a for a in args]
+    args = list(map(int, args))
     return QtGui.QColor(*args)
 
 
@@ -277,10 +281,10 @@ def mkPen(*args, **kargs):
         pen.setStyle(style)
     return pen
 
-def hsvColor(h, s=1.0, v=1.0, a=1.0):
-    """Generate a QColor from HSVa values."""
+def hsvColor(hue, sat=1.0, val=1.0, alpha=1.0):
+    """Generate a QColor from HSVa values. (all arguments are float 0.0-1.0)"""
     c = QtGui.QColor()
-    c.setHsvF(h, s, v, a)
+    c.setHsvF(hue, sat, val, alpha)
     return c
 
     
@@ -316,7 +320,43 @@ def intColor(index, hues=9, values=1, maxValue=255, minValue=150, maxHue=360, mi
     c.setAlpha(alpha)
     return c
 
+def glColor(*args, **kargs):
+    """
+    Convert a color to OpenGL color format (r,g,b,a) floats 0.0-1.0
+    Accepts same arguments as :func:`mkColor <pyqtgraph.mkColor>`.
+    """
+    c = mkColor(*args, **kargs)
+    return (c.red()/255., c.green()/255., c.blue()/255., c.alpha()/255.)
 
+    
+
+def makeArrowPath(headLen=20, tipAngle=20, tailLen=20, tailWidth=3, baseAngle=0):
+    """
+    Construct a path outlining an arrow with the given dimensions.
+    The arrow points in the -x direction with tip positioned at 0,0.
+    If *tipAngle* is supplied (in degrees), it overrides *headWidth*.
+    If *tailLen* is None, no tail will be drawn.
+    """
+    headWidth = headLen * np.tan(tipAngle * 0.5 * np.pi/180.)
+    path = QtGui.QPainterPath()
+    path.moveTo(0,0)
+    path.lineTo(headLen, -headWidth)
+    if tailLen is None:
+        innerY = headLen - headWidth * np.tan(baseAngle*np.pi/180.)
+        path.lineTo(innerY, 0)
+    else:
+        tailWidth *= 0.5
+        innerY = headLen - (headWidth-tailWidth) * np.tan(baseAngle*np.pi/180.)
+        path.lineTo(innerY, -tailWidth)
+        path.lineTo(headLen + tailLen, -tailWidth)
+        path.lineTo(headLen + tailLen, tailWidth)
+        path.lineTo(innerY, tailWidth)
+    path.lineTo(headLen, headWidth)
+    path.lineTo(0,0)
+    return path
+    
+    
+    
 def affineSlice(data, shape, origin, vectors, axes, **kargs):
     """
     Take a slice of any orientation through an array. This is useful for extracting sections of multi-dimensional arrays such as MRI images for viewing as 1D or 2D data.
@@ -337,6 +377,8 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
         * If the vectors are not orthogonal, the result will be sheared.
             
         *axes*: the axes in the original dataset which correspond to the slice *vectors*
+        
+        All extra keyword arguments are passed to scipy.ndimage.map_coordinates
         
     Example: start with a 4D fMRI data set, take a diagonal-planar slice out of the last 3 axes
         
@@ -364,10 +406,10 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
         if len(v) != len(axes):
             raise Exception("each vector must be same length as axes.")
         
-    shape = map(np.ceil, shape)
+    shape = list(map(np.ceil, shape))
 
     ## transpose data so slice axes come first
-    trAx = range(data.ndim)
+    trAx = list(range(data.ndim))
     for x in axes:
         trAx.remove(x)
     tr1 = tuple(axes) + tuple(trAx)
@@ -396,7 +438,7 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
         #print data[ind].shape, x.shape, output[ind].shape, output.shape
         output[ind] = scipy.ndimage.map_coordinates(data[ind], x, **kargs)
     
-    tr = range(output.ndim)
+    tr = list(range(output.ndim))
     trb = []
     for i in range(min(axes)):
         ind = tr1.index(i) + (len(shape)-len(axes))
@@ -408,8 +450,45 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
     return output.transpose(tr2)
 
 
-
-
+def solve3DTransform(points1, points2):
+    """
+    Find a 3D transformation matrix that maps points1 onto points2
+    points must be specified as a list of 4 Vectors.
+    """
+    A = np.array([[points1[i].x(), points1[i].y(), points1[i].z(), 1] for i in range(4)])
+    B = np.array([[points2[i].x(), points2[i].y(), points2[i].z(), 1] for i in range(4)])
+    
+    ## solve 3 sets of linear equations to determine transformation matrix elements
+    matrix = np.zeros((4,4))
+    for i in range(3):
+        matrix[i] = scipy.linalg.solve(A, B[:,i])  ## solve Ax = B; x is one row of the desired transformation matrix
+    
+    return matrix
+    
+def solveBilinearTransform(points1, points2):
+    """
+    Find a bilinear transformation matrix (2x4) that maps points1 onto points2
+    points must be specified as a list of 4 Vector, Point, QPointF, etc.
+    
+    To use this matrix to map a point [x,y]::
+    
+        mapped = np.dot(matrix, [x*y, x, y, 1])
+    """
+    ## A is 4 rows (points) x 4 columns (xy, x, y, 1)
+    ## B is 4 rows (points) x 2 columns (x, y)
+    A = np.array([[points1[i].x()*points1[i].y(), points1[i].x(), points1[i].y(), 1] for i in range(4)])
+    B = np.array([[points2[i].x(), points2[i].y()] for i in range(4)])
+    
+    ## solve 2 sets of linear equations to determine transformation matrix elements
+    matrix = np.zeros((2,4))
+    for i in range(2):
+        matrix[i] = scipy.linalg.solve(A, B[:,i])  ## solve Ax = B; x is one row of the desired transformation matrix
+    
+    return matrix
+    
+    
+    
+    
 
 def makeARGB(data, lut=None, levels=None, useRGBA=False): 
     """
@@ -496,13 +575,13 @@ def makeARGB(data, lut=None, levels=None, useRGBA=False):
             else:
                 if data.ndim == 2:
                     newData = np.empty(data.shape+(levels.shape[0],), dtype=np.uint32)
-                    for i in xrange(levels.shape[0]):
+                    for i in range(levels.shape[0]):
                         scale = float(lutLength / (levels[i,1]-levels[i,0]))
                         offset = float(levels[i,0])
                         newData[...,i] = rescaleData(data, scale, offset)
                 elif data.ndim == 3:
                     newData = np.empty(data.shape, dtype=np.uint32)
-                    for i in xrange(data.shape[2]):
+                    for i in range(data.shape[2]):
                         scale = float(lutLength / (levels[i,1]-levels[i,0]))
                         offset = float(levels[i,0])
                         #print scale, offset, data.shape, newData.shape, levels.shape
@@ -589,10 +668,10 @@ def makeARGB(data, lut=None, levels=None, useRGBA=False):
         order = [2,1,0,3] ## for some reason, the colors line up as BGR in the final image.
         
     if data.shape[2] == 1:
-        for i in xrange(3):
+        for i in range(3):
             imgData[..., order[i]] = data[..., 0]    
     else:
-        for i in xrange(0, data.shape[2]):
+        for i in range(0, data.shape[2]):
             imgData[..., order[i]] = data[..., i]    
         
     prof.mark('5')
@@ -795,8 +874,8 @@ def isocurve(data, level):
     #print index
     
     ## add lines
-    for i in xrange(index.shape[0]):                 # data x-axis
-        for j in xrange(index.shape[1]):             # data y-axis     
+    for i in range(index.shape[0]):                 # data x-axis
+        for j in range(index.shape[1]):             # data y-axis     
             sides = sideTable[index[i,j]]
             for l in range(0, len(sides), 2):     ## faces for this grid cell
                 edges = sides[l:l+2]
@@ -1172,9 +1251,9 @@ def isosurface(data, level):
     #print index
     
     ## add facets
-    for i in xrange(index.shape[0]):                 # data x-axis
-        for j in xrange(index.shape[1]):             # data y-axis
-            for k in xrange(index.shape[2]):         # data z-axis
+    for i in range(index.shape[0]):                 # data x-axis
+        for j in range(index.shape[1]):             # data y-axis
+            for k in range(index.shape[2]):         # data z-axis
                 tris = triTable[index[i,j,k]]
                 for l in range(0, len(tris), 3):     ## faces for this grid cell
                     edges = tris[l:l+3]

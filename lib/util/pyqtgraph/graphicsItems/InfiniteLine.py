@@ -1,16 +1,25 @@
 from pyqtgraph.Qt import QtGui, QtCore
 from pyqtgraph.Point import Point
-from UIGraphicsItem import UIGraphicsItem
+from .GraphicsObject import GraphicsObject
 import pyqtgraph.functions as fn
 import numpy as np
 import weakref
 
 
 __all__ = ['InfiniteLine']
-class InfiniteLine(UIGraphicsItem):
+class InfiniteLine(GraphicsObject):
     """
+    **Bases:** :class:`GraphicsObject <pyqtgraph.GraphicsObject>`
+    
     Displays a line of infinite length.
     This line may be dragged to indicate a position in data coordinates.
+    
+    =============================== ===================================================
+    **Signals**
+    sigDragged(self)
+    sigPositionChangeFinished(self)
+    sigPositionChanged(self)
+    =============================== ===================================================
     """
     
     sigDragged = QtCore.Signal(object)
@@ -19,15 +28,21 @@ class InfiniteLine(UIGraphicsItem):
     
     def __init__(self, pos=None, angle=90, pen=None, movable=False, bounds=None):
         """
-        Initialization options:
-            pos      - Position of the line. This can be a QPointF or a single value for vertical/horizontal lines.
-            angle    - Angle of line in degrees. 0 is horizontal, 90 is vertical.
-            pen      - Pen to use when drawing line
-            movable  - If True, the line can be dragged to a new position by the user
-            bounds   - Optional [min, max] bounding values. Bounds are only valid if the line is vertical or horizontal.
+        ============= ==================================================================
+        **Arguments**
+        pos           Position of the line. This can be a QPointF or a single value for
+                      vertical/horizontal lines.
+        angle         Angle of line in degrees. 0 is horizontal, 90 is vertical.
+        pen           Pen to use when drawing line. Can be any arguments that are valid 
+                      for :func:`mkPen <pyqtgraph.mkPen>`. Default pen is transparent 
+                      yellow.
+        movable       If True, the line can be dragged to a new position by the user.
+        bounds        Optional [min, max] bounding values. Bounds are only valid if the
+                      line is vertical or horizontal.
+        ============= ==================================================================
         """
         
-        UIGraphicsItem.__init__(self)
+        GraphicsObject.__init__(self)
         
         if bounds is None:              ## allowed value boundaries for orthogonal lines
             self.maxRange = [None, None]
@@ -49,6 +64,7 @@ class InfiniteLine(UIGraphicsItem):
         #self.setFlag(self.ItemSendsScenePositionChanges)
       
     def setMovable(self, m):
+        """Set whether the line is movable by the user."""
         self.movable = m
         self.setAcceptHoverEvents(m)
       
@@ -58,6 +74,8 @@ class InfiniteLine(UIGraphicsItem):
         self.setValue(self.value())
         
     def setPen(self, pen):
+        """Set the pen for drawing the line. Allowable arguments are any that are valid 
+        for :func:`mkPen <pyqtgraph.mkPen>`."""
         self.pen = fn.mkPen(pen)
         self.currentPen = self.pen
         self.update()
@@ -76,6 +94,7 @@ class InfiniteLine(UIGraphicsItem):
         self.update()
         
     def setPos(self, pos):
+        
         if type(pos) in [list, tuple]:
             newPos = pos
         elif isinstance(pos, QtCore.QPointF):
@@ -102,7 +121,7 @@ class InfiniteLine(UIGraphicsItem):
             
         if self.p != newPos:
             self.p = newPos
-            UIGraphicsItem.setPos(self, Point(self.p))
+            GraphicsObject.setPos(self, Point(self.p))
             self.update()
             self.sigPositionChanged.emit(self)
 
@@ -116,6 +135,8 @@ class InfiniteLine(UIGraphicsItem):
         return self.p
 
     def value(self):
+        """Return the value of the line. Will be a single number for horizontal and 
+        vertical lines, and a list of [x,y] values for diagonal lines."""
         if self.angle%180 == 0:
             return self.getYPos()
         elif self.angle%180 == 90:
@@ -124,6 +145,9 @@ class InfiniteLine(UIGraphicsItem):
             return self.getPos()
                 
     def setValue(self, v):
+        """Set the position of the line. If line is horizontal or vertical, v can be 
+        a single value. Otherwise, a 2D coordinate must be specified (list, tuple and 
+        QPointF are all acceptable)."""
         self.setPos(v)
 
     ## broken in 4.7
@@ -137,37 +161,24 @@ class InfiniteLine(UIGraphicsItem):
         #return GraphicsObject.itemChange(self, change, val)
                 
     def boundingRect(self):
-        br = UIGraphicsItem.boundingRect(self)
-        
+        #br = UIGraphicsItem.boundingRect(self)
+        br = self.viewRect()
         ## add a 4-pixel radius around the line for mouse interaction.
         
-        #print "line bounds:", self, br
-        dt = self.deviceTransform()
-        if dt is None:
-            return QtCore.QRectF()
-        lineDir = Point(dt.map(Point(1, 0)) - dt.map(Point(0,0)))  ## direction of line in pixel-space
-        orthoDir = Point(lineDir[1], -lineDir[0])  ## orthogonal to line in pixel-space
-        try:
-            norm = orthoDir.norm()  ## direction of one pixel orthogonal to line
-        except ZeroDivisionError:
-            return br
-        
-        dti = dt.inverted()[0]
-        px = Point(dti.map(norm)-dti.map(Point(0,0)))  ## orthogonal pixel mapped back to item coords
-        px = px[1]  ## project to y-direction
-        
+        px = self.pixelLength(direction=Point(1,0), ortho=True)  ## get pixel length orthogonal to the line
+        if px is None:
+            px = 0
         br.setBottom(-px*4)
         br.setTop(px*4)
         return br.normalized()
     
     def paint(self, p, *args):
-        UIGraphicsItem.paint(self, p, *args)
         br = self.boundingRect()
         p.setPen(self.currentPen)
         p.drawLine(Point(br.right(), 0), Point(br.left(), 0))
         #p.drawRect(self.boundingRect())
         
-    def dataBounds(self, axis, frac=1.0):
+    def dataBounds(self, axis, frac=1.0, orthoRange=None):
         if axis == 0:
             return None   ## x axis should never be auto-scaled
         else:

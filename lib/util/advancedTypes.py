@@ -13,72 +13,73 @@ Includes:
 import threading, sys, copy, collections
 from debug import *
 
+from collections import OrderedDict
+## Deprecated; this class is now present in Python 2.7 as collections.OrderedDict
+#class OrderedDict(dict):
+    #"""extends dict so that elements are iterated in the order that they were added.
+    #Since this class can not be instantiated with regular dict notation, it instead uses
+    #a list of tuples: 
+      #od = OrderedDict([(key1, value1), (key2, value2), ...])
+    #items set using __setattr__ are added to the end of the key list.
+    #"""
+    
+    #def __init__(self, data=None):
+        #self.order = []
+        #if data is not None:
+            #for i in data:
+                #self[i[0]] = i[1]
+    
+    #def __setitem__(self, k, v):
+        #if not self.has_key(k):
+            #self.order.append(k)
+        #dict.__setitem__(self, k, v)
+    
+    #def __delitem__(self, k):
+        #self.order.remove(k)
+        #dict.__delitem__(self, k)
 
-class OrderedDict(dict):
-    """extends dict so that elements are iterated in the order that they were added.
-    Since this class can not be instantiated with regular dict notation, it instead uses
-    a list of tuples: 
-      od = OrderedDict([(key1, value1), (key2, value2), ...])
-    items set using __setattr__ are added to the end of the key list.
-    """
+    #def keys(self):
+        #return self.order[:]
     
-    def __init__(self, data=None):
-        self.order = []
-        if data is not None:
-            for i in data:
-                self[i[0]] = i[1]
+    #def items(self):
+        #it = []
+        #for k in self.keys():
+            #it.append((k, self[k]))
+        #return it
     
-    def __setitem__(self, k, v):
-        if not self.has_key(k):
-            self.order.append(k)
-        dict.__setitem__(self, k, v)
+    #def values(self):
+        #return [self[k] for k in self.order]
     
-    def __delitem__(self, k):
-        self.order.remove(k)
-        dict.__delitem__(self, k)
-
-    def keys(self):
-        return self.order[:]
+    #def remove(self, key):
+        #del self[key]
+        ##self.order.remove(key)
     
-    def items(self):
-        it = []
-        for k in self.keys():
-            it.append((k, self[k]))
-        return it
-    
-    def values(self):
-        return [self[k] for k in self.order]
-    
-    def remove(self, key):
-        del self[key]
-        #self.order.remove(key)
-    
-    def __iter__(self):
-        for k in self.order:
-            yield k
+    #def __iter__(self):
+        #for k in self.order:
+            #yield k
             
-    def update(self, data):
-        """Works like dict.update, but accepts list-of-tuples as well as dict."""
-        if isinstance(data, dict):
-            for k, v in data.iteritems():
-                self[k] = v
-        else:
-            for k,v in data:
-                self[k] = v
+    #def update(self, data):
+        #"""Works like dict.update, but accepts list-of-tuples as well as dict."""
+        #if isinstance(data, dict):
+            #for k, v in data.iteritems():
+                #self[k] = v
+        #else:
+            #for k,v in data:
+                #self[k] = v
 
-    def copy(self):
-        return OrderedDict(self.items())
+    #def copy(self):
+        #return OrderedDict(self.items())
         
-    def itervalues(self):
-        for k in self.order:
-            yield self[k]
+    #def itervalues(self):
+        #for k in self.order:
+            #yield self[k]
             
-    def iteritems(self):
-        for k in self.order:
-            yield (k, self[k])
+    #def iteritems(self):
+        #for k in self.order:
+            #yield (k, self[k])
             
-    def __deepcopy__(self, memo):
-        return OrderedDict([(k, copy.deepcopy(v, memo)) for k, v in self.iteritems()])
+    #def __deepcopy__(self, memo):
+        #return OrderedDict([(k, copy.deepcopy(v, memo)) for k, v in self.iteritems()])
         
         
 
@@ -266,12 +267,12 @@ class Locker:
         except:
             pass
 
-class CaselessDict(dict):
+class CaselessDict(OrderedDict):
     """Case-insensitive dict. Values can be set and retrieved using keys of any case.
     Note that when iterating, the original case is returned for each key."""
     def __init__(self, *args):
-        dict.__init__(self)
-        self.keyMap = dict([(k.lower(), k) for k in dict.keys(self)])
+        OrderedDict.__init__(self, {}) ## requirement for the empty {} here seems to be a python bug?
+        self.keyMap = OrderedDict([(k.lower(), k) for k in OrderedDict.keys(self)])
         if len(args) == 0:
             return
         elif len(args) == 1 and isinstance(args[0], dict):
@@ -286,16 +287,16 @@ class CaselessDict(dict):
     def __setitem__(self, key, val):
         kl = key.lower()
         if kl in self.keyMap:
-            dict.__setitem__(self, self.keyMap[kl], val)
+            OrderedDict.__setitem__(self, self.keyMap[kl], val)
         else:
-            dict.__setitem__(self, key, val)
+            OrderedDict.__setitem__(self, key, val)
             self.keyMap[kl] = key
             
     def __getitem__(self, key):
         kl = key.lower()
         if kl not in self.keyMap:
             raise KeyError(key)
-        return dict.__getitem__(self, self.keyMap[kl])
+        return OrderedDict.__getitem__(self, self.keyMap[kl])
         
     def __contains__(self, key):
         return key.lower() in self.keyMap
@@ -305,19 +306,21 @@ class CaselessDict(dict):
             self[k] = v
             
     def copy(self):
-        return CaselessDict(dict.copy(self))
+        return CaselessDict(OrderedDict.copy(self))
         
     def __delitem__(self, key):
         kl = key.lower()
         if kl not in self.keyMap:
             raise KeyError(key)
-        dict.__delitem__(self, self.keyMap[kl])
+        OrderedDict.__delitem__(self, self.keyMap[kl])
         del self.keyMap[kl]
             
     def __deepcopy__(self, memo):
         raise Exception("deepcopy not implemented")
 
-
+    def clear(self):
+        OrderedDict.clear(self)
+        self.keyMap.clear()
 
 
 

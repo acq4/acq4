@@ -54,9 +54,9 @@ def init():
 
 
 class NIDAQError(Exception):
-    pass
-class NIDAQWarning(Exception):
-    pass
+    def __init__(self, errCode, msg):
+        Exception.__init__(self, msg)
+        self.errCode = errCode
 
 class _NIDAQ:
     NIDAQ_CREATED = False
@@ -140,7 +140,7 @@ class _NIDAQ:
             #for s in self.error(errCode):
                 #print s
             #print self.error(errCode)[1]
-            msg = "NiDAQ Error while running function '%s%s':\n%s" % (func, str(args), self.error(errCode))
+            msg = "NiDAQ Error while running function '%s%s':\n%s" % (func, str(args), self.error())
             raise NIDAQError(errCode, msg)
             #raise NIDAQError(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
         elif errCode > 0:
@@ -168,9 +168,14 @@ class _NIDAQ:
             print func, args
             raise
         
-    def error(self, errCode):
-        return (self.GetErrorString(errCode),
-                      self.GetExtendedErrorInfo())
+    def error(self, errCode=None):
+        """Return a string with error information. If errCode is None, then the currently 'active' error will be used."""
+        if errCode is None:
+            err = self.GetExtendedErrorInfo()
+        else:
+            err = self.GetErrorString(errCode)
+        err.replace('\\n', '\n')
+        return err
 
     def __del__(self):
         self.__class__.NIDAQ_CREATED = False

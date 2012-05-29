@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
-from __future__ import with_statement
 from lib.devices.Device import *
 from metaarray import MetaArray, axis
 from Mutex import Mutex
-from numpy import *
+import numpy as np
 from protoGUI import *
 from debug import *
 from pyqtgraph import siFormat
@@ -352,7 +351,7 @@ class DAQGenericTask(DeviceTask):
                 #print "channel", chConf['channel'][1], cmdData
                 
                 if chConf['type'] == 'do':
-                    cmdData = cmdData.astype(uint32)
+                    cmdData = cmdData.astype(np.uint32)
                     cmdData[cmdData<=0] = 0
                     cmdData[cmdData>0] = 0xFFFFFFFF
                 
@@ -436,14 +435,14 @@ class DAQGenericTask(DeviceTask):
             rate = meta['rate']
             nPts = meta['numPts']
             ## Create an array of time values
-            timeVals = linspace(0, float(nPts-1) / float(rate), nPts)
+            timeVals = np.linspace(0, float(nPts-1) / float(rate), nPts)
             
             ## Concatenate all channels together into a single array, generate MetaArray info
-            chanList = [atleast_2d(result[x]['data']) for x in result]
+            chanList = [np.atleast_2d(result[x]['data']) for x in result]
             cols = [(x, result[x]['units']) for x in result]
             # print cols
             try:
-                arr = concatenate(chanList)
+                arr = np.concatenate(chanList)
             except:
                 print chanList
                 print [a.shape for a in chanList]
@@ -483,7 +482,7 @@ class DAQGenericTask(DeviceTask):
         for ch in self._DAQCmd:
             if self._DAQCmd[ch].get('recordInit', False):
             #if 'recordInit' in self._DAQCmd[ch] and self._DAQCmd[ch]['recordInit']:
-                dirHandle.setInfo({(self.dev.name, ch): self.initialState[ch]})
+                dirHandle.setInfo({(self.dev.name(), ch): self.initialState[ch]})
            
                 
 class DAQDevGui(QtGui.QWidget):
@@ -603,4 +602,3 @@ class DAQDevGui(QtGui.QWidget):
 
 
 
-        

@@ -58,7 +58,7 @@ class DAQGenericProtoGui(ProtocolGui):
         #print "Plot label:", ch, units
         self.plots[ch] = p
         
-        p.registerPlot(self.dev.name + '.' + ch)
+        p.registerPlot(self.dev.name() + '.' + ch)
         
         if conf['type'] in ['ao', 'do']:
             w = OutputChannelGui(self, ch, conf, p, self.dev, self.prot, daqName)
@@ -91,7 +91,7 @@ class DAQGenericProtoGui(ProtocolGui):
                 try:
                     self.channels[ch].restoreState(state['channels'][ch])
                 except KeyError:
-                    printExc("Warning: Cannot restore state for channel %s.%s (channel does not exist on this device)" % (self.dev.name, ch))
+                    printExc("Warning: Cannot restore state for channel %s.%s (channel does not exist on this device)" % (self.dev.name(), ch))
                     continue    
                 self.channels[ch].restoreState(state['channels'][ch])
         except:
@@ -110,12 +110,12 @@ class DAQGenericProtoGui(ProtocolGui):
         return l
         
     def sequenceChanged(self):
-        #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
-        self.sigSequenceChanged.emit(self.dev.name)
+        #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name())
+        self.sigSequenceChanged.emit(self.dev.name())
         
     def taskStarted(self, params):  ## automatically invoked from ProtocolGui
         ## Pull out parameters for this device
-        params = dict([(p[1], params[p]) for p in params if p[0] == self.dev.name])
+        params = dict([(p[1], params[p]) for p in params if p[0] == self.dev.name()])
         
         for ch in self.channels:
             ## Extract just the parameters the channel will need

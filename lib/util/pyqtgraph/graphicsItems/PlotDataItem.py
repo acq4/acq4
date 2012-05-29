@@ -1,29 +1,42 @@
-try: 
-    import metaarray
-    HAVE_METAARRAY = True
-except:
-    HAVE_METAARRAY = False
-
+import pyqtgraph.metaarray as metaarray
 from pyqtgraph.Qt import QtCore
-from GraphicsObject import GraphicsObject
-from PlotCurveItem import PlotCurveItem
-from ScatterPlotItem import ScatterPlotItem
+from .GraphicsObject import GraphicsObject
+from .PlotCurveItem import PlotCurveItem
+from .ScatterPlotItem import ScatterPlotItem
 import numpy as np
 import scipy
 import pyqtgraph.functions as fn
 import pyqtgraph.debug as debug
 
 class PlotDataItem(GraphicsObject):
-    """GraphicsItem for displaying plot curves, scatter plots, or both."""
+    """
+    **Bases:** :class:`GraphicsObject <pyqtgraph.GraphicsObject>`
+    
+    GraphicsItem for displaying plot curves, scatter plots, or both. 
+    While it is possible to use :class:`PlotCurveItem <pyqtgraph.PlotCurveItem>` or
+    :class:`ScatterPlotItem <pyqtgraph.ScatterPlotItem>` individually, this class
+    provides a unified interface to both. Inspances of :class:`PlotDataItem` are 
+    usually created by plot() methods such as :func:`pyqtgraph.plot` and
+    :func:`PlotItem.plot() <pyqtgraph.PlotItem.plot>`.
+    
+    ============================== ==============================================
+    **Signals:**
+    sigPlotChanged(self)           Emitted when the data in this item is updated.  
+    sigClicked(self)               Emitted when the item is clicked.
+    sigPointsClicked(self, points) Emitted when a plot point is clicked
+                                   Sends the list of points under the mouse.
+    ============================== ==============================================
+    """
     
     sigPlotChanged = QtCore.Signal(object)
     sigClicked = QtCore.Signal(object)
+    sigPointsClicked = QtCore.Signal(object, object)
     
     def __init__(self, *args, **kargs):
         """
         There are many different ways to create a PlotDataItem:
         
-        Data initialization: (x,y data only)
+        **Data initialization arguments:** (x,y data only)
         
             =================================== ======================================
             PlotDataItem(xValues, yValues)      x and y values may be any sequence (including ndarray) of real numbers
@@ -32,7 +45,7 @@ class PlotDataItem(GraphicsObject):
             PlotDataItem(ndarray(Nx2))          numpy array with shape (N, 2) where x=data[:,0] and y=data[:,1]
             =================================== ======================================
         
-        Data initialization: (x,y data AND may include spot style)
+        **Data initialization arguments:** (x,y data AND may include spot style)
         
             ===========================   =========================================
             PlotDataItem(recarray)        numpy array with dtype=[('x', float), ('y', float), ...]
@@ -42,34 +55,40 @@ class PlotDataItem(GraphicsObject):
                                           OR 2D array with a column 'y' and extra columns as needed.
             ===========================   =========================================
         
-        Line style keyword         
+        **Line style keyword arguments:**
             ==========   ================================================
-            pen          pen to use for drawing line between points. Default is solid grey, 1px width. Use None to disable line drawing.
+            pen          pen to use for drawing line between points. 
+                         Default is solid grey, 1px width. Use None to disable line drawing.
+                         May be any single argument accepted by :func:`mkPen() <pyqtgraph.mkPen>`
             shadowPen    pen for secondary line to draw behind the primary line. disabled by default.
+                         May be any single argument accepted by :func:`mkPen() <pyqtgraph.mkPen>`
             fillLevel    fill the area between the curve and fillLevel
             fillBrush    fill to use when fillLevel is specified
+                         May be any single argument accepted by :func:`mkBrush() <pyqtgraph.mkBrush>`
             ==========   ================================================
         
-        Point style keyword arguments:
+        **Point style keyword arguments:**
         
             ============   ================================================
-            symbol         symbol to use for drawing points OR list of symbols, one per point. Default is no symbol.
+            symbol         (str) symbol to use for drawing points OR list of symbols, one per point. Default is no symbol.
                            options are o, s, t, d, +
             symbolPen      outline pen for drawing points OR list of pens, one per point
+                           May be any single argument accepted by :func:`mkPen() <pyqtgraph.mkPen>`
             symbolBrush    brush for filling points OR list of brushes, one per point
+                           May be any single argument accepted by :func:`mkBrush() <pyqtgraph.mkBrush>`
             symbolSize     diameter of symbols OR list of diameters
             pxMode         (bool) If True, then symbolSize is specified in pixels. If False, then symbolSize is 
                            specified in data coordinates.
             ============   ================================================
         
-        Optimization keyword arguments:
+        **Optimization keyword arguments:**
         
             ==========   ================================================
-            identical    spots are all identical. The spot image will be rendered only once and repeated for every point
+            identical    *deprecated*
             decimate     (int) decimate data
             ==========   ================================================
         
-        Meta-info keyword arguments:
+        **Meta-info keyword arguments:**
         
             ==========   ================================================
             name         name of dataset. This would appear in a legend
@@ -87,6 +106,10 @@ class PlotDataItem(GraphicsObject):
         self.scatter = ScatterPlotItem()
         self.curve.setParentItem(self)
         self.scatter.setParentItem(self)
+        
+        self.curve.sigClicked.connect(self.curveClicked)
+        self.scatter.sigClicked.connect(self.scatterClicked)
+        
         
         #self.clear()
         self.opts = {
@@ -106,6 +129,8 @@ class PlotDataItem(GraphicsObject):
             'symbolPen': (200,200,200),
             'symbolBrush': (50, 50, 150),
             'identical': False,
+            
+            'data': None,
         }
         self.setData(*args, **kargs)
     
@@ -129,8 +154,8 @@ class PlotDataItem(GraphicsObject):
         self.xDisp = self.yDisp = None
         self.updateItems()
     
-    def setLogMode(self, mode):
-        self.opts['logMode'] = mode
+    def setLogMode(self, xMode, yMode):
+        self.opts['logMode'] = (xMode, yMode)
         self.xDisp = self.yDisp = None
         self.updateItems()
     
@@ -223,7 +248,7 @@ class PlotDataItem(GraphicsObject):
             data = args[0]
             dt = dataType(data)
             if dt == 'empty':
-                return
+                pass
             elif dt == 'listOfValues':
                 y = np.array(data)
             elif dt == 'Nx2array':
@@ -239,6 +264,8 @@ class PlotDataItem(GraphicsObject):
                     x = np.array([d.get('x',None) for d in data])
                 if 'y' in data[0]:
                     y = np.array([d.get('y',None) for d in data])
+                for k in ['data', 'symbolSize', 'symbolPen', 'symbolBrush', 'symbolShape']:
+                    kargs[k] = [d.get(k, None) for d in data]
             elif dt == 'MetaArray':
                 y = data.view(np.ndarray)
                 x = data.xvals(0).view(np.ndarray)
@@ -275,7 +302,7 @@ class PlotDataItem(GraphicsObject):
         if 'brush' in kargs:
             kargs['fillBrush'] = kargs['brush']
             
-        for k in self.opts.keys():
+        for k in list(self.opts.keys()):
             if k in kargs:
                 self.opts[k] = kargs[k]
                 
@@ -328,8 +355,9 @@ class PlotDataItem(GraphicsObject):
             curveArgs[v] = self.opts[k]
         
         scatterArgs = {}
-        for k,v in [('symbolPen','pen'), ('symbolBrush','brush'), ('symbol','symbol'), ('symbolSize', 'size')]:
-            scatterArgs[v] = self.opts[k]
+        for k,v in [('symbolPen','pen'), ('symbolBrush','brush'), ('symbol','symbol'), ('symbolSize', 'size'), ('data', 'data')]:
+            if k in self.opts:
+                scatterArgs[v] = self.opts[k]
         
         x,y = self.getData()
         
@@ -356,7 +384,7 @@ class PlotDataItem(GraphicsObject):
         if self.xData is None:
             return (None, None)
         if self.xDisp is None:
-            nanMask = np.isnan(self.xData) | np.isnan(self.yData)
+            nanMask = np.isnan(self.xData) | np.isnan(self.yData) | np.isinf(self.xData) | np.isinf(self.yData)
             if any(nanMask):
                 x = self.xData[~nanMask]
                 y = self.yData[~nanMask]
@@ -377,21 +405,51 @@ class PlotDataItem(GraphicsObject):
                 x = np.log10(x)
             if self.opts['logMode'][1]:
                 y = np.log10(y)
+            if any(self.opts['logMode']):  ## re-check for NANs after log
+                nanMask = np.isinf(x) | np.isinf(y) | np.isnan(x) | np.isnan(y)
+                if any(nanMask):
+                    x = x[~nanMask]
+                    y = y[~nanMask]
             self.xDisp = x
             self.yDisp = y
         #print self.yDisp.shape, self.yDisp.min(), self.yDisp.max()
         #print self.xDisp.shape, self.xDisp.min(), self.xDisp.max()
         return self.xDisp, self.yDisp
 
-    def dataBounds(self, ax, frac=1.0):
+    def dataBounds(self, ax, frac=1.0, orthoRange=None):
+        """
+        Returns the range occupied by the data (along a specific axis) in this item.
+        This method is called by ViewBox when auto-scaling.
+
+        =============== =============================================================
+        **Arguments:**
+        ax              (0 or 1) the axis for which to return this item's data range
+        frac            (float 0.0-1.0) Specifies what fraction of the total data 
+                        range to return. By default, the entire range is returned.
+                        This allows the ViewBox to ignore large spikes in the data
+                        when auto-scaling.
+        orthoRange      ([min,max] or None) Specifies that only the data within the
+                        given range (orthogonal to *ax*) should me measured when 
+                        returning the data range. (For example, a ViewBox might ask
+                        what is the y-range of all data with x-values between min
+                        and max)
+        =============== =============================================================
+        """
         (x, y) = self.getData()
         if x is None or len(x) == 0:
             return (0, 0)
             
         if ax == 0:
             d = x
+            d2 = y
         elif ax == 1:
             d = y
+            d2 = x
+            
+        if orthoRange is not None:
+            mask = (d2 >= orthoRange[0]) * (d2 <= orthoRange[1])
+            d = d[mask]
+            d2 = d2[mask]
             
         if frac >= 1.0:
             return (np.min(d), np.max(d))
@@ -417,15 +475,23 @@ class PlotDataItem(GraphicsObject):
     def appendData(self, *args, **kargs):
         pass
     
+    def curveClicked(self):
+        self.sigClicked.emit(self)
+        
+    def scatterClicked(self, plt, points):
+        self.sigClicked.emit(self)
+        self.sigPointsClicked.emit(self, points)
+    
     
 def dataType(obj):
     if hasattr(obj, '__len__') and len(obj) == 0:
         return 'empty'
     if isSequence(obj):
         first = obj[0]
-        if isinstance(obj, np.ndarray):
-            if HAVE_METAARRAY and isinstance(obj, metaarray.MetaArray):
-                return 'MetaArray'
+        
+        if isinstance(obj, metaarray.MetaArray):
+            return 'MetaArray'
+        elif isinstance(obj, np.ndarray):
             if obj.ndim == 1:
                 if obj.dtype.names is None:
                     return 'listOfValues'
@@ -444,7 +510,7 @@ def dataType(obj):
         
         
 def isSequence(obj):
-    return isinstance(obj, list) or isinstance(obj, np.ndarray)
+    return isinstance(obj, list) or isinstance(obj, np.ndarray) or isinstance(obj, metaarray.MetaArray)
     
             
             

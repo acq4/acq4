@@ -254,8 +254,8 @@ class Task(DeviceTask):
 
         
         ## Probably the DAQ should be started last
-        startOrder.remove(self.dev.name)
-        startOrder.append(self.dev.name)
+        startOrder.remove(self.dev.name())
+        startOrder.append(self.dev.name())
         
         ## Determine how the protocol will be triggered
         if 'triggerChan' in self.cmd:
@@ -263,7 +263,7 @@ class Task(DeviceTask):
         elif 'triggerDevice' in self.cmd:
             tDevName = self.cmd['triggerDevice']
             tDev = self.dev.dm.getDevice(tDevName)
-            self.st.setTrigger(tDev.getTriggerChannel(self.dev.name))
+            self.st.setTrigger(tDev.getTriggerChannel(self.dev.name()))
             
             ## If there is a trigger device, it needs to start after the DAQ does.
             if tDevName in startOrder:
@@ -404,7 +404,7 @@ class Task(DeviceTask):
         return res
         
     def devName(self):
-        return self.dev.name
+        return self.dev.name()
         
 
 

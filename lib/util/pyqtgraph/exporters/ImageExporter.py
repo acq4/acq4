@@ -1,4 +1,4 @@
-from Exporter import Exporter
+from .Exporter import Exporter
 from pyqtgraph.parametertree import Parameter
 from pyqtgraph.Qt import QtGui, QtCore, QtSvg
 import pyqtgraph as pg
@@ -59,6 +59,7 @@ class ImageExporter(Exporter):
         painter = QtGui.QPainter(self.png)
         try:
             self.setExportMode(True, {'antialias': self.params['antialias'], 'background': self.params['background']})
+            painter.setRenderHint(QtGui.QPainter.Antialiasing, self.params['antialias'])
             self.getScene().render(painter, QtCore.QRectF(targetRect), sourceRect)
         finally:
             self.setExportMode(False)
