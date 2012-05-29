@@ -1,0 +1,411 @@
+protocol:
+    windowState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%03%00%00%00%00%00%00%04%C2%00%00%02%3E%FC%02%00%00%00%01%FC%00%00%01_%00%00%02%3E%00%00%00%00%00%FF%FF%FF%FA%00%00%00%00%01%00%00%00%01%FB%00%00%00%16%00S%00c%00a%00n%00n%00e%00r%00-%00R%00a%00w%00%00%00%00%00%00%00%04%C2%00%00%00%00%00%00%00%00%00%00%00%02%00%00%05%1F%00%00%01%5B%FC%01%00%00%00%04%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01%13%00%00%01%09%00%FF%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%01%17%00%00%01Q%00%00%01%18%00%FF%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%02l%00%00%01t%00%00%014%00%FF%FF%FF%FC%00%00%03%E4%00%00%01%3B%00%00%00%FE%00%FF%FF%FF%FA%00%00%00%02%01%00%00%00%04%FB%00%00%00%16%00T%00e%00m%00p%00e%00r%00a%00t%00u%00r%00e%01%00%00%00%00%FF%FF%FF%FF%00%00%00%9B%00%FF%FF%FF%FB%00%00%00%10%00U%00n%00c%00a%00g%00i%00n%00g%01%00%00%00%00%FF%FF%FF%FF%00%00%00%FE%00%FF%FF%FF%FB%00%00%00%06%00D%00A%00Q%01%00%00%00%00%FF%FF%FF%FF%00%00%00%C8%00%FF%FF%FF%FB%00%00%00%14%00d%00o%00c%00k%00W%00i%00d%00g%00e%00t%01%00%00%00%00%FF%FF%FF%FF%00%00%00U%00%FF%FF%FF%00%00%00%03%00%00%05%1F%00%00%01%91%FC%01%00%00%00%01%FC%00%00%00%00%00%00%05%1F%00%00%01j%00%FF%FF%FF%FA%00%00%00%00%02%00%00%00%05%FB%00%00%00%0C%00C%00l%00a%00m%00p%002%01%00%00%00%00%FF%FF%FF%FF%00%00%00%D8%00%FF%FF%FF%FB%00%00%00%0E%00S%00c%00a%00n%00n%00e%00r%01%00%00%00%00%FF%FF%FF%FF%00%00%00%F3%00%FF%FF%FF%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%00%00%FF%FF%FF%FF%00%00%00%D8%00%FF%FF%FF%FB%00%00%00%10%00L%00a%00s%00e%00r%00-%00U%00V%01%00%00%00%00%FF%FF%FF%FF%00%00%01v%00%FF%FF%FF%FB%00%00%00%0C%00C%00a%00m%00e%00r%00a%01%00%00%01c%00%00%02%3A%00%00%01e%00%FF%FF%FF%00%00%05%1F%00%00%00%01%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
+    params: [('Laser-UV', 'QSwitch.p', False, []), ('Laser-UV', 'Shutter.p', False, []), ('Scanner', 'targets', True, [])]
+    conf:
+        continuous: False
+        cycleTime: 0.050000000000000003
+        loop: False
+        duration: 1.2
+        repetitions: 0
+        leadTime: 0.01
+        loopCycleTime: 0.29999999999999999
+    analysis:
+        Uncaging:
+            clampTestStopSpin: 600.0
+            displayImageCheck: False
+            spotToleranceSpin: 4000.0
+            enabledCheck: True
+            cameraModCombo: 'Camera'
+            alphaSlider: 150
+            frame2Spin: 1
+            clampBaseStartSpin: 450.0
+            clampDevCombo: 'Clamp1'
+            frame1Spin: 0
+            clampBaseStopSpin: 500.0
+            scannerDevCombo: 'Scanner'
+            pspToleranceSpin: 10.0
+            clampTestStartSpin: 500.0
+devices:
+    Clamp1:
+        bottomPlotWidget:
+            xAutoRadio: True
+            maxTracesCheck: True
+            downsampleSpin: 1
+            xLinkCombo: ''
+            xMinText: '0'
+            groupBox_2: False
+            xMouseCheck: True
+            yAutoPercentSpin: 100
+            manualDecimateRadio: False
+            xManualRadio: False
+            maxTracesSpin: 1
+            autoDecimateRadio: True
+            xAutoPercentSpin: 100
+            alphaSlider: 1000
+            yMaxText: '0'
+            paramList:
+            yLinkCombo: ''
+            yManualRadio: False
+            autoPointsCheck: True
+            decimateGroup: True
+            yAutoRadio: True
+            yLogCheck: False
+            yMouseCheck: True
+            groupBox: False
+            gridGroup: False
+            pointsGroup: True
+            yMinText: '0'
+            gridAlphaSlider: 70
+            averageGroup: False
+            autoAlphaCheck: False
+            alphaGroup: True
+            xMaxText: '0'
+            powerSpectrumGroup: False
+            forgetTracesCheck: True
+            xLogCheck: False
+        primarySignalCheck: False
+        topPlotWidget:
+            xAutoRadio: True
+            maxTracesCheck: True
+            downsampleSpin: 1
+            xLinkCombo: ''
+            xMinText: '0'
+            groupBox_2: False
+            xMouseCheck: True
+            yAutoPercentSpin: 100
+            manualDecimateRadio: False
+            xManualRadio: False
+            maxTracesSpin: 1
+            autoDecimateRadio: True
+            xAutoPercentSpin: 100
+            alphaSlider: 1000
+            yMaxText: '0'
+            paramList:
+                Scanner.targets: False
+            yLinkCombo: ''
+            yManualRadio: False
+            autoPointsCheck: True
+            decimateGroup: True
+            yAutoRadio: True
+            yLogCheck: False
+            yMouseCheck: False
+            groupBox: False
+            gridGroup: True
+            pointsGroup: True
+            yMinText: '0'
+            gridAlphaSlider: 70
+            averageGroup: False
+            autoAlphaCheck: False
+            alphaGroup: True
+            xMaxText: '0'
+            powerSpectrumGroup: False
+            forgetTracesCheck: True
+            xLogCheck: False
+        vcModeRadio: True
+        splitter: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%01%E0%00%00%00%AF%01%00%00%00%05%01%00%00%00%02'
+        holdingCheck: False
+        holdingSpin: -0.050000000000000003
+        primarySignal: 'Membrane Current'
+        primaryGainSpin: 2
+        secondaryGainSpin: 1
+        splitter_2: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%00%CF%00%00%00%3C%01%00%00%00%05%01%00%00%00%01'
+        i0ModeRadio: False
+        waveGeneratorWidget:
+            function: 'pulse(1100, 50, -10)\n'
+            autoUpdate: False
+            params: ''
+        icModeRadio: False
+        primarySignalCombo: 'Membrane Current'
+        secondaryGainCheck: False
+        primaryGainCheck: False
+        secondarySignalCheck: False
+        mode: 'VC'
+        secondarySignalCombo: 'Membrane plus Offset Potential'
+        secondarySignal: 'Membrane plus Offset Potential'
+    Laser-UV:
+        splitter2: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%00%B0%00%00%00%B0%01%00%00%00%05%01%00%00%00%02'
+        splitter3: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%00%3C%00%00%00%3C%01%00%00%00%05%01%00%00%00%02'
+        splitter1: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%01%5E%00%00%03%05%01%00%00%00%05%01%00%00%00%01'
+        channels:
+            Shutter:
+                holdingCheck: False
+                holdingSpin: 0
+                functionCheck: True
+                preSetCheck: True
+                groupBox: True
+                displayCheck: True
+                preSetSpin: 0
+                waveGeneratorWidget:
+                    function: 'pulse(460, p, 1)'
+                    autoUpdate: False
+                    params: 'p = 42;[41,41,42,42,43,43,44,44]'
+            QSwitch:
+                holdingCheck: False
+                holdingSpin: 0
+                functionCheck: True
+                preSetCheck: True
+                groupBox: True
+                displayCheck: True
+                preSetSpin: 0
+                waveGeneratorWidget:
+                    function: 'pulse(500, p, 1)'
+                    autoUpdate: False
+                    params: 'p = 2;[0.5,1,1.5,2,2.5,3,3.5,4]'
+    Camera:
+        triggerCheck: False
+        normGroup: False
+        recordCheck: True
+        releaseAfterRadio: True
+        normROICheck: False
+        normYBlurSpin: 0.0
+        horizSplitter: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%01H%00%00%03c%01%00%00%00%05%01%00%00%00%01'
+        plotSplitter: '%00%00%00%FF%00%00%00%00%00%00%00%03%00%00%02%18%00%00%00%3C%00%00%00%3C%01%00%00%00%05%01%00%00%00%02'
+        daqState:
+            triggerCheck: False
+            normGroup: False
+            recordCheck: True
+            ctrlSplitter: '%00%00%00%FF%00%00%00%00%00%00%00%03%00%00%01%A6%00%00%00%B0%00%00%004%01%00%00%00%05%01%00%00%00%02'
+            releaseAfterRadio: True
+            normROICheck: False
+            channels:
+                trigger:
+                    holdingCheck: True
+                    holdingSpin: 1
+                    functionCheck: True
+                    preSetCheck: True
+                    groupBox: True
+                    displayCheck: True
+                    preSetSpin: 1
+                    waveGeneratorWidget:
+                        function: 'pulse([300, 500], 20, -1)'
+                        autoUpdate: False
+                        params: ''
+                exposure:
+                    recordInitCheck: False
+                    groupBox: True
+                    recordCheck: True
+                    displayCheck: True
+            horizSplitter: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%01H%00%00%03c%01%00%00%00%05%01%00%00%00%01'
+            plotSplitter: '%00%00%00%FF%00%00%00%00%00%00%00%03%00%00%02%18%00%00%00%3C%00%00%00%3C%01%00%00%00%05%01%00%00%00%02'
+            normXBlurSpin: 0.0
+            roiPlot:
+                xAutoRadio: True
+                maxTracesCheck: True
+                downsampleSpin: 1
+                xLinkCombo: ''
+                xMinText: '0'
+                groupBox_2: False
+                xMouseCheck: True
+                yAutoPercentSpin: 100
+                manualDecimateRadio: False
+                xManualRadio: False
+                maxTracesSpin: 1
+                autoDecimateRadio: True
+                xAutoPercentSpin: 100
+                alphaSlider: 1000
+                yMaxText: '0'
+                paramList:
+                yLinkCombo: ''
+                yManualRadio: False
+                autoPointsCheck: True
+                decimateGroup: True
+                yAutoRadio: True
+                yLogCheck: False
+                yMouseCheck: True
+                groupBox: False
+                gridGroup: True
+                pointsGroup: True
+                yMinText: '0'
+                gridAlphaSlider: 70
+                averageGroup: False
+                autoAlphaCheck: False
+                alphaGroup: True
+                xMaxText: '0'
+                powerSpectrumGroup: False
+                forgetTracesCheck: True
+                xLogCheck: False
+            triggerModeCombo: 'Bulb'
+            normTimeRangeCheck: False
+            splitter: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%00%C2%00%00%00%28%01%00%00%00%05%01%00%00%00%02'
+            releaseBetweenRadio: False
+            normOffRadio: True
+            normYBlurSpin: 0.0
+            cameraGroupBox: False
+            normSubtractRadio: False
+            normDivideRadio: False
+            displayCheck: True
+            normTBlurSpin: 0.0
+            normFrameCheck: False
+        normXBlurSpin: 0.0
+        roiPlot:
+            xAutoRadio: True
+            maxTracesCheck: True
+            downsampleSpin: 1
+            xLinkCombo: ''
+            xMinText: '0'
+            groupBox_2: False
+            xMouseCheck: True
+            yAutoPercentSpin: 100
+            manualDecimateRadio: False
+            xManualRadio: False
+            maxTracesSpin: 1
+            autoDecimateRadio: True
+            xAutoPercentSpin: 100
+            alphaSlider: 1000
+            yMaxText: '0'
+            paramList:
+            yLinkCombo: ''
+            yManualRadio: False
+            autoPointsCheck: True
+            decimateGroup: True
+            yAutoRadio: True
+            yLogCheck: False
+            yMouseCheck: True
+            groupBox: False
+            gridGroup: True
+            pointsGroup: True
+            yMinText: '0'
+            gridAlphaSlider: 70
+            averageGroup: False
+            autoAlphaCheck: False
+            alphaGroup: True
+            xMaxText: '0'
+            powerSpectrumGroup: False
+            forgetTracesCheck: True
+            xLogCheck: False
+        triggerModeCombo: 'Bulb'
+        normTimeRangeCheck: False
+        splitter: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%00%C2%00%00%00%28%01%00%00%00%05%01%00%00%00%02'
+        releaseBetweenRadio: False
+        normOffRadio: True
+        ctrlSplitter: '%00%00%00%FF%00%00%00%00%00%00%00%03%00%00%01%A6%00%00%00%B0%00%00%004%01%00%00%00%05%01%00%00%00%02'
+        cameraGroupBox: False
+        normSubtractRadio: False
+        normDivideRadio: False
+        displayCheck: True
+        normTBlurSpin: 0.0
+        normFrameCheck: False
+    Scanner:
+        minTime: 5.0
+        laserCombo: 'Laser-UV'
+        cameraCombo: 'Camera'
+        minDist: 0.00050000000000000001
+    DAQ:
+        butterworthStopband: 2.0
+        denoiseThreshold: 4.0
+        denoiseMethod: 'None'
+        downsample: 20
+        filterMethod: 'None'
+        butterworthPassband: 1.0
+        butterworthPassDB: 2.0
+        denoiseWidth: 1
+        butterworthStopDB: 10.0
+        rate: 200000.0
+        besselOrder: 4
+        triggerDevice: 'No Trigger'
+        besselCutoff: 2.0
+    Temperature:
+        splitter2: '%00%00%00%FF%00%00%00%00%00%00%00%01%00%00%00%DC%01%00%00%00%05%01%00%00%00%02'
+        splitter3: '%00%00%00%FF%00%00%00%00%00%00%00%01%00%00%03%2A%01%00%00%00%05%01%00%00%00%02'
+        splitter1: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%00%9A%00%00%09%60%01%00%00%00%05%01%00%00%00%01'
+        channels:
+            BathTemp:
+                recordInitCheck: True
+                groupBox: True
+                recordCheck: False
+                displayCheck: False
+    Clamp2:
+        bottomPlotWidget:
+            xAutoRadio: True
+            maxTracesCheck: False
+            downsampleSpin: 1
+            xLinkCombo: ''
+            xMinText: '0'
+            groupBox_2: False
+            xMouseCheck: True
+            yAutoPercentSpin: 100
+            manualDecimateRadio: True
+            xManualRadio: False
+            maxTracesSpin: 0
+            autoDecimateRadio: False
+            xAutoPercentSpin: 100
+            alphaSlider: 1000
+            yMaxText: '0'
+            paramList:
+            yLinkCombo: ''
+            yManualRadio: False
+            autoPointsCheck: True
+            decimateGroup: True
+            yAutoRadio: True
+            yLogCheck: False
+            yMouseCheck: True
+            groupBox: False
+            gridGroup: False
+            pointsGroup: True
+            yMinText: '0'
+            gridAlphaSlider: 70
+            averageGroup: False
+            autoAlphaCheck: False
+            alphaGroup: True
+            xMaxText: '0'
+            powerSpectrumGroup: False
+            forgetTracesCheck: False
+            xLogCheck: False
+        primarySignalCheck: False
+        topPlotWidget:
+            xAutoRadio: False
+            maxTracesCheck: False
+            downsampleSpin: 1
+            xLinkCombo: ''
+            xMinText: '0'
+            groupBox_2: False
+            xMouseCheck: True
+            yAutoPercentSpin: 100
+            manualDecimateRadio: True
+            xManualRadio: True
+            maxTracesSpin: 0
+            autoDecimateRadio: False
+            xAutoPercentSpin: 100
+            alphaSlider: 1000
+            yMaxText: '0'
+            paramList:
+            yLinkCombo: ''
+            yManualRadio: True
+            autoPointsCheck: True
+            decimateGroup: True
+            yAutoRadio: False
+            yLogCheck: False
+            yMouseCheck: True
+            groupBox: False
+            gridGroup: False
+            pointsGroup: True
+            yMinText: '0'
+            gridAlphaSlider: 70
+            averageGroup: False
+            autoAlphaCheck: False
+            alphaGroup: True
+            xMaxText: '0'
+            powerSpectrumGroup: False
+            forgetTracesCheck: False
+            xLogCheck: False
+        vcModeRadio: False
+        splitter: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%09~%FF%FF%FF%FF%01%00%00%00%05%01%00%00%00%02'
+        holdingCheck: False
+        holdingSpin: 0.0
+        primarySignal: 'Membrane Potential'
+        primaryGainSpin: 2
+        secondaryGainSpin: 1
+        splitter_2: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%01%16%00%00%09%60%01%00%00%00%05%01%00%00%00%01'
+        i0ModeRadio: True
+        waveGeneratorWidget:
+            function: ''
+            autoUpdate: False
+            params: ''
+        icModeRadio: False
+        primarySignalCombo: 'Membrane Potential'
+        secondaryGainCheck: False
+        primaryGainCheck: False
+        secondarySignalCheck: False
+        mode: 'I=0'
+        secondarySignalCombo: 'Command Current'
+        secondarySignal: 'Command Current'

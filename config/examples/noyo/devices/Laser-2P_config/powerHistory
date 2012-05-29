@@ -1,0 +1,12 @@
+entry_0:
+    date: '2011.11.02 14:42:41'
+    expectedPower: 0
+entry_1:
+    date: '2011.11.02 16:53:52'
+    expectedPower: 0.79
+entry_1:
+    date: '2011.11.02 16:53:52'
+    expectedPower: 0.84
+entry_1:
+    date: '2011.11.02 16:53:53'
+    expectedPower: 0.88
