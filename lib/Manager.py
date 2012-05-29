@@ -792,7 +792,8 @@ class Task:
         
         self.lockedDevs = []
         self.startedDevs = []
-        
+        self.startTime = None
+        self.stopTime = None
         
         #self.reserved = False
         try:
@@ -822,7 +823,6 @@ class Task:
                 continue
             self.devs[devName] = dev
             self.tasks[devName] = task
-        
         
     def execute(self, block=True, processEvents=True):
         """Start the protocol task.
@@ -983,7 +983,24 @@ class Task:
             if not self.tasks[t].isDone():
                 #print "Task %s not finished" % t
                 return False
+        if self.stopTime is None:
+            self.stopTime = ptime.time()
         return True
+    
+    def duration(self):
+        """Return the requested protocol duration, or None if it was not given."""
+        return self.command.get('protocol', {}).get('duration', None)
+    
+    def runTime(self):
+        """Return the length of time since this protocol has been running.
+        If the task has already finished, return the length of time the task ran for.
+        If the task has not started yet, return None.
+        """
+        if self.startTime is None:
+            return None
+        if self.stopTime is None:
+            return ptime.time() - self.startTime
+        return self.stopTime - self.startTime
         
     def stop(self, abort=False):
         """Stop all tasks and read data. If abort is True, does not attempt to collect data from the run."""
@@ -1031,6 +1048,8 @@ class Task:
                 prof.mark("store data")
         finally:   ## Regardless of any other problems, at least make sure we release hardware for future use
             ## Release all hardware for use elsewhere
+            if self.stopTime is None:
+                self.stopTime = ptime.time()
             
             self.releaseAll()
             prof.mark("release all")

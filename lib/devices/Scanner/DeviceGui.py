@@ -185,32 +185,6 @@ class ScannerDeviceGui(QtGui.QWidget):
         
 
     def runCalibration(self):
-        """Wraps around runCalibrationInner, adds progress dialog and error reporting"""
-        with pg.ProgressDialog("Calibrating scanner: Running protocol..", 0, 100) as self.progressDlg:
-            #self.progressDlg.setWindowModality(QtCore.Qt.WindowModal)
-            #self.progressDlg.setMinimumDuration(0)
-        
-            try:
-                self.updatePrgDlg(0)
-                return self.runCalibrationInner()
-            except:
-                #print "SHOW ERROR"
-                self.win.showMessage("Error during scanner calibration, see console.", 30000)
-                raise
-            #finally:
-                #self.progressDlg.setValue(100)
-
-    def updatePrgDlg(self, val=None, text=None):
-        if text is not None:
-            self.progressDlg.setLabelText(text)
-        if val is not None:
-            self.progressDlg.setValue(val)
-        QtGui.QApplication.instance().processEvents()
-        if self.progressDlg.wasCanceled():
-            self.progressDlg.setValue(100)
-            raise HelpfulException('Calibration canceled by user.', msgType='warning')
-
-    def runCalibrationInner(self):
         """The scanner calibration routine:
             1) Measure background frame, then scan mirrors 
                while collecting frames as fast as possible (self.scan())
@@ -260,67 +234,49 @@ class ScannerDeviceGui(QtGui.QWidget):
         size = self.spotSize(mfBlur)
         #center = info['centerPosition']
 
-        self.updatePrgDlg(40, "Calibrating scanner: Computing spot positions...")
-
-
-        ## Determine location of spot within each frame, 
-        ## ignoring frames where the spot is too dim or too close to the frame edge
-        spotLocations = []
-        globalSpotLocations = []
-        spotCommands = []
-        spotFrames = []
-        margin = fit[3]
-        
-        for i in range(len(positions)):
-            frame = frames[i]
-            fBlur = blur(frame.astype(np.float32), blurRadius)
-
-            mx = fBlur.max()
-            diff = mx - fBlur.min()
-            ss = self.spotSize(fBlur)
-            if ss < size * 0.6:
-                #print "Ignoring spot:", ss
-                continue
-            #else:
-                #print "Keeping spot:", ss
+        with pg.ProgressDialog("Calibrating scanner: Computing spot positions...", 0, 100) as dlg:
+            ## Determine location of spot within each frame, 
+            ## ignoring frames where the spot is too dim or too close to the frame edge
+            spotLocations = []
+            globalSpotLocations = []
+            spotCommands = []
+            spotFrames = []
+            margin = fit[3]
+            
+            for i in range(len(positions)):
+                frame = frames[i]
+                fBlur = blur(frame.astype(np.float32), blurRadius)
+    
+                mx = fBlur.max()
+                diff = mx - fBlur.min()
+                ss = self.spotSize(fBlur)
+                if ss < size * 0.6:
+                    #print "Ignoring spot:", ss
+                    continue
+                #else:
+                    #print "Keeping spot:", ss
+                    
+                (x, y) = argwhere(fBlur == mx)[0]   # guess location of spot
+                if x < margin or x > frame.shape[0] - margin:
+                    #print "   ..skipping; too close to edge", x, y
+                    continue
+                if y < margin or y > frame.shape[1] - margin:
+                    #print "   ..skipping; too close to edge", x, y
+                    continue
                 
-            (x, y) = argwhere(fBlur == mx)[0]   # guess location of spot
-            if x < margin or x > frame.shape[0] - margin:
-                #print "   ..skipping; too close to edge", x, y
-                continue
-            if y < margin or y > frame.shape[1] - margin:
-                #print "   ..skipping; too close to edge", x, y
-                continue
-            
-            frame[x,y] = -1  ## mark location of peak in image
-            #print "  ..spot is at", x, y
-            
-            ## x,y are currently in sensor coords, now convert to absolute scale relative to center
-            ### No, let's calibrate into sensor coords.
-            #print "======="
-            ##print x, y, region
-            #print "Image location:", x, y
-            #x = (x - (region[2]/ (2*binning[0]))) * info['pixelSize'][0]
-            #y = (y - (region[3]/ (2*binning[1]))) * info['pixelSize'][1]
-            ##print x, y
-            #print "Camera region:", region, binning
-            #print "Real location:", x, y
-            
-            ### convert image location to absolute sensor pixel
-            #x = region[0] + (x+0.5) * binning[0]
-            #y = region[1] + (y+0.5) * binning[1]
-            
-            ### convert sensor location to scope-centric coordinates
-            #(x,y) = someFrame.mapSensorToScope([x,y])
-            
-            globalPos = frameTransform.map(pg.Point(x, y))  ## Map from frame pixel location to global coordinates
-            localPos = self.dev.mapGlobalToParent(globalPos)  ## map from global to parent coordinate system. This is the position we calibrate to.
-            
-            spotLocations.append([localPos.x(), localPos.y()])
-            globalSpotLocations.append([globalPos.x(), globalPos.y()])
-            spotCommands.append(positions[i])
-            spotFrames.append(frame[newaxis])
-            self.updatePrgDlg(40 + 60 * i / frames.shape[0])
+                frame[x,y] = -1  ## mark location of peak in image
+                
+                ## convert pixel location to coordinate system of scanner's parent
+                globalPos = frameTransform.map(pg.Point(x, y))  ## Map from frame pixel location to global coordinates
+                localPos = self.dev.mapGlobalToParent(globalPos)  ## map from global to parent coordinate system. This is the position we calibrate to.
+                
+                spotLocations.append([localPos.x(), localPos.y()])
+                globalSpotLocations.append([globalPos.x(), globalPos.y()])
+                spotCommands.append(positions[i])
+                spotFrames.append(frame[newaxis])
+                dlg.setValue(100. * i / frames.shape[0])
+                if dlg.wasCanceled():
+                    raise HelpfulException('Calibration canceled by user.', msgType='warning')
         
         ## sanity check on spot frame
         if len(spotFrames) == 0:
@@ -338,8 +294,6 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         if len(spotFrames) < 10:
             raise HelpfulException('Calibration detected only %d frames with laser spot; need minimum of 10.' % len(spotFrames), reasons=['spot is too dim for camera sensitivity', 'objective is not clean', 'mirrors are scanning too quickly', 'mirror scanning region is not within the camera\'s view'])
-        
-        self.updatePrgDlg(90, "Calibrating scanner: Doing linear regression..")
         
         ## Fit all data to a map function
         mapParams = self.generateMap(array(spotLocations), array(spotCommands))
@@ -465,7 +419,15 @@ class ScannerDeviceGui(QtGui.QWidget):
         }
         #print "\n\n====> Scan\n"
         task = lib.Manager.getManager().createTask(cmd)
-        task.execute()
+        task.execute(block=False)
+        with pg.ProgressDialog("Calibrating scanner: Running scan protocol..", 0, 100) as dlg:
+            while not task.isDone():
+                dlg.setValue(100.*task.runTime()/task.duration())
+                if dlg.wasCanceled():
+                    task.abort()
+                    raise HelpfulException('Calibration canceled by user.', msgType='warning')
+                time.sleep(0.2)
+        
         result = task.getResult()
 
         frames = result[camera].toMetaArray()

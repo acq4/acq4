@@ -843,6 +843,8 @@ class ErrorDialog(QtGui.QDialog):
         #self.msgLabel.setFrameStyle(QtGui.QFrame.Box)
         #self.msgLabel.setStyleSheet('QLabel { font-weight: bold }')
         self.layout.addWidget(self.msgLabel)
+        self.msgLabel.setMaximumWidth(700)
+        self.msgLabel.setWordWrap(True)
         self.layout.addStretch()
         self.disableCheck = QtGui.QCheckBox('Disable error message popups')
         self.layout.addWidget(self.disableCheck)

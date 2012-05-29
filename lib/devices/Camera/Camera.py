@@ -582,7 +582,7 @@ class CameraTask(DAQGenericTask):
     def stop(self, abort=False):
         ## Stop DAQ first
         #print "Stop camera task"
-        DAQGenericTask.stop(self)
+        DAQGenericTask.stop(self, abort=abort)
         
         with self.lock:
             self.stopRecording = True

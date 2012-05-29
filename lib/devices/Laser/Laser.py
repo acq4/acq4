@@ -474,8 +474,8 @@ class Laser(DAQGeneric, OptomechDevice):
             powerIndTrace = result[powerInd[0]]
             if powerIndTrace is None:
                 raise Exception("No data returned from power indicator")
-            laserOn = powerIndTrace[0][0.1*rate:-2]
-            laserOff = powerIndTrace[0][:0.1*rate]
+            laserOn = powerIndTrace[0][0.1*rate:-2].asarray()
+            laserOff = powerIndTrace[0][:0.1*rate].asarray()
             
             t, prob = stats.ttest_ind(laserOn, laserOff)
             if prob < 0.01: ### if powerOn is statistically different from powerOff
