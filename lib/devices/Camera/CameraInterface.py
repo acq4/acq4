@@ -18,7 +18,10 @@ from lib.devices.OptomechDevice import DeviceTreeItemGroup
         
 class CameraInterface(QtCore.QObject):
     """
-    This class provides all the functionality necessary for a camera to display images and controls within the camera module's main window. Each camera that connects to the window must implement an instance of this interface.
+    This class provides all the functionality necessary for a camera to display images and controls within the camera module's main window. Each camera that connects to a camera module must implement an instance of this interface.
+    
+    The interface provides a control GUI via the controlWidget() method and directly manages its own GraphicsItems
+    within the camera module's view box.
     """
     
     sigNewFrame = QtCore.Signal(object, object)  # self, frame
@@ -180,6 +183,7 @@ class CameraInterface(QtCore.QObject):
         #self.ui.clearFramesBtn.clicked.connect(self.clearPersistentFrames)
 
         
+        
     def controlWidget(self):
         return self.widget
         
@@ -206,22 +210,32 @@ class CameraInterface(QtCore.QObject):
             raise
 
 
-    def globalTransformChanged(self, emitter=None, changedDev=None):
+    def globalTransformChanged(self, emitter=None, changedDev=None, transform=None):
         ## scope has moved; update viewport and camera outlines.
         ## This is only used when the camera is not running--
         ## if the camera is running, then this is taken care of in drawFrame to
         ## ensure that the image remains stationary on screen.
         if not self.cam.isRunning():
             tr = pg.Transform(self.cam.globalTransform())
-            pos = tr.getTranslation()
+            self.updateTransform(tr)
+            
+    def updateTransform(self, tr):
+        ## update view for new transform such that sensor bounds remain stationary on screen.
+        pos = tr.getTranslation()
+        
+        scale = tr.getScale()
+        if scale != self.lastCameraScale:
+            anchor = self.view.mapViewToDevice(self.lastCameraPosition)
+            self.view.scaleBy(scale / self.lastCameraScale)
+            anchor2 = self.view.mapDeviceToView(anchor)
+            diff = pos - anchor2
+            self.lastCameraScale = scale
+        else:
             diff = pos - self.lastCameraPosition
-            self.lastCameraPosition = pos
-            scale = tr.getScale()
-            if scale == self.lastCameraScale:
-                self.view.translateBy(diff)
-            else:  ## if objective has changed, don't translate to follow it.
-                self.lastCameraScale = scale
-            self.cameraItemGroup.setTransform(tr)
+            
+        self.view.translateBy(diff)
+        self.lastCameraPosition = pos
+        self.cameraItemGroup.setTransform(tr)
         
 
     #@trace
@@ -635,17 +649,18 @@ class CameraInterface(QtCore.QObject):
             
             ## Update viewport to correct for scope movement/scaling
             tr = pg.Transform(self.currentFrame.cameraTransform())
-            newPos = tr.getTranslation()
-            diff = newPos - self.lastCameraPosition
-            self.view.translateBy(diff)
-            self.lastCameraPosition = newPos
+            self.updateTransform(tr)
+            #newPos = tr.getTranslation()
+            #diff = newPos - self.lastCameraPosition
+            #self.view.translateBy(diff)
+            #self.lastCameraPosition = newPos
             
-            newScale = tr.getScale()
-            if newScale != self.lastCameraScale:
-                self.module.centerView()
-            self.lastCameraScale = newScale
+            #newScale = tr.getScale()
+            #if newScale != self.lastCameraScale:
+                #self.module.centerView()
+            #self.lastCameraScale = newScale
             
-            self.cameraItemGroup.setTransform(tr)
+            #self.cameraItemGroup.setTransform(tr)
             self.imageItemGroup.setTransform(tr)
             prof.mark()
             
