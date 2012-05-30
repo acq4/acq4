@@ -1099,10 +1099,10 @@ class pbm_ImageAnalysis(AnalysisModule):
                 # self.ROI_Plot.plot(self.imageTimes, bk, pen=pg.mkPen('b'))
             if self.lastROITouched == []:
                 self.lastROITouched = roi
-                roi.pen.setWidth(0.12) # just bump up the width
+                roi.pen().setWidth(0.12) # just bump up the width
             if roi != self.lastROITouched:
                 self.lastROITouched.pen.setWidth(0.12)
-                roi.pen.setWidthF(0.25)
+                roi.pen().setWidthF(0.25)
                 self.lastROITouched = roi # save the most recent one
             return(tr)
 

@@ -1039,7 +1039,7 @@ class TargetPoint(pg.EllipseROI):
         pg.ROI.__init__(self, (0,0), [ptSize] * 2, movable=args.get('movable', True))
         self.aspectLocked = True
         self.overPen = None
-        self.underPen = self.pen
+        self.underPen = self.pen()
         #self.treeItem = None
         self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         #self.host = args.get('host', None)
@@ -1353,7 +1353,7 @@ class TargetGrid(pg.ROI):
         p.save()
         r = QtCore.QRectF(0,0, self.state['size'][0], self.state['size'][1])
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(self.pen)
+        p.setPen(self.pen())
         p.translate(r.left(), r.top())
         p.scale(r.width(), r.height())
         p.drawRect(0, 0, 1, 1)
@@ -1370,7 +1370,7 @@ class TargetGrid(pg.ROI):
             if self.pens[i] != None:
                 p.setPen(self.pens[i])
             else:
-                p.setPen(self.pen)
+                p.setPen(self.pen())
             #p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
             p.drawEllipse(QtCore.QPointF(pt[0]/self.pointSize, pt[1]/self.pointSize), 0.5, 0.5)
             

@@ -104,7 +104,7 @@ rois.append(pg.PolygonROI([[2,0], [2.1,0], [2,.1]], pen=(5,9)))
 ## Add each ROI to the scene and link its data to a plot curve with the same color
 for r in rois:
     v.addItem(r)
-    c = pi1.plot(pen=r.pen)
+    c = pi1.plot(pen=r.pen())
     r.curve = c
     r.sigRegionChanged.connect(updateRoi)
 

@@ -8,13 +8,13 @@ import math
 class CortexROI(ROI.PolyLineROI):
     
     def __init__(self, pos, state=None):
-        ROI.PolyLineROI.__init__(self, [[0,0], [2,0], [2,1], [0,1]], size=(1e-3, 1e-3), pos=pos, closed=True)
+        ROI.PolyLineROI.__init__(self, [[0,0], [2,0], [2,1], [0,1]], size=(1e-3, 1e-3), pos=pos, closed=True, pen=pg.mkPen(50,50, 255, 200))
         
         ## don't let the user add handles to the sides, only to the top and bottom
         self.segments[1].setAcceptsHandles(False)
         self.segments[3].setAcceptsHandles(False)
         
-        self.pen = pg.mkPen(50,50, 255, 200)
+         
         
         if state is not None:
             self.setState(state)
@@ -73,12 +73,12 @@ class CortexROI(ROI.PolyLineROI):
             ROI.PolyLineROI.newHandleRequested(self, self.segments[mirrorInd], pos=mirrorPos)
             ROI.PolyLineROI.newHandleRequested(self, segment, pos=pos)
             
-            ROI.LineSegmentROI([pos, mirrorPos], [0,0], handles=(self.segments[ind].handles[1]['item'], self.segments[mirrorInd+1].handles[1]['item']), pen=pg.mkPen(50,50,255,100), movable=False, acceptsHandles=False, parent=self)
+            ROI.LineSegmentROI([pos, mirrorPos], [0,0], handles=(self.segments[ind].handles[1]['item'], self.segments[mirrorInd+1].handles[1]['item']), pen=self.pen(), movable=False, acceptsHandles=False, parent=self)
             
         else:
             ROI.PolyLineROI.newHandleRequested(self, segment, pos=pos)            
             ROI.PolyLineROI.newHandleRequested(self, self.segments[mirrorInd], pos=mirrorPos)
-            ROI.LineSegmentROI([mirrorPos, pos], [0,0], handles=(self.segments[mirrorInd].handles[1]['item'], self.segments[ind+1].handles[1]['item']), pen=pg.mkPen(50,50,255,100), movable=False, acceptsHandles=False, parent=self)
+            ROI.LineSegmentROI([mirrorPos, pos], [0,0], handles=(self.segments[mirrorInd].handles[1]['item'], self.segments[ind+1].handles[1]['item']), pen=self.pen(), movable=False, acceptsHandles=False, parent=self)
         
         
     def getQuadrilaterals(self):

@@ -46,7 +46,7 @@ class ROI(GraphicsObject):
     sigHoverEvent = QtCore.Signal(object)
     sigClicked = QtCore.Signal(object, object)
     
-    def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None, pen=None, movable=True):
+    def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None, pen=None, hoverPen=None, movable=True):
         #QObjectWorkaround.__init__(self)
         GraphicsObject.__init__(self, parent)
         self.setAcceptedMouseButtons(QtCore.Qt.NoButton)
@@ -58,9 +58,14 @@ class ROI(GraphicsObject):
         
         self.freeHandleMoved = False ## keep track of whether free handles have moved since last change signal was emitted.
         self.mouseHovering = False
+        
         if pen is None:
             pen = (255, 255, 255)
         self.setPen(pen)
+        
+        if hoverPen is None:
+            hoverPen = (255, 255, 0)
+        self.setHoverPen(hoverPen)
         
         self.handlePen = QtGui.QPen(QtGui.QColor(150, 255, 255))
         self.handles = []
@@ -115,9 +120,24 @@ class ROI(GraphicsObject):
         return self.mapToParent(self.boundingRect()).boundingRect()
 
     def setPen(self, pen):
-        self.pen = fn.mkPen(pen)
-        self.currentPen = self.pen
+        self._pen = fn.mkPen(pen)
+        #self.currentPen = self.pen
         self.update()
+        
+    def setHoverPen(self, pen):
+        self._hoverPen = fn.mkPen(pen)
+    
+    def pen(self):
+        return self._pen
+
+    def hoverPen(self):
+        return self._hoverPen
+        
+    def currentPen(self):
+        if self.mouseHovering:
+            return self._hoverPen
+        else:
+            return self._pen
         
     def size(self):
         return self.getState()['size']
@@ -363,10 +383,10 @@ class ROI(GraphicsObject):
         if self.mouseHovering == hover:
             return
         self.mouseHovering = hover
-        if hover:
-            self.currentPen = fn.mkPen(255, 255, 0)
-        else:
-            self.currentPen = self.pen
+        #if hover:
+        #    self.currentPen = fn.mkPen(255, 255, 0)
+        #else:
+        #    self.currentPen = self.pen
         self.update()
         
             
@@ -699,7 +719,7 @@ class ROI(GraphicsObject):
         p.save()
         r = self.boundingRect()
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(self.currentPen)
+        p.setPen(self.currentPen())
         p.translate(r.left(), r.top())
         p.scale(r.width(), r.height())
         p.drawRect(0, 0, 1, 1)
@@ -1233,7 +1253,7 @@ class MultiLineROI(QtGui.QGraphicsObject):
     
     def __init__(self, points, width, pen=None, closed=False, **args):
         QtGui.QGraphicsObject.__init__(self)
-        self.pen = pen
+        self._pen = pen
         self.roiArgs = args
         if len(points) < 2:
             raise Exception("Must start with at least 2 points")
@@ -1263,6 +1283,9 @@ class MultiLineROI(QtGui.QGraphicsObject):
         
     def paint(self, *args):
         pass
+    
+    def pen(self):
+        return self._pen
     
     def boundingRect(self):
         return QtCore.QRectF()
@@ -1315,7 +1338,7 @@ class EllipseROI(ROI):
     def paint(self, p, opt, widget):
         r = self.boundingRect()
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(self.currentPen)
+        p.setPen(self.currentPen())
         
         p.scale(r.width(), r.height())## workaround for GL bug
         r = QtCore.QRectF(r.x()/r.width(), r.y()/r.height(), 1,1)
@@ -1368,7 +1391,7 @@ class PolygonROI(ROI):
             
     def paint(self, p, *args):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(self.currentPen)
+        p.setPen(self.currentPen())
         for i in range(len(self.handles)):
             h1 = self.handles[i]['item'].pos()
             h2 = self.handles[i-1]['item'].pos()
@@ -1401,8 +1424,10 @@ class PolyLineROI(ROI):
     def __init__(self, positions, size=[1,1], closed=False, pos=None, **args):
         if pos is None:
             pos = [0,0]
-        pen=args.get('pen', fn.mkPen((100,100,255)))
+        
         ROI.__init__(self, pos, size, **args)
+        
+        pen=self.pen()
         
         self.segments = []
         
@@ -1462,7 +1487,7 @@ class PolyLineROI(ROI):
         for i, s in enumerate(self.segments):
             if s == segment:
                 #newSegment = LineSegmentROI([pos, h2['pos']], [0,0], handles=(None, h2['item']), pen=segment.pen, movable=False, acceptsHandles=True, parent=self)
-                newSegment = LineSegmentROI([h1['pos'], pos], [0,0], handles=(h1['item'], None), pen=segment.pen, movable=False, acceptsHandles=True, parent=self)
+                newSegment = LineSegmentROI([h1['pos'], pos], [0,0], handles=(h1['item'], None), pen=segment.pen(), movable=False, acceptsHandles=True, parent=self)
                 self.setSegmentSettings(newSegment)
                 self.segments.insert(i, newSegment)
                 break
@@ -1495,7 +1520,7 @@ class PolyLineROI(ROI):
     def paint(self, p, *args):
         #for s in self.segments:
             #s.update()
-        #p.setPen(self.currentPen)
+        #p.setPen(self.currentPen())
         #p.setPen(fn.mkPen('w'))
         #p.drawRect(self.boundingRect())
         #p.drawPath(self.shape())
@@ -1597,7 +1622,7 @@ class LineSegmentROI(ROI):
             
     def paint(self, p, *args):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(self.currentPen)
+        p.setPen(self.currentPen())
         h1 = self.handles[0]['item'].pos()
         h2 = self.handles[1]['item'].pos()
         p.drawLine(h1, h2)
@@ -1776,12 +1801,12 @@ class SpiralROI(ROI):
     def paint(self, p, *args):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         #path = self.shape()
-        p.setPen(self.currentPen)
+        p.setPen(self.currentPen())
         p.drawPath(self.path)
-        p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
-        p.drawPath(self.shape())
-        p.setPen(QtGui.QPen(QtGui.QColor(0,0,255)))
-        p.drawRect(self.boundingRect())
+        #p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
+        #p.drawPath(self.shape())
+        #p.setPen(QtGui.QPen(QtGui.QColor(0,0,255)))
+       # p.drawRect(self.boundingRect())
         
     
 
