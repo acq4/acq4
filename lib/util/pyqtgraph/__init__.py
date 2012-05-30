@@ -111,8 +111,8 @@ from .imageview import *
 from .WidgetGroup import *
 from .Point import Point
 from .Vector import Vector
-from .Transform import Transform
-from .Transform3D import Transform3D
+from .SRTTransform import SRTTransform
+from .SRTTransform3D import SRTTransform3D
 from .functions import *
 from .graphicsWindows import *
 from .SignalProxy import *
