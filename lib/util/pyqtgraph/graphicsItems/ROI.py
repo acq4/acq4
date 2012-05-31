@@ -1322,15 +1322,12 @@ class MultiLineROI(QtGui.QGraphicsObject):
             if w == w0:
                 continue
             l.scale([1.0, w/w0], center=[0.5,0.5])
-        #self.emit(QtCore.SIGNAL('regionChanged'), self)
         self.sigRegionChanged.emit(self)
             
     def roiChangeStartedEvent(self):
-        #self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
         self.sigRegionChangeStarted.emit(self)
         
     def roiChangeFinishedEvent(self):
-        #self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
         self.sigRegionChangeFinished.emit(self)
         
             
