@@ -19,7 +19,7 @@ import numpy as np
 from numpy.linalg import norm
 import scipy.ndimage as ndimage
 from pyqtgraph.Point import *
-from pyqtgraph.Transform import Transform
+from pyqtgraph.SRTTransform import SRTTransform
 from math import cos, sin
 import pyqtgraph.functions as fn
 from .GraphicsObject import GraphicsObject
@@ -930,8 +930,8 @@ class ROI(GraphicsObject):
         
         
         
-        t1 = Transform(relativeTo)
-        t2 = Transform(st)
+        t1 = SRTTransform(relativeTo)
+        t2 = SRTTransform(st)
         return t2/t1
         
         
@@ -959,7 +959,7 @@ class ROI(GraphicsObject):
         st = self.getState()
         
         st['scale'] = st['size']
-        st = Transform(st)
+        st = SRTTransform(st)
         st = (st * tr).saveState()
         st['size'] = st['scale']
         self.setState(st)

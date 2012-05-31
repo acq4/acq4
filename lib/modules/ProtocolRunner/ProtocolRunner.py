@@ -901,7 +901,7 @@ class ProtocolRunner(Module):
         cur = 'Current iteration:\n'
         plist = self.ui.sequenceParamList.listParams()
         try:
-            nums = [str(params[p[:2]]) for p in plist]
+            nums = [str(params[p[:2]]+1) for p in plist]
         except:
             nums = []
         cur += ',  '.join(nums)

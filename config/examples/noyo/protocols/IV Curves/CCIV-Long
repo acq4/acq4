@@ -66,6 +66,7 @@ devices:
             alphaSlider: 1000
             yMaxText: '0'
             paramList:
+                Clamp1.Amplitude: False
             yLinkCombo: ''
             yManualRadio: False
             autoPointsCheck: True
@@ -97,7 +98,7 @@ devices:
         waveGeneratorWidget:
             function: 'pulse(10, 500, Amplitude)'
             autoUpdate: False
-            params: 'Amplitude = 300; -200:200/21'
+            params: 'Amplitude = 100; -200:200/21'
         icModeRadio: True
         primarySignalCombo: 'Membrane Potential'
         secondaryGainCheck: False

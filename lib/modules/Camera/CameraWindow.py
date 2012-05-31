@@ -176,13 +176,14 @@ class CameraWindow(QtGui.QMainWindow):
         self.view.setRange(*args, **kargs)
 
     def addItem(self, item, pos=(0,0), scale=(1,1), z=0):
-        """Adds an item into the scene. The image will be automatically scaled and translated when the scope moves."""
+        """Adds an item into the scene. The item is placed in the global coordinate system;
+        it will (should) stay fixed on the subject even if the scope moves or changes objective."""
         
         self.view.addItem(item)
         
         if pos is None:
-            pos = self.lastCameraPosition
-        item.setPos(QtCore.QPointF(pos[0], pos[1]))
+            pos = self.view.viewRect().center()
+        item.setPos(pg.Point(pos))
         item.scale(scale[0], scale[1])
         item.setZValue(z)
     
@@ -190,7 +191,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.view.removeItem(item)
     
 
-    def  clearPersistentFrames(self):
+    def clearPersistentFrames(self):
         for i in self.persistentFrames:
             self.view.removeItem(i)
         self.persistentFrames = []

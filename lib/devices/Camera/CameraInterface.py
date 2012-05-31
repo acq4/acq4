@@ -13,12 +13,15 @@ from metaarray import *
 import lib.Manager as Manager
 from RecordThread import RecordThread
 from CameraInterfaceTemplate import Ui_Form as CameraInterfaceTemplate
-
+from lib.devices.OptomechDevice import DeviceTreeItemGroup
 
         
 class CameraInterface(QtCore.QObject):
     """
-    This class provides all the functionality necessary for a camera to display images and controls within the camera module's main window. Each camera that connects to the window must implement an instance of this interface.
+    This class provides all the functionality necessary for a camera to display images and controls within the camera module's main window. Each camera that connects to a camera module must implement an instance of this interface.
+    
+    The interface provides a control GUI via the controlWidget() method and directly manages its own GraphicsItems
+    within the camera module's view box.
     """
     
     sigNewFrame = QtCore.Signal(object, object)  # self, frame
@@ -29,6 +32,7 @@ class CameraInterface(QtCore.QObject):
         self.view = module.getView()
         self.hasQuit = False
         self.persistentFrames = []
+        self.boundaryItems = {}
 
         ## setup UI
         self.ui = CameraInterfaceTemplate()
@@ -78,15 +82,15 @@ class CameraInterface(QtCore.QObject):
 
 
         ## set up item groups
-        self.scopeItemGroup = pg.ItemGroup()   ## translated as scope moves
+        #self.scopeItemGroup = pg.ItemGroup()   ## translated as scope moves
         self.cameraItemGroup = pg.ItemGroup()  ## translated with scope, scaled with camera objective
         self.imageItemGroup = pg.ItemGroup()   ## translated and scaled as each frame arrives
         self.view.addItem(self.imageItemGroup)
         self.view.addItem(self.cameraItemGroup)
-        self.view.addItem(self.scopeItemGroup)
-        self.scopeItemGroup.setZValue(10)
+        #self.view.addItem(self.scopeItemGroup)
+        #self.scopeItemGroup.setZValue(10)
         self.cameraItemGroup.setZValue(0)
-        self.imageItemGroup.setZValue(0)
+        self.imageItemGroup.setZValue(-2)
 
         ## video image item
         self.imageItem = pg.ImageItem()
@@ -120,10 +124,17 @@ class CameraInterface(QtCore.QObject):
         self.setRegion()
 
         ## Set up microscope objective borders
-        self.borders = []
-        #self.cam.sigGlobalTransformChanged.connect(self.cameraMoved)
-        self.cam.sigGlobalTransformChanged.connect(self.scopeMoved)
-        self.scopeMoved()
+        #self.borders = []
+        self.borders = CameraItemGroup(self.cam)
+        self.module.addItem(self.borders)
+        self.borders.setZValue(-1)
+        
+        self.cam.sigGlobalTransformChanged.connect(self.globalTransformChanged)
+        #self.cam.sigGlobalSubdeviceTransformChanged.connect(self.rebuildBoundaryItems)
+        #self.cam.sigGlobalSubdeviceChanged.connect(self.rebuildBoundaryItems)
+        
+        self.globalTransformChanged()
+        #self.rebuildBoundaryItems()
 
         ## Initialize values/connections in Camera Dock
         self.setUiBinning(self.binning)
@@ -172,6 +183,7 @@ class CameraInterface(QtCore.QObject):
         #self.ui.clearFramesBtn.clicked.connect(self.clearPersistentFrames)
 
         
+        
     def controlWidget(self):
         return self.widget
         
@@ -198,45 +210,56 @@ class CameraInterface(QtCore.QObject):
             raise
 
 
-    def scopeMoved(self, p=None):
+    def globalTransformChanged(self, emitter=None, changedDev=None, transform=None):
         ## scope has moved; update viewport and camera outlines.
         ## This is only used when the camera is not running--
         ## if the camera is running, then this is taken care of in drawFrame to
         ## ensure that the image remains stationary on screen.
         if not self.cam.isRunning():
-            tr = pg.Transform(self.cam.globalTransform())
-            pos = tr.getTranslation()
+            tr = pg.SRTTransform(self.cam.globalTransform())
+            self.updateTransform(tr)
+            
+    def updateTransform(self, tr):
+        ## update view for new transform such that sensor bounds remain stationary on screen.
+        pos = tr.getTranslation()
+        
+        scale = tr.getScale()
+        if scale != self.lastCameraScale:
+            anchor = self.view.mapViewToDevice(self.lastCameraPosition)
+            self.view.scaleBy(scale / self.lastCameraScale)
+            anchor2 = self.view.mapDeviceToView(anchor)
+            diff = pos - anchor2
+            self.lastCameraScale = scale
+        else:
             diff = pos - self.lastCameraPosition
-            self.lastCameraPosition = pos
-            scale = tr.getScale()
-            if scale == self.lastCameraScale:
-                self.view.translateBy(diff)
-            else:  ## if objective has changed, don't translate to follow it.
-                self.lastCameraScale = scale
-            self.cameraItemGroup.setTransform(tr)
+            
+        self.view.translateBy(diff)
+        self.lastCameraPosition = pos
+        self.cameraItemGroup.setTransform(tr)
+        
 
     #@trace
-    def updateBorders(self):
-        """Draw the camera boundaries for each objective"""
-        for b in self.borders:
-            self.view.removeItem(b)
-        self.borders = []
+    #def updateBorders(self):
+        #"""Draw the camera boundaries for each objective"""
+        #for b in self.borders:
+            #self.view.removeItem(b)
+        #self.borders = []
 
-        scope = self.module.cam.getScopeDevice()
-        if scope is None:
-            return
+        #scope = self.module.cam.getScopeDevice()
+        #if scope is None:
+            #return
 
-        bounds = self.module.cam.getBoundaries()
-        for b in bounds:
-            border = QtGui.QGraphicsRectItem(QtCore.QRectF(0, 0, 1, 1), self.scopeItemGroup)
-            border.scale(b.width(), b.height())
-            border.setPos(b.x(), b.y())
-            border.setAcceptedMouseButtons(QtCore.Qt.NoButton)
-            border.setPen(QtGui.QPen(QtGui.QColor(50,80,80)))
-            border.setZValue(10)
-            self.scopeItemGroup.resetTransform()
-            self.borders.append(border)
-        self.updateCameraDecorations()
+        #bounds = self.module.cam.getBoundaries()
+        #for b in bounds:
+            #border = QtGui.QGraphicsRectItem(QtCore.QRectF(0, 0, 1, 1), self.scopeItemGroup)
+            #border.scale(b.width(), b.height())
+            #border.setPos(b.x(), b.y())
+            #border.setAcceptedMouseButtons(QtCore.Qt.NoButton)
+            #border.setPen(QtGui.QPen(QtGui.QColor(50,80,80)))
+            #border.setZValue(10)
+            #self.scopeItemGroup.resetTransform()
+            #self.borders.append(border)
+        #self.updateCameraDecorations()
 
 
     def toggleRecord(self, b):
@@ -399,7 +422,7 @@ class CameraInterface(QtCore.QObject):
         #m.scale(ps[0], ps[1])
         #m.translate(-cs[0]*0.5, -cs[1]*0.5)
         m = self.cam.globalTransform()
-        self.cameraItemGroup.setTransform(pg.Transform(m))
+        self.cameraItemGroup.setTransform(pg.SRTTransform(m))
 
 
 
@@ -625,18 +648,19 @@ class CameraInterface(QtCore.QObject):
             prof.mark()
             
             ## Update viewport to correct for scope movement/scaling
-            tr = pg.Transform(self.currentFrame.cameraTransform())
-            newPos = tr.getTranslation()
-            diff = newPos - self.lastCameraPosition
-            self.view.translateBy(diff)
-            self.lastCameraPosition = newPos
+            tr = pg.SRTTransform(self.currentFrame.cameraTransform())
+            self.updateTransform(tr)
+            #newPos = tr.getTranslation()
+            #diff = newPos - self.lastCameraPosition
+            #self.view.translateBy(diff)
+            #self.lastCameraPosition = newPos
             
-            newScale = tr.getScale()
-            if newScale != self.lastCameraScale:
-                self.module.centerView()
-            self.lastCameraScale = newScale
+            #newScale = tr.getScale()
+            #if newScale != self.lastCameraScale:
+                #self.module.centerView()
+            #self.lastCameraScale = newScale
             
-            self.cameraItemGroup.setTransform(tr)
+            #self.cameraItemGroup.setTransform(tr)
             self.imageItemGroup.setTransform(tr)
             prof.mark()
             
@@ -694,6 +718,60 @@ class CameraInterface(QtCore.QObject):
         """
         return self.cam.getBoundary().boundingRect()
 
+    #def rebuildBoundaryItems(self):
+        #"""Create the tree of graphics items needed to display camera boundaries"""
+        #for dev, items in self.boundaryItems.iteritems():
+            #for item in items:
+                #scene = item.scene()
+                #if scene is not None:
+                    #scene.removeItem(item)
+        #self.boundaryItems = {}  ## device: [items]
+        
+        #devices = self.cam.parentDevices()
+        #parentItems = [None]
+        #for dev in devices[::-1]:
+            #newItems = []
+            #for parent in parentItems:
+                #subdevs = dev.listSubdevices()
+                #if len(subdevs) > 0:
+                    #groups = []
+                    #for subdev in subdevs:
+                        #group = QtGui.QGraphicsItemGroup()
+                        #group.setTransform(pg.SRTTransform(dev.deviceTransform(subdev)))
+                        #groups.append(group)
+                #else:
+                    #group = QtGui.QGraphicsItemGroup()
+                    #group.setTransform(pg.SRTTransform(dev.deviceTransform()))
+                    #groups = [group]
+                
+                #if dev is self.cam:
+                    #bound = QtGui.QGraphicsPathItem(self.cam.getBoundary(globalCoords=False))
+                    #bound.setParentItem(groups[0])
+                    #bound.setPen(pg.mkPen(40, 150, 150))
+                
+                #if parent is None:
+                    #for group in groups:
+                        #self.module.addItem(group)
+                #else:
+                    #for group in groups:
+                        #group.setParentItem(parent)
+                #newItems.extend(groups)
+            #parentItems = newItems
+            #self.boundaryItems[dev] = newItems
+            
+class CameraItemGroup(DeviceTreeItemGroup):
+    def __init__(self, camera, includeSubdevices=True):
+        DeviceTreeItemGroup.__init__(self, device=camera, includeSubdevices=includeSubdevices)
+        
+    def makeGroup(self, dev, subdev):
+        grp = DeviceTreeItemGroup.makeGroup(self, dev, subdev)
+        if dev is self.device:
+            bound = QtGui.QGraphicsPathItem(self.device.getBoundary(globalCoords=False))
+            bound.setParentItem(grp)
+            bound.setPen(pg.mkPen(40, 150, 150))
+        return grp
+        
+        
 class CamROI(pg.ROI):
     """Used for specifying the ROI for a camera to acquire from"""
     def __init__(self, size, parent=None):

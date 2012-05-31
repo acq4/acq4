@@ -42,8 +42,8 @@ class ImageCanvasItem(CanvasItem):
 
             try:
                 if 'transform' in self.handle.info():
-                    tr = pg.Transform3D(self.handle.info()['transform'])
-                    tr = pg.Transform(tr)  ## convert to 2D
+                    tr = pg.SRTTransform3D(self.handle.info()['transform'])
+                    tr = pg.SRTTransform(tr)  ## convert to 2D
                     opts['pos'] = tr.getTranslation()
                     opts['scale'] = tr.getScale()
                     opts['angle'] = tr.getRotation()

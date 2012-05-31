@@ -178,7 +178,7 @@ def loadCell(cell):
                     #dh = ev[i]['ProtocolDir']
                     #p1 = pg.Point(dh.info()['Scanner']['position'])
                     #if key[0] not in tcache:
-                        #tr = pg.Transform()
+                        #tr = pg.SRTTransform()
                         #tr.restoreState(dh.parent().info()['userTransform'])
                         #tcache[key[0]] = tr
                     #trans = tcache[key[0]]

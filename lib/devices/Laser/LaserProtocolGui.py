@@ -112,13 +112,14 @@ class LaserProtoGui(DAQGenericProtoGui):
     def samplePowerChanged(self, power):
         if power is None:
             self.ui.samplePowerLabel.setText("?")
+            return
         else:
             self.ui.samplePowerLabel.setText(siFormat(power, suffix='W'))
 
         if self.dev.hasPCell:
             raise Exception('stub')
         else:
-            #self.powerWidget.setMeta('y', value=samplePower, dec=False, limits=(0, samplePower), step=samplePower)
+            ## adjust length of pulse to correct for new power
             if self.ui.adjustLengthCheck.isChecked():
                 en = {}
                 for param in self.powerWidget.ui.waveGeneratorWidget.stimParams:

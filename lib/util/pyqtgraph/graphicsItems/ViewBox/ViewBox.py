@@ -328,7 +328,7 @@ class ViewBox(GraphicsWidget):
 
         if len(changes) == 0:
             print rect
-            raise Exception("Must specify at least one of rect, xRange, or yRange.")
+            raise Exception("Must specify at least one of rect, xRange, or yRange. (gave rect=%s)" % str(type(rect)))
         
         changed = [False, False]
         for ax, range in changes.items():
@@ -743,6 +743,12 @@ class ViewBox(GraphicsWidget):
         return self.childGroup.mapToItem(item, obj)
         #return item.mapFromScene(self.mapViewToScene(obj))
 
+    def mapViewToDevice(self, obj):
+        return self.mapToDevice(self.mapFromView(obj))
+        
+    def mapDeviceToView(self, obj):
+        return self.mapToView(self.mapFromDevice(obj))
+        
     def viewPixelSize(self):
         """Return the (width, height) of a screen pixel in view coordinates."""
         o = self.mapToView(Point(0,0))

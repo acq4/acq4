@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'protoTemplate.ui'
 #
-# Created: Sun Mar 18 17:23:50 2012
+# Created: Tue May 29 01:21:48 2012
 #      by: PyQt4 UI code generator 4.8.5
 #
 # WARNING! All changes made in this file will be lost!

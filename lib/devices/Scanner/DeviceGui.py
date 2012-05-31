@@ -49,15 +49,17 @@ class ScannerDeviceGui(QtGui.QWidget):
             #defLaser = self.dev.config['defaultLaser']
         defLaser = self.dev.config.get('defaultLaser', None)
 
-        devs = self.dev.dm.listDevices()
-        for d in devs:
-            self.ui.cameraCombo.addItem(d)
-            self.ui.laserCombo.addItem(d)
-            if d == defCam:
-                self.ui.cameraCombo.setCurrentIndex(self.ui.cameraCombo.count()-1)
-            if d == defLaser:
-                self.ui.laserCombo.setCurrentIndex(self.ui.laserCombo.count()-1)
-            
+        #devs = self.dev.dm.listDevices()
+        #for d in devs:
+            #self.ui.cameraCombo.addItem(d)
+            #self.ui.laserCombo.addItem(d)
+            #if d == defCam:
+                #self.ui.cameraCombo.setCurrentIndex(self.ui.cameraCombo.count()-1)
+            #if d == defLaser:
+                #self.ui.laserCombo.setCurrentIndex(self.ui.laserCombo.count()-1)
+        self.ui.cameraCombo.setTypes('camera')
+        self.ui.laserCombo.setTypes('laser')
+        
         self.spots = []
         
         ## Populate list of calibrations
@@ -101,14 +103,14 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         ## Populate calibration lists
         index = self.dev.getCalibrationIndex()
-        for cam in index:
-            for laser in index[cam]:
-                for obj in index[cam][laser]:
-                    cal = index[cam][laser][obj]
-                    spot = '%0.0f, %0.1f um' % (cal['spot'][0], cal['spot'][1]*1e6)
-                    date = cal['date']
-                    item = QtGui.QTreeWidgetItem([cam, obj, laser, str(spot), date])
-                    self.ui.calibrationList.addTopLevelItem(item)
+        for laser in index:
+            for obj in index[laser]:
+                cal = index[laser][obj]
+                spot = '%0.0f, %0.1f um' % (cal['spot'][0], cal['spot'][1]*1e6)
+                date = cal['date']
+                item = QtGui.QTreeWidgetItem([', '.join(obj), laser, str(spot), date])
+                item.opticState = obj
+                self.ui.calibrationList.addTopLevelItem(item)
         
         
     def storeCamConf(self):
@@ -118,7 +120,8 @@ class ScannerDeviceGui(QtGui.QWidget):
     def calibrateClicked(self):
         cam = str(self.ui.cameraCombo.currentText())
         laser = str(self.ui.laserCombo.currentText())
-        obj = self.dev.getObjective()
+        #obj = self.dev.getObjective()
+        opticState = self.dev.getDeviceStateKey()
         
         ## Run calibration
         (cal, spot) = self.runCalibration()
@@ -131,7 +134,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         if laser not in index:
             index[laser] = {}
-        index[laser][obj] = {'spot': spot, 'date': date, 'params': cal}
+        index[laser][opticState] = {'spot': spot, 'date': date, 'params': cal}
 
         self.dev.writeCalibrationIndex(index)
         
@@ -142,30 +145,17 @@ class ScannerDeviceGui(QtGui.QWidget):
 
     def deleteClicked(self):
         cur = self.ui.calibrationList.currentItem()
-        cam = str(cur.text(0))
-        obj = str(cur.text(1))
-        laser = str(cur.text(2))
-        
+        optState = cur.opticState
+        laser = str(cur.text(1))
         index = self.dev.getCalibrationIndex()
-        
-        cal = index[cam][laser][obj]
-        del index[cam][laser][obj]
-        #fileName = cal['fileName']
-        #calDir = self.dev.config['calibrationDir']
-        #fileName = os.path.join(calDir, fileName)
-        #try:
-            #os.remove(fileName)
-        #except:
-            #print "Error while removing file %s:" % fileName
-            #sys.excepthook(*sys.exc_info())
+        del index[laser][optState]
         self.dev.writeCalibrationIndex(index)
-        
         self.updateCalibrationList()
 
 
     def addSpot(self, pos, size):
         """Add a circle to the image"""
-        s2 = size/2.
+        s2 = size/2.0
         s = QtGui.QGraphicsEllipseItem(0, 0, 1, 1)
         s.scale(size, size)
         s.setPos(pos[0]-s2, pos[1]-s2)
@@ -183,36 +173,11 @@ class ScannerDeviceGui(QtGui.QWidget):
         
 
     def runCalibration(self):
-        """Wraps around runCalibrationInner, adds progress dialog and error reporting"""
-        with pg.ProgressDialog("Calibrating scanner: Running protocol..", 0, 100) as self.progressDlg:
-            #self.progressDlg.setWindowModality(QtCore.Qt.WindowModal)
-            #self.progressDlg.setMinimumDuration(0)
-        
-            try:
-                self.updatePrgDlg(0)
-                return self.runCalibrationInner()
-            except:
-                #print "SHOW ERROR"
-                self.win.showMessage("Error during scanner calibration, see console.", 30000)
-                raise
-            #finally:
-                #self.progressDlg.setValue(100)
-
-    def updatePrgDlg(self, val=None, text=None):
-        if text is not None:
-            self.progressDlg.setLabelText(text)
-        if val is not None:
-            self.progressDlg.setValue(val)
-        QtGui.QApplication.instance().processEvents()
-        if self.progressDlg.wasCanceled():
-            self.progressDlg.setValue(100)
-            raise HelpfulException('Calibration canceled by user.', msgType='warning')
-
-    def runCalibrationInner(self):
         """The scanner calibration routine:
             1) Measure background frame, then scan mirrors 
                while collecting frames as fast as possible (self.scan())
             2) Locate spot in every frame using gaussian fit
+            3) Map image spot locations to coordinate system of Scanner device's parent
             3) Do parabolic fit to determine mapping between voltage and position
         """
         camera = str(self.ui.cameraCombo.currentText())
@@ -220,11 +185,10 @@ class ScannerDeviceGui(QtGui.QWidget):
         blurRadius = 5
         
         ## Do fast scan of entire allowed command range
-        (background, origFrames, positions) = self.scan()
+        (background, cameraResult, positions) = self.scan()
 
-        self.updatePrgDlg(25, "Calibrating scanner: Computing spot size...")
-        
         ## Forget first 2 frames since some cameras can't seem to get these right.
+        origFrames = cameraResult.asArray()
         origFrames = origFrames[2:]
         positions = positions[2:]
         
@@ -244,114 +208,88 @@ class ScannerDeviceGui(QtGui.QWidget):
         (x, y) = argwhere(mfBlur == mfBlur.max())[0]   ## guess location of spot
         fit = fitGaussian2D(maxFrame, [amp, x, y, maxFrame.shape[0] / 10, 0.])[0]  ## gaussian fit to locate spot exactly
         fit[3] = abs(fit[3]) ## sometimes the fit for width comes out negative. *shrug*
-        info = origFrames.infoCopy()[-1]
-        pixelSize = info['pixelSize'][0]
-        region = info['region']
-        binning = info['binning']
-        spotHeight = fit[0]
+        #info = origFrames.infoCopy()[-1]
+        #pixelSize = info['pixelSize'][0]
+        #region = info['region']
+        #binning = info['binning']
+        someFrame = cameraResult.frames()[0]
+        frameTransform = pg.SRTTransform(someFrame.globalTransform())
+        pixelSize = someFrame.info()['pixelSize'][0]
+        spotAmplitude = fit[0]
         spotWidth = fit[3] * pixelSize
         size = self.spotSize(mfBlur)
-        center = info['centerPosition']
+        #center = info['centerPosition']
 
-        self.updatePrgDlg(40, "Calibrating scanner: Computing spot positions...")
-
-
-        ## Determine location of spot within each frame, 
-        ## ignoring frames where the spot is too dim or too close to the frame edge
-        spotLocations = []
-        spotCommands = []
-        spotFrames = []
-        margin = fit[3]
-        #sensorSize = lib.Manager.getManager().getDevice(camera).getParam('sensorSize')
-        #print "Spot size is %f x %g (%f px)" % (size, spotWidth, fit[3])
-        #debug = []
-        for i in range(len(positions)):
-            frame = frames[i]
-            fBlur = blur(frame.astype(np.float32), blurRadius)
-            #debug.append(frame[np.newaxis, ...])
-            #debug.append(fBlur[np.newaxis, ...])
-            mx = fBlur.max()
-            diff = mx - fBlur.min()
-            ss = self.spotSize(fBlur)
-            if ss < size * 0.6:
-                #print "Ignoring spot:", ss
-                continue
-            #else:
-                #print "Keeping spot:", ss
+        with pg.ProgressDialog("Calibrating scanner: Computing spot positions...", 0, 100) as dlg:
+            ## Determine location of spot within each frame, 
+            ## ignoring frames where the spot is too dim or too close to the frame edge
+            spotLocations = []
+            globalSpotLocations = []
+            spotCommands = []
+            spotFrames = []
+            margin = fit[3]
+            
+            for i in range(len(positions)):
+                frame = frames[i]
+                fBlur = blur(frame.astype(np.float32), blurRadius)
+    
+                mx = fBlur.max()
+                diff = mx - fBlur.min()
+                ss = self.spotSize(fBlur)
+                if ss < size * 0.6:
+                    #print "Ignoring spot:", ss
+                    continue
+                #else:
+                    #print "Keeping spot:", ss
+                    
+                (x, y) = argwhere(fBlur == mx)[0]   # guess location of spot
+                if x < margin or x > frame.shape[0] - margin:
+                    #print "   ..skipping; too close to edge", x, y
+                    continue
+                if y < margin or y > frame.shape[1] - margin:
+                    #print "   ..skipping; too close to edge", x, y
+                    continue
                 
-            (x, y) = argwhere(fBlur == mx)[0]   # guess location of spot
-            if x < margin or x > frame.shape[0] - margin:
-                #print "   ..skipping; too close to edge", x, y
-                continue
-            if y < margin or y > frame.shape[1] - margin:
-                #print "   ..skipping; too close to edge", x, y
-                continue
-            
-            frame[x,y] = -1  ## mark location of peak in image
-            #print "  ..spot is at", x, y
-            
-            ## x,y are currently in sensor coords, now convert to absolute scale relative to center
-            ### No, let's calibrate into sensor coords.
-            #print "======="
-            ##print x, y, region
-            #print "Image location:", x, y
-            #x = (x - (region[2]/ (2*binning[0]))) * info['pixelSize'][0]
-            #y = (y - (region[3]/ (2*binning[1]))) * info['pixelSize'][1]
-            ##print x, y
-            #print "Camera region:", region, binning
-            #print "Real location:", x, y
-            
-            ## convert image location to absolute sensor pixel
-            x = region[0] + (x+0.5) * binning[0]
-            y = region[1] + (y+0.5) * binning[1]
-            
-            ## convert sensor location to scope-centric coordinates
-            (x,y) = someFrame.mapSensorToScope([x,y])
-            
-            spotLocations.append([x, y])
-            spotCommands.append(positions[i])
-            spotFrames.append(frame[newaxis])
-            self.updatePrgDlg(40 + 60 * i / frames.shape[0])
-        #pg.show(np.concatenate(debug, axis=0))
-        #for i in range(len(spotLocations)):
-            #print spotLocations[i], spotCommands[i]
+                frame[x,y] = -1  ## mark location of peak in image
+                
+                ## convert pixel location to coordinate system of scanner's parent
+                globalPos = frameTransform.map(pg.Point(x, y))  ## Map from frame pixel location to global coordinates
+                localPos = self.dev.mapGlobalToParent(globalPos)  ## map from global to parent coordinate system. This is the position we calibrate to.
+                
+                spotLocations.append([localPos.x(), localPos.y()])
+                globalSpotLocations.append([globalPos.x(), globalPos.y()])
+                spotCommands.append(positions[i])
+                spotFrames.append(frame[newaxis])
+                dlg.setValue(100. * i / frames.shape[0])
+                if dlg.wasCanceled():
+                    raise HelpfulException('Calibration canceled by user.', msgType='warning')
         
         ## sanity check on spot frame
         if len(spotFrames) == 0:
-            #self.image.updateImage(frames.max(axis=0))
             self.ui.view.setImage(frames)
             raise HelpfulException('Calibration never detected laser spot!  Looking for spots that are %f pixels wide.'% fit[3], reasons=['shutter is disabled', 'mirrors are disabled', 'objective is not clean', 'spot is not visible or not bright enough when shutter is open'])
 
         spotFrameMax = concatenate(spotFrames).max(axis=0)
-        #self.image.updateImage(maxFrame, autoRange=True)
-        #self.image.updateImage(spotFrameMax, autoRange=True)
-        #self.image.resetTransform()
-        #impos = info['imagePosition']
-        #self.ui.view.setImage(spotFrameMax, scale=[pixelSize, pixelSize], pos=[impos[0]-center[0], impos[1]-center[1]])
-        self.ui.view.setImage(spotFrameMax, scale=binning, pos=region[:2])
-        #self.image.scale(pixelSize, pixelSize)
-        #self.image.setPos(impos[0]-center[0], impos[1]-center[1])
-        #self.ui.view.setRange(self.image.mapRectToScene(self.image.boundingRect()))
+        self.ui.view.setImage(spotFrameMax, transform=frameTransform)
         
         self.clearSpots()
-        for sl in spotLocations:
-            #self.addSpot(sl, spotWidth)
-            self.addSpot(sl, fit[3]*binning[0])
+        for sl in globalSpotLocations:
+            #self.addSpot(sl, fit[3]*binning[0])
+            self.addSpot(sl, spotWidth)
+        self.ui.view.autoRange()
         
         if len(spotFrames) < 10:
             raise HelpfulException('Calibration detected only %d frames with laser spot; need minimum of 10.' % len(spotFrames), reasons=['spot is too dim for camera sensitivity', 'objective is not clean', 'mirrors are scanning too quickly', 'mirror scanning region is not within the camera\'s view'])
-
-        self.updatePrgDlg(90, "Calibrating scanner: Doing linear regression..")
         
         ## Fit all data to a map function
         mapParams = self.generateMap(array(spotLocations), array(spotCommands))
         #print 
         #print "Map parameters:", mapParams
         
-        return (mapParams, (spotHeight, spotWidth))
+        return (mapParams, (spotAmplitude, spotWidth))
 
     def generateMap(self, loc, cmd):
-        """Generates parameters for functions that map image locations (Loc) to command values (Cmd).
+        """Generates parameters for functions that map spot locations (Loc) to command values (Cmd).
         We assume that command values can be approximated by parabolic functions:
           Cmd.X  =  A  +  B * Loc.X  +  C * Loc.Y  +  D * Loc.X^2  +  E * Loc.Y^2
           Cmd.Y  =  F  +  G * Loc.X  +  H * Loc.Y  +  I * Loc.X^2  +  J * Loc.Y^2
@@ -408,14 +346,10 @@ class ScannerDeviceGui(QtGui.QWidget):
 
     def scan(self):
         """Scan over x and y ranges in a nPts x nPts grid, return the image recorded at each location."""
-        
-        ## Camera settings to use during scan
-        binning = (2, 2)
-        exposure = 0.003
-        
         camera = str(self.ui.cameraCombo.currentText())
         laser = str(self.ui.laserCombo.currentText())
         
+        ## Camera settings to use during scan
         camParams = self.dev.getCameraConfig(camera)        
         
         duration = self.ui.scanDurationSpin.value()
@@ -454,7 +388,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         task.execute()
         result = task.getResult()
         ## pull result, convert to ndarray float, take average over all frames
-        background = result[camera]['frames'].view(np.ndarray).astype(float).mean(axis=0)
+        background = result[camera].asArray().astype(float).mean(axis=0)
         #print "Background shape:", result[camera]['frames'].shape
         
         ## Record full scan.
@@ -466,15 +400,24 @@ class ScannerDeviceGui(QtGui.QWidget):
                 'popState': 'scanProt'},
             #laser: {'shutter': {'preset': 0, 'holding': 0, 'command': np.ones(len(xCommand), dtype=byte)}},
             laser: {'alignMode': True},
-            self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand},
+            self.dev.name(): {'xCommand': xCommand, 'yCommand': yCommand},
             daqName: {'numPts': nPts, 'rate': rate, 'triggerDevice': camera}
         }
         #print "\n\n====> Scan\n"
         task = lib.Manager.getManager().createTask(cmd)
-        task.execute()
+        task.execute(block=False)
+        with pg.ProgressDialog("Calibrating scanner: Running scan protocol..", 0, 100) as dlg:
+            while not task.isDone():
+                dlg.setValue(100.*task.runTime()/task.duration())
+                if dlg.wasCanceled():
+                    task.abort()
+                    raise HelpfulException('Calibration canceled by user.', msgType='warning')
+                time.sleep(0.2)
+        
         result = task.getResult()
 
-        frames = result[camera]['frames']
+        frames = result[camera].asMetaArray()
+        
         #print "scan shape:", frames.shape
         #print "parameters:", camParams
         
@@ -493,5 +436,5 @@ class ScannerDeviceGui(QtGui.QWidget):
         if background.shape != frames.shape[1:]:
             raise Exception("Background measurement frame has different shape %s from scan frames %s" % (str(background.shape), str(frames.shape[1:])))
         
-        return (background, frames, positions)
+        return (background, result[camera], positions)
         

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
 from lib.devices.Device import *
-from lib.devices.RigidDevice import *
+from lib.devices.OptomechDevice import *
 #import serial, struct
 from lib.drivers.SutterMP285 import *
 from lib.drivers.SutterMP285 import SutterMP285 as SutterMP285Driver  ## name collision with device class
@@ -15,16 +15,16 @@ import pyqtgraph as pg
 import numpy as np
 from copy import deepcopy
 
-class SutterMP285(Device, RigidDevice):
+class SutterMP285(Device, OptomechDevice):
 
     sigPositionChanged = QtCore.Signal(object)
     sigLimitsChanged = QtCore.Signal(object)
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        RigidDevice.__init__(self, dm, config, name)
+        OptomechDevice.__init__(self, dm, config, name)
         self.config = config
-        self.configFile = os.path.join('devices', self.name + '_config.cfg')
+        self.configFile = os.path.join('devices', name + '_config.cfg')
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.port = config['port']-1  ## windows com ports start at COM1, pyserial ports start at 0
         self.scale = config.get('scale', None) ## Allow config to apply extra scale factor
@@ -89,7 +89,7 @@ class SutterMP285(Device, RigidDevice):
             rel[:len(data['rel'])] = data['rel']
         self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
         
-        tr = pg.Transform3D()
+        tr = pg.SRTTransform3D()
         tr.translate(*self.pos)
         self.setDeviceTransform(tr) ## this informs rigidly-connected devices that they have moved
 
