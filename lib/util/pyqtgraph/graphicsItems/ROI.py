@@ -19,7 +19,7 @@ import numpy as np
 from numpy.linalg import norm
 import scipy.ndimage as ndimage
 from pyqtgraph.Point import *
-from pyqtgraph.Transform import Transform
+from pyqtgraph.SRTTransform import SRTTransform
 from math import cos, sin
 import pyqtgraph.functions as fn
 from .GraphicsObject import GraphicsObject

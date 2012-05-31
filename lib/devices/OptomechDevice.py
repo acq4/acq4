@@ -1,7 +1,6 @@
 from PyQt4 import QtCore, QtGui
 from Device import Device
 from Mutex import Mutex
-#from pyqtgraph import Transform3D, Transform
 import pyqtgraph as pg
 import collections
 
