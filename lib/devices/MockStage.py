@@ -31,7 +31,7 @@ class MockStage(Device, OptomechDevice):
         
     def setPosition(self, pos):
         self.pos = pos
-        tr = pg.Transform3D()
+        tr = pg.SRTTransform3D()
         tr.translate(pos)
         self.setDeviceTransform(tr)
         self.sigPositionChanged.emit(self)

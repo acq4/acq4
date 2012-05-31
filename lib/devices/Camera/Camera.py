@@ -109,7 +109,7 @@ class Camera(DAQGeneric, OptomechDevice):
         self.setupCamera() 
         #print "Camera: setupCamera returned, about to create acqThread"
         self.sensorSize = self.getParam('sensorSize')
-        tr = pg.Transform3D()
+        tr = pg.SRTTransform3D()
         tr.translate(-self.sensorSize[0]*0.5, -self.sensorSize[1]*0.5)
         self.setDeviceTransform(self.deviceTransform() * tr)
         
@@ -338,7 +338,7 @@ class Camera(DAQGeneric, OptomechDevice):
         bounds = QtGui.QPainterPath()
         bounds.addRect(QtCore.QRectF(0, 0, *size))
         if globalCoords:
-            return pg.Transform(self.globalTransform()).map(bounds)
+            return pg.SRTTransform(self.globalTransform()).map(bounds)
         else:
             return bounds
         
@@ -413,11 +413,11 @@ class Frame(object):
         ## make frame transform
         rgn = self._info['region']
         binn = self._info['binning']
-        tr = Transform3D()
+        tr = SRTTransform3D()
         tr.translate(*rgn[:2])
         tr.scale(binn[0], binn[1], 1)
         self._frameTransform = tr
-        self._info['transform'] = Transform3D(self.cameraTransform() * tr)
+        self._info['transform'] = SRTTransform3D(self.cameraTransform() * tr)
         
         
     def data(self):
@@ -428,21 +428,21 @@ class Frame(object):
     
     def cameraTransform(self):
         """Returns the transform that maps from camera coordinates to global."""
-        return Transform3D(self._info['cameraTransform'])
+        return SRTTransform3D(self._info['cameraTransform'])
     
     def frameTransform(self):
         """Return the transform that maps from this frame's image coordinates
         to its source camera coordinates. This transform takes into account
         the camera's region and binning settings.
         """
-        return Transform3D(self._frameTransform)
+        return SRTTransform3D(self._frameTransform)
         
     def globalTransform(self):
         """
         Return the transform that maps this frame's image coordinates
         to global coordinates. This is equivalent to cameraTransform * frameTransform
         """
-        return Transform3D(self._info['transform'])
+        return SRTTransform3D(self._info['transform'])
         
         
     def mapFromFrameToScope(obj):
@@ -835,7 +835,7 @@ class AcquireThread(QtCore.QThread):
                         #pos = ss['centerPosition']
                         #pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
                         
-                        transform = pg.Transform3D(ss['transform'])
+                        transform = pg.SRTTransform3D(ss['transform'])
                         #transform.translate(region[0]*ps[0], region[1]*ps[1])  ## correct for ROI here
                         
                         frameInfo = {

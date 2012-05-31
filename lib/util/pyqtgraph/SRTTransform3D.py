@@ -162,10 +162,10 @@ class SRTTransform3D(QtGui.QMatrix4x4):
     #def __div__(self, t):
         #"""A / B  ==  B^-1 * A"""
         #dt = t.inverted()[0] * self
-        #return Transform(dt)
+        #return SRTTransform(dt)
         
     #def __mul__(self, t):
-        #return Transform(QtGui.QTransform.__mul__(self, t))
+        #return SRTTransform(QtGui.QTransform.__mul__(self, t))
 
     def saveState(self):
         p = self._state['pos']

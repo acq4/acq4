@@ -216,7 +216,7 @@ class CameraInterface(QtCore.QObject):
         ## if the camera is running, then this is taken care of in drawFrame to
         ## ensure that the image remains stationary on screen.
         if not self.cam.isRunning():
-            tr = pg.Transform(self.cam.globalTransform())
+            tr = pg.SRTTransform(self.cam.globalTransform())
             self.updateTransform(tr)
             
     def updateTransform(self, tr):
@@ -422,7 +422,7 @@ class CameraInterface(QtCore.QObject):
         #m.scale(ps[0], ps[1])
         #m.translate(-cs[0]*0.5, -cs[1]*0.5)
         m = self.cam.globalTransform()
-        self.cameraItemGroup.setTransform(pg.Transform(m))
+        self.cameraItemGroup.setTransform(pg.SRTTransform(m))
 
 
 
@@ -648,7 +648,7 @@ class CameraInterface(QtCore.QObject):
             prof.mark()
             
             ## Update viewport to correct for scope movement/scaling
-            tr = pg.Transform(self.currentFrame.cameraTransform())
+            tr = pg.SRTTransform(self.currentFrame.cameraTransform())
             self.updateTransform(tr)
             #newPos = tr.getTranslation()
             #diff = newPos - self.lastCameraPosition
@@ -736,11 +736,11 @@ class CameraInterface(QtCore.QObject):
                     #groups = []
                     #for subdev in subdevs:
                         #group = QtGui.QGraphicsItemGroup()
-                        #group.setTransform(pg.Transform(dev.deviceTransform(subdev)))
+                        #group.setTransform(pg.SRTTransform(dev.deviceTransform(subdev)))
                         #groups.append(group)
                 #else:
                     #group = QtGui.QGraphicsItemGroup()
-                    #group.setTransform(pg.Transform(dev.deviceTransform()))
+                    #group.setTransform(pg.SRTTransform(dev.deviceTransform()))
                     #groups = [group]
                 
                 #if dev is self.cam:
