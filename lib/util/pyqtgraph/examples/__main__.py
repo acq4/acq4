@@ -22,7 +22,7 @@ examples = OrderedDict([
         ('IsocurveItem', 'isocurve.py'),
         ('ImageItem - video', 'ImageItem.py'),
         ('ImageItem - draw', 'Draw.py'),
-        ('Region-of-Interest', 'ROItypes.py'),
+        ('Region-of-Interest', 'ROIExamples.py'),
         ('GraphicsLayout', 'GraphicsLayout.py'),
         ('Text Item', 'text.py'),
         ('Linked Views', 'linkedViews.py'),
