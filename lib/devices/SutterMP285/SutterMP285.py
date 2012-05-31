@@ -89,7 +89,7 @@ class SutterMP285(Device, OptomechDevice):
             rel[:len(data['rel'])] = data['rel']
         self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
         
-        tr = pg.Transform3D()
+        tr = pg.SRTTransform3D()
         tr.translate(*self.pos)
         self.setDeviceTransform(tr) ## this informs rigidly-connected devices that they have moved
 

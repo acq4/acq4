@@ -11,10 +11,6 @@ import lib.Manager as Manager
 from debug import Profiler
 import numpy as np
 
-class PlotROI(pg.ROI):
-    def __init__(self, pos, size):
-        pg.ROI.__init__(self, pos, size=size)
-        self.addScaleHandle([1, 1], [0, 0])
 
 
         
@@ -211,6 +207,17 @@ class CameraWindow(QtGui.QMainWindow):
         self.view.addItem(roi)
         plot = self.roiPlot.plot(pen=pen)
         self.ROIs.append({'roi': roi, 'plot': plot, 'vals': [], 'times': []})
+        roi.sigRemoveRequested.connect(self.removeROI)
+
+    def removeROI(self, roi):
+        self.view.removeItem(roi)
+        roi.sigRemoveRequested.disconnect(self.removeROI)
+        for i, r in enumerate(self.ROIs):
+            if r['roi'] is roi:
+                self.roiPlot.removeItem(r['plot'])
+                self.ROIs.remove(r)
+                break
+        
         
     def clearROIs(self):
         for r in self.ROIs:
@@ -327,4 +334,9 @@ class CameraWindow(QtGui.QMainWindow):
         prof.finish()
     
     
+
+class PlotROI(pg.ROI):
+    def __init__(self, pos, size):
+        pg.ROI.__init__(self, pos, size=size, removable=True)
+        self.addScaleHandle([1, 1], [0, 0])
 

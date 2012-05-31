@@ -1,7 +1,6 @@
 from PyQt4 import QtCore, QtGui
 from Device import Device
 from Mutex import Mutex
-#from pyqtgraph import Transform3D, Transform
 import pyqtgraph as pg
 import collections
 
@@ -87,7 +86,7 @@ class OptomechDevice(object):
         self.__parent = None
         self.__globalTransform = 0  ## 0 indicates the cache is invalid. None indicates the transform is non-affine.
         self.__inverseGlobalTransform = 0
-        self.__transform = pg.Transform3D()
+        self.__transform = pg.SRTTransform3D()
         self.__inverseTransform = 0
         self.__lock = Mutex(recursive=True)
         self.__subdevices = collections.OrderedDict()
@@ -264,7 +263,7 @@ class OptomechDevice(object):
     
     def setDeviceTransform(self, tr):
         with self.__lock:
-            self.__transform = pg.Transform3D(tr)
+            self.__transform = pg.SRTTransform3D(tr)
             self.invalidateCachedTransforms()
         #print "setDeviceTransform", self
         #print "   -> emit sigTransformChanged"
@@ -298,7 +297,7 @@ class OptomechDevice(object):
         ## subdev must be a dict
         with self.__lock:
             devices = self.parentDevices()
-            transform = pg.Transform3D()
+            transform = pg.SRTTransform3D()
             for d in devices:
                 tr = d.deviceTransform(subdev)
                 if tr is None:
@@ -533,20 +532,20 @@ class DeviceTreeItemGroup(pg.ItemGroup):
         """Construct a QGraphicsItemGroup for the specified device/subdevice.
         This is a good method to extend in subclasses."""
         newGroup = QtGui.QGraphicsItemGroup()
-        newGroup.setTransform(pg.Transform(dev.deviceTransform(subdev)))
+        newGroup.setTransform(pg.SRTTransform(dev.deviceTransform(subdev)))
         return newGroup
         
         
         
     def transformChanged(self, sender, device):
         for subdev, items in self.groups[device].iteritems():
-            tr = pg.Transform(device.deviceTransform(subdev))
+            tr = pg.SRTTransform(device.deviceTransform(subdev))
             for item in items:
                 item.setTransform(tr)
         
         
     def subdevTransformChanged(self, sender, device, subdev):
-        tr = pg.Transform(device.deviceTransform(subdev))
+        tr = pg.SRTTransform(device.deviceTransform(subdev))
         #print "subdevTransformChanged:", sender, device, subdev
         for item in self.groups[device][subdev]:
             item.setTransform(tr)

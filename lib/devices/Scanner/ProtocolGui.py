@@ -560,7 +560,7 @@ class ScannerProtoGui(ProtocolGui):
                 #cgi = child.graphicsItem
                 #pgi = cgi.parentItem()
                 #pState = pgi.stateCopy()
-                #transform = pg.Transform({'pos': pState['pos'], 'angle': pState['angle']})
+                #transform = pg.SRTTransform({'pos': pState['pos'], 'angle': pState['angle']})
                 
                 ##pos = cgi.parentItem().parentItem().mapFromScene(cgi.scenePos())
                 #cgi.setParentItem(cgi.parentItem().parentItem())

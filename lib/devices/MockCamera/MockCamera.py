@@ -154,7 +154,7 @@ class MockCamera(Camera):
             w,h = self.params['sensorSize']
             
             tr = self.globalTransform()
-            tr = pg.Transform(tr)
+            tr = pg.SRTTransform(tr)
             m = QtGui.QTransform()
             m.scale(2e6, 2e6)
             tr = tr * m
@@ -167,7 +167,7 @@ class MockCamera(Camera):
             y = np.array([y.x(), y.y()])
             
             ## render fractal on the fly
-            #m = pg.Transform(tr).matrix()
+            #m = pg.SRTTransform(tr).matrix()
             #tr = np.array([[1,0,0],[0,1,0],[0,0,1]])
             #xy = xy = np.ones((3,w,h))
             #xy[:2] = np.mgrid[0:w, 0:h]
@@ -220,7 +220,7 @@ class MockCamera(Camera):
             
             ## draw cells
             px = (self.pixelVectors()[0]**2).sum() ** 0.5
-            tr = pg.Transform(self.inverseGlobalTransform())
+            tr = pg.SRTTransform(self.inverseGlobalTransform())
             for cell in self.cells:
                 w = cell['size'] / px
                 pos = pg.Point(cell['x'], cell['y'])
