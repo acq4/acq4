@@ -149,14 +149,14 @@ class CameraProtoGui(DAQGenericProtoGui):
         #print result
         state = self.stateGroup.state()
         if state['displayCheck']:
-            if result is None or result['frames'] is None:
+            if result is None or len(result.frames()) == 0:
                 print "No images returned from camera protocol."
             else:
-                self.ui.imageView.setImage(result['frames'])
+                self.ui.imageView.setImage(result.asMetaArray())
                 #print "  frame times:", list(result['frames'].xvals('Time'))
-                self.frameTicks.setXVals(result['frames'].xvals('Time'))
+                self.frameTicks.setXVals(result.frameTimes())
                 
-        DAQGenericProtoGui.handleResult(self, result['channels'], params)
+        DAQGenericProtoGui.handleResult(self, result.daqResult(), params)
         #if state['displayExposureCheck'] and 'expose' in result and result['expose'] is not None:
             #d = result['expose']
             #if self.exposeCurve is None:

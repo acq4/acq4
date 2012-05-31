@@ -9,6 +9,10 @@ class GraphicsItem(object):
 
     Abstract class providing useful methods to GraphicsObject and GraphicsWidget.
     (This is required because we cannot have multiple inheritance with QObject subclasses.)
+
+    A note about Qt's GraphicsView framework:
+
+    The GraphicsView system places a lot of emphasis on the notion that the graphics within the scene should be device independent--you should be able to take the same graphics and display them on screens of different resolutions, printers, export to SVG, etc. This is nice in principle, but causes me a lot of headache in practice. It means that I have to circumvent all the device-independent expectations any time I want to operate in pixel coordinates rather than arbitrary scene coordinates. A lot of the code in GraphicsItem is devoted to this task--keeping track of view widgets and device transforms, computing the size and shape of a pixel in local item coordinates, etc. Note that in item coordinates, a pixel does not have to be square or even rectangular, so just asking how to increase a bounding rect by 2px can be a rather complex task.
     """
     def __init__(self, register=True):
         self._viewWidget = None
@@ -31,10 +35,10 @@ class GraphicsItem(object):
                 return None
             self._viewWidget = weakref.ref(self.scene().views()[0])
         return self._viewWidget()
-        
+    
     def forgetViewWidget(self):
         self._viewWidget = None
-        
+    
     def getViewBox(self):
         """
         Return the first ViewBox or GraphicsView which bounds this item's visible space.
@@ -73,7 +77,11 @@ class GraphicsItem(object):
                 return None
             viewportTransform = view.viewportTransform()
         dt = QtGui.QGraphicsObject.deviceTransform(self, viewportTransform)
-        if dt.m11() * dt.m22() == 0: ## occurs when deviceTransform is invalid because widget has not been displayed
+        
+        #xmag = abs(dt.m11())+abs(dt.m12())
+        #ymag = abs(dt.m21())+abs(dt.m22())
+        #if xmag * ymag == 0: 
+        if dt.determinant() == 0:  ## occurs when deviceTransform is invalid because widget has not been displayed
             return None
         else:
             return dt

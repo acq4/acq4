@@ -6,24 +6,24 @@ import debug
 from metaarray import MetaArray
 import numpy as np
 import ptime
+import lib.Manager
 
 class RecordThread(QtCore.QThread):
-    
+    """
+    Thread class used by camera module for storing data to disk.
+    """
     sigShowMessage = QtCore.Signal(object)
     sigRecordingFailed = QtCore.Signal()
     sigRecordingFinished = QtCore.Signal()
     
-    def __init__(self, ui, manager):
+    def __init__(self, ui):
         QtCore.QThread.__init__(self)
         self.ui = ui
-        self.m = manager
-        #QtCore.QObject.connect(self.ui.cam, QtCore.SIGNAL('newFrame'), self.newCamFrame)
+        self.m = lib.Manager.getManager()
         self.ui.cam.sigNewFrame.connect(self.newCamFrame)
         
-        #QtCore.QObject.connect(ui.ui.btnRecord, QtCore.SIGNAL('toggled(bool)'), self.toggleRecord)
-        ui.ui.btnRecord.toggled.connect(self.toggleRecord)
-        #QtCore.QObject.connect(ui.ui.btnSnap, QtCore.SIGNAL('clicked()'), self.snapClicked)
-        ui.ui.btnSnap.clicked.connect(self.snapClicked)
+        ui.ui.recordStackBtn.toggled.connect(self.toggleRecord)
+        ui.ui.saveFrameBtn.clicked.connect(self.snapClicked)
         self.recording = False
         self.recordStart = False
         self.recordStop = False
@@ -102,7 +102,8 @@ class RecordThread(QtCore.QThread):
         recFrames = []
         newRec = False
         for frame in frames:
-            (data, info) = frame['frame']
+            data = frame['frame'].data()
+            info = frame['frame'].info()
             if frame['record']:
                 recFrames.append((data, info))
                 if frame['newRec']:
@@ -131,9 +132,9 @@ class RecordThread(QtCore.QThread):
                     self.showMessage("Saved image %s" % fn)
                     with self.lock:
                         self.takeSnap = False
-                    self.ui.ui.btnSnap.success("Saved.")
+                    self.ui.ui.saveFrameBtn.success("Saved.")
                 except:
-                    self.ui.ui.btnSnap.failure("Error.")
+                    self.ui.ui.saveFrameBtn.failure("Error.")
                     raise
                     
         if len(recFrames) > 0:

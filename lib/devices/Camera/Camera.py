@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
 from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask
+from lib.devices.OptomechDevice import OptomechDevice
 from Mutex import Mutex
 #from lib.devices.Device import *
+from lib.devices.Microscope import Microscope
 from PyQt4 import QtCore
 import time
 from numpy import *
@@ -10,10 +12,13 @@ from metaarray import *
 from protoGUI import *
 from deviceGUI import *
 import ptime as ptime
-from Mutex import Mutex, MutexLocker
+from Mutex import Mutex
 from debug import *
+from pyqtgraph import Vector, Transform3D
 
-class Camera(DAQGeneric):
+from CameraInterface import CameraInterface
+
+class Camera(DAQGeneric, OptomechDevice):
     """Generic camera device class. All cameras should extend from this interface.
      - The class handles protocol tasks, scope integration, expose/trigger lines
      - Subclasses should handle the connection to the camera driver by overriding
@@ -47,8 +52,9 @@ class Camera(DAQGeneric):
     sigParamsChanged = QtCore.Signal(object)
 
     def __init__(self, dm, config, name):
-        self.lock = Mutex(Mutex.Recursive)
+        OptomechDevice.__init__(self, dm, config, name)
         
+        self.lock = Mutex(Mutex.Recursive)
         
         # Generate config to use for DAQ 
         daqConfig = {}
@@ -68,30 +74,45 @@ class Camera(DAQGeneric):
         ## Default values for scope state. These will be used if there is no scope defined.
         self.scopeState = {
             'id': 0,
-            'scale': self.camConfig['scaleFactor'],
-            'scopePosition': [0, 0],   ## position of scope in global coords
-            'centerPosition': [0, 0],  ## position of objective in global coords (objective may be offset from center of scope)
-            'offset': [0, 0],
-            'objScale': 1,
-            'pixelSize': filter(abs, self.camConfig['scaleFactor']),
-            'objective': ''
+            #'scopePosition': [0, 0],   ## position of scope in global coords
+            #'centerPosition': [0, 0],  ## position of objective in global coords (objective may be offset from center of scope)
+            #'offset': [0, 0],
+            #'objScale': 1,
+            #'pixelSize': (1, 1),
+            #'objective': '',
+            #'transform': None,
         }
         
+
+        self.scopeDev = None
+        p = self
+        while p is not None:
+            p = p.parentDevice()
+            if isinstance(p, Microscope):
+                self.scopeDev = p
+                self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged)
+                break
         
-        if 'scopeDevice' in config:
-            self.scopeDev = self.dm.getDevice(config['scopeDevice'])
-            self.scopeDev.sigPositionChanged.connect(self.positionChanged)
-            self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged)
-            ## Cache microscope state for fast access later
+        #if 'scopeDevice' in config:
+            #self.scopeDev = self.dm.getDevice(config['scopeDevice'])
+            #self.scopeDev.sigPositionChanged.connect(self.positionChanged)
+            ### Cache microscope state for fast access later
+            #self.objectiveChanged()
+            #self.positionChanged()
+        #else:
+            #self.scopeDev = None
+        self.transformChanged()
+        if self.scopeDev is not None:
             self.objectiveChanged()
-            self.positionChanged()
-        else:
-            self.scopeDev = None
         
         
         self.setupCamera() 
         #print "Camera: setupCamera returned, about to create acqThread"
         self.sensorSize = self.getParam('sensorSize')
+        tr = pg.Transform3D()
+        tr.translate(-self.sensorSize[0]*0.5, -self.sensorSize[1]*0.5)
+        self.setDeviceTransform(self.deviceTransform() * tr)
+        
         
         self.acqThread = AcquireThread(self)
         #print "Camera: acqThread created, about to connect signals."
@@ -100,6 +121,8 @@ class Camera(DAQGeneric):
         self.acqThread.sigShowMessage.connect(self.showMessage)
         self.acqThread.sigNewFrame.connect(self.newFrame)
         #print "Camera: signals connected:"
+        
+        self.sigGlobalTransformChanged.connect(self.transformChanged)
         
         if config != None and 'params' in config:
             #print "Camera: setting configuration params."
@@ -250,21 +273,14 @@ class Camera(DAQGeneric):
         DAQGeneric.quit(self)
         #print "Camera device quit."
         
-        
-    #@ftrace
-    def devName(self):
-        with MutexLocker(self.lock):
-            return self.name
-    
-    
     #@ftrace
     def createTask(self, cmd):
-        with MutexLocker(self.lock):
+        with self.lock:
             return CameraTask(self, cmd)
     
     #@ftrace
     def getTriggerChannel(self, daq):
-        with MutexLocker(self.lock):
+        with self.lock:
             if not 'triggerOutChannel' in self.camConfig:
                 return None
             if self.camConfig['triggerOutChannel']['device'] != daq:
@@ -278,59 +294,58 @@ class Camera(DAQGeneric):
 
     def deviceInterface(self, win):
         return CameraDeviceGui(self, win)
+
+    def cameraModuleInterface(self, mod):
+        return CameraInterface(self, mod)
     
     ### Scope interface functions below
 
-    def getPosition(self, justScope=False):
-        """Return the coordinate of the center of the sensor area
-        If justScope is True, return the scope position, uncorrected for the objective offset"""
-        with MutexLocker(self.lock):
-            if justScope:
-                return self.scopeState['scopePosition']
-            else:
-                return self.scopeState['centerPosition']
+    #def getPosition(self, justScope=False):
+        #"""Return the coordinate of the center of the sensor area
+        #If justScope is True, return the scope position, uncorrected for the objective offset"""
+        #with MutexLocker(self.lock):
+            #if justScope:
+                #return self.scopeState['scopePosition']
+            #else:
+                #return self.scopeState['centerPosition']
 
     #@ftrace
-    def getScale(self):
-        """Return the dimensions of 1 pixel with signs if the image is flipped"""
-        with MutexLocker(self.lock):
-            return self.scopeState['scale']
+    #def getScale(self):
+        #"""Return the dimensions of 1 pixel with signs if the image is flipped"""
+        #with MutexLocker(self.lock):
+            #return self.scopeState['scale']
         
     #@ftrace
     def getPixelSize(self):
         """Return the absolute size of 1 pixel"""
-        with MutexLocker(self.lock):
+        with self.lock:
             return self.scopeState['pixelSize']
         
     #@ftrace
     def getObjective(self):
-        with MutexLocker(self.lock):
+        with self.lock:
             return self.scopeState['objective']
 
     def getScopeDevice(self):
-        with MutexLocker(self.lock):
+        with self.lock:
             return self.scopeDev
             
-    def getBoundary(self, obj=None):
-        """Return the boundaries of the camera in coordinates relative to the scope center.
-        If obj is specified, then the boundary is computed for that objective."""
-        if obj is None:
-            obj = self.scopeDev.getObjective()
-        if obj is None:
-            return None
-        
-        with MutexLocker(self.lock):
-            sf = self.camConfig['scaleFactor']
-            size = self.getParam('sensorSize')
-            sx = size[0] * obj['scale'] * sf[0]
-            sy = size[1] * obj['scale'] * sf[1]
-            bounds = QtCore.QRectF(-sx * 0.5 + obj['offset'][0], -sy * 0.5 + obj['offset'][1], sx, sy)
+    def getBoundary(self, globalCoords=True):
+        """Return the boundaries of the camera sensor in global coordinates.
+        If globalCoords==False, return in local coordinates.
+        """
+        size = self.getParam('sensorSize')
+        bounds = QtGui.QPainterPath()
+        bounds.addRect(QtCore.QRectF(0, 0, *size))
+        if globalCoords:
+            return pg.Transform(self.globalTransform()).map(bounds)
+        else:
             return bounds
         
     def getBoundaries(self):
         """Return a list of camera boundaries for all objectives"""
-        objs = self.scopeDev.listObjectives(allObjs=False)
-        return [self.getBoundary(objs[o]) for o in objs]
+        objs = self.scopeDev.listObjectives()
+        return [self.getBoundary(o) for o in objs]
     
     def mapToSensor(self, pos):
         """Return the sub-pixel location on the sensor that corresponds to global position pos"""
@@ -345,73 +360,112 @@ class Camera(DAQGeneric):
         
     def getScopeState(self):
         """Return meta information to be included with each frame. This function must be FAST."""
-        with MutexLocker(self.lock):
+        with self.lock:
             return self.scopeState
         
-    def positionChanged(self, pos=None):
-        if pos is None:
-            pos = self.scopeDev.getPosition()
-        else:
-            pos = pos['abs']
-        with MutexLocker(self.lock):
-            self.scopeState['scopePosition'] = pos
-            offset = self.scopeState['offset']
-            self.scopeState['centerPosition'] = [pos[0] + offset[0], pos[1] + offset[1]]
-            self.scopeState['id'] += 1
-        #print self.scopeState
+    def transformChanged(self):  ## called then this device's global transform changes.
+        self.scopeState['transform'] = self.globalTransform()
+        o = Vector(self.scopeState['transform'].map(Vector(0,0,0)))
+        p = Vector(self.scopeState['transform'].map(Vector(1, 1)) - o)
+        self.scopeState['centerPosition'] = o
+        self.scopeState['pixelSize'] = p
+        self.scopeState['id'] += 1  ## hint to acquisition thread that state has changed
         
     def objectiveChanged(self, obj=None):
         if obj is None:
             obj = self.scopeDev.getObjective()
         else:
-            obj = obj[0]
-        with MutexLocker(self.lock):
-            scale = obj['scale']
-            offset = obj['offset']
-            pos = self.scopeState['scopePosition']
-            self.scopeState['objective'] = obj['name']
-            self.scopeState['objScale'] = scale
-            self.scopeState['offset'] = offset
-            self.scopeState['centerPosition'] = [pos[0] + offset[0], pos[1] + offset[1]]
-            sf = self.camConfig['scaleFactor']
-            self.scopeState['scale'] = [sf[0] * scale, sf[1] * scale]
-            self.scopeState['pixelSize'] = filter(abs, self.scopeState['scale'])
+            obj, oldObj = obj
+        with self.lock:
+            self.scopeState['objective'] = obj.name()
             self.scopeState['id'] += 1
-        #print self.scopeState
         
-    #def getCamera(self):
-        #return self.cam
         
         
     ### Proxy signals and functions for acqThread:
     ###############################################
     
     def acqThreadFinished(self):
-        #self.emit(QtCore.SIGNAL('cameraStopped'))
         self.sigCameraStopped.emit()
 
     def acqThreadStarted(self):
-        #self.emit(QtCore.SIGNAL('cameraStarted'))
         self.sigCameraStarted.emit()
 
     def showMessage(self, msg):
-        #self.emit(QtCore.SIGNAL('showMessage'), msg)
         self.sigShowMessage.emit(msg)
 
     def newFrame(self, data):
-        #self.emit(QtCore.SIGNAL('newFrame'), *args)
         self.sigNewFrame.emit(data)
         
     def isRunning(self):
         return self.acqThread.isRunning()
 
-    #def isRunning(self):
-        #with MutexLocker(self.lock):
-            #return self.acqThread.isRunning()
-    
     def wait(self, *args, **kargs):
         return self.acqThread.wait(*args, **kargs)
 
+        
+class Frame(object):
+    def __init__(self, data, info):
+        object.__init__(self)
+        self._data = data
+        self._info = info
+        
+        ## make frame transform
+        rgn = self._info['region']
+        binn = self._info['binning']
+        tr = Transform3D()
+        tr.translate(*rgn[:2])
+        tr.scale(binn[0], binn[1], 1)
+        self._frameTransform = tr
+        self._info['transform'] = Transform3D(self.cameraTransform() * tr)
+        
+        
+    def data(self):
+        return self._data
+    
+    def info(self):
+        return self._info
+    
+    def cameraTransform(self):
+        """Returns the transform that maps from camera coordinates to global."""
+        return Transform3D(self._info['cameraTransform'])
+    
+    def frameTransform(self):
+        """Return the transform that maps from this frame's image coordinates
+        to its source camera coordinates. This transform takes into account
+        the camera's region and binning settings.
+        """
+        return Transform3D(self._frameTransform)
+        
+    def globalTransform(self):
+        """
+        Return the transform that maps this frame's image coordinates
+        to global coordinates. This is equivalent to cameraTransform * frameTransform
+        """
+        return Transform3D(self._info['transform'])
+        
+        
+    def mapFromFrameToScope(obj):
+        """
+        Map from the frame's data coordinates to scope coordinates
+        """
+        pass
+    
+    def mapFromFrameToGlobal(obj):
+        """
+        Map from the frame's data coordinates to global coordinates
+        """
+        return self.globalTransform().map(obj)
+    
+    
+    def mapFromFrameToSensor(obj):
+        """
+        Map from the frame's data coordinates to the camera's sensor coordinates
+        """
+        pass
+    
+    
+        
 class CameraTask(DAQGenericTask):
     """Default implementation of camera protocol task.
     Some of these functions may need to be reimplemented for subclasses."""
@@ -433,7 +487,7 @@ class CameraTask(DAQGenericTask):
         self.frames = []
         self.recording = False
         self.stopRecording = False
-        
+        self.resultObj = None
         
     def configure(self, tasks, startOrder):
         ## Merge command into default values:
@@ -443,54 +497,24 @@ class CameraTask(DAQGenericTask):
         ## set default parameters, load params from command
         params = {
             'triggerMode': 'Normal',
-            #'recordExposeChannel': False
         }
         params.update(self.camCmd['params'])
         
-        #print "pushState..."
         if 'pushState' in self.camCmd:
             stateName = self.camCmd['pushState']
             self.dev.pushState(stateName)
-        #time.sleep(0.5)
-        
-        #nonCameraParams = ['channels', 'record', 'triggerProtocol', 'pushState', 'popState', 'minFrames']
-        #for k in self.camCmd:
-            #if k not in nonCameraParams:
-                #params[k] = self.camCmd[k]
-        #for k in defaults:
-            #if k not in self.camCmd:
-                #self.camCmd[k] = defaults[k]
-        
         prof.mark('collect params')
-                
-        ## Determine whether to restart acquisition after protocol
-        #self.stopAfter = (not self.dev.isRunning())
-
-        ## are we requesting any parameter changes?
-        #paramSet = False
-        #for k in ['binning', 'exposure', 'region', 'params']:
-            #if k in self.camCmd:
-                #paramSet = True
-                
-        ## if the camera is being triggered by the daq or if there are parameters to be set, stop it now
-        #if self.camCmd['triggerMode'] != 'No Trigger' or paramSet:
-            #self.dev.stopAcquire(block=True)  
 
         ## If we are sending a one-time trigger to start the camera, then it must be restarted to arm the trigger        
         if params['triggerMode'] == 'TriggerStart':
             restart = True
-            
-        #print params
-        #print "Camera.configure: setParams"
         (newParams, restart) = self.dev.setParams(params, autoCorrect=True, autoRestart=False)  ## we'll restart in a moment if needed..
-        #print "restart:", restart
         
         prof.mark('set params')
         ## If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
         ##   (daq must be started first so that it is armed to received the camera trigger)
-        name = self.dev.devName()
+        name = self.dev.name()
         if self.camCmd.get('triggerProtocol', False):
-            #print "Camera triggering protocol; restart needed"
             restart = True
             daqName = self.dev.camConfig['triggerOutChannel']['device']
             startOrder.remove(name)
@@ -504,16 +528,9 @@ class CameraTask(DAQGenericTask):
             startOrder.insert(0, name)
             prof.mark('conf 2')
             
-            
-        #if 'forceStop' in self.camCmd and self.camCmd['forceStop'] is True:
-            #restart = True
-            
-            
         ## We want to avoid this if at all possible since it may be very expensive
-        #print "CameraTask: configure: restart camera:", restart
         if restart:
             self.dev.stop(block=True)
-            #self.stoppedCam = True
         prof.mark('stop')
             
         ## connect using acqThread's connect method because there may be no event loop
@@ -527,11 +544,8 @@ class CameraTask(DAQGenericTask):
             
     def newFrame(self, frame):
         disconnect = False
-        with MutexLocker(self.lock):
+        with self.lock:
             if self.recording:
-                #print "New frame"
-                #if self.stopRecording:
-                    #print "Adding in last frame %d" % len(self.frames)
                 self.frames.append(frame)
             if self.stopRecording:
                 self.recording = False
@@ -545,46 +559,12 @@ class CameraTask(DAQGenericTask):
         self.frames = []
         self.stopRecording = False
         self.recording = True
-        
-        #print "CameraTask start"
-        #time.sleep(0.5)
-        #self.recordHandle = CameraTask(self.dev.acqThread)  #self.dev.acqThread.startRecord()
-        ## start acquisition if needed
-        #print "Camera start:", self.camCmd
-        
-        ## all extra parameters should be passed on to the camera..
-        #camState = {'mode': self.camCmd['triggerMode']}
-        #for k in ['binning', 'exposure', 'region']:
-            #if k in self.camCmd:
-                #camState[k] = self.camCmd[k]
-        
-        ## set special camera parameters
-        #if 'params' in self.camCmd:
-            #params = self.camCmd['params']
-            #self.returnState = {}
-            #for k in params:
-                #self.returnState[k] = self.dev.getParam(k)
-            ##print "Set camera params:", params
-            #self.dev.setParams(params)
-            ##print "   set done"
-                
-        
-        #if self.stoppedCam:
-            #print "  CameraTask start: waiting for camera to stop.."
-            #self.dev.wait()
             
         if not self.dev.isRunning():
-            #print "  CameraTask start: Starting camera.."
-            #self.dev.setParams(camState)
             self.dev.start(block=True)  ## wait until camera is actually ready to acquire
-                
             
         ## Last I checked, this does nothing. It should be here anyway, though..
-        #print "  start daq task"
         DAQGenericTask.start(self)
-        #time.sleep(0.5)
-        
-        #print "  done"
         
         
     def isDone(self):
@@ -594,7 +574,7 @@ class CameraTask(DAQGenericTask):
         
         ## should return false if recording is required to run for a specific time.
         if 'minFrames' in self.camCmd:
-            with MutexLocker(self.lock):
+            with self.lock:
                 if len(self.frames) < self.camCmd['minFrames']:
                     return False
         return DAQGenericTask.isDone(self)  ## Should return True.
@@ -602,122 +582,149 @@ class CameraTask(DAQGenericTask):
     def stop(self, abort=False):
         ## Stop DAQ first
         #print "Stop camera task"
-        DAQGenericTask.stop(self)
+        DAQGenericTask.stop(self, abort=abort)
         
-        with MutexLocker(self.lock):
+        with self.lock:
             self.stopRecording = True
-        #if self.stopAfter:
-            #self.dev.stopAcquire()
         
         if 'popState' in self.camCmd:
-            #print "  pop state"
             self.dev.popState(self.camCmd['popState'])  ## restores previous settings, stops/restarts camera if needed
-        
-        ## If this task made any changes to the camera state, return them now
-        #for k in self.returnState:
-            #self.dev.setParam(k, self.returnState[k])
-            
-        #if not self.stopAfter and (not self.dev.isRunning() or self.camCmd['triggerMode'] != 'No Trigger'):
-            #self.dev.startAcquire({'mode': 'No Trigger'})
                 
     def getResult(self):
-        #print "get result from camera task.."
-        #expose = None
-        ## generate MetaArray of expose channel if it was recorded
-        #if ('recordExposeChannel' in self.camCmd) and self.camCmd['recordExposeChannel']:
-            #expose = self.daqTask.getData(self.dev.camConfig['exposeChannel'][1])
-            #timeVals = linspace(0, float(expose['info']['numPts']-1) / float(expose['info']['rate']), expose['info']['numPts'])
-            #info = [axis(name='Time', values=timeVals), expose['info']]
-            #expose = MetaArray(expose['data'], info=info)
-        daqResult = DAQGenericTask.getResult(self)
-            
-        ## generate MetaArray of images collected during recording
-        #data = self.recordHandle.data()
-        times = None
-        with MutexLocker(self.lock):
-            data = self.frames
-            if len(data) > 0:
-                arr = concatenate([f[0][newaxis,...] for f in data])
-                try:
-                    times = array([f[1]['time'] for f in data])
-                except:
-                    print f
-                    raise
-                times -= times[0]
-                info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), data[0][1]]
-                #print info
-                marr = MetaArray(arr, info=info)
-                #print "returning frames:", marr.shape
-            else:
-                #print "returning no frames"
-                marr = None
-            
-        expose = None
-        if daqResult is not None and daqResult.hasColumn('Channel', 'exposure'):
-            expose = daqResult['Channel':'exposure']
-            
-        ## Correct times for each frame based on data recorded from exposure channel.
-        if expose is not None and marr is not None: 
-        
-            ## Extract times from trace
-            ex = expose.view(ndarray).astype(int32)
-            exd = ex[1:] - ex[:-1]
-
-            
-            timeVals = expose.xvals('Time')
-            inds = argwhere(exd > 0.5)[:, 0] + 1
-            onTimes = timeVals[inds]
-            
-            ## If camera triggered DAQ, then it is likely we missed the first 0->1 transition
-            if self.camCmd.get('triggerProtocol', False) and ex[0] > 0.5:
-                onTimes = array([timeVals[0]] + list(onTimes))
-            
-            #print "onTimes:", onTimes
-            inds = argwhere(exd < 0.5)[:, 0] + 1
-            offTimes = timeVals[inds]
-            
-            ## Determine average frame transfer time
-            txLen = (offTimes[:len(times)] - times[:len(offTimes)]).mean()
-            
-            ## Determine average exposure time (excluding first frame, which is often shorter)
-            expLen = (offTimes[1:len(onTimes)] - onTimes[1:len(offTimes)]).mean()
-            
-            
-            if self.camCmd['params']['triggerMode'] == 'Normal' and not self.camCmd.get('triggerProtocol', False):
-                ## Can we make a good guess about frame times even without having triggered the first frame?
-                ## frames are marked with their arrival time. We will assume that a frame most likely 
-                ## corresponds to the last complete exposure signal. 
-                pass
-                
-            elif len(onTimes) > 0:
-                ## If we triggered the camera (or if the camera triggered the DAQ), 
-                ## then we know frame 0 occurred at the same time as the first expose signal.
-                ## New times list is onTimes, any extra frames just increment by tx+exp time
-                vals = marr.xvals('Time')
-                #print "Original times:", vals
-                vals[:len(onTimes)] = onTimes[:len(vals)]
-                lastTime = onTimes[-1]
-                if len(onTimes) > 1:
-                    framePeriod = (onTimes[-1] - onTimes[0]) / (len(onTimes) - 1)
-                elif times is not None:
-                    framePeriod = (times[-1] - times[0]) / (len(times) - 1)
-                else:
-                    framePeriod = None
-                    
-                if framePeriod is not None:
-                    for i in range(len(onTimes), len(vals)):
-                        lastTime += framePeriod
-                        vals[i] = lastTime 
-            
-        ## Generate final result, incorporating data from DAQ
-        return {'frames': marr, 'channels': daqResult}
+        if self.resultObj is None:
+            daqResult = DAQGenericTask.getResult(self)
+            self.resultObj = CameraTaskResult(self, self.frames[:], daqResult)
+        return self.resultObj
         
     def storeResult(self, dirHandle):
         result = self.getResult()
-        dh = dirHandle.mkdir(self.dev.name)
+        result = {'frames': (result.asMetaArray(), result.info()), 'daqResult': (result.daqResult(), {})}
+        dh = dirHandle.mkdir(self.dev.name())
         for k in result:
-            if result[k] is not None:
-                dh.writeFile(result[k], k)
+            data, info = result[k]
+            if data is not None:
+                dh.writeFile(data, k, info=info)
+
+class CameraTaskResult:
+    def __init__(self, task, frames, daqResult):
+        self.lock = Mutex(recursive=True)
+        self._task = task
+        self._frames = frames
+        self._daqResult = daqResult
+        self._marr = None
+        self._arr = None
+        self._frameTimes = None
+        
+    def frames(self):
+        """Return a list of Frame instances collected during the task"""
+        return self._frames[:]
+    
+    def info(self):
+        """Return meta-info for the first frame recorded or {} if there were no frames."""
+        if len(self._frames) == 0:
+            return {}
+        return self._frames[0].info()
+    
+    def asArray(self):
+        with self.lock:
+            if self._arr is None:
+                data = self._frames
+                if len(data) > 0:
+                    self._arr = concatenate([f.data()[newaxis,...] for f in self._frames])
+        return self._arr
+    
+    def asMetaArray(self):
+        """Return a MetaArray containing all frame and timing data"""
+        with self.lock:
+            if self._marr is None:
+                arr = self.asArray()
+                if arr is not None:
+                    times = self.frameTimes()[:arr.shape[0]]
+                    info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), self.info()]
+                    #print info
+                    self._marr = MetaArray(arr, info=info)
+            
+        return self._marr
+            
+    def daqResult(self):
+        """Return results of DAQ channel recordings"""
+        return self._daqResult
+
+    def frameTimes(self):
+        if self._frameTimes is None:
+            ## generate MetaArray of images collected during recording
+            times = None
+            with self.lock:
+                if len(self._frames) > 0:  ## extract frame times as reported by camera. This is a first approximation.
+                    try:
+                        times = array([f.info()['time'] for f in self._frames])
+                    except:
+                        print f
+                        raise
+                    times -= times[0]
+                else:
+                    return None
+                
+                expose = None
+                daqResult = self._daqResult
+                if daqResult is not None and daqResult.hasColumn('Channel', 'exposure'):
+                    expose = daqResult['Channel':'exposure']
+                
+            ## Correct times for each frame based on data recorded from exposure channel.
+            if expose is not None: 
+            
+                ## Extract times from trace
+                ex = expose.view(ndarray).astype(int32)
+                exd = ex[1:] - ex[:-1]
+                
+                timeVals = expose.xvals('Time')
+                inds = argwhere(exd > 0.5)[:, 0] + 1
+                onTimes = timeVals[inds]
+                
+                ## If camera triggered DAQ, then it is likely we missed the first 0->1 transition
+                if self._task.camCmd.get('triggerProtocol', False) and ex[0] > 0.5:
+                    onTimes = array([timeVals[0]] + list(onTimes))
+                
+                #print "onTimes:", onTimes
+                inds = argwhere(exd < 0.5)[:, 0] + 1
+                offTimes = timeVals[inds]
+                
+                ## Determine average frame transfer time
+                txLen = (offTimes[:len(times)] - times[:len(offTimes)]).mean()
+                
+                ## Determine average exposure time (excluding first frame, which is often shorter)
+                expLen = (offTimes[1:len(onTimes)] - onTimes[1:len(offTimes)]).mean()
+                
+                if self._task.camCmd['params']['triggerMode'] == 'Normal' and not self._task.camCmd.get('triggerProtocol', False):
+                    ## Can we make a good guess about frame times even without having triggered the first frame?
+                    ## frames are marked with their arrival time. We will assume that a frame most likely 
+                    ## corresponds to the last complete exposure signal. 
+                    pass
+                    
+                elif len(onTimes) > 0:
+                    ## If we triggered the camera (or if the camera triggered the DAQ), 
+                    ## then we know frame 0 occurred at the same time as the first expose signal.
+                    ## New times list is onTimes, any extra frames just increment by tx+exp time
+                    times[:len(onTimes)] = onTimes[:len(times)]  ## set the times for which we detected an exposure pulse
+                    
+                    ## Try to determine mean framerate
+                    if len(onTimes) > 1:
+                        framePeriod = (onTimes[-1] - onTimes[0]) / (len(onTimes) - 1)
+                    else:
+                        framePeriod = (times[-1] - times[0]) / (len(times) - 1)
+                        
+                    ## For any extra frames that did not have an exposure signal, just try
+                    ## to guess the correct time based on the average framerate.
+                    lastTime = onTimes[-1]
+                    if framePeriod is not None:
+                        for i in range(len(onTimes), len(times)):
+                            lastTime += framePeriod
+                            times[i] = lastTime 
+                
+            self._frameTimes = times
+            
+        return self._frameTimes
+        
         
 class AcquireThread(QtCore.QThread):
     
@@ -758,11 +765,11 @@ class AcquireThread(QtCore.QThread):
         
     
     def connectCallback(self, method):
-        with MutexLocker(self.connectMutex):
+        with self.connectMutex:
             self.connections.add(method)
     
     def disconnectCallback(self, method):
-        with MutexLocker(self.connectMutex):
+        with self.connectMutex:
             if method in self.connections:
                 self.connections.remove(method)
     #
@@ -820,21 +827,25 @@ class AcquireThread(QtCore.QThread):
                     
                     ## frameInfo includes pixelSize, objective, centerPosition, scopePosition, imagePosition
                     ss = self.dev.getScopeState()
-                    #print ss
                     if ss['id'] != scopeState:
                         #print "scope state changed"
                         scopeState = ss['id']
                         ## regenerate frameInfo here
                         ps = ss['pixelSize']  ## size of CCD pixel
-                        pos = ss['centerPosition']
-                        pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
+                        #pos = ss['centerPosition']
+                        #pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
+                        
+                        transform = pg.Transform3D(ss['transform'])
+                        #transform.translate(region[0]*ps[0], region[1]*ps[1])  ## correct for ROI here
                         
                         frameInfo = {
                             'pixelSize': [ps[0] * binning[0], ps[1] * binning[1]],  ## size of image pixel
-                            'scopePosition': ss['scopePosition'],
-                            'centerPosition': pos,
+                            #'scopePosition': ss['scopePosition'],
+                            #'centerPosition': pos,
                             'objective': ss['objective'],
-                            'imagePosition': pos2
+                            #'imagePosition': pos2
+                            #'cameraTransform': ss['transform'],
+                            'cameraTransform': transform,
                         }
                         
                     ## Copy frame info to info array
@@ -855,8 +866,8 @@ class AcquireThread(QtCore.QThread):
                         #print data
                         del frame['data']
                         frameInfo.update(frame)
-                        out = (data, frameInfo)
-                        with MutexLocker(self.connectMutex):
+                        out = Frame(data, frameInfo)
+                        with self.connectMutex:
                             conn = list(self.connections)
                         for c in conn:
                             c(out)
@@ -912,7 +923,7 @@ class AcquireThread(QtCore.QThread):
         
     def stop(self, block=False):
         #print "AcquireThread.stop: Requesting thread stop, acquiring lock first.."
-        with MutexLocker(self.lock):
+        with self.lock:
             self.stopThread = True
         #print "AcquireThread.stop: got lock, requested stop."
         #print "AcquireThread.stop: Unlocked, waiting for thread exit (%s)" % block

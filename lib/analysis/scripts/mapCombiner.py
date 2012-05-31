@@ -325,3 +325,58 @@ def convolveCells_Xuying(sites, spacing=5e-6, probThreshold=0.02, probRadius=90e
     #return arrs
         
         
+def convolveCells_newAtlas(sites, keys=None, spacing=5e-6, probThreshold=0.02, sampleSpacing=35e-6):
+    if keys == None:
+        keys = {
+            'x':'xPosCell',
+            'y':'yPosCell',
+            'mappedX': 'modXPosCell',
+            'mappedY': 'percentDepth'}
+            
+    #avgCellX = np.array(list(set(sites['CellXPos']))).mean()
+    #avgCellY = np.array(list(set(sites['CellYPos']))).mean()
+    #xmin = (sites['xPos']-sites['CellXPos']).min() ## point furthest left of the cell
+    xmin = sites[keys['mappedX']].min()
+    #ymin = (sites['yPos']-sites['CellYPos']).min() ## point furthest above the cell
+    ymin = sites[keys['mappedY']].min() if sites[keys[mappedY]].min() < 0 else 0.
+    #xmax = (sites['xPos']-sites['CellXPos']).max()
+    xmax = sites[keys['mappedX']].max()
+    #ymax = (sites['yPos']-sites['CellXPos']).max()
+    ymax = sites[keys['mappedY']].max()
+                 
+    xdim = int((xmax-xmin)/spacing)+10
+    ydim = int((ymax-ymin)/spacing)+10
+    #avgCellIndex = np.array([int((avgCellX-xmin)/spacing)+5, int((avgCellY-ymin)/spacing)+5])
+    
+    cells = set(sites['CellDir'])
+    n = len(cells)
+    
+    arr = np.zeros((n, xdim, ydim), dtype=float)
+    sampling = np.zeros(n, xdim, ydim), dtype=float)
+    #results = []
+    
+    for i, c in enumerate(cells):
+        data = sites[sites['CellDir']==c]
+        spontRate = data['numOfPreEvents'].sum()/data['PreRegionLen'].sum()
+        data = afn.bendelsSpatialCorrelationAlgorithm(data, 90e-6, spontRate, data[0]['PostRegionLen'])
+  
+        probs = np.zeros(len(data))
+        probs[data['prob'] < probThreshold] = 1.
+        for j, s in enumerate(data):
+            trans1 = (data[keys['mappedX']] - xmin, data[keys['mappedY']]-ymin)
+            #trans2 = (avgCellX+xmin, avgCellY+ymin)            
+            x, y = (int((s['xPos']-trans1[0])/spacing), int((s['yPos']-trans1[1])/spacing))
+            arr[i, x, y] = probs[j]
+            sampling[i, x, y] = 1
+              
+        #results.append(arr[i].copy())
+        arr[i] = scipy.ndimage.gaussian_filter(arr[i], 2)
+        arr[i] = arr[i]/0.039
+        arr[i][arr[i] > 0.02] = 1
+        arr[i][arr[i] <= 0.02] = 0
+        
+        sampling[i] = scipy.ndimage.gaussian_filter(sampling[i], 2)
+        sampling[i] = sampling[i]/0.039
+        sampling[i][sampling[i] > 0.02] = 1
+        sampling[i][sampling[i] <= 0.02] = 0        
+    return arr, sampling

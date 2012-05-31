@@ -53,11 +53,11 @@ class LaserDevGui(QtGui.QWidget):
         
         
         ### Populate device lists
-        self.ui.microscopeCombo.setTypes('microscope')
+        #self.ui.microscopeCombo.setTypes('microscope')
         self.ui.meterCombo.setTypes('daqChannelGroup')
-        defMicroscope = self.dev.config.get('scope', None)     
+        #defMicroscope = self.dev.config.get('scope', None)     
         defPowerMeter = self.dev.config.get('defaultPowerMeter', None)
-        self.ui.microscopeCombo.setCurrentText(defMicroscope)
+        #self.ui.microscopeCombo.setCurrentText(defMicroscope)
         self.ui.meterCombo.setCurrentText(defPowerMeter)
         #devs = self.dev.dm.listDevices()
         #for d in devs:
@@ -244,8 +244,8 @@ class LaserDevGui(QtGui.QWidget):
 
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()
-        for scope, obj, wavelength, trans, power, date in self.dev.getCalibrationList():
-            item = QtGui.QTreeWidgetItem([scope, obj, wavelength, '%.2f' %(trans*100) + '%', siFormat(power, suffix='W'), date])
+        for opticState, wavelength, trans, power, date in self.dev.getCalibrationList():
+            item = QtGui.QTreeWidgetItem([opticState, wavelength, '%.2f' %(trans*100) + '%', siFormat(power, suffix='W'), date])
             self.ui.calibrationList.addTopLevelItem(item)
             
     def calibrateClicked(self):
@@ -257,11 +257,11 @@ class LaserDevGui(QtGui.QWidget):
             try:
                 self.ui.calibrateBtn.setEnabled(False)
                 self.ui.calibrateBtn.setText('Calibrating...')
-                scope = str(self.ui.microscopeCombo.currentText())
+                #scope = str(self.ui.microscopeCombo.currentText())
                 powerMeter = unicode(self.ui.meterCombo.currentText())
                 mTime = self.ui.measurementSpin.value()
                 sTime = self.ui.settlingSpin.value()
-                self.dev.calibrate(scope, powerMeter, mTime, sTime)
+                self.dev.calibrate(powerMeter, mTime, sTime)
                 self.updateCalibrationList()
             except:
                 raise
@@ -282,12 +282,12 @@ class LaserDevGui(QtGui.QWidget):
         cur = self.ui.calibrationList.currentItem()
         if cur is None:
             return
-        scope = str(cur.text(0))
-        obj = str(cur.text(1))
+        #scope = str(cur.text(0))
+        opticState = str(cur.text(1))
         
         index = self.dev.getCalibrationIndex()
         
-        del index[scope][obj]
+        del index[opticState]
 
         self.dev.writeCalibrationIndex(index)
         self.updateCalibrationList()
