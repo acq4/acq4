@@ -14,7 +14,7 @@ from deviceGUI import *
 import ptime as ptime
 from Mutex import Mutex
 from debug import *
-from pyqtgraph import Vector, Transform3D
+from pyqtgraph import Vector, SRTTransform3D
 
 from CameraInterface import CameraInterface
 

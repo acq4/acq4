@@ -5,7 +5,7 @@ from DirTreeWidget import *
 import numpy as np
 import metaarray
 from pyqtgraph.flowchart.library.common import *
-from pyqtgraph import Transform, Point
+from pyqtgraph import SRTTransform, Point
 #from pyqtgraph import TreeWidget
 import functions
 
