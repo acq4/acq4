@@ -683,8 +683,11 @@ class ViewBox(GraphicsWidget):
         By default, the positive y-axis points upward on the screen. Use invertY(True) to reverse the y-axis.
         """
         self.state['yInverted'] = b
-        self.updateMatrix()
+        self.updateMatrix(changed=(False, True))
         self.sigStateChanged.emit(self)
+
+    def yInverted(self):
+        return self.state['yInverted']
         
     def setAspectLocked(self, lock=True, ratio=1):
         """
