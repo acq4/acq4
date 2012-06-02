@@ -1033,6 +1033,7 @@ class ViewBox(GraphicsWidget):
     def updateMatrix(self, changed=None):
         if changed is None:
             changed = [False, False]
+        changed = list(changed)
         #print "udpateMatrix:"
         #print "  range:", self.range
         tr = self.targetRect()
