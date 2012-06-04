@@ -375,7 +375,7 @@ class AxisItem(GraphicsWidget):
             
         ticks = []
         tickLevels = self.tickSpacing(minVal, maxVal, size)
-        allValues = []
+        allValues = np.array([])
         for i in range(len(tickLevels)):
             spacing, offset = tickLevels[i]
             
@@ -385,8 +385,11 @@ class AxisItem(GraphicsWidget):
             ## determine number of ticks
             num = int((maxVal-start) / spacing) + 1
             values = np.arange(num) * spacing + start
-            values = filter(lambda x: x not in allValues, values) ## remove any ticks that were present in higher levels
-            allValues.extend(values)
+            ## remove any ticks that were present in higher levels
+            ## we assume here that if the difference between a tick value and a previously seen tick value
+            ## is less than spacing/100, then they are 'equal' and we can ignore the new tick.
+            values = filter(lambda x: all(np.abs(allValues-x) > spacing*0.01), values) 
+            allValues = np.concatenate([allValues, values])
             ticks.append((spacing, values))
         return ticks
     

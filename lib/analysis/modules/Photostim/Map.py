@@ -84,7 +84,7 @@ class Map:
     def addScanSpots(self, scan):
         for pt in scan.spots():
             pos = pt.viewPos()
-            size = pt.size  #sceneBoundingRect().width()
+            size = pt.size()  #sceneBoundingRect().width()
             dh = pt.data()
             
             added = False
@@ -93,7 +93,7 @@ class Map:
                 dp = pos2-pos
                 dist = (dp.x()**2 + dp.y()**2)**0.5
                 if dist < size/3.:      ## if position matches, add scan/spot data into existing site
-                    pt2['data'].append((scan, pt.data))
+                    pt2['data'].append((scan, pt.data()))
                     #pt2[2]['data'].append((scan, dh))
                     added = True
                     self.pointsByFile[pt.data()] = pt2

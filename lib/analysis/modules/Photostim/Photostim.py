@@ -149,6 +149,7 @@ class Photostim(AnalysisModule):
             cells = [dh]
         else:
             return
+        print "cells:", cells
         for cell in cells:
             self.dbCtrl.listMaps(cell)
 
