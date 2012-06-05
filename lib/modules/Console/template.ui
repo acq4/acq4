@@ -54,6 +54,16 @@
            </property>
           </widget>
          </item>
+         <item>
+          <widget class="QPushButton" name="exceptionBtn">
+           <property name="text">
+            <string>Exceptions..</string>
+           </property>
+           <property name="checkable">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
         </layout>
        </item>
       </layout>
@@ -64,6 +74,56 @@
         <family>Monospace</family>
        </font>
       </property>
+     </widget>
+     <widget class="QGroupBox" name="exceptionGroup">
+      <property name="title">
+       <string>Exception Handling</string>
+      </property>
+      <layout class="QGridLayout" name="gridLayout_2">
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <property name="spacing">
+        <number>0</number>
+       </property>
+       <item row="1" column="0" colspan="3">
+        <widget class="QLabel" name="exceptionInfoLabel">
+         <property name="text">
+          <string>Exception Info</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="0">
+        <widget class="QCheckBox" name="catchExceptionsCheck">
+         <property name="text">
+          <string>Catch Exceptions</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QPushButton" name="continueBtn">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string>Continue</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QCheckBox" name="processEventsCheck">
+         <property name="text">
+          <string>Process Qt Events</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="0" colspan="3">
+        <widget class="QListWidget" name="exceptionStackList"/>
+       </item>
+      </layout>
      </widget>
     </widget>
    </item>

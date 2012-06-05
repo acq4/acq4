@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'template.ui'
 #
-# Created: Thu Nov 17 21:28:25 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Tue Jun  5 16:05:53 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -46,12 +46,38 @@ class Ui_Form(object):
         self.historyBtn.setCheckable(True)
         self.historyBtn.setObjectName(_fromUtf8("historyBtn"))
         self.horizontalLayout.addWidget(self.historyBtn)
+        self.exceptionBtn = QtGui.QPushButton(self.layoutWidget)
+        self.exceptionBtn.setCheckable(True)
+        self.exceptionBtn.setObjectName(_fromUtf8("exceptionBtn"))
+        self.horizontalLayout.addWidget(self.exceptionBtn)
         self.verticalLayout.addLayout(self.horizontalLayout)
         self.historyList = QtGui.QListWidget(self.splitter)
         font = QtGui.QFont()
         font.setFamily(_fromUtf8("Monospace"))
         self.historyList.setFont(font)
         self.historyList.setObjectName(_fromUtf8("historyList"))
+        self.exceptionGroup = QtGui.QGroupBox(self.splitter)
+        self.exceptionGroup.setObjectName(_fromUtf8("exceptionGroup"))
+        self.gridLayout_2 = QtGui.QGridLayout(self.exceptionGroup)
+        self.gridLayout_2.setSpacing(0)
+        self.gridLayout_2.setContentsMargins(-1, 0, -1, 0)
+        self.gridLayout_2.setObjectName(_fromUtf8("gridLayout_2"))
+        self.exceptionInfoLabel = QtGui.QLabel(self.exceptionGroup)
+        self.exceptionInfoLabel.setObjectName(_fromUtf8("exceptionInfoLabel"))
+        self.gridLayout_2.addWidget(self.exceptionInfoLabel, 1, 0, 1, 3)
+        self.catchExceptionsCheck = QtGui.QCheckBox(self.exceptionGroup)
+        self.catchExceptionsCheck.setObjectName(_fromUtf8("catchExceptionsCheck"))
+        self.gridLayout_2.addWidget(self.catchExceptionsCheck, 0, 0, 1, 1)
+        self.continueBtn = QtGui.QPushButton(self.exceptionGroup)
+        self.continueBtn.setEnabled(False)
+        self.continueBtn.setObjectName(_fromUtf8("continueBtn"))
+        self.gridLayout_2.addWidget(self.continueBtn, 0, 2, 1, 1)
+        self.processEventsCheck = QtGui.QCheckBox(self.exceptionGroup)
+        self.processEventsCheck.setObjectName(_fromUtf8("processEventsCheck"))
+        self.gridLayout_2.addWidget(self.processEventsCheck, 0, 1, 1, 1)
+        self.exceptionStackList = QtGui.QListWidget(self.exceptionGroup)
+        self.exceptionStackList.setObjectName(_fromUtf8("exceptionStackList"))
+        self.gridLayout_2.addWidget(self.exceptionStackList, 2, 0, 1, 3)
         self.gridLayout.addWidget(self.splitter, 0, 0, 1, 1)
 
         self.retranslateUi(Form)
@@ -60,5 +86,11 @@ class Ui_Form(object):
     def retranslateUi(self, Form):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
         self.historyBtn.setText(QtGui.QApplication.translate("Form", "History..", None, QtGui.QApplication.UnicodeUTF8))
+        self.exceptionBtn.setText(QtGui.QApplication.translate("Form", "Exceptions..", None, QtGui.QApplication.UnicodeUTF8))
+        self.exceptionGroup.setTitle(QtGui.QApplication.translate("Form", "Exception Handling", None, QtGui.QApplication.UnicodeUTF8))
+        self.exceptionInfoLabel.setText(QtGui.QApplication.translate("Form", "Exception Info", None, QtGui.QApplication.UnicodeUTF8))
+        self.catchExceptionsCheck.setText(QtGui.QApplication.translate("Form", "Catch Exceptions", None, QtGui.QApplication.UnicodeUTF8))
+        self.continueBtn.setText(QtGui.QApplication.translate("Form", "Continue", None, QtGui.QApplication.UnicodeUTF8))
+        self.processEventsCheck.setText(QtGui.QApplication.translate("Form", "Process Qt Events", None, QtGui.QApplication.UnicodeUTF8))
 
 from CmdInput import CmdInput

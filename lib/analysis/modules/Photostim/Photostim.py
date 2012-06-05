@@ -501,13 +501,14 @@ class Photostim(AnalysisModule):
             
         ## ask eventdetector to store events for us.
         #print parentDir
-        self.detector.storeToDB()
-        events = self.detector.output()
+        with db.transaction():
+            self.detector.storeToDB()
+            events = self.detector.output()
 
-        ## store stats
-        stats = self.processStats(spot=spot)  ## gets current stats if no processing is requested
-        
-        self.storeStats(stats)
+            ## store stats
+            stats = self.processStats(spot=spot)  ## gets current stats if no processing is requested
+            
+            self.storeStats(stats)
         
         ## update data in Map
         self.selectedScan.updateSpot(spot.data(), events, stats)
@@ -517,46 +518,50 @@ class Photostim(AnalysisModule):
         """Store all data for a scan, using cached values if possible"""
         p = debug.Profiler("Photostim.storeDBScan", disabled=True)
         
-        #dh = scan.source()
-        print "Store scan:", scan.source().name()
-        events = []
-        stats = []
-        spots = scan.spots()
-        with pg.ProgressDialog("Preparing data for %s" % scan.name(), 0, len(spots)+1) as dlg:
-            
-            ## collect events and stats from all spots in the scan
-            for i in xrange(len(spots)):
-                s = spots[i]
-                fh = self.dataModel.getClampFile(s.data())
-                try:
-                    ev = scan.getEvents(fh)['events']
-                    events.append(ev)
-                except:
-                    print fh, scan.getEvents(fh)
-                    raise
-                st = scan.getStats(s.data())
-                stats.append(st)
-                dlg.setValue(i)
-                if dlg.wasCanceled():
-                    raise HelpfulException("Scan store canceled by user.", msgType='status')
+        with pg.BusyCursor():
+            #dh = scan.source()
+            print "Store scan:", scan.source().name()
+            events = []
+            stats = []
+            spots = scan.spots()
+            with pg.ProgressDialog("Preparing data for %s" % scan.name(), 0, len(spots)+1) as dlg:
                 
-            p.mark("Prepared data")
-            
-        ## Store all events for this scan
-        events = [x for x in events if len(x) > 0] 
-        
-        if len(events) > 0:
-            ev = np.concatenate(events)
-            p.mark("concatenate events")
-            self.detector.storeToDB(ev)
-            p.mark("stored all events")
-            
-        ## Store spot data
-        self.storeStats(stats)
-        p.mark("stored all stats")
-        p.finish()
-        print "   scan %s is now locked" % scan.source().name()
-        scan.lock()
+                ## collect events and stats from all spots in the scan
+                for i in xrange(len(spots)):
+                    s = spots[i]
+                    fh = self.dataModel.getClampFile(s.data())
+                    try:
+                        ev = scan.getEvents(fh)['events']
+                        events.append(ev)
+                    except:
+                        print fh, scan.getEvents(fh)
+                        raise
+                    st = scan.getStats(s.data())
+                    stats.append(st)
+                    dlg.setValue(i)
+                    if dlg.wasCanceled():
+                        raise HelpfulException("Scan store canceled by user.", msgType='status')
+                    
+                p.mark("Prepared data")
+                
+            dbui = self.getElement('Database')
+            db = dbui.getDb()
+            with db.transaction():
+                ## Store all events for this scan
+                events = [x for x in events if len(x) > 0] 
+                
+                if len(events) > 0:
+                    ev = np.concatenate(events)
+                    p.mark("concatenate events")
+                    self.detector.storeToDB(ev)
+                    p.mark("stored all events")
+                    
+                ## Store spot data
+                self.storeStats(stats)
+                p.mark("stored all stats")
+                p.finish()
+                print "   scan %s is now locked" % scan.source().name()
+                scan.lock()
 
     def rewriteSpotPositions(self, scan):
         ## for now, let's just rewrite everything.

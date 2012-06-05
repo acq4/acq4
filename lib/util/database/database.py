@@ -184,6 +184,9 @@ class SqliteDatabase:
         All arguments are passed through to select(). By default, limit=1000 and offset=0.
         Note that if you specify limit or offset, they MUST be given as keyword arguments.
         """
+        if 'chunkSize' in kargs:  ## for compatibility with iterInsert
+            kargs['limit'] = kargs['chunkSize']
+            del kargs['chunkSize']
         if 'offset' not in kargs:
             kargs['offset'] = 0
         if 'limit' not in kargs:

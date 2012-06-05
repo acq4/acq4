@@ -1,18 +1,17 @@
 from PyQt4 import QtCore, QtGui
 from lib.modules.Module import *
-import sys, re, os
+import sys, re, os, time, traceback
 import debug
-import traceback
 import pyqtgraph as pg
 import numpy as np
 import template
-        
+import exceptionHandling
 
 class Console(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         self.manager = manager
-        self.locals = {
+        self.localNamespace = {
             'man': manager,
             'pg': pg,
             'np': np,
@@ -61,11 +60,20 @@ class Console(Module):
             self.ui.historyList.addItems(config['history'][::-1])
         #self.layout.addWidget(self.input)
         self.ui.historyList.hide()
+        self.ui.exceptionGroup.hide()
         
         self.input.sigExecuteCmd.connect(self.runCmd)
         self.ui.historyBtn.toggled.connect(self.ui.historyList.setVisible)
         self.ui.historyList.itemClicked.connect(self.cmdSelected)
         self.ui.historyList.itemDoubleClicked.connect(self.cmdDblClicked)
+        self.ui.exceptionBtn.toggled.connect(self.ui.exceptionGroup.setVisible)
+        self.ui.catchExceptionsCheck.toggled.connect(self.catchToggled)
+        self.ui.processEventsCheck.toggled.connect(self.processEventsToggled)
+        self.ui.continueBtn.clicked.connect(self.continueClicked)
+        self.ui.exceptionStackList.itemClicked.connect(self.stackItemClicked)
+        
+        self.exceptionHandlerRunning = False
+        self.currentTraceback = None
         
     def runCmd(self, cmd):
         #cmd = str(self.input.lastCmd)
@@ -101,13 +109,32 @@ class Console(Module):
             sb = self.ui.historyList.verticalScrollBar()
             sb.setValue(sb.maximum())
             
+    def globals(self):
+        if self.exceptionHandlerRunning:
+            return self.currentFrame().f_globals
+        else:
+            return globals()
+        
+    def locals(self):
+        if self.exceptionHandlerRunning:
+            return self.currentFrame().f_locals
+        else:
+            return self.localNamespace
+            
+    def currentFrame(self):
+        index = self.ui.exceptionStackList.currentRow()
+        tb = self.currentTraceback
+        for i in range(index):
+            tb = tb.tb_next
+        return tb.tb_frame
+            
     def execSingle(self, cmd):
         try:
-            output = eval(cmd, globals(), self.locals)
+            output = eval(cmd, self.globals(), self.locals())
             self.write(str(output) + '\n')
         except SyntaxError:
             try:
-                exec(cmd, globals(), self.locals)
+                exec(cmd, self.globals(), self.locals())
             except SyntaxError as exc:
                 if 'unexpected EOF' in exc.msg:
                     self.multiline = cmd
@@ -128,12 +155,12 @@ class Console(Module):
             cmd = self.multiline
             
         try:
-            output = eval(cmd, globals(), self.locals)
+            output = eval(cmd, self.globals(), self.locals())
             self.write(str(output) + '\n')
             self.multiline = None
         except SyntaxError:
             try:
-                exec(cmd, globals(), self.locals)
+                exec(cmd, self.globals(), self.locals())
                 self.multiline = None
             except SyntaxError as exc:
                 if 'unexpected EOF' in exc.msg:
@@ -181,8 +208,58 @@ class Console(Module):
         
     def flush(self):
         pass
-    
-    
-    
-    
-    
+
+    def catchToggled(self, b):
+        if b:
+            exceptionHandling.installCallback(self.exceptionHandler)
+        else:
+            exceptionHandling.removeCallback(self.exceptionHandler)
+        
+    def processEventsToggled(self, b):
+        pass
+        
+    def continueClicked(self):
+        self.exitHandler = True
+        
+    def stackItemClicked(self, item):
+        pass
+
+    def exceptionHandler(self, excType, exc, tb):
+        if not self.ui.catchExceptionsCheck.isChecked() or self.exceptionHandlerRunning:
+            return
+            
+        try:
+            self.exceptionHandlerRunning = True
+            self.ui.continueBtn.setEnabled(True)
+            self.currentTraceback = tb
+            
+            excMessage = ''.join(traceback.format_exception_only(excType, exc))
+            self.ui.exceptionInfoLabel.setText(excMessage)
+            self.ui.exceptionStackList.clear()
+            for index, line in enumerate(traceback.extract_tb(tb)):
+                self.ui.exceptionStackList.addItem('File "%s", line %s, in %s()\n  %s' % line)
+            
+            self.exitHandler = False
+            while True:
+                
+                
+                if self.exitHandler:
+                    break
+                QtGui.QApplication.processEvents()
+                time.sleep(0.01)
+        finally:
+            self.ui.exceptionInfoLabel.setText("[No current exception]")
+            self.ui.exceptionStackList.clear()
+            self.ui.continueBtn.setEnabled(False)
+            self.exceptionHandlerRunning = False
+            self.currentTraceback = None
+        
+    def quit(self):
+        if self.exceptionHandlerRunning:
+            self.exitHandler = True
+        try:
+            exceptionHandling.removeCallback(self.exceptionHandler)
+        except:
+            pass
+        
+        
