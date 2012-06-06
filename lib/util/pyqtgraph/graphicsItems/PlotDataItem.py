@@ -489,7 +489,7 @@ def dataType(obj):
     if isSequence(obj):
         first = obj[0]
         
-        if (hasattr(data, 'implements') and data.implements('MetaArray')):
+        if (hasattr(obj, 'implements') and obj.implements('MetaArray')):
             return 'MetaArray'
         elif isinstance(obj, np.ndarray):
             if obj.ndim == 1:
@@ -510,7 +510,7 @@ def dataType(obj):
         
         
 def isSequence(obj):
-    return isinstance(obj, list) or isinstance(obj, np.ndarray) or (hasattr(data, 'implements') and data.implements('MetaArray'))
+    return isinstance(obj, list) or isinstance(obj, np.ndarray) or (hasattr(obj, 'implements') and obj.implements('MetaArray'))
     
             
             
