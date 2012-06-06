@@ -89,39 +89,59 @@
        <property name="spacing">
         <number>0</number>
        </property>
+       <item row="0" column="0">
+        <widget class="QPushButton" name="catchNextExceptionBtn">
+         <property name="text">
+          <string>Catch Next Exception</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="0" colspan="3">
+        <widget class="QListWidget" name="exceptionStackList">
+         <property name="alternatingRowColors">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QPushButton" name="catchAllExceptionsBtn">
+         <property name="text">
+          <string>Catch All Exceptions</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QPushButton" name="clearExceptionBtn">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string>Clear Exception</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="0" colspan="3">
+        <widget class="QCheckBox" name="runSelectedFrameCheck">
+         <property name="text">
+          <string>Run commands in selected stack frame</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
        <item row="1" column="0" colspan="3">
         <widget class="QLabel" name="exceptionInfoLabel">
          <property name="text">
           <string>Exception Info</string>
          </property>
         </widget>
-       </item>
-       <item row="0" column="0">
-        <widget class="QCheckBox" name="catchExceptionsCheck">
-         <property name="text">
-          <string>Catch Exceptions</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="2">
-        <widget class="QPushButton" name="continueBtn">
-         <property name="enabled">
-          <bool>false</bool>
-         </property>
-         <property name="text">
-          <string>Continue</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="1">
-        <widget class="QCheckBox" name="processEventsCheck">
-         <property name="text">
-          <string>Process Qt Events</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="0" colspan="3">
-        <widget class="QListWidget" name="exceptionStackList"/>
        </item>
       </layout>
      </widget>
