@@ -18,10 +18,10 @@ class ExpDeconvolve(CtrlNode):
         tau = self.ctrls['tau'].value()
         return functions.expDeconvolve(data, tau)
         #dt = 1
-        #if isinstance(data, MetaArray):
+        #if (hasattr(data, 'implements') and data.implements('MetaArray')):
             #dt = data.xvals(0)[1] - data.xvals(0)[0]
         #d = data[:-1] + (self.ctrls['tau'].value() / dt) * (data[1:] - data[:-1])
-        #if isinstance(data, MetaArray):
+        #if (hasattr(data, 'implements') and data.implements('MetaArray')):
             #info = data.infoCopy()
             #if 'values' in info[0]:
                 #info[0]['values'] = info[0]['values'][:-1]

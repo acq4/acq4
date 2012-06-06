@@ -195,7 +195,7 @@ class ImageView(QtGui.QWidget):
         """
         prof = debug.Profiler('ImageView.setImage', disabled=True)
         
-        if HAVE_METAARRAY and isinstance(img, metaarray.MetaArray):
+        if HAVE_METAARRAY and (hasattr(data, 'implements') and data.implements('MetaArray')):
             img = img.asarray()
         
         if not isinstance(img, np.ndarray):

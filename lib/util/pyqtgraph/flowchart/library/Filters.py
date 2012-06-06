@@ -145,7 +145,7 @@ class Derivative(CtrlNode):
     nodeName = 'DerivativeFilter'
     
     def processData(self, data):
-        if HAVE_METAARRAY and isinstance(data, metaarray.MetaArray):
+        if HAVE_METAARRAY and (hasattr(data, 'implements') and data.implements('MetaArray')):
             info = data.infoCopy()
             if 'values' in info[0]:
                 info[0]['values'] = info[0]['values'][:-1]

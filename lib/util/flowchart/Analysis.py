@@ -350,7 +350,7 @@ class Histogram(CtrlNode):
     def processData(self, In):
         data = In.view(np.ndarray)
         units = None
-        if isinstance(In, metaarray.MetaArray):
+        if (hasattr(data, 'implements') and data.implements('MetaArray')):
             units = In.axisUnits(1)
         y,x = np.histogram(data, bins=self.ctrls['numBins'].value())
         x = (x[1:] + x[:-1]) * 0.5

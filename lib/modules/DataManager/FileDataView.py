@@ -81,7 +81,7 @@ class FileDataView(QtGui.QSplitter):
             
             #self.plots = [weakref.ref(p[0]) for p in w.mPlotItem.plots]
         
-        if isinstance(data, metaarray.MetaArray):
+        if (hasattr(data, 'implements') and data.implements('MetaArray')):
             if self.dictWidget is None:
                 w = DictView(data._info)
                 self.dictWidget = w

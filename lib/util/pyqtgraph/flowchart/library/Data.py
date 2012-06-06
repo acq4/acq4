@@ -31,7 +31,7 @@ class ColumnSelectNode(Node):
             self.updateList(In)
                 
         out = {}
-        if HAVE_METAARRAY and isinstance(In, metaarray.MetaArray):
+        if HAVE_METAARRAY and (hasattr(data, 'implements') and data.implements('MetaArray')):
             for c in self.columns:
                 out[c] = In[self.axis:c]
         elif isinstance(In, np.ndarray) and In.dtype.fields is not None:
@@ -47,7 +47,7 @@ class ColumnSelectNode(Node):
         return self.columnList
 
     def updateList(self, data):
-        if HAVE_METAARRAY and isinstance(data, metaarray.MetaArray):
+        if HAVE_METAARRAY and (hasattr(data, 'implements') and data.implements('MetaArray')):
             cols = data.listColumns()
             for ax in cols:  ## find first axis with columns
                 if len(cols[ax]) > 0:
@@ -161,7 +161,7 @@ class RegionSelectNode(CtrlNode):
         if self.selected.isConnected():
             if data is None:
                 sliced = None
-            elif isinstance(data, MetaArray):
+            elif (hasattr(data, 'implements') and data.implements('MetaArray')):
                 sliced = data[0:s['start']:s['stop']]
             else:
                 mask = (data['time'] >= s['start']) * (data['time'] < s['stop'])

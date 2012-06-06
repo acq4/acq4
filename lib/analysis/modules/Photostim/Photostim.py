@@ -300,6 +300,7 @@ class Photostim(AnalysisModule):
 
     def redisplayData(self, points):  ## data must be [(scan, fh, <event time>), ...]  
         #raise Exception('blah')
+        print points
         try:
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
             plot = self.getElement("Data Plot")

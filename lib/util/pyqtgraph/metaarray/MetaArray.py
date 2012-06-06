@@ -126,7 +126,7 @@ class MetaArray(object):
                 raise Exception("File read failed: %s" % file)
         else:
             self._info = info
-            if isinstance(data, MetaArray):
+            if (hasattr(data, 'implements') and data.implements('MetaArray')):
                 self._info = data._info
                 self._data = data.asarray()
             elif isinstance(data, tuple):  ## create empty array with specified shape
@@ -172,6 +172,13 @@ class MetaArray(object):
                         info[i]['cols'] = list(info[i]['cols'])
                     if len(info[i]['cols']) != self.shape[i]:
                         raise Exception('Length of column list for axis %d does not match data. (given %d, but should be %d)' % (i, len(info[i]['cols']), self.shape[i]))
+   
+    def implements(self, name=None):
+        ## Rather than isinstance(obj, MetaArray) use object.implements('MetaArray')
+        if name is None:
+            return ['MetaArray']
+        else:
+            return name == 'MetaArray'
     
     #def __array_finalize__(self,obj):
         ### array_finalize is called every time a MetaArray is created 
