@@ -879,11 +879,11 @@ class MetaArray(object):
         self._info = meta
         
         if writable or not readAllData:  ## read all data, convert to ndarray, close file
-            self._data = f['data'][:]
-            f.close()
-        else:
             self._data = f['data']
             self._openFile = f
+        else:
+            self._data = f['data'][:]
+            f.close()
 
     @staticmethod
     def mapHDF5Array(data, writable=False):
