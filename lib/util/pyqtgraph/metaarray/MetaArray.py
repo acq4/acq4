@@ -844,7 +844,10 @@ class MetaArray(object):
         #raise Exception()  ## stress-testing
         #return subarr
 
-    def _readHDF5(self, fileName, readAllData=None, writable=False):
+    def _readHDF5(self, fileName, readAllData=None, writable=False, **kargs):
+        if 'close' in kargs and readAllData is None: ## for backward compatibility
+            readAllData = kargs['close']
+       
         if not HAVE_HDF5:
             raise Exception("The file '%s' is HDF5-formatted, but the HDF5 library (h5py) was not found." % fileName)
         
