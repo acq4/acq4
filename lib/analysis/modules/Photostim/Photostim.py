@@ -351,7 +351,7 @@ class Photostim(AnalysisModule):
                 if len(events) > 0:
                     if 'fitTime' in events.dtype.names:
                         times = events['fitTime']
-                        ticks = pg.VTickGroup(times, [0.85, 1.0], pen=color)
+                        ticks = pg.VTickGroup(times, [0.9, 1.0], pen=color)
                         plot.addItem(ticks)
                         self.mapTicks.append(ticks)
             
@@ -517,7 +517,7 @@ class Photostim(AnalysisModule):
 
     def storeDBScan(self, scan):
         """Store all data for a scan, using cached values if possible"""
-        p = debug.Profiler("Photostim.storeDBScan", disabled=True)
+        p = debug.Profiler("Photostim.storeDBScan", disabled=False)
         
         with pg.BusyCursor():
             #dh = scan.source()
@@ -633,22 +633,6 @@ class Photostim(AnalysisModule):
         if db is None:
             raise Exception("No DB selected")
 
-        #pTable, pRow = db.addDir(parentDir)
-        
-        #data = data.copy()  ## don't overwrite anything we shouldn't.. 
-        #data['SourceFile'] = name
-        #data['SourceDir'] = pRow
-        
-        ## Fix up records (convert file handles to names relative to parent) and add new columns
-        #records = []
-        #for rec in data:
-            #sf = rec['SourceFile']
-            #if not isinstance(sf, basestring):
-                #sf = sf.name(relativeTo=parentDir)
-            #rec2 = rec.copy()
-            #rec2.update(SourceFile=sf, SourceDir=pRow)
-            #records.append(rec2)
-        
         ## determine the set of fields we expect to find in the table
         
         fields = db.describeData(data)
@@ -657,27 +641,22 @@ class Photostim(AnalysisModule):
         fields['ProtocolDir'] = 'directory:Protocol'
         fields['ProtocolSequenceDir'] = 'directory:ProtocolSequence'
         
-        #fields = OrderedDict([
-            #('SourceDir', 'int'),
-            #('SourceFile', 'text'),
-        #])
-        #fields.update(db.describeData(data))
-        
-        ## Make sure target table exists and has correct columns, links to input file
-        db.checkTable(table, owner=identity, columns=fields, create=True, addUnknownColumns=True)
-        
-        # delete old
-        for source in set([d['ProtocolDir'] for d in data]):
-            #name = rec['SourceFile']
-            db.delete(table, where={'ProtocolDir': source})
+        with db.transaction():
+            ## Make sure target table exists and has correct columns, links to input file
+            db.checkTable(table, owner=identity, columns=fields, create=True, addUnknownColumns=True, indexes=[['SourceFile'], ['ProtocolDir'], ['ProtocolSequenceDir']])
+            
+            # delete old
+            for source in set([d['ProtocolDir'] for d in data]):
+                #name = rec['SourceFile']
+                db.delete(table, where={'ProtocolDir': source})
 
-        # write new
-        with pg.ProgressDialog("Storing spot stats...", 0, 100) as dlg:
-            for n, nmax in db.iterInsert(table, data):
-                dlg.setMaximum(nmax)
-                dlg.setValue(n)
-                if dlg.wasCanceled():
-                    raise HelpfulException("Scan store canceled by user.", msgType='status')
+            # write new
+            with pg.ProgressDialog("Storing spot stats...", 0, 100) as dlg:
+                for n, nmax in db.iterInsert(table, data, chunkSize=30):
+                    dlg.setMaximum(nmax)
+                    dlg.setValue(n)
+                    if dlg.wasCanceled():
+                        raise HelpfulException("Scan store canceled by user.", msgType='status')
             
 
     def loadSpotFromDB(self, dh):
@@ -687,17 +666,8 @@ class Photostim(AnalysisModule):
         if db is None:
             raise Exception("No DB selected")
         
-        #fh = self.getClampFile(dh)
         fh = self.dataModel.getClampFile(dh)
         parentDir = fh.parent()
-        #p2 = parentDir.parent()
-        #if db.dirTypeName(p2) == 'ProtocolSequence':
-            #parentDir = p2
-            
-        
-        #pRow = db.getDirRowID(parentDir)
-        #if pRow is None:
-            #return None, None
             
         identity = self.dbIdentity+'.sites'
         table = dbui.getTableName(identity)
@@ -718,17 +688,6 @@ class Photostim(AnalysisModule):
         if db is None:
             raise Exception("No DB selected")
         
-        #fh = self.getClampFile(dh)
-        #fh = self.dataModel.getClampFile(dh)
-        #parentDir = fh.parent()
-        #p2 = parentDir.parent()
-        #if db.dirTypeName(p2) == 'ProtocolSequence':
-            #parentDir = p2
-            
-        
-        #pRow = db.getDirRowID(sourceDir)
-        #if pRow is None:
-            #return None, None
             
         identity = self.dbIdentity+'.sites'
         table = dbui.getTableName(identity)
