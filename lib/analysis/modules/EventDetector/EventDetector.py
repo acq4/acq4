@@ -119,7 +119,7 @@ class EventDetector(AnalysisModule):
             raise
         
     def storeToDB(self, data=None):
-        p = debug.Profiler("EventDetector.storeToDB", disabled=False)
+        p = debug.Profiler("EventDetector.storeToDB", disabled=True)
         
         if data is None:
             data = self.flowchart.output()['events']

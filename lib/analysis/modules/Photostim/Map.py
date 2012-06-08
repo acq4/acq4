@@ -57,16 +57,21 @@ class Map:
                 item.handle = fh
                 self.item.addChild(item)
 
-    def name(self, cell=None):
-        rec = self.getRecord()
+    def name(self, cell=None, rec=None):
+        if rec is None:
+            rec = self.getRecord()
         if cell is None:
             cell = rec['cell']
         if cell is None:
             return ""
         name = cell.shortName()
-        if rec['holding'] < -.04:
+        try:
+            holding = float(rec['holding'])
+        except ValueError:
+            holding = 0.0
+        if holding < -.04:
             name = name + "_excitatory"
-        elif rec['holding'] >= -.01:
+        elif holding >= -.01:
             name = name + "_inhibitory"
         return name
 
@@ -172,7 +177,7 @@ class Map:
         ninfo = next.info()
         if 'Temperature.BathTemp' in ninfo:
             rec['temp'] = ninfo['Temperature.BathTemp']
-        rec['description'] = self.name(source.parent())
+        rec['description'] = self.name(source.parent(), rec)
         return rec
 
 
