@@ -155,7 +155,7 @@ def loadCell(cell):
     tot = db.select(eventView, 'count()', where={'CellDir': cell})[0]['count()']
     print tot, "total events.."
     
-    with pg.ProgressDialog('Loading event data...', maximum=tot) as dlg:
+    with pg.ProgressDialog('Loading event data...', maximum=tot, wait=0) as dlg:
         for ev in db.iterSelect(eventView, ['ProtocolSequenceDir', 'SourceFile', 'fitAmplitude', 'fitTime', 'fitDecayTau', 'fitRiseTau', 'fitTimeToPeak', 'fitLengthOverDecay', 'fitFractionalError', 'userTransform', 'type', 'CellDir', 'ProtocolDir'], where={'CellDir': cell}, toArray=True, chunkSize=200):
             extra = np.empty(ev.shape, dtype=[('right', float), ('anterior', float), ('dorsal', float), ('holding', float)])
             

@@ -238,7 +238,7 @@ class RemovePeriodic(CtrlNode):
                 re = mag * np.cos(phase)
                 im = mag * np.sin(phase)
                 ft[j] = re + im*1j
-                ft[-(j+1)] = re - im*1j
+                ft[len(ft)-j] = re - im*1j
             print abs(ft[ind1-2:ind2+2])
             print ft[ind1-2:ind2+2]
                 
