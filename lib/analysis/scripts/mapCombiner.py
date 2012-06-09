@@ -245,13 +245,13 @@ def convolveCells(sites, spacing=5e-6, probThreshold=0.02, sampleSpacing=35e-6):
             trans1 = (data['CellXPos'][0] - avgCellX, data['CellYPos'][0]-avgCellY)
             trans2 = (avgCellX+xmin, avgCellY+ymin)            
             x, y = (int((s['xPos']-trans1[0]-trans2[0])/spacing), int((s['yPos']-trans1[1]-trans2[1])/spacing))
-            arr[i, x, y] = probs[j] + 1 
+            arr[i, x, y] = probs[j]
               
         results.append(arr[i].copy())
         arr[i] = scipy.ndimage.gaussian_filter(arr[i], 2)
         arr[i] = arr[i]/0.039
-        arr[i][arr[i] > 0.04] = 2
-        arr[i][(arr[i] > 0.02)*(arr[i] <=0.04)] = 1
+        arr[i][arr[i] > 0.02] = 1
+        #arr[i][(arr[i] > 0.02)*(arr[i] <=0.04)] = 1
         arr[i][arr[i] <= 0.02] = 0
         
     return arr, results
@@ -325,7 +325,7 @@ def convolveCells_Xuying(sites, spacing=5e-6, probThreshold=0.02, probRadius=90e
     #return arrs
         
         
-def convolveCells_newAtlas(sites, keys=None, spacing=5e-6, probThreshold=0.02, sampleSpacing=35e-6):
+def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probThreshold=0.02, sampleSpacing=35e-6):
     if keys == None:
         keys = {
             'x':'xPosCell',
@@ -338,11 +338,11 @@ def convolveCells_newAtlas(sites, keys=None, spacing=5e-6, probThreshold=0.02, s
     #xmin = (sites['xPos']-sites['CellXPos']).min() ## point furthest left of the cell
     xmin = sites[keys['mappedX']].min()
     #ymin = (sites['yPos']-sites['CellYPos']).min() ## point furthest above the cell
-    ymin = sites[keys['mappedY']].min() if sites[keys[mappedY]].min() < 0 else 0.
+    ymin = (sites[keys['mappedY']].min() if sites[keys['mappedY']].min() < 0 else 0.) *factor
     #xmax = (sites['xPos']-sites['CellXPos']).max()
     xmax = sites[keys['mappedX']].max()
     #ymax = (sites['yPos']-sites['CellXPos']).max()
-    ymax = sites[keys['mappedY']].max()
+    ymax = sites[keys['mappedY']].max()*factor
                  
     xdim = int((xmax-xmin)/spacing)+10
     ydim = int((ymax-ymin)/spacing)+10
@@ -352,7 +352,7 @@ def convolveCells_newAtlas(sites, keys=None, spacing=5e-6, probThreshold=0.02, s
     n = len(cells)
     
     arr = np.zeros((n, xdim, ydim), dtype=float)
-    sampling = np.zeros(n, xdim, ydim), dtype=float)
+    sampling = np.zeros((n, xdim, ydim), dtype=float)
     #results = []
     
     for i, c in enumerate(cells):
@@ -363,9 +363,9 @@ def convolveCells_newAtlas(sites, keys=None, spacing=5e-6, probThreshold=0.02, s
         probs = np.zeros(len(data))
         probs[data['prob'] < probThreshold] = 1.
         for j, s in enumerate(data):
-            trans1 = (data[keys['mappedX']] - xmin, data[keys['mappedY']]-ymin)
+            #trans1 = (s[keys['mappedX']] - xmin, s[keys['mappedY']]-ymin)
             #trans2 = (avgCellX+xmin, avgCellY+ymin)            
-            x, y = (int((s['xPos']-trans1[0])/spacing), int((s['yPos']-trans1[1])/spacing))
+            x, y = (int((s[keys['mappedX']]-xmin)/spacing), int((s[keys['mappedY']]*factor-ymin)/spacing))
             arr[i, x, y] = probs[j]
             sampling[i, x, y] = 1
               
