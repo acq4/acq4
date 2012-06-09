@@ -2,7 +2,7 @@ The examples here are configuration files from a few of the systems we use with 
 They have a variety of different hardware configurations:
 
 noyo:
-   Used primarily for UV uncaging and calcium imaging experiments
+   Used primarily for UV uncaging calcium imaging, and 2p imaging/photostimulation experiments
    NI PCI-6259
    MultiClamp 700A
    Photometrics Quantix 57 (camera)
@@ -30,7 +30,7 @@ cambria:
 
 underwood:
    A laptop running Linux, used primarily for data analysis.
-   This configuration has a few 'mock' devices which allow the acquisition 
+   This configuration also has a few 'mock' devices which allow the acquisition 
    system to be tested in the absence of real hardware.
 
 
