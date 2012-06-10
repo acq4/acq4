@@ -128,8 +128,10 @@ class GraphicsLayout(GraphicsWidget):
     def clear(self):
         items = []
         for i in list(self.items.keys()):
-            self.removeItem(i)
-
+            try:
+                self.removeItem(i)
+            except:
+                pass
 
 ## Must be imported at the end to avoid cyclic-dependency hell:
 from .ViewBox import ViewBox

@@ -196,7 +196,17 @@ def SignalFilter_LPFButter(signal, LPF, samplefreq, NPole = 8):
     zi = spSignal.lfilter_zi(b,a)
     out, zo = spSignal.lfilter(b, a, signal, zi=zi*signal[0])
     return(numpy.array(out))
-     
+
+# filter with Butterworth high pass, using time-causal lfilter 
+def SignalFilter_HPFButter(signal, HPF, samplefreq, NPole = 8):
+    flpf = float(HPF)
+    sf = float(samplefreq)
+    wn = [flpf/(sf/2.0)]
+    b, a = spSignal.butter(NPole, wn, btype='high', output='ba')
+    zi = spSignal.lfilter_zi(b,a)
+    out, zo = spSignal.lfilter(b, a, signal, zi=zi*signal[0])
+    return(numpy.array(out)) 
+        
 # filter signal with low-pass Bessel
 def SignalFilter_LPFBessel(signal, LPF, samplefreq, NPole = 8, reduce = False):
     """ Low pass filter a signal, possibly reducing the number of points in the
