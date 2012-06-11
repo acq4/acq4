@@ -118,66 +118,7 @@
         </item>
        </widget>
       </item>
-      <item row="9" column="0">
-       <widget class="QPushButton" name="ImagePhys_UnBleach">
-        <property name="font">
-         <font>
-          <family>Arial</family>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="text">
-         <string>Unbleach</string>
-        </property>
-       </widget>
-      </item>
-      <item row="9" column="1">
-       <widget class="QLabel" name="ImagePhys_BleachInfo">
-        <property name="font">
-         <font>
-          <family>Arial</family>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="frameShape">
-         <enum>QFrame::StyledPanel</enum>
-        </property>
-        <property name="frameShadow">
-         <enum>QFrame::Sunken</enum>
-        </property>
-        <property name="text">
-         <string>None</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item row="9" column="2">
-       <widget class="QComboBox" name="ImagePhys_View">
-        <property name="font">
-         <font>
-          <family>Arial</family>
-         </font>
-        </property>
-        <item>
-         <property name="text">
-          <string>Movie</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Reference Image</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Std Image</string>
-         </property>
-        </item>
-       </widget>
-      </item>
-      <item row="10" column="2">
+      <item row="12" column="2">
        <widget class="QComboBox" name="ImagePhys_ImgMethod">
         <property name="font">
          <font>
@@ -212,8 +153,11 @@
         </item>
        </widget>
       </item>
-      <item row="10" column="0">
+      <item row="12" column="0">
        <widget class="QPushButton" name="ImagePhys_ImgNormalize">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
         <property name="font">
          <font>
           <family>Arial</family>
@@ -228,7 +172,7 @@
         </property>
        </widget>
       </item>
-      <item row="10" column="1">
+      <item row="12" column="1">
        <widget class="QLabel" name="ImagePhys_NormInfo">
         <property name="font">
          <font>
@@ -250,7 +194,7 @@
         </property>
        </widget>
       </item>
-      <item row="13" column="0">
+      <item row="15" column="0">
        <widget class="QLabel" name="label">
         <property name="font">
          <font>
@@ -263,7 +207,7 @@
         </property>
        </widget>
       </item>
-      <item row="13" column="1">
+      <item row="15" column="1">
        <widget class="QDoubleSpinBox" name="ImagePhys_BaseStart">
         <property name="font">
          <font>
@@ -282,7 +226,7 @@
         </property>
        </widget>
       </item>
-      <item row="13" column="2">
+      <item row="15" column="2">
        <widget class="QPushButton" name="ImagePhys_findROIs">
         <property name="font">
          <font>
@@ -295,7 +239,7 @@
         </property>
        </widget>
       </item>
-      <item row="14" column="0">
+      <item row="16" column="0">
        <widget class="QLabel" name="label_3">
         <property name="font">
          <font>
@@ -308,7 +252,7 @@
         </property>
        </widget>
       </item>
-      <item row="14" column="1">
+      <item row="16" column="1">
        <widget class="QDoubleSpinBox" name="ImagePhys_BaseEnd">
         <property name="font">
          <font>
@@ -327,7 +271,7 @@
         </property>
        </widget>
       </item>
-      <item row="14" column="2">
+      <item row="16" column="2">
        <widget class="QComboBox" name="ImagePhys_ROIKernel">
         <property name="maximumSize">
          <size>
@@ -400,7 +344,7 @@
         </item>
        </widget>
       </item>
-      <item row="16" column="1">
+      <item row="18" column="1">
        <widget class="QDoubleSpinBox" name="ImagePhys_ImgLPF">
         <property name="font">
          <font>
@@ -428,7 +372,7 @@
         </property>
        </widget>
       </item>
-      <item row="16" column="2">
+      <item row="18" column="2">
        <widget class="QPushButton" name="ImagePhys_addRoi">
         <property name="font">
          <font>
@@ -441,7 +385,7 @@
         </property>
        </widget>
       </item>
-      <item row="16" column="0">
+      <item row="18" column="0">
        <widget class="QCheckBox" name="ImagePhys_CorrTool_LPF">
         <property name="enabled">
          <bool>true</bool>
@@ -457,7 +401,7 @@
         </property>
        </widget>
       </item>
-      <item row="17" column="1">
+      <item row="19" column="1">
        <widget class="QDoubleSpinBox" name="ImagePhys_ImgHPF">
         <property name="font">
          <font>
@@ -488,7 +432,7 @@
         </property>
        </widget>
       </item>
-      <item row="17" column="2">
+      <item row="19" column="2">
        <widget class="QPushButton" name="ImagePhys_clearRoi">
         <property name="font">
          <font>
@@ -501,7 +445,7 @@
         </property>
        </widget>
       </item>
-      <item row="17" column="0">
+      <item row="19" column="0">
        <widget class="QCheckBox" name="ImagePhys_CorrTool_HPF">
         <property name="font">
          <font>
@@ -514,7 +458,7 @@
         </property>
        </widget>
       </item>
-      <item row="19" column="0">
+      <item row="21" column="0">
        <widget class="QCheckBox" name="ImagePhys_CorrTool_BL1">
         <property name="font">
          <font>
@@ -527,7 +471,7 @@
         </property>
        </widget>
       </item>
-      <item row="19" column="1">
+      <item row="21" column="1">
        <widget class="QPushButton" name="ImagePhys_DisplayTraces">
         <property name="font">
          <font>
@@ -540,7 +484,7 @@
         </property>
        </widget>
       </item>
-      <item row="19" column="2">
+      <item row="21" column="2">
        <widget class="QPushButton" name="ImagePhys_RetrieveROI">
         <property name="font">
          <font>
@@ -553,7 +497,7 @@
         </property>
        </widget>
       </item>
-      <item row="20" column="1">
+      <item row="22" column="1">
        <widget class="QPushButton" name="ImagePhys_Update">
         <property name="font">
          <font>
@@ -566,7 +510,7 @@
         </property>
        </widget>
       </item>
-      <item row="20" column="0">
+      <item row="22" column="0">
        <widget class="QLabel" name="label_9">
         <property name="enabled">
          <bool>true</bool>
@@ -590,7 +534,7 @@
         </property>
        </widget>
       </item>
-      <item row="20" column="2">
+      <item row="22" column="2">
        <widget class="QPushButton" name="ImagePhys_SaveROI">
         <property name="font">
          <font>
@@ -603,7 +547,7 @@
         </property>
        </widget>
       </item>
-      <item row="21" column="0">
+      <item row="23" column="0">
        <widget class="QCheckBox" name="ImagePhys_RectSelect">
         <property name="font">
          <font>
@@ -619,7 +563,7 @@ rectangle  box</string>
         </property>
        </widget>
       </item>
-      <item row="21" column="1">
+      <item row="23" column="1">
        <widget class="QPushButton" name="ImagePhys_ExportTiff">
         <property name="font">
          <font>
@@ -632,7 +576,7 @@ rectangle  box</string>
         </property>
        </widget>
       </item>
-      <item row="21" column="2">
+      <item row="23" column="2">
        <widget class="QPushButton" name="ImagePhys_RecalculateROIs">
         <property name="font">
          <font>
@@ -674,8 +618,33 @@ rectangle  box</string>
         </property>
        </widget>
       </item>
+      <item row="3" column="2">
+       <widget class="QSpinBox" name="ImagePhys_ignoreFirst">
+        <property name="suffix">
+         <string/>
+        </property>
+        <property name="prefix">
+         <string/>
+        </property>
+        <property name="value">
+         <number>1</number>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QLabel" name="label_4">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>Ignore first N images:</string>
+        </property>
+       </widget>
+      </item>
       <item row="5" column="0">
-       <widget class="QLabel" name="label_2">
+       <widget class="QPushButton" name="ImagePhys_UnBleach">
         <property name="font">
          <font>
           <family>Arial</family>
@@ -683,14 +652,46 @@ rectangle  box</string>
          </font>
         </property>
         <property name="text">
-         <string>Downsample</string>
+         <string>Unbleach</string>
         </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+       </widget>
+      </item>
+      <item row="10" column="0">
+       <widget class="QPushButton" name="ImagePhys_RegisterStack">
+        <property name="font">
+         <font>
+          <family>Arial</family>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>Register Stack</string>
         </property>
        </widget>
       </item>
       <item row="5" column="1">
+       <widget class="QLabel" name="ImagePhys_BleachInfo">
+        <property name="font">
+         <font>
+          <family>Arial</family>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="frameShape">
+         <enum>QFrame::StyledPanel</enum>
+        </property>
+        <property name="frameShadow">
+         <enum>QFrame::Sunken</enum>
+        </property>
+        <property name="text">
+         <string>None</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="2">
        <widget class="QComboBox" name="ImagePhys_Downsample">
         <property name="font">
          <font>
@@ -758,33 +759,8 @@ rectangle  box</string>
         </item>
        </widget>
       </item>
-      <item row="4" column="0">
-       <widget class="QLabel" name="label_4">
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="text">
-         <string>Ignore first N images:</string>
-        </property>
-       </widget>
-      </item>
       <item row="4" column="1">
-       <widget class="QSpinBox" name="ImagePhys_ignoreFirst">
-        <property name="suffix">
-         <string/>
-        </property>
-        <property name="prefix">
-         <string/>
-        </property>
-        <property name="value">
-         <number>1</number>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="2">
-       <widget class="QPushButton" name="ImagePhys_RegisterStack">
+       <widget class="QLabel" name="label_2">
         <property name="font">
          <font>
           <family>Arial</family>
@@ -792,8 +768,35 @@ rectangle  box</string>
          </font>
         </property>
         <property name="text">
-         <string>Register Stack</string>
+         <string>Downsample</string>
         </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="2">
+       <widget class="QComboBox" name="ImagePhys_View">
+        <property name="font">
+         <font>
+          <family>Arial</family>
+         </font>
+        </property>
+        <item>
+         <property name="text">
+          <string>Movie</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Reference Image</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Std Image</string>
+         </property>
+        </item>
        </widget>
       </item>
      </layout>

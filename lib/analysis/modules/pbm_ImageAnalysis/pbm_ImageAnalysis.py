@@ -284,6 +284,8 @@ class pbm_ImageAnalysis(AnalysisModule):
         In this case, we request a directory, corresponding to a sample run,
         which may contain both physiology and image data"""
         
+        print dir(self.imageView.parent)
+        self.imageView.setFocus()
         self.downSample = int(self.ctrl.ImagePhys_Downsample.currentText())
         if self.downSample <= 0:
             self.downSample = 1 # same as "none"
@@ -301,46 +303,6 @@ class pbm_ImageAnalysis(AnalysisModule):
         dh = dh[0]
         self.currentFileName = dh.name()
         self.imageScaleUnit = 'pixels'
-        # if dh.isFile(): # direct file "video....ma" read
-        #     if self.downSample == 1:
-        #         img = dh.read() # read the image stack
-        #     else:
-        #         (img, info) = self.tryDownSample(dh)
-        #     if img == []:
-        #         return False
-        #     fi = self.ignoreFirst
-        #     self.clearPhysiologyInfo() # clear the physiology data currently in memory to avoid confusion
-        #     self.imageData = img.view(np.ndarray) # load into rawData, clipping the first image if needed
-        #     self.rawData = self.imageData.copy()[fi:] # save the raw data.
-        #     self.imageData = self.imageData[fi:]
-        #     self.baseImage = self.imageData[0] # save first image in series to show after processing...
-        #     if self.downSample > 1:
-        #         self.imageTimes = info[0]['values']
-        #         self.imageTimes = self.imageTimes[fi:]
-        #         self.imageTimes = self.imageTimes[::self.downSample]
-        #         nFrames = np.shape(self.imageData)[0]
-        #         print 'frames: %d   imageTimes: %d' % (nFrames, len(self.imageTimes))
-        #         self.imageTimes = self.imageTimes[:nFrames] # sometimes these don't match when downsampling
-        #         print 'imageTime: %d' % (len(self.imageTimes))
-        #         self.imageInfo = info
-        #     else:
-        #         self.imageTimes = img.infoCopy()[0].values()[1]
-        #         self.imageTimes = self.imageTimes[fi:]
-        #         self.imageInfo = img.infoCopy()
-#            if self.shiftFlag:
-#                imean = np.mean(np.mean(np.mean(self.imageData, axis=1), axis=1), axis=0)
-#                self.imageData = self.AlignStack(self.imageData, fi, verbose=True)
-            # self.imageView.setImage(self.imageData)
-            # self.dataState['Loaded'] = True
-            # self.dataState['Structure'] = 'Flat'
-            # self.background = self.rawData.mean(axis=2).mean(axis=1)
-            # self.backgroundmean = self.background.mean(axis=0)
-
-#            QtGui.QMessageBox.warning(self,
-#                                      "pbm_ImageAnalysis: loadFileRequested Error",
-#                                      "Select a Directory containing the data, not the data file itself")
-#            return
-#            raise Exception("Select a Directory containing the data, not the data file itself")
 
         if self.dataStruct is 'flat':
             #print 'getting Flat data structure!'
@@ -447,16 +409,25 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ROI_Plot.clearPlots()
         self.getDataStruct()
         self.currentDataDirectory = dh
-        self.updateAvgStdImage()
-        self.calculateAllROIs()
-        self.updateThisROI(self.lastROITouched)    
+        self.ctrl.ImagePhys_View.setCurrentIndex(0)# always set to show the movie
+        self.updateAvgStdImage() # make sure mean and std are properly updated
+        self.calculateAllROIs() # recompute the ROIS
+        self.updateThisROI(self.lastROITouched)  #  and make sure plot reflects current ROI (not old data)  
         return True
 
     def updateAvgStdImage(self):
         """ update the reference image types and then make sure display agrees.
         """
         self.aveImage = np.mean(self.imageData, axis=0)
+        #self.stdImage = scipy.stats.skew(self.imageData, axis=0)
         self.stdImage = np.std(self.imageData, axis=0)
+        freim = np.abs(np.fft.fft(self.imageData, axis=0)/self.imageData.shape[0])
+#        Y = fft(y)/n # fft computing and normalization
+        print 'fim shape: ', freim.shape
+        npts = self.imageData.shape[0]/2
+        self.stdImage = np.mean(freim[range(int(0.5*npts/2),int(0.8*npts/2))], axis=0)
+        print self.stdImage.shape
+        print 'fim: ', freim.shape
         self.changeView()
         
     def getImageScaling(self):
@@ -1654,11 +1625,13 @@ class pbm_ImageAnalysis(AnalysisModule):
             3. We filter candidate ROIs by distances, so that there are no overlapping ROIs.
                         
             """
-        imstd = np.std(self.imageData, axis=0)
+        imstd = self.stdImage
         stdmax = np.amax(imstd)
         imstd = 255.0*imstd/stdmax
         imstd = scipy.ndimage.gaussian_filter(imstd, sigma=0.002)
-        block_size2 = 3 # must be odd
+        block_size2 =  int(self.ctrl.ImagePhys_ROIKernel.currentText())
+        print 'blocksiae: ', block_size2
+         # must be odd
         stdmax = np.amax(imstd)
         imstd = 255.0*imstd/stdmax
         reconst2 = self.ProperOpen(imstd.astype('uint8'), block_size2)
@@ -1751,7 +1724,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         # clean up the final regions - accept only those that are more than 
         # "diag" of an ROI apart
         dr = 5.
-        diag = np.hypot(dr,dr)*2.0 # note we only accept ROIs that are more than this distance apart - nonoverlapping
+        diag = np.hypot(dr,dr)# note we only accept ROIs that are more than this distance apart - nonoverlapping
         # first convert the dictionary to a simple list in order
         fp = []
         for u in finalregions:
@@ -2426,160 +2399,35 @@ class pbm_ImageAnalysis(AnalysisModule):
     def Analysis_SpikeXCorr(self):
         pass        
 
-#---------------------------- align images across a stack - this doesn't work yet ------------
-    # """
-    # The original code for the next subroutine is pulled form the xanesP.py source
-    # (for x-ray spectroscopy data)
-    # The original was by Tamás Haraszti tamas.haraszti@uni-heidelberg.de
-    # http://www.biomedcentral.com/1752-153X/4/11
-    # PMID: 20525317 [PubMed] PMCID: PMC2891742 
-    # 
-    # """
-    # 
-    # def AlignStack(self, imgstack, imgi, thresh = 0.0,
-    #         invert=True, cut=True, ROI=None, verbose = False):
-    #     """ Align a stack to one of its images using a convolution filter.
-    #         First the images are convolved to a reference image, and the
-    #         maximum of the convolution is taken. Standard precision is at 
-    #         single pixel level.
-    #         Then a shift is applied using the ImageP.shift routine.
-    # 
-    #         In this algorithm no subpixel shifting is used in order to
-    #         preserve the original statistics of the data points.
-    #     
-    #         Parameters:
-    #         imgstack:   a list containing images
-    #         imgi:       index of the position image inside imgstack
-    #         thresh:     threshold to use on the reference image; if it is
-    #                     zero, then use the ImageP.graythresh algorithm
-    #         invert:     if True, invert the reference image
-    #         cut:        if True, cut to the common area after shift
-    #         ROI:        i list or tuple of ndices i0,i1,j0,j1 so that the 
-    #                     subimage: img[i0:i1,j0:j1] shall be used for the
-    #                     alignment.
-    #         verbose:    plot actual convolution image
-    # 
-    #         Return:
-    #         an list of the aligned images
-    #     """
-    # 
-    #     N = len(imgstack)
-    #     (newWin1, view1, imgwin1) = self.newpgImageWindow(title = 'original')
-    #     for img in imgstack:
-    #         imgwin1.setImage(img, autoLevels = True)
-    #         imgwin1.updateImage()
-    #         
-    #     if imgi < 0 or imgi >= N:
-    #         print "Invalid index: %d not in 0 - %d" %(imgi, N)
-    #         return None
-    #     #end if
-    # 
-    #     a = imgstack[imgi].copy()
-    # 
-    #     if ROI is True:
-    #         if len(ROI) != 4 :
-    #             print "ROI should be 4 indices long"
-    #         else:
-    #             try:
-    #                 atmp = a[ROI[0]:ROI[1],ROI[2]:ROI[3]]
-    #             except:
-    #                 print "Invalid ROI!"
-    #             else:
-    #                 a = atmp
-    #             #end try
-    #         #end if
-    #     #end if
-    # 
-    #     if invert is True:
-    #         a = a.max() - a
-    #     else :
-    #         a = a - a.min()
-    #     #end if
-    #     sh = a.shape
-    #     if thresh == 0.0 :
-    #         #the a*100 is a residue from problems with images
-    #         #where min and max were between 0-1 and graythresh 
-    #         #returned strange results or error:
-    #         thresh = ImageP.graythresh(a*100.0) * a.max()
-    # 
-    #         if verbose:
-    #             print "threshold is set to: %.3f" %thresh
-    #         #end if
-    #     #end if
-    # 
-    #     #initialize result stack:
-    #     outstack = []
-    #     indx = np.zeros( imgstack[0].shape, dtype='bool') + True
-    # 
-    #     # if verbose :
-    #     # #initiate two figure frames
-    #     #     emptyarr = np.random.normal(size=sh)
-    #     #     (newWin1, view1, imgwin1) = self.newpgImageWindow(title = 'original')
-    #     #     imgwin1.setImage(a)
-    #     #     (newWin2, view2, imgwin2) = self.newpgImageWindow(title= 'img2')
-    #     #     imgwin2.setImage(emptyarr)
-    #     #     imgwin1.updateImage()
-    #     #     imgwin2.updateImage()
-    #     #             
-    #     for img in imgstack:
-    #         if invert is True:
-    #             #invert the image as well (a is already inverted):
-    #             c = ImageP.ConvFilter(a > thresh, img.max() - img)
-    #         else :
-    #             c = ImageP.ConvFilter(a > thresh, img)
-    #         #end if
-    # 
-    #         # overkill: 
-    #         #res = ImageP.PeakFind(c)
-    # 
-    #         # we could also use ImageP.PeakFind on convolve(a,a) as reference.
-    #         # indexing goes 0 - N-1, then N/2-1 is the center:
-    #         #x = res['X'][0] - (c.shape[0]/2 - 1)
-    #         #y = res['Y'][0] - (c.shape[1]/2 - 1)
-    # 
-    #         #we stick to the first maximum. If there are more than one,
-    #         #anyway we have a problem. That shold be handled by adjusting the
-    #         #image parameters prior the alignment.
-    #         x,y = (c == c.max()).nonzero()
-    #         x = x[0] - (c.shape[0]/2 -1)
-    #         y = y[0] - (c.shape[1]/2 -1)
-    #         print 'max of c: ', c.max().max()
-    #         #now do the alignment:
-    #         #shift is creating a new array
-    #         img2 = ImageP.shift(img, x, y)
-    #        # print img2[0:10,0:10]
-    #     #    print img[0:10,0:10]
-    #         print 'shift: x %d y %d' % (x, y)
-    #      #   print 'img2: ', img2.shape
-    #      #   print 'img:  ', img.shape
-    #         outstack.append(img2)
-    #         indx = indx * (img2 > 0)
-    # 
-    #         # imgwin1.setImage(img, autoLevels = True)
-    #         # imgwin1.updateImage()
-    #         # imgwin2.setImage(img2, autoLevels = True)
-    #         # imgwin2.updateImage()
-    # 
-    #     if cut is True:
-    #         ix, iy = indx.nonzero()
-    #         i0 = ix.min()
-    #         #+1 for the indexing limit...
-    #         i1 = ix.max()+1
-    #         j0 = iy.min()
-    #         j1 = iy.max()+1
-    #     
-    #         print "Common boundaries:",i0,i1,j0,j1
-    # 
-    #         #cut the list elements:
-    #         for i in xrange(N):
-    #             outstack[i] = outstack[i][i0:i1,j0:j1]
-    # 
-    #     return np.atleast_2d(outstack)
-    # #end of AlignStack
 
-    def RegisterStack(self, imgstack = None, imgi = None, thresh = 0.0,
-            invert=True, cut=True, ROI=None, verbose = False):
-        """ Align a stack to one of its images using recursiveRegisterImages
+
+    
+    def RegisterStack(self):
+        """
+        Align a stack of images using openCV. We calculate a rigid transform
+        referenced to the first image, and transform each subsequent image
+        based on that. 
+        It is fast, and better than nothing, but not perfect.
+        """
+        import scipy.ndimage.interpolation
+        outstack = self.imageData.copy()
+        shd = self.imageData.shape
+        maximg = np.amax(self.imageData)
+        refimg = (255*np.mean(self.imageData, axis=0)/maximg).astype('uint8')
+        for i in range(0,shd[0]):
+            timage = (255*self.imageData[i,:,:]/maximg).astype('uint8')
+            affineMat = cv2.estimateRigidTransform(refimg, timage, False)
+            print timage.shape, self.imageData[i].shape
+            self.imageData[i,:,:] = cv2.warpAffine(timage, affineMat, dsize=timage.shape, borderMode = cv2.BORDER_REPLICATE).astype('float32')*maximg/255.
+            #x = scipy.ndimage.interpolation.affine_transform(self.imageData[i,:,:], affineMat[0:2,0:2] )
+        self.updateAvgStdImage()        
+        
+        
+    
+    def RegisterStack2(self):
+        """ THIS IS NOT IN USE!!! 
+        
+        Align a stack to one of its images using recursiveRegisterImages
             from util/functions.py
             
             Parameters:
@@ -2599,100 +2447,42 @@ class pbm_ImageAnalysis(AnalysisModule):
         """
         from lib.analysis.tools import ImageP # avaialable as part of the STXMPy package
 
-        if imgstack is None or imgstack is False:
-            imgstack = self.imageData
-
-        if imgi == None:
-            imgi = 0 # use first image as reference
-        N = len(imgstack)
-        (newWin1, view1, imgwin1) = self.newpgImageWindow(title = 'original')
-        for img in imgstack:
-            imgwin1.setImage(img, autoLevels = True)
-            imgwin1.updateImage()
-            
+        imgstack = self.imageData
+        cut = False
+        imgi = 0 # use first image as reference
+        N = len(imgstack)            
         if imgi < 0 or imgi >= N:
             print "Invalid index: %d not in 0 - %d" %(imgi, N)
             return None
         #end if
     
         a = imgstack[imgi].copy()
-    
-        if ROI is True:
-            if len(ROI) != 4 :
-                print "ROI should be 4 indices long"
-            else:
-                try:
-                    atmp = a[ROI[0]:ROI[1],ROI[2]:ROI[3]]
-                except:
-                    print "Invalid ROI!"
-                else:
-                    a = atmp
-                #end try
-            #end if
-        #end if
-    
-        if invert is True:
-            a = a.max() - a
-        else :
-            a = a - a.min()
-        #end if
+        
         sh = a.shape
-        if thresh == 0.0 :
-            #the a*100 is a residue from problems with images
-            #where min and max were between 0-1 and graythresh 
-            #returned strange results or error:
-            thresh = ImageP.graythresh(a*100.0) * a.max()
-    
-            if verbose:
-                print "threshold is set to: %.3f" %thresh
-            #end if
-        #end if
+        thresh = np.mean(a)*1.25
+        print "threshold is set to: %.3f" % thresh
     
         #initialize result stack:
         outstack = []
         indx = np.zeros( imgstack[0].shape, dtype='bool') + True
     
-        # if verbose :
-        # #initiate two figure frames
-        #     emptyarr = np.random.normal(size=sh)
-        #     (newWin1, view1, imgwin1) = self.newpgImageWindow(title = 'original')
-        #     imgwin1.setImage(a)
-        #     (newWin2, view2, imgwin2) = self.newpgImageWindow(title= 'img2')
-        #     imgwin2.setImage(emptyarr)
-        #     imgwin1.updateImage()
-        #     imgwin2.updateImage()
-        #             
         imgN = 0
-      #  print imgstack.shape
-        for img in imgstack:
-            x = 0
-            y = 0
-            if imgN != imgi:
-                if invert is True:
-                #invert the image as well (a is already inverted):
-                    c = ImageP.ConvFilter(a > thresh, img.max() - img)
-                else:
-                    c = ImageP.ConvFilter(a > thresh, img)
-                #end if                if invert is True:
-                 #   img = img.max() - img
-                
-                #c = FN.recursiveRegisterImages(img, imgstack[imgi], maxDist=10)
-               # print 'C: ' , c
-            imgN = imgN + 1
-           # continue
+        #  print imgstack.shape
+        for i, img in enumerate(imgstack):
+            x = 0.
+            y = 0.
+            if i != imgi:
+                #c = ImageP.ConvFilter(a > thresh, img)
+                # print c
+                c = FN.recursiveRegisterImages(img, imgstack[imgi], maxDist=10)
+                x,y = (c == c.max()).nonzero()
+                x = x[0] - (c.shape[0]/2 -1)
+                y = y[0] - (c.shape[1]/2 -1)
             img2 = ImageP.shift(img, x, y)
-           # print img2[0:10,0:10]
-        #    print img[0:10,0:10]
-         #   print 'shift: x %d y %d' % (x, y)
-         #   print 'img2: ', img2.shape
-         #   print 'img:  ', img.shape
+            print 'n: %d shift: x %f y %f' % (imgN, x, y)
             outstack.append(img2)
             indx = indx * (img2 > 0)
-    
-            # imgwin1.setImage(img, autoLevels = True)
-            # imgwin1.updateImage()
-            # imgwin2.setImage(img2, autoLevels = True)
-            # imgwin2.updateImage()
+            imgN = imgN + 1
     
         if cut is True:
             ix, iy = indx.nonzero()
@@ -2705,11 +2495,11 @@ class pbm_ImageAnalysis(AnalysisModule):
             print "Common boundaries:",i0,i1,j0,j1
     
             #cut the list elements:
-          #  print i0, i1, j0, j1
             for i in xrange(N):
-            #    print outstack[i].shape
                 outstack[i] = outstack[i][i0:i1,j0:j1]
     
+        for i in range(self.imageData.shape[0]):
+            self.imageData[i,:,:] = outstack[i]
         return np.atleast_2d(outstack)
     #end of registerStack
 
