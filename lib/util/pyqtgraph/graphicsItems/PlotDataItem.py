@@ -128,7 +128,7 @@ class PlotDataItem(GraphicsObject):
             'symbolSize': 10,
             'symbolPen': (200,200,200),
             'symbolBrush': (50, 50, 150),
-            'identical': False,
+            'pxMode': True,
             
             'data': None,
         }
@@ -355,7 +355,7 @@ class PlotDataItem(GraphicsObject):
             curveArgs[v] = self.opts[k]
         
         scatterArgs = {}
-        for k,v in [('symbolPen','pen'), ('symbolBrush','brush'), ('symbol','symbol'), ('symbolSize', 'size'), ('data', 'data')]:
+        for k,v in [('symbolPen','pen'), ('symbolBrush','brush'), ('symbol','symbol'), ('symbolSize', 'size'), ('data', 'data'), ('pxMode', 'pxMode')]:
             if k in self.opts:
                 scatterArgs[v] = self.opts[k]
         
@@ -371,6 +371,7 @@ class PlotDataItem(GraphicsObject):
             #self.curves.append(curve)
         
         if scatterArgs['symbol'] is not None:
+            print scatterArgs
             self.scatter.setData(x=x, y=y, **scatterArgs)
             self.scatter.show()
         else:
