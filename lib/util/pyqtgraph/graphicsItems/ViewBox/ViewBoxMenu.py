@@ -1,6 +1,7 @@
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.WidgetGroup import WidgetGroup
 from .axisCtrlTemplate import Ui_Form as AxisCtrlTemplate
+import weakref 
 
 class ViewBoxMenu(QtGui.QMenu):
     def __init__(self, view):
@@ -8,6 +9,7 @@ class ViewBoxMenu(QtGui.QMenu):
         
         self.view = view
         self.valid = False  ## tells us whether the ui needs to be updated
+        self.viewMap = weakref.WeakValueDictionary()  ## weakrefs to all views listed in the link combos
 
         self.setTitle("ViewBox options")
         self.viewAll = QtGui.QAction("View All", self)
@@ -99,14 +101,15 @@ class ViewBoxMenu(QtGui.QMenu):
             self.updateState()
         
     def updateState(self):
+        ## Something about the viewbox has changed; update the menu GUI
+        
         state = self.view.getState(copy=False)
         if state['mouseMode'] == ViewBox.PanMode:
             self.mouseModes[0].setChecked(True)
         else:
             self.mouseModes[1].setChecked(True)
             
-            
-        for i in [0,1]:
+        for i in [0,1]:  # x, y
             tr = state['targetRange'][i]
             self.ctrl[i].minText.setText("%0.5g" % tr[0])
             self.ctrl[i].maxText.setText("%0.5g" % tr[1])
@@ -118,17 +121,15 @@ class ViewBoxMenu(QtGui.QMenu):
                 self.ctrl[i].manualRadio.setChecked(True)
             self.ctrl[i].mouseCheck.setChecked(state['mouseEnabled'][i])
             
+            ## Update combo to show currently linked view
             c = self.ctrl[i].linkCombo
             c.blockSignals(True)
             try:
-                view = state['linkedViews'][i]
+                view = state['linkedViews'][i]  ## will always be string or None
                 if view is None:
                     view = ''
                     
-                if isinstance(view, basestring):
-                    ind = c.findText(view)
-                else:
-                    ind = c.findText(view.name)
+                ind = c.findText(view)
                     
                 if ind == -1:
                     ind = 0
@@ -226,7 +227,17 @@ class ViewBoxMenu(QtGui.QMenu):
         
         
     def setViewList(self, views):
-        views = [''] + views
+        names = ['']
+        self.viewMap.clear()
+        
+        ## generate list of views to show in the link combo
+        for v in views:
+            name = v.name
+            if name is None:  ## unnamed views do not show up in the view list (although they are linkable)
+                continue
+            names.append(name)
+            self.viewMap[name] = v
+            
         for i in [0,1]:
             c = self.ctrl[i].linkCombo
             current = asUnicode(c.currentText())
@@ -234,9 +245,9 @@ class ViewBoxMenu(QtGui.QMenu):
             changed = True
             try:
                 c.clear()
-                for v in views:
-                    c.addItem(v)
-                    if v == current:
+                for name in names:
+                    c.addItem(name)
+                    if name == current:
                         changed = False
                         c.setCurrentIndex(c.count()-1)
             finally:

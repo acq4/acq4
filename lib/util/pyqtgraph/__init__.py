@@ -119,6 +119,30 @@ from .SignalProxy import *
 from .ptime import time
 
 
+#import atexit
+#def cleanup():
+    #import gc
+    #import debug
+    #objs = debug.listObjs('Q')  ## find all 'Q...' objects still remaining
+    #app = QtGui.QApplication.instance()
+    #if app is None:
+        #return
+    #import sip
+    #for obj in objs:
+        #if isinstance(obj, QtCore.QObject):
+            #if obj.parent() is None:
+                #pass
+                #sip.delete(obj)
+                #QtCore.QObject.setParent(obj, app)
+            #print obj, obj.parent()
+        #else:
+            #print "not QObject:", obj
+    #app.exit()
+    
+    
+#atexit.register(cleanup)
+
+
 
 ## Convenience functions for command-line use
 
