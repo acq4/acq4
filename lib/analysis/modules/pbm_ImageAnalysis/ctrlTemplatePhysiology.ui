@@ -515,6 +515,20 @@
           <string>Min Interburst Interval</string>
          </property>
         </widget>
+        <widget class="QRadioButton" name="ImagePhys_PhysROIPlot">
+         <property name="geometry">
+          <rect>
+           <x>15</x>
+           <y>315</y>
+           <width>102</width>
+           <height>41</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Enable Multiplot
+ for Matplotlib</string>
+         </property>
+        </widget>
        </widget>
       </item>
      </layout>

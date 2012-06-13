@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/pbm_ImageAnalysis/ctrlTemplatePhysiology.ui'
 #
-# Created: Wed Apr 18 22:43:06 2012
-#      by: PyQt4 UI code generator 4.8.5
+# Created: Tue Jun 12 16:49:14 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -27,7 +27,6 @@ class Ui_Form(object):
         font.setFamily(_fromUtf8("Arial"))
         font.setPointSize(12)
         Form.setFont(font)
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
         self.gridLayout = QtGui.QGridLayout(Form)
         self.gridLayout.setMargin(0)
         self.gridLayout.setHorizontalSpacing(10)
@@ -39,7 +38,6 @@ class Ui_Form(object):
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.groupBox.sizePolicy().hasHeightForWidth())
         self.groupBox.setSizePolicy(sizePolicy)
-        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Physiology Analysis Functions", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox.setAlignment(QtCore.Qt.AlignCenter)
         self.groupBox.setObjectName(_fromUtf8("groupBox"))
         self.gridLayout_2 = QtGui.QGridLayout(self.groupBox)
@@ -75,7 +73,6 @@ class Ui_Form(object):
         font.setFamily(_fromUtf8("Arial"))
         font.setPointSize(11)
         self.ImagePhys_DetectSpikes.setFont(font)
-        self.ImagePhys_DetectSpikes.setText(QtGui.QApplication.translate("Form", "Detect Spikes", None, QtGui.QApplication.UnicodeUTF8))
         self.ImagePhys_DetectSpikes.setObjectName(_fromUtf8("ImagePhys_DetectSpikes"))
         self.ImagePhys_burstISI = QtGui.QDoubleSpinBox(self.widget)
         self.ImagePhys_burstISI.setGeometry(QtCore.QRect(0, 140, 106, 25))
@@ -117,7 +114,6 @@ class Ui_Form(object):
         font.setFamily(_fromUtf8("Arial"))
         font.setPointSize(11)
         self.ImagePhys_STA.setFont(font)
-        self.ImagePhys_STA.setText(QtGui.QApplication.translate("Form", "Spike-triggered Average", None, QtGui.QApplication.UnicodeUTF8))
         self.ImagePhys_STA.setObjectName(_fromUtf8("ImagePhys_STA"))
         self.ImagePhys_RevSTA = QtGui.QPushButton(self.widget_2)
         self.ImagePhys_RevSTA.setEnabled(False)
@@ -126,7 +122,6 @@ class Ui_Form(object):
         font.setFamily(_fromUtf8("Arial"))
         font.setPointSize(11)
         self.ImagePhys_RevSTA.setFont(font)
-        self.ImagePhys_RevSTA.setText(QtGui.QApplication.translate("Form", "Rev STA", None, QtGui.QApplication.UnicodeUTF8))
         self.ImagePhys_RevSTA.setObjectName(_fromUtf8("ImagePhys_RevSTA"))
         self.ImagePhys_BTA = QtGui.QPushButton(self.widget_2)
         self.ImagePhys_BTA.setGeometry(QtCore.QRect(0, 230, 141, 32))
@@ -134,7 +129,6 @@ class Ui_Form(object):
         font.setFamily(_fromUtf8("Arial"))
         font.setPointSize(11)
         self.ImagePhys_BTA.setFont(font)
-        self.ImagePhys_BTA.setText(QtGui.QApplication.translate("Form", "Burst-triggered Average", None, QtGui.QApplication.UnicodeUTF8))
         self.ImagePhys_BTA.setObjectName(_fromUtf8("ImagePhys_BTA"))
         self.line_5 = QtGui.QFrame(self.widget_2)
         self.line_5.setGeometry(QtCore.QRect(5, 195, 131, 20))
@@ -148,7 +142,6 @@ class Ui_Form(object):
         font.setFamily(_fromUtf8("Arial"))
         font.setPointSize(12)
         self.label_4.setFont(font)
-        self.label_4.setText(QtGui.QApplication.translate("Form", "Event Thresh", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setObjectName(_fromUtf8("label_4"))
         self.ImagePhys_PhysLPF = QtGui.QDoubleSpinBox(self.widget_2)
         self.ImagePhys_PhysLPF.setGeometry(QtCore.QRect(143, 35, 112, 25))
@@ -168,7 +161,6 @@ class Ui_Form(object):
         font.setPointSize(12)
         self.ImagePhys_PhysThresh.setFont(font)
         self.ImagePhys_PhysThresh.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
-        self.ImagePhys_PhysThresh.setSuffix(QtGui.QApplication.translate("Form", " pA", None, QtGui.QApplication.UnicodeUTF8))
         self.ImagePhys_PhysThresh.setDecimals(1)
         self.ImagePhys_PhysThresh.setMinimum(0.0)
         self.ImagePhys_PhysThresh.setMaximum(2000.0)
@@ -182,23 +174,19 @@ class Ui_Form(object):
         self.ImagePhys_PhysSign.setFont(font)
         self.ImagePhys_PhysSign.setObjectName(_fromUtf8("ImagePhys_PhysSign"))
         self.ImagePhys_PhysSign.addItem(_fromUtf8(""))
-        self.ImagePhys_PhysSign.setItemText(0, QtGui.QApplication.translate("Form", "+", None, QtGui.QApplication.UnicodeUTF8))
         self.ImagePhys_PhysSign.addItem(_fromUtf8(""))
-        self.ImagePhys_PhysSign.setItemText(1, QtGui.QApplication.translate("Form", "-", None, QtGui.QApplication.UnicodeUTF8))
         self.label_7 = QtGui.QLabel(self.widget_2)
         self.label_7.setGeometry(QtCore.QRect(15, 35, 123, 25))
         font = QtGui.QFont()
         font.setFamily(_fromUtf8("Arial"))
         font.setPointSize(12)
         self.label_7.setFont(font)
-        self.label_7.setText(QtGui.QApplication.translate("Form", "LPF", None, QtGui.QApplication.UnicodeUTF8))
         self.label_7.setObjectName(_fromUtf8("label_7"))
         self.label_2 = QtGui.QLabel(self.widget_2)
         self.label_2.setGeometry(QtCore.QRect(15, 89, 123, 20))
         font = QtGui.QFont()
         font.setPointSize(12)
         self.label_2.setFont(font)
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Event Sign", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setObjectName(_fromUtf8("label_2"))
         self.label_6 = QtGui.QLabel(self.widget_2)
         self.label_6.setGeometry(QtCore.QRect(15, 15, 123, 20))
@@ -208,7 +196,6 @@ class Ui_Form(object):
         font.setBold(True)
         font.setWeight(75)
         self.label_6.setFont(font)
-        self.label_6.setText(QtGui.QApplication.translate("Form", "Physiology", None, QtGui.QApplication.UnicodeUTF8))
         self.label_6.setObjectName(_fromUtf8("label_6"))
         self.label_5 = QtGui.QLabel(self.widget_2)
         self.label_5.setGeometry(QtCore.QRect(5, 175, 131, 25))
@@ -216,7 +203,6 @@ class Ui_Form(object):
         font.setFamily(_fromUtf8("Arial"))
         font.setPointSize(12)
         self.label_5.setFont(font)
-        self.label_5.setText(QtGui.QApplication.translate("Form", "Minimum # spikes/burst", None, QtGui.QApplication.UnicodeUTF8))
         self.label_5.setObjectName(_fromUtf8("label_5"))
         self.label_8 = QtGui.QLabel(self.widget_2)
         self.label_8.setGeometry(QtCore.QRect(5, 150, 123, 25))
@@ -224,7 +210,6 @@ class Ui_Form(object):
         font.setFamily(_fromUtf8("Arial"))
         font.setPointSize(12)
         self.label_8.setFont(font)
-        self.label_8.setText(QtGui.QApplication.translate("Form", "Max burst ISI (msec)", None, QtGui.QApplication.UnicodeUTF8))
         self.label_8.setObjectName(_fromUtf8("label_8"))
         self.label_9 = QtGui.QLabel(self.widget_2)
         self.label_9.setGeometry(QtCore.QRect(5, 125, 123, 25))
@@ -232,8 +217,10 @@ class Ui_Form(object):
         font.setFamily(_fromUtf8("Arial"))
         font.setPointSize(12)
         self.label_9.setFont(font)
-        self.label_9.setText(QtGui.QApplication.translate("Form", "Min Interburst Interval", None, QtGui.QApplication.UnicodeUTF8))
         self.label_9.setObjectName(_fromUtf8("label_9"))
+        self.ImagePhys_PhysROIPlot = QtGui.QRadioButton(self.widget_2)
+        self.ImagePhys_PhysROIPlot.setGeometry(QtCore.QRect(15, 315, 102, 41))
+        self.ImagePhys_PhysROIPlot.setObjectName(_fromUtf8("ImagePhys_PhysROIPlot"))
         self.gridLayout_2.addWidget(self.widget_2, 1, 0, 2, 1)
         self.gridLayout.addWidget(self.groupBox, 0, 0, 1, 1)
 
@@ -242,5 +229,22 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        pass
+        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
+        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Physiology Analysis Functions", None, QtGui.QApplication.UnicodeUTF8))
+        self.ImagePhys_DetectSpikes.setText(QtGui.QApplication.translate("Form", "Detect Spikes", None, QtGui.QApplication.UnicodeUTF8))
+        self.ImagePhys_STA.setText(QtGui.QApplication.translate("Form", "Spike-triggered Average", None, QtGui.QApplication.UnicodeUTF8))
+        self.ImagePhys_RevSTA.setText(QtGui.QApplication.translate("Form", "Rev STA", None, QtGui.QApplication.UnicodeUTF8))
+        self.ImagePhys_BTA.setText(QtGui.QApplication.translate("Form", "Burst-triggered Average", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_4.setText(QtGui.QApplication.translate("Form", "Event Thresh", None, QtGui.QApplication.UnicodeUTF8))
+        self.ImagePhys_PhysThresh.setSuffix(QtGui.QApplication.translate("Form", " pA", None, QtGui.QApplication.UnicodeUTF8))
+        self.ImagePhys_PhysSign.setItemText(0, QtGui.QApplication.translate("Form", "+", None, QtGui.QApplication.UnicodeUTF8))
+        self.ImagePhys_PhysSign.setItemText(1, QtGui.QApplication.translate("Form", "-", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_7.setText(QtGui.QApplication.translate("Form", "LPF", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_2.setText(QtGui.QApplication.translate("Form", "Event Sign", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_6.setText(QtGui.QApplication.translate("Form", "Physiology", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_5.setText(QtGui.QApplication.translate("Form", "Minimum # spikes/burst", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_8.setText(QtGui.QApplication.translate("Form", "Max burst ISI (msec)", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_9.setText(QtGui.QApplication.translate("Form", "Min Interburst Interval", None, QtGui.QApplication.UnicodeUTF8))
+        self.ImagePhys_PhysROIPlot.setText(QtGui.QApplication.translate("Form", "Enable Multiplot\n"
+" for Matplotlib", None, QtGui.QApplication.UnicodeUTF8))
 

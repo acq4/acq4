@@ -44,19 +44,23 @@ from lib.analysis.tools import PlotHelpers as PH # matlab plotting helpers
 from lib.util import functions as FN
 from HelpfulException import HelpfulException
 
-#from lib.analysis.tools import ImageP # avaialable as part of the STXMPy package
-#import scikits
-#from scikits.learn import mixture
 import cv2
 import cv2.cv as cv
 
-# at http://www.rzuser.uni-heidelberg.de/~ge6/Programing/STXMPy.html
-# https://launchpad.net/imagep  
-
-
 #import smc as SMC # Vogelstein's OOPSI analysis for calcium transients
-
+import matplotlib
+try:
+    matplotlib.use('PS')
+except Warning:
+    pass
 import pylab as PL
+# from matplotlib import mpl
+# from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
+# from matplotlib.backends.backend_qt4 import NavigationToolbar2QT as NavigationToolbar 
+# from matplotlib.figure import Figure
+# matplotlib.rc('figure', facecolor='1.0') # Params['figure.facecolor'] = 1
+matplotlib.rc('font', size=' 11.0') # ['font.size'] = 11.0
+
 """ 
 We use matplotlib/pylab for *some* figure generation.
 
@@ -101,7 +105,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.burstsFound = None
         self.spikeTimes = []
         self.burstTimes = []
-        
+                
         self.spikesFoundpk = None
         self.withinBurstsFound = None
         self.FData = []
@@ -184,7 +188,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrlPhysFunc.ImagePhys_STA.clicked.connect(self.computeSTA)
         self.ctrlPhysFunc.ImagePhys_BTA.clicked.connect(self.computeBTA)
         self.ctrlPhysFunc.ImagePhys_PhysLPF.valueChanged.connect(self.physLPF_valueChanged)
-        
+        self.ctrlPhysFunc.ImagePhys_PhysROIPlot.toggled.connect(self.setupPhysROIPlot)
         #
         # Imaging analysis buttons
         #
@@ -205,7 +209,6 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ROIDistanceMap = []
         self.tc_bleach = []
 
-        
     def updateRectSelect(self):
         self.rectSelect = self.ctrl.ImagePhys_RectSelect.isChecked()
         if self.rectSelect:
@@ -278,13 +281,52 @@ class pbm_ImageAnalysis(AnalysisModule):
         #self.plot2.plot(data.max(axis=1))
         #self.plot2.plot(data.min(axis=1))
 
-
     def loadFileRequested(self, dh):
         """Called by file loader when a file load is requested.
         In this case, we request a directory, corresponding to a sample run,
-        which may contain both physiology and image data"""
+        which may contain both physiology and image data.
+        If multiple files are selected, this routine will be called for each one...
         
-        print dir(self.imageView.parent)
+        """
+        dlh = self.fileLoaderInstance.selectedFiles()
+        if self.ctrlPhysFunc.ImagePhys_PhysROIPlot.isChecked():
+            print 'multiple file load, lendh: ', len(dlh)
+            self.makePhysROIPlot(dh, dlh)
+        else:
+            if len(dlh) > 1:
+                raise  HelpfulException("pbm_ImageAnalysis: loadFileRequested Error\nCan only load from single file", msgType='status')
+                return False
+            else:
+                self.loadSingleFile(dh[0])
+    
+    def setupPhysROIPlot(self):
+        if self.ctrlPhysFunc.ImagePhys_PhysROIPlot.isChecked():
+            self.checkMPL()
+            self.firstPlot=False
+            self.plotCount = 0
+
+    def makePhysROIPlot(self, dh, dlh):
+        if self.firstPlot is False:
+            (self.MPLFig, self.MPPhysPlots) = PL.subplots(num="Physiology-ROI comparison", 
+            nrows = len(dlh), ncols=2, sharex = True, sharey = False)
+            self.MPLFig.suptitle('ROI Traces' , fontsize=10)
+        self.firstPlot = True
+#        for i, d in enumerate(dh):
+        self.loadSingleFile(dh)
+        print 'plotting %s ' % (dh)
+        self.calculateAllROIs()
+        self.MPPhysPlots[self.plotCount,0].plot(self.tdat, self.physData, 'k-')
+       # print len(self.FData)
+    #    print self.plotCount
+        for i in range(self.nROI):
+            ndpt = len(self.FData[i,:])
+            self.MPPhysPlots[self.plotCount,1].plot(self.imageTimes[0:ndpt], self.FData[i,:])
+        self.plotCount += 1
+        PL.draw()
+        PL.show()
+
+
+    def loadSingleFile(self, dh):
         self.imageView.setFocus()
         self.downSample = int(self.ctrl.ImagePhys_Downsample.currentText())
         if self.downSample <= 0:
@@ -294,12 +336,6 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.shiftFlag = False # eventually, but at the moment it does NOT work
         self.getDataStruct()
         
-        if len(dh) != 1:
-            QtGui.QMessageBox.warning(self,
-                                      "pbm_ImageAnalysis: loadFileRequested Error",
-                                      "Can only load one data set/run at a time.")
-            return False
-            # raise Exception("Can only load one data set/run at a time.")
         dh = dh[0]
         self.currentFileName = dh.name()
         self.imageScaleUnit = 'pixels'
@@ -311,8 +347,8 @@ class pbm_ImageAnalysis(AnalysisModule):
             else:
                 fhandle = dh['Camera/frames.ma']
                 self.clearPhysiologyInfo() # clear the physiology data currently in memory to avoid confusion
-            print dh
-            print fhandle
+            # print dh
+            # print fhandle
             self.rawData = []
             if not dh.isFile():
                 self.readPhysiology(dh)
@@ -423,11 +459,11 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.stdImage = np.std(self.imageData, axis=0)
         freim = np.abs(np.fft.fft(self.imageData, axis=0)/self.imageData.shape[0])
 #        Y = fft(y)/n # fft computing and normalization
-        print 'fim shape: ', freim.shape
+        #print 'fim shape: ', freim.shape
         npts = self.imageData.shape[0]/2
         self.stdImage = np.mean(freim[range(int(0.5*npts/2),int(0.8*npts/2))], axis=0)
-        print self.stdImage.shape
-        print 'fim: ', freim.shape
+        #print self.stdImage.shape
+        #print 'fim: ', freim.shape
         self.changeView()
         
     def getImageScaling(self):
@@ -936,7 +972,9 @@ class pbm_ImageAnalysis(AnalysisModule):
         for j in range(len(allBurstList)):
             burstTList.append(self.SpikeTimes[allBurstList[j]])
         return(burstTList)
-                
+
+#---------------------------------------------------------------------------
+
     def ROIDistStrength(self):
         """
         Create a plot of the strength of the cross correlation (peak value) versus the distance
@@ -1630,8 +1668,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         imstd = 255.0*imstd/stdmax
         imstd = scipy.ndimage.gaussian_filter(imstd, sigma=0.002)
         block_size2 =  int(self.ctrl.ImagePhys_ROIKernel.currentText())
-        print 'blocksiae: ', block_size2
-         # must be odd
+        # Note: block_size must be odd, so control has only odd values and no edit.
         stdmax = np.amax(imstd)
         imstd = 255.0*imstd/stdmax
         reconst2 = self.ProperOpen(imstd.astype('uint8'), block_size2)
@@ -1644,7 +1681,6 @@ class pbm_ImageAnalysis(AnalysisModule):
         thrlist = np.arange(0.2, 1.1, 0.05) # start at lowest and work up
         import matplotlib.colors as mc
         thrcols = list(mc.cnames.keys()) # ['r', 'orange', 'y', 'g', 'teal', 'c', 'b', 'violet', 'gray', '']
-        #thrcols.reverse()
         # find countours for each threshold level
         for t in thrlist:
             thr = (maxt-meant)*t
@@ -1674,7 +1710,6 @@ class pbm_ImageAnalysis(AnalysisModule):
         npolys = 0
         for t in thrlist:
             npolys += len(pols[t])
-        
         regthresh = {} # we save the region threshold [Region: thresh]
         finalregions = {} # and the location [Region: (x,y)]
         nregs = 0
@@ -1690,7 +1725,7 @@ class pbm_ImageAnalysis(AnalysisModule):
                     dlg.setMaximum(len(pols[t]))
                     dlg.setValue(k1)
                     if dlg.wasCanceled():
-                        raise HelpfulException("Search for ROIs canceled by user.", msgType='status')
+                        raise HelpfulException("The search for ROIs was canceled by the user.", msgType='status')
                     poly_low = np.array([s1[0].reshape(-1,2)]) # this is needed for cv2.moments to take tha argument.
                     t2 = thrlist[i+1] # examine the next higher threshold
                     oneabove = False
@@ -1705,7 +1740,7 @@ class pbm_ImageAnalysis(AnalysisModule):
                             oneabove = True # we just need to find one - there could be more
                             break
                     if oneabove is False: # no CM's were found above us, so save this value
-                        finalregions[nregs] = cm_low # all polygons at this level are accepted
+                        finalregions[nregs] = cm_low # Accepte this polygon at this threshold as a candidate.
                         regthresh[nregs] = t
                         nregs += 1
         # finally, also accept all peaks at the highest threshold level - they were "deferred" in the loop above
@@ -1719,11 +1754,10 @@ class pbm_ImageAnalysis(AnalysisModule):
             nregs += 1
             
         print 'Regions detected: %d' % (nregs)
-#        print 'finalregions: ', finalregions
 
-        # clean up the final regions - accept only those that are more than 
-        # "diag" of an ROI apart
-        dr = 5.
+        # clean up the final regions - accept only those whose centers are more than 
+        # "diag" of an ROI apart.
+        dr = 5. # Roi size
         diag = np.hypot(dr,dr)# note we only accept ROIs that are more than this distance apart - nonoverlapping
         # first convert the dictionary to a simple list in order
         fp = []
@@ -1757,6 +1791,8 @@ class pbm_ImageAnalysis(AnalysisModule):
         print 'Found %d ROIs' % (len(candidates))
 
 # next we verify that there are no close ROI pairs left:
+# this may not be needed, but sometimes with the pairwise-comparison, it is
+# possible for a proposed ROI to slip through.
         nc = {}
         for i, c in enumerate(candidates):
             nc[i] = candidates[c] # just copy over with a new key
@@ -1784,7 +1820,6 @@ class pbm_ImageAnalysis(AnalysisModule):
             if len(neighbors) == 1: # we are our only neighbor
                 continue
             k = int(np.argmax(allth)) # find the one with the highest signal
-            #neighbors.pop(k)
             for i, n in enumerate(neighbors):
                 if n == p2:
                     continue
@@ -2133,8 +2168,19 @@ class pbm_ImageAnalysis(AnalysisModule):
         cols = rows
         self.IXC_plots = [[]]*(sum(range(1,nROI)))
         self.IXC_Strength = np.empty((nROI, nROI))
+        self.IXC_Strength_Zero = np.empty((nROI, nROI))
+        
         self.IXC_Strength.fill(np.nan)
+        
         xtrace  = 0
+        xtrace = 0
+        lag_zero = np.argmin(np.abs(self.lags)) # find lag closest to zero
+        for xtrace1 in range(0, nROI-1):
+            for xtrace2 in range(xtrace1+1, nROI):
+                self.IXC_Strength[xtrace1, xtrace2] = self.IXC_corr[xtrace].max()
+                self.IXC_Strength[xtrace1, xtrace2] = self.IXC_corr[xtrace][lag_zero]
+                xtrace = xtrace + 1
+        
         yMinorTicks = 0
         bLegend = self.ctrlImageFunc.IAFuncs_checkbox_TraceLabels.isChecked()
         gridFlag = True
@@ -2151,11 +2197,8 @@ class pbm_ImageAnalysis(AnalysisModule):
             xtrace = 0
             for xtrace1 in range(0, nROI-1):
                 for xtrace2 in range(xtrace1+1, nROI):
-                    try:
-                        self.IXC_plots[xtrace] = self.pgwin.addPlot(xtrace1, xtrace2)
-                    except:
-                        self.pgwin = pg.GraphicsLayout()
-                        self.IXC_plots[xtrace] = self.pgwin.addPlot(xtrace1, xtrace2)
+                    print 'xtrace: ', xtrace
+                    self.IXC_plots[xtrace] = self.pgwin.addPlot(xtrace1, xtrace2)
                     xtrace = xtrace + 1
                 self.pgwin.nextRow()
            
@@ -2193,9 +2236,8 @@ class pbm_ImageAnalysis(AnalysisModule):
                         legend = legend=('%d vs %d' % (xtrace1, xtrace2))
                     else:
                         legend = None
-                    self.IXC_Strength[xtrace1, xtrace2] = self.IXC_corr[xtrace].max()
-                    s = np.shape(self.IXC_corr[xtrace])
-                    self.lags = dt*(np.arange(0, s[0])-s[0]/2.0)
+                    #s = np.shape(self.IXC_corr[xtrace])
+                    #self.lags = dt*(np.arange(0, s[0])-s[0]/2.0)
                     #MPlots.PlotLine(self.IXC_plots[xtrace], self.lags, 0*self.IXC_corr[xtrace],
                     #                color = 'lightgray', linestyle='Dash', dataID=('ref_%d_%d' % (xtrace1, xtrace2)))
                     #MPlots.PlotLine(self.IXC_plots[xtrace], self.lags, self.IXC_corr[xtrace],
