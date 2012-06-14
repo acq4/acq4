@@ -160,6 +160,8 @@ class ViewBox(GraphicsWidget):
         if name is not None:
             ViewBox.NamedViews[name] = self
             ViewBox.updateAllViewLists()
+            self.destroyed.connect(lambda: ViewBox.forgetView(id(self), self.name))
+            #self.destroyed.connect(self.unregister)
 
     def unregister(self):
         """
@@ -649,10 +651,9 @@ class ViewBox(GraphicsWidget):
         
         vr = view.viewRect()
         vg = view.screenGeometry()
-        if vg is None:
-            return
-            
         sg = self.screenGeometry()
+        if vg is None or sg is None:
+            return
         
         view.blockLink(True)
         try:
@@ -1154,11 +1155,12 @@ class ViewBox(GraphicsWidget):
             
         ## make a sorted list of all named views
         nv = list(ViewBox.NamedViews.values())
-
+        #print "new view list:", nv
         sortList(nv, cmpViews) ## see pyqtgraph.python2_3.sortList
         
         if self in nv:
             nv.remove(self)
+            
         self.menu.setViewList(nv)
         
         for ax in [0,1]:
@@ -1167,14 +1169,26 @@ class ViewBox(GraphicsWidget):
                 for v in nv:
                     if link == v.name:
                         self.linkView(ax, v)
-        
+        #print "New view list:", nv
+        #print "linked views:", self.state['linkedViews']
 
     @staticmethod
     def updateAllViewLists():
+        #print "Update:", ViewBox.AllViews.keys()
+        #print "Update:", ViewBox.NamedViews.keys()
         for v in ViewBox.AllViews:
             v.updateViewLists()
             
 
-
+    @staticmethod
+    def forgetView(vid, name):
+        
+        ## Called with ID and name of view (the view itself is no longer available)
+        for v in ViewBox.AllViews.iterkeys():
+            if id(v) == vid:
+                ViewBox.AllViews.pop(v)
+                break
+        ViewBox.NamedViews.pop(name, None)
+        ViewBox.updateAllViewLists()
 
 from .ViewBoxMenu import ViewBoxMenu
