@@ -22,7 +22,7 @@ d = osp.dirname(osp.dirname(osp.abspath(__file__)))
 sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
 
 ## install global exception handler for others to hook into.
-import exceptionHandling   
+import pyqtgraph.exceptionHandling as exceptionHandling   
 
 import time, atexit, weakref, reload
 from PyQt4 import QtCore, QtGui
@@ -117,7 +117,7 @@ def exceptionCallback(*args):
             original_excepthook(*sys.exc_info())
         finally:
             blockLogging = False
-exceptionHandling.installCallback(exceptionCallback)        
+exceptionHandling.register(exceptionCallback)        
 
 
 

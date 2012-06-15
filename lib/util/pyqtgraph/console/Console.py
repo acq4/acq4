@@ -1,67 +1,36 @@
-from PyQt4 import QtCore, QtGui
-from lib.modules.Module import *
+from pyqtgraph.Qt import QtCore, QtGui
 import sys, re, os, time, traceback
-import debug
 import pyqtgraph as pg
-import numpy as np
 import template
-import exceptionHandling
+import pyqtgraph.exceptionHandling as exceptionHandling
 
 
 EDITOR = "pykate {fileName}:{lineNum}"
 
-class Console(Module):
-    def __init__(self, manager, name, config):
-        Module.__init__(self, manager, name, config)
-        self.manager = manager
-        self.localNamespace = {
-            'man': manager,
-            'pg': pg,
-            'np': np,
-        }
-        self.configFile = os.path.join('modules', 'Console.cfg')
-        config = manager.readConfigFile(self.configFile, missingOk=True)
+class ConsoleWidget(QtGui.QWidget):
+    def __init__(self, parent=None, namespace=None, historyFile=None, text=None):
+        QtGui.QWidget.__init__(parent)
+        if namespace is None:
+            namespace = {}
+        self.localNamespace = namespace
         
         self.multiline = None
         self.inCmd = False
         
-        self.win = QtGui.QMainWindow()
-        self.win.setWindowTitle('ACQ4 Console')
-        mp = os.path.dirname(__file__)
-        self.win.setWindowIcon(QtGui.QIcon(os.path.join(mp, 'icon.png')))
-        self.win.resize(800,500)
-        self.win.show()
-        self.cw = QtGui.QWidget()
-        self.win.setCentralWidget(self.cw)
-        
         self.ui = template.Ui_Form()
-        self.ui.setupUi(self.cw)
+        self.ui.setupUi(self)
         self.output = self.ui.output
         self.input = self.ui.input
         self.input.setFocus()
-        #self.layout = QtGui.QVBoxLayout()
-        #self.cw.setLayout(self.layout)
-        #self.output = QtGui.QPlainTextEdit()
-        self.output.setPlainText("""
-        Python console built-in variables:
-           man - The ACQ4 Manager object
-                 man.currentFile  ## currently selected file
-                 man.getCurrentDir()  ## current storage directory
-                 man.getDevice("Name")
-                 man.getModule("Name")
-           pg - pyqtgraph library
-                pg.show(imageData)
-                pg.plot(plotData)
-           np - numpy library
-           
-        """)
-        #self.output.setReadOnly(True)
-        #self.layout.addWidget(self.output)
-        #self.input = CmdInput()
-        if 'history' in config:
-            self.input.history = [""] + config['history']
-            self.ui.historyList.addItems(config['history'][::-1])
-        #self.layout.addWidget(self.input)
+        
+        if test is not None:
+            self.output.setPlainText(text)
+
+        self.historyFile = historyFile
+        if hisoryFile is not None:
+            history = pickle.load(open(historyFile, 'rb'))
+            self.input.history = [""] + history
+            self.ui.historyList.addItems(history[::-1])
         self.ui.historyList.hide()
         self.ui.exceptionGroup.hide()
         
@@ -88,8 +57,8 @@ class Console(Module):
         encCmd = re.sub(r' ', '&nbsp;', encCmd)
         
         self.ui.historyList.addItem(cmd)
-
-        self.manager.writeConfigFile({'history': self.input.history[1:100]}, self.configFile)
+        if self.historyFile is not None:
+            pickle.dump(open(self.historyFile, 'wb'), self.input.history[1:100])
         
         try:
             sys.stdout = self
@@ -222,16 +191,16 @@ class Console(Module):
     def catchAllToggled(self, b):
         if b:
             self.ui.catchNextExceptionBtn.setChecked(False)
-            exceptionHandling.installCallback(self.allExceptionsHandler)
+            exceptionHandling.register(self.allExceptionsHandler)
         else:
-            exceptionHandling.removeCallback(self.allExceptionsHandler)
+            exceptionHandling.unregister(self.allExceptionsHandler)
         
     def catchNextToggled(self, b):
         if b:
             self.ui.catchAllExceptionsBtn.setChecked(False)
-            exceptionHandling.installCallback(self.nextExceptionHandler)
+            exceptionHandling.register(self.nextExceptionHandler)
         else:
-            exceptionHandling.removeCallback(self.nextExceptionHandler)
+            exceptionHandling.unregister(self.nextExceptionHandler)
         
         
     def clearExceptionClicked(self):
@@ -273,7 +242,7 @@ class Console(Module):
         if self.exceptionHandlerRunning:
             self.exitHandler = True
         try:
-            exceptionHandling.removeCallback(self.exceptionHandler)
+            exceptionHandling.unregister(self.exceptionHandler)
         except:
             pass
         
