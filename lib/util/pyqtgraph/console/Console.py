@@ -48,8 +48,9 @@ class ConsoleWidget(QtGui.QWidget):
             self.output.setPlainText(text)
 
         self.historyFile = historyFile
-        if historyFile is not None:
-            history = pickle.load(open(historyFile, 'rb'))
+        
+        history = self.loadHistory()
+        if history is not None:
             self.input.history = [""] + history
             self.ui.historyList.addItems(history[::-1])
         self.ui.historyList.hide()
@@ -70,6 +71,17 @@ class ConsoleWidget(QtGui.QWidget):
         self.exceptionHandlerRunning = False
         self.currentTraceback = None
         
+    def loadHistory(self):
+        """Return the list of previously-invoked command strings (or None)."""
+        if self.historyFile is not None:
+            return pickle.load(open(self.historyFile, 'rb'))
+        
+    def saveHistory(self, history):
+        """Store the list of previously-invoked command strings."""
+        if self.historyFile is not None:
+            pickle.dump(open(self.historyFile, 'wb'), history)
+        
+        
     def runCmd(self, cmd):
         #cmd = str(self.input.lastCmd)
         self.stdout = sys.stdout
@@ -78,8 +90,7 @@ class ConsoleWidget(QtGui.QWidget):
         encCmd = re.sub(r' ', '&nbsp;', encCmd)
         
         self.ui.historyList.addItem(cmd)
-        if self.historyFile is not None:
-            pickle.dump(open(self.historyFile, 'wb'), self.input.history[1:100])
+        self.saveHistory(self.input.history[1:100])
         
         try:
             sys.stdout = self
