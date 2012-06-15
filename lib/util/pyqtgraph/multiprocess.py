@@ -35,12 +35,20 @@ TODO:
     - deferred attribute lookup
     - custom pickler:
         - automatically decide which types to transfer by proxy or by value
+            - selectable modes:
+                proxy only mutable objects
+                proxy only unpicklable objects
+                proxy all
+                custom list of classes
+            - specific proxy objects may have default proxy mode, attributes inherit
+                
         - allow LocalObjectProxy to be created without specifying event handler
         - allow LocalObjectProxy to be used multiple times
             (and be careful about reference counting!)
             Another approach: what if remote handler keeps track of the object IDs it still has references to?
             Then we don't need to worry about reuse of local proxies.. (actually, this might already be the case?)
     
+        - attributes of proxy should inherit defaultReturnMode
 """
 
 
