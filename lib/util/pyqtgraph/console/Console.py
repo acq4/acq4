@@ -3,17 +3,38 @@ import sys, re, os, time, traceback
 import pyqtgraph as pg
 import template
 import pyqtgraph.exceptionHandling as exceptionHandling
-
+import pickle
 
 EDITOR = "pykate {fileName}:{lineNum}"
 
 class ConsoleWidget(QtGui.QWidget):
-    def __init__(self, parent=None, namespace=None, historyFile=None, text=None):
-        QtGui.QWidget.__init__(parent)
+    """
+    Widget displaying console output and accepting command input.
+    Implements:
+        
+    - eval python expressions / exec python statements
+    - storable history of commands
+    - exception handling allowing commands to be interpreted in the context of any level in the exception stack frame
+    """
+    
+    def __init__(self, parent=None, namespace=None, historyFile=None, text=None, editor=None):
+        """
+        ============  ============================================================================
+        Arguments:
+        namespace     dictionary containing the initial variables present in the default namespace
+        historyFile   optional file for storing command history
+        text          initial text to display in the console window
+        editor        optional string for invoking code editor (called when stack trace entries are 
+                      double-clicked). May contain {fileName} and {lineNum} format keys. Example:: 
+                      
+                        editorCommand --loadfile {fileName} --gotoline {lineNum}
+        ============  =============================================================================
+        """
+        QtGui.QWidget.__init__(self, parent)
         if namespace is None:
             namespace = {}
         self.localNamespace = namespace
-        
+        self.editor = editor
         self.multiline = None
         self.inCmd = False
         
@@ -23,11 +44,11 @@ class ConsoleWidget(QtGui.QWidget):
         self.input = self.ui.input
         self.input.setFocus()
         
-        if test is not None:
+        if text is not None:
             self.output.setPlainText(text)
 
         self.historyFile = historyFile
-        if hisoryFile is not None:
+        if historyFile is not None:
             history = pickle.load(open(historyFile, 'rb'))
             self.input.history = [""] + history
             self.ui.historyList.addItems(history[::-1])

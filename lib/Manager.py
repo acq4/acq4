@@ -23,6 +23,7 @@ sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
 
 ## install global exception handler for others to hook into.
 import pyqtgraph.exceptionHandling as exceptionHandling   
+exceptionHandling.setTracebackClearing(True)
 
 import time, atexit, weakref, reload
 from PyQt4 import QtCore, QtGui
