@@ -31,7 +31,7 @@ Example:
     plt1.sigViewChanged.connect(viewChanged)
 
 TODO:
-
+    - don't rely on fixed port / authkey
     - deferred attribute lookup
     - custom pickler:
         - automatically decide which types to transfer by proxy or by value
@@ -53,7 +53,7 @@ TODO:
 
 
 
-import multiprocessing.connection as connection
+import multiprocessing.connection
 import subprocess
 import os, __builtin__, time, sys, atexit, traceback, pickle, weakref
 from pyqtgraph.Qt import QtCore, QtGui
@@ -131,7 +131,13 @@ class RemoteEventHandler(object):
         try:
             args, kargs = pickle.loads(argStr)
             
-            if cmd == 'getObjAttr':
+            if cmd == 'result' or cmd == 'error':
+                #status, reqId, argStr = self.conn.recv()
+                #args, kargs = pickle.loads(argStr)
+                self.results[reqId] = (status, args[0])
+                reqId = None  ## prevents attempt to return information from this request
+                              ## (this is already a return from a previous request)
+            elif cmd == 'getObjAttr':
                 obj, attr = args
                 result = getattr(obj, attr)
             elif cmd == 'callObj':
@@ -200,32 +206,68 @@ class RemoteEventHandler(object):
         argStr = pickle.dumps((args, kargs)) ## double-pickle args to ensure that at least status and request ID get through
         self.conn.send((status, reqId, argStr))
     
-    def sendNoReturn(self, cmd, *args, **kargs):
-        argStr = pickle.dumps((args, kargs)) ## double-pickle args to ensure that at least status and request ID get through
-        self.conn.send((cmd, None, argStr))
+    #def sendNoReturn(self, cmd, *args, **kargs):
+        #argStr = pickle.dumps((args, kargs)) ## double-pickle args to ensure that at least status and request ID get through
+        #self.conn.send((cmd, None, argStr))
     
-    def sendAsync(self, cmd, *args, **kargs):
-        reqId = self.nextRequestId
-        self.nextRequestId += 1
+    #def sendAsync(self, cmd, *args, **kargs):
+        #reqId = self.nextRequestId
+        #self.nextRequestId += 1
+        #argStr = pickle.dumps((args, kargs)) ## double-pickle args to ensure that at least status and request ID get through
+        #request = (cmd, reqId, argStr)
+        #self.conn.send(request)
+        #return Request(self, reqId, description=str(request))
+        
+    #def sendSync(self, cmd, *args, **kargs):
+        #req = self.sendAsync(cmd, *args, **kargs)
+        #try:
+            #return req.result()
+        #except NoResultError:
+            #return req
+    
+    def send(self, request, args, returnMode='sync', **kargs):
+        ## send a new request packet to the remote process
+        ## args _must_ be a tuple
+        
+        assert returnMode in ['off', 'sync', 'async'], 'returnMode must be one of "off", "sync", or "async"'
+        
+        if returnMode == 'off': 
+            reqId = None
+        else:
+            reqId = self.nextRequestId
+            self.nextRequestId += 1
         argStr = pickle.dumps((args, kargs)) ## double-pickle args to ensure that at least status and request ID get through
         request = (cmd, reqId, argStr)
-        self.conn.send(request)
-        return Request(self, reqId, description=str(request))
+        self.conn.send(request)  ## final request looks like (cmd, reqId, (args, kargs))
+                                 ## where the format of (args, kargs) depends on the command value.
+                                 ## for commands that invoke a remote method, the format is
+                                 ##    (args, kargs) == ((method, call_args, call_kargs), {'returnProxy': bool})
         
-    def sendSync(self, cmd, *args, **kargs):
-        req = self.sendAsync(cmd, *args, **kargs)
-        try:
-            return req.result()
-        except NoResultError:
+        if returnMode == 'off':
+            return
+        
+        req = Request(self, reqId, description=str(request))
+        if returnMode == 'async':
             return req
+            
+        if returnMode == 'sync':
+            try:
+                return req.result()
+            except NoResultError:
+                return req
+            
+        
     
-    def quitEventLoop(self):
-        self.sendNoReturn('close')
+    
+    def quitEventLoop(self, returnMode='off'):
+        self.send(request='close', returnMode=returnMode)
+        #self.sendNoReturn('close')
     
     def getResult(self, reqId):
         ## raises NoResultError if the result is not available yet
         if reqId not in self.results:
-            self.readPipe()
+            #self.readPipe()
+            self.processRequests()
         if reqId not in self.results:
             raise NoResultError()
         status, result = self.results.pop(reqId)
@@ -246,35 +288,40 @@ class RemoteEventHandler(object):
         else:
             raise Exception("Internal error.")
     
-    def readPipe(self):
-        #print "read pipe"
-        while self.conn.poll():
-            status, reqId, argStr = self.conn.recv()
-            args, kargs = pickle.loads(argStr)
-            result = args[0]
-            self.results[reqId] = (status, result)
+    #def readPipe(self):
+        ##print "read pipe"
+        #while self.conn.poll():
+            #status, reqId, argStr = self.conn.recv()
+            #args, kargs = pickle.loads(argStr)
+            #result = args[0]
+            #self.results[reqId] = (status, result)
 
     def _import(self, mod):
-        return self.sendSync('import', mod)
+        return self.send(request='import', args=(mod,), returnMode='sync')
         
     def getObjAttr(self, obj, attr):
-        return self.sendSync('getObjAttr', obj, attr)
+        return self.send(request='getObjAttr', args=(obj, attr), returnMode='sync')
         
     def getObjValue(self, objId):
-        return self.sendSync('getObjValue', objId)
+        return self.send(request='getObjValue', args=(objId,), returnMode='sync')
         
     def callObj(self, obj, *args, **kargs):
+        returnValue = kargs.pop('returnValue', False)
         mode = kargs.pop('returnMode', 'sync')
-        if mode == 'sync':
-            return self.sendSync('callObj', obj, args, kargs)
-        elif mode == 'async':
-            return self.sendAsync('callObj', obj, args, kargs)
-        elif mode == 'off' or mode is None:
-            return self.sendNoReturn('callObj', obj, args, kargs)
-        elif mode == 'value':
-            return self.sendSync('callObj', obj, args, kargs, returnProxy=False)
-        elif mode == 'async_value':
-            return self.sendAsync('callObj', obj, args, kargs, returnProxy=False)
+        
+        return self.send(request='callObj', args=(obj, args, kargs), returnMode=mode, returnProxy=(not returnValue))
+        
+        #mode = kargs.pop('returnMode', 'sync')
+        #if mode == 'sync':
+            #return self.sendSync('callObj', obj, args, kargs)
+        #elif mode == 'async':
+            #return self.sendAsync('callObj', obj, args, kargs)
+        #elif mode == 'off' or mode is None:
+            #return self.sendNoReturn('callObj', obj, args, kargs)
+        #elif mode == 'value':
+            #return self.sendSync('callObj', obj, args, kargs, returnProxy=False)
+        #elif mode == 'async_value':
+            #return self.sendAsync('callObj', obj, args, kargs, returnProxy=False)
 
     def registerProxiedObject(self, obj):
         ## remember that this object has been sent by proxy to another process
@@ -288,7 +335,7 @@ class RemoteEventHandler(object):
     def deleteProxy(self, ref):
         objId = self.proxies.pop(ref)
         try:
-            self.sendNoReturn('del', objId)
+            self.send(request='del', args=(objId,), returnMode='off')
         except IOError:  ## if remote process has closed down, there is no need to send delete requests anymore
             pass
 
@@ -318,9 +365,11 @@ class RemoteEventHandler(object):
         
         
 class Process(RemoteEventHandler):
-    def __init__(self, name, target=None):
+    def __init__(self, name=None, target=None):
         if target is None:
             target = startEventLoop
+        if name is None:
+            name = str(self)
             
         port = 50000
         authkey = 'a8hfu23p9rapm9fw'
@@ -331,16 +380,10 @@ class Process(RemoteEventHandler):
         self.proc.stdin.close()
         
         ## open connection to remote process
-        conn = connection.Client(('localhost', port), authkey=authkey)
+        conn = multiprocessing.connection.Client(('localhost', port), authkey=authkey)
         RemoteEventHandler.__init__(self, conn, name+'_parent', pid=self.proc.pid)
         
-        #self.start()
-        #while self.pid is None:  need to set self.pid
-            #time.sleep(0.005)
-        #Process.processes[self.proc.pid] = self
         atexit.register(self.join)
-        
-        #print "parent received:", conn.recv()
         
     def join(self, timeout=10):
         if self.proc.poll() is None:
@@ -353,7 +396,7 @@ class Process(RemoteEventHandler):
         
         
 def startEventLoop(name, port, authkey):
-    l = connection.Listener(('localhost', int(port)), authkey=authkey)
+    l = multiprocessing.connection.Listener(('localhost', int(port)), authkey=authkey)
     conn = l.accept()
     global HANDLER
     HANDLER = RemoteEventHandler(conn, name, os.getppid())
@@ -362,8 +405,52 @@ def startEventLoop(name, port, authkey):
             HANDLER.processRequests()  # exception raised when the loop should exit
             time.sleep(0.01)
         except ExitError:
-            print "Event loop exited normally"
             break
+
+
+class ForkedProcess(Process):
+    """
+    ForkedProcess is a substitute for Process that uses os.fork() to generate a new process.
+    This is much faster than starting a completely new interpreter, but carries some caveats
+    and limitations:
+      - open file handles are shared with the parent process, which is potentially dangerous
+      - it is not possible to have a QApplication in both parent and child process
+        (unless both QApplications are created _after_ the call to fork())
+      - generally not thread-safe.
+    """
+    
+    def __init__(self, name=None, target=None):
+        if target is None:
+            target = self.eventLoop()
+        if name is None:
+            name = str(self)
+        
+        conn, remoteConn = multiprocessing.Pipe()
+        
+        pid = os.fork()
+        if pid == 0:
+            RemoteEventHandler.__init__(self, remoteConn, name+'_child', pid=os.getppid())
+            target()
+        else:
+            RemoteEventHandler.objProxies = {}  ## don't want to inherit any of this from the parent.
+            RemoteEventHandler.handlers = {}
+            
+            RemoteEventHandler.__init__(self, conn, name+'_parent', pid=pid)
+            atexit.register(self.join)
+            
+        
+        
+    def eventLoop(self):
+        while True:
+            try:
+                self.processRequests()  # exception raised when the loop should exit
+                time.sleep(0.01)
+            except ExitError:
+                sys.exit(0)
+        
+    def join(self, timeout=10):
+        self.quitEventLoop(returnMode='sync')  ## ask the child process to exit and require that it return a confirmation.
+
 
 
 ##Special set of subclasses that implement a Qt event loop instead.
@@ -386,7 +473,7 @@ class RemoteQtEventHandler(RemoteEventHandler):
             #raise
 
 class QtProcess(Process):
-    def __init__(self, name):
+    def __init__(self, name=None):
         Process.__init__(self, name, target=startQtEventLoop)
         self.timer = QtCore.QTimer()
         
@@ -395,7 +482,7 @@ class QtProcess(Process):
         self.timer.start(10)
     
 def startQtEventLoop(name, port, authkey):
-    l = connection.Listener(('localhost', int(port)), authkey=authkey)
+    l = multiprocessing.connection.Listener(('localhost', int(port)), authkey=authkey)
     conn = l.accept()
     #from pyqtgraph.Qt import QtGui, QtCore
     from PyQt4 import QtGui, QtCore
@@ -644,42 +731,42 @@ if __name__ == '__main__':
         #atexit.register(done)
 
         
-    else:
-        ## testing code goes here
+    #else:
+        ### testing code goes here
         
-        import pyqtgraph as pg
-        p2 = pg.plot([1,4,2,3])
+        #import pyqtgraph as pg
+        #p2 = pg.plot([1,4,2,3])
         
-        #print "parent:", os.getpid()
-        from PyQt4 import QtGui, QtCore
-        proc = QtProcess('test')
+        ##print "parent:", os.getpid()
+        #from PyQt4 import QtGui, QtCore
+        #proc = QtProcess('test')
         
-        #app = QtGui.QApplication([])
+        ##app = QtGui.QApplication([])
         
-        proc.startEventTimer()
+        #proc.startEventTimer()
         
-        rnp = proc._import('numpy')
-        arr = rnp.array([1,4,2,3,5])
-        arr2 = arr+arr
+        #rnp = proc._import('numpy')
+        #arr = rnp.array([1,4,2,3,5])
+        #arr2 = arr+arr
         
-        rpg = proc._import('pyqtgraph')
-        plt = rpg.plot()
-        p1 = plt.plot(arr2)
-        p1.setPen('g')
+        #rpg = proc._import('pyqtgraph')
+        #plt = rpg.plot()
+        #p1 = plt.plot(arr2)
+        #p1.setPen('g')
         
-        print plt.viewRect(returnMode='value')
-        req = plt.viewRect(returnMode='async')
-        while not req.hasResult():
-            time.sleep(0.01)
-        print req.result()._getValue()
+        #print plt.viewRect(returnValue=True)
+        #req = plt.viewRect(returnMode='async')
+        #while not req.hasResult():
+            #time.sleep(0.01)
+        #print req.result()._getValue()
         
-        b = rpg.QtGui.QPushButton("PRESS ME")
-        b.show()
+        #b = rpg.QtGui.QPushButton("PRESS ME")
+        #b.show()
         
-        def fn(b):
-            print "got remote click"
-        fnProx = LocalObjectProxy(fn, proc)
-        b.clicked.connect(fnProx)
+        #def fn(b):
+            #print "got remote click"
+        #fnProx = LocalObjectProxy(fn, proc)
+        #b.clicked.connect(fnProx)
         
         
 
