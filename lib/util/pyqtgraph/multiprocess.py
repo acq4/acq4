@@ -122,16 +122,19 @@ class RemoteEventHandler(object):
         except EOFError:
             ## remote process has shut down; end event loop
             raise ExitError()
+        except IOError:
+            raise ExitError()
+            
+        
         #print "receive command:", cmd
         try:
             args, kargs = pickle.loads(argStr)
-            
+            #print self.name, cmd, args
             if cmd == 'result' or cmd == 'error':
-                #status, reqId, argStr = self.conn.recv()
-                #args, kargs = pickle.loads(argStr)
-                self.results[reqId] = (status, args[0])
+                resultId = reqId
                 reqId = None  ## prevents attempt to return information from this request
                               ## (this is already a return from a previous request)
+                self.results[resultId] = (cmd, args[0])
             elif cmd == 'getObjAttr':
                 obj, attr = args
                 result = getattr(obj, attr)
@@ -166,12 +169,16 @@ class RemoteEventHandler(object):
                 
             elif cmd == 'del':
                 del self.objProxies[args[0]]
+                
+            elif cmd == 'close':
+                if reqId is not None:
+                    result = True
+                    returnProxy = False
+                    
             exc = None
         except:
             exc = sys.exc_info()
 
-        if cmd == 'close':
-            raise ExitError()
             
             
         if reqId is not None:
@@ -204,6 +211,8 @@ class RemoteEventHandler(object):
         elif exc is not None:
             sys.excepthook(*exc)
     
+        if cmd == 'close':
+            raise ExitError()
     
     #def __getattr__(self, attr):
         #return self.sendSync('get', attr)
@@ -230,7 +239,7 @@ class RemoteEventHandler(object):
         #except NoResultError:
             #return req
     
-    def send(self, request, args, returnMode='sync', **kargs):
+    def send(self, request, args=(), returnMode='sync', timeout=10, **kargs):
         ## send a new request packet to the remote process
         ## args _must_ be a tuple
         
@@ -242,7 +251,7 @@ class RemoteEventHandler(object):
             reqId = self.nextRequestId
             self.nextRequestId += 1
         argStr = pickle.dumps((args, kargs)) ## double-pickle args to ensure that at least status and request ID get through
-        request = (cmd, reqId, argStr)
+        request = (request, reqId, argStr)
         self.conn.send(request)  ## final request looks like (cmd, reqId, (args, kargs))
                                  ## where the format of (args, kargs) depends on the command value.
                                  ## for commands that invoke a remote method, the format is
@@ -257,15 +266,15 @@ class RemoteEventHandler(object):
             
         if returnMode == 'sync':
             try:
-                return req.result()
+                return req.result(timeout=timeout)
             except NoResultError:
                 return req
             
         
     
     
-    def quitEventLoop(self, returnMode='off'):
-        self.send(request='close', returnMode=returnMode)
+    def quitEventLoop(self, returnMode='off', **kargs):
+        self.send(request='close', returnMode=returnMode, **kargs)
         #self.sendNoReturn('close')
     
     def getResult(self, reqId):
@@ -357,29 +366,6 @@ class RemoteEventHandler(object):
             pass
 
     
-#class Process(mp.Process, RemoteEventHandler):
-    
-    #processes = {}  ## child PID: Process; used when unpickling object proxies
-                    ### to determine which Process the proxy belongs to.
-    
-    #def __init__(self, name, eventLoop=None):
-        #conn, self._remote = mp.Pipe()
-        #RemoteEventHandler.__init__(self, conn, name+'_parent')
-        
-        #if eventLoop is None:
-            #eventLoop = startEventLoop
-        #mp.Process.__init__(self, target=eventLoop, args=(self._remote, name+'_child'))
-        #self.start()
-        #while self.pid is None:
-            #time.sleep(0.005)
-        #Process.processes[self.pid] = self
-        #atexit.register(self.join)
-
-    #def join(self, timeout=None):
-        #if self.is_alive():
-            #self.quitEventLoop()
-            #mp.Process.join(self, timeout)
-        
         
 class Process(RemoteEventHandler):
     def __init__(self, name=None, target=None):
@@ -425,7 +411,7 @@ def startEventLoop(name, port, authkey):
             break
 
 
-class ForkedProcess(Process):
+class ForkedProcess(RemoteEventHandler):
     """
     ForkedProcess is a substitute for Process that uses os.fork() to generate a new process.
     This is much faster than starting a completely new interpreter, but carries some caveats
@@ -437,8 +423,9 @@ class ForkedProcess(Process):
     """
     
     def __init__(self, name=None, target=None):
+        self.hasJoined = False
         if target is None:
-            target = self.eventLoop()
+            target = self.eventLoop
         if name is None:
             name = str(self)
         
@@ -446,9 +433,11 @@ class ForkedProcess(Process):
         
         pid = os.fork()
         if pid == 0:
+            conn.close()
             RemoteEventHandler.__init__(self, remoteConn, name+'_child', pid=os.getppid())
             target()
         else:
+            remoteConn.close()
             RemoteEventHandler.objProxies = {}  ## don't want to inherit any of this from the parent.
             RemoteEventHandler.handlers = {}
             
@@ -466,8 +455,10 @@ class ForkedProcess(Process):
                 sys.exit(0)
         
     def join(self, timeout=10):
-        self.quitEventLoop(returnMode='sync')  ## ask the child process to exit and require that it return a confirmation.
-
+        if self.hasJoined:
+            return
+        self.quitEventLoop(returnMode='sync', timeout=timeout)  ## ask the child process to exit and require that it return a confirmation.
+        self.hasJoined = True
 
 
 ##Special set of subclasses that implement a Qt event loop instead.
@@ -640,7 +631,7 @@ class ObjectProxy(object):
         return self.__getattr__('__setitem__')(*args)
         
     def __str__(self, *args):
-        return self.__getattr__('__str__')(*args, returnMode='value')
+        return self.__getattr__('__str__')(*args, returnValue=True)
         
     # handled by weakref instead
     #def __del__(self):
