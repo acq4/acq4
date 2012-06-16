@@ -48,7 +48,11 @@ TODO:
             Another approach: what if remote handler keeps track of the object IDs it still has references to?
             Then we don't need to worry about reuse of local proxies.. (actually, this might already be the case?)
     
-        - attributes of proxy should inherit defaultReturnMode
+    - attributes of proxy should inherit defaultReturnMode
+    - additionally, proxies should inherit defaultReturnMode from the Process that generated them
+        - and _import should obey defaultReturnMode ?
+    - can we make process startup asynchronous since it takes so long?
+        - Process can defer sending requests until remote process is ready
 """
 
 
@@ -57,21 +61,6 @@ import multiprocessing.connection as connection
 import subprocess
 import os, __builtin__, time, sys, atexit, traceback, pickle, weakref
 from pyqtgraph.Qt import QtCore, QtGui
-
-## TODO: convert to use subprocess.Popen instead of mp.Process
-#import multiprocessing.connection as connection
-
-#p = subprocess.Popen((sys.executable, 'subproc.py', 'server'), stdin=subprocess.PIPE)
-#conn = connection.Client(('localhost', 6000), authkey='a8hfu23p9rapm9fw')
-#print "parent received:", conn.recv()
-
-#l = connection.Listener(('localhost', 6000), authkey='a8hfu23p9rapm9fw')
-#conn = l.accept()
-#conn.send([1,2,3])
-
-
-
-
 
 class ExitError(Exception):
     pass
@@ -126,7 +115,11 @@ class RemoteEventHandler(object):
         ## handle a single request from the pipe
         result = None
         returnProxy = True
-        cmd, reqId, argStr = self.conn.recv() ## args, kargs are double-pickled to ensure this recv() call never fails
+        try:
+            cmd, reqId, argStr = self.conn.recv() ## args, kargs are double-pickled to ensure this recv() call never fails
+        except EOFError:
+            ## remote process has shut down; end event loop
+            raise ExitError()
         #print "receive command:", cmd
         try:
             args, kargs = pickle.loads(argStr)
@@ -152,7 +145,17 @@ class RemoteEventHandler(object):
                     #result = err
             elif cmd == 'import':
                 name = args[0]
-                result = __builtin__.__import__(name)
+                fromlist = kargs.get('fromlist', [])
+                mod = __builtin__.__import__(name, fromlist=fromlist)
+                
+                if len(fromlist) == 0:
+                    parts = name.lstrip('.').split('.')
+                    result = mod
+                    for part in parts[1:]:
+                        result = getattr(result, part)
+                else:
+                    result = map(mod.__getattr__, fromlist)
+                
             elif cmd == 'del':
                 del self.objProxies[args[0]]
             exc = None
@@ -254,8 +257,20 @@ class RemoteEventHandler(object):
             result = args[0]
             self.results[reqId] = (status, result)
 
-    def _import(self, mod):
-        return self.sendSync('import', mod)
+    def _import(self, *args, **kargs):
+        """
+        Request the remote process import a module (or symbols from a module)
+        and return the proxied results. Uses built-in __import__() function, but 
+        adds a bit more processing:
+        
+            _import('module')  =>  returns module
+            _import('module.submodule')  =>  returns submodule 
+                                             (note this differs from behavior of __import__)
+            _import('module', fromlist=[name1, name2, ...])  =>  returns [module.name1, module.name2, ...]
+                                             (this also differs from behavior of __import__)
+            
+        """
+        return self.sendSync('import', *args, **kargs)
         
     def getObjAttr(self, obj, attr):
         return self.sendSync('getObjAttr', obj, attr)
@@ -318,16 +333,18 @@ class RemoteEventHandler(object):
         
         
 class Process(RemoteEventHandler):
-    def __init__(self, name, target=None):
+    def __init__(self, name=None, target=None):
         if target is None:
             target = startEventLoop
+        if name is None:
+            name = ''
             
         port = 50000
         authkey = 'a8hfu23p9rapm9fw'
         
         ## start remote process, instruct it to run target function
-        self.proc = subprocess.Popen((sys.executable, 'multiprocess.py', 'remote'), stdin=subprocess.PIPE)
-        pickle.dump((name, port, authkey, target), self.proc.stdin)
+        self.proc = subprocess.Popen((sys.executable, __file__, 'remote'), stdin=subprocess.PIPE)
+        pickle.dump((name+'_child', port, authkey, target), self.proc.stdin)
         self.proc.stdin.close()
         
         ## open connection to remote process
@@ -386,23 +403,36 @@ class RemoteQtEventHandler(RemoteEventHandler):
             #raise
 
 class QtProcess(Process):
-    def __init__(self, name):
+    def __init__(self, name=None):
         Process.__init__(self, name, target=startQtEventLoop)
+        
         self.timer = QtCore.QTimer()
+        self.startEventTimer()
         
     def startEventTimer(self):
+        app = QtGui.QApplication.instance()
+        if app is None:
+            raise Exception("Must create QApplication before starting QtProcess")
         self.timer.timeout.connect(self.processRequests)
         self.timer.start(10)
+        
+    def processRequests(self):
+        try:
+            Process.processRequests(self)
+        except ExitError:
+            self.timer.stop()
     
 def startQtEventLoop(name, port, authkey):
     l = connection.Listener(('localhost', int(port)), authkey=authkey)
     conn = l.accept()
-    #from pyqtgraph.Qt import QtGui, QtCore
-    from PyQt4 import QtGui, QtCore
-    app = QtGui.QApplication.instance()  ## how is this QApplication being created??
-    print app
+    from pyqtgraph.Qt import QtGui, QtCore
+    #from PyQt4 import QtGui, QtCore
+    app = QtGui.QApplication.instance()
+    #print app
     if app is None:
         app = QtGui.QApplication([])
+        app.setQuitOnLastWindowClosed(False)  ## generally we want the event loop to stay open 
+                                              ## until it is explicitly closed by the parent process.
     
     global HANDLER
     HANDLER = RemoteQtEventHandler(conn, name, os.getppid())
