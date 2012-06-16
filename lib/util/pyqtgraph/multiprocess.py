@@ -54,7 +54,6 @@ TODO:
     - can we make process startup asynchronous since it takes so long?
         - Process can defer sending requests until remote process is ready
         
-    - ForkedProcess using pipe for faster parallelization
 """
 
 
@@ -96,6 +95,9 @@ class RemoteEventHandler(object):
                           ##   where exception may be None if it could not be passed through the Connection.
         self.proxies = {} ## maps {weakref(proxy): objectId}; used to inform the remote process when a proxy has been deleted.                  
         self.nextRequestId = 0
+        
+        self.noProxyTypes = [ type(None), str, int, float, ]
+        
         RemoteEventHandler.handlers[pid] = self  ## register this handler as the one communicating with pid
     
     @classmethod
@@ -116,7 +118,6 @@ class RemoteEventHandler(object):
     def handleRequest(self):
         ## handle a single request from the pipe
         result = None
-        returnProxy = True
         try:
             cmd, reqId, argStr = self.conn.recv() ## args, kargs are double-pickled to ensure this recv() call never fails
         except EOFError:
@@ -129,7 +130,9 @@ class RemoteEventHandler(object):
         #print "receive command:", cmd
         try:
             args, kargs = pickle.loads(argStr)
-            #print self.name, cmd, args
+            
+            returnValue = kargs.get('returnValue', 'auto')
+            
             if cmd == 'result' or cmd == 'error':
                 resultId = reqId
                 reqId = None  ## prevents attempt to return information from this request
@@ -140,7 +143,6 @@ class RemoteEventHandler(object):
                 result = getattr(obj, attr)
             elif cmd == 'callObj':
                 obj, fnargs, fnkargs = args
-                returnProxy = kargs.get('returnProxy', returnProxy)
                 if len(fnkargs) == 0:  ## need to do this because some functions do not allow keyword arguments.
                     #print obj, fnargs
                     result = obj(*fnargs)
@@ -148,7 +150,7 @@ class RemoteEventHandler(object):
                     result = obj(*fnargs, **fnkargs)
             elif cmd == 'getObjValue':
                 result = self.objProxies[args[0]]
-                returnProxy = False
+                returnValue = True
             #elif cmd == 'get':
                 #try:
                     #result = ns[args[0]]
@@ -173,7 +175,7 @@ class RemoteEventHandler(object):
             elif cmd == 'close':
                 if reqId is not None:
                     result = True
-                    returnProxy = False
+                    returnValue = True
                     
             exc = None
         except:
@@ -183,9 +185,16 @@ class RemoteEventHandler(object):
             
         if reqId is not None:
             if exc is None:
-                if returnProxy:
-                    #oid = id(result)
-                    #self.objProxies[oid] = result
+                #print "returnValue:", returnValue, result
+                if returnValue == 'auto':
+                    returnValue = False
+                    for typ in self.noProxyTypes:
+                        if isinstance(result, typ):
+                            #print "return", result, "by value"
+                            returnValue = True
+                            break
+                
+                if returnValue is False:
                     proxy = LocalObjectProxy(result, self)
                     self.sendReply("result", reqId, proxy)
                 else:
@@ -195,9 +204,6 @@ class RemoteEventHandler(object):
                         print "Error sending value for '%s':" % str(result)
                         sys.excepthook(*sys.exc_info())
                         exc = traceback.format_exception(*sys.exc_info())
-                        #print "Sending back error text instead:"
-                        #print exc
-                        #print "----"
                         self.sendReply('error', reqId, exc)
             else:
                 #print "Error processing request:"
@@ -214,30 +220,10 @@ class RemoteEventHandler(object):
         if cmd == 'close':
             raise ExitError()
     
-    #def __getattr__(self, attr):
-        #return self.sendSync('get', attr)
     def sendReply(self, status, reqId, *args, **kargs):
         argStr = pickle.dumps((args, kargs)) ## double-pickle args to ensure that at least status and request ID get through
         self.conn.send((status, reqId, argStr))
     
-    #def sendNoReturn(self, cmd, *args, **kargs):
-        #argStr = pickle.dumps((args, kargs)) ## double-pickle args to ensure that at least status and request ID get through
-        #self.conn.send((cmd, None, argStr))
-    
-    #def sendAsync(self, cmd, *args, **kargs):
-        #reqId = self.nextRequestId
-        #self.nextRequestId += 1
-        #argStr = pickle.dumps((args, kargs)) ## double-pickle args to ensure that at least status and request ID get through
-        #request = (cmd, reqId, argStr)
-        #self.conn.send(request)
-        #return Request(self, reqId, description=str(request))
-        
-    #def sendSync(self, cmd, *args, **kargs):
-        #req = self.sendAsync(cmd, *args, **kargs)
-        #try:
-            #return req.result()
-        #except NoResultError:
-            #return req
     
     def send(self, request, args=(), returnMode='sync', timeout=10, **kargs):
         ## send a new request packet to the remote process
@@ -270,8 +256,6 @@ class RemoteEventHandler(object):
             except NoResultError:
                 return req
             
-        
-    
     
     def quitEventLoop(self, returnMode='off', **kargs):
         self.send(request='close', returnMode=returnMode, **kargs)
@@ -332,10 +316,10 @@ class RemoteEventHandler(object):
         return self.send(request='getObjValue', args=(objId,), returnMode='sync')
         
     def callObj(self, obj, *args, **kargs):
-        returnValue = kargs.pop('returnValue', False)
+        returnValue = kargs.pop('returnValue', 'auto')
         mode = kargs.pop('returnMode', 'sync')
         
-        return self.send(request='callObj', args=(obj, args, kargs), returnMode=mode, returnProxy=(not returnValue))
+        return self.send(request='callObj', args=(obj, args, kargs), returnMode=mode, returnValue=returnValue)
         
         #mode = kargs.pop('returnMode', 'sync')
         #if mode == 'sync':
@@ -622,6 +606,7 @@ class ObjectProxy(object):
         if 'returnMode' not in kargs and self._defaultReturnMode is not None:
             kargs['returnMode'] = self._defaultReturnMode
         #proc = Process._processes[self._processId]
+        #print "call", args, kargs
         return self._handler.callObj(self, *args, **kargs)
     
     def __getitem__(self, *args):

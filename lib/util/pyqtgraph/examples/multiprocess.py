@@ -15,24 +15,26 @@ rnp = proc._import('numpy')
 arr = rnp.array([1,2,3,4])
 print repr(arr)
 print str(arr)
-print arr.mean()
-proc.join()
-print "process finished"
+print repr(arr.mean(returnValue=True))
+print repr(arr.mean(returnValue=False))
+print repr(arr.mean(returnValue='auto'))
+#proc.join()
+#print "process finished"
 
-print "Start forked process"
-try:
-    proc = mp.ForkedProcess()
-except SystemExit:
-    print "forked process exit"
-    raise
-print "started"
-rnp = proc._import('numpy')
-arr = rnp.array([1,2,3,4])
-print repr(arr)
-print str(arr)
-print arr.mean()
-proc.join()
-print "process finished"
+#print "Start forked process"
+#try:
+    #proc = mp.ForkedProcess()
+#except SystemExit:
+    #print "forked process exit"
+    #raise
+#print "started"
+#rnp = proc._import('numpy')
+#arr = rnp.array([1,2,3,4])
+#print repr(arr)
+#print str(arr)
+#print repr(arr.mean())
+#proc.join()
+#print "process finished"
 
 #print "Start Qt Process"
 #proc = mp.QtProcess()
