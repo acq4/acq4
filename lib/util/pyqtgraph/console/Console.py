@@ -151,7 +151,7 @@ class ConsoleWidget(QtGui.QWidget):
     def execSingle(self, cmd):
         try:
             output = eval(cmd, self.globals(), self.locals())
-            self.write(str(output) + '\n')
+            self.write(repr(output) + '\n')
         except SyntaxError:
             try:
                 exec(cmd, self.globals(), self.locals())

@@ -53,6 +53,8 @@ TODO:
         - and _import should obey defaultReturnMode ?
     - can we make process startup asynchronous since it takes so long?
         - Process can defer sending requests until remote process is ready
+        
+    - ForkedProcess using pipe for faster parallelization
 """
 
 
