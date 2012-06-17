@@ -5,7 +5,7 @@ import numpy as np
 import pyqtgraph.multiprocess as mp
 
 
-print "Start process"
+print "\n=================\nStart Process"
 proc = mp.Process()
 print "started"
 rnp = proc._import('numpy')
@@ -18,13 +18,10 @@ print repr(arr.mean(_returnValue='auto'))
 proc.join()
 print "process finished"
 
-print "Start forked process"
-try:
-    proc = mp.ForkedProcess()
-except SystemExit:
-    print "forked process exit"
-    raise
-print "started"
+
+
+print "\n=================\nStart ForkedProcess"
+proc = mp.ForkedProcess()
 rnp = proc._import('numpy')
 arr = rnp.array([1,2,3,4])
 print repr(arr)
@@ -33,11 +30,14 @@ print repr(arr.mean())
 proc.join()
 print "process finished"
 
+
+
+
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 app = pg.QtGui.QApplication([])
 
-print "Start Qt Process"
+print "\n=================\nStart QtProcess"
 proc = mp.QtProcess()
 d1 = proc.transfer(np.random.normal(size=1000))
 d2 = proc.transfer(np.random.normal(size=1000))

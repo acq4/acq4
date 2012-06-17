@@ -1,67 +1,5 @@
-"""
-Multiprocessing utility library
-(parallelization done the way I like it)
-
-Luke Campagnola
-2012.06.10
-
-This library provides:
-  - simple mechanism for starting a new python interpreter process that can be controlled from the original process
-  - proxy system that allows objects hosted in the remote process to be used as if they were local
-  - Qt signal connection between processes
-
-Example:
-  
-    ## start new process, start listening for events from remote
-    proc = QtProcess('remote_plotter')
-    proc.startEventTimer()
-
-    ## import pyqtgraph on remote end, assign to local variable
-    rpg = proc._import('pyqtgraph')
-    
-    ## use rpg exactly as if it were a local pyqtgraph module
-    win = rpg.GraphicsWindow()
-    plt1 = win.addPlot()
-    p1 = plt.plot([1,5,2,4,3])
-    p1.setPen('g')
-
-    ## even connect signals from remote process to local functions
-    def viewChanged(*args):
-        print "Remote view changed:", args
-    plt1.sigViewChanged.connect(viewChanged)
-
-TODO:
-    - don't rely on fixed port / authkey
-    - deferred attribute lookup
-    - custom pickler:
-        - automatically decide which types to transfer by proxy or by value
-            - selectable modes:
-                proxy only mutable objects
-                proxy only unpicklable objects
-                proxy all
-                custom list of classes
-            - specific proxy objects may have default proxy mode, attributes inherit
-                
-        - allow LocalObjectProxy to be created without specifying event handler
-        - allow LocalObjectProxy to be used multiple times
-            (and be careful about reference counting!)
-            Another approach: what if remote handler keeps track of the object IDs it still has references to?
-            Then we don't need to worry about reuse of local proxies.. (actually, this might already be the case?)
-    
-    - attributes of proxy should inherit defaultReturnMode
-    - additionally, proxies should inherit defaultReturnMode from the Process that generated them
-        - and _import should obey defaultReturnMode ?
-    - can we make process startup asynchronous since it takes so long?
-        - Process can defer sending requests until remote process is ready
-"""
-
-
-
-import multiprocessing.connection
-import subprocess
-import os, __builtin__, time, sys, atexit, traceback, pickle, weakref
-from pyqtgraph.Qt import QtCore, QtGui
-import numpy
+import os, __builtin__, time, sys, traceback, weakref
+import cPickle as pickle
 
 class ExitError(Exception):
     pass
@@ -72,14 +10,6 @@ class NoResultError(Exception):
     
 class RemoteEventHandler(object):
     
-    objProxies = {} ## id: object; cache of objects which are referenced by the remote process.
-                    ## For each entry in this dict, there should exist an ObjectProxy on the remote
-                    ## host which references the object. When the remote ObjectProxy is collected,
-                    ## the reference in the dict will be removed, allowing the local object to
-                    ## be collected as well.
-                    ## We make this a class variable so the unpickler has an easier time tracking
-                    ## down the objects.
-                    
     handlers = {}   ## maps {process ID : handler}. This allows unpickler to determine which process
                     ## an object proxy belongs to
                          
@@ -90,7 +20,9 @@ class RemoteEventHandler(object):
                           ## status is either 'result' or 'error'
                           ##   if 'error', then result will be (exception, formatted exceprion)
                           ##   where exception may be None if it could not be passed through the Connection.
-        self.proxies = {} ## maps {weakref(proxy): objectId}; used to inform the remote process when a proxy has been deleted.                  
+                          
+        self.proxies = {} ## maps {weakref(proxy): proxyId}; used to inform the remote process when a proxy has been deleted.
+        
         self.nextRequestId = 0
         self.exited = False
         self.noProxyTypes = [ type(None), str, int, float, LocalObjectProxy, ObjectProxy ]
@@ -128,7 +60,6 @@ class RemoteEventHandler(object):
             raise ExitError()
             
         
-        #print "receive command:", cmd
         try:
             opts = pickle.loads(optStr)
             
@@ -173,7 +104,8 @@ class RemoteEventHandler(object):
                     result = map(mod.__getattr__, fromlist)
                 
             elif cmd == 'del':
-                del self.objProxies[opts['objId']]
+                LocalObjectProxy.releaseProxyId(opts['proxyId'])
+                #del self.proxiedObjects[opts['objId']]
                 
             elif cmd == 'close':
                 if reqId is not None:
@@ -198,7 +130,7 @@ class RemoteEventHandler(object):
                             break
                 
                 if returnValue is False:
-                    proxy = LocalObjectProxy(result, self)
+                    proxy = LocalObjectProxy(result)
                     self.replyResult(reqId, proxy)
                 else:
                     try:
@@ -293,7 +225,7 @@ class RemoteEventHandler(object):
         del                           Inform the remote process that a proxy has been 
                                       released (thus the remote process may be able to 
                                       release the original object)
-                       objId          id of object which is no longer referenced by 
+                       proxyId        id of proxy which is no longer referenced by 
                                       remote host
                                       
         close                         Instruct the remote process to stop its event loop
@@ -323,17 +255,9 @@ class RemoteEventHandler(object):
             ## If requestId is provided, this _must_ be a response to a previously received request.
             assert request in ['result', 'error']
         
-        #if autoProxy:
-            #for k, v in opts.iteritems():
-                #proxy = True
-                #for typ in self.noProxyTypes:
-                    #if isinstance(v, typ):
-                        #proxy = False
-                        #break
-                #if proxy:
-                    #opts[k] = LocalObjectProxy(v, self)
+        ## double-pickle args to ensure that at least status and request ID get through
+        optStr = pickle.dumps(opts)
         
-        optStr = pickle.dumps(opts) ## double-pickle args to ensure that at least status and request ID get through
         request = (request, reqId, optStr)
         self.conn.send(request)  ## final request looks like (cmd, reqId, (args, kwds))
                                  ## where the format of (args, kwds) depends on the command value.
@@ -352,8 +276,7 @@ class RemoteEventHandler(object):
                 return req.result(timeout=timeout)
             except NoResultError:
                 return req
-            
-    
+        
     def quitEventLoop(self, returnMode='off', **kwds):
         self.send(request='close', returnMode=returnMode, **kwds)
     
@@ -414,19 +337,14 @@ class RemoteEventHandler(object):
         
         return self.send(request='callObj', obj=obj, args=args, kwds=kwds, **opts)
 
-    def registerProxiedObject(self, obj):
-        ## remember that this object has been sent by proxy to another process
-        ## we keep a reference to the object until the remote tells us the proxy has been released.
-        self.objProxies[id(obj)] = obj
-            
     def registerProxy(self, proxy):
         ref = weakref.ref(proxy, self.deleteProxy)
-        self.proxies[ref] = proxy._objectId
+        self.proxies[ref] = proxy._proxyId
     
     def deleteProxy(self, ref):
-        objId = self.proxies.pop(ref)
+        proxyId = self.proxies.pop(ref)
         try:
-            self.send(request='del', objId=objId, returnMode='off')
+            self.send(request='del', proxyId=proxyId, returnMode='off')
         except IOError:  ## if remote process has closed down, there is no need to send delete requests anymore
             pass
 
@@ -442,164 +360,9 @@ class RemoteEventHandler(object):
         for typ in self.noProxyTypes:
             if isinstance(obj, typ):
                 return obj
-        return LocalObjectProxy(obj, self)
-
-class Process(RemoteEventHandler):
-    def __init__(self, name=None, target=None):
-        if target is None:
-            target = startEventLoop
-        if name is None:
-            name = str(self)
-            
-        port = 50000
-        authkey = 'a8hfu23p9rapm9fw'
-        
-        ## start remote process, instruct it to run target function
-        self.proc = subprocess.Popen((sys.executable, __file__, 'remote'), stdin=subprocess.PIPE)
-        pickle.dump((name+'_child', port, authkey, target), self.proc.stdin)
-        self.proc.stdin.close()
-        
-        ## open connection to remote process
-        conn = multiprocessing.connection.Client(('localhost', port), authkey=authkey)
-        RemoteEventHandler.__init__(self, conn, name+'_parent', pid=self.proc.pid)
-        
-        atexit.register(self.join)
-        
-    def join(self, timeout=10):
-        if self.proc.poll() is None:
-            self.quitEventLoop()
-            start = time.time()
-            while self.proc.poll() is None:
-                if timeout is not None and time.time() - start > timeout:
-                    raise Exception('Timed out waiting for remote process to end.')
-                time.sleep(0.05)
+        return LocalObjectProxy(obj)
         
         
-def startEventLoop(name, port, authkey):
-    l = multiprocessing.connection.Listener(('localhost', int(port)), authkey=authkey)
-    conn = l.accept()
-    global HANDLER
-    HANDLER = RemoteEventHandler(conn, name, os.getppid())
-    while True:
-        try:
-            HANDLER.processRequests()  # exception raised when the loop should exit
-            time.sleep(0.01)
-        except ExitError:
-            break
-
-
-class ForkedProcess(RemoteEventHandler):
-    """
-    ForkedProcess is a substitute for Process that uses os.fork() to generate a new process.
-    This is much faster than starting a completely new interpreter, but carries some caveats
-    and limitations:
-      - open file handles are shared with the parent process, which is potentially dangerous
-      - it is not possible to have a QApplication in both parent and child process
-        (unless both QApplications are created _after_ the call to fork())
-      - generally not thread-safe.
-      - forked processes are unceremoniously terminated when join() is called; they are not 
-        given any opportunity to clean up. (This prevents them calling any cleanup code that
-        was only intended to be used by the parent process)
-    """
-    
-    def __init__(self, name=None, target=None):
-        self.hasJoined = False
-        if target is None:
-            target = self.eventLoop
-        if name is None:
-            name = str(self)
-        
-        conn, remoteConn = multiprocessing.Pipe()
-        
-        pid = os.fork()
-        if pid == 0:
-            conn.close()
-            sys.stdin.close()  ## otherwise we screw with interactive prompts.
-            RemoteEventHandler.__init__(self, remoteConn, name+'_child', pid=os.getppid())
-            target()
-        else:
-            self.childPid = pid
-            remoteConn.close()
-            RemoteEventHandler.objProxies = {}  ## don't want to inherit any of this from the parent.
-            RemoteEventHandler.handlers = {}
-            
-            RemoteEventHandler.__init__(self, conn, name+'_parent', pid=pid)
-            atexit.register(self.join)
-        
-        
-    def eventLoop(self):
-        while True:
-            try:
-                self.processRequests()  # exception raised when the loop should exit
-                time.sleep(0.01)
-            except ExitError:
-                sys.exit(0)
-        
-    def join(self, timeout=10):
-        if self.hasJoined:
-            return
-        #os.kill(pid, 9)  
-        self.quitEventLoop(returnMode='sync', timeout=timeout, noCleanup=True)  ## ask the child process to exit and require that it return a confirmation.
-        self.hasJoined = True
-
-
-##Special set of subclasses that implement a Qt event loop instead.
-        
-class RemoteQtEventHandler(RemoteEventHandler):
-    def __init__(self, *args, **kwds):
-        RemoteEventHandler.__init__(self, *args, **kwds)
-        self.timer = QtCore.QTimer()
-        
-    def startEventTimer(self):
-        self.timer.timeout.connect(self.processRequests)
-        self.timer.start(10)
-    
-    def processRequests(self):
-        try:
-            RemoteEventHandler.processRequests(self)
-        except ExitError:
-            QtGui.QApplication.instance().quit()
-            self.timer.stop()
-            #raise
-
-class QtProcess(Process):
-    def __init__(self, name=None):
-        Process.__init__(self, name, target=startQtEventLoop)
-        
-        self.timer = QtCore.QTimer()
-        self.startEventTimer()
-        
-    def startEventTimer(self):
-        app = QtGui.QApplication.instance()
-        if app is None:
-            raise Exception("Must create QApplication before starting QtProcess")
-        self.timer.timeout.connect(self.processRequests)
-        self.timer.start(10)
-        
-    def processRequests(self):
-        try:
-            Process.processRequests(self)
-        except ExitError:
-            self.timer.stop()
-    
-def startQtEventLoop(name, port, authkey):
-    l = multiprocessing.connection.Listener(('localhost', int(port)), authkey=authkey)
-    conn = l.accept()
-    from pyqtgraph.Qt import QtGui, QtCore
-    #from PyQt4 import QtGui, QtCore
-    app = QtGui.QApplication.instance()
-    #print app
-    if app is None:
-        app = QtGui.QApplication([])
-        app.setQuitOnLastWindowClosed(False)  ## generally we want the event loop to stay open 
-                                              ## until it is explicitly closed by the parent process.
-    
-    global HANDLER
-    HANDLER = RemoteQtEventHandler(conn, name, os.getppid())
-    HANDLER.startEventTimer()
-    app.exec_()
-
-
 class Request:
     ## used internally for tracking asynchronous requests and returning results
     def __init__(self, process, reqId, description=None):
@@ -644,42 +407,61 @@ class Request:
         return self.gotResult
 
 class LocalObjectProxy(object):
-    """Used for wrapping local objects to ensure that they are send by proxy to a remote host.
-    A LocalObjectProxy may only be used for a single RemoteEventHandler and may only be used once.
-    """
-    def __init__(self, obj, handler):
+    """Used for wrapping local objects to ensure that they are send by proxy to a remote host."""
+    nextProxyId = 0
+    proxiedObjects = {}  ## maps {proxyId: object}
+    
+    
+    @classmethod
+    def registerProxy(cls, proxy):
+        ## assign it a unique ID so we can keep a reference to the local object
+        
+        pid = cls.nextProxyId
+        cls.nextProxyId += 1
+        cls.proxiedObjects[pid] = proxy.obj
+        #print "register:", cls.proxiedObjects
+        return pid
+    
+    @classmethod
+    def lookupProxyId(cls, pid):
+        return cls.proxiedObjects[pid]
+    
+    @classmethod
+    def releaseProxyId(cls, pid):
+        del cls.proxiedObjects[pid]
+        #print "release:", cls.proxiedObjects 
+    
+    def __init__(self, obj):
         self.processId = os.getpid()
-        self.objectId = id(obj)
+        #self.objectId = id(obj)
         self.typeStr = repr(obj)
-        self.handler = handler
+        #self.handler = handler
         self.obj = obj
-        self.pickled = False
         
     def __reduce__(self):
-        ## this proxy is being pickled; most likely it is being sent to another process.
-        if self.pickled:
-            raise Exception("It is not safe to re-use LocalObjectProxy")
-        self.pickled = True
-        self.handler.registerProxiedObject(self.obj)
-        return (unpickleObjectProxy, (self.processId, self.objectId, self.typeStr))
+        ## a proxy is being pickled and sent to a remote process.
+        ## every time this happens, a new proxy will be generated in the remote process,
+        ## so we keep a new ID so we can track when each is released.
+        pid = LocalObjectProxy.registerProxy(self)
+        return (unpickleObjectProxy, (self.processId, pid, self.typeStr))
         
 ## alias
 proxy = LocalObjectProxy
 
-def unpickleObjectProxy(processId, objectId, typeStr):
+def unpickleObjectProxy(processId, proxyId, typeStr):
     if processId == os.getpid():
-        return RemoteEventHandler.objProxies[objectId]
+        return LocalObjectProxy.lookupProxyId(proxyId)
     else:
-        return ObjectProxy(processId, objId=objectId, typeStr=typeStr)
+        return ObjectProxy(processId, proxyId=proxyId, typeStr=typeStr)
     
 class ObjectProxy(object):
     ## Represents an object stored by the remote process.
     ## when passed through the pipe, it is unpickled as the referenced object.
-    def __init__(self, processId, objId, typeStr=''):
+    def __init__(self, processId, proxyId, typeStr=''):
         object.__init__(self)
         self._processId = processId
         self._typeStr = typeStr
-        self._objectId = objId
+        self._proxyId = proxyId
         self._defaultReturnMode = None
         self._defaultReturnValue = None
         self._handler = RemoteEventHandler.getHandler(processId)
@@ -690,11 +472,11 @@ class ObjectProxy(object):
         self._defaultReturnMode = mode
     
     def __reduce__(self):
-        return (unpickleObjectProxy, (self._processId, self._objectId, self._typeStr))
+        return (unpickleObjectProxy, (self._processId, self._proxyId, self._typeStr))
     
     def __repr__(self):
         #objRepr = self.__getattr__('__repr__')(returnMode='value')
-        return "<ObjectProxy for process %d, object 0x%x: %s >" % (self._processId, self._objectId, self._typeStr)
+        return "<ObjectProxy for process %d, object 0x%x: %s >" % (self._processId, self._proxyId, self._typeStr)
         
         
     def __getattr__(self, attr):
@@ -830,64 +612,3 @@ class ObjectProxy(object):
     def __rmod__(self, *args):
         return self.__getattr__('__rmod__')(*args)
         
-        
-        
-    
-if __name__ == '__main__':
-    if len(sys.argv) == 2 and sys.argv[1] == 'remote':  ## module has been invoked as script in new python interpreter.
-        name, port, authkey, target = pickle.load(sys.stdin)
-        #print "remote process %s starting.." % name
-        target(name, port, authkey)
-        #time.sleep(5)
-        sys.exit(0)
-        #import atexit
-        #def done():
-            #print "remote propcess done"
-        #atexit.register(done)
-
-        
-    #else:
-        ### testing code goes here
-        
-        #import pyqtgraph as pg
-        #p2 = pg.plot([1,4,2,3])
-        
-        ##print "parent:", os.getpid()
-        #from PyQt4 import QtGui, QtCore
-        #proc = QtProcess('test')
-        
-        ##app = QtGui.QApplication([])
-        
-        #proc.startEventTimer()
-        
-        #rnp = proc._import('numpy')
-        #arr = rnp.array([1,4,2,3,5])
-        #arr2 = arr+arr
-        
-        #rpg = proc._import('pyqtgraph')
-        #plt = rpg.plot()
-        #p1 = plt.plot(arr2)
-        #p1.setPen('g')
-        
-        #print plt.viewRect(returnValue=True)
-        #req = plt.viewRect(returnMode='async')
-        #while not req.hasResult():
-            #time.sleep(0.01)
-        #print req.result()._getValue()
-        
-        #b = rpg.QtGui.QPushButton("PRESS ME")
-        #b.show()
-        
-        #def fn(b):
-            #print "got remote click"
-        #fnProx = LocalObjectProxy(fn, proc)
-        #b.clicked.connect(fnProx)
-        
-        
-
-
-
-
-
-
-
