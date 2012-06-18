@@ -83,7 +83,7 @@ class Parallelize:
                     rem.append(ch)
             for ch in rem:
                 activeChilds.remove(ch)
-            time.sleep(0.01)
+            time.sleep(0.1)
         
         return []  ## no tasks for parent process.
         
@@ -113,63 +113,64 @@ class Tasker:
     
     
     
-class Parallelizer:
-    """
-    Use::
+#class Parallelizer:
+    #"""
+    #Use::
     
-        p = Parallelizer()
-        with p(4) as i:
-            p.finish(do_work(i))
-        print p.results()
+        #p = Parallelizer()
+        #with p(4) as i:
+            #p.finish(do_work(i))
+        #print p.results()
     
-    """
-    def __init__(self):
-        pass
+    #"""
+    #def __init__(self):
+        #pass
 
-    def __call__(self, n):
-        self.replies = []
-        self.conn = None  ## indicates this is the parent process
-        return Session(self, n)
+    #def __call__(self, n):
+        #self.replies = []
+        #self.conn = None  ## indicates this is the parent process
+        #return Session(self, n)
             
-    def finish(self, data):
-        if self.conn is None:
-            self.replies.append((self.i, data))
-        else:
-            self.conn.send((self.i, data))
-            os._exit(0)
+    #def finish(self, data):
+        #if self.conn is None:
+            #self.replies.append((self.i, data))
+        #else:
+            ##print "send", self.i, data
+            #self.conn.send((self.i, data))
+            #os._exit(0)
             
-    def result(self):
-        print self.replies
+    #def result(self):
+        #print self.replies
         
-class Session:
-    def __init__(self, par, n):
-        self.par = par
-        self.n = n
+#class Session:
+    #def __init__(self, par, n):
+        #self.par = par
+        #self.n = n
         
-    def __enter__(self):
-        self.childs = []
-        for i in range(1, self.n):
-            c1, c2 = multiprocessing.Pipe()
-            pid = os.fork()
-            if pid == 0:  ## child
-                self.par.i = i
-                self.par.conn = c2
-                self.childs = None
-                c1.close()
-                return i+1
-            else:
-                self.childs.append(c1)
-                c2.close()
-        self.par.i = 0
-        return 0
+    #def __enter__(self):
+        #self.childs = []
+        #for i in range(1, self.n):
+            #c1, c2 = multiprocessing.Pipe()
+            #pid = os.fork()
+            #if pid == 0:  ## child
+                #self.par.i = i
+                #self.par.conn = c2
+                #self.childs = None
+                #c1.close()
+                #return i
+            #else:
+                #self.childs.append(c1)
+                #c2.close()
+        #self.par.i = 0
+        #return 0
             
         
         
-    def __exit__(self, *exc_info):
-        if exc_info[0] is not None:
-            sys.excepthook(*exc_info)
-        if self.childs is not None:
-            self.par.replies.extend([conn.recv() for conn in self.childs])
-        else:
-            self.par.finish(None)
+    #def __exit__(self, *exc_info):
+        #if exc_info[0] is not None:
+            #sys.excepthook(*exc_info)
+        #if self.childs is not None:
+            #self.par.replies.extend([conn.recv() for conn in self.childs])
+        #else:
+            #self.par.finish(None)
         

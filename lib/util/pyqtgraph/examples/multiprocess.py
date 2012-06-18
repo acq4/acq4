@@ -9,43 +9,59 @@ import time
 print "\n=================\nParallelize"
 tasks = [1,2,4,8]
 results = [None] * len(tasks)
+size = 2000000
 
 start = time.time()
 with Parallelize(enumerate(tasks), results=results, workers=1) as tasker:
     for i, x in tasker:
-        results[i] = (np.random.normal(size=3000000) * x).std()
+        print i, x
+        tot = 0
+        for j in xrange(size):
+            tot += j * x
+        results[i] = tot
 print results
 print "serial:", time.time() - start
 
 start = time.time()
 with Parallelize(enumerate(tasks), results=results) as tasker:
     for i, x in tasker:
-        results[i] = (np.random.normal(size=3000000) * x).std()
+        print i, x
+        tot = 0
+        for j in xrange(size):
+            tot += j * x
+        results[i] = tot
 print results
 print "parallel:", time.time() - start
 
 
-start = time.time()
-par = Parallelizer()
-with par(1) as i:
-    for i, x in enumerate(tasks):
-        res = (np.random.normal(size=3000000) * x).std()
-        par.finish((i, res))
-print par.result()
-print "serial:", time.time() - start
+#print "\n=================\nParallelize (old)"
+#start = time.time()
+#par = Parallelizer()
+#with par(1) as i:
+    #for i, x in enumerate(tasks):
+        #print i, x
+        #tot = 0
+        #for j in xrange(size):
+            #tot += j * x
+        #par.finish((i, tot))
+#print par.result()
+#print "serial:", time.time() - start
 
-start = time.time()
-par = Parallelizer()
-with par(2) as i:
-    for j, x in enumerate(tasks[i*2:(i+1)*2]):
-        res = (np.random.normal(size=3000000) * x).std()
-        par.finish((i, res))
-print par.result()
-print "parallel:", time.time() - start
+#start = time.time()
+#par = Parallelizer()
+#with par(2) as i:
+    #for i, x in enumerate(tasks):
+        #print i, x
+        #tot = 0
+        #for j in xrange(size):
+            #tot += j * x
+        #par.finish((i, tot))
+#print par.result()
+#print "parallel:", time.time() - start
 
 
-import sys
-sys.exit()
+#import sys
+#sys.exit()
 
 
 print "\n=================\nStart Process"
