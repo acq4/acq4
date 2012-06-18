@@ -25,7 +25,7 @@ from . import python2_3
 if 'linux' in sys.platform:  ## linux has numerous bugs in opengl implementation
     useOpenGL = False
 elif 'darwin' in sys.platform: ## openGL can have a major impact on mac, but also has serious bugs
-    useOpenGL = False
+    useOpenGL = True
 else:
     useOpenGL = False  ## on windows there's a more even performance / bugginess tradeoff. 
                 
@@ -193,7 +193,10 @@ show = image  ## for backward compatibility
     
 def mkQApp():
     global QAPP
-    if QtGui.QApplication.instance() is None:
+    inst = QtGui.QApplication.instance()
+    if inst is None:
         QAPP = QtGui.QApplication([])
+    else:
+        QAPP = inst
     return QAPP
         
