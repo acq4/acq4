@@ -3,7 +3,7 @@ import initExample ## Add path to library (just for examples; you do not need th
 
 import numpy as np
 import pyqtgraph.multiprocess as mp
-from pyqtgraph.multiprocess.parallelizer import Parallelize, Parallelizer
+from pyqtgraph.multiprocess.parallelizer import Parallelize #, Parallelizer
 import time
 
 print "\n=================\nParallelize"
