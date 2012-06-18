@@ -34,46 +34,20 @@ print results
 print "parallel:", time.time() - start
 
 
-#print "\n=================\nParallelize (old)"
-#start = time.time()
-#par = Parallelizer()
-#with par(1) as i:
-    #for i, x in enumerate(tasks):
-        #print i, x
-        #tot = 0
-        #for j in xrange(size):
-            #tot += j * x
-        #par.finish((i, tot))
-#print par.result()
-#print "serial:", time.time() - start
-
-#start = time.time()
-#par = Parallelizer()
-#with par(2) as i:
-    #for i, x in enumerate(tasks):
-        #print i, x
-        #tot = 0
-        #for j in xrange(size):
-            #tot += j * x
-        #par.finish((i, tot))
-#print par.result()
-#print "parallel:", time.time() - start
-
-
-#import sys
-#sys.exit()
 
 
 print "\n=================\nStart Process"
 proc = mp.Process()
+import os
+print "parent:", os.getpid(), "child:", proc.proc.pid
 print "started"
 rnp = proc._import('numpy')
 arr = rnp.array([1,2,3,4])
 print repr(arr)
 print str(arr)
-print repr(arr.mean(_returnValue=True))
-print repr(arr.mean(_returnValue=False))
-print repr(arr.mean(_returnValue='auto'))
+print "return value:", repr(arr.mean(_returnType='value'))
+print "return proxy:", repr(arr.mean(_returnType='proxy'))
+print "return auto: ", repr(arr.mean(_returnType='auto'))
 proc.join()
 print "process finished"
 
@@ -102,6 +76,7 @@ d1 = proc.transfer(np.random.normal(size=1000))
 d2 = proc.transfer(np.random.normal(size=1000))
 rpg = proc._import('pyqtgraph')
 plt = rpg.plot(d1+d2)
+
 
 ## Start Qt event loop unless running in interactive mode or using pyside.
 #import sys
