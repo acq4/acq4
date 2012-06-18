@@ -65,12 +65,11 @@ class ForkedProcess(RemoteEventHandler):
       - open file handles are shared with the parent process, which is potentially dangerous
       - it is not possible to have a QApplication in both parent and child process
         (unless both QApplications are created _after_ the call to fork())
-      - generally not thread-safe.
+      - generally not thread-safe. Also, threads are not copied by fork(); the new process 
+        will have only one thread that starts wherever fork() was called in the parent process.
       - forked processes are unceremoniously terminated when join() is called; they are not 
         given any opportunity to clean up. (This prevents them calling any cleanup code that
         was only intended to be used by the parent process)
-        
-    
     """
     
     def __init__(self, name=None, target=0, preProxy=None):
@@ -138,7 +137,7 @@ class ForkedProcess(RemoteEventHandler):
             return
         #os.kill(pid, 9)  
         try:
-            self.close(returnMode='sync', timeout=timeout, noCleanup=True)  ## ask the child process to exit and require that it return a confirmation.
+            self.close(callSync='sync', timeout=timeout, noCleanup=True)  ## ask the child process to exit and require that it return a confirmation.
         except IOError:  ## probably remote process has already quit
             pass  
         self.hasJoined = True
