@@ -277,7 +277,7 @@ class RemoteEventHandler(object):
             except NoResultError:
                 return req
         
-    def quitEventLoop(self, returnMode='off', **kwds):
+    def close(self, returnMode='off', **kwds):
         self.send(request='close', returnMode=returnMode, **kwds)
     
     def getResult(self, reqId):
@@ -413,12 +413,12 @@ class LocalObjectProxy(object):
     
     
     @classmethod
-    def registerProxy(cls, proxy):
+    def registerObject(cls, obj):
         ## assign it a unique ID so we can keep a reference to the local object
         
         pid = cls.nextProxyId
         cls.nextProxyId += 1
-        cls.proxiedObjects[pid] = proxy.obj
+        cls.proxiedObjects[pid] = obj
         #print "register:", cls.proxiedObjects
         return pid
     
@@ -442,7 +442,7 @@ class LocalObjectProxy(object):
         ## a proxy is being pickled and sent to a remote process.
         ## every time this happens, a new proxy will be generated in the remote process,
         ## so we keep a new ID so we can track when each is released.
-        pid = LocalObjectProxy.registerProxy(self)
+        pid = LocalObjectProxy.registerObject(self.obj)
         return (unpickleObjectProxy, (self.processId, pid, self.typeStr))
         
 ## alias
