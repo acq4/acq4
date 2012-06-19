@@ -240,7 +240,7 @@ class EvalNode(Node):
     def saveState(self):
         state = Node.saveState(self)
         state['text'] = str(self.text.toPlainText())
-        state['terminals'] = self.saveTerminals()
+        #state['terminals'] = self.saveTerminals()
         return state
         
     def restoreState(self, state):

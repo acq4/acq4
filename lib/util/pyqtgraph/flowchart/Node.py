@@ -1,16 +1,13 @@
 # -*- coding: utf-8 -*-
 from pyqtgraph.Qt import QtCore, QtGui
-#from PySide import QtCore, QtGui
 from pyqtgraph.graphicsItems.GraphicsObject import GraphicsObject
 import pyqtgraph.functions as fn
 from .Terminal import *
 from collections import OrderedDict
 from pyqtgraph.debug import *
 import numpy as np
-#from pyqtgraph.ObjectWorkaround import QObjectWorkaround
 from .eq import *
 
-#TETRACYCLINE = True
 
 def strDict(d):
     return dict([(str(k), v) for k, v in d.items()])
@@ -85,24 +82,16 @@ class Node(QtCore.QObject):
     def terminalRenamed(self, term, oldName):
         """Called after a terminal has been renamed"""
         newName = term.name()
-        #print "node", self, "handling rename..", newName, oldName
         for d in [self.terminals, self._inputs, self._outputs]:
             if oldName not in d:
                 continue
-            #print "  got one"
             d[newName] = d[oldName]
             del d[oldName]
             
         self.graphicsItem().updateTerminals()
-        #self.emit(QtCore.SIGNAL('terminalRenamed'), term, oldName)
         self.sigTerminalRenamed.emit(term, oldName)
         
     def addTerminal(self, name, **opts):
-        #print "Node.addTerminal called. name:", name, "opts:", opts
-        #global TETRACYCLINE
-        #print "TETRACYCLINE: ", TETRACYCLINE
-        #if TETRACYCLINE:
-            #print  "Creating Terminal..."
         name = self.nextTerminalName(name)
         term = Terminal(self, name, **opts)
         self.terminals[name] = term
@@ -278,12 +267,20 @@ class Node(QtCore.QObject):
 
     def saveState(self):
         pos = self.graphicsItem().pos()
-        return {'pos': (pos.x(), pos.y()), 'bypass': self.isBypassed()}
+        state = {'pos': (pos.x(), pos.y()), 'bypass': self.isBypassed()}
+        termsEditable = self._allowAddInput | self._allowAddOutput
+        for term in self._inputs.values() + self._outputs.values():
+            termsEditable |= term._renamable | term._removable | term._multiable
+        if termsEditable:
+            state['terminals'] = self.saveTerminals()
+        return state
         
     def restoreState(self, state):
         pos = state.get('pos', (0,0))
         self.graphicsItem().setPos(*pos)
         self.bypass(state.get('bypass', False))
+        if 'terminals' in state:
+            self.restoreTerminals(state['terminals'])
 
     def saveTerminals(self):
         terms = OrderedDict()
