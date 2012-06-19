@@ -487,12 +487,10 @@ class Flowchart(Node):
             nodes.sort(lambda a, b: cmp(a['pos'][0], b['pos'][0]))
             for n in nodes:
                 if n['name'] in self._nodes:
-                    print "restore:", n['name']
                     #self._nodes[n['name']].graphicsItem().moveBy(*n['pos'])
                     self._nodes[n['name']].restoreState(n['state'])
                     continue
                 try:
-                    print "recreate:", n['name']
                     node = self.createNode(n['class'], name=n['name'])
                     node.restoreState(n['state'])
                 except:
@@ -502,7 +500,7 @@ class Flowchart(Node):
             self.inputNode.restoreState(state.get('inputNode', {}))
             self.outputNode.restoreState(state.get('outputNode', {}))
                 
-            self.restoreTerminals(state['terminals'])
+            #self.restoreTerminals(state['terminals'])
             for n1, t1, n2, t2 in state['connects']:
                 try:
                     self.connectTerminals(self._nodes[n1][t1], self._nodes[n2][t2])

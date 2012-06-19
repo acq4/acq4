@@ -29,8 +29,8 @@ class Node(QtCore.QObject):
         self.bypassButton = None  ## this will be set by the flowchart ctrl widget..
         self._graphicsItem = None
         self.terminals = OrderedDict()
-        self._inputs = {}
-        self._outputs = {}
+        self._inputs = OrderedDict()
+        self._outputs = OrderedDict()
         self._allowAddInput = allowAddInput   ## flags to allow the user to add/remove terminals
         self._allowAddOutput = allowAddOutput
         self._allowRemove = allowRemove
@@ -306,8 +306,8 @@ class Node(QtCore.QObject):
         for t in self.terminals.values():
             t.close()
         self.terminals = OrderedDict()
-        self._inputs = {}
-        self._outputs = {}
+        self._inputs = OrderedDict()
+        self._outputs = OrderedDict()
         
     def close(self):
         """Cleans up after the node--removes terminals, graphicsItem, widget"""
@@ -490,10 +490,6 @@ class NodeGraphicsItem(GraphicsObject):
             self.hovered = False
         self.update()
             
-    #def mouseReleaseEvent(self, ev):
-        #ret = QtGui.QGraphicsItem.mouseReleaseEvent(self, ev)
-        #return ret
-
     def keyPressEvent(self, ev):
         if ev.key() == QtCore.Qt.Key_Delete or ev.key() == QtCore.Qt.Key_Backspace:
             ev.accept()
@@ -510,13 +506,8 @@ class NodeGraphicsItem(GraphicsObject):
         return GraphicsObject.itemChange(self, change, val)
             
 
-    #def contextMenuEvent(self, ev):
-        #ev.accept()
-        #self.menu.popup(ev.screenPos())
-        
     def getMenu(self):
         return self.menu
-    
 
     def getContextMenus(self, event):
         return [self.menu]
@@ -545,25 +536,3 @@ class NodeGraphicsItem(GraphicsObject):
     def addOutputFromMenu(self):  ## called when add output is clicked in context menu
         self.node.addOutput(renamable=True, removable=True, multiable=False)
         
-    #def menuTriggered(self, action):
-        ##print "node.menuTriggered called. action:", action
-        #act = str(action.text())
-        #if act == "Add input":
-            #self.node.addInput()
-            #self.updateActionMenu()
-        #elif act == "Add output":
-            #self.node.addOutput()
-            #self.updateActionMenu()
-        #elif act == "Remove node":
-            #self.node.close()
-        #else: ## only other option is to remove a terminal
-            #self.node.removeTerminal(act)
-            #self.terminalMenu.removeAction(action)
-
-    #def updateActionMenu(self):
-        #for t in self.node.terminals:
-            #if t not in [str(a.text()) for a in self.terminalMenu.actions()]:
-                #self.terminalMenu.addAction(t)
-        #for a in self.terminalMenu.actions():
-            #if str(a.text()) not in self.node.terminals:
-                #self.terminalMenu.removeAction(a)
