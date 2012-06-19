@@ -40,7 +40,7 @@ class EventDetector(AnalysisModule):
         #self.ui.chartDock1.setWidget(self.flowchart.widget())
         self.flowchart.addInput("dataIn")
         self.flowchart.addOutput('events')
-        self.flowchart.addOutput('regions', multi=True)        
+        #self.flowchart.addOutput('regions', multi=True)
         self.flowchart.sigChartLoaded.connect(self.connectPlots)
 
         self.dbCtrl = DBCtrl(self, identity=self.dbIdentity)

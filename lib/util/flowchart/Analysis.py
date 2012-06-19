@@ -399,7 +399,7 @@ class StatsCalculator(Node):
         dataRegions = {'all': data}
         #print "regions:"
         items = regions.items()
-        for term, r in items:
+        for name, r in items:
             #print "  ", term, r
             if isinstance(r, dict):
                 items.extend(r.items())
@@ -408,7 +408,7 @@ class StatsCalculator(Node):
                 mask = (data['fitTime'] > r[0]) * (data['fitTime'] < r[1])
             except:
                 mask = (data['time'] > r[0]) * (data['time'] < r[1])
-            dataRegions[term.node().name()] = data[mask]
+            dataRegions[name] = data[mask]
         
         for row in state['rows']:  ## iterate over variables in data
             name = row[0]

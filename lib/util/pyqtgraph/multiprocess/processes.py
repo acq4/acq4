@@ -101,9 +101,14 @@ class ForkedProcess(RemoteEventHandler):
         pid = os.fork()
         if pid == 0:
             self.isParent = False
+            ## We are now in the forked process; need to be extra careful what we touch while here.
+            ##   - no reading/writing file handles/sockets owned by parent process (stdout is ok)
+            ##   - don't touch QtGui or QApplication at all; these are landmines.
+            ##   - don't let the process call exit handlers
+            ##   -  
             
             ## close all file handles we do not want shared with parent
-            #conn.close()
+            conn.close()
             sys.stdin.close()  ## otherwise we screw with interactive prompts.
             fid = remoteConn.fileno()
             os.closerange(3, fid)
@@ -112,17 +117,30 @@ class ForkedProcess(RemoteEventHandler):
             ## Override any custom exception hooks
             def excepthook(*args):
                 import traceback
-                traceback.print_exception(*exc)
+                traceback.print_exception(*args)
             sys.excepthook = excepthook 
             
+            ## Make it harder to access QApplication instance
+            if 'PyQt4.QtGui' in sys.modules:
+                sys.modules['PyQt4.QtGui'].QApplication = None
+            sys.modules.pop('PyQt4.QtGui', None)
+            sys.modules.pop('PyQt4.QtCore', None)
+            
+            ## sabotage atexit callbacks
+            atexit._exithandlers = []
+            atexit.register(lambda: os._exit(0))
+            
+            
             RemoteEventHandler.__init__(self, remoteConn, name+'_child', pid=os.getppid())
-            if target is not None:
-                target()
-                
+            
             ppid = os.getppid()
             self.forkedProxies = {}
             for name, proxyId in proxyIDs.iteritems():
                 self.forkedProxies[name] = ObjectProxy(ppid, proxyId=proxyId, typeStr=repr(preProxy[name]))
+            
+            if target is not None:
+                target()
+                
         else:
             self.isParent = True
             self.childPid = pid

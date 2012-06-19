@@ -49,7 +49,6 @@ class Photostim(AnalysisModule):
         self.mapCtrl = QtGui.QWidget()
         self.mapLayout = QtGui.QVBoxLayout()
         self.mapCtrl.setLayout(self.mapLayout)
-        self.recolorBtn = QtGui.QPushButton("Recolor")
         self.mapLayout.splitter = QtGui.QSplitter()
         self.mapLayout.splitter.setOrientation(QtCore.Qt.Vertical)
         self.mapLayout.splitter.setContentsMargins(0,0,0,0)
@@ -57,7 +56,17 @@ class Photostim(AnalysisModule):
         self.mapLayout.splitter.addWidget(self.analysisCtrl)
         #self.mapLayout.splitter.addWidget(QtGui.QSplitter())
         self.mapLayout.splitter.addWidget(self.mapper)
-        self.mapLayout.splitter.addWidget(self.recolorBtn)
+        #self.mapLayout.splitter.addWidget(self.recolorBtn)
+        
+        self.recolorLayout = QtGui.QHBoxLayout()
+        self.recolorWidget = QtGui.QWidget()
+        self.mapLayout.splitter.addWidget(self.recolorWidget)
+        self.recolorWidget.setLayout(self.recolorLayout)
+        self.recolorBtn = QtGui.QPushButton('Recolor')
+        self.recolorLayout.addWidget(self.recolorBtn)
+        self.recolorParallelCheck = QtGui.QCheckBox('Parallel')
+        self.recolorParallelCheck.setChecked(True)
+        self.recolorLayout.addWidget(self.recolorParallelCheck)
         
         ## scatter plot
         self.scatterPlot = ScatterPlotter()
@@ -420,7 +429,7 @@ class Photostim(AnalysisModule):
         allScans = [s for s in self.scans if s.isVisible()]
         allScans.extend([s for s in self.maps if s.isVisible()])
         for i in range(len(allScans)):
-            allScans[i].recolor(i, len(allScans))
+            allScans[i].recolor(i, len(allScans), parallel=self.recolorParallelCheck.isChecked())
         
         #for i in range(len(self.scans)):
             #self.scans[i].recolor(i, len(self.scans))

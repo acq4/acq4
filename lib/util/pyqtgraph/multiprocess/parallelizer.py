@@ -74,16 +74,28 @@ class Parallelize:
         
         ## process events from workers until all have exited.
         activeChilds = self.childs[:]
+        pollInterval = 0.01
         while len(activeChilds) > 0:
+            waitingChildren = 0
             for ch in activeChilds:
                 rem = []
                 try:
-                    ch.processRequests()
+                    n = ch.processRequests()
+                    if n > 0:
+                        waitingChildren += 1
                 except ExitError:
                     rem.append(ch)
             for ch in rem:
                 activeChilds.remove(ch)
-            time.sleep(0.1)
+                
+            ## adjust polling interval--prefer to get exactly 1 event per poll cycle.
+            if waitingChildren > 1:
+                pollInterval *= 0.7
+            elif waitingChildren == 0:
+                pollInterval /= 0.7
+            pollInterval = max(min(pollInterval, 0.5), 0.0005) ## but keep it within reasonable limits
+            
+            time.sleep(pollInterval)
         
         return []  ## no tasks for parent process.
         

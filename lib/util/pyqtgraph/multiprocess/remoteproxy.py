@@ -9,7 +9,21 @@ class NoResultError(Exception):
 
     
 class RemoteEventHandler(object):
+    """
+    This class handles communication between two processes. One instance is present on 
+    each process and listens for communication from the other process. This enables
+    (amongst other things) ObjectProxy instances to look up their attributes and call 
+    their methods.
     
+    This class is responsible for carrying out actions on behalf of the remote process.
+    Each instance holds one end of a Connection which allows python
+    objects to be passed between processes.
+    
+    To handle and respond to incoming requests, RemoteEventHandler requires that its
+    processRequests method is called repeatedly (this is usually handled by the Process
+    classes defined in multiprocess.processes).
+    
+    """
     handlers = {}   ## maps {process ID : handler}. This allows unpickler to determine which process
                     ## an object proxy belongs to
                          
@@ -55,19 +69,25 @@ class RemoteEventHandler(object):
     
     def processRequests(self):
         """Process all pending requests from the pipe, return
-        after no more events are immediately available. (non-blocking)"""
+        after no more events are immediately available. (non-blocking)
+        Returns the number of events processed.
+        """
         if self.exited:
             raise ExitError()
         
+        numProcessed = 0
         while self.conn.poll():
             try:
                 self.handleRequest()
+                numProcessed += 1
             except ExitError:
                 self.exited = True
                 raise
             except:
                 print "Error in process %s" % self.name
                 sys.excepthook(*sys.exc_info())
+                
+        return numProcessed
     
     def handleRequest(self):
         """Handle a single request from the remote process. 
@@ -282,7 +302,9 @@ class RemoteEventHandler(object):
         try:
             optStr = pickle.dumps(opts)
         except:
-            print "Error pickling:", opts
+            print "====  Error pickling this object:  ===="
+            print opts
+            print "======================================="
             raise
         
         request = (request, reqId, optStr)

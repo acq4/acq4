@@ -3,7 +3,7 @@ from PyQt4 import QtGui, QtCore
 import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.multiprocess as mp
-import time
+import time, os
 
 class Scan(QtCore.QObject):
     ### This class represents a single photostim scan (one set of non-overlapping points)
@@ -128,7 +128,7 @@ class Scan(QtCore.QObject):
     def isVisible(self):
         return self.item.isVisible()
         
-    def recolor(self, n, nMax):
+    def recolor(self, n, nMax, parallel=False):
         if not self.item.isVisible():
             return
         spots = self.spots()
@@ -137,7 +137,8 @@ class Scan(QtCore.QObject):
         
         ## This can be very slow; try to run in parallel (requires fork(); runs serially on windows).
         start = time.time()
-        with mp.Parallelize(tasks=enumerate(handles), result=result) as tasker:
+        workers = None if parallel else 1
+        with mp.Parallelize(tasks=enumerate(handles), result=result, workers=workers) as tasker:
             for i, dhfh in tasker:
                 dh, fh = dhfh
                 events = self.getEvents(fh, signal=False)
