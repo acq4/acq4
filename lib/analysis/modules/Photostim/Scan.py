@@ -2,6 +2,8 @@
 from PyQt4 import QtGui, QtCore
 import numpy as np
 import pyqtgraph as pg
+import pyqtgraph.multiprocess as mp
+import time
 
 class Scan(QtCore.QObject):
     ### This class represents a single photostim scan (one set of non-overlapping points)
@@ -130,34 +132,28 @@ class Scan(QtCore.QObject):
         if not self.item.isVisible():
             return
         spots = self.spots()
-        with pg.ProgressDialog("Computing spot colors (Scan %d/%d)" % (n+1,nMax), 0, len(spots)) as dlg:
-        #progressDlg = QtGui.QProgressDialog("Computing spot colors (Map %d/%d)" % (n+1,nMax), 0, len(spots))
-        #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
-        #progressDlg.setMinimumDuration(250)
-        #try:
-            ops = []
-            for i in range(len(spots)):
-                spot = spots[i]
-                #fh = self.dataModel.getClampFile(spot.data)  ## fh should be the protocol dir, not clamp file.
-                dh = spot.data()
-                stats = self.getStats(dh, signal=False)
-                #print "stats:", stats
-                color = self.host.getColor(stats)
-                ops.append((spot, color))
-                dlg.setValue(i+1)
-                #QtGui.QApplication.processEvents()
-                if dlg.wasCanceled():
-                    raise Exception("Recolor canceled by user.")
-        #except:
-            #raise
-        #finally:
-            ### close progress dialog no matter what happens
-            #progressDlg.setValue(len(spots))
+        handles = [(spot.data(), self.host.dataModel.getClampFile(spot.data())) for spot in spots]
+        result = []
         
-        ## delay until the very end for speed.
-        for spot, color in ops:
+        ## This can be very slow; try to run in parallel (requires fork(); runs serially on windows).
+        start = time.time()
+        with mp.Parallelize(tasks=enumerate(handles), result=result) as tasker:
+            for i, dhfh in tasker:
+                dh, fh = dhfh
+                events = self.getEvents(fh, signal=False)
+                stats = self.getStats(dh, signal=False)
+                color = self.host.getColor(stats)
+                tasker.result.append((i, color, stats, events))
+        print "recolor:", time.time() - start
+        
+        ## Collect all results, store to caches, and recolor spots
+        for i, color, stats, events in result:
+            dh, fh = handles[i]
+            self.stats[dh] = stats
+            self.events[fh] = events
+            spot = spots[i]
             spot.setBrush(color)
-            
+        
         self.sigEventsChanged.emit(self)  ## it's possible events didn't actually change, but meh.
         
         

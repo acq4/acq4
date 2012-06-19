@@ -44,3 +44,4 @@ TODO:
 """
 
 from processes import *
+from parallelizer import Parallelize

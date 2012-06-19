@@ -54,10 +54,11 @@ def reloadAll(prefix=None, debug=False):
                 #print "Ignoring module %s; unchanged" % str(mod)
             continue
         
-        try:
-            reload(mod, debug=debug)
-        except:
-            printExc("Error while reloading module %s, skipping\n" % mod)
+        reload(mod, debug=debug)
+        #try:
+            #reload(mod, debug=debug)
+        #except:
+            #printExc("Error while reloading module %s, skipping\n" % mod)
 
 
 def reload(module, debug=False, lists=False, dicts=False):

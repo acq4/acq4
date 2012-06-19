@@ -102,8 +102,20 @@ class ForkedProcess(RemoteEventHandler):
         pid = os.fork()
         if pid == 0:
             self.isParent = False
-            conn.close()
+            
+            ## close all file handles we do not want shared with parent
+            #conn.close()
             sys.stdin.close()  ## otherwise we screw with interactive prompts.
+            fid = remoteConn.fileno()
+            os.closerange(3, fid)
+            os.closerange(fid+1, 4096) ## just guessing on the maximum descriptor count..
+            
+            ## Override any custom exception hooks
+            def excepthook(*args):
+                import traceback
+                traceback.print_exception(*exc)
+            sys.excepthook = excepthook 
+            
             RemoteEventHandler.__init__(self, remoteConn, name+'_child', pid=os.getppid())
             if target is not None:
                 target()
@@ -128,10 +140,11 @@ class ForkedProcess(RemoteEventHandler):
                 self.processRequests()  # exception raised when the loop should exit
                 time.sleep(0.01)
             except ExitError:
-                sys.exit(0)
+                break
             except:
                 print "Error occurred in forked event loop:"
                 sys.excepthook(*sys.exc_info())
+        sys.exit(0)
         
     def join(self, timeout=10):
         if self.hasJoined:
