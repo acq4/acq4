@@ -225,7 +225,7 @@ class Map:
     def isVisible(self):
         return self.sPlotItem.isVisible()
             
-    def recolor(self, n, nMax):
+    def recolor(self, n, nMax, parallel=False):  ## ignore parallel here; it's plenty fast already.
         if not self.sPlotItem.isVisible():
             return
         spots = self.sPlotItem.points()
