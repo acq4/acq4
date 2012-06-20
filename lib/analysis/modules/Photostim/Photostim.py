@@ -158,7 +158,7 @@ class Photostim(AnalysisModule):
             cells = [dh]
         else:
             return
-        print "cells:", cells
+        #print "cells:", cells
         for cell in cells:
             self.dbCtrl.listMaps(cell)
 
@@ -281,7 +281,7 @@ class Photostim(AnalysisModule):
         try:
             point = points[0]
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-            print "clicked:", point.data()
+            #print "clicked:", point.data()
             plot = self.getElement("Data Plot")
             plot.clear()
             self.selectedSpot = point
@@ -309,7 +309,7 @@ class Photostim(AnalysisModule):
 
     def redisplayData(self, points):  ## data must be [(scan, fh, <event time>), ...]  
         #raise Exception('blah')
-        print points
+        #print points
         try:
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
             plot = self.getElement("Data Plot")
@@ -426,10 +426,13 @@ class Photostim(AnalysisModule):
     def recolor(self):
 
         ## Select only visible scans and maps for recoloring
-        allScans = [s for s in self.scans if s.isVisible()]
-        allScans.extend([s for s in self.maps if s.isVisible()])
-        for i in range(len(allScans)):
-            allScans[i].recolor(i, len(allScans), parallel=self.recolorParallelCheck.isChecked())
+        try:
+            allScans = [s for s in self.scans if s.isVisible()]
+            allScans.extend([s for s in self.maps if s.isVisible()])
+            for i in range(len(allScans)):
+                allScans[i].recolor(i, len(allScans), parallel=self.recolorParallelCheck.isChecked())
+        except pg.multiprocess.CanceledError:
+            pass
         
         #for i in range(len(self.scans)):
             #self.scans[i].recolor(i, len(self.scans))
@@ -441,7 +444,7 @@ class Photostim(AnalysisModule):
         return self.mapper.getColor(stats)
 
     def processEvents(self, fh):
-        print "Process Events:", fh
+        #print "Process Events:", fh
         ret = self.detector.process(fh)
         return ret
         
@@ -503,7 +506,7 @@ class Photostim(AnalysisModule):
         spot = self.selectedSpot
         if spot is None:
             raise Exception("No spot selected")
-        print "Store spot:", spot.data
+        #print "Store spot:", spot.data
         #parentDir = spot.data
         #p2 = parentDir.parent()
         #if self.dataModel.dirType(p2) == 'ProtocolSequence':
@@ -530,7 +533,7 @@ class Photostim(AnalysisModule):
         
         with pg.BusyCursor():
             #dh = scan.source()
-            print "Store scan:", scan.source().name()
+            #print "Store scan:", scan.source().name()
             events = []
             stats = []
             spots = scan.spots()
@@ -570,7 +573,7 @@ class Photostim(AnalysisModule):
                 self.storeStats(stats)
                 p.mark("stored all stats")
                 p.finish()
-                print "   scan %s is now locked" % scan.source().name()
+                #print "   scan %s is now locked" % scan.source().name()
                 scan.lock()
 
     def rewriteSpotPositions(self, scan):
@@ -602,7 +605,7 @@ class Photostim(AnalysisModule):
         #dh = loader.selectedFile()
         #scan = self.scans[dh]
         dh = scan.source()
-        print "Clear scan", dh
+        #print "Clear scan", dh
         #pRow = db.getDirRowID(dh)
         colName = self.dataModel.dirType(dh)+'Dir'
             

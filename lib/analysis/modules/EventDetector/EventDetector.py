@@ -100,7 +100,7 @@ class EventDetector(AnalysisModule):
 
     def process(self, fh):
         ret = self.flowchart.process(dataIn=fh)
-        print "Return:", ret.keys()
+        #print "Return:", ret.keys()
         return ret
 
     def outputChanged(self):

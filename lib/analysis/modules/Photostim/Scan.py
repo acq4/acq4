@@ -60,7 +60,7 @@ class Scan(QtCore.QObject):
 
     def loadFromDB(self):
         sourceDir = self.source()
-        print "Loading scan data for", sourceDir
+        #print "Loading scan data for", sourceDir
         self.events = {}
         self.stats = {}
         self.statExample = None
@@ -98,14 +98,14 @@ class Scan(QtCore.QObject):
                 #stats = allStats[allEvents['SourceFile']==dh.name(relativeTo=self.source())]
                 if dh not in self.stats:
                 #if len(stats) == 0:
-                    print "  No data for spot", dh
+                    #print "  No data for spot", dh
                     haveAll = False
                     continue
                 else:
                     self.statExample = self.stats[dh]
             #self.stats[dh] = stats[0]
             if haveAll:
-                print "  have data for all spots; locking."
+                #print "  have data for all spots; locking."
                 self.lock()
 
     def getStatsKeys(self):
@@ -116,13 +116,13 @@ class Scan(QtCore.QObject):
 
     def forgetEvents(self):
         if not self.locked():
-            print "Scan forget events:", self.source()
+            #print "Scan forget events:", self.source()
             self.events = {}
             self.forgetStats()
         
     def forgetStats(self):
         #if not self.locked:
-        print "Scan forget stats:", self.source()
+        #print "Scan forget stats:", self.source()
         self.stats = {}
         
     def isVisible(self):
@@ -138,15 +138,15 @@ class Scan(QtCore.QObject):
         ## This can be very slow; try to run in parallel (requires fork(); runs serially on windows).
         start = time.time()
         workers = None if parallel else 1
-        dlg = pg.ProgressDialog("Processing scan (%d / %d)" % (n, nMax))
-        with mp.Parallelize(tasks=enumerate(handles), result=result, workers=workers, progressDialog=dlg) as tasker:
+        msg = "Processing scan (%d / %d)" % (n+1, nMax)
+        with mp.Parallelize(tasks=enumerate(handles), result=result, workers=workers, progressDialog=msg) as tasker:
             for i, dhfh in tasker:
                 dh, fh = dhfh
                 events = self.getEvents(fh, signal=False)
                 stats = self.getStats(dh, signal=False)
                 color = self.host.getColor(stats)
                 tasker.result.append((i, color, stats, events))
-        print "recolor:", time.time() - start
+        print "recolor took %0.2fsec" % (time.time() - start)
         
         ## Collect all results, store to caches, and recolor spots
         for i, color, stats, events in result:
@@ -169,7 +169,7 @@ class Scan(QtCore.QObject):
         #except:
             #raise Exception("File %s is not in this scan" % fh.name())
         if dh not in self.stats:
-            print "No stats cache for", dh.name(), "compute.."
+            #print "No stats cache for", dh.name(), "compute.."
             fh = self.host.dataModel.getClampFile(dh)
             events = self.getEvents(fh, signal=signal)
             try:
@@ -183,7 +183,7 @@ class Scan(QtCore.QObject):
     def getEvents(self, fh, process=True, signal=True):
         if fh not in self.events:
             if process:
-                print "No event cache for", fh.name(), "compute.."
+                #print "No event cache for", fh.name(), "compute.."
                 events = self.host.processEvents(fh)  ## need ALL output from the flowchart; not just events
                 self.events[fh] = events
                 if signal:

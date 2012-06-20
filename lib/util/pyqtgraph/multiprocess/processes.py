@@ -1,7 +1,9 @@
 from remoteproxy import RemoteEventHandler, ExitError, NoResultError, LocalObjectProxy, ObjectProxy
-import subprocess, atexit, os, sys, time, random, socket
+import subprocess, atexit, os, sys, time, random, socket, signal
 import cPickle as pickle
 import multiprocessing.connection
+
+__all__ = ['Process', 'QtProcess', 'ForkedProcess', 'ExitError', 'NoResultError']
 
 class Process(RemoteEventHandler):
     def __init__(self, name=None, target=None):

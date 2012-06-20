@@ -20,4 +20,4 @@ TODO:
 """
 
 from processes import *
-from parallelizer import Parallelize
+from parallelizer import Parallelize, CanceledError
