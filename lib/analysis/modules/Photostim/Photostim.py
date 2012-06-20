@@ -32,8 +32,6 @@ class Photostim(AnalysisModule):
         self.dbIdentity = "Photostim"  ## how we identify to the database; this determines which tables we own
         self.selectedSpot = None
         
-
-
         ## setup analysis flowchart
         modPath = os.path.abspath(os.path.split(__file__)[0])
         flowchartDir = os.path.join(modPath, "analysis_fc")
@@ -655,7 +653,7 @@ class Photostim(AnalysisModule):
         
         with db.transaction():
             ## Make sure target table exists and has correct columns, links to input file
-            db.checkTable(table, owner=identity, columns=fields, create=True, addUnknownColumns=True, indexes=[['SourceFile'], ['ProtocolDir'], ['ProtocolSequenceDir']])
+            db.checkTable(table, owner=identity, columns=fields, create=True, addUnknownColumns=True, indexes=[['ProtocolDir'], ['ProtocolSequenceDir']])
             
             # delete old
             for source in set([d['ProtocolDir'] for d in data]):
