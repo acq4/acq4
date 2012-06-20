@@ -63,7 +63,7 @@ class Parallelize:
             self.progressDlg = pg.ProgressDialog(**progressDialog)
         
         if workers is None:
-            workers = multiprocessing.cpu_count()
+            workers = self.suggestedWorkerCount()
         if not hasattr(os, 'fork'):
             workers = 1
         self.workers = workers
@@ -79,24 +79,25 @@ class Parallelize:
             return self.runParallel()
     
     def __exit__(self, *exc_info):
-        try:
-            if exc_info[0] is not None:
-                sys.excepthook(*exc_info)
-        finally:
-            if self.proc is not None:
+        
+        if self.proc is not None:  ## worker 
+            try:
+                if exc_info[0] is not None:
+                    sys.excepthook(*exc_info)
+            finally:
                 #print os.getpid(), 'exit'
                 os._exit(0)
-
-    def runSerial(self):
-        try:
-            if self.showProgress:
-                self.progressDlg.__enter__()
-                self.progressDlg.setMaximum(len(self.tasks))
-            self.progress = {os.getpid(): []}
-            return Tasker(None, self.tasks, self.kwds)
-        finally:
+                
+        else:  ## parent
             if self.showProgress:
                 self.progressDlg.__exit__(None, None, None)
+
+    def runSerial(self):
+        if self.showProgress:
+            self.progressDlg.__enter__()
+            self.progressDlg.setMaximum(len(self.tasks))
+        self.progress = {os.getpid(): []}
+        return Tasker(None, self.tasks, self.kwds)
 
     
     def runParallel(self):
@@ -170,12 +171,10 @@ class Parallelize:
         return []  ## no tasks for parent process.
     
     
-    
-    
-    def wait(self):
-        ## wait for all child processes to finish
-        pass
-    
+    @staticmethod
+    def suggestedWorkerCount():
+        return multiprocessing.cpu_count()  ## is this really the best option?
+        
     def _taskStarted(self, pid, i, **kwds):
         ## called remotely by tasker to indicate it has started working on task i
         #print pid, 'reported starting task', i
