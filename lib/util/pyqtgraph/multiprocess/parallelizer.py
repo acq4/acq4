@@ -150,6 +150,7 @@ class Parallelize:
                 #print "remove:", [ch.childPid for ch in rem]
                 for ch in rem:
                     activeChilds.remove(ch)
+                    os.waitpid(ch.childPid, 0)
                     #print [ch.childPid for ch in activeChilds]
                     
                 if self.showProgress and self.progressDlg.wasCanceled():
