@@ -46,12 +46,6 @@ if not hasattr(QtCore, 'Signal'):
 from lib.Manager import *
 from numpy import *
 
-
-## Disable long-term storage of exception stack frames
-## This fixes a potentially major memory leak, but
-## may break some debuggers.
-import disableExceptionStorage
-
 ## Initialize Qt
 #QtGui.QApplication.setGraphicsSystem('raster')  ## needed for specific composition modes
 app = QtGui.QApplication(sys.argv)

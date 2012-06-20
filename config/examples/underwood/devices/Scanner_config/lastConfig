@@ -1,0 +1,7 @@
+laserCombo: 'Laser-UV'
+simulateShutter: False
+cameraCombo: 'Camera'
+minDist: 0.0004
+minTime: 10.0
+items: [{'angle': 0, 'spacing': 9.03507884427e-05, 'pos': (-0.0009032999930695951, -0.016076799598522488), 'active': False, 'layout': 'Hexagonal', 'type': 'Grid', 'size': (0.0003614031537708, 0.0003614031537708)}, {'angle': 0, 'spacing': 9.7503622050813642e-06, 'pos': (-0.0008844714126535314, -0.016059837498632837), 'active': True, 'layout': 'Hexagonal', 'type': 'Grid', 'size': (3.900144882032546e-05, 3.900144882032546e-05)}]
+spotSize: 9.03507884427e-05

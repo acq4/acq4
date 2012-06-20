@@ -10,12 +10,6 @@ from pyqtgraph.graphicsItems.LinearRegionItem import LinearRegionItem
 
 from . import functions
 
-try:
-    import metaarray
-    HAVE_METAARRAY = True
-except:
-    HAVE_METAARRAY = False
-
 class ColumnSelectNode(Node):
     """Select named columns from a record array or MetaArray."""
     nodeName = "ColumnSelect"
@@ -31,7 +25,7 @@ class ColumnSelectNode(Node):
             self.updateList(In)
                 
         out = {}
-        if HAVE_METAARRAY and isinstance(In, metaarray.MetaArray):
+        if hasattr(In, 'implements') and In.implements('MetaArray'):
             for c in self.columns:
                 out[c] = In[self.axis:c]
         elif isinstance(In, np.ndarray) and In.dtype.fields is not None:
@@ -47,7 +41,7 @@ class ColumnSelectNode(Node):
         return self.columnList
 
     def updateList(self, data):
-        if HAVE_METAARRAY and isinstance(data, metaarray.MetaArray):
+        if hasattr(data, 'implements') and data.implements('MetaArray'):
             cols = data.listColumns()
             for ax in cols:  ## find first axis with columns
                 if len(cols[ax]) > 0:
@@ -161,7 +155,7 @@ class RegionSelectNode(CtrlNode):
         if self.selected.isConnected():
             if data is None:
                 sliced = None
-            elif isinstance(data, MetaArray):
+            elif (hasattr(data, 'implements') and data.implements('MetaArray')):
                 sliced = data[0:s['start']:s['stop']]
             else:
                 mask = (data['time'] >= s['start']) * (data['time'] < s['stop'])
@@ -246,7 +240,7 @@ class EvalNode(Node):
     def saveState(self):
         state = Node.saveState(self)
         state['text'] = str(self.text.toPlainText())
-        state['terminals'] = self.saveTerminals()
+        #state['terminals'] = self.saveTerminals()
         return state
         
     def restoreState(self, state):
@@ -288,7 +282,7 @@ class ColumnJoinNode(Node):
         
     def addInput(self):
         #print "ColumnJoinNode.addInput called."
-        term = Node.addInput(self, 'input', renamable=True)
+        term = Node.addInput(self, 'input', renamable=True, removable=True)
         #print "Node.addInput returned. term:", term
         item = QtGui.QTreeWidgetItem([term.name()])
         item.term = term
@@ -328,16 +322,14 @@ class ColumnJoinNode(Node):
         
     def restoreState(self, state):
         Node.restoreState(self, state)
-        inputs = [inp.name() for inp in self.inputs()]
+        inputs = self.inputs()
+        order = [name for name in state['order'] if name in inputs]
         for name in inputs:
-            if name not in state['order']:
-                self.removeTerminal(name)
-        for name in state['order']:
-            if name not in inputs:
-                Node.addInput(self, name, renamable=True)
+            if name not in order:
+                order.append(name)
         
         self.tree.clear()
-        for name in state['order']:
+        for name in order:
             term = self[name]
             item = QtGui.QTreeWidgetItem([name])
             item.term = term

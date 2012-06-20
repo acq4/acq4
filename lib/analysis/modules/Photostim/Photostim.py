@@ -32,8 +32,6 @@ class Photostim(AnalysisModule):
         self.dbIdentity = "Photostim"  ## how we identify to the database; this determines which tables we own
         self.selectedSpot = None
         
-
-
         ## setup analysis flowchart
         modPath = os.path.abspath(os.path.split(__file__)[0])
         flowchartDir = os.path.join(modPath, "analysis_fc")
@@ -49,7 +47,6 @@ class Photostim(AnalysisModule):
         self.mapCtrl = QtGui.QWidget()
         self.mapLayout = QtGui.QVBoxLayout()
         self.mapCtrl.setLayout(self.mapLayout)
-        self.recolorBtn = QtGui.QPushButton("Recolor")
         self.mapLayout.splitter = QtGui.QSplitter()
         self.mapLayout.splitter.setOrientation(QtCore.Qt.Vertical)
         self.mapLayout.splitter.setContentsMargins(0,0,0,0)
@@ -57,7 +54,17 @@ class Photostim(AnalysisModule):
         self.mapLayout.splitter.addWidget(self.analysisCtrl)
         #self.mapLayout.splitter.addWidget(QtGui.QSplitter())
         self.mapLayout.splitter.addWidget(self.mapper)
-        self.mapLayout.splitter.addWidget(self.recolorBtn)
+        #self.mapLayout.splitter.addWidget(self.recolorBtn)
+        
+        self.recolorLayout = QtGui.QHBoxLayout()
+        self.recolorWidget = QtGui.QWidget()
+        self.mapLayout.splitter.addWidget(self.recolorWidget)
+        self.recolorWidget.setLayout(self.recolorLayout)
+        self.recolorBtn = QtGui.QPushButton('Recolor')
+        self.recolorLayout.addWidget(self.recolorBtn)
+        self.recolorParallelCheck = QtGui.QCheckBox('Parallel')
+        self.recolorParallelCheck.setChecked(True)
+        self.recolorLayout.addWidget(self.recolorParallelCheck)
         
         ## scatter plot
         self.scatterPlot = ScatterPlotter()
@@ -149,6 +156,7 @@ class Photostim(AnalysisModule):
             cells = [dh]
         else:
             return
+        #print "cells:", cells
         for cell in cells:
             self.dbCtrl.listMaps(cell)
 
@@ -271,7 +279,7 @@ class Photostim(AnalysisModule):
         try:
             point = points[0]
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-            print "clicked:", point.data()
+            #print "clicked:", point.data()
             plot = self.getElement("Data Plot")
             plot.clear()
             self.selectedSpot = point
@@ -299,6 +307,7 @@ class Photostim(AnalysisModule):
 
     def redisplayData(self, points):  ## data must be [(scan, fh, <event time>), ...]  
         #raise Exception('blah')
+        #print points
         try:
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
             plot = self.getElement("Data Plot")
@@ -349,7 +358,7 @@ class Photostim(AnalysisModule):
                 if len(events) > 0:
                     if 'fitTime' in events.dtype.names:
                         times = events['fitTime']
-                        ticks = pg.VTickGroup(times, [0.85, 1.0], pen=color)
+                        ticks = pg.VTickGroup(times, [0.9, 1.0], pen=color)
                         plot.addItem(ticks)
                         self.mapTicks.append(ticks)
             
@@ -415,10 +424,13 @@ class Photostim(AnalysisModule):
     def recolor(self):
 
         ## Select only visible scans and maps for recoloring
-        allScans = [s for s in self.scans if s.isVisible()]
-        allScans.extend([s for s in self.maps if s.isVisible()])
-        for i in range(len(allScans)):
-            allScans[i].recolor(i, len(allScans))
+        try:
+            allScans = [s for s in self.scans if s.isVisible()]
+            allScans.extend([s for s in self.maps if s.isVisible()])
+            for i in range(len(allScans)):
+                allScans[i].recolor(i, len(allScans), parallel=self.recolorParallelCheck.isChecked())
+        except pg.multiprocess.CanceledError:
+            pass
         
         #for i in range(len(self.scans)):
             #self.scans[i].recolor(i, len(self.scans))
@@ -430,7 +442,7 @@ class Photostim(AnalysisModule):
         return self.mapper.getColor(stats)
 
     def processEvents(self, fh):
-        print "Process Events:", fh
+        #print "Process Events:", fh
         ret = self.detector.process(fh)
         return ret
         
@@ -492,7 +504,7 @@ class Photostim(AnalysisModule):
         spot = self.selectedSpot
         if spot is None:
             raise Exception("No spot selected")
-        print "Store spot:", spot.data
+        #print "Store spot:", spot.data
         #parentDir = spot.data
         #p2 = parentDir.parent()
         #if self.dataModel.dirType(p2) == 'ProtocolSequence':
@@ -500,13 +512,14 @@ class Photostim(AnalysisModule):
             
         ## ask eventdetector to store events for us.
         #print parentDir
-        self.detector.storeToDB()
-        events = self.detector.output()
+        with db.transaction():
+            self.detector.storeToDB()
+            events = self.detector.output()
 
-        ## store stats
-        stats = self.processStats(spot=spot)  ## gets current stats if no processing is requested
-        
-        self.storeStats(stats)
+            ## store stats
+            stats = self.processStats(spot=spot)  ## gets current stats if no processing is requested
+            
+            self.storeStats(stats)
         
         ## update data in Map
         self.selectedScan.updateSpot(spot.data(), events, stats)
@@ -516,46 +529,50 @@ class Photostim(AnalysisModule):
         """Store all data for a scan, using cached values if possible"""
         p = debug.Profiler("Photostim.storeDBScan", disabled=True)
         
-        #dh = scan.source()
-        print "Store scan:", scan.source().name()
-        events = []
-        stats = []
-        spots = scan.spots()
-        with pg.ProgressDialog("Preparing data for %s" % scan.name(), 0, len(spots)+1) as dlg:
-            
-            ## collect events and stats from all spots in the scan
-            for i in xrange(len(spots)):
-                s = spots[i]
-                fh = self.dataModel.getClampFile(s.data())
-                try:
-                    ev = scan.getEvents(fh)['events']
-                    events.append(ev)
-                except:
-                    print fh, scan.getEvents(fh)
-                    raise
-                st = scan.getStats(s.data())
-                stats.append(st)
-                dlg.setValue(i)
-                if dlg.wasCanceled():
-                    raise HelpfulException("Scan store canceled by user.", msgType='status')
+        with pg.BusyCursor():
+            #dh = scan.source()
+            #print "Store scan:", scan.source().name()
+            events = []
+            stats = []
+            spots = scan.spots()
+            with pg.ProgressDialog("Preparing data for %s" % scan.name(), 0, len(spots)+1) as dlg:
                 
-            p.mark("Prepared data")
-            
-        ## Store all events for this scan
-        events = [x for x in events if len(x) > 0] 
-        
-        if len(events) > 0:
-            ev = np.concatenate(events)
-            p.mark("concatenate events")
-            self.detector.storeToDB(ev)
-            p.mark("stored all events")
-            
-        ## Store spot data
-        self.storeStats(stats)
-        p.mark("stored all stats")
-        p.finish()
-        print "   scan %s is now locked" % scan.source().name()
-        scan.lock()
+                ## collect events and stats from all spots in the scan
+                for i in xrange(len(spots)):
+                    s = spots[i]
+                    fh = self.dataModel.getClampFile(s.data())
+                    try:
+                        ev = scan.getEvents(fh)['events']
+                        events.append(ev)
+                    except:
+                        print fh, scan.getEvents(fh)
+                        raise
+                    st = scan.getStats(s.data())
+                    stats.append(st)
+                    dlg.setValue(i)
+                    if dlg.wasCanceled():
+                        raise HelpfulException("Scan store canceled by user.", msgType='status')
+                    
+                p.mark("Prepared data")
+                
+            dbui = self.getElement('Database')
+            db = dbui.getDb()
+            with db.transaction():
+                ## Store all events for this scan
+                events = [x for x in events if len(x) > 0] 
+                
+                if len(events) > 0:
+                    ev = np.concatenate(events)
+                    p.mark("concatenate events")
+                    self.detector.storeToDB(ev)
+                    p.mark("stored all events")
+                    
+                ## Store spot data
+                self.storeStats(stats)
+                p.mark("stored all stats")
+                p.finish()
+                #print "   scan %s is now locked" % scan.source().name()
+                scan.lock()
 
     def rewriteSpotPositions(self, scan):
         ## for now, let's just rewrite everything.
@@ -586,7 +603,7 @@ class Photostim(AnalysisModule):
         #dh = loader.selectedFile()
         #scan = self.scans[dh]
         dh = scan.source()
-        print "Clear scan", dh
+        #print "Clear scan", dh
         #pRow = db.getDirRowID(dh)
         colName = self.dataModel.dirType(dh)+'Dir'
             
@@ -626,22 +643,6 @@ class Photostim(AnalysisModule):
         if db is None:
             raise Exception("No DB selected")
 
-        #pTable, pRow = db.addDir(parentDir)
-        
-        #data = data.copy()  ## don't overwrite anything we shouldn't.. 
-        #data['SourceFile'] = name
-        #data['SourceDir'] = pRow
-        
-        ## Fix up records (convert file handles to names relative to parent) and add new columns
-        #records = []
-        #for rec in data:
-            #sf = rec['SourceFile']
-            #if not isinstance(sf, basestring):
-                #sf = sf.name(relativeTo=parentDir)
-            #rec2 = rec.copy()
-            #rec2.update(SourceFile=sf, SourceDir=pRow)
-            #records.append(rec2)
-        
         ## determine the set of fields we expect to find in the table
         
         fields = db.describeData(data)
@@ -650,27 +651,22 @@ class Photostim(AnalysisModule):
         fields['ProtocolDir'] = 'directory:Protocol'
         fields['ProtocolSequenceDir'] = 'directory:ProtocolSequence'
         
-        #fields = OrderedDict([
-            #('SourceDir', 'int'),
-            #('SourceFile', 'text'),
-        #])
-        #fields.update(db.describeData(data))
-        
-        ## Make sure target table exists and has correct columns, links to input file
-        db.checkTable(table, owner=identity, columns=fields, create=True, addUnknownColumns=True)
-        
-        # delete old
-        for source in set([d['ProtocolDir'] for d in data]):
-            #name = rec['SourceFile']
-            db.delete(table, where={'ProtocolDir': source})
+        with db.transaction():
+            ## Make sure target table exists and has correct columns, links to input file
+            db.checkTable(table, owner=identity, columns=fields, create=True, addUnknownColumns=True, indexes=[['ProtocolDir'], ['ProtocolSequenceDir']])
+            
+            # delete old
+            for source in set([d['ProtocolDir'] for d in data]):
+                #name = rec['SourceFile']
+                db.delete(table, where={'ProtocolDir': source})
 
-        # write new
-        with pg.ProgressDialog("Storing spot stats...", 0, 100) as dlg:
-            for n, nmax in db.iterInsert(table, data):
-                dlg.setMaximum(nmax)
-                dlg.setValue(n)
-                if dlg.wasCanceled():
-                    raise HelpfulException("Scan store canceled by user.", msgType='status')
+            # write new
+            with pg.ProgressDialog("Storing spot stats...", 0, 100) as dlg:
+                for n, nmax in db.iterInsert(table, data, chunkSize=30):
+                    dlg.setMaximum(nmax)
+                    dlg.setValue(n)
+                    if dlg.wasCanceled():
+                        raise HelpfulException("Scan store canceled by user.", msgType='status')
             
 
     def loadSpotFromDB(self, dh):
@@ -680,17 +676,8 @@ class Photostim(AnalysisModule):
         if db is None:
             raise Exception("No DB selected")
         
-        #fh = self.getClampFile(dh)
         fh = self.dataModel.getClampFile(dh)
         parentDir = fh.parent()
-        #p2 = parentDir.parent()
-        #if db.dirTypeName(p2) == 'ProtocolSequence':
-            #parentDir = p2
-            
-        
-        #pRow = db.getDirRowID(parentDir)
-        #if pRow is None:
-            #return None, None
             
         identity = self.dbIdentity+'.sites'
         table = dbui.getTableName(identity)
@@ -711,17 +698,6 @@ class Photostim(AnalysisModule):
         if db is None:
             raise Exception("No DB selected")
         
-        #fh = self.getClampFile(dh)
-        #fh = self.dataModel.getClampFile(dh)
-        #parentDir = fh.parent()
-        #p2 = parentDir.parent()
-        #if db.dirTypeName(p2) == 'ProtocolSequence':
-            #parentDir = p2
-            
-        
-        #pRow = db.getDirRowID(sourceDir)
-        #if pRow is None:
-            #return None, None
             
         identity = self.dbIdentity+'.sites'
         table = dbui.getTableName(identity)
