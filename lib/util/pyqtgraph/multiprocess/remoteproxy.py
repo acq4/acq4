@@ -666,13 +666,13 @@ class ObjectProxy(object):
         return self._getSpecialAttr('__getitem__')(*args)
     
     def __setitem__(self, *args):
-        return self._getSpecialAttr('__setitem__')(*args)
+        return self._getSpecialAttr('__setitem__')(*args, _callSync='off')
         
     def __setattr__(self, *args):
-        return self._getSpecialAttr('__setattr__')(*args)
+        return self._getSpecialAttr('__setattr__')(*args, _callSync='off')
         
     def __str__(self, *args):
-        return self._getSpecialAttr('__str__')(*args, _returnType=True)
+        return self._getSpecialAttr('__str__')(*args, _returnType='value')
         
     def __len__(self, *args):
         return self._getSpecialAttr('__len__')(*args)
@@ -692,6 +692,21 @@ class ObjectProxy(object):
     def __pow__(self, *args):
         return self._getSpecialAttr('__pow__')(*args)
         
+    def __iadd__(self, *args):
+        return self._getSpecialAttr('__iadd__')(*args, _callSync='off')
+    
+    def __isub__(self, *args):
+        return self._getSpecialAttr('__isub__')(*args, _callSync='off')
+        
+    def __idiv__(self, *args):
+        return self._getSpecialAttr('__idiv__')(*args, _callSync='off')
+        
+    def __imul__(self, *args):
+        return self._getSpecialAttr('__imul__')(*args, _callSync='off')
+        
+    def __ipow__(self, *args):
+        return self._getSpecialAttr('__ipow__')(*args, _callSync='off')
+        
     def __rshift__(self, *args):
         return self._getSpecialAttr('__rshift__')(*args)
         
@@ -700,6 +715,15 @@ class ObjectProxy(object):
         
     def __floordiv__(self, *args):
         return self._getSpecialAttr('__pow__')(*args)
+        
+    def __irshift__(self, *args):
+        return self._getSpecialAttr('__rshift__')(*args, _callSync='off')
+        
+    def __ilshift__(self, *args):
+        return self._getSpecialAttr('__lshift__')(*args, _callSync='off')
+        
+    def __ifloordiv__(self, *args):
+        return self._getSpecialAttr('__pow__')(*args, _callSync='off')
         
     def __eq__(self, *args):
         return self._getSpecialAttr('__eq__')(*args)
@@ -726,7 +750,16 @@ class ObjectProxy(object):
         return self._getSpecialAttr('__or__')(*args)
         
     def __xor__(self, *args):
-        return self._getSpecialAttr('__or__')(*args)
+        return self._getSpecialAttr('__xor__')(*args)
+        
+    def __iand__(self, *args):
+        return self._getSpecialAttr('__iand__')(*args, _callSync='off')
+        
+    def __ior__(self, *args):
+        return self._getSpecialAttr('__ior__')(*args, _callSync='off')
+        
+    def __ixor__(self, *args):
+        return self._getSpecialAttr('__ixor__')(*args, _callSync='off')
         
     def __mod__(self, *args):
         return self._getSpecialAttr('__mod__')(*args)

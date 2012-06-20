@@ -173,6 +173,14 @@ class ForkedProcess(RemoteEventHandler):
             pass  
         self.hasJoined = True
 
+    def kill(self):
+        """Immediately kill the forked remote process. 
+        This is generally safe because forked processes are already
+        expected to _avoid_ any cleanup at exit."""
+        os.kill(self.childPid, signal.SIGKILL)
+        self.hasJoined = True
+        
+        
 
 ##Special set of subclasses that implement a Qt event loop instead.
         

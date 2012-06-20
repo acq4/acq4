@@ -138,7 +138,8 @@ class Scan(QtCore.QObject):
         ## This can be very slow; try to run in parallel (requires fork(); runs serially on windows).
         start = time.time()
         workers = None if parallel else 1
-        with mp.Parallelize(tasks=enumerate(handles), result=result, workers=workers) as tasker:
+        dlg = pg.ProgressDialog("Processing scan (%d / %d)" % (n, nMax))
+        with mp.Parallelize(tasks=enumerate(handles), result=result, workers=workers, progressDialog=dlg) as tasker:
             for i, dhfh in tasker:
                 dh, fh = dhfh
                 events = self.getEvents(fh, signal=False)
