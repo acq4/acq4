@@ -21,3 +21,4 @@ TODO:
 
 from processes import *
 from parallelizer import Parallelize, CanceledError
+from remoteproxy import proxy

@@ -8,10 +8,8 @@ if __name__ == '__main__':
         while len(sys.path) > 0:
             sys.path.pop()
         sys.path.extend(path)
-    print "bootstrap path:", sys.path
-    import pyqtgraph
-    print "bootstrap pyqtgraph:", pyqtgraph.__file__
-    import pyqtgraph.multiprocess.processes
-    target = pickle.loads(targetStr)
+    #import pyqtgraph
+    #import pyqtgraph.multiprocess.processes
+    target = pickle.loads(targetStr)  ## unpickling the target should import everything we need
     target(name, port, authkey)
     sys.exit(0)

@@ -283,7 +283,7 @@ class QtProcess(Process):
         
         def slot():
             print 'slot invoked on parent process'
-        btn.clicked.connect(slot)
+        btn.clicked.connect(proxy(slot))   # be sure to send a proxy of the slot
     """
     
     def __init__(self, **kwds):
