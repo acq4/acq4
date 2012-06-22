@@ -34,6 +34,7 @@ def reloadAll(prefix=None, debug=False):
     - Skips reload if the file has not been updated (if .pyc is newer than .py)
     - if prefix is None, checks all loaded modules
     """
+    failed = []
     for modName, mod in list(sys.modules.items()):  ## don't use iteritems; size may change during reload
         if not inspect.ismodule(mod):
             continue
@@ -54,12 +55,14 @@ def reloadAll(prefix=None, debug=False):
                 #print "Ignoring module %s; unchanged" % str(mod)
             continue
         
-        reload(mod, debug=debug)
-        #try:
-            #reload(mod, debug=debug)
-        #except:
-            #printExc("Error while reloading module %s, skipping\n" % mod)
-
+        try:
+            reload(mod, debug=debug)
+        except:
+            printExc("Error while reloading module %s, skipping\n" % mod)
+            failed.append(mod.__name__)
+        
+    if len(failed) > 0:
+        raise Exception("Some modules failed to reload: %s" % ', '.join(failed))
 
 def reload(module, debug=False, lists=False, dicts=False):
     """Replacement for the builtin reload function:
