@@ -2,7 +2,7 @@ from pyqtgraph.Qt import QtGui, QtCore
 import pyqtgraph.multiprocess as mp
 import pyqtgraph as pg
 import numpy as np
-import mmap, tempfile, ctypes
+import mmap, tempfile, ctypes, atexit
 
 __all__ = ['RemoteGraphicsView']
 
@@ -29,6 +29,7 @@ class RemoteGraphicsView(QtGui.QWidget):
         self.shmFile = open(shmFileName, 'r')
         self.shm = mmap.mmap(self.shmFile.fileno(), mmap.PAGESIZE, mmap.MAP_SHARED, mmap.PROT_READ)
 
+        
         for method in ['scene', 'setCentralItem']:
             setattr(self, method, getattr(self._view, method))
         
@@ -81,7 +82,7 @@ class Renderer(pg.GraphicsView):
         #fh.flush()
         fd = self.shmFile.fileno()
         self.shm = mmap.mmap(fd, mmap.PAGESIZE, mmap.MAP_SHARED, mmap.PROT_WRITE)
-
+        atexit.register(self.close)
         
         pg.GraphicsView.__init__(self, *args, **kwds)
         self.scene().changed.connect(self.update)
@@ -89,6 +90,10 @@ class Renderer(pg.GraphicsView):
         self.renderTimer = QtCore.QTimer()
         self.renderTimer.timeout.connect(self.renderView)
         self.renderTimer.start(16)
+        
+    def close(self):
+        self.shm.close()
+        self.shmFile.close()
         
     def shmFileName(self):
         return self.shmFile.name
