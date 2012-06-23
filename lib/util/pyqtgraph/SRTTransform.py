@@ -2,8 +2,9 @@
 from .Qt import QtCore, QtGui
 from .Point import Point
 import numpy as np
+import pyqtgraph as pg
 
-class Transform(QtGui.QTransform):
+class SRTTransform(QtGui.QTransform):
     """Transform that can always be represented as a combination of 3 matrices: scale * rotate * translate
     This transform has no shear; angles are always preserved.
     """
@@ -11,9 +12,11 @@ class Transform(QtGui.QTransform):
         QtGui.QTransform.__init__(self)
         self.reset()
         
-        if isinstance(init, dict):
+        if init is None:
+            return
+        elif isinstance(init, dict):
             self.restoreState(init)
-        elif isinstance(init, Transform):
+        elif isinstance(init, SRTTransform):
             self._state = {
                 'pos': Point(init._state['pos']),
                 'scale': Point(init._state['scale']),
@@ -22,6 +25,10 @@ class Transform(QtGui.QTransform):
             self.update()
         elif isinstance(init, QtGui.QTransform):
             self.setFromQTransform(init)
+        elif isinstance(init, QtGui.QMatrix4x4):
+            self.setFromMatrix4x4(init)
+        else:
+            raise Exception("Cannot create SRTTransform from input type: %s" % str(type(init)))
 
         
     def getScale(self):
@@ -62,6 +69,19 @@ class Transform(QtGui.QTransform):
             'pos': Point(p1),
             'scale': Point(dp2.length(), dp3.length() * sy),
             'angle': (np.arctan2(dp2[1], dp2[0]) * 180. / np.pi) + da
+        }
+        self.update()
+        
+    def setFromMatrix4x4(self, m):
+        m = pg.SRTTransform3D(m)
+        angle, axis = m.getRotation()
+        if angle != 0 and (axis[0] != 0 or axis[1] != 0 or axis[2] != 1):
+            print angle, axis
+            raise Exception("Can only convert 4x4 matrix to 3x3 if rotation is around Z-axis.")
+        self._state = {
+            'pos': Point(m.getTranslation()),
+            'scale': Point(m.getScale()),
+            'angle': angle
         }
         self.update()
         
@@ -109,10 +129,10 @@ class Transform(QtGui.QTransform):
     def __div__(self, t):
         """A / B  ==  B^-1 * A"""
         dt = t.inverted()[0] * self
-        return Transform(dt)
+        return SRTTransform(dt)
         
     def __mul__(self, t):
-        return Transform(QtGui.QTransform.__mul__(self, t))
+        return SRTTransform(QtGui.QTransform.__mul__(self, t))
 
     def saveState(self):
         p = self._state['pos']
@@ -184,12 +204,12 @@ if __name__ == '__main__':
     s.addItem(l1)
     s.addItem(l2)
     
-    tr1 = Transform()
-    tr2 = Transform()
+    tr1 = SRTTransform()
+    tr2 = SRTTransform()
     tr3 = QtGui.QTransform()
     tr3.translate(20, 0)
     tr3.rotate(45)
-    print("QTransform -> Transform:", Transform(tr3))
+    print("QTransform -> Transform:", SRTTransform(tr3))
     
     print("tr1:", tr1)
     
@@ -202,7 +222,7 @@ if __name__ == '__main__':
     
     print("tr2 * tr1 = ", tr2*tr1)
     
-    tr4 = Transform()
+    tr4 = SRTTransform()
     tr4.scale(-1, 1)
     tr4.rotate(30)
     print("tr1 * tr4 = ", tr1*tr4)

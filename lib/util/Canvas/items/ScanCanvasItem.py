@@ -197,7 +197,7 @@ class ScanCanvasItem(CanvasItem):
                     continue
                 fh = d['Camera']['frames.ma']
                 handles.append(fh)
-                frames = fh.read()
+                frames = fh.read().asarray()
                 if self.ui.bgFrameCheck.isChecked():
                     image = frames[spotFrame]-frames[bgFrame]
                     image[frames[bgFrame] > frames[spotFrame]] = 0.  ## unsigned type; avoid negative values

@@ -58,6 +58,7 @@ class SqliteDatabase:
         self.db.setDatabaseName(fileName)
         self.db.open()
         self.tables = None
+        self._transactions = []
         self._readTableList()
         
     def close(self):
@@ -183,6 +184,9 @@ class SqliteDatabase:
         All arguments are passed through to select(). By default, limit=1000 and offset=0.
         Note that if you specify limit or offset, they MUST be given as keyword arguments.
         """
+        if 'chunkSize' in kargs:  ## for compatibility with iterInsert
+            kargs['limit'] = kargs['chunkSize']
+            del kargs['chunkSize']
         if 'offset' not in kargs:
             kargs['offset'] = 0
         if 'limit' not in kargs:
@@ -237,41 +241,44 @@ class SqliteDatabase:
         if len(records) == 0:
             return
         ret = []
-        
-        ## Rememember that _prepareData may change the number of columns!
-        records = TableData(self._prepareData(table, records, ignoreUnknownColumns=ignoreExtraColumns, batch=True))
-        p.mark("prepared data")
-        
-        columns = records.keys()
-        insert = "INSERT"
-        if replaceOnConflict:
-            insert += " OR REPLACE"
-        #print "Insert:", columns
-        cmd = "%s INTO %s (%s) VALUES (%s)" % (insert, table, quoteList(columns), ','.join([':'+f for f in columns]))
 
-        numRecs = len(records)
-        if chunkAll: ## insert all records in one go.
-            self.exe(cmd, records, batch=True)
-            yield (numRecs, numRecs)
-            return
-            
-        
-        chunkSize = int(chunkSize) ## just make sure
-        offset = 0
-        i = 0
-        while offset < len(records)-1:
-            #print len(columns), len(records[0]), len(self.tableSchema(table))
-            chunk = records[offset:offset+chunkSize]
-            self.exe(cmd, chunk, batch=True)
-            offset += len(chunk)
-            yield (offset, numRecs)
-            
+        with self.transaction():
+            ## Rememember that _prepareData may change the number of columns!
+            records = TableData(self._prepareData(table, records, ignoreUnknownColumns=ignoreExtraColumns, batch=True))
+            p.mark("prepared data")
+
+            columns = records.keys()
+            insert = "INSERT"
+            if replaceOnConflict:
+                insert += " OR REPLACE"
+            #print "Insert:", columns
+            cmd = "%s INTO %s (%s) VALUES (%s)" % (insert, table, quoteList(columns), ','.join([':'+f for f in columns]))
+
+            numRecs = len(records)
+            if chunkAll: ## insert all records in one go.
+                self.exe(cmd, records, batch=True)
+                yield (numRecs, numRecs)
+                return
+
+
+            chunkSize = int(chunkSize) ## just make sure
+            offset = 0
+            i = 0
+            while offset < len(records)-1:
+                #print len(columns), len(records[0]), len(self.tableSchema(table))
+                chunk = records[offset:offset+chunkSize]
+                self.exe(cmd, chunk, batch=True)
+                offset += len(chunk)
+                yield (offset, numRecs)
+            p.mark("Transaction done")
+
         p.finish("Executed.")
 
     def delete(self, table, where):
-        whereStr = self._buildWhereClause(where, table)
-        cmd = "DELETE FROM %s %s" % (table, whereStr)
-        return self(cmd)
+        with self.transaction():
+            whereStr = self._buildWhereClause(where, table)
+            cmd = "DELETE FROM %s %s" % (table, whereStr)
+            return self(cmd)
 
     def update(self, table, vals, where=None, rowid=None):
         """Update records in the DB.
@@ -283,17 +290,28 @@ class SqliteDatabase:
             if where is not None:
                 raise Exception("'where' and 'rowid' are mutually exclusive arguments.")
             where = {'rowid': rowid}
-        whereStr = self._buildWhereClause(where, table)
-        #if where is None:
-            #if rowid is None:
-                #raise Exception("Must specify 'where' or 'rowids'")
-            #else:
-                #where = "rowid=%d" % rowid
-        setStr = ', '.join(['"%s"=:%s' % (k, k) for k in vals])
-        data = self._prepareData(table, [vals], batch=True)
-        cmd = "UPDATE %s SET %s %s" % (table, setStr, where)
-        return self(cmd, data, batch=True)
+        
+        with self.transaction():
+            whereStr = self._buildWhereClause(where, table)
+            setStr = ', '.join(['"%s"=:%s' % (k, k) for k in vals])
+            cmd = "UPDATE %s SET %s %s" % (table, setStr, where)
+            data = self._prepareData(table, [vals], batch=True)
+            return self(cmd, data, batch=True)
 
+    def transaction(self, name=None):
+        """Return an enterable Transaction instance.
+        Use thusly::
+
+            with db.transaction():
+                db.doStuff()
+                db.doMoreStuff()
+
+        If an exception is raised while the transaction is active, all changes will be rolled back.
+        Note that wrapping multiple database operations in a transaction can *greatly* increase
+        performance.
+        """
+        return Transaction(self, name)
+        
     def lastInsertRow(self):
         q = self("select last_insert_rowid()")
         return q[0].values()[0]
@@ -307,6 +325,7 @@ class SqliteDatabase:
           columns: (list) a list of tuples (name, type, constraints) defining columns in the table. 
                    all 3 elements othe tuple are strings; constraints are optional. 
                    Types may be any string, but are typically int, real, text, or blob.
+        (see sqlite 'CREATE TABLE')
         """
         #print "create table", table, ', '.join(columns)
         
@@ -319,7 +338,21 @@ class SqliteDatabase:
 
         self('CREATE TABLE "%s" (%s) %s' % (table, columnStr, sql))
         self._readTableList()
- 
+
+    def createIndex(self, table, columns, ifNotExist=True):
+        """
+        Create an index on table (columns)
+        *columns* may be the name of a single column or a list of column names.
+        (see sqlite 'CREATE INDEX')
+        """
+        ine = "IF NOT EXISTS" if ifNotExist else ""
+        if isinstance(columns, basestring):
+            columns = [columns]
+        name = table + '__' + '_'.join(columns)
+        colStr = quoteList(columns)
+        cmd = 'CREATE INDEX %s "%s" ON "%s" (%s)' % (ine, name, table, colStr)
+        self(cmd)
+
     def addColumn(self, table, colName, colType, constraints=None):
         """
         Add a column to a table.
@@ -341,7 +374,8 @@ class SqliteDatabase:
         self('DROP TABLE "%s"' % table)
 
     def hasTable(self, table):
-        return table in self.listTables()  ## this is a case-insensitive operation
+        self.listTables()  ## make sure table list has been generated
+        return table in self.tables  ## this is a case-insensitive operation
     
     def tableSchema(self, table):
         """
@@ -551,9 +585,30 @@ class SqliteDatabase:
         #print tables
 
 
-
-
+class Transaction:
+    """See SQLiteDatabase.transaction()"""
+    def __init__(self, db, name=None):
+        self.db = db
+        self.name = name
         
+    def __enter__(self):
+        if self.name is None:
+            self.name = 'transaction%d' % len(self.db._transactions)
+        self.db('SAVEPOINT %s' % self.name)
+        self.db._transactions.append(self)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type is None:
+            self.db('RELEASE SAVEPOINT %s' % self.name)
+        else:
+            self.db('ROLLBACK TRANSACTION TO %s' % self.name)
+        
+        if self.db._transactions[-1] is not self:
+            print self, self.db._transactions
+            raise Exception('Tried to exit transaction before another nested transaction has finished.')
+        self.db._transactions.pop(-1)
+
+
 class TableData:
     """
     Class for presenting multiple forms of tabular data through a consistent interface.

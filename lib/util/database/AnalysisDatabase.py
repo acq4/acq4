@@ -323,7 +323,7 @@ class AnalysisDatabase(SqliteDatabase):
             del self.columnConfigCache[table]
     
     
-    def checkTable(self, table, owner, columns, create=False, ignoreUnknownColumns=False, addUnknownColumns=False):
+    def checkTable(self, table, owner, columns, create=False, ignoreUnknownColumns=False, addUnknownColumns=False, indexes=None):
         """
         Checks to be sure that a table has been created with the correct fields and ownership.
         This should generally be run before attempting to access a table.
@@ -336,6 +336,9 @@ class AnalysisDatabase(SqliteDatabase):
         
         If addUnknownColumns==True, then any columns in the data
         that are not also in the table will be created in the table.
+
+        If indexes is supplied and create==True, then the specified indexes will be created
+        if they do not already exist by calling db.createIndex(table, index) once for each item in indexes.
         """
         columns = parseColumnDefs(columns, keyOrder=['Type', 'Constraints', 'Link'])
         ## Make sure target table exists and has correct columns, links to input file
@@ -372,37 +375,44 @@ class AnalysisDatabase(SqliteDatabase):
                         if (colName in config and config[colName].get('Type',None) == colType):
                             continue
                     raise Exception("Table has different data structure: Column '%s' type is %s, should be %s" % (colName, specType, colType))
+
+        if create is True and indexes is not None:
+            for index in indexes:
+                self.createIndex(table, index, ifNotExist=True)   
+        
         return True
 
     def createDirTable(self, dirHandle):
         """Creates a new table for storing directories similar to dirHandle"""
         
-        ## Ask manager what columns we think should go with this directory
-        columns = lib.Manager.getManager().suggestedDirFields(dirHandle).keys()
-        
-        ## Add in any other columns present 
-        #for k in dirHandle.info():   ## Let's leave it to the user to add these if they want 
-            #if k not in columns:
-                #columns.append(k)
-        columns = [(k, 'text') for k in columns]
-        columns = [('Dir', 'file')] + columns
-        
-        tableName = self.dirTableName(dirHandle)
-        if self.hasTable(tableName):
-            raise Exception('Can not add directory table "%s"; table already exists.' % tableName)
-        
-        ## Link this table to its parent
-        parent = dirHandle.parent()
-        if parent.isManaged() and parent is not self.baseDir():
-            pType = self.dataModel().dirType(parent)
-            colName = pType + "Dir"
-            columns = [(colName, 'directory:'+pType)] + columns
-            #self.linkTables(tableName, colName, pName)
+        with self.transaction():
+            ## Ask manager what columns we think should go with this directory
+            columns = lib.Manager.getManager().suggestedDirFields(dirHandle).keys()
             
-        dirType = self.dataModel().dirType(dirHandle)
-        self.createTable(tableName, columns, dirType=dirType)
+            ## Add in any other columns present
+            #for k in dirHandle.info():   ## Let's leave it to the user to add these if they want
+                #if k not in columns:
+                    #columns.append(k)
+            columns = [(k, 'text') for k in columns]
+            columns = [('Dir', 'file')] + columns
+            
+            tableName = self.dirTableName(dirHandle)
+            if self.hasTable(tableName):
+                raise Exception('Can not add directory table "%s"; table already exists.' % tableName)
+            
+            ## Link this table to its parent
+            parent = dirHandle.parent()
+            if parent.isManaged() and parent is not self.baseDir():
+                pType = self.dataModel().dirType(parent)
+                colName = pType + "Dir"
+                columns = [(colName, 'directory:'+pType)] + columns
+                #self.linkTables(tableName, colName, pName)
+            
+            dirType = self.dataModel().dirType(dirHandle)
+            self.createTable(tableName, columns, dirType=dirType)
+        
         return tableName
-
+    
     def addDir(self, handle):
         """Create a record based on a DirHandle and its meta-info."""
         info = handle.info().deepcopy()
@@ -412,87 +422,79 @@ class AnalysisDatabase(SqliteDatabase):
                 info[n] = info[k]
                 del info[k]
         
-        ### determine parent directory, make sure parent is in DB.
-        #parent = handle.parent()
-        #parentRowId = None
-        #if parent.isManaged() and parent is not self.baseDir():
-            #pTable, parentRowId = self.addDir(parent)
+        with self.transaction():
+            table = self.dirTableName(handle)
+            if not self.hasTable(table):
+                self.createDirTable(handle)
             
-        table = self.dirTableName(handle)
-        if not self.hasTable(table):
-            self.createDirTable(handle)
+            ## make sure dir is not already in DB.
+            ## if it is, just return the row ID
+            rid = self.getDirRowID(handle)
+            if rid is not None:
+                return table, rid
             
-        ## make sure dir is not already in DB. 
-        ## if it is, just return the row ID
-        rid = self.getDirRowID(handle)
-        if rid is not None:
-            return table, rid
-        
-        ## find all directory columns, make sure linked directories are present in DB
-        conf = self.getColumnConfig(table)
-        for colName, col in conf.iteritems():
-            if col['Type'].startswith('directory'):
-                #pTable = col['Link']
-                pType = col['Type'].lstrip('directory:')
-                parent = self.dataModel().getParent(handle, pType)
-                if parent is not None:
-                    self.addDir(parent)
-                    info[colName] = parent
-                else:
-                    info[colName] = None
-        
+            ## find all directory columns, make sure linked directories are present in DB
+            conf = self.getColumnConfig(table)
+            for colName, col in conf.iteritems():
+                if col['Type'].startswith('directory'):
+                    #pTable = col['Link']
+                    pType = col['Type'].lstrip('directory:')
+                    parent = self.dataModel().getParent(handle, pType)
+                    if parent is not None:
+                        self.addDir(parent)
+                        info[colName] = parent
+                    else:
+                        info[colName] = None
             
-        #if parentRowId is not None:
-            #pType = self.getTableConfig(pTable)['DirType']
-            #info[pType+'Dir'] = parentRowId
-        info['Dir'] = handle
-        
-        self.insert(table, info, ignoreExtraColumns=True)
-
-        return table, self.lastInsertRow()
+            info['Dir'] = handle
+            
+            self.insert(table, info, ignoreExtraColumns=True)
+            
+            return table, self.lastInsertRow()
 
 
     def createView(self, viewName, tables):
         """Create a view which joins the tables listed."""
         # db('create view "sites" as select * from photostim_sites inner join DirTable_Protocol on photostim_sites.ProtocolDir=DirTable_Protocol.rowid inner join DirTable_Cell on DirTable_Protocol.CellDir=DirTable_Cell.rowid')
-        
-        cmd = 'create view "%s" as select * from "%s"' % (viewName, tables[0])
-        for i in range(len(tables)-1):
-            t1 = tables[i]
-            t2 = tables[i+1]
+
+        with self.transaction():
+            cmd = 'create view "%s" as select * from "%s"' % (viewName, tables[0])
+            for i in range(len(tables)-1):
+                t1 = tables[i]
+                t2 = tables[i+1]
+                
+                linkCol = None
+                for colName, config in self.getColumnConfig(t1).iteritems():
+                    if str(config['Link']).lower() == t2.lower():
+                        linkCol = config['Column']
+                        break
+                
+                if linkCol is None:
+                    for c in self.getColumnConfig(t1):
+                        print "  ", c
+                    raise Exception("No column linking table %s to %s.rowid" % (t1, t2))
+                
+                cmd += ' inner join "%s" on %s.%s=%s.rowid' % (t2, t1, linkCol, t2)
             
-            linkCol = None
-            for colName, config in self.getColumnConfig(t1).iteritems():
-                if str(config['Link']).lower() == t2.lower():
-                    linkCol = config['Column']
-                    break
-                    
-            if linkCol is None:
-                for c in self.getColumnConfig(t1):
-                    print "  ", c
-                raise Exception("No column linking table %s to %s.rowid" % (t1, t2))
+            self(cmd)
             
-            cmd += ' inner join "%s" on %s.%s=%s.rowid' % (t2, t1, linkCol, t2)
-        
-        self(cmd)
-        
-        ## Create column config records for this view
-        colNames = self.tableSchema(viewName).keys()
-        colDesc = []
-        colIndex = 0
-        for table in tables:
-            cols = self.getColumnConfig(table)
-            for col, config in cols.iteritems():
-                config = config.copy()
-                config['Column'] = colNames[colIndex]
-                config['Table'] = viewName
-                colDesc.append(config)
-                colIndex += 1
-        self.insert('ColumnConfig', colDesc)
-        
-        
-        
-        
+            ## Create column config records for this view
+            colNames = self.tableSchema(viewName).keys()
+            colDesc = []
+            colIndex = 0
+            for table in tables:
+                cols = self.getColumnConfig(table)
+                for col, config in cols.iteritems():
+                    config = config.copy()
+                    config['Column'] = colNames[colIndex]
+                    config['Table'] = viewName
+                    colDesc.append(config)
+                    colIndex += 1
+            self.insert('ColumnConfig', colDesc)
+    
+    
+    
+    
 
     #def linkTables(self, table1, col, table2):
         #"""Declare a key relationship between two tables. Values in table1.column are ROWIDs from table 2"""
@@ -553,8 +555,8 @@ class AnalysisDatabase(SqliteDatabase):
         ## Return a DirHandle given table, rowid
         res = self.select(table, ['Dir'], sql='where rowid=%d'%rowid)
         if len(res) < 1:
-            raise Exception('rowid %d does not exist in %s' % (rowid, table))
-            #logMsg('rowid %d does not exist in %s' % (rowid, table), msgType='error')
+            raise Exception('rowid %d does not exist in %s' % (rowid, table)) 
+            #logMsg('rowid %d does not exist in %s' % (rowid, table), msgType='error') ### This needs to be caught further up in Photostim or somewhere, not here
             #return None
         #print res
         #return self.baseDir()[res[0]['Dir']]

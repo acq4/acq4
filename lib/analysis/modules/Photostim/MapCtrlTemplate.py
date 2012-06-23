@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/Photostim/MapCtrlTemplate.ui'
 #
-# Created: Wed May  9 23:22:46 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Wed Jun 13 15:43:17 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(286, 371)
+        Form.resize(292, 371)
         self.gridLayout = QtGui.QGridLayout(Form)
         self.gridLayout.setMargin(0)
         self.gridLayout.setSpacing(0)
@@ -54,6 +54,7 @@ class Ui_Form(object):
         self.gridLayout_2.setVerticalSpacing(0)
         self.gridLayout_2.setObjectName(_fromUtf8("gridLayout_2"))
         self.scanTree = TreeWidget(self.groupBox)
+        self.scanTree.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
         self.scanTree.setHeaderHidden(False)
         self.scanTree.setObjectName(_fromUtf8("scanTree"))
         self.gridLayout_2.addWidget(self.scanTree, 0, 0, 1, 3)

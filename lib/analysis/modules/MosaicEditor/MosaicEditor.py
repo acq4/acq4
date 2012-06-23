@@ -79,10 +79,11 @@ class MosaicEditor(AnalysisModule):
         self.closeAtlas()
         
         cls = atlas.getAtlasClass(name)
-        if name == 'AuditoryCortex':
-            obj = cls(canvas=self.getElement('Canvas'))
-        else:
-            obj = cls()
+        #if name == 'AuditoryCortex':
+        #    obj = cls(canvas=self.getElement('Canvas'))
+        #else:
+             #obj = cls()
+        obj = cls()
         ctrl = obj.ctrlWidget(host=self)
         self.ui.atlasLayout.addWidget(ctrl, 0, 0)
         self.atlas = ctrl

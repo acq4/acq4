@@ -1,90 +1,75 @@
 protocol:
-    windowState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%02%00%00%00%02%00%00%04%FE%00%00%01T%FC%01%00%00%00%04%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01%3C%00%00%00%EF%00%FF%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%01%40%00%00%01%5C%00%00%01%17%00%FF%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%02%A0%00%00%01f%00%00%015%00%FF%FF%FF%FC%00%00%04%0A%00%00%00%F4%00%00%00%C8%00%FF%FF%FF%FA%00%00%00%00%02%00%00%00%03%FB%00%00%00%16%00T%00e%00m%00p%00e%00r%00a%00t%00u%00r%00e%01%00%00%00%00%FF%FF%FF%FF%00%00%00J%00%FF%FF%FF%FB%00%00%00%06%00D%00A%00Q%01%00%00%00%00%FF%FF%FF%FF%00%00%01%3E%00%FF%FF%FF%FB%00%00%00%14%00d%00o%00c%00k%00W%00i%00d%00g%00e%00t%01%00%00%00%00%00%00%00%D5%00%00%00%3E%00%FF%FF%FF%00%00%00%03%00%00%04%FE%00%00%02%91%FC%01%00%00%00%01%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%00%00%00%00%04%FE%00%00%01n%00%FF%FF%FF%00%00%04%FE%00%00%00%00%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
+    windowState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%02%00%00%00%02%00%00%04%AA%00%00%01L%FC%01%00%00%00%04%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01%2A%00%00%00%E8%00%FF%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%01.%00%00%01%18%00%00%01%18%00%FF%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%02J%00%00%01%9B%00%00%014%00%FF%FF%FF%FC%00%00%03%E9%00%00%00%C1%00%00%00%C1%00%FF%FF%FF%FA%00%00%00%00%02%00%00%00%03%FB%00%00%00%16%00T%00e%00m%00p%00e%00r%00a%00t%00u%00r%00e%01%00%00%00%00%FF%FF%FF%FF%00%00%00F%00%FF%FF%FF%FB%00%00%00%06%00D%00A%00Q%01%00%00%00%00%FF%FF%FF%FF%00%00%017%00%FF%FF%FF%FB%00%00%00%14%00d%00o%00c%00k%00W%00i%00d%00g%00e%00t%01%00%00%00%00%00%00%00%D5%00%00%00%40%00%FF%FF%FF%00%00%00%03%00%00%04%AA%00%00%02P%FC%01%00%00%00%02%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%00%00%00%00%04%AA%00%00%01%2F%00%FF%FF%FF%FB%00%00%00%16%00T%00e%00m%00p%00e%00r%00a%00t%00u%00r%00e%01%00%00%04%5B%00%00%00%9B%00%00%00%00%00%00%00%00%00%00%04%AA%00%00%00%00%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
     params: [('Clamp1', 'Amplitude', True, [])]
     conf:
         continuous: False
         cycleTime: 1.5
         loop: False
-        duration: 0.40000000000000002
+        duration: 0.4
         repetitions: 0
-        leadTime: 0.050000000000000003
+        leadTime: 0.05
         loopCycleTime: 1.0
     analysis:
 devices:
     Clamp1:
         bottomPlotWidget:
-            xAutoRadio: True
-            maxTracesCheck: False
-            downsampleSpin: 1
-            xLinkCombo: ''
-            xMinText: '0'
-            groupBox_2: False
-            xMouseCheck: True
-            yAutoPercentSpin: 100
-            manualDecimateRadio: False
-            xManualRadio: False
-            maxTracesSpin: 0
-            autoDecimateRadio: True
-            xAutoPercentSpin: 100
-            alphaSlider: 1000
-            yMaxText: '0'
-            paramList:
-            yLinkCombo: ''
-            yManualRadio: False
-            autoPointsCheck: True
             decimateGroup: True
-            yAutoRadio: True
-            yLogCheck: False
-            yMouseCheck: True
-            groupBox: False
-            gridGroup: True
+            downsampleSpin: 1000
+            gridGroup: False
             pointsGroup: True
-            yMinText: '0'
+            maxTracesSpin: 0
+            manualDecimateRadio: True
             gridAlphaSlider: 70
+            maxTracesCheck: False
             averageGroup: False
+            alphaGroup: False
+            autoDecimateRadio: False
             autoAlphaCheck: False
-            alphaGroup: True
-            xMaxText: '0'
+            alphaSlider: 1000
+            paramList:
             powerSpectrumGroup: False
+            autoPointsCheck: True
             forgetTracesCheck: False
-            xLogCheck: False
+            view:
+                wheelScaleFactor: -0.125
+                viewRange: [[-0.008, 0.40800000000000003], [-5.26e-10, 8.259999999999998e-10]]
+                mouseEnabled: [True, True]
+                linkedViews: [None, None]
+                mouseMode: 3
+                yInverted: False
+                targetRange: [[-0.008, 0.40800000000000003], [-5.26e-10, 8.259999999999998e-10]]
+                autoRange: [1.0, 1.0]
+                aspectLocked: False
         primarySignalCheck: False
         topPlotWidget:
-            xAutoRadio: True
-            maxTracesCheck: False
-            downsampleSpin: 1
-            xLinkCombo: ''
-            xMinText: '0'
-            groupBox_2: False
-            xMouseCheck: True
-            yAutoPercentSpin: 100
-            manualDecimateRadio: False
-            xManualRadio: False
-            maxTracesSpin: 0
-            autoDecimateRadio: True
-            xAutoPercentSpin: 100
-            alphaSlider: 1000
-            yMaxText: '0'
-            paramList:
-            yLinkCombo: ''
-            yManualRadio: False
-            autoPointsCheck: True
             decimateGroup: True
-            yAutoRadio: True
-            yLogCheck: False
-            yMouseCheck: True
-            groupBox: False
-            gridGroup: True
+            downsampleSpin: 1
+            gridGroup: False
             pointsGroup: True
-            yMinText: '0'
+            maxTracesSpin: 0
+            manualDecimateRadio: True
             gridAlphaSlider: 70
+            maxTracesCheck: False
             averageGroup: False
-            autoAlphaCheck: False
             alphaGroup: True
-            xMaxText: '0'
+            autoDecimateRadio: False
+            autoAlphaCheck: False
+            alphaSlider: 1000
+            paramList:
+                Clamp1.Amplitude: False
             powerSpectrumGroup: False
+            autoPointsCheck: True
             forgetTracesCheck: False
-            xLogCheck: False
+            view:
+                wheelScaleFactor: -0.125
+                viewRange: [[-0.007998, 0.407898], [-0.10862761334991225, 0.004399422837304989]]
+                mouseEnabled: [True, True]
+                linkedViews: [None, None]
+                mouseMode: 3
+                yInverted: False
+                targetRange: [[-0.007998, 0.407898], [-0.10862761334991225, 0.004399422837304989]]
+                autoRange: [True, True]
+                aspectLocked: False
         vcModeRadio: False
         splitter: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%01%E8%00%00%00%BD%01%00%00%00%05%01%00%00%00%02'
         holdingCheck: False
@@ -95,30 +80,37 @@ devices:
         splitter_2: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%010%00%00%03n%01%00%00%00%05%01%00%00%00%01'
         i0ModeRadio: False
         waveGeneratorWidget:
-            function: 'pulse(50, 300, Amplitude)'
-            autoUpdate: False
-            params: 'Amplitude = 200; -200:200/21'
+            function: 'pulse(50*ms, 300*ms, Amplitude)'
+            autoUpdate: True
+            params:
+                Amplitude:
+                    default: u'300*pA'
+                    sequence: 'range'
+                    start: u'-500*pA'
+                    stop: u'800*pA'
+                    steps: 27
+            advancedMode: True
         icModeRadio: True
-        primarySignalCombo: 'Membrane Potential'
+        primarySignalCombo: u'Membrane Potential'
         secondaryGainCheck: False
         primaryGainCheck: True
         secondarySignalCheck: False
         mode: 'IC'
-        secondarySignalCombo: 'Command Current'
+        secondarySignalCombo: u'Command Current'
         secondarySignal: 'Command Current'
     DAQ:
         butterworthStopband: 2.0
         denoiseThreshold: 4.0
-        denoiseMethod: 'None'
+        denoiseMethod: u'None'
         downsample: 40
-        filterMethod: 'None'
+        filterMethod: u'None'
         butterworthPassband: 1.0
         butterworthPassDB: 2.0
         denoiseWidth: 1
         butterworthStopDB: 10.0
         rate: 400000.0
         besselOrder: 4
-        triggerDevice: 'No Trigger'
+        triggerDevice: u'No Trigger'
         besselCutoff: 2.0
     Temperature:
         splitter2: '%00%00%00%FF%00%00%00%00%00%00%00%01%00%00%00%DC%01%00%00%00%05%01%00%00%00%02'
@@ -127,6 +119,34 @@ devices:
         channels:
             BathTemp:
                 recordInitCheck: True
+                plot:
+                    decimateGroup: True
+                    downsampleSpin: 1
+                    gridGroup: False
+                    pointsGroup: True
+                    maxTracesSpin: 0
+                    manualDecimateRadio: True
+                    gridAlphaSlider: 70
+                    maxTracesCheck: False
+                    averageGroup: False
+                    alphaGroup: True
+                    autoDecimateRadio: False
+                    autoAlphaCheck: False
+                    alphaSlider: 1000
+                    paramList:
+                    powerSpectrumGroup: False
+                    autoPointsCheck: True
+                    forgetTracesCheck: False
+                    view:
+                        wheelScaleFactor: -0.125
+                        viewRange: [[-0.632659509248, 0.6326595092480002], [-0.632659509248, 0.6326595092480002]]
+                        mouseEnabled: [True, True]
+                        linkedViews: [None, None]
+                        mouseMode: 3
+                        yInverted: False
+                        targetRange: [[-0.632659509248, 0.6326595092480002], [-0.632659509248, 0.6326595092480002]]
+                        autoRange: [1.0, 1.0]
+                        aspectLocked: False
                 groupBox: True
                 recordCheck: False
                 displayCheck: False

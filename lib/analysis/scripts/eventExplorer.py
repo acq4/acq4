@@ -155,55 +155,58 @@ def loadCell(cell):
     tot = db.select(eventView, 'count()', where={'CellDir': cell})[0]['count()']
     print tot, "total events.."
     
-    for ev in db.iterSelect(eventView, ['ProtocolSequenceDir', 'SourceFile', 'fitAmplitude', 'fitTime', 'fitDecayTau', 'fitRiseTau', 'fitLengthOverDecay', 'fitFractionalError', 'userTransform', 'type', 'CellDir', 'ProtocolDir'], where={'CellDir': cell}, toArray=True):
-        extra = np.empty(ev.shape, dtype=[('right', float), ('anterior', float), ('dorsal', float), ('holding', float)])
-        
-        ## insert holding levels
-        for i in range(len(ev)):
-            sd = ev[i]['ProtocolSequenceDir']
-            if sd not in hvals:
-                cf = ev[i]['SourceFile']
-                hvals[sd] = mod.getClampHoldingLevel(cf)
-                #print hvals[sd], cf
-            extra[i]['holding'] = hvals[sd]
+    with pg.ProgressDialog('Loading event data...', maximum=tot, wait=0) as dlg:
+        for ev in db.iterSelect(eventView, ['ProtocolSequenceDir', 'SourceFile', 'fitAmplitude', 'fitTime', 'fitDecayTau', 'fitRiseTau', 'fitTimeToPeak', 'fitLengthOverDecay', 'fitFractionalError', 'userTransform', 'type', 'CellDir', 'ProtocolDir'], where={'CellDir': cell}, toArray=True, chunkSize=200):
+            extra = np.empty(ev.shape, dtype=[('right', float), ('anterior', float), ('dorsal', float), ('holding', float)])
             
-        ## insert positions
-
-        for i in range(len(ev)):
-            protoDir = ev[i]['SourceFile'].parent()
-            key = protoDir
-            #key = (ev[i]['ProtocolSequenceDir'], ev[i]['SourceFile'])
-            if key not in positionCache:
-                #try:
-                    #dh = ev[i]['ProtocolDir']
-                    #p1 = pg.Point(dh.info()['Scanner']['position'])
-                    #if key[0] not in tcache:
-                        #tr = pg.Transform()
-                        #tr.restoreState(dh.parent().info()['userTransform'])
-                        #tcache[key[0]] = tr
-                    #trans = tcache[key[0]]
-                    #p2 = trans.map(p1)
-                    #pcache[key] = (p2.x(),p2.y())
-                #except:
-                    #print key
-                    #raise
-                rec = db.select('CochlearNucleus_Protocol', where={'ProtocolDir': protoDir})
-                if len(rec) == 0:
-                    pos = (None, None, None)
-                elif len(rec) == 1:
-                    pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
-                elif len(rec) == 2:
-                    raise Exception("Multiple position records for %s!" % str(protoDir))
-                positionCache[key] = pos
-            extra[i]['right'] = positionCache[key][0]
-            extra[i]['anterior'] = positionCache[key][1]
-            extra[i]['dorsal'] = positionCache[key][2]
-        
+            ## insert holding levels
+            for i in range(len(ev)):
+                sd = ev[i]['ProtocolSequenceDir']
+                if sd not in hvals:
+                    cf = ev[i]['SourceFile']
+                    hvals[sd] = mod.getClampHoldingLevel(cf)
+                    #print hvals[sd], cf
+                extra[i]['holding'] = hvals[sd]
+                
+            ## insert positions
+    
+            for i in range(len(ev)):
+                protoDir = ev[i]['SourceFile'].parent()
+                key = protoDir
+                #key = (ev[i]['ProtocolSequenceDir'], ev[i]['SourceFile'])
+                if key not in positionCache:
+                    #try:
+                        #dh = ev[i]['ProtocolDir']
+                        #p1 = pg.Point(dh.info()['Scanner']['position'])
+                        #if key[0] not in tcache:
+                            #tr = pg.SRTTransform()
+                            #tr.restoreState(dh.parent().info()['userTransform'])
+                            #tcache[key[0]] = tr
+                        #trans = tcache[key[0]]
+                        #p2 = trans.map(p1)
+                        #pcache[key] = (p2.x(),p2.y())
+                    #except:
+                        #print key
+                        #raise
+                    rec = db.select('CochlearNucleus_Protocol', where={'ProtocolDir': protoDir})
+                    if len(rec) == 0:
+                        pos = (None, None, None)
+                    elif len(rec) == 1:
+                        pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
+                    elif len(rec) == 2:
+                        raise Exception("Multiple position records for %s!" % str(protoDir))
+                    positionCache[key] = pos
+                extra[i]['right'] = positionCache[key][0]
+                extra[i]['anterior'] = positionCache[key][1]
+                extra[i]['dorsal'] = positionCache[key][2]
             
-        ev = fn.concatenateColumns([ev, extra])
-        allEvents.append(ev)
-        nEv += len(ev)
-        print "    Loaded %d / %d events" % (nEv, tot)
+                
+            ev = fn.concatenateColumns([ev, extra])
+            allEvents.append(ev)
+            nEv += len(ev)
+            dlg.setValue(nEv)
+            if dlg.wasCanceled():
+                raise Exception('Canceled by user.')
     ev = np.concatenate(allEvents)
     events[cell] = ev
     
@@ -358,12 +361,14 @@ def showCell():
     sr = spontRate(ev2)
     sri = spontRate(ev3)
         
-    title = "%s -- %s --- <span style='color: #99F;'>ex:</span> %s %s %0.1fHz --- <span style='color: #F99;'>in:</span> %s %s %0.1fHz" % (
+    title = "%s -- %s --- <span style='color: #99F;'>ex:</span> %s %s %s %0.1fHz --- <span style='color: #F99;'>in:</span> %s %s %s %0.1fHz" % (
         dh.name(relativeTo=dh.parent().parent().parent()), 
         typ,
+        pg.siFormat(np.median(ev2['fitTimeToPeak']), error=np.std(ev2['fitTimeToPeak']), space=False, suffix='s'),
         pg.siFormat(np.median(ev2['fitDecayTau']), error=np.std(ev2['fitDecayTau']), space=False, suffix='s'),
         pg.siFormat(np.median(ev2['fitAmplitude']), error=np.std(ev2['fitAmplitude']), space=False, suffix='A'),
         sr,
+        pg.siFormat(np.median(ev3['fitTimeToPeak']), error=np.std(ev3['fitTimeToPeak']), space=False, suffix='s'),
         pg.siFormat(np.median(ev3['fitDecayTau']), error=np.std(ev3['fitDecayTau']), space=False, suffix='s'),
         pg.siFormat(np.median(ev3['fitAmplitude']), error=np.std(ev3['fitAmplitude']), space=False, suffix='A'),
         sri)

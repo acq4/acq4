@@ -39,8 +39,8 @@ class MultiClampProtoGui(ProtocolGui):
         self.mode = None
         self.setMode('I=0')
 
-        self.ui.topPlotWidget.registerPlot(self.dev.name + '.Input')
-        self.ui.bottomPlotWidget.registerPlot(self.dev.name + '.Command')
+        self.ui.topPlotWidget.registerPlot(self.dev.name() + '.Input')
+        self.ui.bottomPlotWidget.registerPlot(self.dev.name() + '.Command')
 
         self.daqChanged(self.daqUI.currentState())
         self.daqUI.sigChanged.connect(self.daqChanged)
@@ -133,7 +133,7 @@ class MultiClampProtoGui(ProtocolGui):
 
     def sequenceChanged(self):
         #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
-        self.sigSequenceChanged.emit(self.dev.name)
+        self.sigSequenceChanged.emit(self.dev.name())
 
     def updateWaves(self):
         self.clearCmdPlots()
@@ -173,7 +173,7 @@ class MultiClampProtoGui(ProtocolGui):
         ## Draw green trace for current command waveform
         if self.currentCmdPlot is not None:
             self.ui.bottomPlotWidget.removeItem(self.currentCmdPlot)
-        params = dict([(p[1], params[p]) for p in params if p[0] == self.dev.name])
+        params = dict([(p[1], params[p]) for p in params if p[0] == self.dev.name()])
         cur = self.getSingleWave(params) 
         if cur is not None:
             self.currentCmdPlot = self.plotCmdWave(cur, color=QtGui.QColor(100, 200, 100))

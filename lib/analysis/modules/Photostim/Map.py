@@ -57,16 +57,21 @@ class Map:
                 item.handle = fh
                 self.item.addChild(item)
 
-    def name(self, cell=None):
-        rec = self.getRecord()
+    def name(self, cell=None, rec=None):
+        if rec is None:
+            rec = self.getRecord()
         if cell is None:
             cell = rec['cell']
         if cell is None:
             return ""
         name = cell.shortName()
-        if rec['holding'] < -.04:
+        try:
+            holding = float(rec['holding'])
+        except ValueError:
+            holding = 0.0
+        if holding < -.04:
             name = name + "_excitatory"
-        elif rec['holding'] >= -.01:
+        elif holding >= -.01:
             name = name + "_inhibitory"
         return name
 
@@ -84,7 +89,7 @@ class Map:
     def addScanSpots(self, scan):
         for pt in scan.spots():
             pos = pt.viewPos()
-            size = pt.size  #sceneBoundingRect().width()
+            size = pt.size()  #sceneBoundingRect().width()
             dh = pt.data()
             
             added = False
@@ -93,7 +98,7 @@ class Map:
                 dp = pos2-pos
                 dist = (dp.x()**2 + dp.y()**2)**0.5
                 if dist < size/3.:      ## if position matches, add scan/spot data into existing site
-                    pt2['data'].append((scan, pt.data))
+                    pt2['data'].append((scan, pt.data()))
                     #pt2[2]['data'].append((scan, dh))
                     added = True
                     self.pointsByFile[pt.data()] = pt2
@@ -172,7 +177,7 @@ class Map:
         ninfo = next.info()
         if 'Temperature.BathTemp' in ninfo:
             rec['temp'] = ninfo['Temperature.BathTemp']
-        rec['description'] = self.name(source.parent())
+        rec['description'] = self.name(source.parent(), rec)
         return rec
 
 

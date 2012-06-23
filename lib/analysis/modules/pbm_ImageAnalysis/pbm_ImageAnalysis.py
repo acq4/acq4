@@ -48,22 +48,10 @@ import cv2
 import cv2.cv as cv
 
 #import smc as SMC # Vogelstein's OOPSI analysis for calcium transients
-import matplotlib
-try:
-    matplotlib.use('PS')
-except Warning:
-    pass
-import pylab as PL
-# from matplotlib import mpl
-# from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
-# from matplotlib.backends.backend_qt4 import NavigationToolbar2QT as NavigationToolbar 
-# from matplotlib.figure import Figure
-# matplotlib.rc('figure', facecolor='1.0') # Params['figure.facecolor'] = 1
-matplotlib.rc('font', size=' 11.0') # ['font.size'] = 11.0
 
+import pylab as PL
 """ 
 We use matplotlib/pylab for *some* figure generation.
-
 """
 class pbm_ImageAnalysis(AnalysisModule):
     def __init__(self, host, flowchartDir = None, dbIdentity = "ImageAnalysis"):
@@ -105,6 +93,10 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.burstsFound = None
         self.spikeTimes = []
         self.burstTimes = []
+        self.specImage = []
+        self.specImageCalcFlag = False
+        self.stdImage = []
+        self.avgImage = []
                 
         self.spikesFoundpk = None
         self.withinBurstsFound = None
@@ -166,6 +158,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrl.ImagePhys_getRatio.clicked.connect(self.loadRatioImage)
         self.ctrl.ImagePhys_ImgNormalize.clicked.connect(self.doNormalize)
         self.ctrl.ImagePhys_UnBleach.clicked.connect(self.unbleachImage)
+        self.ctrl.ImagePhys_SpecCalc.clicked.connect(self.spectrumCalc)
         self.ctrl.ImagePhys_View.currentIndexChanged.connect(self.changeView)
         self.ctrl.ImagePhys_RecalculateROIs.clicked.connect(self.calculateAllROIs)
         self.ctrl.ImagePhys_RetrieveROI.clicked.connect(self.restoreROI)
@@ -227,6 +220,8 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.viewFlag = True
         if view == 'Std Image':
             self.imageView.setImage(self.stdImage)
+        if view == 'Spectrum Image':
+            self.imageView.setImage(self.specImageDisplay)
         if view == 'Movie':
             self.imageView.setImage(self.imageData)
             self.viewFlag = False
@@ -336,7 +331,8 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.shiftFlag = False # eventually, but at the moment it does NOT work
         self.getDataStruct()
         
-        dh = dh[0]
+        if type(dh) is list:
+            dh = dh[0]
         self.currentFileName = dh.name()
         self.imageScaleUnit = 'pixels'
 
@@ -366,13 +362,16 @@ class pbm_ImageAnalysis(AnalysisModule):
 
             self.imageData = img.view(np.ndarray) # load into rawData, clipping the first image if needed
             self.rawData = self.imageData.copy()[fi:] # save the raw data.
+            # reduce image size if it is too big:
             self.imageData = self.imageData[fi:]
             self.baseImage = self.imageData[0] # just to show after processing...
             self.imageTimes = self.imageInfo[0].values()[1]
+            self.imagedT = np.mean(np.diff(self.imageTimes))
             self.imageTimes = self.imageTimes[fi:]
             self.imageView.setImage(self.imageData)
             self.dataState['Loaded'] = True
             self.dataState['Structure'] = 'Flat'
+            print 'rawdata shape: ', self.rawData.shape
             self.background = self.rawData.mean(axis=2).mean(axis=1)
             self.backgroundmean = self.background.mean(axis=0)
 
@@ -446,6 +445,17 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.getDataStruct()
         self.currentDataDirectory = dh
         self.ctrl.ImagePhys_View.setCurrentIndex(0)# always set to show the movie
+        self.specImageCalcFlag = False # we need to recalculate the spectrum
+        npts = self.imageData.shape[0]/2
+        freq = np.fft.fftfreq(npts, d=self.imagedT)
+        freq = freq[0:npts/2 + 1]
+        self.ctrl.ImagePhys_SpecHPF.setMinimum(0.0)
+        self.ctrl.ImagePhys_SpecHPF.setMaximum(np.max(freq))
+        self.ctrl.ImagePhys_SpecHPF.setValue(freq[1])
+        self.ctrl.ImagePhys_SpecLPF.setMinimum(freq[1])
+        self.ctrl.ImagePhys_SpecLPF.setMaximum(np.max(freq))
+        self.ctrl.ImagePhys_SpecLPF.setValue(np.max(freq))
+        
         self.updateAvgStdImage() # make sure mean and std are properly updated
         self.calculateAllROIs() # recompute the ROIS
         self.updateThisROI(self.lastROITouched)  #  and make sure plot reflects current ROI (not old data)  
@@ -457,15 +467,73 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.aveImage = np.mean(self.imageData, axis=0)
         #self.stdImage = scipy.stats.skew(self.imageData, axis=0)
         self.stdImage = np.std(self.imageData, axis=0)
-        freim = np.abs(np.fft.fft(self.imageData, axis=0)/self.imageData.shape[0])
-#        Y = fft(y)/n # fft computing and normalization
-        #print 'fim shape: ', freim.shape
-        npts = self.imageData.shape[0]/2
-        self.stdImage = np.mean(freim[range(int(0.5*npts/2),int(0.8*npts/2))], axis=0)
-        #print self.stdImage.shape
-        #print 'fim: ', freim.shape
         self.changeView()
         
+    
+    def spectrumCalc(self):
+        """
+        Calculate the spectrum and display the power across timein a frequency band as the image
+        intensity at each point. Useful for finding areas of activity
+        """
+#        self.specImageCalcFlag = False
+        sh = self.imageData.shape
+        #nr = range(0,sh[1],4)
+        if self.specImageCalcFlag is False:
+            self.freim = np.abs(np.fft.fft(self.imageData, axis=0)/self.imageData.shape[0])
+            self.specImageCalcFlag = True
+            
+#        Y = fft(y)/n # fft computing and normalization
+#        print 'fim shape: ', self.freim.shape
+        npts = self.imageData.shape[0]/2
+        freq = np.fft.fftfreq(npts, d=self.imagedT)
+        freq = freq[0:npts/2 + 1]
+#        print freq
+        hpf = self.ctrl.ImagePhys_SpecHPF.value()
+        lpf = self.ctrl.ImagePhys_SpecLPF.value()
+        u = np.where(freq > hpf)
+        v = np.where(freq < lpf)
+#        print u
+#        print v
+        frl = list(set(u[0]).intersection(set(v[0])))
+#        print frl
+        if len(frl) == 0:
+            return
+        si = self.freim.take(frl, axis=0)
+#        print si.shape
+        self.specImage = np.mean(si, axis=0)
+        sigma = self.ctrl.ImagePhys_FFTSmooth.value()
+        self.specImageDisplay = scipy.ndimage.filters.gaussian_filter(self.specImage, sigma)
+#        self.fftImage = np.mean(freim[range(int(0.5*npts/2),int(0.8*npts/2))], axis=0)
+        #print self.stdImage.shape
+        #print 'fim: ', freim.shape
+        view = self.ctrl.ImagePhys_View.setCurrentIndex(3)
+        self.changeView()
+
+
+ 
+#         nr = range(0,sh[1],4)
+#         print 'nr: ', nr
+#     #    (m.take([1,3], axis=1).take([1,3], axis=0))
+#         print 'original image shape: ', self.imageData.shape
+#         xdata = self.imageData.take(nr, axis=2).take(nr, axis=1)
+#         print 'xdata shape: ', xdata.shape 
+#         freim = np.abs(np.fft.fft(xdata)/self.imageData.shape[0])
+# #        Y = fft(y)/n # fft computing and normalization
+#         print 'freim shape: ', freim.shape
+#         npts = self.imageData.shape[0]/2
+#         freq = np.fft.fftfreq(npts, d=self.imagedT)
+#         freq = freq[0:npts/2 + 1]
+#         print freq
+#         u = np.where(freq > 1.0)
+#         v = np.where(freq < 5.0)
+#         frl = list(set(u[0]).intersection(set(v[0])))
+#         print frl
+#         si = freim.take(frl, axis=0)
+#         print si.shape
+#         self.stdImage = np.mean(si, axis=0)
+#         print self.stdImage.shape
+#         #print 'fim: ', freim.shape
+                
     def getImageScaling(self):
         """ retrieve scaling factor and set imageScaleUnit from the info on the image file
             In the case where the information is missing, we just set pixels.
@@ -1611,8 +1679,8 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.backgroundPlot.plot(y=tc_bleach, x=self.imageTimes[0:ndl], pen=pg.mkPen('r'), clear=True)
         #self.backgroundPlot.plot(y=self.tc_bleach, x=self.imageTimes[0:ndl], clear=False, pen=pg.mkPen('b'))
         self.backgroundPlot.plot(y=b_corr, x=self.imageTimes[0:ndl], clear=False, pen=pg.mkPen('g'))
-        self.updateAvgStdImage()
         self.paintImage(focus = False)
+        self.updateAvgStdImage()
         self.dataState['bleachCorrection'] = True # now set the flag
 
     

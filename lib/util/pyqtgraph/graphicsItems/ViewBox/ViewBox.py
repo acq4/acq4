@@ -327,7 +327,8 @@ class ViewBox(GraphicsWidget):
             changes[1] = yRange
 
         if len(changes) == 0:
-            raise Exception("Must specify at least one of rect, xRange, or yRange.")
+            print rect
+            raise Exception("Must specify at least one of rect, xRange, or yRange. (gave rect=%s)" % str(type(rect)))
         
         changed = [False, False]
         for ax, range in changes.items():
@@ -390,13 +391,17 @@ class ViewBox(GraphicsWidget):
         """
         self.setRange(xRange=[min, max], update=update, padding=padding)
 
-    def autoRange(self, padding=0.02):
+    def autoRange(self, padding=0.02, item=None):
         """
         Set the range of the view box to make all children visible.
         Note that this is not the same as enableAutoRange, which causes the view to 
         automatically auto-range whenever its contents are changed.
         """
-        bounds = self.childrenBoundingRect()
+        if item is None:
+            bounds = self.childrenBoundingRect()
+        else:
+            bounds = self.mapFromItemToView(item, item.boundingRect()).boundingRect()
+            
         if bounds is not None:
             self.setRange(bounds, padding=padding)
             
@@ -678,8 +683,11 @@ class ViewBox(GraphicsWidget):
         By default, the positive y-axis points upward on the screen. Use invertY(True) to reverse the y-axis.
         """
         self.state['yInverted'] = b
-        self.updateMatrix()
+        self.updateMatrix(changed=(False, True))
         self.sigStateChanged.emit(self)
+
+    def yInverted(self):
+        return self.state['yInverted']
         
     def setAspectLocked(self, lock=True, ratio=1):
         """
@@ -738,6 +746,19 @@ class ViewBox(GraphicsWidget):
         return self.childGroup.mapToItem(item, obj)
         #return item.mapFromScene(self.mapViewToScene(obj))
 
+    def mapViewToDevice(self, obj):
+        return self.mapToDevice(self.mapFromView(obj))
+        
+    def mapDeviceToView(self, obj):
+        return self.mapToView(self.mapFromDevice(obj))
+        
+    def viewPixelSize(self):
+        """Return the (width, height) of a screen pixel in view coordinates."""
+        o = self.mapToView(Point(0,0))
+        px, py = [Point(self.mapToView(v) - o) for v in self.pixelVectors()]
+        return (px.length(), py.length())
+        
+        
     def itemBoundingRect(self, item):
         """Return the bounding rect of the item in view coordinates"""
         return self.mapSceneToView(item.sceneBoundingRect()).boundingRect()
@@ -1012,6 +1033,7 @@ class ViewBox(GraphicsWidget):
     def updateMatrix(self, changed=None):
         if changed is None:
             changed = [False, False]
+        changed = list(changed)
         #print "udpateMatrix:"
         #print "  range:", self.range
         tr = self.targetRect()

@@ -21,6 +21,9 @@ import os.path as osp
 d = osp.dirname(osp.dirname(osp.abspath(__file__)))
 sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
 
+## install global exception handler for others to hook into.
+import exceptionHandling   
+
 import time, atexit, weakref, reload
 from PyQt4 import QtCore, QtGui
 if not hasattr(QtCore, 'Signal'):
@@ -40,6 +43,9 @@ import pyqtgraph as pg
 from pyqtgraph import ProgressDialog
 from LogWindow import LogWindow
 from HelpfulException import HelpfulException
+
+
+
 
 LOG = None
 
@@ -94,6 +100,27 @@ def logExc(msg, *args, **kwargs):
         print "Can't log error message; no log created yet."
         print args
         print kwargs
+
+blockLogging = False
+def exceptionCallback(*args):
+    ## Called whenever there is an unhandled exception.
+    
+    ## unhandled exceptions generate an error message by default, but this
+    ## can be overridden by raising HelpfulException(msgType='...')
+    global blockLogging
+    if not blockLogging:  ## if an error occurs *while* trying to log another exception, disable any further logging to prevent recursion.
+        try:
+            blockLogging = True
+            logMsg("Unexpected error: ", exception=args, msgType='error')
+        except:
+            print "Error: Exception could no be logged."
+            original_excepthook(*sys.exc_info())
+        finally:
+            blockLogging = False
+exceptionHandling.installCallback(exceptionCallback)        
+
+
+
 
 class Manager(QtCore.QObject):
     """Manager class is responsible for:
@@ -516,6 +543,7 @@ class Manager(QtCore.QObject):
         with self.lock:
             if mod.name in self.modules:
                 del self.modules[mod.name]
+                self.interfaceDir.removeObject(mod)
             else:
                 return
         self.sigModulesChanged.emit()
@@ -792,7 +820,8 @@ class Task:
         
         self.lockedDevs = []
         self.startedDevs = []
-        
+        self.startTime = None
+        self.stopTime = None
         
         #self.reserved = False
         try:
@@ -822,7 +851,6 @@ class Task:
                 continue
             self.devs[devName] = dev
             self.tasks[devName] = task
-        
         
     def execute(self, block=True, processEvents=True):
         """Start the protocol task.
@@ -983,7 +1011,24 @@ class Task:
             if not self.tasks[t].isDone():
                 #print "Task %s not finished" % t
                 return False
+        if self.stopTime is None:
+            self.stopTime = ptime.time()
         return True
+    
+    def duration(self):
+        """Return the requested protocol duration, or None if it was not given."""
+        return self.command.get('protocol', {}).get('duration', None)
+    
+    def runTime(self):
+        """Return the length of time since this protocol has been running.
+        If the task has already finished, return the length of time the task ran for.
+        If the task has not started yet, return None.
+        """
+        if self.startTime is None:
+            return None
+        if self.stopTime is None:
+            return ptime.time() - self.startTime
+        return self.stopTime - self.startTime
         
     def stop(self, abort=False):
         """Stop all tasks and read data. If abort is True, does not attempt to collect data from the run."""
@@ -1031,6 +1076,8 @@ class Task:
                 prof.mark("store data")
         finally:   ## Regardless of any other problems, at least make sure we release hardware for future use
             ## Release all hardware for use elsewhere
+            if self.stopTime is None:
+                self.stopTime = ptime.time()
             
             self.releaseAll()
             prof.mark("release all")

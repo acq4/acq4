@@ -3,18 +3,12 @@ from ..Node import Node
 from pyqtgraph.Qt import QtGui, QtCore
 import numpy as np
 from .common import *
-from pyqtgraph.Transform import Transform
+from pyqtgraph.SRTTransform import SRTTransform
 from pyqtgraph.Point import Point
 from pyqtgraph.widgets.TreeWidget import TreeWidget
 from pyqtgraph.graphicsItems.LinearRegionItem import LinearRegionItem
 
 from . import functions
-
-try:
-    import metaarray
-    HAVE_METAARRAY = True
-except:
-    HAVE_METAARRAY = False
 
 class ColumnSelectNode(Node):
     """Select named columns from a record array or MetaArray."""
@@ -31,7 +25,7 @@ class ColumnSelectNode(Node):
             self.updateList(In)
                 
         out = {}
-        if HAVE_METAARRAY and isinstance(In, metaarray.MetaArray):
+        if hasattr(In, 'implements') and In.implements('MetaArray'):
             for c in self.columns:
                 out[c] = In[self.axis:c]
         elif isinstance(In, np.ndarray) and In.dtype.fields is not None:
@@ -47,7 +41,7 @@ class ColumnSelectNode(Node):
         return self.columnList
 
     def updateList(self, data):
-        if HAVE_METAARRAY and isinstance(data, metaarray.MetaArray):
+        if hasattr(data, 'implements') and data.implements('MetaArray'):
             cols = data.listColumns()
             for ax in cols:  ## find first axis with columns
                 if len(cols[ax]) > 0:
@@ -161,7 +155,7 @@ class RegionSelectNode(CtrlNode):
         if self.selected.isConnected():
             if data is None:
                 sliced = None
-            elif isinstance(data, MetaArray):
+            elif (hasattr(data, 'implements') and data.implements('MetaArray')):
                 sliced = data[0:s['start']:s['stop']]
             else:
                 mask = (data['time'] >= s['start']) * (data['time'] < s['stop'])
