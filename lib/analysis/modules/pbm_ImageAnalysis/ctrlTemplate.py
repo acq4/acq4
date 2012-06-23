@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/pbm_ImageAnalysis/ctrlTemplate.ui'
 #
-# Created: Sat Jun 23 10:18:34 2012
+# Created: Sat Jun 23 18:12:52 2012
 #      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
@@ -450,6 +450,12 @@ class Ui_Form(object):
         self.ImagePhys_FFTSmooth.setObjectName(_fromUtf8("ImagePhys_FFTSmooth"))
         self.horizontalLayout_12.addWidget(self.ImagePhys_FFTSmooth)
         self.gridLayout_2.addLayout(self.horizontalLayout_12, 15, 0, 1, 1)
+        self.horizontalLayout_13 = QtGui.QHBoxLayout()
+        self.horizontalLayout_13.setObjectName(_fromUtf8("horizontalLayout_13"))
+        self.ImagePhys_PhysROIPlot = QtGui.QCheckBox(self.groupBox)
+        self.ImagePhys_PhysROIPlot.setObjectName(_fromUtf8("ImagePhys_PhysROIPlot"))
+        self.horizontalLayout_13.addWidget(self.ImagePhys_PhysROIPlot)
+        self.gridLayout_2.addLayout(self.horizontalLayout_13, 23, 1, 1, 1)
         self.gridLayout.addWidget(self.groupBox, 0, 0, 1, 1)
 
         self.retranslateUi(Form)
@@ -518,4 +524,5 @@ class Ui_Form(object):
         self.label_8.setText(QtGui.QApplication.translate("Form", "High", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("Form", "Ignore images", None, QtGui.QApplication.UnicodeUTF8))
         self.label_10.setText(QtGui.QApplication.translate("Form", "Spec Smooth", None, QtGui.QApplication.UnicodeUTF8))
+        self.ImagePhys_PhysROIPlot.setText(QtGui.QApplication.translate("Form", "MultiPlot", None, QtGui.QApplication.UnicodeUTF8))
 

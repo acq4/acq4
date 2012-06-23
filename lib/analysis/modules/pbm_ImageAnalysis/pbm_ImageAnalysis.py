@@ -27,7 +27,7 @@ This module provides:
 from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
-import os, shutil
+import os, shutil, os.path
 import operator
 import pyqtgraph as pg
 import DatabaseGui
@@ -50,6 +50,8 @@ import cv2.cv as cv
 #import smc as SMC # Vogelstein's OOPSI analysis for calcium transients
 
 import pylab as PL
+from mpl_toolkits.axes_grid1 import AxesGrid
+
 """ 
 We use matplotlib/pylab for *some* figure generation.
 """
@@ -181,7 +183,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrlPhysFunc.ImagePhys_STA.clicked.connect(self.computeSTA)
         self.ctrlPhysFunc.ImagePhys_BTA.clicked.connect(self.computeBTA)
         self.ctrlPhysFunc.ImagePhys_PhysLPF.valueChanged.connect(self.physLPF_valueChanged)
-        self.ctrlPhysFunc.ImagePhys_PhysROIPlot.toggled.connect(self.setupPhysROIPlot)
+        self.ctrl.ImagePhys_PhysROIPlot.toggled.connect(self.setupPhysROIPlot)
         #
         # Imaging analysis buttons
         #
@@ -284,7 +286,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         
         """
         dlh = self.fileLoaderInstance.selectedFiles()
-        if self.ctrlPhysFunc.ImagePhys_PhysROIPlot.isChecked():
+        if self.ctrl.ImagePhys_PhysROIPlot.isChecked():
             print 'multiple file load, lendh: ', len(dlh)
             self.makePhysROIPlot(dh, dlh)
         else:
@@ -295,30 +297,72 @@ class pbm_ImageAnalysis(AnalysisModule):
                 self.loadSingleFile(dh[0])
     
     def setupPhysROIPlot(self):
-        if self.ctrlPhysFunc.ImagePhys_PhysROIPlot.isChecked():
+        if self.ctrl.ImagePhys_PhysROIPlot.isChecked():
             self.checkMPL()
             self.firstPlot=False
             self.plotCount = 0
 
     def makePhysROIPlot(self, dh, dlh):
+        if type(dh) is list:
+            dh = dh[0]
+        fname = dh.name()
+        (head, tail) = os.path.split(fname)
+        self.MPRncolumns = 2
+        self.MPRnrows = len(dlh)
+        if len(dlh) % 2 == 1:
+            self.MPRnrows += 2
+        print self.MPRnrows, self.MPRncolumns
+        print len(dlh)
         if self.firstPlot is False:
-            (self.MPLFig, self.MPPhysPlots) = PL.subplots(num="Physiology-ROI comparison", 
-            nrows = len(dlh), ncols=2, sharex = True, sharey = False)
-            self.MPLFig.suptitle('ROI Traces' , fontsize=10)
+            (self.MPLFig, self.MPPhysPlots) = PL.subplots(num="Physiology-Fluor comparison", 
+            nrows = self.MPRnrows, ncols=self.MPRncolumns, sharex = True, sharey = False)
+            self.MPLFig.suptitle('Dataset: %s' % (head) , fontsize=10)
+
+            self.nPhysPlots = len(dlh)
+            c = 0
+            r = 0
+            for i in range(0,self.MPRnrows*self.MPRncolumns,2):
+                self.MPPhysPlots[r,c].sharey = True
+                r = r + 2
+                if r >= self.MPRnrows:
+                    r = 0
+                    c += 1
+            c = 0
+            r = 0
+            for i in range(1,self.MPRnrows*self.MPRncolumns,2):
+                self.MPPhysPlots[r,c].sharey = True
+                r = r + 2
+                if r >= self.MPRnrows:
+                    r = 0
+                    c += 1
+                
         self.firstPlot = True
-#        for i, d in enumerate(dh):
-        self.loadSingleFile(dh)
-        print 'plotting %s ' % (dh)
+        try:
+            self.loadSingleFile(dh)
+        except:
+            print 'problem loading data... skipping'
+            self.plotCount += 1
+            return
+        self.unbleachImage()
         self.calculateAllROIs()
-        self.MPPhysPlots[self.plotCount,0].plot(self.tdat, self.physData, 'k-')
-       # print len(self.FData)
-    #    print self.plotCount
+
+        c = 0
+        r = self.plotCount*2
+        if r >= self.MPRnrows-1:
+            c += 1
+            r = self.plotCount*2 % self.MPRnrows
+        self.MPPhysPlots[r+1, c].plot(self.tdat, self.physData, 'k-')
+        self.MPPhysPlots[r+1, c].set_title(tail)
+
         for i in range(self.nROI):
             ndpt = len(self.FData[i,:])
-            self.MPPhysPlots[self.plotCount,1].plot(self.imageTimes[0:ndpt], self.FData[i,:])
+            self.MPPhysPlots[r,c].plot(self.imageTimes[0:ndpt], (self.FData[i,:]-1.0)*100.)
         self.plotCount += 1
         PL.draw()
-        PL.show()
+        if self.plotCount >= self.nPhysPlots:
+            PL.show()
+            self.ctrl.ImagePhys_PhysROIPlot.setCheckState(False) # turn off now - to properly sequence reload
+            PL.savefig('/Users/pbmanis/Desktop/IA.png', dpi=600, format='png')
 
 
     def loadSingleFile(self, dh):
@@ -2132,9 +2176,9 @@ class pbm_ImageAnalysis(AnalysisModule):
         if not self.use_MPL:
             if self.floatingWindow is None:
                 self.floatingWindow = pyqtgrwindow(title = 'Analog_Xcorr_Average')
-            self.mpwavg = pg.GraphicsLayoutWidget()
-            self.floatingWindow.setCentralWidget(self.mpwavg)
-            self.floatingWindow.show()
+            # self.mpwavg = pg.GraphicsLayoutWidget()
+            # self.floatingWindow.setCentralWidget(self.mpwavg)
+            # self.floatingWindow.show()
         else:
             self.checkMPL()
             (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Average XCorr", nrows = 1, ncols=1, 
@@ -2144,7 +2188,9 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.calculate_all_xcorr(FData, dt)   
 
         if not self.use_MPL:
-            p = self.mpwavg.addPlot(0,0)
+            print dir(self.floatingWindow)
+            print dir(self.floatingWindow.layout)
+            p = self.floatingWindow.layout.addPlot(0,0)
             p.plot(self.lags,self.xcorr)
             p.setXRange(np.min(self.lags), np.max(self.lags))
         else:
@@ -2731,7 +2777,9 @@ class pyqtgrwindow(QtGui.QMainWindow):
     def __init__(self, parent=None, title = '', size=(500,500)):
         super(pyqtgrwindow, self).__init__(parent)
         self.setWindowTitle(title)
-        self.setCentralWidget(QtGui.QWidget(self))
+        self.view = pg.GraphicsView()
+        self.layout = pg.GraphicsLayout(border=pg.mkPen(0, 0, 255))
         self.resize(size[0], size[1])
-        self.show()
+        self.view.setCentralItem(self.layout)
+        self.view.show()
         

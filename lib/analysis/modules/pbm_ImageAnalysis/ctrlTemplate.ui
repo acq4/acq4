@@ -923,6 +923,17 @@ rectangle  box</string>
         </item>
        </layout>
       </item>
+      <item row="23" column="1">
+       <layout class="QHBoxLayout" name="horizontalLayout_13">
+        <item>
+         <widget class="QCheckBox" name="ImagePhys_PhysROIPlot">
+          <property name="text">
+           <string>MultiPlot</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
      </layout>
     </widget>
    </item>
