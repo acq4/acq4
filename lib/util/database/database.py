@@ -602,6 +602,7 @@ class Transaction:
             self.db('RELEASE SAVEPOINT %s' % self.name)
         else:
             self.db('ROLLBACK TRANSACTION TO %s' % self.name)
+            self.db.tables = None  ## make sure we are forced to re-read the table list after the rollback.
         
         if self.db._transactions[-1] is not self:
             print self, self.db._transactions

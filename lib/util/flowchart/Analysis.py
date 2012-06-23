@@ -17,8 +17,8 @@ class EventFitter(CtrlNode):
     nodeName = "EventFitter"
     uiTemplate = [
         ('multiFit', 'check', {'value': False}),
-        ('parallel', 'check', {'value': False}),
-        ('nProcesses', 'spin', {'value': 1, 'min': 1, 'int': True}),
+        #('parallel', 'check', {'value': False}),
+        #('nProcesses', 'spin', {'value': 1, 'min': 1, 'int': True}),
         ('plotFits', 'check', {'value': True}),
         ('plotGuess', 'check', {'value': False}),
         ('plotEvents', 'check', {'value': False}),
@@ -37,23 +37,23 @@ class EventFitter(CtrlNode):
         self.deletedFits = []
         self.pool = None  ## multiprocessing pool
         self.poolSize = 0
-        self.ctrls['parallel'].toggled.connect(self.setupPool)
-        self.ctrls['nProcesses'].valueChanged.connect(self.setupPool)
+        #self.ctrls['parallel'].toggled.connect(self.setupPool)
+        #self.ctrls['nProcesses'].valueChanged.connect(self.setupPool)
     
-    def setupPool(self):
-        import multiprocessing as mp
-        if self.ctrls['parallel'].isChecked():
-            nProc = self.ctrls['nProcesses'].value()
-            if self.pool is not None and self.poolSize != nProc:
-                self.pool.terminate()
-                self.pool = None
-            if self.pool is None:
-                self.pool = mp.Pool(processes=nProc)
-                self.poolSize = nProc
-        else:
-            if self.pool is not None:
-                self.pool.terminate()
-                self.pool = None
+    #def setupPool(self):
+        #import multiprocessing as mp
+        #if self.ctrls['parallel'].isChecked():
+            #nProc = self.ctrls['nProcesses'].value()
+            #if self.pool is not None and self.poolSize != nProc:
+                #self.pool.terminate()
+                #self.pool = None
+            #if self.pool is None:
+                #self.pool = mp.Pool(processes=nProc)
+                #self.poolSize = nProc
+        #else:
+            #if self.pool is not None:
+                #self.pool.terminate()
+                #self.pool = None
     
     def process(self, waveform, events, display=True):
         self.deletedFits = []
@@ -73,44 +73,44 @@ class EventFitter(CtrlNode):
         }
         
         
-        if not self.ctrls['parallel'].isChecked():
-            output = processEventFits(events, startEvent=0, stopEvent=len(events), opts=opts)
-            guesses = output['guesses']
-            eventData = output['eventData']
-            indexes = output['indexes']
-            xVals = output['xVals']
-            yVals = output['yVals']
-            output = output['output']
-        else:
-            print "parallel:", self.pool, self.poolSize
-            results = []
-            nProcesses = self.ctrls['nProcesses'].value()
-            evPerProcess = int(len(events) / nProcesses)
-            start = 0
-            for i in range(nProcesses):
-                stop = start + evPerProcess
-                if stop > len(events):
-                    stop = len(events)
-                args = (events, start, stop, opts)
-                results.append(self.pool.apply_async(processEventFits, args))
-                print "started process", start, stop
-                start = stop
-            data = []
-            guesses = []
-            eventData = []
-            indexes = []
-            xVals = []
-            yVals = []
-            for res in results:  ## reconstruct results here
-                print "getting result", res
-                output = res.get(10)
-                data.append(output['output'])
-                guesses.extend(output['guesses'])
-                eventData.extend(output['eventData'])
-                indexes.extend(output['indexes'])
-                xVals.extend(output['xVals'])
-                yVals.extend(output['yVals'])
-            output = np.concatenate(data)
+        #if not self.ctrls['parallel'].isChecked():
+        output = processEventFits(events, startEvent=0, stopEvent=len(events), opts=opts)
+        guesses = output['guesses']
+        eventData = output['eventData']
+        indexes = output['indexes']
+        xVals = output['xVals']
+        yVals = output['yVals']
+        output = output['output']
+        #else:
+            #print "parallel:", self.pool, self.poolSize
+            #results = []
+            #nProcesses = self.ctrls['nProcesses'].value()
+            #evPerProcess = int(len(events) / nProcesses)
+            #start = 0
+            #for i in range(nProcesses):
+                #stop = start + evPerProcess
+                #if stop > len(events):
+                    #stop = len(events)
+                #args = (events, start, stop, opts)
+                #results.append(self.pool.apply_async(processEventFits, args))
+                #print "started process", start, stop
+                #start = stop
+            #data = []
+            #guesses = []
+            #eventData = []
+            #indexes = []
+            #xVals = []
+            #yVals = []
+            #for res in results:  ## reconstruct results here
+                #print "getting result", res
+                #output = res.get(10)
+                #data.append(output['output'])
+                #guesses.extend(output['guesses'])
+                #eventData.extend(output['eventData'])
+                #indexes.extend(output['indexes'])
+                #xVals.extend(output['xVals'])
+                #yVals.extend(output['yVals'])
+            #output = np.concatenate(data)
             
         for i in range(len(indexes)):            
             if display and self.plot.isConnected():
@@ -399,7 +399,7 @@ class StatsCalculator(Node):
         dataRegions = {'all': data}
         #print "regions:"
         items = regions.items()
-        for term, r in items:
+        for name, r in items:
             #print "  ", term, r
             if isinstance(r, dict):
                 items.extend(r.items())
@@ -408,7 +408,7 @@ class StatsCalculator(Node):
                 mask = (data['fitTime'] > r[0]) * (data['fitTime'] < r[1])
             except:
                 mask = (data['time'] > r[0]) * (data['time'] < r[1])
-            dataRegions[term.node().name()] = data[mask]
+            dataRegions[name] = data[mask]
         
         for row in state['rows']:  ## iterate over variables in data
             name = row[0]

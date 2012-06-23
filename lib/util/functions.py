@@ -213,7 +213,7 @@ def fitPsp(x, y, guess, bounds=None, risePower=2.0, multiFit=False):
     ## try on a few more fits
     if multiFit:
         err = (errFn(fit, x, y)**2).sum()
-        print "fit:", err
+        #print "fit:", err
         bestFit = fit
         for da in [0.5, 1.0, 2.0]:
             for dt in [0.5, 1.0, 2.0]:
@@ -230,7 +230,7 @@ def fitPsp(x, y, guess, bounds=None, risePower=2.0, multiFit=False):
                         err2 = (errFn(fit2, x, y)**2).sum()
                         if err2 < err:
                             bestFit = fit2
-                            print "   found better PSP fit: %s -> %s" % (err, err2), da, dt, dr, do
+                            #print "   found better PSP fit: %s -> %s" % (err, err2), da, dt, dr, do
                             err = err2
         
         fit = bestFit
@@ -403,7 +403,7 @@ def fitDoublePsp(x, y, guess, bounds=None, risePower=2.0):
     #print 'guess:', guess
     
     err = (errFn(fit, x, y)**2).sum()
-    print "initial fit:", fit, err
+    #print "initial fit:", fit, err
     
     guess = fit.copy()
     bestFit = fit
@@ -414,11 +414,11 @@ def fitDoublePsp(x, y, guess, bounds=None, risePower=2.0):
             fit2 = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-2, factor=0.1)[0]
             err2 = (errFn(fit2, x, y)**2).sum()
             if err2 < err:
-                print "Improved fit:", ampx, taux, err2
+                #print "Improved fit:", ampx, taux, err2
                 bestFit = fit2
                 err = err2
     fit = bestFit
-    print "final fit:", fit, err
+    #print "final fit:", fit, err
     fit[0] *= yScale
     fit[1] *= yScale
     return tuple(fit[:4]) + (min(*fit[4:]), max(*fit[4:]))

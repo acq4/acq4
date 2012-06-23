@@ -32,8 +32,6 @@ class Photostim(AnalysisModule):
         self.dbIdentity = "Photostim"  ## how we identify to the database; this determines which tables we own
         self.selectedSpot = None
         
-
-
         ## setup analysis flowchart
         modPath = os.path.abspath(os.path.split(__file__)[0])
         flowchartDir = os.path.join(modPath, "analysis_fc")
@@ -49,7 +47,6 @@ class Photostim(AnalysisModule):
         self.mapCtrl = QtGui.QWidget()
         self.mapLayout = QtGui.QVBoxLayout()
         self.mapCtrl.setLayout(self.mapLayout)
-        self.recolorBtn = QtGui.QPushButton("Recolor")
         self.mapLayout.splitter = QtGui.QSplitter()
         self.mapLayout.splitter.setOrientation(QtCore.Qt.Vertical)
         self.mapLayout.splitter.setContentsMargins(0,0,0,0)
@@ -57,7 +54,17 @@ class Photostim(AnalysisModule):
         self.mapLayout.splitter.addWidget(self.analysisCtrl)
         #self.mapLayout.splitter.addWidget(QtGui.QSplitter())
         self.mapLayout.splitter.addWidget(self.mapper)
-        self.mapLayout.splitter.addWidget(self.recolorBtn)
+        #self.mapLayout.splitter.addWidget(self.recolorBtn)
+        
+        self.recolorLayout = QtGui.QHBoxLayout()
+        self.recolorWidget = QtGui.QWidget()
+        self.mapLayout.splitter.addWidget(self.recolorWidget)
+        self.recolorWidget.setLayout(self.recolorLayout)
+        self.recolorBtn = QtGui.QPushButton('Recolor')
+        self.recolorLayout.addWidget(self.recolorBtn)
+        self.recolorParallelCheck = QtGui.QCheckBox('Parallel')
+        self.recolorParallelCheck.setChecked(True)
+        self.recolorLayout.addWidget(self.recolorParallelCheck)
         
         ## scatter plot
         self.scatterPlot = ScatterPlotter()
@@ -149,7 +156,7 @@ class Photostim(AnalysisModule):
             cells = [dh]
         else:
             return
-        print "cells:", cells
+        #print "cells:", cells
         for cell in cells:
             self.dbCtrl.listMaps(cell)
 
@@ -272,7 +279,7 @@ class Photostim(AnalysisModule):
         try:
             point = points[0]
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-            print "clicked:", point.data()
+            #print "clicked:", point.data()
             plot = self.getElement("Data Plot")
             plot.clear()
             self.selectedSpot = point
@@ -300,7 +307,7 @@ class Photostim(AnalysisModule):
 
     def redisplayData(self, points):  ## data must be [(scan, fh, <event time>), ...]  
         #raise Exception('blah')
-        print points
+        #print points
         try:
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
             plot = self.getElement("Data Plot")
@@ -417,10 +424,13 @@ class Photostim(AnalysisModule):
     def recolor(self):
 
         ## Select only visible scans and maps for recoloring
-        allScans = [s for s in self.scans if s.isVisible()]
-        allScans.extend([s for s in self.maps if s.isVisible()])
-        for i in range(len(allScans)):
-            allScans[i].recolor(i, len(allScans))
+        try:
+            allScans = [s for s in self.scans if s.isVisible()]
+            allScans.extend([s for s in self.maps if s.isVisible()])
+            for i in range(len(allScans)):
+                allScans[i].recolor(i, len(allScans), parallel=self.recolorParallelCheck.isChecked())
+        except pg.multiprocess.CanceledError:
+            pass
         
         #for i in range(len(self.scans)):
             #self.scans[i].recolor(i, len(self.scans))
@@ -432,7 +442,7 @@ class Photostim(AnalysisModule):
         return self.mapper.getColor(stats)
 
     def processEvents(self, fh):
-        print "Process Events:", fh
+        #print "Process Events:", fh
         ret = self.detector.process(fh)
         return ret
         
@@ -494,7 +504,7 @@ class Photostim(AnalysisModule):
         spot = self.selectedSpot
         if spot is None:
             raise Exception("No spot selected")
-        print "Store spot:", spot.data
+        #print "Store spot:", spot.data
         #parentDir = spot.data
         #p2 = parentDir.parent()
         #if self.dataModel.dirType(p2) == 'ProtocolSequence':
@@ -521,7 +531,7 @@ class Photostim(AnalysisModule):
         
         with pg.BusyCursor():
             #dh = scan.source()
-            print "Store scan:", scan.source().name()
+            #print "Store scan:", scan.source().name()
             events = []
             stats = []
             spots = scan.spots()
@@ -561,7 +571,7 @@ class Photostim(AnalysisModule):
                 self.storeStats(stats)
                 p.mark("stored all stats")
                 p.finish()
-                print "   scan %s is now locked" % scan.source().name()
+                #print "   scan %s is now locked" % scan.source().name()
                 scan.lock()
 
     def rewriteSpotPositions(self, scan):
@@ -593,7 +603,7 @@ class Photostim(AnalysisModule):
         #dh = loader.selectedFile()
         #scan = self.scans[dh]
         dh = scan.source()
-        print "Clear scan", dh
+        #print "Clear scan", dh
         #pRow = db.getDirRowID(dh)
         colName = self.dataModel.dirType(dh)+'Dir'
             
@@ -643,7 +653,7 @@ class Photostim(AnalysisModule):
         
         with db.transaction():
             ## Make sure target table exists and has correct columns, links to input file
-            db.checkTable(table, owner=identity, columns=fields, create=True, addUnknownColumns=True, indexes=[['SourceFile'], ['ProtocolDir'], ['ProtocolSequenceDir']])
+            db.checkTable(table, owner=identity, columns=fields, create=True, addUnknownColumns=True, indexes=[['ProtocolDir'], ['ProtocolSequenceDir']])
             
             # delete old
             for source in set([d['ProtocolDir'] for d in data]):

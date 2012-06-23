@@ -342,43 +342,44 @@ class AnalysisDatabase(SqliteDatabase):
         """
         columns = parseColumnDefs(columns, keyOrder=['Type', 'Constraints', 'Link'])
         ## Make sure target table exists and has correct columns, links to input file
-        if not self.hasTable(table):
-            if create:
-                ## create table
-                self.createTable(table, columns, owner=owner)
+        with self.transaction():
+            if not self.hasTable(table):
+                if create:
+                    ## create table
+                    self.createTable(table, columns, owner=owner)
+                else:
+                    raise Exception("Table %s does not exist." % table)
             else:
-                raise Exception("Table %s does not exist." % table)
-        else:
-            ## check table for ownership
-            if self.tableOwner(table) != owner:
-                raise Exception("Table %s is not owned by %s." % (table, owner))
-            
-            ## check table for correct columns
-            ts = self.tableSchema(table)
-            config = self.getColumnConfig(table)
-            
-            for colName, col in columns.iteritems():
-                colType = col['Type']
-                if colName not in ts:  ## <-- this is a case-insensitive operation
-                    if ignoreUnknownColumns:
-                        continue
-                    elif addUnknownColumns:
-                        self.addColumn(table, colName, colType)
-                        ts = self.tableSchema(table) ## re-read schema and column config
-                        config = self.getColumnConfig(table)
-                    else:
-                        raise Exception("Table has different data structure: Missing column %s" % colName)
-                specType = ts[colName]
-                if specType.lower() != colType.lower():  ## type names are case-insensitive too
-                    ## requested column type does not match schema; check for directory / file types
-                    if (colType == 'file' or colType.startswith('directory')):
-                        if (colName in config and config[colName].get('Type',None) == colType):
+                ## check table for ownership
+                if self.tableOwner(table) != owner:
+                    raise Exception("Table %s is not owned by %s." % (table, owner))
+                
+                ## check table for correct columns
+                ts = self.tableSchema(table)
+                config = self.getColumnConfig(table)
+                
+                for colName, col in columns.iteritems():
+                    colType = col['Type']
+                    if colName not in ts:  ## <-- this is a case-insensitive operation
+                        if ignoreUnknownColumns:
                             continue
-                    raise Exception("Table has different data structure: Column '%s' type is %s, should be %s" % (colName, specType, colType))
+                        elif addUnknownColumns:
+                            self.addColumn(table, colName, colType)
+                            ts = self.tableSchema(table) ## re-read schema and column config
+                            config = self.getColumnConfig(table)
+                        else:
+                            raise Exception("Table has different data structure: Missing column %s" % colName)
+                    specType = ts[colName]
+                    if specType.lower() != colType.lower():  ## type names are case-insensitive too
+                        ## requested column type does not match schema; check for directory / file types
+                        if (colType == 'file' or colType.startswith('directory')):
+                            if (colName in config and config[colName].get('Type',None) == colType):
+                                continue
+                        raise Exception("Table has different data structure: Column '%s' type is %s, should be %s" % (colName, specType, colType))
 
-        if create is True and indexes is not None:
-            for index in indexes:
-                self.createIndex(table, index, ifNotExist=True)   
+            if create is True and indexes is not None:
+                for index in indexes:
+                    self.createIndex(table, index, ifNotExist=True)   
         
         return True
 
