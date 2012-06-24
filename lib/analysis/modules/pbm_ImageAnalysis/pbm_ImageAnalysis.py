@@ -311,8 +311,6 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.MPRnrows = len(dlh)
         if len(dlh) % 2 == 1:
             self.MPRnrows += 2
-        print self.MPRnrows, self.MPRncolumns
-        print len(dlh)
         if self.firstPlot is False:
             (self.MPLFig, self.MPPhysPlots) = PL.subplots(num="Physiology-Fluor comparison", 
             nrows = self.MPRnrows, ncols=self.MPRncolumns, sharex = True, sharey = False)
@@ -512,72 +510,34 @@ class pbm_ImageAnalysis(AnalysisModule):
         #self.stdImage = scipy.stats.skew(self.imageData, axis=0)
         self.stdImage = np.std(self.imageData, axis=0)
         self.changeView()
-        
-    
+
     def spectrumCalc(self):
         """
         Calculate the spectrum and display the power across timein a frequency band as the image
         intensity at each point. Useful for finding areas of activity
         """
-#        self.specImageCalcFlag = False
         sh = self.imageData.shape
-        #nr = range(0,sh[1],4)
-        if self.specImageCalcFlag is False:
+        if self.specImageCalcFlag is False: # calculate spectrum info
             self.freim = np.abs(np.fft.fft(self.imageData, axis=0)/self.imageData.shape[0])
             self.specImageCalcFlag = True
             
-#        Y = fft(y)/n # fft computing and normalization
-#        print 'fim shape: ', self.freim.shape
         npts = self.imageData.shape[0]/2
-        freq = np.fft.fftfreq(npts, d=self.imagedT)
+        freq = np.fft.fftfreq(npts, d=self.imagedT) # get frequency list
         freq = freq[0:npts/2 + 1]
-#        print freq
         hpf = self.ctrl.ImagePhys_SpecHPF.value()
         lpf = self.ctrl.ImagePhys_SpecLPF.value()
-        u = np.where(freq > hpf)
+        u = np.where(freq > hpf) # from frequencies, select those from the window
         v = np.where(freq < lpf)
-#        print u
-#        print v
         frl = list(set(u[0]).intersection(set(v[0])))
-#        print frl
-        if len(frl) == 0:
+        if len(frl) == 0: # catch bad selection
             return
-        si = self.freim.take(frl, axis=0)
-#        print si.shape
-        self.specImage = np.mean(si, axis=0)
+        si = self.freim.take(frl, axis=0) # % make selection
+        self.specImage = np.mean(si, axis=0) # and get the average across the frequenies selected
         sigma = self.ctrl.ImagePhys_FFTSmooth.value()
-        self.specImageDisplay = scipy.ndimage.filters.gaussian_filter(self.specImage, sigma)
-#        self.fftImage = np.mean(freim[range(int(0.5*npts/2),int(0.8*npts/2))], axis=0)
-        #print self.stdImage.shape
-        #print 'fim: ', freim.shape
+        self.specImageDisplay = scipy.ndimage.filters.gaussian_filter(self.specImage, sigma) # smooth a bit
         view = self.ctrl.ImagePhys_View.setCurrentIndex(3)
         self.changeView()
 
-
- 
-#         nr = range(0,sh[1],4)
-#         print 'nr: ', nr
-#     #    (m.take([1,3], axis=1).take([1,3], axis=0))
-#         print 'original image shape: ', self.imageData.shape
-#         xdata = self.imageData.take(nr, axis=2).take(nr, axis=1)
-#         print 'xdata shape: ', xdata.shape 
-#         freim = np.abs(np.fft.fft(xdata)/self.imageData.shape[0])
-# #        Y = fft(y)/n # fft computing and normalization
-#         print 'freim shape: ', freim.shape
-#         npts = self.imageData.shape[0]/2
-#         freq = np.fft.fftfreq(npts, d=self.imagedT)
-#         freq = freq[0:npts/2 + 1]
-#         print freq
-#         u = np.where(freq > 1.0)
-#         v = np.where(freq < 5.0)
-#         frl = list(set(u[0]).intersection(set(v[0])))
-#         print frl
-#         si = freim.take(frl, axis=0)
-#         print si.shape
-#         self.stdImage = np.mean(si, axis=0)
-#         print self.stdImage.shape
-#         #print 'fim: ', freim.shape
-                
     def getImageScaling(self):
         """ retrieve scaling factor and set imageScaleUnit from the info on the image file
             In the case where the information is missing, we just set pixels.
@@ -836,9 +796,9 @@ class pbm_ImageAnalysis(AnalysisModule):
        # self.makeROIDataFigure(clear=False, gcolor='g')
 
     def SignalBPF(self, roi):
-       ### data correction
-       ### try to decrease baseline drift by high-pass filtering the data.
-
+       """ data correction
+       try to decrease baseline drift by high-pass filtering the data.
+       """
        #self.BFData = np.array(self.FData).copy()
        HPF = self.ctrl.ImagePhys_ImgHPF.value()
        LPF = self.ctrl.ImagePhys_ImgLPF.value() # 100.0
@@ -849,15 +809,13 @@ class pbm_ImageAnalysis(AnalysisModule):
        samplefreq = 1.0/dt
        if (LPF > 0.5*samplefreq):
            LPF = 0.5*samplefreq
-#        for roi in range(0, self.nROI):
        d = self.BFData[roi.ID].copy().T
        return(Utility.SignalFilter(d, LPF, HPF, samplefreq))
 
-
     def SignalHPF(self, roi): 
-        ### data correction
-        ### try to decrease baseline drift by high-pass filtering the data.
-
+        """ data correction
+        try to decrease baseline drift by high-pass filtering the data.
+        """
         HPF = self.ctrl.ImagePhys_ImgHPF.value()
         dt = np.mean(np.diff(self.imageTimes))
         samplefreq = 1.0/dt
@@ -865,9 +823,9 @@ class pbm_ImageAnalysis(AnalysisModule):
         return(Utility.SignalFilter_HPFButter(d, HPF, samplefreq))
 
     def SignalLPF(self, roi): 
-        ### data correction
-        ### Low-pass filter the data.
-
+        """ data correction
+        Low-pass filter the data.
+        """
         LPF = self.ctrl.ImagePhys_ImgLPF.value() # 100.0
         dt = np.mean(np.diff(self.imageTimes))
         samplefreq = 1.0/dt
@@ -879,7 +837,6 @@ class pbm_ImageAnalysis(AnalysisModule):
 #
 # detect spikes in physiology trace
 #
-
     def showPhysTrigger(self):
         thr = self.ctrlPhysFunc.ImagePhys_PhysThresh.value()
         sign = self.ctrlPhysFunc.ImagePhys_PhysSign.currentIndex()
@@ -956,16 +913,15 @@ class pbm_ImageAnalysis(AnalysisModule):
                 burstSpikes.extend(bdat[1:].tolist())
             self.burstsFound.setPoints(x=onsetSpikes, y = [bursts[1] for x in range(len(onsetSpikes))])
             self.withinBurstsFound.setPoints(x=burstSpikes, y = [bursts[2] for x in range(len(burstSpikes))])
-                
+
     def checkMPL(self):
         if self.MPLFig is not None:
             PL.close()
             self.MPLFig = None
-            
-        
+
     def RevSTA(self):
         pass
-        
+
     def computeSTA(self):
         """
         Compute the spike-triggered average of the ROI signals, given the spike train. 
@@ -1094,27 +1050,48 @@ class pbm_ImageAnalysis(AnalysisModule):
         """
         if self.ROIDistanceMap == []:
             self.ROIDistances() # make sure we ahve valid distance information
-#        print self.IXC_Strength
+
         if self.IXC_Strength == []:
             self.Analog_Xcorr_Individual(plottype = None)
-        self.checkMPL()
-        (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Image Analysis", nrows = 1, ncols=1, 
-                    sharex = True, sharey = True)
-        self.MPLFig.suptitle('Analog XCorr: %s' % self.currentFileName, fontsize=11)
         threshold = self.ctrlImageFunc.IAFuncs_XCorrThreshold.value()
         x0 = np.nanmin(np.nanmin(self.ROIDistanceMap))
         x1 = np.nanmax(np.nanmax(self.ROIDistanceMap))
         thrliney = [threshold, threshold]
+        nthrliney = [-threshold, -threshold]
         thrlinex = [x0, x1]
-        sp = self.MPL_plots.scatter(self.ROIDistanceMap, self.IXC_Strength, s=15, color='tomato')
-        self.MPL_plots.plot(thrlinex, thrliney)
-        self.MPL_plots.set_xlabel('Distance (%s)' % self.imageScaleUnit)
-        self.MPL_plots.set_ylabel('Correlation (R)')
-        self.MPL_plots.set_ylim((0,1))
-        PL.show()
+        self.use_MPL = self.ctrlImageFunc.IAFuncs_MatplotlibCheckBox.checkState()
         mean  = scipy.stats.nanmean(self.IXC_Strength.flatten())
         std  = scipy.stats.nanstd(self.IXC_Strength.flatten())
         print 'Mean XC: %f   std: %f' % (mean, std)
+        if self.use_MPL:
+            self.checkMPL()
+            (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Image Analysis", nrows = 1, ncols=1, 
+                    sharex = True, sharey = True)
+            self.MPLFig.suptitle('Analog XCorr: %s' % self.currentFileName, fontsize=11)
+            sp = self.MPL_plots.scatter(self.ROIDistanceMap, self.IXC_Strength, s=15, color='tomato')
+            self.MPL_plots.plot(thrlinex, thrliney)
+            self.MPL_plots.set_xlabel('Distance (%s)' % self.imageScaleUnit)
+            self.MPL_plots.set_ylabel('Correlation (R)')
+            self.MPL_plots.set_ylim((-1,1))
+            PL.show()
+        else:
+            self.floatingDistWin = pyqtgrwindow(title = 'ROI Distance Strength')
+            self.floatingDistWin.setWindowTitle('ROI Distance Strength: %s' % self.currentFileName)
+            self.floatingDistWin.layout.clear()
+            self.floatingDistWin.layout.setWindowTitle("New Title?")
+            s1 = pg.ScatterPlotItem(size=7, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 255))
+            X = np.reshape(self.ROIDistanceMap, -1)
+            X = X[~np.isnan(X)]
+            Y = np.reshape(self.IXC_Strength, -1)
+            Y = Y[~np.isnan(Y)]
+            p = self.floatingDistWin.layout.addPlot(0,0)
+            s1.addPoints(X, Y)
+            p.addItem(s1)
+            p.plot(thrlinex, thrliney, pen=pg.mkPen(width=0.75, color='c'))
+            p.plot(thrlinex, nthrliney, pen=pg.mkPen(width=0.75, color='c'))
+            p.setLabel('bottom', 'Distance (%s)' % self.imageScaleUnit)
+            p.setLabel('left', 'Correlation (R)')
+            p.setYRange(-1, 1)
 
     def printDistStrength(self):
         print '\n\n----------------------------------\nROI Distance Map\nFile: %s '% self.currentFileName
@@ -1134,43 +1111,87 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.ROIDistances() # make sure we ahve valid distance information
         if self.IXC_Strength == []:
             self.Analog_Xcorr_Individual(plottype = None)
-        self.checkMPL()
-        (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Network Graph", nrows = 1, ncols=1, 
-                    sharex = True, sharey = True)
-        self.MPLFig.suptitle('Network Graph: %s' % self.currentFileName, fontsize=11)
+
+        self.use_MPL = self.ctrlImageFunc.IAFuncs_MatplotlibCheckBox.checkState()
+        
+        if self.use_MPL:
+            self.checkMPL()
+            (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Network Graph", nrows = 1, ncols=1, 
+                        sharex = True, sharey = True)
+            self.MPLFig.suptitle('Network Graph: %s' % self.currentFileName, fontsize=11)
+            yFlip_flag  = False
+        else:
+            self.floatingDistWin = pyqtgrwindow(title = 'Network Graph')
+            self.floatingDistWin.setWindowTitle('Network Graph: %s' % self.currentFileName)
+            self.floatingDistWin.layout.clear()
+            self.floatingDistWin.layout.setWindowTitle("Network Graph?")
+            plt = self.floatingDistWin.layout.addPlot(0,0)
+            yFlip_flag = True
+            
         (sx, sy, px) = self.getImageScaling()
-        maxStr = np.nanmax(self.IXC_Strength)
+        print sy
+        print px
+        maxStr = np.abs(np.nanmax(self.IXC_Strength))
         minStr = np.nanmin(self.IXC_Strength)
         maxline = 4.0
         minline = 0.20
         threshold = self.ctrlImageFunc.IAFuncs_XCorrThreshold.value()
         nd = len(self.AllRois)
-        print px
+        X=np.zeros(nd)
+        Y=np.zeros(nd)
         for i in range(0, nd):
             wpos1 = [self.AllRois[i].pos().x(), self.AllRois[i].pos().y(),
                             self.AllRois[i].boundingRect().width(), self.AllRois[i].boundingRect().height()]
             x1 = (wpos1[0]+0.5*wpos1[2])*px[0]
             y1 = (wpos1[1]+0.5*wpos1[3])*px[1]                
+            if yFlip_flag:
+                y1 = sy - y1
+            X[i] = x1
+            Y[i] = y1
             for j in range(i+1, nd):
                 wpos2 = [self.AllRois[j].pos().x(), self.AllRois[j].pos().y(),
                             self.AllRois[j].boundingRect().width(), self.AllRois[j].boundingRect().height()]
                 x2 = (wpos2[0]+0.5*wpos2[2])*px[0]
                 y2 = (wpos2[1]+0.5*wpos2[3])*px[1]
-                if self.IXC_Strength[i,j] < threshold:
-                    self.MPL_plots.plot([x1, x2], [y1, y2], 
-                    linestyle = '--', color='grey', marker='o', linewidth=minline)
+                if yFlip_flag:
+                    y2 = sy-y2
+                if np.abs(self.IXC_Strength[i,j]) < threshold:
+                    if self.use_MPL:
+                        self.MPL_plots.plot([x1, x2], [y1, y2], 
+                            linestyle = '--', color='grey', marker='o', linewidth=minline)
+                    else:
+                        pn = pg.mkPen(width=minline, color=[128, 128, 128, 192], style=QtCore.Qt.DashLine)
+                        plt.plot([x1, x2], [y1, y2], pen = pn)
                 else:
-                    lw = maxline*(self.IXC_Strength[i,j]-threshold)/(maxStr-threshold)+minline
-                    if lw < 0:
-                        lw = 0
-                    self.MPL_plots.plot([x1, x2], [y1, y2], linewidth=lw, 
-                    linestyle = '-', color='tomato', marker='o')
-        self.MPL_plots.set_xlim((0, sx))
-        self.MPL_plots.set_ylim((sy, 0))
-        self.MPL_plots.set_xlabel('X (%s)' % self.imageScaleUnit)
-        self.MPL_plots.set_ylabel('Y (%s)' % self.imageScaleUnit)
-        PL.show()
+                    lw = maxline*(abs(self.IXC_Strength[i,j])-threshold)/(maxStr-threshold)+minline
+                    if self.IXC_Strength[i,j] >= threshold:
+                        pn = pg.mkPen(width=lw, color=[255, 128, 128, 255])
+                        mcolor = 'tomato'
+                    elif self.IXC_Strength[i,j] <= threshold:
+                        pn = pg.mkPen(width=lw, color=[128, 128, 255, 255])
+                        mcolor = 'blue'
+                    
+                    if self.use_MPL:
+                        self.MPL_plots.plot([x1, x2], [y1, y2], linewidth=lw, 
+                            linestyle = '-', color=mcolor, marker='o')
+                    else:
+                        plt.plot([x1, x2], [y1, y2], pen = pn)
         
+        if self.use_MPL:
+            self.MPL_plots.set_xlim((0, sx))
+            self.MPL_plots.set_ylim((sy, 0))
+            self.MPL_plots.set_xlabel('X (%s)' % self.imageScaleUnit)
+            self.MPL_plots.set_ylabel('Y (%s)' % self.imageScaleUnit)
+            PL.show()
+        else:
+            s1 = pg.ScatterPlotItem(size=7, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 255))
+            s1.addPoints(X, Y)
+            plt.addItem(s1)
+            plt.setLabel('bottom', 'X (%s)' % self.imageScaleUnit)
+            plt.setLabel('left', 'Y (%s)' % self.imageScaleUnit)
+            plt.setXRange(0., sx)
+            plt.setYRange(0., sy)
+            
 #--------------- From PyImageAnalysis3.py: -----------------------------
 #---------------- ROI routines on Images  ------------------------------
 
@@ -1505,24 +1526,27 @@ class pbm_ImageAnalysis(AnalysisModule):
                 self.tr("CSV Files (*.csv)"))
             if not fileName:
                 return
-        fname = fileName
-        if "." not in fileName:
-            fileName = fileName + '.csv'
-        file = open(fileName, 'w')
+        (fnc, extc) = os.path.splitext(fileName)
+        fName = fnc + '.csv'
+        fd = open(fName, 'w')
         stringVals=''
         for col in range(0, data.shape[1]): # write a header for our formatting.
             if col is 0:
-                file.write('time,')
+                fd.write('time,')
             else:
                 stringVals = ['R%03d' % x for x in range(0, col)]
-        file.write(",".join(stringVals) + "\n")
+        fd.write(",".join(stringVals) + "\n")
         for row in range(0, data.shape[0]):
             stringVals = ["%f" % x for x in data[row]]
-            file.write(",".join(stringVals) + "\n")
-        file.close()
-        fd = open(fname + '.roi', 'w')
+            fd.write(",".join(stringVals) + "\n")
+        print 'Wrote: %s\n' % (fName)
+        fd.close()
+        (fnc, extc) = os.path.splitext(fileName)
+        fName = fnc + '.roi'
+        fd = open(fName, 'w')
         for rd in roiData:
             fd.write(' '.join(map(str, rd)) + '\n')
+        print 'Wrote: %s\n' % fName
         fd.close()
     
     def restoreROI(self, fileName = None):
@@ -1530,23 +1554,14 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.clearAllROI() # always start with a clean slate.
         if fileName is False or fileName is None:
             fileName = QtGui.QFileDialog.getOpenFileName(None, u'Retrieve ROI data', u'', u'ROIs (*.roi)')
-        self.RData = []
-        self.nROI = 0
         if fileName:
             fd = open(fileName, 'r')
             for line in fd:
                 roixy = np.fromstring(line, sep=' ')
-                roi = self.addOneROI(pos=[roixy[0], roixy[1]], hw=[roixy[2], roixy[3]])
-                tr = self.updateThisROI(roi, livePlot=False)
-                lcount = len (tr)
-                self.RData.append(tr)
-            #self.times = arange(0, len(tr))
-            self.nROI = len(self.RData)
-            self.FData = np.array(self.RData)# .reshape(lcount, self.nROI).T
-            self.BFData = [] # 'baseline corrected'
-            #self.plotdata(yMinorTicks = 0, yMajorTicks = 3,
-            #              yLabel = u'F0<sub>ROI %d</sub>')
-        self.makeROIDataFigure(clear=True)
+                self.addOneROI(pos=[roixy[0], roixy[1]], hw=[roixy[2], roixy[3]])
+            fd.close()
+            self.calculateAllROIs()
+        #self.makeROIDataFigure(clear=True)
 
 
     def makeROIDataFigure(self, clear = True, gcolor = 'k'):
@@ -1645,7 +1660,7 @@ class pbm_ImageAnalysis(AnalysisModule):
     #        (a0, a1, tau) = Fits.expfit(fitx, tc_bleach)
     #        print("fit result = a0: %f   a1: %f   tau: %f\n", (a0, a1, tau))
 
-            print fpar
+#            print fpar
             DC = fpar[0][0]
             A0 = fpar[0][1]
             tau1 = fpar[0][2]
@@ -1755,7 +1770,7 @@ class pbm_ImageAnalysis(AnalysisModule):
     def findROIs(self):
         """ find potential regions of interest in an image series. 
             This algorithm does the following:
-            1. We use the standard deviation of the image. A series of thresholds
+            1. We use the standard deviation or power spectrum of the image. A series of thresholds
             are then set and contours identified. Each contour includes an area in which
             the standard deviation of the image exceeds the threshold. The contours are checked for
             minimum and maximum area.
@@ -1775,7 +1790,14 @@ class pbm_ImageAnalysis(AnalysisModule):
             3. We filter candidate ROIs by distances, so that there are no overlapping ROIs.
                         
             """
-        imstd = self.stdImage
+        if self.ctrl.ImagePhys_StdRB.isChecked():
+            imstd = self.stdImage
+        else:
+            imstd = self.specImage
+        dr = 3.0 # Roi size
+        dr = self.ctrl.ImagePhys_ROISize.value() # get roi size fromthe control
+        diag = np.hypot(dr,dr)# note we only accept ROIs that are more than this distance apart - nonoverlapping
+
         stdmax = np.amax(imstd)
         imstd = 255.0*imstd/stdmax
         imstd = scipy.ndimage.gaussian_filter(imstd, sigma=0.002)
@@ -1790,7 +1812,9 @@ class pbm_ImageAnalysis(AnalysisModule):
         meant = int(np.mean(reconst2))/2.0
         sqs = {}
         pols = {}
-        thrlist = np.arange(0.2, 1.1, 0.05) # start at lowest and work up
+        thr_low = self.ctrl.ImagePhys_ROIThrLow.value()
+        thr_high = self.ctrl.ImagePhys_ROIThrHigh.value()
+        thrlist = np.arange(thr_low, thr_high*1.2, 0.05) # start at lowest and work up
         import matplotlib.colors as mc
         thrcols = list(mc.cnames.keys()) # ['r', 'orange', 'y', 'g', 'teal', 'c', 'b', 'violet', 'gray', '']
         # find countours for each threshold level
@@ -1869,8 +1893,6 @@ class pbm_ImageAnalysis(AnalysisModule):
 
         # clean up the final regions - accept only those whose centers are more than 
         # "diag" of an ROI apart.
-        dr = 5. # Roi size
-        diag = np.hypot(dr,dr)# note we only accept ROIs that are more than this distance apart - nonoverlapping
         # first convert the dictionary to a simple list in order
         fp = []
         for u in finalregions:
@@ -2012,11 +2034,11 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.paintImage()
         self.dataState['Normalized'] = True
         self.dataState['NType'] = 'Slow Filter'
-        self.ctrl.ImagePhys_NormInfo.setText('Slow Filter')
+#        self.ctrl.ImagePhys_NormInfo.setText('Slow Filter')
         # this completes the "normalization for the "slow filtering mode"
         # remainder of code here is for ROI detection. 
 
-        
+
     def normalizeImage(self):
         """
         Each image is normalized to the mean of the whole series, instead
@@ -2172,28 +2194,25 @@ class pbm_ImageAnalysis(AnalysisModule):
                 dt = 1
             else:
                 dt = np.mean(np.diff(self.imageTimes))
+        self.calculate_all_xcorr(FData, dt)   
         self.use_MPL = self.ctrlImageFunc.IAFuncs_MatplotlibCheckBox.checkState()
+        
+
         if not self.use_MPL:
-            if self.floatingWindow is None:
-                self.floatingWindow = pyqtgrwindow(title = 'Analog_Xcorr_Average')
-            # self.mpwavg = pg.GraphicsLayoutWidget()
-            # self.floatingWindow.setCentralWidget(self.mpwavg)
-            # self.floatingWindow.show()
+            self.floatingWindow = pyqtgrwindow(title = 'Analog_Xcorr_Average')
+            self.floatingWindow.setWindowTitle('Average XCorr: %s' % self.currentFileName)
+            # print dir(self.floatingWindow)
+            # print dir(self.floatingWindow.layout)
+            self.floatingWindow.layout.clear()
+            self.floatingWindow.layout.setWindowTitle("New Title?")
+            p = self.floatingWindow.layout.addPlot(0,0)
+            p.plot(self.lags,self.xcorr)
+            p.setXRange(np.min(self.lags), np.max(self.lags))
         else:
             self.checkMPL()
             (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Average XCorr", nrows = 1, ncols=1, 
                         sharex = True, sharey = True)
             self.MPLFig.suptitle('Average XCorr: %s' % self.currentFileName, fontsize=11)
-        
-        self.calculate_all_xcorr(FData, dt)   
-
-        if not self.use_MPL:
-            print dir(self.floatingWindow)
-            print dir(self.floatingWindow.layout)
-            p = self.floatingWindow.layout.addPlot(0,0)
-            p.plot(self.lags,self.xcorr)
-            p.setXRange(np.min(self.lags), np.max(self.lags))
-        else:
             self.MPL_plots.plot(self.lags, self.xcorr)
             self.MPL_plots.plot(self.lags,np.zeros(self.lags.shape), color = '0.5')
             self.MPL_plots.plot([0,0], [-0.5, 1.0], color = '0.5')
@@ -2298,33 +2317,30 @@ class pbm_ImageAnalysis(AnalysisModule):
         yMinorTicks = 0
         bLegend = self.ctrlImageFunc.IAFuncs_checkbox_TraceLabels.isChecked()
         gridFlag = True
-
+        if plottype is None:
+            return
+            
         if self.nROI > 8:
             gridFlag = False
         if not self.use_MPL:
-            if self.floatingWindow is None:
-                self.floatingWindow = pyqtgrwindow(title = 'Analog_Xcorr_Individual')
-            self.gview = pg.GraphicsView()
-            if self.pgwin is None:
-                self.pgwin = pg.GraphicsLayout()
-            self.pgwin.clear()
+            #if self.floatingWindow is None:
+            self.floatingWindow = pyqtgrwindow(title = 'Analog_Xcorr_Individual')
+            self.floatingWindow.layout.clear()
+            # self.gview = pg.GraphicsView()
+            # if self.pgwin is None:
+            #     self.pgwin = pg.GraphicsLayout()
+            # self.pgwin.clear()
             xtrace = 0
             for xtrace1 in range(0, nROI-1):
                 for xtrace2 in range(xtrace1+1, nROI):
-                    print 'xtrace: ', xtrace
-                    self.IXC_plots[xtrace] = self.pgwin.addPlot(xtrace1, xtrace2)
+#                    print 'xtrace: ', xtrace
+                    self.IXC_plots[xtrace] = self.floatingWindow.layout.addPlot(xtrace1, xtrace2)
+                    # if xtrace == 0:
+                    #     print dir(self.IXC_plots[xtrace])
+                    if xtrace > 0:
+                        self.IXC_plots[xtrace].hideButtons()
                     xtrace = xtrace + 1
-                self.pgwin.nextRow()
-           
-           
-            try:
-                self.gview.setCentralWidget(self.pgwin)
-            except:
-                self.gview = pg.GraphicsView()
-                self.gview.setCentralWidget(self.pgwin)
-            self.gview.show()
-            self.floatingWindow.show()
-        
+                self.floatingWindow.layout.nextRow()
         else:
             self.checkMPL()
             if plottype == 'traces':
@@ -2350,12 +2366,6 @@ class pbm_ImageAnalysis(AnalysisModule):
                         legend = legend=('%d vs %d' % (xtrace1, xtrace2))
                     else:
                         legend = None
-                    #s = np.shape(self.IXC_corr[xtrace])
-                    #self.lags = dt*(np.arange(0, s[0])-s[0]/2.0)
-                    #MPlots.PlotLine(self.IXC_plots[xtrace], self.lags, 0*self.IXC_corr[xtrace],
-                    #                color = 'lightgray', linestyle='Dash', dataID=('ref_%d_%d' % (xtrace1, xtrace2)))
-                    #MPlots.PlotLine(self.IXC_plots[xtrace], self.lags, self.IXC_corr[xtrace],
-                    #                color = 'k', dataID = ('Xcorr_%d_%d' % (xtrace1, xtrace2)))
                     if plottype == 'traces':
                         if not self.use_MPL: # pyqtgraph
                             self.IXC_plots[xtrace].plot(self.lags, self.IXC_corr[xtrace])
@@ -2371,11 +2381,7 @@ class pbm_ImageAnalysis(AnalysisModule):
                             plx.plot([0,0], [-0.5, 1.0], color = '0.5')
                             if xtrace1 == 0:
                                 plx.set_title('ROI: %d' % (xtrace2), fontsize=8)
-                                #plx.set_xlabel('T (sec)', fontsize=10)
-                            #if xtrace2 == 0:
-                                #plx.set_ylabel('Corr (R)', fontsize=10)
                             PH.cleanAxes(plx) 
-                        
                     xtrace = xtrace + 1
                     dlg += 1
                     if dlg.wasCanceled():
@@ -2383,7 +2389,6 @@ class pbm_ImageAnalysis(AnalysisModule):
                     
         
         # now rescale all the plot Y axes by getting the min/max "viewRange" across all, then setting them all the same
-
         if not self.use_MPL and plottype == 'traces':
             ymin = 0
             ymax = 0
@@ -2421,31 +2426,6 @@ class pbm_ImageAnalysis(AnalysisModule):
 #            print self.IXC_Strength.shape
             self.MPLFig.imshow(self.IXC_Strength)
             PL.show()
-        
-        #MPlots.sameScale(self.IXC_plots)
-        #MPlots.PlotReset(self.IXC_plots[xtrace-1], xAxisOn=True, yAxisOn=True, xlabel='Lag', unitsX='s',
-        #                 ylabel='C', xMinorTicks=0, yMinorTicks=0, clearFlag = False,)
-        #self.IXC_plots[xtrace-1].replot()
-        #self.selectIndividualXcorrTab()
-    #  print self.IXC_strength
-        #self.MPLAxes.clear()
-        #self.MPLAxes.hold=False
-#         imagey = 96
-#         for i in range(0, self.nROI):
-#             self.MPLAxes.plot(rois[i].pos().x(), imagey-rois[i].pos().y(), 'ro')
-#             self.MPLAxes.hold=True 
-#             self.MPLAxes.text(rois[i].pos().x()+1, imagey-rois[i].pos().y(), ("%d" % (i) ))
-#         scmax = self.IXC_strength.max().max()
-#         widmax = 5.0/scmax # scale width by peak strength of correlation
-# #        print scmax
-# #        print widmax
-#         for xtrace1 in range(0, self.nROI-1):
-#             for xtrace2 in range(xtrace1+1, self.nROI):
-#                 if self.IXC_strength[xtrace1, xtrace2] > 0.25:
-#                     self.MPLAxes.plot([rois[xtrace1].pos().x(), rois[xtrace2].pos().x()], 
-#                                       [imagey-rois[xtrace1].pos().y(), imagey-rois[xtrace2].pos().y()], 'b-', 
-#                                       linewidth=widmax*self.IXC_strength[xtrace1, xtrace2])
-#                    print "xt: %d yt: %d lw: %f" % (xtrace1, xtrace2, widmax*self.IXC_strength[xtrace1, xtrace2])
 
 #----------------Fourier Map (reports phase)----------------------------
     def Analog_AFFT(self):
@@ -2776,10 +2756,10 @@ class DBCtrl(QtGui.QWidget):
 class pyqtgrwindow(QtGui.QMainWindow):
     def __init__(self, parent=None, title = '', size=(500,500)):
         super(pyqtgrwindow, self).__init__(parent)
-        self.setWindowTitle(title)
         self.view = pg.GraphicsView()
-        self.layout = pg.GraphicsLayout(border=pg.mkPen(0, 0, 255))
+        self.layout = pg.GraphicsLayout(border=None) # pg.mkPen(0, 0, 255))
         self.resize(size[0], size[1])
+        self.setWindowTitle(title)
         self.view.setCentralItem(self.layout)
         self.view.show()
         
