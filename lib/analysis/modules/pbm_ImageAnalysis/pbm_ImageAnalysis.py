@@ -1092,7 +1092,61 @@ class pbm_ImageAnalysis(AnalysisModule):
             p.setLabel('bottom', 'Distance (%s)' % self.imageScaleUnit)
             p.setLabel('left', 'Correlation (R)')
             p.setYRange(-1, 1)
+            (xm, xn) = self._calcMinMax(X) 
+            p.setXRange(0., xn);
 
+    def _calcMinMax(self, x, p = 0.05):
+        '''
+        Compute initial min and max axis scaling points.
+        Approach: 
+        a) with buffer:
+           reserve a fraction p of the total span of an axis as buffer and
+           round to next order of magnitude
+        b) strict (p==0):
+           just round to the next order of magnitude
+        Special cases: 
+        x_min==x_max : assign symmetric interval or [0,1], if zero.
+        From:
+        F. Oliver Gathmann (gathmann@scar.utoronto.ca)
+        Surface and Groundwater Ecology Research Group      
+        University of Toronto
+        phone: (416) - 287 7420 ; fax: (416) - 287 7423     
+        web: http://www.scar.utoronto.ca/~gathmann
+        
+        '''
+        if len(x)>0:             # not an empty array passed
+            x_max,x_min = np.maximum.reduce(x),np.minimum.reduce(x)
+            if x_min <> x_max:   # esp. not both x_min,x_max equal to zero
+                span = x_max - x_min
+                buffer = p * span
+                if x_min-buffer > 0:    # both (x_min-buffer),(x_max+buffer) > 0
+                    x_min = round(x_min - buffer, -int((np.floor(np.log10(buffer) - 1))))
+                    x_max = round(x_max + buffer, -int((np.ceil(np.log10(buffer) - 1))))
+                elif x_max+buffer < 0:  # both (x_min-buffer),(x_max+buffer) < 0
+                    x_min = round(x_min - buffer, -int((np.ceil(np.log10(buffer) - 1))))
+                    x_max = round(x_max + buffer, -int((np.floor(np.log10(buffer) - 1))))
+                else: # (x_min-buffer </= 0)and(x_max+buffer >/= 0) 
+                    try:
+                        x_min = round(x_min - buffer, -int((np.ceil(np.log10(buffer) - 1))))
+                    except OverflowError: # buffer == 0
+                        x_min = 0
+                    try:
+                        x_max = round(x_max + buffer, -int((np.ceil(np.log10(buffer) - 1))))
+                    except OverflowError: # buffer == 0
+                        x_max = 0
+            else:
+                if x_min <> 0:
+                    x_min = x_min - x_min/2.0
+                    x_max = x_max + x_max/2.0
+                else:
+                    x_min = 0
+                    x_max = 1
+        else:
+            x_min = 0
+            x_max = 1
+        return x_min,x_max
+
+        
     def printDistStrength(self):
         print '\n\n----------------------------------\nROI Distance Map\nFile: %s '% self.currentFileName
         print 'roi1\troi2\td (um)\t R'
@@ -1156,12 +1210,13 @@ class pbm_ImageAnalysis(AnalysisModule):
                 if yFlip_flag:
                     y2 = sy-y2
                 if np.abs(self.IXC_Strength[i,j]) < threshold:
-                    if self.use_MPL:
-                        self.MPL_plots.plot([x1, x2], [y1, y2], 
-                            linestyle = '--', color='grey', marker='o', linewidth=minline)
-                    else:
-                        pn = pg.mkPen(width=minline, color=[128, 128, 128, 192], style=QtCore.Qt.DashLine)
-                        plt.plot([x1, x2], [y1, y2], pen = pn)
+                    pass
+                    # if self.use_MPL:
+                    #     self.MPL_plots.plot([x1, x2], [y1, y2], 
+                    #         linestyle = '--', color='grey', marker='o', linewidth=minline)
+                    # else:
+                    #     pn = pg.mkPen(width=minline, color=[128, 128, 128, 192], style=QtCore.Qt.DashLine)
+                    #     plt.plot([x1, x2], [y1, y2], pen = pn)
                 else:
                     lw = maxline*(abs(self.IXC_Strength[i,j])-threshold)/(maxStr-threshold)+minline
                     if self.IXC_Strength[i,j] >= threshold:
@@ -1241,10 +1296,13 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.plotdata(yMinorTicks = 0, yMajorTicks = 3,
                       yLabel = u'F0<sub>ROI %d</sub>')
 
-    def addOneROI(self, pos=[0 ,0], hw=[5, 5]):
+    def addOneROI(self, pos=[0 ,0], hw=None):
         """ append one roi to the self.AllRois list, put it on the screen (scene), and
         make sure it is actively connected to code. The return value lets us
         handle the rois when we restore them """
+        if hw is None:
+            dr = self.ctrl.ImagePhys_ROISize.value()
+            hw = [dr, dr]
         roi = pg.RectROI(pos, hw, scaleSnap=True, translateSnap=True)
 #       roi = qtgraph.widgets.EllipseROI(pos, hw, scaleSnap=True, translateSnap=True)
 #       roi = qtgraph.widgets.MultiLineROI([[0,0], [5,5], [10,10]], 3, scaleSnap=True, translateSnap=True)
