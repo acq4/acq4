@@ -27,7 +27,7 @@ This module provides:
 from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
-import os, shutil
+import os, shutil, os.path
 import operator
 import pyqtgraph as pg
 import DatabaseGui
@@ -44,22 +44,16 @@ from lib.analysis.tools import PlotHelpers as PH # matlab plotting helpers
 from lib.util import functions as FN
 from HelpfulException import HelpfulException
 
-#from lib.analysis.tools import ImageP # avaialable as part of the STXMPy package
-#import scikits
-#from scikits.learn import mixture
 import cv2
 import cv2.cv as cv
-
-# at http://www.rzuser.uni-heidelberg.de/~ge6/Programing/STXMPy.html
-# https://launchpad.net/imagep  
-
 
 #import smc as SMC # Vogelstein's OOPSI analysis for calcium transients
 
 import pylab as PL
+from mpl_toolkits.axes_grid1 import AxesGrid
+
 """ 
 We use matplotlib/pylab for *some* figure generation.
-
 """
 class pbm_ImageAnalysis(AnalysisModule):
     def __init__(self, host, flowchartDir = None, dbIdentity = "ImageAnalysis"):
@@ -101,11 +95,17 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.burstsFound = None
         self.spikeTimes = []
         self.burstTimes = []
-        
+        self.specImage = []
+        self.specImageCalcFlag = False
+        self.stdImage = []
+        self.avgImage = []
+                
         self.spikesFoundpk = None
         self.withinBurstsFound = None
         self.FData = []
         self.MPLFig = None # We keep one instance of a matplotlib figure, create and destroy as needed
+        self.floatingWindow = None  # one instance of a pyqtgraph window that floats.
+        self.pgwin = None
         
         self.ctrlWidget = QtGui.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
@@ -160,6 +160,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrl.ImagePhys_getRatio.clicked.connect(self.loadRatioImage)
         self.ctrl.ImagePhys_ImgNormalize.clicked.connect(self.doNormalize)
         self.ctrl.ImagePhys_UnBleach.clicked.connect(self.unbleachImage)
+        self.ctrl.ImagePhys_SpecCalc.clicked.connect(self.spectrumCalc)
         self.ctrl.ImagePhys_View.currentIndexChanged.connect(self.changeView)
         self.ctrl.ImagePhys_RecalculateROIs.clicked.connect(self.calculateAllROIs)
         self.ctrl.ImagePhys_RetrieveROI.clicked.connect(self.restoreROI)
@@ -182,7 +183,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrlPhysFunc.ImagePhys_STA.clicked.connect(self.computeSTA)
         self.ctrlPhysFunc.ImagePhys_BTA.clicked.connect(self.computeBTA)
         self.ctrlPhysFunc.ImagePhys_PhysLPF.valueChanged.connect(self.physLPF_valueChanged)
-        
+        self.ctrl.ImagePhys_PhysROIPlot.toggled.connect(self.setupPhysROIPlot)
         #
         # Imaging analysis buttons
         #
@@ -203,7 +204,6 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ROIDistanceMap = []
         self.tc_bleach = []
 
-        
     def updateRectSelect(self):
         self.rectSelect = self.ctrl.ImagePhys_RectSelect.isChecked()
         if self.rectSelect:
@@ -222,6 +222,8 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.viewFlag = True
         if view == 'Std Image':
             self.imageView.setImage(self.stdImage)
+        if view == 'Spectrum Image':
+            self.imageView.setImage(self.specImageDisplay)
         if view == 'Movie':
             self.imageView.setImage(self.imageData)
             self.viewFlag = False
@@ -276,12 +278,93 @@ class pbm_ImageAnalysis(AnalysisModule):
         #self.plot2.plot(data.max(axis=1))
         #self.plot2.plot(data.min(axis=1))
 
-
     def loadFileRequested(self, dh):
         """Called by file loader when a file load is requested.
         In this case, we request a directory, corresponding to a sample run,
-        which may contain both physiology and image data"""
+        which may contain both physiology and image data.
+        If multiple files are selected, this routine will be called for each one...
         
+        """
+        dlh = self.fileLoaderInstance.selectedFiles()
+        if self.ctrl.ImagePhys_PhysROIPlot.isChecked():
+            print 'multiple file load, lendh: ', len(dlh)
+            self.makePhysROIPlot(dh, dlh)
+        else:
+            if len(dlh) > 1:
+                raise  HelpfulException("pbm_ImageAnalysis: loadFileRequested Error\nCan only load from single file", msgType='status')
+                return False
+            else:
+                self.loadSingleFile(dh[0])
+    
+    def setupPhysROIPlot(self):
+        if self.ctrl.ImagePhys_PhysROIPlot.isChecked():
+            self.checkMPL()
+            self.firstPlot=False
+            self.plotCount = 0
+
+    def makePhysROIPlot(self, dh, dlh):
+        if type(dh) is list:
+            dh = dh[0]
+        fname = dh.name()
+        (head, tail) = os.path.split(fname)
+        self.MPRncolumns = 2
+        self.MPRnrows = len(dlh)
+        if len(dlh) % 2 == 1:
+            self.MPRnrows += 2
+        if self.firstPlot is False:
+            (self.MPLFig, self.MPPhysPlots) = PL.subplots(num="Physiology-Fluor comparison", 
+            nrows = self.MPRnrows, ncols=self.MPRncolumns, sharex = True, sharey = False)
+            self.MPLFig.suptitle('Dataset: %s' % (head) , fontsize=10)
+
+            self.nPhysPlots = len(dlh)
+            c = 0
+            r = 0
+            for i in range(0,self.MPRnrows*self.MPRncolumns,2):
+                self.MPPhysPlots[r,c].sharey = True
+                r = r + 2
+                if r >= self.MPRnrows:
+                    r = 0
+                    c += 1
+            c = 0
+            r = 0
+            for i in range(1,self.MPRnrows*self.MPRncolumns,2):
+                self.MPPhysPlots[r,c].sharey = True
+                r = r + 2
+                if r >= self.MPRnrows:
+                    r = 0
+                    c += 1
+                
+        self.firstPlot = True
+        try:
+            self.loadSingleFile(dh)
+        except:
+            print 'problem loading data... skipping'
+            self.plotCount += 1
+            return
+        self.unbleachImage()
+        self.calculateAllROIs()
+
+        c = 0
+        r = self.plotCount*2
+        if r >= self.MPRnrows-1:
+            c += 1
+            r = self.plotCount*2 % self.MPRnrows
+        self.MPPhysPlots[r+1, c].plot(self.tdat, self.physData, 'k-')
+        self.MPPhysPlots[r+1, c].set_title(tail)
+
+        for i in range(self.nROI):
+            ndpt = len(self.FData[i,:])
+            self.MPPhysPlots[r,c].plot(self.imageTimes[0:ndpt], (self.FData[i,:]-1.0)*100.)
+        self.plotCount += 1
+        PL.draw()
+        if self.plotCount >= self.nPhysPlots:
+            PL.show()
+            self.ctrl.ImagePhys_PhysROIPlot.setCheckState(False) # turn off now - to properly sequence reload
+            PL.savefig('/Users/pbmanis/Desktop/IA.png', dpi=600, format='png')
+
+
+    def loadSingleFile(self, dh):
+        self.imageView.setFocus()
         self.downSample = int(self.ctrl.ImagePhys_Downsample.currentText())
         if self.downSample <= 0:
             self.downSample = 1 # same as "none"
@@ -290,55 +373,10 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.shiftFlag = False # eventually, but at the moment it does NOT work
         self.getDataStruct()
         
-        if len(dh) != 1:
-            QtGui.QMessageBox.warning(self,
-                                      "pbm_ImageAnalysis: loadFileRequested Error",
-                                      "Can only load one data set/run at a time.")
-            return False
-            # raise Exception("Can only load one data set/run at a time.")
-        dh = dh[0]
+        if type(dh) is list:
+            dh = dh[0]
         self.currentFileName = dh.name()
         self.imageScaleUnit = 'pixels'
-        # if dh.isFile(): # direct file "video....ma" read
-        #     if self.downSample == 1:
-        #         img = dh.read() # read the image stack
-        #     else:
-        #         (img, info) = self.tryDownSample(dh)
-        #     if img == []:
-        #         return False
-        #     fi = self.ignoreFirst
-        #     self.clearPhysiologyInfo() # clear the physiology data currently in memory to avoid confusion
-        #     self.imageData = img.view(np.ndarray) # load into rawData, clipping the first image if needed
-        #     self.rawData = self.imageData.copy()[fi:] # save the raw data.
-        #     self.imageData = self.imageData[fi:]
-        #     self.baseImage = self.imageData[0] # save first image in series to show after processing...
-        #     if self.downSample > 1:
-        #         self.imageTimes = info[0]['values']
-        #         self.imageTimes = self.imageTimes[fi:]
-        #         self.imageTimes = self.imageTimes[::self.downSample]
-        #         nFrames = np.shape(self.imageData)[0]
-        #         print 'frames: %d   imageTimes: %d' % (nFrames, len(self.imageTimes))
-        #         self.imageTimes = self.imageTimes[:nFrames] # sometimes these don't match when downsampling
-        #         print 'imageTime: %d' % (len(self.imageTimes))
-        #         self.imageInfo = info
-        #     else:
-        #         self.imageTimes = img.infoCopy()[0].values()[1]
-        #         self.imageTimes = self.imageTimes[fi:]
-        #         self.imageInfo = img.infoCopy()
-#            if self.shiftFlag:
-#                imean = np.mean(np.mean(np.mean(self.imageData, axis=1), axis=1), axis=0)
-#                self.imageData = self.AlignStack(self.imageData, fi, verbose=True)
-            # self.imageView.setImage(self.imageData)
-            # self.dataState['Loaded'] = True
-            # self.dataState['Structure'] = 'Flat'
-            # self.background = self.rawData.mean(axis=2).mean(axis=1)
-            # self.backgroundmean = self.background.mean(axis=0)
-
-#            QtGui.QMessageBox.warning(self,
-#                                      "pbm_ImageAnalysis: loadFileRequested Error",
-#                                      "Select a Directory containing the data, not the data file itself")
-#            return
-#            raise Exception("Select a Directory containing the data, not the data file itself")
 
         if self.dataStruct is 'flat':
             #print 'getting Flat data structure!'
@@ -347,8 +385,8 @@ class pbm_ImageAnalysis(AnalysisModule):
             else:
                 fhandle = dh['Camera/frames.ma']
                 self.clearPhysiologyInfo() # clear the physiology data currently in memory to avoid confusion
-            print dh
-            print fhandle
+            # print dh
+            # print fhandle
             self.rawData = []
             if not dh.isFile():
                 self.readPhysiology(dh)
@@ -366,13 +404,16 @@ class pbm_ImageAnalysis(AnalysisModule):
 
             self.imageData = img.view(np.ndarray) # load into rawData, clipping the first image if needed
             self.rawData = self.imageData.copy()[fi:] # save the raw data.
+            # reduce image size if it is too big:
             self.imageData = self.imageData[fi:]
             self.baseImage = self.imageData[0] # just to show after processing...
             self.imageTimes = self.imageInfo[0].values()[1]
+            self.imagedT = np.mean(np.diff(self.imageTimes))
             self.imageTimes = self.imageTimes[fi:]
             self.imageView.setImage(self.imageData)
             self.dataState['Loaded'] = True
             self.dataState['Structure'] = 'Flat'
+            print 'rawdata shape: ', self.rawData.shape
             self.background = self.rawData.mean(axis=2).mean(axis=1)
             self.backgroundmean = self.background.mean(axis=0)
 
@@ -445,18 +486,58 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ROI_Plot.clearPlots()
         self.getDataStruct()
         self.currentDataDirectory = dh
-        self.updateAvgStdImage()
-        self.calculateAllROIs()
-        self.updateThisROI(self.lastROITouched)    
+        self.ctrl.ImagePhys_View.setCurrentIndex(0)# always set to show the movie
+        self.specImageCalcFlag = False # we need to recalculate the spectrum
+        npts = self.imageData.shape[0]/2
+        freq = np.fft.fftfreq(npts, d=self.imagedT)
+        freq = freq[0:npts/2 + 1]
+        self.ctrl.ImagePhys_SpecHPF.setMinimum(0.0)
+        self.ctrl.ImagePhys_SpecHPF.setMaximum(np.max(freq))
+        self.ctrl.ImagePhys_SpecHPF.setValue(freq[1])
+        self.ctrl.ImagePhys_SpecLPF.setMinimum(freq[1])
+        self.ctrl.ImagePhys_SpecLPF.setMaximum(np.max(freq))
+        self.ctrl.ImagePhys_SpecLPF.setValue(np.max(freq))
+        
+        self.updateAvgStdImage() # make sure mean and std are properly updated
+        self.calculateAllROIs() # recompute the ROIS
+        self.updateThisROI(self.lastROITouched)  #  and make sure plot reflects current ROI (not old data)  
         return True
 
     def updateAvgStdImage(self):
         """ update the reference image types and then make sure display agrees.
         """
         self.aveImage = np.mean(self.imageData, axis=0)
+        #self.stdImage = scipy.stats.skew(self.imageData, axis=0)
         self.stdImage = np.std(self.imageData, axis=0)
         self.changeView()
-        
+
+    def spectrumCalc(self):
+        """
+        Calculate the spectrum and display the power across timein a frequency band as the image
+        intensity at each point. Useful for finding areas of activity
+        """
+        sh = self.imageData.shape
+        if self.specImageCalcFlag is False: # calculate spectrum info
+            self.freim = np.abs(np.fft.fft(self.imageData, axis=0)/self.imageData.shape[0])
+            self.specImageCalcFlag = True
+            
+        npts = self.imageData.shape[0]/2
+        freq = np.fft.fftfreq(npts, d=self.imagedT) # get frequency list
+        freq = freq[0:npts/2 + 1]
+        hpf = self.ctrl.ImagePhys_SpecHPF.value()
+        lpf = self.ctrl.ImagePhys_SpecLPF.value()
+        u = np.where(freq > hpf) # from frequencies, select those from the window
+        v = np.where(freq < lpf)
+        frl = list(set(u[0]).intersection(set(v[0])))
+        if len(frl) == 0: # catch bad selection
+            return
+        si = self.freim.take(frl, axis=0) # % make selection
+        self.specImage = np.mean(si, axis=0) # and get the average across the frequenies selected
+        sigma = self.ctrl.ImagePhys_FFTSmooth.value()
+        self.specImageDisplay = scipy.ndimage.filters.gaussian_filter(self.specImage, sigma) # smooth a bit
+        view = self.ctrl.ImagePhys_View.setCurrentIndex(3)
+        self.changeView()
+
     def getImageScaling(self):
         """ retrieve scaling factor and set imageScaleUnit from the info on the image file
             In the case where the information is missing, we just set pixels.
@@ -520,7 +601,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             nbigblocks += 1
         nframesperblock = bigblock/self.downSample
         print 'Reducing from %d frames to %d frames, downsample = %d ' % (sh[0], outframes, self.downSample)
-        print "bigblock: %d  nbigblocks: %d  lastblock: %d   Frames Per Block: %d" % (bigblock, nbigblocks, nlastblock, nframesperblock)
+#        print "bigblock: %d  nbigblocks: %d  lastblock: %d   Frames Per Block: %d" % (bigblock, nbigblocks, nlastblock, nframesperblock)
         imt_out = np.empty((outframes, sh[1], sh[2]), dtype=np.float32)
         tfr = 0
         nfr = 0
@@ -539,7 +620,6 @@ class pbm_ImageAnalysis(AnalysisModule):
                 if bb == nbigblocks-1:
                     nframesperblock = int(np.floor(nlastblock/self.downSample))
                     print "reading last block of short..."
-                print 'bb: %d   nfram/glock: %d' % (bb, nframesperblock)
                 for fr in range(nframesperblock):
                     dlg.setLabelText("Reading block %d of %d" % (tfr, outframes))
                     block_pos = fr * self.downSample
@@ -716,9 +796,9 @@ class pbm_ImageAnalysis(AnalysisModule):
        # self.makeROIDataFigure(clear=False, gcolor='g')
 
     def SignalBPF(self, roi):
-       ### data correction
-       ### try to decrease baseline drift by high-pass filtering the data.
-
+       """ data correction
+       try to decrease baseline drift by high-pass filtering the data.
+       """
        #self.BFData = np.array(self.FData).copy()
        HPF = self.ctrl.ImagePhys_ImgHPF.value()
        LPF = self.ctrl.ImagePhys_ImgLPF.value() # 100.0
@@ -729,15 +809,13 @@ class pbm_ImageAnalysis(AnalysisModule):
        samplefreq = 1.0/dt
        if (LPF > 0.5*samplefreq):
            LPF = 0.5*samplefreq
-#        for roi in range(0, self.nROI):
        d = self.BFData[roi.ID].copy().T
        return(Utility.SignalFilter(d, LPF, HPF, samplefreq))
 
-
     def SignalHPF(self, roi): 
-        ### data correction
-        ### try to decrease baseline drift by high-pass filtering the data.
-
+        """ data correction
+        try to decrease baseline drift by high-pass filtering the data.
+        """
         HPF = self.ctrl.ImagePhys_ImgHPF.value()
         dt = np.mean(np.diff(self.imageTimes))
         samplefreq = 1.0/dt
@@ -745,9 +823,9 @@ class pbm_ImageAnalysis(AnalysisModule):
         return(Utility.SignalFilter_HPFButter(d, HPF, samplefreq))
 
     def SignalLPF(self, roi): 
-        ### data correction
-        ### Low-pass filter the data.
-
+        """ data correction
+        Low-pass filter the data.
+        """
         LPF = self.ctrl.ImagePhys_ImgLPF.value() # 100.0
         dt = np.mean(np.diff(self.imageTimes))
         samplefreq = 1.0/dt
@@ -759,7 +837,6 @@ class pbm_ImageAnalysis(AnalysisModule):
 #
 # detect spikes in physiology trace
 #
-
     def showPhysTrigger(self):
         thr = self.ctrlPhysFunc.ImagePhys_PhysThresh.value()
         sign = self.ctrlPhysFunc.ImagePhys_PhysSign.currentIndex()
@@ -836,16 +913,15 @@ class pbm_ImageAnalysis(AnalysisModule):
                 burstSpikes.extend(bdat[1:].tolist())
             self.burstsFound.setPoints(x=onsetSpikes, y = [bursts[1] for x in range(len(onsetSpikes))])
             self.withinBurstsFound.setPoints(x=burstSpikes, y = [bursts[2] for x in range(len(burstSpikes))])
-                
+
     def checkMPL(self):
         if self.MPLFig is not None:
             PL.close()
             self.MPLFig = None
-            
-        
+
     def RevSTA(self):
         pass
-        
+
     def computeSTA(self):
         """
         Compute the spike-triggered average of the ROI signals, given the spike train. 
@@ -964,7 +1040,9 @@ class pbm_ImageAnalysis(AnalysisModule):
         for j in range(len(allBurstList)):
             burstTList.append(self.SpikeTimes[allBurstList[j]])
         return(burstTList)
-                
+
+#---------------------------------------------------------------------------
+
     def ROIDistStrength(self):
         """
         Create a plot of the strength of the cross correlation (peak value) versus the distance
@@ -972,28 +1050,103 @@ class pbm_ImageAnalysis(AnalysisModule):
         """
         if self.ROIDistanceMap == []:
             self.ROIDistances() # make sure we ahve valid distance information
-#        print self.IXC_Strength
+
         if self.IXC_Strength == []:
             self.Analog_Xcorr_Individual(plottype = None)
-        self.checkMPL()
-        (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Image Analysis", nrows = 1, ncols=1, 
-                    sharex = True, sharey = True)
-        self.MPLFig.suptitle('Analog XCorr: %s' % self.currentFileName, fontsize=11)
         threshold = self.ctrlImageFunc.IAFuncs_XCorrThreshold.value()
         x0 = np.nanmin(np.nanmin(self.ROIDistanceMap))
         x1 = np.nanmax(np.nanmax(self.ROIDistanceMap))
         thrliney = [threshold, threshold]
+        nthrliney = [-threshold, -threshold]
         thrlinex = [x0, x1]
-        sp = self.MPL_plots.scatter(self.ROIDistanceMap, self.IXC_Strength, s=15, color='tomato')
-        self.MPL_plots.plot(thrlinex, thrliney)
-        self.MPL_plots.set_xlabel('Distance (%s)' % self.imageScaleUnit)
-        self.MPL_plots.set_ylabel('Correlation (R)')
-        self.MPL_plots.set_ylim((0,1))
-        PL.show()
+        self.use_MPL = self.ctrlImageFunc.IAFuncs_MatplotlibCheckBox.checkState()
         mean  = scipy.stats.nanmean(self.IXC_Strength.flatten())
         std  = scipy.stats.nanstd(self.IXC_Strength.flatten())
         print 'Mean XC: %f   std: %f' % (mean, std)
+        if self.use_MPL:
+            self.checkMPL()
+            (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Image Analysis", nrows = 1, ncols=1, 
+                    sharex = True, sharey = True)
+            self.MPLFig.suptitle('Analog XCorr: %s' % self.currentFileName, fontsize=11)
+            sp = self.MPL_plots.scatter(self.ROIDistanceMap, self.IXC_Strength, s=15, color='tomato')
+            self.MPL_plots.plot(thrlinex, thrliney)
+            self.MPL_plots.set_xlabel('Distance (%s)' % self.imageScaleUnit)
+            self.MPL_plots.set_ylabel('Correlation (R)')
+            self.MPL_plots.set_ylim((-1,1))
+            PL.show()
+        else:
+            self.floatingDistWin = pyqtgrwindow(title = 'ROI Distance Strength')
+            self.floatingDistWin.setWindowTitle('ROI Distance Strength: %s' % self.currentFileName)
+            self.floatingDistWin.layout.clear()
+            self.floatingDistWin.layout.setWindowTitle("New Title?")
+            s1 = pg.ScatterPlotItem(size=7, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 255))
+            X = np.reshape(self.ROIDistanceMap, -1)
+            X = X[~np.isnan(X)]
+            Y = np.reshape(self.IXC_Strength, -1)
+            Y = Y[~np.isnan(Y)]
+            p = self.floatingDistWin.layout.addPlot(0,0)
+            s1.addPoints(X, Y)
+            p.addItem(s1)
+            p.plot(thrlinex, thrliney, pen=pg.mkPen(width=0.75, color='c'))
+            p.plot(thrlinex, nthrliney, pen=pg.mkPen(width=0.75, color='c'))
+            p.setLabel('bottom', 'Distance (%s)' % self.imageScaleUnit)
+            p.setLabel('left', 'Correlation (R)')
+            p.setYRange(-1, 1)
+            (xm, xn) = self._calcMinMax(X) 
+            p.setXRange(0., xn);
 
+    def _calcMinMax(self, x, p = 0.05):
+        '''
+        Compute initial min and max axis scaling points.
+        Approach: 
+        a) with buffer:
+           reserve a fraction p of the total span of an axis as buffer and
+           round to next order of magnitude
+        b) strict (p==0):
+           just round to the next order of magnitude
+        Special cases: 
+        x_min==x_max : assign symmetric interval or [0,1], if zero.
+        From:
+        F. Oliver Gathmann (gathmann@scar.utoronto.ca)
+        Surface and Groundwater Ecology Research Group      
+        University of Toronto
+        phone: (416) - 287 7420 ; fax: (416) - 287 7423     
+        web: http://www.scar.utoronto.ca/~gathmann
+        
+        '''
+        if len(x)>0:             # not an empty array passed
+            x_max,x_min = np.maximum.reduce(x),np.minimum.reduce(x)
+            if x_min <> x_max:   # esp. not both x_min,x_max equal to zero
+                span = x_max - x_min
+                buffer = p * span
+                if x_min-buffer > 0:    # both (x_min-buffer),(x_max+buffer) > 0
+                    x_min = round(x_min - buffer, -int((np.floor(np.log10(buffer) - 1))))
+                    x_max = round(x_max + buffer, -int((np.ceil(np.log10(buffer) - 1))))
+                elif x_max+buffer < 0:  # both (x_min-buffer),(x_max+buffer) < 0
+                    x_min = round(x_min - buffer, -int((np.ceil(np.log10(buffer) - 1))))
+                    x_max = round(x_max + buffer, -int((np.floor(np.log10(buffer) - 1))))
+                else: # (x_min-buffer </= 0)and(x_max+buffer >/= 0) 
+                    try:
+                        x_min = round(x_min - buffer, -int((np.ceil(np.log10(buffer) - 1))))
+                    except OverflowError: # buffer == 0
+                        x_min = 0
+                    try:
+                        x_max = round(x_max + buffer, -int((np.ceil(np.log10(buffer) - 1))))
+                    except OverflowError: # buffer == 0
+                        x_max = 0
+            else:
+                if x_min <> 0:
+                    x_min = x_min - x_min/2.0
+                    x_max = x_max + x_max/2.0
+                else:
+                    x_min = 0
+                    x_max = 1
+        else:
+            x_min = 0
+            x_max = 1
+        return x_min,x_max
+
+        
     def printDistStrength(self):
         print '\n\n----------------------------------\nROI Distance Map\nFile: %s '% self.currentFileName
         print 'roi1\troi2\td (um)\t R'
@@ -1012,43 +1165,88 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.ROIDistances() # make sure we ahve valid distance information
         if self.IXC_Strength == []:
             self.Analog_Xcorr_Individual(plottype = None)
-        self.checkMPL()
-        (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Network Graph", nrows = 1, ncols=1, 
-                    sharex = True, sharey = True)
-        self.MPLFig.suptitle('Network Graph: %s' % self.currentFileName, fontsize=11)
+
+        self.use_MPL = self.ctrlImageFunc.IAFuncs_MatplotlibCheckBox.checkState()
+        
+        if self.use_MPL:
+            self.checkMPL()
+            (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Network Graph", nrows = 1, ncols=1, 
+                        sharex = True, sharey = True)
+            self.MPLFig.suptitle('Network Graph: %s' % self.currentFileName, fontsize=11)
+            yFlip_flag  = False
+        else:
+            self.floatingDistWin = pyqtgrwindow(title = 'Network Graph')
+            self.floatingDistWin.setWindowTitle('Network Graph: %s' % self.currentFileName)
+            self.floatingDistWin.layout.clear()
+            self.floatingDistWin.layout.setWindowTitle("Network Graph?")
+            plt = self.floatingDistWin.layout.addPlot(0,0)
+            yFlip_flag = True
+            
         (sx, sy, px) = self.getImageScaling()
-        maxStr = np.nanmax(self.IXC_Strength)
+        print sy
+        print px
+        maxStr = np.abs(np.nanmax(self.IXC_Strength))
         minStr = np.nanmin(self.IXC_Strength)
         maxline = 4.0
         minline = 0.20
         threshold = self.ctrlImageFunc.IAFuncs_XCorrThreshold.value()
         nd = len(self.AllRois)
-        print px
+        X=np.zeros(nd)
+        Y=np.zeros(nd)
         for i in range(0, nd):
             wpos1 = [self.AllRois[i].pos().x(), self.AllRois[i].pos().y(),
                             self.AllRois[i].boundingRect().width(), self.AllRois[i].boundingRect().height()]
             x1 = (wpos1[0]+0.5*wpos1[2])*px[0]
             y1 = (wpos1[1]+0.5*wpos1[3])*px[1]                
+            if yFlip_flag:
+                y1 = sy - y1
+            X[i] = x1
+            Y[i] = y1
             for j in range(i+1, nd):
                 wpos2 = [self.AllRois[j].pos().x(), self.AllRois[j].pos().y(),
                             self.AllRois[j].boundingRect().width(), self.AllRois[j].boundingRect().height()]
                 x2 = (wpos2[0]+0.5*wpos2[2])*px[0]
                 y2 = (wpos2[1]+0.5*wpos2[3])*px[1]
-                if self.IXC_Strength[i,j] < threshold:
-                    self.MPL_plots.plot([x1, x2], [y1, y2], 
-                    linestyle = '--', color='grey', marker='o', linewidth=minline)
+                if yFlip_flag:
+                    y2 = sy-y2
+                if np.abs(self.IXC_Strength[i,j]) < threshold:
+                    pass
+                    # if self.use_MPL:
+                    #     self.MPL_plots.plot([x1, x2], [y1, y2], 
+                    #         linestyle = '--', color='grey', marker='o', linewidth=minline)
+                    # else:
+                    #     pn = pg.mkPen(width=minline, color=[128, 128, 128, 192], style=QtCore.Qt.DashLine)
+                    #     plt.plot([x1, x2], [y1, y2], pen = pn)
                 else:
-                    lw = maxline*(self.IXC_Strength[i,j]-threshold)/(maxStr-threshold)+minline
-                    if lw < 0:
-                        lw = 0
-                    self.MPL_plots.plot([x1, x2], [y1, y2], linewidth=lw, 
-                    linestyle = '-', color='tomato', marker='o')
-        self.MPL_plots.set_xlim((0, sx))
-        self.MPL_plots.set_ylim((sy, 0))
-        self.MPL_plots.set_xlabel('X (%s)' % self.imageScaleUnit)
-        self.MPL_plots.set_ylabel('Y (%s)' % self.imageScaleUnit)
-        PL.show()
+                    lw = maxline*(abs(self.IXC_Strength[i,j])-threshold)/(maxStr-threshold)+minline
+                    if self.IXC_Strength[i,j] >= threshold:
+                        pn = pg.mkPen(width=lw, color=[255, 128, 128, 255])
+                        mcolor = 'tomato'
+                    elif self.IXC_Strength[i,j] <= threshold:
+                        pn = pg.mkPen(width=lw, color=[128, 128, 255, 255])
+                        mcolor = 'blue'
+                    
+                    if self.use_MPL:
+                        self.MPL_plots.plot([x1, x2], [y1, y2], linewidth=lw, 
+                            linestyle = '-', color=mcolor, marker='o')
+                    else:
+                        plt.plot([x1, x2], [y1, y2], pen = pn)
         
+        if self.use_MPL:
+            self.MPL_plots.set_xlim((0, sx))
+            self.MPL_plots.set_ylim((sy, 0))
+            self.MPL_plots.set_xlabel('X (%s)' % self.imageScaleUnit)
+            self.MPL_plots.set_ylabel('Y (%s)' % self.imageScaleUnit)
+            PL.show()
+        else:
+            s1 = pg.ScatterPlotItem(size=7, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 255))
+            s1.addPoints(X, Y)
+            plt.addItem(s1)
+            plt.setLabel('bottom', 'X (%s)' % self.imageScaleUnit)
+            plt.setLabel('left', 'Y (%s)' % self.imageScaleUnit)
+            plt.setXRange(0., sx)
+            plt.setYRange(0., sy)
+            
 #--------------- From PyImageAnalysis3.py: -----------------------------
 #---------------- ROI routines on Images  ------------------------------
 
@@ -1098,10 +1296,13 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.plotdata(yMinorTicks = 0, yMajorTicks = 3,
                       yLabel = u'F0<sub>ROI %d</sub>')
 
-    def addOneROI(self, pos=[0 ,0], hw=[5, 5]):
+    def addOneROI(self, pos=[0 ,0], hw=None):
         """ append one roi to the self.AllRois list, put it on the screen (scene), and
         make sure it is actively connected to code. The return value lets us
         handle the rois when we restore them """
+        if hw is None:
+            dr = self.ctrl.ImagePhys_ROISize.value()
+            hw = [dr, dr]
         roi = pg.RectROI(pos, hw, scaleSnap=True, translateSnap=True)
 #       roi = qtgraph.widgets.EllipseROI(pos, hw, scaleSnap=True, translateSnap=True)
 #       roi = qtgraph.widgets.MultiLineROI([[0,0], [5,5], [10,10]], 3, scaleSnap=True, translateSnap=True)
@@ -1383,24 +1584,27 @@ class pbm_ImageAnalysis(AnalysisModule):
                 self.tr("CSV Files (*.csv)"))
             if not fileName:
                 return
-        fname = fileName
-        if "." not in fileName:
-            fileName = fileName + '.csv'
-        file = open(fileName, 'w')
+        (fnc, extc) = os.path.splitext(fileName)
+        fName = fnc + '.csv'
+        fd = open(fName, 'w')
         stringVals=''
         for col in range(0, data.shape[1]): # write a header for our formatting.
             if col is 0:
-                file.write('time,')
+                fd.write('time,')
             else:
                 stringVals = ['R%03d' % x for x in range(0, col)]
-        file.write(",".join(stringVals) + "\n")
+        fd.write(",".join(stringVals) + "\n")
         for row in range(0, data.shape[0]):
             stringVals = ["%f" % x for x in data[row]]
-            file.write(",".join(stringVals) + "\n")
-        file.close()
-        fd = open(fname + '.roi', 'w')
+            fd.write(",".join(stringVals) + "\n")
+        print 'Wrote: %s\n' % (fName)
+        fd.close()
+        (fnc, extc) = os.path.splitext(fileName)
+        fName = fnc + '.roi'
+        fd = open(fName, 'w')
         for rd in roiData:
             fd.write(' '.join(map(str, rd)) + '\n')
+        print 'Wrote: %s\n' % fName
         fd.close()
     
     def restoreROI(self, fileName = None):
@@ -1408,23 +1612,14 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.clearAllROI() # always start with a clean slate.
         if fileName is False or fileName is None:
             fileName = QtGui.QFileDialog.getOpenFileName(None, u'Retrieve ROI data', u'', u'ROIs (*.roi)')
-        self.RData = []
-        self.nROI = 0
         if fileName:
             fd = open(fileName, 'r')
             for line in fd:
                 roixy = np.fromstring(line, sep=' ')
-                roi = self.addOneROI(pos=[roixy[0], roixy[1]], hw=[roixy[2], roixy[3]])
-                tr = self.updateThisROI(roi, livePlot=False)
-                lcount = len (tr)
-                self.RData.append(tr)
-            #self.times = arange(0, len(tr))
-            self.nROI = len(self.RData)
-            self.FData = np.array(self.RData)# .reshape(lcount, self.nROI).T
-            self.BFData = [] # 'baseline corrected'
-            #self.plotdata(yMinorTicks = 0, yMajorTicks = 3,
-            #              yLabel = u'F0<sub>ROI %d</sub>')
-        self.makeROIDataFigure(clear=True)
+                self.addOneROI(pos=[roixy[0], roixy[1]], hw=[roixy[2], roixy[3]])
+            fd.close()
+            self.calculateAllROIs()
+        #self.makeROIDataFigure(clear=True)
 
 
     def makeROIDataFigure(self, clear = True, gcolor = 'k'):
@@ -1523,7 +1718,7 @@ class pbm_ImageAnalysis(AnalysisModule):
     #        (a0, a1, tau) = Fits.expfit(fitx, tc_bleach)
     #        print("fit result = a0: %f   a1: %f   tau: %f\n", (a0, a1, tau))
 
-            print fpar
+#            print fpar
             DC = fpar[0][0]
             A0 = fpar[0][1]
             tau1 = fpar[0][2]
@@ -1601,8 +1796,8 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.backgroundPlot.plot(y=tc_bleach, x=self.imageTimes[0:ndl], pen=pg.mkPen('r'), clear=True)
         #self.backgroundPlot.plot(y=self.tc_bleach, x=self.imageTimes[0:ndl], clear=False, pen=pg.mkPen('b'))
         self.backgroundPlot.plot(y=b_corr, x=self.imageTimes[0:ndl], clear=False, pen=pg.mkPen('g'))
-        self.updateAvgStdImage()
         self.paintImage(focus = False)
+        self.updateAvgStdImage()
         self.dataState['bleachCorrection'] = True # now set the flag
 
     
@@ -1631,37 +1826,63 @@ class pbm_ImageAnalysis(AnalysisModule):
         return(self.pOpen(self.pClose(self.pOpen(img, block_size), block_size), block_size))
 
     def findROIs(self):
-        # try adaptive thresholding for lcal signals
-        #        filt = cv.FeatureDetector_create('SimpleBlob')
-        #        detector = cv.GridAdaptedFeatureDetector(sift, 50)
-        #        fs = detector.detect(imstd)
-        
-        #        block_size = 7 # must be ODD
-        #        cv_binary_adaptive = cv2.adaptiveThreshold(imstd.astype('uint8'), np.float(16384.0), cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, block_size, 3)
+        """ find potential regions of interest in an image series. 
+            This algorithm does the following:
+            1. We use the standard deviation or power spectrum of the image. A series of thresholds
+            are then set and contours identified. Each contour includes an area in which
+            the standard deviation of the image exceeds the threshold. The contours are checked for
+            minimum and maximum area.
+            2. Next, for each threshold level:
+                for each contour at that threshod, we identify contours at the next thresholded
+                level up whose center of mass is inside ours. There are 2 possiblities:
+                    a. no contours fall inside the current site. This site is a "peak", and
+                        it's center of mass is stored as an ROI location.
+                    b. one or more contours have a CM at the next level that falls inside 
+                        the current site. This means that the peak is higher than the current
+                        threshold. 
+                        i. If we are not at the next to the highest threshod, we do not save this
+                        location as a potential ROI (it will be identified when looking at the
+                        next threshold level).
+                        ii. If we are at the next to the highest threshold, then those locations
+                        are saved as candidate ROIs.
+            3. We filter candidate ROIs by distances, so that there are no overlapping ROIs.
+                        
+            """
+        if self.ctrl.ImagePhys_StdRB.isChecked():
+            imstd = self.stdImage
+        else:
+            imstd = self.specImage
+        dr = 3.0 # Roi size
+        dr = self.ctrl.ImagePhys_ROISize.value() # get roi size fromthe control
+        diag = np.hypot(dr,dr)# note we only accept ROIs that are more than this distance apart - nonoverlapping
 
-        #        reconst = cv_binary_adaptive
-
-        imstd = np.std(self.imageData, axis=0)
+        stdmax = np.amax(imstd)
+        imstd = 255.0*imstd/stdmax
         imstd = scipy.ndimage.gaussian_filter(imstd, sigma=0.002)
-        block_size2 = 3
+        block_size2 =  int(self.ctrl.ImagePhys_ROIKernel.currentText())
+        # Note: block_size must be odd, so control has only odd values and no edit.
+        stdmax = np.amax(imstd)
+        imstd = 255.0*imstd/stdmax
         reconst2 = self.ProperOpen(imstd.astype('uint8'), block_size2)
 
-        maxt = int(np.amax(np.amax(reconst2)))
-        mint = int(np.amin(np.amin(reconst2)))
+        maxt = int(np.amax(reconst2))
+        mint = int(np.amin(reconst2))
+        meant = int(np.mean(reconst2))/2.0
         sqs = {}
         pols = {}
-        
-        thrlist = np.arange(0.9, 0.1, -0.025)
-        thrcols = ['r', 'orange', 'y', 'g', 'teal', 'c', 'b', 'violet', 'gray']
-        thrcols.reverse()
+        thr_low = self.ctrl.ImagePhys_ROIThrLow.value()
+        thr_high = self.ctrl.ImagePhys_ROIThrHigh.value()
+        thrlist = np.arange(thr_low, thr_high*1.2, 0.05) # start at lowest and work up
+        import matplotlib.colors as mc
+        thrcols = list(mc.cnames.keys()) # ['r', 'orange', 'y', 'g', 'teal', 'c', 'b', 'violet', 'gray', '']
+        # find countours for each threshold level
         for t in thrlist:
-            thr = (maxt - mint)*t
-            retval, ci = cv2.threshold(reconst2, thr, maxt, cv2.THRESH_BINARY)
-            contours, heirarchy = cv2.findContours(ci, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-            squares = []
+            thr = (maxt-meant)*t
+            imctr = reconst2.copy() # cv2 method may modify input argument
+            retval, ci = cv2.threshold(imctr.astype('uint8'), thr, maxt, cv2.THRESH_BINARY)
+            contours, heirarchy = cv2.findContours(ci, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             oth = []
             m = []
-            sqs[t] = [] # start out with empty lists
             pols[t] = []
             for cnt in contours:
                 cnt_len = cv2.arcLength(cnt, True)
@@ -1669,102 +1890,166 @@ class pbm_ImageAnalysis(AnalysisModule):
                 m.append(cv2.minAreaRect(cnt))
                 area = cv2.contourArea(cnt)
                 if len(cnt) == 4 and area > 2.0 and cv2.isContourConvex(cnt):
-                    cnt = cnt.reshape(-1, 2)
-                    max_cos = np.max([self.angle_cos( cnt[i], cnt[(i+1) % 4], cnt[(i+2) % 4] ) for i in xrange(4)])
-                    if max_cos < 0.3:
-                        squares.append(cnt)
-            
+                    cnt = cnt.reshape(-1, 2)            
                 if area > 2.0 and area < 400:
                     cnt = cnt.reshape(-1,2)
                     cnt = np.append(cnt, cnt[0]) # add the first point to the array to make sure it is closed
                     oth.append([cnt, True])
-            sqs[t] = squares
             pols[t] = oth
+        
         # now check for the polygons whose center of mass is inside other polygons
         # if, from lowest threshold upwards, 
         savpols = pols.copy()
         roi = []
         npolys = 0
         for t in thrlist:
-            for p in pols[t]:
-                npolys += 1
-
-#        allregions = pols[thrlist[0]] # define all regions that were found at the lowest threshold
-#        print 'Regions: ', len(allregions)
-        regthresh = {} # np.zeros(len(allregions)) # find the region threshold
-        finalregions = {}
+            npolys += len(pols[t])
+        regthresh = {} # we save the region threshold [Region: thresh]
+        finalregions = {} # and the location [Region: (x,y)]
         nregs = 0
         with pg.ProgressDialog("Searching for ROIs ...", 0, 100) as dlg:
-            for i in range(len(thrlist)): # work through all thresholds
+            for i in range(len(thrlist)-1): # work through all thresholds, starting at the bottom
                 t = thrlist[i]
-                print 'testing for threshold = %f' % t
+               # print '\n\n>>>>>>>>>>testing for threshold = %9.3f<<<<<<<<' % t,
                 if len(pols[t]) == 0:
-                    print '(has no polys)'
+                #    print '   (found no candidates at threshold) ', t
                     continue
-                print '              which has %d polys' % len(pols[t])
-                for s1 in range(len(pols[t])): # for each region at this threshold
+                #print '   found %d candidates' % len(pols[t])
+                for k1, s1 in enumerate(pols[t]): # for each region at this threshold
                     dlg.setMaximum(len(pols[t]))
-                    dlg.setValue(s1)
+                    dlg.setValue(k1)
                     if dlg.wasCanceled():
-                        raise HelpfulException("Search for ROIs canceled by user.", msgType='status')
-                    if pols[t][s1][1] is False:
-                        continue
-                    sr = np.array([pols[t][s1][0].reshape(-1,2)]) # this is needed for cv2.moments to take tha argument.
-                    m = cv2.moments(sr)
-                    cm = (m['m10']/m['m00'], m['m01']/m['m00']) # compute center of mass of this point
-                    for j in range(i+1, len(thrlist)): # check remaining lower thresholds
-                        t2 = thrlist[j] # second threshold
-                        if len(pols[t2]) == 0:
-                            continue
-                        #if len(pols[t2][0][0]) == 0 or pols[t2][0][1] is False:
-                        if pols[t2][0][1] is False:
-                                continue
-                        for s2 in range(len(pols[t2])): # for each region identified at this theshold:
-                            ur = np.array([pols[t2][s2][0].reshape(-1,2)])
-                            test = cv2.pointPolygonTest(ur, cm, False) # is that center of mass
-                            if test >= 0: # higher threshold definitely INSIDE the polygon of the lower threshold
-                                pols[t2][s2][1] = False # remove the lower one
-                                if cm in set(finalregions.values()): # avoid duplicates
-                                    continue
-                                regthresh[nregs] = t
-                                finalregions[nregs] = cm
-                                nregs += 1
+                        raise HelpfulException("The search for ROIs was canceled by the user.", msgType='status')
+                    poly_low = np.array([s1[0].reshape(-1,2)]) # this is needed for cv2.moments to take tha argument.
+                    t2 = thrlist[i+1] # examine the next higher threshold
+                    oneabove = False
+                    m = cv2.moments(poly_low)
+                    cm_low = (m['m10']/m['m00'], m['m01']/m['m00']) # compute center of mass of this point
+                    for k2, s2 in enumerate(pols[t2]): # for each region identified at the next theshold level:
+                        poly_high = np.array([s2[0].reshape(-1,2)])
+                        m_high = cv2.moments(poly_high)
+                        cm_high = (m_high['m10']/m_high['m00'], m_high['m01']/m_high['m00']) # compute center of mass of this point
+                        test = cv2.pointPolygonTest(poly_low, cm_high, False) # is that center of mass
+                        if  test >= 0: # a higher threshold  center is definitely INSIDE the polygon of the lower threshold
+                            oneabove = True # we just need to find one - there could be more
+                            break
+                    if oneabove is False: # no CM's were found above us, so save this value
+                        finalregions[nregs] = cm_low # Accepte this polygon at this threshold as a candidate.
+                        regthresh[nregs] = t
+                        nregs += 1
+        # finally, also accept all peaks at the highest threshold level - they were "deferred" in the loop above
+        t = thrlist[-1]
+        for k1, s1 in enumerate(pols[t]):
+            poly=np.array([s1[0].reshape(-1,2)])
+            m = cv2.moments(poly)
+            cm = (m['m10']/m['m00'], m['m01']/m['m00'])
+            finalregions[nregs] = cm # all polygons at this level are accepted
+            regthresh[nregs] = t
+            nregs += 1
+            
+        print 'Regions detected: %d' % (nregs)
 
-        PL.subplot(111)
-        PL.cla()
-        PL.imshow(imstd, cmap=PL.cm.gray)
-        PL.axis('off')
-        import matplotlib.cm as cmx
-        import matplotlib.colors as colors
-        jet = PL.get_cmap('jet')
-        cNorm  = colors.normalize(vmin=0, vmax=max(thrlist))
-        scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=jet)
-                
-        for i in range(len(thrlist)):
-            t = thrlist[i]
-            col = scalarMap.to_rgba(thrlist[i])
-            if len(pols[t]) == 0:
+        # clean up the final regions - accept only those whose centers are more than 
+        # "diag" of an ROI apart.
+        # first convert the dictionary to a simple list in order
+        fp = []
+        for u in finalregions:
+            fp.append(finalregions[u])
+        tree = scipy.spatial.KDTree(fp) # make a tree
+        candidates = {} # isolated
+        candidates_n = {} # the neighbors not selected
+        excluded = []
+        for i, p in enumerate(finalregions.keys()):
+            if p in excluded: #  or p in candidates_n:
                 continue
-            for j in range(len(savpols[t])): # for each region identified at this theshold:
-                if  pols[t][j][1]:
-                    #pass
-                    #continue
-                    #col = 'DeepPink'
-                    sr = pols[t][j][0].reshape(-1,2)
-                    PL.plot(sr[:,0], sr[:,1], color = col, linestyle='-')
+            set_close = tree.query(fp[i], k=100, distance_upper_bound=diag) # find all pairs that are close together
+            neighbors = []
+            allth = [] # get the thresholds for all the neighbors
+            for p2 in list(set_close[1]):
+                if p2 == len(fp): # return values include self and inf.
+                    continue
+                if p2 in excluded or p2 in candidates_n:
+                    continue
+                neighbors.append(p2) # build a list of local friends
+                allth.append(regthresh[p2])
+            if len(neighbors) == 1: # we are our only neighbor
+                candidates[p] = (finalregions[p], regthresh[p]) # no decision to make, this one is isolated
+                excluded.append(p)
+                continue
+            k = int(np.argmax(allth)) # find the one with the highest signal
+            candidates[p] = (finalregions[neighbors[k]], allth[k]) # candidates will have only the keys that are picked.
+            for n in neighbors:
+                excluded.append(n) # add these to the excluded list
+        print 'Found %d ROIs' % (len(candidates))
+
+# next we verify that there are no close ROI pairs left:
+# this may not be needed, but sometimes with the pairwise-comparison, it is
+# possible for a proposed ROI to slip through.
+        nc = {}
+        for i, c in enumerate(candidates):
+            nc[i] = candidates[c] # just copy over with a new key
+            
+        cp = []
+        th = []
+        excluded = []
+        for i, u in enumerate(nc):
+            cp.append(nc[u][0]) # just get the coordinates
+        tree = scipy.spatial.KDTree(cp) # make a tree
+        for i, p in enumerate(nc.keys()):
+            if p in excluded:
+                continue
+            set_close = tree.query(cp[i], k=10, distance_upper_bound=diag) # find all pairs that are close together
+            allth = [] # get the thresholds for all the neighbors
+            neighbors=[]
+            for j, p1 in enumerate(set_close):
+                if set_close[0][j] == np.inf: # return values include self and inf.
+                    continue
+                p2 = set_close[1][j] # indexed into cp
+                if p2 in excluded: # already kicked out
+                    continue
+                neighbors.append(p2) # build a list of local friends, mapped to main list
+                allth.append(nc[p2][1]) # get the threshold
+            if len(neighbors) == 1: # we are our only neighbor
+                continue
+            k = int(np.argmax(allth)) # find the one with the highest signal
+            for i, n in enumerate(neighbors):
+                if n == p2:
+                    continue
+                excluded.append(neighbors[i])
+                nc.pop(n) # remove the duplicates
+        print 'Reduced to %d ROIs' % (len(nc))
+        candidates = nc.copy()
 
         self.oldROIs = self.AllRois
         self.clearAllROI()
-        img_sh = self.rawData.shape
-        img_x = img_sh[1]
-        img_y = img_sh[2]
-        dr = 5
-        for r in finalregions:
-            PL.plot(finalregions[r][0], finalregions[r][1], 'r+')
-           # print finalregions[r]
-            self.addOneROI(pos = [finalregions[r][1]-dr/2, finalregions[r][0]-dr/2], hw=[dr, dr])
+        plotContours = False
+        if plotContours:
+            PL.subplot(111)
+            PL.cla()
+            PL.imshow(imstd, cmap=PL.cm.gray)
+            PL.axis('off')
+            import matplotlib.cm as cmx
+            import matplotlib.colors as colors
+            jet = PL.get_cmap('jet')
+            cNorm  = colors.normalize(vmin=0, vmax=max(thrlist))
+            scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=jet)
+            
+            for i, t in enumerate(thrlist):
+                col = thrcols[i]    # scalarMap.to_rgba(t)
+                if len(pols[t]) == 0:
+                    continue
+                for p in savpols[t]: # for each region identified at this theshold:
+                    if  p[1]:
+                        sr = p[0].reshape(-1,2)
+                        PL.plot(sr[:,0], sr[:,1], color = col, linestyle='-')
 
-        PL.show()
+        for i, ra in enumerate(candidates):
+            rxy = candidates[ra][0]
+            if plotContours:
+                PL.plot(rxy[0], rxy[1], 'r+')
+            self.addOneROI(pos = [rxy[1]-dr/2, rxy[0]-dr/2], hw=[dr, dr])
+        if plotContours:
+            PL.show()
 
 #-------------------------Corrections and/or Normalization---------------------------------
 #
@@ -1783,9 +2068,9 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.imageData = self.rawData.copy() # just start over with the raw data... 
 
         sh = self.imageData.shape
-        t_delay = 0.75 # secs
-        t_targetSmooth = 0.2 # secs
-        t_subSmooth = 2.0 # secs
+        t_delay = 0.2 # secs
+        t_targetSmooth = 0.25 # secs
+        t_subSmooth = 0.5 # secs
         dt  = np.mean(np.diff(self.imageTimes))
         print dt
         n_delay = t_delay/dt
@@ -1807,11 +2092,11 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.paintImage()
         self.dataState['Normalized'] = True
         self.dataState['NType'] = 'Slow Filter'
-        self.ctrl.ImagePhys_NormInfo.setText('Slow Filter')
+#        self.ctrl.ImagePhys_NormInfo.setText('Slow Filter')
         # this completes the "normalization for the "slow filtering mode"
         # remainder of code here is for ROI detection. 
 
-        
+
     def normalizeImage(self):
         """
         Each image is normalized to the mean of the whole series, instead
@@ -1967,42 +2252,25 @@ class pbm_ImageAnalysis(AnalysisModule):
                 dt = 1
             else:
                 dt = np.mean(np.diff(self.imageTimes))
+        self.calculate_all_xcorr(FData, dt)   
         self.use_MPL = self.ctrlImageFunc.IAFuncs_MatplotlibCheckBox.checkState()
+        
+
         if not self.use_MPL:
-            self.avgXcorrWindow = pyqtgrwindow(title = 'Analog_Xcorr_Average')
-            self.mpwavg = pg.GraphicsLayoutWidget()
-            self.avgXcorrWindow.setCentralWidget(self.mpwavg)
-            self.avgXcorrWindow.show()
+            self.floatingWindow = pyqtgrwindow(title = 'Analog_Xcorr_Average')
+            self.floatingWindow.setWindowTitle('Average XCorr: %s' % self.currentFileName)
+            # print dir(self.floatingWindow)
+            # print dir(self.floatingWindow.layout)
+            self.floatingWindow.layout.clear()
+            self.floatingWindow.layout.setWindowTitle("New Title?")
+            p = self.floatingWindow.layout.addPlot(0,0)
+            p.plot(self.lags,self.xcorr)
+            p.setXRange(np.min(self.lags), np.max(self.lags))
         else:
             self.checkMPL()
             (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Average XCorr", nrows = 1, ncols=1, 
                         sharex = True, sharey = True)
             self.MPLFig.suptitle('Average XCorr: %s' % self.currentFileName, fontsize=11)
-            
-        nxc = 0
-        self.xcorr = []
-        ndl = len(FData[0,:])
-        itime = self.imageTimes[0:ndl]
-        for roi1 in range(0, len(FData)-1):
-            for roi2 in range(roi1+1, len(FData)):
-                (a1, b1) = np.polyfit(itime, FData[roi1,:], 1)
-                (a2, b2) = np.polyfit(itime, FData[roi2,:], 1)
-                y1 = np.polyval([a1, b1], itime)
-                y2 = np.polyval([a2, b2], itime)
-                sc = self.ccf(FData[roi1,:]-y1, FData[roi2,:]-y2)
-                if nxc == 0:
-                    self.xcorr = sc
-                else:
-                    self.xcorr = self.xcorr + sc
-                nxc = nxc + 1
-        self.xcorr = self.xcorr/nxc
-        s = np.shape(self.xcorr)
-        self.lags = dt*(np.arange(0, s[0])-s[0]/2.0)
-        if not self.use_MPL:
-            p = self.mpwavg.addPlot(0,0)
-            p.plot(self.lags,self.xcorr)
-            p.setXRange(np.min(self.lags), np.max(self.lags))
-        else:
             self.MPL_plots.plot(self.lags, self.xcorr)
             self.MPL_plots.plot(self.lags,np.zeros(self.lags.shape), color = '0.5')
             self.MPL_plots.plot([0,0], [-0.5, 1.0], color = '0.5')
@@ -2011,7 +2279,40 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.MPL_plots.set_ylabel('Corr (R)', fontsize=10)
             PH.cleanAxes(self.MPL_plots)
             PL.show()
-            
+
+    def calculate_all_xcorr(self, FData = None, dt = None):
+        if FData is None:
+            FData = self.FData
+            nROI = self.nROI
+        else:
+            nROI = len(FData)
+        if dt is None:
+            if self.imageTimes is []:
+                dt = 1
+            else:
+                dt = np.mean(np.diff(self.imageTimes))
+        ndl = len(FData[0,:])
+        itime = self.imageTimes[0:ndl]
+        self.IXC_corr =  [[]]*(sum(range(1,nROI)))
+        self.xcorr = []
+        xtrace = 0
+        for roi1 in range(0, len(FData)-1):
+            for roi2 in range(roi1+1, len(FData)):
+                (a1, b1) = np.polyfit(itime, FData[roi1,:], 1)
+                (a2, b2) = np.polyfit(itime, FData[roi2,:], 1)
+                y1 = np.polyval([a1, b1], itime)
+                y2 = np.polyval([a2, b2], itime)
+                sc = self.ccf(FData[roi1,:]-y1, FData[roi2,:]-y2)
+                self.IXC_corr[xtrace] = sc
+                if xtrace == 0:
+                    self.xcorr = sc
+                else:
+                    self.xcorr = self.xcorr + sc
+                xtrace += 1
+        self.xcorr = self.xcorr/xtrace
+        s = np.shape(self.xcorr)
+        self.lags = dt*(np.arange(0, s[0])-s[0]/2.0)
+
     def Analog_Xcorr_unbiased(self, FData = None, dt = None):
         """ hijacked -"""
         # baseline 
@@ -2052,26 +2353,52 @@ class pbm_ImageAnalysis(AnalysisModule):
                 dt = 1
             else:
                 dt = np.mean(np.diff(self.imageTimes))
-        
+        self.calculate_all_xcorr(self.FData, dt)
         nxc = 0
         rows = nROI-1
         cols = rows
-        self.IXC_corr =  [[]]*(sum(range(1,nROI)))
         self.IXC_plots = [[]]*(sum(range(1,nROI)))
         self.IXC_Strength = np.empty((nROI, nROI))
+        self.IXC_Strength_Zero = np.empty((nROI, nROI))
+        
         self.IXC_Strength.fill(np.nan)
+        
         xtrace  = 0
+        xtrace = 0
+        lag_zero = np.argmin(np.abs(self.lags)) # find lag closest to zero
+        for xtrace1 in range(0, nROI-1):
+            for xtrace2 in range(xtrace1+1, nROI):
+                self.IXC_Strength[xtrace1, xtrace2] = self.IXC_corr[xtrace].max()
+                self.IXC_Strength[xtrace1, xtrace2] = self.IXC_corr[xtrace][lag_zero]
+                xtrace = xtrace + 1
+        
         yMinorTicks = 0
         bLegend = self.ctrlImageFunc.IAFuncs_checkbox_TraceLabels.isChecked()
         gridFlag = True
-
+        if plottype is None:
+            return
+            
         if self.nROI > 8:
             gridFlag = False
         if not self.use_MPL:
-            self.newWindow = pyqtgrwindow(title = 'Analog_Xcorr_Individual')
-            self.pgwin = pg.GraphicsLayoutWidget()
-            self.newWindow.setCentralWidget(self.pgwin)
-            self.newWindow.show()
+            #if self.floatingWindow is None:
+            self.floatingWindow = pyqtgrwindow(title = 'Analog_Xcorr_Individual')
+            self.floatingWindow.layout.clear()
+            # self.gview = pg.GraphicsView()
+            # if self.pgwin is None:
+            #     self.pgwin = pg.GraphicsLayout()
+            # self.pgwin.clear()
+            xtrace = 0
+            for xtrace1 in range(0, nROI-1):
+                for xtrace2 in range(xtrace1+1, nROI):
+#                    print 'xtrace: ', xtrace
+                    self.IXC_plots[xtrace] = self.floatingWindow.layout.addPlot(xtrace1, xtrace2)
+                    # if xtrace == 0:
+                    #     print dir(self.IXC_plots[xtrace])
+                    if xtrace > 0:
+                        self.IXC_plots[xtrace].hideButtons()
+                    xtrace = xtrace + 1
+                self.floatingWindow.layout.nextRow()
         else:
             self.checkMPL()
             if plottype == 'traces':
@@ -2084,35 +2411,21 @@ class pbm_ImageAnalysis(AnalysisModule):
         ndl = len(FData[0,:])
         itime = self.imageTimes[0:ndl]
         dlg = 0
+        xtrace = 0
         with pg.ProgressDialog("Analyzing ROIs...", 0, 100) as dlg:
             for xtrace1 in range(0, nROI-1):
-                dlg.setLabelText("Reading images...")
+#               dlg.setLabelText("I")
                 dlg.setValue(0)
                 dlg.setMaximum(nROI)
-                a1 = np.polyfit(itime, FData[xtrace1,:], 1)
-                y1 = np.polyval(a1,itime)
-                temp_F = FData[xtrace1,:]-y1
+                temp_F = FData[xtrace1,:] #-y1
                 for xtrace2 in range(xtrace1+1, nROI):
                     
                     if bLegend:
                         legend = legend=('%d vs %d' % (xtrace1, xtrace2))
                     else:
                         legend = None
-                    a2 = np.polyfit(itime, FData[xtrace2,:], 1)
-                    y2 = np.polyval(a2, itime)
-                    sc = self.ccf(temp_F, FData[xtrace2,:]-y2)
-                    #sc = self.ccf(FData[xtrace1,:], FData[xtrace2,:])
-                    self.IXC_corr[xtrace] = sc
-                    self.IXC_Strength[xtrace1, xtrace2] = sc.max()
-                    s = np.shape(sc)
-                    self.lags = dt*(np.arange(0, s[0])-s[0]/2.0)
-                    #MPlots.PlotLine(self.IXC_plots[xtrace], self.lags, 0*self.IXC_corr[xtrace],
-                    #                color = 'lightgray', linestyle='Dash', dataID=('ref_%d_%d' % (xtrace1, xtrace2)))
-                    #MPlots.PlotLine(self.IXC_plots[xtrace], self.lags, self.IXC_corr[xtrace],
-                    #                color = 'k', dataID = ('Xcorr_%d_%d' % (xtrace1, xtrace2)))
                     if plottype == 'traces':
                         if not self.use_MPL: # pyqtgraph
-                            self.IXC_plots[xtrace] = self.pgwin.addPlot(xtrace1, xtrace2)
                             self.IXC_plots[xtrace].plot(self.lags, self.IXC_corr[xtrace])
                             if xtrace == 0:
                                 self.IXC_plots[0].registerPlot(name='xcorr_%03d' % xtrace)
@@ -2126,11 +2439,7 @@ class pbm_ImageAnalysis(AnalysisModule):
                             plx.plot([0,0], [-0.5, 1.0], color = '0.5')
                             if xtrace1 == 0:
                                 plx.set_title('ROI: %d' % (xtrace2), fontsize=8)
-                                #plx.set_xlabel('T (sec)', fontsize=10)
-                            #if xtrace2 == 0:
-                                #plx.set_ylabel('Corr (R)', fontsize=10)
                             PH.cleanAxes(plx) 
-                        
                     xtrace = xtrace + 1
                     dlg += 1
                     if dlg.wasCanceled():
@@ -2138,7 +2447,6 @@ class pbm_ImageAnalysis(AnalysisModule):
                     
         
         # now rescale all the plot Y axes by getting the min/max "viewRange" across all, then setting them all the same
-
         if not self.use_MPL and plottype == 'traces':
             ymin = 0
             ymax = 0
@@ -2176,31 +2484,6 @@ class pbm_ImageAnalysis(AnalysisModule):
 #            print self.IXC_Strength.shape
             self.MPLFig.imshow(self.IXC_Strength)
             PL.show()
-        
-        #MPlots.sameScale(self.IXC_plots)
-        #MPlots.PlotReset(self.IXC_plots[xtrace-1], xAxisOn=True, yAxisOn=True, xlabel='Lag', unitsX='s',
-        #                 ylabel='C', xMinorTicks=0, yMinorTicks=0, clearFlag = False,)
-        #self.IXC_plots[xtrace-1].replot()
-        #self.selectIndividualXcorrTab()
-    #  print self.IXC_strength
-        #self.MPLAxes.clear()
-        #self.MPLAxes.hold=False
-#         imagey = 96
-#         for i in range(0, self.nROI):
-#             self.MPLAxes.plot(rois[i].pos().x(), imagey-rois[i].pos().y(), 'ro')
-#             self.MPLAxes.hold=True 
-#             self.MPLAxes.text(rois[i].pos().x()+1, imagey-rois[i].pos().y(), ("%d" % (i) ))
-#         scmax = self.IXC_strength.max().max()
-#         widmax = 5.0/scmax # scale width by peak strength of correlation
-# #        print scmax
-# #        print widmax
-#         for xtrace1 in range(0, self.nROI-1):
-#             for xtrace2 in range(xtrace1+1, self.nROI):
-#                 if self.IXC_strength[xtrace1, xtrace2] > 0.25:
-#                     self.MPLAxes.plot([rois[xtrace1].pos().x(), rois[xtrace2].pos().x()], 
-#                                       [imagey-rois[xtrace1].pos().y(), imagey-rois[xtrace2].pos().y()], 'b-', 
-#                                       linewidth=widmax*self.IXC_strength[xtrace1, xtrace2])
-#                    print "xt: %d yt: %d lw: %f" % (xtrace1, xtrace2, widmax*self.IXC_strength[xtrace1, xtrace2])
 
 #----------------Fourier Map (reports phase)----------------------------
     def Analog_AFFT(self):
@@ -2310,160 +2593,35 @@ class pbm_ImageAnalysis(AnalysisModule):
     def Analysis_SpikeXCorr(self):
         pass        
 
-#---------------------------- align images across a stack - this doesn't work yet ------------
-    # """
-    # The original code for the next subroutine is pulled form the xanesP.py source
-    # (for x-ray spectroscopy data)
-    # The original was by Tamás Haraszti tamas.haraszti@uni-heidelberg.de
-    # http://www.biomedcentral.com/1752-153X/4/11
-    # PMID: 20525317 [PubMed] PMCID: PMC2891742 
-    # 
-    # """
-    # 
-    # def AlignStack(self, imgstack, imgi, thresh = 0.0,
-    #         invert=True, cut=True, ROI=None, verbose = False):
-    #     """ Align a stack to one of its images using a convolution filter.
-    #         First the images are convolved to a reference image, and the
-    #         maximum of the convolution is taken. Standard precision is at 
-    #         single pixel level.
-    #         Then a shift is applied using the ImageP.shift routine.
-    # 
-    #         In this algorithm no subpixel shifting is used in order to
-    #         preserve the original statistics of the data points.
-    #     
-    #         Parameters:
-    #         imgstack:   a list containing images
-    #         imgi:       index of the position image inside imgstack
-    #         thresh:     threshold to use on the reference image; if it is
-    #                     zero, then use the ImageP.graythresh algorithm
-    #         invert:     if True, invert the reference image
-    #         cut:        if True, cut to the common area after shift
-    #         ROI:        i list or tuple of ndices i0,i1,j0,j1 so that the 
-    #                     subimage: img[i0:i1,j0:j1] shall be used for the
-    #                     alignment.
-    #         verbose:    plot actual convolution image
-    # 
-    #         Return:
-    #         an list of the aligned images
-    #     """
-    # 
-    #     N = len(imgstack)
-    #     (newWin1, view1, imgwin1) = self.newpgImageWindow(title = 'original')
-    #     for img in imgstack:
-    #         imgwin1.setImage(img, autoLevels = True)
-    #         imgwin1.updateImage()
-    #         
-    #     if imgi < 0 or imgi >= N:
-    #         print "Invalid index: %d not in 0 - %d" %(imgi, N)
-    #         return None
-    #     #end if
-    # 
-    #     a = imgstack[imgi].copy()
-    # 
-    #     if ROI is True:
-    #         if len(ROI) != 4 :
-    #             print "ROI should be 4 indices long"
-    #         else:
-    #             try:
-    #                 atmp = a[ROI[0]:ROI[1],ROI[2]:ROI[3]]
-    #             except:
-    #                 print "Invalid ROI!"
-    #             else:
-    #                 a = atmp
-    #             #end try
-    #         #end if
-    #     #end if
-    # 
-    #     if invert is True:
-    #         a = a.max() - a
-    #     else :
-    #         a = a - a.min()
-    #     #end if
-    #     sh = a.shape
-    #     if thresh == 0.0 :
-    #         #the a*100 is a residue from problems with images
-    #         #where min and max were between 0-1 and graythresh 
-    #         #returned strange results or error:
-    #         thresh = ImageP.graythresh(a*100.0) * a.max()
-    # 
-    #         if verbose:
-    #             print "threshold is set to: %.3f" %thresh
-    #         #end if
-    #     #end if
-    # 
-    #     #initialize result stack:
-    #     outstack = []
-    #     indx = np.zeros( imgstack[0].shape, dtype='bool') + True
-    # 
-    #     # if verbose :
-    #     # #initiate two figure frames
-    #     #     emptyarr = np.random.normal(size=sh)
-    #     #     (newWin1, view1, imgwin1) = self.newpgImageWindow(title = 'original')
-    #     #     imgwin1.setImage(a)
-    #     #     (newWin2, view2, imgwin2) = self.newpgImageWindow(title= 'img2')
-    #     #     imgwin2.setImage(emptyarr)
-    #     #     imgwin1.updateImage()
-    #     #     imgwin2.updateImage()
-    #     #             
-    #     for img in imgstack:
-    #         if invert is True:
-    #             #invert the image as well (a is already inverted):
-    #             c = ImageP.ConvFilter(a > thresh, img.max() - img)
-    #         else :
-    #             c = ImageP.ConvFilter(a > thresh, img)
-    #         #end if
-    # 
-    #         # overkill: 
-    #         #res = ImageP.PeakFind(c)
-    # 
-    #         # we could also use ImageP.PeakFind on convolve(a,a) as reference.
-    #         # indexing goes 0 - N-1, then N/2-1 is the center:
-    #         #x = res['X'][0] - (c.shape[0]/2 - 1)
-    #         #y = res['Y'][0] - (c.shape[1]/2 - 1)
-    # 
-    #         #we stick to the first maximum. If there are more than one,
-    #         #anyway we have a problem. That shold be handled by adjusting the
-    #         #image parameters prior the alignment.
-    #         x,y = (c == c.max()).nonzero()
-    #         x = x[0] - (c.shape[0]/2 -1)
-    #         y = y[0] - (c.shape[1]/2 -1)
-    #         print 'max of c: ', c.max().max()
-    #         #now do the alignment:
-    #         #shift is creating a new array
-    #         img2 = ImageP.shift(img, x, y)
-    #        # print img2[0:10,0:10]
-    #     #    print img[0:10,0:10]
-    #         print 'shift: x %d y %d' % (x, y)
-    #      #   print 'img2: ', img2.shape
-    #      #   print 'img:  ', img.shape
-    #         outstack.append(img2)
-    #         indx = indx * (img2 > 0)
-    # 
-    #         # imgwin1.setImage(img, autoLevels = True)
-    #         # imgwin1.updateImage()
-    #         # imgwin2.setImage(img2, autoLevels = True)
-    #         # imgwin2.updateImage()
-    # 
-    #     if cut is True:
-    #         ix, iy = indx.nonzero()
-    #         i0 = ix.min()
-    #         #+1 for the indexing limit...
-    #         i1 = ix.max()+1
-    #         j0 = iy.min()
-    #         j1 = iy.max()+1
-    #     
-    #         print "Common boundaries:",i0,i1,j0,j1
-    # 
-    #         #cut the list elements:
-    #         for i in xrange(N):
-    #             outstack[i] = outstack[i][i0:i1,j0:j1]
-    # 
-    #     return np.atleast_2d(outstack)
-    # #end of AlignStack
 
-    def RegisterStack(self, imgstack = None, imgi = None, thresh = 0.0,
-            invert=True, cut=True, ROI=None, verbose = False):
-        """ Align a stack to one of its images using recursiveRegisterImages
+
+    
+    def RegisterStack(self):
+        """
+        Align a stack of images using openCV. We calculate a rigid transform
+        referenced to the first image, and transform each subsequent image
+        based on that. 
+        It is fast, and better than nothing, but not perfect.
+        """
+        import scipy.ndimage.interpolation
+        outstack = self.imageData.copy()
+        shd = self.imageData.shape
+        maximg = np.amax(self.imageData)
+        refimg = (255*np.mean(self.imageData, axis=0)/maximg).astype('uint8')
+        for i in range(0,shd[0]):
+            timage = (255*self.imageData[i,:,:]/maximg).astype('uint8')
+            affineMat = cv2.estimateRigidTransform(refimg, timage, False)
+            print timage.shape, self.imageData[i].shape
+            self.imageData[i,:,:] = cv2.warpAffine(timage, affineMat, dsize=timage.shape, borderMode = cv2.BORDER_REPLICATE).astype('float32')*maximg/255.
+            #x = scipy.ndimage.interpolation.affine_transform(self.imageData[i,:,:], affineMat[0:2,0:2] )
+        self.updateAvgStdImage()        
+        
+        
+    
+    def RegisterStack2(self):
+        """ THIS IS NOT IN USE!!! 
+        
+        Align a stack to one of its images using recursiveRegisterImages
             from util/functions.py
             
             Parameters:
@@ -2481,101 +2639,44 @@ class pbm_ImageAnalysis(AnalysisModule):
             Return:
             a list of the aligned images
         """
+        from lib.analysis.tools import ImageP # avaialable as part of the STXMPy package
 
-        if imgstack is None or imgstack is False:
-            imgstack = self.imageData
-
-        if imgi == None:
-            imgi = 0 # use first image as reference
-        N = len(imgstack)
-        (newWin1, view1, imgwin1) = self.newpgImageWindow(title = 'original')
-        for img in imgstack:
-            imgwin1.setImage(img, autoLevels = True)
-            imgwin1.updateImage()
-            
+        imgstack = self.imageData
+        cut = False
+        imgi = 0 # use first image as reference
+        N = len(imgstack)            
         if imgi < 0 or imgi >= N:
             print "Invalid index: %d not in 0 - %d" %(imgi, N)
             return None
         #end if
     
         a = imgstack[imgi].copy()
-    
-        if ROI is True:
-            if len(ROI) != 4 :
-                print "ROI should be 4 indices long"
-            else:
-                try:
-                    atmp = a[ROI[0]:ROI[1],ROI[2]:ROI[3]]
-                except:
-                    print "Invalid ROI!"
-                else:
-                    a = atmp
-                #end try
-            #end if
-        #end if
-    
-        if invert is True:
-            a = a.max() - a
-        else :
-            a = a - a.min()
-        #end if
+        
         sh = a.shape
-        if thresh == 0.0 :
-            #the a*100 is a residue from problems with images
-            #where min and max were between 0-1 and graythresh 
-            #returned strange results or error:
-            thresh = ImageP.graythresh(a*100.0) * a.max()
-    
-            if verbose:
-                print "threshold is set to: %.3f" %thresh
-            #end if
-        #end if
+        thresh = np.mean(a)*1.25
+        print "threshold is set to: %.3f" % thresh
     
         #initialize result stack:
         outstack = []
         indx = np.zeros( imgstack[0].shape, dtype='bool') + True
     
-        # if verbose :
-        # #initiate two figure frames
-        #     emptyarr = np.random.normal(size=sh)
-        #     (newWin1, view1, imgwin1) = self.newpgImageWindow(title = 'original')
-        #     imgwin1.setImage(a)
-        #     (newWin2, view2, imgwin2) = self.newpgImageWindow(title= 'img2')
-        #     imgwin2.setImage(emptyarr)
-        #     imgwin1.updateImage()
-        #     imgwin2.updateImage()
-        #             
         imgN = 0
-      #  print imgstack.shape
-        for img in imgstack:
-            x = 0
-            y = 0
-            if imgN != imgi:
-                if invert is True:
-                #invert the image as well (a is already inverted):
-                    c = ImageP.ConvFilter(a > thresh, img.max() - img)
-                else:
-                    c = ImageP.ConvFilter(a > thresh, img)
-                #end if                if invert is True:
-                 #   img = img.max() - img
-                
-                #c = FN.recursiveRegisterImages(img, imgstack[imgi], maxDist=10)
-               # print 'C: ' , c
-            imgN = imgN + 1
-           # continue
+        #  print imgstack.shape
+        for i, img in enumerate(imgstack):
+            x = 0.
+            y = 0.
+            if i != imgi:
+                #c = ImageP.ConvFilter(a > thresh, img)
+                # print c
+                c = FN.recursiveRegisterImages(img, imgstack[imgi], maxDist=10)
+                x,y = (c == c.max()).nonzero()
+                x = x[0] - (c.shape[0]/2 -1)
+                y = y[0] - (c.shape[1]/2 -1)
             img2 = ImageP.shift(img, x, y)
-           # print img2[0:10,0:10]
-        #    print img[0:10,0:10]
-         #   print 'shift: x %d y %d' % (x, y)
-         #   print 'img2: ', img2.shape
-         #   print 'img:  ', img.shape
+            print 'n: %d shift: x %f y %f' % (imgN, x, y)
             outstack.append(img2)
             indx = indx * (img2 > 0)
-    
-            # imgwin1.setImage(img, autoLevels = True)
-            # imgwin1.updateImage()
-            # imgwin2.setImage(img2, autoLevels = True)
-            # imgwin2.updateImage()
+            imgN = imgN + 1
     
         if cut is True:
             ix, iy = indx.nonzero()
@@ -2588,11 +2689,11 @@ class pbm_ImageAnalysis(AnalysisModule):
             print "Common boundaries:",i0,i1,j0,j1
     
             #cut the list elements:
-          #  print i0, i1, j0, j1
             for i in xrange(N):
-            #    print outstack[i].shape
                 outstack[i] = outstack[i][i0:i1,j0:j1]
     
+        for i in range(self.imageData.shape[0]):
+            self.imageData[i,:,:] = outstack[i]
         return np.atleast_2d(outstack)
     #end of registerStack
 
@@ -2713,8 +2814,10 @@ class DBCtrl(QtGui.QWidget):
 class pyqtgrwindow(QtGui.QMainWindow):
     def __init__(self, parent=None, title = '', size=(500,500)):
         super(pyqtgrwindow, self).__init__(parent)
-        self.setWindowTitle(title)
-        self.setCentralWidget(QtGui.QWidget(self))
+        self.view = pg.GraphicsView()
+        self.layout = pg.GraphicsLayout(border=None) # pg.mkPen(0, 0, 255))
         self.resize(size[0], size[1])
-        self.show()
+        self.setWindowTitle(title)
+        self.view.setCentralItem(self.layout)
+        self.view.show()
         

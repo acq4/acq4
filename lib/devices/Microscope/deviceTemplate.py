@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/devices/Microscope/deviceTemplate.ui'
 #
-# Created: Wed May 18 20:44:16 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Wed Jun 13 15:38:36 2012
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -23,21 +23,13 @@ class Ui_Form(object):
         self.gridLayout.setHorizontalSpacing(8)
         self.gridLayout.setVerticalSpacing(0)
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
-        self.label = QtGui.QLabel(Form)
-        self.label.setObjectName(_fromUtf8("label"))
-        self.gridLayout.addWidget(self.label, 0, 0, 1, 1)
-        self.positionLabel = QtGui.QLabel(Form)
-        self.positionLabel.setObjectName(_fromUtf8("positionLabel"))
-        self.gridLayout.addWidget(self.positionLabel, 0, 1, 1, 2)
         self.label_2 = QtGui.QLabel(Form)
         self.label_2.setObjectName(_fromUtf8("label_2"))
-        self.gridLayout.addWidget(self.label_2, 1, 0, 1, 1)
+        self.gridLayout.addWidget(self.label_2, 0, 0, 1, 1)
         spacerItem = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-        self.gridLayout.addItem(spacerItem, 1, 3, 1, 1)
-        spacerItem1 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-        self.gridLayout.addItem(spacerItem1, 0, 3, 1, 1)
-        spacerItem2 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        self.gridLayout.addItem(spacerItem2, 2, 0, 1, 1)
+        self.gridLayout.addItem(spacerItem, 0, 3, 1, 1)
+        spacerItem1 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.gridLayout.addItem(spacerItem1, 1, 0, 1, 1)
         self.objectiveLayout = QtGui.QGridLayout()
         self.objectiveLayout.setSpacing(4)
         self.objectiveLayout.setObjectName(_fromUtf8("objectiveLayout"))
@@ -58,15 +50,13 @@ class Ui_Form(object):
         self.label_5 = QtGui.QLabel(Form)
         self.label_5.setObjectName(_fromUtf8("label_5"))
         self.objectiveLayout.addWidget(self.label_5, 0, 4, 1, 1)
-        self.gridLayout.addLayout(self.objectiveLayout, 1, 1, 1, 2)
+        self.gridLayout.addLayout(self.objectiveLayout, 0, 1, 1, 2)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Position:", None, QtGui.QApplication.UnicodeUTF8))
-        self.positionLabel.setText(QtGui.QApplication.translate("Form", "0, 0", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("Form", "Objective:", None, QtGui.QApplication.UnicodeUTF8))
         self.label_3.setText(QtGui.QApplication.translate("Form", "X", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("Form", "Y", None, QtGui.QApplication.UnicodeUTF8))

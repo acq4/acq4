@@ -8,6 +8,7 @@ class GraphicsObject(GraphicsItem, QtGui.QGraphicsObject):
 
     Extension of QGraphicsObject with some useful methods (provided by :class:`GraphicsItem <pyqtgraph.graphicsItems.GraphicsItem>`)
     """
+    _qtBaseClass = QtGui.QGraphicsObject
     def __init__(self, *args):
         QtGui.QGraphicsObject.__init__(self, *args)
         GraphicsItem.__init__(self)
@@ -17,5 +18,3 @@ class GraphicsObject(GraphicsItem, QtGui.QGraphicsObject):
         if change in [self.ItemParentHasChanged, self.ItemSceneHasChanged]:
             self._updateView()
         return ret
-
-        

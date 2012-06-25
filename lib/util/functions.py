@@ -213,7 +213,7 @@ def fitPsp(x, y, guess, bounds=None, risePower=2.0, multiFit=False):
     ## try on a few more fits
     if multiFit:
         err = (errFn(fit, x, y)**2).sum()
-        print "fit:", err
+        #print "fit:", err
         bestFit = fit
         for da in [0.5, 1.0, 2.0]:
             for dt in [0.5, 1.0, 2.0]:
@@ -230,7 +230,7 @@ def fitPsp(x, y, guess, bounds=None, risePower=2.0, multiFit=False):
                         err2 = (errFn(fit2, x, y)**2).sum()
                         if err2 < err:
                             bestFit = fit2
-                            print "   found better PSP fit: %s -> %s" % (err, err2), da, dt, dr, do
+                            #print "   found better PSP fit: %s -> %s" % (err, err2), da, dt, dr, do
                             err = err2
         
         fit = bestFit
@@ -403,7 +403,7 @@ def fitDoublePsp(x, y, guess, bounds=None, risePower=2.0):
     #print 'guess:', guess
     
     err = (errFn(fit, x, y)**2).sum()
-    print "initial fit:", fit, err
+    #print "initial fit:", fit, err
     
     guess = fit.copy()
     bestFit = fit
@@ -414,11 +414,11 @@ def fitDoublePsp(x, y, guess, bounds=None, risePower=2.0):
             fit2 = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-2, factor=0.1)[0]
             err2 = (errFn(fit2, x, y)**2).sum()
             if err2 < err:
-                print "Improved fit:", ampx, taux, err2
+                #print "Improved fit:", ampx, taux, err2
                 bestFit = fit2
                 err = err2
     fit = bestFit
-    print "final fit:", fit, err
+    #print "final fit:", fit, err
     fit[0] *= yScale
     fit[1] *= yScale
     return tuple(fit[:4]) + (min(*fit[4:]), max(*fit[4:]))
@@ -446,7 +446,7 @@ def downsample(data, n, axis=0, xvals='subsample'):
     or downsampled to match.
     """
     ma = None
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         ma = data
         data = data.view(ndarray)
         
@@ -1114,7 +1114,7 @@ def applyFilter(data, b, a, padding=100, bidir=True):
     if padding > 0:
         d1 = d1[padding:-padding]
         
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         return MetaArray(d1, info=data.infoCopy())
     else:
         return d1
@@ -1133,7 +1133,7 @@ def besselFilter(data, cutoff, order=1, dt=None, btype='low', bidir=True):
     return applyFilter(data, b, a, bidir=bidir)
     #base = data.mean()
     #d1 = scipy.signal.lfilter(b, a, data.view(ndarray)-base) + base
-    #if isinstance(data, MetaArray):
+    #if (hasattr(data, 'implements') and data.implements('MetaArray')):
         #return MetaArray(d1, info=data.infoCopy())
     #return d1
 
@@ -1606,7 +1606,7 @@ def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshol
     data1 = data.view(ndarray)
     #p.mark('view')
     xvals = None
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         try:
             xvals = data.xvals(0)
         except:
@@ -1691,7 +1691,7 @@ def thresholdEvents(data, threshold, adjustTimes=True):
     Optionally adjusts times to an extrapolated zero-crossing."""
     threshold = abs(threshold)
     data1 = data.view(ndarray)
-    #if isinstance(data, MetaArray):
+    #if (hasattr(data, 'implements') and data.implements('MetaArray')):
     try:
         xvals = data.xvals(0)
         dt = xvals[1]-xvals[0]
@@ -1870,7 +1870,7 @@ def adaptiveDetrend(data, x=None, threshold=3.0):
     base = lr[1] + lr[0]*x
     d4 = d - base
     
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         return MetaArray(d4, info=data.infoCopy())
     return d4
     
@@ -1907,7 +1907,7 @@ def modeFilter(data, window=500, step=None, bins=None):
     chunks.append(np.linspace(vals[-1], vals[-1], remain))
     d2 = np.hstack(chunks)
     
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         return MetaArray(d2, info=data.infoCopy())
     return d2
     
@@ -1931,7 +1931,7 @@ def histogramDetrend(data, window=500, bins=50, threshold=3.0):
     base = np.linspace(v[0], v[1], len(data))
     d3 = data.view(np.ndarray) - base
     
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         return MetaArray(d3, info=data.infoCopy())
     return d3
     
@@ -1957,7 +1957,7 @@ def subtractMedian(data, time=None, width=100, dt=None):
     med = scipy.ndimage.median_filter(d1, size=width)
     d2 = d1 - med
     
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         return MetaArray(d2, info=data.infoCopy())
     return d2
     
@@ -1972,7 +1972,7 @@ def subtractMedian(data, time=None, width=100, dt=None):
     #d3 = where(abs(d2) > stdev*threshold, 0, d2)
     #d4 = d2 - median_filter(d3, windows[1])
     
-    #if isinstance(data, MetaArray):
+    #if (hasattr(data, 'implements') and data.implements('MetaArray')):
         #return MetaArray(d4, info=data.infoCopy())
     #return d4
     
@@ -2003,7 +2003,7 @@ def denoise(data, radius=2, threshold=4):
     d6[:radius] = d1[:radius]
     d6[-radius:] = d1[-radius:]
     
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         return MetaArray(d6, info=data.infoCopy())
     return d6
 
@@ -2115,10 +2115,11 @@ def tauiness(data, win, step=10):
 
 def expDeconvolve(data, tau):
     dt = 1
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         dt = data.xvals(0)[1] - data.xvals(0)[0]
-    d = data[:-1] + (tau / dt) * (data[1:] - data[:-1])
-    if isinstance(data, MetaArray):
+    arr = data.view(np.ndarray)
+    d = arr[:-1] + (tau / dt) * (arr[1:] - arr[:-1])
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         info = data.infoCopy()
         if 'values' in info[0]:
             info[0]['values'] = info[0]['values'][:-1]
@@ -2129,7 +2130,7 @@ def expDeconvolve(data, tau):
 
     
 def expReconvolve(data, tau=None, dt=None):
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         if dt is None:
             dt = data.xvals(0)[1] - data.xvals(0)[0]
         if tau is None:
@@ -2147,7 +2148,7 @@ def expReconvolve(data, tau=None, dt=None):
     for i in range(1, len(d)):
         d[i] = dtti * d[i-1] + dtt * data[i-1]
     
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         info = data.infoCopy()
         #if 'values' in info[0]:
             #info[0]['values'] = info[0]['values'][:-1]

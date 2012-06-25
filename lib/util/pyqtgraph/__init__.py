@@ -19,12 +19,12 @@ if sys.version_info[0] < 2 or (sys.version_info[0] == 2 and sys.version_info[1] 
 from . import python2_3
 
     
-## in general openGL is poorly supported in Qt.
+## in general openGL is poorly supported with Qt+GraphicsView.
 ## we only enable it where the performance benefit is critical.
 ## Note this only applies to 2D graphics; 3D graphics always use OpenGL.
 if 'linux' in sys.platform:  ## linux has numerous bugs in opengl implementation
     useOpenGL = False
-elif 'darwin' in sys.platform: ## openGL greatly speeds up display on mac
+elif 'darwin' in sys.platform: ## openGL can have a major impact on mac, but also has serious bugs
     useOpenGL = False # True
 else:
     useOpenGL = False  ## on windows there's a more even performance / bugginess tradeoff. 
@@ -110,17 +110,35 @@ importAll('widgets', excludes=['MatplotlibWidget'])
 from .imageview import *
 from .WidgetGroup import *
 from .Point import Point
-from .Transform import Transform
+from .Vector import Vector
+from .SRTTransform import SRTTransform
+from .SRTTransform3D import SRTTransform3D
 from .functions import *
 from .graphicsWindows import *
 from .SignalProxy import *
 from .ptime import time
 
 
+## Workaround for Qt exit crash:
+## ALL QGraphicsItems must have a scene before they are deleted.
+## This is potentially very expensive, but preferred over crashing.
+import atexit
+def cleanup():
+    if QtGui.QApplication.instance() is None:
+        return
+    import gc
+    s = QtGui.QGraphicsScene()
+    for o in gc.get_objects():
+        try:
+            if isinstance(o, QtGui.QGraphicsItem) and o.scene() is None:
+                s.addItem(o)
+        except RuntimeError:  ## occurs if a python wrapper no longer has its underlying C++ object
+            continue
+atexit.register(cleanup)
+
+
 
 ## Convenience functions for command-line use
-
-
 
 plots = []
 images = []
@@ -174,8 +192,11 @@ show = image  ## for backward compatibility
     
     
 def mkQApp():
-    if QtGui.QApplication.instance() is None:
-        global QAPP
+    global QAPP
+    inst = QtGui.QApplication.instance()
+    if inst is None:
         QAPP = QtGui.QApplication([])
-        
+    else:
+        QAPP = inst
+    return QAPP
         

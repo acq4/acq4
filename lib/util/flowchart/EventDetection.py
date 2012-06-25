@@ -65,14 +65,14 @@ class ThresholdEvents(CtrlNode):
     """Detects regions of a waveform that cross a threshold (positive or negative) and returns the time, length, sum, and peak of each event."""
     nodeName = 'ThresholdEvents'
     uiTemplate = [
+        ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Events must reach this threshold to be detected.'}),
         ('threshold', 'spin', {'value': 1e-12, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Events are detected only if they cross this threshold.'}),
-        ('adjustTimes', 'check', {'value': True, 'tip': 'If False, then event times are reported where the trace crosses threshold. If True, the event time is adjusted to estimate when the trace would have crossed 0.'}),
         #('index', 'combo', {'values':['start','peak'], 'index':0}), 
         ('minLength', 'intSpin', {'value': 0, 'min': 0, 'max': 1e9, 'tip': 'Events must contain this many samples to be detected.'}),
         ('minSum', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
-        ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Events must reach this threshold to be detected.'}),
         ('eventLimit', 'intSpin', {'value': 100, 'min': 1, 'max': 1e9, 'tip': 'Limits the number of events that may be detected in a single trace. This prevents runaway processes due to over-sensitive detection criteria.'}),
         ('deadTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [0,None], 'siPrefix': True, 'suffix': 's', 'tip': 'Ignore events that occur too quickly following another event.'}),
+        ('adjustTimes', 'check', {'value': True, 'tip': 'If False, then event times are reported where the trace crosses threshold. If True, the event time is adjusted to estimate when the trace would have crossed 0.'}),
         ('reverseTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [0,None], 'siPrefix': True, 'suffix': 's', 'tip': 'Ignore events that 1) have the opposite sign of the event immediately prior and 2) occur within the given time window after the prior event. This is useful for ignoring rebound signals.'}),
     ]
 
@@ -160,7 +160,7 @@ class SpikeDetector(CtrlNode):
         s = self.stateGroup.state()
         radius = s['radius']
         d1 = data.view(np.ndarray)
-        d2 = data[radius:] - data[:-radius] #a derivative
+        d2 = d1[radius:] - d1[:-radius] #a derivative
         mask1 = d2 > s['minDiff']  #where derivative is large and positive
         mask2 = d2 < -s['minDiff'] #where derivative is large and negative
         maskpos = mask1[:-radius] * mask2[radius:] #both need to be true

@@ -1,9 +1,4 @@
-try: 
-    import metaarray
-    HAVE_METAARRAY = True
-except:
-    HAVE_METAARRAY = False
-
+import pyqtgraph.metaarray as metaarray
 from pyqtgraph.Qt import QtCore
 from .GraphicsObject import GraphicsObject
 from .PlotCurveItem import PlotCurveItem
@@ -133,7 +128,7 @@ class PlotDataItem(GraphicsObject):
             'symbolSize': 10,
             'symbolPen': (200,200,200),
             'symbolBrush': (50, 50, 150),
-            'identical': False,
+            'pxMode': True,
             
             'data': None,
         }
@@ -360,7 +355,7 @@ class PlotDataItem(GraphicsObject):
             curveArgs[v] = self.opts[k]
         
         scatterArgs = {}
-        for k,v in [('symbolPen','pen'), ('symbolBrush','brush'), ('symbol','symbol'), ('symbolSize', 'size'), ('data', 'data')]:
+        for k,v in [('symbolPen','pen'), ('symbolBrush','brush'), ('symbol','symbol'), ('symbolSize', 'size'), ('data', 'data'), ('pxMode', 'pxMode')]:
             if k in self.opts:
                 scatterArgs[v] = self.opts[k]
         
@@ -493,9 +488,10 @@ def dataType(obj):
         return 'empty'
     if isSequence(obj):
         first = obj[0]
-        if isinstance(obj, np.ndarray):
-            if HAVE_METAARRAY and isinstance(obj, metaarray.MetaArray):
-                return 'MetaArray'
+        
+        if (hasattr(obj, 'implements') and obj.implements('MetaArray')):
+            return 'MetaArray'
+        elif isinstance(obj, np.ndarray):
             if obj.ndim == 1:
                 if obj.dtype.names is None:
                     return 'listOfValues'
@@ -514,7 +510,7 @@ def dataType(obj):
         
         
 def isSequence(obj):
-    return isinstance(obj, list) or isinstance(obj, np.ndarray) or (HAVE_METAARRAY and isinstance(obj, metaarray.MetaArray))
+    return isinstance(obj, list) or isinstance(obj, np.ndarray) or (hasattr(obj, 'implements') and obj.implements('MetaArray'))
     
             
             

@@ -16,6 +16,7 @@ import lib.analysis.tools.Utility as Utility # pbm's utilities...
 import lib.analysis.tools.Fitting as Fitting # pbm's fitting stuff... 
 
 import ctrlTemplate
+import debug
 
 class IVCurve(AnalysisModule):
     def __init__(self, host):
@@ -24,14 +25,24 @@ class IVCurve(AnalysisModule):
         self.ctrlWidget = QtGui.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
+        self.main_layout =  pg.GraphicsView()
+        
+        # make fixed widget for the module output
+        self.widget = QtGui.QWidget()
+        self.gridLayout = QtGui.QGridLayout()
+        self.widget.setLayout(self.gridLayout)
+        self.gridLayout.setContentsMargins(0,0,0,0)
+        self.gridLayout.setSpacing(1)
         # Setup basic GUI
         self._elements_ = OrderedDict([
             ('File Loader', {'type': 'fileInput', 'size': (100, 300), 'host': self}),
             ('Parameters', {'type': 'ctrl', 'object': self.ctrlWidget, 'host': self, 'size': (100,300)}),
-            ('Data Plot', {'type': 'plot', 'pos': ('right', 'File Loader'), 'size': (400, 300)}),
-            ('IV Plot', {'type': 'plot', 'pos': ('right', 'Data Plot'), 'size': (400, 300)}),
-            ('FI Plot', {'type': 'plot', 'pos': ('right', 'Parameters'), 'size': (400, 300)}),
-            ('FSL/FISI Plot', {'type': 'plot', 'pos': ('right', 'FI Plot'), 'size': (400, 300)}),
+            ('Plots', {'type': 'ctrl', 'object': self.widget, 'pos': ('right',), 'size': (800, 600)}),
+#            ('Plots', {'type': 'graphicsLayout', 'pos': ('right',), 'size': (800, 600)}),
+#            ('Data Plot', {'type': 'plot', 'pos': ('right', 'File Loader'), 'size': (400, 300)}),
+#            ('IV Plot', {'type': 'plot', 'pos': ('right', 'Data Plot'), 'size': (400, 300)}),
+#            ('FI Plot', {'type': 'plot', 'pos': ('right', 'Parameters'), 'size': (400, 300)}),
+#            ('FSL/FISI Plot', {'type': 'plot', 'pos': ('right', 'FI Plot'), 'size': (400, 300)}),
         ])
         self.initializeElements()
         # grab input form the "Ctrl" window
@@ -42,12 +53,26 @@ class IVCurve(AnalysisModule):
 #        self.ctrl.IVCurve_pkTStart.valueChanged.connect(self.readParameters)
 #        self.ctrl.IVCurve_pkTStop.valueChanged.connect(self.readParameters)
         self.clearResults()
-        self.data_plot = self.getElement('Data Plot', create=True)
-        self.IV_plot = self.getElement('IV Plot', create=True)
-        self.fiPlot = self.getElement('FI Plot', create=True)
-        self.fslPlot = self.getElement('FSL/FISI Plot', create = True)
-        self.IVScatterPlot_ss = pg.ScatterPlotItem(size=6, pen=pg.mkPen('w'), brush=pg.mkBrush(255, 255, 255, 255), identical=True)
-        self.IVScatterPlot_pk = pg.ScatterPlotItem(size=6, pen=pg.mkPen('r'), brush=pg.mkBrush(255, 0, 0, 255), identical=True)
+        self.layout = self.getElement('Plots', create=True)
+#        print dir(self.plotView)
+#        mainLayout = pg.GraphicsLayout(border=pg.mkPen(0, 0, 255))
+        #print dir(mainLayout)
+#        self.data_plot = self.getElement('Data Plot', create=True)
+ 
+        self.data_plot = pg.PlotWidget()
+        self.gridLayout.addWidget(self.data_plot, 0, 0)# (row=0, col=0) # self.getElement('Data Plot', create=True)
+        self.labelUp(self.data_plot, 'T (ms)', 'V (mV)', 'Data')
+        self.IV_plot = pg.PlotWidget()
+        self.gridLayout.addWidget(self.IV_plot, 0, 1) # self.getElement('IV Plot', create=True)
+        self.labelUp(self.IV_plot, 'I (nA)', 'V (mV)', 'I-V')
+        self.fiPlot = pg.PlotWidget()
+        self.gridLayout.addWidget(self.fiPlot, 1, 0) # self.getElement('FI Plot', create=True)
+        self.labelUp(self.fiPlot, 'I (nA)', 'Spikes (#)', 'F-I')
+        self.fslPlot =  pg.PlotWidget()
+        self.gridLayout.addWidget(self.fslPlot, 1, 1) # self.getElement('FSL/FISI Plot', create = True)
+        self.labelUp(self.fslPlot, 'I (nA)', 'Fsl/Fisi (ms)', 'FSL/FISI')
+#        self.IVScatterPlot_ss = pg.ScatterPlotItem(size=6, pen=pg.mkPen('w'), brush=pg.mkBrush(255, 255, 255, 255), identical=True)
+#        self.IVScatterPlot_pk = pg.ScatterPlotItem(size=6, pen=pg.mkPen('r'), brush=pg.mkBrush(255, 0, 0, 255), identical=True)
 
         self.lrss = pg.LinearRegionItem([0, 1])
         self.lrpk = pg.LinearRegionItem([0, 1])
@@ -87,6 +112,8 @@ class IVCurve(AnalysisModule):
         
     def loadFileRequested(self, dh):
         """Called by file loader when a file load is requested."""
+        if len(dh) == 0:
+            raise Exception("Select an IV protocol directory.")
         if len(dh) != 1:
             raise Exception("Can only load one file at a time.")
         self.clearResults()
@@ -100,11 +127,12 @@ class IVCurve(AnalysisModule):
         self.Sequence = self.dataModel.listSequenceParams(dh)
         maxplotpts = 1024
         # Iterate over sequence
-        for d in dirs:
-            d = dh[d]
+        for dirName in dirs:
+            d = dh[dirName]
             try:
                 data = self.dataModel.getClampFile(d).read()
             except:
+                debug.printExc("Error loading data for protocol %s:" % d.name() )
                 continue  ## If something goes wrong here, we'll just try to carry on
             cmd = self.dataModel.getClampCommand(data)
             data = self.dataModel.getClampPrimary(data)
@@ -131,12 +159,13 @@ class IVCurve(AnalysisModule):
                 data.infoCopy('Time'), 
                 data.infoCopy(-1)]
             self.traces = MetaArray(traces, info=info)
-            cmdtimes = numpy.argwhere(cmd[1:]-cmd[:-1] != 0)[:,0]
+            cmddata = cmd.asarray()
+            cmdtimes = numpy.argwhere(cmddata[1:]-cmddata[:-1] != 0)[:,0]
             self.tstart = cmd.xvals('Time')[cmdtimes[0]]
             self.tend = cmd.xvals('Time')[cmdtimes[1]]
             self.tdur = self.tend - self.tstart
 
-            tr =  numpy.reshape(self.traces, (len(dirs),-1))
+            tr =  numpy.reshape(self.traces.asarray(), (len(dirs),-1))
             fsl = numpy.zeros(len(dirs))
             fisi = numpy.zeros(len(dirs))
             misi = numpy.zeros(len(dirs))
@@ -187,23 +216,28 @@ class IVCurve(AnalysisModule):
             self.spk = numpy.where(self.spikecount > 0)
             self.icmd = current[self.nospk]
             self.spcmd = current[self.spk]
-            # plot with lines and symbols:
-            self.fiScatterPlot = pg.ScatterPlotItem(size=10, pen=pg.mkPen('b'), brush=pg.mkBrush(0, 0, 255, 200), 
-                symbol='s', identical=True)
-            self.fslScatterPlot = pg.ScatterPlotItem(size=6, pen=pg.mkPen('g'), brush=pg.mkBrush(0, 255, 0, 200), 
-                symbol = 't', identical=True)
-            self.fisiScatterPlot = pg.ScatterPlotItem(size=6, pen=pg.mkPen('y'), brush=pg.mkBrush(255, 255, 0, 200),
-                symbol = 's', identical=True)
-            self.fiPlot.plot(x=current*1e12, y = self.spikecount, clear=True)
-            #self.fiPlot.setXRange(-0.5, 0.5)
-            self.fiScatterPlot.addPoints(x=current*iscale, y=self.spikecount )# plot the spike counts
-            self.fslPlot.plot(x=self.spcmd*iscale, y = fsl[self.spk], clear=True)
-            self.fslPlot.plot(x=self.spcmd*iscale, y = fisi[self.spk])
-            self.fslScatterPlot.addPoints(x=self.spcmd*iscale, y=fsl[self.spk])# plot the spike counts
-            self.fisiScatterPlot.addPoints(x=self.spcmd*iscale, y=fisi[self.spk])# plot the spike counts
-            self.fiPlot.addItem(self.fiScatterPlot)
-            self.fslPlot.addItem(self.fslScatterPlot)
-            self.fslPlot.addItem(self.fisiScatterPlot)
+            ### plot with lines and symbols:
+            #self.fiScatterPlot = pg.ScatterPlotItem(size=10, pen=pg.mkPen('b'), brush=pg.mkBrush(0, 0, 255, 200), symbol='s', identical=True)
+            #self.fiScatterPlot = pg.PlotDataItem(x=current*iscale, y=self.spikecount, pen='w', symbolSize=10, symbolPen='b', symbolBrush=pg.mkBrush(0, 0, 255, 200), symbol='s', identical=True)
+            #self.fiScatterPlot.addPoints(x=current*iscale, y=self.spikecount )# plot the spike counts
+            #self.fiPlot.plot(x=current*1e12, y = self.spikecount, clear=True)
+            #self.fiPlot.setXRange(-0.5, 0.5)   
+            #self.fiPlot.addItem(self.fiScatterPlot)
+            self.fiPlot.plot(x=current*iscale, y=self.spikecount, clear=True, pen='w', symbolSize=10, symbolPen='b', symbolBrush=(0, 0, 255, 200), symbol='s')
+            
+            self.fslPlot.plot(x=self.spcmd*iscale, y=fsl[self.spk], pen='w', clear=True, symbolSize=6, symbolPen='g', symbolBrush=(0, 255, 0, 200), symbol='t')
+            #self.fslScatterPlot = pg.ScatterPlotItem(size=6, pen=pg.mkPen('g'), brush=pg.mkBrush(0, 255, 0, 200), symbol = 't', identical=True)
+            
+            #self.fslPlot.plot(x=self.spcmd*iscale, y = fsl[self.spk], clear=True)
+            self.fslPlot.plot(x=self.spcmd*iscale, y=fisi[self.spk], pen='w', symbolSize=6, symbolPen='y', symbolBrush=(255, 255, 0, 200), symbol='s')
+            #self.fslScatterPlot.addPoints(x=self.spcmd*iscale, y=fsl[self.spk])# plot the spike counts            
+            
+            
+            #self.fisiScatterPlot = pg.ScatterPlotItem(size=6, pen=pg.mkPen('y'), brush=pg.mkBrush(255, 255, 0, 200),symbol = 's', identical=True)
+            #self.fisiScatterPlot.addPoints(x=self.spcmd*iscale, y=fisi[self.spk])# plot the spike counts
+            
+            #self.fslPlot.addItem(self.fslScatterPlot)
+            #self.fslPlot.addItem(self.fisiScatterPlot)
             if len(self.spcmd) > 0:
                 self.fslPlot.setXRange(0.0, numpy.max(self.spcmd*iscale))
             self.lrss.setRegion([(self.tend-(self.tdur/2.0)), self.tend]) # steady-state
@@ -317,14 +351,15 @@ class IVCurve(AnalysisModule):
         self.update_IVPlot()
 
     def update_IVPlot(self):
+        self.IV_plot.clear()
         if len(self.ivss) > 0:
-            self.IV_plot.plot(self.ivss, clear=True)
-            self.IVScatterPlot_ss.setPoints(x=self.icmd, y = self.ivss)
-            self.IV_plot.addItem(self.IVScatterPlot_ss)
+            self.IV_plot.plot(self.ivss, symbolSize=6, symbolPen='w', symbolBrush='w')
+            #self.IVScatterPlot_ss.setPoints(x=self.icmd, y = self.ivss)
+            #self.IV_plot.addItem(self.IVScatterPlot_ss)
         if len(self.ivpk) > 0:
-            self.IV_plot.plot(self.ivpk, clear=False)
-            self.IVScatterPlot_pk.setPoints(x=self.icmd, y = self.ivpk)
-            self.IV_plot.addItem(self.IVScatterPlot_pk)
+            self.IV_plot.plot(self.ivpk, symbolSize=6, symbolPen='w', symbolBrush='r')
+            #self.IVScatterPlot_pk.setPoints(x=self.icmd, y = self.ivpk)
+            #self.IV_plot.addItem(self.IVScatterPlot_pk)
         
         
     def readParameters(self, clearFlag=False, pw=False):
@@ -340,4 +375,14 @@ class IVCurve(AnalysisModule):
         rgnx2 = self.ctrl.IVCurve_pkTStop.value()/1.0e3
         self.lrpk.setRegion([rgnx1, rgnx2])
         self.update_pkAnalysis(clear=False, pw = pw)
+
+
+#---- Helpers ---
+# Some of these would normally live in a pyqtgraph-related module, but are just stuck here to get the job done.
+    def labelUp(self, plot, xtext, ytext, title):
+        """helper to label up the plot"""
+        plot.setLabel('bottom', xtext)
+        plot.setLabel('left', ytext)
+        plot.setTitle(title)
+
 
