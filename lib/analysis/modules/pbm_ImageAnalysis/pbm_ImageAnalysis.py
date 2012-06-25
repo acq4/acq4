@@ -349,7 +349,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         if r >= self.MPRnrows-1:
             c += 1
             r = self.plotCount*2 % self.MPRnrows
-        self.MPPhysPlots[r+1, c].plot(self.tdat, self.physData, 'k-')
+        self.MPPhysPlots[r+1, c].plot(self.tdat, self.physData, 'k-', linewidth =0.5)
         self.MPPhysPlots[r+1, c].set_title(tail)
 
         for i in range(self.nROI):
@@ -360,7 +360,11 @@ class pbm_ImageAnalysis(AnalysisModule):
         if self.plotCount >= self.nPhysPlots:
             PL.show()
             self.ctrl.ImagePhys_PhysROIPlot.setCheckState(False) # turn off now - to properly sequence reload
-            PL.savefig('/Users/pbmanis/Desktop/IA.png', dpi=600, format='png')
+            (d1, s1) = os.path.split(self.currentFileName)
+            (d2, s2) = os.path.split(d1)
+            (d3, s3) = os.path.split(s2)
+            sfn = s3+'-'+s2+'-'+s1
+            PL.savefig('/Users/Experimenters/Desktop/ePhysPlots/%s.png' % (sfn), dpi=600, format='png')
 
 
     def loadSingleFile(self, dh):
@@ -408,8 +412,14 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.imageData = self.imageData[fi:]
             self.baseImage = self.imageData[0] # just to show after processing...
             self.imageTimes = self.imageInfo[0].values()[1]
-            self.imagedT = np.mean(np.diff(self.imageTimes))
             self.imageTimes = self.imageTimes[fi:]
+            print 'original: ', self.imageTimes.shape
+            if self.downSample > 1:
+                self.imageTimes = self.imageTimes[0:-1:self.downSample]
+            self.imagedT = np.mean(np.diff(self.imageTimes))
+            print 'new: ', self.imageTimes.shape
+            print 'dt: ', self.imagedT
+            print self.imageData.shape
             self.imageView.setImage(self.imageData)
             self.dataState['Loaded'] = True
             self.dataState['Structure'] = 'Flat'
