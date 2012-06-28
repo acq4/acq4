@@ -96,35 +96,289 @@ Notes on probability computation:
 
 import numpy as np
 import scipy.stats as stats
+import pyqtgraph as pg
+import pyqtgraph.console
+import user
 
-def poissonProcess(mu, tmax):
+def poissonProcess(rate, tmax):
     """Simulate a poisson process; return a list of event times"""
     events = []
     t = 0
     while True:
-        t += np.random.exponential(mu)
+        t += np.random.exponential(1/rate)
         if t > tmax:
             break
         events.append(t)
-    return events
+    return np.array(events)
 
-def poissonProb(events, xvals):
+def poissonProb(events, xvals, rate):
+    ## evaluate poisson cdf of events for multiple windows (0 to x for x in xvals)
     y = []
     for x in xvals:
-        y.append(stats.poisson(10 * x).pmf(len(events<=x)))
-    return np.array(y)
+        y.append(stats.poisson(rate * x).cdf(np.sum(events<=x)))
+    return 1./(1.-np.array(y))
+
+def poissonScore(events, rate):
+    ## maximum of poisson probabilities windowed at each event
+    return poissonProb(events, events, rate).max()
+    
+def poissonBlame(ev, rate):
+    ## estimate how much each event contributes to the poisson-score of a list of events.
+    pp = []
+    for i in range(len(ev)):
+        ev2 = list(ev)
+        ev2.pop(i)
+        #pp.append(poissonScore(ev, rate) / poissonScore(ev2, rate))
+        pp1 = poissonProb(ev, ev, rate)
+        pp2 = poissonProb(ev2, ev2, rate)
+        pp2l = list(pp2)
+        print pp2[max(0,i-1):i]
+        pp2l.insert(i, pp2[i-1:i].mean())
+        pp.append((pp1 / np.array(pp2l)).max())
+    ret = np.array(pp)
+    assert not any(np.isnan(pp))
+    return ret
+
+#def poissonBlame(ev, rate):
+    ### estimate how much each event contributes to the poisson-score of a list of events.
+    #ev = list(ev)
+    #ps = poissonScore(ev, rate)
+    #pp = []
+    #while len(ev) > 0:
+        #ev.pop(-1)
+        #if len(ev) == 0:
+            #ps2 = 1.0
+        #else:
+            #ps2 = poissonScore(ev, rate)
+        #pp.insert(0, ps / ps2)
+        #ps = ps2
+    #return np.array(pp)
+    
+    
+## show that poissonProcess works as expected
+#rate = 3.
+#d1 = np.random.poisson(rate, size=100000)
+#h1 = np.histogram(d1, bins=range(d1.max()+1))
+
+#d2 = np.array([len(poissonProcess(rate, 1)) for i in xrange(100000)])
+#h2 = np.histogram(d2, bins=range(d2.max()+1))
+
+#plt = pg.plot(h2[1][1:], h2[0], pen='g', symbolSize=3)
+#plt.plot(h1[1][1:], h1[0], pen='r', symbolSize=3)
 
 
-rate = 10.
+## assign post-score to a series of events
+#rate = 20.
+#ev = poissonProcess(rate, 1.0)
+#times = np.linspace(0.0, 1.0, 1000)
+#prob = poissonProb(ev, times, rate)
+#plt = pg.plot()
 
-d1 = np.random.poisson(rate, size=100000)
-h1 = np.histogram(d1, bins=range(d1.max()+1))
+#for i in range(5):
+    #prob = poissonProb(ev, times, rate)
+    #c = plt.plot(x=times, y=1./prob, pen=(i,7))
+    #c.setZValue(-i)
+    #ev = np.append(ev, 0.06+i*0.01)
+    #ev.sort()
 
-d2 = np.array([len(poissonProcess(1.0/rate, 1)) for i in xrange(100000)])
-h2 = np.histogram(d2, bins=range(d2.max()+1))
+    
+#def recursiveBlame(ev, inds, rate, depth=0):
+    #print "  "*depth, "start:", zip(inds, ev)
+    #score = poissonScore(ev, rate)
+    ##print "score:"
+    #subScores = {}
+    #for i in range(len(ev)):
+        #ev2 = list(ev)
+        #ev2.pop(i)
+        #print "  "*depth, "check:", ev2
+        #subScores[inds[i]] = score / poissonScore(ev2, rate)
+    #print "  " * depth, "scores:", subScores
+    
+    
+    #ev2 = [ev[i] for i in range(len(ev)) if subScores[inds[i]] > 1.0]
+    #inds2 = [inds[i] for i in range(len(ev)) if subScores[inds[i]] > 1.0]
+    #print "  "*depth, "passed:", zip(inds2, ev2)
+    #if len(ev2) < 3:
+        #return subScores
+        
+    #correctedScores = {}
+    #for i in range(len(ev2)):
+        #print "  "*depth, "remove", inds2[i], ':'
+        #ev3 = list(ev2)
+        #ev3.pop(i)
+        #inds3 = list(inds2)
+        #inds3.pop(i)
+        #newScores = recursiveBlame(ev3, inds3, rate, depth+2)
+        #if newScores is None:
+            #continue
+        #print "  "*depth, "compute correction:"
+        #correction = 1.0
+        #for j in range(len(ev3)):
+            #c = subScores[inds3[j]] / newScores[inds3[j]]
+            #correction *= c
+            #print "  "*depth, inds3[j], c
+        #correctedScores[inds2[i]] = subScores[inds2[i]] * correction
+        #print "  "*depth, "final score:", inds2[i], correctedScores[inds2[i]]
+        
+        
+        
+    #return correctedScores
+    
+#app = pg.mkQApp()
+#con = pyqtgraph.console.ConsoleWidget()
+#con.show()
+#con.catchAllExceptions()
+    
+## Attempt to assign a post-probability to each event
+#rate = 3.
+#plt = pg.plot(name='Event Score')
+#allev1 = []
+#allev2 = []
+#for i in range(10): ## reps
+    #ev = poissonProcess(rate, 1.0)
+    #allev1.append(ev)
+    #colors = ['g'] * len(ev)
+    #for i in range(3):  ## insert 4 events
+        #ev = np.append(ev, 0.02 + np.random.gamma(shape=1, scale=0.01))
+        #colors.append('w')
+    #ev = np.append(ev, 0.07)
+    #colors.append('w')
+    #ev = np.append(ev, 0.15)
+    #colors.append('w')
+    
+    
+    
+    #allev2.append(ev)
+    #pp = poissonBlame(ev, rate)
+    #print len(ev), len(pp), len(colors)
+    #plt.plot(x=ev, y=pp, pen=None, symbol='o', symbolBrush=colors).setOpacity(0.5)
 
-plt = pg.plot(h2[1][1:], h2[0], pen='g', symbolSize=3)
-plt.plot(h1[1][1:], h1[0], pen='r', symbolSize=3)
+#allev1 = np.concatenate(allev1)
+#allev2 = np.concatenate(allev2)
+#h = np.histogram(allev1, bins=100)
+#plt = pg.plot(h[1][1:], h[0], name='PSTH')
+#h = np.histogram(allev2, bins=100)
+#plt.plot(h[1][1:], h[0])
+
+#print ev
+#recursiveBlame(ev, list(range(len(ev))), rate)
+
+
+
+## Create a set of test cases:
+
+reps = 30
+spontRate = 10.
+miniAmp = 1.0
+tMax = 0.5
+
+def randAmp(n=1, quanta=1):
+    return np.random.gamma(4., size=n) * miniAmp * quanta / 4.
+
+## create a standard set of spontaneous events
+spont = []
+for i in range(reps):
+    times = poissonProcess(spontRate, tMax)
+    amps = randAmp(len(times))  ## using scale=4 gives a nice not-quite-gaussian distribution
+    source = ['spont'] * len(times)
+    spont.append((times, amps, source))
+
+
+def spontCopy(i, extra):
+    times, amps, source = spont[i]
+    ev = np.zeros(len(times)+extra, dtype=[('time', float), ('amp', float), ('source', object)])
+    ev['time'][:len(times)] = times
+    ev['amp'][:len(times)] = amps
+    ev['source'][:len(times)] = source
+    return ev
+    
+## copy spont. events and add on evoked events
+tests = [[] for i in range(7)]
+for i in range(reps):
+    ## Test 0: no evoked events
+    tests[0].append(spontCopy(i, 0))
+
+    ## Test 1: 1 extra event, single quantum, short latency
+    ev = spontCopy(i, 1)
+    ev[-1] = (0.01, 1, 'evoked')
+    tests[1].append(ev)
+
+    ## Test 2: 2 extra events, single quantum, short latency
+    ev = spontCopy(i, 2)
+    for j, t in enumerate([0.01, 0.015]):
+        ev[-(j+1)] = (t, 1, 'evoked')
+    tests[2].append(ev)
+
+    ## Test 3: 4 extra events, single quantum, short latency
+    ev = spontCopy(i, 4)
+    for j,t in enumerate([0.01, 0.015, 0.024, 0.04]):
+        ev[-(j+1)] = (t, 1, 'evoked')
+    tests[3].append(ev)
+
+    ## Test 4: 3 extra events, single quantum, long latency
+    ev = spontCopy(i, 3)
+    for j,t in enumerate([0.07, 0.10, 0.15]):
+        ev[-(j+1)] = (t, 1, 'evoked')
+    tests[4].append(ev)
+
+    ## Test 5: 1 extra event, 2 quanta, short latency
+    ev = spontCopy(i, 1)
+    ev[-1] = (0.01, 2, 'evoked')
+    tests[5].append(ev)
+
+    ## Test 6: 1 extra event, 3 quanta, long latency
+    ev = spontCopy(i, 1)
+    ev[-1] = (0.05, 3, 'evoked')
+    tests[6].append(ev)
+
+
+## Analyze and plot all:
+
+win = pg.GraphicsWindow()
+for i in range(len(tests)):
+    first = (i == 0)
+    last = (i == len(tests)-1)
+    
+    if first:
+        evLabel = win.addLabel('Event amplitude', angle=-90, rowspan=len(tests))
+    evplt = win.addPlot()
+    
+    if first:
+        scoreLabel = win.addLabel('Poisson Score', angle=-90, rowspan=len(tests))
+    scoreplt = win.addPlot()
+    scoreplt.setLogMode(True, True)
+    diag = pg.InfiniteLine(angle=45)
+    scoreplt.addItem(diag)
+    scoreplt.hideAxis('left')
+    scoreplt.hideAxis('bottom')
+    
+    for j in range(reps):
+        ev = tests[i][j]
+        colors = [(0,255,0,50) if source=='spont' else (255,255,255,50) for source in ev['source']]
+        evplt.plot(x=ev['time'], y=ev['amp'], pen=None, symbolBrush=colors, symbol='d', symbolSize=8, symbolPen=None)
+        
+        print ev['time']
+        score1 = poissonScore(ev['time'], spontRate)
+        score2 = poissonScore((ev[ev['source'] == 'spont'])['time'], spontRate)
+        scoreplt.plot(x=[score2], y=[score1], pen=None, symbol='o')
+        
+        evplt.hideAxis('bottom')
+        #scoreplt.hideAxis('bottom')
+        if last:
+            evplt.showAxis('bottom')
+            evplt.setLabel('bottom', 'Event time', 's')
+            #scoreplt.showAxis('bottom')
+            #scoreplt.setLabel('bottom', 'Spontaneous Score')
+        
+        
+        
+    win.nextRow()
+    
+    
+    
+
+
+
 
 
 

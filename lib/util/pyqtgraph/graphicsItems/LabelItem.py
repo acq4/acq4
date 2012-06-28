@@ -22,10 +22,9 @@ class LabelItem(GraphicsWidget):
             'justify': 'center'
         }
         self.opts.update(args)
-        self.sizeHint = {}
+        self._sizeHint = {}
         self.setText(text)
         self.setAngle(angle)
-        
             
     def setAttr(self, attr, value):
         """Set default text properties. See setText() for accepted parameters."""
@@ -64,7 +63,7 @@ class LabelItem(GraphicsWidget):
         self.item.setHtml(full)
         self.updateMin()
         self.resizeEvent(None)
-        self.update()
+        self.updateGeometry()
         
     def resizeEvent(self, ev):
         #c1 = self.boundingRect().center()
@@ -72,16 +71,35 @@ class LabelItem(GraphicsWidget):
         #dif = c1 - c2
         #self.item.moveBy(dif.x(), dif.y())
         #print c1, c2, dif, self.item.pos()
+        self.item.setPos(0,0)
+        bounds = self.itemRect()
+        left = self.mapFromItem(self.item, QtCore.QPointF(0,0)) - self.mapFromItem(self.item, QtCore.QPointF(1,0))
+        rect = self.rect()
+        
         if self.opts['justify'] == 'left':
-            self.item.setPos(0,0)
+            if left.x() != 0:
+                bounds.moveLeft(rect.left())
+            if left.y() < 0:
+                bounds.moveTop(rect.top())
+            elif left.y() > 0:
+                bounds.moveBottom(rect.bottom())
+                
         elif self.opts['justify'] == 'center':
-            bounds = self.item.mapRectToParent(self.item.boundingRect())
-            self.item.setPos(self.width()/2. - bounds.width()/2., 0)
+            bounds.moveCenter(rect.center())
+            #bounds = self.itemRect()
+            #self.item.setPos(self.width()/2. - bounds.width()/2., 0)
         elif self.opts['justify'] == 'right':
-            bounds = self.item.mapRectToParent(self.item.boundingRect())
-            self.item.setPos(self.width() - bounds.width(), 0)
-        #if self.width() > 0:
-            #self.item.setTextWidth(self.width())
+            if left.x() != 0:
+                bounds.moveRight(rect.right())
+            if left.y() < 0:
+                bounds.moveBottom(rect.bottom())
+            elif left.y() > 0:
+                bounds.moveTop(rect.top())
+            #bounds = self.itemRect()
+            #self.item.setPos(self.width() - bounds.width(), 0)
+            
+        self.item.setPos(bounds.topLeft() - self.itemRect().topLeft())
+        self.updateMin()
         
     def setAngle(self, angle):
         self.angle = angle
@@ -89,27 +107,31 @@ class LabelItem(GraphicsWidget):
         self.item.rotate(angle)
         self.updateMin()
         
+        
     def updateMin(self):
-        bounds = self.item.mapRectToParent(self.item.boundingRect())
+        bounds = self.itemRect()
         self.setMinimumWidth(bounds.width())
         self.setMinimumHeight(bounds.height())
         
-        self.sizeHint = {
+        self._sizeHint = {
             QtCore.Qt.MinimumSize: (bounds.width(), bounds.height()),
             QtCore.Qt.PreferredSize: (bounds.width(), bounds.height()),
             QtCore.Qt.MaximumSize: (-1, -1),  #bounds.width()*2, bounds.height()*2),
             QtCore.Qt.MinimumDescent: (0, 0)  ##?? what is this?
         }
-            
-        self.update()
+        self.updateGeometry()
         
     def sizeHint(self, hint, constraint):
-        if hint not in self.sizeHint:
+        if hint not in self._sizeHint:
             return QtCore.QSizeF(0, 0)
-        return QtCore.QSizeF(*self.sizeHint[hint])
+        return QtCore.QSizeF(*self._sizeHint[hint])
+        
+    def itemRect(self):
+        return self.item.mapRectToParent(self.item.boundingRect())
         
     #def paint(self, p, *args):
         #p.setPen(fn.mkPen('r'))
         #p.drawRect(self.rect())
-        #p.drawRect(self.item.boundingRect())
+        #p.setPen(fn.mkPen('g'))
+        #p.drawRect(self.itemRect())
         

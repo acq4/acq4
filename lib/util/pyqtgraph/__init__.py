@@ -35,6 +35,7 @@ CONFIG_OPTIONS = {
     'foregroundColor': (200,200,200),
     'backgroundColor': (0,0,0),
     'antialias': False,
+    'editorCommand': None,  ## command used to invoke code editor from ConsoleWidgets
 } 
 
 def setConfigOption(opt, value):
