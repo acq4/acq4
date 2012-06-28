@@ -370,8 +370,6 @@ class AxisItem(GraphicsWidget):
         """
         minVal, maxVal = sorted((minVal, maxVal))
         
-        if self.logMode:
-            return self.logTickValues(minVal, maxVal, size)
             
         ticks = []
         tickLevels = self.tickSpacing(minVal, maxVal, size)
@@ -391,18 +389,33 @@ class AxisItem(GraphicsWidget):
             values = filter(lambda x: all(np.abs(allValues-x) > spacing*0.01), values) 
             allValues = np.concatenate([allValues, values])
             ticks.append((spacing, values))
+            
+        if self.logMode:
+            return self.logTickValues(minVal, maxVal, size, ticks)
+            
         return ticks
     
-    def logTickValues(self, minVal, maxVal, size):
-        v1 = int(np.floor(minVal))
-        v2 = int(np.ceil(maxVal))
-        major = list(range(v1+1, v2))
+    def logTickValues(self, minVal, maxVal, size, stdTicks):
         
-        minor = []
-        for v in range(v1, v2):
-            minor.extend(v + np.log10(np.arange(1, 10)))
-        minor = [x for x in minor if x>minVal and x<maxVal]
-        return [(1.0, major), (None, minor)]
+        ## start with the tick spacing given by tickValues().
+        ## Any level whose spacing is < 1 needs to be converted to log scale
+        
+        ticks = []
+        for (spacing, t) in stdTicks:
+            if spacing >= 1.0:
+                ticks.append((spacing, t))
+        
+        if len(ticks) < 3:
+            v1 = int(np.floor(minVal))
+            v2 = int(np.ceil(maxVal))
+            #major = list(range(v1+1, v2))
+            
+            minor = []
+            for v in range(v1, v2):
+                minor.extend(v + np.log10(np.arange(1, 10)))
+            minor = [x for x in minor if x>minVal and x<maxVal]
+            ticks.append((None, minor))
+        return ticks
 
     def tickStrings(self, values, scale, spacing):
         """Return the strings that should be placed next to ticks. This method is called 
