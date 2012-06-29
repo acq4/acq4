@@ -116,6 +116,9 @@ def poissonProb(events, xvals, rate):
     ## evaluate poisson cdf of events for multiple windows (0 to x for x in xvals)
     ## for each value x in xvals, returns the probability that events from 0 to x
     ## would be produced by a poisson process with the given rate.
+    #n = (events[:, np.newaxis] < xvals[np.newaxis,:]).sum(axis=0)
+    #p = stats.poisson(rate * x)
+    #return 1.0 - p.cdf(n)
     y = []
     for x in xvals:
         y.append(stats.poisson(rate * x).cdf(np.sum(events<=x)))
@@ -134,8 +137,12 @@ def poissonScore(events, rate):
         return 1.0
     else:
         return 0.5 * ((1.0 / pp.min())**0.5)
-    
-def poissonBlame(ev, rate):
+
+def poissonIntegral(events, rate, tMin, tMax):
+    xvals = np.linspace(tMin, tMax, 1000)
+    return (1. / poissonProb(events, xvals, rate)).sum() ** 0.5
+        
+def poissonScoreBlame(ev, rate):
     ## estimate how much each event contributes to the poisson-score of a list of events.
     pp = []
     for i in range(len(ev)):
@@ -148,6 +155,19 @@ def poissonBlame(ev, rate):
         print pp2[max(0,i-1):i]
         pp2l.insert(i, pp2[i-1:i].mean())
         pp.append((pp1 / np.array(pp2l)).max())
+    ret = np.array(pp)
+    assert not any(np.isnan(pp))
+    return ret
+
+def poissonIntegralBlame(ev, rate, xMin, xMax):
+    ## estimate how much each event contributes to the poisson-integral of a list of events.
+    pp = []
+    for i in range(len(ev)):
+        ev2 = list(ev)
+        ev2.pop(i)
+        pp1 = poissonIntegral(ev, rate, xMin, xMax)
+        pp2 = poissonIntegral(ev2, rate, xMin, xMax)
+        pp.append(pp1 / pp2)
     ret = np.array(pp)
     assert not any(np.isnan(pp))
     return ret
@@ -280,32 +300,30 @@ con.catchAllExceptions()
 
 ## Test ability of poissonScore to predict proability of seeing false positives
 
-
-for rate in [2, 5, 10, 20]:
-    print "spont rate:", rate
-    #rate = 5.
-    tMax = 1.0
-    totals = [0,0,0,0,0,0]
-    pptotals = [0,0,0,0,0,0]
-    trials = 10000
-    for i in xrange(trials):
-        events = poissonProcess(rate, tMax)
-        #prob = 1.0 / (1.-poissonProb(events, [tMax], rate)[0])
-        score = poissonScore(events, rate)
-        for i in range(1,6):
-            if score > 10**i:
-                totals[i] += 1
-            #if prob > 10**i:
-                #pptotals[i] += 1
-    print "False negative scores:"
-    for i in range(1,6):
-        print "   > %d: %d (%0.2f%%)" % (10**i, totals[i], 100*totals[i]/float(trials))
-    #print "False negative probs:"
+#for rate in [2, 5, 10, 20]:
+    #print "spont rate:", rate
+    ##rate = 5.
+    #tMax = 1.0
+    #totals = [0,0,0,0,0,0]
+    #pptotals = [0,0,0,0,0,0]
+    #trials = 1000
+    #for i in xrange(trials):
+        #events = poissonProcess(rate, tMax)
+        ##prob = 1.0 / (1.-poissonProb(events, [tMax], rate)[0])
+        #score = poissonScore(events, rate)
+        #for i in range(1,6):
+            #if score > 10**i:
+                #totals[i] += 1
+            ##if prob > 10**i:
+                ##pptotals[i] += 1
+    #print "False negative scores:"
     #for i in range(1,6):
-        #print "   > %d: %d (%0.2f%%)" % (10**i, pptotals[i], 100*pptotals[i]/float(trials))
+        #print "   > %d: %d (%0.2f%%)" % (10**i, totals[i], 100*totals[i]/float(trials))
+    ##print "False negative probs:"
+    ##for i in range(1,6):
+        ##print "   > %d: %d (%0.2f%%)" % (10**i, pptotals[i], 100*pptotals[i]/float(trials))
 
 
-raise SystemExit(0)
 
 ## Create a set of test cases:
 
@@ -391,28 +409,53 @@ with pg.ProgressDialog('processing..', maximum=len(tests)) as dlg:
         scoreplt = win.addPlot()
         
         if first:
+            intLabel = win.addLabel('Poisson Integral', angle=-90, rowspan=len(tests))
+        intplt = win.addPlot()
+        
+        if first:
+            intBlameLabel = win.addLabel('Poisson Integral Blame', angle=-90, rowspan=len(tests))
+        intblameplt = win.addPlot()
+        
+        if first:
             evplt.register('EventPlot1')
             scoreplt.register('ScorePlot1')
+            intplt.register('IntegralPlot1')
+            intblameplt.register('IntegralBlamePlot1')
         else:
             evplt.setXLink('EventPlot1')
             scoreplt.setXLink('ScorePlot1')
+            intplt.setXLink('IntegralPlot1')
+            intblameplt.setXLink('IntegralBlamePlot1')
             
         scoreplt.setLogMode(False, True)
         #diag = pg.InfiniteLine(angle=45)
         #scoreplt.addItem(diag)
         #scoreplt.hideAxis('left')
         scoreplt.hideAxis('bottom')
+        intplt.hideAxis('bottom')
+        
         
         for j in range(reps):
             ev = tests[i][j]
+            spont = tests[0][j]
             colors = [(0,255,0,50) if source=='spont' else (255,255,255,50) for source in ev['source']]
             evplt.plot(x=ev['time'], y=ev['amp'], pen=None, symbolBrush=colors, symbol='d', symbolSize=8, symbolPen=None)
             
             #print ev['time']
             score1 = poissonScore(ev['time'], spontRate)
-            score2 = poissonScore((ev[ev['source'] == 'spont'])['time'], spontRate)
+            score2 = poissonScore(spont['time'], spontRate)
             scoreplt.plot(x=[j], y=[score1], pen=None, symbol='o', symbolBrush=(255,255,255,100))
             scoreplt.plot(x=[j], y=[score2], pen=None, symbol='o', symbolBrush=(0,255,0,100))
+
+            xMin = 0.005
+            xMax = 0.3
+            int1 = poissonIntegral(ev['time'], spontRate, xMin, xMax)
+            int2 = poissonIntegral(spont['time'], spontRate, xMin, xMax)
+            intplt.plot(x=[j], y=[int1], pen=None, symbol='o', symbolBrush=(255,255,255,100))
+            intplt.plot(x=[j], y=[int2], pen=None, symbol='o', symbolBrush=(0,255,0,100))
+            
+            blame = poissonIntegralBlame(ev, spontRate, xMin, xMax)
+            intblameplt.plot(x=ev['time'], y=blame, pen=None, symbolBrush=colors, symbol='d', symbolSize=8, symbolPen=None)
             
             evplt.hideAxis('bottom')
             #scoreplt.hideAxis('bottom')
