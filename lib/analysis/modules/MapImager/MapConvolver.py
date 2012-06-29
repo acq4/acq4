@@ -2,7 +2,7 @@ from PyQt4 import QtCore, QtGui
 #import lib.Manager
 import pyqtgraph as pg
 import numpy as np
-#import functions as fn
+import functions as fn
 import MapConvolverTemplate
 import scipy
 from lib.analysis.tools import functions as afn
