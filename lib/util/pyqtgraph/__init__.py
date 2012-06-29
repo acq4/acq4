@@ -32,8 +32,8 @@ else:
 CONFIG_OPTIONS = {
     'useOpenGL': useOpenGL,   ## by default, this is platform-dependent (see widgets/GraphicsView). Set to True or False to explicitly enable/disable opengl.
     'leftButtonPan': True,  ## if false, left button drags a rubber band for zooming in viewbox
-    'foregroundColor': (200,200,200),
-    'backgroundColor': (0,0,0),
+    'foreground': (150, 150, 150),  ## default foreground color for axes, labels, etc.
+    'background': (0, 0, 0),        ## default background for GraphicsWidget
     'antialias': False,
 } 
 
