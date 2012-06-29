@@ -185,15 +185,18 @@ class GraphicsView(QtGui.QGraphicsView):
             return
         if self.autoPixelRange:
             self.range = QtCore.QRectF(0, 0, self.size().width(), self.size().height())
-        GraphicsView.setRange(self, self.range, padding=0, disableAutoPixel=False)
+        GraphicsView.setRange(self, self.range, padding=0, disableAutoPixel=False)  ## we do this because some subclasses like to redefine setRange in an incompatible way.
         self.updateMatrix()
     
     def updateMatrix(self, propagate=True):
         self.setSceneRect(self.range)
-        if self.aspectLocked:
-            self.fitInView(self.range, QtCore.Qt.KeepAspectRatio)
+        if self.autoPixelRange:
+            self.resetTransform()
         else:
-            self.fitInView(self.range, QtCore.Qt.IgnoreAspectRatio)
+            if self.aspectLocked:
+                self.fitInView(self.range, QtCore.Qt.KeepAspectRatio)
+            else:
+                self.fitInView(self.range, QtCore.Qt.IgnoreAspectRatio)
             
         self.sigRangeChanged.emit(self, self.range)
         
