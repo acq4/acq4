@@ -147,12 +147,12 @@ class AtlasCtrlWidget(QtGui.QWidget):
                 scanInfo = info.get('Scanner', None)
                 if scanInfo is None:
                     continue
-                tr = pg.Transform(info.get('userTransform', None))
+                tr = pg.SRTTransform(info.get('userTransform', None))
                 pos = tr.map(*scanInfo['position'])
                 prots.append((f, pos))
             elif self.dataModel.dirType(f) == 'ProtocolSequence':
                 info = f.info()
-                tr = pg.Transform(info.get('userTransform', None))
+                tr = pg.SRTTransform(info.get('userTransform', None))
                 for subName in f.subDirs():
                     subf = f[subName]
                     scanInfo = subf.info().get('Scanner', None)

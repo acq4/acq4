@@ -343,9 +343,9 @@ class ImageItem(GraphicsObject):
         if ev.button() != QtCore.Qt.LeftButton:
             ev.ignore()
             return
-
-        ev.accept()
-        self.drawAt(ev.pos(), ev)
+        elif self.drawKernel is not None:
+            ev.accept()
+            self.drawAt(ev.pos(), ev)
 
     def mouseClickEvent(self, ev):
         if ev.button() == QtCore.Qt.RightButton:
@@ -355,7 +355,6 @@ class ImageItem(GraphicsObject):
             self.drawAt(ev.pos(), ev)
 
     def raiseContextMenu(self, ev):
-        ## only raise menu if this terminal is removable
         menu = self.getMenu()
         if menu is None:
             return False
@@ -443,4 +442,8 @@ class ImageItem(GraphicsObject):
         self.drawMask = mask
 
     def removeClicked(self):
-        self.sigRemoveRequested.emit(self)
+        ## Send remove event only after we have exited the menu event handler
+        self.removeTimer = QtCore.QTimer()
+        self.removeTimer.timeout.connect(lambda: self.sigRemoveRequested.emit(self))
+        self.removeTimer.start(0)
+

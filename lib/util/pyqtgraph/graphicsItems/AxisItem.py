@@ -4,6 +4,7 @@ from pyqtgraph.Point import Point
 import pyqtgraph.debug as debug
 import weakref
 import pyqtgraph.functions as fn
+import pyqtgraph as pg
 from .GraphicsWidget import GraphicsWidget
 
 __all__ = ['AxisItem']
@@ -65,8 +66,6 @@ class AxisItem(GraphicsWidget):
             
         self.setRange(0, 1)
         
-        if pen is None:
-            pen = QtGui.QPen(QtGui.QColor(100, 100, 100))
         self.setPen(pen)
         
         self._linkedView = None
@@ -189,8 +188,18 @@ class AxisItem(GraphicsWidget):
         self.setMaximumWidth(w)
         self.setMinimumWidth(w)
         
+    def pen(self):
+        if self._pen is None:
+            return fn.mkPen(pg.getConfigOption('foreground'))
+        return self._pen
+        
     def setPen(self, pen):
-        self.pen = pen
+        """
+        Set the pen used for drawing text, axes, ticks, and grid lines.
+        if pen == None, the default will be used (see :func:`setConfigOption 
+        <pyqtgraph.setConfigOption>`)
+        """
+        self._pen = pen
         self.picture = None
         self.update()
         
@@ -210,7 +219,7 @@ class AxisItem(GraphicsWidget):
         if scale is None:
             #if self.drawLabel:  ## If there is a label, then we are free to rescale the values 
             if self.label.isVisible():
-                d = self.range[1] - self.range[0]
+                #d = self.range[1] - self.range[0]
                 #(scale, prefix) = fn.siScale(d / 2.)
                 (scale, prefix) = fn.siScale(max(abs(self.range[0]), abs(self.range[1])))
                 if self.labelUnits == '' and prefix in ['k', 'm']:  ## If we are not showing units, wait until 1e6 before scaling.
@@ -230,7 +239,7 @@ class AxisItem(GraphicsWidget):
     def setRange(self, mn, mx):
         """Set the range of values displayed by the axis.
         Usually this is handled automatically by linking the axis to a ViewBox with :func:`linkToView <pyqtgraph.AxisItem.linkToView>`"""
-        if mn in [np.nan, np.inf, -np.inf] or mx in [np.nan, np.inf, -np.inf]:
+        if any(np.isinf((mn, mx))) or any(np.isnan((mn, mx))):
             raise Exception("Not setting range to [%s, %s]" % (str(mn), str(mx)))
         self.range = [mn, mx]
         if self.autoScale:
@@ -259,7 +268,10 @@ class AxisItem(GraphicsWidget):
             view.sigXRangeChanged.connect(self.linkedViewChanged)
         
     def linkedViewChanged(self, view, newRange):
-        self.setRange(*newRange)
+        if self.orientation in ['right', 'left'] and view.yInverted():
+            self.setRange(*newRange[::-1])
+        else:
+            self.setRange(*newRange)
         
     def boundingRect(self):
         linkedView = self.linkedView()
@@ -365,12 +377,12 @@ class AxisItem(GraphicsWidget):
         By default, this method calls tickSpacing to determine the correct tick locations.
         This is a good method to override in subclasses.
         """
-        if self.logMode:
-            return self.logTickValues(minVal, maxVal, size)
+        minVal, maxVal = sorted((minVal, maxVal))
+        
             
         ticks = []
         tickLevels = self.tickSpacing(minVal, maxVal, size)
-        allValues = []
+        allValues = np.array([])
         for i in range(len(tickLevels)):
             spacing, offset = tickLevels[i]
             
@@ -380,21 +392,39 @@ class AxisItem(GraphicsWidget):
             ## determine number of ticks
             num = int((maxVal-start) / spacing) + 1
             values = np.arange(num) * spacing + start
-            values = filter(lambda x: x not in allValues, values) ## remove any ticks that were present in higher levels
-            allValues.extend(values)
+            ## remove any ticks that were present in higher levels
+            ## we assume here that if the difference between a tick value and a previously seen tick value
+            ## is less than spacing/100, then they are 'equal' and we can ignore the new tick.
+            values = filter(lambda x: all(np.abs(allValues-x) > spacing*0.01), values) 
+            allValues = np.concatenate([allValues, values])
             ticks.append((spacing, values))
+            
+        if self.logMode:
+            return self.logTickValues(minVal, maxVal, size, ticks)
+            
         return ticks
     
-    def logTickValues(self, minVal, maxVal, size):
-        v1 = int(np.floor(minVal))
-        v2 = int(np.ceil(maxVal))
-        major = list(range(v1+1, v2))
+    def logTickValues(self, minVal, maxVal, size, stdTicks):
         
-        minor = []
-        for v in range(v1, v2):
-            minor.extend(v + np.log10(np.arange(1, 10)))
-        minor = [x for x in minor if x>minVal and x<maxVal]
-        return [(1.0, major), (None, minor)]
+        ## start with the tick spacing given by tickValues().
+        ## Any level whose spacing is < 1 needs to be converted to log scale
+        
+        ticks = []
+        for (spacing, t) in stdTicks:
+            if spacing >= 1.0:
+                ticks.append((spacing, t))
+        
+        if len(ticks) < 3:
+            v1 = int(np.floor(minVal))
+            v2 = int(np.ceil(maxVal))
+            #major = list(range(v1+1, v2))
+            
+            minor = []
+            for v in range(v1, v2):
+                minor.extend(v + np.log10(np.arange(1, 10)))
+            minor = [x for x in minor if x>minVal and x<maxVal]
+            ticks.append((None, minor))
+        return ticks
 
     def tickStrings(self, values, scale, spacing):
         """Return the strings that should be placed next to ticks. This method is called 
@@ -469,12 +499,14 @@ class AxisItem(GraphicsWidget):
         #print tickStart, tickStop, span
         
         ## draw long line along axis
-        p.setPen(self.pen)
+        p.setPen(self.pen())
         p.drawLine(*span)
         p.translate(0.5,0)  ## resolves some damn pixel ambiguity
 
         ## determine size of this item in pixels
         points = list(map(self.mapToDevice, span))
+        if None in points:
+            return
         lengthInPixels = Point(points[1] - points[0]).length()
         if lengthInPixels == 0:
             return
@@ -532,7 +564,11 @@ class AxisItem(GraphicsWidget):
                 p2[axis] = tickStop
                 if self.grid is False:
                     p2[axis] += tickLength*tickDir
-                p.setPen(QtGui.QPen(QtGui.QColor(150, 150, 150, lineAlpha)))
+                tickPen = self.pen()
+                color = tickPen.color()
+                color.setAlpha(lineAlpha)
+                tickPen.setColor(color)
+                p.setPen(tickPen)
                 p.drawLine(Point(p1), Point(p2))
                 tickPositions[i].append(x)
         prof.mark('draw ticks')
@@ -584,7 +620,7 @@ class AxisItem(GraphicsWidget):
                     textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignTop
                     rect = QtCore.QRectF(x-100, tickStop+max(0,self.tickLength), 200, height)
 
-                p.setPen(QtGui.QPen(QtGui.QColor(150, 150, 150)))
+                p.setPen(self.pen())
                 p.drawText(rect, textFlags, vstr)
         prof.mark('draw text')
         prof.finish()

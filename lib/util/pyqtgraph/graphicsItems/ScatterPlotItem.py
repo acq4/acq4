@@ -36,7 +36,7 @@ for k, c in coords.items():
 def makeSymbolPixmap(size, pen, brush, symbol):
     ## Render a spot with the given parameters to a pixmap
     penPxWidth = max(np.ceil(pen.width()), 1)
-    image = QtGui.QImage(size+penPxWidth, size+penPxWidth, QtGui.QImage.Format_ARGB32_Premultiplied)
+    image = QtGui.QImage(int(size+penPxWidth), int(size+penPxWidth), QtGui.QImage.Format_ARGB32_Premultiplied)
     image.fill(0)
     p = QtGui.QPainter(image)
     p.setRenderHint(p.Antialiasing)
@@ -226,6 +226,7 @@ class ScatterPlotItem(GraphicsObject):
             self.setPointData(kargs['data'], dataSet=newData)
         
         #self.updateSpots()
+        self.prepareGeometryChange()
         self.bounds = [None, None]
         self.generateSpotItems()
         self.sigPlotChanged.emit(self)
@@ -330,7 +331,14 @@ class ScatterPlotItem(GraphicsObject):
         if isinstance(data, np.ndarray) or isinstance(data, list):
             if len(data) != len(dataSet):
                 raise Exception("Length of meta data does not match number of points (%d != %d)" % (len(data), len(dataSet)))
-        dataSet['data'] = data
+        
+        ## Bug: If data is a numpy record array, then items from that array must be copied to dataSet one at a time.
+        ## (otherwise they are converted to tuples and thus lose their field names.
+        if isinstance(data, np.ndarray) and len(data.dtype.fields) > 1:
+            for i, rec in enumerate(data):
+                dataSet['data'][i] = rec
+        else:
+            dataSet['data'] = data
         
     def setPxMode(self, mode, update=True):
         if self.opts['pxMode'] == mode:
@@ -389,7 +397,7 @@ class ScatterPlotItem(GraphicsObject):
         if frac >= 1.0 and self.bounds[ax] is not None:
             return self.bounds[ax]
         
-        self.prepareGeometryChange()
+        #self.prepareGeometryChange()
         if self.data is None or len(self.data) == 0:
             return (None, None)
         
@@ -457,6 +465,7 @@ class ScatterPlotItem(GraphicsObject):
         return QtCore.QRectF(xmn, ymn, xmx-xmn, ymx-ymn)
 
     def viewRangeChanged(self):
+        self.prepareGeometryChange()
         GraphicsObject.viewRangeChanged(self)
         self.bounds = [None, None]
         

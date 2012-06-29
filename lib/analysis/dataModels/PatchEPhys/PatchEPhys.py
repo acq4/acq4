@@ -254,7 +254,7 @@ def getClampPrimary(data):
     
 def getClampMode(data):
     """Given a clamp file handle or MetaArray, return the recording mode."""
-    if not isinstance(data, MetaArray):
+    if not (hasattr(data, 'implements') and data.implements('MetaArray')):
         if not isClampFile(data):
             raise Exception('%s not a clamp file.' %fh.shortName())
         data = data.read()

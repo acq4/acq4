@@ -5,6 +5,7 @@ from Map import Map
 import DatabaseGui
 import MapCtrlTemplate
 from lib.Manager import logMsg, logExc
+import pyqtgraph as pg
 
 class DBCtrl(QtGui.QWidget):
     """GUI for reading and writing to the database."""
@@ -235,11 +236,12 @@ class DBCtrl(QtGui.QWidget):
     def addScanClicked(self):
         try:
             #scan = self.getSelectedScanFromScanTree()
-            scan = self.selectedScan()
-            map = self.selectedMap()
-            map.addScans([scan])
-            self.writeMapRecord(map)
-            map.rebuildPlot()
+            scans = self.selectedScans()
+            for scan in scans:
+                map = self.selectedMap()
+                map.addScans([scan])
+                self.writeMapRecord(map)
+                map.rebuildPlot()
             self.ui.addScanBtn.success("OK.")
         except:
             self.ui.addScanBtn.failure("Error.")
@@ -296,20 +298,19 @@ class DBCtrl(QtGui.QWidget):
             item = item.parent()
         return item.map
         
-    def selectedScan(self):
-        item = self.ui.scanTree.currentItem()
-        #if not hasattr(item, 'scan'):
-            #return None
-        return item.scan
+    def selectedScans(self):
+        items = self.ui.scanTree.selectedItems()
+        #item = self.ui.scanTree.currentItem()
+        return [item.scan for item in items]
         
     
     def clearDBScan(self):
         try:
-            item = self.ui.scanTree.currentItem()
-            if item is None:
-                raise Exception("No scan selected.")
-            scan = item.scan
-            self.host.clearDBScan(scan)
+            scans = self.selectedScans()
+            if len(scans) == 0:
+                raise Exception("No scans selected.")
+            for scan in scans:
+                self.host.clearDBScan(scan)
             self.ui.clearDBScanBtn.success("Cleared.")
         except:
             self.ui.clearDBScanBtn.failure("Error.")
@@ -317,10 +318,15 @@ class DBCtrl(QtGui.QWidget):
     
     def storeDBScan(self):
         try:
-            scan = self.selectedScan()
-            if scan is None:
-                raise Exception("No scan selected.")
-            self.host.storeDBScan(scan)
+            scans = self.selectedScans()
+            if len(scans) == 0:
+                raise Exception("No scans selected.")
+            with pg.ProgressDialog('Storing scan data to DB..', maximum=len(scans)) as dlg:
+                for scan in scans:
+                    self.host.storeDBScan(scan)
+                    dlg += 1
+                    if dlg.wasCanceled():
+                        raise Exception('Store canceled by user')
             self.ui.storeDBScanBtn.success("Stored.")
         except:
             self.ui.storeDBScanBtn.failure("Error.")

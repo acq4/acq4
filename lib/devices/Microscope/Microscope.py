@@ -172,13 +172,13 @@ class Objective(OptomechDevice):
             self.setScale(config['scale'])
             
     #def updateTransform(self):
-        #tr = pg.Transform3D()
+        #tr = pg.SRTTransform3D()
         #tr.translate(self._offset)
         #tr.scale(self._scale)
         #self.setDeviceTransform(tr)
     
     def deviceTransform(self):
-        return pg.Transform3D(OptomechDevice.deviceTransform(self))
+        return pg.SRTTransform3D(OptomechDevice.deviceTransform(self))
     
     def setOffset(self, pos):
         tr = self.deviceTransform()

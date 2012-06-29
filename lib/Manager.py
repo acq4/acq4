@@ -21,6 +21,10 @@ import os.path as osp
 d = osp.dirname(osp.dirname(osp.abspath(__file__)))
 sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
 
+## install global exception handler for others to hook into.
+import pyqtgraph.exceptionHandling as exceptionHandling   
+exceptionHandling.setTracebackClearing(True)
+
 import time, atexit, weakref, reload
 from PyQt4 import QtCore, QtGui
 if not hasattr(QtCore, 'Signal'):
@@ -40,6 +44,9 @@ import pyqtgraph as pg
 from pyqtgraph import ProgressDialog
 from LogWindow import LogWindow
 from HelpfulException import HelpfulException
+
+
+
 
 LOG = None
 
@@ -94,6 +101,27 @@ def logExc(msg, *args, **kwargs):
         print "Can't log error message; no log created yet."
         print args
         print kwargs
+
+blockLogging = False
+def exceptionCallback(*args):
+    ## Called whenever there is an unhandled exception.
+    
+    ## unhandled exceptions generate an error message by default, but this
+    ## can be overridden by raising HelpfulException(msgType='...')
+    global blockLogging
+    if not blockLogging:  ## if an error occurs *while* trying to log another exception, disable any further logging to prevent recursion.
+        try:
+            blockLogging = True
+            logMsg("Unexpected error: ", exception=args, msgType='error')
+        except:
+            print "Error: Exception could no be logged."
+            original_excepthook(*sys.exc_info())
+        finally:
+            blockLogging = False
+exceptionHandling.register(exceptionCallback)        
+
+
+
 
 class Manager(QtCore.QObject):
     """Manager class is responsible for:

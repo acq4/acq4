@@ -1,6 +1,10 @@
 from pyqtgraph.Qt import QtGui, QtCore
 import pyqtgraph.functions as fn
 from .GraphicsWidget import GraphicsWidget
+## Must be imported at the end to avoid cyclic-dependency hell:
+from .ViewBox import ViewBox
+from .PlotItem import PlotItem
+from .LabelItem import LabelItem
 
 __all__ = ['GraphicsLayout']
 class GraphicsLayout(GraphicsWidget):
@@ -17,24 +21,32 @@ class GraphicsLayout(GraphicsWidget):
         self.border = border
         self.layout = QtGui.QGraphicsGridLayout()
         self.setLayout(self.layout)
-        self.items = {}
-        self.rows = {}
+        self.items = {}  ## item: [(row, col), (row, col), ...]  lists all cells occupied by the item
+        self.rows = {}   ## row: {col1: item1, col2: item2, ...}    maps cell location to item
         self.currentRow = 0
         self.currentCol = 0
+        self.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding))
+    
+    #def resizeEvent(self, ev):
+        #ret = GraphicsWidget.resizeEvent(self, ev)
+        #print self.pos(), self.mapToDevice(self.rect().topLeft())
+        #return ret
     
     def nextRow(self):
         """Advance to next row for automatic item placement"""
         self.currentRow += 1
-        self.currentCol = 0
+        self.currentCol = -1
+        self.nextColumn()
         
-    def nextColumn(self, colspan=1):
-        """Advance to next column, while returning the current column number 
+    def nextColumn(self):
+        """Advance to next available column
         (generally only for internal use--called by addItem)"""
-        self.currentCol += colspan
-        return self.currentCol-colspan
+        self.currentCol += 1
+        while self.getItem(self.currentRow, self.currentCol) is not None:
+            self.currentCol += 1
         
     def nextCol(self, *args, **kargs):
-        """Advance to next column for automatic item placement"""
+        """Alias of nextColumn"""
         return self.nextColumn(*args, **kargs)
         
     def addPlot(self, row=None, col=None, rowspan=1, colspan=1, **kargs):
@@ -62,6 +74,8 @@ class GraphicsLayout(GraphicsWidget):
         Create a LabelItem with *text* and place it in the next available cell (or in the cell specified)
         All extra keyword arguments are passed to :func:`LabelItem.__init__ <pyqtgraph.LabelItem.__init__>`
         Returns the created item.
+        
+        To create a vertical label, use *angle*=-90
         """
         text = LabelItem(text, **kargs)
         self.addItem(text, row, col, rowspan, colspan)
@@ -85,18 +99,24 @@ class GraphicsLayout(GraphicsWidget):
         if row is None:
             row = self.currentRow
         if col is None:
-            col = self.nextCol(colspan)
+            col = self.currentCol
             
-        if row not in self.rows:
-            self.rows[row] = {}
-        self.rows[row][col] = item
-        self.items[item] = (row, col)
+        self.items[item] = []
+        for i in range(rowspan):
+            for j in range(colspan):
+                row2 = row + i
+                col2 = col + j
+                if row2 not in self.rows:
+                    self.rows[row2] = {}
+                self.rows[row2][col2] = item
+                self.items[item].append((row2, col2))
         
         self.layout.addItem(item, row, col, rowspan, colspan)
+        self.nextColumn()
 
     def getItem(self, row, col):
-        """Return the item in (*row*, *col*)"""
-        return self.row[row][col]
+        """Return the item in (*row*, *col*). If the cell is empty, return None."""
+        return self.rows.get(row, {}).get(col, None)
 
     def boundingRect(self):
         return self.rect()
@@ -120,9 +140,10 @@ class GraphicsLayout(GraphicsWidget):
         ind = self.itemIndex(item)
         self.layout.removeAt(ind)
         self.scene().removeItem(item)
-        r,c = self.items[item]
+        
+        for r,c in self.items[item]:
+            del self.rows[r][c]
         del self.items[item]
-        del self.rows[r][c]
         self.update()
     
     def clear(self):
@@ -131,7 +152,3 @@ class GraphicsLayout(GraphicsWidget):
             self.removeItem(i)
 
 
-## Must be imported at the end to avoid cyclic-dependency hell:
-from .ViewBox import ViewBox
-from .PlotItem import PlotItem
-from .LabelItem import LabelItem

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 from Qt import QtCore, QtGui
 from Vector import Vector
-from Transform import Transform
+from SRTTransform import SRTTransform
 import pyqtgraph as pg
 import numpy as np
 import scipy.linalg
 
-class Transform3D(QtGui.QMatrix4x4):
+class SRTTransform3D(QtGui.QMatrix4x4):
     """4x4 Transform matrix that can always be represented as a combination of 3 matrices: scale * rotate * translate
     This transform has no shear; angles are always preserved.
     """
@@ -16,11 +16,11 @@ class Transform3D(QtGui.QMatrix4x4):
         if init is None:
             return
         if init.__class__ is QtGui.QTransform:
-            init = Transform(init)
+            init = SRTTransform(init)
         
         if isinstance(init, dict):
             self.restoreState(init)
-        elif isinstance(init, Transform3D):
+        elif isinstance(init, SRTTransform3D):
             self._state = {
                 'pos': Vector(init._state['pos']),
                 'scale': Vector(init._state['scale']),
@@ -28,7 +28,7 @@ class Transform3D(QtGui.QMatrix4x4):
                 'axis': Vector(init._state['axis']),
             }
             self.update()
-        elif isinstance(init, Transform):
+        elif isinstance(init, SRTTransform):
             self._state = {
                 'pos': Vector(init._state['pos']),
                 'scale': Vector(init._state['scale']),
@@ -39,7 +39,7 @@ class Transform3D(QtGui.QMatrix4x4):
         elif isinstance(init, QtGui.QMatrix4x4):
             self.setFromMatrix(init)
         else:
-            raise Exception("Cannot build Transform3D from argument type:", type(init))
+            raise Exception("Cannot build SRTTransform3D from argument type:", type(init))
 
         
     def getScale(self):
@@ -125,6 +125,10 @@ class Transform3D(QtGui.QMatrix4x4):
         
         ## scale is vector-length of first three columns
         scale = (m[:3,:3]**2).sum(axis=0)**0.5
+        ## see whether there is an inversion
+        z = np.cross(m[0, :3], m[1, :3])
+        if np.dot(z, m[2, :3]) < 0:
+            scale[1] *= -1  ## doesn't really matter which axis we invert
         self._state['scale'] = scale
         
         ## rotation axis is the eigenvector with eigenvalue=1
@@ -153,15 +157,15 @@ class Transform3D(QtGui.QMatrix4x4):
         
     def as2D(self):
         """Return a QTransform representing the x,y portion of this transform (if possible)"""
-        return pg.Transform(self)
+        return pg.SRTTransform(self)
 
     #def __div__(self, t):
         #"""A / B  ==  B^-1 * A"""
         #dt = t.inverted()[0] * self
-        #return Transform(dt)
+        #return SRTTransform(dt)
         
     #def __mul__(self, t):
-        #return Transform(QtGui.QTransform.__mul__(self, t))
+        #return SRTTransform(QtGui.QTransform.__mul__(self, t))
 
     def saveState(self):
         p = self._state['pos']
@@ -250,12 +254,12 @@ if __name__ == '__main__':
     s.addItem(l1)
     s.addItem(l2)
     
-    tr1 = Transform()
-    tr2 = Transform()
+    tr1 = SRTTransform()
+    tr2 = SRTTransform()
     tr3 = QtGui.QTransform()
     tr3.translate(20, 0)
     tr3.rotate(45)
-    print "QTransform -> Transform:", Transform(tr3)
+    print "QTransform -> Transform:", SRTTransform(tr3)
     
     print "tr1:", tr1
     
@@ -268,7 +272,7 @@ if __name__ == '__main__':
     
     print "tr2 * tr1 = ", tr2*tr1
     
-    tr4 = Transform()
+    tr4 = SRTTransform()
     tr4.scale(-1, 1)
     tr4.rotate(30)
     print "tr1 * tr4 = ", tr1*tr4

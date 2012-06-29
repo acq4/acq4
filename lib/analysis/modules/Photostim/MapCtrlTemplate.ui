@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>286</width>
+    <width>292</width>
     <height>371</height>
    </rect>
   </property>
@@ -93,6 +93,9 @@
       </property>
       <item row="0" column="0" colspan="3">
        <widget class="TreeWidget" name="scanTree">
+        <property name="selectionMode">
+         <enum>QAbstractItemView::ExtendedSelection</enum>
+        </property>
         <property name="headerHidden">
          <bool>false</bool>
         </property>

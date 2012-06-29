@@ -24,7 +24,7 @@ class GradientWidget(GraphicsView):
         self.setCacheMode(self.CacheNone)
         self.setRenderHints(QtGui.QPainter.Antialiasing | QtGui.QPainter.TextAntialiasing)
         self.setFrameStyle(QtGui.QFrame.NoFrame | QtGui.QFrame.Plain)
-        self.setBackgroundRole(QtGui.QPalette.NoRole)
+        #self.setBackgroundRole(QtGui.QPalette.NoRole)
         #self.setBackgroundBrush(QtGui.QBrush(QtCore.Qt.NoBrush))
         #self.setAutoFillBackground(False)
         #self.setAttribute(QtCore.Qt.WA_PaintOnScreen, False)

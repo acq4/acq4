@@ -33,7 +33,7 @@ class CSVFile(FileType):
         #if fileName[-len(ext):] != ext:
             #fileName = fileName + ext
             
-        #if not isinstance(data, MetaArray):
+        #if not (hasattr(data, 'implements') and data.implements('MetaArray')):
             #data = MetaArray(data)
         #data.write(os.path.join(dirHandle.name(), fileName), **args)
         #return fileName
