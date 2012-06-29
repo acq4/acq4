@@ -1,5 +1,6 @@
 from pyqtgraph.Qt import QtGui, QtCore
 import pyqtgraph.functions as fn
+import pyqtgraph as pg
 from .GraphicsWidget import GraphicsWidget
 
 
@@ -18,7 +19,7 @@ class LabelItem(GraphicsWidget):
         GraphicsWidget.__init__(self, parent)
         self.item = QtGui.QGraphicsTextItem(self)
         self.opts = {
-            'color': 'CCC',
+            'color': None,
             'justify': 'center'
         }
         self.opts.update(args)
@@ -43,15 +44,17 @@ class LabelItem(GraphicsWidget):
         ==================== ==============================
         """
         self.text = text
-        opts = self.opts.copy()
+        opts = self.opts
         for k in args:
             opts[k] = args[k]
         
         optlist = []
-        if 'color' in opts:
-            if isinstance(opts['color'], QtGui.QColor):
-                opts['color'] = fn.colorStr(opts['color'])[:6]
-            optlist.append('color: #' + opts['color'])
+        
+        color = self.opts['color']
+        if color is None:
+            color = pg.getConfigOption('foreground')
+        color = fn.mkColor(color)
+        optlist.append('color: #' + fn.colorStr(color)[:6])
         if 'size' in opts:
             optlist.append('font-size: ' + opts['size'])
         if 'bold' in opts and opts['bold'] in [True, False]:

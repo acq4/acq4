@@ -4,6 +4,7 @@ from pyqtgraph.Point import Point
 import pyqtgraph.debug as debug
 import weakref
 import pyqtgraph.functions as fn
+import pyqtgraph as pg
 from .GraphicsWidget import GraphicsWidget
 
 __all__ = ['AxisItem']
@@ -65,8 +66,6 @@ class AxisItem(GraphicsWidget):
             
         self.setRange(0, 1)
         
-        if pen is None:
-            pen = QtGui.QPen(QtGui.QColor(100, 100, 100))
         self.setPen(pen)
         
         self._linkedView = None
@@ -189,8 +188,18 @@ class AxisItem(GraphicsWidget):
         self.setMaximumWidth(w)
         self.setMinimumWidth(w)
         
+    def pen(self):
+        if self._pen is None:
+            return fn.mkPen(pg.getConfigOption('foreground'))
+        return self._pen
+        
     def setPen(self, pen):
-        self.pen = pen
+        """
+        Set the pen used for drawing text, axes, ticks, and grid lines.
+        if pen == None, the default will be used (see :func:`setConfigOption 
+        <pyqtgraph.setConfigOption>`)
+        """
+        self._pen = pen
         self.picture = None
         self.update()
         
@@ -490,7 +499,7 @@ class AxisItem(GraphicsWidget):
         #print tickStart, tickStop, span
         
         ## draw long line along axis
-        p.setPen(self.pen)
+        p.setPen(self.pen())
         p.drawLine(*span)
         p.translate(0.5,0)  ## resolves some damn pixel ambiguity
 
@@ -555,7 +564,11 @@ class AxisItem(GraphicsWidget):
                 p2[axis] = tickStop
                 if self.grid is False:
                     p2[axis] += tickLength*tickDir
-                p.setPen(QtGui.QPen(QtGui.QColor(150, 150, 150, lineAlpha)))
+                tickPen = self.pen()
+                color = tickPen.color()
+                color.setAlpha(lineAlpha)
+                tickPen.setColor(color)
+                p.setPen(tickPen)
                 p.drawLine(Point(p1), Point(p2))
                 tickPositions[i].append(x)
         prof.mark('draw ticks')
@@ -607,7 +620,7 @@ class AxisItem(GraphicsWidget):
                     textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignTop
                     rect = QtCore.QRectF(x-100, tickStop+max(0,self.tickLength), 200, height)
 
-                p.setPen(QtGui.QPen(QtGui.QColor(150, 150, 150)))
+                p.setPen(self.pen())
                 p.drawText(rect, textFlags, vstr)
         prof.mark('draw text')
         prof.finish()
