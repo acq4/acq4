@@ -1166,7 +1166,7 @@ class ViewBox(GraphicsWidget):
 
     def updateBackground(self):
         bg = self.state['background']
-        print self, bg
+        #print self, bg
         if bg is None:
             self.background.hide()
         else:
