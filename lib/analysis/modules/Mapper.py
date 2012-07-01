@@ -22,6 +22,9 @@ Features:
     of specific event features -- amplitude, shape, etc. This data is used to 
     determine:
         - For each event, the probability that it is evoked / spontaneous / direct
+            - If we can get a good measure of this, we should also be able to formulate
+              a distribution describing spontaneous events. We can then ask how much of the 
+              actual distribution exceeds this and automatically partition events into evoked / spont.
         - For each site, the probability that it contains evoked and/or direct events
     This should have no notion of 'episodes' -- events at the beginning of one trace
     may have been evoked by the previous stim.
@@ -96,20 +99,23 @@ Notes on probability computation:
 
 import numpy as np
 import scipy.stats as stats
+import scipy.misc
 import pyqtgraph as pg
 import pyqtgraph.console
 import user
 import pyqtgraph.multiprocess as mp
 
-def poissonProcess(rate, tmax):
+def poissonProcess(rate, tmax=None, n=None):
     """Simulate a poisson process; return a list of event times"""
     events = []
     t = 0
     while True:
         t += np.random.exponential(1./rate)
-        if t > tmax:
+        if tmax is not None and t > tmax:
             break
         events.append(t)
+        if n is not None and len(events) >= n:
+            break
     return np.array(events)
 
 def poissonProb(events, xvals, rate, correctForSelection=False):
@@ -239,7 +245,192 @@ def poissonIntegralBlame(ev, rate, xMin, xMax):
         #ps = ps2
     #return np.array(pp)
     
+def productlog(x):
+    n = np.arange(1, 30, dtype=float)
+    return ((x ** n) * ((-n) ** (n-1)) / scipy.misc.factorial(n)).sum()
     
+    
+    
+def productlog(x, prec=1e-12):
+    """
+    Stolen from py-fcm:
+    Productlog or LambertW function computes principal solution for w in f(w) = w*exp(w).
+    """ 
+    #  fast estimate with closed-form approximation
+    if (x <= 500):
+        lxl = np.log(x + 1.0)
+        return 0.665 * (1+0.0195*lxl) * lxl + 0.04
+    else:
+        return np.log(x - 4.0) - (1.0 - 1.0/np.log(x)) * np.log(np.log(x))
+
+def poissonProb(n, t, l):
+    """
+    For a poisson process, return the probability of seeing at least *n* events in *t* seconds given
+    that the process has a mean rate *l* AND the last event occurs at time *t*.
+    """
+    return stats.poisson(l*t).cdf(n-1)   ## using n-1 corrects for the fact that we _know_ one of the events is at the end.
+    
+def maxPoissonProb(ev, l):
+    """
+    For a list of events, compute poissonImp for each event; return the maximum and the index of the maximum.
+    """
+    pi = poissonProb(np.arange(1, len(ev)+1), ev, l)
+    ind = np.argmax(pi)
+    #norm = 1. / 2.**(1./len(ev))  ## taking max artificialy increases probability value; re-normalize
+    #return pi[ind]/norm, ind
+    #return pi[ind]**len(ev), ind   ## raise to power of len(ev) in order to flatten distribution.
+    return [pi[ind], ind] + list(pi)
+    
+#def poissonImp(n, t, l):
+    #"""
+    #For a poisson process, return the improbability of seeing at least *n* events in *t* seconds given
+    #that the process has a mean rate *l* AND the last event occurs at time *t*.
+    #"""
+    #return 1.0 / (1.0 - stats.poisson(l*t).cdf(n-1))   ## using n-1 corrects for the fact that we _know_ one of the events is at the end.
+    ##l = l * t + 1
+    ##i = np.arange(0, n+1)
+    ##cdf = np.exp(-l) * (l**i / scipy.misc.factorial(i)).sum()
+    ##return 1.0 / (1.0 - cdf)
+
+#def maxPoissonImp(ev, l):
+    #"""
+    #For a list of events, compute poissonImp for each event; return the maximum and the index of the maximum.
+    #"""
+    #pi = poissonImp(np.arange(1, len(ev)+1), ev, l)
+    #ind = np.argmax(pi)
+    #return pi[ind], ind
+    
+#def timeOfPoissonImp(p, n, l, guess=0.1):
+    #"""
+    #Solve p == poissonImp(n, t, l) for t
+    #"""
+    #def erf(t):
+        #return p - poissonImp(n, t, l)
+    #return scipy.optimize.leastsq(erf, guess)[0][0]
+    
+#def polyRedist(v, x):
+    #return v[0] + v[1] * x + v[2] * x**2 + v[3] * x**3 + v[4] * x**4
+
+#def polyRedistFit(ev1, ev2):
+    #"""
+    #Find polynomial coefficients mapping ev1 onto ev2
+    #"""
+    #h2 = np.histogram(ev2, bins=200)
+    #def err(v):
+        #h1 = np.histogram(polyRedist(v, ev1), bins=200)
+        ##print v, ((h2[0]-h1[0])**2).sum()
+        #return h2[0] - h1[0]
+    #return scipy.optimize.leastsq(err, x0=(0, 1, 0, 0, 0))
+    
+#def ellipseRedist(v, x):
+    #x0, x1 = v
+    #xp = x0 + x * (x1 - x0)
+    #y0 = -(1-x0**2)**0.5
+    #y1 = -(1-x1**2)**0.5
+    #yp = -(1-xp**2)**0.5
+    #y = (yp - y0) / (y1 - y0)
+    #return y
+
+#def ellipseRedistFit(ev1, ev2, **kwds):
+    #"""
+    #Find circular coefficients mapping ev1 onto ev2
+    #"""
+    #h2 = np.histogram(ev2, bins=200)
+    #def err(v):
+        #print v
+        #v = (v[0], min(v[1], 0.9999999))
+        #h1 = np.histogram(ellipseRedist(v, ev1), bins=200)
+        #return ((h2[0][-50:] - h1[0][-50:])**2).sum()
+    #return scipy.optimize.fmin(err, x0=(0.995, 0.9995), **kwds)
+
+#def poissonImpInv(x, l):
+    #return -(2 + productlog(-x / np.exp(3))) / l
+
+rate = 15.
+trials = 2000000
+
+# create a seties of poisson event trains with n=1
+#ev1 = np.vstack([poissonProcess(rate=rate, n=1) for i in xrange(trials)])
+#mpi1 = np.array([maxPoissonImp(e, rate) for e in ev1])
+
+
+# create a series of poisson event trains with n=2
+app = pg.mkQApp()
+plt = pg.plot()
+pp = []
+mpp = []
+for n in [2]:#,3,4,5]:
+    ev2 = np.vstack([poissonProcess(rate=rate, n=n) for i in xrange(trials)])
+    #pi2 = np.array([poissonImp(n, e[-1], rate) for e in ev2])
+    #mpi2 = np.array([maxPoissonImp(e, rate) for e in ev2])
+    #mpi20 = mpi2[mpi2[:,1]==0][:,0]
+    #mpi21 = mpi2[mpi2[:,1]==1][:,0]
+    app.processEvents()
+    pp2 = np.array([poissonProb(n, e[-1], rate) for e in ev2])
+    app.processEvents()
+    mpp2 = np.array([maxPoissonProb(e, rate) for e in ev2])
+
+    #break
+    
+    #print "\nPoisson improbability (n=%d):" % n
+    #for i in range(1,4):
+        #print "  %d: %0.2f%%" % (10**i, (pi2>10**i).sum() * 100. / trials)
+    #print "Max poisson improbability (n=%d):" % n
+    #for i in range(1,4):
+        #print "  %d: %0.2f%%" % (10**i, (mpi2[:,0]>10**i).sum() * 100. / trials)
+    print "\nPoisson probability (n=%d):" % n
+    for i in range(1,4):
+        thresh = 1.-10**-i
+        print "  %0.2f: %0.2f%%" % (thresh, (pp2>thresh).sum() * 100. / trials)
+    print "Max poisson probability (n=%d):" % n
+    for i in range(1,4):
+        thresh = 1.-10**-i
+        print "  %0.2f: %0.2f%%" % (thresh, (mpp2[:,0]>thresh).sum() * 100. / trials)
+
+
+    h = np.histogram(pp2, bins=100)
+    plt.plot(h[1][1:], h[0], pen='g')
+    h = np.histogram(mpp2[:,0], bins=100)
+    plt.plot(h[1][1:], h[0], pen='y')
+    app.processEvents()
+    
+    pp.append(pp2)
+    mpp.append(mpp2)
+
+
+mpp1 = mpp[0][mpp[0][:,1]==0]
+mpp2 = mpp[0][mpp[0][:,1]==1]
+h1 = np.histogram(mpp1[:,3], bins=100)
+h2 = np.histogram(mpp1[:,2], bins=100)
+h3 = np.histogram(mpp2[:,2], bins=100)
+h4 = np.histogram(mpp2[:,3], bins=100)
+pg.plot(h1[1][1:], (h2[0]+h4[0])-(h1[0]+h3[0]))
+
+raise SystemExit(0)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## show that poissonProcess works as expected
 #plt = pg.plot()
 #for rate in [3, 10, 20]:
@@ -345,11 +536,12 @@ def poissonIntegralBlame(ev, rate, xMin, xMax):
 #print ev
 #recursiveBlame(ev, list(range(len(ev))), rate)
 
-
 app = pg.mkQApp()
-con = pyqtgraph.console.ConsoleWidget()
-con.show()
-con.catchAllExceptions()
+#con = pyqtgraph.console.ConsoleWidget()
+#con.show()
+#con.catchAllExceptions()
+
+
 
 ## Test ability of poissonScore to predict proability of seeing false positives
 
