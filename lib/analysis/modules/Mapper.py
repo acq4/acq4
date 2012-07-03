@@ -347,19 +347,21 @@ def maxPoissonProb(ev, l):
     #return -(2 + productlog(-x / np.exp(3))) / l
 
 rate = 15.
-trials = 2000000
+trials = 1000000
 
-# create a seties of poisson event trains with n=1
+# create a series of poisson event trains with n=1
 #ev1 = np.vstack([poissonProcess(rate=rate, n=1) for i in xrange(trials)])
 #mpi1 = np.array([maxPoissonImp(e, rate) for e in ev1])
 
 
 # create a series of poisson event trains with n=2
 app = pg.mkQApp()
-plt = pg.plot()
+plt = pg.plot(title='Distribution of probability values')
+plt2 = pg.plot(title='Cumulative distribution of probability values')
 pp = []
 mpp = []
-for n in [2]:#,3,4,5]:
+nval = np.array([2,3,5,8,12,17,23,30])
+for n in nval:
     ev2 = np.vstack([poissonProcess(rate=rate, n=n) for i in xrange(trials)])
     #pi2 = np.array([poissonImp(n, e[-1], rate) for e in ev2])
     #mpi2 = np.array([maxPoissonImp(e, rate) for e in ev2])
@@ -398,15 +400,70 @@ for n in [2]:#,3,4,5]:
     mpp.append(mpp2)
 
 
-mpp1 = mpp[0][mpp[0][:,1]==0]
-mpp2 = mpp[0][mpp[0][:,1]==1]
-h1 = np.histogram(mpp1[:,3], bins=100)
-h2 = np.histogram(mpp1[:,2], bins=100)
-h3 = np.histogram(mpp2[:,2], bins=100)
-h4 = np.histogram(mpp2[:,3], bins=100)
-pg.plot(h1[1][1:], (h2[0]+h4[0])-(h1[0]+h3[0]))
+#mpp1 = mpp[0][mpp[0][:,1]==0]
+#mpp2 = mpp[0][mpp[0][:,1]==1]
+#h1 = np.histogram(mpp1[:,3], bins=100)
+#h2 = np.histogram(mpp1[:,2], bins=100)
+#h3 = np.histogram(mpp2[:,2], bins=100)
+#h4 = np.histogram(mpp2[:,3], bins=100)
+#pg.plot(h1[1][1:], (h2[0]+h4[0])-(h1[0]+h3[0]))
 
-raise SystemExit(0)
+
+#p = []
+#for i in range(len(mpp)):
+    #p.append(plt2.plot(pen=(i,10)))
+#a = array([ 0.95 ,  0.93 ,  0.91 ,  0.89 ,  0.88 ,  0.865,  0.855,  0.855])
+#b = array([ 1.49,  1.86,  2.35,  2.78,  3.2 ,  3.48,  3.7 ,  4.07])
+
+#scipy.optimize.fmin(lambda v: ((b - (1.+ v[0] * (nval-1) ** v[1]))**2).sum(), x0=[1., 2.])
+#scipy.optimize.fmin(lambda v: ((b - (1.+ v[0] * (nval-1) ** v[1]))**2).sum(), x0=[1., 2.])
+
+### plot a reference line for a uniform distribution of probability vaules
+#uniformEvents = np.concatenate([mpp[0][:,2], mpp[1][:,2], mpp[2][:,2], mpp[3][:,2]])
+#h = np.histogram(uniformEvents, bins=500)
+#h[0][1:] += h[0][:-1]
+#plt2.plot(h[1][1:], h[0] / float(len(uniformEvents)))
+
+#def redist(i):
+    #global a, b, mpp
+    #return (1.0 - (1.0 - mpp[i][:,0])**a[i])**b[i]
+
+#def replot(i):
+    #ev = redist(i)
+    #h = np.histogram(ev, bins=500)
+    #h[0][1:] += h[0][:-1]
+    #p[i].setData(h[1][1:], h[0] / float(len(ev)))
+
+    
+## Approach:
+## look at scoreatpercentile across different values of n
+pervals = 100*(1.-np.logspace(-4, -.2, 40))
+per = np.zeros((8,len(pervals)))
+for i in range(8):
+  for j in range(len(pervals)):
+    per[i,j] = scipy.stats.scoreatpercentile(mpp[i][:,0], pervals[j])
+
+## Note that (1-np.array(per[i])) * nval**1.36  
+## makes a very nearly linear set of points
+plt4 = pg.plot()
+for i in range(len(pervals)):
+    plt4.plot(nval, (1.-per[:,i])*nval**1.36, symbol='o')
+
+regress = []
+for i in range(len(pervals)):
+    reg = scipy.stats.linregress(nval, (1-np.array(per[:,i])) * nval**1.36)
+    regress.append(reg)
+    x = np.array([-10, 40])
+    plt4.plot(x, reg[0] * x + reg[1], pen='r')
+
+plt5 = pg.plot()
+plt5.plot(100-pervals, [reg[0] for reg in regress], symbol='o')  ## note: plotting this on log-log turns it linear.
+## log(y) = m log(x) + b
+## note also that this means the relationship is y = A x^B
+fit = scipy.optimize.fmin(lambda v: (( np.log(np.array([reg[0] for reg in regress])) - (np.log(v[0]) + np.log(100-pervals) * v[1]) )**2).sum(), [1, 2])
+plt5.plot(100-pervals, fit[0] * (100-pervals) ** fit[1], pen='r')
+
+raise Exception()
 
 
 
