@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-REVISION = '621'
+REVISION = None
 
 ### import all the goodies and add some helper functions for easy CLI use
 
@@ -11,7 +11,7 @@ from .Qt import QtGui
 #if QtGui.QApplication.instance() is None:
     #app = QtGui.QApplication([])
 
-import sys
+import os, sys
 
 ## check python version
 if sys.version_info[0] < 2 or (sys.version_info[0] == 2 and sys.version_info[1] != 7):
@@ -49,12 +49,19 @@ def getConfigOption(opt):
 
 
 def systemInfo():
-    print "sys.platform:", sys.platform
-    print "sys.version:", sys.version
+    print("sys.platform: %s" % sys.platform)
+    print("sys.version: %s" % sys.version)
     from .Qt import VERSION_INFO
-    print "qt bindings:", VERSION_INFO
-    print "pyqtgraph:", REVISION
-    print "config:"
+    print("qt bindings: %s" % VERSION_INFO)
+    
+    global REVISION
+    if REVISION is None:  ## this code was probably checked out from bzr; look up the last-revision file
+        lastRevFile = os.path.join(os.path.dirname(__file__), '.bzr', 'branch', 'last-revision')
+        if os.path.exists(lastRevFile):
+            REVISION = open(lastRevFile, 'r').read().strip()
+    
+    print("pyqtgraph: %s" % REVISION)
+    print("config:")
     import pprint
     pprint.pprint(CONFIG_OPTIONS)
 
@@ -119,7 +126,7 @@ def importAll(path, excludes=()):
                 globals()[k] = getattr(mod, k)
 
 importAll('graphicsItems')
-importAll('widgets', excludes=['MatplotlibWidget'])
+importAll('widgets', excludes=['MatplotlibWidget', 'RemoteGraphicsView'])
 
 from .imageview import *
 from .WidgetGroup import *
