@@ -266,15 +266,15 @@ def productlog(x, prec=1e-12):
 def poissonProb(n, t, l):
     """
     For a poisson process, return the probability of seeing at least *n* events in *t* seconds given
-    that the process has a mean rate *l* AND the last event occurs at time *t*.
+    that the process has a mean rate *l*.
     """
-    return stats.poisson(l*t).cdf(n-1)   ## using n-1 corrects for the fact that we _know_ one of the events is at the end.
+    return stats.poisson(l*t).cdf(n)   
     
 def maxPoissonProb(ev, l):
     """
     For a list of events, compute poissonImp for each event; return the maximum and the index of the maximum.
     """
-    pi = poissonProb(np.arange(1, len(ev)+1), ev, l)
+    pi = poissonProb(np.arange(len(ev)), ev, l)  ## note that by using n=0 to len(ev)-1, we correct for the fact that the time window always ends at the last event
     ind = np.argmax(pi)
     #norm = 1. / 2.**(1./len(ev))  ## taking max artificialy increases probability value; re-normalize
     #return pi[ind]/norm, ind
