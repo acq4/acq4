@@ -17,6 +17,7 @@ examples = OrderedDict([
     ('Plot speed test', 'PlotSpeedTest.py'),
     ('Data Slicing', 'DataSlicing.py'),
     ('Plot Customization', 'customPlot.py'),
+    ('Dock widgets', 'dockarea.py'),
     ('GraphicsItems', OrderedDict([
         ('Scatter Plot', 'ScatterPlot.py'),
         #('PlotItem', 'PlotItem.py'),
