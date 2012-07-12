@@ -118,117 +118,117 @@ def poissonProcess(rate, tmax=None, n=None):
             break
     return np.array(events)
 
-def poissonProb(events, xvals, rate, correctForSelection=False):
-    ## Given a list of event times,
-    ## evaluate poisson cdf of events for multiple windows (0 to x for x in xvals)
-    ## for each value x in xvals, returns the probability that events from 0 to x
-    ## would be produced by a poisson process with the given rate.
-    #n = (events[:, np.newaxis] < xvals[np.newaxis,:]).sum(axis=0)
-    #p = stats.poisson(rate * x)
+#def poissonProb(events, xvals, rate, correctForSelection=False):
+    ### Given a list of event times,
+    ### evaluate poisson cdf of events for multiple windows (0 to x for x in xvals)
+    ### for each value x in xvals, returns the probability that events from 0 to x
+    ### would be produced by a poisson process with the given rate.
+    ##n = (events[:, np.newaxis] < xvals[np.newaxis,:]).sum(axis=0)
+    ##p = stats.poisson(rate * x)
     
-    ## In the case that events == xvals (the windows to evaluate are _selected_ 
-    ## based on the event times), we must apply a correction factor to the expectation
-    ## value: rate*x  =>  rate * (x + 1/rate). This effectively increases the size of the window
-    ## by one period, which reduces the probability to the expected value.
+    ### In the case that events == xvals (the windows to evaluate are _selected_ 
+    ### based on the event times), we must apply a correction factor to the expectation
+    ### value: rate*x  =>  rate * (x + 1/rate). This effectively increases the size of the window
+    ### by one period, which reduces the probability to the expected value.
     
-    ## return 1.0 - p.cdf(n)
+    ### return 1.0 - p.cdf(n)
     
-    y = []
-    for i in range(len(xvals)):
-        x = xvals[i]
-        e = 0
-        if correctForSelection:
-            e = 1./rate
-        y.append(stats.poisson(rate * (x+e)).cdf(i+1))
-    return 1.0-np.array(y)
+    #y = []
+    #for i in range(len(xvals)):
+        #x = xvals[i]
+        #e = 0
+        #if correctForSelection:
+            #e = 1./rate
+        #y.append(stats.poisson(rate * (x+e)).cdf(i+1))
+    #return 1.0-np.array(y)
 
-def poissonScore(events, rate):
-    ## 1) For each event, measure the probability that the event and those preceding
-    ##    it could be produced by a poisson process
-    ## 2) Of the probabilities computed in 1), select the minimum value
-    ## 3) X = 1 / min to convert from probability to improbability
-    ## 4) apply some magic: Y = sqrt(X) / 2  -- don't know why this works, but
-    ##    it scales the value such that 1 in Y random trials will produce a score >= Y
+#def poissonScore(events, rate):
+    ### 1) For each event, measure the probability that the event and those preceding
+    ###    it could be produced by a poisson process
+    ### 2) Of the probabilities computed in 1), select the minimum value
+    ### 3) X = 1 / min to convert from probability to improbability
+    ### 4) apply some magic: Y = sqrt(X) / 2  -- don't know why this works, but
+    ###    it scales the value such that 1 in Y random trials will produce a score >= Y
     
-    pp = poissonProb(events, events, rate, correctForSelection=True)
-    if len(pp) == 0:
-        return 1.0
-    else:
-        return ((1.0 / pp.min())**1.0) / (rate ** 0.5)
-
-        
-#def poissonIntegral(events, rate, tMin, tMax):
-    ## This version sucks
-    #pp = poissonProb(events, events, rate)
+    #pp = poissonProb(events, events, rate, correctForSelection=True)
     #if len(pp) == 0:
         #return 1.0
     #else:
-        #return (1.0 / pp.mean())**0.5
-        
-poissonIntCache = {}
-def poissonIntegral(events, rate, tMin, tMax, plot=False):
-    
-    global poissonIntCache
-    xvals = np.linspace(tMin, tMax, 1000)
-    dt = xvals[1]-xvals[0]
-    tot = 0
-    t = tMin
-    nev = 0
-    allprobs = []
-    events = list(events)
-    events.sort()
-    events.append(tMax)
-    for ev in events:
-        if ev < tMin:
-            continue
-        if ev > tMax:
-            ev = tMax
-        i1 = int((t-tMin) / dt)
-        i2 = int((ev-tMin) / dt)
-        if nev not in poissonIntCache:
-            poissonIntCache[nev] = np.array([1-stats.poisson(rate * x).cdf(nev) for x in xvals])
-        probs = poissonIntCache[nev][i1:i2]
-        tot += (1./probs).sum()
-        allprobs.append(1./probs)
-        t = ev
-        nev += 1
-        if ev == tMax:
-            break
-        
-    if plot:
-        y = np.concatenate(allprobs)
-        pg.plot(x=xvals[:len(y)], y=y)
-    return tot * dt
-    #return (1. / poissonProb(events, xvals, rate)).sum() ** 0.5
-        
-def poissonScoreBlame(ev, rate):
-    ## estimate how much each event contributes to the poisson-score of a list of events.
-    if len(ev) == 0:
-        return []
-    pp = []
-    for i in range(len(ev)):
-        ev2 = list(ev)
-        ev2.pop(i)
-        #pp.append(poissonScore(ev, rate) / poissonScore(ev2, rate))
-        pp1 = 1. / poissonProb(ev, ev[i:], rate)
-        pp2 = 1. / poissonProb(ev2, ev[i:], rate)
-        pp.append((pp1 / pp2).max())
-    ret = np.array(pp)
-    assert not any(np.isnan(pp))
-    return ret
+        #return ((1.0 / pp.min())**1.0) / (rate ** 0.5)
 
-def poissonIntegralBlame(ev, rate, xMin, xMax):
-    ## estimate how much each event contributes to the poisson-integral of a list of events.
-    pp = []
-    for i in range(len(ev)):
-        ev2 = list(ev)
-        ev2.pop(i)
-        pp1 = poissonIntegral(ev, rate, xMin, xMax)
-        pp2 = poissonIntegral(ev2, rate, xMin, xMax)
-        pp.append(pp1 / pp2)
-    ret = np.array(pp)
-    assert not any(np.isnan(pp))
-    return ret
+        
+##def poissonIntegral(events, rate, tMin, tMax):
+    ### This version sucks
+    ##pp = poissonProb(events, events, rate)
+    ##if len(pp) == 0:
+        ##return 1.0
+    ##else:
+        ##return (1.0 / pp.mean())**0.5
+        
+#poissonIntCache = {}
+#def poissonIntegral(events, rate, tMin, tMax, plot=False):
+    
+    #global poissonIntCache
+    #xvals = np.linspace(tMin, tMax, 1000)
+    #dt = xvals[1]-xvals[0]
+    #tot = 0
+    #t = tMin
+    #nev = 0
+    #allprobs = []
+    #events = list(events)
+    #events.sort()
+    #events.append(tMax)
+    #for ev in events:
+        #if ev < tMin:
+            #continue
+        #if ev > tMax:
+            #ev = tMax
+        #i1 = int((t-tMin) / dt)
+        #i2 = int((ev-tMin) / dt)
+        #if nev not in poissonIntCache:
+            #poissonIntCache[nev] = np.array([1-stats.poisson(rate * x).cdf(nev) for x in xvals])
+        #probs = poissonIntCache[nev][i1:i2]
+        #tot += (1./probs).sum()
+        #allprobs.append(1./probs)
+        #t = ev
+        #nev += 1
+        #if ev == tMax:
+            #break
+        
+    #if plot:
+        #y = np.concatenate(allprobs)
+        #pg.plot(x=xvals[:len(y)], y=y)
+    #return tot * dt
+    ##return (1. / poissonProb(events, xvals, rate)).sum() ** 0.5
+        
+#def poissonScoreBlame(ev, rate):
+    ### estimate how much each event contributes to the poisson-score of a list of events.
+    #if len(ev) == 0:
+        #return []
+    #pp = []
+    #for i in range(len(ev)):
+        #ev2 = list(ev)
+        #ev2.pop(i)
+        ##pp.append(poissonScore(ev, rate) / poissonScore(ev2, rate))
+        #pp1 = 1. / poissonProb(ev, ev[i:], rate)
+        #pp2 = 1. / poissonProb(ev2, ev[i:], rate)
+        #pp.append((pp1 / pp2).max())
+    #ret = np.array(pp)
+    #assert not any(np.isnan(pp))
+    #return ret
+
+#def poissonIntegralBlame(ev, rate, xMin, xMax):
+    ### estimate how much each event contributes to the poisson-integral of a list of events.
+    #pp = []
+    #for i in range(len(ev)):
+        #ev2 = list(ev)
+        #ev2.pop(i)
+        #pp1 = poissonIntegral(ev, rate, xMin, xMax)
+        #pp2 = poissonIntegral(ev2, rate, xMin, xMax)
+        #pp.append(pp1 / pp2)
+    #ret = np.array(pp)
+    #assert not any(np.isnan(pp))
+    #return ret
 
 #def poissonBlame(ev, rate):
     ### estimate how much each event contributes to the poisson-score of a list of events.
@@ -245,23 +245,23 @@ def poissonIntegralBlame(ev, rate, xMin, xMax):
         #ps = ps2
     #return np.array(pp)
     
-def productlog(x):
-    n = np.arange(1, 30, dtype=float)
-    return ((x ** n) * ((-n) ** (n-1)) / scipy.misc.factorial(n)).sum()
+#def productlog(x):
+    #n = np.arange(1, 30, dtype=float)
+    #return ((x ** n) * ((-n) ** (n-1)) / scipy.misc.factorial(n)).sum()
     
     
     
-def productlog(x, prec=1e-12):
-    """
-    Stolen from py-fcm:
-    Productlog or LambertW function computes principal solution for w in f(w) = w*exp(w).
-    """ 
-    #  fast estimate with closed-form approximation
-    if (x <= 500):
-        lxl = np.log(x + 1.0)
-        return 0.665 * (1+0.0195*lxl) * lxl + 0.04
-    else:
-        return np.log(x - 4.0) - (1.0 - 1.0/np.log(x)) * np.log(np.log(x))
+#def productlog(x, prec=1e-12):
+    #"""
+    #Stolen from py-fcm:
+    #Productlog or LambertW function computes principal solution for w in f(w) = w*exp(w).
+    #""" 
+    ##  fast estimate with closed-form approximation
+    #if (x <= 500):
+        #lxl = np.log(x + 1.0)
+        #return 0.665 * (1+0.0195*lxl) * lxl + 0.04
+    #else:
+        #return np.log(x - 4.0) - (1.0 - 1.0/np.log(x)) * np.log(np.log(x))
 
 def poissonProb(n, t, l):
     """
@@ -280,7 +280,16 @@ def maxPoissonProb(ev, l):
     #return pi[ind]/norm, ind
     #return pi[ind]**len(ev), ind   ## raise to power of len(ev) in order to flatten distribution.
     return [pi[ind], ind] + list(pi)
+ 
+def maxPoissonBlame(ev, l):
+    """
+    For a list of events, compute the amount that each event contributes to the max poisson probability _after_ the event.
+    """
     
+    
+    
+    
+ 
 #def poissonImp(n, t, l):
     #"""
     #For a poisson process, return the improbability of seeing at least *n* events in *t* seconds given
@@ -346,58 +355,58 @@ def maxPoissonProb(ev, l):
 #def poissonImpInv(x, l):
     #return -(2 + productlog(-x / np.exp(3))) / l
 
-rate = 15.
-trials = 1000000
+#rate = 15.
+#trials = 1000000
 
-# create a series of poisson event trains with n=1
-#ev1 = np.vstack([poissonProcess(rate=rate, n=1) for i in xrange(trials)])
-#mpi1 = np.array([maxPoissonImp(e, rate) for e in ev1])
+## create a series of poisson event trains with n=1
+##ev1 = np.vstack([poissonProcess(rate=rate, n=1) for i in xrange(trials)])
+##mpi1 = np.array([maxPoissonImp(e, rate) for e in ev1])
 
 
-# create a series of poisson event trains with n=2
-app = pg.mkQApp()
-plt = pg.plot(title='Distribution of probability values')
-plt2 = pg.plot(title='Cumulative distribution of probability values')
-pp = []
-mpp = []
-nval = np.array([2,3,5,8,12,17,23,30])
-for n in nval:
-    ev2 = np.vstack([poissonProcess(rate=rate, n=n) for i in xrange(trials)])
-    #pi2 = np.array([poissonImp(n, e[-1], rate) for e in ev2])
-    #mpi2 = np.array([maxPoissonImp(e, rate) for e in ev2])
-    #mpi20 = mpi2[mpi2[:,1]==0][:,0]
-    #mpi21 = mpi2[mpi2[:,1]==1][:,0]
-    app.processEvents()
-    pp2 = np.array([poissonProb(n, e[-1], rate) for e in ev2])
-    app.processEvents()
-    mpp2 = np.array([maxPoissonProb(e, rate) for e in ev2])
+## create a series of poisson event trains with n=2
+#app = pg.mkQApp()
+#plt = pg.plot(title='Distribution of probability values')
+#plt2 = pg.plot(title='Cumulative distribution of probability values')
+#pp = []
+#mpp = []
+#nval = np.array([2,3,5,8,12,17,23,30])
+#for n in nval:
+    #ev2 = np.vstack([poissonProcess(rate=rate, n=n) for i in xrange(trials)])
+    ##pi2 = np.array([poissonImp(n, e[-1], rate) for e in ev2])
+    ##mpi2 = np.array([maxPoissonImp(e, rate) for e in ev2])
+    ##mpi20 = mpi2[mpi2[:,1]==0][:,0]
+    ##mpi21 = mpi2[mpi2[:,1]==1][:,0]
+    #app.processEvents()
+    #pp2 = np.array([poissonProb(n, e[-1], rate) for e in ev2])
+    #app.processEvents()
+    #mpp2 = np.array([maxPoissonProb(e, rate) for e in ev2])
 
-    #break
+    ##break
     
-    #print "\nPoisson improbability (n=%d):" % n
+    ##print "\nPoisson improbability (n=%d):" % n
+    ##for i in range(1,4):
+        ##print "  %d: %0.2f%%" % (10**i, (pi2>10**i).sum() * 100. / trials)
+    ##print "Max poisson improbability (n=%d):" % n
+    ##for i in range(1,4):
+        ##print "  %d: %0.2f%%" % (10**i, (mpi2[:,0]>10**i).sum() * 100. / trials)
+    #print "\nPoisson probability (n=%d):" % n
     #for i in range(1,4):
-        #print "  %d: %0.2f%%" % (10**i, (pi2>10**i).sum() * 100. / trials)
-    #print "Max poisson improbability (n=%d):" % n
+        #thresh = 1.-10**-i
+        #print "  %0.2f: %0.2f%%" % (thresh, (pp2>thresh).sum() * 100. / trials)
+    #print "Max poisson probability (n=%d):" % n
     #for i in range(1,4):
-        #print "  %d: %0.2f%%" % (10**i, (mpi2[:,0]>10**i).sum() * 100. / trials)
-    print "\nPoisson probability (n=%d):" % n
-    for i in range(1,4):
-        thresh = 1.-10**-i
-        print "  %0.2f: %0.2f%%" % (thresh, (pp2>thresh).sum() * 100. / trials)
-    print "Max poisson probability (n=%d):" % n
-    for i in range(1,4):
-        thresh = 1.-10**-i
-        print "  %0.2f: %0.2f%%" % (thresh, (mpp2[:,0]>thresh).sum() * 100. / trials)
+        #thresh = 1.-10**-i
+        #print "  %0.2f: %0.2f%%" % (thresh, (mpp2[:,0]>thresh).sum() * 100. / trials)
 
 
-    h = np.histogram(pp2, bins=100)
-    plt.plot(h[1][1:], h[0], pen='g')
-    h = np.histogram(mpp2[:,0], bins=100)
-    plt.plot(h[1][1:], h[0], pen='y')
-    app.processEvents()
+    #h = np.histogram(pp2, bins=100)
+    #plt.plot(h[1][1:], h[0], pen='g')
+    #h = np.histogram(mpp2[:,0], bins=100)
+    #plt.plot(h[1][1:], h[0], pen='y')
+    #app.processEvents()
     
-    pp.append(pp2)
-    mpp.append(mpp2)
+    #pp.append(pp2)
+    #mpp.append(mpp2)
 
 
 #mpp1 = mpp[0][mpp[0][:,1]==0]
