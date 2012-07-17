@@ -254,7 +254,7 @@ def poissonProb(n, t, l, clip=False):
     """
     p = stats.poisson(l*t).cdf(n)   
     if clip:
-        p = np.clip(p, 0, 1.0-1e-14)
+        p = np.clip(p, 0, 1.0-1e-25)
     return p
     
 def maxPoissonProb(ev, l):
@@ -269,47 +269,75 @@ def maxPoissonProb(ev, l):
         
     return mp
 
-def poissonScore(ev, l):
+def poissonScore(ev, l, ampMean, ampStdev, normalize=False):
+    ev = [x['time'] for x in ev]  ## select times from event set
+    ev = np.concatenate(ev)   ## mix events together, rescale times to make rate=1.0
+    
     mpp = min(maxPoissonProb(ev, l), 1.0-1e-12)  ## don't allow returning inf
     score =  1.0 / (1.0 - mpp)
-    return score
+    if normalize:
+        ret = mapPoissonScore(score)
+    else:
+        ret = score
+    if np.isscalar(ret):
+        assert not np.isnan(ret)
+    else:
+        assert not any(np.isnan(ret))
+    
+    return ret
+
+
+        
+poissonScoreNorm = None
+def mapPoissonScore(x):
+    global poissonScoreNorm
+    if poissonScoreNorm is None:
+        print "Generating poissonScore normalization table..."
+        n = 50000
+        global normScores
+        normScores = np.empty(int(n))
+        for i in xrange(int(n)):
+            if i%1000==0:
+                print i
+            ev = poissonProcess(1.0, 10.)
+            normScores[i] = poissonScore([ev], 1.0, normalize=False)
+            
+        poissonScoreNorm = np.empty((2,100))
+        #mask = np.zeros(n, dtype=bool)
+        x = 1.0
+        for i in range(poissonScoreNorm.shape[1]):
+            if i == poissonScoreNorm.shape[1]-1:
+                x == 0.0
+            poissonScoreNorm[:, i] = scipy.stats.scoreatpercentile(normScores, (1-x)*100), 1.0 / max(x, 1e-25)
+            x *= 0.95
+            
+    
+    ind = np.argwhere(poissonScoreNorm[1] > x)
+    if len(ind) == 0:
+        ind = len(poissonScoreNorm[1])-1
+    else:
+        ind = ind[0,0]
+    if ind == 0:
+        ind = 1
+    x1, x2 = poissonScoreNorm[0, ind-1:ind+1]
+    y1, y2 = poissonScoreNorm[1, ind-1:ind+1]
+    s = (x-x1) / (x2-x1)
+    mapped = y1 + s*(y2-y1)
+    assert not (np.isinf(mapped) or np.isnan(mapped))
+    return mapped
 
 
 def poissonScoreBlame(ev, rate):
-    ##### Is this completely daft?
-    ### estimate how much each event contributes to the poisson-score of a list of events.
-    #if len(ev) == 0:
-        #return []
-    
-    #ev = np.sort(ev)
-    #pp1 = 1.0 /   (1.0 - poissonProb(np.arange(len(ev)), ev, rate))
-    ##pp1 = np.array([1.0 / (1.0 - poissonProb(len(ev<t), t, rate))  for t in ev])     ## must be ev<t to make p correction
-        
-    #pp = []
-    ### compute effect of removing each event one at a time
-    #for i in range(len(ev)):   ## i is the index of the event to ignore for this round
-        #pp2 = []
-        #for j in range(i+1,len(ev)):  ## compute score at all event times after the removed event
-        #pp2 = np.array([1.0 / (1.0 - poissonProb(len(ev2<=t), t, rate))  for t in ev])
-        ##pp2 = poissonProb(np.arange(len(ev2)), ev2, rate)
-        #pp.append((pp1[i:] - pp2[i:]).max())
-        #assert pp[-1] != 0
-        #assert not np.isinf(pp[-1])
-    #ret = np.array(pp)
-    #assert not any(np.isnan(pp))
-    #return ret
     nVals = np.array([(ev<=t).sum()-1 for t in ev]) 
     pp1 = 1.0 /   (1.0 - poissonProb(nVals, ev, rate, clip=True))
     pp2 = 1.0 /   (1.0 - poissonProb(nVals-1, ev, rate, clip=True))
     diff = pp1 / pp2
     blame = np.array([diff[np.argwhere(ev >= ev[i])].max() for i in range(len(ev))])
-    #assert not any(np.isinf(blame)) and not any(np.isnan(blame))
-    #assert all(blame < 1e2)
     return blame
     
     
     
-def poissonRepScore(ev, l):
+def poissonRepScore(ev, l, *args):
     """
     Given a set of event lists, return probability that a poisson process would generate all sets of events.
     ev = [
@@ -318,9 +346,72 @@ def poissonRepScore(ev, l):
        ...
     ]
     """
-    allTimes = np.sort(np.concatenate(ev))
+    ev = [x['time'] for x in ev]  ## select times from event set
     
- 
+    ev2 = []
+    for i in range(len(ev)):
+        arr = np.zeros(len(ev[i]), dtype=[('trial', int), ('time', float)])
+        arr['time'] = ev[i]
+        arr['trial'] = i
+        ev2.append(arr)
+    ev2 = np.sort(np.concatenate(ev2), order=['time', 'trial'])
+    if len(ev2) == 0:
+        return 1.0
+    
+    ev = map(np.sort, ev)
+    pp = np.empty((len(ev), len(ev2)))
+    for i, trial in enumerate(ev):
+        nVals = []
+        for j in range(len(ev2)):
+            n = (trial<ev2[j]['time']).sum()
+            if any(trial == ev2[j]['time']) and ev2[j]['trial'] > i:  ## need to correct for the case where two events in separate trials happen to have exactly the same time.
+                n += 1
+            nVals.append(n)
+        
+        pp[i] = 1.0 / (1.0 - poissonProb(np.array(nVals), ev2['time'], l))
+    return pp.prod(axis=0).max()
+    
+    
+def poissonRepAmpScore(ev, l, ampMean, ampStdev):
+    events = ev
+    ev = [x['time'] for x in ev]  ## select times from event set
+    ev2 = []
+    for i in range(len(ev)):
+        arr = np.zeros(len(ev[i]), dtype=[('trial', int), ('time', float)])
+        arr['time'] = ev[i]
+        arr['trial'] = i
+        ev2.append(arr)
+    ev2 = np.sort(np.concatenate(ev2), order=['time', 'trial'])
+    if len(ev2) == 0:
+        return 1.0
+    
+    ev = map(np.sort, ev)
+    pp = np.empty((len(ev), len(ev2)))
+    for i, trial in enumerate(ev):
+        nVals = []
+        for j in range(len(ev2)):
+            n = (trial<ev2[j]['time']).sum()
+            if any(trial == ev2[j]['time']) and ev2[j]['trial'] > i:  ## need to correct for the case where two events in separate trials happen to have exactly the same time.
+                n += 1
+            nVals.append(n)
+        
+        pp[i] = 1.0 / (1.0 - poissonProb(np.array(nVals), ev2['time'], l))
+        pp[i] *= [gaussProb(events[i]['amp'][events[i]['time']<=t], ampMean, ampStdev) for t in ev2['time']]
+    return pp.prod(axis=0).max()
+    
+
+def gaussProb(amps, mean, stdev):
+    """
+    Given a gaussian distribution with mean, stdev, return the improbability
+    of seeing all of the given amplitudes consecutively, normalized for the number of events.
+    """
+    if len(amps) == 0:
+        return 1.0
+    p = 1.0 - stats.norm(mean, stdev).cdf(amps)
+    return 1.0 / (p.prod() ** (1./len(amps)))
+    
+    
+    
 #def poissonImp(n, t, l):
     #"""
     #For a poisson process, return the improbability of seeing at least *n* events in *t* seconds given
@@ -675,7 +766,7 @@ con.catchAllExceptions()
 ## Create a set of test cases:
 
 reps = 3
-trials = 30
+trials = 100
 spontRate = 3.
 miniAmp = 1.0
 tMax = 0.5
@@ -685,6 +776,7 @@ def randAmp(n=1, quanta=1):
 
 ## create a standard set of spontaneous events
 spont = [] ## trial, rep
+allAmps = []
 for i in range(trials):
     spont.append([])
     for j in range(reps):
@@ -692,6 +784,9 @@ for i in range(trials):
         amps = randAmp(len(times))  ## using scale=4 gives a nice not-quite-gaussian distribution
         source = ['spont'] * len(times)
         spont[i].append((times, amps, source))
+        allAmps.append(amps)
+        
+miniStdev = np.concatenate(allAmps).std()
 
 
 def spontCopy(i, j, extra):
@@ -704,7 +799,7 @@ def spontCopy(i, j, extra):
     
 ## copy spont. events and add on evoked events
 testNames = []
-tests = [[[] for i in range(trials)] for k in range(8)]  # test, trial, rep
+tests = [[[] for i in range(trials)] for k in range(7)]  # test, trial, rep
 for i in range(trials):
     for j in range(reps):
         ## Test 0: no evoked events
@@ -724,131 +819,201 @@ for i in range(trials):
             ev[-(k+1)] = (t, 1, 'evoked')
         tests[2][i].append(ev)
 
-        ## Test 3: 4 extra events, single quantum, short latency
-        testNames.append('4ev, fast')
-        ev = spontCopy(i, j, 4)
-        for k,t in enumerate(np.random.gamma(1.0, size=4)*0.01):
-            ev[-(k+1)] = (t, 1, 'evoked')
-        tests[3][i].append(ev)
-
-        ## Test 4: 3 extra events, single quantum, long latency
+        ## Test 3: 3 extra events, single quantum, long latency
         testNames.append('3ev, slow')
         ev = spontCopy(i, j, 3)
         for k,t in enumerate(np.random.gamma(1.0, size=3)*0.07):
             ev[-(k+1)] = (t, 1, 'evoked')
-        tests[4][i].append(ev)
+        tests[3][i].append(ev)
 
-        ## Test 5: 1 extra event, 2 quanta, short latency
+        ## Test 4: 1 extra event, 2 quanta, short latency
         testNames.append('1ev, 2x, fast')
         ev = spontCopy(i, j, 1)
         ev[-1] = (np.random.gamma(1.0)*0.01, 2, 'evoked')
-        tests[5][i].append(ev)
+        tests[4][i].append(ev)
 
-        ## Test 6: 1 extra event, 3 quanta, long latency
+        ## Test 5: 1 extra event, 3 quanta, long latency
         testNames.append('1ev, 3x, slow')
         ev = spontCopy(i, j, 1)
         ev[-1] = (np.random.gamma(1.0)*0.05, 3, 'evoked')
-        tests[6][i].append(ev)
+        tests[5][i].append(ev)
 
-        ## Test 7: 1 extra events specific time (tests handling of simultaneous events)
-        testNames.append('3ev simultaneous')
-        ev = spontCopy(i, j, 1)
-        ev[-1] = (0.01, 1, 'evoked')
-        tests[7][i].append(ev)
+        ## Test 6: 1 extra events specific time (tests handling of simultaneous events)
+        #testNames.append('3ev simultaneous')
+        #ev = spontCopy(i, j, 1)
+        #ev[-1] = (0.01, 1, 'evoked')
+        #tests[6][i].append(ev)
+        
+        ## 2 events, 1 failure
+        testNames.append('0ev; 1ev; 2ev')
+        ev = spontCopy(i, j, j)
+        if j > 0:
+            for k, t in enumerate(np.random.gamma(1.0, size=j)*0.01):
+                ev[-(k+1)] = (t, 1, 'evoked')
+        tests[6][i].append(ev)
+        
 
 #raise Exception()
 
 ## Analyze and plot all:
+
+def checkScores(scores):
+    best = None
+    bestn = None
+    bestval = None
+    for i in [0,1]:
+        for j in range(scores.shape[1]): 
+            x = scores[i,j]
+            fn = (scores[0] < x).sum()
+            fp = (scores[1] >= x).sum()
+            diff = abs(fp-fn)
+            if bestval is None or diff < bestval:
+                bestval = diff
+                best = x
+                bestn = (fp+fn)/2.
+    return best, bestn
+    
+    
+algorithms = [
+    ('Poisson Score', poissonScore),
+    ('Poisson Multi', poissonRepScore),
+    ('Poisson Multi + Amp', poissonRepAmpScore),
+]
 
 win = pg.GraphicsWindow(border=0.3)
 with pg.ProgressDialog('processing..', maximum=len(tests)) as dlg:
     for i in range(len(tests)):
         first = (i == 0)
         last = (i == len(tests)-1)
+        
         if first:
             evLabel = win.addLabel('Event amplitude', angle=-90, rowspan=len(tests))
-        evplt = win.addPlot()
+        evPlt = win.addPlot()
         
-        if first:
-            scoreLabel = win.addLabel('Poisson Score', angle=-90, rowspan=len(tests))
-        scoreplt = win.addPlot()
-        
-        if first:
-            intLabel = win.addLabel('Poisson Integral', angle=-90, rowspan=len(tests))
-        intplt = win.addPlot()
-        
-        if first:
-            scoreBlameLabel = win.addLabel('Poisson Score Blame', angle=-90, rowspan=len(tests))
-        scoreblameplt = win.addPlot()
-        
-        if first:
-            intBlameLabel = win.addLabel('Poisson Integral Blame', angle=-90, rowspan=len(tests))
-        intblameplt = win.addPlot()
-        
-        if first:
-            evplt.register('EventPlot1')
-            scoreplt.register('ScorePlot1')
-            intplt.register('IntegralPlot1')
-            scoreblameplt.register('ScoreBlamePlot1')
-            intblameplt.register('IntegralBlamePlot1')
-        else:
-            evplt.setXLink('EventPlot1')
-            scoreplt.setXLink('ScorePlot1')
-            intplt.setXLink('IntegralPlot1')
-            scoreblameplt.setXLink('ScoreBlamePlot1')
-            intblameplt.setXLink('IntegralBlamePlot1')
+        plots = []
+        for title, fn in algorithms:
+            if first:
+                label = win.addLabel(title, angle=-90, rowspan=len(tests))
+            plt = win.addPlot()
+            plots.append(plt)
+            if first:
+                plt.register(title)
+            else:
+                plt.setXLink(title)
+            plt.setLogMode(False, True)
+            plt.hideAxis('bottom')
+            if last:
+                plt.showAxis('bottom')
+                plt.setLabel('bottom', 'Trial')
+                
             
-        scoreplt.setLogMode(False, True)
-        intplt.setLogMode(False, True)
-        #diag = pg.InfiniteLine(angle=45)
-        #scoreplt.addItem(diag)
-        #scoreplt.hideAxis('left')
-        scoreplt.hideAxis('bottom')
-        intplt.hideAxis('bottom')
-        scoreblameplt.setLogMode(False, True)
+        #if first:
+            #repScoreLabel = win.addLabel('Poisson Rep Score', angle=-90, rowspan=len(tests))
+        #repScorePlt = win.addPlot()
         
-        evplt.hideAxis('bottom')
-        scoreblameplt.hideAxis('bottom')
-        evplt.setLabel('left', testNames[i])
-        #scoreplt.hideAxis('bottom')
+        #if first:
+            #scoreBlameLabel = win.addLabel('Poisson Score Blame', angle=-90, rowspan=len(tests))
+        #scoreBlamePlt = win.addPlot()
+        
+        #if first:
+            #intBlameLabel = win.addLabel('Poisson Integral Blame', angle=-90, rowspan=len(tests))
+        #intblameplt = win.addPlot()
+        
+        if first:
+            evPlt.register('EventPlot1')
+            #scorePlt.register('ScorePlot1')
+            #repScorePlt.register('RepScorePlot1')
+            #scoreBlamePlt.register('ScoreBlamePlot1')
+            #intblameplt.register('IntegralBlamePlot1')
+        else:
+            evPlt.setXLink('EventPlot1')
+            #scorePlt.setXLink('ScorePlot1')
+            #repScorePlt.setXLink('RepScorePlot1')
+            #scoreBlamePlt.setXLink('ScoreBlamePlot1')
+            #intblameplt.setXLink('IntegralBlamePlot1')
+            
+        #scorePlt.setLogMode(False, True)
+        #repScorePlt.setLogMode(False, True)
+        #diag = pg.InfiniteLine(angle=45)
+        #scorePlt.addItem(diag)
+        #scorePlt.hideAxis('left')
+        #scorePlt.hideAxis('bottom')
+        #repScorePlt.hideAxis('bottom')
+        #scoreBlamePlt.setLogMode(False, True)
+        
+        evPlt.hideAxis('bottom')
+        #scoreBlamePlt.hideAxis('bottom')
+        evPlt.setLabel('left', testNames[i])
+        #scorePlt.hideAxis('bottom')
         if last:
-            evplt.showAxis('bottom')
-            evplt.setLabel('bottom', 'Event time', 's')
-            scoreblameplt.showAxis('bottom')
-            scoreblameplt.setLabel('bottom', 'Event time', 's')
-            #scoreplt.showAxis('bottom')
-            #scoreplt.setLabel('bottom', 'Spontaneous Score')
+            evPlt.showAxis('bottom')
+            evPlt.setLabel('bottom', 'Event time', 's')
+            #scoreBlamePlt.showAxis('bottom')
+            #scoreBlamePlt.setLabel('bottom', 'Event time', 's')
+            #scorePlt.showAxis('bottom')
+            #repScorePlt.showAxis('bottom')
+            #scorePlt.setLabel('bottom', 'Trial')
+            #repScorePlt.setLabel('bottom', 'Trial')
         
         trials = tests[i]
+        scores = np.empty((len(algorithms), 2, len(trials)))
+        repScores = np.empty((2, len(trials)))
         for j in range(len(trials)):
             
             ## combine all trials together for poissonScore tests
-            ev = np.concatenate(tests[i][j])
-            spont = np.concatenate(tests[0][j])
-            nReps = len(tests[i][j])
+            ev = tests[i][j]
+            spont = tests[0][j]
+            evTimes = [x['time'] for x in ev]
+            spontTimes = [x['time'] for x in spont]
             
-            colors = [(0,255,0,50) if source=='spont' else (255,255,255,50) for source in ev['source']]
-            evplt.plot(x=ev['time'], y=ev['amp'], pen=None, symbolBrush=colors, symbol='d', symbolSize=8, symbolPen=None)
+            allEv = np.concatenate(ev)
+            allSpont = np.concatenate(spont)
+            #ev = np.concatenate(tests[i][j])
+            #spont = np.concatenate(tests[0][j])
+            #nReps = len(tests[i][j])
             
-            #print ev['time']
-            score1 = poissonScore(ev['time'], spontRate*nReps)
-            score2 = poissonScore(spont['time'], spontRate*nReps)
-            scoreplt.plot(x=[j], y=[score1], pen=None, symbol='o', symbolBrush=(255,255,255,100))
-            scoreplt.plot(x=[j], y=[score2], pen=None, symbol='o', symbolBrush=(0,255,0,100))
+            colors = [(0,255,0,50) if source=='spont' else (255,255,255,50) for source in allEv['source']]
+            evPlt.plot(x=allEv['time'], y=allEv['amp'], pen=None, symbolBrush=colors, symbol='d', symbolSize=8, symbolPen=None)
+            
+            for k, opts in enumerate(algorithms):
+                title, fn = opts
+                score1 = fn(ev, spontRate, miniAmp, miniStdev)
+                score2 = fn(spont, spontRate, miniAmp, miniStdev)
+                scores[k, :, j] = score1, score2
+                plots[k].plot(x=[j], y=[score1], pen=None, symbolPen=None, symbol='o', symbolBrush=(255,255,255,50))
+                plots[k].plot(x=[j], y=[score2], pen=None, symbolPen=None, symbol='o', symbolBrush=(0,255,0,50))
 
-            #xMin = 0.005
-            #xMax = 0.3
-            #int1 = poissonIntegral(ev['time'], spontRate, xMin, xMax)
-            #int2 = poissonIntegral(spont['time'], spontRate, xMin, xMax)
-            #intplt.plot(x=[j], y=[int1], pen=None, symbol='o', symbolBrush=(255,255,255,100))
-            #intplt.plot(x=[j], y=[int2], pen=None, symbol='o', symbolBrush=(0,255,0,100))
+            #blame = poissonScoreBlame(allEv['time'], spontRate*len(ev))
+            #scoreBlamePlt.plot(x=allEv['time'], y=blame, pen=None, symbolBrush=colors, symbol='d', symbolSize=8, symbolPen=None)
             
-            blame = poissonScoreBlame(ev['time'], spontRate*nReps)
-            scoreblameplt.plot(x=ev['time'], y=blame, pen=None, symbolBrush=colors, symbol='d', symbolSize=8, symbolPen=None)
+            ## poissonRepScore tests
+            #score1 = poissonRepScore(evTimes, spontRate)
+            #score2 = poissonRepScore(spontTimes, spontRate)
+            #repScores[:, j] = score1, score2
+            #repScorePlt.plot(x=[j], y=[score1], pen=None, symbolPen=None, symbol='o', symbolBrush=(255,255,255,50))
+            #repScorePlt.plot(x=[j], y=[score2], pen=None, symbolPen=None, symbol='o', symbolBrush=(0,255,0,50))
+            
             
             #blame = poissonIntegralBlame(ev['time'], spontRate, xMin, xMax)
             #intblameplt.plot(x=ev['time'], y=blame, pen=None, symbolBrush=colors, symbol='d', symbolSize=8, symbolPen=None)
+        
+        ## Report on ability of each algorithm to separate spontaneous from evoked
+        for k, opts in enumerate(algorithms):
+            thresh, errors = checkScores(scores[k])
+            plots[k].setTitle("%0.2g, %d" % (thresh, errors))
+        
+        ## Plot score histograms
+        #bins = np.linspace(-1, 6, 50)
+        #h1 = np.histogram(np.log10(scores[0, :]), bins=bins)
+        #h2 = np.histogram(np.log10(scores[1, :]), bins=bins)
+        #scorePlt.plot(x=0.5*(h1[1][1:]+h1[1][:-1]), y=h1[0], pen='w')
+        #scorePlt.plot(x=0.5*(h2[1][1:]+h2[1][:-1]), y=h2[0], pen='g')
             
+        #bins = np.linspace(-1, 14, 50)
+        #h1 = np.histogram(np.log10(repScores[0, :]), bins=bins)
+        #h2 = np.histogram(np.log10(repScores[1, :]), bins=bins)
+        #repScorePlt.plot(x=0.5*(h1[1][1:]+h1[1][:-1]), y=h1[0], pen='w')
+        #repScorePlt.plot(x=0.5*(h2[1][1:]+h2[1][:-1]), y=h2[0], pen='g')
             
         dlg += 1
         if dlg.wasCanceled():
