@@ -151,9 +151,13 @@ class Scanner(Device, OptomechDevice):
             raise HelpfulException("The scanner device '%s' is not calibrated for this combination of laser and objective (%s, %s)" % (self.name(), laser, str(opticState)))
             
         ## map from global coordinates to parent
-        parentPos = self.mapGlobalToParent(pg.Point(x,y))
-        x = parentPos.x()
-        y = parentPos.y()
+        parentPos = self.mapGlobalToParent((x,y))
+        if isinstance(parentPos, QtCore.QPointF):
+            x = parentPos.x()
+            y = parentPos.y()
+        else:
+            x = parentPos[0]
+            y = parentPos[1]
             
         ## map to voltages using calibration
         cal = cal['params']
@@ -488,7 +492,7 @@ class ScannerTask(DeviceTask):
                 if pos == None:
                     pos = self.dev.getOffVoltage()
                 else:
-                    pos = self.dev.mapToScanner(pos[0], pos[1], self.cmd['camera'], self.cmd['laser'])
+                    pos = self.dev.mapToScanner(pos[0], pos[1], self.cmd['laser'])
                 lastPos = pos
                 
                 arr[0, startInd] = pos[0]
@@ -501,7 +505,7 @@ class ScannerTask(DeviceTask):
                 
                 xPos = linspace(lastPos[0], pos[0], stopInd-startInd)
                 yPos = linspace(lastPos[1], pos[1], stopInd-startInd)
-                x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['camera'], self.cmd['laser'])
+                x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['laser'])
                 arr[0, startInd:stopInd] = x
                 arr[1, startInd:stopInd] = y
                 lastPos = pos
@@ -513,7 +517,7 @@ class ScannerTask(DeviceTask):
                 
                 xPos = np.linspace(startPos.x(), stopPos.x(), scanLength)
                 yPos = np.linspace(startPos.y(), stopPos.y(), scanLength)
-                x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['camera'], self.cmd['laser'])
+                x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['laser'])
                 x = np.tile(x, cmd['nScans'])
                 y = np.tile(y, cmd['nScans'])
                 arr[0, startInd:startInd + len(x)] = x
@@ -540,7 +544,7 @@ class ScannerTask(DeviceTask):
                     for yp in range(0,nYScans):
                         yPos = yPos + yStep
                         #yPos = np.linspace(startPos.y(), stopPos.y(), scanLength)
-                        xl, yl = self.dev.mapToScanner(xPos, yPos, self.cmd['camera'], self.cmd['laser'])
+                        xl, yl = self.dev.mapToScanner(xPos, yPos, self.cmd['laser'])
                         if nsc == 0 and yp == 0:
                             y = yl
                             x = xl

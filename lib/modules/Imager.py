@@ -12,25 +12,47 @@ import time
 #import matplotlib.pylab as MP
 
 Presets = {
-    'video': {
+    'video-std': {
         'Downsample': 1,
-        'Image Width': 300,
-        'Image Height': 300,
+        'Image Width': 200 ,
+        'Image Height': 200,
         'Overscan': 60,
         'Store': False,
         'Blank Screen': False,
         ('Decomb', 'Shift'): 173e-6,
         ('Decomb', 'Auto'): False,
     },
-    'quality': {
+    'video-fast': {
+        'Downsample': 2,
+        'Image Width': 128 ,
+        'Image Height': 128,
+        'Overscan': 60,
+        'Store': False,
+        'Blank Screen': False,
+        ('Decomb', 'Shift'): 58e-6,
+        ('Decomb', 'Auto'): False,
+    },
+
+    'StandardDef': {
         'Downsample': 10,
         'Image Width': 500,
         'Image Height': 500,
         'Overscan': 5,
+        'Store': False,
         'Blank Screen': True,
         ('Decomb', 'Shift'): 17e-6,
         ('Decomb', 'Auto'): False,
-    }
+    },
+    'HighDef': {
+        'Downsample': 10,
+        'Image Width': 1000,
+        'Image Height': 1000,
+        'Overscan': 5,
+        'Store': False,
+        'Blank Screen': True,
+        ('Decomb', 'Shift'): 17e-6,
+        ('Decomb', 'Auto'): False,
+    },
 }
 
 
@@ -103,8 +125,8 @@ class Imager(Module):
         self.tree = PT.ParameterTree()
         self.l2.addWidget(self.tree)
         self.snap_button = QtGui.QPushButton('Snap')
-        #self.run_button = QtGui.QPushButton('Run')
-        #self.stop_button = QtGui.QPushButton('Stop')
+        self.run_button = QtGui.QPushButton('Run')
+        self.stop_button = QtGui.QPushButton('Stop')
         self.video_button = QtGui.QPushButton('Video')
         self.record_button = QtGui.QPushButton('Record Stack')
         self.record_button.setCheckable(True)
@@ -112,15 +134,16 @@ class Imager(Module):
         self.cameraSnapBtn = QtGui.QPushButton('Camera Snap')
         
         self.l2.addWidget(self.snap_button)
-        #self.l2.addWidget(self.run_button)
-        #self.l2.addWidget(self.stop_button)
+        self.l2.addWidget(self.run_button)
+        self.l2.addWidget(self.stop_button)
         self.l2.addWidget(self.video_button)
         self.l2.addWidget(self.record_button)
         self.l2.addWidget(self.cameraSnapBtn)
         
         self.win.resize(800, 480)
         self.param = PT.Parameter(name = 'param', children=[
-            dict(name="Preset", type='list', value='', values=['', 'video', 'quality']),
+            dict(name="Preset", type='list', value='', values=['', 'video-std',
+                                                               'video-fast', 'StandardDef', 'HighDef']),
             dict(name='Sample Rate', type='float', value=1.0e6, suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10e3, 5e6], siPrefix=True),
             dict(name='Downsample', type='int', value=1, limits=[1,None]),
             dict(name='Image Width', type='int', value=500),
@@ -163,9 +186,9 @@ class Imager(Module):
         self.tree.setParameters(self.param)
         self.param.sigTreeStateChanged.connect(self.update)
         self.update()
-        #self.run_button.clicked.connect(self.PMT_Run)
+        self.run_button.clicked.connect(self.PMT_Run)
         self.snap_button.clicked.connect(self.PMT_Snap)
-        #self.stop_button.clicked.connect(self.PMT_Stop)
+        self.stop_button.clicked.connect(self.PMT_Stop)
         self.video_button.clicked.connect(self.toggleVideo)
         self.record_button.toggled.connect(self.recordToggled)
         self.cameraSnapBtn.clicked.connect(self.cameraSnap)
@@ -468,12 +491,13 @@ class Imager(Module):
                 return
         
     def recordToggled(self, b):
-        if b:
-            self.param['Store'] = True
-        else:
+        if not b:
             self.currentStack = None
             self.currentStackLength = 0
+            self.param['Store'] = False
             self.record_button.setText('Record Stack')
+        else:
+            self.param['Store'] = True # turn off recording...
             
     def getScopeDevice(self):
         return self.manager.getDevice(self.param['Scope Device'])

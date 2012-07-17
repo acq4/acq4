@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'ProtocolTemplate.ui'
+# Form implementation generated from reading ui file '.\lib\devices\Scanner\ProtocolTemplate.ui'
 #
-# Created: Tue Mar 27 14:33:55 2012
-#      by: PyQt4 UI code generator 4.9.1
+# Created: Tue Jul 17 18:29:57 2012
+#      by: PyQt4 UI code generator 4.9
 #
 # WARNING! All changes made in this file will be lost!
 
