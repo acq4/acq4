@@ -196,7 +196,17 @@ def SignalFilter_LPFButter(signal, LPF, samplefreq, NPole = 8):
     zi = spSignal.lfilter_zi(b,a)
     out, zo = spSignal.lfilter(b, a, signal, zi=zi*signal[0])
     return(numpy.array(out))
-     
+
+# filter with Butterworth high pass, using time-causal lfilter 
+def SignalFilter_HPFButter(signal, HPF, samplefreq, NPole = 8):
+    flpf = float(HPF)
+    sf = float(samplefreq)
+    wn = [flpf/(sf/2.0)]
+    b, a = spSignal.butter(NPole, wn, btype='high', output='ba')
+    zi = spSignal.lfilter_zi(b,a)
+    out, zo = spSignal.lfilter(b, a, signal, zi=zi*signal[0])
+    return(numpy.array(out)) 
+        
 # filter signal with low-pass Bessel
 def SignalFilter_LPFBessel(signal, LPF, samplefreq, NPole = 8, reduce = False):
     """ Low pass filter a signal, possibly reducing the number of points in the
@@ -403,6 +413,7 @@ def findspikes(x, v, thresh, t0=None, t1= None, dt=1.0, mode=None, interpolate=F
     if True, the returned time is interpolated, based on a spline fit
     if False, the returned time is just taken as the data time. 
     """
+    print 'x, v: ', len(x), len(v)
     if debug:
     # this does not work with pyside...
         import matplotlib
@@ -422,9 +433,12 @@ def findspikes(x, v, thresh, t0=None, t1= None, dt=1.0, mode=None, interpolate=F
         xt = numpy.array(x)
         v = numpy.array(v)
     if debug:
-        f = figure(1)
-        plot(xt, v, 'k-')
-        show()
+        f = pylab.figure(1)
+        print "xt: ", xt
+        print "v: ", v
+        pylab.plot(numpy.array(xt), v, 'k-')
+        pylab.draw()
+        pylab.show()
     dv = numpy.diff(v)/dt # compute slope
     st=numpy.array([])
     spk = []

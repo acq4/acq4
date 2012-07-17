@@ -27,7 +27,7 @@ from . import python2_3
 if 'linux' in sys.platform:  ## linux has numerous bugs in opengl implementation
     useOpenGL = False
 elif 'darwin' in sys.platform: ## openGL can have a major impact on mac, but also has serious bugs
-    useOpenGL = True
+    useOpenGL = False # True
 else:
     useOpenGL = False  ## on windows there's a more even performance / bugginess tradeoff. 
                 
