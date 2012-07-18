@@ -117,8 +117,12 @@ class SRTTransform3D(QtGui.QMatrix4x4):
         The input matrix must be affine AND have no shear,
         otherwise the conversion will most likely fail.
         """
+        if isinstance(m, np.ndarray):
+            m=m.reshape(16)
+            m = QtGui.QMatrix4x4(*map(float,m))
         for i in range(4):
             self.setRow(i, m.row(i))
+            
         m = self.matrix().reshape(4,4)
         ## translation is 4th column
         self._state['pos'] = m[:3,3] 

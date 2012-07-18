@@ -798,7 +798,8 @@ class ViewBox(GraphicsWidget):
     def viewPixelSize(self):
         """Return the (width, height) of a screen pixel in view coordinates."""
         o = self.mapToView(Point(0,0))
-        px, py = [Point(self.mapToView(v) - o) for v in self.pixelVectors()]
+        pv = self.pixelVectors()
+        px, py = [Point(self.mapToView(v) - o) for v in pv]
         return (px.length(), py.length())
         
         

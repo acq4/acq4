@@ -1391,8 +1391,13 @@ class ProgramRectScan(QtCore.QObject):
         return self.params
     
     def generateProtocol(self):
-        points = self.roi.listPoints() # in local coordinates local to roi.
-        points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
+        state = self.roi.getState()
+        w, h = state['size']
+        p0 = pg.Point(0,0)
+        p1 = pg.Point(w,0)
+        p2 = pg.Point(0, h)
+        points = [p0, p1, p2]
+        points = [pg.Point(self.roi.mapToView(p)) for p in points] # convert to view points (as needed for scanner)
         return {'type': self.name, 'points': points, 'startTime': self.params['startTime'], 
                 'endTime': self.params['endTime'], 'nScans': self.params['nScans'],
                 'lineSpacing': self.params['linespacing']}
