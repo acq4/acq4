@@ -1638,6 +1638,9 @@ class LineSegmentROI(ROI):
     """
     ROI subclass with two freely-moving handles defining a line.
     """
+    sigRegionChangeFinished = QtCore.Signal(object)
+    sigRegionChangeStarted = QtCore.Signal(object)
+    sigRegionChanged = QtCore.Signal(object)
     
     def __init__(self, positions=(None, None), pos=None, handles=(None,None), **args):
         if pos is None:
@@ -1650,7 +1653,10 @@ class LineSegmentROI(ROI):
         
         for i, p in enumerate(positions):
             self.addFreeHandle(p, item=handles[i])
-                
+
+            #l.sigRegionChanged.connect(self.roiChangedEvent)
+            #l.sigRegionChangeStarted.connect(self.roiChangeStartedEvent)
+            #l.sigRegionChangeFinished.connect(self.roiChangeFinishedEvent)                
         #self.setZValue(1000)
         #self.parentROI = None
         #self.hasParentROI = False

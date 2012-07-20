@@ -1302,27 +1302,11 @@ class ProgramLineScan(QtCore.QObject):
             dict(name='endTime', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='nScans', type='int', value=100, bounds=[1, None]),
         ])
-        self.params.ctrl = self
-        #self.params.layout.sigStateChanged.connect(self.regeneratePoints)
-        #self.params.spacing.sigStateChanged.connect(self.regeneratePoints)
-        #pg.ROI.__init__(self, pos=(0,0), size=args.get('size', [ptSize*4]*2), angle=args.get('angle', 0))
-        #self.addScaleHandle([0, 0], [1, 1])
-        #self.addScaleHandle([1, 1], [0, 0])
-        #self.addRotateHandle([0, 1], [0.5, 0.5])
-        #self.addRotateHandle([1, 0], [0.5, 0.5])
-        #self.lastSize = self.state['size']
-        ##self.connect(QtCore.SIGNAL('regionChanged'), self.rgnChanged)
-        #self.sigRegionChanged.connect(self.rgnChanging)
-        #self.sigRegionChangeFinished.connect(self.rgnChanged)
-        #self.points = []
-        #self.pens = []
-        #self.pointSize = ptSize
-        ##self.pointDisplaySize = self.pointSize
-        #self.oldDisplaySize = self.pointSize
-        #self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
-        
+        self.params.ctrl = self        
         self.roi = pg.LineSegmentROI([[0.0, 0.0], [self.params['length'], self.params['length']]])
-        
+ #       print dir(self.roi)
+        self.params.sigTreeStateChanged.connect(self.update)
+        self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
         
     def getGraphicsItems(self):
         return [self.roi]
@@ -1333,6 +1317,14 @@ class ProgramLineScan(QtCore.QObject):
     def parameters(self):
         return self.params
     
+    def update(self):
+        pass
+    
+    def updateFromROI(self):
+        p =self.roi.listPoints()
+        dist = (pg.Point(p[0])-pg.Point(p[1])).length()
+        self.params['length'] = dist
+        
     def generateProtocol(self):
         points = self.roi.listPoints() # in local coordinates local to roi.
         points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
@@ -1380,6 +1372,8 @@ class ProgramRectScan(QtCore.QObject):
         self.roi = pg.ROI(size=[self.params['width'], self.params['height']], pos=[0.0, 0.0])
         self.roi.addScaleHandle([1,1], [0.5, 0.5])
         self.roi.addRotateHandle([0,0], [0.5, 0.5])
+        self.params.sigTreeStateChanged.connect(self.update)
+        self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
         
     def getGraphicsItems(self):
         return [self.roi]
@@ -1389,7 +1383,18 @@ class ProgramRectScan(QtCore.QObject):
     
     def parameters(self):
         return self.params
+
+    def update(self):
+        pass
     
+    def updateFromROI(self):
+        """ read the ROI rectangle width and height and repost
+        in the parameter tree """
+        state = self.roi.getState()
+        w, h = state['size']
+        self.params['width'] = w
+        self.params['height'] = h
+        
     def generateProtocol(self):
         state = self.roi.getState()
         w, h = state['size']

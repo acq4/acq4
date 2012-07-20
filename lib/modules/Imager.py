@@ -4,6 +4,8 @@ from lib.modules.Module import Module
 from PyQt4 import QtGui, QtCore
 from pyqtgraph import ImageView
 import pyqtgraph as PG
+from lib.Manager import getManager
+import lib.Manager
 import InterfaceCombo
 import pyqtgraph.parametertree as PT
 import numpy as NP
@@ -56,14 +58,11 @@ Presets = {
 }
 
 
-
-
-
-
 class Black(QtGui.QWidget):
+    """ make a black rectangle to fill screen when "blanking" """
     def paintEvent(self, event):
         p = QtGui.QPainter(self)
-        brush = PG.mkBrush(0,0,0)
+        brush = PG.mkBrush(0.0)
         p.fillRect(self.rect(), brush)
         p.end()
     
@@ -114,14 +113,23 @@ class Imager(Module):
         self.w2.setLayout(self.l2)
         self.currentStack = None
         self.currentStackLength = 0
+        self.camdev = self.manager.getDevice('Camera')
+        self.cameraModule = self.manager.getModule('Camera')
         
         self.regionCtrl = None
+        self.roi = None
         
         self.win.setCentralWidget(self.w1)
         self.w1.addWidget(self.w2)
         
         self.view = ImageView()
         self.w1.addWidget(self.view)
+        #if 'defaultCamera' in self.dev.config:
+        # self.dev.config['defaultCamera']
+        self.laserdev = self.manager.getDevice('Laser-Blue')
+ #       if 'defaultLaser' in self.dev.config:
+ #           defLaser = self.dev.config['defaultLaser']
+
         self.tree = PT.ParameterTree()
         self.l2.addWidget(self.tree)
         self.snap_button = QtGui.QPushButton('Snap')
@@ -149,6 +157,8 @@ class Imager(Module):
             dict(name='Image Width', type='int', value=500),
             dict(name='Y = X', type='bool', value=True),
             dict(name='Image Height', type='int', value=500),
+            dict(name='Width', type='float', value = 50.0e-6, suffix = 'm', limits=[0., 5000.], step=5, siPrefix=True), #  True image width and height, in microns
+            dict(name='Height', type = 'float', value = 50.0e-6, suffix='m', limits=[0., 5000.], step=5, siPrefix=True),
             dict(name='XCenter', type='float', value=-0.3, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
             dict(name='XSweep', type='float', value=1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
             dict(name='YCenter', type='float', value=-0.75, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
@@ -195,7 +205,28 @@ class Imager(Module):
         self.Manager = manager
         
         self.param.param('Camera Module').sigValueChanged.connect(self.setupCameraModule)
+         # insert an ROI into the camera image that corresponds to our scan area
+                
+        scopeState = self.camdev.getScopeState()
+        print scopeState
+        cpos = scopeState['centerPosition']
+#        print 'cpos: ', float(cpos[0]), float(cpos[1])
+        self.roi = PG.ROI([float(cpos[0]), float(cpos[1])], size=[self.param['Width'], self.param['Height']]) # centered box
+        self.roi.addScaleHandle([1,1], [0.5, 0.5])
+        self.roi.addRotateHandle([0,0], [0.5, 0.5])
+        self.roi.setZValue(1000)
+        #print cm.children
+        self.cameraModule.ui.addItem(self.roi)
+        self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
+
+    
+    def quit(self):
+        self.cameraModule.ui.removeItem(self.roi)
+        Module.quit(self)
         
+    def updateFromROI(self):
+        pass
+    
     def PMT_Run(self):
         info = {}
         self.stopFlag = False
@@ -259,7 +290,12 @@ class Imager(Module):
             info['2pImageType'] = 'Snap'
             #info['microscope'] = self.param['Scope Device'].value()
             scope = self.Manager.getDevice(self.param['Scope Device'])
-            info['microscope'] = scope.getState()
+            #print dir(scope)
+            #m = self.handle.info()['microscope']
+           ### this needs to be fixed so that the microscope info is stored in the file - current NOT
+           ### due to API change that I can't figure out.
+           ###
+           #info['microscope'] = scope.getState()
             if self.record_button.isChecked():
                 mainfo = [
                     {'name': 'Frame'},
@@ -417,11 +453,10 @@ class Imager(Module):
             #imgData = imgTemp # [width*height]
             #imgTemp=[]
         if self.param['Show PMT V']:
-            PG.plot(y=imgData, x=NP.linspace(0, samples/sampleRate, imgData.size))
+            x=NP.linspace(0, samples/sampleRate, imgData.size)
+            PG.plot(y=imgData.reshape(imgData.shape[0]*imgData.shape[1]), x=x)
         if self.param['Show Mirror V']:
             PG.plot(y=xScan, x=NP.linspace(0, samples/self.param['Sample Rate'], xScan.size))
-
-
         #imgData = imgData.reshape((width, height)).transpose()
         return imgData
   
