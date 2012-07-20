@@ -200,6 +200,7 @@ class CameraWindow(QtGui.QMainWindow):
     def addROI(self):
         pen = pg.mkPen(pg.intColor(len(self.ROIs)))
         center = self.view.viewRect().center()
+        #print 'camerawindow.py: addROI:: ', self.view.viewPixelSize()
         size = [x*50 for x in self.view.viewPixelSize()]
         roi = PlotROI(center, size)
         roi.setZValue(40000)

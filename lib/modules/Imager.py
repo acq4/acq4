@@ -11,7 +11,8 @@ import pyqtgraph.parametertree as PT
 import numpy as NP
 import metaarray as MA
 import time
-#import matplotlib.pylab as MP
+import pprint
+
 
 Presets = {
     'video-std': {
@@ -89,10 +90,15 @@ class ScreenBlanker:
         self.widgets = []
         
 class RegionCtrl(PG.ROI):
+    """
+    Create an ROI "Region Control" with handles, with specified size
+    and color. 
+    """
     def __init__(self, pos, size):
-        PG.ROI.__init__(self, pos, size, pen='r')
+        PG.ROI.__init__(self, pos, size=size, pen='r')
         self.addScaleHandle([0,0], [1,1])
         self.addScaleHandle([1,1], [0,0])
+        self.setZValue(1000)
         #self.addRotateHandle([1,0], [0,1])
         #self.addRotateHandle([0,1], [1,0])
 
@@ -203,21 +209,27 @@ class Imager(Module):
         self.record_button.toggled.connect(self.recordToggled)
         self.cameraSnapBtn.clicked.connect(self.cameraSnap)
         self.Manager = manager
-        
-        self.param.param('Camera Module').sigValueChanged.connect(self.setupCameraModule)
          # insert an ROI into the camera image that corresponds to our scan area
                 
         scopeState = self.camdev.getScopeState()
-        print scopeState
+        #print scopeState
         cpos = scopeState['centerPosition']
-#        print 'cpos: ', float(cpos[0]), float(cpos[1])
-        self.roi = PG.ROI([float(cpos[0]), float(cpos[1])], size=[self.param['Width'], self.param['Height']]) # centered box
+        csize = [self.param['Width'], self.param['Height']]
+        #print 'cpos: ', float(cpos[0]), float(cpos[1])
+        #print 'csize: ', csize
+        self.roi = RegionCtrl([float(cpos[0]), float(cpos[1])], [self.param['Width'], self.param['Height']])
         self.roi.addScaleHandle([1,1], [0.5, 0.5])
         self.roi.addRotateHandle([0,0], [0.5, 0.5])
         self.roi.setZValue(1000)
-        #print cm.children
-        self.cameraModule.ui.addItem(self.roi)
-        self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
+        
+        pos = self.roi.pos()
+        si = self.roi.size()
+        print 'pos, size: ', pos, si
+        ##print cm.children
+        #self.cameraModule.ui.addItem(self.roi)
+        #self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
+        cm = self.setupCameraModule()
+        #self.param.param('Camera Module').sigValueChanged.connect(cm)
 
     
     def quit(self):
@@ -225,7 +237,9 @@ class Imager(Module):
         Module.quit(self)
         
     def updateFromROI(self):
-        pass
+        pos = self.roi.pos()
+        si = self.roi.size()
+        print 'pos, size: ', pos, si
     
     def PMT_Run(self):
         info = {}
@@ -544,12 +558,18 @@ class Imager(Module):
         if self.regionCtrl is not None:
             self.regionCtrl.scene().removeItem(self.regionCtrl)
         
+        pp = pprint.PrettyPrinter(indent=4)
+        #pp.pprint(dir(mod))
         scope = self.getScopeDevice()
-        pos = scope.getPosition()
-        size = [mod.window().cameraScale[0] * 100]*2
-        self.regionCtrl = RegionCtrl(pos, size)
-        mod.window.addItem(self.regionCtrl, z=100)
+        #pp.pprint(dir(scope))
+        pos = self.roi.mapToParent(self.roi.pos())
+        si = self.roi.mapToParent(self.roi.size())
+        print 'setup: pos, size: ', pos, si#pp.pprint((scope.config))
+        #self.regionCtrl = RegionCtrl(self.roi.pos(), self.roi.size())
+        #mod.addItem(self.roi, z=1000)
         
+
+
         
     def cameraSnap(self):
         width = self.param['Image Width']

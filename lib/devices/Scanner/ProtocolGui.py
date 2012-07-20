@@ -26,7 +26,8 @@ class PositionCtrlGroup(pTypes.GroupParameter):
             'name': 'Position Controls',
             'type': 'group',
             'addText': "Add Control..",
-            'addList': ['Point', 'Grid', 'Occlusion']
+            'addList': ['Point', 'Grid', 'Occlusion'],
+
         }
         pTypes.GroupParameter.__init__(self, **opts)
     
@@ -40,7 +41,8 @@ class ProgramCtrlGroup(pTypes.GroupParameter):
             'name': 'Program Controls',
             'type': 'group',
             'addText': "Add Control..",
-            'addList': ['lineScan', 'rectangleScan']
+            'addList': ['lineScan', 'rectangleScan'],
+            'autoIncrementName': True,
         }
         pTypes.GroupParameter.__init__(self, **opts)
     

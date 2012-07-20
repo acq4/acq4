@@ -23,7 +23,7 @@ class ImagingModule(AnalysisModule):
         self.ui.plotWidget.setLabel('bottom', 'Time', 's')
         self.ui.plotWidget.setLabel('left', 'Distance', 'm')
         self.ui.plotWidget.register('ImagingPlot')
-        
+        self.ui.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
         self.img = None  ## image shown in camera module
         #devs = self.man.listDevices()
         #for d in devs:
@@ -88,16 +88,15 @@ class ImagingModule(AnalysisModule):
             imageData = pmtdata[prog['startStopIndices'][0]:prog['startStopIndices'][0] +nscans*samplesPerScan]
             imageData=imageData.reshape(nscans, samplesPerScan)
             imageData = fn.downsample(imageData, downSample, axis=1)
-            data = imageData # np.random.normal(size=(100,100))
             sd = self.pr.getDevice(self.scannerDevice())
             camMod = sd.cameraModule().window()
             if self.img is not None:
                 camMod.removeItem(self.img)
                 self.img = None
-            self.img = pg.ImageItem(data)
+            self.img = pg.ImageItem(imageData)
             camMod.addItem(self.img)
-            w=data.shape[0]
-            h = data.shape[1]
+            w = imageData.shape[0]
+            h = imageData.shape[1]
             localPts = map(pg.Vector, [[0,0], [w,0], [0,h], [0,0,1]]) # w and h of data of image in pixels.
             globalPts = prog['points'] # sort of. - 
             m = pg.solve3DTransform(localPts, map(pg.Vector, globalPts+[[0,0,1]]))
@@ -119,7 +118,13 @@ class ImagingModule(AnalysisModule):
                 #dirhandle.writeFile(ma, 'Imaging.ma')
         
         
-
+    def imageAlphaAdjust(self):
+        if self.img is None:
+            return
+        alpha = self.ui.alphaSlider.value()
+        self.img.setImage(opacity=float(alpha/100.))
+        
+        
     def detectorDevice(self):
         return str(self.ui.detectorComboBox.currentText())
         
