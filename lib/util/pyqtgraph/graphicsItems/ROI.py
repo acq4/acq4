@@ -721,8 +721,11 @@ class ROI(GraphicsObject):
             changed = True
         else:
             for k in list(self.state.keys()):
-                if self.state[k] != self.lastState[k]:
-                    changed = True
+                if k in self.lastState.keys(): # protect against mismatched keys.
+                    if self.state[k] != self.lastState[k]:
+                        changed = True
+                else:
+                    raise Exception ("ROI:stateChanged: old and new state Keys do no match for key: %s"  % (k))
         
         self.prepareGeometryChange()
         if changed:

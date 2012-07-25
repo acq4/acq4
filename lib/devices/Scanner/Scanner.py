@@ -144,7 +144,6 @@ class Scanner(Device, OptomechDevice):
         """
         if opticState is None:
             opticState = self.getDeviceStateKey() ## this tells us about objectives, filters, etc
-        #print "camera:", x, y
         cal = self.getCalibration(laser, opticState)
         
         if cal is None:

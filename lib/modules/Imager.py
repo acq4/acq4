@@ -119,11 +119,18 @@ class Imager(Module):
         self.w2.setLayout(self.l2)
         self.currentStack = None
         self.currentStackLength = 0
+        # we assum that you are not going to change the current camera or scope while running
+        # ... not just yet anyway
         self.camdev = self.manager.getDevice('Camera')
         self.cameraModule = self.manager.getModule('Camera')
+        self.scopeDev = self.camdev.scopeDev
         
+        self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged)
+        self.scopeDev.sigGlobalTransformChanged.connect(self.transformChanged)
+
         self.regionCtrl = None
         self.roi = None
+        self.img = None # overlay image in the camera Window... 
         
         self.win.setCentralWidget(self.w1)
         self.w1.addWidget(self.w2)
@@ -132,7 +139,6 @@ class Imager(Module):
         self.w1.addWidget(self.view)
         #if 'defaultCamera' in self.dev.config:
         # self.dev.config['defaultCamera']
-        self.laserdev = self.manager.getDevice('Laser-Blue')
  #       if 'defaultLaser' in self.dev.config:
  #           defLaser = self.dev.config['defaultLaser']
 
@@ -146,6 +152,16 @@ class Imager(Module):
         self.record_button.setCheckable(True)
         self.video_button.setCheckable(True)
         self.cameraSnapBtn = QtGui.QPushButton('Camera Snap')
+        self.alphaSlider = QtGui.QSlider()
+        self.alphaSlider.setMaximum(100)
+        self.alphaSlider.setSingleStep(2)
+        self.alphaSlider.setProperty("value", 50)
+        self.alphaSlider.setOrientation(QtCore.Qt.Horizontal)
+        self.alphaSlider.setInvertedAppearance(False)
+        self.alphaSlider.setInvertedControls(True)
+        self.alphaSlider.setTickPosition(QtGui.QSlider.TicksBelow)            
+        self.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
+        self.alphaSlider.setObjectName("alphaSlider")
         
         self.l2.addWidget(self.snap_button)
         self.l2.addWidget(self.run_button)
@@ -153,34 +169,37 @@ class Imager(Module):
         self.l2.addWidget(self.video_button)
         self.l2.addWidget(self.record_button)
         self.l2.addWidget(self.cameraSnapBtn)
+        self.l2.addWidget(self.alphaSlider)
         
         self.win.resize(800, 480)
         self.param = PT.Parameter(name = 'param', children=[
-            dict(name="Preset", type='list', value='', values=['', 'video-std',
-                                                               'video-fast', 'StandardDef', 'HighDef']),
+            dict(name="Preset", type='list', value='', 
+                 values=['', 'video-std', 'video-fast', 'StandardDef', 'HighDef']),
+            dict(name='Store', type='bool', value=True),
+            dict(name='Blank Screen', type='bool', value=True),
             dict(name='Sample Rate', type='float', value=1.0e6, suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10e3, 5e6], siPrefix=True),
             dict(name='Downsample', type='int', value=1, limits=[1,None]),
-            dict(name='Image Width', type='int', value=500),
+            dict(name='Frame Time', type='float', readonly=True, value=0.0),
+            dict(name='Pockels', type='float', value= 0.03, suffix='V', dec=True, minStep=1e-3, limits=[0, 1.5], step=0.1, siPrefix=True),
+            dict(name='Objective', type='str', value='Unk', readonly=True),
+            dict(name='Image Width', type='int', value=500, readonly=True),
+            dict(name='Image Height', type='int', value=500, readonlyt=True),
+            dict(name='Pixel Size', type='float', value=0.5e-7, suffix='m', limits=[1.e-7, 10.], step=0.1, siPrefix=True),
+            dict(name='Width', type='float', value = 50.0e-6, suffix = 'm', limits=[0., 5000.], step=5, siPrefix=True, readonly=True), #  True image width and height, in microns
+            dict(name='Height', type = 'float', value = 50.0e-6, suffix='m', limits=[0., 5000.], step=5, siPrefix=True, readonly=True),
+            dict(name='Xpos', type='float', value = 0.0e-6, suffix = 'm', limits=[-5000., 5000.], step=5, siPrefix=True, readonly=True), #  True image width and height, in microns
+            dict(name='Ypos', type = 'float', value = 00.0e-6, suffix='m', limits=[-5000., 5000.], step=5, siPrefix=True, readonly=True),
             dict(name='Y = X', type='bool', value=True),
-            dict(name='Image Height', type='int', value=500),
-            dict(name='Width', type='float', value = 50.0e-6, suffix = 'm', limits=[0., 5000.], step=5, siPrefix=True), #  True image width and height, in microns
-            dict(name='Height', type = 'float', value = 50.0e-6, suffix='m', limits=[0., 5000.], step=5, siPrefix=True),
-            dict(name='XCenter', type='float', value=-0.3, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
-            dict(name='XSweep', type='float', value=1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
-            dict(name='YCenter', type='float', value=-0.75, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
-            dict(name='YSweep', type='float', value=1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
+            dict(name='XCenter', type='float', value=-0.3, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True, readonly=True),
+            dict(name='XSweep', type='float', value=1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True, readonly=True),
+            dict(name='YCenter', type='float', value=-0.75, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True, readonly=True),
+            dict(name='YSweep', type='float', value=1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True, readonly=True),
             dict(name='Bidirectional', type='bool', value=True),
             dict(name='Decomb', type='bool', value=True, children=[
                 dict(name='Auto', type='bool', value=True),
                 dict(name='Shift', type='float', value=100e-6, suffix='s', step=10e-6, siPrefix=True),
             ]),
             dict(name='Overscan', type='float', value=5.0, suffix='%'),
-            dict(name='Pockels', type='float', value= 0.03, suffix='V', dec=True, minStep=1e-3, limits=[0, 1.5], step=0.1, siPrefix=True),
-            dict(name='Blank Screen', type='bool', value=True),
-            dict(name='Store', type='bool', value=True),
-            dict(name='Show PMT V', type='bool', value=False),
-            dict(name='Show Mirror V', type='bool', value=False),
-            dict(name='Frame Time', type='float', readonly=True, value=0.0),
             dict(name='Scope Device', type='interface', interfaceTypes=['microscope']),
             dict(name='Scanner Device', type='interface', interfaceTypes=['scanner']),
             dict(name='Laser Device', type='interface', interfaceTypes=['laser']),
@@ -197,6 +216,8 @@ class Imager(Module):
                 dict(name="Duration", type="float", value=0, readonly=True, suffix='s', siPrefix = True),
                 dict(name="Current Frame", type='int', value = 0, readonly=True),
             ]),
+            dict(name='Show PMT V', type='bool', value=False),
+            dict(name='Show Mirror V', type='bool', value=False),
         ])
         self.stopFlag = False
         self.tree.setParameters(self.param)
@@ -209,38 +230,60 @@ class Imager(Module):
         self.record_button.toggled.connect(self.recordToggled)
         self.cameraSnapBtn.clicked.connect(self.cameraSnap)
         self.Manager = manager
-         # insert an ROI into the camera image that corresponds to our scan area
+        # insert an ROI into the camera image that corresponds to our scan area
                 
         scopeState = self.camdev.getScopeState()
-        #print scopeState
+        self.objectiveChanged() # force update of objective information
         cpos = scopeState['centerPosition']
         csize = [self.param['Width'], self.param['Height']]
-        #print 'cpos: ', float(cpos[0]), float(cpos[1])
-        #print 'csize: ', csize
-        self.roi = RegionCtrl([float(cpos[0]), float(cpos[1])], [self.param['Width'], self.param['Height']])
-        self.roi.addScaleHandle([1,1], [0.5, 0.5])
-        self.roi.addRotateHandle([0,0], [0.5, 0.5])
-        self.roi.setZValue(1000)
+        if self.roi is None:
+            self.roi = RegionCtrl(cpos, csize) #[float(cpos[0]), float(cpos[1])] # this actually gets over ridden by the camera additem below..
+            self.roi.setZValue(1000)
+            self.cameraModule.window().addItem(self.roi)
+            self.roi.setPos(cpos) # now is the time to do this. aaaaargh. Several hours later!!!
+            self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
+# check the devices...        
+        self.laserDev = self.manager.getDevice(self.param['Laser Device'])
+        self.scannerDev = self.manager.getDevice(self.param['Scanner Device'])
         
-        pos = self.roi.pos()
-        si = self.roi.size()
-        print 'pos, size: ', pos, si
-        ##print cm.children
-        #self.cameraModule.ui.addItem(self.roi)
-        #self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
-        cm = self.setupCameraModule()
-        #self.param.param('Camera Module').sigValueChanged.connect(cm)
-
-    
-    def quit(self):
-        self.cameraModule.ui.removeItem(self.roi)
+    def quit(self, fromUi=False):
+        if self.roi is not None:
+            self.cameraModule.window().removeItem(self.roi)
+        if not fromUi:
+            self.ui.quit()
         Module.quit(self)
-        
-    def updateFromROI(self):
-        pos = self.roi.pos()
-        si = self.roi.size()
-        print 'pos, size: ', pos, si
+
+    def objectiveChanged(self):
+        """ report that the objective has changed in the parameter tree,
+        and then (future) reposition the ROI that drives the image region.
+        """
+        self.param['Objective'] = self.scopeDev.currentObjective.name()
     
+    def transformChanged(self):
+        """
+        Report that the tranform has changed, which might include the objective, or
+        perhaps the stage position, etc. This needs to be obtained to re-align
+        the scanner
+        """
+        pass
+    
+    def updateFromROI(self):
+        """ read the ROI rectangle width and height and repost
+        in the parameter tree """
+        state = self.roi.getState()
+        w, h = state['size']
+        self.param['Width'] = w
+        self.param['Height'] = h
+        x, y = state['pos']
+        self.param['Xpos'] = x
+        self.param['Ypos'] = y
+
+    def imageAlphaAdjust(self):
+        if self.img is None:
+            return
+        alpha = self.alphaSlider.value()
+        self.img.setImage(opacity=float(alpha/100.))
+        
     def PMT_Run(self):
         info = {}
         self.stopFlag = False
@@ -253,6 +296,8 @@ class Imager(Module):
             nSteps = self.param['Z-Stack', 'Steps']
             for i in range(nSteps):
                 img = self.takeImage()[NP.newaxis, ...]
+                if img is None:
+                    break
                 images.append(img)
                 self.view.setImage(img)
                 
@@ -270,6 +315,8 @@ class Imager(Module):
                     break
                 self.param['Timed', 'Current Frame'] = i
                 img = self.takeImage()[NP.newaxis, ...]
+                if img is None:
+                   return
                 images.append(img)
                 self.view.setImage(img)
                 if self.stopFlag:
@@ -282,6 +329,8 @@ class Imager(Module):
         else:
             info['2pImageType'] = 'Snap'
             imgData = self.takeImage()
+            if imgData is None:
+                return
 
         self.view.setImage(imgData)
         info = self.param.getValues()
@@ -294,7 +343,7 @@ class Imager(Module):
         Take one image as a snap, regardless of whether a Z stack or a Timed acquisition is selected
         """
         imgData = self.takeImage()
-        if self.testMode:
+        if self.testMode or imgData is None:
             return
         self.view.setImage(imgData)
         info = self.param.getValues()
@@ -334,80 +383,75 @@ class Imager(Module):
         self.stopFlag = True
         
     def takeImage(self):
-        width = self.param['Image Width']
+#
+# get image parameters from the ROI:
+#
+        state = self.roi.getState()
+        w, h = state['size']
+        p0 = PG.Point(0,0)
+        p1 = PG.Point(w,0)
+        p2 = PG.Point(0, h)
+        points = [p0, p1, p2]
+        points = [PG.Point(self.roi.mapToView(p)) for p in points] # convert to view points (as needed for scanner)
+
+    #return {'type': self.name, 'points': points, 'startTime': self.params['startTime'], 
+        #        'endTime': self.params['endTime'], 'nScans': self.params['nScans'],
+        #        'lineSpacing': self.params['linespacing']} 
+
+        width = self.param['Width']
         if self.param['Y = X']:
             height = width
         else:
-            height = self.param['Image Height']
-        #viewImagePts = height * width
-        #imagePts = height * width
-        
-        xscan = self.param['XSweep']/2.0
-        xcenter = self.param['XCenter']
-        ycenter = self.param['YCenter']
-        if self.param['Y = X']:
-            yscan = xscan
-        else:
-            yscan = self.param['YSweep']/2.0
-            
+            height = self.param['Height']
+        Xpos = self.param['Xpos']
+        Ypos = self.param['Ypos']
+        xCenter = self.param['Xpos']#-width/2.0
+        yCenter = self.param['Ypos']#-height/2.0
+        nPointsX = int(width/self.param['Pixel Size'])
+        nPointsY = int(height/self.param['Pixel Size'])
+        xScan = NP.linspace(0., width, nPointsX)
+        xScan += xCenter
+#        print 'w, h, xc, yc', width, height, xCenter, yCenter   
         sampleRate = self.param['Sample Rate']
         downsample = self.param['Downsample']
-        overscan = self.param['Overscan']/100.     ## fraction of voltage scan range
-        xscan *= overscan + 1.0 
-        overscanPixels = int(width / 2. * overscan)
-        pixelsPerRow = width + 2 * overscanPixels  ## make sure width is increased by an even number.
+        overScan = self.param['Overscan']/100.     ## fraction of voltage scan range
+        overScanWidth = width*overScan
+#        print 'overscan: ', overScan
+        #xScan *= overScan + 1.0 
+        overScanPixels = int(nPointsX / 2. * overScan)
+        pixelsPerRow = nPointsX + 2 * overScanPixels  ## make sure width is increased by an even number.
         samplesPerRow = pixelsPerRow * downsample
-        samples = samplesPerRow * height
-        #xoverscan = xscan*overscan/100.0 # overscan voltage
-        #noverscan = int(width*xoverscan)     ## ???  pixels * volts
-        #nsamp = imagePts+2*noverscan*height  
-        #scanpixels = pixelsPerRow * height
-        #nscwidth = downsample*(width+2*noverscan)
-#        if self.testMode:
-#            print "imagePts: %d" % (imagePts)
-#            print "noverscan: %d" % (noverscan)
-#            print "samples: %d" % (samples)
-#            print "downsample %d" % (downsample)
-#            print "xoverscan: %f" % (xoverscan)
+        samples = samplesPerRow * nPointsY
+#        print 'nPointsX, Pixels per row, overScanPixels: ', nPointsX, pixelsPerRow, overScanPixels
         if not self.param['Bidirectional']:
-            saw1 = NP.linspace(xcenter-xscan, xcenter+xscan, samplesPerRow)
-            #if noverscan > 0:
-                #saw1 = NP.concatenate((saw1[0]*NP.ones(noverscan), saw1, saw1[-1]*NP.ones(noverscan)))
-            xScan = NP.tile(saw1, (1, height))[0,:]
+            saw1 = NP.linspace(0., width+overScanWidth, num=samplesPerRow)
+            saw1 += xCenter-overScanWidth/2.0
+            xSaw = NP.tile(saw1, (1, nPointsY))[0,:]
         else:
-            saw1 = NP.linspace(xcenter-xscan, xcenter+xscan, samplesPerRow)
-            rows = [saw1, saw1[::-1]] * int(height/2)
-            if len(rows) < height:
+            saw1 = NP.linspace(0., width+overScanWidth, num=samplesPerRow)
+            saw1 += xCenter-overScanWidth/2.0
+            rows = [saw1, saw1[::-1]] * int(nPointsY/2)
+            if len(rows) < nPointsY:
                 rows.append(saw1)
-            xScan = NP.concatenate(rows, axis=0)
-            #if noverscan > 0:
-                #saw1 = NP.concatenate((saw1[0]*NP.ones(noverscan), saw1, saw1[-1]*NP.ones(noverscan)))
-            #scandir = 0
-            #xScan = NP.empty(samples)
-            #for y in range(height):
-                #if scandir == 0:
-                    #xScan[y*nscwidth:(y+1)*nscwidth] = saw1
-                    #scandir = 1
-                #elif scandir == 1:
-                    #xScan[y*nscwidth:(y+1)*nscwidth] = NP.flipud(saw1)
-                    #scandir = 0
-        yvals = NP.linspace(ycenter-yscan, ycenter+yscan, height)
+            xSaw = NP.concatenate(rows, axis=0)
+
+        yvals = NP.linspace(0., height, num=nPointsY)
+        yvals += yCenter
         yScan = NP.empty(samples)
-        for y in range(height):
+        for y in range(nPointsY):
             yScan[y*samplesPerRow:(y+1)*samplesPerRow] = yvals[y]
         
-#        if self.testMode:
-#            MP.figure(1)
-#            MP.plot(xScan, 'r-')
-#            MP.plot(yScan, 'b-')
-#            MP.show()
-#            return
-            
+        # now translate this scan into scanner voltage coordinates...
+
+        x, y = self.scannerDev.mapToScanner(xSaw, yScan, self.laserDev.name())
+#        print 'xS, yS: ', xScan[0:10], yScan[0:10]
+#        print 'xl, yl: ', x[0:10], y[0:10]
+        
         cmd= {'protocol': {'duration': samples/sampleRate},
               'DAQ' : {'rate': sampleRate, 'numPts': samples, 'downsample':downsample}, 
               'Scanner-Raw': {
-                  'XAxis' : {'command': xScan},
-                  'YAxis' : {'command': yScan}
+                  'XAxis' : {'command': x},
+                  'YAxis' : {'command': y}
                   },
               'PockelCell': {'Switch' : {'preset': self.param['Pockels']}},
               'PMT' : {
@@ -431,47 +475,48 @@ class Imager(Module):
 
         data = task.getResult()
         imgData = data['PMT']['Input'].view(NP.ndarray)
-#        print imgData.shape
-#        print width*height
-        #imgTemp = NP.zeros((width * height))
-        imgData.shape = (height, pixelsPerRow)
+        imgData.shape = (nPointsY, pixelsPerRow)
         imgData = imgData.transpose()
         
         if self.param['Bidirectional']:
-            #scandir = 0
-            for y in range(1, height, 2):
+            for y in range(1, nPointsY, 2):
                 imgData[:,y] = imgData[::-1,y]
-                #if scandir == 0:
-                    #scandir = 1
-                #elif scandir == 1:
-                    #imgData[y*width:(y+1)*width] = NP.flipud(imgData[y*width:(y+1)*width])
-                    #scandir = 0            
             if self.param['Decomb', 'Auto']:
                 imgData, shift = self.decomb(imgData, minShift=0*sampleRate, maxShift=200e-6*sampleRate)  ## correct for mirror lag up to 200us
                 self.param['Decomb', 'Shift'] = shift / sampleRate
             else:
-                #print self.param['Decomb', 'Shift'], sampleRate
                 imgData, shift = self.decomb(imgData, auto=False, shift=self.param['Decomb', 'Shift']*sampleRate)
-            
-        
-        if overscanPixels > 0:
-            imgData = imgData[overscanPixels:-overscanPixels]  ## remove overscan
-        #if noverscan > 0: # remove the overscan data
-            #actualWidth = 2*noverscan+width
-            ##print "actualWidth: %d" % (actualWidth)
-            #for y in range(height): # first remove the overscan data from the array
-                #y0 = y*actualWidth + noverscan # first point in non-overscanned dat for this line
-##                if y < 10:
-##                    print "y: %d y0: %d + width: %d into: %d, %d" % (y, y0, y0+width, y*width, (y+1)*width)
-                #imgTemp[y*width:(y+1)*width] = imgData[y0:y0+width]
-            #imgData = imgTemp # [width*height]
-            #imgTemp=[]
+                
+        if overScanPixels > 0:
+            imgData = imgData[overScanPixels:-overScanPixels]  ## remove overscan
+
+        if self.img is not None:
+            self.cameraModule.window().removeItem(self.img)
+            self.img = None
+        #self.img = PG.ImageItem(imgData)
+        #self.cameraModule.window().addItem(self.img)
+        #w = imgData.shape[0]
+        #h = imgData.shape[1]
+        #localPts = map(PG.Vector, [[0,0], [w,0], [0,h], [0,0,1]]) # w and h of data of image in pixels.
+        #globalPts = [[Xpos, Ypos], [width, Ypos], [Xpos, height]]
+        ##imgData.shape[0]*imgData.shape[1] # prog['points'] # sort of. - 
+        #m = PG.solve3DTransform(localPts, map(PG.Vector, globalPts+[[0,0,1]]))
+        #m[:,2] = m[:,3]
+        #m[2] = m[3]
+        #m[2,2] = 1
+
+        #tr = QtGui.QTransform(*m[:3,:3].transpose().reshape(9))
+        #self.img.setTransform(tr)
+# flip the PMT image upside down, since that is how it is... there is a mirror in the path
+# (should this be a settable parameter? )
+
+       # imgData = NP.flipud(imgData)
+        imgData = NP.fliplr(imgData)
         if self.param['Show PMT V']:
             x=NP.linspace(0, samples/sampleRate, imgData.size)
             PG.plot(y=imgData.reshape(imgData.shape[0]*imgData.shape[1]), x=x)
         if self.param['Show Mirror V']:
             PG.plot(y=xScan, x=NP.linspace(0, samples/self.param['Sample Rate'], xScan.size))
-        #imgData = imgData.reshape((width, height)).transpose()
         return imgData
   
     def update(self):
@@ -488,6 +533,10 @@ class Imager(Module):
         if self.param['Y = X']:
             self.param['YSweep'] = self.param['XSweep']
             self.param['Image Height'] = self.param['Image Width']
+# check the devices...        
+        self.laserDev = self.manager.getDevice(self.param['Laser Device'])
+        self.scannerDev = self.manager.getDevice(self.param['Scanner Device'])
+
             
     def decomb(self, img, minShift=0, maxShift=100, auto=True, shift=None):
         ## split image into fields
@@ -534,6 +583,8 @@ class Imager(Module):
     def startVideo(self):
         while True:
             img = self.takeImage()
+            if img is None:
+                return
             self.view.setImage(img, autoLevels=False)
             QtGui.QApplication.processEvents()
             if not self.video_button.isChecked():
@@ -567,9 +618,6 @@ class Imager(Module):
         print 'setup: pos, size: ', pos, si#pp.pprint((scope.config))
         #self.regionCtrl = RegionCtrl(self.roi.pos(), self.roi.size())
         #mod.addItem(self.roi, z=1000)
-        
-
-
         
     def cameraSnap(self):
         width = self.param['Image Width']
