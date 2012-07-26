@@ -285,6 +285,22 @@ class pbm_ImageAnalysis(AnalysisModule):
         If multiple files are selected, this routine will be called for each one...
         
         """
+        
+        ds = self.dataModel.isSequence(dh[0])
+        print 'is seqence? : ', ds
+        dt = self.dataModel.dirType(dh[0])
+        print 'dirtype: ', dt
+        print 'day: ', self.dataModel.getDayInfo(dh[0])
+        print 'slice: ', self.dataModel.getSliceInfo(dh[0])
+        if dt == 'ProtocolSequence':
+            dsp = self.dataModel.listSequenceParams(dh[0])
+            print 'pseq par: ', dsp
+            #m = self.dataModel.buildSequenceArray(dh[0], lambda protoDir: self.dataModel.getClampFile(protoDir).read()['primary'])
+            #print 'm = ', m
+        
+        
+        return
+        
         dlh = self.fileLoaderInstance.selectedFiles()
         if self.ctrl.ImagePhys_PhysROIPlot.isChecked():
             print 'multiple file load, lendh: ', len(dlh)
