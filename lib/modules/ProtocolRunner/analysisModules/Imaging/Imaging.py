@@ -60,16 +60,21 @@ class ImagingModule(AnalysisModule):
         dist = (pg.Point(limits[0])-pg.Point(limits[1])).length()
         startT = prog['startTime']
         endT = prog['endTime']
+        print "In NewFrame!!"
         
         if prog['type'] == 'lineScan':
+            print "lineScane:" 
             imageData = pmtdata[prog['startStopIndices'][0]:prog['startStopIndices'][0]+nscans*prog['samplesPerScan']]
             imageData=imageData.reshape(nscans, prog['samplesPerScan'])
             imageData = fn.downsample(imageData, downSample, axis=1)
+            print 'before setImage'
             self.image.setImage(imageData)
             self.image.setRect(QtCore.QRectF(startT, 0.0, endT-startT, dist ))
+            print "before PlotWidget"
             self.ui.plotWidget.autoRange()
             self.ui.histogram.imageChanged(autoLevel=True)
             storeFlag = frame['cmd']['protocol']['storeData'] # get flag 
+            print "before StoreFlag and storeflag is:", storeFlag
             if storeFlag:
                 dirhandle = frame['cmd']['protocol']['storageDir'] # grab directory
                 self.info={'detector': self.detectorDevice(), 'scanner': self.scannerDevice(), 'indices': prog['startStopIndices'], 
@@ -78,6 +83,7 @@ class ImagingModule(AnalysisModule):
                 print dict
                 info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]:prog['samplesPerScan']]), dict(name='Distance'), self.info]
                 ma = metaarray.MetaArray(imageData, info=info)
+                print 'I am writing imaging.ma'
                 dirhandle.writeFile(ma, 'Imaging.ma')
 
         if prog['type'] == 'rectScan':

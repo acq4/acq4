@@ -86,6 +86,23 @@ Presets = {
     },
 }
 
+class ImagerWindow(QtGui.QMainWindow):
+    """
+    Create the window we will use for the Imager Module.
+    This is only done this way so that we can catch the window
+    close event (with "X").
+    """
+    def __init__(self, module):
+        self.hasQuit = False
+        self.module = module ## handle to the rest of the module class
+   
+        ## Create the main window
+        win = QtGui.QMainWindow.__init__(self)
+        return win
+    
+    def closeEvent(self, ev):
+        self.module.quit()
+
 
 class Black(QtGui.QWidget):
     """ make a black rectangle to fill screen when "blanking" """
@@ -94,8 +111,8 @@ class Black(QtGui.QWidget):
         brush = PG.mkBrush(0.0)
         p.fillRect(self.rect(), brush)
         p.end()
-    
-    
+     
+
 class ScreenBlanker:
     """
     Perform the blanking on ALL screens that we can detect.
@@ -117,6 +134,7 @@ class ScreenBlanker:
         for w in self.widgets:
             w.hide() # just take them away
         self.widgets = []
+
         
 class RegionCtrl(PG.ROI):
     """
@@ -127,8 +145,8 @@ class RegionCtrl(PG.ROI):
     window().addItem, the position is lost, and will have to be
     reset in the ROI.
     """
-    def __init__(self, pos, size):
-        PG.ROI.__init__(self, pos, size=size, pen='r')
+    def __init__(self, pos, size, roiColor = 'r'):
+        PG.ROI.__init__(self, pos, size=size, pen=roiColor)
         self.addScaleHandle([0,0], [1,1])
         self.addScaleHandle([1,1], [0,0])
         self.setZValue(1000)
@@ -139,7 +157,7 @@ class RegionCtrl(PG.ROI):
 class Imager(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config) 
-        self.win = QtGui.QMainWindow()
+        self.win = ImagerWindow(self) # make the main window - mostly to catch window close event...
         self.testMode = False # set to True to just display the scan signals
         self.win.show()
         self.win.setWindowTitle('Multiphoton Imager')
@@ -192,7 +210,6 @@ class Imager(Module):
         self.record_button.setCheckable(True)
         self.video_button.setCheckable(True)
         self.cameraSnapBtn = QtGui.QPushButton('Camera Snap')
-        self.quit_button = QtGui.QPushButton('Quit Imager')
         # control the alpha of the overlay image created from scanning the ROI
         self.alphaSlider = QtGui.QSlider()
         self.alphaSlider.setMaximum(100)
@@ -212,7 +229,6 @@ class Imager(Module):
         self.l2.addWidget(self.record_button)
         self.l2.addWidget(self.cameraSnapBtn)
         self.l2.addWidget(self.alphaSlider)
-        self.l2.addWidget(self.quit_button)
 
         self.run_button.clicked.connect(self.PMT_Run)
         self.snap_button.clicked.connect(self.PMT_Snap)
@@ -220,7 +236,6 @@ class Imager(Module):
         self.video_button.clicked.connect(self.toggleVideo)
         self.record_button.toggled.connect(self.recordToggled)
         self.cameraSnapBtn.clicked.connect(self.cameraSnap)
-        self.quit_button.clicked.connect(self.closeWindow)
         
         self.param = PT.Parameter(name = 'param', children=[
             dict(name="Preset", type='list', value='', 
@@ -234,7 +249,7 @@ class Imager(Module):
             dict(name='Objective', type='str', value='Unk', readonly=True),
             dict(name='Image Width', type='int', value=500, readonly=True),
             dict(name='Image Height', type='int', value=500, readonlyt=True),
-            dict(name='Pixel Size', type='float', value=0.5e-7, suffix='m', limits=[1.e-7, 1e-4], step=1e-7, siPrefix=True),
+            dict(name='Pixel Size', type='float', value=0.5e-7, suffix='m', limits=[1.e-8, 1e-4], step=1e-7, siPrefix=True),
             dict(name='Width', type='float', value = 50.0e-6, suffix = 'm', limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
             dict(name='Height', type = 'float', value = 50.0e-6, suffix='m', limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True),
             dict(name='Xpos', type='float', value = 0.0e-6, suffix = 'm', limits=[-50e-3, 50e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
@@ -280,8 +295,8 @@ class Imager(Module):
 # check the devices...        
         self.laserDev = self.manager.getDevice(self.param['Laser Device'])
         self.scannerDev = self.manager.getDevice(self.param['Scanner Device'])
-        
-    def closeWindow(self):
+
+    def quit(self):
        # print 'Imager quit WAS CALLED'
         for obj in self.objectiveROImap:
             try:
@@ -315,10 +330,27 @@ class Imager(Module):
         """
         pass
 
-    def createROI(self):
-       # scopeState = self.camdev.getScopeState()
-       # cpos = scopeState['centerPosition']
-       # csize = [self.param['Width'], self.param['Height']] # size of roi we will place
+    def getObjectiveColor(self, objective):
+        """
+        for the current objective, parse a color or use a default. This is a kludge. 
+        """
+        color = 'r'
+        id = objective.key()[1]
+        if id == u'63x0.9':
+            color = QtGui.QColor("darkBlue")
+        elif id == u'40x0.8':
+            color = QtGui.QColor("blue")
+        elif id == u'40x0.75':
+            color = QtGui.QColor("blue")
+        elif id == u'5x0.25':
+            color = QtGui.QColor("red")
+        elif id == u'4x0.1':
+            color = QtGui.QColor("darkRed")
+        else:
+            color = QtGui.QColor("lightGray")
+        return(color)
+            
+    def createROI(self, roiColor='r'):
        # the initial ROI will be nearly as big as the field, and centered.
         brect = self.camdev.getBoundary().boundingRect()
         width = brect.width()
@@ -327,7 +359,8 @@ class Imager(Module):
         y = brect.y()+height*0.05
         csize= [width*0.9,  height*0.9]
         cpos = [x, y]
-        roi = RegionCtrl(cpos, csize) #[float(cpos[0]), float(cpos[1])] # this actually gets over ridden by the camera additem below..
+        roiColor = self.getObjectiveColor(self.scopeDev.currentObjective) # pick up an objective color...
+        roi = RegionCtrl(cpos, csize, roiColor) # Note that the position actually gets over ridden by the camera additem below..
         roi.setZValue(1000)
         self.cameraModule.window().addItem(roi)
         roi.setPos(cpos) # now is the time to do this. aaaaargh. Several hours later!!!
@@ -353,8 +386,25 @@ class Imager(Module):
         self.param['Image Width'] = int(w/self.param['Pixel Size'])
         self.param['Image Height'] = int(h/self.param['Pixel Size'])
         self.update() # get the rest of the info to update as well.
-        
 
+    def update(self):
+        preset = self.param['Preset']
+        if preset != '':
+            self.param['Preset'] = ''
+            global Presets
+            for k,v in Presets[preset].iteritems():
+                self.param[k] = v
+            
+        self.param['Frame Time'] = self.param['Image Width']*self.param['Image Height']*self.param['Downsample']/self.param['Sample Rate']
+        self.param['Z-Stack', 'Depth'] = self.param['Z-Stack', 'Step Size'] * (self.param['Z-Stack', 'Steps']-1)
+        self.param['Timed', 'Duration'] = self.param['Timed', 'Interval'] * (self.param['Timed', 'N Intervals']-1)
+        if self.param['Y = X']:
+            self.param['YSweep'] = self.param['XSweep']
+            self.param['Image Height'] = self.param['Image Width']
+# check the devices...        
+        self.laserDev = self.manager.getDevice(self.param['Laser Device'])
+        self.scannerDev = self.manager.getDevice(self.param['Scanner Device'])
+        
     def imageAlphaAdjust(self):
         if self.img is None:
             return
@@ -428,7 +478,7 @@ class Imager(Module):
         if self.param['Store']:
             info = self.param.getValues()
             info['2pImageType'] = 'Snap'
-            #info['microscope'] = self.param['Scope Device'].value()
+            #microscope = self.#info['microscope'] = self.param['Scope Device'].value()
             scope = self.Manager.getDevice(self.param['Scope Device'])
             #print dir(scope)
             #m = self.handle.info()['microscope']
@@ -570,6 +620,7 @@ class Imager(Module):
         if self.img is not None:
             self.cameraModule.window().removeItem(self.img)
             self.img = None
+        # code to display the image on the camera image - temporarily CUT
         #self.img = PG.ImageItem(imgData)
         #self.cameraModule.window().addItem(self.img)
         #w = imgData.shape[0]
@@ -595,25 +646,6 @@ class Imager(Module):
         if self.param['Show Mirror V']:
             PG.plot(y=xScan, x=NP.linspace(0, samples/self.param['Sample Rate'], xScan.size))
         return imgData
-  
-    def update(self):
-        preset = self.param['Preset']
-        if preset != '':
-            self.param['Preset'] = ''
-            global Presets
-            for k,v in Presets[preset].iteritems():
-                self.param[k] = v
-            
-        self.param['Frame Time'] = self.param['Image Width']*self.param['Image Height']*self.param['Downsample']/self.param['Sample Rate']
-        self.param['Z-Stack', 'Depth'] = self.param['Z-Stack', 'Step Size'] * (self.param['Z-Stack', 'Steps']-1)
-        self.param['Timed', 'Duration'] = self.param['Timed', 'Interval'] * (self.param['Timed', 'N Intervals']-1)
-        if self.param['Y = X']:
-            self.param['YSweep'] = self.param['XSweep']
-            self.param['Image Height'] = self.param['Image Width']
-# check the devices...        
-        self.laserDev = self.manager.getDevice(self.param['Laser Device'])
-        self.scannerDev = self.manager.getDevice(self.param['Scanner Device'])
-
             
     def decomb(self, img, minShift=0, maxShift=100, auto=True, shift=None):
         ## split image into fields
