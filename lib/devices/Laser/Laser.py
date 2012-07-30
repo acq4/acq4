@@ -543,9 +543,15 @@ class Laser(DAQGeneric, OptomechDevice):
             #if self.getParam('powerAlert'):
                 #logMsg("%s power is outside expected range. Please adjust expected value or adjust the tuning of the laser." %self.name(), msgType='error')
         
-    def getPCellWaveform(self, powerCmd):
+    def getPCellWaveform(self, powerCmd, cmd):
         ### return a waveform of pCell voltages to give the power in powerCmd
-        raise Exception("Support for pockel cells is not yet implemented.")
+        return
+        #if self.hasPCell:
+            #print cmd
+            #print 'powercmd: ',powerCmd
+            #print np.amax(powerCmd)
+            
+            #raise Exception("Support for pockel cells is not yet implemented.")
     
 
     def getChannelCmds(self, cmd, rate):
@@ -578,7 +584,7 @@ class Laser(DAQGeneric, OptomechDevice):
                 powerCmd = cmd['switchWaveform']*power*transmission
             else:
                 powerCmd = cmd['powerWaveform']
-            daqCmd['pCell'] = self.getPCellWaveform(powerCmd)
+            daqCmd['pCell'] = self.getPCellWaveform(powerCmd, cmd)
         else:
             if len(np.unique(cmdWaveform)) > 2: ## check to make sure command doesn't specify powers we can't do
                 raise Exception("%s device does not have an analog power modulator, so can only have a binary power command." %str(self.name()))
@@ -596,7 +602,8 @@ class Laser(DAQGeneric, OptomechDevice):
             ## open shutter a little before we expect power because it has a delay
             delayPts = int(delay*rate) 
             a = np.argwhere(shutterCmd[1:]-shutterCmd[:-1] == 1)+1
-            
+            print 'delay: ', delay
+            print a
             for i in a:
                 start = i-delayPts
                 if start < 0:

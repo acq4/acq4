@@ -1300,9 +1300,11 @@ class ProgramLineScan(QtCore.QObject):
         
         self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
             dict(name='length', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
-            dict(name='startTime', type='float', value=1e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
-            dict(name='endTime', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='startTime', type='float', value=5e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='sweepDuration', type='float', value=4e-3, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='retraceDuration', type='float', value=1e-3, suffix='s', siPrefix=True, bounds=[0., None], step=1e-3),
             dict(name='nScans', type='int', value=100, bounds=[1, None]),
+            dict(name='endTime', type='float', value=5.5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2, readonly=True),
         ])
         self.params.ctrl = self        
         self.roi = pg.LineSegmentROI([[0.0, 0.0], [self.params['length'], self.params['length']]])
@@ -1320,7 +1322,7 @@ class ProgramLineScan(QtCore.QObject):
         return self.params
     
     def update(self):
-        pass
+        self.params['endTime'] = self.params['startTime']+self.params['nScans']*(self.params['sweepDuration'] + self.params['retraceDuration'])
     
     def updateFromROI(self):
         p =self.roi.listPoints()
@@ -1330,8 +1332,8 @@ class ProgramLineScan(QtCore.QObject):
     def generateProtocol(self):
         points = self.roi.listPoints() # in local coordinates local to roi.
         points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
-        return {'type': 'lineScan', 'points': points, 'startTime': self.params['startTime'], 
-                'endTime': self.params['endTime'], 'nScans': self.params['nScans']}
+        return {'type': 'lineScan', 'points': points, 'startTime': self.params['startTime'], 'sweepDuration': self.params['sweepDuration'], 
+                'endTime': self.params['endTime'], 'retraceDuration': self.params['retraceDuration'], 'nScans': self.params['nScans']}
         
     
 class ProgramRectScan(QtCore.QObject):

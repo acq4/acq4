@@ -519,9 +519,16 @@ class ScannerTask(DeviceTask):
                 startPos = cmd['points'][0]                
                 stopPos = cmd['points'][1]               
                 scanLength = (stopInd - startInd)/cmd['nScans'] # in point indices, not time.
+                retraceLength = cmd['retraceDuration']/dt
+                scanLength = scanLength - retraceLength # adjust for retrace
+                scanPause = np.ones(int(retraceLength))
                 cmd['samplesPerScan'] = scanLength
+                cmd['samplesPerPause'] = scanPause.shape[0]
                 xPos = np.linspace(startPos.x(), stopPos.x(), scanLength)
+                xPos = np.append(xPos, startPos.x()*scanPause)
+
                 yPos = np.linspace(startPos.y(), stopPos.y(), scanLength)
+                yPos = np.append(yPos, startPos.x()*scanPause)
                 x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['laser'])
                 x = np.tile(x, cmd['nScans'])
                 y = np.tile(y, cmd['nScans'])

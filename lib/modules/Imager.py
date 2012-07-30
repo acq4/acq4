@@ -200,7 +200,9 @@ class Imager(Module):
 
         # create the user interface
         self.tree = PT.ParameterTree()
-        self.l2.addWidget(self.tree)
+        self.l2.insertWidget(0, self.tree)
+        self.buttonGrid = QtGui.QGridLayout()
+        self.l2.insertLayout(1, self.buttonGrid)
         # action buttons:
         self.snap_button = QtGui.QPushButton('Snap')
         self.run_button = QtGui.QPushButton('Run')
@@ -210,6 +212,9 @@ class Imager(Module):
         self.record_button.setCheckable(True)
         self.video_button.setCheckable(True)
         self.cameraSnapBtn = QtGui.QPushButton('Camera Snap')
+        self.hide_check = QtGui.QCheckBox('Hide Overlay')
+        self.hide_check.setCheckState(False)
+        self.hide_check.stateChanged.connect(self.hideOverlayImage)
         # control the alpha of the overlay image created from scanning the ROI
         self.alphaSlider = QtGui.QSlider()
         self.alphaSlider.setMaximum(100)
@@ -222,13 +227,15 @@ class Imager(Module):
         self.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
         self.alphaSlider.setObjectName("alphaSlider")
         
-        self.l2.addWidget(self.snap_button)
-        self.l2.addWidget(self.run_button)
-        self.l2.addWidget(self.stop_button)
-        self.l2.addWidget(self.video_button)
-        self.l2.addWidget(self.record_button)
-        self.l2.addWidget(self.cameraSnapBtn)
-        self.l2.addWidget(self.alphaSlider)
+        self.buttonGrid.addWidget(self.snap_button, 0, 0)
+        self.buttonGrid.addWidget(self.run_button, 1, 0)
+        self.buttonGrid.addWidget(self.stop_button, 2, 0)
+        self.buttonGrid.addWidget(self.hide_check, 3, 0)
+        self.buttonGrid.addWidget(self.video_button, 0, 1)
+        self.buttonGrid.addWidget(self.record_button, 1, 1)
+        self.buttonGrid.addWidget(self.cameraSnapBtn, 2, 1)
+        self.buttonGrid.addWidget(self.alphaSlider, 3, 1)
+
 
         self.run_button.clicked.connect(self.PMT_Run)
         self.snap_button.clicked.connect(self.PMT_Snap)
@@ -246,9 +253,9 @@ class Imager(Module):
             dict(name='Downsample', type='int', value=1, limits=[1,None]),
             dict(name='Frame Time', type='float', readonly=True, value=0.0),
             dict(name='Pockels', type='float', value= 0.03, suffix='V', dec=True, minStep=1e-3, limits=[0, 1.5], step=0.1, siPrefix=True),
-            dict(name='Objective', type='str', value='Unk', readonly=True),
+            dict(name='Objective', type='str', value='Unknown', readonly=True),
             dict(name='Image Width', type='int', value=500, readonly=True),
-            dict(name='Image Height', type='int', value=500, readonlyt=True),
+            dict(name='Image Height', type='int', value=500, readonly=True),
             dict(name='Pixel Size', type='float', value=0.5e-7, suffix='m', limits=[1.e-8, 1e-4], step=1e-7, siPrefix=True),
             dict(name='Width', type='float', value = 50.0e-6, suffix = 'm', limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
             dict(name='Height', type = 'float', value = 50.0e-6, suffix='m', limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True),
@@ -264,6 +271,7 @@ class Imager(Module):
                 dict(name='Auto', type='bool', value=True),
                 dict(name='Shift', type='float', value=100e-6, suffix='s', step=10e-6, siPrefix=True),
             ]),
+            
             dict(name='Overscan', type='float', value=5.0, suffix='%'),
             dict(name='Scope Device', type='interface', interfaceTypes=['microscope']),
             dict(name='Scanner Device', type='interface', interfaceTypes=['scanner']),
@@ -286,8 +294,8 @@ class Imager(Module):
         ])
         self.stopFlag = False
         self.tree.setParameters(self.param)
+        self.update() # also force update now to make sure all parameters are synchronized
         self.param.sigTreeStateChanged.connect(self.update)
-        self.update()
 
         self.Manager = manager
         # insert an ROI into the camera image that corresponds to our scan area                
@@ -383,33 +391,60 @@ class Imager(Module):
         x, y = state['pos']
         self.param['Xpos'] = x
         self.param['Ypos'] = y
-        self.param['Image Width'] = int(w/self.param['Pixel Size'])
-        self.param['Image Height'] = int(h/self.param['Pixel Size'])
-        self.update() # get the rest of the info to update as well.
+        self.param['Image Width'] = int(self.param['Width']/self.param['Pixel Size'])
+        if self.param['Y = X']:
+            self.param['YSweep'] = self.param['XSweep']
+            self.param['Image Height'] = self.param['Image Width']
+        else:
+            self.param['Image Height'] = int(self.param['Height']/self.param['Pixel Size'])
+            
 
     def update(self):
+        try:
+            self.param.sigTreeStateChanged.disconnect(self.update) # prevent recursion. 
+        except:
+            pass
+        # check the devices first        
+        self.laserDev = self.manager.getDevice(self.param['Laser Device'])
+        self.scannerDev = self.manager.getDevice(self.param['Scanner Device'])
+        # use the presets if they are engaged
         preset = self.param['Preset']
         if preset != '':
             self.param['Preset'] = ''
             global Presets
             for k,v in Presets[preset].iteritems():
                 self.param[k] = v
-            
-        self.param['Frame Time'] = self.param['Image Width']*self.param['Image Height']*self.param['Downsample']/self.param['Sample Rate']
-        self.param['Z-Stack', 'Depth'] = self.param['Z-Stack', 'Step Size'] * (self.param['Z-Stack', 'Steps']-1)
-        self.param['Timed', 'Duration'] = self.param['Timed', 'Interval'] * (self.param['Timed', 'N Intervals']-1)
+        # calculate some values
+        
+        self.param['Image Width'] = int(self.param['Width']/self.param['Pixel Size'])
         if self.param['Y = X']:
             self.param['YSweep'] = self.param['XSweep']
             self.param['Image Height'] = self.param['Image Width']
-# check the devices...        
-        self.laserDev = self.manager.getDevice(self.param['Laser Device'])
-        self.scannerDev = self.manager.getDevice(self.param['Scanner Device'])
+        else:
+            self.param['Image Height'] = int(self.param['Height']/self.param['Pixel Size'])
+
+        self.param['Frame Time'] = self.param['Image Width']*self.param['Image Height']*self.param['Downsample']/self.param['Sample Rate']
+        self.param['Z-Stack', 'Depth'] = self.param['Z-Stack', 'Step Size'] * (self.param['Z-Stack', 'Steps']-1)
+        self.param['Timed', 'Duration'] = self.param['Timed', 'Interval'] * (self.param['Timed', 'N Intervals']-1)
+        self.param.sigTreeStateChanged.connect(self.update) # restore updating
+
         
     def imageAlphaAdjust(self):
         if self.img is None:
             return
         alpha = self.alphaSlider.value()
         self.img.setImage(opacity=float(alpha/100.))
+        
+    def hideOverlayImage(self):
+        if self.img is None:
+            print 'img is none'
+            return
+        if self.hide_check.isChecked() is True:
+            print 'hide'
+            self.img.hide()
+        else:
+            print 'show'
+            self.img.show()
         
     def PMT_Run(self):
         info = {}
@@ -510,9 +545,12 @@ class Imager(Module):
         self.stopFlag = True
         
     def takeImage(self):
-#
-# get image parameters from the ROI:
-#
+        """
+        Take an image using the scanning system and PMT, and return with the data.
+        """
+        #
+        # get image parameters from the ROI:
+        #
         state = self.currentRoi.getState()
         w, h = state['size']
         p0 = PG.Point(0,0)
@@ -620,26 +658,28 @@ class Imager(Module):
         if self.img is not None:
             self.cameraModule.window().removeItem(self.img)
             self.img = None
-        # code to display the image on the camera image - temporarily CUT
-        #self.img = PG.ImageItem(imgData)
-        #self.cameraModule.window().addItem(self.img)
-        #w = imgData.shape[0]
-        #h = imgData.shape[1]
-        #localPts = map(PG.Vector, [[0,0], [w,0], [0,h], [0,0,1]]) # w and h of data of image in pixels.
-        #globalPts = [[Xpos, Ypos], [width, Ypos], [Xpos, height]]
+        
+        # code to display the image on the camera image
+        self.img = PG.ImageItem(imgData) # make data into a pyqtgraph image
+        self.cameraModule.window().addItem(self.img)
+        w = imgData.shape[0]
+        h = imgData.shape[1]
+        localPts = map(PG.Vector, [[0,0], [w,0], [0, h], [0,0,1]]) # w and h of data of image in pixels.
+        globalPts = map(PG.Vector, [[Xpos, Ypos], [Xpos+width, Ypos], [Xpos, Ypos+height], [0, 0, 1]]) # actual values in global coordinates
         ##imgData.shape[0]*imgData.shape[1] # prog['points'] # sort of. - 
-        #m = PG.solve3DTransform(localPts, map(PG.Vector, globalPts+[[0,0,1]]))
-        #m[:,2] = m[:,3]
-        #m[2] = m[3]
-        #m[2,2] = 1
+        m = PG.solve3DTransform(localPts, globalPts)
+        m[:,2] = m[:,3]
+        m[2] = m[3]
+        m[2,2] = 1
 
-        #tr = QtGui.QTransform(*m[:3,:3].transpose().reshape(9))
-        #self.img.setTransform(tr)
+        tr = QtGui.QTransform(*m[:3,:3].transpose().reshape(9))
+        self.img.setTransform(tr)
 # flip the PMT image upside down, since that is how it is... there is a mirror in the path
 # (should this be a settable parameter? )
 
-       # imgData = NP.flipud(imgData)
+        #imgData = NP.flipud(imgData)
         imgData = NP.fliplr(imgData)
+        
         if self.param['Show PMT V']:
             x=NP.linspace(0, samples/sampleRate, imgData.size)
             PG.plot(y=imgData.reshape(imgData.shape[0]*imgData.shape[1]), x=x)
