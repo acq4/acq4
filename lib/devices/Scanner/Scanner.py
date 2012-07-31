@@ -478,6 +478,7 @@ class ScannerTask(DeviceTask):
         lastStopInd = 0
         for i in range(len(cmds)):
             cmd = cmds[i]
+            print dir(cmd)
             startInd = cmd['startTime'] / dt
             stopInd = cmd['endTime'] / dt
             assert stopInd < arr.shape[1]

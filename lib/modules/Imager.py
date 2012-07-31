@@ -34,6 +34,7 @@ import numpy as NP
 import metaarray as MA
 import time
 import pprint
+from lib.modules.imagerTemplate import Ui_Form
 
 """
 Create some useful configurations for the user.
@@ -41,10 +42,9 @@ Create some useful configurations for the user.
 Presets = {
     'video-std': {
         'Downsample': 1,
-        #'Image Width': 200 ,
-        #'Image Height': 200,
-        'Pixel Size' : 0.5e-6,
-        'Overscan': 60,
+        'Image Width': 256,
+        'Image Height': 256,
+        'Overscan': 50,
         'Store': False,
         'Blank Screen': False,
         ('Decomb', 'Shift'): 173e-6,
@@ -52,10 +52,9 @@ Presets = {
     },
     'video-fast': {
         'Downsample': 2,
-        #'Image Width': 128 ,
-        #'Image Height': 128,
-         'Pixel Size' : 2e-6,
-         'Overscan': 60,
+        'Image Width': 128 ,
+        'Image Height': 128,
+        'Overscan': 60,
         'Store': False,
         'Blank Screen': False,
         ('Decomb', 'Shift'): 58e-6,
@@ -64,10 +63,9 @@ Presets = {
 
     'StandardDef': {
         'Downsample': 10,
-        #'Image Width': 500,
-        #'Image Height': 500,
-         'Pixel Size' : 0.5e-6,
-         'Overscan': 5,
+        'Image Width': 512,
+        'Image Height': 512,
+        'Overscan': 25,
         'Store': False,
         'Blank Screen': True,
         ('Decomb', 'Shift'): 17e-6,
@@ -75,10 +73,9 @@ Presets = {
     },
     'HighDef': {
         'Downsample': 10,
-        #'Image Width': 1000,
-        #'Image Height': 1000,
-         'Pixel Size' : 2e-7,
-         'Overscan': 5,
+        'Image Width': 1024,
+        'Image Height': 1024,
+        'Overscan': 25,
         'Store': False,
         'Blank Screen': True,
         ('Decomb', 'Shift'): 17e-6,
@@ -158,16 +155,31 @@ class Imager(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config) 
         self.win = ImagerWindow(self) # make the main window - mostly to catch window close event...
+        self.ui = Ui_Form()
         self.testMode = False # set to True to just display the scan signals
         self.win.show()
         self.win.setWindowTitle('Multiphoton Imager')
-        self.win.resize(800, 600) # make the window big enough to use on a large monitor...
+        self.win.resize(1000, 720) # make the window big enough to use on a large monitor...
 
-        self.w1 = QtGui.QSplitter()
+
+        self.w1 = QtGui.QSplitter() # divide l, r
         self.w1.setOrientation(QtCore.Qt.Horizontal)
-        self.w2 = QtGui.QWidget()
-        self.l2 = QtGui.QVBoxLayout()
-        self.w2.setLayout(self.l2)
+#        self.w2 = QtGui.QWidget() # create another splitter
+        self.w2s = QtGui.QSplitter()
+        self.w2s.setOrientation(QtCore.Qt.Vertical)
+
+        self.win.setCentralWidget(self.w1) # w1 is the "main window" splitter
+        self.w1.addWidget(self.w2s) # now we add w2s, the spliter on the left
+       # self.w2.addWidget(self.w2s) # and it's vertical splitter
+        self.ui.setupUi(self.w2s)  # put the ui on the top 
+        # create the user interface
+        self.tree = PT.ParameterTree()
+        self.w2s.addWidget(self.tree) # put the parameters on the bottom
+        self.w2s.setSizes([1,900])
+        self.view = ImageView()
+        self.w1.addWidget(self.view)   # add the view to the right of w1     
+        
+        
         self.currentStack = None
         self.currentStackLength = 0
         # we assume that you are not going to change the current camera or scope while running
@@ -188,61 +200,50 @@ class Imager(Module):
         self.currentRoi = None
         self.img = None # overlay image in the camera Window... 
         
-        self.win.setCentralWidget(self.w1)
-        self.w1.addWidget(self.w2)
-        
-        self.view = ImageView()
-        self.w1.addWidget(self.view)
-        #if 'defaultCamera' in self.dev.config:
-        # self.dev.config['defaultCamera']
- #       if 'defaultLaser' in self.dev.config:
- #           defLaser = self.dev.config['defaultLaser']
 
-        # create the user interface
-        self.tree = PT.ParameterTree()
-        self.l2.insertWidget(0, self.tree)
-        self.buttonGrid = QtGui.QGridLayout()
-        self.l2.insertLayout(1, self.buttonGrid)
+ 
+       
+        #self.buttonGrid = QtGui.QGridLayout()
+        #self.l2.insertLayout(1, self.buttonGrid)
         # action buttons:
-        self.snap_button = QtGui.QPushButton('Snap')
-        self.run_button = QtGui.QPushButton('Run')
-        self.stop_button = QtGui.QPushButton('Stop')
-        self.video_button = QtGui.QPushButton('Video')
-        self.record_button = QtGui.QPushButton('Record Stack')
-        self.record_button.setCheckable(True)
-        self.video_button.setCheckable(True)
-        self.cameraSnapBtn = QtGui.QPushButton('Camera Snap')
-        self.hide_check = QtGui.QCheckBox('Hide Overlay')
-        self.hide_check.setCheckState(False)
-        self.hide_check.stateChanged.connect(self.hideOverlayImage)
+        #self.snap_button = QtGui.QPushButton('Snap')
+        #self.run_button = QtGui.QPushButton('Run')
+        #self.stop_button = QtGui.QPushButton('Stop')
+        #self.video_button = QtGui.QPushButton('Video')
+        #self.record_button = QtGui.QPushButton('Record Stack')
+        #self.record_button.setCheckable(True)
+        #self.video_button.setCheckable(True)
+        #self.cameraSnapBtn = QtGui.QPushButton('Camera Snap')
+        #self.hide_check = QtGui.QCheckBox('Hide Overlay')
+        #self.hide_check.setCheckState(False)
+        self.ui.hide_check.stateChanged.connect(self.hideOverlayImage)
         # control the alpha of the overlay image created from scanning the ROI
-        self.alphaSlider = QtGui.QSlider()
-        self.alphaSlider.setMaximum(100)
-        self.alphaSlider.setSingleStep(2)
-        self.alphaSlider.setProperty("value", 50)
-        self.alphaSlider.setOrientation(QtCore.Qt.Horizontal)
-        self.alphaSlider.setInvertedAppearance(False)
-        self.alphaSlider.setInvertedControls(True)
-        self.alphaSlider.setTickPosition(QtGui.QSlider.TicksBelow)            
-        self.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
-        self.alphaSlider.setObjectName("alphaSlider")
+        #self.alphaSlider = QtGui.QSlider()
+        #self.alphaSlider.setMaximum(100)
+        #self.alphaSlider.setSingleStep(2)
+        #self.alphaSlider.setProperty("value", 50)
+        #self.alphaSlider.setOrientation(QtCore.Qt.Horizontal)
+        #self.alphaSlider.setInvertedAppearance(False)
+        #self.alphaSlider.setInvertedControls(True)
+        #self.alphaSlider.setTickPosition(QtGui.QSlider.TicksBelow)            
+        self.ui.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
+        #self.alphaSlider.setObjectName("alphaSlider")
         
-        self.buttonGrid.addWidget(self.snap_button, 0, 0)
-        self.buttonGrid.addWidget(self.run_button, 1, 0)
-        self.buttonGrid.addWidget(self.stop_button, 2, 0)
-        self.buttonGrid.addWidget(self.hide_check, 3, 0)
-        self.buttonGrid.addWidget(self.video_button, 0, 1)
-        self.buttonGrid.addWidget(self.record_button, 1, 1)
-        self.buttonGrid.addWidget(self.cameraSnapBtn, 2, 1)
-        self.buttonGrid.addWidget(self.alphaSlider, 3, 1)
+        #self.buttonGrid.addWidget(self.snap_button, 0, 0)
+        #self.buttonGrid.addWidget(self.run_button, 1, 0)
+        #self.buttonGrid.addWidget(self.stop_button, 2, 0)
+        #self.buttonGrid.addWidget(self.hide_check, 3, 0)
+        #self.buttonGrid.addWidget(self.video_button, 0, 1)
+        #self.buttonGrid.addWidget(self.record_button, 1, 1)
+        #self.buttonGrid.addWidget(self.cameraSnapBtn, 2, 1)
+        #self.buttonGrid.addWidget(self.alphaSlider, 3, 1)
 
-
-        self.run_button.clicked.connect(self.PMT_Run)
-        self.snap_button.clicked.connect(self.PMT_Snap)
-        self.stop_button.clicked.connect(self.PMT_Stop)
-        self.video_button.clicked.connect(self.toggleVideo)
-        self.record_button.toggled.connect(self.recordToggled)
-        self.cameraSnapBtn.clicked.connect(self.cameraSnap)
+        self.ui.run_Button.clicked.connect(self.PMT_Run)
+        self.ui.snap_Button.clicked.connect(self.PMT_Snap)
+        self.ui.stop_button.clicked.connect(self.PMT_Stop)
+        self.ui.video_button.clicked.connect(self.toggleVideo)
+        self.ui.record_button.toggled.connect(self.recordToggled)
+        self.ui.cameraSnapBtn.clicked.connect(self.cameraSnap)
         
         self.param = PT.Parameter(name = 'param', children=[
             dict(name="Preset", type='list', value='', 
@@ -254,25 +255,25 @@ class Imager(Module):
             dict(name='Frame Time', type='float', readonly=True, value=0.0),
             dict(name='Pockels', type='float', value= 0.03, suffix='V', dec=True, minStep=1e-3, limits=[0, 1.5], step=0.1, siPrefix=True),
             dict(name='Objective', type='str', value='Unknown', readonly=True),
-            dict(name='Image Width', type='int', value=500, readonly=True),
-            dict(name='Image Height', type='int', value=500, readonly=True),
-            dict(name='Pixel Size', type='float', value=0.5e-7, suffix='m', limits=[1.e-8, 1e-4], step=1e-7, siPrefix=True),
-            dict(name='Width', type='float', value = 50.0e-6, suffix = 'm', limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
-            dict(name='Height', type = 'float', value = 50.0e-6, suffix='m', limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True),
-            dict(name='Xpos', type='float', value = 0.0e-6, suffix = 'm', limits=[-50e-3, 50e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
-            dict(name='Ypos', type = 'float', value = 0.0e-6, suffix='m', limits=[-50e-3, 50e-3], step=10e-6, siPrefix=True, readonly=True),
+            dict(name='Image Width', type='int', value=500, readonly=False),
+            dict(name='Image Height', type='int', value=500, readonly=False),
             dict(name='Y = X', type='bool', value=True),
-            dict(name='XCenter', type='float', value=-0.3, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True, readonly=True),
-            dict(name='XSweep', type='float', value=1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True, readonly=True),
-            dict(name='YCenter', type='float', value=-0.75, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True, readonly=True),
-            dict(name='YSweep', type='float', value=1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True, readonly=True),
+            #dict(name='Pixel Size', type='float', value=0.2e-7, readonly=True), #suffix='m', limits=[1.e-8, 1e-4], step=1e-7, siPrefix=True, readonly=True),
+            #dict(name='Width', type='float', value = 50.0e-6, suffix = 'm'), #limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
+            #dict(name='Height', type = 'float', value = 50.0e-6, suffix='m'), # limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True),
+            #dict(name='Xpos', type='float', value = 0.0e-6, suffix = 'm'), #, limits=[-50e-3, 50e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
+            #dict(name='Ypos', type = 'float', value = 0.0e-6, suffix='m'), #, limits=[-50e-3, 50e-3], step=10e-6, siPrefix=True, readonly=True),
+
+            #dict(name='XCenter', type='float', value=-0.3, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True, readonly=True),
+            #dict(name='XSweep', type='float', value=1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True, readonly=True),
+            #dict(name='YCenter', type='float', value=-0.75, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True, readonly=True),
+            #dict(name='YSweep', type='float', value=1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True, readonly=True),
             dict(name='Bidirectional', type='bool', value=True),
             dict(name='Decomb', type='bool', value=True, children=[
                 dict(name='Auto', type='bool', value=True),
                 dict(name='Shift', type='float', value=100e-6, suffix='s', step=10e-6, siPrefix=True),
-            ]),
-            
-            dict(name='Overscan', type='float', value=5.0, suffix='%'),
+            ]),       
+            dict(name='Overscan', type='float', value=25.0, suffix='%'),
             dict(name='Scope Device', type='interface', interfaceTypes=['microscope']),
             dict(name='Scanner Device', type='interface', interfaceTypes=['scanner']),
             dict(name='Laser Device', type='interface', interfaceTypes=['laser']),
@@ -294,8 +295,6 @@ class Imager(Module):
         ])
         self.stopFlag = False
         self.tree.setParameters(self.param)
-        self.update() # also force update now to make sure all parameters are synchronized
-        self.param.sigTreeStateChanged.connect(self.update)
 
         self.Manager = manager
         # insert an ROI into the camera image that corresponds to our scan area                
@@ -303,10 +302,15 @@ class Imager(Module):
 # check the devices...        
         self.laserDev = self.manager.getDevice(self.param['Laser Device'])
         self.scannerDev = self.manager.getDevice(self.param['Scanner Device'])
+        self.update() # also force update now to make sure all parameters are synchronized
+        self.param.sigTreeStateChanged.connect(self.update)
 
     def quit(self):
        # print 'Imager quit WAS CALLED'
-        for obj in self.objectiveROImap:
+        if self.img is not None:# clear the image ovelay if it exists
+            self.cameraModule.window().removeItem(self.img)
+            self.img = None
+        for obj in self.objectiveROImap: # remove the ROI's for all objectives.
             try:
                 self.cameraModule.window().removeItem(self.objectiveROImap[obj])
             except:
@@ -316,8 +320,11 @@ class Imager(Module):
     def objectiveUpdate(self):
         """ Update the objective information and the associated ROI
         Used to report that the objective has changed in the parameter tree,
-        and then (future) reposition the ROI that drives the image region.
+        and then reposition the ROI that drives the image region.
         """
+        if self.img is not None:# clear the image ovelay if it exists
+            self.cameraModule.window().removeItem(self.img)
+            self.img = None
         self.param['Objective'] = self.scopeDev.currentObjective.name()
         if self.param['Objective'] not in self.objectiveROImap: # add the objective and an ROI
             self.objectiveROImap[self.param['Objective']] = self.createROI()
@@ -385,26 +392,20 @@ class Imager(Module):
         """ read the ROI rectangle width and height and repost
         in the parameter tree """
         state = self.currentRoi.getState()
-        w, h = state['size']
-        self.param['Width'] = w
-        self.param['Height'] = h
-        x, y = state['pos']
-        self.param['Xpos'] = x
-        self.param['Ypos'] = y
-        self.param['Image Width'] = int(self.param['Width']/self.param['Pixel Size'])
+        self.width, self.height = state['size']
         if self.param['Y = X']:
-            self.param['YSweep'] = self.param['XSweep']
-            self.param['Image Height'] = self.param['Image Width']
-        else:
-            self.param['Image Height'] = int(self.param['Height']/self.param['Pixel Size'])
-            
+            self.height = self.width
+            self.currentRoi.setSize([self.width, self.height]) # force screen to match
+        self.ui.width.setText('%g' % self.width)
+        self.ui.height.setText('%g' % self.height)
+        self.xPos, self.yPos = state['pos']
+        self.ui.xpos.setText('%g' % self.xPos) # param['Xpos'] = x
+        self.ui.ypos.setText('%g' % self.yPos) # param['Ypos'] = y
+        self.pixelSize = self.width/self.param['Image Width']
+        self.ui.pixelSize.setText('%g' % self.pixelSize)
 
     def update(self):
-        try:
-            self.param.sigTreeStateChanged.disconnect(self.update) # prevent recursion. 
-        except:
-            pass
-        # check the devices first        
+    #check the devices first        
         self.laserDev = self.manager.getDevice(self.param['Laser Device'])
         self.scannerDev = self.manager.getDevice(self.param['Scanner Device'])
         # use the presets if they are engaged
@@ -415,31 +416,32 @@ class Imager(Module):
             for k,v in Presets[preset].iteritems():
                 self.param[k] = v
         # calculate some values
-        
-        self.param['Image Width'] = int(self.param['Width']/self.param['Pixel Size'])
-        if self.param['Y = X']:
-            self.param['YSweep'] = self.param['XSweep']
-            self.param['Image Height'] = self.param['Image Width']
-        else:
-            self.param['Image Height'] = int(self.param['Height']/self.param['Pixel Size'])
+        state = self.currentRoi.getState()
+        self.width, self.height = state['size']
+        self.pixelSize = self.width/self.param['Image Width']
+        self.ui.pixelSize.setText('%g' % self.pixelSize)
+        #self.param['Image Width'] = int(self.param['Width']/self.param['Pixel Size'])
+        #if self.param['Y = X']:
+        #    self.param['YSweep'] = self.param['XSweep']
+        #    self.param['Image Height'] = self.param['Image Width']
+        #else:
+        #    self.param['Image Height'] = int(self.param['Height']/self.param['Pixel Size'])
 
         self.param['Frame Time'] = self.param['Image Width']*self.param['Image Height']*self.param['Downsample']/self.param['Sample Rate']
         self.param['Z-Stack', 'Depth'] = self.param['Z-Stack', 'Step Size'] * (self.param['Z-Stack', 'Steps']-1)
         self.param['Timed', 'Duration'] = self.param['Timed', 'Interval'] * (self.param['Timed', 'N Intervals']-1)
-        self.param.sigTreeStateChanged.connect(self.update) # restore updating
-
-        
+                
     def imageAlphaAdjust(self):
         if self.img is None:
             return
-        alpha = self.alphaSlider.value()
+        alpha = self.ui.alphaSlider.value()
         self.img.setImage(opacity=float(alpha/100.))
         
     def hideOverlayImage(self):
         if self.img is None:
             print 'img is none'
             return
-        if self.hide_check.isChecked() is True:
+        if self.ui.hide_check.isChecked() is True:
             print 'hide'
             self.img.hide()
         else:
@@ -521,7 +523,7 @@ class Imager(Module):
            ### due to API change that I can't figure out.
            ###
            #info['microscope'] = scope.getState()
-            if self.record_button.isChecked():
+            if self.ui.record_button.isChecked():
                 mainfo = [
                     {'name': 'Frame'},
                     {'name': 'X'},
@@ -536,7 +538,7 @@ class Imager(Module):
                 else:
                     data.write(self.currentStack.name(), appendAxis='Frame')
                 self.currentStackLength += 1
-                self.record_button.setText('Recording (%d)' % self.currentStackLength)
+                self.ui.record_button.setText('Recording (%d)' % self.currentStackLength)
                 
             else:
                 self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
@@ -563,24 +565,24 @@ class Imager(Module):
         #        'endTime': self.params['endTime'], 'nScans': self.params['nScans'],
         #        'lineSpacing': self.params['linespacing']} 
 
-        width = self.param['Width']
+        #width = self.param['Width']
         if self.param['Y = X']:
-            height = width
-        else:
-            height = self.param['Height']
-        Xpos = self.param['Xpos']
-        Ypos = self.param['Ypos']
-        xCenter = self.param['Xpos']#-width/2.0
-        yCenter = self.param['Ypos']#-height/2.0
-        nPointsX = int(width/self.param['Pixel Size'])
-        nPointsY = int(height/self.param['Pixel Size'])
-        xScan = NP.linspace(0., width, nPointsX)
+            self.height = self.width
+        #else:
+        #    self.height = self.param['Height']
+        Xpos = self.xPos #self.param['Xpos']
+        Ypos = self.yPos # self.param['Ypos']
+        xCenter = Xpos # self.param['Xpos']#-width/2.0
+        yCenter = Ypos # self.param['Ypos']#-height/2.0
+        nPointsX = int(self.width/self.pixelSize) # self.param['Pixel Size'])
+        nPointsY = int(self.height/self.pixelSize) # self.param['Pixel Size'])
+        xScan = NP.linspace(0., self.width, nPointsX)
         xScan += xCenter
 #        print 'w, h, xc, yc', width, height, xCenter, yCenter   
         sampleRate = self.param['Sample Rate']
         downsample = self.param['Downsample']
         overScan = self.param['Overscan']/100.     ## fraction of voltage scan range
-        overScanWidth = width*overScan
+        overScanWidth = self.width*overScan
 #        print 'overscan: ', overScan
         #xScan *= overScan + 1.0 
         overScanPixels = int(nPointsX / 2. * overScan)
@@ -589,18 +591,18 @@ class Imager(Module):
         samples = samplesPerRow * nPointsY
 #        print 'nPointsX, Pixels per row, overScanPixels: ', nPointsX, pixelsPerRow, overScanPixels
         if not self.param['Bidirectional']:
-            saw1 = NP.linspace(0., width+overScanWidth, num=samplesPerRow)
+            saw1 = NP.linspace(0., self.width+overScanWidth, num=samplesPerRow)
             saw1 += xCenter-overScanWidth/2.0
             xSaw = NP.tile(saw1, (1, nPointsY))[0,:]
         else:
-            saw1 = NP.linspace(0., width+overScanWidth, num=samplesPerRow)
+            saw1 = NP.linspace(0., self.width+overScanWidth, num=samplesPerRow)
             saw1 += xCenter-overScanWidth/2.0
             rows = [saw1, saw1[::-1]] * int(nPointsY/2)
             if len(rows) < nPointsY:
                 rows.append(saw1)
             xSaw = NP.concatenate(rows, axis=0)
 
-        yvals = NP.linspace(0., height, num=nPointsY)
+        yvals = NP.linspace(0., self.height, num=nPointsY)
         yvals += yCenter
         yScan = NP.empty(samples)
         for y in range(nPointsY):
@@ -665,7 +667,7 @@ class Imager(Module):
         w = imgData.shape[0]
         h = imgData.shape[1]
         localPts = map(PG.Vector, [[0,0], [w,0], [0, h], [0,0,1]]) # w and h of data of image in pixels.
-        globalPts = map(PG.Vector, [[Xpos, Ypos], [Xpos+width, Ypos], [Xpos, Ypos+height], [0, 0, 1]]) # actual values in global coordinates
+        globalPts = map(PG.Vector, [[Xpos, Ypos], [Xpos+self.width, Ypos], [Xpos, Ypos+self.height], [0, 0, 1]]) # actual values in global coordinates
         ##imgData.shape[0]*imgData.shape[1] # prog['points'] # sort of. - 
         m = PG.solve3DTransform(localPts, globalPts)
         m[:,2] = m[:,3]
@@ -736,7 +738,7 @@ class Imager(Module):
                 return
             self.view.setImage(img, autoLevels=False)
             QtGui.QApplication.processEvents()
-            if not self.video_button.isChecked():
+            if not self.ui.video_button.isChecked():
                 return
         
     def recordToggled(self, b):
@@ -744,7 +746,7 @@ class Imager(Module):
             self.currentStack = None
             self.currentStackLength = 0
             self.param['Store'] = False
-            self.record_button.setText('Record Stack')
+            self.ui.record_button.setText('Record Stack')
         else:
             self.param['Store'] = True # turn off recording...
             
