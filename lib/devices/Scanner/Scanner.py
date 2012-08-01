@@ -470,29 +470,21 @@ class ScannerTask(DeviceTask):
         """
         dt = command['duration'] / command['numPts']
         arr = np.empty((2, command['numPts']))
-
+        print 'numPts: ', command['numPts']
+        
         cmds = command['program']
-        lastPos = None
-                
+        lastPos = None     
         lastValue = np.array(self.dev.getVoltage())
         lastStopInd = 0
         for i in range(len(cmds)):
             cmd = cmds[i]
-            print dir(cmd)
+            if cmd['active'] is False:
+                continue
             startInd = cmd['startTime'] / dt
             stopInd = cmd['endTime'] / dt
             assert stopInd < arr.shape[1]
             arr[:,lastStopInd:startInd] = lastValue[:,np.newaxis]
             if cmd['type'] == 'step':
-                ## determine when to end the step
-                #if i+1 < len(cmds):
-                    #nextTime = cmds[i+1]['time']
-                    #if type(nextTime) is tuple:
-                        #nextTime = nextTime[0]
-                    #stopInd = nextTime / dt
-                #else:
-                    #stopInd = -1
-                
                 pos = cmd['pos']
                 if pos == None:
                     pos = self.dev.getOffVoltage()
@@ -502,7 +494,6 @@ class ScannerTask(DeviceTask):
                 
                 arr[0, startInd] = pos[0]
                 arr[1, startInd] = pos[1]
-                
                 
             elif cmd['type'] == 'line':
                 if lastPos is None:
@@ -539,6 +530,61 @@ class ScannerTask(DeviceTask):
                 arr[1, startInd + len(y):stopInd] = arr[1, startInd + len(y)-1]
                 lastPos = (x[-1], y[-1])
 
+            elif cmd['type'] == 'multipleLineScan':
+                """
+                Use a polyline to make a scan that covers multiple regions in an
+                interleaved fashion. Alternate line segments of the polyline
+                are either the "scan" or the "interscan", allowing rapid movement
+                between successive points. 
+                Interscan intervals are green on the line, scan intervals are white
+                """
+                pts = cmd['points']
+                startPos = pts[0]                
+                stopPos = pts[-1]
+                
+                scanPoints = cmd['sweepDuration']/dt # in point indices, not time.
+                interTracePoints = cmd['intertraceDuration']/dt
+                scanPause = np.ones(int(interTracePoints))
+                cmd['samplesPerScan'] = scanPoints
+                cmd['samplesPerPause'] = interTracePoints
+                interScanFlag = False
+                xp = np.array([])
+                yp = np.array([])
+                pockels = np.array([])
+                nSegmentScans = 0
+                nIntersegmentScans = 0
+                for k in xrange(len(pts)): # loop through the list of points
+                    if interScanFlag is False:
+                        k2 = k + 1
+                        if k2 > len(pts)-1:
+                            k2 = 0
+                        xPos = np.linspace(pts[k].x(), pts[k2].x(), scanPoints)
+                        yPos = np.linspace(pts[k].y(), pts[k2].y(), scanPoints)
+                        pockels = np.append(pockels, np.ones(scanPoints))
+                        nSegmentScans += 1
+                    else:
+                        k2 = k + 1
+                        if k2 > len(pts)-1:
+                            k2 = 0
+                        xPos = np.linspace(pts[k].x(), pts[k2].x(), interTracePoints)
+                        yPos = np.linspace(pts[k].y(), pts[k2].y(), interTracePoints)
+                        pockels = np.append(pockels, np.zeros(interTracePoints))
+                        nIntersegmentScans += 1
+                    cmd['nSegmentScans'] = nSegmentScans
+                    cmd['nIntersegmentScans'] = nIntersegmentScans
+                    x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['laser'])
+                    xp = np.append(xp, x)
+                    yp = np.append(yp,y)
+                    interScanFlag = not interScanFlag
+                    
+                x = np.tile(xp, cmd['nScans'])
+                y = np.tile(yp, cmd['nScans'])
+                arr[0, startInd:startInd + len(x)] = x
+                arr[1, startInd:startInd + len(y)] = y
+                arr[0, startInd + len(x):stopInd] = arr[0, startInd + len(x)-1] # fill in any unused sample on this scan section
+                arr[1, startInd + len(y):stopInd] = arr[1, startInd + len(y)-1]
+                lastPos = (x[-1], y[-1])
+                
             elif cmd['type'] == 'rectScan':
                 pts = cmd['points']
                 width  = (pts[1] -pts[0]).length()

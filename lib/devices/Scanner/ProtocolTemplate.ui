@@ -370,6 +370,13 @@ p, li { white-space: pre-wrap; }
           </property>
          </widget>
         </item>
+        <item row="0" column="0">
+         <widget class="QCheckBox" name="interleaveCheckBox">
+          <property name="text">
+           <string>Interleave Like Programs</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </item>
       <item row="0" column="0">
@@ -397,14 +404,14 @@ p, li { white-space: pre-wrap; }
    <container>1</container>
   </customwidget>
   <customwidget>
-   <class>SpinBox</class>
-   <extends>QDoubleSpinBox</extends>
-   <header>pyqtgraph</header>
-  </customwidget>
-  <customwidget>
    <class>InterfaceCombo</class>
    <extends>QComboBox</extends>
    <header>InterfaceCombo</header>
+  </customwidget>
+  <customwidget>
+   <class>SpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>pyqtgraph</header>
   </customwidget>
   <customwidget>
    <class>ParameterTree</class>

@@ -1488,7 +1488,9 @@ class PolygonROI(ROI):
 class PolyLineROI(ROI):
     """Container class for multiple connected LineSegmentROIs. Responsible for adding new 
     line segments, and for translation/(rotation?) of multiple lines together."""
-    def __init__(self, positions, closed=False, pos=None, **args):
+    # alternation causes the line color to alternate between the normal "white" and 
+    # a light green to help with paths that may use "alternate 
+    def __init__(self, positions, closed=False, pos=None, alternate=False, **args):
         
         if pos is None:
             pos = [0,0]
@@ -1496,6 +1498,7 @@ class PolyLineROI(ROI):
         ROI.__init__(self, pos, size=[1,1], **args)
         self.closed = closed
         self.segments = []
+        self.alternate = alternate
         
         for p in positions:
             self.addFreeHandle(p)
@@ -1532,18 +1535,21 @@ class PolyLineROI(ROI):
         #pass
 
     def addSegment(self, h1, h2, index=None):
+
         seg = LineSegmentROI(handles=(h1, h2), pen=self.pen, parent=self, movable=False)
         if index is None:
             self.segments.append(seg)
         else:
             self.segments.insert(index, seg)
+            
         seg.sigClicked.connect(self.segmentClicked)
         seg.setAcceptedMouseButtons(QtCore.Qt.LeftButton)
         seg.setZValue(self.zValue()+1)
         for h in seg.handles:
             h['item'].setDeletable(True)
             h['item'].setAcceptedMouseButtons(h['item'].acceptedMouseButtons() | QtCore.Qt.LeftButton) ## have these handles take left clicks too, so that handles cannot be added on top of other handles
-        
+        self.recolor()
+            
     def setMouseHover(self, hover):
         ## Inform all the ROI's segments that the mouse is(not) hovering over it
         #if self.mouseHovering == hover:
@@ -1604,6 +1610,22 @@ class PolyLineROI(ROI):
         self.segments.remove(seg)
         seg.sigClicked.disconnect(self.segmentClicked)
         self.scene().removeItem(seg)
+        for i, s in enumerate(self.segments):
+            if i % 2 == 0:
+                s.setPen(self.pen)
+            else:
+                s.setPen(fn.mkPen([75, 200, 75]))
+        self.recolor()
+    
+    def recolor(self):
+        if not self.alternate:
+            return
+        for i, s in enumerate(self.segments):
+            if i % 2 == 0:
+                s.setPen(self.pen)
+            else:
+                s.setPen(fn.mkPen([75, 200, 75]))
+            
         
     def checkRemoveHandle(self, h):
         ## called when a handle is about to display its context menu
@@ -1611,7 +1633,14 @@ class PolyLineROI(ROI):
             return len(self.handles) > 3
         else:
             return len(self.handles) > 2
-        
+
+    def listPoints(self):
+        return [p['item'].pos() for p in self.handles]
+    
+    def countSegments(self):
+        ## return the number of line segments 
+        return(len(self.handles)-1)
+    
     def paint(self, p, *args):
         #for s in self.segments:
             #s.update()

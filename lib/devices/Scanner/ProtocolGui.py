@@ -41,7 +41,7 @@ class ProgramCtrlGroup(pTypes.GroupParameter):
             'name': 'Program Controls',
             'type': 'group',
             'addText': "Add Control..",
-            'addList': ['lineScan', 'rectangleScan'],
+            'addList': ['lineScan', 'multipleLineScan', 'rectangleScan'],
             'autoIncrementName': True,
         }
         pTypes.GroupParameter.__init__(self, **opts)
@@ -355,7 +355,7 @@ class ScannerProtoGui(ProtocolGui):
         
     def addProgramCtrl(self, param, itemType):
         ## called when "Add Control.." combo is changed
-        cls = {'lineScan': ProgramLineScan, 'rectangleScan': ProgramRectScan}[itemType]
+        cls = {'lineScan': ProgramLineScan, 'multipleLineScan': ProgramMultipleLineScan, 'rectangleScan': ProgramRectScan}[itemType]
         state = {}
         ctrl = cls(**state)
         self.programCtrlGroup.addChild(ctrl.parameters())
@@ -1332,9 +1332,58 @@ class ProgramLineScan(QtCore.QObject):
     def generateProtocol(self):
         points = self.roi.listPoints() # in local coordinates local to roi.
         points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
-        return {'type': 'lineScan', 'points': points, 'startTime': self.params['startTime'], 'sweepDuration': self.params['sweepDuration'], 
+        return {'type': 'lineScan', 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 'sweepDuration': self.params['sweepDuration'], 
                 'endTime': self.params['endTime'], 'retraceDuration': self.params['retraceDuration'], 'nScans': self.params['nScans']}
+
+class ProgramMultipleLineScan(QtCore.QObject):
+    
+    sigStateChanged = QtCore.Signal(object)
+    
+    def __init__(self):
+        QtCore.QObject.__init__(self)
+        self.name = 'multipleLineScan'
+        ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         
+        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
+            dict(name='Length', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='startTime', type='float', value=5e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='sweepDuration', type='float', value=4e-3, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='intertraceDuration', type='float', value=1e-3, suffix='s', siPrefix=True, bounds=[0., None], step=1e-3),
+            dict(name='nScans', type='int', value=100, bounds=[1, None]),
+            dict(name='endTime', type='float', value=5.5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2, readonly=True),
+        ])
+        self.params.ctrl = self        
+        self.roi = pg.PolyLineROI([[0.0, 0.0], [self.params['Length'], self.params['Length']]], alternate=True)
+        self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
+ #       print dir(self.roi)
+        self.params.sigTreeStateChanged.connect(self.update)
+        
+    def getGraphicsItems(self):
+        return [self.roi]
+
+    def isActive(self):
+        return self.params.value()
+    
+    def parameters(self):
+        return self.params
+    
+    def update(self):
+        print 'segments: ', self.roi.countSegments()
+        self.params['endTime'] = self.params['startTime']+(self.roi.countSegments()*self.params['nScans']*
+                                                           (self.params['sweepDuration'] + self.params['intertraceDuration']))
+    
+    def updateFromROI(self):
+        pass
+    #p =self.roi.listPoints()
+        #dist = (pg.Point(p[0])-pg.Point(p[1])).length()
+        #self.params['length'] = dist
+        
+    def generateProtocol(self):
+        points=self.roi.listPoints() # in local coordinates local to roi.
+        points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
+        return {'type': 'multipleLineScan', 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 'sweepDuration': self.params['sweepDuration'], 
+                'endTime': self.params['endTime'], 'intertraceDuration': self.params['intertraceDuration'], 'nScans': self.params['nScans']}
+                
     
 class ProgramRectScan(QtCore.QObject):
     
@@ -1407,7 +1456,7 @@ class ProgramRectScan(QtCore.QObject):
         p2 = pg.Point(0, h)
         points = [p0, p1, p2]
         points = [pg.Point(self.roi.mapToView(p)) for p in points] # convert to view points (as needed for scanner)
-        return {'type': self.name, 'points': points, 'startTime': self.params['startTime'], 
+        return {'type': self.name, 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 
                 'endTime': self.params['endTime'], 'nScans': self.params['nScans'],
                 'lineSpacing': self.params['linespacing']}
         

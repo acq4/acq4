@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file '.\lib\devices\Scanner\ProtocolTemplate.ui'
 #
-# Created: Tue Jul 17 18:29:57 2012
+# Created: Wed Aug 01 12:41:40 2012
 #      by: PyQt4 UI code generator 4.9
 #
 # WARNING! All changes made in this file will be lost!
@@ -162,6 +162,9 @@ class Ui_Form(object):
         self.previewBtn.setEnabled(False)
         self.previewBtn.setObjectName(_fromUtf8("previewBtn"))
         self.gridLayout_9.addWidget(self.previewBtn, 0, 2, 1, 1)
+        self.interleaveCheckBox = QtGui.QCheckBox(self.groupBox_4)
+        self.interleaveCheckBox.setObjectName(_fromUtf8("interleaveCheckBox"))
+        self.gridLayout_9.addWidget(self.interleaveCheckBox, 0, 0, 1, 1)
         self.gridLayout_6.addLayout(self.gridLayout_9, 1, 0, 1, 1)
         self.programTree = ParameterTree(self.groupBox_4)
         self.programTree.setObjectName(_fromUtf8("programTree"))
@@ -208,6 +211,7 @@ class Ui_Form(object):
         self.hideMarkerBtn.setText(QtGui.QApplication.translate("Form", "Hide Spot Marker", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox_4.setTitle(QtGui.QApplication.translate("Form", "Program Controls", None, QtGui.QApplication.UnicodeUTF8))
         self.previewBtn.setText(QtGui.QApplication.translate("Form", "Preview", None, QtGui.QApplication.UnicodeUTF8))
+        self.interleaveCheckBox.setText(QtGui.QApplication.translate("Form", "Interleave Like Programs", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph import SpinBox, PlotWidget
 from pyqtgraph.parametertree import ParameterTree
