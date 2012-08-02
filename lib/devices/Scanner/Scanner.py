@@ -469,9 +469,7 @@ class ScannerTask(DeviceTask):
           - spiral
         """
         dt = command['duration'] / command['numPts']
-        arr = np.empty((2, command['numPts']))
-        print 'numPts: ', command['numPts']
-        
+        arr = np.empty((2, command['numPts']))        
         cmds = command['program']
         lastPos = None     
         lastValue = np.array(self.dev.getVoltage())
@@ -570,13 +568,13 @@ class ScannerTask(DeviceTask):
                         yPos = np.linspace(pts[k].y(), pts[k2].y(), interTracePoints)
                         pockels = np.append(pockels, np.zeros(interTracePoints))
                         nIntersegmentScans += 1
-                    cmd['nSegmentScans'] = nSegmentScans
-                    cmd['nIntersegmentScans'] = nIntersegmentScans
                     x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['laser'])
                     xp = np.append(xp, x)
-                    yp = np.append(yp,y)
+                    yp = np.append(yp, y)
                     interScanFlag = not interScanFlag
                     
+                cmd['nSegmentScans'] = nSegmentScans
+                cmd['nIntersegmentScans'] = nIntersegmentScans
                 x = np.tile(xp, cmd['nScans'])
                 y = np.tile(yp, cmd['nScans'])
                 arr[0, startInd:startInd + len(x)] = x

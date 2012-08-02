@@ -602,8 +602,6 @@ class Laser(DAQGeneric, OptomechDevice):
             ## open shutter a little before we expect power because it has a delay
             delayPts = int(delay*rate) 
             a = np.argwhere(shutterCmd[1:]-shutterCmd[:-1] == 1)+1
-            print 'delay: ', delay
-            print a
             for i in a:
                 start = i-delayPts
                 if start < 0:

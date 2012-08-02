@@ -1368,8 +1368,11 @@ class ProgramMultipleLineScan(QtCore.QObject):
         return self.params
     
     def update(self):
-        print 'segments: ', self.roi.countSegments()
-        self.params['endTime'] = self.params['startTime']+(self.roi.countSegments()*self.params['nScans']*
+        nsegs = self.roi.countSegments()# count segments and include retraces in each
+        if nsegs % 2 > 0:
+            nsegs += 1 # add the retrace if the last one is a "trace"
+        nsegs = nsegs/2
+        self.params['endTime'] = self.params['startTime']+(nsegs*self.params['nScans']*
                                                            (self.params['sweepDuration'] + self.params['intertraceDuration']))
     
     def updateFromROI(self):

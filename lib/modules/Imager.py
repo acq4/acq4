@@ -44,20 +44,24 @@ Presets = {
         'Downsample': 1,
         'Image Width': 256,
         'Image Height': 256,
-        'Overscan': 50,
+        'Overscan': 70,
         'Store': False,
         'Blank Screen': False,
-        ('Decomb', 'Shift'): 173e-6,
+        'Bidirectional': True,
+        'Decomb': True,
+        ('Decomb', 'Shift'): 170e-6,
         ('Decomb', 'Auto'): False,
     },
     'video-fast': {
         'Downsample': 2,
         'Image Width': 128 ,
         'Image Height': 128,
-        'Overscan': 60,
+        'Overscan': 68,
         'Store': False,
         'Blank Screen': False,
-        ('Decomb', 'Shift'): 58e-6,
+        'Bidirectional': True,
+        'Decomb' : True,
+        ('Decomb', 'Shift'): 85e-6,
         ('Decomb', 'Auto'): False,
     },
 
@@ -68,17 +72,21 @@ Presets = {
         'Overscan': 25,
         'Store': False,
         'Blank Screen': True,
+        'Bidirectional' : True,
+        'Decomb': True,
         ('Decomb', 'Shift'): 17e-6,
         ('Decomb', 'Auto'): False,
     },
     'HighDef': {
-        'Downsample': 10,
+        'Downsample': 5,
         'Image Width': 1024,
         'Image Height': 1024,
         'Overscan': 25,
         'Store': False,
         'Blank Screen': True,
-        ('Decomb', 'Shift'): 17e-6,
+        'Bidirectional': True,
+        'Decomb': True,
+        ('Decomb', 'Shift'): 34e-6,
         ('Decomb', 'Auto'): False,
     },
 }
@@ -253,6 +261,7 @@ class Imager(Module):
             dict(name='Sample Rate', type='float', value=1.0e6, suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10e3, 5e6], siPrefix=True),
             dict(name='Downsample', type='int', value=1, limits=[1,None]),
             dict(name='Frame Time', type='float', readonly=True, value=0.0),
+            dict(name='Average', type='int', value=1, limits=[1,100]),
             dict(name='Pockels', type='float', value= 0.03, suffix='V', dec=True, minStep=1e-3, limits=[0, 1.5], step=0.1, siPrefix=True),
             dict(name='Objective', type='str', value='Unknown', readonly=True),
             dict(name='Image Width', type='int', value=500, readonly=False),
@@ -439,13 +448,10 @@ class Imager(Module):
         
     def hideOverlayImage(self):
         if self.img is None:
-            print 'img is none'
             return
         if self.ui.hide_check.isChecked() is True:
-            print 'hide'
             self.img.hide()
         else:
-            print 'show'
             self.img.show()
         
     def PMT_Run(self):
@@ -614,37 +620,45 @@ class Imager(Module):
 #        print 'xS, yS: ', xScan[0:10], yScan[0:10]
 #        print 'xl, yl: ', x[0:10], y[0:10]
         
-        cmd= {'protocol': {'duration': samples/sampleRate},
-              'DAQ' : {'rate': sampleRate, 'numPts': samples, 'downsample':downsample}, 
-              'Scanner-Raw': {
-                  'XAxis' : {'command': x},
-                  'YAxis' : {'command': y}
-                  },
-              'PockelCell': {'Switch' : {'preset': self.param['Pockels']}},
-              'PMT' : {
-                  'Input': {'record': True},
-                #  'PlateVoltage': {'record' : False, 'recordInit': True}
-                  }
-            }
+
         # take some data
-        task = self.Manager.createTask(cmd)
-        if self.param['Blank Screen']:
-            with ScreenBlanker():
+        
+        imgData = NP.zeros((pixelsPerRow, nPointsY))
+        for N in xrange(self.param['Average']):
+
+            cmd= {'protocol': {'duration': samples/sampleRate},
+                  'DAQ' : {'rate': sampleRate, 'numPts': samples, 'downsample':downsample}, 
+                  'Scanner-Raw': {
+                      'XAxis' : {'command': x},
+                      'YAxis' : {'command': y}
+                      },
+                  'PockelCell': {'Switch' : {'preset': self.param['Pockels']}},
+                  'PMT' : {
+                      'Input': {'record': True},
+                    #  'PlateVoltage': {'record' : False, 'recordInit': True}
+                      }
+                }
+            task = self.Manager.createTask(cmd)
+            if self.param['Blank Screen']:
+                with ScreenBlanker():
+                    task.execute(block = False)
+                    while not task.isDone():
+                        QtGui.QApplication.processEvents()
+                        time.sleep(0.01)
+            else:
                 task.execute(block = False)
                 while not task.isDone():
                     QtGui.QApplication.processEvents()
-                    time.sleep(0.1)
-        else:
-            task.execute(block = False)
-            while not task.isDone():
-                QtGui.QApplication.processEvents()
-                time.sleep(0.1)
-
-        data = task.getResult()
-        imgData = data['PMT']['Input'].view(NP.ndarray)
-        imgData.shape = (nPointsY, pixelsPerRow)
-        imgData = imgData.transpose()
+                    time.sleep(0.01)
+    
+            data = task.getResult()
+            imgData1 = data['PMT']['Input'].view(NP.ndarray)
+            imgData1.shape = (nPointsY, pixelsPerRow)
+            imgData += imgData1.transpose()
         
+        if self.param['Average'] > 1:
+            imgData = imgData/self.param['Average']
+            
         if self.param['Bidirectional']:
             for y in range(1, nPointsY, 2):
                 imgData[:,y] = imgData[::-1,y]
@@ -663,23 +677,23 @@ class Imager(Module):
         
         # code to display the image on the camera image
         self.img = PG.ImageItem(imgData) # make data into a pyqtgraph image
-        self.cameraModule.window().addItem(self.img)
-        w = imgData.shape[0]
-        h = imgData.shape[1]
-        localPts = map(PG.Vector, [[0,0], [w,0], [0, h], [0,0,1]]) # w and h of data of image in pixels.
-        globalPts = map(PG.Vector, [[Xpos, Ypos], [Xpos+self.width, Ypos], [Xpos, Ypos+self.height], [0, 0, 1]]) # actual values in global coordinates
-        ##imgData.shape[0]*imgData.shape[1] # prog['points'] # sort of. - 
-        m = PG.solve3DTransform(localPts, globalPts)
-        m[:,2] = m[:,3]
-        m[2] = m[3]
-        m[2,2] = 1
-
-        tr = QtGui.QTransform(*m[:3,:3].transpose().reshape(9))
-        self.img.setTransform(tr)
-# flip the PMT image upside down, since that is how it is... there is a mirror in the path
+        if self.ui.hide_check.isChecked() is False:
+            self.cameraModule.window().addItem(self.img)
+            w = imgData.shape[0]
+            h = imgData.shape[1]
+            localPts = map(PG.Vector, [[0,0], [w,0], [0, h], [0,0,1]]) # w and h of data of image in pixels.
+            globalPts = map(PG.Vector, [[Xpos, Ypos], [Xpos+self.width, Ypos], [Xpos, Ypos+self.height], [0, 0, 1]]) # actual values in global coordinates
+            ##imgData.shape[0]*imgData.shape[1] # prog['points'] # sort of. - 
+            m = PG.solve3DTransform(localPts, globalPts)
+            m[:,2] = m[:,3]
+            m[2] = m[3]
+            m[2,2] = 1
+    
+            tr = QtGui.QTransform(*m[:3,:3].transpose().reshape(9))
+            self.img.setTransform(tr)
+# flip the PMT image LR, since that is how it is... there is a mirror in the path
 # (should this be a settable parameter? )
 
-        #imgData = NP.flipud(imgData)
         imgData = NP.fliplr(imgData)
         
         if self.param['Show PMT V']:
