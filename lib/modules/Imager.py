@@ -266,7 +266,7 @@ class Imager(Module):
             dict(name='Objective', type='str', value='Unknown', readonly=True),
             dict(name='Image Width', type='int', value=500, readonly=False),
             dict(name='Image Height', type='int', value=500, readonly=False),
-            dict(name='Y = X', type='bool', value=True),
+            #dict(name='Y = X', type='bool', value=True),
             #dict(name='Pixel Size', type='float', value=0.2e-7, readonly=True), #suffix='m', limits=[1.e-8, 1e-4], step=1e-7, siPrefix=True, readonly=True),
             #dict(name='Width', type='float', value = 50.0e-6, suffix = 'm'), #limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
             #dict(name='Height', type = 'float', value = 50.0e-6, suffix='m'), # limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True),
@@ -402,9 +402,9 @@ class Imager(Module):
         in the parameter tree """
         state = self.currentRoi.getState()
         self.width, self.height = state['size']
-        if self.param['Y = X']:
-            self.height = self.width
-            self.currentRoi.setSize([self.width, self.height]) # force screen to match
+#        if self.param['Y = X']: # causes recursion, can crash... 
+#            self.height = self.width
+#            self.currentRoi.setSize([self.width, self.height]) # force screen to match
         self.ui.width.setText('%g' % self.width)
         self.ui.height.setText('%g' % self.height)
         self.xPos, self.yPos = state['pos']
@@ -572,8 +572,9 @@ class Imager(Module):
         #        'lineSpacing': self.params['linespacing']} 
 
         #width = self.param['Width']
-        if self.param['Y = X']:
-            self.height = self.width
+        
+        #if self.param['Y = X']:
+        #    self.height = self.width
         #else:
         #    self.height = self.param['Height']
         Xpos = self.xPos #self.param['Xpos']
@@ -786,10 +787,10 @@ class Imager(Module):
         
     def cameraSnap(self):
         width = self.param['Image Width']
-        if self.param['Y = X']:
-            height = width
-        else:
-            height = self.param['Image Height']
+        #if self.param['Y = X']:
+        #    height = width
+        #else:
+        height = self.param['Image Height']
         
         #xscan = self.param['XSweep']/2.0
         #xcenter = self.param['XCenter']

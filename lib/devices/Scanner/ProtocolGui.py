@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from ProtocolTemplate import Ui_Form
 from lib.devices.Device import ProtocolGui
+from ScanProgramGenerator import *
 from PyQt4 import QtCore, QtGui
 from lib.Manager import getManager, logMsg, logExc
 import random
@@ -1298,7 +1299,7 @@ class ProgramLineScan(QtCore.QObject):
         self.name = 'lineScan'
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         
-        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
+        self.params = pTypes.SimpleParameter(name=self.name, autoIncrementName = True, type='bool', value=True, removable=True, renamable=True, children=[
             dict(name='length', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='startTime', type='float', value=5e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='sweepDuration', type='float', value=4e-3, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
@@ -1347,8 +1348,8 @@ class ProgramMultipleLineScan(QtCore.QObject):
         self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
             dict(name='Length', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='startTime', type='float', value=5e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
-            dict(name='sweepDuration', type='float', value=4e-3, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
-            dict(name='intertraceDuration', type='float', value=1e-3, suffix='s', siPrefix=True, bounds=[0., None], step=1e-3),
+            dict(name='sweepSpeed', type='float', value=1e-6, suffix='m/ms', siPrefix=True, bounds=[1e-8, None], minStep=5e-7, step=0.5, dec=True),
+            dict(name='interSweepSpeed', type='float', value=5e-6, suffix='m/ms', siPrefix=True, bounds=[1e-8, None], minStep=5e-7, step=0.5, dec=True),
             dict(name='nScans', type='int', value=100, bounds=[1, None]),
             dict(name='endTime', type='float', value=5.5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2, readonly=True),
         ])
@@ -1368,15 +1369,23 @@ class ProgramMultipleLineScan(QtCore.QObject):
         return self.params
     
     def update(self):
-        nsegs = self.roi.countSegments()# count segments and include retraces in each
-        if nsegs % 2 > 0:
-            nsegs += 1 # add the retrace if the last one is a "trace"
-        nsegs = nsegs/2
-        self.params['endTime'] = self.params['startTime']+(nsegs*self.params['nScans']*
-                                                           (self.params['sweepDuration'] + self.params['intertraceDuration']))
+        pts = self.roi.listPoints()
+        scanTime = 0.
+        interScanFlag = False
+        for k in xrange(len(pts)): # loop through the list of points
+            k2 = k + 1
+            if k2 > len(pts)-1:
+                k2 = 0
+            dist = (pts[k]-pts[k2]).length()
+            if interScanFlag is False:
+                scanTime += dist/(self.params['sweepSpeed']*1000.)
+            else:
+                scanTime += dist/(self.params['interSweepSpeed']*1000.)
+            interScanFlag = not interScanFlag
+        self.params['endTime'] = self.params['startTime']+(self.params['nScans']*scanTime)
     
     def updateFromROI(self):
-        pass
+        self.update()
     #p =self.roi.listPoints()
         #dist = (pg.Point(p[0])-pg.Point(p[1])).length()
         #self.params['length'] = dist
@@ -1384,8 +1393,8 @@ class ProgramMultipleLineScan(QtCore.QObject):
     def generateProtocol(self):
         points=self.roi.listPoints() # in local coordinates local to roi.
         points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
-        return {'type': 'multipleLineScan', 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 'sweepDuration': self.params['sweepDuration'], 
-                'endTime': self.params['endTime'], 'intertraceDuration': self.params['intertraceDuration'], 'nScans': self.params['nScans']}
+        return {'type': 'multipleLineScan', 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 'sweepSpeed': self.params['sweepSpeed'], 
+                'endTime': self.params['endTime'], 'interSweepSpeed': self.params['interSweepSpeed'], 'nScans': self.params['nScans']}
                 
     
 class ProgramRectScan(QtCore.QObject):

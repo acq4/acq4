@@ -49,10 +49,13 @@ class ImagingModule(AnalysisModule):
         # get the downsample for the daq. This is far more complicated than it should be...
         finfo = frame['result'][self.detectorDevice()]["Channel":'Input']
         info = finfo.infoCopy()
-        if 'downsampling' in info[1]['DAQ']['Input'].keys():
-            daqDownSample = info[1]['DAQ']['Input']['downsampling']
-        else:
-            daqDownSample = 1
+        #if 'downsampling' in info[1]['DAQ']['Input'].keys():
+            #daqDownSample = info[1]['DAQ']['Input']['downsampling']
+        #else:
+            #daqDownSample = 1
+        daqDownSample = info[1]['DAQ']['Input'].get('downsampling', 1)
+        if daqDownSample != 1:
+            raise HelpfulException("Set downsampling in DAQ to 1!")
         # get the data and the command used on the scanner
         pmtdata = frame['result'][self.detectorDevice()]["Channel":'Input'].asarray()
         t = frame['result'][self.detectorDevice()].xvals('Time')
@@ -88,9 +91,13 @@ class ImagingModule(AnalysisModule):
                 dirhandle.writeFile(ma, 'Imaging.ma')
 
         if prog['type'] == 'multipleLineScan':
-            totSamps = prog['nSegmentScans']*prog['samplesPerScan']+prog['nIntersegmentScans']*prog['samplesPerPause']
-            imageData = pmtdata[prog['startStopIndices'][0]:prog['startStopIndices'][0]+nscans*totSamps]
-            imageData=imageData.reshape(nscans, totSamps)
+            totSamps = int(np.sum(prog['scanPointList'])) # samples per scan, before downsampling
+            imageData = pmtdata[prog['startStopIndices'][0]:prog['startStopIndices'][0]+int((nscans*totSamps))].copy()           
+            imageData = imageData.reshape(nscans, totSamps)
+            csum = np.cumsum(prog['scanPointList'])
+            for i in xrange(0, len(csum), 2):
+                    imageData[:,csum[i]:csum[i+1]] = 0
+
             #imageData = imageData[:,0:prog['samplesPerScan']] # trim off the pause data
             imageData = fn.downsample(imageData, imageDownSample, axis=1)
             self.image.setImage(imageData)
@@ -102,7 +109,7 @@ class ImagingModule(AnalysisModule):
             if storeFlag:
                 dirhandle = frame['cmd']['protocol']['storageDir'] # grab directory
                 self.info={'detector': self.detectorDevice(), 'scanner': self.scannerDevice(), 'indices': prog['startStopIndices'], 
-                           'samplesPerScan': prog['samplesPerScan'], 'nscans': prog['nScans'], 'positions': [[prog['points'][0].x(), prog['points'][0].y()], [prog['points'][1].x(), prog['points'][1].y()]],
+                           'scanPointList': prog['scanPointList'], 'nscans': prog['nScans'], 'positions': [[prog['points'][0].x(), prog['points'][0].y()], [prog['points'][1].x(), prog['points'][1].y()]],
                            'downSample': imageDownSample, 'daqDownSample': daqDownSample}
                 print dict
                 info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]:prog['samplesPerScan']]), dict(name='Distance'), self.info]
@@ -111,8 +118,6 @@ class ImagingModule(AnalysisModule):
                 dirhandle.writeFile(ma, 'Imaging.ma')
 
         if prog['type'] == 'rectScan':
-            print 'start stop, samp per scan'
-            print prog['startStopIndices']
             samplesPerScan = int((prog['startStopIndices'][1]-prog['startStopIndices'][0])/prog['nScans'])
             print samplesPerScan
             imageData = pmtdata[prog['startStopIndices'][0]:prog['startStopIndices'][0] +nscans*samplesPerScan]
@@ -120,7 +125,6 @@ class ImagingModule(AnalysisModule):
             imageData = fn.downsample(imageData, imageDownSample, axis=1)
             self.image.setImage(imageData)
             limits = prog['points']
-            print 'limits: ', limits
             #self.image.setRect(QtCore.QRectF(startT, 0.0, totSamps*dt*nscans,  ))
             self.ui.plotWidget.autoRange()
             self.ui.histogram.imageChanged(autoLevel=True)
