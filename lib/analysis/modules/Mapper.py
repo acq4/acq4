@@ -330,28 +330,50 @@ def mapPoissonScore(n, x):
     assert not (np.isinf(mapped) or np.isnan(mapped))
     return mapped
 
-def generateNormalizationTable(nEvents=10000):
+def generateNormalizationTable(nEvents=100000000):
     print "Generating poissonScore normalization table..."
     rate = 1.0
     tVals = 2**np.arange(9)
+    nev = (nEvents / (rate*tVals)**0.5).astype(int)
+    
     global normScores
-    normScores = []
+    #normScores = []
+    r = 10**(10/500.)
+    xVals = r ** np.arange(500)  ## log spacing from 1 to 10**20 in 500 steps
+    count = np.zeros((len(tVals),len(xVals)), dtype=float)
     for i, t in enumerate(tVals):
-        n = int(nEvents / (rate*t)**0.5)
-        normScores.append(np.empty(int(n)))
+        #n = int(nEvents / (rate*t)**0.5)
+        n = nev[i]
+        #normScores.append(np.empty(int(n)))
+        #import time
+        #t1 = 0
+        #t2 = 0
         for j in xrange(int(n)):
-            if j%1000==0:
+            if j%10000==0:
                 print t, j
+            #now = time.time()
             ev = [{'time': poissonProcess(rate, t)}]
-            
-            normScores[i][j] = poissonScore(ev, 1.0, normalize=False)
-        
-    xVals = 0.92 ** np.arange(500)
-    xVals[-1] = 1e-25
+            #t1 += time.time()-now
+            #now = time.time()
+            score = poissonScore(ev, 1.0, normalize=False)
+            #t2 += time.time()-now
+            #normScores[i][j] = score
+            ind = np.log(score) / np.log(r)
+            count[i, :ind+1] += 1
+        #print t1, t2
+    
+    count[count==0] = 1
     norm = np.empty((2, len(tVals),len(xVals)))
-    for i in range(norm.shape[1]):
-        for j, x in enumerate(xVals):
-            norm[:, i, j] = scipy.stats.scoreatpercentile(normScores[i], (1-x)*100), 1.0/max(x, 1e-25)
+    norm[0,:] = xVals.reshape(1, len(xVals))
+    norm[1] = nev.reshape(len(nev), 1) / count
+    
+        
+    #xVals = 0.92 ** np.arange(500)
+    #xVals[-1] = 1e-25
+    #norm = np.empty((2, len(tVals),len(xVals)))
+    #for i in range(norm.shape[1]):
+        #for j, x in enumerate(xVals):
+            #norm[:, i, j] = scipy.stats.scoreatpercentile(normScores[i], (1-x)*100), 1.0/max(x, 1e-25)
         
     return norm
 
@@ -368,6 +390,12 @@ def testMapping(rate=1.0, tmax=1.0, n=10000):
     for j in [1,2,3,4]:
         print "  %d: %f" % (10**j, (scores>10**j).sum() / float(len(scores)))
     return ev, scores
+    
+def showMap():
+    global poissonScoreNorm
+    plt = pg.plot()
+    for i in range(poissonScoreNorm.shape[1]):
+        plt.plot(poissonScoreNorm[0,i], poissonScoreNorm[1,i], pen=(i, 14), symbolPen=(i,14), symbol='o')
     
 def poissonScoreBlame(ev, rate):
     nVals = np.array([(ev<=t).sum()-1 for t in ev]) 
