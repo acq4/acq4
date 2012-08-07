@@ -105,6 +105,7 @@ import pyqtgraph as pg
 import pyqtgraph.console
 import user
 import pyqtgraph.multiprocess as mp
+import os
 
 def poissonProcess(rate, tmax=None, n=None):
     """Simulate a poisson process; return a list of event times"""
@@ -119,135 +120,6 @@ def poissonProcess(rate, tmax=None, n=None):
             break
     return np.array(events)
 
-#def poissonProb1(events, xvals, rate, correctForSelection=False):
-    ### Given a list of event times,
-    ### evaluate poisson cdf of events for multiple windows (0 to x for x in xvals)
-    ### for each value x in xvals, returns the probability that events from 0 to x
-    ### would be produced by a poisson process with the given rate.
-    ##n = (events[:, np.newaxis] < xvals[np.newaxis,:]).sum(axis=0)
-    ##p = stats.poisson(rate * x)
-    
-    ### In the case that events == xvals (the windows to evaluate are _selected_ 
-    ### based on the event times), we must apply a correction factor to the expectation
-    ### value: rate*x  =>  rate * (x + 1/rate). This effectively increases the size of the window
-    ### by one period, which reduces the probability to the expected value.
-    
-    ### return 1.0 - p.cdf(n)
-    
-    #y = []
-    #for i in range(len(xvals)):
-        #x = xvals[i]
-        #e = 0
-        #if correctForSelection:
-            #e = 1./rate
-        #y.append(stats.poisson(rate * (x+e)).cdf(i+1))
-    #return 1.0-np.array(y)
-
-#def poissonScore(events, rate):
-    ### 1) For each event, measure the probability that the event and those preceding
-    ###    it could be produced by a poisson process
-    ### 2) Of the probabilities computed in 1), select the minimum value
-    ### 3) X = 1 / min to convert from probability to improbability
-    ### 4) apply some magic: Y = sqrt(X) / 2  -- don't know why this works, but
-    ###    it scales the value such that 1 in Y random trials will produce a score >= Y
-    
-    #pp = poissonProb(events, events, rate, correctForSelection=True)
-    #if len(pp) == 0:
-        #return 1.0
-    #else:
-        #return ((1.0 / pp.min())**1.0) / (rate ** 0.5)
-
-##def poissonIntegral(events, rate, tMin, tMax):
-    ### This version sucks
-    ##pp = poissonProb(events, events, rate)
-    ##if len(pp) == 0:
-        ##return 1.0
-    ##else:
-        ##return (1.0 / pp.mean())**0.5
-        
-#poissonIntCache = {}
-#def poissonIntegral(events, rate, tMin, tMax, plot=False):
-    
-    #global poissonIntCache
-    #xvals = np.linspace(tMin, tMax, 1000)
-    #dt = xvals[1]-xvals[0]
-    #tot = 0
-    #t = tMin
-    #nev = 0
-    #allprobs = []
-    #events = list(events)
-    #events.sort()
-    #events.append(tMax)
-    #for ev in events:
-        #if ev < tMin:
-            #continue
-        #if ev > tMax:
-            #ev = tMax
-        #i1 = int((t-tMin) / dt)
-        #i2 = int((ev-tMin) / dt)
-        #if nev not in poissonIntCache:
-            #poissonIntCache[nev] = np.array([1-stats.poisson(rate * x).cdf(nev) for x in xvals])
-        #probs = poissonIntCache[nev][i1:i2]
-        #tot += (1./probs).sum()
-        #allprobs.append(1./probs)
-        #t = ev
-        #nev += 1
-        #if ev == tMax:
-            #break
-        
-    #if plot:
-        #y = np.concatenate(allprobs)
-        #pg.plot(x=xvals[:len(y)], y=y)
-    #return tot * dt
-    ##return (1. / poissonProb(events, xvals, rate)).sum() ** 0.5
-        
-
-#def poissonIntegralBlame(ev, rate, xMin, xMax):
-    ### estimate how much each event contributes to the poisson-integral of a list of events.
-    #pp = []
-    #for i in range(len(ev)):
-        #ev2 = list(ev)
-        #ev2.pop(i)
-        #pp1 = poissonIntegral(ev, rate, xMin, xMax)
-        #pp2 = poissonIntegral(ev2, rate, xMin, xMax)
-        #pp.append(pp1 / pp2)
-    #ret = np.array(pp)
-    #assert not any(np.isnan(pp))
-    #return ret
-
-#def poissonBlame(ev, rate):
-    ### estimate how much each event contributes to the poisson-score of a list of events.
-    #ev = list(ev)
-    #ps = poissonScore(ev, rate)
-    #pp = []
-    #while len(ev) > 0:
-        #ev.pop(-1)
-        #if len(ev) == 0:
-            #ps2 = 1.0
-        #else:
-            #ps2 = poissonScore(ev, rate)
-        #pp.insert(0, ps / ps2)
-        #ps = ps2
-    #return np.array(pp)
-    
-#def productlog(x):
-    #n = np.arange(1, 30, dtype=float)
-    #return ((x ** n) * ((-n) ** (n-1)) / scipy.misc.factorial(n)).sum()
-    
-    
-    
-#def productlog(x, prec=1e-12):
-    #"""
-    #Stolen from py-fcm:
-    #Productlog or LambertW function computes principal solution for w in f(w) = w*exp(w).
-    #""" 
-    ##  fast estimate with closed-form approximation
-    #if (x <= 500):
-        #lxl = np.log(x + 1.0)
-        #return 0.665 * (1+0.0195*lxl) * lxl + 0.04
-    #else:
-        #return np.log(x - 4.0) - (1.0 - 1.0/np.log(x)) * np.log(np.log(x))
-
 def poissonProb(n, t, l, clip=False):
     """
     For a poisson process, return the probability of seeing at least *n* events in *t* seconds given
@@ -258,203 +130,6 @@ def poissonProb(n, t, l, clip=False):
         p = np.clip(p, 0, 1.0-1e-25)
     return p
     
-def maxPoissonProb(ev, l):
-    """
-    For a list of events, compute poissonImp for each event; return the maximum and the index of the maximum.
-    """
-    if len(ev) == 0:
-        return 0.0
-    nVals = np.array([(ev<=t).sum()-1 for t in ev]) 
-    pi = poissonProb(nVals, ev, l)  ## note that by using n=0 to len(ev)-1, we correct for the fact that the time window always ends at the last event
-    mp = pi.max()
-        
-    return mp
-
-def poissonScore(ev, l, tMax=None, ampMean=None, ampStdev=None, normalize=True):
-    nSets = len(ev)
-    ev = [x['time'] for x in ev]  ## select times from event set
-    ev = np.concatenate(ev)   ## mix events together
-    
-    mpp = min(maxPoissonProb(ev, l*nSets), 1.0-1e-12)  ## don't allow returning inf
-    score =  1.0 / (1.0 - mpp)
-    #n = len(ev)
-    if normalize:
-        ret = mapPoissonScore(l*tMax*nSets, score)
-    else:
-        ret = score
-    if np.isscalar(ret):
-        assert not np.isnan(ret)
-    else:
-        assert not any(np.isnan(ret))
-    
-    return ret
-
-
-        
-poissonScoreNorm = None
-def mapPoissonScore(n, x):
-    global poissonScoreNorm
-    if poissonScoreNorm is None:
-        poissonScoreNorm = generateNormalizationTable()
-        
-    nind = np.log(n)/np.log(2)
-    n1 = np.clip(int(np.floor(nind)), 0, poissonScoreNorm.shape[1]-2)
-    n2 = n1+1
-    
-    mapped1 = []
-    for i in [n1, n2]:
-        norm = poissonScoreNorm[:,i]
-        ind = np.argwhere(norm[0] > x)
-        if len(ind) == 0:
-            ind = len(norm[0])-1
-        else:
-            ind = ind[0,0]
-        if ind == 0:
-            ind = 1
-        x1, x2 = norm[0, ind-1:ind+1]
-        y1, y2 = norm[1, ind-1:ind+1]
-        if x1 == x2:
-            s = 0.0
-        else:
-            s = (x-x1) / float(x2-x1)
-        mapped1.append(y1 + s*(y2-y1))
-    
-    mapped = mapped1[0] + (mapped1[1]-mapped1[0]) * (nind-n1)/float(n2-n1)
-    
-    ## doesn't handle points outside of the original data.
-    #mapped = scipy.interpolate.griddata(poissonScoreNorm[0], poissonScoreNorm[1], [x], method='cubic')[0]
-    #normTable, tVals, xVals = poissonScoreNorm
-    #spline = scipy.interpolate.RectBivariateSpline(tVals, xVals, normTable)
-    #mapped = spline.ev(n, x)[0]
-    #raise Exception()
-    assert not (np.isinf(mapped) or np.isnan(mapped))
-    return mapped
-
-def generateNormalizationTable(nEvents=100000000):
-    print "Generating poissonScore normalization table..."
-    rate = 1.0
-    tVals = 2**np.arange(9)
-    nev = (nEvents / (rate*tVals)**0.5).astype(int)
-    
-    global normScores
-    #normScores = []
-    r = 10**(10/500.)
-    xVals = r ** np.arange(500)  ## log spacing from 1 to 10**20 in 500 steps
-    count = np.zeros((len(tVals),len(xVals)), dtype=float)
-    for i, t in enumerate(tVals):
-        #n = int(nEvents / (rate*t)**0.5)
-        n = nev[i]
-        #normScores.append(np.empty(int(n)))
-        #import time
-        #t1 = 0
-        #t2 = 0
-        for j in xrange(int(n)):
-            if j%10000==0:
-                print t, j
-            #now = time.time()
-            ev = [{'time': poissonProcess(rate, t)}]
-            #t1 += time.time()-now
-            #now = time.time()
-            score = poissonScore(ev, 1.0, normalize=False)
-            #t2 += time.time()-now
-            #normScores[i][j] = score
-            ind = np.log(score) / np.log(r)
-            count[i, :ind+1] += 1
-        #print t1, t2
-    
-    count[count==0] = 1
-    norm = np.empty((2, len(tVals),len(xVals)))
-    norm[0,:] = xVals.reshape(1, len(xVals))
-    norm[1] = nev.reshape(len(nev), 1) / count
-    
-        
-    #xVals = 0.92 ** np.arange(500)
-    #xVals[-1] = 1e-25
-    #norm = np.empty((2, len(tVals),len(xVals)))
-    #for i in range(norm.shape[1]):
-        #for j, x in enumerate(xVals):
-            #norm[:, i, j] = scipy.stats.scoreatpercentile(normScores[i], (1-x)*100), 1.0/max(x, 1e-25)
-        
-    return norm
-
-    
-def testMapping(rate=1.0, tmax=1.0, n=10000):
-    scores = np.empty(n)
-    mapped = np.empty(n)
-    ev = []
-    for i in xrange(len(scores)):
-        ev.append([{'time': poissonProcess(rate, tmax)}])
-        scores[i] = poissonScore(ev[-1], rate, tMax=tmax)
-        #mapped[i] = mapPoissonScore(rate*tmax, scores[i])
-    
-    for j in [1,2,3,4]:
-        print "  %d: %f" % (10**j, (scores>10**j).sum() / float(len(scores)))
-    return ev, scores
-    
-def showMap():
-    global poissonScoreNorm
-    plt = pg.plot()
-    for i in range(poissonScoreNorm.shape[1]):
-        plt.plot(poissonScoreNorm[0,i], poissonScoreNorm[1,i], pen=(i, 14), symbolPen=(i,14), symbol='o')
-    
-def poissonScoreBlame(ev, rate):
-    nVals = np.array([(ev<=t).sum()-1 for t in ev]) 
-    pp1 = 1.0 /   (1.0 - poissonProb(nVals, ev, rate, clip=True))
-    pp2 = 1.0 /   (1.0 - poissonProb(nVals-1, ev, rate, clip=True))
-    diff = pp1 / pp2
-    blame = np.array([diff[np.argwhere(ev >= ev[i])].max() for i in range(len(ev))])
-    return blame
-    
-    
-    
-def poissonRepScore(ev, l, tMax, ampMean, ampStdev, useAmps=False):
-    """
-    Given a set of event lists, return probability that a poisson process would generate all sets of events.
-    ev = [
-       [t1, t2, t3, ...],    ## trial 1
-       [t1, t2, t3, ...],    ## trial 2
-       ...
-    ]
-    """
-    events = ev
-    ev = [x['time'] for x in ev]  ## select times from event set
-    
-    ev2 = []
-    for i in range(len(ev)):
-        arr = np.zeros(len(ev[i]), dtype=[('trial', int), ('time', float)])
-        arr['time'] = ev[i]
-        arr['trial'] = i
-        ev2.append(arr)
-    ev2 = np.sort(np.concatenate(ev2), order=['time', 'trial'])
-    if len(ev2) == 0:
-        return 1.0
-    
-    ev = map(np.sort, ev)
-    pp = np.empty((len(ev), len(ev2)))
-    for i, trial in enumerate(ev):
-        nVals = []
-        for j in range(len(ev2)):
-            n = (trial<ev2[j]['time']).sum()
-            if any(trial == ev2[j]['time']) and ev2[j]['trial'] > i:  ## need to correct for the case where two events in separate trials happen to have exactly the same time.
-                n += 1
-            nVals.append(n)
-        
-        pp[i] = 1.0 / (1.0 - poissonProb(np.array(nVals), ev2['time'], l))
-        if useAmps:
-            pp[i] *= [gaussProb(events[i]['amp'][events[i]['time']<=t], ampMean, ampStdev) for t in ev2['time']]
-            
-            
-    return pp.prod(axis=0).max() ##** (1.0 / len(ev))  ## normalize by number of trials [disabled--we WANT to see the significance that comes from multiple trials.]
-    
-    
-    
-    
-    
-    
-def poissonRepAmpScore(*args):
-    return poissonRepScore(*args, useAmps=True)
-    
-
 def gaussProb(amps, mean, stdev):
     """
     Given a gaussian distribution with mean, stdev, return the improbability
@@ -464,8 +139,346 @@ def gaussProb(amps, mean, stdev):
         return 1.0
     p = 1.0 - stats.norm(mean, stdev).cdf(amps)
     return 1.0 / (p.prod() ** (1./len(amps)))
+
+class PoissonScore:
+    """
+    Class for computing a statistic that asks "what is the probability that a poisson process
+    would generate a set of events like this"
+    
+    General procedure:
+      1. For each event n in a list of events, compute the probability of a poisson
+         process generating at least n-1 events in the time up to event n (this is 
+         poissonProb() applied individually to each event)
+      2. The maximum value over all events is the score. For multiple trials, simply
+         mix together all events and assume an accordingly faster poisson process.
+      3. Normalize the score to a probability using a precomputed table generated
+         by a poisson process simulations.
+    """
     
     
+    normalizationTable = None
+    
+        
+    @staticmethod
+    def maxPoissonProb(ev, l):
+        """
+        For a list of events, compute poissonImp for each event; return the maximum and the index of the maximum.
+        """
+        if len(ev) == 0:
+            return 0.0
+        nVals = np.array([(ev<=t).sum()-1 for t in ev]) 
+        pi = poissonProb(nVals, ev, l)  ## note that by using n=0 to len(ev)-1, we correct for the fact that the time window always ends at the last event
+        mp = pi.max()
+            
+        return mp
+
+    @classmethod
+    def poissonScore(cls, ev, l, tMax=None, ampMean=None, ampStdev=None, normalize=True):
+        nSets = len(ev)
+        ev = [x['time'] for x in ev]  ## select times from event set
+        ev = np.concatenate(ev)   ## mix events together
+        
+        mpp = min(cls.maxPoissonProb(ev, l*nSets), 1.0-1e-12)  ## don't allow returning inf
+        score =  1.0 / (1.0 - mpp)
+        #n = len(ev)
+        if normalize:
+            ret = cls.mapPoissonScore(score, l*tMax*nSets)
+        else:
+            ret = score
+        if np.isscalar(ret):
+            assert not np.isnan(ret)
+        else:
+            assert not any(np.isnan(ret))
+        
+        return ret
+
+
+    @classmethod
+    def mapPoissonScore(cls, x, n):
+        """
+        Map score x to probability given we expect n events per set
+        """
+        if cls.normalizationTable is None:
+            cls.normalizationTable = cls.generateNormalizationTable()
+            
+        nind = np.log(n)/np.log(2)
+        n1 = np.clip(int(np.floor(nind)), 0, cls.normalizationTable.shape[1]-2)
+        n2 = n1+1
+        
+        mapped1 = []
+        for i in [n1, n2]:
+            norm = cls.normalizationTable[:,i]
+            ind = np.argwhere(norm[0] > x)
+            if len(ind) == 0:
+                ind = len(norm[0])-1
+            else:
+                ind = ind[0,0]
+            if ind == 0:
+                ind = 1
+            x1, x2 = norm[0, ind-1:ind+1]
+            y1, y2 = norm[1, ind-1:ind+1]
+            if x1 == x2:
+                s = 0.0
+            else:
+                s = (x-x1) / float(x2-x1)
+            mapped1.append(y1 + s*(y2-y1))
+        
+        mapped = mapped1[0] + (mapped1[1]-mapped1[0]) * (nind-n1)/float(n2-n1)
+        
+        ## doesn't handle points outside of the original data.
+        #mapped = scipy.interpolate.griddata(poissonScoreNorm[0], poissonScoreNorm[1], [x], method='cubic')[0]
+        #normTable, tVals, xVals = poissonScoreNorm
+        #spline = scipy.interpolate.RectBivariateSpline(tVals, xVals, normTable)
+        #mapped = spline.ev(n, x)[0]
+        #raise Exception()
+        assert not (np.isinf(mapped) or np.isnan(mapped))
+        return mapped
+
+    @classmethod
+    def generateNormalizationTable(cls, nEvents=1000000000):
+        print "Generating poissonScore normalization table..."
+        path = os.path.dirname(__file__)
+        cacheFile = os.path.join(path, 'poissonScoreNormTable_2x9x500_float64.dat')
+        if os.path.exists(cacheFile):
+            norm = np.fromstring(open(cacheFile).read(), dtype=np.float64).reshape(2,9,500)
+            
+        else:
+            rate = 1.0
+            tVals = 2**np.arange(9)
+            nev = (nEvents / (rate*tVals)**0.5).astype(int)
+            
+            r = 10**(10/500.)
+            xVals = r ** np.arange(500)  ## log spacing from 1 to 10**20 in 500 steps
+            count = np.zeros((len(tVals),len(xVals)), dtype=float)
+            for i, t in enumerate(tVals):
+                n = nev[i]
+                for j in xrange(int(n)):
+                    if j%1000==0:
+                        print t, j
+                    ev = [{'time': poissonProcess(rate, t)}]
+                    score = cls.poissonScore(ev, 1.0, normalize=False)
+                    ind = np.log(score) / np.log(r)
+                    count[i, :ind+1] += 1
+            
+            count[count==0] = 1
+            norm = np.empty((2, len(tVals),len(xVals)))
+            norm[0,:] = xVals.reshape(1, len(xVals))
+            norm[1] = nev.reshape(len(nev), 1) / count
+            
+            open(cacheFile, 'wb').write(norm.tostring())
+        return norm
+
+        
+    @classmethod
+    def testMapping(cls, rate=1.0, tmax=1.0, n=10000):
+        scores = np.empty(n)
+        mapped = np.empty(n)
+        ev = []
+        for i in xrange(len(scores)):
+            ev.append([{'time': poissonProcess(rate, tmax)}])
+            scores[i] = cls.poissonScore(ev[-1], rate, tMax=tmax)
+        
+        for j in [1,2,3,4]:
+            print "  %d: %f" % (10**j, (scores>10**j).sum() / float(len(scores)))
+        return ev, scores
+        
+    @classmethod
+    def showMap(cls):
+        plt = pg.plot()
+        for i in range(cls.normalizationTable.shape[1]):
+            plt.plot(cls.normalizationTable[0,i], cls.normalizationTable[1,i], pen=(i, 14), symbolPen=(i,14), symbol='o')
+    
+    @classmethod
+    def poissonScoreBlame(ev, rate):
+        nVals = np.array([(ev<=t).sum()-1 for t in ev]) 
+        pp1 = 1.0 /   (1.0 - cls.poissonProb(nVals, ev, rate, clip=True))
+        pp2 = 1.0 /   (1.0 - cls.poissonProb(nVals-1, ev, rate, clip=True))
+        diff = pp1 / pp2
+        blame = np.array([diff[np.argwhere(ev >= ev[i])].max() for i in range(len(ev))])
+        return blame
+
+
+
+
+
+class PoissonRepeatScore:
+    """
+    Class for analyzing poisson-process spike trains with evoked events mixed in. 
+    This computes a statistic that asks "assuming spikes have poisson timing and
+    normally-distributed amplitudes, what is the probability of seeing this set
+    of times/amplitudes?". 
+    
+    A single set of events is merely a list of time values; we can also ask a 
+    similar question for multiple trials: "what is the probability that a poisson 
+    process would produce all of these spike trains"
+
+    The statistic should be able to pick out:
+      - Spikes that are very close to the stimulus (assumed to be at t=0)
+      - Abnormally high spike rates, particularly soon after the stimulus
+      - Spikes that occur with similar post-stimulus latency over multiple trials
+      - Spikes that are larger than average, particularly soon after the stimulus
+    
+    """
+    normalizationTable = None
+    
+    @classmethod
+    def poissonRepScore(cls, ev, rate, tMax=None, ampMean=1.0, ampStdev=1.0, useAmps=False, normalize=True):
+        """
+        Given a set of event lists, return probability that a poisson process would generate all sets of events.
+        ev = [
+        [t1, t2, t3, ...],    ## trial 1
+        [t1, t2, t3, ...],    ## trial 2
+        ...
+        ]
+        """
+        events = ev
+        nSets = len(ev)
+        ev = [x['time'] for x in ev]  ## select times from event set
+        
+        ev2 = []
+        for i in range(len(ev)):
+            arr = np.zeros(len(ev[i]), dtype=[('trial', int), ('time', float)])
+            arr['time'] = ev[i]
+            arr['trial'] = i
+            ev2.append(arr)
+        ev2 = np.sort(np.concatenate(ev2), order=['time', 'trial'])
+        if len(ev2) == 0:
+            return 1.0
+        
+        ev = map(np.sort, ev)
+        pp = np.empty((len(ev), len(ev2)))
+        for i, trial in enumerate(ev):
+            nVals = []
+            for j in range(len(ev2)):
+                n = (trial<ev2[j]['time']).sum()
+                if any(trial == ev2[j]['time']) and ev2[j]['trial'] > i:  ## need to correct for the case where two events in separate trials happen to have exactly the same time.
+                    n += 1
+                nVals.append(n)
+            
+            pp[i] = 1.0 / (1.0 - poissonProb(np.array(nVals), ev2['time'], rate))
+            if useAmps:
+                pp[i] *= [gaussProb(events[i]['amp'][events[i]['time']<=t], ampMean, ampStdev) for t in ev2['time']]
+                
+                
+        score = pp.prod(axis=0).max() ##** (1.0 / len(ev))  ## normalize by number of trials [disabled--we WANT to see the significance that comes from multiple trials.]
+        if normalize:
+            ret = cls.mapScore(score, rate*tMax, nSets)
+        else:
+            ret = score
+        if np.isscalar(ret):
+            assert not np.isnan(ret)
+        else:
+            assert not any(np.isnan(ret))
+            
+        return ret
+        
+    @classmethod    
+    def poissonRepAmpScore(cls, *args):
+        return cls.poissonRepScore(*args, useAmps=True)
+        
+
+    
+    @classmethod
+    def mapScore(cls, x, n, m):
+        """
+        Map score x to probability given we expect n events per set and m repeat sets
+        """
+        if cls.normalizationTable is None:
+            cls.normalizationTable = cls.generateNormalizationTable()
+            
+        table = cls.normalizationTable[m-1]  # select the table for this repeat number
+        
+        nind = np.log(n)/np.log(2)
+        n1 = np.clip(int(np.floor(nind)), 0, table.shape[1]-2)
+        n2 = n1+1
+        
+        mapped1 = []
+        for i in [n1, n2]:
+            norm = table[:,i]
+            ind = np.argwhere(norm[0] > x)
+            if len(ind) == 0:
+                ind = len(norm[0])-1
+            else:
+                ind = ind[0,0]
+            if ind == 0:
+                ind = 1
+            x1, x2 = norm[0, ind-1:ind+1]
+            y1, y2 = norm[1, ind-1:ind+1]
+            if x1 == x2:
+                s = 0.0
+            else:
+                s = (x-x1) / float(x2-x1)
+            mapped1.append(y1 + s*(y2-y1))
+        
+        mapped = mapped1[0] + (mapped1[1]-mapped1[0]) * (nind-n1)/float(n2-n1)
+        
+        ## doesn't handle points outside of the original data.
+        #mapped = scipy.interpolate.griddata(poissonScoreNorm[0], poissonScoreNorm[1], [x], method='cubic')[0]
+        #normTable, tVals, xVals = poissonScoreNorm
+        #spline = scipy.interpolate.RectBivariateSpline(tVals, xVals, normTable)
+        #mapped = spline.ev(n, x)[0]
+        #raise Exception()
+        assert not (np.isinf(mapped) or np.isnan(mapped))
+        return mapped
+
+    @classmethod
+    def generateRandom(cls, rate, tMax, reps):
+        return [{'time': poissonProcess(rate, tMax), 'amp': np.random.normal()} for x in range(reps)]
+        
+    @classmethod
+    def generateNormalizationTable(cls, nEvents=1000):
+        print "Generating poissonRepScore normalization table..."
+        reps = np.arange(1,3)
+        rate = 1.0
+        tVals = 2**np.arange(9)
+        nev = (nEvents / (rate*tVals)**0.5).astype(int)
+        
+        r = 10**(10/500.)
+        xVals = r ** np.arange(500)  ## log spacing from 1 to 10**20 in 500 steps
+        norm = np.empty((2, len(reps), len(tVals),len(xVals)))
+        
+        count = np.zeros((len(reps), len(tVals), len(xVals)), dtype=float)
+        for i, t in enumerate(tVals):
+            n = nev[i]
+            for j in xrange(int(n)):
+                if j%1000==0:
+                    print t, j
+                ev = cls.generateRandom(rate=rate, tMax=t, reps=reps[-1])
+                for m in reps:
+                    score = cls.poissonRepScore(ev[:m], 1.0, normalize=False)
+                    ind = np.log(score) / np.log(r)
+                    count[m-1, i, :ind+1] += 1
+        
+        count[count==0] = 1
+        norm[0] = xVals.reshape(1, 1, len(xVals))
+        norm[1] = nev.reshape(1, len(nev), 1) / count
+        
+        return norm
+
+        
+    @classmethod
+    def testMapping(cls, rate=1.0, tmax=1.0, n=10000):
+        scores = np.empty(n)
+        mapped = np.empty(n)
+        ev = []
+        for i in xrange(len(scores)):
+            ev.append([{'time': poissonProcess(rate, tmax)}])
+            scores[i] = cls.poissonScore(ev[-1], rate, tMax=tmax)
+        
+        for j in [1,2,3,4]:
+            print "  %d: %f" % (10**j, (scores>10**j).sum() / float(len(scores)))
+        return ev, scores
+        
+    @classmethod
+    def showMap(cls):
+        plt = pg.plot()
+        for i in range(cls.normalizationTable.shape[1]):
+            plt.plot(cls.normalizationTable[0,i], cls.normalizationTable[1,i], pen=(i, 14), symbolPen=(i,14), symbol='o')
+
+
+
+
+
 app = pg.mkQApp()
 con = pyqtgraph.console.ConsoleWidget()
 con.show()
@@ -616,9 +629,9 @@ def checkScores(scores):
     
     
 algorithms = [
-    ('Poisson Score', poissonScore),
-    ('Poisson Multi', poissonRepScore),
-    ('Poisson Multi + Amp', poissonRepAmpScore),
+    ('Poisson Score', PoissonScore.poissonScore),
+    ('Poisson Multi', PoissonRepeatScore.poissonRepScore),
+    ('Poisson Multi + Amp', PoissonRepeatScore.poissonRepAmpScore),
 ]
 
 win = pg.GraphicsWindow(border=0.3)
@@ -782,6 +795,134 @@ with pg.ProgressDialog('processing..', maximum=len(tests)) as dlg:
     
     
     
+#def poissonProb1(events, xvals, rate, correctForSelection=False):
+    ### Given a list of event times,
+    ### evaluate poisson cdf of events for multiple windows (0 to x for x in xvals)
+    ### for each value x in xvals, returns the probability that events from 0 to x
+    ### would be produced by a poisson process with the given rate.
+    ##n = (events[:, np.newaxis] < xvals[np.newaxis,:]).sum(axis=0)
+    ##p = stats.poisson(rate * x)
+    
+    ### In the case that events == xvals (the windows to evaluate are _selected_ 
+    ### based on the event times), we must apply a correction factor to the expectation
+    ### value: rate*x  =>  rate * (x + 1/rate). This effectively increases the size of the window
+    ### by one period, which reduces the probability to the expected value.
+    
+    ### return 1.0 - p.cdf(n)
+    
+    #y = []
+    #for i in range(len(xvals)):
+        #x = xvals[i]
+        #e = 0
+        #if correctForSelection:
+            #e = 1./rate
+        #y.append(stats.poisson(rate * (x+e)).cdf(i+1))
+    #return 1.0-np.array(y)
+
+#def poissonScore(events, rate):
+    ### 1) For each event, measure the probability that the event and those preceding
+    ###    it could be produced by a poisson process
+    ### 2) Of the probabilities computed in 1), select the minimum value
+    ### 3) X = 1 / min to convert from probability to improbability
+    ### 4) apply some magic: Y = sqrt(X) / 2  -- don't know why this works, but
+    ###    it scales the value such that 1 in Y random trials will produce a score >= Y
+    
+    #pp = poissonProb(events, events, rate, correctForSelection=True)
+    #if len(pp) == 0:
+        #return 1.0
+    #else:
+        #return ((1.0 / pp.min())**1.0) / (rate ** 0.5)
+
+##def poissonIntegral(events, rate, tMin, tMax):
+    ### This version sucks
+    ##pp = poissonProb(events, events, rate)
+    ##if len(pp) == 0:
+        ##return 1.0
+    ##else:
+        ##return (1.0 / pp.mean())**0.5
+        
+#poissonIntCache = {}
+#def poissonIntegral(events, rate, tMin, tMax, plot=False):
+    
+    #global poissonIntCache
+    #xvals = np.linspace(tMin, tMax, 1000)
+    #dt = xvals[1]-xvals[0]
+    #tot = 0
+    #t = tMin
+    #nev = 0
+    #allprobs = []
+    #events = list(events)
+    #events.sort()
+    #events.append(tMax)
+    #for ev in events:
+        #if ev < tMin:
+            #continue
+        #if ev > tMax:
+            #ev = tMax
+        #i1 = int((t-tMin) / dt)
+        #i2 = int((ev-tMin) / dt)
+        #if nev not in poissonIntCache:
+            #poissonIntCache[nev] = np.array([1-stats.poisson(rate * x).cdf(nev) for x in xvals])
+        #probs = poissonIntCache[nev][i1:i2]
+        #tot += (1./probs).sum()
+        #allprobs.append(1./probs)
+        #t = ev
+        #nev += 1
+        #if ev == tMax:
+            #break
+        
+    #if plot:
+        #y = np.concatenate(allprobs)
+        #pg.plot(x=xvals[:len(y)], y=y)
+    #return tot * dt
+    ##return (1. / poissonProb(events, xvals, rate)).sum() ** 0.5
+        
+
+#def poissonIntegralBlame(ev, rate, xMin, xMax):
+    ### estimate how much each event contributes to the poisson-integral of a list of events.
+    #pp = []
+    #for i in range(len(ev)):
+        #ev2 = list(ev)
+        #ev2.pop(i)
+        #pp1 = poissonIntegral(ev, rate, xMin, xMax)
+        #pp2 = poissonIntegral(ev2, rate, xMin, xMax)
+        #pp.append(pp1 / pp2)
+    #ret = np.array(pp)
+    #assert not any(np.isnan(pp))
+    #return ret
+
+#def poissonBlame(ev, rate):
+    ### estimate how much each event contributes to the poisson-score of a list of events.
+    #ev = list(ev)
+    #ps = poissonScore(ev, rate)
+    #pp = []
+    #while len(ev) > 0:
+        #ev.pop(-1)
+        #if len(ev) == 0:
+            #ps2 = 1.0
+        #else:
+            #ps2 = poissonScore(ev, rate)
+        #pp.insert(0, ps / ps2)
+        #ps = ps2
+    #return np.array(pp)
+    
+#def productlog(x):
+    #n = np.arange(1, 30, dtype=float)
+    #return ((x ** n) * ((-n) ** (n-1)) / scipy.misc.factorial(n)).sum()
+    
+    
+    
+#def productlog(x, prec=1e-12):
+    #"""
+    #Stolen from py-fcm:
+    #Productlog or LambertW function computes principal solution for w in f(w) = w*exp(w).
+    #""" 
+    ##  fast estimate with closed-form approximation
+    #if (x <= 500):
+        #lxl = np.log(x + 1.0)
+        #return 0.665 * (1+0.0195*lxl) * lxl + 0.04
+    #else:
+        #return np.log(x - 4.0) - (1.0 - 1.0/np.log(x)) * np.log(np.log(x))
     
 
     
