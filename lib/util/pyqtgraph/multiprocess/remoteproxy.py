@@ -88,6 +88,11 @@ class RemoteEventHandler(object):
             except ExitError:
                 self.exited = True
                 raise
+            except IOError as err:
+                if err.errno == 4:  ## interrupted system call; try again
+                    continue
+                else:
+                    raise
             except:
                 print "Error in process %s" % self.name
                 sys.excepthook(*sys.exc_info())

@@ -423,35 +423,51 @@ class PoissonRepeatScore:
 
     @classmethod
     def generateRandom(cls, rate, tMax, reps):
-        return [{'time': poissonProcess(rate, tMax), 'amp': np.random.normal()} for x in range(reps)]
+        ev = []
+        for i in range(reps):
+            times = poissonProcess(rate, tMax)
+            ev.append({'time': times, 'amp': np.random.normal(size=len(times))})
+        return ev
         
     @classmethod
-    def generateNormalizationTable(cls, nEvents=100000):
+    def generateNormalizationTable(cls, nEvents=1000000):
         print "Generating poissonRepScore normalization table..."
-        reps = np.arange(1,5)
-        rate = 1.0
-        tVals = 2**np.arange(4)
-        nev = (nEvents / (rate*tVals)**0.5).astype(int)
-        
-        r = 10**(20/500.)
-        xVals = r ** np.arange(500)  ## log spacing from 1 to 10**20 in 500 steps
-        norm = np.empty((2, len(reps), len(tVals),len(xVals)))
-        
-        count = np.zeros((len(reps), len(tVals), len(xVals)), dtype=float)
-        for i, t in enumerate(tVals):
-            n = nev[i]
-            for j in xrange(int(n)):
-                if j%1000==0:
-                    print t, j
-                ev = cls.generateRandom(rate=rate, tMax=t, reps=reps[-1])
-                for m in reps:
-                    score = cls.poissonRepScore(ev[:m], 1.0, normalize=False)
-                    ind = np.log(score) / np.log(r)
-                    count[m-1, i, :ind+1] += 1
-        
-        count[count==0] = 1
-        norm[0] = xVals.reshape(1, 1, len(xVals))
-        norm[1] = nev.reshape(1, len(nev), 1) / count
+        path = os.path.dirname(__file__)
+        cacheFile = os.path.join(path, 'poissonRepeatNormTable_2x4x4x500_float64.dat')
+        if os.path.exists(cacheFile):
+            norm = np.fromstring(open(cacheFile).read(), dtype=np.float64).reshape(2,4,4,500)
+        else:
+            reps = np.arange(1,5)
+            rate = 1.0
+            tVals = 2**np.arange(4)
+            nev = (nEvents / (rate*tVals)**0.5).astype(int)
+            
+            r = 10**(20/500.)
+            xVals = r ** np.arange(500)  ## log spacing from 1 to 10**20 in 500 steps
+            norm = np.empty((2, len(reps), len(tVals),len(xVals)))
+            
+            counts = []
+            with mp.Parallelize(tasks=[0,1], counts=counts) as tasker:
+                for task in tasker:
+                    count = np.zeros((len(reps), len(tVals), len(xVals)), dtype=float)
+                    for i, t in enumerate(tVals):
+                        n = nev[i]
+                        for j in xrange(int(n)):
+                            if j%1000==0:
+                                print t, j
+                            ev = cls.generateRandom(rate=rate, tMax=t, reps=reps[-1])
+                            for m in reps:
+                                score = cls.poissonRepScore(ev[:m], 1.0, normalize=False)
+                                ind = np.log(score) / np.log(r)
+                                count[m-1, i, :ind+1] += 1
+                    tasker.counts.append(count)
+                            
+            count = sum(counts)
+            count[count==0] = 1
+            norm[0] = xVals.reshape(1, 1, len(xVals))
+            norm[1] = nev.reshape(1, len(nev), 1) / count
+            
+            open(cacheFile, 'wb').write(norm.tostring())
         
         return norm
 
