@@ -386,7 +386,7 @@ class PoissonRepeatScore:
         if cls.normalizationTable is None:
             cls.normalizationTable = cls.generateNormalizationTable()
             
-        table = cls.normalizationTable[m-1]  # select the table for this repeat number
+        table = cls.normalizationTable[min(m-1, cls.normalizationTable.shape[0]-1)]  # select the table for this repeat number
         
         nind = np.log(n)/np.log(2)
         n1 = np.clip(int(np.floor(nind)), 0, table.shape[1]-2)
@@ -426,11 +426,11 @@ class PoissonRepeatScore:
         return [{'time': poissonProcess(rate, tMax), 'amp': np.random.normal()} for x in range(reps)]
         
     @classmethod
-    def generateNormalizationTable(cls, nEvents=1000):
+    def generateNormalizationTable(cls, nEvents=10000):
         print "Generating poissonRepScore normalization table..."
-        reps = np.arange(1,3)
+        reps = np.arange(1,5)
         rate = 1.0
-        tVals = 2**np.arange(9)
+        tVals = 2**np.arange(4)
         nev = (nEvents / (rate*tVals)**0.5).astype(int)
         
         r = 10**(10/500.)
@@ -472,8 +472,9 @@ class PoissonRepeatScore:
     @classmethod
     def showMap(cls):
         plt = pg.plot()
-        for i in range(cls.normalizationTable.shape[1]):
-            plt.plot(cls.normalizationTable[0,i], cls.normalizationTable[1,i], pen=(i, 14), symbolPen=(i,14), symbol='o')
+        for n in range(cls.normalizationTable.shape[1]):
+            for i in range(cls.normalizationTable.shape[2]):
+                plt.plot(cls.normalizationTable[0, n,i], cls.normalizationTable[1, n,i], pen=(n, 14), symbolPen=(i,14), symbol='o')
 
 
 
