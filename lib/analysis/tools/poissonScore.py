@@ -387,10 +387,10 @@ class PoissonRepeatScore:
             cls.normalizationTable = cls.generateNormalizationTable()
             cls.extrapolateNormTable()
             
-        table = cls.normalizationTable[min(m-1, cls.normalizationTable.shape[0]-1)]  # select the table for this repeat number
+        table = cls.normalizationTable[:,min(m-1, cls.normalizationTable.shape[1]-1)]  # select the table for this repeat number
         
         nind = np.log(n)/np.log(2)
-        n1 = np.clip(int(np.floor(nind)), 0, table.shape[1]-2)
+        n1 = np.clip(int(np.floor(nind)), 0, table.shape[2]-2)
         n2 = n1+1
         
         mapped1 = []
