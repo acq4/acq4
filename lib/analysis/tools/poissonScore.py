@@ -385,6 +385,7 @@ class PoissonRepeatScore:
         """
         if cls.normalizationTable is None:
             cls.normalizationTable = cls.generateNormalizationTable()
+            cls.extrapolateNormTable()
             
         table = cls.normalizationTable[min(m-1, cls.normalizationTable.shape[0]-1)]  # select the table for this repeat number
         
@@ -471,6 +472,24 @@ class PoissonRepeatScore:
         
         return norm
 
+    @classmethod
+    def extrapolateNormTable(cls):
+        ## It appears that, on a log-log scale, the normalization curves appear to become linear after reaching
+        ## about 50 on the y-axis. 
+        ## we can use this to overwrite all the junk at the end caused by running too few test iterations.
+        d = cls.normalizationTable
+        for rep in range(d.shape[1]):
+            for n in range(d.shape[2]):
+                trace = d[:,rep,n]
+                logtrace = np.log(trace)
+                ind1 = np.argwhere(trace[1] > 60)[0,0]
+                ind2 = np.argwhere(trace[1] > 100)[0,0]
+                dd = logtrace[:,ind2] - logtrace[:,ind1]
+                slope = dd[1]/dd[0]
+                npts = trace.shape[1]-ind2
+                yoff = logtrace[1,ind2] - logtrace[0,ind2] * slope
+                trace[1,ind2:] = np.exp(logtrace[0,ind2:] * slope + yoff)
+        
         
     @classmethod
     def testMapping(cls, rate=1.0, tmax=1.0, n=10000):
