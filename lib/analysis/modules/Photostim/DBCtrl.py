@@ -56,44 +56,14 @@ class DBCtrl(QtGui.QWidget):
 
     def scanLoaded(self, scan):
         ## Scan has been loaded, add a new item into the scanTree
-        item = QtGui.QTreeWidgetItem([scan.name(), '', ''])
+        item = ScanTreeItem(scan)
         self.ui.scanTree.addTopLevelItem(item)
-        scan.scanTreeItem = item
-        item.scan = scan
-        item.setCheckState(2, QtCore.Qt.Checked)
-        scan.sigLockChanged.connect(self.scanLockChanged)
-        self.scanLockChanged(scan)
-        scan.sigItemVisibilityChanged.connect(self.scanItemVisibilityChanged)
-        
-    def scanTreeItemChanged(self, item, col):
-        ## when scan items are checked/unchecked, show/hide the canvasItem
-        if col == 2:
-            vis = item.checkState(col) == QtCore.Qt.Checked
-            scan = item.scan
-            ci = scan.canvasItem
-            ci.setVisible(vis)
-        
-    def scanLockChanged(self, scan):
-        ## scan has been locked/unlocked (or newly loaded), update the indicator in the scanTree
-        item = scan.scanTreeItem
-        if scan.locked():
-            item.setText(1, 'Yes')
-        else:
-            item.setText(1, 'No')
-            
-    def scanItemVisibilityChanged(self, scan):
-        treeItem = scan.scanTreeItem
-        cItem = scan.canvasItem
-        checked = treeItem.checkState(2) == QtCore.Qt.Checked
-        vis = cItem.isVisible()
-        if vis == checked:
-            return
-        if vis:
-            treeItem.setCheckState(2, QtCore.Qt.Checked)
-        else:
-            treeItem.setCheckState(2, QtCore.Qt.Unchecked)
-            
 
+    def scanTreeItemChanged(self, item, col):
+        item.changed(col)
+        
+        
+        
     def newMap(self, rec=None):
         m = Map(self.host, rec)
         self.maps.append(m)
@@ -310,7 +280,8 @@ class DBCtrl(QtGui.QWidget):
             if len(scans) == 0:
                 raise Exception("No scans selected.")
             for scan in scans:
-                self.host.clearDBScan(scan)
+                scan.clearFromDB()
+                #self.host.clearDBScan(scan)
             self.ui.clearDBScanBtn.success("Cleared.")
         except:
             self.ui.clearDBScanBtn.failure("Error.")
@@ -323,7 +294,8 @@ class DBCtrl(QtGui.QWidget):
                 raise Exception("No scans selected.")
             with pg.ProgressDialog('Storing scan data to DB..', maximum=len(scans)) as dlg:
                 for scan in scans:
-                    self.host.storeDBScan(scan)
+                    scan.storeToDB()
+                    #self.host.storeDBScan(scan)
                     dlg += 1
                     if dlg.wasCanceled():
                         raise Exception('Store canceled by user')
@@ -343,3 +315,73 @@ class DBCtrl(QtGui.QWidget):
         except:
             self.ui.rewriteSpotPosBtn.failure("Error.")
             raise
+
+            
+
+            
+            
+            
+            
+            
+            
+class ScanTreeItem(QtGui.QTreeWidgetItem):
+    def __init__(self, scan):
+        QtGui.QTreeWidgetItem.__init__(self, [scan.name(), '', '', '', '']
+        scan.scanTreeItem = self
+        self.scan = scan
+        self.setCheckState(2, QtCore.Qt.Checked)
+        self.setCheckState(3, QtCore.Qt.Checked)
+        self.setCheckState(4, QtCore.Qt.Checked)
+        self.scanLockChanged(scan)
+        scan.sigLockStateChanged.connect(self.scanLockChanged)
+        scan.sigStorageStateChanged.connect(self.scanStorageChanged)
+        scan.sigItemVisibilityChanged.connect(self.scanItemVisibilityChanged)
+        
+    def changed(self, col):
+        ## when scan items are checked/unchecked, show/hide the canvasItem
+        checked = self.checkState(col) == QtCore.Qt.Checked
+        if col == 2:
+            self.scan.canvasItem.setVisible(checked)
+        elif col == 3:
+            self.scan.lockEvents(checked)
+        elif col == 4:
+            self.scan.lockStats(checked)
+            
+    def scanLockChanged(self, scan):
+        ## scan has been locked/unlocked (or newly loaded), update the indicator in the scanTree
+        item = scan.scanTreeItem
+        ev, st = scan.getLockState()
+        item.setCheckState(3, QtCore.Qt.Checked if ev else QtCore.Qt.Unchecked)
+        item.setCheckState(4, QtCore.Qt.Checked if ev else QtCore.Qt.Unchecked)
+
+    def scanStorageChanged(self, stored):
+        self.setText(1, "Yes" if stored else "No")
+        
+    def scanItemVisibilityChanged(self, scan):
+        cItem = scan.canvasItem
+        checked = self.checkState(2) == QtCore.Qt.Checked
+        vis = cItem.isVisible()
+        if vis == checked:
+            return
+        self.setCheckState(2, QtCore.Qt.Checked if vis else QtCore.Qt.Unchecked)
+            
+
+class SaveLockWidget(QtGui.QWidget):
+    def __init__(self):
+        QtGui.QWidget.__init__(self)
+        self.layout = QtGui.QHBoxLayout()
+        self.setLayout(self.layout)
+        self.saveLabel = QtGui.QLabel(self)
+        self.lockBtn = QtGui.QPushPutton(self)
+        self.layout.setSpacing(0)
+        self.layout.setContentsMargins(0)
+        
+        path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'lib', 'icons'))
+        images = [os.path.join(path, x) for x in ['locked.png', 'unlocked.png', 'saved.png', 'unsaved.png']]
+        self.images = map(QtGui.QPixmap, images)
+        
+        self.saveLabel.setPixmap(self.images[2])
+       
+        
+    
+        

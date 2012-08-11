@@ -387,7 +387,7 @@ class Photostim(AnalysisModule):
         #print "STATE CHANGE"
         #print "Detector state changed"
         for scan in self.scans:
-            scan.forgetEvents()
+            scan.invalidateEvents()
         
     def detectorOutputChanged(self):
         if self.selectedSpot==None:
@@ -402,7 +402,7 @@ class Photostim(AnalysisModule):
     def analyzerStateChanged(self):
         #print "Analyzer state changed."
         for scan in self.scans:
-            scan.forgetStats()
+            scan.invalidateStats()
         
     def analyzerOutputChanged(self):
         table = self.getElement('Stats')
@@ -525,7 +525,7 @@ class Photostim(AnalysisModule):
         self.selectedScan.updateSpot(spot.data(), events, stats)
         
 
-    def storeDBScan(self, scan):
+    def storeDBScan(self, scan, storeEvents=True):
         """Store all data for a scan, using cached values if possible"""
         p = debug.Profiler("Photostim.storeDBScan", disabled=True)
         
@@ -559,13 +559,14 @@ class Photostim(AnalysisModule):
             db = dbui.getDb()
             with db.transaction():
                 ## Store all events for this scan
-                events = [x for x in events if len(x) > 0] 
-                
-                if len(events) > 0:
-                    ev = np.concatenate(events)
-                    p.mark("concatenate events")
-                    self.detector.storeToDB(ev)
-                    p.mark("stored all events")
+                if storeEvents:
+                    events = [x for x in events if len(x) > 0] 
+                    
+                    if len(events) > 0:
+                        ev = np.concatenate(events)
+                        p.mark("concatenate events")
+                        self.detector.storeToDB(ev)
+                        p.mark("stored all events")
                     
                 ## Store spot data
                 self.storeStats(stats)

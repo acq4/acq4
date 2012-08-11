@@ -9,8 +9,9 @@ class Scan(QtCore.QObject):
     ### This class represents a single photostim scan (one set of non-overlapping points)
     ### It handles processing and caching data 
     sigEventsChanged = QtCore.Signal(object)
-    sigLockChanged = QtCore.Signal(object)
+    sigLockStateChanged = QtCore.Signal(object)  # self
     sigItemVisibilityChanged = QtCore.Signal(object)
+    sigStorageStateChanged(object) #self
     
     def __init__(self, host, source, canvasItem, name=None):
         QtCore.QObject.__init__(self)
@@ -22,10 +23,15 @@ class Scan(QtCore.QObject):
         self.host = host                          ## the parent Photostim object
         self.dataModel = host.dataModel
         self.givenName = name
-        self._locked = False  ## prevents flowchart changes from clearing the cache--only individual updates allowed
         self.events = {}    ## {'events': ...}
         self.stats = {}     ## {protocolDir: stats}
         self.spotDict = {}  ## protocolDir: spot 
+        self.statsLocked = False  ## If true, cache of stats can not be overwritten
+        self.eventsLocked = False  ## If true, cache of events can not be overwritten
+        self.statCacheValid = set()  ## If dh is in set, stat flowchart has not changed since stats were last computed
+        self.eventCacheValid = set() ## if fh is in set, event flowchart has not changed since events were last computed
+        self.statsStored = False 
+        self.eventsStored = False
         self.loadFromDB()
         
     def itemVisibilityChanged(self):
@@ -34,15 +40,15 @@ class Scan(QtCore.QObject):
     def source(self):
         return self._source
         
-    def locked(self):
-        return self._locked
+    #def locked(self):
+        #return self._locked
         
-    def lock(self, lock=True):
-        ### If the scan is locked, it will no longer automatically invalidate its own cache.
-        if self.locked() == lock:
-            return
-        self._locked = lock
-        self.sigLockChanged.emit(self)
+    #def lock(self, lock=True):
+        #### If the scan is locked, it will no longer automatically invalidate its own cache.
+        #if self.locked() == lock:
+            #return
+        #self._locked = lock
+        #self.sigLockChanged.emit(self)
     
     def unlock(self):
         self.lock(False)
@@ -106,7 +112,12 @@ class Scan(QtCore.QObject):
             #self.stats[dh] = stats[0]
             if haveAll:
                 #print "  have data for all spots; locking."
-                self.lock()
+                self.lockEvents()
+                self.lockStats()
+                self.statsStored = True
+                self.eventsStored = True
+                self.sigStorageStateChanged.emit(self, True)
+                
 
     def getStatsKeys(self):
         if self.statExample is None:
@@ -114,16 +125,47 @@ class Scan(QtCore.QObject):
         else:
             return self.statExample.keys()
 
-    def forgetEvents(self):
-        if not self.locked():
-            #print "Scan forget events:", self.source()
-            self.events = {}
-            self.forgetStats()
+    
+    def lockStats(self, lock=True):
+        emit = self.statsLocked != lock
+        self.statsLocked = lock
+            
+        if lock:
+            self.lockEvents() ## emits signal
+        elif emit:
+            self.sigLockStateChanged.emit(self)
+            
         
-    def forgetStats(self):
-        #if not self.locked:
-        #print "Scan forget stats:", self.source()
-        self.stats = {}
+    def lockEvents(self, lock=True):
+        emit = self.eventsLocked != lock
+        self.eventsLocked = lock
+            
+        if not lock:
+            self.lockStats(False) # emits signal
+        elif emit:
+            self.sigLockStateChanged.emit(self)
+        
+        
+    def getLockState(self):
+        return self.eventsLocked, self.statsLocked
+        
+    def getStorageState(self):
+        return self.eventsStored, self.statsStored
+        
+    def invalidateEvents(self):
+        self.eventCacheValid = set()
+            
+    def invalidateStats(self):
+        self.statCacheValid = set()
+            
+    ## 'forget' methods are no longer allowed.
+    #def forgetEvents(self):
+        #if not self.locked():
+            #self.events = {}
+            #self.forgetStats()
+        
+    #def forgetStats(self):
+        #self.stats = {}
         
     def isVisible(self):
         return self.item.isVisible()
@@ -168,7 +210,7 @@ class Scan(QtCore.QObject):
         #print "  got spot:", spot
         #except:
             #raise Exception("File %s is not in this scan" % fh.name())
-        if dh not in self.stats:
+        if dh not in self.stats or (not self.statsLocked and not self.statsCacheValid.get(dh, False)):
             #print "No stats cache for", dh.name(), "compute.."
             fh = self.host.dataModel.getClampFile(dh)
             events = self.getEvents(fh, signal=signal)
@@ -178,14 +220,20 @@ class Scan(QtCore.QObject):
                 print events
                 raise
             self.stats[dh] = stats
+            self.statCacheValid.add(dh)
+            self.statsStored = False
+            self.sigStorageStateChanged.emit(self)
         return self.stats[dh].copy()
 
     def getEvents(self, fh, process=True, signal=True):
-        if fh not in self.events:
+        if fh not in self.events or (not self.eventsLocked and not self.eventsCacheValid.get(fh, False)):
             if process:
                 #print "No event cache for", fh.name(), "compute.."
                 events = self.host.processEvents(fh)  ## need ALL output from the flowchart; not just events
                 self.events[fh] = events
+                self.eventCacheValid.add(fh)
+                self.eventsStored = False
+                self.sigStorageStateChanged.emit(self)
                 if signal:
                     self.sigEventsChanged.emit(self)
             else:
@@ -283,3 +331,20 @@ class Scan(QtCore.QObject):
         #if 'Temperature.BathTemp' in ninfo:
             #rec['temp'] = ninfo['Temperature.BathTemp']
         return rec
+
+    def storeToDB(self):
+        if self.eventsStored and self.statsStored:
+            return
+        self.host.storeDBScan(self, storeEvents=(not self.eventsStored))
+        self.eventsStored = True
+        self.statsStored = True
+        self.sigStorageStateChanged.emit(self)
+        
+    def clearFromDB(self):
+        self.host.clearDBScan(self)
+        self.eventsStored = False
+        self.statsStored = False
+        self.sigStorageStateChanged.emit(self)
+        
+        
+        
