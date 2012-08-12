@@ -326,12 +326,13 @@ class DBCtrl(QtGui.QWidget):
             
 class ScanTreeItem(QtGui.QTreeWidgetItem):
     def __init__(self, scan):
-        QtGui.QTreeWidgetItem.__init__(self, [scan.name(), '', '', '', '']
+        QtGui.QTreeWidgetItem.__init__(self, [scan.name(), '', '', '']
         scan.scanTreeItem = self
         self.scan = scan
         self.setCheckState(2, QtCore.Qt.Checked)
-        self.setCheckState(3, QtCore.Qt.Checked)
-        self.setCheckState(4, QtCore.Qt.Checked)
+        self.eventWidget = ScanLockWidget()
+        self.statWidget = ScanLockWidget()
+        self.
         self.scanLockChanged(scan)
         scan.sigLockStateChanged.connect(self.scanLockChanged)
         scan.sigStorageStateChanged.connect(self.scanStorageChanged)
@@ -367,6 +368,8 @@ class ScanTreeItem(QtGui.QTreeWidgetItem):
             
 
 class SaveLockWidget(QtGui.QWidget):
+    sigLockStateChanged = QtCore.Signal(object, object)  # self, lock
+    
     def __init__(self):
         QtGui.QWidget.__init__(self)
         self.layout = QtGui.QHBoxLayout()
@@ -379,9 +382,18 @@ class SaveLockWidget(QtGui.QWidget):
         path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'lib', 'icons'))
         images = [os.path.join(path, x) for x in ['locked.png', 'unlocked.png', 'saved.png', 'unsaved.png']]
         self.images = map(QtGui.QPixmap, images)
+        self.locked = False
+        self.setUnsaved()
         
-        self.saveLabel.setPixmap(self.images[2])
+    def lockClicked(self): 
+        self.locked = not self.locked
+        self.lockBtn.setPixmap(self.images[0 if self.locked else 1])
+        self.sigLockStateChanged.emit(self, self.locked)
        
+    def setSaved(self):
+        self.saveLabel.setPixmap(self.images[2])
         
+    def setUnsaved(self):
+        self.saveLabel.setPixmap(self.images[3])
     
         
