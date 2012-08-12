@@ -200,7 +200,7 @@ class TreeWidget(QtGui.QTreeWidget):
         items = self.topLevelItems()
         for item in items:
             self.prepareMove(item)
-        QtGui.QTreeWidget.clear()
+        QtGui.QTreeWidget.clear(self)
         for item in items:
             self.informTreeWidgetChange(item)
         

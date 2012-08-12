@@ -11,7 +11,7 @@ class Scan(QtCore.QObject):
     sigEventsChanged = QtCore.Signal(object)
     sigLockStateChanged = QtCore.Signal(object)  # self
     sigItemVisibilityChanged = QtCore.Signal(object)
-    sigStorageStateChanged(object) #self
+    sigStorageStateChanged = QtCore.Signal(object) #self
     
     def __init__(self, host, source, canvasItem, name=None):
         QtCore.QObject.__init__(self)
@@ -50,8 +50,8 @@ class Scan(QtCore.QObject):
         #self._locked = lock
         #self.sigLockChanged.emit(self)
     
-    def unlock(self):
-        self.lock(False)
+    #def unlock(self):
+        #self.lock(False)
         
     def name(self):
         if self.givenName == None:
@@ -129,10 +129,10 @@ class Scan(QtCore.QObject):
     def lockStats(self, lock=True):
         emit = self.statsLocked != lock
         self.statsLocked = lock
-            
+        
         if lock:
-            self.lockEvents() ## emits signal
-        elif emit:
+            self.lockEvents()
+        if emit:
             self.sigLockStateChanged.emit(self)
             
         
@@ -141,8 +141,8 @@ class Scan(QtCore.QObject):
         self.eventsLocked = lock
             
         if not lock:
-            self.lockStats(False) # emits signal
-        elif emit:
+            self.lockStats(False)
+        if emit:
             self.sigLockStateChanged.emit(self)
         
         
