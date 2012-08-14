@@ -116,7 +116,7 @@ class Scan(QtCore.QObject):
                 self.lockStats()
                 self.statsStored = True
                 self.eventsStored = True
-                self.sigStorageStateChanged.emit(self, True)
+                self.sigStorageStateChanged.emit(self)
                 
 
     def getStatsKeys(self):
@@ -153,9 +153,12 @@ class Scan(QtCore.QObject):
         return self.eventsStored, self.statsStored
         
     def invalidateEvents(self):
+        #print "events invalidated"
         self.eventCacheValid = set()
+        self.invalidateStats()
             
     def invalidateStats(self):
+        #print "stats invalidated"
         self.statCacheValid = set()
             
     ## 'forget' methods are no longer allowed.
@@ -210,7 +213,7 @@ class Scan(QtCore.QObject):
         #print "  got spot:", spot
         #except:
             #raise Exception("File %s is not in this scan" % fh.name())
-        if dh not in self.stats or (not self.statsLocked and not self.statsCacheValid.get(dh, False)):
+        if dh not in self.stats or (not self.statsLocked and dh not in self.statCacheValid):
             #print "No stats cache for", dh.name(), "compute.."
             fh = self.host.dataModel.getClampFile(dh)
             events = self.getEvents(fh, signal=signal)
@@ -226,7 +229,7 @@ class Scan(QtCore.QObject):
         return self.stats[dh].copy()
 
     def getEvents(self, fh, process=True, signal=True):
-        if fh not in self.events or (not self.eventsLocked and not self.eventsCacheValid.get(fh, False)):
+        if fh not in self.events or (not self.eventsLocked and fh not in self.eventCacheValid):
             if process:
                 #print "No event cache for", fh.name(), "compute.."
                 events = self.host.processEvents(fh)  ## need ALL output from the flowchart; not just events
@@ -339,12 +342,16 @@ class Scan(QtCore.QObject):
         self.eventsStored = True
         self.statsStored = True
         self.sigStorageStateChanged.emit(self)
+        self.lockEvents(True)
+        self.lockStats(True)
         
     def clearFromDB(self):
         self.host.clearDBScan(self)
         self.eventsStored = False
         self.statsStored = False
         self.sigStorageStateChanged.emit(self)
+        self.lockEvents(False)
+        self.lockStats(False)
         
         
         

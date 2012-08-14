@@ -573,7 +573,7 @@ class Photostim(AnalysisModule):
                 p.mark("stored all stats")
                 p.finish()
                 #print "   scan %s is now locked" % scan.source().name()
-                scan.lock()
+                #scan.lock() ## handled by Scan now
 
     def rewriteSpotPositions(self, scan):
         ## for now, let's just rewrite everything.
@@ -620,8 +620,9 @@ class Photostim(AnalysisModule):
             db.delete(table, where={colName: dh})
         #db.delete(table, "SourceDir=%d" % pRow)
             
-        scan.unlock()
-        scan.forgetEvents()
+        #scan.unlock()
+        #scan.forgetEvents()
+        
         
 
 

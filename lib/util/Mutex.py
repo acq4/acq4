@@ -20,7 +20,7 @@ class Mutex(QtCore.QMutex):
         QtCore.QMutex.__init__(self, *args)
         self.l = QtCore.QMutex()  ## for serializing access to self.tb
         self.tb = []
-        self.debug = True ## True to enable debugging functions
+        self.debug = False ## True to enable debugging functions
 
     def tryLock(self, timeout=None, id=None):
         if timeout is None:

@@ -60,7 +60,11 @@ class RemoteEventHandler(object):
     
     @classmethod
     def getHandler(cls, pid):
-        return cls.handlers[pid]
+        try:
+            return cls.handlers[pid]
+        except:
+            print pid, cls.handlers
+            raise
     
     def getProxyOption(self, opt):
         return self.proxyOptions[opt]

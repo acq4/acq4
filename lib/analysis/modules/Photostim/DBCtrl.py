@@ -336,6 +336,7 @@ class ScanTreeItem(pg.TreeWidgetItem):
         self.setWidget(2, self.eventWidget)
         self.setWidget(3, self.statWidget)
         self.scanLockChanged(scan)
+        self.scanStorageChanged(scan)
         
         self.eventWidget.sigLockClicked.connect(self.eventLockClicked)
         self.statWidget.sigLockClicked.connect(self.statLockClicked)
@@ -366,6 +367,7 @@ class ScanTreeItem(pg.TreeWidgetItem):
         
     def scanStorageChanged(self, scan):
         ev, st = self.scan.getStorageState()
+        #print "set saved:", ev, st
         self.eventWidget.setSaved(ev)
         self.statWidget.setSaved(st)
         
