@@ -55,11 +55,12 @@ Changes to event detector:
 from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
 #from flowchart import *
-#import os
-#from collections import OrderedDict
+import os
+from collections import OrderedDict
 #import debug
 #import FileLoader
 #import DatabaseGui
+from ColorMapper import ColorMapper
 import pyqtgraph as pg
 import pyqtgraph.parametertree as ptree
 
@@ -72,30 +73,30 @@ class Mapper(AnalysisModule):
         self.ctrl = ptree.ParameterTree()
         params = [
             dict(name='Time Ranges', type='group', children=[
-                dict(name='', type='', value=),
-                dict(name='', type='', value=),
-                
+                dict(name='Direct Start', type='float', value='0.498', suffix='s', step=0.001, siPrefix=True),
+                dict(name='Post Start', type='float', value='0.503', suffix='s', step=0.001, siPrefix=True),
+                dict(name='Post End', type='float', value='0.700', suffix='s', step=0.001, siPrefix=True),
             ]),
             dict(name='Event Selection', type='group', children=[
-                dict(name='', type='', value=),
-                dict(name='', type='', value=),
-                dict(name='', type='', value=),
-                
+                dict(name='Sign', type='list', values=['Excitatory', 'Inhibitory'], value='Excitatory'),
             ]),
             dict(name='Spontaneous Rate', type='group', children=[
-                dict(name='', type='', value=),
-                dict(name='', type='', value=),
-                dict(name='', type='', value=),
-                
+                dict(name='Method', type='list', values=['Constant', 'Per-episode'], value='Constant'),
+                dict(name='Constant Rate', type='float', value=0, suffix='Hz', siPrefix=True),
+                dict(name='Average Window', type='float', value=10., suffix='s', siPrefix=True),
             ]),
             dict(name='Analysis Methods', type='group', children=[
-                dict(name='', type='', value=),
-                dict(name='', type='', value=),
-                dict(name='', type='', value=),
-                
-                
+                dict(name='Z-Score', type='bool', value=False),
+                dict(name='Poisson', type='bool', value=False),
+                dict(name='Poisson Multi', type='bool', value=True, children=[
+                    dict(name='Amplitude', type='bool', value=False),
+                    dict(name='Mean', type='float', readonly=True),
+                    dict(name='Stdev', type='float', readonly=True),
+                ]),
             ])
         ]
+        self.params = ptree.Parameter(name='options', type='group', children=params)
+        self.ctrl.setParameters(self.params, showTop=False)
         
         self.loader = pg.LayoutWidget()
         self.loaderTree = pg.TreeWidget()
@@ -108,10 +109,11 @@ class Mapper(AnalysisModule):
         self.colorMapper = ColorMapper(filePath=os.path.join(modPath, "colorMaps"))
         self._elements_ = OrderedDict([
             ('Map Loader', {'type': 'ctrl', 'object': self.loader, 'size': (300, 400)}),
-            ('Canvas', {'type': 'canvas', 'position': ('right', 'Map Loader'), 'size': (500, 400)}),
+            ('Canvas', {'type': 'canvas', 'pos': ('right', 'Map Loader'), 'size': (500, 400)}),
             ('Color Mapper', {'type':'ctrl', 'object': self.colorMapper, 'size': (500,200), 'pos':('top', 'Canvas')}),
-            ('Options', {'type': 'ctrl', 'object': self.ctrl, 'size': (300, 400), 'position': ('bottom', 'Map Loader')}),
+            ('Options', {'type': 'ctrl', 'object': self.ctrl, 'size': (300, 400), 'pos': ('bottom', 'Map Loader')}),
             ('Data Plot', {'type': 'plot', 'pos': ('bottom', 'Canvas'), 'size': (500, 300)}),
+            ('Score Histogram', {'type': 'plot', 'pos': ('below', 'Data Plot'), 'size': (500, 300)}),
             ('Timeline', {'type': 'plot', 'pos': ('below', 'Data Plot'), 'size': (500, 300)}),
             ('Stats Table', {'type': 'table', 'pos': ('below', 'Data Plot'), 'size': (500,300)}),
         ])
@@ -123,15 +125,15 @@ class Mapper(AnalysisModule):
         name = element.name()
         
         ## connect plots to flowchart, link X axes
-        if name == 'Data Plot':
-            self.flowchart.nodes()['Plot_000'].setPlot(new)
-            p2 = self.getElement('Filter Plot')
-            if p2 is not None:
-                new.setXLink(p2)
-        elif name == 'Filter Plot':
-            self.flowchart.nodes()['Plot_001'].setPlot(new)
-            p2 = self.getElement('Data Plot')
-            if p2 is not None:
-                p2.setXLink(new)
+        #if name == 'Data Plot':
+            #self.flowchart.nodes()['Plot_000'].setPlot(new)
+            #p2 = self.getElement('Filter Plot')
+            #if p2 is not None:
+                #new.setXLink(p2)
+        #elif name == 'Filter Plot':
+            #self.flowchart.nodes()['Plot_001'].setPlot(new)
+            #p2 = self.getElement('Data Plot')
+            #if p2 is not None:
+                #p2.setXLink(new)
 
 

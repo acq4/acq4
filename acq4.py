@@ -7,17 +7,17 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 
 print "Loading ACQ4..."
 
-## rename any orphaned .pyc files -- these are probably leftover from 
-## a module being moved and may interfere with expected operation.
-import os, sys
-from lib.util.pycRename import pycRename
-modDir = os.path.abspath(os.path.split(__file__)[0])
-pycRename(modDir)
 
 import sip
 sip.setapi('QString', 2)
 sip.setapi('QVariant', 2)
     
+## rename any orphaned .pyc files -- these are probably leftover from 
+## a module being moved and may interfere with expected operation.
+import os, sys
+from lib.util.pyqtgraph import renamePyc
+modDir = os.path.abspath(os.path.split(__file__)[0])
+renamePyc(modDir)
 
 ## PyQt bug: make sure qt.conf was installed correctly
 #pyDir = os.path.split(sys.executable)[0]
