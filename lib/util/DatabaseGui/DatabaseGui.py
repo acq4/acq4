@@ -4,10 +4,7 @@ import DatabaseTemplate, QueryTemplate
 import os
 
 class DatabaseGui(QtGui.QWidget):
-    """Presents a very simple interface for interacting with a database.
-    Allows the user to:
-    - Run queries and display/select results
-    - Select tables"""
+    """Presents a very simple interface for selecting tables from an AnalysisDatabase."""
     
     sigTableChanged = QtCore.Signal(str, str)  ## table purpose, table name
     #sigStoreToDB = QtCore.Signal()
@@ -17,7 +14,7 @@ class DatabaseGui(QtGui.QWidget):
         QtGui.QWidget.__init__(self)
         self.dm = dm
         #self.ident = identity
-        self.tables = tables
+        self.tables = {}
         self.db = None
         self.ui = DatabaseTemplate.Ui_Form()
         self.ui.setupUi(self)
@@ -25,6 +22,8 @@ class DatabaseGui(QtGui.QWidget):
         self.tableWidgets = {}
         if dm is not None:
             self.setDataManager(dm)
+        if tables is not None:
+            self.setTables(tables)
         
     def getTableName(self, ident):
         return str(self.tableWidgets[ident][1].currentText())
@@ -68,7 +67,7 @@ class DatabaseGui(QtGui.QWidget):
             combo = QtGui.QComboBox()
             combo.setEditable(True)
             tables = self.db.listTablesOwned(ident)
-            if default not in tables:
+            if (default is not None) and (default not in tables):
                 tables.insert(0, default)
             for t in tables:
                 combo.addItem(t)

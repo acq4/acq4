@@ -4,6 +4,57 @@ import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.multiprocess as mp
 import time, os
+import Canvas
+
+
+def loadScanSequence(fh, host):
+    ## Load a scan (or sequence of scans) from fh,
+    ## return a Scan object (or list of Scan objects)
+    
+    dataModel = host.dataModel
+    
+    if dataModel.isSequence(fh):  ## If we are loading a sequence, there will be multiple spot locations and/or multiple scans.
+        ## get sequence parameters
+        params = dataModel.listSequenceParams(fh).deepcopy()  ## copy is required since this info is read-only.
+        if ('Scanner', 'targets') in params:
+            #params.remove(('Scanner', 'targets'))  ## removing this key enables us to process other sequence variables independently
+            del params[('Scanner', 'targets')]
+    
+            
+        ## Determine the set of subdirs for each scan present in the sequence
+        ## (most sequences will have only one scan)
+        scans = {}
+        for dhName in fh.subDirs():
+            dh = fh[dhName]
+            key = '_'.join([str(dh.info()[p]) for p in params])
+            if key not in scans:
+                scans[key] = []
+            scans[key].append(dh)
+
+    else:  ## If we are not loading a sequence, then there is only a single spot
+        scans = {None: [fh]}
+        #seq = False
+        #parent = None
+
+
+    ## Add each scan
+    
+        
+    ret = []
+    for key, subDirs in scans.iteritems():
+        if len(scans) > 1:
+            name = key
+            sname = fh.shortName() + '.' + key
+        else:
+            name = fh.shortName()
+            sname = name
+        scan = Scan(host, fh, subDirs, name=sname, itemName=name)
+        ret.append(scan)
+    
+    print ret
+    return ret
+
+            
 
 class Scan(QtCore.QObject):
     ### This class represents a single photostim scan (one set of non-overlapping points)
@@ -13,16 +64,17 @@ class Scan(QtCore.QObject):
     sigItemVisibilityChanged = QtCore.Signal(object)
     sigStorageStateChanged = QtCore.Signal(object) #self
     
-    def __init__(self, host, source, canvasItem, name=None):
+    def __init__(self, host, source, dirHandles, name=None, itemName=None):
         QtCore.QObject.__init__(self)
         self._source = source           ## DirHandle to data for this scan
-        canvasItem.graphicsItem().scan = self  ## mark the graphicsItem so that we can trace back to here when it is clicked
-        self.canvasItem = canvasItem
-        canvasItem.sigVisibilityChanged.connect(self.itemVisibilityChanged)
-        self.item = canvasItem.graphicsItem()     ## graphics item
+        self.dirHandles = dirHandles    ## List of DirHandles, one per spot
+        
+        self._canvasItem = None
+        
         self.host = host                          ## the parent Photostim object
         self.dataModel = host.dataModel
         self.givenName = name
+        self.itemName = itemName
         self.events = {}    ## {'events': ...}
         self.stats = {}     ## {protocolDir: stats}
         self.spotDict = {}  ## protocolDir: spot 
@@ -33,6 +85,15 @@ class Scan(QtCore.QObject):
         self.statsStored = False 
         self.eventsStored = False
         self.loadFromDB()
+        
+    def canvasItem(self):
+        if self._canvasItem is None:
+            self._canvasItem = Canvas.ScanCanvasItem(handle=self.source(), subDirs=self.dirHandles, name=self.itemName)
+            self._canvasItem.graphicsItem().scan = self  ## mark the graphicsItem so that we can trace back to here when it is clicked
+            self._canvasItem.sigVisibilityChanged.connect(self.itemVisibilityChanged)
+            self.item = self._canvasItem.graphicsItem()     ## graphics item
+        return self._canvasItem
+
         
     def itemVisibilityChanged(self):
         self.sigItemVisibilityChanged.emit(self)
@@ -94,8 +155,8 @@ class Scan(QtCore.QObject):
             for st in allStats:
                 self.stats[st['ProtocolDir']] = st
                 
-            for spot in self.spots():
-                dh = spot.data()
+            for dh in self.dirHandles:
+                #dh = spot.data()
                 #fh = self.host.getClampFile(dh)
                 fh = self.dataModel.getClampFile(dh)
                 #events, stats = self.host.loadSpotFromDB(dh)

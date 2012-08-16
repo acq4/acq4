@@ -59,12 +59,17 @@ import os
 from collections import OrderedDict
 #import debug
 #import FileLoader
-#import DatabaseGui
+import DatabaseGui
 from ColorMapper import ColorMapper
 import pyqtgraph as pg
 import pyqtgraph.parametertree as ptree
 
-class Mapper(AnalysisModule):
+import lib.analysis.modules.Photostim.Scan as Scan
+from lib.analysis.modules.Photostim.Map import Map
+
+
+
+class MapAnalyzer(AnalysisModule):
     
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
@@ -98,26 +103,22 @@ class Mapper(AnalysisModule):
         self.params = ptree.Parameter(name='options', type='group', children=params)
         self.ctrl.setParameters(self.params, showTop=False)
         
-        self.loader = pg.LayoutWidget()
-        self.loaderTree = pg.TreeWidget()
-        self.loadBtn = QtGui.QPushButton('Load Map')
-        self.loader.addWidget(self.loaderTree, 0, 0)
-        self.loader.addWidget(self.loadBtn, 1, 0)
+        self.loader = Loader(host=self, dm=host.dataManager())
         
         
         modPath = os.path.abspath(os.path.dirname(__file__))
         self.colorMapper = ColorMapper(filePath=os.path.join(modPath, "colorMaps"))
         self._elements_ = OrderedDict([
-            ('Map Loader', {'type': 'ctrl', 'object': self.loader, 'size': (300, 400)}),
-            ('Canvas', {'type': 'canvas', 'pos': ('right', 'Map Loader'), 'size': (500, 400)}),
-            ('Color Mapper', {'type':'ctrl', 'object': self.colorMapper, 'size': (500,200), 'pos':('top', 'Canvas')}),
-            ('Options', {'type': 'ctrl', 'object': self.ctrl, 'size': (300, 400), 'pos': ('bottom', 'Map Loader')}),
-            ('Data Plot', {'type': 'plot', 'pos': ('bottom', 'Canvas'), 'size': (500, 300)}),
-            ('Score Histogram', {'type': 'plot', 'pos': ('below', 'Data Plot'), 'size': (500, 300)}),
-            ('Timeline', {'type': 'plot', 'pos': ('below', 'Data Plot'), 'size': (500, 300)}),
-            ('Stats Table', {'type': 'table', 'pos': ('below', 'Data Plot'), 'size': (500,300)}),
+            ('Map Loader', {'type': 'ctrl', 'object': self.loader, 'size': (300, 300)}),
+            ('Canvas', {'type': 'canvas', 'pos': ('right', 'Map Loader'), 'size': (800, 400)}),
+            ('Color Mapper', {'type':'ctrl', 'object': self.colorMapper, 'size': (800,200), 'pos':('top', 'Canvas')}),
+            ('Options', {'type': 'ctrl', 'object': self.ctrl, 'size': (300, 500), 'pos': ('bottom', 'Map Loader')}),
+            ('Data Plot', {'type': 'plot', 'pos': ('bottom', 'Canvas'), 'size': (800, 300)}),
+            ('Score Histogram', {'type': 'plot', 'pos': ('below', 'Data Plot'), 'size': (800, 300)}),
+            ('Timeline', {'type': 'plot', 'pos': ('below', 'Data Plot'), 'size': (800, 300)}),
+            ('Stats Table', {'type': 'table', 'pos': ('below', 'Data Plot'), 'size': (800,300)}),
         ])
-        
+        host.resize(1100, 800)
         self.initializeElements()
         
         
@@ -136,4 +137,80 @@ class Mapper(AnalysisModule):
             #if p2 is not None:
                 #p2.setXLink(new)
 
+    def loadMap(self, rec):
+        self.currentMap = Map(self, rec)
+        self.currentMap.loadStubs()
+        self.getElement('Canvas').addGraphicsItem(self.currentMap.sPlotItem)
+                
+    def loadScan(self, dh):
+        ## called by Map objects to load scans
+        return Scan.loadScanSequence(dh, self)
+        
+    def getColor(self, data):
+        ## return the color to represent this data
+        return pg.mkColor(200,200,255)
 
+class Loader(QtGui.QWidget):
+    def __init__(self, parent=None, host=None, dm=None):
+        QtGui.QWidget.__init__(self, parent)
+        self.host = host
+        
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        self.dbGui = DatabaseGui.DatabaseGui(dm=dm, tables={'Photostim.events': None, 'Photostim.sites': None, 'Photostim.maps': None})
+        self.layout.addWidget(self.dbGui, 0, 0)
+        
+        self.tree = pg.TreeWidget()
+        self.layout.addWidget(self.tree, 1, 0)
+        
+        self.loadBtn = QtGui.QPushButton('Load Map')
+        self.layout.addWidget(self.loadBtn, 2, 0)
+        self.loadBtn.clicked.connect(self.load)
+        
+        self.loadedLabel = QtGui.QLabel("Loaded: [none]")
+        self.layout.addWidget(self.loadedLabel, 3, 0)
+        
+        self.populate()
+        
+    def populate(self):
+        self.tree.clear()
+        mapTable = self.dbGui.getTableName('Photostim.maps')
+        if mapTable == '':
+            return
+            #raise Exception("No table selected for %s" % ident)
+        db = self.dbGui.getDb()
+        maps = db.select(mapTable, ['rowid','*'])
+        
+        paths = {}
+        for rec in maps:
+            if len(rec['scans']) == 0:
+                continue
+            
+            ## convert (table, rowid) to (dirhandle, rowid) before creating Map
+            rec['scans'] = [(db.getDir(*s), s[1]) for s in rec['scans']]
+            path = rec['scans'][0][0].parent()
+            
+            if path not in paths:
+                pathItem = pg.TreeWidgetItem([path.name(relativeTo=db.baseDir())])
+                self.tree.addTopLevelItem(pathItem)
+                paths[path] = pathItem
+            
+            item = pg.TreeWidgetItem([rec['description']])
+            item.rec = rec
+            paths[path].addChild(item)
+            
+    def load(self):
+        sel = self.tree.selectedItems()
+        if len(sel) != 1:
+            raise Exception("Must select a single map to load.")
+        sel = sel[0]
+        if not hasattr(sel, 'rec'):
+            raise Exception("Must select a map to load.")
+        try: 
+            self.host.loadMap(sel.rec)
+            self.loadedLabel.setText("Loaded: %s" % (sel.parent().text(0) + '/' + sel.text(0)))
+        except:
+            self.loadedLabel.setText("Loaded: [none]")
+            raise
+        
+        

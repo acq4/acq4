@@ -348,7 +348,7 @@ class ScanTreeItem(pg.TreeWidgetItem):
         ## when scan items are checked/unchecked, show/hide the canvasItem
         checked = self.checkState(col) == QtCore.Qt.Checked
         if col == 1:
-            self.scan.canvasItem.setVisible(checked)
+            self.scan.canvasItem().setVisible(checked)
             
     def scanLockChanged(self, scan):
         ## scan has been locked/unlocked (or newly loaded), update the indicator in the scanTree
@@ -372,12 +372,12 @@ class ScanTreeItem(pg.TreeWidgetItem):
         self.statWidget.setSaved(st)
         
     def scanItemVisibilityChanged(self, scan):
-        cItem = scan.canvasItem
-        checked = self.checkState(2) == QtCore.Qt.Checked
+        cItem = scan.canvasItem()
+        checked = self.checkState(1) == QtCore.Qt.Checked
         vis = cItem.isVisible()
         if vis == checked:
             return
-        self.setCheckState(2, QtCore.Qt.Checked if vis else QtCore.Qt.Unchecked)
+        self.setCheckState(1, QtCore.Qt.Checked if vis else QtCore.Qt.Unchecked)
             
 
 class SaveLockWidget(QtGui.QWidget):
