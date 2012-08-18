@@ -144,7 +144,20 @@ class MapAnalyzer(AnalysisModule):
                 
     def loadScan(self, dh):
         ## called by Map objects to load scans
-        return Scan.loadScanSequence(dh, self)
+        scans = Scan.loadScanSequence(dh, self)
+        for scan in scans:
+            ci = scan.canvasItem()
+            self.getElement('Canvas').addItem(ci)
+            ci.hide()
+        return scans
+        
+    def loadScanFromDB(self, sourceDir):
+        statTable = self.loader.dbGui.getTableName('Photostim.sites')
+        eventTable = self.loader.dbGui.getTableName('Photostim.events')
+        db = self.loader.dbGui.getDb()
+        stats = db.select(statTable, '*', where={'ProtocolSequenceDir': sourceDir})
+        events = db.select(eventTable, '*', where={'ProtocolSequenceDir': sourceDir}, toArray=True)
+        return events, stats
         
     def getColor(self, data):
         ## return the color to represent this data

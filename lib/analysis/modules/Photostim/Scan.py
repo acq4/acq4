@@ -85,6 +85,7 @@ class Scan(QtCore.QObject):
         self.statsStored = False 
         self.eventsStored = False
         self.loadFromDB()
+        self.canvasItem() ## create canvas item
         
     def canvasItem(self):
         if self._canvasItem is None:
