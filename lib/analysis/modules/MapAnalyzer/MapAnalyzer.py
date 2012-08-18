@@ -121,6 +121,8 @@ class MapAnalyzer(AnalysisModule):
         host.resize(1100, 800)
         self.initializeElements()
         
+        self.timeMarker = TimelineMarker()
+        self.getElement('Timeline', create=True).addItem(self.timeMarker)
         
     def elementChanged(self, element, old, new):
         name = element.name()
@@ -138,6 +140,7 @@ class MapAnalyzer(AnalysisModule):
                 #p2.setXLink(new)
 
     def loadMap(self, rec):
+        self.getElement('Canvas').clear()
         self.currentMap = Map(self, rec)
         self.currentMap.loadStubs()
         self.getElement('Canvas').addGraphicsItem(self.currentMap.sPlotItem)
@@ -145,10 +148,15 @@ class MapAnalyzer(AnalysisModule):
     def loadScan(self, dh):
         ## called by Map objects to load scans
         scans = Scan.loadScanSequence(dh, self)
+        if len(scans) > 1:
+            raise Exception("Scan sequences not supported yet.")
         for scan in scans:
             ci = scan.canvasItem()
             self.getElement('Canvas').addItem(ci)
             ci.hide()
+            times = scan.getTimes()
+            print times
+            self.timeMarker.addTimes(times)
         return scans
         
     def loadScanFromDB(self, sourceDir):
@@ -226,4 +234,75 @@ class Loader(QtGui.QWidget):
             self.loadedLabel.setText("Loaded: [none]")
             raise
         
+class TimelineMarker(pg.GraphicsObject):
+    def __init__(self):
+        pg.GraphicsObject.__init__(self)
+        self.times = []
+        self.yRange=(0.1, 0.2)
+        self.xRange=[float('inf'), float('-inf')]
+        self.pen = pg.mkPen(None)
+        self.brush = pg.mkBrush((200,200,255,200))
         
+    def boundingRect(self):
+        if self.xRange[0] == float('inf'):
+            x1,x2 = 0,0
+        else:
+            x1,x2 = self.xRange
+        return QtCore.QRectF(x1, 0, x2-x1, 1)
+        
+    def setTimes(self, times):
+        """Times must be a list of (start, end) tuples."""
+        self.clear()
+        self.addTimes(times)
+            
+    def addTimes(self, times):
+        for x1, x2 in times:
+            t = QtGui.QGraphicsRectItem(QtCore.QRectF(x1, 0, x2-x1, 1))
+            t.setParentItem(self)
+            t.setPen(self.pen)
+            t.setBrush(self.brush)
+            self.xRange[0] = min(self.xRange[0], x1, x2)
+            self.xRange[1] = max(self.xRange[1], x1, x2)
+            self.prepareGeometryChange()
+            self.times.append(t)
+            
+    def paint(self, p, *args):
+        pass
+        #p.setPen(pg.mkPen('r'))
+        #p.drawRect(self.boundingRect())
+            
+    def clear(self):
+        self.xRange
+        s = self.scene()
+        if s is not None:
+            for t in self.times:
+                s.removeItem(t)
+                t.setParentItem(None)
+        else:
+            for t in self.times:
+                t.setParentItem(None)
+            
+        self.times = []
+            
+    def setPen(self, pen):
+        pen = pg.mkPen(pen)
+        self.pen = pen
+        for t in self.times:
+            t.setPen(pen)
+            
+    def setBrush(self, brush):
+        brush = pg.mkBrush(brush)
+        self.brush = brush
+        for t in self.times:
+            t.setBrush(brush)
+            
+            
+        
+    def viewRangeChanged(self):
+        self.resetTransform()
+        r = self.viewRect()
+        y1 = r.top() + r.height() * self.yRange[0]
+        y2 = r.top() + r.height() * self.yRange[1]
+        self.translate(0, y1)
+        self.scale(1.0, abs(y2-y1))
+        print y1, y2
