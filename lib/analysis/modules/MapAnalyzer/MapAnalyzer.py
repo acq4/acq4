@@ -74,7 +74,11 @@ class MapAnalyzer(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         
-
+        self.filterStage = EventFilter()
+        self.spontRateStage = SpontRateAnalyzer()
+        self.statsStage = EventStatisticsAnalyzer()
+        self.stages = [self.filterStage, self.spontRateState, self.statsStage]
+        
         self.ctrl = ptree.ParameterTree()
         params = [
             dict(name='Time Ranges', type='group', children=[
@@ -82,24 +86,12 @@ class MapAnalyzer(AnalysisModule):
                 dict(name='Post Start', type='float', value='0.503', suffix='s', step=0.001, siPrefix=True),
                 dict(name='Post End', type='float', value='0.700', suffix='s', step=0.001, siPrefix=True),
             ]),
-            dict(name='Event Selection', type='group', children=[
-                dict(name='Sign', type='list', values=['Excitatory', 'Inhibitory'], value='Excitatory'),
-            ]),
-            dict(name='Spontaneous Rate', type='group', children=[
-                dict(name='Method', type='list', values=['Constant', 'Per-episode'], value='Constant'),
-                dict(name='Constant Rate', type='float', value=0, suffix='Hz', siPrefix=True),
-                dict(name='Average Window', type='float', value=10., suffix='s', siPrefix=True),
-            ]),
-            dict(name='Analysis Methods', type='group', children=[
-                dict(name='Z-Score', type='bool', value=False),
-                dict(name='Poisson', type='bool', value=False),
-                dict(name='Poisson Multi', type='bool', value=True, children=[
-                    dict(name='Amplitude', type='bool', value=False),
-                    dict(name='Mean', type='float', readonly=True),
-                    dict(name='Stdev', type='float', readonly=True),
-                ]),
-            ])
         ]
+        
+        ## each processing stage comes with its own set of parameters
+        for stage in self.stages:
+            params.append(stage.parameters())
+        
         self.params = ptree.Parameter(name='options', type='group', children=params)
         self.ctrl.setParameters(self.params, showTop=False)
         
@@ -126,18 +118,6 @@ class MapAnalyzer(AnalysisModule):
         
     def elementChanged(self, element, old, new):
         name = element.name()
-        
-        ## connect plots to flowchart, link X axes
-        #if name == 'Data Plot':
-            #self.flowchart.nodes()['Plot_000'].setPlot(new)
-            #p2 = self.getElement('Filter Plot')
-            #if p2 is not None:
-                #new.setXLink(p2)
-        #elif name == 'Filter Plot':
-            #self.flowchart.nodes()['Plot_001'].setPlot(new)
-            #p2 = self.getElement('Data Plot')
-            #if p2 is not None:
-                #p2.setXLink(new)
 
     def loadMap(self, rec):
         self.getElement('Canvas').clear()
@@ -160,6 +140,7 @@ class MapAnalyzer(AnalysisModule):
         return scans
         
     def loadScanFromDB(self, sourceDir):
+        ## Called by Scan as it is loading
         statTable = self.loader.dbGui.getTableName('Photostim.sites')
         eventTable = self.loader.dbGui.getTableName('Photostim.events')
         db = self.loader.dbGui.getDb()
@@ -170,6 +151,19 @@ class MapAnalyzer(AnalysisModule):
     def getColor(self, data):
         ## return the color to represent this data
         return pg.mkColor(200,200,255)
+        
+    def update(self):
+        map = self.currentMap
+        
+        events = np.concatenate([s.events().copy() for s in map.scans()])
+        filtered = self.filterStage.process(events)
+        spontRates = self.spontRateStage.process(filtered)
+        output = self.statsStage.process(spontRate)
+        
+        
+        
+    
+    
 
 class Loader(QtGui.QWidget):
     def __init__(self, parent=None, host=None, dm=None):
@@ -306,3 +300,48 @@ class TimelineMarker(pg.GraphicsObject):
         self.translate(0, y1)
         self.scale(1.0, abs(y2-y1))
         print y1, y2
+        
+        
+class EventFilter:
+    def __init__(self):
+        self.params = dict(name='Event Selection', type='group', children=[
+                dict(name='Amplitude Sign', type='list', values=['+', '-'], value='+'),
+            ]),
+    
+    def parameters(self):
+        return self.params
+    
+    def process(self, events):
+        if self.params['Amplitude Sign'] == '+':
+            return events[events['fitAmplitude'] > 0]
+        else:
+            return events[events['fitAmplitude'] < 0]
+
+class SpontRateAnalyzer:
+    def __init__(self):
+        self.params = dict(name='Spontaneous Rate', type='group', children=[
+                dict(name='Method', type='list', values=['Constant', 'Per-episode'], value='Constant'),
+                dict(name='Constant Rate', type='float', value=0, suffix='Hz', siPrefix=True),
+                dict(name='Average Window', type='float', value=10., suffix='s', siPrefix=True),
+            ]),
+    
+    def parameters(self):
+        return self.params
+
+class EventStatisticsAnalyzer:
+    def __init__(self):
+        self.params = dict(name='Analysis Methods', type='group', children=[
+                dict(name='Z-Score', type='bool', value=False),
+                dict(name='Poisson', type='bool', value=False),
+                dict(name='Poisson Multi', type='bool', value=True, children=[
+                    dict(name='Amplitude', type='bool', value=False),
+                    dict(name='Mean', type='float', readonly=True),
+                    dict(name='Stdev', type='float', readonly=True),
+                ]),
+            ])
+    
+    def parameters(self):
+        return self.params
+
+    
+    
