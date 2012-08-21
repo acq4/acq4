@@ -77,7 +77,7 @@ class MapAnalyzer(AnalysisModule):
         self.filterStage = EventFilter()
         self.spontRateStage = SpontRateAnalyzer()
         self.statsStage = EventStatisticsAnalyzer()
-        self.stages = [self.filterStage, self.spontRateState, self.statsStage]
+        self.stages = [self.filterStage, self.spontRateStage, self.statsStage]
         
         self.ctrl = ptree.ParameterTree()
         params = [
@@ -155,8 +155,9 @@ class MapAnalyzer(AnalysisModule):
     def update(self):
         map = self.currentMap
         
-        events = np.concatenate([s.events().copy() for s in map.scans()])
+        events = np.concatenate([s.getAllEvents().copy() for s in map.scans()])
         filtered = self.filterStage.process(events)
+        
         spontRates = self.spontRateStage.process(filtered)
         output = self.statsStage.process(spontRate)
         
@@ -306,7 +307,7 @@ class EventFilter:
     def __init__(self):
         self.params = dict(name='Event Selection', type='group', children=[
                 dict(name='Amplitude Sign', type='list', values=['+', '-'], value='+'),
-            ]),
+            ])
     
     def parameters(self):
         return self.params
@@ -323,10 +324,29 @@ class SpontRateAnalyzer:
                 dict(name='Method', type='list', values=['Constant', 'Per-episode'], value='Constant'),
                 dict(name='Constant Rate', type='float', value=0, suffix='Hz', siPrefix=True),
                 dict(name='Average Window', type='float', value=10., suffix='s', siPrefix=True),
-            ]),
+            ])
     
     def parameters(self):
         return self.params
+        
+    def process(self, events):
+        ## filter events by pre-region
+        events = events[events['fitTime'] < x]
+        
+        
+        handles = set(events['ProtocolDir'])
+        
+        ## sort handles by timestamp
+        
+        ## measure spont. rate for each handle
+        
+        ## do averaging
+        
+        ## add spont rate, filtered spont rate columns to site data
+        
+        
+        
+        
 
 class EventStatisticsAnalyzer:
     def __init__(self):
