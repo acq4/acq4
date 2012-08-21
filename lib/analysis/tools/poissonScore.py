@@ -244,7 +244,6 @@ class PoissonScore:
 
     @classmethod
     def generateNormalizationTable(cls, nEvents=1000000000):
-        print "Generating poissonScore normalization table..."
         path = os.path.dirname(__file__)
         cacheFile = os.path.join(path, 'poissonScoreNormTable_2x9x500_float64.dat')
         if os.path.exists(cacheFile):
