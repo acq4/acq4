@@ -154,15 +154,95 @@ class MapAnalyzer(AnalysisModule):
         
     def update(self):
         map = self.currentMap
-        
+        scans = map.scans()
         events = np.concatenate([s.getAllEvents().copy() for s in map.scans()])
         filtered = self.filterStage.process(events)
         
-        spontRates = self.spontRateStage.process(filtered)
+        ## Get a list of all stimulations in the map and their times.
+        sites = []
+        for s in scans:
+            sites.extend(s.getTimes)
+        sites.sort(key=lambda i: i[1])
+            
+        ## set up table of per-stimulation data
+        spontRates = np.empty(len(sites), dtype=[('protocolDir', object), ('start', float), ('stop', float), ('spontRate', float), ('filteredSpontRate', float)])
+        spontRates[:] = [s+(0,0) for s in sites] ## fill with data
+        
+        ## compute spontaneous rates
+        sr = self.spontRateStage.process(spontRates, filtered)
+        spontRates['spontRate'] = sr['spontRate']
+        spontRates['filteredSpontRate'] = sr['filteredSpontRate']
+        
         output = self.statsStage.process(spontRate)
         
         
         
+class EventFilter:
+    def __init__(self):
+        self.params = dict(name='Event Selection', type='group', children=[
+                dict(name='Amplitude Sign', type='list', values=['+', '-'], value='+'),
+            ])
+    
+    def parameters(self):
+        return self.params
+    
+    def process(self, events):
+        if self.params['Amplitude Sign'] == '+':
+            return events[events['fitAmplitude'] > 0]
+        else:
+            return events[events['fitAmplitude'] < 0]
+
+class SpontRateAnalyzer:
+    def __init__(self, plot=None):
+        self.plot = plot
+        self.params = dict(name='Spontaneous Rate', type='group', children=[
+                dict(name='Method', type='list', values=['Constant', 'Per-episode'], value='Constant'),
+                dict(name='Constant Rate', type='float', value=0, suffix='Hz', siPrefix=True),
+                dict(name='Average Window', type='float', value=10., suffix='s', siPrefix=True),
+            ])
+    
+    def parameters(self):
+        return self.params
+        
+    def process(self, events, sites):
+        ## Inputs:
+        ##   events - record array of event data. Must have fields 'protocolDir', 'fitTime'
+        ##   sites  - record array with 'protocolDir', 'start', and 'stop' fields. Sorted by start.
+        
+        ## filter events by pre-region
+        events = events[events['fitTime'] < x]
+        
+        
+        ## sort handles by timestamp
+        
+        ## measure spont. rate for each handle
+        
+        ## do averaging
+        
+        ## add spont rate, filtered spont rate columns to site data
+        
+        return {'spontRates': , 'filteredSpontRates': }
+        
+        
+        
+
+class EventStatisticsAnalyzer:
+    def __init__(self):
+        self.params = dict(name='Analysis Methods', type='group', children=[
+                dict(name='Z-Score', type='bool', value=False),
+                dict(name='Poisson', type='bool', value=False),
+                dict(name='Poisson Multi', type='bool', value=True, children=[
+                    dict(name='Amplitude', type='bool', value=False),
+                    dict(name='Mean', type='float', readonly=True),
+                    dict(name='Stdev', type='float', readonly=True),
+                ]),
+            ])
+    
+    def parameters(self):
+        return self.params
+
+    
+            
     
     
 
@@ -302,66 +382,3 @@ class TimelineMarker(pg.GraphicsObject):
         self.scale(1.0, abs(y2-y1))
         print y1, y2
         
-        
-class EventFilter:
-    def __init__(self):
-        self.params = dict(name='Event Selection', type='group', children=[
-                dict(name='Amplitude Sign', type='list', values=['+', '-'], value='+'),
-            ])
-    
-    def parameters(self):
-        return self.params
-    
-    def process(self, events):
-        if self.params['Amplitude Sign'] == '+':
-            return events[events['fitAmplitude'] > 0]
-        else:
-            return events[events['fitAmplitude'] < 0]
-
-class SpontRateAnalyzer:
-    def __init__(self):
-        self.params = dict(name='Spontaneous Rate', type='group', children=[
-                dict(name='Method', type='list', values=['Constant', 'Per-episode'], value='Constant'),
-                dict(name='Constant Rate', type='float', value=0, suffix='Hz', siPrefix=True),
-                dict(name='Average Window', type='float', value=10., suffix='s', siPrefix=True),
-            ])
-    
-    def parameters(self):
-        return self.params
-        
-    def process(self, events):
-        ## filter events by pre-region
-        events = events[events['fitTime'] < x]
-        
-        
-        handles = set(events['ProtocolDir'])
-        
-        ## sort handles by timestamp
-        
-        ## measure spont. rate for each handle
-        
-        ## do averaging
-        
-        ## add spont rate, filtered spont rate columns to site data
-        
-        
-        
-        
-
-class EventStatisticsAnalyzer:
-    def __init__(self):
-        self.params = dict(name='Analysis Methods', type='group', children=[
-                dict(name='Z-Score', type='bool', value=False),
-                dict(name='Poisson', type='bool', value=False),
-                dict(name='Poisson Multi', type='bool', value=True, children=[
-                    dict(name='Amplitude', type='bool', value=False),
-                    dict(name='Mean', type='float', readonly=True),
-                    dict(name='Stdev', type='float', readonly=True),
-                ]),
-            ])
-    
-    def parameters(self):
-        return self.params
-
-    
-    

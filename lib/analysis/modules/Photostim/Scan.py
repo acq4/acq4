@@ -5,6 +5,7 @@ import pyqtgraph as pg
 import pyqtgraph.multiprocess as mp
 import time, os
 import Canvas
+import collections
 
 
 def loadScanSequence(fh, host):
@@ -106,7 +107,9 @@ class Scan(QtCore.QObject):
         return self.dirHandles
         
     def getTimes(self):
-        """Return a list of (start, end) time values for each spot"""
+        """
+        Return a list of (dirHandle, start, end) time values for each spot.
+        """
         times = []
         for dh in self.handles():
             fh = self.dataModel.getClampFile(dh)
@@ -114,7 +117,7 @@ class Scan(QtCore.QObject):
                 continue
             start = fh.info()['__timestamp__']
             stop = start + dh.parent().info()['protocol']['conf']['duration']
-            times.append((start, stop))
+            times.append((dh, start, stop))
         return times
         
         
