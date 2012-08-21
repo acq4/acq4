@@ -169,8 +169,17 @@ class PoissonScore:
         nSets = len(ev)
         ev = [x['time'] for x in ev]  ## select times from event set
         ev = np.concatenate(ev)   ## mix events together
+
+        if len(ev) == 0:
+            mp = 0.0
+        else:
+            nVals = np.array([(ev<=t).sum()-1 for t in ev]) 
+            pi = poissonProb(nVals, ev, rate*nSets)  ## note that by using n=0 to len(ev)-1, we correct for the fact that the time window always ends at the last event
+            mp = pi.max()
         
-        mpp = min(cls.maxPoissonProb(ev, rate*nSets), 1.0-1e-12)  ## don't allow returning inf
+        #mpp = min(cls.maxPoissonProb(ev, rate*nSets), 1.0-1e-12)  ## don't allow returning inf
+        mpp = min(mp, 1.0-1e-12)
+        
         score =  1.0 / (1.0 - mpp)
         #n = len(ev)
         if normalize:
@@ -184,19 +193,30 @@ class PoissonScore:
         
         return ret
 
-
-    @staticmethod
-    def maxPoissonProb(ev, rate):
-        """
-        For a list of events, compute poissonImp for each event; return the maximum and the index of the maximum.
-        """
-        if len(ev) == 0:
-            return 0.0
-        nVals = np.array([(ev<=t).sum()-1 for t in ev]) 
-        pi = poissonProb(nVals, ev, rate)  ## note that by using n=0 to len(ev)-1, we correct for the fact that the time window always ends at the last event
-        mp = pi.max()
+    @classmethod
+    def amplitudeScore(cls, events, times, **kwds):
+        """Computes extra probability information about events based on their amplitude.
+        Inputs to this method are:
+            events: record array of events; fields include 'time' and 'amp'
+            times:  the time points at which to compute probability values
+                    (the output must have the same length)
             
-        return mp
+        By default, no extra score is applied for amplitude (but see also PoissonRepeatAmpScore)
+        """
+        return np.ones(len(times))
+
+    #@staticmethod
+    #def maxPoissonProb(ev, rate):
+        #"""
+        #For a list of events, compute poissonImp for each event; return the maximum and the index of the maximum.
+        #"""
+        #if len(ev) == 0:
+            #return 0.0
+        #nVals = np.array([(ev<=t).sum()-1 for t in ev]) 
+        #pi = poissonProb(nVals, ev, rate)  ## note that by using n=0 to len(ev)-1, we correct for the fact that the time window always ends at the last event
+        #mp = pi.max()
+            
+        #return mp
 
     @classmethod
     def mapPoissonScore(cls, x, n):
