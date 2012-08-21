@@ -102,6 +102,22 @@ class Scan(QtCore.QObject):
     def source(self):
         return self._source
         
+    def handles(self):
+        return self.dirHandles
+        
+    def getTimes(self):
+        """Return a list of (start, end) time values for each spot"""
+        times = []
+        for dh in self.handles():
+            fh = self.dataModel.getClampFile(dh)
+            if fh is None:
+                continue
+            start = fh.info()['__timestamp__']
+            stop = start + dh.parent().info()['protocol']['conf']['duration']
+            times.append((start, stop))
+        return times
+        
+        
     #def locked(self):
         #return self._locked
         

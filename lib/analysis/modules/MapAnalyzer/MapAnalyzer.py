@@ -74,7 +74,11 @@ class MapAnalyzer(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         
-
+        self.filterStage = EventFilter()
+        self.spontRateStage = SpontRateAnalyzer()
+        self.statsStage = EventStatisticsAnalyzer()
+        self.stages = [self.filterStage, self.spontRateState, self.statsStage]
+        
         self.ctrl = ptree.ParameterTree()
         params = [
             dict(name='Time Ranges', type='group', children=[
@@ -82,24 +86,12 @@ class MapAnalyzer(AnalysisModule):
                 dict(name='Post Start', type='float', value='0.503', suffix='s', step=0.001, siPrefix=True),
                 dict(name='Post End', type='float', value='0.700', suffix='s', step=0.001, siPrefix=True),
             ]),
-            dict(name='Event Selection', type='group', children=[
-                dict(name='Sign', type='list', values=['Excitatory', 'Inhibitory'], value='Excitatory'),
-            ]),
-            dict(name='Spontaneous Rate', type='group', children=[
-                dict(name='Method', type='list', values=['Constant', 'Per-episode'], value='Constant'),
-                dict(name='Constant Rate', type='float', value=0, suffix='Hz', siPrefix=True),
-                dict(name='Average Window', type='float', value=10., suffix='s', siPrefix=True),
-            ]),
-            dict(name='Analysis Methods', type='group', children=[
-                dict(name='Z-Score', type='bool', value=False),
-                dict(name='Poisson', type='bool', value=False),
-                dict(name='Poisson Multi', type='bool', value=True, children=[
-                    dict(name='Amplitude', type='bool', value=False),
-                    dict(name='Mean', type='float', readonly=True),
-                    dict(name='Stdev', type='float', readonly=True),
-                ]),
-            ])
         ]
+        
+        ## each processing stage comes with its own set of parameters
+        for stage in self.stages:
+            params.append(stage.parameters())
+        
         self.params = ptree.Parameter(name='options', type='group', children=params)
         self.ctrl.setParameters(self.params, showTop=False)
         
@@ -121,23 +113,14 @@ class MapAnalyzer(AnalysisModule):
         host.resize(1100, 800)
         self.initializeElements()
         
+        self.timeMarker = TimelineMarker()
+        self.getElement('Timeline', create=True).addItem(self.timeMarker)
         
     def elementChanged(self, element, old, new):
         name = element.name()
-        
-        ## connect plots to flowchart, link X axes
-        #if name == 'Data Plot':
-            #self.flowchart.nodes()['Plot_000'].setPlot(new)
-            #p2 = self.getElement('Filter Plot')
-            #if p2 is not None:
-                #new.setXLink(p2)
-        #elif name == 'Filter Plot':
-            #self.flowchart.nodes()['Plot_001'].setPlot(new)
-            #p2 = self.getElement('Data Plot')
-            #if p2 is not None:
-                #p2.setXLink(new)
 
     def loadMap(self, rec):
+        self.getElement('Canvas').clear()
         self.currentMap = Map(self, rec)
         self.currentMap.loadStubs()
         self.getElement('Canvas').addGraphicsItem(self.currentMap.sPlotItem)
@@ -145,13 +128,19 @@ class MapAnalyzer(AnalysisModule):
     def loadScan(self, dh):
         ## called by Map objects to load scans
         scans = Scan.loadScanSequence(dh, self)
+        if len(scans) > 1:
+            raise Exception("Scan sequences not supported yet.")
         for scan in scans:
             ci = scan.canvasItem()
             self.getElement('Canvas').addItem(ci)
             ci.hide()
+            times = scan.getTimes()
+            print times
+            self.timeMarker.addTimes(times)
         return scans
         
     def loadScanFromDB(self, sourceDir):
+        ## Called by Scan as it is loading
         statTable = self.loader.dbGui.getTableName('Photostim.sites')
         eventTable = self.loader.dbGui.getTableName('Photostim.events')
         db = self.loader.dbGui.getDb()
@@ -162,6 +151,19 @@ class MapAnalyzer(AnalysisModule):
     def getColor(self, data):
         ## return the color to represent this data
         return pg.mkColor(200,200,255)
+        
+    def update(self):
+        map = self.currentMap
+        
+        events = np.concatenate([s.events().copy() for s in map.scans()])
+        filtered = self.filterStage.process(events)
+        spontRates = self.spontRateStage.process(filtered)
+        output = self.statsStage.process(spontRate)
+        
+        
+        
+    
+    
 
 class Loader(QtGui.QWidget):
     def __init__(self, parent=None, host=None, dm=None):
@@ -226,4 +228,120 @@ class Loader(QtGui.QWidget):
             self.loadedLabel.setText("Loaded: [none]")
             raise
         
+class TimelineMarker(pg.GraphicsObject):
+    def __init__(self):
+        pg.GraphicsObject.__init__(self)
+        self.times = []
+        self.yRange=(0.1, 0.2)
+        self.xRange=[float('inf'), float('-inf')]
+        self.pen = pg.mkPen(None)
+        self.brush = pg.mkBrush((200,200,255,200))
         
+    def boundingRect(self):
+        if self.xRange[0] == float('inf'):
+            x1,x2 = 0,0
+        else:
+            x1,x2 = self.xRange
+        return QtCore.QRectF(x1, 0, x2-x1, 1)
+        
+    def setTimes(self, times):
+        """Times must be a list of (start, end) tuples."""
+        self.clear()
+        self.addTimes(times)
+            
+    def addTimes(self, times):
+        for x1, x2 in times:
+            t = QtGui.QGraphicsRectItem(QtCore.QRectF(x1, 0, x2-x1, 1))
+            t.setParentItem(self)
+            t.setPen(self.pen)
+            t.setBrush(self.brush)
+            self.xRange[0] = min(self.xRange[0], x1, x2)
+            self.xRange[1] = max(self.xRange[1], x1, x2)
+            self.prepareGeometryChange()
+            self.times.append(t)
+            
+    def paint(self, p, *args):
+        pass
+        #p.setPen(pg.mkPen('r'))
+        #p.drawRect(self.boundingRect())
+            
+    def clear(self):
+        self.xRange
+        s = self.scene()
+        if s is not None:
+            for t in self.times:
+                s.removeItem(t)
+                t.setParentItem(None)
+        else:
+            for t in self.times:
+                t.setParentItem(None)
+            
+        self.times = []
+            
+    def setPen(self, pen):
+        pen = pg.mkPen(pen)
+        self.pen = pen
+        for t in self.times:
+            t.setPen(pen)
+            
+    def setBrush(self, brush):
+        brush = pg.mkBrush(brush)
+        self.brush = brush
+        for t in self.times:
+            t.setBrush(brush)
+            
+            
+        
+    def viewRangeChanged(self):
+        self.resetTransform()
+        r = self.viewRect()
+        y1 = r.top() + r.height() * self.yRange[0]
+        y2 = r.top() + r.height() * self.yRange[1]
+        self.translate(0, y1)
+        self.scale(1.0, abs(y2-y1))
+        print y1, y2
+        
+        
+class EventFilter:
+    def __init__(self):
+        self.params = dict(name='Event Selection', type='group', children=[
+                dict(name='Amplitude Sign', type='list', values=['+', '-'], value='+'),
+            ]),
+    
+    def parameters(self):
+        return self.params
+    
+    def process(self, events):
+        if self.params['Amplitude Sign'] == '+':
+            return events[events['fitAmplitude'] > 0]
+        else:
+            return events[events['fitAmplitude'] < 0]
+
+class SpontRateAnalyzer:
+    def __init__(self):
+        self.params = dict(name='Spontaneous Rate', type='group', children=[
+                dict(name='Method', type='list', values=['Constant', 'Per-episode'], value='Constant'),
+                dict(name='Constant Rate', type='float', value=0, suffix='Hz', siPrefix=True),
+                dict(name='Average Window', type='float', value=10., suffix='s', siPrefix=True),
+            ]),
+    
+    def parameters(self):
+        return self.params
+
+class EventStatisticsAnalyzer:
+    def __init__(self):
+        self.params = dict(name='Analysis Methods', type='group', children=[
+                dict(name='Z-Score', type='bool', value=False),
+                dict(name='Poisson', type='bool', value=False),
+                dict(name='Poisson Multi', type='bool', value=True, children=[
+                    dict(name='Amplitude', type='bool', value=False),
+                    dict(name='Mean', type='float', readonly=True),
+                    dict(name='Stdev', type='float', readonly=True),
+                ]),
+            ])
+    
+    def parameters(self):
+        return self.params
+
+    
+    
