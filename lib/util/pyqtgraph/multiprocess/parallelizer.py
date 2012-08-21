@@ -229,7 +229,14 @@ class Tasker:
             #print os.getpid(), 'no more tasks'
             self.proc.close()
     
-    
+    def process(self):
+        """
+        Process requests from parent.
+        Usually it is not necessary to call this unless you would like to 
+        receive messages (such as exit requests) during an iteration.
+        """
+        if self.proc is not None:
+            self.proc.processRequests()
     
 #class Parallelizer:
     #"""

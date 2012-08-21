@@ -167,24 +167,35 @@ class PoissonScore:
         *rate* may be either a single value or a list (in which case the mean will be used)
         """
         nSets = len(ev)
-        ev = [x['time'] for x in ev]  ## select times from event set
-        ev = np.concatenate(ev)   ## mix events together
+        events = np.concatenate(ev)
 
         if not np.isscalar(rate):
             rate = np.mean(rate)
         
-        if len(ev) == 0:
-            mp = 0.0
+        if len(events) == 0:
+            score = 1.0
         else:
-            nVals = np.array([(ev<=t).sum()-1 for t in ev]) 
+            #ev = [x['time'] for x in ev]  ## select times from event set
+            #ev = np.concatenate(ev)   ## mix events together
+            ev = events['time']
+            
+            nVals = np.array([(ev<=t).sum()-1 for t in ev]) ## looks like arange, but consider what happens if two events occur at the same time.
             pi = poissonProb(nVals, ev, rate*nSets)  ## note that by using n=0 to len(ev)-1, we correct for the fact that the time window always ends at the last event
+            pi = 1.0 / (1.0 - pi)
+            
+            ## apply extra score for uncommonly large amplitudes
+            ## (note: by default this has no effect; see amplitudeScore)
+            ampScore = cls.amplitudeScore(events, **kwds)
+            pi *= ampScore
+            
             mp = pi.max()
-        
-        #mpp = min(cls.maxPoissonProb(ev, rate*nSets), 1.0-1e-12)  ## don't allow returning inf
-        mpp = min(mp, 1.0-1e-12)
-        
-        
-        score =  1.0 / (1.0 - mpp)
+            #mpp = min(cls.maxPoissonProb(ev, rate*nSets), 1.0-1e-12)  ## don't allow returning inf
+            #mpp = min(mp, 1.0-1e-12)
+            
+            score = mp
+            #score =  1.0 / (1.0 - mpp)
+            
+            
         #n = len(ev)
         if normalize:
             ret = cls.mapPoissonScore(score, rate*tMax*nSets)
@@ -198,16 +209,14 @@ class PoissonScore:
         return ret
 
     @classmethod
-    def amplitudeScore(cls, events, times, **kwds):
+    def amplitudeScore(cls, events, **kwds):
         """Computes extra probability information about events based on their amplitude.
         Inputs to this method are:
             events: record array of events; fields include 'time' and 'amp'
-            times:  the time points at which to compute probability values
-                    (the output must have the same length)
             
         By default, no extra score is applied for amplitude (but see also PoissonRepeatAmpScore)
         """
-        return np.ones(len(times))
+        return np.ones(len(events))
 
     #@staticmethod
     #def maxPoissonProb(ev, rate):
@@ -229,6 +238,7 @@ class PoissonScore:
         """
         if cls.normalizationTable is None:
             cls.normalizationTable = cls.generateNormalizationTable()
+            cls.extrapolateNormTable()
             
         nind = np.log(n)/np.log(2)
         n1 = np.clip(int(np.floor(nind)), 0, cls.normalizationTable.shape[1]-2)
@@ -263,39 +273,114 @@ class PoissonScore:
         assert not (np.isinf(mapped) or np.isnan(mapped))
         return mapped
 
+    #@classmethod
+    #def generateNormalizationTable(cls, nEvents=1000000000):
+
+    
+        ##### parameters determining sample space for normalization table
+        ###reps = np.arange(1,5)  ## number of repeats
+        ###rate = 1.0
+        ###tVals = 2**np.arange(4)  ## set of tMax values
+        ###nev = (nEvents / (rate*tVals)**0.5).astype(int)
+        
+        ###xSteps = 1000
+        ###r = 10**(30./xSteps)
+        ###xVals = r ** np.arange(xSteps)  ## log spacing from 1 to 10**20 in 500 steps
+        ###tableShape = (2, len(reps), len(tVals), len(xVals))
+    
+    
+        #rate = 1.0
+        #tVals = 2**np.arange(9)
+        #nev = (nEvents / (rate*tVals)**0.5).astype(int)
+        
+        #r = 10**(10/500.)
+        #xVals = r ** np.arange(500)  ## log spacing from 1 to 10**20 in 500 steps
+        #tableShape = (2, len(tVals), len(xVals))
+    
+        #path = os.path.dirname(__file__)
+        #cacheFile = os.path.join(path, '%s_normTable_%s_float64.dat' % (cls.__name__, 'x'.join(map(str,tableShape))))
+        ##path = os.path.dirname(__file__)
+        ##cacheFile = os.path.join(path, 'poissonScoreNormTable_2x9x500_float64.dat')
+        #if os.path.exists(cacheFile):
+            #norm = np.fromstring(open(cacheFile).read(), dtype=np.float64).reshape(2,9,500)
+            
+        #else:
+            #count = np.zeros(tableShape[1:], dtype=float)
+            #for i, t in enumerate(tVals):
+                #n = nev[i]
+                #for j in xrange(int(n)):
+                    #if j%1000==0:
+                        #print t, j
+                    #ev = [{'time': poissonProcess(rate, t)}]
+                    #score = cls.score(ev, 1.0, normalize=False)
+                    #ind = np.log(score) / np.log(r)
+                    #count[i, :ind+1] += 1
+            
+            #count[count==0] = 1
+            #norm = np.empty(tableShape)
+            #norm[0,:] = xVals.reshape(1, len(xVals))
+            #norm[1] = nev.reshape(len(nev), 1) / count
+            
+            #open(cacheFile, 'wb').write(norm.tostring())
+        #return norm
+
     @classmethod
-    def generateNormalizationTable(cls, nEvents=1000000000):
+    def generateRandom(cls, rate, tMax, reps=3):
+        ret = []
+        for i in range(reps):
+            times = poissonProcess(rate, tMax)
+            ev = np.empty(len(times), dtype=[('time', float), ('amp', float)])
+            ev['time'] = times
+            ev['amp'] = np.random.normal(size=len(times))
+            ret.append(ev)
+        return ret
+        
+    @classmethod
+    def generateNormalizationTable(cls, nEvents=1000000):
+        
+        ## parameters determining sample space for normalization table
+        rate = 1.0
+        tVals = 2**np.arange(9)  ## set of tMax values
+        nev = (nEvents / (rate*tVals)**0.5).astype(int)  # number of events to generate for each tMax value
+        
+        xSteps = 1000
+        r = 10**(30./xSteps)
+        xVals = r ** np.arange(xSteps)  ## log spacing from 1 to 10**20 in 500 steps
+        tableShape = (2, len(tVals), len(xVals))
+        
         path = os.path.dirname(__file__)
-        cacheFile = os.path.join(path, 'poissonScoreNormTable_2x9x500_float64.dat')
+        cacheFile = os.path.join(path, '%s_normTable_%s_float64.dat' % (cls.__name__, 'x'.join(map(str,tableShape))))
+        
         if os.path.exists(cacheFile):
-            norm = np.fromstring(open(cacheFile).read(), dtype=np.float64).reshape(2,9,500)
-            
+            norm = np.fromstring(open(cacheFile).read(), dtype=np.float64).reshape(tableShape)
         else:
-            rate = 1.0
-            tVals = 2**np.arange(9)
-            nev = (nEvents / (rate*tVals)**0.5).astype(int)
-            
-            r = 10**(10/500.)
-            xVals = r ** np.arange(500)  ## log spacing from 1 to 10**20 in 500 steps
-            count = np.zeros((len(tVals),len(xVals)), dtype=float)
-            for i, t in enumerate(tVals):
-                n = nev[i]
-                for j in xrange(int(n)):
-                    if j%1000==0:
-                        print t, j
-                    ev = [{'time': poissonProcess(rate, t)}]
-                    score = cls.score(ev, 1.0, normalize=False)
-                    ind = np.log(score) / np.log(r)
-                    count[i, :ind+1] += 1
-            
+            print "Generating %s ..." % cacheFile
+            norm = np.empty(tableShape)
+            counts = []
+            with mp.Parallelize(tasks=[0,1], counts=counts, workers=2) as tasker:
+                for task in tasker:
+                    count = np.zeros(tableShape[1:], dtype=float)
+                    for i, t in enumerate(tVals):
+                        n = nev[i]
+                        for j in xrange(int(n)):
+                            if j%1000==0:
+                                print t, j
+                                tasker.process()
+                            ev = cls.generateRandom(rate=rate, tMax=t)
+                            
+                            score = cls.score(ev, rate, normalize=False)
+                            ind = np.log(score) / np.log(r)
+                            count[i, :ind+1] += 1
+                    tasker.counts.append(count)
+                            
+            count = sum(counts)
             count[count==0] = 1
-            norm = np.empty((2, len(tVals),len(xVals)))
-            norm[0,:] = xVals.reshape(1, len(xVals))
+            norm[0] = xVals.reshape(1, len(xVals))
             norm[1] = nev.reshape(len(nev), 1) / count
             
             open(cacheFile, 'wb').write(norm.tostring())
+        
         return norm
-
         
     @classmethod
     def testMapping(cls, rate=1.0, tmax=1.0, n=10000):
@@ -325,7 +410,39 @@ class PoissonScore:
         blame = np.array([diff[np.argwhere(ev >= ev[i])].max() for i in range(len(ev))])
         return blame
 
+    @classmethod
+    def extrapolateNormTable(cls):
+        ## It appears that, on a log-log scale, the normalization curves appear to become linear after reaching
+        ## about 50 on the y-axis. 
+        ## we can use this to overwrite all the junk at the end caused by running too few test iterations.
+        d = cls.normalizationTable
+        for n in range(d.shape[1]):
+            trace = d[:,n]
+            logtrace = np.log(trace)
+            ind1 = np.argwhere(trace[1] > 60)[0,0]
+            ind2 = np.argwhere(trace[1] > 100)[0,0]
+            dd = logtrace[:,ind2] - logtrace[:,ind1]
+            slope = dd[1]/dd[0]
+            npts = trace.shape[1]-ind2
+            yoff = logtrace[1,ind2] - logtrace[0,ind2] * slope
+            trace[1,ind2:] = np.exp(logtrace[0,ind2:] * slope + yoff)
+        
+        
 
+class PoissonAmpScore(PoissonScore):
+    
+    normalizationTable = None
+    
+    @classmethod
+    def amplitudeScore(cls, events, ampMean=1.0, ampStdev=1.0, **kwds):
+        """Computes extra probability information about events based on their amplitude.
+        Inputs to this method are:
+            events: record array of events; fields include 'time' and 'amp'
+            times:  the time points at which to compute probability values
+                    (the output must have the same length)
+            ampMean, ampStdev: population statistics of spontaneous events
+        """
+        return [ gaussProb(events['amp'][events['time']<=t], ampMean, ampStdev) for t in events['time'] ]
 
 
 
@@ -465,11 +582,14 @@ class PoissonRepeatScore:
 
     @classmethod
     def generateRandom(cls, rate, tMax, reps):
-        ev = []
+        ret = []
         for i in range(reps):
             times = poissonProcess(rate, tMax)
-            ev.append({'time': times, 'amp': np.random.normal(size=len(times))})
-        return ev
+            ev = np.empty(len(times), dtype=[('time', float), ('amp', float)])
+            ev['time'] = times
+            ev['amp'] = np.random.normal(size=len(times))
+            ret.append(ev)
+        return ret
         
     @classmethod
     def generateNormalizationTable(cls, nEvents=1000000):
@@ -504,7 +624,7 @@ class PoissonRepeatScore:
                                 print t, j
                             ev = cls.generateRandom(rate=rate, tMax=t, reps=reps[-1])
                             for m in reps:
-                                score = cls.score(ev[:m], 1.0, normalize=False)
+                                score = cls.score(ev[:m], rate, normalize=False)
                                 ind = np.log(score) / np.log(r)
                                 count[m-1, i, :ind+1] += 1
                     tasker.counts.append(count)
@@ -616,7 +736,7 @@ con.catchAllExceptions()
 ## Create a set of test cases:
 
 reps = 3
-trials = 200
+trials = 30
 spontRate = [2., 3., 5.]
 miniAmp = 1.0
 tMax = 0.5
@@ -726,6 +846,7 @@ def checkScores(scores):
     
 algorithms = [
     ('Poisson Score', PoissonScore.score),
+    ('Poisson Score + Amp', PoissonAmpScore.score),
     ('Poisson Multi', PoissonRepeatScore.score),
     ('Poisson Multi + Amp', PoissonRepeatAmpScore.score),
 ]
