@@ -7,6 +7,15 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 
 print "Loading ACQ4..."
 
+## Path adjustments:
+##   - make sure 'lib' path is available for module search
+##   - add util to front of search path. This allows us to override some libs 
+##     that may be installed globally with local versions.
+import sys
+import os.path as osp
+d = osp.dirname(osp.abspath(__file__))
+sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
+
 
 import sip
 sip.setapi('QString', 2)

@@ -54,16 +54,13 @@ Changes to event detector:
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
-#from flowchart import *
 import os
 from collections import OrderedDict
-#import debug
-#import FileLoader
 import DatabaseGui
 from ColorMapper import ColorMapper
 import pyqtgraph as pg
 import pyqtgraph.parametertree as ptree
-
+import numpy as np
 import lib.analysis.modules.Photostim.Scan as Scan
 from lib.analysis.modules.Photostim.Map import Map
 
@@ -74,26 +71,8 @@ class MapAnalyzer(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         
-        self.filterStage = EventFilter()
-        self.spontRateStage = SpontRateAnalyzer()
-        self.statsStage = EventStatisticsAnalyzer()
-        self.stages = [self.filterStage, self.spontRateStage, self.statsStage]
         
         self.ctrl = ptree.ParameterTree()
-        params = [
-            dict(name='Time Ranges', type='group', children=[
-                dict(name='Direct Start', type='float', value='0.498', suffix='s', step=0.001, siPrefix=True),
-                dict(name='Post Start', type='float', value='0.503', suffix='s', step=0.001, siPrefix=True),
-                dict(name='Post End', type='float', value='0.700', suffix='s', step=0.001, siPrefix=True),
-            ]),
-        ]
-        
-        ## each processing stage comes with its own set of parameters
-        for stage in self.stages:
-            params.append(stage.parameters())
-        
-        self.params = ptree.Parameter(name='options', type='group', children=params)
-        self.ctrl.setParameters(self.params, showTop=False)
         
         self.loader = Loader(host=self, dm=host.dataManager())
         
@@ -113,8 +92,28 @@ class MapAnalyzer(AnalysisModule):
         host.resize(1100, 800)
         self.initializeElements()
         
-        self.timeMarker = TimelineMarker()
-        self.getElement('Timeline', create=True).addItem(self.timeMarker)
+        
+        self.filterStage = EventFilter()
+        self.spontRateStage = SpontRateAnalyzer(plot=self.getElement('Timeline', create=True))
+        self.statsStage = EventStatisticsAnalyzer()
+        self.stages = [self.filterStage, self.spontRateStage, self.statsStage]
+        
+        params = [
+            dict(name='Time Ranges', type='group', children=[
+                dict(name='Direct Start', type='float', value='0.498', suffix='s', step=0.001, siPrefix=True),
+                dict(name='Post Start', type='float', value='0.503', suffix='s', step=0.001, siPrefix=True),
+                dict(name='Post End', type='float', value='0.700', suffix='s', step=0.001, siPrefix=True),
+            ]),
+        ]
+        
+        ## each processing stage comes with its own set of parameters
+        for stage in self.stages:
+            params.append(stage.parameters())
+        
+        self.params = ptree.Parameter(name='options', type='group', children=params)
+        self.ctrl.setParameters(self.params, showTop=False)
+        
+        self.params.sigTreeStateChanged.connect(self.update)
         
     def elementChanged(self, element, old, new):
         name = element.name()
@@ -134,9 +133,6 @@ class MapAnalyzer(AnalysisModule):
             ci = scan.canvasItem()
             self.getElement('Canvas').addItem(ci)
             ci.hide()
-            times = scan.getTimes()
-            print times
-            self.timeMarker.addTimes(times)
         return scans
         
     def loadScanFromDB(self, sourceDir):
@@ -154,18 +150,19 @@ class MapAnalyzer(AnalysisModule):
         
     def update(self):
         map = self.currentMap
-        scans = map.scans()
-        events = np.concatenate([s.getAllEvents().copy() for s in map.scans()])
+        scans = map.scans
+        events = np.concatenate([s.getAllEvents().copy() for s in scans])
+        
         filtered = self.filterStage.process(events)
         
         ## Get a list of all stimulations in the map and their times.
         sites = []
         for s in scans:
-            sites.extend(s.getTimes)
+            sites.extend(s.getTimes())
         sites.sort(key=lambda i: i[1])
             
         ## set up table of per-stimulation data
-        spontRates = np.empty(len(sites), dtype=[('protocolDir', object), ('start', float), ('stop', float), ('spontRate', float), ('filteredSpontRate', float)])
+        spontRates = np.empty(len(sites), dtype=[('ProtocolDir', object), ('start', float), ('stop', float), ('spontRate', float), ('filteredSpontRate', float)])
         spontRates[:] = [s+(0,0) for s in sites] ## fill with data
         
         ## compute spontaneous rates
@@ -173,13 +170,13 @@ class MapAnalyzer(AnalysisModule):
         spontRates['spontRate'] = sr['spontRate']
         spontRates['filteredSpontRate'] = sr['filteredSpontRate']
         
-        output = self.statsStage.process(spontRate)
+        #output = self.statsStage.process(spontRate)
         
         
         
 class EventFilter:
     def __init__(self):
-        self.params = dict(name='Event Selection', type='group', children=[
+        self.params = ptree.Parameter(name='Event Selection', type='group', children=[
                 dict(name='Amplitude Sign', type='list', values=['+', '-'], value='+'),
             ])
     
@@ -195,40 +192,100 @@ class EventFilter:
 class SpontRateAnalyzer:
     def __init__(self, plot=None):
         self.plot = plot
-        self.params = dict(name='Spontaneous Rate', type='group', children=[
-                dict(name='Method', type='list', values=['Constant', 'Per-episode'], value='Constant'),
+        self.spontRatePlot = plot.plot(pen=0.5)
+        self.filterPlot = plot.plot(pen='g')
+        self.timeMarker = TimelineMarker()
+        plot.addItem(self.timeMarker)
+        
+        self.params = ptree.Parameter(name='Spontaneous Rate', type='group', children=[
+                dict(name='Stimulus Time', type='float', value=0.495, suffix='s', siPrefix=True, step=0.005),
+                dict(name='Method', type='list', values=['Constant', 'Constant (Mean)', 'Constant (Median)', 'Mean Window', 'Median Window', 'Gaussian Window'], value='Gaussian Window'),
                 dict(name='Constant Rate', type='float', value=0, suffix='Hz', siPrefix=True),
-                dict(name='Average Window', type='float', value=10., suffix='s', siPrefix=True),
+                dict(name='Filter Window', type='float', value=20., suffix='s', siPrefix=True),
             ])
+        self.params.sigTreeStateChanged.connect(self.paramsChanged)
     
     def parameters(self):
         return self.params
         
-    def process(self, events, sites):
+    def paramsChanged(self, param, changes):
+        for param, change, info in changes:
+            if param is self.params.param('Method'):
+                method = self.params['Method']
+                const = self.params.param('Constant Rate')
+                window = self.params.param('Filter Window')
+                if method.startswith('Constant'):
+                    const.show()
+                    const.setReadonly(method != 'Constant')
+                    window.hide()
+                else:
+                    const.hide()
+                    window.show()
+        
+    def process(self, sites, events):
         ## Inputs:
         ##   events - record array of event data. Must have fields 'protocolDir', 'fitTime'
         ##   sites  - record array with 'protocolDir', 'start', and 'stop' fields. Sorted by start.
         
+        self.timeMarker.setTimes(zip(sites['start'], sites['stop']))
+        
         ## filter events by pre-region
-        events = events[events['fitTime'] < x]
-        
-        
-        ## sort handles by timestamp
+        stimTime = self.params['Stimulus Time']
+        events = events[events['fitTime'] < stimTime]
         
         ## measure spont. rate for each handle
+        spontRate = []
+        for site in sites:
+            ev = events[events['ProtocolDir'] == site['ProtocolDir']]
+            spontRate.append(len(ev) / stimTime)
+        spontRate = np.array(spontRate)
+        
+        self.spontRatePlot.setData(x=sites['start'], y=spontRate)
         
         ## do averaging
+        method = self.params['Method']
+        if method == 'Constant':
+            rate = self.params['Constant Rate']
+            filtered = [rate] * len(spontRate)
+        elif method == 'Constant (Median)':
+            rate = np.median(spontRate)
+            filtered = [rate] * len(spontRate)
+            self.params['Constant Rate'] = rate
+        elif method == 'Constant (Mean)':
+            rate = np.mean(spontRate)
+            filtered = [rate] * len(spontRate)
+            self.params['Constant Rate'] = rate
+        else:
+            filtered = np.empty(len(spontRate))
+            for i in xrange(len(spontRate)):
+                now = sites['start'][i]
+                window = self.params['Filter Window']
+                start = now - window
+                stop = now + window
+                if method == 'Median Window':
+                    mask = (sites['start'] > start) & (sites['start'] < stop)
+                    filtered[i] = np.median(spontRate[mask])
+                if method == 'Mean Window':
+                    mask = (sites['start'] > start) & (sites['start'] < stop)
+                    filtered[i] = np.mean(spontRate[mask])
+                if method == 'Gaussian Window':
+                    filtered[i] = self.gauss(spontRate, sites['start'], now, window)
         
-        ## add spont rate, filtered spont rate columns to site data
+        self.filterPlot.setData(x=sites['start'], y=filtered)
         
-        return {'spontRates': , 'filteredSpontRates': }
+        return {'spontRate': spontRate, 'filteredSpontRate': filtered}
         
-        
+    @staticmethod
+    def gauss(values, times, mean, sigma):
+        a = 1.0 / (sigma * (2 * np.pi)**0.5)
+        weights = np.exp(-((times-mean)**2) / (2 * sigma**2))
+        weights /= weights.sum()
+        return (weights * values).sum()
         
 
 class EventStatisticsAnalyzer:
     def __init__(self):
-        self.params = dict(name='Analysis Methods', type='group', children=[
+        self.params = ptree.Parameter(name='Analysis Methods', type='group', children=[
                 dict(name='Z-Score', type='bool', value=False),
                 dict(name='Poisson', type='bool', value=False),
                 dict(name='Poisson Multi', type='bool', value=True, children=[
@@ -241,7 +298,8 @@ class EventStatisticsAnalyzer:
     def parameters(self):
         return self.params
 
-    
+    def process(self):
+        pass
             
     
     

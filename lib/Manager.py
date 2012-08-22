@@ -12,14 +12,7 @@ The class is responsible for:
 """
 
 
-## Path adjustments:
-##   - make sure 'lib' path is available for module search
-##   - add util to front of search path. This allows us to override some libs 
-##     that may be installed globally with local versions.
 import sys, gc
-import os.path as osp
-d = osp.dirname(osp.dirname(osp.abspath(__file__)))
-sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
 
 ## install global exception handler for others to hook into.
 import pyqtgraph.exceptionHandling as exceptionHandling   
