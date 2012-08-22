@@ -1,4 +1,5 @@
 from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.python2_3 import asUnicode
 from .Parameter import Parameter, registerParameterType
 from .ParameterItem import ParameterItem
 from pyqtgraph.widgets.SpinBox import SpinBox
@@ -348,6 +349,7 @@ class GroupParameterItem(ParameterItem):
 
     def treeWidgetChanged(self):
         ParameterItem.treeWidgetChanged(self)
+        self.treeWidget().setFirstItemColumnSpanned(self, True)
         if self.addItem is not None:
             self.treeWidget().setItemWidget(self.addItem, 0, self.addWidgetBox)
             self.treeWidget().setFirstItemColumnSpanned(self.addItem, True)
@@ -364,7 +366,6 @@ class GroupParameter(Parameter):
     of child parameters. It also provides a simple mechanism for displaying a button or combo
     that can be used to add new parameters to the group.
     """
-    type = 'group'
     itemClass = GroupParameterItem
 
     def addNew(self, typ=None):
@@ -455,7 +456,6 @@ class ListParameterItem(WidgetParameterItem):
 
 
 class ListParameter(Parameter):
-    type = 'list'
     itemClass = ListParameterItem
 
     def __init__(self, **opts):

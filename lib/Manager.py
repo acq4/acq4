@@ -12,14 +12,7 @@ The class is responsible for:
 """
 
 
-## Path adjustments:
-##   - make sure 'lib' path is available for module search
-##   - add util to front of search path. This allows us to override some libs 
-##     that may be installed globally with local versions.
 import sys, gc
-import os.path as osp
-d = osp.dirname(osp.dirname(osp.abspath(__file__)))
-sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
 
 ## install global exception handler for others to hook into.
 import pyqtgraph.exceptionHandling as exceptionHandling   
@@ -146,6 +139,17 @@ class Manager(QtCore.QObject):
     
     def __init__(self, configFile=None, argv=None):
         self.lock = Mutex(recursive=True)  ## used for keeping some basic methods thread-safe
+        self.devices = OrderedDict()
+        self.modules = OrderedDict()
+        self.config = OrderedDict()
+        self.definedModules = OrderedDict()
+        self.currentDir = None
+        self.baseDir = None
+        self.gui = None
+        self.shortcuts = []
+        self.disableDevs = []
+        self.alreadyQuit = False
+        self.taskLock = Mutex(QtCore.QMutex.Recursive)
         
         try:
             if Manager.CREATED:
@@ -159,34 +163,24 @@ class Manager(QtCore.QObject):
             
             if argv is not None:
                 try:
-                    opts, args = getopt.getopt(argv, 'c:m:b:s:d:n', ['config=', 'module=', 'baseDir=', 'storageDir=', 'disable=', 'noManager'])
+                    opts, args = getopt.getopt(argv, 'c:a:m:b:s:d:n', ['config=', 'config-name=', 'module=', 'baseDir=', 'storageDir=', 'disable=', 'noManager'])
                 except getopt.GetoptError, err:
                     print str(err)
                     print """
     Valid options are:
-        -c --config=     configuration file
-        -m --module=     module name to load
-        -b --baseDir=    base directory to use
-        -s --storageDir= storage directory to use
-        -n --noManager   Do not load manager module
-        -d --disable=    Disable the device specified
+        -c --config=       Configuration file to load
+        -a --config-name=  Named configuration to load
+        -m --module=       Module name to load
+        -b --baseDir=      Base directory to use
+        -s --storageDir=   Storage directory to use
+        -n --noManager     Do not load manager module
+        -d --disable=      Disable the device specified
     """
-            QtCore.QObject.__init__(self)
-            self.alreadyQuit = False
-            self.taskLock = Mutex(QtCore.QMutex.Recursive)
-            atexit.register(self.quit)
-            self.devices = OrderedDict()
-            self.modules = OrderedDict()
-            self.config = OrderedDict()
-            self.definedModules = OrderedDict()
-            #self.devRack = None
-            #self.dataManager = DataManager()
-            self.currentDir = None
-            self.baseDir = None
-            self.gui = None
-            self.shortcuts = []
-            self.disableDevs = []
+                    raise
             
+            
+            QtCore.QObject.__init__(self)
+            atexit.register(self.quit)
             self.interfaceDir = InterfaceDirectory()
     
             
@@ -195,9 +189,12 @@ class Manager(QtCore.QObject):
             setBaseDir = None
             setStorageDir = None
             loadManager = True
+            loadConfigs = []
             for o, a in opts:
                 if o in ['-c', '--config']:
                     configFile = a
+                elif o in ['-a', '--config-name']:
+                    loadConfigs.append(a)
                 elif o in ['-m', '--module']:
                     loadModules.append(a)
                 elif o in ['-b', '--baseDir']:
@@ -224,6 +221,9 @@ class Manager(QtCore.QObject):
             
             ## Act on options if they were specified..
             try:
+                for name in loadConfigs:
+                    self.loadDefinedConfig(name)
+                        
                 if setBaseDir is not None:
                     self.setBaseDir(setBaseDir)
                 if setStorageDir is not None:

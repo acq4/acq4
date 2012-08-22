@@ -15,7 +15,7 @@ class GradientWidget(GraphicsView):
     
     def __init__(self, parent=None, orientation='bottom',  *args, **kargs):
         GraphicsView.__init__(self, parent, useOpenGL=False, background=None)
-        self.maxDim = 27
+        self.maxDim = 31
         kargs['tickPen'] = 'k'
         self.item = GradientEditorItem(*args, **kargs)
         self.item.sigGradientChanged.connect(self.sigGradientChanged)

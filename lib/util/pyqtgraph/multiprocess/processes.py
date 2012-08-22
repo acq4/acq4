@@ -31,7 +31,7 @@ class Process(RemoteEventHandler):
     ProxyObject for more information.
     """
     
-    def __init__(self, name=None, target=None, copySysPath=True):
+    def __init__(self, name=None, target=None, executable=None, copySysPath=True):
         """
         ============  =============================================================
         Arguments:
@@ -50,6 +50,8 @@ class Process(RemoteEventHandler):
             target = startEventLoop
         if name is None:
             name = str(self)
+        if executable is None:
+            executable = sys.executable
         
         ## random authentication key
         authkey = ''.join([chr(random.getrandbits(7)) for i in range(20)])
@@ -68,7 +70,7 @@ class Process(RemoteEventHandler):
         ## start remote process, instruct it to run target function
         sysPath = sys.path if copySysPath else None
         bootstrap = os.path.abspath(os.path.join(os.path.dirname(__file__), 'bootstrap.py'))
-        self.proc = subprocess.Popen((sys.executable, bootstrap), stdin=subprocess.PIPE)
+        self.proc = subprocess.Popen((executable, bootstrap), stdin=subprocess.PIPE)
         targetStr = pickle.dumps(target)  ## double-pickle target so that child has a chance to 
                                           ## set its sys.path properly before unpickling the target
         pickle.dump((name+'_child', port, authkey, targetStr, sysPath), self.proc.stdin)
@@ -130,7 +132,7 @@ class ForkedProcess(RemoteEventHandler):
       
     """
     
-    def __init__(self, name=None, target=0, preProxy=None):
+    def __init__(self, name=None, target=0, preProxy=None, randomReseed=True):
         """
         When initializing, an optional target may be given. 
         If no target is specified, self.eventLoop will be used.
@@ -141,6 +143,9 @@ class ForkedProcess(RemoteEventHandler):
         in the remote process (but do not need to be sent explicitly since 
         they are available immediately before the call to fork().
         Proxies will be availabe as self.proxies[name].
+        
+        If randomReseed is True, the built-in random and numpy.random generators
+        will be reseeded in the child process.
         """
         self.hasJoined = False
         if target == 0:
@@ -163,7 +168,8 @@ class ForkedProcess(RemoteEventHandler):
             ##   - no reading/writing file handles/sockets owned by parent process (stdout is ok)
             ##   - don't touch QtGui or QApplication at all; these are landmines.
             ##   - don't let the process call exit handlers
-            ##   -  
+            
+            os.setpgrp()  ## prevents signals (notably keyboard interrupt) being forwarded from parent to this process
             
             ## close all file handles we do not want shared with parent
             conn.close()
@@ -188,6 +194,11 @@ class ForkedProcess(RemoteEventHandler):
             atexit._exithandlers = []
             atexit.register(lambda: os._exit(0))
             
+            if randomReseed:
+                if 'numpy.random' in sys.modules:
+                    sys.modules['numpy.random'].seed(os.getpid() ^ int(time.time()*10000%10000))
+                if 'random' in sys.modules:
+                    sys.modules['random'].seed(os.getpid() ^ int(time.time()*10000%10000))
             
             RemoteEventHandler.__init__(self, remoteConn, name+'_child', pid=os.getppid())
             
