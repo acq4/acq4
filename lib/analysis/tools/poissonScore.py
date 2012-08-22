@@ -198,7 +198,7 @@ class PoissonScore:
             
         #n = len(ev)
         if normalize:
-            ret = cls.mapPoissonScore(score, rate*tMax*nSets)
+            ret = cls.mapScore(score, rate*tMax*nSets)
         else:
             ret = score
         if np.isscalar(ret):
@@ -232,7 +232,7 @@ class PoissonScore:
         #return mp
 
     @classmethod
-    def mapPoissonScore(cls, x, n):
+    def mapScore(cls, x, n):
         """
         Map score x to probability given we expect n events per set
         """
@@ -336,7 +336,7 @@ class PoissonScore:
         return ret
         
     @classmethod
-    def generateNormalizationTable(cls, nEvents=1000000):
+    def generateNormalizationTable(cls, nEvents=100000):
         
         ## parameters determining sample space for normalization table
         rate = 1.0
@@ -366,7 +366,7 @@ class PoissonScore:
                             if j%1000==0:
                                 print t, j
                                 tasker.process()
-                            ev = cls.generateRandom(rate=rate, tMax=t)
+                            ev = cls.generateRandom(rate=rate, tMax=t, reps=1)
                             
                             score = cls.score(ev, rate, normalize=False)
                             ind = np.log(score) / np.log(r)
@@ -383,17 +383,18 @@ class PoissonScore:
         return norm
         
     @classmethod
-    def testMapping(cls, rate=1.0, tmax=1.0, n=10000):
+    def testMapping(cls, rate=1.0, tmax=1.0, n=10000, reps=3):
         scores = np.empty(n)
         mapped = np.empty(n)
         ev = []
         for i in xrange(len(scores)):
-            ev.append([{'time': poissonProcess(rate, tmax)}])
-            scores[i] = cls.score(ev[-1], rate, tMax=tmax)
+            ev.append(cls.generateRandom(rate, tmax, reps))
+            scores[i] = cls.score(ev[-1], rate, tMax=tmax, normalize=False)
+            mapped[i] = cls.mapScore(scores[i], rate*tMax*reps)
         
         for j in [1,2,3,4]:
-            print "  %d: %f" % (10**j, (scores>10**j).sum() / float(len(scores)))
-        return ev, scores
+            print "  %d: %f" % (10**j, (mapped>10**j).sum() / float(n))
+        return ev, scores, mapped
         
     @classmethod
     def showMap(cls):
@@ -482,6 +483,9 @@ class PoissonRepeatScore:
         events = ev
         nSets = len(ev)
         ev = [x['time'] for x in ev]  ## select times from event set
+        
+        if np.isscalar(rate):
+            rate = [rate] * nSets
         
         ev2 = []
         for i in range(len(ev)):
@@ -657,13 +661,26 @@ class PoissonRepeatScore:
                 trace[1,ind2:] = np.exp(logtrace[0,ind2:] * slope + yoff)
         
         
+    #@classmethod
+    #def testMapping(cls, rate=1.0, tmax=1.0, n=10000):
+        #scores = np.empty(n)
+        #mapped = np.empty(n)
+        #ev = []
+        #for i in xrange(len(scores)):
+            #ev.append([{'time': poissonProcess(rate, tmax)}])
+            #scores[i] = cls.score(ev[-1], rate, tMax=tmax)
+        
+        #for j in [1,2,3,4]:
+            #print "  %d: %f" % (10**j, (scores>10**j).sum() / float(len(scores)))
+        #return ev, scores
+        
     @classmethod
-    def testMapping(cls, rate=1.0, tmax=1.0, n=10000):
+    def testMapping(cls, rate=1.0, tmax=1.0, n=10000, reps=3):
         scores = np.empty(n)
         mapped = np.empty(n)
         ev = []
         for i in xrange(len(scores)):
-            ev.append([{'time': poissonProcess(rate, tmax)}])
+            ev.append(cls.generateRandom(rate, tmax, reps))
             scores[i] = cls.score(ev[-1], rate, tMax=tmax)
         
         for j in [1,2,3,4]:
