@@ -721,8 +721,11 @@ class ROI(GraphicsObject):
             changed = True
         else:
             for k in list(self.state.keys()):
-                if self.state[k] != self.lastState[k]:
-                    changed = True
+                if k in self.lastState.keys(): # protect against mismatched keys.
+                    if self.state[k] != self.lastState[k]:
+                        changed = True
+                else:
+                    raise Exception ("ROI:stateChanged: old and new state Keys do no match for key: %s"  % (k))
         
         self.prepareGeometryChange()
         if changed:
@@ -800,7 +803,7 @@ class ROI(GraphicsObject):
         #print "  dshape", dShape
         
         ## Determine transform that maps ROI bounding box to image coordinates
-        tr = self.sceneTransform() * img.sceneTransform().inverted()[0] 
+        tr = self.sceneTransform() * fn.invertQTransform(img.sceneTransform())
         
         ## Modify transform to scale from image coords to data coords
         #m = QtGui.QTransform()
@@ -1251,7 +1254,7 @@ class Handle(UIGraphicsItem):
         v = dt.map(QtCore.QPointF(1, 0)) - dt.map(QtCore.QPointF(0, 0))
         va = np.arctan2(v.y(), v.x())
         
-        dti = dt.inverted()[0]
+        dti = fn.invertQTransform(dt)
         devPos = dt.map(QtCore.QPointF(0,0))
         tr = QtGui.QTransform()
         tr.translate(devPos.x(), devPos.y())
@@ -1638,6 +1641,9 @@ class LineSegmentROI(ROI):
     """
     ROI subclass with two freely-moving handles defining a line.
     """
+    sigRegionChangeFinished = QtCore.Signal(object)
+    sigRegionChangeStarted = QtCore.Signal(object)
+    sigRegionChanged = QtCore.Signal(object)
     
     def __init__(self, positions=(None, None), pos=None, handles=(None,None), **args):
         if pos is None:
@@ -1650,7 +1656,10 @@ class LineSegmentROI(ROI):
         
         for i, p in enumerate(positions):
             self.addFreeHandle(p, item=handles[i])
-                
+
+            #l.sigRegionChanged.connect(self.roiChangedEvent)
+            #l.sigRegionChangeStarted.connect(self.roiChangeStartedEvent)
+            #l.sigRegionChangeFinished.connect(self.roiChangeFinishedEvent)                
         #self.setZValue(1000)
         #self.parentROI = None
         #self.hasParentROI = False

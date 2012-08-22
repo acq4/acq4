@@ -71,8 +71,8 @@ class Loader(DirTreeWidget.DirTreeLoader):
 class ProtocolRunner(Module):
     
     sigProtocolPaused = QtCore.Signal()
-    sigProtocolFinished = QtCore.Signal()
-    sigNewFrame = QtCore.Signal(object)
+    sigProtocolFinished = QtCore.Signal()       ## emitted when the task thread exits (end of protocol, end of sequence, or exit due to error)
+    sigNewFrame = QtCore.Signal(object)         ## emitted at the end of each individual protocol
     sigProtocolStarted = QtCore.Signal(object)  ## called whenever single protocol OR protocol sequence has started
     sigTaskStarted = QtCore.Signal(object)      ## called at start of EVERY protocol, including within sequences
     sigProtocolChanged = QtCore.Signal(object, object)

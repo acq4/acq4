@@ -3,6 +3,7 @@ from Device import Device
 from Mutex import Mutex
 import pyqtgraph as pg
 import collections
+import numpy as np
 
 class OptomechDevice(object):
     """
@@ -140,14 +141,14 @@ class OptomechDevice(object):
             tr = self.deviceTransform(subdev)
             if tr is None:
                 raise Exception('Cannot map--device classes with no affine transform must override map methods.')
-            return tr.map(obj)
+            return self._mapTransform(obj, tr)
     
     def mapToGlobal(self, obj, subdev=None):
         """Map *obj* from local coordinates to global."""
         with self.__lock:
             tr = self.globalTransform(subdev)
             if tr is not None:
-                return tr.map(obj)
+                return self._mapTransform(obj, tr)
             
             ## If our transformation is nonlinear, then the local mapping step must be done separately.
             subdev = self._subdevDict(subdev)
@@ -170,14 +171,14 @@ class OptomechDevice(object):
             tr = self.inverseDeviceTransform(subdev)
             if tr is None:
                 raise Exception('Cannot map--device classes with no affine transform must override map methods.')
-            return tr.map(obj)
+            return self._mapTransform(obj, tr)
     
     def mapFromGlobal(self, obj, subdev=None):
         """Map *obj* from global to local coordinates."""
         with self.__lock:
             tr = self.inverseGlobalTransform(subdev)
             if tr is not None:
-                return tr.map(obj)
+                return self._mapTransform(obj, tr)
         
             ## If our transformation is nonlinear, then the local mapping step must be done separately.
             subdev = self._subdevDict(subdev)
@@ -212,6 +213,26 @@ class OptomechDevice(object):
             else:
                 return self.parentDevice().mapToGlobal(obj, subdev)
         
+    def _mapTransform(self, obj, tr):
+        if isinstance(obj, tuple):
+            if np.isscalar(obj[0]):
+                obj = QtCore.QPointF(*obj)
+            elif isinstance(obj[0], np.ndarray):
+                obj = np.vstack(obj)
+            else:
+                raise Exception ('Cannot map--object of type %s ' % str(type(obj[0])))
+        if isinstance(obj, QtCore.QPointF):
+            return tr.map(obj)
+        elif isinstance(obj, np.ndarray):
+            m = np.array(tr.copyDataTo()).reshape(4,4)
+            m1 = m[:2,:2, np.newaxis]
+            obj = obj[np.newaxis,...]
+            m2 = (m1*obj).sum(axis=0)
+            m2 += m[:2,3,np.newaxis]
+            return m2
+        else:
+            raise Exception('Cannot map--object of type %s ' % str(type(obj))) 
+    
     
     def deviceTransform(self, subdev=None):
         """
