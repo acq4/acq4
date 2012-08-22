@@ -1,0 +1,1 @@
+from MapAnalyzer import MapAnalyzer

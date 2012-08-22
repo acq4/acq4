@@ -48,7 +48,7 @@ def isSequence(dh):
     #else:
         #return False
     
-def dirType(dh):
+def dirType(dh, allowRecurse=True):
     """
     Return a string representing the type of data stored in a directory.
     Usually, this is provided in the meta-info for the directory, but in a few
@@ -70,7 +70,9 @@ def dirType(dh):
         
         else:
             try:
-                if dirType(dh.parent()) == 'ProtocolSequence':
+                assert allowRecurse
+                parent = dh.parent()
+                if dirType(parent, allowRecurse=False) == 'ProtocolSequence':
                     type = 'Protocol'
                 #else:
                     #raise Exception()
