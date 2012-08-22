@@ -113,6 +113,8 @@ class MapAnalyzer(AnalysisModule):
         self.params = ptree.Parameter(name='options', type='group', children=params)
         self.ctrl.setParameters(self.params, showTop=False)
         
+        self.params.sigTreeStateChanged.connect(self.update)
+        
     def elementChanged(self, element, old, new):
         name = element.name()
 
@@ -197,16 +199,16 @@ class SpontRateAnalyzer:
         
         self.params = ptree.Parameter(name='Spontaneous Rate', type='group', children=[
                 dict(name='Stimulus Time', type='float', value=0.495, suffix='s', siPrefix=True, step=0.005),
-                dict(name='Method', type='list', values=['Constant', 'Constant (Mean)', 'Constant (Median)', 'Mean Window', 'Median Window', 'Gaussian Window'], value='Constant'),
+                dict(name='Method', type='list', values=['Constant', 'Constant (Mean)', 'Constant (Median)', 'Mean Window', 'Median Window', 'Gaussian Window'], value='Gaussian Window'),
                 dict(name='Constant Rate', type='float', value=0, suffix='Hz', siPrefix=True),
-                dict(name='Filter Window', type='float', value=10., suffix='s', siPrefix=True),
+                dict(name='Filter Window', type='float', value=20., suffix='s', siPrefix=True),
             ])
         self.params.sigTreeStateChanged.connect(self.paramsChanged)
     
     def parameters(self):
         return self.params
         
-    def paramsChanged(self, changes):
+    def paramsChanged(self, param, changes):
         for param, change, info in changes:
             if param is self.params.param('Method'):
                 method = self.params['Method']
@@ -214,7 +216,7 @@ class SpontRateAnalyzer:
                 window = self.params.param('Filter Window')
                 if method.startswith('Constant'):
                     const.show()
-                    const.setWritable(method == 'Constant')
+                    const.setReadonly(method != 'Constant')
                     window.hide()
                 else:
                     const.hide()
@@ -241,21 +243,44 @@ class SpontRateAnalyzer:
         self.spontRatePlot.setData(x=sites['start'], y=spontRate)
         
         ## do averaging
-        if self.params['Method'] == 'Constant':
-            filtered = [np.median(spontRate)] * len(spontRate)
+        method = self.params['Method']
+        if method == 'Constant':
+            rate = self.params['Constant Rate']
+            filtered = [rate] * len(spontRate)
+        elif method == 'Constant (Median)':
+            rate = np.median(spontRate)
+            filtered = [rate] * len(spontRate)
+            self.params['Constant Rate'] = rate
+        elif method == 'Constant (Mean)':
+            rate = np.mean(spontRate)
+            filtered = [rate] * len(spontRate)
+            self.params['Constant Rate'] = rate
         else:
             filtered = np.empty(len(spontRate))
             for i in xrange(len(spontRate)):
                 now = sites['start'][i]
-                start = now - self.params['Average Window']
-                stop = now + self.params['Average Window']
-                filtered[i] = np.median(spontRate[(sites['start'] > start) & (sites['start'] < stop)])
+                window = self.params['Filter Window']
+                start = now - window
+                stop = now + window
+                if method == 'Median Window':
+                    mask = (sites['start'] > start) & (sites['start'] < stop)
+                    filtered[i] = np.median(spontRate[mask])
+                if method == 'Mean Window':
+                    mask = (sites['start'] > start) & (sites['start'] < stop)
+                    filtered[i] = np.mean(spontRate[mask])
+                if method == 'Gaussian Window':
+                    filtered[i] = self.gauss(spontRate, sites['start'], now, window)
         
         self.filterPlot.setData(x=sites['start'], y=filtered)
         
         return {'spontRate': spontRate, 'filteredSpontRate': filtered}
         
-        
+    @staticmethod
+    def gauss(values, times, mean, sigma):
+        a = 1.0 / (sigma * (2 * np.pi)**0.5)
+        weights = np.exp(-((times-mean)**2) / (2 * sigma**2))
+        weights /= weights.sum()
+        return (weights * values).sum()
         
 
 class EventStatisticsAnalyzer:
