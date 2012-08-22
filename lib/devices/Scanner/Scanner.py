@@ -452,7 +452,7 @@ class ScannerTask(DeviceTask):
     def generateProgramArrays(self, command):
         """LASER LOGO
         Turn a list of movement commands into arrays of x and y values.
-        prg looks like:
+        "command" looks like:
         { 
             numPts: 10000,
             duration: 1.0,
@@ -478,6 +478,7 @@ class ScannerTask(DeviceTask):
         lastStopInd = 0
         for i in range(len(cmds)):
             cmd = cmds[i]
+            print dir(cmd)
             startInd = cmd['startTime'] / dt
             stopInd = cmd['endTime'] / dt
             assert stopInd < arr.shape[1]
@@ -519,9 +520,16 @@ class ScannerTask(DeviceTask):
                 startPos = cmd['points'][0]                
                 stopPos = cmd['points'][1]               
                 scanLength = (stopInd - startInd)/cmd['nScans'] # in point indices, not time.
+                retraceLength = cmd['retraceDuration']/dt
+                scanLength = scanLength - retraceLength # adjust for retrace
+                scanPause = np.ones(int(retraceLength))
                 cmd['samplesPerScan'] = scanLength
+                cmd['samplesPerPause'] = scanPause.shape[0]
                 xPos = np.linspace(startPos.x(), stopPos.x(), scanLength)
+                xPos = np.append(xPos, startPos.x()*scanPause)
+
                 yPos = np.linspace(startPos.y(), stopPos.y(), scanLength)
+                yPos = np.append(yPos, startPos.x()*scanPause)
                 x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['laser'])
                 x = np.tile(x, cmd['nScans'])
                 y = np.tile(y, cmd['nScans'])

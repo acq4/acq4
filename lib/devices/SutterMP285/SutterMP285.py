@@ -418,6 +418,10 @@ class SutterMP285Thread(QtCore.QThread):
             
     def checkLimits(self, pos, limits):
         for i in [0,1,2]:
+            print 'pos, limits', pos[i]
+            print limits[i]
+            print limits[i][0]
+            print limits[i][1]
             if pos[i] < limits[i][0] or pos[i] > limits[i][1]:
                 return False
         return True

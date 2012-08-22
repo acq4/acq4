@@ -14,7 +14,7 @@
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="0" column="4">
+   <item row="0" column="5">
     <spacer name="horizontalSpacer">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
@@ -29,6 +29,9 @@
    </item>
    <item row="0" column="1">
     <widget class="InterfaceCombo" name="scannerComboBox"/>
+   </item>
+   <item row="1" column="1">
+    <widget class="InterfaceCombo" name="detectorComboBox"/>
    </item>
    <item row="0" column="0">
     <widget class="QLabel" name="label">
@@ -53,38 +56,18 @@
      </property>
     </widget>
    </item>
-   <item row="4" column="0" colspan="7">
-    <widget class="QSplitter" name="splitter">
+   <item row="1" column="5">
+    <spacer name="horizontalSpacer_2">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
-     <widget class="PlotWidget" name="plotWidget" native="true"/>
-     <widget class="HistogramLUTWidget" name="histogram" native="true"/>
-    </widget>
-   </item>
-   <item row="0" column="2">
-    <widget class="QLabel" name="label_3">
-     <property name="text">
-      <string>Downsampling</string>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>85</width>
+       <height>20</height>
+      </size>
      </property>
-    </widget>
-   </item>
-   <item row="1" column="1">
-    <widget class="InterfaceCombo" name="detectorComboBox"/>
-   </item>
-   <item row="1" column="0">
-    <widget class="QLabel" name="label_2">
-     <property name="text">
-      <string>Detector</string>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="2">
-    <widget class="QLabel" name="label_4">
-     <property name="text">
-      <string>ROI alpha</string>
-     </property>
-    </widget>
+    </spacer>
    </item>
    <item row="1" column="3">
     <widget class="QSlider" name="alphaSlider">
@@ -111,18 +94,42 @@
      </property>
     </widget>
    </item>
-   <item row="1" column="4">
-    <spacer name="horizontalSpacer_2">
+   <item row="1" column="0">
+    <widget class="QLabel" name="label_2">
+     <property name="text">
+      <string>Detector</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="2">
+    <widget class="QLabel" name="label_4">
+     <property name="text">
+      <string>ROI alpha</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="0" colspan="8">
+    <widget class="QSplitter" name="splitter">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>85</width>
-       <height>20</height>
-      </size>
+     <widget class="PlotWidget" name="plotWidget" native="true"/>
+     <widget class="HistogramLUTWidget" name="histogram" native="true"/>
+    </widget>
+   </item>
+   <item row="0" column="2">
+    <widget class="QLabel" name="label_3">
+     <property name="text">
+      <string>Downsampling</string>
      </property>
-    </spacer>
+    </widget>
+   </item>
+   <item row="0" column="4">
+    <widget class="QCheckBox" name="blankCheck">
+     <property name="text">
+      <string>Blank Screen</string>
+     </property>
+    </widget>
    </item>
   </layout>
  </widget>
