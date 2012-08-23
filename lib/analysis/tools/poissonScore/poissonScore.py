@@ -726,252 +726,223 @@ class PoissonRepeatAmpScore(PoissonRepeatScore):
         
 
 
-app = pg.mkQApp()
-con = pyqtgraph.console.ConsoleWidget()
-con.show()
-con.catchAllExceptions()
+if __name__ == '__main__':
+            
+    app = pg.mkQApp()
+    con = pyqtgraph.console.ConsoleWidget()
+    con.show()
+    con.catchAllExceptions()
 
 
-## Test ability of poissonScore to predict proability of seeing false positives
 
-#with mp.Parallelize(tasks=[2, 2, 2, 2, 5, 5, 5, 5, 10, 10, 10, 10, 20, 20, 20, 20]) as tasker:
-    ##np.random.seed(os.getpid() ^ int(time.time()*100))  ## make sure each fork gets its own random seed
-    #for rate in tasker:
-        ##rate = 5.
-        #tMax = 1.0
-        #totals = [0,0,0,0,0,0]
-        #pptotals = [0,0,0,0,0,0]
-        #trials = 10000
-        #for i in xrange(trials):
-            #events = poissonProcess(rate, tMax)
-            ###prob = 1.0 / poissonProb(events, [tMax], rate)[0]
-            ###prob = 1.0 / (1.0 - stats.poisson(rate*tMax).cdf(len(events)))  ## only gives accurate predictions for large rate
-            ##prob = 1.0 / (1.0 - stats.poisson(rate*(events[-1]+(1./rate) if len(events) > 0 else tMax)).cdf(len(events)))  ## only gives accurate predictions for large rate
-            ##score = poissonIntegral(events, rate, 0.005, 0.3)
-            #score = poissonScore(events, rate)
-            #for i in range(1,6):
-                #if score > 10**i:
-                    #totals[i] += 1
-                ##if prob > 10**i:
-                    ##pptotals[i] += 1
-        #print "spont rate:", rate
-        #print "False negative scores:"
-        #for i in range(1,6):
-            #print "   > %d: %d (%0.2f%%)" % (10**i, totals[i], 100*totals[i]/float(trials))
-        ##print "False negative probs:"
-        ##for i in range(1,6):
-            ##print "   > %d: %d (%0.2f%%)" % (10**i, pptotals[i], 100*pptotals[i]/float(trials))
+    ## Create a set of test cases:
 
-#raise Exception()
+    reps = 3
+    trials = 30
+    spontRate = [2., 3., 5.]
+    miniAmp = 1.0
+    tMax = 0.5
 
-## Create a set of test cases:
+    def randAmp(n=1, quanta=1):
+        return np.random.gamma(4., size=n) * miniAmp * quanta / 4.
 
-reps = 3
-trials = 30
-spontRate = [2., 3., 5.]
-miniAmp = 1.0
-tMax = 0.5
+    ## create a standard set of spontaneous events
+    spont = [] ## trial, rep
+    allAmps = []
+    for i in range(trials):
+        spont.append([])
+        for j in range(reps):
+            times = poissonProcess(spontRate[j], tMax)
+            amps = randAmp(len(times))  ## using scale=4 gives a nice not-quite-gaussian distribution
+            source = ['spont'] * len(times)
+            spont[i].append((times, amps, source))
+            allAmps.append(amps)
+            
+    miniStdev = np.concatenate(allAmps).std()
 
-def randAmp(n=1, quanta=1):
-    return np.random.gamma(4., size=n) * miniAmp * quanta / 4.
 
-## create a standard set of spontaneous events
-spont = [] ## trial, rep
-allAmps = []
-for i in range(trials):
-    spont.append([])
-    for j in range(reps):
-        times = poissonProcess(spontRate[j], tMax)
-        amps = randAmp(len(times))  ## using scale=4 gives a nice not-quite-gaussian distribution
-        source = ['spont'] * len(times)
-        spont[i].append((times, amps, source))
-        allAmps.append(amps)
+    def spontCopy(i, j, extra):
+        times, amps, source = spont[i][j]
+        ev = np.zeros(len(times)+extra, dtype=[('time', float), ('amp', float), ('source', object)])
+        ev['time'][:len(times)] = times
+        ev['amp'][:len(times)] = amps
+        ev['source'][:len(times)] = source
+        return ev
         
-miniStdev = np.concatenate(allAmps).std()
+    ## copy spont. events and add on evoked events
+    testNames = []
+    tests = [[[] for i in range(trials)] for k in range(7)]  # test, trial, rep
+    for i in range(trials):
+        for j in range(reps):
+            ## Test 0: no evoked events
+            testNames.append('No evoked')
+            tests[0][i].append(spontCopy(i, j, 0))
 
+            ## Test 1: 1 extra event, single quantum, short latency
+            testNames.append('1ev, fast')
+            ev = spontCopy(i, j, 1)
+            ev[-1] = (np.random.gamma(1.0) * 0.01, 1, 'evoked')
+            tests[1][i].append(ev)
 
-def spontCopy(i, j, extra):
-    times, amps, source = spont[i][j]
-    ev = np.zeros(len(times)+extra, dtype=[('time', float), ('amp', float), ('source', object)])
-    ev['time'][:len(times)] = times
-    ev['amp'][:len(times)] = amps
-    ev['source'][:len(times)] = source
-    return ev
-    
-## copy spont. events and add on evoked events
-testNames = []
-tests = [[[] for i in range(trials)] for k in range(7)]  # test, trial, rep
-for i in range(trials):
-    for j in range(reps):
-        ## Test 0: no evoked events
-        testNames.append('No evoked')
-        tests[0][i].append(spontCopy(i, j, 0))
-
-        ## Test 1: 1 extra event, single quantum, short latency
-        testNames.append('1ev, fast')
-        ev = spontCopy(i, j, 1)
-        ev[-1] = (np.random.gamma(1.0) * 0.01, 1, 'evoked')
-        tests[1][i].append(ev)
-
-        ## Test 2: 2 extra events, single quantum, short latency
-        testNames.append('2ev, fast')
-        ev = spontCopy(i, j, 2)
-        for k, t in enumerate(np.random.gamma(1.0, size=2)*0.01):
-            ev[-(k+1)] = (t, 1, 'evoked')
-        tests[2][i].append(ev)
-
-        ## Test 3: 3 extra events, single quantum, long latency
-        testNames.append('3ev, slow')
-        ev = spontCopy(i, j, 3)
-        for k,t in enumerate(np.random.gamma(1.0, size=3)*0.07):
-            ev[-(k+1)] = (t, 1, 'evoked')
-        tests[3][i].append(ev)
-
-        ## Test 4: 1 extra event, 2 quanta, short latency
-        testNames.append('1ev, 2x, fast')
-        ev = spontCopy(i, j, 1)
-        ev[-1] = (np.random.gamma(1.0)*0.01, 2, 'evoked')
-        tests[4][i].append(ev)
-
-        ## Test 5: 1 extra event, 3 quanta, long latency
-        testNames.append('1ev, 3x, slow')
-        ev = spontCopy(i, j, 1)
-        ev[-1] = (np.random.gamma(1.0)*0.05, 3, 'evoked')
-        tests[5][i].append(ev)
-
-        ## Test 6: 1 extra events specific time (tests handling of simultaneous events)
-        #testNames.append('3ev simultaneous')
-        #ev = spontCopy(i, j, 1)
-        #ev[-1] = (0.01, 1, 'evoked')
-        #tests[6][i].append(ev)
-        
-        ## 2 events, 1 failure
-        testNames.append('0ev; 1ev; 2ev')
-        ev = spontCopy(i, j, j)
-        if j > 0:
-            for k, t in enumerate(np.random.gamma(1.0, size=j)*0.01):
+            ## Test 2: 2 extra events, single quantum, short latency
+            testNames.append('2ev, fast')
+            ev = spontCopy(i, j, 2)
+            for k, t in enumerate(np.random.gamma(1.0, size=2)*0.01):
                 ev[-(k+1)] = (t, 1, 'evoked')
-        tests[6][i].append(ev)
+            tests[2][i].append(ev)
+
+            ## Test 3: 3 extra events, single quantum, long latency
+            testNames.append('3ev, slow')
+            ev = spontCopy(i, j, 3)
+            for k,t in enumerate(np.random.gamma(1.0, size=3)*0.07):
+                ev[-(k+1)] = (t, 1, 'evoked')
+            tests[3][i].append(ev)
+
+            ## Test 4: 1 extra event, 2 quanta, short latency
+            testNames.append('1ev, 2x, fast')
+            ev = spontCopy(i, j, 1)
+            ev[-1] = (np.random.gamma(1.0)*0.01, 2, 'evoked')
+            tests[4][i].append(ev)
+
+            ## Test 5: 1 extra event, 3 quanta, long latency
+            testNames.append('1ev, 3x, slow')
+            ev = spontCopy(i, j, 1)
+            ev[-1] = (np.random.gamma(1.0)*0.05, 3, 'evoked')
+            tests[5][i].append(ev)
+
+            ## Test 6: 1 extra events specific time (tests handling of simultaneous events)
+            #testNames.append('3ev simultaneous')
+            #ev = spontCopy(i, j, 1)
+            #ev[-1] = (0.01, 1, 'evoked')
+            #tests[6][i].append(ev)
+            
+            ## 2 events, 1 failure
+            testNames.append('0ev; 1ev; 2ev')
+            ev = spontCopy(i, j, j)
+            if j > 0:
+                for k, t in enumerate(np.random.gamma(1.0, size=j)*0.01):
+                    ev[-(k+1)] = (t, 1, 'evoked')
+            tests[6][i].append(ev)
+            
+
+    #raise Exception()
+
+    ## Analyze and plot all:
+
+    def checkScores(scores):
+        best = None
+        bestn = None
+        bestval = None
+        for i in [0,1]:
+            for j in range(scores.shape[1]): 
+                x = scores[i,j]
+                fn = (scores[0] < x).sum()
+                fp = (scores[1] >= x).sum()
+                diff = abs(fp-fn)
+                if bestval is None or diff < bestval:
+                    bestval = diff
+                    best = x
+                    bestn = (fp+fn)/2.
+        return best, bestn
         
-
-#raise Exception()
-
-## Analyze and plot all:
-
-def checkScores(scores):
-    best = None
-    bestn = None
-    bestval = None
-    for i in [0,1]:
-        for j in range(scores.shape[1]): 
-            x = scores[i,j]
-            fn = (scores[0] < x).sum()
-            fp = (scores[1] >= x).sum()
-            diff = abs(fp-fn)
-            if bestval is None or diff < bestval:
-                bestval = diff
-                best = x
-                bestn = (fp+fn)/2.
-    return best, bestn
-    
-    
-algorithms = [
-    ('Poisson Score', PoissonScore.score),
-    ('Poisson Score + Amp', PoissonAmpScore.score),
-    ('Poisson Multi', PoissonRepeatScore.score),
-    ('Poisson Multi + Amp', PoissonRepeatAmpScore.score),
-]
-
-win = pg.GraphicsWindow(border=0.3)
-with pg.ProgressDialog('processing..', maximum=len(tests)) as dlg:
-    for i in range(len(tests)):
-        first = (i == 0)
-        last = (i == len(tests)-1)
         
-        if first:
-            evLabel = win.addLabel('Event amplitude', angle=-90, rowspan=len(tests))
-        evPlt = win.addPlot()
-        
-        plots = []
-        for title, fn in algorithms:
+    algorithms = [
+        ('Poisson Score', PoissonScore.score),
+        ('Poisson Score + Amp', PoissonAmpScore.score),
+        ('Poisson Multi', PoissonRepeatScore.score),
+        ('Poisson Multi + Amp', PoissonRepeatAmpScore.score),
+    ]
+
+    win = pg.GraphicsWindow(border=0.3)
+    with pg.ProgressDialog('processing..', maximum=len(tests)) as dlg:
+        for i in range(len(tests)):
+            first = (i == 0)
+            last = (i == len(tests)-1)
+            
             if first:
-                label = win.addLabel(title, angle=-90, rowspan=len(tests))
-            plt = win.addPlot()
-            plots.append(plt)
-            if first:
-                plt.register(title)
-            else:
-                plt.setXLink(title)
-            plt.setLogMode(False, True)
-            plt.hideAxis('bottom')
-            if last:
-                plt.showAxis('bottom')
-                plt.setLabel('bottom', 'Trial')
+                evLabel = win.addLabel('Event amplitude', angle=-90, rowspan=len(tests))
+            evPlt = win.addPlot()
+            
+            plots = []
+            for title, fn in algorithms:
+                if first:
+                    label = win.addLabel(title, angle=-90, rowspan=len(tests))
+                plt = win.addPlot()
+                plots.append(plt)
+                if first:
+                    plt.register(title)
+                else:
+                    plt.setXLink(title)
+                plt.setLogMode(False, True)
+                plt.hideAxis('bottom')
+                if last:
+                    plt.showAxis('bottom')
+                    plt.setLabel('bottom', 'Trial')
+                    
                 
+            if first:
+                evPlt.register('EventPlot1')
+            else:
+                evPlt.setXLink('EventPlot1')
             
-        if first:
-            evPlt.register('EventPlot1')
-        else:
-            evPlt.setXLink('EventPlot1')
-        
-        evPlt.hideAxis('bottom')
-        evPlt.setLabel('left', testNames[i])
-        if last:
-            evPlt.showAxis('bottom')
-            evPlt.setLabel('bottom', 'Event time', 's')
-        
-        trials = tests[i]
-        scores = np.empty((len(algorithms), 2, len(trials)))
-        repScores = np.empty((2, len(trials)))
-        for j in range(len(trials)):
+            evPlt.hideAxis('bottom')
+            evPlt.setLabel('left', testNames[i])
+            if last:
+                evPlt.showAxis('bottom')
+                evPlt.setLabel('bottom', 'Event time', 's')
             
-            ## combine all trials together for poissonScore tests
-            ev = tests[i][j]
-            spont = tests[0][j]
-            evTimes = [x['time'] for x in ev]
-            spontTimes = [x['time'] for x in spont]
-            
-            allEv = np.concatenate(ev)
-            allSpont = np.concatenate(spont)
-            
-            colors = [(0,255,0,50) if source=='spont' else (255,255,255,50) for source in allEv['source']]
-            evPlt.plot(x=allEv['time'], y=allEv['amp'], pen=None, symbolBrush=colors, symbol='d', symbolSize=8, symbolPen=None)
-            
-            for k, opts in enumerate(algorithms):
-                title, fn = opts
-                score1 = fn(ev, spontRate, tMax, ampMean=miniAmp, ampStdev=miniStdev)
-                score2 = fn(spont, spontRate, tMax, ampMean=miniAmp, ampStdev=miniStdev)
-                scores[k, :, j] = score1, score2
-                plots[k].plot(x=[j], y=[score1], pen=None, symbolPen=None, symbol='o', symbolBrush=(255,255,255,50))
-                plots[k].plot(x=[j], y=[score2], pen=None, symbolPen=None, symbol='o', symbolBrush=(0,255,0,50))
+            trials = tests[i]
+            scores = np.empty((len(algorithms), 2, len(trials)))
+            repScores = np.empty((2, len(trials)))
+            for j in range(len(trials)):
+                
+                ## combine all trials together for poissonScore tests
+                ev = tests[i][j]
+                spont = tests[0][j]
+                evTimes = [x['time'] for x in ev]
+                spontTimes = [x['time'] for x in spont]
+                
+                allEv = np.concatenate(ev)
+                allSpont = np.concatenate(spont)
+                
+                colors = [(0,255,0,50) if source=='spont' else (255,255,255,50) for source in allEv['source']]
+                evPlt.plot(x=allEv['time'], y=allEv['amp'], pen=None, symbolBrush=colors, symbol='d', symbolSize=8, symbolPen=None)
+                
+                for k, opts in enumerate(algorithms):
+                    title, fn = opts
+                    score1 = fn(ev, spontRate, tMax, ampMean=miniAmp, ampStdev=miniStdev)
+                    score2 = fn(spont, spontRate, tMax, ampMean=miniAmp, ampStdev=miniStdev)
+                    scores[k, :, j] = score1, score2
+                    plots[k].plot(x=[j], y=[score1], pen=None, symbolPen=None, symbol='o', symbolBrush=(255,255,255,50))
+                    plots[k].plot(x=[j], y=[score2], pen=None, symbolPen=None, symbol='o', symbolBrush=(0,255,0,50))
 
+            
+            ## Report on ability of each algorithm to separate spontaneous from evoked
+            for k, opts in enumerate(algorithms):
+                thresh, errors = checkScores(scores[k])
+                plots[k].setTitle("%0.2g, %d" % (thresh, errors))
+            
+            ## Plot score histograms
+            #bins = np.linspace(-1, 6, 50)
+            #h1 = np.histogram(np.log10(scores[0, :]), bins=bins)
+            #h2 = np.histogram(np.log10(scores[1, :]), bins=bins)
+            #scorePlt.plot(x=0.5*(h1[1][1:]+h1[1][:-1]), y=h1[0], pen='w')
+            #scorePlt.plot(x=0.5*(h2[1][1:]+h2[1][:-1]), y=h2[0], pen='g')
+                
+            #bins = np.linspace(-1, 14, 50)
+            #h1 = np.histogram(np.log10(repScores[0, :]), bins=bins)
+            #h2 = np.histogram(np.log10(repScores[1, :]), bins=bins)
+            #repScorePlt.plot(x=0.5*(h1[1][1:]+h1[1][:-1]), y=h1[0], pen='w')
+            #repScorePlt.plot(x=0.5*(h2[1][1:]+h2[1][:-1]), y=h2[0], pen='g')
+                
+            dlg += 1
+            if dlg.wasCanceled():
+                break
+                
+            win.nextRow()
         
-        ## Report on ability of each algorithm to separate spontaneous from evoked
-        for k, opts in enumerate(algorithms):
-            thresh, errors = checkScores(scores[k])
-            plots[k].setTitle("%0.2g, %d" % (thresh, errors))
         
-        ## Plot score histograms
-        #bins = np.linspace(-1, 6, 50)
-        #h1 = np.histogram(np.log10(scores[0, :]), bins=bins)
-        #h2 = np.histogram(np.log10(scores[1, :]), bins=bins)
-        #scorePlt.plot(x=0.5*(h1[1][1:]+h1[1][:-1]), y=h1[0], pen='w')
-        #scorePlt.plot(x=0.5*(h2[1][1:]+h2[1][:-1]), y=h2[0], pen='g')
-            
-        #bins = np.linspace(-1, 14, 50)
-        #h1 = np.histogram(np.log10(repScores[0, :]), bins=bins)
-        #h2 = np.histogram(np.log10(repScores[1, :]), bins=bins)
-        #repScorePlt.plot(x=0.5*(h1[1][1:]+h1[1][:-1]), y=h1[0], pen='w')
-        #repScorePlt.plot(x=0.5*(h2[1][1:]+h2[1][:-1]), y=h2[0], pen='g')
-            
-        dlg += 1
-        if dlg.wasCanceled():
-            break
-            
-        win.nextRow()
-    
-    
-    
+        
 
 
 

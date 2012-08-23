@@ -261,7 +261,7 @@ class Photostim(AnalysisModule):
     def mapPointClicked(self, scan, points):
         data = []
         for p in points:
-            for source in p.data():
+            for source in p.data()['sites']:
                 data.append([source[0], self.dataModel.getClampFile(source[1])])
             #data.extend(p.data)
         self.redisplayData(data)
@@ -385,7 +385,7 @@ class Photostim(AnalysisModule):
         #for i in range(len(self.maps)):
             #self.maps[i].recolor(self, i, len(self.maps))
 
-    def getColor(self, stats):
+    def getColor(self, stats, data):
         #print "STATS:", stats
         return self.mapper.getColor(stats)
 

@@ -63,7 +63,7 @@ import pyqtgraph.parametertree as ptree
 import numpy as np
 import lib.analysis.modules.Photostim.Scan as Scan
 from lib.analysis.modules.Photostim.Map import Map
-
+import lib.analysis.tools.poissonScore as poissonScore
 
 
 class MapAnalyzer(AnalysisModule):
@@ -71,6 +71,7 @@ class MapAnalyzer(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         
+        self.currentMap = None
         
         self.ctrl = ptree.ParameterTree()
         
@@ -87,7 +88,7 @@ class MapAnalyzer(AnalysisModule):
             ('Data Plot', {'type': 'plot', 'pos': ('bottom', 'Canvas'), 'size': (800, 300)}),
             ('Score Histogram', {'type': 'plot', 'pos': ('below', 'Data Plot'), 'size': (800, 300)}),
             ('Timeline', {'type': 'plot', 'pos': ('below', 'Data Plot'), 'size': (800, 300)}),
-            ('Stats Table', {'type': 'table', 'pos': ('below', 'Data Plot'), 'size': (800,300)}),
+            ('Stats Table', {'type': 'dataTree', 'pos': ('below', 'Data Plot'), 'size': (800,300)}),
         ])
         host.resize(1100, 800)
         self.initializeElements()
@@ -114,6 +115,8 @@ class MapAnalyzer(AnalysisModule):
         self.ctrl.setParameters(self.params, showTop=False)
         
         self.params.sigTreeStateChanged.connect(self.update)
+        
+        self.getElement('Color Mapper', create=True).sigChanged.connect(self.colorMapChanged)
         
     def elementChanged(self, element, old, new):
         name = element.name()
@@ -147,13 +150,34 @@ class MapAnalyzer(AnalysisModule):
         stats = db.select(statTable, '*', where={'ProtocolSequenceDir': sourceDir})
         events = db.select(eventTable, '*', where={'ProtocolSequenceDir': sourceDir}, toArray=True)
         return events, stats
+
+    def getDb(self):
+        db = self.loader.dbGui.getDb()
+        return db
         
-    def getColor(self, data):
+        
+    def getColor(self, stats, data):
         ## return the color to represent this data
-        return pg.mkColor(200,200,255)
+        
+        ## merge data together
+        d2 = data.copy()
+        del d2['sites']
+        d2 = OrderedDict(d2)
+        d2.update(stats)
+        del d2['ProtocolDir']
+        
+        mapper = self.getElement('Color Mapper')
+        mapper.setArgList(d2.keys())
+        
+        return mapper.getColor(d2)
+        
+    def colorMapChanged(self):
+        self.currentMap.recolor()
         
     def update(self):
         map = self.currentMap
+        if map is None:
+            return
         scans = map.scans
         events = np.concatenate([s.getAllEvents().copy() for s in scans])
         
@@ -174,7 +198,8 @@ class MapAnalyzer(AnalysisModule):
         spontRates['spontRate'] = sr['spontRate']
         spontRates['filteredSpontRate'] = sr['filteredSpontRate']
         
-        output = self.statsStage.process(map, spontRate, events)
+        output = self.statsStage.process(map, spontRates, filtered, sr['ampMean'], sr['ampStdev'])
+        map.recolor()
         
     def scanPointClicked(self, gitem, points):
         plot = self.getElement('Data Plot', create=True)
@@ -187,17 +212,19 @@ class MapAnalyzer(AnalysisModule):
         plot.clear()
         data = []
         for p in points:
-            for source in p.data():
+            for source in p.data()['sites']:
                 data.append(source)
             #data.extend(p.data)
         for i in range(len(data)):
             scan, fh = data[i]
             scan.displayData(fh, plot, pen=(i, len(data)*1.3))
+        
+        self.getElement('Stats Table').setData(points[0].data())
 
 
 class EventFilter:
     def __init__(self):
-        self.params = ptree.Parameter(name='Event Selection', type='group', children=[
+        self.params = ptree.types.GroupParameter(name='Event Selection', children=[
                 dict(name='Amplitude Sign', type='list', values=['+', '-'], value='+'),
             ])
     
@@ -218,7 +245,7 @@ class SpontRateAnalyzer:
         self.timeMarker = TimelineMarker()
         plot.addItem(self.timeMarker)
         
-        self.params = ptree.Parameter(name='Spontaneous Rate', type='group', children=[
+        self.params = ptree.types.GroupParameter(name='Spontaneous Rate', type='group', children=[
                 dict(name='Stimulus Time', type='float', value=0.495, suffix='s', siPrefix=True, step=0.005),
                 dict(name='Method', type='list', values=['Constant', 'Constant (Mean)', 'Constant (Median)', 'Mean Window', 'Median Window', 'Gaussian Window'], value='Gaussian Window'),
                 dict(name='Constant Rate', type='float', value=0, suffix='Hz', siPrefix=True),
@@ -256,9 +283,11 @@ class SpontRateAnalyzer:
         
         ## measure spont. rate for each handle
         spontRate = []
+        amps = []
         for site in sites:
             ev = events[events['ProtocolDir'] == site['ProtocolDir']]
             spontRate.append(len(ev) / stimTime)
+            amps.extend(ev['fitAmplitude'])
         spontRate = np.array(spontRate)
         
         self.spontRatePlot.setData(x=sites['start'], y=spontRate)
@@ -294,7 +323,7 @@ class SpontRateAnalyzer:
         
         self.filterPlot.setData(x=sites['start'], y=filtered)
         
-        return {'spontRate': spontRate, 'filteredSpontRate': filtered}
+        return {'spontRate': spontRate, 'filteredSpontRate': filtered, 'ampMean': np.mean(amps), 'ampStdev': np.std(amps)}
         
     @staticmethod
     def gauss(values, times, mean, sigma):
@@ -306,7 +335,7 @@ class SpontRateAnalyzer:
 
 class EventStatisticsAnalyzer:
     def __init__(self):
-        self.params = ptree.Parameter(name='Analysis Methods', type='group', children=[
+        self.params = ptree.types.GroupParameter(name='Analysis Methods', type='group', children=[
                 dict(name='Start Time', type='float', value=0.505, suffix='s', siPrefix=True, step=0.001),
                 dict(name='Stop Time', type='float', value=0.7, suffix='s', siPrefix=True, step=0.001),
                 dict(name='Z-Score', type='bool', value=False),
@@ -322,22 +351,47 @@ class EventStatisticsAnalyzer:
     def parameters(self):
         return self.params
 
-    def process(self, map, spontRate, events):
-        start = self.params['Start Time']
-        stop = self.params['Stop Time']
-        dt = stop - start
+    def process(self, map, spontRateTable, events, ampMean, ampStdev):
+        postStart = self.params['Start Time']
+        postStop = self.params['Stop Time']
+        postDt = postStop - postStart
         
-        ## Get list of map locations and their corresponding recordings
-        for spot in map.spots:
-            
+        ## generate dict of spont. rates for each site
+        spontRate = {}
+        for rec in spontRateTable:
+            spontRate[rec['ProtocolDir']] = rec
+        
+        ## filter events by time
+        postMask = (events['fitTime'] > postStart)  &  (events['fitTime'] < postStop)
+        postEvents = events[postMask]
+        #preMask = (events['fitTime'] > preStart)  &  (events['fitTime'] < preStop)
+        #preEvents = events[preMask]
+        
+        for site in map.spots:
+            events = []
+            rates = []
+            ## generate lists of post-stimulus events for each site
+            for scan,dh in site['data']['sites']:
+                ev = postEvents[postEvents['ProtocolDir'] == dh]
+                ev2 = np.empty(len(ev), dtype=[('time', float), ('amp', float)])
+                ev2['time'] = ev['fitTime']
+                ev2['amp'] = ev['fitAmplitude']
+                events.append(ev2)
+                rates.append(spontRate[dh]['filteredSpontRate'])
+        
+            ## compute score for each site
+            ## note that keys added to site here are ultimately passed to host.getColor via Map.recolor
+            site['data']['spontaneousRates'] = rates
+            site['data']['events'] = events
+            site['data']['ampMean'] = ampMean
+            site['data']['ampStdev'] = ampStdev
+            site['data']['PoissonScore'] = poissonScore.PoissonScore.score(events, rates, tMax=postDt)
+        
+            site['data']['PoissonAmpScore'] = poissonScore.PoissonAmpScore.score(events, rates, tMax=postDt, ampMean=ampMean, ampStdev=ampStdev)
         
         
-        ## generate list of spont. rates for each site
         
-        ## generate lists of post-stimulus events for each site
         
-        ## compute score for each site
-        score = PoissonScore(events, rates, tMax=dt
             
     
     
