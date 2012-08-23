@@ -281,7 +281,6 @@ class Photostim(AnalysisModule):
             plot.clear()
             eTable = self.getElement("Event Table")
             sTable = self.getElement("Stats")
-            self.mapTicks = []
             
             #num = len(point.data)
             num = len(points)
@@ -295,13 +294,13 @@ class Photostim(AnalysisModule):
                 except:
                     print points[i]
                     raise
-                if isinstance(fh, basestring):
-                    fh = scan.source()[fh]
                 
-                ## plot all data, incl. events
-                data = fh.read()['primary']
-                data = fn.besselFilter(data, 10e3)
-                pc = plot.plot(data, pen=color, clear=False)
+                if len(points[i]) == 3:
+                    evTime = points[i][2]
+                else:
+                    evTime = None
+                
+                scan.displayData(fh, plot, color, evTime)
                 
                 ## show stats
                 stats = scan.getStats(fh.parent())
@@ -310,24 +309,6 @@ class Photostim(AnalysisModule):
                 if len(events) > 0:
                     evList.append(events)
 
-                ## mark location of event if an event index was given
-                if len(points[i]) == 3:
-                    evTime = points[i][2]
-                    #pos = float(index)/len(data)
-                    pos = evTime / data.xvals('Time')[-1]
-                    #print evTime, data.xvals('Time')[-1], pos
-                    #print index
-                    self.arrow = pg.CurveArrow(pc, pos=pos)
-                    plot.addItem(self.arrow)
-                
-
-                ## draw ticks over all detected events
-                if len(events) > 0:
-                    if 'fitTime' in events.dtype.names:
-                        times = events['fitTime']
-                        ticks = pg.VTickGroup(times, [0.9, 1.0], pen=color)
-                        plot.addItem(ticks)
-                        self.mapTicks.append(ticks)
             
             sTable.setData(statList)
             if len(evList) > 0:

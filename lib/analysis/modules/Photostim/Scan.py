@@ -6,7 +6,7 @@ import pyqtgraph.multiprocess as mp
 import time, os
 import Canvas
 import collections
-
+import functions as fn
 
 def loadScanSequence(fh, host):
     ## Load a scan (or sequence of scans) from fh,
@@ -435,4 +435,44 @@ class Scan(QtCore.QObject):
         self.lockStats(False)
         
         
+    def displayData(self, fh, plot, pen, evTime=None):
+        """
+        Display data for a single site in a plot--ephys trace, detected events
+        Returns all items added to the plot.
+        """
+        pen = pg.mkPen(pen)
         
+        items = []
+        if isinstance(fh, basestring):
+            fh = self.source()[fh]
+        if fh.isDir():
+            fh = self.dataModel.getClampFile(fh)
+            
+        ## plot all data, incl. events
+        data = fh.read()['primary']
+        data = fn.besselFilter(data, 10e3)
+        pc = plot.plot(data, pen=pen, clear=False)
+        items.append(pc)
+        
+        ## mark location of event if an event index was given
+        if evTime is not None:
+            #pos = float(index)/len(data)
+            pos = evTime / data.xvals('Time')[-1]
+            #print evTime, data.xvals('Time')[-1], pos
+            #print index
+            arrow = pg.CurveArrow(pc, pos=pos)
+            plot.addItem(arrow)
+            items.append(arrow)
+            
+        events = self.getEvents(fh)['events']
+        
+        ## draw ticks over all detected events
+        if len(events) > 0:
+            if 'fitTime' in events.dtype.names:
+                times = events['fitTime']
+                ticks = pg.VTickGroup(times, [0.9, 1.0], pen=pen)
+                plot.addItem(ticks)
+                items.append(ticks)
+                #self.mapTicks.append(ticks)
+        return items
+

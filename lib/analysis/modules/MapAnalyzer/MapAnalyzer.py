@@ -122,6 +122,8 @@ class MapAnalyzer(AnalysisModule):
         self.getElement('Canvas').clear()
         self.currentMap = Map(self, rec)
         self.currentMap.loadStubs()
+        self.currentMap.sPlotItem.sigClicked.connect(self.mapPointClicked)
+
         self.getElement('Canvas').addGraphicsItem(self.currentMap.sPlotItem)
                 
     def loadScan(self, dh):
@@ -133,6 +135,8 @@ class MapAnalyzer(AnalysisModule):
             ci = scan.canvasItem()
             self.getElement('Canvas').addItem(ci)
             ci.hide()
+            scan.canvasItem().graphicsItem().sigClicked.connect(self.scanPointClicked)
+
         return scans
         
     def loadScanFromDB(self, sourceDir):
@@ -172,8 +176,25 @@ class MapAnalyzer(AnalysisModule):
         
         #output = self.statsStage.process(spontRate)
         
+    def scanPointClicked(self, gitem, points):
+        plot = self.getElement('Data Plot', create=True)
+        plot.clear()
+        scan = gitem.scan
+        scan.displayData(points[0].data(), plot, 'w')
         
-        
+    def mapPointClicked(self, gitem, points):
+        plot = self.getElement('Data Plot', create=True)
+        plot.clear()
+        data = []
+        for p in points:
+            for source in p.data():
+                data.append(source)
+            #data.extend(p.data)
+        for i in range(len(data)):
+            scan, fh = data[i]
+            scan.displayData(fh, plot, pen=(i, len(data)*1.3))
+
+
 class EventFilter:
     def __init__(self):
         self.params = ptree.Parameter(name='Event Selection', type='group', children=[
