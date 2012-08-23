@@ -169,7 +169,7 @@ class PoissonScore:
         nSets = len(ev)
         events = np.concatenate(ev)
 
-        if not np.isscalar(rate):
+        if not np.isscalar(rate):   ### Is this valid???  I think so..
             rate = np.mean(rate)
         
         if len(events) == 0:
@@ -326,9 +326,11 @@ class PoissonScore:
 
     @classmethod
     def generateRandom(cls, rate, tMax, reps=3):
+        if np.isscalar(rate):
+            rate = [rate]*reps
         ret = []
         for i in range(reps):
-            times = poissonProcess(rate, tMax)
+            times = poissonProcess(rate[i], tMax)
             ev = np.empty(len(times), dtype=[('time', float), ('amp', float)])
             ev['time'] = times
             ev['amp'] = np.random.normal(size=len(times))
@@ -336,7 +338,18 @@ class PoissonScore:
         return ret
         
     @classmethod
-    def generateNormalizationTable(cls, nEvents=100000):
+    def generateNormalizationTable(cls, nEvents=1000000):
+        ## table looks like this:
+        ##   (2 x M x N)
+        ##   Axis 0:  (score, mapped)
+        ##   Axis 1:  expected number of events  [1, 2, 4, 8, ...]
+        ##   Axis 2:  score axis 
+        
+        ## To map:
+        ##    determine axis-1 index by expected number of events
+        ##    look up axis-2 index from table[0, ind1]
+        ##    look up mapped score at table[1, ind1, ind2]
+        
         
         ## parameters determining sample space for normalization table
         rate = 1.0
@@ -357,11 +370,11 @@ class PoissonScore:
             print "Generating %s ..." % cacheFile
             norm = np.empty(tableShape)
             counts = []
-            with mp.Parallelize(tasks=[0,1], counts=counts, workers=2) as tasker:
+            with mp.Parallelize(counts=counts) as tasker:
                 for task in tasker:
                     count = np.zeros(tableShape[1:], dtype=float)
                     for i, t in enumerate(tVals):
-                        n = nev[i]
+                        n = nev[i] / tasker.numWorkers()
                         for j in xrange(int(n)):
                             if j%1000==0:
                                 print t, j
@@ -383,14 +396,14 @@ class PoissonScore:
         return norm
         
     @classmethod
-    def testMapping(cls, rate=1.0, tmax=1.0, n=10000, reps=3):
+    def testMapping(cls, rate=1.0, tMax=1.0, n=10000, reps=3):
         scores = np.empty(n)
         mapped = np.empty(n)
         ev = []
         for i in xrange(len(scores)):
-            ev.append(cls.generateRandom(rate, tmax, reps))
-            scores[i] = cls.score(ev[-1], rate, tMax=tmax, normalize=False)
-            mapped[i] = cls.mapScore(scores[i], rate*tMax*reps)
+            ev.append(cls.generateRandom(rate, tMax, reps))
+            scores[i] = cls.score(ev[-1], rate, tMax=tMax, normalize=False)
+            mapped[i] = cls.mapScore(scores[i], np.mean(rate)*tMax*reps)
         
         for j in [1,2,3,4]:
             print "  %d: %f" % (10**j, (mapped>10**j).sum() / float(n))
@@ -675,17 +688,18 @@ class PoissonRepeatScore:
         #return ev, scores
         
     @classmethod
-    def testMapping(cls, rate=1.0, tmax=1.0, n=10000, reps=3):
+    def testMapping(cls, rate=1.0, tMax=1.0, n=10000, reps=3):
         scores = np.empty(n)
         mapped = np.empty(n)
         ev = []
         for i in xrange(len(scores)):
-            ev.append(cls.generateRandom(rate, tmax, reps))
-            scores[i] = cls.score(ev[-1], rate, tMax=tmax)
+            ev.append(cls.generateRandom(rate, tMax, reps))
+            scores[i] = cls.score(ev[-1], rate, tMax=tMax, normalize=False)
+            mapped[i] = cls.mapScore(scores[i], rate*tMax*reps)
         
         for j in [1,2,3,4]:
-            print "  %d: %f" % (10**j, (scores>10**j).sum() / float(len(scores)))
-        return ev, scores
+            print "  %d: %f" % (10**j, (mapped>10**j).sum() / float(n))
+        return ev, scores, mapped
         
     @classmethod
     def showMap(cls):
