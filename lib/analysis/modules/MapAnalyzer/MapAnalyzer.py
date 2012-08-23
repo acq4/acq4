@@ -174,7 +174,7 @@ class MapAnalyzer(AnalysisModule):
         spontRates['spontRate'] = sr['spontRate']
         spontRates['filteredSpontRate'] = sr['filteredSpontRate']
         
-        #output = self.statsStage.process(spontRate)
+        output = self.statsStage.process(map, spontRate, events)
         
     def scanPointClicked(self, gitem, points):
         plot = self.getElement('Data Plot', create=True)
@@ -307,6 +307,8 @@ class SpontRateAnalyzer:
 class EventStatisticsAnalyzer:
     def __init__(self):
         self.params = ptree.Parameter(name='Analysis Methods', type='group', children=[
+                dict(name='Start Time', type='float', value=0.505, suffix='s', siPrefix=True, step=0.001),
+                dict(name='Stop Time', type='float', value=0.7, suffix='s', siPrefix=True, step=0.001),
                 dict(name='Z-Score', type='bool', value=False),
                 dict(name='Poisson', type='bool', value=False),
                 dict(name='Poisson Multi', type='bool', value=True, children=[
@@ -314,13 +316,28 @@ class EventStatisticsAnalyzer:
                     dict(name='Mean', type='float', readonly=True),
                     dict(name='Stdev', type='float', readonly=True),
                 ]),
+                dict(name='Threshold', type='float', value=100., dec=True, minStep=1, step=0.5),
             ])
     
     def parameters(self):
         return self.params
 
-    def process(self):
-        pass
+    def process(self, map, spontRate, events):
+        start = self.params['Start Time']
+        stop = self.params['Stop Time']
+        dt = stop - start
+        
+        ## Get list of map locations and their corresponding recordings
+        for spot in map.spots:
+            
+        
+        
+        ## generate list of spont. rates for each site
+        
+        ## generate lists of post-stimulus events for each site
+        
+        ## compute score for each site
+        score = PoissonScore(events, rates, tMax=dt
             
     
     
