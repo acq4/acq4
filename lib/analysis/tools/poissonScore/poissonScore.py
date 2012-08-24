@@ -125,7 +125,7 @@ def poissonProb(n, t, l, clip=False):
     For a poisson process, return the probability of seeing at least *n* events in *t* seconds given
     that the process has a mean rate *l*.
     """
-    p = stats.poisson(l*t).cdf(n)   
+    p = stats.poisson(l*t).sf(n)   
     if clip:
         p = np.clip(p, 0, 1.0-1e-25)
     return p
@@ -137,7 +137,7 @@ def gaussProb(amps, mean, stdev):
     """
     if len(amps) == 0:
         return 1.0
-    p = 1.0 - stats.norm(mean, stdev).cdf(amps)
+    p = stats.norm(mean, stdev).sf(amps)
     return 1.0 / (p.prod() ** (1./len(amps)))
 
 class PoissonScore:
@@ -181,7 +181,7 @@ class PoissonScore:
             
             nVals = np.array([(ev<=t).sum()-1 for t in ev]) ## looks like arange, but consider what happens if two events occur at the same time.
             pi = poissonProb(nVals, ev, rate*nSets)  ## note that by using n=0 to len(ev)-1, we correct for the fact that the time window always ends at the last event
-            pi = 1.0 / (1.0 - pi)
+            pi = 1.0 / pi
             
             ## apply extra score for uncommonly large amplitudes
             ## (note: by default this has no effect; see amplitudeScore)

@@ -111,7 +111,7 @@ class MapAnalyzer(AnalysisModule):
         for stage in self.stages:
             params.append(stage.parameters())
         
-        self.params = ptree.Parameter(name='options', type='group', children=params)
+        self.params = ptree.Parameter.create(name='options', type='group', children=params)
         self.ctrl.setParameters(self.params, showTop=False)
         
         self.params.sigTreeStateChanged.connect(self.update)
@@ -224,7 +224,7 @@ class MapAnalyzer(AnalysisModule):
 
 class EventFilter:
     def __init__(self):
-        self.params = ptree.types.GroupParameter(name='Event Selection', children=[
+        self.params = ptree.Parameter.create(name='Event Selection', type='group', children=[
                 dict(name='Amplitude Sign', type='list', values=['+', '-'], value='+'),
             ])
     
@@ -245,7 +245,7 @@ class SpontRateAnalyzer:
         self.timeMarker = TimelineMarker()
         plot.addItem(self.timeMarker)
         
-        self.params = ptree.types.GroupParameter(name='Spontaneous Rate', type='group', children=[
+        self.params = ptree.Parameter.create(name='Spontaneous Rate', type='group', children=[
                 dict(name='Stimulus Time', type='float', value=0.495, suffix='s', siPrefix=True, step=0.005),
                 dict(name='Method', type='list', values=['Constant', 'Constant (Mean)', 'Constant (Median)', 'Mean Window', 'Median Window', 'Gaussian Window'], value='Gaussian Window'),
                 dict(name='Constant Rate', type='float', value=0, suffix='Hz', siPrefix=True),
@@ -335,9 +335,10 @@ class SpontRateAnalyzer:
 
 class EventStatisticsAnalyzer:
     def __init__(self):
-        self.params = ptree.types.GroupParameter(name='Analysis Methods', type='group', children=[
-                dict(name='Start Time', type='float', value=0.505, suffix='s', siPrefix=True, step=0.001),
-                dict(name='Stop Time', type='float', value=0.7, suffix='s', siPrefix=True, step=0.001),
+        self.params = ptree.Parameter.create(name='Analysis Methods', type='group', children=[
+                dict(name='Stimulus Time', type='float', value=0.5, suffix='s', siPrefix=True, step=0.001),
+                dict(name='Post Start', type='float', value=0.505, suffix='s', siPrefix=True, step=0.001),
+                dict(name='Post Stop', type='float', value=0.7, suffix='s', siPrefix=True, step=0.001),
                 dict(name='Z-Score', type='bool', value=False),
                 dict(name='Poisson', type='bool', value=False),
                 dict(name='Poisson Multi', type='bool', value=True, children=[
@@ -352,8 +353,9 @@ class EventStatisticsAnalyzer:
         return self.params
 
     def process(self, map, spontRateTable, events, ampMean, ampStdev):
-        postStart = self.params['Start Time']
-        postStop = self.params['Stop Time']
+        postStart = self.params['Post Start']
+        postStop = self.params['Post Stop']
+        stimTime = self.params['Stimulus Time']
         postDt = postStop - postStart
         
         ## generate dict of spont. rates for each site
@@ -374,7 +376,7 @@ class EventStatisticsAnalyzer:
             for scan,dh in site['data']['sites']:
                 ev = postEvents[postEvents['ProtocolDir'] == dh]
                 ev2 = np.empty(len(ev), dtype=[('time', float), ('amp', float)])
-                ev2['time'] = ev['fitTime']
+                ev2['time'] = ev['fitTime'] - stimTime
                 ev2['amp'] = ev['fitAmplitude']
                 events.append(ev2)
                 rates.append(spontRate[dh]['filteredSpontRate'])
