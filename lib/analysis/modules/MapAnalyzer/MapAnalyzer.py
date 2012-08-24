@@ -96,7 +96,7 @@ class MapAnalyzer(AnalysisModule):
         
         self.filterStage = EventFilter()
         self.spontRateStage = SpontRateAnalyzer(plot=self.getElement('Timeline', create=True))
-        self.statsStage = EventStatisticsAnalyzer()
+        self.statsStage = EventStatisticsAnalyzer(histogramPlot=self.getElement('Score Histogram', create=True))
         self.stages = [self.filterStage, self.spontRateStage, self.statsStage]
         
         params = [
@@ -334,18 +334,22 @@ class SpontRateAnalyzer:
         
 
 class EventStatisticsAnalyzer:
-    def __init__(self):
+    def __init__(self, histogramPlot):
+        self.histogram = histogramPlot
         self.params = ptree.Parameter.create(name='Analysis Methods', type='group', children=[
                 dict(name='Stimulus Time', type='float', value=0.5, suffix='s', siPrefix=True, step=0.001),
+                dict(name='Pre Start', type='float', value=0.0, suffix='s', siPrefix=True, step=0.001),
+                dict(name='Pre Stop', type='float', value=0.495, suffix='s', siPrefix=True, step=0.001),
                 dict(name='Post Start', type='float', value=0.505, suffix='s', siPrefix=True, step=0.001),
                 dict(name='Post Stop', type='float', value=0.7, suffix='s', siPrefix=True, step=0.001),
-                dict(name='Z-Score', type='bool', value=False),
-                dict(name='Poisson', type='bool', value=False),
-                dict(name='Poisson Multi', type='bool', value=True, children=[
-                    dict(name='Amplitude', type='bool', value=False),
-                    dict(name='Mean', type='float', readonly=True),
-                    dict(name='Stdev', type='float', readonly=True),
-                ]),
+                #dict(name='Z-Score', type='bool', value=False),
+                #dict(name='Poisson', type='bool', value=False),
+                #dict(name='Poisson Multi', type='bool', value=True, children=[
+                    #dict(name='Amplitude', type='bool', value=False),
+                    #dict(name='Mean', type='float', readonly=True),
+                    #dict(name='Stdev', type='float', readonly=True),
+                #]),
+                dict(name='Threshold Parameter', type='list', values=['Poisson Score', 'Poisson Score + Amp']),
                 dict(name='Threshold', type='float', value=100., dec=True, minStep=1, step=0.5),
             ])
     
@@ -353,9 +357,14 @@ class EventStatisticsAnalyzer:
         return self.params
 
     def process(self, map, spontRateTable, events, ampMean, ampStdev):
+        stimTime = self.params['Stimulus Time']
+        
+        preStart = self.params['Pre Start']
+        preStop = self.params['Pre Stop']
+        preDt = preStop - preStart
+        
         postStart = self.params['Post Start']
         postStop = self.params['Post Stop']
-        stimTime = self.params['Stimulus Time']
         postDt = postStop - postStart
         
         ## generate dict of spont. rates for each site
@@ -366,19 +375,34 @@ class EventStatisticsAnalyzer:
         ## filter events by time
         postMask = (events['fitTime'] > postStart)  &  (events['fitTime'] < postStop)
         postEvents = events[postMask]
-        #preMask = (events['fitTime'] > preStart)  &  (events['fitTime'] < preStop)
-        #preEvents = events[preMask]
+        preMask = (events['fitTime'] > preStart)  &  (events['fitTime'] < preStop)
+        preEvents = events[preMask]
+        
+        preScores = {'PoissonScore': [], 'PoissonAmpScore': []}
+        postScores = {'PoissonScore': [], 'PoissonAmpScore': []}
+        
         
         for site in map.spots:
-            events = []
+            postSiteEvents = []
+            preSiteEvents = []
             rates = []
+            
             ## generate lists of post-stimulus events for each site
             for scan,dh in site['data']['sites']:
+                ## collect post-stim events
                 ev = postEvents[postEvents['ProtocolDir'] == dh]
                 ev2 = np.empty(len(ev), dtype=[('time', float), ('amp', float)])
                 ev2['time'] = ev['fitTime'] - stimTime
                 ev2['amp'] = ev['fitAmplitude']
-                events.append(ev2)
+                postSiteEvents.append(ev2)
+                
+                ## collect pre-stim events
+                ev = preEvents[preEvents['ProtocolDir'] == dh]
+                ev2 = np.empty(len(ev), dtype=[('time', float), ('amp', float)])
+                ev2['time'] = ev['fitTime']
+                ev2['amp'] = ev['fitAmplitude']
+                preSiteEvents.append(ev2)
+                
                 rates.append(spontRate[dh]['filteredSpontRate'])
         
             ## compute score for each site
@@ -387,13 +411,33 @@ class EventStatisticsAnalyzer:
             site['data']['events'] = events
             site['data']['ampMean'] = ampMean
             site['data']['ampStdev'] = ampStdev
-            site['data']['PoissonScore'] = poissonScore.PoissonScore.score(events, rates, tMax=postDt)
+            site['data']['PoissonScore'] = poissonScore.PoissonScore.score(postSiteEvents, rates, tMax=postDt)
+            site['data']['PoissonAmpScore'] = poissonScore.PoissonAmpScore.score(postSiteEvents, rates, tMax=postDt, ampMean=ampMean, ampStdev=ampStdev)
+            postScores['PoissonScore'].append(site['data']['PoissonScore'])
+            postScores['PoissonAmpScore'].append(site['data']['PoissonAmpScore'])
+            
+            site['data']['PoissonScore_Pre'] = poissonScore.PoissonScore.score(preSiteEvents, rates, tMax=postDt)
+            site['data']['PoissonAmpScore_Pre'] = poissonScore.PoissonAmpScore.score(preSiteEvents, rates, tMax=postDt, ampMean=ampMean, ampStdev=ampStdev)
+            preScores['PoissonScore'].append(site['data']['PoissonScore_Pre'])
+            preScores['PoissonAmpScore'].append(site['data']['PoissonAmpScore_Pre'])
+            
+            
+            
+            if self.params['Threshold Parameter'] == 'Poisson Score':
+                score = site['data']['PoissonScore']
+            else:
+                score = site['data']['PoissonAmpScore']
+            site['data']['HasInput'] = score > self.params['Threshold']
         
-            site['data']['PoissonAmpScore'] = poissonScore.PoissonAmpScore.score(events, rates, tMax=postDt, ampMean=ampMean, ampStdev=ampStdev)
         
-        
-        
-        
+        ## plot histogram of scores for threshold parameter
+        if self.params['Threshold Parameter'] == 'Poisson Score':
+            pre, post = preScores['PoissonScore'], postScores['PoissonScore']
+        else:
+            pre, post = preScores['PoissonAmpScore'], postScores['PoissonAmpScore']
+        self.histogram.clear()
+        self.histogram.plot(x=pre, y=np.arange(len(pre)), pen=None, symbol='o', symbolPen=None, symbolBrush=(0, 0, 255, 50))
+        self.histogram.plot(x=post, y=np.arange(len(post)), pen=None, symbol='o', symbolPen=None, symbolBrush=(255, 255, 0, 50))
             
     
     
@@ -410,13 +454,17 @@ class Loader(QtGui.QWidget):
         
         self.tree = pg.TreeWidget()
         self.layout.addWidget(self.tree, 1, 0)
+
+        self.refreshBtn = QtGui.QPushButton('Reload Map List')
+        self.layout.addWidget(self.refreshBtn, 2, 0)
+        self.refreshBtn.clicked.connect(self.populate)
         
         self.loadBtn = QtGui.QPushButton('Load Map')
-        self.layout.addWidget(self.loadBtn, 2, 0)
+        self.layout.addWidget(self.loadBtn, 3, 0)
         self.loadBtn.clicked.connect(self.load)
         
         self.loadedLabel = QtGui.QLabel("Loaded: [none]")
-        self.layout.addWidget(self.loadedLabel, 3, 0)
+        self.layout.addWidget(self.loadedLabel, 4, 0)
         
         self.populate()
         
@@ -430,22 +478,27 @@ class Loader(QtGui.QWidget):
         maps = db.select(mapTable, ['rowid','*'])
         
         paths = {}
-        for rec in maps:
-            if len(rec['scans']) == 0:
-                continue
-            
-            ## convert (table, rowid) to (dirhandle, rowid) before creating Map
-            rec['scans'] = [(db.getDir(*s), s[1]) for s in rec['scans']]
-            path = rec['scans'][0][0].parent()
-            
-            if path not in paths:
-                pathItem = pg.TreeWidgetItem([path.name(relativeTo=db.baseDir())])
-                self.tree.addTopLevelItem(pathItem)
-                paths[path] = pathItem
-            
-            item = pg.TreeWidgetItem([rec['description']])
-            item.rec = rec
-            paths[path].addChild(item)
+        with pg.ProgressDialog("Reading map table...", 0, len(maps)) as dlg:
+            for rec in maps:
+                if len(rec['scans']) == 0:
+                    continue
+                
+                ## convert (table, rowid) to (dirhandle, rowid) before creating Map
+                rec['scans'] = [(db.getDir(*s), s[1]) for s in rec['scans']]
+                path = rec['scans'][0][0].parent()
+                
+                if path not in paths:
+                    pathItem = pg.TreeWidgetItem([path.name(relativeTo=db.baseDir())])
+                    self.tree.addTopLevelItem(pathItem)
+                    paths[path] = pathItem
+                
+                item = pg.TreeWidgetItem([rec['description']])
+                item.rec = rec
+                paths[path].addChild(item)
+                
+                dlg += 1
+                if dlg.wasCanceled():
+                    raise Exception("User cancelled map list construction; some maps may not be displayed.")
             
     def load(self):
         sel = self.tree.selectedItems()

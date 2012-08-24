@@ -272,13 +272,14 @@ class Scan(QtCore.QObject):
                 stats = self.getStats(dh, signal=False)
                 color = self.host.getColor(stats)
                 tasker.result.append((i, color, stats, events))
+                
         print "recolor took %0.2fsec" % (time.time() - start)
         
         ## Collect all results, store to caches, and recolor spots
         for i, color, stats, events in result:
             dh, fh = handles[i]
-            self.stats[dh] = stats
-            self.events[fh] = events
+            self.updateStatCache(dh, stats)
+            self.updateEventCache(fh, events, signal=False)
             spot = spots[i]
             spot.setBrush(color)
         
@@ -303,26 +304,36 @@ class Scan(QtCore.QObject):
             except:
                 print events
                 raise
-            self.stats[dh] = stats
-            self.statCacheValid.add(dh)
-            self.statsStored = False
-            self.sigStorageStateChanged.emit(self)
+            
+            ## NOTE: Cache update must be taken care of elsewhere if this function is run in a parallel process!
+            self.updateStatCache(dh, stats)
+            
         return self.stats[dh].copy()
+        
+    def updateStatCache(self, dh, stats):
+        self.stats[dh] = stats
+        self.statCacheValid.add(dh)
+        self.statsStored = False
+        self.sigStorageStateChanged.emit(self)
 
     def getEvents(self, fh, process=True, signal=True):
         if fh not in self.events or (not self.eventsLocked and fh not in self.eventCacheValid):
             if process:
                 #print "No event cache for", fh.name(), "compute.."
                 events = self.host.processEvents(fh)  ## need ALL output from the flowchart; not just events
-                self.events[fh] = events
-                self.eventCacheValid.add(fh)
-                self.eventsStored = False
-                self.sigStorageStateChanged.emit(self)
-                if signal:
-                    self.sigEventsChanged.emit(self)
+                ## NOTE: Cache update must be taken care of elsewhere if this function is run in a parallel process!
+                self.updateEventCache(fh, events, signal)
             else:
                 return None
         return self.events[fh]
+        
+    def updateEventCache(self, fh, events, signal=True):
+        self.events[fh] = events
+        self.eventCacheValid.add(fh)
+        self.eventsStored = False
+        self.sigStorageStateChanged.emit(self)
+        if signal:
+            self.sigEventsChanged.emit(self)
         
     def getAllEvents(self):
         #print "getAllEvents", self.name()
