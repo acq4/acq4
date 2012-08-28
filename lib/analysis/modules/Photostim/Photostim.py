@@ -342,9 +342,9 @@ class Photostim(AnalysisModule):
         output = self.detector.flowchart.output()
         output['fileHandle']=self.selectedSpot.data()
         self.flowchart.setInput(**output)
-        errs = output['events']['fitFractionalError']
-        if len(errs) > 0:
-            print "Detector events error mean / median / max:", errs.mean(), np.median(errs), errs.max()
+        #errs = output['events']['fitFractionalError']
+        #if len(errs) > 0:
+            #print "Detector events error mean / median / max:", errs.mean(), np.median(errs), errs.max()
 
     def analyzerStateChanged(self):
         #print "Analyzer state changed."
