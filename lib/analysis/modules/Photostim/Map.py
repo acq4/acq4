@@ -57,16 +57,21 @@ class Map:
                 item.handle = fh
                 self.item.addChild(item)
 
-    def name(self, cell=None):
-        rec = self.getRecord()
+    def name(self, cell=None, rec=None):
+        if rec is None:
+            rec = self.getRecord()
         if cell is None:
             cell = rec['cell']
         if cell is None:
             return ""
         name = cell.shortName()
-        if rec['holding'] < -.04:
+        try:
+            holding = float(rec['holding'])
+        except ValueError:
+            holding = 0.0
+        if holding < -.04:
             name = name + "_excitatory"
-        elif rec['holding'] >= -.01:
+        elif holding >= -.01:
             name = name + "_inhibitory"
         return name
 
@@ -84,8 +89,8 @@ class Map:
     def addScanSpots(self, scan):
         for pt in scan.spots():
             pos = pt.viewPos()
-            size = pt.size  #sceneBoundingRect().width()
-            dh = pt.data
+            size = pt.size()  #sceneBoundingRect().width()
+            dh = pt.data()
             
             added = False
             for pt2 in self.spots:     ## check all previously added points for position match
@@ -93,16 +98,16 @@ class Map:
                 dp = pos2-pos
                 dist = (dp.x()**2 + dp.y()**2)**0.5
                 if dist < size/3.:      ## if position matches, add scan/spot data into existing site
-                    pt2['data'].append((scan, pt.data))
+                    pt2['data']['sites'].append((scan, pt.data()))
                     #pt2[2]['data'].append((scan, dh))
                     added = True
-                    self.pointsByFile[pt.data] = pt2
+                    self.pointsByFile[pt.data()] = pt2
                     break
             if not added:               ## ..otherwise, add a new site
-                newSpot = {'pos': pos, 'size': size, 'data': [(scan, dh)]}
+                newSpot = {'pos': pos, 'size': size, 'data': {'sites': [(scan, dh)]}}
                 self.spots.append(newSpot)
                 #self.points.append((pos, [(scan, dh)], self.spots[-1]))
-                self.pointsByFile[pt.data] = newSpot
+                self.pointsByFile[pt.data()] = newSpot
 
     def addScans(self, scanList):
         #print "Map.addScans:", scanList
@@ -172,7 +177,7 @@ class Map:
         ninfo = next.info()
         if 'Temperature.BathTemp' in ninfo:
             rec['temp'] = ninfo['Temperature.BathTemp']
-        rec['description'] = self.name(source.parent())
+        rec['description'] = self.name(source.parent(), rec)
         return rec
 
 
@@ -220,7 +225,7 @@ class Map:
     def isVisible(self):
         return self.sPlotItem.isVisible()
             
-    def recolor(self, n, nMax):
+    def recolor(self, n=1, nMax=1, parallel=False):  ## ignore parallel here; it's plenty fast already.
         if not self.sPlotItem.isVisible():
             return
         spots = self.sPlotItem.points()
@@ -229,7 +234,7 @@ class Map:
             for i in xrange(len(spots)):
                 s = spots[i]
                 data = []
-                sources = s.data
+                sources = s.data()['sites']
                 for scan, dh in sources:
                     data.append(scan.getStats(dh))
                 
@@ -253,7 +258,7 @@ class Map:
                         except:
                             mergeData[k] = vals[0]
                 #print mergeData
-                color = self.host.getColor(mergeData)
+                color = self.host.getColor(mergeData, s.data())
                 #s.setBrush(color)  ## wait until after to set the colors
                 colors.append((s, color))
                 dlg.setValue(i)

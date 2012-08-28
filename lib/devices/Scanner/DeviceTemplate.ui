@@ -40,12 +40,7 @@
          </attribute>
          <column>
           <property name="text">
-           <string>Camera</string>
-          </property>
-         </column>
-         <column>
-          <property name="text">
-           <string>Objective</string>
+           <string>Optics</string>
           </property>
          </column>
          <column>
@@ -218,7 +213,7 @@
              </widget>
             </item>
             <item row="1" column="1">
-             <widget class="QComboBox" name="cameraCombo"/>
+             <widget class="InterfaceCombo" name="cameraCombo"/>
             </item>
             <item row="2" column="0">
              <widget class="QLabel" name="label_3">
@@ -231,7 +226,7 @@
              </widget>
             </item>
             <item row="2" column="1">
-             <widget class="QComboBox" name="laserCombo"/>
+             <widget class="InterfaceCombo" name="laserCombo"/>
             </item>
             <item row="1" column="2" colspan="2">
              <widget class="QPushButton" name="storeCamConfBtn">
@@ -402,6 +397,11 @@
    <extends>QWidget</extends>
    <header>pyqtgraph</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>InterfaceCombo</class>
+   <extends>QComboBox</extends>
+   <header>InterfaceCombo</header>
   </customwidget>
  </customwidgets>
  <resources/>

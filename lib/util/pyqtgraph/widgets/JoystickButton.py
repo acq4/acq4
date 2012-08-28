@@ -12,6 +12,8 @@ class JoystickButton(QtGui.QPushButton):
         self.setCheckable(True)
         self.state = None
         self.setState(0,0)
+        self.setFixedWidth(50)
+        self.setFixedHeight(50)
         
         
     def mousePressEvent(self, ev):
@@ -82,7 +84,7 @@ if __name__ == '__main__':
     w.resize(100, 100)
     
     def fn(b, s):
-        print "state changed:", s
+        print("state changed:", s)
         
     b.sigStateChanged.connect(fn)
         

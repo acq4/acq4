@@ -1,10 +1,12 @@
 from pyqtgraph.Qt import QtGui, QtCore  
 from pyqtgraph.GraphicsScene import GraphicsScene
-from GraphicsItem import GraphicsItem
+from .GraphicsItem import GraphicsItem
 
 __all__ = ['GraphicsWidget']
 
 class GraphicsWidget(GraphicsItem, QtGui.QGraphicsWidget):
+    
+    _qtBaseClass = QtGui.QGraphicsWidget
     def __init__(self, *args, **kargs):
         """
         **Bases:** :class:`GraphicsItem <pyqtgraph.GraphicsItem>`, :class:`QtGui.QGraphicsWidget`
@@ -14,7 +16,16 @@ class GraphicsWidget(GraphicsItem, QtGui.QGraphicsWidget):
         """
         QtGui.QGraphicsWidget.__init__(self, *args, **kargs)
         GraphicsItem.__init__(self)
-        GraphicsScene.registerObject(self)  ## workaround for pyqt bug in graphicsscene.items()
+        
+        ## done by GraphicsItem init
+        #GraphicsScene.registerObject(self)  ## workaround for pyqt bug in graphicsscene.items()
+
+## Removed because this causes segmentation faults. Don't know why.
+#    def itemChange(self, change, value):
+#        ret = QtGui.QGraphicsWidget.itemChange(self, change, value)  ## segv occurs here
+#        if change in [self.ItemParentHasChanged, self.ItemSceneHasChanged]:
+#            self._updateView()
+#        return ret
 
     #def getMenu(self):
         #pass

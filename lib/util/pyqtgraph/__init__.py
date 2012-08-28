@@ -1,34 +1,46 @@
 # -*- coding: utf-8 -*-
+REVISION = None
+
 ### import all the goodies and add some helper functions for easy CLI use
 
 ## 'Qt' is a local module; it is intended mainly to cover up the differences
 ## between PyQt4 and PySide.
-from Qt import QtGui 
+from .Qt import QtGui
 
-## not really safe.
+## not really safe--If we accidentally create another QApplication, the process hangs (and it is very difficult to trace the cause)
 #if QtGui.QApplication.instance() is None:
     #app = QtGui.QApplication([])
 
-## in general openGL is poorly supported in Qt. 
-## we only enable it where the performance benefit is critical.
-## Note this only applies to 2D graphics; 3D graphics always use OpenGL.
-import sys
+import os, sys
 
 ## check python version
-if sys.version_info[0] != 2 or sys.version_info[1] != 7:
+## Allow anything >= 2.7
+if sys.version_info[0] < 2 or (sys.version_info[0] == 2 and sys.version_info[1] < 7):
     raise Exception("Pyqtgraph requires Python version 2.7 (this is %d.%d)" % (sys.version_info[0], sys.version_info[1]))
 
+## helpers for 2/3 compatibility
+from . import python2_3
+
+    
+## in general openGL is poorly supported with Qt+GraphicsView.
+## we only enable it where the performance benefit is critical.
+## Note this only applies to 2D graphics; 3D graphics always use OpenGL.
 if 'linux' in sys.platform:  ## linux has numerous bugs in opengl implementation
     useOpenGL = False
-elif 'darwin' in sys.platform: ## openGL greatly speeds up display on mac
+elif 'darwin' in sys.platform: ## openGL can have a major impact on mac, but also has serious bugs
     useOpenGL = True
 else:
     useOpenGL = False  ## on windows there's a more even performance / bugginess tradeoff. 
                 
 CONFIG_OPTIONS = {
-    'useOpenGL': useOpenGL,   ## by default, this is platform-dependent (see widgets/GraphicsView). Set to True or False to explicitly enable/disable opengl.
-    'leftButtonPan': True  ## if false, left button drags a rubber band for zooming in viewbox
-}
+    'useOpenGL': useOpenGL, ## by default, this is platform-dependent (see widgets/GraphicsView). Set to True or False to explicitly enable/disable opengl.
+    'leftButtonPan': True,  ## if false, left button drags a rubber band for zooming in viewbox
+    'foreground': (150, 150, 150),  ## default foreground color for axes, labels, etc.
+    'background': (0, 0, 0),        ## default background for GraphicsWidget
+    'antialias': False,
+    'editorCommand': None,  ## command used to invoke code editor from ConsoleWidgets
+} 
+
 
 def setConfigOption(opt, value):
     CONFIG_OPTIONS[opt] = value
@@ -36,6 +48,23 @@ def setConfigOption(opt, value):
 def getConfigOption(opt):
     return CONFIG_OPTIONS[opt]
 
+
+def systemInfo():
+    print("sys.platform: %s" % sys.platform)
+    print("sys.version: %s" % sys.version)
+    from .Qt import VERSION_INFO
+    print("qt bindings: %s" % VERSION_INFO)
+    
+    global REVISION
+    if REVISION is None:  ## this code was probably checked out from bzr; look up the last-revision file
+        lastRevFile = os.path.join(os.path.dirname(__file__), '.bzr', 'branch', 'last-revision')
+        if os.path.exists(lastRevFile):
+            REVISION = open(lastRevFile, 'r').read().strip()
+    
+    print("pyqtgraph: %s" % REVISION)
+    print("config:")
+    import pprint
+    pprint.pprint(CONFIG_OPTIONS)
 
 ## Rename orphaned .pyc files. This is *probably* safe :)
 
@@ -47,13 +76,15 @@ def renamePyc(startDir):
     printed = False
     startDir = os.path.abspath(startDir)
     for path, dirs, files in os.walk(startDir):
+        if '__pycache__' in path:
+            continue
         for f in files:
             fileName = os.path.join(path, f)
             base, ext = os.path.splitext(fileName)
             py = base + ".py"
             if ext == '.pyc' and not os.path.isfile(py):
                 if not printed:
-                    print "NOTE: Renaming orphaned .pyc files:"
+                    print("NOTE: Renaming orphaned .pyc files:")
                     printed = True
                 n = 1
                 while True:
@@ -61,8 +92,8 @@ def renamePyc(startDir):
                     if not os.path.exists(name2):
                         break
                     n += 1
-                print "  " + fileName + "  ==>"
-                print "  " + name2
+                print("  " + fileName + "  ==>")
+                print("  " + name2)
                 os.rename(fileName, name2)
                 
 import os
@@ -78,7 +109,7 @@ def importAll(path, excludes=()):
     d = os.path.join(os.path.split(__file__)[0], path)
     files = []
     for f in os.listdir(d):
-        if os.path.isdir(os.path.join(d, f)):
+        if os.path.isdir(os.path.join(d, f)) and f != '__pycache__':
             files.append(f)
         elif f[-3:] == '.py' and f != '__init__.py':
             files.append(f[:-3])
@@ -96,22 +127,40 @@ def importAll(path, excludes=()):
                 globals()[k] = getattr(mod, k)
 
 importAll('graphicsItems')
-importAll('widgets', excludes=['MatplotlibWidget'])
+importAll('widgets', excludes=['MatplotlibWidget', 'RemoteGraphicsView'])
 
-from imageview import *
-from WidgetGroup import *
-from Point import Point
-from Transform import Transform
-from functions import *
-from graphicsWindows import *
-from SignalProxy import *
-from ptime import time
+from .imageview import *
+from .WidgetGroup import *
+from .Point import Point
+from .Vector import Vector
+from .SRTTransform import SRTTransform
+from .SRTTransform3D import SRTTransform3D
+from .functions import *
+from .graphicsWindows import *
+from .SignalProxy import *
+from .ptime import time
+
+
+## Workaround for Qt exit crash:
+## ALL QGraphicsItems must have a scene before they are deleted.
+## This is potentially very expensive, but preferred over crashing.
+import atexit
+def cleanup():
+    if QtGui.QApplication.instance() is None:
+        return
+    import gc
+    s = QtGui.QGraphicsScene()
+    for o in gc.get_objects():
+        try:
+            if isinstance(o, QtGui.QGraphicsItem) and o.scene() is None:
+                s.addItem(o)
+        except RuntimeError:  ## occurs if a python wrapper no longer has its underlying C++ object
+            continue
+atexit.register(cleanup)
 
 
 
 ## Convenience functions for command-line use
-
-
 
 plots = []
 images = []
@@ -165,8 +214,11 @@ show = image  ## for backward compatibility
     
     
 def mkQApp():
-    if QtGui.QApplication.instance() is None:
-        global QAPP
+    global QAPP
+    inst = QtGui.QApplication.instance()
+    if inst is None:
         QAPP = QtGui.QApplication([])
-        
+    else:
+        QAPP = inst
+    return QAPP
         

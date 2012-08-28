@@ -1,6 +1,7 @@
 from pyqtgraph.Qt import QtCore, QtGui
-from Parameter import Parameter, registerParameterType
-from ParameterItem import ParameterItem
+from pyqtgraph.python2_3 import asUnicode
+from .Parameter import Parameter, registerParameterType
+from .ParameterItem import ParameterItem
 from pyqtgraph.widgets.SpinBox import SpinBox
 from pyqtgraph.widgets.ColorButton import ColorButton
 import pyqtgraph as pg
@@ -105,8 +106,8 @@ class WidgetParameterItem(ParameterItem):
         elif t == 'str':
             w = QtGui.QLineEdit()
             w.sigChanged = w.editingFinished
-            w.value = lambda: unicode(w.text())
-            w.setValue = lambda v: w.setText(unicode(v))
+            w.value = lambda: asUnicode(w.text())
+            w.setValue = lambda v: w.setText(asUnicode(v))
             w.sigChanging = w.textChanged
         elif t == 'color':
             w = ColorButton()
@@ -117,7 +118,7 @@ class WidgetParameterItem(ParameterItem):
             self.hideWidget = False
             w.setFlat(True)
         else:
-            raise Exception("Unknown type '%s'" % unicode(t))
+            raise Exception("Unknown type '%s'" % asUnicode(t))
         return w
         
     def widgetEventFilter(self, obj, ev):
@@ -165,11 +166,11 @@ class WidgetParameterItem(ParameterItem):
             value = self.param.value()
         opts = self.param.opts
         if isinstance(self.widget, QtGui.QAbstractSpinBox):
-            text = unicode(self.widget.lineEdit().text())
+            text = asUnicode(self.widget.lineEdit().text())
         elif isinstance(self.widget, QtGui.QComboBox):
             text = self.widget.currentText()
         else:
-            text = unicode(value)
+            text = asUnicode(value)
         self.displayLabel.setText(text)
 
     def widgetValueChanged(self):
@@ -289,23 +290,7 @@ class GroupParameterItem(ParameterItem):
     """
     def __init__(self, param, depth):
         ParameterItem.__init__(self, param, depth)
-        if depth == 0:
-            for c in [0,1]:
-                self.setBackground(c, QtGui.QBrush(QtGui.QColor(100,100,100)))
-                self.setForeground(c, QtGui.QBrush(QtGui.QColor(220,220,255)))
-                font = self.font(c)
-                font.setBold(True)
-                font.setPointSize(font.pointSize()+1)
-                self.setFont(c, font)
-                self.setSizeHint(0, QtCore.QSize(0, 25))
-        else:
-            for c in [0,1]:
-                self.setBackground(c, QtGui.QBrush(QtGui.QColor(220,220,220)))
-                font = self.font(c)
-                font.setBold(True)
-                #font.setPointSize(font.pointSize()+1)
-                self.setFont(c, font)
-                self.setSizeHint(0, QtCore.QSize(0, 20))
+        self.updateDepth(depth) 
                 
         self.addItem = None
         if 'addText' in param.opts:
@@ -330,6 +315,27 @@ class GroupParameterItem(ParameterItem):
             self.addItem.setFlags(QtCore.Qt.ItemIsEnabled)
             ParameterItem.addChild(self, self.addItem)
             
+    def updateDepth(self, depth):
+        ## Change item's appearance based on its depth in the tree
+        ## This allows highest-level groups to be displayed more prominently.
+        if depth == 0:
+            for c in [0,1]:
+                self.setBackground(c, QtGui.QBrush(QtGui.QColor(100,100,100)))
+                self.setForeground(c, QtGui.QBrush(QtGui.QColor(220,220,255)))
+                font = self.font(c)
+                font.setBold(True)
+                font.setPointSize(font.pointSize()+1)
+                self.setFont(c, font)
+                self.setSizeHint(0, QtCore.QSize(0, 25))
+        else:
+            for c in [0,1]:
+                self.setBackground(c, QtGui.QBrush(QtGui.QColor(220,220,220)))
+                font = self.font(c)
+                font.setBold(True)
+                #font.setPointSize(font.pointSize()+1)
+                self.setFont(c, font)
+                self.setSizeHint(0, QtCore.QSize(0, 20))
+    
     def addClicked(self):
         """Called when "add new" button is clicked
         The parameter MUST have an 'addNew' method defined.
@@ -342,12 +348,13 @@ class GroupParameterItem(ParameterItem):
         """
         if self.addWidget.currentIndex() == 0:
             return
-        typ = unicode(self.addWidget.currentText())
+        typ = asUnicode(self.addWidget.currentText())
         self.param.addNew(typ)
         self.addWidget.setCurrentIndex(0)
 
     def treeWidgetChanged(self):
         ParameterItem.treeWidgetChanged(self)
+        self.treeWidget().setFirstItemColumnSpanned(self, True)
         if self.addItem is not None:
             self.treeWidget().setItemWidget(self.addItem, 0, self.addWidgetBox)
             self.treeWidget().setFirstItemColumnSpanned(self.addItem, True)
@@ -364,7 +371,6 @@ class GroupParameter(Parameter):
     of child parameters. It also provides a simple mechanism for displaying a button or combo
     that can be used to add new parameters to the group.
     """
-    type = 'group'
     itemClass = GroupParameterItem
 
     def addNew(self, typ=None):
@@ -400,7 +406,7 @@ class ListParameterItem(WidgetParameterItem):
         
     def value(self):
         #vals = self.param.opts['limits']
-        key = unicode(self.widget.currentText())
+        key = asUnicode(self.widget.currentText())
         #if isinstance(vals, dict):
             #return vals[key]
         #else:
@@ -431,18 +437,18 @@ class ListParameterItem(WidgetParameterItem):
         self.forward = collections.OrderedDict()  ## name: value
         self.reverse = collections.OrderedDict()  ## value: name
         if isinstance(limits, dict):
-            for k, v in limits.iteritems():
+            for k, v in limits.items():
                 self.forward[k] = v
                 self.reverse[v] = k
         else:
             for v in limits:
-                n = unicode(v)
+                n = asUnicode(v)
                 self.forward[n] = v
                 self.reverse[v] = n
         
         try:
             self.widget.blockSignals(True)
-            val = unicode(self.widget.currentText())
+            val = asUnicode(self.widget.currentText())
             self.widget.clear()
             for k in self.forward:
                 self.widget.addItem(k)
@@ -455,7 +461,6 @@ class ListParameterItem(WidgetParameterItem):
 
 
 class ListParameter(Parameter):
-    type = 'list'
     itemClass = ListParameterItem
 
     def __init__(self, **opts):
@@ -469,19 +474,19 @@ class ListParameter(Parameter):
         self.forward = collections.OrderedDict()  ## name: value
         self.reverse = collections.OrderedDict()  ## value: name
         if isinstance(limits, dict):
-            for k, v in limits.iteritems():
+            for k, v in limits.items():
                 self.forward[k] = v
                 self.reverse[v] = k
         else:
             for v in limits:
-                n = unicode(v)
+                n = asUnicode(v)
                 self.forward[n] = v
                 self.reverse[v] = n
         
         Parameter.setLimits(self, limits)
         #print self.name(), self.value(), limits
         if self.value() not in self.reverse and len(self.reverse) > 0:
-            self.setValue(self.reverse.keys()[0])
+            self.setValue(list(self.reverse.keys())[0])
             
 
 registerParameterType('list', ListParameter, override=True)

@@ -13,7 +13,7 @@ Widget used for displaying 2D or 3D data. Features:
   - Image normalization through a variety of methods
 """
 
-from ImageViewTemplate import *
+from .ImageViewTemplate import *
 from pyqtgraph.graphicsItems.ImageItem import *
 from pyqtgraph.graphicsItems.ROI import *
 from pyqtgraph.graphicsItems.LinearRegionItem import *
@@ -29,9 +29,16 @@ import pyqtgraph.debug as debug
 
 from pyqtgraph.SignalProxy import SignalProxy
 
+#try:
+    #import pyqtgraph.metaarray as metaarray
+    #HAVE_METAARRAY = True
+#except:
+    #HAVE_METAARRAY = False
+    
+
 class PlotROI(ROI):
     def __init__(self, size):
-        ROI.__init__(self, pos=[0,0], size=size, scaleSnap=True, translateSnap=True)
+        ROI.__init__(self, pos=[0,0], size=size) #, scaleSnap=True, translateSnap=True)
         self.addScaleHandle([1, 1], [0, 0])
         self.addRotateHandle([0, 0], [0.5, 0.5])
 
@@ -60,7 +67,12 @@ class ImageView(QtGui.QWidget):
     sigTimeChanged = QtCore.Signal(object, object)
     sigProcessingChanged = QtCore.Signal(object)
     
-    def __init__(self, parent=None, name="ImageView", *args):
+    def __init__(self, parent=None, name="ImageView", view=None, imageItem=None, *args):
+        """
+        By default, this class creates an :class:`ImageItem <pyqtgraph.ImageItem>` to display image data
+        and a :class:`ViewBox <pyqtgraph.ViewBox>` to contain the ImageItem. Custom items may be given instead 
+        by specifying the *view* and/or *imageItem* arguments.
+        """
         QtGui.QWidget.__init__(self, parent, *args)
         self.levelMax = 4096
         self.levelMin = 0
@@ -82,7 +94,10 @@ class ImageView(QtGui.QWidget):
         #self.ui.graphicsView.setAspectLocked(True)
         #self.ui.graphicsView.invertY()
         #self.ui.graphicsView.enableMouse()
-        self.view = ViewBox()
+        if view is None:
+            self.view = ViewBox()
+        else:
+            self.view = view
         self.ui.graphicsView.setCentralItem(self.view)
         self.view.setAspectLocked(True)
         self.view.invertY()
@@ -94,7 +109,10 @@ class ImageView(QtGui.QWidget):
         #self.ui.gradientWidget.setTickColor(self.ticks[1], QtGui.QColor(255,255,255))
         #self.ui.gradientWidget.setOrientation('right')
         
-        self.imageItem = ImageItem()
+        if imageItem is None:
+            self.imageItem = ImageItem()
+        else:
+            self.imageItem = imageItem
         self.view.addItem(self.imageItem)
         self.currentIndex = 0
         
@@ -168,7 +186,7 @@ class ImageView(QtGui.QWidget):
         
         self.roiClicked() ## initialize roi plot to correct shape / visibility
 
-    def setImage(self, img, autoRange=True, autoLevels=True, levels=None, axes=None, xvals=None, pos=None, scale=None):
+    def setImage(self, img, autoRange=True, autoLevels=True, levels=None, axes=None, xvals=None, pos=None, scale=None, transform=None):
         """
         Set the image to be displayed in the widget.
         
@@ -187,6 +205,9 @@ class ImageView(QtGui.QWidget):
         ============== =======================================================================
         """
         prof = debug.Profiler('ImageView.setImage', disabled=True)
+        
+        if hasattr(img, 'implements') and img.implements('MetaArray'):
+            img = img.asarray()
         
         if not isinstance(img, np.ndarray):
             raise Exception("Image must be specified as ndarray.")
@@ -274,6 +295,8 @@ class ImageView(QtGui.QWidget):
             self.imageItem.scale(*scale)
         if pos is not None:
             self.imageItem.setPos(*pos)
+        if transform is not None:
+            self.imageItem.setTransform(transform)
         prof.mark('6')
             
         if autoRange:
@@ -315,14 +338,14 @@ class ImageView(QtGui.QWidget):
         image = self.getProcessedImage()
         
         #self.ui.graphicsView.setRange(QtCore.QRectF(0, 0, image.shape[self.axes['x']], image.shape[self.axes['y']]), padding=0., lockAspect=True)        
-        self.view.setRange(self.imageItem.boundingRect(), padding=0.)
+        self.view.autoRange() ##setRange(self.imageItem.viewBoundingRect(), padding=0.)
         
     def getProcessedImage(self):
         """Returns the image data after it has been processed by any normalization options in use."""
         if self.imageDisp is None:
             image = self.normalize(self.image)
             self.imageDisp = image
-            self.levelMin, self.levelMax = map(float, ImageView.quickMinMax(self.imageDisp))
+            self.levelMin, self.levelMax = list(map(float, ImageView.quickMinMax(self.imageDisp)))
             self.ui.histogram.setHistogramRange(self.levelMin, self.levelMax)
             
         return self.imageDisp
@@ -383,7 +406,7 @@ class ImageView(QtGui.QWidget):
         
     def evalKeyState(self):
         if len(self.keysPressed) == 1:
-            key = self.keysPressed.keys()[0]
+            key = list(self.keysPressed.keys())[0]
             if key == QtCore.Qt.Key_Right:
                 self.play(20)
                 self.jumpFrames(1)
@@ -519,14 +542,18 @@ class ImageView(QtGui.QWidget):
             axes = (1, 2)
         else:
             return
-        data = self.roi.getArrayRegion(image.view(np.ndarray), self.imageItem, axes)
+        data, coords = self.roi.getArrayRegion(image.view(np.ndarray), self.imageItem, axes, returnMappedCoords=True)
         if data is not None:
             while data.ndim > 1:
                 data = data.mean(axis=1)
             if image.ndim == 3:
                 self.roiCurve.setData(y=data, x=self.tVals)
             else:
-                self.roiCurve.setData(y=data, x=range(len(data)))
+                while coords.ndim > 2:
+                    coords = coords[:,:,0]
+                coords = coords - coords[:,0,np.newaxis]
+                xvals = (coords**2).sum(axis=0) ** 0.5
+                self.roiCurve.setData(y=data, x=xvals)
                 
             #self.ui.roiPlot.replot()
 
@@ -652,4 +679,18 @@ class ImageView(QtGui.QWidget):
         #return self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[0])
         ##return self.levelMin + ((self.levelMax-self.levelMin) / self.ui.blackSlider.maximum()) * self.ui.blackSlider.value()
         
-    
+    def getView(self):
+        """Return the ViewBox (or other compatible object) which displays the ImageItem"""
+        return self.view
+        
+    def getImageItem(self):
+        """Return the ImageItem for this ImageView."""
+        return self.imageItem
+        
+    def getRoiPlot(self):
+        """Return the ROI PlotWidget for this ImageView"""
+        return self.ui.roiPlot
+       
+    def getHistogramWidget(self):
+        """Return the HistogramLUTWidget for this ImageView"""
+        return self.ui.histogram

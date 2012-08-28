@@ -271,7 +271,7 @@ class CaselessDict(OrderedDict):
     """Case-insensitive dict. Values can be set and retrieved using keys of any case.
     Note that when iterating, the original case is returned for each key."""
     def __init__(self, *args):
-        OrderedDict.__init__(self)
+        OrderedDict.__init__(self, {}) ## requirement for the empty {} here seems to be a python bug?
         self.keyMap = OrderedDict([(k.lower(), k) for k in OrderedDict.keys(self)])
         if len(args) == 0:
             return

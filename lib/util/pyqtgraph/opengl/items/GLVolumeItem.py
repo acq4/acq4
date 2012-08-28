@@ -43,6 +43,11 @@ class GLVolumeItem(GLGraphicsItem):
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER)
         shape = self.data.shape
         
+        ## Test texture dimensions first
+        glTexImage3D(GL_PROXY_TEXTURE_3D, 0, GL_RGBA, shape[0], shape[1], shape[2], 0, GL_RGBA, GL_UNSIGNED_BYTE, None)
+        if glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_WIDTH) == 0:
+            raise Exception("OpenGL failed to create 3D texture (%dx%dx%d); too large for this hardware." % shape[:3])
+        
         glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, shape[0], shape[1], shape[2], 0, GL_RGBA, GL_UNSIGNED_BYTE, self.data.transpose((2,1,0,3)))
         glDisable(GL_TEXTURE_3D)
         
@@ -105,7 +110,7 @@ class GLVolumeItem(GLGraphicsItem):
         vp[3][imax[0]] = 0
         vp[3][imax[1]] = self.data.shape[imax[1]]
         slices = self.data.shape[ax] * self.sliceDensity
-        r = range(slices)
+        r = list(range(slices))
         if d == -1:
             r = r[::-1]
             

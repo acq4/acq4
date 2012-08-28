@@ -11,18 +11,21 @@ examples = OrderedDict([
     ('Command-line usage', 'CLIexample.py'),
     ('Basic Plotting', 'Plotting.py'),
     ('ImageView', 'ImageView.py'),
-    ('ParameterTree', '../parametertree'),
+    ('ParameterTree', 'parametertree.py'),
     ('Crosshair / Mouse interaction', 'crosshair.py'),
     ('Video speed test', 'VideoSpeedTest.py'),
     ('Plot speed test', 'PlotSpeedTest.py'),
     ('Data Slicing', 'DataSlicing.py'),
+    ('Plot Customization', 'customPlot.py'),
+    ('Dock widgets', 'dockarea.py'),
+    ('Console', 'ConsoleWidget.py'),
     ('GraphicsItems', OrderedDict([
         ('Scatter Plot', 'ScatterPlot.py'),
         #('PlotItem', 'PlotItem.py'),
         ('IsocurveItem', 'isocurve.py'),
         ('ImageItem - video', 'ImageItem.py'),
         ('ImageItem - draw', 'Draw.py'),
-        ('Region-of-Interest', 'ROItypes.py'),
+        ('Region-of-Interest', 'ROIExamples.py'),
         ('GraphicsLayout', 'GraphicsLayout.py'),
         ('Text Item', 'text.py'),
         ('Linked Views', 'linkedViews.py'),
@@ -35,17 +38,18 @@ examples = OrderedDict([
     ])),
     ('Widgets', OrderedDict([
         ('PlotWidget', 'PlotWidget.py'),
-        #('SpinBox', '../widgets/SpinBox.py'),
-        ('TreeWidget', '../widgets/TreeWidget.py'),
-        ('DataTreeWidget', '../widgets/DataTreeWidget.py'),
-        ('GradientWidget', '../widgets/GradientWidget.py'),
+        ('SpinBox', 'SpinBox.py'),
+        ('ConsoleWidget', 'ConsoleWidget.py'),
+        ('TreeWidget', 'TreeWidget.py'),
+        ('DataTreeWidget', 'DataTreeWidget.py'),
+        ('GradientWidget', 'GradientWidget.py'),
         #('TableWidget', '../widgets/TableWidget.py'),
-        ('ColorButton', '../widgets/ColorButton.py'),
+        ('ColorButton', 'ColorButton.py'),
         #('CheckTable', '../widgets/CheckTable.py'),
         #('VerticalLabel', '../widgets/VerticalLabel.py'),
         ('JoystickButton', 'JoystickButton.py'),
     ])),
-   
+    
     ('GraphicsScene', 'GraphicsScene.py'),
     ('Flowcharts', 'Flowchart.py'),
     #('Canvas', '../canvas'),
@@ -66,16 +70,16 @@ class ExampleLoader(QtGui.QMainWindow):
         self.populateTree(self.ui.exampleTree.invisibleRootItem(), examples)
         self.ui.exampleTree.expandAll()
         
-        self.resize(900,500)
+        self.resize(1000,500)
         self.show()
-        self.ui.splitter.setSizes([150,750])
+        self.ui.splitter.setSizes([250,750])
         self.ui.loadBtn.clicked.connect(self.loadFile)
         self.ui.exampleTree.currentItemChanged.connect(self.showFile)
         self.ui.exampleTree.itemDoubleClicked.connect(self.loadFile)
 
 
     def populateTree(self, root, examples):
-        for key, val in examples.iteritems():
+        for key, val in examples.items():
             item = QtGui.QTreeWidgetItem([key])
             if isinstance(val, basestring):
                 item.file = val

@@ -5,13 +5,13 @@ GraphicsWidget displaying an image histogram along with gradient editor. Can be 
 
 from pyqtgraph.Qt import QtGui, QtCore
 import pyqtgraph.functions as fn
-from GraphicsWidget import GraphicsWidget
-from ViewBox import *
-from GradientEditorItem import *
-from LinearRegionItem import *
-from PlotDataItem import *
-from AxisItem import *
-from GridItem import *
+from .GraphicsWidget import GraphicsWidget
+from .ViewBox import *
+from .GradientEditorItem import *
+from .LinearRegionItem import *
+from .PlotDataItem import *
+from .AxisItem import *
+from .GridItem import *
 from pyqtgraph.Point import Point
 import pyqtgraph.functions as fn
 import numpy as np
@@ -25,9 +25,10 @@ class HistogramLUTItem(GraphicsWidget):
     """
     This is a graphicsWidget which provides controls for adjusting the display of an image.
     Includes:
-       - Image histogram 
-       - Movable region over histogram to select black/white levels
-       - Gradient editor to define color lookup table for single-channel images
+
+    - Image histogram 
+    - Movable region over histogram to select black/white levels
+    - Gradient editor to define color lookup table for single-channel images
     """
     
     sigLookupTableChanged = QtCore.Signal(object)
@@ -49,7 +50,7 @@ class HistogramLUTItem(GraphicsWidget):
         self.layout.setSpacing(0)
         self.vb = ViewBox()
         self.vb.setMaximumWidth(152)
-        self.vb.setMinimumWidth(52)
+        self.vb.setMinimumWidth(45)
         self.vb.setMouseEnabled(x=False, y=True)
         self.gradient = GradientEditorItem()
         self.gradient.setOrientation('right')

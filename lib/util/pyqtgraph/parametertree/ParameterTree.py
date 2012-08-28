@@ -76,9 +76,9 @@ class ParameterTree(TreeWidget):
                 index = root.indexOfChild(startItem) - 1
             
         if forward:
-            inds = range(index, root.childCount())
+            inds = list(range(index, root.childCount()))
         else:
-            inds = range(index, -1, -1)
+            inds = list(range(index, -1, -1))
             
         for i in inds:
             item = root.child(i)
@@ -113,4 +113,6 @@ class ParameterTree(TreeWidget):
             sel[0].selected(True)
         return TreeWidget.selectionChanged(self, *args)
         
-
+    def wheelEvent(self, ev):
+        self.clearSelection()
+        return TreeWidget.wheelEvent(self, ev)

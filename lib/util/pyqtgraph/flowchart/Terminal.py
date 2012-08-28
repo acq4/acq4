@@ -5,7 +5,7 @@ from pyqtgraph.graphicsItems.GraphicsObject import GraphicsObject
 import pyqtgraph.functions as fn
 from pyqtgraph.Point import Point
 #from PySide import QtCore, QtGui
-from eq import *
+from .eq import *
 
 class Terminal:
     def __init__(self, node, name, io, optional=False, multi=False, pos=None, renamable=False, removable=False, multiable=False, bypass=None):
@@ -45,7 +45,7 @@ class Terminal:
             self._value = {}  ## dictionary of terminal:value pairs.
         else:
             self._value = None  
-            
+        
         self.valueOk = None
         self.recolor()
         
@@ -70,6 +70,8 @@ class Terminal:
                 return
             self._value = val
         else:
+            if not isinstance(self._value, dict):
+                self._value = {}
             if val is not None:
                 self._value.update(val)
             
@@ -83,6 +85,14 @@ class Terminal:
                 #if c.isInput():
                     #c.inputChanged(self)
         self.recolor()
+        
+    def setOpts(self, **opts):
+        self._renamable = opts.get('renamable', self._renamable)
+        self._removable = opts.get('removable', self._removable)
+        self._multiable = opts.get('multiable', self._multiable)
+        if 'multi' in opts:
+            self.setMultiValue(opts['multi'])
+        
 
     def connected(self, term):
         """Called whenever this terminal has been connected to another. (note--this function is called on both terminals)"""
@@ -132,9 +142,14 @@ class Terminal:
     def isMultiValue(self):
         return self._multi
     
-    def setMultiValue(self, b):
+    def setMultiValue(self, multi):
         """Set whether this is a multi-value terminal."""
-        self._multi = b
+        self._multi = multi
+        if not multi and len(self.inputTerminals()) > 1:
+            self.disconnectAll()
+            
+        for term in self.inputTerminals():
+            self.inputChanged(term)
 
     def isOutput(self):
         return self._io == 'out'
@@ -192,7 +207,7 @@ class Terminal:
                 raise Exception("Can't connect to terminal on same node.")
             for t in [self, term]:
                 if t.isInput() and not t._multi and len(t.connections()) > 0:
-                    raise Exception("Cannot connect %s <-> %s: Terminal %s is already connected to %s (and does not allow multiple connections)" % (self, term, t, t.connections().keys()))
+                    raise Exception("Cannot connect %s <-> %s: Terminal %s is already connected to %s (and does not allow multiple connections)" % (self, term, t, list(t.connections().keys())))
             #if self.hasInput() and term.hasInput():
                 #raise Exception('Target terminal already has input')
             
@@ -244,7 +259,7 @@ class Terminal:
             
         
     def disconnectAll(self):
-        for t in self._connections.keys():
+        for t in list(self._connections.keys()):
             self.disconnectFrom(t)
         
     def recolor(self, color=None, recurse=True):
@@ -372,7 +387,7 @@ class TerminalGraphicsItem(GraphicsObject):
         self.updateConnections()
         
     def updateConnections(self):
-        for t, c in self.term.connections().iteritems():
+        for t, c in self.term.connections().items():
             c.updateLine()
             
     def mousePressEvent(self, ev):
@@ -407,6 +422,8 @@ class TerminalGraphicsItem(GraphicsObject):
             multiAct = QtGui.QAction("Multi-value", self.menu)
             multiAct.setCheckable(True)
             multiAct.setChecked(self.term.isMultiValue())
+            multiAct.setEnabled(self.term.isMultiable())
+            
             multiAct.triggered.connect(self.toggleMulti)
             self.menu.addAction(multiAct)
             self.menu.multiAct = multiAct
@@ -484,7 +501,7 @@ class TerminalGraphicsItem(GraphicsObject):
         return self.mapToView(self.mapFromItem(self.box, self.box.boundingRect().center()))
 
     def nodeMoved(self):
-        for t, item in self.term.connections().iteritems():
+        for t, item in self.term.connections().items():
             item.updateLine()
 
 

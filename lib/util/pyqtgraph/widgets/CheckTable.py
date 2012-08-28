@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from pyqtgraph.Qt import QtGui, QtCore
-import VerticalLabel
+from . import VerticalLabel
 
 __all__ = ['CheckTable']
 
@@ -47,9 +47,9 @@ class CheckTable(QtGui.QWidget):
             check.row = name
             self.layout.addWidget(check, row, col)
             checks.append(check)
-            col += 1
             if name in self.oldRows:
-                check.setChecked(self.oldRows[name])
+                check.setChecked(self.oldRows[name][col])
+            col += 1
             #QtCore.QObject.connect(check, QtCore.SIGNAL('stateChanged(int)'), self.checkChanged)
             check.stateChanged.connect(self.checkChanged)
         self.rowNames.append(name)

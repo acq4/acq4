@@ -7,17 +7,26 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 
 print "Loading ACQ4..."
 
-## rename any orphaned .pyc files -- these are probably leftover from 
-## a module being moved and may interfere with expected operation.
-import os, sys
-from lib.util.pycRename import pycRename
-modDir = os.path.abspath(os.path.split(__file__)[0])
-pycRename(modDir)
+## Path adjustments:
+##   - make sure 'lib' path is available for module search
+##   - add util to front of search path. This allows us to override some libs 
+##     that may be installed globally with local versions.
+import sys
+import os.path as osp
+d = osp.dirname(osp.abspath(__file__))
+sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
+
 
 import sip
 sip.setapi('QString', 2)
 sip.setapi('QVariant', 2)
     
+## rename any orphaned .pyc files -- these are probably leftover from 
+## a module being moved and may interfere with expected operation.
+import os, sys
+from lib.util.pyqtgraph import renamePyc
+modDir = os.path.abspath(os.path.split(__file__)[0])
+renamePyc(modDir)
 
 ## PyQt bug: make sure qt.conf was installed correctly
 #pyDir = os.path.split(sys.executable)[0]
@@ -45,12 +54,6 @@ if not hasattr(QtCore, 'Signal'):
     
 from lib.Manager import *
 from numpy import *
-
-
-## Disable long-term storage of exception stack frames
-## This fixes a potentially major memory leak, but
-## may break some debuggers.
-import disableExceptionStorage
 
 ## Initialize Qt
 #QtGui.QApplication.setGraphicsSystem('raster')  ## needed for specific composition modes

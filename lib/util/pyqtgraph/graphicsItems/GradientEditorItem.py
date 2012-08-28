@@ -1,7 +1,8 @@
 from pyqtgraph.Qt import QtGui, QtCore
+from pyqtgraph.python2_3 import sortList
 import pyqtgraph.functions as fn
-from GraphicsObject import GraphicsObject
-from GraphicsWidget import GraphicsWidget
+from .GraphicsObject import GraphicsObject
+from .GraphicsWidget import GraphicsWidget
 import weakref, collections
 import numpy as np
 
@@ -175,7 +176,7 @@ class TickSliderItem(GraphicsWidget):
     
     def resizeEvent(self, ev):
         wlen = max(40, self.widgetLength())
-        self.setLength(wlen-self.tickSize)
+        self.setLength(wlen-self.tickSize-2)
         self.setOrientation(self.orientation)
         #bounds = self.scene().itemsBoundingRect()
         #bounds.setLeft(min(-self.tickSize*0.5, bounds.left()))
@@ -185,8 +186,8 @@ class TickSliderItem(GraphicsWidget):
         
     def setLength(self, newLen):
         #private
-        for t, x in self.ticks.items():
-            t.setPos(x * newLen, t.pos().y())
+        for t, x in list(self.ticks.items()):
+            t.setPos(x * newLen + 1, t.pos().y())
         self.length = float(newLen)
         
     #def mousePressEvent(self, ev):
@@ -325,8 +326,8 @@ class TickSliderItem(GraphicsWidget):
     def listTicks(self):
         """Return a sorted list of all the Tick objects on the slider."""
         ## public
-        ticks = self.ticks.items()
-        ticks.sort(lambda a,b: cmp(a[1], b[1]))
+        ticks = list(self.ticks.items())
+        sortList(ticks, lambda a,b: cmp(a[1], b[1]))  ## see pyqtgraph.python2_3.sortList
         return ticks
 
 
@@ -420,7 +421,7 @@ class GradientEditorItem(TickSliderItem):
         self.menu.addAction(self.hsvAction)
         
         
-        for t in self.ticks.keys():
+        for t in list(self.ticks.keys()):
             self.removeTick(t)
         self.addTick(0, QtGui.QColor(0,0,0), True)
         self.addTick(1, QtGui.QColor(255,0,0), True)
@@ -491,8 +492,8 @@ class GradientEditorItem(TickSliderItem):
     def setLength(self, newLen):
         #private (but maybe public)
         TickSliderItem.setLength(self, newLen)
-        self.backgroundRect.setRect(0, -self.rectSize, newLen, self.rectSize)
-        self.gradRect.setRect(0, -self.rectSize, newLen, self.rectSize)
+        self.backgroundRect.setRect(1, -self.rectSize, newLen, self.rectSize)
+        self.gradRect.setRect(1, -self.rectSize, newLen, self.rectSize)
         self.updateGradient()
         
     def currentColorChanged(self, color):
@@ -720,7 +721,7 @@ class GradientEditorItem(TickSliderItem):
         """
         ## public
         self.setColorMode(state['mode'])
-        for t in self.ticks.keys():
+        for t in list(self.ticks.keys()):
             self.removeTick(t)
         for t in state['ticks']:
             c = QtGui.QColor(*t[1])

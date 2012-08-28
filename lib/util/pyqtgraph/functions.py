@@ -5,6 +5,7 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
+from .python2_3 import asUnicode
 Colors = {
     'b': (0,0,255,255),
     'g': (0,255,0,255),
@@ -16,18 +17,22 @@ Colors = {
     'w': (255,255,255,255),
 }  
 
-SI_PREFIXES = u'yzafpnµm kMGTPEZY'
+SI_PREFIXES = asUnicode('yzafpnµm kMGTPEZY')
 SI_PREFIXES_ASCII = 'yzafpnum kMGTPEZY'
 
-USE_WEAVE = True
 
 
-from Qt import QtGui, QtCore
+from .Qt import QtGui, QtCore
 import numpy as np
 import scipy.ndimage
 import decimal, re
-import scipy.weave
-import debug
+try:
+    import scipy.weave
+    USE_WEAVE = True
+except ImportError:
+    USE_WEAVE = False
+
+from . import debug
 
 def siScale(x, minVal=1e-25, allowUnicode=True):
     """
@@ -46,7 +51,7 @@ def siScale(x, minVal=1e-25, allowUnicode=True):
         if np.isnan(x) or np.isinf(x):
             return(1, '')
     except:
-        print x, type(x)
+        print(x, type(x))
         raise
     if abs(x) < minVal:
         m = 0
@@ -90,7 +95,7 @@ def siFormat(x, precision=3, suffix='', space=True, error=None, minVal=1e-25, al
         return fmt % (x*p, pref, suffix)
     else:
         if allowUnicode:
-            plusminus = space + u"±" + space
+            plusminus = space + asUnicode("±") + space
         else:
             plusminus = " +/- "
         fmt = "%." + str(precision) + "g%s%s%s%s"
@@ -105,7 +110,7 @@ def siEval(s):
         siEval("100 μV")  # returns 0.0001
     """
     
-    s = unicode(s)
+    s = asUnicode(s)
     m = re.match(r'(-?((\d+(\.\d*)?)|(\.\d+))([eE]-?\d+)?)\s*([u' + SI_PREFIXES + r']?)$', s)
     if m is None:
         raise Exception("Can't convert string '%s' to number." % s)
@@ -208,8 +213,8 @@ def mkColor(*args):
         raise Exception(err)
     
     args = [r,g,b,a]
-    args = map(lambda a: 0 if np.isnan(a) or np.isinf(a) else a, args)
-    args = map(int, args)
+    args = [0 if np.isnan(a) or np.isinf(a) else a for a in args]
+    args = list(map(int, args))
     return QtGui.QColor(*args)
 
 
@@ -324,26 +329,65 @@ def glColor(*args, **kargs):
     c = mkColor(*args, **kargs)
     return (c.red()/255., c.green()/255., c.blue()/255., c.alpha()/255.)
 
-def affineSlice(data, shape, origin, vectors, axes, **kargs):
+    
+
+def makeArrowPath(headLen=20, tipAngle=20, tailLen=20, tailWidth=3, baseAngle=0):
+    """
+    Construct a path outlining an arrow with the given dimensions.
+    The arrow points in the -x direction with tip positioned at 0,0.
+    If *tipAngle* is supplied (in degrees), it overrides *headWidth*.
+    If *tailLen* is None, no tail will be drawn.
+    """
+    headWidth = headLen * np.tan(tipAngle * 0.5 * np.pi/180.)
+    path = QtGui.QPainterPath()
+    path.moveTo(0,0)
+    path.lineTo(headLen, -headWidth)
+    if tailLen is None:
+        innerY = headLen - headWidth * np.tan(baseAngle*np.pi/180.)
+        path.lineTo(innerY, 0)
+    else:
+        tailWidth *= 0.5
+        innerY = headLen - (headWidth-tailWidth) * np.tan(baseAngle*np.pi/180.)
+        path.lineTo(innerY, -tailWidth)
+        path.lineTo(headLen + tailLen, -tailWidth)
+        path.lineTo(headLen + tailLen, tailWidth)
+        path.lineTo(innerY, tailWidth)
+    path.lineTo(headLen, headWidth)
+    path.lineTo(0,0)
+    return path
+    
+    
+    
+def affineSlice(data, shape, origin, vectors, axes, order=1, returnCoords=False, **kargs):
     """
     Take a slice of any orientation through an array. This is useful for extracting sections of multi-dimensional arrays such as MRI images for viewing as 1D or 2D data.
     
-    The slicing axes are aribtrary; they do not need to be orthogonal to the original data or even to each other. It is possible to use this function to extract arbitrary linear, rectangular, or parallelepiped shapes from within larger datasets.
+    The slicing axes are aribtrary; they do not need to be orthogonal to the original data or even to each other. It is possible to use this function to extract arbitrary linear, rectangular, or parallelepiped shapes from within larger datasets. The original data is interpolated onto a new array of coordinates using scipy.ndimage.map_coordinates (see the scipy documentation for more information about this).
     
-    For a graphical interface to this function, see :func:`ROI.getArrayRegion`
+    For a graphical interface to this function, see :func:`ROI.getArrayRegion <pyqtgraph.ROI.getArrayRegion>`
     
+    ==============  ====================================================================================================
     Arguments:
+    *data*          (ndarray) the original dataset
+    *shape*         the shape of the slice to take (Note the return value may have more dimensions than len(shape))
+    *origin*        the location in the original dataset that will become the origin of the sliced data.
+    *vectors*       list of unit vectors which point in the direction of the slice axes. Each vector must have the same 
+                    length as *axes*. If the vectors are not unit length, the result will be scaled relative to the 
+                    original data. If the vectors are not orthogonal, the result will be sheared relative to the 
+                    original data.
+    *axes*          The axes in the original dataset which correspond to the slice *vectors*
+    *order*         The order of spline interpolation. Default is 1 (linear). See scipy.ndimage.map_coordinates
+                    for more information.
+    *returnCoords*  If True, return a tuple (result, coords) where coords is the array of coordinates used to select
+                    values from the original dataset.
+    *All extra keyword arguments are passed to scipy.ndimage.map_coordinates.*
+    --------------------------------------------------------------------------------------------------------------------
+    ==============  ====================================================================================================
     
-        | *data* (ndarray): the original dataset
-        | *shape*: the shape of the slice to take (Note the return value may have more dimensions than len(shape))
-        | *origin*: the location in the original dataset that will become the origin in the sliced data.
-        | *vectors*: list of unit vectors which point in the direction of the slice axes
+    Note the following must be true: 
         
-        * each vector must have the same length as *axes*
-        * If the vectors are not unit length, the result will be scaled.
-        * If the vectors are not orthogonal, the result will be sheared.
-            
-        *axes*: the axes in the original dataset which correspond to the slice *vectors*
+        | len(shape) == len(vectors) 
+        | len(origin) == len(axes) == len(vectors[i])
         
     Example: start with a 4D fMRI data set, take a diagonal-planar slice out of the last 3 axes
         
@@ -356,10 +400,6 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
         
         affineSlice(data, shape=(20,20), origin=(40,0,0), vectors=((-1, 1, 0), (-1, 0, 1)), axes=(1,2,3))
     
-    Note the following must be true: 
-        
-        | len(shape) == len(vectors) 
-        | len(origin) == len(axes) == len(vectors[0])
     """
     
     # sanity check
@@ -371,10 +411,10 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
         if len(v) != len(axes):
             raise Exception("each vector must be same length as axes.")
         
-    shape = map(np.ceil, shape)
+    shape = list(map(np.ceil, shape))
 
     ## transpose data so slice axes come first
-    trAx = range(data.ndim)
+    trAx = list(range(data.ndim))
     for x in axes:
         trAx.remove(x)
     tr1 = tuple(axes) + tuple(trAx)
@@ -401,9 +441,9 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
     for inds in np.ndindex(*extraShape):
         ind = (Ellipsis,) + inds
         #print data[ind].shape, x.shape, output[ind].shape, output.shape
-        output[ind] = scipy.ndimage.map_coordinates(data[ind], x, **kargs)
+        output[ind] = scipy.ndimage.map_coordinates(data[ind], x, order=order, **kargs)
     
-    tr = range(output.ndim)
+    tr = list(range(output.ndim))
     trb = []
     for i in range(min(axes)):
         ind = tr1.index(i) + (len(shape)-len(axes))
@@ -412,11 +452,57 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
     tr2 = tuple(trb+tr)
 
     ## Untranspose array before returning
-    return output.transpose(tr2)
+    output = output.transpose(tr2)
+    if returnCoords:
+        return (output, x)
+    else:
+        return output
 
-
-
-
+def transformToArray(tr):
+    """
+    Given a QTransform, return a 3x3 numpy array.
+    """
+    return np.array([[tr.m11(), tr.m12(), tr.m13()],[tr.m21(), tr.m22(), tr.m23()],[tr.m31(), tr.m32(), tr.m33()]])
+        
+def solve3DTransform(points1, points2):
+    """
+    Find a 3D transformation matrix that maps points1 onto points2
+    points must be specified as a list of 4 Vectors.
+    """
+    A = np.array([[points1[i].x(), points1[i].y(), points1[i].z(), 1] for i in range(4)])
+    B = np.array([[points2[i].x(), points2[i].y(), points2[i].z(), 1] for i in range(4)])
+    
+    ## solve 3 sets of linear equations to determine transformation matrix elements
+    matrix = np.zeros((4,4))
+    for i in range(3):
+        matrix[i] = scipy.linalg.solve(A, B[:,i])  ## solve Ax = B; x is one row of the desired transformation matrix
+    
+    return matrix
+    
+def solveBilinearTransform(points1, points2):
+    """
+    Find a bilinear transformation matrix (2x4) that maps points1 onto points2
+    points must be specified as a list of 4 Vector, Point, QPointF, etc.
+    
+    To use this matrix to map a point [x,y]::
+    
+        mapped = np.dot(matrix, [x*y, x, y, 1])
+    """
+    ## A is 4 rows (points) x 4 columns (xy, x, y, 1)
+    ## B is 4 rows (points) x 2 columns (x, y)
+    A = np.array([[points1[i].x()*points1[i].y(), points1[i].x(), points1[i].y(), 1] for i in range(4)])
+    B = np.array([[points2[i].x(), points2[i].y()] for i in range(4)])
+    
+    ## solve 2 sets of linear equations to determine transformation matrix elements
+    matrix = np.zeros((2,4))
+    for i in range(2):
+        matrix[i] = scipy.linalg.solve(A, B[:,i])  ## solve Ax = B; x is one row of the desired transformation matrix
+    
+    return matrix
+    
+    
+    
+    
 
 def makeARGB(data, lut=None, levels=None, useRGBA=False): 
     """
@@ -503,13 +589,13 @@ def makeARGB(data, lut=None, levels=None, useRGBA=False):
             else:
                 if data.ndim == 2:
                     newData = np.empty(data.shape+(levels.shape[0],), dtype=np.uint32)
-                    for i in xrange(levels.shape[0]):
+                    for i in range(levels.shape[0]):
                         scale = float(lutLength / (levels[i,1]-levels[i,0]))
                         offset = float(levels[i,0])
                         newData[...,i] = rescaleData(data, scale, offset)
                 elif data.ndim == 3:
                     newData = np.empty(data.shape, dtype=np.uint32)
-                    for i in xrange(data.shape[2]):
+                    for i in range(data.shape[2]):
                         scale = float(lutLength / (levels[i,1]-levels[i,0]))
                         offset = float(levels[i,0])
                         #print scale, offset, data.shape, newData.shape, levels.shape
@@ -596,10 +682,10 @@ def makeARGB(data, lut=None, levels=None, useRGBA=False):
         order = [2,1,0,3] ## for some reason, the colors line up as BGR in the final image.
         
     if data.shape[2] == 1:
-        for i in xrange(3):
+        for i in range(3):
             imgData[..., order[i]] = data[..., 0]    
     else:
-        for i in xrange(0, data.shape[2]):
+        for i in range(0, data.shape[2]):
             imgData[..., order[i]] = data[..., i]    
         
     prof.mark('5')
@@ -802,8 +888,8 @@ def isocurve(data, level):
     #print index
     
     ## add lines
-    for i in xrange(index.shape[0]):                 # data x-axis
-        for j in xrange(index.shape[1]):             # data y-axis     
+    for i in range(index.shape[0]):                 # data x-axis
+        for j in range(index.shape[1]):             # data y-axis     
             sides = sideTable[index[i,j]]
             for l in range(0, len(sides), 2):     ## faces for this grid cell
                 edges = sides[l:l+2]
@@ -1179,9 +1265,9 @@ def isosurface(data, level):
     #print index
     
     ## add facets
-    for i in xrange(index.shape[0]):                 # data x-axis
-        for j in xrange(index.shape[1]):             # data y-axis
-            for k in xrange(index.shape[2]):         # data z-axis
+    for i in range(index.shape[0]):                 # data x-axis
+        for j in range(index.shape[1]):             # data y-axis
+            for k in range(index.shape[2]):         # data z-axis
                 tris = triTable[index[i,j,k]]
                 for l in range(0, len(tris), 3):     ## faces for this grid cell
                     edges = tris[l:l+3]
@@ -1203,3 +1289,19 @@ def isosurface(data, level):
 
     return facets
 
+
+    
+def invertQTransform(tr):
+    """Return a QTransform that is the inverse of *tr*.
+    Rasises an exception if tr is not invertible.
+    
+    Note that this function is preferred over QTransform.inverted() due to
+    bugs in that method. (specifically, Qt has floating-point precision issues
+    when determining whether a matrix is invertible)
+    """
+    #return tr.inverted()[0]
+    arr = np.array([[tr.m11(), tr.m12(), tr.m13()], [tr.m21(), tr.m22(), tr.m23()], [tr.m31(), tr.m32(), tr.m33()]])
+    inv = scipy.linalg.inv(arr)
+    return QtGui.QTransform(inv[0,0], inv[0,1], inv[0,2], inv[1,0], inv[1,1], inv[1,2], inv[2,0], inv[2,1])
+    
+    

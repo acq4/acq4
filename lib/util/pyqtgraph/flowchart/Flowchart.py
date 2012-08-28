@@ -3,24 +3,24 @@ from pyqtgraph.Qt import QtCore, QtGui
 #from PyQt4 import QtCore, QtGui
 #from PySide import QtCore, QtGui
 #import Node as NodeMod
-from Node import *
+from .Node import *
 #import functions
 from collections import OrderedDict
 from pyqtgraph.widgets.TreeWidget import *
 #from .. DataTreeWidget import *
-import FlowchartTemplate
-import FlowchartCtrlTemplate
-from Terminal import Terminal
+from . import FlowchartTemplate
+from . import FlowchartCtrlTemplate
+from .Terminal import Terminal
 from numpy import ndarray
-import library
+from . import library
 from pyqtgraph.debug import printExc
 import pyqtgraph.configfile as configfile
 import pyqtgraph.dockarea as dockarea
 import pyqtgraph as pg
-import FlowchartGraphicsView
+from . import FlowchartGraphicsView
 
 def strDict(d):
-    return dict([(str(k), v) for k, v in d.iteritems()])
+    return dict([(str(k), v) for k, v in d.items()])
 
 
 def toposort(deps, nodes=None, seen=None, stack=None, depth=0):
@@ -33,7 +33,7 @@ def toposort(deps, nodes=None, seen=None, stack=None, depth=0):
     if nodes is None:
         ## run through deps to find nodes that are not depended upon
         rem = set()
-        for dep in deps.itervalues():
+        for dep in deps.values():
             rem |= set(dep)
         nodes = set(deps.keys()) - rem
     if seen is None:
@@ -71,7 +71,8 @@ class Flowchart(Node):
         if terminals is None:
             terminals = {}
         self.filePath = filePath
-        Node.__init__(self, name)  ## create node without terminals; we'll add these later
+        Node.__init__(self, name, allowAddInput=True, allowAddOutput=True)  ## create node without terminals; we'll add these later
+        
         
         self.inputWasSet = False  ## flag allows detection of changes in the absence of input change.
         self._nodes = {}
@@ -99,7 +100,7 @@ class Flowchart(Node):
         
         self.viewBox.autoRange(padding = 0.04)
             
-        for name, opts in terminals.iteritems():
+        for name, opts in terminals.items():
             self.addTerminal(name, **opts)
       
     def setInput(self, **args):
@@ -159,7 +160,10 @@ class Flowchart(Node):
         Node.addTerminal(self, term.name(), io=io, renamable=term.isRenamable(), removable=term.isRemovable(), multiable=term.isMultiable())
         
     def internalTerminalRemoved(self, node, term):
-        Node.removeTerminal(self, term.name())
+        try:
+            Node.removeTerminal(self, term.name())
+        except KeyError:
+            pass
         
     def terminalRenamed(self, term, oldName):
         newName = term.name()
@@ -267,7 +271,7 @@ class Flowchart(Node):
         #print "ORDER:", order
         
         ## Record inputs given to process()
-        for n, t in self.inputNode.outputs().iteritems():
+        for n, t in self.inputNode.outputs().items():
             if n not in args:
                 raise Exception("Parameter %s required to process this chart." % n)
             data[t] = args[n]
@@ -285,8 +289,8 @@ class Flowchart(Node):
                 
                             
                 ## get input and output terminals for this node
-                outs = node.outputs().values()
-                ins = node.inputs().values()
+                outs = list(node.outputs().values())
+                ins = list(node.inputs().values())
                 
                 ## construct input value dictionary
                 args = {}
@@ -308,7 +312,7 @@ class Flowchart(Node):
                         else:
                             result = node.process(display=False, **args)
                     except:
-                        print "Error processing node %s. Args are: %s" % (str(node), str(args))
+                        print("Error processing node %s. Args are: %s" % (str(node), str(args)))
                         raise
                     for out in outs:
                         #print "    Output:", out, out.name()
@@ -316,7 +320,7 @@ class Flowchart(Node):
                         try:
                             data[out] = result[out.name()]
                         except:
-                            print out, out.name()
+                            print(out, out.name())
                             raise
             elif c == 'd':   ## delete a terminal result (no longer needed; may be holding a lot of memory)
                 #print "===> delete", arg
@@ -334,9 +338,9 @@ class Flowchart(Node):
         ## first collect list of nodes/terminals and their dependencies
         deps = {}
         tdeps = {}   ## {terminal: [nodes that depend on terminal]}
-        for name, node in self._nodes.iteritems():
+        for name, node in self._nodes.items():
             deps[node] = node.dependentNodes()
-            for t in node.outputs().itervalues():
+            for t in node.outputs().values():
                 tdeps[t] = t.dependentNodes()
             
         #print "DEPS:", deps
@@ -350,7 +354,7 @@ class Flowchart(Node):
         
         ## determine when it is safe to delete terminal values
         dels = []
-        for t, nodes in tdeps.iteritems():
+        for t, nodes in tdeps.items():
             lastInd = 0
             lastNode = None
             for n in nodes:  ## determine which node is the last to be processed according to order
@@ -385,9 +389,9 @@ class Flowchart(Node):
         self.processing = True
         try:
             deps = {}
-            for name, node in self._nodes.iteritems():
+            for name, node in self._nodes.items():
                 deps[node] = []
-                for t in node.outputs().itervalues():
+                for t in node.outputs().values():
                     deps[node].extend(t.dependentNodes())
             
             ## determine order of updates 
@@ -401,9 +405,9 @@ class Flowchart(Node):
             #print "Order:", order
             for node in order[1:]:
                 #print "Processing node", node
-                for term in node.inputs().values():
+                for term in list(node.inputs().values()):
                     #print "  checking terminal", term
-                    deps = term.connections().keys()
+                    deps = list(term.connections().keys())
                     update = False
                     for d in deps:
                         if d in terms:
@@ -446,9 +450,9 @@ class Flowchart(Node):
 
     def listConnections(self):
         conn = set()
-        for n in self._nodes.itervalues():
+        for n in self._nodes.values():
             terms = n.outputs()
-            for n, t in terms.iteritems():
+            for n, t in terms.items():
                 for c in t.connections():
                     conn.add((t, c))
         return conn
@@ -457,9 +461,9 @@ class Flowchart(Node):
         state = Node.saveState(self)
         state['nodes'] = []
         state['connects'] = []
-        state['terminals'] = self.saveTerminals()
+        #state['terminals'] = self.saveTerminals()
         
-        for name, node in self._nodes.iteritems():
+        for name, node in self._nodes.items():
             cls = type(node)
             if hasattr(cls, 'nodeName'):
                 clsName = cls.nodeName
@@ -470,7 +474,7 @@ class Flowchart(Node):
         conn = self.listConnections()
         for a, b in conn:
             state['connects'].append((a.node().name(), a.name(), b.node().name(), b.name()))
-            
+        
         state['inputNode'] = self.inputNode.saveState()
         state['outputNode'] = self.outputNode.saveState()
         
@@ -486,7 +490,8 @@ class Flowchart(Node):
             nodes.sort(lambda a, b: cmp(a['pos'][0], b['pos'][0]))
             for n in nodes:
                 if n['name'] in self._nodes:
-                    self._nodes[n['name']].moveBy(*n['pos'])
+                    #self._nodes[n['name']].graphicsItem().moveBy(*n['pos'])
+                    self._nodes[n['name']].restoreState(n['state'])
                     continue
                 try:
                     node = self.createNode(n['class'], name=n['name'])
@@ -498,13 +503,13 @@ class Flowchart(Node):
             self.inputNode.restoreState(state.get('inputNode', {}))
             self.outputNode.restoreState(state.get('outputNode', {}))
                 
-            self.restoreTerminals(state['terminals'])
+            #self.restoreTerminals(state['terminals'])
             for n1, t1, n2, t2 in state['connects']:
                 try:
                     self.connectTerminals(self._nodes[n1][t1], self._nodes[n2][t2])
                 except:
-                    print self._nodes[n1].terminals
-                    print self._nodes[n2].terminals
+                    print(self._nodes[n1].terminals)
+                    print(self._nodes[n2].terminals)
                     printExc("Error connecting terminals %s.%s - %s.%s:" % (n1, t1, n2, t2))
                     
                 
@@ -513,6 +518,7 @@ class Flowchart(Node):
             
         self.sigChartLoaded.emit()
         self.outputChanged()
+        self.sigStateChanged.emit()
         #self.sigOutputChanged.emit()
             
     def loadFile(self, fileName=None, startDir=None):
@@ -554,7 +560,7 @@ class Flowchart(Node):
         self.sigFileSaved.emit(fileName)
 
     def clear(self):
-        for n in self._nodes.values():
+        for n in list(self._nodes.values()):
             if n is self.inputNode or n is self.outputNode:
                 continue
             n.close()  ## calls self.nodeClosed(n) by signal
@@ -583,7 +589,7 @@ class FlowchartGraphicsItem(GraphicsObject):
         inp = self.chart.inputs()
         dy = bounds.height() / (len(inp)+1)
         y = dy
-        for n, t in inp.iteritems():
+        for n, t in inp.items():
             item = t.graphicsItem()
             self.terminals[n] = item
             item.setParentItem(self)
@@ -592,7 +598,7 @@ class FlowchartGraphicsItem(GraphicsObject):
         out = self.chart.outputs()
         dy = bounds.height() / (len(out)+1)
         y = dy
-        for n, t in out.iteritems():
+        for n, t in out.items():
             item = t.graphicsItem()
             self.terminals[n] = item
             item.setParentItem(self)
@@ -840,7 +846,7 @@ class FlowchartWidget(dockarea.DockArea):
     def buildMenu(self, pos=None):
         self.nodeMenu = QtGui.QMenu()
         self.subMenus = []
-        for section, nodes in library.getNodeTree().iteritems():
+        for section, nodes in library.getNodeTree().items():
             menu = QtGui.QMenu(section)
             self.nodeMenu.addMenu(menu)
             for name in nodes:

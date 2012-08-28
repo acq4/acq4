@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from pyqtgraph.Qt import QtGui, QtCore
+from pyqtgraph.python2_3 import asUnicode
 from pyqtgraph.SignalProxy import SignalProxy
 
 import pyqtgraph.functions as fn
@@ -115,7 +116,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         
         self.decOpts = ['step', 'minStep']
         
-        self.val = D(unicode(value))  ## Value is precise decimal. Ordinary math not allowed.
+        self.val = D(asUnicode(value))  ## Value is precise decimal. Ordinary math not allowed.
         self.updateText()
         self.skipValidate = False
         self.setCorrectionMode(self.CorrectToPreviousValue)
@@ -125,6 +126,12 @@ class SpinBox(QtGui.QAbstractSpinBox):
         
         self.editingFinished.connect(self.editingFinishedEvent)
         self.proxy = SignalProxy(self.sigValueChanging, slot=self.delayedChange)
+        
+    def event(self, ev):
+        ret = QtGui.QAbstractSpinBox.event(self, ev)
+        if ev.type() == QtCore.QEvent.KeyPress and ev.key() == QtCore.Qt.Key_Return:
+            ret = True  ## For some reason, spinbox pretends to ignore return key press
+        return ret
         
     ##lots of config options, just gonna stuff 'em all in here rather than do the get/set crap.
     def setOpts(self, **opts):
@@ -144,7 +151,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
                     #else:
                         #self.opts[k][i] = D(unicode(opts[k][i]))
             elif k in ['step', 'minStep']:
-                self.opts[k] = D(unicode(opts[k]))
+                self.opts[k] = D(asUnicode(opts[k]))
             elif k == 'value':
                 pass   ## don't set value until bounds have been set
             else:
@@ -160,8 +167,9 @@ class SpinBox(QtGui.QAbstractSpinBox):
         if self.opts['int']:
             if 'step' in opts:
                 step = opts['step']
-                if int(step) != step:
-                    raise Exception('Integer SpinBox must have integer step size.')
+                ## not necessary..
+                #if int(step) != step:
+                    #raise Exception('Integer SpinBox must have integer step size.')
             else:
                 self.opts['step'] = int(self.opts['step'])
             
@@ -182,7 +190,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
     def setMaximum(self, m, update=True):
         """Set the maximum allowed value (or None for no limit)"""
         if m is not None:
-            m = D(unicode(m))
+            m = D(asUnicode(m))
         self.opts['bounds'][1] = m
         if update:
             self.setValue()
@@ -190,7 +198,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
     def setMinimum(self, m, update=True):
         """Set the minimum allowed value (or None for no limit)"""
         if m is not None:
-            m = D(unicode(m))
+            m = D(asUnicode(m))
         self.opts['bounds'][0] = m
         if update:
             self.setValue()
@@ -208,7 +216,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
                 #val = val.toDouble()[0]
             self.setValue(val)
         else:
-            print "Warning: SpinBox.setProperty('%s', ..) not supported." % prop
+            print("Warning: SpinBox.setProperty('%s', ..) not supported." % prop)
 
     def setSuffix(self, suf):
         self.setOpts(suffix=suf)
@@ -252,7 +260,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         if self.opts['int']:
             value = int(value)
 
-        value = D(unicode(value))
+        value = D(asUnicode(value))
         if value == self.val:
             return
         prev = self.val
@@ -364,7 +372,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
             try:
                 ## first make sure we didn't mess with the suffix
                 suff = self.opts.get('suffix', '')
-                if len(suff) > 0 and unicode(strn)[-len(suff):] != suff:
+                if len(suff) > 0 and asUnicode(strn)[-len(suff):] != suff:
                     #print '"%s" != "%s"' % (unicode(strn)[-len(suff):], suff)
                     ret = QtGui.QValidator.Invalid
                     
@@ -452,7 +460,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
     def editingFinishedEvent(self):
         """Edit has finished; set value."""
         #print "Edit finished."
-        if unicode(self.lineEdit().text()) == self.lastText:
+        if asUnicode(self.lineEdit().text()) == self.lastText:
             #print "no text change."
             return
         try:
@@ -486,61 +494,3 @@ class SpinBox(QtGui.QAbstractSpinBox):
     #def widgetGroupInterface(self):
         #return (self.valueChanged, SpinBox.value, SpinBox.setValue)
     
-        
-if __name__ == '__main__':
-    import sys
-    app = QtGui.QApplication([])
-    
-    def valueChanged(sb):
-        #sb = QtCore.QObject.sender()
-        print str(sb) + " valueChanged: %s" % str(sb.value())
-    
-    def valueChanging(sb, value):
-        #sb = QtCore.QObject.sender()
-        print str(sb) + " valueChanging: %s" % str(sb.value())
-    
-    def mkWin():
-        win = QtGui.QMainWindow()
-        g = QtGui.QFormLayout()
-        w = QtGui.QWidget()
-        w.setLayout(g)
-        win.setCentralWidget(w)
-        s1 = SpinBox(value=5, step=0.1, bounds=[-1.5, None], suffix='units')
-        t1 = QtGui.QLineEdit()
-        g.addRow(s1, t1)
-        s2 = SpinBox(value=10e-6, dec=True, step=0.1, minStep=1e-6, suffix='A', siPrefix=True)
-        t2 = QtGui.QLineEdit()
-        g.addRow(s2, t2)
-        s3 = SpinBox(value=1000, dec=True, step=0.5, minStep=1e-6, bounds=[1, 1e9], suffix='Hz', siPrefix=True)
-        t3 = QtGui.QLineEdit()
-        g.addRow(s3, t3)
-        s4 = SpinBox(int=True, dec=True, step=1, minStep=1, bounds=[-10, 1000])
-        t4 = QtGui.QLineEdit()
-        g.addRow(s4, t4)
-
-        win.show()
-        
-        import sys
-        for sb in [s1, s2, s3,s4]:
-            
-            #QtCore.QObject.connect(sb, QtCore.SIGNAL('valueChanged(double)'), lambda v: sys.stdout.write(str(sb) + " valueChanged\n"))
-            #QtCore.QObject.connect(sb, QtCore.SIGNAL('editingFinished()'), lambda: sys.stdout.write(str(sb) + " editingFinished\n"))
-            sb.sigValueChanged.connect(valueChanged)
-            sb.sigValueChanging.connect(valueChanging)
-            sb.editingFinished.connect(lambda: sys.stdout.write(str(sb) + " editingFinished\n"))
-        return win, w, [s1, s2, s3, s4]
-    a = mkWin()
-    
-        
-    def test(n=100):
-        for i in range(n):
-            win, w, sb = mkWin()
-            for s in sb:
-                w.setParent(None)
-                s.setParent(None)
-                s.valueChanged.disconnect()
-                s.editingFinished.disconnect()
-                
-    ## Start Qt event loop unless running in interactive mode.
-    if sys.flags.interactive != 1:
-        app.exec_()

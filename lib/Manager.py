@@ -12,14 +12,11 @@ The class is responsible for:
 """
 
 
-## Path adjustments:
-##   - make sure 'lib' path is available for module search
-##   - add util to front of search path. This allows us to override some libs 
-##     that may be installed globally with local versions.
 import sys, gc
-import os.path as osp
-d = osp.dirname(osp.dirname(osp.abspath(__file__)))
-sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
+
+## install global exception handler for others to hook into.
+import pyqtgraph.exceptionHandling as exceptionHandling   
+exceptionHandling.setTracebackClearing(True)
 
 import time, atexit, weakref, reload
 from PyQt4 import QtCore, QtGui
@@ -40,6 +37,9 @@ import pyqtgraph as pg
 from pyqtgraph import ProgressDialog
 from LogWindow import LogWindow
 from HelpfulException import HelpfulException
+
+
+
 
 LOG = None
 
@@ -95,6 +95,27 @@ def logExc(msg, *args, **kwargs):
         print args
         print kwargs
 
+blockLogging = False
+def exceptionCallback(*args):
+    ## Called whenever there is an unhandled exception.
+    
+    ## unhandled exceptions generate an error message by default, but this
+    ## can be overridden by raising HelpfulException(msgType='...')
+    global blockLogging
+    if not blockLogging:  ## if an error occurs *while* trying to log another exception, disable any further logging to prevent recursion.
+        try:
+            blockLogging = True
+            logMsg("Unexpected error: ", exception=args, msgType='error')
+        except:
+            print "Error: Exception could no be logged."
+            original_excepthook(*sys.exc_info())
+        finally:
+            blockLogging = False
+exceptionHandling.register(exceptionCallback)        
+
+
+
+
 class Manager(QtCore.QObject):
     """Manager class is responsible for:
       - Loading/configuring device modules and storing their handles
@@ -118,6 +139,17 @@ class Manager(QtCore.QObject):
     
     def __init__(self, configFile=None, argv=None):
         self.lock = Mutex(recursive=True)  ## used for keeping some basic methods thread-safe
+        self.devices = OrderedDict()
+        self.modules = OrderedDict()
+        self.config = OrderedDict()
+        self.definedModules = OrderedDict()
+        self.currentDir = None
+        self.baseDir = None
+        self.gui = None
+        self.shortcuts = []
+        self.disableDevs = []
+        self.alreadyQuit = False
+        self.taskLock = Mutex(QtCore.QMutex.Recursive)
         
         try:
             if Manager.CREATED:
@@ -131,34 +163,24 @@ class Manager(QtCore.QObject):
             
             if argv is not None:
                 try:
-                    opts, args = getopt.getopt(argv, 'c:m:b:s:d:n', ['config=', 'module=', 'baseDir=', 'storageDir=', 'disable=', 'noManager'])
+                    opts, args = getopt.getopt(argv, 'c:a:m:b:s:d:n', ['config=', 'config-name=', 'module=', 'baseDir=', 'storageDir=', 'disable=', 'noManager'])
                 except getopt.GetoptError, err:
                     print str(err)
                     print """
     Valid options are:
-        -c --config=     configuration file
-        -m --module=     module name to load
-        -b --baseDir=    base directory to use
-        -s --storageDir= storage directory to use
-        -n --noManager   Do not load manager module
-        -d --disable=    Disable the device specified
+        -c --config=       Configuration file to load
+        -a --config-name=  Named configuration to load
+        -m --module=       Module name to load
+        -b --baseDir=      Base directory to use
+        -s --storageDir=   Storage directory to use
+        -n --noManager     Do not load manager module
+        -d --disable=      Disable the device specified
     """
-            QtCore.QObject.__init__(self)
-            self.alreadyQuit = False
-            self.taskLock = Mutex(QtCore.QMutex.Recursive)
-            atexit.register(self.quit)
-            self.devices = OrderedDict()
-            self.modules = OrderedDict()
-            self.config = OrderedDict()
-            self.definedModules = OrderedDict()
-            #self.devRack = None
-            #self.dataManager = DataManager()
-            self.currentDir = None
-            self.baseDir = None
-            self.gui = None
-            self.shortcuts = []
-            self.disableDevs = []
+                    raise
             
+            
+            QtCore.QObject.__init__(self)
+            atexit.register(self.quit)
             self.interfaceDir = InterfaceDirectory()
     
             
@@ -167,9 +189,12 @@ class Manager(QtCore.QObject):
             setBaseDir = None
             setStorageDir = None
             loadManager = True
+            loadConfigs = []
             for o, a in opts:
                 if o in ['-c', '--config']:
                     configFile = a
+                elif o in ['-a', '--config-name']:
+                    loadConfigs.append(a)
                 elif o in ['-m', '--module']:
                     loadModules.append(a)
                 elif o in ['-b', '--baseDir']:
@@ -196,6 +221,9 @@ class Manager(QtCore.QObject):
             
             ## Act on options if they were specified..
             try:
+                for name in loadConfigs:
+                    self.loadDefinedConfig(name)
+                        
                 if setBaseDir is not None:
                     self.setBaseDir(setBaseDir)
                 if setStorageDir is not None:
@@ -516,6 +544,7 @@ class Manager(QtCore.QObject):
         with self.lock:
             if mod.name in self.modules:
                 del self.modules[mod.name]
+                self.interfaceDir.removeObject(mod)
             else:
                 return
         self.sigModulesChanged.emit()
@@ -792,7 +821,8 @@ class Task:
         
         self.lockedDevs = []
         self.startedDevs = []
-        
+        self.startTime = None
+        self.stopTime = None
         
         #self.reserved = False
         try:
@@ -822,7 +852,6 @@ class Task:
                 continue
             self.devs[devName] = dev
             self.tasks[devName] = task
-        
         
     def execute(self, block=True, processEvents=True):
         """Start the protocol task.
@@ -983,7 +1012,24 @@ class Task:
             if not self.tasks[t].isDone():
                 #print "Task %s not finished" % t
                 return False
+        if self.stopTime is None:
+            self.stopTime = ptime.time()
         return True
+    
+    def duration(self):
+        """Return the requested protocol duration, or None if it was not given."""
+        return self.command.get('protocol', {}).get('duration', None)
+    
+    def runTime(self):
+        """Return the length of time since this protocol has been running.
+        If the task has already finished, return the length of time the task ran for.
+        If the task has not started yet, return None.
+        """
+        if self.startTime is None:
+            return None
+        if self.stopTime is None:
+            return ptime.time() - self.startTime
+        return self.stopTime - self.startTime
         
     def stop(self, abort=False):
         """Stop all tasks and read data. If abort is True, does not attempt to collect data from the run."""
@@ -1031,6 +1077,8 @@ class Task:
                 prof.mark("store data")
         finally:   ## Regardless of any other problems, at least make sure we release hardware for future use
             ## Release all hardware for use elsewhere
+            if self.stopTime is None:
+                self.stopTime = ptime.time()
             
             self.releaseAll()
             prof.mark("release all")

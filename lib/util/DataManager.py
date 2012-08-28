@@ -805,6 +805,8 @@ class DirHandle(FileHandle):
         
         if info is None:
             info = {}   ## never put {} in the function default
+        else:
+            info = info.copy()  ## we modify this later; need to copy first
         
         t = time.time()
         with self.lock:

@@ -260,7 +260,7 @@ class SuperTask:
         return data
         
     def stop(self, wait=False, abort=False):
-        #print "ST stopping, wait=",wait
+        #print "ST stopping, wait=",wait, " abort:", abort
         ## need to be very careful about stopping and unreserving all hardware, even if there is a failure at some point.
         try:
             if wait:

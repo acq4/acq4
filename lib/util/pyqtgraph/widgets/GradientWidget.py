@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
-if __name__ == '__main__':
-    import os, sys
-    path = os.path.join(os.path.dirname(__file__), '..', '..')
-    sys.path = [path] + sys.path
-    
-    
 from pyqtgraph.Qt import QtGui, QtCore
-from GraphicsView import GraphicsView
+from .GraphicsView import GraphicsView
 from pyqtgraph.graphicsItems.GradientEditorItem import GradientEditorItem
 import weakref
 import numpy as np
@@ -21,7 +15,7 @@ class GradientWidget(GraphicsView):
     
     def __init__(self, parent=None, orientation='bottom',  *args, **kargs):
         GraphicsView.__init__(self, parent, useOpenGL=False, background=None)
-        self.maxDim = 27
+        self.maxDim = 31
         kargs['tickPen'] = 'k'
         self.item = GradientEditorItem(*args, **kargs)
         self.item.sigGradientChanged.connect(self.sigGradientChanged)
@@ -30,7 +24,7 @@ class GradientWidget(GraphicsView):
         self.setCacheMode(self.CacheNone)
         self.setRenderHints(QtGui.QPainter.Antialiasing | QtGui.QPainter.TextAntialiasing)
         self.setFrameStyle(QtGui.QFrame.NoFrame | QtGui.QFrame.Plain)
-        self.setBackgroundRole(QtGui.QPalette.NoRole)
+        #self.setBackgroundRole(QtGui.QPalette.NoRole)
         #self.setBackgroundBrush(QtGui.QBrush(QtCore.Qt.NoBrush))
         #self.setAutoFillBackground(False)
         #self.setAttribute(QtCore.Qt.WA_PaintOnScreen, False)
@@ -579,43 +573,5 @@ class GradientWidget(GraphicsView):
                 ##self.view.tickChanged(self)
         
         
-    
-    
-    
-if __name__ == '__main__':
-    app = QtGui.QApplication([])
-    w = QtGui.QMainWindow()
-    w.show()
-    w.resize(400,400)
-    cw = QtGui.QWidget()
-    w.setCentralWidget(cw)
-
-    l = QtGui.QGridLayout()
-    l.setSpacing(0)
-    cw.setLayout(l)
-
-    w1 = GradientWidget(orientation='top')
-    w2 = GradientWidget(orientation='right', allowAdd=False)
-    #w2.setTickColor(1, QtGui.QColor(255,255,255))
-    w3 = GradientWidget(orientation='bottom')
-    w4 = GradientWidget(orientation='left')
-    label = QtGui.QLabel("""
-    - Click a triangle to change its color
-    - Drag triangles to move
-    - Click in an empty area to add a new color
-      (adding is disabled for the right-side widget)
-    - Right click a triangle to remove
-    """)
-
-    l.addWidget(w1, 0, 1)
-    l.addWidget(w2, 1, 2)
-    l.addWidget(w3, 2, 1)
-    l.addWidget(w4, 1, 0)
-    l.addWidget(label, 1, 1)
-    
-    ## Start Qt event loop unless running in interactive mode.
-    import sys
-    if sys.flags.interactive != 1:
-        app.exec_()
     
     

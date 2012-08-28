@@ -12,6 +12,7 @@ import functions as fn
 import numpy as np
 import scipy
 from collections import OrderedDict
+import pyqtgraph as pg
 
 class MockCamera(Camera):
     
@@ -22,6 +23,8 @@ class MockCamera(Camera):
         self.ringSize = 100
         self.frameId = 0
         self.noise = np.random.normal(size=10000000, loc=100, scale=50)  ## pre-generate noise for use in images
+        self.bgData = mandelbrot(w=1000, maxIter=60).astype(np.float32)
+        self.background = None
         
         self.params = OrderedDict([
             ('triggerMode',     'Normal'),
@@ -73,6 +76,19 @@ class MockCamera(Camera):
         self.lastFrameTime = None
         self.stopOk = False
         
+        self.sigGlobalTransformChanged.connect(self.globalTransformChanged)
+        
+        ## generate list of mock cells
+        cells = np.zeros(20, dtype=[('x', float), ('y', float), ('size', float), ('value', float), ('rate', float), ('intensity', float), ('decayTau', float)])
+        cells['x'] = np.random.normal(size=cells.shape, scale=100e-6, loc=100e-6)
+        cells['y'] = np.random.normal(size=cells.shape, scale=100e-6)
+        cells['size'] = np.random.normal(size=cells.shape, scale=2e-6, loc=10e-6)
+        cells['rate'] = np.random.lognormal(size=cells.shape, mean=0, sigma=1) * .3
+        cells['intensity'] = np.random.uniform(size=cells.shape, low=1000, high=10000)
+        cells['decayTau'] = np.random.uniform(size=cells.shape, low=15e-3, high=500e-3)
+        self.cells = cells
+        
+        
     
     def setupCamera(self):
         pass
@@ -92,6 +108,8 @@ class MockCamera(Camera):
         #print "Selected camera:", cams[ind]
         #self.cam = self.pvc.getCamera(cams[ind])
         
+    def globalTransformChanged(self):
+        self.background = None
     
     def startCamera(self):
         self.cameraStarted = True
@@ -131,6 +149,49 @@ class MockCamera(Camera):
         d.shape = shape
         return d.copy()
         
+    def getBackground(self):
+        if self.background is None:
+            w,h = self.params['sensorSize']
+            
+            tr = self.globalTransform()
+            tr = pg.SRTTransform(tr)
+            m = QtGui.QTransform()
+            m.scale(2e6, 2e6)
+            tr = tr * m
+            
+            origin = tr.map(pg.Point(0,0))
+            x = (tr.map(pg.Point(1,0)) - origin)
+            y = (tr.map(pg.Point(0,1)) - origin)
+            origin = np.array([origin.x(), origin.y()])
+            x = np.array([x.x(), x.y()])
+            y = np.array([y.x(), y.y()])
+            
+            ## render fractal on the fly
+            #m = pg.SRTTransform(tr).matrix()
+            #tr = np.array([[1,0,0],[0,1,0],[0,0,1]])
+            #xy = xy = np.ones((3,w,h))
+            #xy[:2] = np.mgrid[0:w, 0:h]
+            #xy = np.dot(xy.transpose(1,2,0), m[:,:2])
+            #xy = xy.transpose(2,0,1)
+            #self.background = mandelbrot(xy)
+            
+            ## slice fractal from pre-rendered data
+            vectors = (x,y)
+            self.background = pg.affineSlice(self.bgData, (w,h), origin, vectors, (0,1), order=1)
+            
+        return self.background
+        
+    def pixelVectors(self):
+        tr = self.globalTransform()
+        origin = tr.map(pg.Point(0,0))
+        x = (tr.map(pg.Point(1,0)) - origin)
+        y = (tr.map(pg.Point(0,1)) - origin)
+        origin = np.array([origin.x(), origin.y()])
+        x = np.array([x.x(), x.y()])
+        y = np.array([y.x(), y.y()])
+        
+        return x,y
+        
     def newFrames(self):
         """Return a list of all frames acquired since the last call to newFrames."""
         now = ptime.time()
@@ -138,6 +199,13 @@ class MockCamera(Camera):
         dt = now - self.lastFrameTime
         exp = self.getParam('exposure')
         region = self.getParam('region') 
+        bg = self.getBackground()[region[0]:region[0]+region[2], region[1]:region[1]+region[3]]
+        
+        ## update cells
+        spikes = np.random.poisson(max(dt, 0.4) * self.cells['rate'])
+        self.cells['value'] *= np.exp(-dt / self.cells['decayTau'])
+        self.cells['value'] = np.clip(self.cells['value'] + spikes * 0.2, 0, 1)
+        
         shape = region[2:]
         bin = self.getParam('binning')
         nf = int(dt / (exp+(40e-3/(bin[0]*bin[1]))))
@@ -147,12 +215,28 @@ class MockCamera(Camera):
             data = self.getNoise(shape)
             data[data<0] = 0
             
-            sig = self.signal[region[0]:region[0]+region[2], region[1]:region[1]+region[3]]
-            data += sig * (exp*1000)
+            #sig = self.signal[region[0]:region[0]+region[2], region[1]:region[1]+region[3]]
+            data += bg * (exp*1000)
+            
+            ## draw cells
+            px = (self.pixelVectors()[0]**2).sum() ** 0.5
+            tr = pg.SRTTransform(self.inverseGlobalTransform())
+            for cell in self.cells:
+                w = cell['size'] / px
+                pos = pg.Point(cell['x'], cell['y'])
+                imgPos = tr.map(pos)
+                start = (int(imgPos.x()), int(imgPos.y()))
+                stop = (start[0]+w, start[1]+w)
+                val = cell['intensity'] * cell['value'] * self.getParam('exposure')
+                data[start[0]:stop[0], start[1]:stop[1]] += val
+            
             
             data = fn.downsample(data, bin[0], axis=0)
             data = fn.downsample(data, bin[1], axis=1)
             data = data.astype(np.uint16)
+            
+            
+            
             
             self.frameId += 1
             frames = []
@@ -293,3 +377,44 @@ class MockCamera(Camera):
             #return self.cam.getParam(param)
         return self.getParams([param])[param]
 
+
+def mandelbrot(w=500, h=None, maxIter=20, xRange=(-2.0, 1.0), yRange=(-1.2, 1.2)):
+    x0,x1 = xRange
+    y0,y1 = yRange
+    if h is None:
+        h = int(w * (y1-y0)/(x1-x0))
+        
+    x = np.linspace(x0, x1, w).reshape(w,1)
+    y = np.linspace(y0, y1, h).reshape(1,h)
+    
+    ## speed up with a clever initial mask:
+    x14 = x-0.25
+    y2 = y**2
+    q = (x14)**2 + y2
+    mask = q * (q + x14) > 0.25 * y2
+    mask &= (x+1)**2 + y2 > 1/16.
+    mask &= x > -2
+    mask &= x < 0.7
+    mask &= y > -1.2
+    mask &= y < 1.2
+
+    img = np.zeros((w,h), dtype=int)
+    xInd, yInd = np.mgrid[0:w, 0:h]
+    x = x.reshape(w)[xInd]
+    y = y.reshape(h)[yInd]
+    z0 = np.empty((w,h), dtype=np.complex64)
+    z0.real = x
+    z0.imag = y
+    z = z0.copy()
+
+    for i in xrange(maxIter):
+        z = z[mask]
+        z0 = z0[mask]
+        xInd = xInd[mask]
+        yInd = yInd[mask]
+        z *= z
+        z += z0
+        mask = np.abs(z) < 2.
+        img[xInd[mask], yInd[mask]] = i % (maxIter-1)
+        
+    return img

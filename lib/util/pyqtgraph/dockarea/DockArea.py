@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 from pyqtgraph.Qt import QtCore, QtGui
-from Container import *
-from DockDrop import *
+from .Container import *
+from .DockDrop import *
+from .Dock import Dock
 import pyqtgraph.debug as debug
 import weakref
 
@@ -202,7 +203,7 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
             a.win.setGeometry(*s[1])
         
         ## 4) Add any remaining docks to the bottom
-        for d in docks.itervalues():
+        for d in docks.values():
             self.moveDock(d, 'below', None)
         
         #print "\nKill old containers:"

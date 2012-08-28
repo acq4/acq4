@@ -88,7 +88,10 @@ class FileAnalysisView(QtGui.QWidget):
         self.sigDbChanged.emit()
         
     def dbComboChanged(self):
-        self.openDb(self.ui.databaseCombo.currentText())
+        fn = self.ui.databaseCombo.currentText()
+        if not os.path.exists(fn):
+            raise Exception("Database file does not exist: %s" % fn)
+        self.openDb(fn)
         
     def quit(self):
         if self.db is not None:
@@ -107,10 +110,15 @@ class FileAnalysisView(QtGui.QWidget):
         fileName = str(fileName)
         if fileName is '':
             return
-        self.ui.databaseCombo.addItem(fileName)
-        self.ui.databaseCombo.setCurrentIndex(self.ui.databaseCombo.count())
+            
         self.dbFile = fileName
         self.db = database.AnalysisDatabase(self.dbFile, dataModel=self.currentModel, baseDir=self.man.getBaseDir())
+        self.ui.databaseCombo.blockSignals(True)
+        try:
+            self.ui.databaseCombo.addItem(fileName)
+            self.ui.databaseCombo.setCurrentIndex(self.ui.databaseCombo.count()-1)
+        finally:
+            self.ui.databaseCombo.blockSignals(False)
         self.sigDbChanged.emit()
         
     def refreshDb(self):
