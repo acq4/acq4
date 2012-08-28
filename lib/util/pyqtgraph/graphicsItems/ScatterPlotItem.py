@@ -51,6 +51,8 @@ class ScatterPlotItem(GraphicsObject):
     #sigPointClicked = QtCore.Signal(object, object)
     sigClicked = QtCore.Signal(object, object)  ## self, points
     sigPlotChanged = QtCore.Signal(object)
+    def getData(self):
+        return self.data['x'], self.data['y']
     
     def __init__(self, *args, **kargs):
         """

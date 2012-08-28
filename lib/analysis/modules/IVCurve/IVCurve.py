@@ -190,7 +190,7 @@ class IVCurve(AnalysisModule):
             #self.fiPlot.plot(x=current*1e12, y = self.spikecount, clear=True)
             #self.fiPlot.setXRange(-0.5, 0.5)   
             #self.fiPlot.addItem(self.fiScatterPlot)
-            self.fiPlot.plot(x=current*iscale, y=self.spikecount, pen='w', symbolSize=10, symbolPen='b', symbolBrush=pg.mkBrush(0, 0, 255, 200), symbol='s', identical=True)
+            self.fiPlot.plot(x=current*iscale, y=self.spikecount, pen='w', symbolSize=10, symbolPen='b', symbolBrush=pg.mkBrush(0, 0, 255, 200), symbol='s', identical=True, clear=True)
             
             self.fslPlot.plot(x=self.spcmd*iscale, y = fsl[self.spk], pen='w', clear=True, symbolSize=6, symbolPen=pg.mkPen('g'), symbolBrush=pg.mkBrush(0, 255, 0, 200), symbol = 't', identical=True)
             #self.fslScatterPlot = pg.ScatterPlotItem(size=6, pen=pg.mkPen('g'), brush=pg.mkBrush(0, 255, 0, 200), symbol = 't', identical=True)
