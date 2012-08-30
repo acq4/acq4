@@ -163,10 +163,11 @@ class IVCurve(AnalysisModule):
             self.tend += sampInterval
             tmax = cmd.xvals('Time')[-1]
             #self.lr.setRegion([end *0.5, end * 0.6])
-
+            threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 0.001
+            
             for i in range(len(traces)):
                 (spike, spk) = Utility.findspikes(cmd.xvals('Time'), tr[i], 
-                    0, t0=self.tstart, t1=self.tend, dt=sampInterval,
+                    threshold, t0=self.tstart, t1=self.tend, dt=sampInterval,
                     mode = 'peak', interpolate=True)
                 if len(spike) > 0:
                     self.spikecount[i] = len(spike)
