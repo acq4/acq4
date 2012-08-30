@@ -218,16 +218,20 @@ def interpolateCells(sites, spacing=5e-6, method='nearest', probThreshold=0.05):
     
     return arr, (xmin, ymin)
     
-def convolveCells(sites, spacing=5e-6, probThreshold=0.02, sampleSpacing=35e-6):
-    avgCellX = np.array(list(set(sites['CellXPos']))).mean()
-    avgCellY = np.array(list(set(sites['CellYPos']))).mean()
-    xmin = (sites['xPos']-sites['CellXPos']).min() ## point furthest left of the cell
-    ymin = (sites['yPos']-sites['CellYPos']).min() ## point furthest above the cell
-    xmax = (sites['xPos']-sites['CellXPos']).max()
-    ymax = (sites['yPos']-sites['CellXPos']).max()
+def convolveCells(sites, spacing=5e-6, probThreshold=0.02, probRadius=90e-6):
+    #avgCellX = np.array(list(set(sites['xPosCell']))).mean()
+    #avgCellY = np.array(list(set(sites['yPosCell']))).mean()
+    #xmin = (sites['xPos']-sites['xPosCell']).min() ## point furthest left of the cell
+    xmin = sites['xPosCell'].min()
+    #ymin = (sites['yPos']-sites['yPosCell']).min() ## point furthest above the cell
+    ymin = sites['yPosCell'].min()
+    #xmax = (sites['xPos']-sites['xPosCell']).max()
+    xmax = sites['xPosCell'].max()
+    #ymax = (sites['yPos']-sites['yPosCell']).max()
+    ymax = sites['yPosCell'].max()
     xdim = int((xmax-xmin)/spacing)+10
     ydim = int((ymax-ymin)/spacing)+10
-    avgCellIndex = np.array([int((avgCellX-xmin)/spacing)+5, int((avgCellY-ymin)/spacing)+5])
+    #avgCellIndex = np.array([int((avgCellX-xmin)/spacing)+5, int((avgCellY-ymin)/spacing)+5])
     cells = set(sites['CellDir'])
     n = len(cells)
     
@@ -248,24 +252,29 @@ def convolveCells(sites, spacing=5e-6, probThreshold=0.02, sampleSpacing=35e-6):
     for i, c in enumerate(cells):
         data = sites[sites['CellDir']==c]
         spontRate = data['numOfPreEvents'].sum()/data['PreRegionLen'].sum()
-        data = afn.bendelsSpatialCorrelationAlgorithm(data, 90e-6, spontRate, data[0]['PostRegionLen'])
+        data = afn.bendelsSpatialCorrelationAlgorithm(data, probRadius, spontRate, data[0]['PostRegionLen'])
         #data['prob'][data['prob'] < probThreshold] = 2.         
         #data['prob'][(data['prob'] >= probThreshold)*(data[i]['prob']!= 2.)] = 0.
         #data['prob'][data['prob'] == 2.] = 1. 
         probs = np.zeros(len(data))
         probs[data['prob'] < probThreshold] = 1.
         for j, s in enumerate(data):
-            trans1 = (data['CellXPos'][0] - avgCellX, data['CellYPos'][0]-avgCellY)
-            trans2 = (avgCellX+xmin, avgCellY+ymin)            
-            x, y = (int((s['xPos']-trans1[0]-trans2[0])/spacing), int((s['yPos']-trans1[1]-trans2[1])/spacing))
-            arr[i, x, y] = probs[j] + 1 
+            #trans1 = (data['xPosCell'][0] - avgCellX, data['yPosCell'][0]-avgCellY)
+            #trans2 = (avgCellX+xmin, avgCellY+ymin)
+            trans = (xmin, ymin)
+            #x, y = (int((s['xPos']-trans1[0]-trans2[0])/spacing), int((s['yPos']-trans1[1]-trans2[1])/spacing))
+            x, y = (int((s['xPosCell']-trans[0])/spacing), int((s['yPosCell'] - trans[1])/spacing))
+            #print i, x, y, j
+            arr[i, x, y] = probs[j] 
               
         results.append(arr[i].copy())
         arr[i] = scipy.ndimage.gaussian_filter(arr[i], 2)
         arr[i] = arr[i]/0.039
-        arr[i][arr[i] > 0.04] = 2
-        arr[i][(arr[i] > 0.02)*(arr[i] <=0.04)] = 1
+        #arr[i][arr[i] > 0.04] = 2
+        #arr[i][(arr[i] > 0.02)*(arr[i] <=0.04)] = 1
+        arr[i][arr[i] > 0.02] = 1
         arr[i][arr[i] <= 0.02] = 0
+        
         #arr[i] = scipy.ndimage.convolve(arr[i], kernel)
         
     return arr, results

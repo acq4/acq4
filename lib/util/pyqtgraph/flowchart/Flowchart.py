@@ -160,7 +160,10 @@ class Flowchart(Node):
         Node.addTerminal(self, term.name(), io=io, renamable=term.isRenamable(), removable=term.isRemovable(), multiable=term.isMultiable())
         
     def internalTerminalRemoved(self, node, term):
-        Node.removeTerminal(self, term.name())
+        try:
+            Node.removeTerminal(self, term.name())
+        except KeyError:
+            pass
         
     def terminalRenamed(self, term, oldName):
         newName = term.name()
@@ -515,6 +518,7 @@ class Flowchart(Node):
             
         self.sigChartLoaded.emit()
         self.outputChanged()
+        self.sigStateChanged.emit()
         #self.sigOutputChanged.emit()
             
     def loadFile(self, fileName=None, startDir=None):

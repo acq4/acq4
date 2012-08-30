@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>292</width>
+    <width>299</width>
     <height>371</height>
    </rect>
   </property>
@@ -91,29 +91,11 @@
       <property name="margin">
        <number>0</number>
       </property>
-      <item row="0" column="0" colspan="3">
-       <widget class="TreeWidget" name="scanTree">
-        <property name="selectionMode">
-         <enum>QAbstractItemView::ExtendedSelection</enum>
+      <item row="2" column="2">
+       <widget class="FeedbackButton" name="storeDBSpotBtn">
+        <property name="text">
+         <string>Store to DB</string>
         </property>
-        <property name="headerHidden">
-         <bool>false</bool>
-        </property>
-        <column>
-         <property name="text">
-          <string>Scan</string>
-         </property>
-        </column>
-        <column>
-         <property name="text">
-          <string>Stored</string>
-         </property>
-        </column>
-        <column>
-         <property name="text">
-          <string>Display</string>
-         </property>
-        </column>
        </widget>
       </item>
       <item row="1" column="0">
@@ -123,8 +105,22 @@
         </property>
        </widget>
       </item>
+      <item row="3" column="1" colspan="2">
+       <widget class="FeedbackButton" name="rewriteSpotPosBtn">
+        <property name="text">
+         <string>Re-write spot locations</string>
+        </property>
+       </widget>
+      </item>
       <item row="1" column="1">
        <widget class="FeedbackButton" name="clearDBScanBtn">
+        <property name="text">
+         <string>Clear DB Entry</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="FeedbackButton" name="clearDBSpotBtn">
         <property name="text">
          <string>Clear DB Entry</string>
         </property>
@@ -137,20 +133,6 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="2">
-       <widget class="FeedbackButton" name="storeDBSpotBtn">
-        <property name="text">
-         <string>Store to DB</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <widget class="FeedbackButton" name="clearDBSpotBtn">
-        <property name="text">
-         <string>Clear DB Entry</string>
-        </property>
-       </widget>
-      </item>
       <item row="2" column="0">
        <widget class="QLabel" name="label">
         <property name="text">
@@ -158,11 +140,40 @@
         </property>
        </widget>
       </item>
-      <item row="3" column="1" colspan="2">
-       <widget class="FeedbackButton" name="rewriteSpotPosBtn">
-        <property name="text">
-         <string>Re-write spot locations</string>
+      <item row="0" column="0" colspan="3">
+       <widget class="TreeWidget" name="scanTree">
+        <property name="selectionMode">
+         <enum>QAbstractItemView::ExtendedSelection</enum>
         </property>
+        <property name="headerHidden">
+         <bool>false</bool>
+        </property>
+        <attribute name="headerDefaultSectionSize">
+         <number>60</number>
+        </attribute>
+        <attribute name="headerMinimumSectionSize">
+         <number>10</number>
+        </attribute>
+        <column>
+         <property name="text">
+          <string>Scan</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Display</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Events</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Stats</string>
+         </property>
+        </column>
        </widget>
       </item>
      </layout>

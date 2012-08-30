@@ -59,7 +59,10 @@ class ColorMapper(QtGui.QWidget):
         combo = self.ui.fileCombo
         if self.filePath is None:
             return
-        files = ["Load..."] + os.listdir(self.filePath)
+        files = ["Load..."]
+        if os.path.isdir(self.filePath):
+            files += os.listdir(self.filePath)
+        
         combo.blockSignals(True)
         combo.clear()
         ind = 0

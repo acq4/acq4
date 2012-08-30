@@ -18,6 +18,7 @@ examples = OrderedDict([
     ('Data Slicing', 'DataSlicing.py'),
     ('Plot Customization', 'customPlot.py'),
     ('Dock widgets', 'dockarea.py'),
+    ('Console', 'ConsoleWidget.py'),
     ('GraphicsItems', OrderedDict([
         ('Scatter Plot', 'ScatterPlot.py'),
         #('PlotItem', 'PlotItem.py'),
@@ -38,6 +39,7 @@ examples = OrderedDict([
     ('Widgets', OrderedDict([
         ('PlotWidget', 'PlotWidget.py'),
         ('SpinBox', 'SpinBox.py'),
+        ('ConsoleWidget', 'ConsoleWidget.py'),
         ('TreeWidget', 'TreeWidget.py'),
         ('DataTreeWidget', 'DataTreeWidget.py'),
         ('GradientWidget', 'GradientWidget.py'),

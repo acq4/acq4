@@ -290,23 +290,7 @@ class GroupParameterItem(ParameterItem):
     """
     def __init__(self, param, depth):
         ParameterItem.__init__(self, param, depth)
-        if depth == 0:
-            for c in [0,1]:
-                self.setBackground(c, QtGui.QBrush(QtGui.QColor(100,100,100)))
-                self.setForeground(c, QtGui.QBrush(QtGui.QColor(220,220,255)))
-                font = self.font(c)
-                font.setBold(True)
-                font.setPointSize(font.pointSize()+1)
-                self.setFont(c, font)
-                self.setSizeHint(0, QtCore.QSize(0, 25))
-        else:
-            for c in [0,1]:
-                self.setBackground(c, QtGui.QBrush(QtGui.QColor(220,220,220)))
-                font = self.font(c)
-                font.setBold(True)
-                #font.setPointSize(font.pointSize()+1)
-                self.setFont(c, font)
-                self.setSizeHint(0, QtCore.QSize(0, 20))
+        self.updateDepth(depth) 
                 
         self.addItem = None
         if 'addText' in param.opts:
@@ -331,6 +315,27 @@ class GroupParameterItem(ParameterItem):
             self.addItem.setFlags(QtCore.Qt.ItemIsEnabled)
             ParameterItem.addChild(self, self.addItem)
             
+    def updateDepth(self, depth):
+        ## Change item's appearance based on its depth in the tree
+        ## This allows highest-level groups to be displayed more prominently.
+        if depth == 0:
+            for c in [0,1]:
+                self.setBackground(c, QtGui.QBrush(QtGui.QColor(100,100,100)))
+                self.setForeground(c, QtGui.QBrush(QtGui.QColor(220,220,255)))
+                font = self.font(c)
+                font.setBold(True)
+                font.setPointSize(font.pointSize()+1)
+                self.setFont(c, font)
+                self.setSizeHint(0, QtCore.QSize(0, 25))
+        else:
+            for c in [0,1]:
+                self.setBackground(c, QtGui.QBrush(QtGui.QColor(220,220,220)))
+                font = self.font(c)
+                font.setBold(True)
+                #font.setPointSize(font.pointSize()+1)
+                self.setFont(c, font)
+                self.setSizeHint(0, QtCore.QSize(0, 20))
+    
     def addClicked(self):
         """Called when "add new" button is clicked
         The parameter MUST have an 'addNew' method defined.
@@ -366,7 +371,6 @@ class GroupParameter(Parameter):
     of child parameters. It also provides a simple mechanism for displaying a button or combo
     that can be used to add new parameters to the group.
     """
-    type = 'group'
     itemClass = GroupParameterItem
 
     def addNew(self, typ=None):
@@ -457,7 +461,6 @@ class ListParameterItem(WidgetParameterItem):
 
 
 class ListParameter(Parameter):
-    type = 'list'
     itemClass = ListParameterItem
 
     def __init__(self, **opts):

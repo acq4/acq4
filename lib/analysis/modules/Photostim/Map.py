@@ -98,13 +98,13 @@ class Map:
                 dp = pos2-pos
                 dist = (dp.x()**2 + dp.y()**2)**0.5
                 if dist < size/3.:      ## if position matches, add scan/spot data into existing site
-                    pt2['data'].append((scan, pt.data()))
+                    pt2['data']['sites'].append((scan, pt.data()))
                     #pt2[2]['data'].append((scan, dh))
                     added = True
                     self.pointsByFile[pt.data()] = pt2
                     break
             if not added:               ## ..otherwise, add a new site
-                newSpot = {'pos': pos, 'size': size, 'data': [(scan, dh)]}
+                newSpot = {'pos': pos, 'size': size, 'data': {'sites': [(scan, dh)]}}
                 self.spots.append(newSpot)
                 #self.points.append((pos, [(scan, dh)], self.spots[-1]))
                 self.pointsByFile[pt.data()] = newSpot
@@ -225,7 +225,7 @@ class Map:
     def isVisible(self):
         return self.sPlotItem.isVisible()
             
-    def recolor(self, n, nMax, parallel=False):  ## ignore parallel here; it's plenty fast already.
+    def recolor(self, n=1, nMax=1, parallel=False):  ## ignore parallel here; it's plenty fast already.
         if not self.sPlotItem.isVisible():
             return
         spots = self.sPlotItem.points()
@@ -234,7 +234,7 @@ class Map:
             for i in xrange(len(spots)):
                 s = spots[i]
                 data = []
-                sources = s.data()
+                sources = s.data()['sites']
                 for scan, dh in sources:
                     data.append(scan.getStats(dh))
                 
@@ -258,7 +258,7 @@ class Map:
                         except:
                             mergeData[k] = vals[0]
                 #print mergeData
-                color = self.host.getColor(mergeData)
+                color = self.host.getColor(mergeData, s.data())
                 #s.setBrush(color)  ## wait until after to set the colors
                 colors.append((s, color))
                 dlg.setValue(i)
