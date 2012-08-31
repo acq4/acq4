@@ -157,8 +157,7 @@ class Photostim(AnalysisModule):
         else:
             return
         #print "cells:", cells
-        for cell in cells:
-            self.dbCtrl.listMaps(cell)
+        self.dbCtrl.listMaps(cells)
 
             
 
@@ -343,9 +342,9 @@ class Photostim(AnalysisModule):
         output = self.detector.flowchart.output()
         output['fileHandle']=self.selectedSpot.data()
         self.flowchart.setInput(**output)
-        errs = output['events']['fitFractionalError']
-        if len(errs) > 0:
-            print "Detector events error mean / median / max:", errs.mean(), np.median(errs), errs.max()
+        #errs = output['events']['fitFractionalError']
+        #if len(errs) > 0:
+            #print "Detector events error mean / median / max:", errs.mean(), np.median(errs), errs.max()
 
     def analyzerStateChanged(self):
         #print "Analyzer state changed."
@@ -385,7 +384,8 @@ class Photostim(AnalysisModule):
         #for i in range(len(self.maps)):
             #self.maps[i].recolor(self, i, len(self.maps))
 
-    def getColor(self, stats, data):
+    def getColor(self, stats, data=None):
+        ## Note: the data argument is used elsewhere (MapAnalyzer)
         #print "STATS:", stats
         return self.mapper.getColor(stats)
 

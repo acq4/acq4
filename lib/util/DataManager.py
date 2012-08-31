@@ -678,7 +678,7 @@ class DirHandle(FileHandle):
                     if f not in self.cTimeCache:
                         self.cTimeCache[f] = self._getFileCTime(f)
                     dlg += 1
-            files.sort(lambda a,b: cmp(self.cTimeCache[a], self.cTimeCache[b]))
+            files.sort(key=lambda f: (self.cTimeCache[f], f))  ## sort by time first, then name.
         elif sortMode == 'alpha':
             ## show directories first when sorting alphabetically.
             files.sort(lambda a,b: 2*cmp(os.path.isdir(os.path.join(self.name(),b)), os.path.isdir(os.path.join(self.name(),a))) + cmp(a,b))
