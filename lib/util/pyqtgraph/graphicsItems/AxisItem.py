@@ -299,8 +299,8 @@ class AxisItem(GraphicsWidget):
                 self.drawPicture(painter)
             finally:
                 painter.end()
-        p.setRenderHint(p.Antialiasing, False)
-        p.setRenderHint(p.TextAntialiasing, True)
+        #p.setRenderHint(p.Antialiasing, False)   ## Sometimes we get a segfault here ???
+        #p.setRenderHint(p.TextAntialiasing, True)
         self.picture.play(p)
         
 
