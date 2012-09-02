@@ -60,32 +60,6 @@ class ScalableGroup(pTypes.GroupParameter):
         self.addChild(dict(name="ScalableParam %d" % (len(self.childs)+1), type=typ, value=val, removable=True, renamable=True))
 
 
-## test column spanning (widget sub-item that spans all columns)
-class TextParameterItem(pTypes.WidgetParameterItem):
-    def __init__(self, param, depth):
-        pTypes.WidgetParameterItem.__init__(self, param, depth)
-        self.subItem = QtGui.QTreeWidgetItem()
-        self.addChild(self.subItem)
-
-    def treeWidgetChanged(self):
-        self.treeWidget().setFirstItemColumnSpanned(self.subItem, True)
-        self.treeWidget().setItemWidget(self.subItem, 0, self.textBox)
-        self.setExpanded(True)
-        
-    def makeWidget(self):
-        self.textBox = QtGui.QTextEdit()
-        self.textBox.setMaximumHeight(100)
-        self.textBox.value = lambda: str(self.textBox.toPlainText())
-        self.textBox.setValue = self.textBox.setPlainText
-        self.textBox.sigChanged = self.textBox.textChanged
-        return self.textBox
-        
-class TextParameter(Parameter):
-    itemClass = TextParameterItem
-    
-registerParameterType('text', TextParameter)
-
-
 
 
 params = [
@@ -101,6 +75,8 @@ params = [
             {'name': 'Sub-param 1', 'type': 'int', 'value': 10},
             {'name': 'Sub-param 2', 'type': 'float', 'value': 1.2e6},
         ]},
+        {'name': 'Text Parameter', 'type': 'text', 'value': 'Some text...'},
+        {'name': 'Action Parameter', 'type': 'action'},
     ]},
     {'name': 'Numerical Parameter Options', 'type': 'group', 'children': [
         {'name': 'Units + SI prefix', 'type': 'float', 'value': 1.2e-6, 'step': 1e-6, 'siPrefix': True, 'suffix': 'V'},
@@ -118,7 +94,6 @@ params = [
         {'name': 'ScalableParam 1', 'type': 'str', 'value': "default param 1"},
         {'name': 'ScalableParam 2', 'type': 'str', 'value': "default param 2"},
     ]),
-    {'name': 'Custom parameter class (text box)', 'type': 'text', 'value': 'Some text...'},
 ]
 
 ## Create tree of Parameter objects
@@ -144,11 +119,11 @@ p.sigTreeStateChanged.connect(change)
 t = ParameterTree()
 t.setParameters(p, showTop=False)
 t.show()
-t.resize(400,600)
+t.resize(400,800)
 t2 = ParameterTree()
 t2.setParameters(p, showTop=False)
 t2.show()
-t2.resize(400,600)
+t2.resize(400,800)
     
 ## test save/restore
 s = p.saveState()
