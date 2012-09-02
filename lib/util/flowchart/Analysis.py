@@ -199,7 +199,6 @@ class EventFitter(CtrlNode):
         
 def processEventFits(events, startEvent, stopEvent, opts):
     ## This function does all the processing work for EventFitter.
-    ## It is a static method to facilitate parallel processing 
     dt = opts['dt']
     origTau = opts['tau']
     multiFit = opts['multiFit']
@@ -280,7 +279,8 @@ def processEventFits(events, startEvent, stopEvent, opts):
             else:
                 zc = zc[zc['peak']<0]
         #print zc    
-        ## measure properties for the largest event
+        ## measure properties for the largest event within 5ms of start
+        zc = zc[zc['index'] < 5e-3/dt]
         if len(zc) > 0:
             if guessAmp > 0:
                 zcInd = np.argmax(zc['sum']) ## the largest event in this clip
@@ -539,10 +539,10 @@ class EventMasker(CtrlNode):
     Accepts a list of regions or a list of times (use padding to give width to each time point)"""
     nodeName = "EventMasker"
     uiTemplate = [
-        #('prePadding', 'spin', {'value': 0, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
-        #('postPadding', 'spin', {'value': 0.1, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
-        ('prePadding', 'intSpin', {'min': 0, 'max': 1e9}),
-        ('postPadding', 'intSpin', {'min': 0, 'max': 1e9}),
+        ('prePadding', 'spin', {'value': -2e-3, 'step': 1e-3, 'range': [None, 0], 'siPrefix': True, 'suffix': 's'}),
+        ('postPadding', 'spin', {'value': 1e-3, 'step': 1e-3, 'range': [0, None], 'siPrefix': True, 'suffix': 's'}),
+        #('prePadding', 'intSpin', {'min': 0, 'max': 1e9}),
+        #('postPadding', 'intSpin', {'min': 0, 'max': 1e9}),
     ]
     
     def __init__(self, name):
@@ -553,17 +553,26 @@ class EventMasker(CtrlNode):
         })
     
     def process(self, events, regions, display=True):
-        #print "From masker:", events
-        #events = events.copy()
+        ##print "From masker:", events
+        ###events = events.copy()
+        
+        #prep = self.ctrls['prePadding'].value()
+        #postp = self.ctrls['postPadding'].value()
+        
+        #starts = (regions['index']-prep)[:,np.newaxis]
+        #stops = (regions['index']+prep)[:,np.newaxis]
+        
+        #times = events['index'][np.newaxis, :]
+        #mask = ((times >= starts) * (times <= stops)).sum(axis=0) == 0
+        
         prep = self.ctrls['prePadding'].value()
         postp = self.ctrls['postPadding'].value()
         
-        starts = (regions['index']-prep)[:,np.newaxis]
-        stops = (regions['index']+prep)[:,np.newaxis]
+        starts = (regions['time']+prep)[:,np.newaxis]
+        stops = (regions['time']+postp)[:,np.newaxis]
         
-        times = events['index'][np.newaxis, :]
+        times = events['fitTime'][np.newaxis, :]
         mask = ((times >= starts) * (times <= stops)).sum(axis=0) == 0
-        
         return {'output': events[mask]}
         
 

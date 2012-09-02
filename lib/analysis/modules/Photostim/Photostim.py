@@ -157,8 +157,7 @@ class Photostim(AnalysisModule):
         else:
             return
         #print "cells:", cells
-        for cell in cells:
-            self.dbCtrl.listMaps(cell)
+        self.dbCtrl.listMaps(cells)
 
             
 
@@ -166,17 +165,21 @@ class Photostim(AnalysisModule):
         canvas = self.getElement('Canvas')
         model = self.dataModel
 
-        for fh in fhList:
-            try:
-                ## TODO: use more clever detection of Scan data here.
-                if fh.isFile() or model.dirType(fh) == 'Cell':
-                    canvas.addFile(fh)
-                else:
-                    self.loadScan(fh)
-                return True
-            except:
-                debug.printExc("Error loading file %s" % fh.name())
-                return False
+        with pg.ProgressDialog("Loading data..", 0, len(fhList)) as dlg:
+            for fh in fhList:
+                try:
+                    ## TODO: use more clever detection of Scan data here.
+                    if fh.isFile() or model.dirType(fh) == 'Cell':
+                        canvas.addFile(fh)
+                    else:
+                        self.loadScan(fh)
+                    return True
+                except:
+                    debug.printExc("Error loading file %s" % fh.name())
+                    return False
+                dlg += 1
+                if dlg.wasCancelled():
+                    return
 
     def loadScan(self, fh):
         ret = []
@@ -261,7 +264,7 @@ class Photostim(AnalysisModule):
     def mapPointClicked(self, scan, points):
         data = []
         for p in points:
-            for source in p.data():
+            for source in p.data()['sites']:
                 data.append([source[0], self.dataModel.getClampFile(source[1])])
             #data.extend(p.data)
         self.redisplayData(data)
@@ -343,9 +346,9 @@ class Photostim(AnalysisModule):
         output = self.detector.flowchart.output()
         output['fileHandle']=self.selectedSpot.data()
         self.flowchart.setInput(**output)
-        errs = output['events']['fitFractionalError']
-        if len(errs) > 0:
-            print "Detector events error mean / median / max:", errs.mean(), np.median(errs), errs.max()
+        #errs = output['events']['fitFractionalError']
+        #if len(errs) > 0:
+            #print "Detector events error mean / median / max:", errs.mean(), np.median(errs), errs.max()
 
     def analyzerStateChanged(self):
         #print "Analyzer state changed."
@@ -385,7 +388,8 @@ class Photostim(AnalysisModule):
         #for i in range(len(self.maps)):
             #self.maps[i].recolor(self, i, len(self.maps))
 
-    def getColor(self, stats):
+    def getColor(self, stats, data=None):
+        ## Note: the data argument is used elsewhere (MapAnalyzer)
         #print "STATS:", stats
         return self.mapper.getColor(stats)
 

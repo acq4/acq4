@@ -106,7 +106,10 @@ class IVCurve(AnalysisModule):
         for dirName in dirs:
             d = dh[dirName]
             try:
-                data = self.dataModel.getClampFile(d).read()
+                cf = self.dataModel.getClampFile(d)
+                if cf is None:  ## No clamp file for this iteration of the protocol (probably the protocol was stopped early)
+                    continue
+                data = cf.read()
             except:
                 debug.printExc("Error loading data for protocol %s:" % d.name() )
                 continue  ## If something goes wrong here, we'll just try to carry on
@@ -129,7 +132,7 @@ class IVCurve(AnalysisModule):
         self.colorScale.setLabels({'%0.2g'%self.values[0]:0, '%0.2g'%self.values[-1]:1}) 
         
         # set up the selection region correctly, prepare IV curves and find spikes
-        if len(dirs) > 0:
+        if len(traces) > 0:
             info = [
                 {'name': 'Command', 'units': cmd.axisUnits(-1), 'values': numpy.array(self.values)},
                 data.infoCopy('Time'), 
@@ -141,14 +144,14 @@ class IVCurve(AnalysisModule):
             self.tend = cmd.xvals('Time')[cmdtimes[1]]
             self.tdur = self.tend - self.tstart
 
-            tr =  numpy.reshape(self.traces.asarray(), (len(dirs),-1))
-            fsl = numpy.zeros(len(dirs))
-            fisi = numpy.zeros(len(dirs))
-            misi = numpy.zeros(len(dirs))
-            ar = numpy.zeros(len(dirs))
-            rmp = numpy.zeros(len(dirs))
+            tr =  numpy.reshape(self.traces.asarray(), (len(traces),-1))
+            fsl = numpy.zeros(len(traces))
+            fisi = numpy.zeros(len(traces))
+            misi = numpy.zeros(len(traces))
+            ar = numpy.zeros(len(traces))
+            rmp = numpy.zeros(len(traces))
             
-            self.spikecount = numpy.zeros(len(dirs))
+            self.spikecount = numpy.zeros(len(traces))
             # for adaptation ratio:
             minspk = 4
             maxspk = 10 # range of spike counts
@@ -160,10 +163,11 @@ class IVCurve(AnalysisModule):
             self.tend += sampInterval
             tmax = cmd.xvals('Time')[-1]
             #self.lr.setRegion([end *0.5, end * 0.6])
-
-            for i in range(len(dirs)):
+            threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 0.001
+            
+            for i in range(len(traces)):
                 (spike, spk) = Utility.findspikes(cmd.xvals('Time'), tr[i], 
-                    0, t0=self.tstart, t1=self.tend, dt=sampInterval,
+                    threshold, t0=self.tstart, t1=self.tend, dt=sampInterval,
                     mode = 'peak', interpolate=True)
                 if len(spike) > 0:
                     self.spikecount[i] = len(spike)
