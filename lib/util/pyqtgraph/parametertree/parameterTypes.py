@@ -508,7 +508,7 @@ class ActionParameterItem(ParameterItem):
         self.button = QtGui.QPushButton(param.name())
         #self.layout.addSpacing(100)
         self.layout.addWidget(self.button)
-        self.layout.addSpacing(100)
+        self.layout.addStretch()
         self.button.clicked.connect(self.buttonClicked)
         param.sigNameChanged.connect(self.paramRenamed)
         self.setText(0, '')
