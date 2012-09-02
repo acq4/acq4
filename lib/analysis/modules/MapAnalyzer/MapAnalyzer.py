@@ -499,6 +499,7 @@ class Loader(QtGui.QWidget):
                 dlg += 1
                 if dlg.wasCanceled():
                     raise Exception("User cancelled map list construction; some maps may not be displayed.")
+        self.tree.sortItems(0, QtCore.Qt.AscendingOrder)
             
     def load(self):
         sel = self.tree.selectedItems()

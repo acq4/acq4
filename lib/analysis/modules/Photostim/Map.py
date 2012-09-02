@@ -31,7 +31,7 @@ class Map:
         #self.points = []         ## Holds all data: [ (position, [(scan, dh), ...], spotData), ... ]
         self.pointsByFile = {}   ## just a lookup dictionary
         self.spots = []          ## holds all data {pos, size, [(scan, dh), ...]};  used to construct scatterplotitem
-        self.sPlotItem = pg.ScatterPlotItem(pxMode=False)
+        self.sPlotItem = pg.ScatterPlotItem(pxMode=False, pen=(50,50,50))
         
         self.header = self.mapFields.keys()[2:]
         

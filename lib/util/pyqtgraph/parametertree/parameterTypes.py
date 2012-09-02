@@ -498,3 +498,72 @@ class ListParameter(Parameter):
 registerParameterType('list', ListParameter, override=True)
 
 
+
+class ActionParameterItem(ParameterItem):
+    def __init__(self, param, depth):
+        ParameterItem.__init__(self, param, depth)
+        self.layoutWidget = QtGui.QWidget()
+        self.layout = QtGui.QHBoxLayout()
+        self.layoutWidget.setLayout(self.layout)
+        self.button = QtGui.QPushButton(param.name())
+        #self.layout.addSpacing(100)
+        self.layout.addWidget(self.button)
+        self.layout.addSpacing(100)
+        self.button.clicked.connect(self.buttonClicked)
+        param.sigNameChanged.connect(self.paramRenamed)
+        self.setText(0, '')
+        
+    def treeWidgetChanged(self):
+        ParameterItem.treeWidgetChanged(self)
+        tree = self.treeWidget()
+        if tree is None:
+            return
+        
+        tree.setFirstItemColumnSpanned(self, True)
+        tree.setItemWidget(self, 0, self.layoutWidget)
+        
+    def paramRenamed(self, param, name):
+        self.button.setText(name)
+        
+    def buttonClicked(self):
+        self.param.activate()
+        
+class ActionParameter(Parameter):
+    """Used for displaying a button within the tree."""
+    itemClass = ActionParameterItem
+    sigActivated = QtCore.Signal(object)
+    
+    def activate(self):
+        self.sigActivated.emit(self)
+        self.emitStateChanged('activated', None)
+        
+registerParameterType('action', ActionParameter)
+
+
+
+class TextParameterItem(WidgetParameterItem):
+    def __init__(self, param, depth):
+        WidgetParameterItem.__init__(self, param, depth)
+        self.subItem = QtGui.QTreeWidgetItem()
+        self.addChild(self.subItem)
+
+    def treeWidgetChanged(self):
+        self.treeWidget().setFirstItemColumnSpanned(self.subItem, True)
+        self.treeWidget().setItemWidget(self.subItem, 0, self.textBox)
+        self.setExpanded(True)
+        
+    def makeWidget(self):
+        self.textBox = QtGui.QTextEdit()
+        self.textBox.setMaximumHeight(100)
+        self.textBox.value = lambda: str(self.textBox.toPlainText())
+        self.textBox.setValue = self.textBox.setPlainText
+        self.textBox.sigChanged = self.textBox.textChanged
+        return self.textBox
+        
+class TextParameter(Parameter):
+    """Editable string; displayed as large text box in the tree."""
+    itemClass = TextParameterItem
+
+    
+    
+registerParameterType('text', TextParameter)

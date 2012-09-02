@@ -165,17 +165,21 @@ class Photostim(AnalysisModule):
         canvas = self.getElement('Canvas')
         model = self.dataModel
 
-        for fh in fhList:
-            try:
-                ## TODO: use more clever detection of Scan data here.
-                if fh.isFile() or model.dirType(fh) == 'Cell':
-                    canvas.addFile(fh)
-                else:
-                    self.loadScan(fh)
-                return True
-            except:
-                debug.printExc("Error loading file %s" % fh.name())
-                return False
+        with pg.ProgressDialog("Loading data..", 0, len(fhList)) as dlg:
+            for fh in fhList:
+                try:
+                    ## TODO: use more clever detection of Scan data here.
+                    if fh.isFile() or model.dirType(fh) == 'Cell':
+                        canvas.addFile(fh)
+                    else:
+                        self.loadScan(fh)
+                    return True
+                except:
+                    debug.printExc("Error loading file %s" % fh.name())
+                    return False
+                dlg += 1
+                if dlg.wasCancelled():
+                    return
 
     def loadScan(self, fh):
         ret = []

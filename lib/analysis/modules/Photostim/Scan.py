@@ -68,7 +68,12 @@ class Scan(QtCore.QObject):
     def __init__(self, host, source, dirHandles, name=None, itemName=None):
         QtCore.QObject.__init__(self)
         self._source = source           ## DirHandle to data for this scan
-        self.dirHandles = dirHandles    ## List of DirHandles, one per spot
+        self.dirHandles = []            ## List of DirHandles, one per spot
+        
+        for d in dirHandles:       ## filter out any dirs which lack the proper data
+            info = d.info()
+            if 'Scanner' in info and 'position' in info['Scanner']:
+                self.dirHandles.append(d)
         
         self._canvasItem = None
         
@@ -85,8 +90,8 @@ class Scan(QtCore.QObject):
         self.eventCacheValid = set() ## if fh is in set, event flowchart has not changed since events were last computed
         self.statsStored = False 
         self.eventsStored = False
-        self.loadFromDB()
         self.canvasItem() ## create canvas item
+        self.loadFromDB()
         
     def canvasItem(self):
         if self._canvasItem is None:
@@ -187,6 +192,9 @@ class Scan(QtCore.QObject):
                 #if len(stats) == 0:
                     #print "  No data for spot", dh
                     haveAll = False
+                    for spot in self.spots():
+                        if spot.data() is dh:
+                            spot.setPen('r')
                     continue
                 else:
                     self.statExample = self.stats[dh]
@@ -360,6 +368,10 @@ class Scan(QtCore.QObject):
         ## called from photostim.storeDBSpot
         self.events[self.host.dataModel.getClampFile(dh)] = events
         self.stats[dh] = stats
+        for spot in self.spots():
+            if spot.data() is dh:
+                spot.setPen((50,50,50))
+        
 
     def getSpot(self, dh):
         if dh not in self.spotDict:
