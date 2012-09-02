@@ -88,7 +88,11 @@ class Parameter(QtCore.QObject):
         
         Use registerParameterType() to add new class types.
         """
-        cls = PARAM_TYPES[opts['type']]
+        typ = opts.get('type', None)
+        if typ is None:
+            cls = Parameter
+        else:
+            cls = PARAM_TYPES[opts['type']]
         return cls(**opts)
     
     def __init__(self, **opts):
@@ -364,9 +368,10 @@ class Parameter(QtCore.QObject):
         return self.insertChild(len(self.childs), child)
         
     def insertChild(self, pos, child):
-        """Insert a new child at pos.
+        """
+        Insert a new child at pos.
         If pos is a Parameter, then insert at the position of that Parameter.
-        If child is a dict, then a parameter is constructed as Parameter(**child)
+        If child is a dict, then a parameter is constructed as Parameter(\*\*child)
         """
         if isinstance(child, dict):
             child = Parameter.create(**child)
@@ -413,6 +418,9 @@ class Parameter(QtCore.QObject):
         """Return a list of this parameter's children."""
         ## warning -- this overrides QObject.children
         return self.childs[:]
+    
+    def hasChildren(self):
+        return len(self.childs) > 0
 
     def parentChanged(self, parent):
         """This method is called when the parameter's parent has changed.
