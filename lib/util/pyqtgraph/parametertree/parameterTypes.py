@@ -375,6 +375,7 @@ class GroupParameterItem(ParameterItem):
     def updateAddList(self):
         self.addWidget.blockSignals(True)
         try:
+            self.addWidget.clear()
             self.addWidget.addItem(self.param.opts['addText'])
             for t in self.param.opts['addList']:
                 self.addWidget.addItem(t)
