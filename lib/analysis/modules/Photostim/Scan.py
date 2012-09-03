@@ -157,6 +157,7 @@ class Scan(QtCore.QObject):
         self.stats = {}
         self.statExample = None
         haveAll = True
+        haveAny = False
         
         if self.host.dataModel.dirType(sourceDir) == 'ProtocolSequence':
             allEvents, allStats = self.host.loadScanFromDB(sourceDir)
@@ -194,9 +195,10 @@ class Scan(QtCore.QObject):
                     haveAll = False
                     for spot in self.spots():
                         if spot.data() is dh:
-                            spot.setPen('r')
+                            spot.setPen((100,0,0,200))
                     continue
                 else:
+                    haveAny = True
                     self.statExample = self.stats[dh]
             #self.stats[dh] = stats[0]
             if haveAll:
@@ -206,6 +208,12 @@ class Scan(QtCore.QObject):
                 self.statsStored = True
                 self.eventsStored = True
                 self.sigStorageStateChanged.emit(self)
+            
+            ## If there is _no_ data for this scan, recolor spots grey.
+            if not haveAny:
+                for s in self.item.points():
+                    s.setPen((50,50,50,200))
+                
                 
 
     def getStatsKeys(self):
@@ -448,6 +456,8 @@ class Scan(QtCore.QObject):
         self.sigStorageStateChanged.emit(self)
         self.lockEvents(True)
         self.lockStats(True)
+        for s in self.item.points():
+            s.setPen((50,50,50,200))
         
     def clearFromDB(self):
         self.host.clearDBScan(self)

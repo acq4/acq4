@@ -37,8 +37,8 @@ class DBCtrl(QtGui.QWidget):
         self.mapWidget = QtGui.QWidget()
         self.ui.setupUi(self.mapWidget)
         self.layout.addWidget(self.mapWidget)
-        self.ui.scanTree.setAcceptDrops(True)
-        self.ui.scanTree.setDragEnabled(True)
+        self.ui.scanTree.setAcceptDrops(False)
+        self.ui.scanTree.setDragEnabled(False)
         
         
         labels = Map.mapFields.keys()[2:]

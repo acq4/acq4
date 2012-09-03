@@ -20,7 +20,6 @@ eventView = 'events_view'
 siteView = 'sites_view'
 
 
-## Get events
 firstRun = False
 if 'events' not in locals():
     global events
@@ -208,7 +207,19 @@ def loadCell(cell):
             if dlg.wasCanceled():
                 raise Exception('Canceled by user.')
     ev = np.concatenate(allEvents)
-    events[cell] = ev
+    
+    numExSites = 0
+    numInSites = 0
+    for site in db.select(siteView, 'ProtocolSequenceDir', where={'CellDir': cell}):
+        h = hvals.get(site['ProtocolSequenceDir'],None)
+        if h is None:
+            continue
+        if h > -0.02:
+            numInSites += 1
+        elif h < -0.04:
+            numExSites += 1
+    
+    events[cell] = (ev, numExSites, numInSites)
     
     
     
@@ -260,7 +271,7 @@ def select(ev, ex=True):
         ev = ev[ev['holding'] < -0.04]         # excitatory events
         ev = ev[(ev['fitAmplitude'] < 0) * (ev['fitAmplitude'] > -2e-10)]
     else:
-        ev = ev[(ev['holding'] >= -0.01) * (ev['holding'] <= 0.01)]  ## inhibitory events
+        ev = ev[(ev['holding'] >= -0.02) * (ev['holding'] <= 0.01)]  ## inhibitory events
         ev = ev[(ev['fitAmplitude'] > 0) * (ev['fitAmplitude'] < 2e-10)]
     ev = ev[(0 < ev['fitDecayTau']) * (ev['fitDecayTau'] < 0.2)]   # select decay region
     
@@ -289,7 +300,7 @@ def showCell():
         image.setImage(np.zeros((2,2)))
         pass
     
-    ev = events[cell]
+    ev, numExSites, numInSites = events[cell]
     
     ev2 = select(ev, ex=True)
     ev3 = select(ev, ex=False)
@@ -358,8 +369,8 @@ def showCell():
     except:
         typ = ev3[0]['type']
         
-    sr = spontRate(ev2)
-    sri = spontRate(ev3)
+    sr = spontRate(ev2, numExSites)
+    sri = spontRate(ev3, numInSites)
         
     title = "%s -- %s --- <span style='color: #99F;'>ex:</span> %s %s %s %0.1fHz --- <span style='color: #F99;'>in:</span> %s %s %s %0.1fHz" % (
         dh.name(relativeTo=dh.parent().parent().parent()), 
@@ -394,16 +405,21 @@ def showCell():
     atlasPoints.setData(pts)
     
     
-def spontRate(ev):
+def spontRate(ev, n):
+    ## This is broken. It does not take into account recordings that had no events.
     ev = ev[ev['fitTime'] < preRgnStop()]
-    count = {}
-    for i in range(len(ev)):
-        key = (ev[i]['ProtocolSequenceDir'], ev[i]['SourceFile'])
-        if key not in count:
-            count[key] = 0
-        count[key] += 1
-    sr = np.mean([v/(preRgnStop()) for v in count.itervalues()])
-    return sr
+    #count = {}
+    #dirs = set()
+    #for i in range(len(ev)):
+        #key = (ev[i]['ProtocolSequenceDir'], ev[i]['SourceFile'])
+        #dirs.add(set)
+        #if key not in count:
+            #count[key] = 0
+        #count[key] += 1
+    #sr = np.mean([v/(preRgnStop()) for v in count.itervalues()])
+    if n == 0:
+        return 0
+    return len(ev) / (preRgnStop() * n)
 
 def preRgnStop():
     return postRgnStartSpin.value() - 0.002

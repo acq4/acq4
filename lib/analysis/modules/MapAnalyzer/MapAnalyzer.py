@@ -64,6 +64,7 @@ import numpy as np
 import lib.analysis.modules.Photostim.Scan as Scan
 from lib.analysis.modules.Photostim.Map import Map
 import lib.analysis.tools.poissonScore as poissonScore
+import flowchart.EventDetection as FCEventDetection
 
 
 class MapAnalyzer(AnalysisModule):
@@ -221,9 +222,35 @@ class MapAnalyzer(AnalysisModule):
         
         self.getElement('Stats Table').setData(points[0].data())
 
+        
+        
+#class EventFilterParameterItem(WidgetParameterItem):
+    #def __init__(self, param, depth):
+        #WidgetParameterItem.__init__(self, param, depth)
+        #self.subItem = QtGui.QTreeWidgetItem()
+        #self.addChild(self.subItem)
+        #self.filter = FCEventDetection.EventFilter('eventFilter')
+
+    #def treeWidgetChanged(self):
+        #self.treeWidget().setFirstItemColumnSpanned(self.subItem, True)
+        #self.treeWidget().setItemWidget(self.subItem, 0, self.textBox)
+        #self.setExpanded(True)
+        
+    #def makeWidget(self):
+        #self.textBox = QtGui.QTextEdit()
+        #self.textBox.setMaximumHeight(100)
+        #self.textBox.value = lambda: str(self.textBox.toPlainText())
+        #self.textBox.setValue = self.textBox.setPlainText
+        #self.textBox.sigChanged = self.textBox.textChanged
+        #return self.textBox
+        
+#class TextParameter(Parameter):
+    #"""Editable string; displayed as large text box in the tree."""
+    #itemClass = TextParameterItem
 
 class EventFilter:
     def __init__(self):
+        
         self.params = ptree.Parameter.create(name='Event Selection', type='group', children=[
                 dict(name='Amplitude Sign', type='list', values=['+', '-'], value='+'),
             ])

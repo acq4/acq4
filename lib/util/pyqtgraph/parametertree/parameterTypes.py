@@ -302,9 +302,7 @@ class GroupParameterItem(ParameterItem):
             addText = param.opts['addText']
             if 'addList' in param.opts:
                 self.addWidget = QtGui.QComboBox()
-                self.addWidget.addItem(addText)
-                for t in param.opts['addList']:
-                    self.addWidget.addItem(t)
+                self.updateAddList()
                 self.addWidget.currentIndexChanged.connect(self.addChanged)
             else:
                 self.addWidget = QtGui.QPushButton(addText)
@@ -369,17 +367,45 @@ class GroupParameterItem(ParameterItem):
             ParameterItem.insertChild(self, self.childCount()-1, child)
         else:
             ParameterItem.addChild(self, child)
-
+            
+    def optsChanged(self, param, changed):
+        if 'addList' in changed:
+            self.updateAddList()
+                
+    def updateAddList(self):
+        self.addWidget.blockSignals(True)
+        try:
+            self.addWidget.addItem(self.param.opts['addText'])
+            for t in self.param.opts['addList']:
+                self.addWidget.addItem(t)
+        finally:
+            self.addWidget.blockSignals(False)
+            
 class GroupParameter(Parameter):
     """
     Group parameters are used mainly as a generic parent item that holds (and groups!) a set
-    of child parameters. It also provides a simple mechanism for displaying a button or combo
-    that can be used to add new parameters to the group.
+    of child parameters. 
+    
+    It also provides a simple mechanism for displaying a button or combo
+    that can be used to add new parameters to the group. To enable this, the group 
+    must be initialized with the 'addText' option (the text will be displayed on
+    a button which, when clicked, will cause addNew() to be called). If the 'addList'
+    option is specified as well, then a dropdown-list of addable items will be displayed
+    instead of a button.
     """
     itemClass = GroupParameterItem
 
     def addNew(self, typ=None):
+        """
+        This method is called when the user has requested to add a new item to the group.
+        """
         raise Exception("Must override this function in subclass.")
+    
+    def setAddList(self, vals):
+        """Change the list of options available for the user to add to the group."""
+        self.setOpts(addList=vals)
+
+    
 
 registerParameterType('group', GroupParameter, override=True)
 
