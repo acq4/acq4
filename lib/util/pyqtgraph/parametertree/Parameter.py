@@ -166,7 +166,15 @@ class Parameter(QtCore.QObject):
         return self.opts['type']
         
     def isType(self, typ):
-        """Return true if this parameter type matches the name *typ*."""
+        """
+        Return True if this parameter type matches the name *typ*.
+        This can occur either of two ways:
+        
+        - If self.type() == *typ*
+        - If this parameter's class is registered with the name *typ*
+        """
+        if self.type() == typ:
+            return True
         global PARAM_TYPES
         cls = PARAM_TYPES.get(typ, None)
         if cls is None:
@@ -247,11 +255,11 @@ class Parameter(QtCore.QObject):
             ## First, see if there is already a child with this name and type
             gotChild = False
             for i, ch2 in enumerate(self.childs[ptr:]):
-                #print ch2, ch2.name, ch2.type
+                #print "  ", ch2.name(), ch2.type()
                 if ch2.name() != name or not ch2.isType(typ):
                     continue
                 gotChild = True
-                #print "  found it"
+                #print "    found it"
                 if i != 0:  ## move parameter to next position
                     self.removeChild(ch2)
                     self.insertChild(ptr, ch2)
@@ -265,7 +273,7 @@ class Parameter(QtCore.QObject):
                 if not addChildren:
                     #print "  ignored child"
                     continue
-                #print "  created new"
+                #print "    created new"
                 ch2 = Parameter.create(**ch)
                 self.insertChild(ptr, ch2)
                 foundChilds.add(ch2)
@@ -273,7 +281,7 @@ class Parameter(QtCore.QObject):
             ptr += 1
             
         if removeChildren:
-            for ch in self:
+            for ch in self.childs[:]:
                 if ch not in foundChilds:
                     #print "  remove:", ch
                     self.removeChild(ch)

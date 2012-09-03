@@ -84,6 +84,13 @@ params = [
         {'name': 'DEC stepping', 'type': 'float', 'value': 1.2e6, 'dec': True, 'step': 1, 'siPrefix': True, 'suffix': 'Hz'},
         
     ]},
+    {'name': 'Save/Restore functionality', 'type': 'group', 'children': [
+        {'name': 'Save State', 'type': 'action'},
+        {'name': 'Restore State', 'type': 'action', 'children': [
+            {'name': 'Add missing items', 'type': 'bool', 'value': True},
+            {'name': 'Remove extra items', 'type': 'bool', 'value': True},
+        ]},
+    ]},
     {'name': 'Extra Parameter Options', 'type': 'group', 'children': [
         {'name': 'Read-only', 'type': 'float', 'value': 1.2e6, 'siPrefix': True, 'suffix': 'Hz', 'readonly': True},
         {'name': 'Renamable', 'type': 'float', 'value': 1.2e6, 'siPrefix': True, 'suffix': 'Hz', 'renamable': True},
@@ -114,6 +121,20 @@ def change(param, changes):
         print('  ----------')
     
 p.sigTreeStateChanged.connect(change)
+
+
+def save():
+    global state
+    state = p.saveState()
+    
+def restore():
+    global state
+    add = p['Save/Restore functionality', 'Restore State', 'Add missing items']
+    rem = p['Save/Restore functionality', 'Restore State', 'Remove extra items']
+    p.restoreState(state, addChildren=add, removeChildren=rem)
+p.param('Save/Restore functionality', 'Save State').sigActivated.connect(save)
+p.param('Save/Restore functionality', 'Restore State').sigActivated.connect(restore)
+
 
 ## Create two ParameterTree widgets, both accessing the same data
 t = ParameterTree()
