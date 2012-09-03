@@ -151,12 +151,15 @@ class WidgetParameterItem(ParameterItem):
         
     def valueChanged(self, param, val, force=False):
         ## called when the parameter's value has changed
+        if self.param.name() == 'Reference Frame':
+            print "WidgetParameterItem.valueChanged:", val
         ParameterItem.valueChanged(self, param, val)
-        
         self.widget.sigChanged.disconnect(self.widgetValueChanged)
         try:
             if force or val != self.widget.value():
                 self.widget.setValue(val)
+            if self.param.name() == 'Reference Frame':
+                print "==> Update label:", self.param.name(), val
             self.updateDisplayLabel(val)  ## always make sure label is updated, even if values match!
         finally:
             self.widget.sigChanged.connect(self.widgetValueChanged)
@@ -411,6 +414,8 @@ class ListParameterItem(WidgetParameterItem):
         return w
         
     def value(self):
+        print "ListParameterItem.value:", self.forward
+        
         #vals = self.param.opts['limits']
         key = asUnicode(self.widget.currentText())
         #if isinstance(vals, dict):
@@ -440,17 +445,14 @@ class ListParameterItem(WidgetParameterItem):
 
     def limitsChanged(self, param, limits):
         # set up forward / reverse mappings for name:value
-        self.forward = collections.OrderedDict()  ## name: value
-        self.reverse = collections.OrderedDict()  ## value: name
-        if isinstance(limits, dict):
-            for k, v in limits.items():
-                self.forward[k] = v
-                self.reverse[v] = k
-        else:
-            for v in limits:
-                n = asUnicode(v)
-                self.forward[n] = v
-                self.reverse[v] = n
+        print "ListParameterItem.limitsChanged:", limits
+        #self.forward = collections.OrderedDict([('', None)])  ## name: value
+        #self.reverse = collections.OrderedDict([(None, '')])  ## value: name
+        
+        if len(limits) == 0:
+            limits = ['']  ## Can never have an empty list--there is always at least a singhe blank item.
+        
+        self.forward, self.reverse = ListParameter.mapping(limits)
         
         try:
             self.widget.blockSignals(True)
@@ -460,7 +462,11 @@ class ListParameterItem(WidgetParameterItem):
                 self.widget.addItem(k)
                 if k == val:
                     self.widget.setCurrentIndex(self.widget.count()-1)
-            
+                    
+            newVal = self.widget.currentText()
+            if newVal != val:
+                print "ListParameterItem.limitsChanged: set new value", newVal, val
+                self.param.setValue(newVal)
         finally:
             self.widget.blockSignals(False)
             
@@ -472,28 +478,38 @@ class ListParameter(Parameter):
     def __init__(self, **opts):
         self.forward = collections.OrderedDict()  ## name: value
         self.reverse = collections.OrderedDict()  ## value: name
+        
+        ## Parameter uses 'limits' option to define the set of allowed values
         if 'values' in opts:
             opts['limits'] = opts['values']
+        if opts.get('limits', None) is None:
+            opts['limits'] = []
         Parameter.__init__(self, **opts)
         
     def setLimits(self, limits):
-        self.forward = collections.OrderedDict()  ## name: value
-        self.reverse = collections.OrderedDict()  ## value: name
-        if isinstance(limits, dict):
-            for k, v in limits.items():
-                self.forward[k] = v
-                self.reverse[v] = k
-        else:
-            for v in limits:
-                n = asUnicode(v)
-                self.forward[n] = v
-                self.reverse[v] = n
+        print "ListParameter.setLimits:", limits
+        self.forward, self.reverse = self.mapping(limits)
         
         Parameter.setLimits(self, limits)
         #print self.name(), self.value(), limits
         if self.value() not in self.reverse and len(self.reverse) > 0:
             self.setValue(list(self.reverse.keys())[0])
             
+    @staticmethod
+    def mapping(limits):
+        ## Return forward and reverse mapping dictionaries given a limit specification
+        forward = collections.OrderedDict()  ## name: value
+        reverse = collections.OrderedDict()  ## value: name
+        if isinstance(limits, dict):
+            for k, v in limits.items():
+                forward[k] = v
+                reverse[v] = k
+        else:
+            for v in limits:
+                n = asUnicode(v)
+                forward[n] = v
+                reverse[v] = n
+        return forward, reverse
 
 registerParameterType('list', ListParameter, override=True)
 

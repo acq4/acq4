@@ -3,13 +3,14 @@ import collections, os, weakref, re
 from .ParameterItem import ParameterItem
 
 PARAM_TYPES = {}
-
+PARAM_NAMES = {}
 
 def registerParameterType(name, cls, override=False):
     global PARAM_TYPES
     if name in PARAM_TYPES and not override:
         raise Exception("Parameter type '%s' already exists (use override=True to replace)" % name)
     PARAM_TYPES[name] = cls
+    PARAM_NAMES[cls] = name
 
 
 
@@ -106,6 +107,7 @@ class Parameter(QtCore.QObject):
             'renamable': False,
             'removable': False,
             'strictNaming': False,  # forces name to be usable as a python variable
+            #'limits': None,  ## This is a bad plan--each parameter type may have a different data type for limits.
         }
         self.opts.update(opts)
         
@@ -163,6 +165,14 @@ class Parameter(QtCore.QObject):
     def type(self):
         return self.opts['type']
         
+    def isType(self, typ):
+        """Return true if this parameter type matches the name *typ*."""
+        global PARAM_TYPES
+        cls = PARAM_TYPES.get(typ, None)
+        if cls is None:
+            raise Exception("Type name '%s' is not registered." % str(typ))
+        return self.__class__ is cls
+        
     def childPath(self, child):
         """
         Return the path of parameter names from self to child.
@@ -179,7 +189,8 @@ class Parameter(QtCore.QObject):
     def setValue(self, value, blockSignal=None):
         ## return the actual value that was set
         ## (this may be different from the value that was requested)
-        #print self, "Set value:", value, self.opts['value'], self.opts['value'] == value
+        if self.name() == 'Reference Frame':
+            print self.name(), "Set value:", value, self.opts['value'], self.opts['value'] == value
         try:
             if blockSignal is not None:
                 self.sigValueChanged.disconnect(blockSignal)
@@ -239,7 +250,7 @@ class Parameter(QtCore.QObject):
             gotChild = False
             for i, ch2 in enumerate(self.childs[ptr:]):
                 #print ch2, ch2.name, ch2.type
-                if ch2.name() != name or ch2.type() != typ:
+                if ch2.name() != name or not ch2.isType(typ):
                     continue
                 gotChild = True
                 #print "  found it"
@@ -300,6 +311,7 @@ class Parameter(QtCore.QObject):
         """Set limits on the acceptable values for this parameter. 
         The format of limits depends on the type of the parameter and
         some parameters do not make use of limits at all."""
+        print "Parameter.setLimits:", self.name(), limits
         if 'limits' in self.opts and self.opts['limits'] == limits:
             return
         self.opts['limits'] = limits
