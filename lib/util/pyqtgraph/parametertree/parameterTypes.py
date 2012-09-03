@@ -151,15 +151,11 @@ class WidgetParameterItem(ParameterItem):
         
     def valueChanged(self, param, val, force=False):
         ## called when the parameter's value has changed
-        if self.param.name() == 'Reference Frame':
-            print "WidgetParameterItem.valueChanged:", val
         ParameterItem.valueChanged(self, param, val)
         self.widget.sigChanged.disconnect(self.widgetValueChanged)
         try:
             if force or val != self.widget.value():
                 self.widget.setValue(val)
-            if self.param.name() == 'Reference Frame':
-                print "==> Update label:", self.param.name(), val
             self.updateDisplayLabel(val)  ## always make sure label is updated, even if values match!
         finally:
             self.widget.sigChanged.connect(self.widgetValueChanged)
@@ -397,7 +393,9 @@ class ListParameterItem(WidgetParameterItem):
     
     """
     def __init__(self, param, depth):
+        self.targetValue = None
         WidgetParameterItem.__init__(self, param, depth)
+        
         
     def makeWidget(self):
         opts = self.param.opts
@@ -414,8 +412,6 @@ class ListParameterItem(WidgetParameterItem):
         return w
         
     def value(self):
-        print "ListParameterItem.value:", self.forward
-        
         #vals = self.param.opts['limits']
         key = asUnicode(self.widget.currentText())
         #if isinstance(vals, dict):
@@ -436,6 +432,7 @@ class ListParameterItem(WidgetParameterItem):
                 #raise Exception("Value '%s' not allowed." % val)
         #else:
             #key = unicode(val)
+        self.targetValue = val
         if val not in self.reverse:
             self.widget.setCurrentIndex(0)
         else:
@@ -445,7 +442,6 @@ class ListParameterItem(WidgetParameterItem):
 
     def limitsChanged(self, param, limits):
         # set up forward / reverse mappings for name:value
-        print "ListParameterItem.limitsChanged:", limits
         #self.forward = collections.OrderedDict([('', None)])  ## name: value
         #self.reverse = collections.OrderedDict([(None, '')])  ## value: name
         
@@ -453,20 +449,16 @@ class ListParameterItem(WidgetParameterItem):
             limits = ['']  ## Can never have an empty list--there is always at least a singhe blank item.
         
         self.forward, self.reverse = ListParameter.mapping(limits)
-        
         try:
             self.widget.blockSignals(True)
-            val = asUnicode(self.widget.currentText())
+            val = self.targetValue  #asUnicode(self.widget.currentText())
+            
             self.widget.clear()
             for k in self.forward:
                 self.widget.addItem(k)
                 if k == val:
                     self.widget.setCurrentIndex(self.widget.count()-1)
-                    
-            newVal = self.widget.currentText()
-            if newVal != val:
-                print "ListParameterItem.limitsChanged: set new value", newVal, val
-                self.param.setValue(newVal)
+                    self.updateDisplayLabel()
         finally:
             self.widget.blockSignals(False)
             
@@ -487,7 +479,6 @@ class ListParameter(Parameter):
         Parameter.__init__(self, **opts)
         
     def setLimits(self, limits):
-        print "ListParameter.setLimits:", limits
         self.forward, self.reverse = self.mapping(limits)
         
         Parameter.setLimits(self, limits)

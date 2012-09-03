@@ -189,8 +189,6 @@ class Parameter(QtCore.QObject):
     def setValue(self, value, blockSignal=None):
         ## return the actual value that was set
         ## (this may be different from the value that was requested)
-        if self.name() == 'Reference Frame':
-            print self.name(), "Set value:", value, self.opts['value'], self.opts['value'] == value
         try:
             if blockSignal is not None:
                 self.sigValueChanged.disconnect(blockSignal)
@@ -311,7 +309,6 @@ class Parameter(QtCore.QObject):
         """Set limits on the acceptable values for this parameter. 
         The format of limits depends on the type of the parameter and
         some parameters do not make use of limits at all."""
-        print "Parameter.setLimits:", self.name(), limits
         if 'limits' in self.opts and self.opts['limits'] == limits:
             return
         self.opts['limits'] = limits
