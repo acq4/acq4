@@ -418,7 +418,8 @@ class ListParameterItem(WidgetParameterItem):
         #else:
             #return key
         #print key, self.forward
-        return self.forward[key]
+        
+        return self.forward.get(key, None)
             
     def setValue(self, val):
         #vals = self.param.opts['limits']
