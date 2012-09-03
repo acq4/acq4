@@ -419,7 +419,8 @@ class ListParameterItem(WidgetParameterItem):
         #else:
             #return key
         #print key, self.forward
-        return self.forward[key]
+        
+        return self.forward.get(key, None)
             
     def setValue(self, val):
         #vals = self.param.opts['limits']
@@ -515,7 +516,7 @@ class ActionParameterItem(ParameterItem):
         self.button = QtGui.QPushButton(param.name())
         #self.layout.addSpacing(100)
         self.layout.addWidget(self.button)
-        self.layout.addSpacing(100)
+        self.layout.addStretch()
         self.button.clicked.connect(self.buttonClicked)
         param.sigNameChanged.connect(self.paramRenamed)
         self.setText(0, '')

@@ -459,7 +459,7 @@ class Parameter(QtCore.QObject):
             num = int(num)
         while True:
             newName = base + ("%%0%dd"%numLen) % num
-            if newName not in self.childs:
+            if newName not in self.names:
                 return newName
             num += 1
 
