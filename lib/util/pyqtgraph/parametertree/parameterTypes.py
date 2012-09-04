@@ -302,6 +302,7 @@ class GroupParameterItem(ParameterItem):
             addText = param.opts['addText']
             if 'addList' in param.opts:
                 self.addWidget = QtGui.QComboBox()
+                self.addWidget.setSizeAdjustPolicy(QtGui.QComboBox.AdjustToContents)
                 self.updateAddList()
                 self.addWidget.currentIndexChanged.connect(self.addChanged)
             else:
@@ -312,7 +313,8 @@ class GroupParameterItem(ParameterItem):
             l.setContentsMargins(0,0,0,0)
             w.setLayout(l)
             l.addWidget(self.addWidget)
-            l.addItem(QtGui.QSpacerItem(200, 10, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
+            l.addStretch()
+            #l.addItem(QtGui.QSpacerItem(200, 10, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
             self.addWidgetBox = w
             self.addItem = QtGui.QTreeWidgetItem([])
             self.addItem.setFlags(QtCore.Qt.ItemIsEnabled)
@@ -572,7 +574,7 @@ class ActionParameter(Parameter):
         self.sigActivated.emit(self)
         self.emitStateChanged('activated', None)
         
-registerParameterType('action', ActionParameter)
+registerParameterType('action', ActionParameter, override=True)
 
 
 
@@ -601,4 +603,4 @@ class TextParameter(Parameter):
 
     
     
-registerParameterType('text', TextParameter)
+registerParameterType('text', TextParameter, override=True)

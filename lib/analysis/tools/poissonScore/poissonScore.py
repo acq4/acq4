@@ -130,16 +130,23 @@ def poissonProb(n, t, l, clip=False):
         p = np.clip(p, 0, 1.0-1e-25)
     return p
     
+#def gaussProb(amps, mean, stdev):
+    #"""
+    #Given a gaussian distribution with mean, stdev, return the improbability
+    #of seeing all of the given amplitudes consecutively, normalized for the number of events.
+    #"""
+    #if len(amps) == 0:
+        #return 1.0
+    #p = stats.norm(mean, stdev).sf(amps)
+    #return 1.0 / (p.prod() ** (1./len(amps)))
+
 def gaussProb(amps, mean, stdev):
-    """
-    Given a gaussian distribution with mean, stdev, return the improbability
-    of seeing all of the given amplitudes consecutively, normalized for the number of events.
-    """
+    ## Return the survival function for gaussian distribution 
     if len(amps) == 0:
         return 1.0
-    p = stats.norm(mean, stdev).sf(amps)
-    return 1.0 / (p.prod() ** (1./len(amps)))
-
+    return stats.norm(mean, stdev).sf(amps)
+    
+    
 class PoissonScore:
     """
     Class for computing a statistic that asks "what is the probability that a poisson process
@@ -456,7 +463,33 @@ class PoissonAmpScore(PoissonScore):
                     (the output must have the same length)
             ampMean, ampStdev: population statistics of spontaneous events
         """
-        return [ gaussProb(events['amp'][events['time']<=t], ampMean, ampStdev) for t in events['time'] ]
+        #score =  [ gaussProb(events['amp'][events['time']<=t], ampMean, ampStdev) for t in events['time'] ]
+        
+        ## Here's the procedure:
+        ## 1. sort the events by amplitude
+        ## 2. For each set of events[0:i], determine the probability of seeing n-i events with amplitude > amp[i-1]
+        ## 3. Return the maximum value
+        
+        def prob(N, R, s):
+            ## Probability that, given N trials, we will see at least R trials with probability <= s
+            k = np.arange(R, N+1)
+            return (sp.comb(N, k) * s**k * (1.0-s)**(N-k)).sum()
+            
+        def score(amps, mean, stdev):
+            ## assign a score to this series of events indicating the probability that a random process would produce a similar set
+            amps = sorted(amps)[::-1]
+            s = gaussProb(amps, mean, stdev)
+            N = len(amps)
+            p = []
+            for i, amp in enumerate(amps):
+                R = i+1
+                p.append(prob(N, R, s[i]))
+            return min(p)
+                
+                assert not np.isinf(score).any()
+                return score
+                
+        return np.array([score(amps[:i+1]) for i in range(len(amps))])
 
 
 

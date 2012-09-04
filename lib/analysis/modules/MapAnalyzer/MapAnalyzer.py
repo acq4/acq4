@@ -250,19 +250,53 @@ class MapAnalyzer(AnalysisModule):
 
 class EventFilter:
     def __init__(self):
+        self.keyList = []
         
-        self.params = ptree.Parameter.create(name='Event Selection', type='group', children=[
+        self.params = ptree.Parameter.create(name='Event Selection', type='group', addText='Add filter..', addList=self.keyList, children=[
                 dict(name='Amplitude Sign', type='list', values=['+', '-'], value='+'),
             ])
+        self.params.addNew = self.addNew
+            
+    def addNew(self, typ):
+        fp = ptree.Parameter.create(name='Filter', autoIncrementName=True, type='bool', value=True, removable=True, renamable=True, children=[
+            dict(name="Field", type='list', value=typ, values=self.keyList),
+            dict(name='Min', type='float', value=0.0),
+            dict(name='Max', type='float', value=1.0),
+            ])
+        self.params.addChild(fp)
     
     def parameters(self):
         return self.params
+        
+    def updateKeys(self, keys):
+        self.keyList = list(keys)
+        self.keyList.sort()
+        self.params.setAddList(keys)
+        for fp in self.params:
+            if fp.name() == 'Amplitude Sign':
+                continue
+            fp.param('Field').setLimits(keys)
     
     def process(self, events):
+        self.updateKeys(events.dtype.names)
+        
         if self.params['Amplitude Sign'] == '+':
-            return events[events['fitAmplitude'] > 0]
+            events = events[events['fitAmplitude'] > 0]
         else:
-            return events[events['fitAmplitude'] < 0]
+            events = events[events['fitAmplitude'] < 0]
+        
+        for fp in self.params:
+            if fp.name() == 'Amplitude Sign':
+                continue
+            if fp.value() is False:
+                continue
+            key, mn, mx = fp['Field'], fp['Min'], fp['Max']
+            vals = events[key]
+            mask = (vals >= mn) * (vals < mx)  ## Use inclusive minimum and non-inclusive maximum. This makes it easier to create non-overlapping selections
+            events = events[mask]
+            
+        return events
+        
 
 class SpontRateAnalyzer:
     def __init__(self, plot=None):
