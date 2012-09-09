@@ -98,6 +98,7 @@ Notes on probability computation:
 ## Code for playing with poisson distributions
 
 import numpy as np
+import scipy
 import scipy.stats as stats
 import scipy.misc
 import scipy.interpolate
@@ -473,7 +474,7 @@ class PoissonAmpScore(PoissonScore):
         def prob(N, R, s):
             ## Probability that, given N trials, we will see at least R trials with probability <= s
             k = np.arange(R, N+1)
-            return (sp.comb(N, k) * s**k * (1.0-s)**(N-k)).sum()
+            return (scipy.comb(N, k) * s**k * (1.0-s)**(N-k)).sum()
             
         def score(amps, mean, stdev):
             ## assign a score to this series of events indicating the probability that a random process would produce a similar set
@@ -484,12 +485,10 @@ class PoissonAmpScore(PoissonScore):
             for i, amp in enumerate(amps):
                 R = i+1
                 p.append(prob(N, R, s[i]))
-            return min(p)
+            return 1.0 / min(p)
                 
-                assert not np.isinf(score).any()
-                return score
-                
-        return np.array([score(amps[:i+1]) for i in range(len(amps))])
+        amps = events['amp']
+        return np.array([score(amps[:i+1], ampMean, ampStdev) for i in range(len(amps))])
 
 
 
@@ -882,8 +881,8 @@ if __name__ == '__main__':
     algorithms = [
         ('Poisson Score', PoissonScore.score),
         ('Poisson Score + Amp', PoissonAmpScore.score),
-        ('Poisson Multi', PoissonRepeatScore.score),
-        ('Poisson Multi + Amp', PoissonRepeatAmpScore.score),
+        #('Poisson Multi', PoissonRepeatScore.score),
+        #('Poisson Multi + Amp', PoissonRepeatAmpScore.score),
     ]
 
     win = pg.GraphicsWindow(border=0.3)
