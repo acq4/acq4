@@ -228,6 +228,9 @@ class Parameter(QtCore.QObject):
         """
         state = self.opts.copy()
         state['children'] = collections.OrderedDict([(ch.name(), ch.saveState()) for ch in self])
+        if state['type'] is None:
+            global PARAM_NAMES
+            state['type'] = PARAM_NAMES.get(type(self), None)
         return state
 
     def restoreState(self, state, recursive=True, addChildren=True, removeChildren=True, blockSignals=True):
@@ -247,19 +250,20 @@ class Parameter(QtCore.QObject):
         if isinstance(childState, dict):
             childState = childState.values()
             
-        self.setOpts(**state)
-        
-        if not recursive:
-            return
-        
-        ptr = 0  ## pointer to first child that has not been restored yet
-        foundChilds = set()
-        #print "==============", self.name()
         
         if blockSignals:
             self.blockTreeChangeSignal()
             
         try:
+            self.setOpts(**state)
+            
+            if not recursive:
+                return
+            
+            ptr = 0  ## pointer to first child that has not been restored yet
+            foundChilds = set()
+            #print "==============", self.name()
+            
             for ch in childState:
                 name = ch['name']
                 typ = ch['type']

@@ -282,9 +282,8 @@ class SimpleParameter(Parameter):
         return pg.mkColor(Parameter.value(self))
     
     def saveColorState(self):
-        state = self.opts.copy()
+        state = Parameter.saveState(self)
         state['value'] = pg.colorTuple(self.value())
-        state['children'] = [ch.saveState() for ch in self]
         return state
         
     
