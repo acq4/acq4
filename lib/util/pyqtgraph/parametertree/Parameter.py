@@ -16,13 +16,16 @@ def registerParameterType(name, cls, override=False):
 
 class Parameter(QtCore.QObject):
     """
-    Tree of name=value pairs (modifiable or not)
-       - Value may be integer, float, string, bool, color, or list selection
-       - Optionally, a custom widget may be specified for a property
-       - Any number of extra columns may be added for other purposes
-       - Any values may be reset to a default value
-       - Parameters may be grouped / nested
-       - Parameter may be subclassed to provide customized behavior.
+    A Parameter is the basic unit of data in a parameter tree. Each parameter has
+    a name, a type, a value, and several other properties that modify the behavior of the 
+    Parameter. Parameters may have parent / child / sibling relationships to construct
+    organized hierarchies. Parameters generally do not have any inherent GUI or visual
+    interpretation; instead they manage ParameterItem instances which take care of
+    display and user interaction.
+    
+    Note: It is fairly uncommon to use the Parameter class directly; mostly you 
+    will use subclasses which provide specialized type and data handling. The static
+    pethod Parameter.create(...) is an easy way to generate instances of these subclasses.
        
     For more Parameter types, see ParameterTree.parameterTypes module.
     
