@@ -272,11 +272,21 @@ class SimpleParameter(Parameter):
     
     def __init__(self, *args, **kargs):
         Parameter.__init__(self, *args, **kargs)
+        
+        ## override a few methods for color parameters
         if self.opts['type'] == 'color':
             self.value = self.colorValue
+            self.saveState = self.saveColorState
     
     def colorValue(self):
         return pg.mkColor(Parameter.value(self))
+    
+    def saveColorState(self):
+        state = self.opts.copy()
+        state['value'] = pg.colorTuple(self.value())
+        state['children'] = [ch.saveState() for ch in self]
+        return state
+        
     
 registerParameterType('int', SimpleParameter, override=True)
 registerParameterType('float', SimpleParameter, override=True)
