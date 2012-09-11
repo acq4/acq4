@@ -98,6 +98,7 @@ Notes on probability computation:
 ## Code for playing with poisson distributions
 
 import numpy as np
+import scipy
 import scipy.stats as stats
 import scipy.misc
 import scipy.interpolate
@@ -463,33 +464,44 @@ class PoissonAmpScore(PoissonScore):
                     (the output must have the same length)
             ampMean, ampStdev: population statistics of spontaneous events
         """
-        #score =  [ gaussProb(events['amp'][events['time']<=t], ampMean, ampStdev) for t in events['time'] ]
+        return 1.0 / gaussProb(events['amp'], ampMean, ampStdev)
+    
+    
+    ## This is perhaps way too complicated.
+    #@classmethod
+    #def amplitudeScore(cls, events, ampMean=1.0, ampStdev=1.0, **kwds):
+        #"""Computes extra probability information about events based on their amplitude.
+        #Inputs to this method are:
+            #events: record array of events; fields include 'time' and 'amp'
+            #times:  the time points at which to compute probability values
+                    #(the output must have the same length)
+            #ampMean, ampStdev: population statistics of spontaneous events
+        #"""
+        ##score =  [ gaussProb(events['amp'][events['time']<=t], ampMean, ampStdev) for t in events['time'] ]
         
-        ## Here's the procedure:
-        ## 1. sort the events by amplitude
-        ## 2. For each set of events[0:i], determine the probability of seeing n-i events with amplitude > amp[i-1]
-        ## 3. Return the maximum value
+        ### Here's the procedure:
+        ### 1. sort the events by amplitude
+        ### 2. For each set of events[0:i], determine the probability of seeing n-i events with amplitude > amp[i-1]
+        ### 3. Return the maximum value
         
-        def prob(N, R, s):
-            ## Probability that, given N trials, we will see at least R trials with probability <= s
-            k = np.arange(R, N+1)
-            return (sp.comb(N, k) * s**k * (1.0-s)**(N-k)).sum()
+        #def prob(N, R, s):
+            ### Probability that, given N trials, we will see at least R trials with probability <= s
+            #k = np.arange(R, N+1)
+            #return (scipy.comb(N, k) * s**k * (1.0-s)**(N-k)).sum()
             
-        def score(amps, mean, stdev):
-            ## assign a score to this series of events indicating the probability that a random process would produce a similar set
-            amps = sorted(amps)[::-1]
-            s = gaussProb(amps, mean, stdev)
-            N = len(amps)
-            p = []
-            for i, amp in enumerate(amps):
-                R = i+1
-                p.append(prob(N, R, s[i]))
-            return min(p)
+        #def score(amps, mean, stdev):
+            ### assign a score to this series of events indicating the probability that a random process would produce a similar set
+            #amps = sorted(amps)[::-1]
+            #s = gaussProb(amps, mean, stdev)
+            #N = len(amps)
+            #p = []
+            #for i, amp in enumerate(amps):
+                #R = i+1
+                #p.append(prob(N, R, s[i]))
+            #return 1.0 / min(p)
                 
-                assert not np.isinf(score).any()
-                return score
-                
-        return np.array([score(amps[:i+1]) for i in range(len(amps))])
+        #amps = events['amp']
+        #return np.array([score(amps[:i+1], ampMean, ampStdev) for i in range(len(amps))])
 
 
 
@@ -882,8 +894,8 @@ if __name__ == '__main__':
     algorithms = [
         ('Poisson Score', PoissonScore.score),
         ('Poisson Score + Amp', PoissonAmpScore.score),
-        ('Poisson Multi', PoissonRepeatScore.score),
-        ('Poisson Multi + Amp', PoissonRepeatAmpScore.score),
+        #('Poisson Multi', PoissonRepeatScore.score),
+        #('Poisson Multi + Amp', PoissonRepeatAmpScore.score),
     ]
 
     win = pg.GraphicsWindow(border=0.3)
