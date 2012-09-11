@@ -29,7 +29,7 @@ import decimal, re
 try:
     import scipy.weave
     USE_WEAVE = True
-except ImportError:
+except:
     USE_WEAVE = False
 
 from . import debug

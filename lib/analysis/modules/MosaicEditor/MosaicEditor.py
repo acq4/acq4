@@ -32,6 +32,7 @@ class MosaicEditor(AnalysisModule):
 
         self.ui.canvas = self.getElement('Canvas', create=True)
         self.items = {}
+        self.files = {}
         self.cells = {}
         #self.loaded = []
         
@@ -95,10 +96,16 @@ class MosaicEditor(AnalysisModule):
             return
 
         for f in files:
+            if f in self.files:   ## Do not allow loading the same file more than once
+                item = self.files[f]
+                item.show()
+                continue
+            
             item = canvas.addFile(f)
             if isinstance(item, list):
                 item = item[0]
             self.items[item] = f
+            self.files[f] = item
             try:
                 item.timestamp = f.info()['__timestamp__']
             except:
