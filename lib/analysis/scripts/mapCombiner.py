@@ -218,16 +218,20 @@ def interpolateCells(sites, spacing=5e-6, method='nearest', probThreshold=0.05):
     
     return arr, (xmin, ymin)
     
-def convolveCells(sites, spacing=5e-6, probThreshold=0.02, sampleSpacing=35e-6):
-    avgCellX = np.array(list(set(sites['CellXPos']))).mean()
-    avgCellY = np.array(list(set(sites['CellYPos']))).mean()
-    xmin = (sites['xPos']-sites['CellXPos']).min() ## point furthest left of the cell
-    ymin = (sites['yPos']-sites['CellYPos']).min() ## point furthest above the cell
-    xmax = (sites['xPos']-sites['CellXPos']).max()
-    ymax = (sites['yPos']-sites['CellXPos']).max()
+def convolveCells(sites, spacing=5e-6, probThreshold=0.02, probRadius=90e-6):
+    #avgCellX = np.array(list(set(sites['xPosCell']))).mean()
+    #avgCellY = np.array(list(set(sites['yPosCell']))).mean()
+    #xmin = (sites['xPos']-sites['xPosCell']).min() ## point furthest left of the cell
+    xmin = sites['xPosCell'].min()
+    #ymin = (sites['yPos']-sites['yPosCell']).min() ## point furthest above the cell
+    ymin = sites['yPosCell'].min()
+    #xmax = (sites['xPos']-sites['xPosCell']).max()
+    xmax = sites['xPosCell'].max()
+    #ymax = (sites['yPos']-sites['yPosCell']).max()
+    ymax = sites['yPosCell'].max()
     xdim = int((xmax-xmin)/spacing)+10
     ydim = int((ymax-ymin)/spacing)+10
-    avgCellIndex = np.array([int((avgCellX-xmin)/spacing)+5, int((avgCellY-ymin)/spacing)+5])
+    #avgCellIndex = np.array([int((avgCellX-xmin)/spacing)+5, int((avgCellY-ymin)/spacing)+5])
     cells = set(sites['CellDir'])
     n = len(cells)
     
@@ -380,3 +384,4 @@ def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probT
         sampling[i][sampling[i] > 0.02] = 1
         sampling[i][sampling[i] <= 0.02] = 0        
     return arr, sampling
+

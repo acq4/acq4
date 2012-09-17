@@ -981,13 +981,15 @@ class ROI(GraphicsObject):
         ### Untranspose array before returning
         #return arr5.transpose(tr2)
 
-    def getAffineSliceParams(self, data, img, axes=(0.1)):
+    def getAffineSliceParams(self, data, img, axes=(0,1)):
         """
         Returns the parameters needed to use :func:`affineSlice <pyqtgraph.affineSlice>` to 
         extract a subset of *data* using this ROI and *img* to specify the subset.
         
         See :func:`getArrayRegion <pyqtgraph.ROI.getArrayRegion>` for more information.
         """
+        if self.scene() is not img.scene():
+            raise Exception("ROI and target item must be members of the same scene.")
         
         shape = self.state['size']
         

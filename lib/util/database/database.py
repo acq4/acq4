@@ -264,7 +264,7 @@ class SqliteDatabase:
             chunkSize = int(chunkSize) ## just make sure
             offset = 0
             i = 0
-            while offset < len(records)-1:
+            while offset < len(records):
                 #print len(columns), len(records[0]), len(self.tableSchema(table))
                 chunk = records[offset:offset+chunkSize]
                 self.exe(cmd, chunk, batch=True)
