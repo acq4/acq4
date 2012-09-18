@@ -156,3 +156,8 @@ class MosaicEditor(AnalysisModule):
         return self.items.values()
         
         
+    def quit(self):
+        self.files = None
+        self.cells = None
+        self.items = None
+        self.ui.canvas.clear()

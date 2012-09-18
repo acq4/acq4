@@ -1577,9 +1577,10 @@ def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshol
     ## We do this check early for performance--it eliminates the vast majority of events
     longEvents = np.argwhere(times[1:] - times[:-1] > minLength)
     if len(longEvents) < 1:
-        return []
-    longEvents = longEvents[:, 0]
-    nEvents = len(longEvents)
+        nEvents = 0
+    else:
+        longEvents = longEvents[:, 0]
+        nEvents = len(longEvents)
     
     ## Measure sum of values within each region between crossings, combine into single array
     if xvals is None:
