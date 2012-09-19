@@ -36,17 +36,22 @@ class SpatialCorrelator(QtGui.QWidget):
         self.ctrl.spontSpin.sigValueChanged.connect(self.paramChanged)
         self.ctrl.thresholdSpin.sigValueChanged.connect(self.paramChanged)
         self.ctrl.probabilityRadio.toggled.connect(self.paramChanged)
+        self.ctrl.eventCombo.currentIndexChanged.connect(self.paramChanged)
         
         
     #def getOutline(self):
         #return self.outline
+    def populateEventsCombo(self, arr):
+        names = arr.dtype.names ## it would be nice to narrow this down to only include integer fields
+        self.ctrl.eventCombo.updateList(names)
     
     def setData(self, arr=None, xPos=None, yPos=None, numOfPostEvents=None):
         if arr is not None:
             self.checkArrayInput(arr)
+            self.populateEventsCombo(arr)
             fields = arr.dtype.names
-            if 'xPos' not in fields or 'yPos' not in fields or 'numOfPostEvents' not in fields:
-                raise HelpfulException("Array input to Spatial correlator needs to have the following fields: 'xPos', 'yPos', 'numOfPostEvents'")
+            if 'xPos' not in fields or 'yPos' not in fields:
+                raise HelpfulException("Array input to Spatial correlator needs to have the following fields: 'xPos', 'yPos'")
         elif arr is None:
             self.data = None
             return
@@ -74,7 +79,7 @@ class SpatialCorrelator(QtGui.QWidget):
             return
         
         #print "calculating Probs"
-        fn.bendelsSpatialCorrelationAlgorithm(self.data, self.ctrl.radiusSpin.value(), self.ctrl.spontSpin.value(), self.ctrl.deltaTSpin.value(), printProcess=False)
+        fn.bendelsSpatialCorrelationAlgorithm(self.data, self.ctrl.radiusSpin.value(), self.ctrl.spontSpin.value(), self.ctrl.deltaTSpin.value(), printProcess=False, eventsKey=str(self.ctrl.eventCombo.currentText()))
         #print "probs calculated"
         self.data['prob'] = 1-self.data['prob'] ## give probability that events are not spontaneous
         

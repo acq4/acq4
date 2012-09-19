@@ -47,12 +47,12 @@ def convertPtsToSparseImage(data, params, spacing=5e-6):
     return arr
 
 
-def bendelsSpatialCorrelationAlgorithm(data, radius, spontRate, timeWindow, printProcess=False):
+def bendelsSpatialCorrelationAlgorithm(data, radius, spontRate, timeWindow, printProcess=False, eventsKey='numOfPostEvents'):
     ## check that data has 'xPos', 'yPos' and 'numOfPostEvents'
     #SpatialCorrelator.checkArrayInput(data) 
     fields = data.dtype.names
-    if 'xPos' not in fields or 'yPos' not in fields or 'numOfPostEvents' not in fields:
-        raise HelpfulException("Array input needs to have the following fields: 'xPos', 'yPos', 'numOfPostEvents'. Current fields are: %s" %str(fields))   
+    if 'xPos' not in fields or 'yPos' not in fields or eventsKey not in fields:
+        raise HelpfulException("Array input needs to have the following fields: 'xPos', 'yPos', the field specified in *eventsKey*. Current fields are: %s" %str(fields))   
     
     ## add 'prob' field to data array
     if 'prob' not in data.dtype.names:
@@ -75,7 +75,7 @@ def bendelsSpatialCorrelationAlgorithm(data, radius, spontRate, timeWindow, prin
     for x in data:
         spots = data[(np.sqrt((data['xPos']-x['xPos'])**2+(data['yPos']-x['yPos'])**2)) < radius]
         nSpots = len(spots)
-        nEventSpots = len(spots[spots['numOfPostEvents'] > 0])
+        nEventSpots = len(spots[spots[eventsKey] > 0])
         
         prob = 0
         for j in range(nEventSpots, nSpots+1):
