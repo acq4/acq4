@@ -77,6 +77,8 @@ class SpatialCorrelator(QtGui.QWidget):
         #print "process called."
         if self.ctrl.disableChk.isChecked():
             return
+        if self.data is None:
+            return
         
         #print "calculating Probs"
         fn.bendelsSpatialCorrelationAlgorithm(self.data, self.ctrl.radiusSpin.value(), self.ctrl.spontSpin.value(), self.ctrl.deltaTSpin.value(), printProcess=False, eventsKey=str(self.ctrl.eventCombo.currentText()))
