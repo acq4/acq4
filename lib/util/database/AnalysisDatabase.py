@@ -662,9 +662,11 @@ class AnalysisDatabase(SqliteDatabase):
 
     def select(self, table, columns='*', where=None, sql='', toDict=True, toArray=False, distinct=False, limit=None, offset=None):
         """Extends select to convert directory/file columns back into Dir/FileHandles"""
+        prof = debug.Profiler("AnalysisDatabase.select()", disabled=False)
         
         data = SqliteDatabase.select(self, table, columns, where=where, sql=sql, distinct=distinct, limit=limit, offset=offset, toDict=True, toArray=False)
         data = TableData(data)
+        prof.mark("got data from SQliteDatabase")
         
         config = self.getColumnConfig(table)
         
@@ -683,9 +685,13 @@ class AnalysisDatabase(SqliteDatabase):
             elif conf.get('Type', None) == 'file':
                 data[column] = map(lambda f: None if f is None else self.baseDir()[f], data[column])
                 
+        prof.mark("converted file/dir handles")
+                
         ret = data.originalData()
         if toArray:
             ret = data.toArray()
+            prof.mark("converted data to array")
+        prof.finish()
         return ret
     
     def _prepareData(self, table, data, ignoreUnknownColumns=False, batch=False):

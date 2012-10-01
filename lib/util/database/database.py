@@ -83,7 +83,7 @@ class SqliteDatabase:
             toDict  - If True, return a list-of-dicts representation of the query results
             toArray - If True, return a record array representation of the query results
         """
-        p = debug.Profiler('SqliteDatabase.exe', disabled=True)
+        p = debug.Profiler('SqliteDatabase.exe', disabled=False)
         p.mark('Command: %s' % cmd)
         #print cmd
         #import traceback
@@ -151,7 +151,7 @@ class SqliteDatabase:
         toArray        if True, return a numpy record array
         ============== ================================================================
         """
-        p = debug.Profiler("SqliteDatabase.select", disabled=True)
+        p = debug.Profiler("SqliteDatabase.select", disabled=False)
         if columns != '*':
             #if isinstance(columns, basestring):
                 #columns = columns.split(',')
@@ -491,6 +491,7 @@ class SqliteDatabase:
         return newData
 
     def _queryToDict(self, q):
+        prof = debug.Profiler("_queryToDict", disabled=True)
         res = []
         while q.next():
             res.append(self._readRecord(q.record()))
@@ -498,7 +499,9 @@ class SqliteDatabase:
 
 
     def _queryToArray(self, q):
+        prof = debug.Profiler("_queryToArray", disabled=False)
         recs = self._queryToDict(q)
+        prof.mark("got records")
         if len(recs) < 1:
             #return np.array([])  ## need to return empty array *with correct columns*, but this is very difficult, so just return None
             return None
@@ -509,10 +512,13 @@ class SqliteDatabase:
         arr[0] = tuple(rec1.values())
         for i in xrange(1, len(recs)):
             arr[i] = tuple(recs[i].values())
+        prof.mark('converted to array')
+        prof.finish()
         return arr
 
 
     def _readRecord(self, rec):
+        prof = debug.Profiler("_readRecord", disabled=False)
         data = collections.OrderedDict()
         for i in range(rec.count()):
             f = rec.field(i)
@@ -539,6 +545,7 @@ class SqliteDatabase:
                 if isinstance(val, QtCore.QByteArray):
                     val = pickle.loads(str(val))
             data[n] = val
+        prof.finish()
         return data
 
     def _readTableList(self):
