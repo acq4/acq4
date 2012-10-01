@@ -1,6 +1,8 @@
 import numpy as np
 import math
 from pyqtgraph.debug import Profiler
+import lib.util.functions as utilFn
+
 
 
 def convertPtsToSparseImage(data, params, spacing=5e-6):
@@ -59,8 +61,8 @@ def bendelsSpatialCorrelationAlgorithm(data, radius, spontRate, timeWindow, prin
     
     ## add 'prob' field to data array
     if 'prob' not in data.dtype.names:
-        arr = np.zeros(len(data), dtype=data.dtype.descr + [('prob', float)])
-        arr[:] = data     
+        arr = utilFn.concatenateColumns([data, np.zeros(len(data), dtype=[('prob', float)])])
+        #arr[:] = data     
         data = arr
     else:
         data['prob']=0
