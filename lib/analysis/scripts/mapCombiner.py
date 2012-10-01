@@ -2,6 +2,8 @@ import lib.Manager
 import numpy as np
 import lib.analysis.tools.functions as afn
 import scipy
+from lib.util.pyqtgraph.multiprocess import Parallelize
+from pyqtgraph.debug import Profiler
 
 
 probabilityInputs = np.array([
@@ -218,7 +220,7 @@ def interpolateCells(sites, spacing=5e-6, method='nearest', probThreshold=0.05):
     
     return arr, (xmin, ymin)
     
-def convolveCells(sites, spacing=5e-6, probThreshold=0.02, probRadius=90e-6):
+def convolveCells(sites, spacing=5e-6, probThreshold=0.02, probRadius=90e-6, timeWindow=0.1, eventKey='numOfPostEvents'):
     #avgCellX = np.array(list(set(sites['xPosCell']))).mean()
     #avgCellY = np.array(list(set(sites['yPosCell']))).mean()
     #xmin = (sites['xPos']-sites['xPosCell']).min() ## point furthest left of the cell
@@ -241,7 +243,7 @@ def convolveCells(sites, spacing=5e-6, probThreshold=0.02, probRadius=90e-6):
     for i, c in enumerate(cells):
         data = sites[sites['CellDir']==c]
         spontRate = data['numOfPreEvents'].sum()/data['PreRegionLen'].sum()
-        data = afn.bendelsSpatialCorrelationAlgorithm(data, 90e-6, spontRate, data[0]['PostRegionLen'])
+        data = afn.bendelsSpatialCorrelationAlgorithm(data, probRadius, spontRate, timeWindow=timeWindow, eventKey=eventKey)
   
         probs = np.zeros(len(data))
         probs[data['prob'] < probThreshold] = 1.
@@ -329,13 +331,17 @@ def convolveCells_Xuying(sites, spacing=5e-6, probThreshold=0.02, probRadius=90e
     #return arrs
         
         
-def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probThreshold=0.02, sampleSpacing=35e-6):
+def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probThreshold=0.02, sampleSpacing=35e-6, eventKey=None, timeWindow=None):
     if keys == None:
         keys = {
             'x':'xPosCell',
             'y':'yPosCell',
             'mappedX': 'modXPosCell',
             'mappedY': 'percentDepth'}
+    if eventKey == None:
+        eventKey = 'numOfPostEvents'
+    if timeWindow == None:
+        timeWindow = sites[0]['PostRgnLen']
             
     #avgCellX = np.array(list(set(sites['CellXPos']))).mean()
     #avgCellY = np.array(list(set(sites['CellYPos']))).mean()
@@ -362,7 +368,7 @@ def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probT
     for i, c in enumerate(cells):
         data = sites[sites['CellDir']==c]
         spontRate = data['numOfPreEvents'].sum()/data['PreRegionLen'].sum()
-        data = afn.bendelsSpatialCorrelationAlgorithm(data, 90e-6, spontRate, data[0]['PostRegionLen'])
+        data = afn.bendelsSpatialCorrelationAlgorithm(data, 90e-6, spontRate, timeWindow, eventsKey=eventKey)
   
         probs = np.zeros(len(data))
         probs[data['prob'] < probThreshold] = 1.
@@ -385,3 +391,50 @@ def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probT
         sampling[i][sampling[i] <= 0.02] = 0        
     return arr, sampling
 
+def randomizeData(data, fields):
+    """Return a record array with the data in specified fields randomly sorted.
+         **Arguments**
+         =============   ==============================================
+         data            A record array
+         fields          A list of field names (or string of one field name) whose values should be randomly shuffled
+         =============   ==============================================
+    """
+    #prof = Profiler('randomizeData', disabled=False)
+    newArr = data.copy()
+    
+    if type(fields) == type(''):
+        fields = [fields]
+        
+    for f in fields:
+        d = data[f]
+        np.random.shuffle(d)
+        newArr[f]=d
+        
+    #prof.finish()
+    return newArr
+    
+    
+def randomProbTest(sites, n=10, cellDir=None, probThreshold=0.02, timeWindow=0.1, eventKey='numOfPostEvents'):
+    #prof = Profiler('randomProbTest', disabled=False)
+    
+    tasks = range(n)
+    results = []
+    
+    data = sites[sites['CellDir']==cellDir]
+    spontRate = data['numOfPreEvents'].sum()/data['PreRegionLen'].sum()
+    #prof.mark('selected data, calculated spontRate')
+    
+    d = afn.bendelsSpatialCorrelationAlgorithm(data, 90e-6, spontRate, timeWindow, eventsKey=eventKey)
+    actualNum = len(d[d['prob'] < probThreshold])
+    #prof.mark('calculated actual number of spots')
+    
+    with Parallelize(tasks, results=results)as tasker:
+        for task in tasker:
+            randomData = randomizeData(data, eventKey)
+            randomData = afn.bendelsSpatialCorrelationAlgorithm(randomData, 90e-6, spontRate, timeWindow, eventsKey=eventKey)
+            tasker.results.append(len(randomData[randomData['prob'] < probThreshold])) 
+    #prof.mark('calculated number of spots for %i random trials'%n)
+    
+    #prof.finish()
+
+    return actualNum, results
