@@ -2,6 +2,12 @@ import lib.Manager
 import numpy as np
 import lib.analysis.tools.functions as afn
 import scipy
+try:
+    import cv2
+    HAVE_CV2 = True
+except ImportError:
+    HAVE_CV2 = False
+    
 
 
 probabilityInputs = np.array([
@@ -108,7 +114,7 @@ def reserveArray(data, spacing=5e-6):
     return np.zeros((n, xdim, ydim), dtype=float)
     
     
-def calculateProb(sites, spacing=5e-6):
+def calculateProb(sites, spacing=5e-6, keys=None):
     cells = set(sites['CellDir'])
     arr = reserveArray(sites, spacing)
     
@@ -372,11 +378,85 @@ def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probT
         #results.append(arr[i].copy())
         arr[i] = scipy.ndimage.gaussian_filter(arr[i], 2)
         arr[i] = arr[i]/0.039
-        arr[i][arr[i] > 0.02] = 1
-        arr[i][arr[i] <= 0.02] = 0
+        arr[i][arr[i] > 0.03] = 1
+        arr[i][arr[i] <= 0.03] = 0
         
         sampling[i] = scipy.ndimage.gaussian_filter(sampling[i], 2)
         sampling[i] = sampling[i]/0.039
-        sampling[i][sampling[i] > 0.02] = 1
-        sampling[i][sampling[i] <= 0.02] = 0        
+        sampling[i][sampling[i] > 0.03] = 1
+        sampling[i][sampling[i] <= 0.03] = 0        
     return arr, sampling
+
+def getContourStats(arr, spacing=5e-6): ### needs debugging
+    """"""
+    global HAVE_CV2
+    if not HAVE_CV2:
+        raise Exception("Cannot get contours because OpenCV2 could not be imported")
+    #arr, sampling = convolveCells_newAtlas(sites, spacing=spacing)
+    xPositions = []
+    yPositions = []
+    areas = []
+    cells = []
+    
+    if len(arr.shape) == 3:
+        n=arr.shape[0]
+    elif len(arr.shape) == 2:
+        n=1
+    else:
+        raise Exception("Array argument needs to have either 2 (width, height) or 3 (n, width, height) dimensions")
+        
+    for i in range(n):
+        if n == 1:
+            data = arr.copy().astype('uint8')
+        else:
+            data = arr[i].copy().astype('uint8')
+            
+        contours, hierarchy = cv2.findContours(data.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+        if len(contours) is 0 or hierarchy is None:
+            continue
+        hierarchy = hierarchy[0]
+        
+        #for j, cnt in enumerate(contours):
+            #cnt_len = cv2.arcLength(cnt, True)
+            #cnt = cv2.approxPolyDP(cnt, 0.02*cnt_len, True)
+            ##m.append(cv2.minAreaRect(cnt))
+            #area = cv2.contourArea(cnt)    
+            #cnt = cnt.reshape(-1,2) # just gets rid of an extra array dimension
+            #cnt = np.append(cnt, cnt[0]) 
+            ##cnt = np.array([cnt, cnt[0]])
+   
+            #poly = np.array([cnt.reshape(-1,2)]) #needed for moments to take the argument (??)
+            #m = cv2.moments(poly)
+            #cm= (m['m10']/m['m00'], m['m01']/m['m00']) ## compute center of mass of this point  
+            
+            #xPositions.append(cm[0])
+            #yPositions.append(cm[1])
+            #areas.append(area)
+            
+        for j, c in enumerate(contours):
+            if hierarchy[j][3] != -1: ## means this is a hole in a larger contour and we don't want to count it
+                continue
+            xmin = c[:,:,1].min()-3
+            xmax = c[:,:,1].max()+3
+            ymin = c[:,:,0].min()-3
+            ymax = c[:,:,0].max()+3
+            print i, j
+            print '   x:', xmin, xmax
+            print '   y:', ymin, ymax
+            m = cv2.moments(data[xmin:xmax, ymin:ymax])
+            y = (m['m10']/m['m00'])+0.5 ## the contour/moments functions seem to leave off the right and bottom edge of contours, so we add it back
+            x = (m['m01']/m['m00'])+0.5
+            xPositions.append((x+xmin)*spacing)
+            yPositions.append((y+ymin)*spacing)
+            areas.append(m['m00']*(spacing**2))
+            cells.append(i)
+            
+    ret = np.zeros(len(areas), dtype=[('xCenterPos', float), ('yCenterPos', float), ('area', float), ('cell', int)])
+    ret['xCenterPos'] = np.array(xPositions)
+    ret['yCenterPos'] = np.array(yPositions)
+    ret['area'] = np.array(areas)
+    ret['cell'] = np.array(cells)
+    return ret
+    
+    
+    
