@@ -4,6 +4,7 @@ import lib.analysis.tools.functions as afn
 import scipy
 from lib.util.pyqtgraph.multiprocess import Parallelize
 from pyqtgraph.debug import Profiler
+import os, sys
 try:
     import cv2
     HAVE_CV2 = True
@@ -336,6 +337,32 @@ def convolveCells_Xuying(sites, spacing=5e-6, probThreshold=0.02, probRadius=90e
             #arrs[p][np.isnan(arrs[p])] = 0
     #return arrs
         
+def reserveImageArray(sites, keys=None, spacing=5e-6, factor=1.11849):
+    """Return an 2-dimensional zero-filled array that fits the position data in *sites*.
+         **Arguments**
+         ================ ================================================
+         sites            a record-array with fields matching the specified keys
+         keys             {'x': field name for x position data, 'y': field name for y position data} ## specified values must be fields in sites
+                          if keys is not specified: {'x':'modXPosCell', 'y':'percentDepth'} is used
+         spacing          the spacing of the array (default is 1px = 5um)
+         factor           a magic factor to multiply the y-position data by (default is 1.11849 (optimized for Megan's data))
+         ================ ================================================
+         """
+    if keys == None:
+        keys = {
+            'x':'modXPosCell',
+            'y':'percentDepth'}    
+        
+    xmin = sites[keys['x']].min()
+    ymin = (sites[keys['y']].min() if sites[keys['y']].min() < 0 else 0.) *factor
+    xmax = sites[keys['x']].max()
+    ymax = sites[keys['y']].max()*factor
+    
+    xdim = int((xmax-xmin)/spacing)+10
+    ydim = int((ymax-ymin)/spacing)+10  
+  
+    return np.zeros((xdim, ydim), dtype=float), xmin, ymin  
+    
         
 def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probThreshold=0.02, sampleSpacing=35e-6, eventKey=None, timeWindow=None):
     if keys == None:
@@ -421,33 +448,60 @@ def randomizeData(data, fields):
     return newArr
     
     
-def randomProbTest(sites, n=10, cellDir=None, probThreshold=0.02, timeWindow=0.1, eventKey='numOfPostEvents'):
+def randomProbTest(sites, cellDir, n=10, getContours=False, **kwargs):
     #prof = Profiler('randomProbTest', disabled=False)
-    
+    keys={
+       'x':'modXPosCell',
+       'y':'percentDepth',
+       'probThreshold': 0.02,
+       'timeWindow':0.1,
+       'eventKey':'numOfPostEvents',
+       'spacing':5e-6,
+       'factor':1.11849
+    }
+    for k in kwargs:
+        keys[k] = kwargs[k]
+        
+        
     tasks = range(n)
-    results = []
+    results = np.zeros((n), dtype=[('numOfSpots', int), ('contourInfo', object)])
     
     data = sites[sites['CellDir']==cellDir]
     spontRate = data['numOfPreEvents'].sum()/data['PreRegionLen'].sum()
     #prof.mark('selected data, calculated spontRate')
     
-    d = afn.bendelsSpatialCorrelationAlgorithm(data, 90e-6, spontRate, timeWindow, eventsKey=eventKey)
+    d = afn.bendelsSpatialCorrelationAlgorithm(data, 90e-6, spontRate, keys[timeWindow], eventsKey=keys[eventKey])
     actualNum = len(d[d['prob'] < probThreshold])
     #prof.mark('calculated actual number of spots')
+    if getContours:
+        img, xmin, ymin = reserveImageArray(sites)
     
     with Parallelize(tasks, results=results)as tasker:
         for task in tasker:
+            np.random.seed()
             randomData = randomizeData(data, eventKey)
             randomData = afn.bendelsSpatialCorrelationAlgorithm(randomData, 90e-6, spontRate, timeWindow, eventsKey=eventKey)
-            tasker.results.append(len(randomData[randomData['prob'] < probThreshold])) 
+            tasker.results[task]['numOfSpots'] = len(randomData[randomData['prob'] < probThreshold])
+            if getContours:
+                im = img.copy()
+                data = randomData[randomData['prob'] < probThreshold]
+                for i, s in enumerate(data):
+                    x, y = (int((s[keys['x']]-xmin)/keys['spacing']), int((s[keys['y']]*keys['factor']-ymin)/keys['spacing']))
+                    im[x,y] = 1
+                ## convolution params are good for 5um grid spacing and 35um spaced samples -- need to generalize for other options
+                im = scipy.ndimage.gaussian_filter(im, 2, mode='constant')
+                im /= 0.039
+                im[im > 0.03] = 1
+                im[im <= 0.03] = 0
+                stats = getContourStats(im, spacing=keys['spacing'])
+                tasker.results[task]['contourInfo'] = stats
+                
     #prof.mark('calculated number of spots for %i random trials'%n)
-    
     #prof.finish()
-
     return actualNum, results
 
-def getContourStats(arr, spacing=5e-6): ### needs debugging
-    """"""
+def getContourStats(arr, spacing=5e-6): 
+    """Return the an array with the center position and area of each contour found in arr. arr needs to be an array of binary values."""
     global HAVE_CV2
     if not HAVE_CV2:
         raise Exception("Cannot get contours because OpenCV2 could not be imported")
@@ -474,23 +528,6 @@ def getContourStats(arr, spacing=5e-6): ### needs debugging
         if len(contours) is 0 or hierarchy is None:
             continue
         hierarchy = hierarchy[0]
-        
-        #for j, cnt in enumerate(contours):
-            #cnt_len = cv2.arcLength(cnt, True)
-            #cnt = cv2.approxPolyDP(cnt, 0.02*cnt_len, True)
-            ##m.append(cv2.minAreaRect(cnt))
-            #area = cv2.contourArea(cnt)    
-            #cnt = cnt.reshape(-1,2) # just gets rid of an extra array dimension
-            #cnt = np.append(cnt, cnt[0]) 
-            ##cnt = np.array([cnt, cnt[0]])
-   
-            #poly = np.array([cnt.reshape(-1,2)]) #needed for moments to take the argument (??)
-            #m = cv2.moments(poly)
-            #cm= (m['m10']/m['m00'], m['m01']/m['m00']) ## compute center of mass of this point  
-            
-            #xPositions.append(cm[0])
-            #yPositions.append(cm[1])
-            #areas.append(area)
             
         for j, c in enumerate(contours):
             if hierarchy[j][3] != -1: ## means this is a hole in a larger contour and we don't want to count it
@@ -519,3 +556,14 @@ def getContourStats(arr, spacing=5e-6): ### needs debugging
     
     
     
+def test(n=10):
+    results = []
+    tasks = range(n)
+    with Parallelize(tasks, workers=2, results=results)as tasker:
+        for task in tasker: 
+            print 'hi' 
+            #print 'Task:', task, '    pid:', os.getpid() 
+            #sys.stdout.flush()
+            #raise Exception("This is the exception for testing Parallelize")
+            
+    return results
