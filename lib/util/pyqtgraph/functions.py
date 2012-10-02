@@ -715,7 +715,7 @@ def makeQImage(imgData, alpha):
     imgData = imgData.transpose((1, 0, 2))  ## QImage expects the row/column order to be opposite
     try:
         buf = imgData.data
-    except AttributeError:
+    except AttributeError:  ## happens when image data is non-contiguous
         imgData = np.ascontiguousarray(imgData)
         buf = imgData.data
         

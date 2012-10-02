@@ -346,7 +346,7 @@ class ConsoleWidget(QtGui.QWidget):
         if excType is AttributeError:
             if filename.endswith('python2.7/collections.py') and function == '__init__':
                 return False
-            if filename.endswith('numpy/core/fromnumeric.py') and function in ('all', '_wrapit', 'transpose'):
+            if filename.endswith('numpy/core/fromnumeric.py') and function in ('all', '_wrapit', 'transpose', 'sum'):
                 return False
             if filename.endswith('numpy/core/arrayprint.py') and function in ('_array2string'):
                 return False
@@ -355,6 +355,8 @@ class ConsoleWidget(QtGui.QWidget):
                     if name in exc:
                         return False
             if filename.endswith('flowchart/eq.py'):
+                return False
+            if filename.endswith('pyqtgraph/functions.py') and function == 'makeQImage':
                 return False
         if excType is TypeError:
             if filename.endswith('numpy/lib/function_base.py') and function == 'iterable':
