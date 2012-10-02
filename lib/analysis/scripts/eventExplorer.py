@@ -50,10 +50,10 @@ if 'events' not in locals():
     lengthRatioLimitSpin = pg.SpinBox(value=1.5, step=0.1)
     layout.addWidget(lengthRatioLimitSpin, 0, 4)
 
-    postRgnStartSpin = pg.SpinBox(value=0.300, step=0.01, siPrefix=True, suffix='s')
+    postRgnStartSpin = pg.SpinBox(value=0.500, step=0.01, siPrefix=True, suffix='s')
     layout.addWidget(postRgnStartSpin, 0, 5)
 
-    postRgnStopSpin = pg.SpinBox(value=0.400, step=0.01, siPrefix=True, suffix='s')
+    postRgnStopSpin = pg.SpinBox(value=0.700, step=0.01, siPrefix=True, suffix='s')
     layout.addWidget(postRgnStopSpin, 0, 6)
 
     spl1 = QtGui.QSplitter()
