@@ -1,4 +1,5 @@
-import re, weakref, collections, sys, copy
+import re, weakref, sys, copy
+from pgcollections import OrderedDict
 import units
 FILES = weakref.WeakValueDictionary()
 GLOBAL_PATH = None # so not thread safe.
@@ -72,7 +73,7 @@ class ConfigLine:
             
             ## set up local variables to use for eval
             local = units.allUnits.copy()
-            local['OrderedDict'] = collections.OrderedDict
+            local['OrderedDict'] = OrderedDict
             local['readConfigFile'] = lambda *args: readConfigFile(*args, parentLine=self)
             if re.search(r'\S', v) and v[0] != '#':  ## eval the value
                 try:
@@ -208,7 +209,7 @@ class ConfigData:
     def blockDict(self):
         ## return dictionary of sub-blocks
         if self._blockDict is None:
-            self._blockDict = collections.OrderedDict()
+            self._blockDict = OrderedDict()
             for b in self.dataBlocks():
                 self._blockDict[b.name()] = b.value()
         return self._blockDict
@@ -223,7 +224,7 @@ class ConfigData:
         if len(self) == 0:
             return copy.deepcopy(self.value(), memo=memo)
         else:
-            return collections.OrderedDict([(block.name(), block.deepcopy(memo=memo)) for block in self.dataBlocks()])
+            return OrderedDict([(block.name(), block.deepcopy(memo=memo)) for block in self.dataBlocks()])
 
     def __deepcopy__(self, memo):
         return self.deepcopy(memo)

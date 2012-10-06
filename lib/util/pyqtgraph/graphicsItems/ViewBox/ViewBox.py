@@ -9,7 +9,6 @@ from pyqtgraph.GraphicsScene import GraphicsScene
 import pyqtgraph
 import weakref
 from copy import deepcopy
-import collections
 
 __all__ = ['ViewBox']
 
@@ -111,12 +110,6 @@ class ViewBox(GraphicsWidget):
         }
         
         
-        #self.exportMethods = collections.OrderedDict([
-            #('SVG', self.saveSvg),
-            #('Image', self.saveImage),
-            #('Print', self.savePrint),
-        #])
-        
         self.setFlag(self.ItemClipsChildrenToShape)
         self.setFlag(self.ItemIsFocusable, True)  ## so we can receive key presses
         
@@ -170,7 +163,8 @@ class ViewBox(GraphicsWidget):
         if name is not None:
             ViewBox.NamedViews[name] = self
             ViewBox.updateAllViewLists()
-            self.destroyed.connect(lambda: ViewBox.forgetView(id(self), self.name))
+            sid = id(self)
+            self.destroyed.connect(lambda: ViewBox.forgetView(sid, name))
             #self.destroyed.connect(self.unregister)
 
     def unregister(self):
@@ -1185,6 +1179,11 @@ class ViewBox(GraphicsWidget):
             
             
     def updateViewLists(self):
+        try:
+            self.window()
+        except RuntimeError:  ## this view has already been deleted; it will probably be collected shortly.
+            return
+            
         def cmpViews(a, b):
             wins = 100 * cmp(a.window() is self.window(), b.window() is self.window())
             alpha = cmp(a.name, b.name)
