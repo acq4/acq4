@@ -106,7 +106,7 @@ class ImageCanvasItem(CanvasItem):
         self.layout.addWidget(self.edgeBtn, thisRow, 0, 1, 1)
 
         self.maxBtn2 = QtGui.QPushButton('Max w/Filter')
-        self.maxBtn2.clicked.connect(self.max2Clicked)
+        self.maxBtn2.clicked.connect(self.maxClicked)
         self.layout.addWidget(self.maxBtn2, thisRow, 1, 1, 1)
         print 'insttalled maxclicked...'
         
@@ -177,6 +177,7 @@ class ImageCanvasItem(CanvasItem):
         print dir(fd)
         print fd.shape
         blur = ndimage.gaussian_filter(fd, (1, 1, 1))
+        print 'image blurred'
         self.graphicsItem().updateImage(blur.max(axis=0))
         print 'image udpate done'
         self.updateHistogram(autoLevels=True)
