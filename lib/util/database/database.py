@@ -302,7 +302,7 @@ class SqliteDatabase:
         with self.transaction():
             whereStr = self._buildWhereClause(where, table)
             setStr = ', '.join(['"%s"=:%s' % (k, k) for k in vals])
-            cmd = "UPDATE %s SET %s %s" % (table, setStr, where)
+            cmd = "UPDATE %s SET %s %s" % (table, setStr, whereStr)
             data = self._prepareData(table, [vals], batch=True)
             return self(cmd, data, batch=True)
 

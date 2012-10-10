@@ -185,6 +185,7 @@ def fitPsp(x, y, guess, bounds=None, risePower=2.0, multiFit=False):
     ## pick some reasonable default bounds
     if bounds is None:
         bounds = [[None,None]] * 4
+        bounds[1][0] = -2e-3
         minTau = (x[1]-x[0]) * 0.5
         #bounds[2] = [minTau, None]
         #bounds[3] = [minTau, None]
