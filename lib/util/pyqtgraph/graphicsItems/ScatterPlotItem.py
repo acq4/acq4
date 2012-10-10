@@ -7,7 +7,7 @@ import numpy as np
 import scipy.stats
 import weakref
 import pyqtgraph.debug as debug
-from collections import OrderedDict
+from pyqtgraph.pgcollections import OrderedDict
 #import pyqtgraph as pg 
 
 __all__ = ['ScatterPlotItem', 'SpotItem']
@@ -44,7 +44,9 @@ def makeSymbolPixmap(size, pen, brush, symbol):
     p.scale(size, size)
     p.setPen(pen)
     p.setBrush(brush)
-    p.drawPath(Symbols[symbol])
+    if isinstance(symbol, basestring):
+        symbol = Symbols[symbol]
+    p.drawPath(symbol)
     p.end()
     return QtGui.QPixmap(image)
 
@@ -71,7 +73,6 @@ class ScatterPlotItem(GraphicsObject):
     #sigPointClicked = QtCore.Signal(object, object)
     sigClicked = QtCore.Signal(object, object)  ## self, points
     sigPlotChanged = QtCore.Signal(object)
-    
     def __init__(self, *args, **kargs):
         """
         Accepts the same arguments as setData()
@@ -113,12 +114,14 @@ class ScatterPlotItem(GraphicsObject):
                                Otherwise, size is in scene coordinates and the spots scale with the view.
                                Default is True
         *symbol*               can be one (or a list) of:
-                               
                                * 'o'  circle (default)
                                * 's'  square
                                * 't'  triangle
                                * 'd'  diamond
                                * '+'  plus
+                               * any QPainterPath to specify custom symbol shapes. To properly obey the position and size,
+                               custom symbols should be centered at (0,0) and width and height of 1.0. Note that it is also
+                               possible to 'install' custom shapes by setting ScatterPlotItem.Symbols[key] = shape.
         *pen*                  The pen (or list of pens) to use for drawing spot outlines.
         *brush*                The brush (or list of brushes) to use for filling spots.
         *size*                 The size (or list of sizes) of spots. If *pxMode* is True, this value is in pixels. Otherwise,
@@ -231,6 +234,9 @@ class ScatterPlotItem(GraphicsObject):
         self.generateSpotItems()
         self.sigPlotChanged.emit(self)
         
+    def getData(self):
+        return self.data['x'], self.data['y']
+    
         
     def setPoints(self, *args, **kargs):
         ##Deprecated; use setData

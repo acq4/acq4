@@ -85,7 +85,7 @@ class IVCurve(AnalysisModule):
 
         # Add a color scale
         # removed for now--seems to be causing crashes :(
-        self.colorScale = pg.GradientLegend(self.data_plot, (20, 150), (-10, -10))
+        self.colorScale = pg.GradientLegend((20, 150), (-10, -10))
         self.data_plot.scene().addItem(self.colorScale)
 
         # Plots are updated when the selected region changes
@@ -130,12 +130,15 @@ class IVCurve(AnalysisModule):
         for dirName in dirs:
             d = dh[dirName]
             try:
-                data = self.dataModel.getClampFile(d).read()
+                cf = self.dataModel.getClampFile(d)
+                if cf is None:  ## No clamp file for this iteration of the protocol (probably the protocol was stopped early)
+                    continue
+                dataF = cf.read()
             except:
                 debug.printExc("Error loading data for protocol %s:" % d.name() )
                 continue  ## If something goes wrong here, we'll just try to carry on
-            cmd = self.dataModel.getClampCommand(data)
-            data = self.dataModel.getClampPrimary(data)
+            cmd = self.dataModel.getClampCommand(dataF)
+            data = self.dataModel.getClampPrimary(dataF)
             shdat = data.shape
             if shdat[0] > 2*maxplotpts:
                 decimate_factor = int(numpy.floor(shdat[0]/maxplotpts))
@@ -149,59 +152,58 @@ class IVCurve(AnalysisModule):
             self.values.append(cmd[len(cmd)/2])
             #c += 1.0 / len(dirs)
             c += 1
+        print 'done loading files'
         self.colorScale.setIntColorScale(0, len(dirs), maxValue=200)
         self.colorScale.setLabels({'%0.2g'%self.values[0]:0, '%0.2g'%self.values[-1]:1}) 
         
         # set up the selection region correctly, prepare IV curves and find spikes
-        if len(dirs) > 0:
+        if len(traces) > 0:
             info = [
                 {'name': 'Command', 'units': cmd.axisUnits(-1), 'values': numpy.array(self.values)},
                 data.infoCopy('Time'), 
                 data.infoCopy(-1)]
+            #self.traces = traces # MetaArray(traces, info=info)
             self.traces = MetaArray(traces, info=info)
             cmddata = cmd.asarray()
             cmdtimes = numpy.argwhere(cmddata[1:]-cmddata[:-1] != 0)[:,0]
             self.tstart = cmd.xvals('Time')[cmdtimes[0]]
             self.tend = cmd.xvals('Time')[cmdtimes[1]]
             self.tdur = self.tend - self.tstart
-
-            tr =  numpy.reshape(self.traces.asarray(), (len(dirs),-1))
-            fsl = numpy.zeros(len(dirs))
-            fisi = numpy.zeros(len(dirs))
-            misi = numpy.zeros(len(dirs))
-            ar = numpy.zeros(len(dirs))
-            rmp = numpy.zeros(len(dirs))
-            
-            self.spikecount = numpy.zeros(len(dirs))
+            tr = traces
+            #tr =  numpy.reshape(self.traces.asarray(), (len(traces),-1))
+            fsl = numpy.zeros(len(traces))
+            fisi = numpy.zeros(len(traces))
+            misi = numpy.zeros(len(traces))
+            ar = numpy.zeros(len(traces))
+            rmp = numpy.zeros(len(traces))
+            self.spikecount = numpy.zeros(len(traces))
             # for adaptation ratio:
             minspk = 4
             maxspk = 10 # range of spike counts
 
-            info1 = self.traces.infoCopy()
+            info1 = info # self.traces.infoCopy()
             sfreq = info1[2]['DAQ']['primary']['rate']
             sampInterval = 1.0/sfreq
             self.tstart += sampInterval
             self.tend += sampInterval
             tmax = cmd.xvals('Time')[-1]
+            tx = cmd.xvals('Time').view(numpy.ndarray)
             #self.lr.setRegion([end *0.5, end * 0.6])
-
+            threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 0.001
             for i in range(len(dirs)):
-
-                (spike, spk) = Utility.findspikes(cmd.xvals('Time'), tr[i], 
-                    0, t0=self.tstart, t1=self.tend, dt=sampInterval,
-                    mode = 'peak', interpolate=True, debug=True)
-                print spike
-                if len(spike) > 0:
-                    self.spikecount[i] = len(spike)
-                    print self.tstart
-                    print spike[0]
-                    fsl[i] = spike[0]-self.tstart
+                (spike, spk) = Utility.findspikes(tx, tr[i], 
+                    threshold, t0=self.tstart, t1=self.tend, dt=sampInterval,
+                    mode = 'schmitt', interpolate=False, debug=False)
+                if len(spike) == 0:
+                    continue
+                self.spikecount[i] = len(spike)
+                fsl[i] = spike[0]-self.tstart
                 if len(spike) > 1:
                     fisi[i] = spike[1]-spike[0]
                 if len(spike) >= minspk and len(spike) <= maxspk: # for Adaptation ratio analysis
                     misi = numpy.mean(numpy.diff(spike[-3:]))
                     ar[i] = misi/fisi[i]
-                (rmp[i], r2) = Utility.measure('mean', cmd.xvals('Time'), tr[i], 0.0, self.tstart)
+                (rmp[i], r2) = Utility.measure('mean', tx, tr[i], 0.0, self.tstart)
             iAR = numpy.where(ar > 0)
             ARmean = numpy.mean(ar[iAR]) # only where we made the measurement
             self.AdaptRatio = ARmean
@@ -318,6 +320,7 @@ class IVCurve(AnalysisModule):
         if self.traces is None:
             return
         rgnss = self.lrss.getRegion()
+        print rgnss
         self.ctrl.IVCurve_ssTStart.setValue(rgnss[0]*1.0e3)
         self.ctrl.IVCurve_ssTStop.setValue(rgnss[1]*1.0e3)
         data1 = self.traces['Time': rgnss[0]:rgnss[1]]

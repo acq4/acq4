@@ -857,9 +857,18 @@ class ROI(GraphicsObject):
         else:
             kwds['returnCoords'] = True
             result, coords = fn.affineSlice(data, shape=shape, vectors=vectors, origin=origin, axes=axes, **kwds)
-            tr = fn.transformToArray(img.transform())[:,:2].reshape((3, 2) + (1,)*(coords.ndim-1))
-            coords = coords[np.newaxis, ...]
-            mapped = (tr*coords).sum(axis=0)
+            #tr = fn.transformToArray(img.transform())[:2]  ## remove perspective transform values
+            
+            ### separate translation from scale/rotate
+            #translate = tr[:,2]
+            #tr = tr[:,:2]
+            #tr = tr.reshape((2,2) + (1,)*(coords.ndim-1))
+            #coords = coords[np.newaxis, ...]
+            
+            ### map coordinates and return
+            #mapped = (tr*coords).sum(axis=0)  ## apply scale/rotate
+            #mapped += translate.reshape((2,1,1))
+            mapped = fn.transformCoordinates(img.transform(), coords)
             return result, mapped
             
             
@@ -961,13 +970,15 @@ class ROI(GraphicsObject):
         ### Untranspose array before returning
         #return arr5.transpose(tr2)
 
-    def getAffineSliceParams(self, data, img, axes=(0.1)):
+    def getAffineSliceParams(self, data, img, axes=(0,1)):
         """
         Returns the parameters needed to use :func:`affineSlice <pyqtgraph.affineSlice>` to 
         extract a subset of *data* using this ROI and *img* to specify the subset.
         
         See :func:`getArrayRegion <pyqtgraph.ROI.getArrayRegion>` for more information.
         """
+        if self.scene() is not img.scene():
+            raise Exception("ROI and target item must be members of the same scene.")
         
         shape = self.state['size']
         

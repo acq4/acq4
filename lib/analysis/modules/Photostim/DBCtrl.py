@@ -37,6 +37,8 @@ class DBCtrl(QtGui.QWidget):
         self.mapWidget = QtGui.QWidget()
         self.ui.setupUi(self.mapWidget)
         self.layout.addWidget(self.mapWidget)
+        self.ui.scanTree.setAcceptDrops(False)
+        self.ui.scanTree.setDragEnabled(False)
         
         
         labels = Map.mapFields.keys()[2:]
@@ -126,36 +128,41 @@ class DBCtrl(QtGui.QWidget):
         self.host.unregisterMap(map)
         
 
-    def listMaps(self, cell):
-        """List all maps associated with the file handle for cell"""
-        dbui = self.host.getElement('Database')
-        db = dbui.getDb()
-        if db is None:
-            logMsg("No database loaded in Data Manager.", msgType='error')
-            
-        ident = self.dbIdentity+'.maps'
-        table = dbui.getTableName(ident)
-        if not db.hasTable(table):
-            return
-        if db.tableOwner(table) != ident:
-            raise Exception("Table %s not owned by %s" % (table, ident))
+    def listMaps(self, cells):
+        """List all maps associated with the file handle for each cell in a list"""
+        self.ui.mapTable.clear()
+        self.maps = []
         
-        #row = db.getDirRowID(cell)
-        #if row is None:
-            #return
+        for cell in cells:
             
-        maps = db.select(table, ['rowid','*'], where={'cell': cell})
-        #print maps
-        for rec in maps:
-            scans = []
-            for rowid in rec['scans']:
-                if isinstance(rowid, tuple):
-                    fh = db.getDir(rowid[0], rowid[1])  ## single-spot maps specify the Protocol table instead
-                else:
-                    fh = db.getDir('ProtocolSequence', rowid)    ## NOTE: single-spot maps use a different table!
-                scans.append((fh, rowid))
-            rec['scans'] = scans
-            self.newMap(rec)
+            dbui = self.host.getElement('Database')
+            db = dbui.getDb()
+            if db is None:
+                logMsg("No database loaded in Data Manager.", msgType='error')
+                
+            ident = self.dbIdentity+'.maps'
+            table = dbui.getTableName(ident)
+            if not db.hasTable(table):
+                return
+            if db.tableOwner(table) != ident:
+                raise Exception("Table %s not owned by %s" % (table, ident))
+            
+            #row = db.getDirRowID(cell)
+            #if row is None:
+                #return
+                
+            maps = db.select(table, ['rowid','*'], where={'cell': cell})
+            #print maps
+            for rec in maps:
+                scans = []
+                for rowid in rec['scans']:
+                    if isinstance(rowid, tuple):
+                        fh = db.getDir(rowid[0], rowid[1])  ## single-spot maps specify the Protocol table instead
+                    else:
+                        fh = db.getDir('ProtocolSequence', rowid)    ## NOTE: single-spot maps use a different table!
+                    scans.append((fh, rowid))
+                rec['scans'] = scans
+                self.newMap(rec)
 
 
     def loadMap(self, map):
@@ -300,6 +307,7 @@ class DBCtrl(QtGui.QWidget):
                     dlg += 1
                     if dlg.wasCanceled():
                         raise Exception('Store canceled by user')
+            self.ui.scanTree.clearSelection()  ## We do this because it is too easy to forget to select the correct set of data before clicking store.
             self.ui.storeDBScanBtn.success("Stored.")
         except:
             self.ui.storeDBScanBtn.failure("Error.")

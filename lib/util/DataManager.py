@@ -458,12 +458,14 @@ class DirHandle(FileHandle):
             else:
                 raise Exception("Directory %s does not exist." % self.path)
         
-        if os.path.isfile(self._indexFile()):
-            ## read the index and cache it.
-            self._readIndex()
-        else:
-            ## If directory is unmanaged, just leave it that way.
-            pass
+        ## Let's avoid reading the index unless we really need to.
+        self._indexFileExists = os.path.isfile(self._indexFile())
+        #if os.path.isfile(self._indexFile()):
+            ### read the index and cache it.
+            #self._readIndex()
+        #else:
+            ### If directory is unmanaged, just leave it that way.
+            #pass
         
         
     #def __del__(self):
@@ -678,7 +680,7 @@ class DirHandle(FileHandle):
                     if f not in self.cTimeCache:
                         self.cTimeCache[f] = self._getFileCTime(f)
                     dlg += 1
-            files.sort(lambda a,b: cmp(self.cTimeCache[a], self.cTimeCache[b]))
+            files.sort(key=lambda f: (self.cTimeCache[f], f))  ## sort by time first, then name.
         elif sortMode == 'alpha':
             ## show directories first when sorting alphabetically.
             files.sort(lambda a,b: 2*cmp(os.path.isdir(os.path.join(self.name(),b)), os.path.isdir(os.path.join(self.name(),a))) + cmp(a,b))
@@ -738,6 +740,7 @@ class DirHandle(FileHandle):
         return len(self.ls()) > 0
     
     def info(self):
+        self._readIndex(unmanagedOk=True)  ## returns None if this directory has no index file
         return advancedTypes.ProtectedDict(self._fileInfo('.'))
     
     def _fileInfo(self, file):
@@ -881,7 +884,7 @@ class DirHandle(FileHandle):
         
     def isManaged(self, fileName=None):
         with self.lock:
-            if self._index is None:
+            if self._indexFileExists is False:
                 return False
             if fileName is None:
                 return True
@@ -979,11 +982,13 @@ class DirHandle(FileHandle):
             #print "Write", type(newIndex)
             self._index = newIndex
             self._indexMTime = os.path.getmtime(self._indexFile())
+            self._indexFileExists = True
 
     def _appendIndex(self, info):
         with self.lock:
             indexFile = self._indexFile()
             appendConfigFile(info, indexFile)
+            self._indexFileExists = True
             for k in info:
                 self._index[k] = info[k]
             self._indexMTime = os.path.getmtime(indexFile)

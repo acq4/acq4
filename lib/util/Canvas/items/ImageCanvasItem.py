@@ -5,6 +5,7 @@ import numpy as np
 import scipy.ndimage as ndimage
 import pyqtgraph as pg
 import DataManager
+import debug
 
 class ImageCanvasItem(CanvasItem):
     def __init__(self, image=None, **opts):
@@ -61,15 +62,12 @@ class ImageCanvasItem(CanvasItem):
                         else:
                             info = self.data._info[-1]
                             opts['pos'] = info.get('imagePosition', None)
-                    else:
+                    elif hasattr(self.data, '_info'):
                         info = self.data._info[-1]
                         opts['scale'] = info.get('pixelSize', None)
                         opts['pos'] = info.get('imagePosition', None)
             except:
-                #print 'uga uga boom'
-                pass
-
-        print opts
+                debug.printExc('Error reading transformation for image file %s:' % image.name())
 
         if item is None:
             item = pg.ImageItem()

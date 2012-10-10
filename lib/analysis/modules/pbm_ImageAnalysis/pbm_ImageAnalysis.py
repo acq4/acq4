@@ -85,6 +85,8 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.baseImage=[]
         self.viewFlag = False # false if viewing movie, true if viewing fixed image
         self.referenceImage = []
+        self.ratioImage = None
+        self.useRatio = False
         self.AllRois = []
         self.nROI = 0 # count of ROI's in the window
         self.rois = []
@@ -157,7 +159,9 @@ class pbm_ImageAnalysis(AnalysisModule):
         # main image processing buttons
         self.ctrl.ImagePhys_addRoi.clicked.connect(self.addOneROI)
         self.ctrl.ImagePhys_clearRoi.clicked.connect(self.clearAllROI)
+
         self.ctrl.ImagePhys_getRatio.clicked.connect(self.loadRatioImage)
+        self.ctrl.ImagePhys_clearRatio.clicked.connect(self.clearRatioImage)
         self.ctrl.ImagePhys_ImgNormalize.clicked.connect(self.doNormalize)
         self.ctrl.ImagePhys_UnBleach.clicked.connect(self.unbleachImage)
         self.ctrl.ImagePhys_SpecCalc.clicked.connect(self.spectrumCalc)
@@ -197,7 +201,7 @@ class pbm_ImageAnalysis(AnalysisModule):
 
     def initDataState(self):
         self.dataState = {'Loaded': False, 'bleachCorrection': False, 'Normalized': False,
-                        'NType' : None, 'Structure': 'Flat', 'NTrials': 0}
+                        'NType' : None, 'Structure': 'Flat', 'NTrials': 0, 'ratioLoaded': False}
         self.ctrl.ImagePhys_BleachInfo.setText('None')
         self.ctrl.ImagePhys_NormInfo.setText('None')
         self.IXC_Strength = []
@@ -214,9 +218,14 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.physPlot.plotItem.vb.setLeftButtonAction(mode='pan') # use the standard pan modeinstead
         
     def changeView(self):
+        view = self.ctrl.ImagePhys_View.currentText()
+        if self.dataState['ratioLoaded'] is True:
+            if view == 'Ratio Image':
+                self.imageView.setImage(self.ratioImage)
+                self.viewFlag = True
+
         if self.dataState['Loaded'] is False:
             return # no data - so skip this.
-        view = self.ctrl.ImagePhys_View.currentText()
         if view == 'Reference Image': 
             self.imageView.setImage(self.baseImage)
             self.viewFlag = True
@@ -287,19 +296,23 @@ class pbm_ImageAnalysis(AnalysisModule):
         """
         
         ds = self.dataModel.isSequence(dh[0])
-        print 'is seqence? : ', ds
-        dt = self.dataModel.dirType(dh[0])
-        print 'dirtype: ', dt
-        print 'day: ', self.dataModel.getDayInfo(dh[0])
-        print 'slice: ', self.dataModel.getSliceInfo(dh[0])
-        if dt == 'ProtocolSequence':
+#        print 'is seqence? : ', ds
+        dirtype = self.dataModel.dirType(dh[0])
+#        print 'dirtype: ', dirtype
+#        print 'day: ', self.dataModel.getDayInfo(dh[0])
+#        print 'slice: ', self.dataModel.getSliceInfo(dh[0])
+        if dirtype == 'ProtocolSequence':
             dsp = self.dataModel.listSequenceParams(dh[0])
-            print 'pseq par: ', dsp
+#            print 'pseq par: ', dsp
             #m = self.dataModel.buildSequenceArray(dh[0], lambda protoDir: self.dataModel.getClampFile(protoDir).read()['primary'])
             #print 'm = ', m
         
         
-        return
+        else:
+#            print 'dt= ', dirtype
+#            print dir(self.dataModel)
+            pass
+       # return
         
         dlh = self.fileLoaderInstance.selectedFiles()
         if self.ctrl.ImagePhys_PhysROIPlot.isChecked():
@@ -675,13 +688,15 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.clearPhysiologyInfo()
         data = self.dataModel.getClampFile(dh).read() # retrieve the physiology traces
         self.physData = self.dataModel.getClampPrimary(data).asarray()
-        self.physData = self.physData * 1e12 # convert to pA
+        if self.dataModel.getClampMode(data) == 'IC':
+            self.physData = self.physData * 1e3 # convert to mV
+            
+        else:
+            self.physData = self.physData * 1e12 # convert to pA
         info1 = data.infoCopy()
         self.samplefreq = info1[2]['DAQ']['primary']['rate']
-        if self.physLPF > 250.0 and self.physLPF < 0.5*self.samplefreq: # respect Nyquist, just minimally
-            #print self.physData.shape
+        if self.physLPF >= 250.0 and self.physLPF < 0.5*self.samplefreq: # respect Nyquist, just minimally
             self.physData =  Utility.SignalFilter_LPFBessel(self.physData, self.physLPF, self.samplefreq, NPole = 8)
-            #print self.physData.shape
         self.physLPFChanged = False # we have updated now, so flag is reset
         maxplotpts=50000
         shdat = self.physData.shape
@@ -697,17 +712,37 @@ class pbm_ImageAnalysis(AnalysisModule):
         #print 'Number of points in original data set: ', shdat
         tdat = data.infoCopy()[1]['values']
         tdat = tdat[::decimate_factor]
+        self.tdat = data.infoCopy()[1]['values']/1000.
         self.physPlot.plot(tdat, self.physData[::decimate_factor], pen=pg.mkPen('w')) # , decimate=decimate_factor)
-        self.tdat = data.infoCopy()[1]['values']
         self.showPhysTrigger()
         self.detectSpikes()
         
     def loadRatioImage(self):
-        pass # not implemented yet...
-        self.background = dh.read()[np.newaxis,...].astype(float)
-        self.background /= self.background.max()
-        return
+        print 'loading ratio image'
+        dh = self.fileLoaderInstance.selectedFiles()
+        self.ratioImage = dh[0].read()[np.newaxis,...].astype(float)
+        print self.ratioImage
+        #self.background /= self.background.max()
+        if self.ratioImage is None:
+            self.dataState['ratioLoaded'] = False
+            self.useRatio = False
+            view = self.ctrl.ImagePhys_View.currentText()
+            if view == 'Ratio Image':
+                view = self.ctrl.ImagePhys_View.setCurrentIndex(0)
 
+        else:
+            self.useRatio = True
+            self.dataState['ratioLoaded'] = True
+            view = self.ctrl.ImagePhys_View.setCurrentIndex(4)
+            self.changeView()
+
+    def clearRatioImage(self):
+        self.ratioImage = None
+        self.dataState['ratioLoaded'] = False
+        self.useRatio = False
+        view = self.ctrl.ImagePhys_View.setCurrentIndex(0)
+        self.changeView()
+            
     def getDataStruct(self):
         ds = self.ctrl.ImagePhys_DataStruct.currentIndex()
         if ds == 0:
@@ -737,8 +772,13 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.normalizeImage() # another normalization
         if method == 3:
             self.slowFilterImage() # slow filtering normalization: (F-Fslow)/Fslow on pixel basis over time
+        print 'normalize method: ', method
+        print self.dataState['ratioLoaded']
+        print self.useRatio
         if method == 4: # g/r ratio  - future: requires image to be loaded (hooks in place, no code yet)
-            pass
+            if self.dataState['ratioLoaded'] and self.useRatio:
+                self.GRFFImage() # convert using the ratio
+                
         self.updateAvgStdImage()
         self.calculateAllROIs()
         
@@ -2192,6 +2232,30 @@ class pbm_ImageAnalysis(AnalysisModule):
 #        ndl = imm.shape[0]
 #        self.backgroundPlot.plot(y=imm, x=self.imageTimes[0:ndl], clear=True)
         self.paintImage()
+
+    def GRRatioImage(self):
+        print 'Doing G/R Ratio calculation'
+        if self.dataState['bleachCorrection'] is False:
+            print 'No Bleaching done, copy rawdata to image'
+            self.imageData = self.rawData.copy() # just copy over without a correction        print 'Normalizing'
+        if self.dataState['ratioLoaded'] is False:
+            print 'NO ratio image loaded - so try again'
+            return
+        if self.dataState['Normalized'] is True and self.dataState['bleachCorrection'] is True:
+            print 'Data is already Normalized, type = %s ' % (self.dataState['NType'])
+            return
+        else:
+            self.imageData = self.rawData.copy() # just start over with the raw data... 
+        #F0= np.mean(self.imageData[0:3,:,:], axis=0) # save the reference
+        self.imageData = self.imageData/self.ratioImage # do NOT replot!
+        self.dataState['Normalized'] = True
+        self.dataState['NType'] = 'GRRatio'
+        self.ctrl.ImagePhys_NormInfo.setText('G/R')
+#        imm = np.mean(np.mean(self.imageData, axis=2), axis=1)
+#        ndl = imm.shape[0]
+#        self.backgroundPlot.plot(y=imm, x=self.imageTimes[0:ndl], clear=True)
+        self.paintImage()
+
 
     def smoothImage(self):
         self.imageData = scipy.ndimage.filters.gaussian_filter(self.imageData, (3,3,3))

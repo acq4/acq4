@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
-from pyqtgraph.Qt import QtCore, QtGui
-#from PyQt4 import QtCore, QtGui
-#from PySide import QtCore, QtGui
-#import Node as NodeMod
+from pyqtgraph.Qt import QtCore, QtGui, USE_PYSIDE
 from .Node import *
-#import functions
-from collections import OrderedDict
+from pyqtgraph.pgcollections import OrderedDict
 from pyqtgraph.widgets.TreeWidget import *
-#from .. DataTreeWidget import *
-from . import FlowchartTemplate
-from . import FlowchartCtrlTemplate
+
+## pyside and pyqt use incompatible ui files.
+if USE_PYSIDE:
+    from . import FlowchartTemplate_pyside as FlowchartTemplate
+    from . import FlowchartCtrlTemplate_pyside as FlowchartCtrlTemplate
+else:
+    from . import FlowchartTemplate_pyqt as FlowchartTemplate
+    from . import FlowchartCtrlTemplate_pyqt as FlowchartCtrlTemplate
+    
 from .Terminal import Terminal
 from numpy import ndarray
 from . import library
@@ -160,7 +162,10 @@ class Flowchart(Node):
         Node.addTerminal(self, term.name(), io=io, renamable=term.isRenamable(), removable=term.isRemovable(), multiable=term.isMultiable())
         
     def internalTerminalRemoved(self, node, term):
-        Node.removeTerminal(self, term.name())
+        try:
+            Node.removeTerminal(self, term.name())
+        except KeyError:
+            pass
         
     def terminalRenamed(self, term, oldName):
         newName = term.name()
