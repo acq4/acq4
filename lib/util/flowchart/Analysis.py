@@ -231,25 +231,26 @@ def processEventFits(events, startEvent, stopEvent, opts):
     
     for i in range(startEvent, stopEvent):
         start = events[i]['time']
-        sliceLen = 50e-3
-        if i+1 < len(events):
-            nextStart = events[i+1]['time']
-            sliceLen = min(sliceLen, nextStart-start)
                 
         guessLen = events[i]['len']*dt
-        
         tau = origTau
         if tau is not None:
             guessLen += tau*2.
+        #print i, guessLen, tau, events[i]['len']*dt
+
+        #sliceLen = 50e-3
+        sliceLen = guessLen
+        if i+1 < len(events):  ## cut slice back if there is another event coming up
+            nextStart = events[i+1]['time']
+            sliceLen = min(sliceLen, nextStart-start)
         
-        sliceLen = min(guessLen*3., sliceLen)
         
         ## Figure out from where to pull waveform data that will be fitted
         startIndex = np.argwhere(tvals>=start)[0][0]
         stopIndex = startIndex + int(sliceLen/dt)
         eventData = waveform[startIndex:stopIndex]
         times = tvals[startIndex:stopIndex]
-        
+        #print i, startIndex, stopIndex, dt
         if len(times) < 4:  ## PSP fit requires at least 4 points; skip this one
             offset += 1
             continue
@@ -257,7 +258,7 @@ def processEventFits(events, startEvent, stopEvent, opts):
         ## reconvolve this chunk of the signal if it was previously deconvolved
         if tau is not None:
             eventData = functions.expReconvolve(eventData, tau=tau, dt=dt)
-
+        #print i, len(eventData)
         ## Make guesses as to the shape of the event
         mx = eventData.max()
         mn = eventData.min()
@@ -271,7 +272,6 @@ def processEventFits(events, startEvent, stopEvent, opts):
         guessStart = times[0]
         
         zc = functions.zeroCrossingEvents(eventData - (peakVal/3.))
-        
         ## eliminate events going the wrong direction
         if len(zc) > 0:
             if guessAmp > 0:
@@ -279,8 +279,8 @@ def processEventFits(events, startEvent, stopEvent, opts):
             else:
                 zc = zc[zc['peak']<0]
         #print zc    
-        ## measure properties for the largest event within 5ms of start
-        zc = zc[zc['index'] < 5e-3/dt]
+        ## measure properties for the largest event within 10ms of start
+        zc = zc[zc['index'] < 10e-3/dt]
         if len(zc) > 0:
             if guessAmp > 0:
                 zcInd = np.argmax(zc['sum']) ## the largest event in this clip
@@ -305,7 +305,7 @@ def processEventFits(events, startEvent, stopEvent, opts):
         #guess = [amp, times[0], guessLen/4., guessLen/2.]  ## careful! 
         bounds = [
             sorted((guessAmp * 0.1, guessAmp)),
-            sorted((guessStart-guessRise*2, guessStart+guessRise*2)), 
+            sorted((guessStart-min(guessRise, 0.01), guessStart+guessRise*2)), 
             sorted((dt*0.5, guessDecay)),
             sorted((dt*0.5, guessDecay * 50.))
         ]

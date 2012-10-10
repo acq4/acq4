@@ -129,6 +129,7 @@ class MapAnalyzer(AnalysisModule):
         self.currentMap.sPlotItem.sigClicked.connect(self.mapPointClicked)
 
         self.getElement('Canvas').addGraphicsItem(self.currentMap.sPlotItem)
+        self.update()
                 
     def loadScan(self, dh):
         ## called by Map objects to load scans
@@ -150,6 +151,15 @@ class MapAnalyzer(AnalysisModule):
         db = self.loader.dbGui.getDb()
         stats = db.select(statTable, '*', where={'ProtocolSequenceDir': sourceDir})
         events = db.select(eventTable, '*', where={'ProtocolSequenceDir': sourceDir}, toArray=True)
+        return events, stats
+        
+    def loadSpotFromDB(self, sourceDir):
+        ## Called by Scan as it is loading single points
+        statTable = self.loader.dbGui.getTableName('Photostim.sites')
+        eventTable = self.loader.dbGui.getTableName('Photostim.events')
+        db = self.loader.dbGui.getDb()
+        stats = db.select(statTable, '*', where={'ProtocolDir': sourceDir})
+        events = db.select(eventTable, '*', where={'ProtocolDir': sourceDir}, toArray=True)
         return events, stats
 
     def getDb(self):
@@ -222,7 +232,7 @@ class MapAnalyzer(AnalysisModule):
         
         self.getElement('Stats Table').setData(points[0].data())
 
-        
+    
         
 #class EventFilterParameterItem(WidgetParameterItem):
     #def __init__(self, param, depth):
@@ -309,7 +319,7 @@ class SpontRateAnalyzer:
         self.params = ptree.Parameter.create(name='Spontaneous Rate', type='group', children=[
                 dict(name='Stimulus Time', type='float', value=0.495, suffix='s', siPrefix=True, step=0.005),
                 dict(name='Method', type='list', values=['Constant', 'Constant (Mean)', 'Constant (Median)', 'Mean Window', 'Median Window', 'Gaussian Window'], value='Gaussian Window'),
-                dict(name='Constant Rate', type='float', value=0, suffix='Hz', siPrefix=True),
+                dict(name='Constant Rate', type='float', value=0, suffix='Hz', limits=[0, None], siPrefix=True),
                 dict(name='Filter Window', type='float', value=20., suffix='s', siPrefix=True),
             ])
         self.params.sigTreeStateChanged.connect(self.paramsChanged)
