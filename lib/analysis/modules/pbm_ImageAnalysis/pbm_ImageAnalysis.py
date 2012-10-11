@@ -715,7 +715,10 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.tdat = data.infoCopy()[1]['values']/1000.
         self.physPlot.plot(tdat, self.physData[::decimate_factor], pen=pg.mkPen('w')) # , decimate=decimate_factor)
         self.showPhysTrigger()
-        self.detectSpikes()
+        try:
+            self.detectSpikes()
+        except:
+            pass
         
     def loadRatioImage(self):
         print 'loading ratio image'

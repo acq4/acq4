@@ -122,7 +122,7 @@ class IVCurve(AnalysisModule):
         self.filename = dh.name()
         dirs = dh.subDirs()
         c = 0
-        traces = []
+        traces = None
         self.values = []
         self.Sequence = self.dataModel.listSequenceParams(dh)
         maxplotpts = 1024
@@ -147,7 +147,9 @@ class IVCurve(AnalysisModule):
             else:
                 pass
                 # store primary channel data and read command amplitude
-            traces.append(data)
+            if traces is None:
+                traces = numpy.zeros((len(dirs), len(data)))
+            traces[c,:]  = data.view(numpy.ndarray) # .append(data)
             self.data_plot.plot(data, pen=pg.intColor(c, len(dirs), maxValue=200)) # , decimate=decimate_factor)
             self.values.append(cmd[len(cmd)/2])
             #c += 1.0 / len(dirs)
@@ -164,7 +166,7 @@ class IVCurve(AnalysisModule):
                 data.infoCopy(-1)]
             #self.traces = traces # MetaArray(traces, info=info)
             self.traces = MetaArray(traces, info=info)
-            cmddata = cmd.asarray()
+            cmddata = cmd.view(numpy.ndarray)
             cmdtimes = numpy.argwhere(cmddata[1:]-cmddata[:-1] != 0)[:,0]
             self.tstart = cmd.xvals('Time')[cmdtimes[0]]
             self.tend = cmd.xvals('Time')[cmdtimes[1]]
@@ -320,7 +322,6 @@ class IVCurve(AnalysisModule):
         if self.traces is None:
             return
         rgnss = self.lrss.getRegion()
-        print rgnss
         self.ctrl.IVCurve_ssTStart.setValue(rgnss[0]*1.0e3)
         self.ctrl.IVCurve_ssTStop.setValue(rgnss[1]*1.0e3)
         data1 = self.traces['Time': rgnss[0]:rgnss[1]]
