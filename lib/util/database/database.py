@@ -83,7 +83,7 @@ class SqliteDatabase:
             toDict  - If True, return a list-of-dicts representation of the query results
             toArray - If True, return a record array representation of the query results
         """
-        p = debug.Profiler('SqliteDatabase.exe', disabled=False)
+        p = debug.Profiler('SqliteDatabase.exe', disabled=True)
         p.mark('Command: %s' % cmd)
         #print cmd
         #import traceback
@@ -151,7 +151,7 @@ class SqliteDatabase:
         toArray        if True, return a numpy record array
         ============== ================================================================
         """
-        p = debug.Profiler("SqliteDatabase.select", disabled=False)
+        p = debug.Profiler("SqliteDatabase.select", disabled=True)
         if columns != '*':
             #if isinstance(columns, basestring):
                 #columns = columns.split(',')
@@ -499,7 +499,7 @@ class SqliteDatabase:
 
 
     def _queryToArray(self, q):
-        prof = debug.Profiler("_queryToArray", disabled=False)
+        prof = debug.Profiler("_queryToArray", disabled=True)
         recs = self._queryToDict(q)
         prof.mark("got records")
         if len(recs) < 1:
@@ -518,7 +518,7 @@ class SqliteDatabase:
 
 
     def _readRecord(self, rec):
-        prof = debug.Profiler("_readRecord", disabled=False)
+        prof = debug.Profiler("_readRecord", disabled=True)
         data = collections.OrderedDict()
         for i in range(rec.count()):
             f = rec.field(i)
