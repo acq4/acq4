@@ -121,7 +121,11 @@ class Scan(QtCore.QObject):
             if fh is None:
                 continue
             start = fh.info()['__timestamp__']
-            stop = start + dh.parent().info()['protocol']['conf']['duration']
+            p = dh.parent()
+            if self.dataModel.isSequence(p):
+                stop = start + dh.parent().info()['protocol']['conf']['duration']
+            else:
+                stop = start + dh.info()['protocol']['conf']['duration']
             times.append((dh, start, stop))
         return times
         
@@ -185,6 +189,8 @@ class Scan(QtCore.QObject):
                 #dh = spot.data()
                 #fh = self.host.getClampFile(dh)
                 fh = self.dataModel.getClampFile(dh)
+                if fh not in self.events:
+                    self.events[fh] = {'events': np.empty(0, dtype=allEvents.dtype)}
                 #events, stats = self.host.loadSpotFromDB(dh)
                 
                 #events = allEvents[allEvents['SourceFile']==fh.name(relativeTo=self.source())]
@@ -334,6 +340,12 @@ class Scan(QtCore.QObject):
 
     def getEvents(self, fh, process=True, signal=True):
         if fh not in self.events or (not self.eventsLocked and fh not in self.eventCacheValid):
+            
+            ## this should never happen
+            #p = fh.parent()  ## If we have stats but no events, then just return an empty list.
+            #if p in self.stats:
+                #return []
+            
             if process:
                 #print "No event cache for", fh.name(), "compute.."
                 events = self.host.processEvents(fh)  ## need ALL output from the flowchart; not just events
@@ -483,7 +495,7 @@ class Scan(QtCore.QObject):
             
         ## plot all data, incl. events
         data = fh.read()['primary']
-        data = fn.besselFilter(data, 10e3)
+        data = fn.besselFilter(data, 4e3)
         pc = plot.plot(data, pen=pen, clear=False)
         items.append(pc)
         

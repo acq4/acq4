@@ -394,7 +394,7 @@ class Photostim(AnalysisModule):
         return self.mapper.getColor(stats)
 
     def processEvents(self, fh):
-        #print "Process Events:", fh
+        print "Process Events:", fh
         ret = self.detector.process(fh)
         return ret
         

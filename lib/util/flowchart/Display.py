@@ -31,8 +31,8 @@ class EventListPlotter(CtrlNode):
         if not display:
             return {'plot': None}
         conn = self['plot'].connections()
-        if len(events) > 200:
-            events = events[:200]
+        if len(events) > 2000:
+            events = events[:2000]
         color = self.ctrls['color'].color()
         
         ## don't keep items from last run; they may have been removed already.

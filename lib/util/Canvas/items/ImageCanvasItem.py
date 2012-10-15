@@ -5,6 +5,7 @@ import numpy as np
 import scipy.ndimage as ndimage
 import pyqtgraph as pg
 import DataManager
+import debug
 
 class ImageCanvasItem(CanvasItem):
     def __init__(self, image=None, **opts):
@@ -61,15 +62,12 @@ class ImageCanvasItem(CanvasItem):
                         else:
                             info = self.data._info[-1]
                             opts['pos'] = info.get('imagePosition', None)
-                    else:
+                    elif hasattr(self.data, '_info'):
                         info = self.data._info[-1]
                         opts['scale'] = info.get('pixelSize', None)
                         opts['pos'] = info.get('imagePosition', None)
             except:
-                #print 'uga uga boom'
-                pass
-
-        print opts
+                debug.printExc('Error reading transformation for image file %s:' % image.name())
 
         if item is None:
             item = pg.ImageItem()
@@ -150,7 +148,7 @@ class ImageCanvasItem(CanvasItem):
 
     def edgeClicked(self):
         ## unsharp mask to enhance fine details
-        fd = self.data.astype(float)
+        fd = self.data.asarray().astype(float)
         blur = ndimage.gaussian_filter(fd, (0, 1, 1))
         blur2 = ndimage.gaussian_filter(fd, (0, 2, 2))
         dif = blur - blur2
@@ -160,20 +158,20 @@ class ImageCanvasItem(CanvasItem):
 
     def maxClicked(self):
         ## just the max of a stack
-        fd = self.data.astype(float)
+        fd = self.data.asarray().astype(float)
         self.graphicsItem().updateImage(fd.max(axis=0))
         self.updateHistogram(autoLevels=True)
 
     def max2Clicked(self):
         ## just the max of a stack, after a little 3d bluring
-        fd = self.data.astype(float)
+        fd = self.data.asarray().astype(float)
         blur = ndimage.gaussian_filter(fd, (1, 1, 1))
         self.graphicsItem().updateImage(blur.max(axis=0))
         self.updateHistogram(autoLevels=True)
 
     def meanClicked(self):
         ## just the max of a stack
-        fd = self.data.astype(float)
+        fd = self.data.asarray().astype(float)
         self.graphicsItem().updateImage(fd.mean(axis=0))
         self.updateHistogram(autoLevels=True)
 

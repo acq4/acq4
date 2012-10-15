@@ -217,6 +217,7 @@ class ConsoleWidget(QtGui.QWidget):
         for l in tb.split('\n'):
             lines.append(" "*indent + prefix + l)
         self.write('\n'.join(lines))
+        self.exceptionHandler(*sys.exc_info())
         
     def cmdSelected(self, item):
         index = -(self.ui.historyList.row(item)+1)
@@ -314,6 +315,8 @@ class ConsoleWidget(QtGui.QWidget):
     def exceptionHandler(self, excType, exc, tb):
         if self.ui.catchNextExceptionBtn.isChecked():
             self.ui.catchNextExceptionBtn.setChecked(False)
+        elif not self.ui.catchAllExceptionsBtn.isChecked():
+            return
         
         self.ui.clearExceptionBtn.setEnabled(True)
         self.currentTraceback = tb
@@ -339,19 +342,31 @@ class ConsoleWidget(QtGui.QWidget):
         if excType is GeneratorExit or excType is StopIteration:
             return False
         if excType is KeyError:
-            if filename.endswith('python2.7/weakref.py') and function == '__contains__':
+            if filename.endswith('python2.7/weakref.py') and function in ('__contains__', 'get'):
                 return False
             if filename.endswith('python2.7/copy.py') and function == '_keep_alive':
                 return False
         if excType is AttributeError:
             if filename.endswith('python2.7/collections.py') and function == '__init__':
                 return False
-            if filename.endswith('numpy/core/fromnumeric.py') and function in ('all', '_wrapit', 'transpose'):
+            if filename.endswith('numpy/core/fromnumeric.py') and function in ('all', '_wrapit', 'transpose', 'sum'):
+                return False
+            if filename.endswith('numpy/core/arrayprint.py') and function in ('_array2string'):
                 return False
             if filename.endswith('MetaArray.py') and function == '__getattr__':
                 for name in ('__array_interface__', '__array_struct__', '__array__'):  ## numpy looks for these when converting objects to array
                     if name in exc:
                         return False
+            if filename.endswith('flowchart/eq.py'):
+                return False
+            if filename.endswith('pyqtgraph/functions.py') and function == 'makeQImage':
+                return False
+        if excType is TypeError:
+            if filename.endswith('numpy/lib/function_base.py') and function == 'iterable':
+                return False
+        if excType is ZeroDivisionError:
+            if filename.endswith('python2.7/traceback.py'):
+                return False
             
         return True
     

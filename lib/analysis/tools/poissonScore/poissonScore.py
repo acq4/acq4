@@ -248,7 +248,7 @@ class PoissonScore:
             cls.normalizationTable = cls.generateNormalizationTable()
             cls.extrapolateNormTable()
             
-        nind = np.log(n)/np.log(2)
+        nind = max(0, np.log(n)/np.log(2))
         n1 = np.clip(int(np.floor(nind)), 0, cls.normalizationTable.shape[1]-2)
         n2 = n1+1
         
@@ -279,6 +279,7 @@ class PoissonScore:
         #mapped = spline.ev(n, x)[0]
         #raise Exception()
         assert not (np.isinf(mapped) or np.isnan(mapped))
+        assert mapped>0
         return mapped
 
     #@classmethod
@@ -464,7 +465,7 @@ class PoissonAmpScore(PoissonScore):
                     (the output must have the same length)
             ampMean, ampStdev: population statistics of spontaneous events
         """
-        return 1.0 / gaussProb(events['amp'], ampMean, ampStdev)
+        return 1.0 / np.clip(gaussProb(events['amp'], ampMean, ampStdev), 1e-100, np.inf)
     
     
     ## This is perhaps way too complicated.
