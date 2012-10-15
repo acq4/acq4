@@ -470,18 +470,18 @@ def randomProbTest(sites, cellDir, n=10, getContours=False, **kwargs):
     spontRate = data['numOfPreEvents'].sum()/data['PreRegionLen'].sum()
     #prof.mark('selected data, calculated spontRate')
     
-    d = afn.bendelsSpatialCorrelationAlgorithm(data, 90e-6, spontRate, keys[timeWindow], eventsKey=keys[eventKey])
-    actualNum = len(d[d['prob'] < probThreshold])
+    d = afn.bendelsSpatialCorrelationAlgorithm(data, 90e-6, spontRate, keys['timeWindow'], eventsKey=keys['eventKey'])
+    actualNum = len(d[d['prob'] < keys['probThreshold']])
     #prof.mark('calculated actual number of spots')
     if getContours:
         img, xmin, ymin = reserveImageArray(sites)
     
-    with Parallelize(tasks, results=results)as tasker:
+    with Parallelize(tasks, workers=1, results=results)as tasker:
         for task in tasker:
             np.random.seed()
-            randomData = randomizeData(data, eventKey)
-            randomData = afn.bendelsSpatialCorrelationAlgorithm(randomData, 90e-6, spontRate, timeWindow, eventsKey=eventKey)
-            tasker.results[task]['numOfSpots'] = len(randomData[randomData['prob'] < probThreshold])
+            randomData = randomizeData(data, keys['eventKey'])
+            randomData = afn.bendelsSpatialCorrelationAlgorithm(randomData, 90e-6, spontRate, keys['timeWindow'], eventsKey=keys['eventKey'])
+            tasker.results[task]['numOfSpots'] = len(randomData[randomData['prob'] < keys['probThreshold']])
             if getContours:
                 im = img.copy()
                 data = randomData[randomData['prob'] < probThreshold]
