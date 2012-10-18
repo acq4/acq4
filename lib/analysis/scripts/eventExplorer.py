@@ -39,7 +39,7 @@ if 'events' not in locals():
     cellCombo.setSizeAdjustPolicy(cellCombo.AdjustToContents)
     layout.addWidget(cellCombo)
     
-    reloadBtn = QtGui.QPusnButton('reload')
+    reloadBtn = QtGui.QPushButton('reload')
     layout.addWidget(reloadBtn)
     
     separateCheck = QtGui.QCheckBox("color pre/post")
@@ -62,7 +62,7 @@ if 'events' not in locals():
 
     spl1 = QtGui.QSplitter()
     spl1.setOrientation(QtCore.Qt.Vertical)
-    layout.addWidget(spl1, row=1, col=0, rowSpan=1, colSpan=8)
+    layout.addWidget(spl1, row=1, col=0, rowspan=1, colspan=8)
 
     pw1 = pg.PlotWidget()
     spl1.addWidget(pw1)
