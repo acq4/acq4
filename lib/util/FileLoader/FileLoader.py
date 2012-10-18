@@ -13,6 +13,7 @@ class FileLoader(QtGui.QWidget):
     
     sigFileLoaded = QtCore.Signal(object)
     sigBaseChanged = QtCore.Signal(object)
+    sigSelectedFileChanged = QtCore.Signal(object)
     
     def __init__(self, dataManager, host=None, showFileTree=True):
         self._baseDir = None
@@ -27,6 +28,7 @@ class FileLoader(QtGui.QWidget):
         self.ui.loadBtn.clicked.connect(self.loadClicked)
         self.ui.dirTree.currentItemChanged.connect(self.updateNotes) ## self.ui.dirTree is a DirTreeWidget
         self.ui.dirTree.itemDoubleClicked.connect(self.doubleClickEvent)
+        self.ui.fileTree.currentItemChanged.connect(self.selectedFileChanged)
         
         self.ui.fileTree.setVisible(showFileTree)
         self.ui.notesTextEdit.setReadOnly(True)
@@ -78,6 +80,18 @@ class FileLoader(QtGui.QWidget):
         finally:
             QtGui.QApplication.restoreOverrideCursor()
             
+    def selectedFileChanged(self):
+        self.sigSelectedFileChanged.emit(self.ui.fileTree.currentItem())
+        
+    def addVirtualFiles(self, itemNames, parentName=None):
+        """Add names in itemNames to the list of loaded files. If parentName is specified items will be added as children of the parent."""
+        for name in itemNames:
+            item = QtGui.QTreeWidgetItem([name])
+            if parentName is not None:
+                parent = self.ui.fileTree.findItems(parentName, QtCore.Qt.MatchExactly)[0]
+                parent.addChild(item)
+            else:
+                self.ui.fileTree.addTopLevelItem(item)
         
     def selectedFile(self):
         """Returns the file selected from the list of already loaded files"""

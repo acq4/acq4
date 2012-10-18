@@ -1,0 +1,55 @@
+pos: (0.0, 0.0)
+connects: [('ThresholdEvents.0', 'Out', 'EventFitter.0', 'events'), ('ColumnSelect.2', 'time', 'EventListPlotter.1', 'events'), ('HistogramDetrend.0', 'Out', 'ExpDeconvolve.1', 'In'), ('BesselFilter.0', 'Out', 'BesselFilter.1', 'In'), ('HistogramDetrend.0', 'Out', 'BesselFilter.0', 'In'), ('EventListPlotter.0', 'plot', u'Plot_000', 'In'), ('ExpDeconvolve.0', 'Out', 'Plot_001', 'In'), ('BesselFilter.1', 'Out', 'ExpDeconvolve.0', 'In'), ('EventFitter.0', 'output', 'ColumnSelect.0', 'In'), ('ColumnJoin.0', 'output', 'Output', 'events'), ('Input', 'dataIn', 'DenoiseFilter.0', 'In'), ('EventFitter.0', 'plot', u'Plot_000', 'In'), ('EventListPlotter.1', 'plot', u'Plot_000', 'In'), ('ExpDeconvolve.0', 'Out', 'ThresholdEvents.0', 'In'), ('DenoiseFilter.0', 'Out', 'HistogramDetrend.0', 'In'), ('EventListPlotter.0', 'plot', 'Plot_001', 'In'), ('ExpDeconvolve.1', 'Out', 'EventFitter.0', 'waveform'), ('ColumnSelect.0', 'time', 'EventListPlotter.0', 'events'), ('HistogramDetrend.0', 'Out', u'Plot_000', 'In')]
+terminals:
+    dataIn:
+        multi: False
+        io: 'in'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+    events:
+        multi: False
+        io: 'out'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+    regions:
+        multi: True
+        io: 'out'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+bypass: False
+inputNode:
+    terminals:
+        dataIn:
+            multi: False
+            io: 'out'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+    pos: (-45.23077449817663, -229.99999524470172)
+    bypass: False
+nodes: [{'state': {'pos': (1248.203161394927, -415.7082521747444), 'bypass': False}, 'pos': (1248.203161394927, -415.7082521747444), 'class': 'PlotWidget', 'name': u'Plot_000'}, {'state': {'pos': (99.12249666147031, -79.67203437382868), 'bypass': True, 'ctrl': {'threshold': 4.0, 'radius': 2}}, 'pos': (99.12249666147031, -79.67203437382868), 'class': 'DenoiseFilter', 'name': 'DenoiseFilter.0'}, {'state': {'pos': (1157.0, -121.0), 'bypass': False, 'order': []}, 'pos': (1157.0, -121.0), 'class': 'ColumnJoin', 'name': 'ColumnJoin.0'}, {'state': {'pos': (842.6916689962295, -53.76257858214379), 'bypass': False, 'ctrl': {'multiFit': False, 'plotEvents': False, 'plotFits': True, 'plotGuess': False}}, 'pos': (842.6916689962295, -53.76257858214379), 'class': 'EventFitter', 'name': 'EventFitter.0'}, {'state': {'pos': (233.28781281958263, -79.34705628295436), 'bypass': False, 'ctrl': {'windowSize': 2000, 'numBins': 50}}, 'pos': (233.28781281958263, -79.34705628295436), 'class': 'HistogramDetrend', 'name': 'HistogramDetrend.0'}, {'state': {'pos': (526.946928330404, -256.92248292618683), 'bypass': False, 'ctrl': {'tau': 0.001}}, 'pos': (526.946928330404, -256.92248292618683), 'class': 'ExpDeconvolve', 'name': 'ExpDeconvolve.1'}, {'state': {'pos': (696.7888272864843, 79.09625115854209), 'bypass': False, 'ctrl': {'minLength': 0, 'eventLimit': 100, 'deadTime': 0.0, 'adjustTimes': False, 'threshold': 0.01, 'minPeak': 0.02, 'reverseTime': 0.0, 'minSum': 0.0}}, 'pos': (696.7888272864843, 79.09625115854209), 'class': 'ThresholdEvents', 'name': 'ThresholdEvents.0'}, {'state': {'pos': (1123.7332363392973, 1.488081320117601), 'bypass': False, 'ctrl': {'color': (128, 128, 128, 255)}}, 'pos': (1123.7332363392973, 1.488081320117601), 'class': 'EventListPlotter', 'name': 'EventListPlotter.0'}, {'state': {'pos': (901.0, -220.0), 'bypass': False, 'ctrl': {'color': (172, 0, 2, 255)}}, 'pos': (901.0, -220.0), 'class': 'EventListPlotter', 'name': 'EventListPlotter.1'}, {'state': {'columns': ['time'], 'pos': (792.0, -217.0), 'bypass': False}, 'pos': (792.0, -217.0), 'class': 'ColumnSelect', 'name': 'ColumnSelect.2'}, {'state': {'pos': (1237.9067244521675, 155.7359164533637), 'bypass': False}, 'pos': (1237.9067244521675, 155.7359164533637), 'class': 'PlotWidget', 'name': 'Plot_001'}, {'state': {'columns': ['time'], 'pos': (1013.5093975134862, -0.3616867074657648), 'bypass': False}, 'pos': (1013.5093975134862, -0.3616867074657648), 'class': 'ColumnSelect', 'name': 'ColumnSelect.0'}, {'state': {'pos': (373.5674624641656, 92.18166435313009), 'bypass': False, 'ctrl': {'band': u'highpass', 'cutoff': 0.001, 'order': 4, 'bidir': True}}, 'pos': (373.5674624641656, 92.18166435313009), 'class': 'BesselFilter', 'name': 'BesselFilter.1'}, {'state': {'pos': (223.25990789065588, 101.49222246178408), 'bypass': False, 'ctrl': {'band': u'lowpass', 'cutoff': 0.1, 'order': 4, 'bidir': True}}, 'pos': (223.25990789065588, 101.49222246178408), 'class': 'BesselFilter', 'name': 'BesselFilter.0'}, {'state': {'pos': (521.9611120874073, 90.11870433296579), 'bypass': False, 'ctrl': {'tau': 15.0}}, 'pos': (521.9611120874073, 90.11870433296579), 'class': 'ExpDeconvolve', 'name': 'ExpDeconvolve.0'}]
+outputNode:
+    terminals:
+        events:
+            multi: False
+            io: 'in'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+        regions:
+            multi: True
+            io: 'in'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+    pos: (1277.6984775950882, -129.8876655920055)
+    bypass: False
