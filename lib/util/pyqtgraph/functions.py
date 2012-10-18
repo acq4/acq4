@@ -24,13 +24,19 @@ SI_PREFIXES_ASCII = 'yzafpnum kMGTPEZY'
 
 from .Qt import QtGui, QtCore
 import numpy as np
-import scipy.ndimage
 import decimal, re
+import ctypes
+
 try:
-    import scipy.weave
-    USE_WEAVE = True
-except:
-    USE_WEAVE = False
+    import scipy.ndimage
+    HAVE_SCIPY = True
+    try:
+        import scipy.weave
+        USE_WEAVE = True
+    except:
+        USE_WEAVE = False
+except ImportError:
+    HAVE_SCIPY = False
 
 from . import debug
 
@@ -218,13 +224,15 @@ def mkColor(*args):
     return QtGui.QColor(*args)
 
 
-def mkBrush(*args):
+def mkBrush(*args, **kwds):
     """
     | Convenience function for constructing Brush.
     | This function always constructs a solid brush and accepts the same arguments as :func:`mkColor() <pyqtgraph.mkColor>`
     | Calling mkBrush(None) returns an invisible brush.
     """
-    if len(args) == 1:
+    if 'color' in kwds:
+        color = kwds['color']
+    elif len(args) == 1:
         arg = args[0]
         if arg is None:
             return QtGui.QBrush(QtCore.Qt.NoBrush)
@@ -232,7 +240,7 @@ def mkBrush(*args):
             return QtGui.QBrush(arg)
         else:
             color = arg
-    if len(args) > 1:
+    elif len(args) > 1:
         color = args
     return QtGui.QBrush(mkColor(color))
 
@@ -401,7 +409,9 @@ def affineSlice(data, shape, origin, vectors, axes, order=1, returnCoords=False,
         affineSlice(data, shape=(20,20), origin=(40,0,0), vectors=((-1, 1, 0), (-1, 0, 1)), axes=(1,2,3))
     
     """
-    
+    if not HAVE_SCIPY:
+        raise Exception("This function requires the scipy library, but it does not appear to be importable.")
+
     # sanity check
     if len(shape) != len(vectors):
         raise Exception("shape and vectors must have same length.")
@@ -535,6 +545,8 @@ def solve3DTransform(points1, points2):
     Find a 3D transformation matrix that maps points1 onto points2
     points must be specified as a list of 4 Vectors.
     """
+    if not HAVE_SCIPY:
+        raise Exception("This function depends on the scipy library, but it does not appear to be importable.")
     A = np.array([[points1[i].x(), points1[i].y(), points1[i].z(), 1] for i in range(4)])
     B = np.array([[points2[i].x(), points2[i].y(), points2[i].z(), 1] for i in range(4)])
     
@@ -554,6 +566,8 @@ def solveBilinearTransform(points1, points2):
     
         mapped = np.dot(matrix, [x*y, x, y, 1])
     """
+    if not HAVE_SCIPY:
+        raise Exception("This function depends on the scipy library, but it does not appear to be importable.")
     ## A is 4 rows (points) x 4 columns (xy, x, y, 1)
     ## B is 4 rows (points) x 2 columns (x, y)
     A = np.array([[points1[i].x()*points1[i].y(), points1[i].x(), points1[i].y(), 1] for i in range(4)])
@@ -571,7 +585,7 @@ def solveBilinearTransform(points1, points2):
     
 
 def makeARGB(data, lut=None, levels=None, useRGBA=False): 
-    """
+    """ 
     Convert a 2D or 3D array into an ARGB array suitable for building QImages
     Will optionally do scaling and/or table lookups to determine final colors.
     
@@ -597,7 +611,7 @@ def makeARGB(data, lut=None, levels=None, useRGBA=False):
         useRGBA - If True, the data is returned in RGBA order. The default is 
                   False, which returns in BGRA order for use with QImage.
                 
-    """    
+    """
     prof = debug.Profiler('functions.makeARGB', disabled=True)
     
     ## sanity checks
@@ -768,30 +782,107 @@ def makeARGB(data, lut=None, levels=None, useRGBA=False):
     return imgData, alpha
     
 
-def makeQImage(imgData, alpha):
-    """Turn an ARGB array into QImage"""
+def makeQImage(imgData, alpha=None, copy=True, transpose=True):
+    """
+    Turn an ARGB array into QImage.
+    By default, the data is copied; changes to the array will not
+    be reflected in the image. The image will be given a 'data' attribute
+    pointing to the array which shares its data to prevent python
+    freeing that memory while the image is in use.
+    
+    =========== ===================================================================
+    Arguments:
+    imgData     Array of data to convert. Must have shape (width, height, 3 or 4) 
+                and dtype=ubyte. The order of values in the 3rd axis must be 
+                (b, g, r, a).
+    alpha       If True, the QImage returned will have format ARGB32. If False,
+                the format will be RGB32. By default, _alpha_ is True if
+                array.shape[2] == 4.
+    copy        If True, the data is copied before converting to QImage.
+                If False, the new QImage points directly to the data in the array.
+                Note that the array must be contiguous for this to work.
+    transpose   If True (the default), the array x/y axes are transposed before 
+                creating the image. Note that Qt expects the axes to be in 
+                (height, width) order whereas pyqtgraph usually prefers the 
+                opposite.
+    =========== ===================================================================    
+    """
     ## create QImage from buffer
     prof = debug.Profiler('functions.makeQImage', disabled=True)
+    
+    ## If we didn't explicitly specify alpha, check the array shape.
+    if alpha is None:
+        alpha = (imgData.shape[2] == 4)
+        
+    copied = False
+    if imgData.shape[2] == 3:  ## need to make alpha channel (even if alpha==False; QImage requires 32 bpp)
+        if copy is True:
+            d2 = np.empty(imgData.shape[:2] + (4,), dtype=imgData.dtype)
+            d2[:,:,:3] = imgData
+            d2[:,:,3] = 255
+            imgData = d2
+            copied = True
+        else:
+            raise Exception('Array has only 3 channels; cannot make QImage without copying.')
     
     if alpha:
         imgFormat = QtGui.QImage.Format_ARGB32
     else:
         imgFormat = QtGui.QImage.Format_RGB32
         
-    imgData = imgData.transpose((1, 0, 2))  ## QImage expects the row/column order to be opposite
-    try:
-        buf = imgData.data
-    except AttributeError:  ## happens when image data is non-contiguous
+    if transpose:
+        imgData = imgData.transpose((1, 0, 2))  ## QImage expects the row/column order to be opposite
+    
+    if not imgData.flags['C_CONTIGUOUS']:
+        if copy is False:
+            extra = ' (try setting transpose=False)' if transpose else ''
+            raise Exception('Array is not contiguous; cannot make QImage without copying.'+extra)
         imgData = np.ascontiguousarray(imgData)
-        buf = imgData.data
+        copied = True
         
-    prof.mark('1')
-    qimage = QtGui.QImage(buf, imgData.shape[1], imgData.shape[0], imgFormat)
-    prof.mark('2')
-    qimage.data = imgData
-    prof.finish()
-    return qimage
+    if copy is True and copied is False:
+        imgData = imgData.copy()
+        
+    addr = ctypes.addressof(ctypes.c_char.from_buffer(imgData, 0))
+    img = QtGui.QImage(addr, imgData.shape[1], imgData.shape[0], imgFormat)
+    img.data = imgData
+    return img
+    #try:
+        #buf = imgData.data
+    #except AttributeError:  ## happens when image data is non-contiguous
+        #buf = imgData.data
+        
+    #prof.mark('1')
+    #qimage = QtGui.QImage(buf, imgData.shape[1], imgData.shape[0], imgFormat)
+    #prof.mark('2')
+    #qimage.data = imgData
+    #prof.finish()
+    #return qimage
 
+def imageToArray(img, copy=False, transpose=True):
+    """
+    Convert a QImage into numpy array. The image must have format RGB32, ARGB32, or ARGB32_Premultiplied.
+    By default, the image is not copied; changes made to the array will appear in the QImage as well (beware: if 
+    the QImage is collected before the array, there may be trouble).
+    The array will have shape (width, height, (b,g,r,a)).
+    """
+    ptr = img.bits()
+    ptr.setsize(img.byteCount())
+    fmt = img.format()
+    if fmt == img.Format_RGB32:
+        arr = np.asarray(ptr).reshape(img.height(), img.width(), 3)
+    elif fmt == img.Format_ARGB32 or fmt == img.Format_ARGB32_Premultiplied:
+        arr = np.asarray(ptr).reshape(img.height(), img.width(), 4)
+    if copy:
+        arr = arr.copy()
+        
+    if transpose:
+        return arr.transpose((1,0,2))
+    else:
+        return arr
+    
+    
+    
 
 def rescaleData(data, scale, offset):
     newData = np.empty((data.size,), dtype=np.int)
@@ -1365,7 +1456,11 @@ def invertQTransform(tr):
     bugs in that method. (specifically, Qt has floating-point precision issues
     when determining whether a matrix is invertible)
     """
-    #return tr.inverted()[0]
+    if not HAVE_SCIPY:
+        inv = tr.inverted()
+        if inv[1] is False:
+            raise Exception("Transform is not invertible.")
+        return inv[0]
     arr = np.array([[tr.m11(), tr.m12(), tr.m13()], [tr.m21(), tr.m22(), tr.m23()], [tr.m31(), tr.m32(), tr.m33()]])
     inv = scipy.linalg.inv(arr)
     return QtGui.QTransform(inv[0,0], inv[0,1], inv[0,2], inv[1,0], inv[1,1], inv[1,2], inv[2,0], inv[2,1])
