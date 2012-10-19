@@ -459,9 +459,12 @@ class PlotDataItem(GraphicsObject):
                         and max)
         =============== =============================================================
         """
+        if frac <= 0.0:
+            raise Exception("Value for parameter 'frac' must be > 0. (got %s)" % str(frac))
+        
         (x, y) = self.getData()
         if x is None or len(x) == 0:
-            return (0, 0)
+            return None
             
         if ax == 0:
             d = x
@@ -473,14 +476,15 @@ class PlotDataItem(GraphicsObject):
         if orthoRange is not None:
             mask = (d2 >= orthoRange[0]) * (d2 <= orthoRange[1])
             d = d[mask]
-            d2 = d2[mask]
+            #d2 = d2[mask]
             
-        if frac >= 1.0:
-            return (np.min(d), np.max(d))
-        elif frac <= 0.0:
-            raise Exception("Value for parameter 'frac' must be > 0. (got %s)" % str(frac))
+        if len(d) > 0:
+            if frac >= 1.0:
+                return (np.min(d), np.max(d))
+            else:
+                return (scipy.stats.scoreatpercentile(d, 50 - (frac * 50)), scipy.stats.scoreatpercentile(d, 50 + (frac * 50)))
         else:
-            return (scipy.stats.scoreatpercentile(d, 50 - (frac * 50)), scipy.stats.scoreatpercentile(d, 50 + (frac * 50)))
+            return None
 
 
     def clear(self):

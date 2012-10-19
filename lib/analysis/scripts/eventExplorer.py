@@ -144,9 +144,9 @@ if 'events' not in locals():
 
     
     
-def loadCell(cell, reload=False):
+def loadCell(cell, reloadData=False):
     global events
-    if reload:
+    if reloadData:
         events.pop(cell, None)
     if cell in events:
         return
@@ -289,10 +289,11 @@ def select(ev, ex=True):
     return ev
     
 def reloadCell():
-    showCell(reload=True)
+    showCell(reloadData=True)
 
-def showCell(reload=False):
+def showCell(**kwds):
     pw2.clear()
+    reloadData = kwds.get('reloadData', False)
     #global lock
     #if lock:
         #return
@@ -302,7 +303,7 @@ def showCell(reload=False):
     cell = cells[cellCombo.currentIndex()-1]
     
     dh = cell #db.getDir('Cell', cell)
-    loadCell(dh, reload=reload)
+    loadCell(dh, reloadData=reloadData)
     
     try:
         image.setImage(dh['morphology.png'].read())

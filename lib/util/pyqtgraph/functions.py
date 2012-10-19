@@ -582,7 +582,10 @@ def solveBilinearTransform(points1, points2):
     
     
     
-    
+def makeRGBA(*args, **kwds):
+    """Equivalent to makeARGB(..., useRGBA=True)"""
+    kwds['useRGBA'] = True
+    return makeARGB(*args, **kwds)
 
 def makeARGB(data, lut=None, levels=None, useRGBA=False): 
     """ 
@@ -608,7 +611,7 @@ def makeARGB(data, lut=None, levels=None, useRGBA=False):
                 Lookup tables can be built using GradientWidget.
         levels - List [min, max]; optionally rescale data before converting through the
                 lookup table.   rescaled = (data-min) * len(lut) / (max-min)
-        useRGBA - If True, the data is returned in RGBA order. The default is 
+        useRGBA - If True, the data is returned in RGBA order (useful for building OpenGL textures). The default is 
                   False, which returns in BGRA order for use with QImage.
                 
     """

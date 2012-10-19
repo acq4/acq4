@@ -778,6 +778,9 @@ class SpotItem(object):
     
     def pos(self):
         return Point(self._data['x'], self._data['y'])
+        
+    def viewPos(self):
+        return self._plot.mapToView(self.pos())
     
     def setSize(self, size):
         """Set the size of this spot. 
