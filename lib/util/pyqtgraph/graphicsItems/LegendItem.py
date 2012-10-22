@@ -6,6 +6,15 @@ from .. import functions as fn
 __all__ = ['LegendItem']
 
 class LegendItem(GraphicsWidget):
+    """
+    Displays a legend used for describing the contents of a plot.
+
+    Note that this item should not be added directly to a PlotItem. Instead,
+    Make it a direct descendant of the PlotItem::
+
+        legend.setParentItem(plotItem)
+
+    """
     def __init__(self, size, offset):
         GraphicsWidget.__init__(self)
         self.setFlag(self.ItemIgnoresTransformations)
@@ -17,6 +26,15 @@ class LegendItem(GraphicsWidget):
         self.setGeometry(QtCore.QRectF(self.offset[0], self.offset[1], self.size[0], self.size[1]))
         
     def addItem(self, item, title):
+        """
+        Add a new entry to the legend. 
+        =========== ========================================================
+        Arguments
+        item        A PlotDataItem from which the line and point style
+                    of the item will be determined
+        title       The title to display for this item. Simple HTML allowed.
+        =========== ========================================================
+        """
         label = LabelItem(title)
         sample = ItemSample(item)
         row = len(self.items)

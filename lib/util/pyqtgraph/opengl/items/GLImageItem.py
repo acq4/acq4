@@ -9,16 +9,17 @@ class GLImageItem(GLGraphicsItem):
     """
     **Bases:** :class:`GLGraphicsItem <pyqtgraph.opengl.GLGraphicsItem>`
     
-    Displays image data. 
+    Displays image data as a textured quad.
     """
     
     
     def __init__(self, data, smooth=False):
         """
+        
         ==============  =======================================================================================
         **Arguments:**
         data            Volume data to be rendered. *Must* be 3D numpy array (x, y, RGBA) with dtype=ubyte.
-                        (See functions.makeARGB)
+                        (See functions.makeRGBA)
         smooth          (bool) If True, the volume slices are rendered with linear interpolation 
         ==============  =======================================================================================
         """
