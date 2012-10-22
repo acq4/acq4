@@ -36,9 +36,11 @@ columns = [
     ('type', [('CellType', 'text')]),
     ('slice plane', None),
     ('atlas ok', None),
+    ('mapping ok', None),
     ('morphology', None),
     ('I/V Curves', None),
     ('temp', None),
+    ('age', None),
     ('region', None),
     ('H-current', None),
     ('time post-dissection', None),
@@ -47,6 +49,7 @@ columns = [
     ('access res.', None),
     ('capacitance', None),
     ('holding cur.', None),
+    ('time constant', None),
     ('time to peak', None),
     ('decay 1', None),
     ('decay 2', None),
@@ -89,8 +92,6 @@ columns = [
     ('TV?', None),
     ('Ex input?', None),
     ('GCA?', None),
-    ('None', None),
-    ('age', None),
     ('mcpg', None),
 ]
 
@@ -107,8 +108,10 @@ def readOds():
     ## make sure ODS data matches column list
     for i in range(cols):
         d = doc.get_cell_value(i+1, 2)
-        if d != columns[i]:
-            raise Exception('Column %d in ODS (%s) does not match template (%s)' % (i+1, d, columns[i]) )
+        if d is not None:
+            d = d[1]
+        if d != columns[i][0]:
+            raise Exception('Column %d in ODS (%s) does not match template (%s)' % (i+1, d, columns[i][0]) )
     if cols != len(columns):
         raise Exception('Expected number of columns (%d) does not match number of columns in ODS (%d)' % (cols, len(columns)))
     
