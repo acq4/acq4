@@ -1,2 +1,2 @@
-items: [{'gradient': {'ticks': [(0, (255, 255, 255, 255)), (0.6584449536638475, (255, 0, 0, 255)), (1.0, (0, 0, 0, 0)), (0.49613548893502807, (243, 255, 0, 255)), (0.8310597812325923, (147, 0, 0, 255))], 'mode': 'rgb'}, 'max': 0.0, 'op': '+', 'min': -1e-09, 'arg': 'postEventSum'}, {'gradient': {'ticks': [(0.2524813895781638, (0, 0, 0, 255)), (0.47185015445384115, (255, 255, 255, 255))], 'mode': 'rgb'}, 'max': 0.0, 'op': '*', 'min': -1e-12, 'arg': 'DirRegionAvgCurrent'}]
-args: ['postEventSum', 'DirRegionAvgCurrent']
+items: [{'gradient': {'ticks': [(1, (255, 0, 0, 255)), (0, (255, 255, 255, 255))], 'mode': 'rgb'}, 'max': 0.0, 'op': '+', 'min': -1e-11, 'arg': 'firstEventAmplitude'}]
+args: ['firstEventAmplitude']

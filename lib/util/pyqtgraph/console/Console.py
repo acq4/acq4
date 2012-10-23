@@ -1,8 +1,12 @@
 
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui, USE_PYSIDE
 import sys, re, os, time, traceback, subprocess
 import pyqtgraph as pg
-from . import template
+if USE_PYSIDE:
+    from . import template_pyside as template
+else:
+    from . import template_pyqt as template
+    
 import pyqtgraph.exceptionHandling as exceptionHandling
 import pickle
 
@@ -75,8 +79,8 @@ class ConsoleWidget(QtGui.QWidget):
         self.ui.clearExceptionBtn.clicked.connect(self.clearExceptionClicked)
         self.ui.exceptionStackList.itemClicked.connect(self.stackItemClicked)
         self.ui.exceptionStackList.itemDoubleClicked.connect(self.stackItemDblClicked)
+        self.ui.onlyUncaughtCheck.toggled.connect(self.updateSysTrace)
         
-        self.exceptionHandlerRunning = False
         self.currentTraceback = None
         
     def loadHistory(self):
@@ -213,6 +217,7 @@ class ConsoleWidget(QtGui.QWidget):
         for l in tb.split('\n'):
             lines.append(" "*indent + prefix + l)
         self.write('\n'.join(lines))
+        self.exceptionHandler(*sys.exc_info())
         
     def cmdSelected(self, item):
         index = -(self.ui.historyList.row(item)+1)
@@ -235,9 +240,10 @@ class ConsoleWidget(QtGui.QWidget):
         self.ui.catchAllExceptionsBtn.setChecked(catch)
         if catch:
             self.ui.catchNextExceptionBtn.setChecked(False)
-            exceptionHandling.register(self.allExceptionsHandler)
+            self.enableExceptionHandling()
+            self.ui.exceptionBtn.setChecked(True)
         else:
-            exceptionHandling.unregister(self.allExceptionsHandler)
+            self.disableExceptionHandling()
         
     def catchNextException(self, catch=True):
         """
@@ -247,10 +253,18 @@ class ConsoleWidget(QtGui.QWidget):
         self.ui.catchNextExceptionBtn.setChecked(catch)
         if catch:
             self.ui.catchAllExceptionsBtn.setChecked(False)
-            exceptionHandling.register(self.nextExceptionHandler)
+            self.enableExceptionHandling()
+            self.ui.exceptionBtn.setChecked(True)
         else:
-            exceptionHandling.unregister(self.nextExceptionHandler)
+            self.disableExceptionHandling()
         
+    def enableExceptionHandling(self):
+        exceptionHandling.register(self.exceptionHandler)
+        self.updateSysTrace()
+        
+    def disableExceptionHandling(self):
+        exceptionHandling.unregister(self.exceptionHandler)
+        self.updateSysTrace()
         
     def clearExceptionClicked(self):
         self.currentTraceback = None
@@ -273,14 +287,37 @@ class ConsoleWidget(QtGui.QWidget):
         subprocess.Popen(self.editor.format(fileName=fileName, lineNum=lineNum), shell=True)
         
     
-    def allExceptionsHandler(self, *args):
-        self.exceptionHandler(*args)
+    #def allExceptionsHandler(self, *args):
+        #self.exceptionHandler(*args)
     
-    def nextExceptionHandler(self, *args):
-        self.ui.catchNextExceptionBtn.setChecked(False)
-        self.exceptionHandler(*args)
+    #def nextExceptionHandler(self, *args):
+        #self.ui.catchNextExceptionBtn.setChecked(False)
+        #self.exceptionHandler(*args)
 
+    def updateSysTrace(self):
+        ## Install or uninstall  sys.settrace handler 
+        
+        if not self.ui.catchNextExceptionBtn.isChecked() and not self.ui.catchAllExceptionsBtn.isChecked():
+            if sys.gettrace() == self.systrace:
+                sys.settrace(None)
+            return
+        
+        if self.ui.onlyUncaughtCheck.isChecked():
+            if sys.gettrace() == self.systrace:
+                sys.settrace(None)
+        else:
+            if sys.gettrace() is not None and sys.gettrace() != self.systrace:
+                self.ui.onlyUncaughtCheck.setChecked(False)
+                raise Exception("sys.settrace is in use; cannot monitor for caught exceptions.")
+            else:
+                sys.settrace(self.systrace)
+        
     def exceptionHandler(self, excType, exc, tb):
+        if self.ui.catchNextExceptionBtn.isChecked():
+            self.ui.catchNextExceptionBtn.setChecked(False)
+        elif not self.ui.catchAllExceptionsBtn.isChecked():
+            return
+        
         self.ui.clearExceptionBtn.setEnabled(True)
         self.currentTraceback = tb
         
@@ -289,14 +326,47 @@ class ConsoleWidget(QtGui.QWidget):
         self.ui.exceptionStackList.clear()
         for index, line in enumerate(traceback.extract_tb(tb)):
             self.ui.exceptionStackList.addItem('File "%s", line %s, in %s()\n  %s' % line)
-        
     
-    def quit(self):
-        if self.exceptionHandlerRunning:
-            self.exitHandler = True
-        try:
-            exceptionHandling.unregister(self.exceptionHandler)
-        except:
-            pass
+    def systrace(self, frame, event, arg):
+        if event == 'exception' and self.checkException(*arg):
+            self.exceptionHandler(*arg)
+        return self.systrace
         
+    def checkException(self, excType, exc, tb):
+        ## Return True if the exception is interesting; False if it should be ignored.
         
+        filename = tb.tb_frame.f_code.co_filename
+        function = tb.tb_frame.f_code.co_name
+        
+        ## Go through a list of common exception points we like to ignore:
+        if excType is GeneratorExit or excType is StopIteration:
+            return False
+        if excType is KeyError:
+            if filename.endswith('python2.7/weakref.py') and function in ('__contains__', 'get'):
+                return False
+            if filename.endswith('python2.7/copy.py') and function == '_keep_alive':
+                return False
+        if excType is AttributeError:
+            if filename.endswith('python2.7/collections.py') and function == '__init__':
+                return False
+            if filename.endswith('numpy/core/fromnumeric.py') and function in ('all', '_wrapit', 'transpose', 'sum'):
+                return False
+            if filename.endswith('numpy/core/arrayprint.py') and function in ('_array2string'):
+                return False
+            if filename.endswith('MetaArray.py') and function == '__getattr__':
+                for name in ('__array_interface__', '__array_struct__', '__array__'):  ## numpy looks for these when converting objects to array
+                    if name in exc:
+                        return False
+            if filename.endswith('flowchart/eq.py'):
+                return False
+            if filename.endswith('pyqtgraph/functions.py') and function == 'makeQImage':
+                return False
+        if excType is TypeError:
+            if filename.endswith('numpy/lib/function_base.py') and function == 'iterable':
+                return False
+        if excType is ZeroDivisionError:
+            if filename.endswith('python2.7/traceback.py'):
+                return False
+            
+        return True
+    

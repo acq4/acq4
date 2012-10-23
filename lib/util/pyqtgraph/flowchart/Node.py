@@ -3,7 +3,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.graphicsItems.GraphicsObject import GraphicsObject
 import pyqtgraph.functions as fn
 from .Terminal import *
-from collections import OrderedDict
+from pyqtgraph.pgcollections import OrderedDict
 from pyqtgraph.debug import *
 import numpy as np
 from .eq import *
@@ -294,6 +294,8 @@ class Node(QtCore.QObject):
                 self.removeTerminal(name)
         for name, opts in state.items():
             if name in self.terminals:
+                term = self[name]
+                term.setOpts(**opts)
                 continue
             try:
                 opts = strDict(opts)

@@ -16,26 +16,25 @@ This class is very heavily featured:
   - Control panel with a huge feature set including averaging, decimation,
     display, power spectrum, svg/png export, plot linking, and more.
 """
-#from graphicsItems import *
-from .plotConfigTemplate import *
-from pyqtgraph.Qt import QtGui, QtCore, QtSvg
+from pyqtgraph.Qt import QtGui, QtCore, QtSvg, USE_PYSIDE
+
+if USE_PYSIDE:
+    from .plotConfigTemplate_pyside import *
+else:
+    from .plotConfigTemplate_pyqt import *
+
 import pyqtgraph.functions as fn
 from pyqtgraph.widgets.FileDialog import FileDialog
 import weakref
-#from types import *
 import numpy as np
 import os
-#from .. PlotCurveItem import PlotCurveItem
-#from .. ScatterPlotItem import ScatterPlotItem
 from .. PlotDataItem import PlotDataItem
 from .. ViewBox import ViewBox
 from .. AxisItem import AxisItem
 from .. LabelItem import LabelItem
 from .. GraphicsWidget import GraphicsWidget
 from .. ButtonItem import ButtonItem
-#from .. GraphicsLayout import GraphicsLayout
 from pyqtgraph.WidgetGroup import WidgetGroup
-import collections
 
 __all__ = ['PlotItem']
 
@@ -73,6 +72,7 @@ class PlotItem(GraphicsWidget):
     :func:`enableAutoRange <pyqtgraph.ViewBox.enableAutoRange>`,
     :func:`disableAutoRange <pyqtgraph.ViewBox.disableAutoRange>`,
     :func:`setAspectLocked <pyqtgraph.ViewBox.setAspectLocked>`,
+    :func:`invertY <pyqtgraph.ViewBox.invertY>`,
     :func:`register <pyqtgraph.ViewBox.register>`,
     :func:`unregister <pyqtgraph.ViewBox.unregister>`
     
@@ -188,7 +188,7 @@ class PlotItem(GraphicsWidget):
         for m in [
             'setXRange', 'setYRange', 'setXLink', 'setYLink', 'setAutoPan', 'setAutoVisible',
             'setRange', 'autoRange', 'viewRect', 'viewRange', 'setMouseEnabled',
-            'enableAutoRange', 'disableAutoRange', 'setAspectLocked',
+            'enableAutoRange', 'disableAutoRange', 'setAspectLocked', 'invertY',
             'register', 'unregister']:  ## NOTE: If you update this list, please update the class docstring as well.
             setattr(self, m, getattr(self.vb, m))
             
@@ -1016,7 +1016,7 @@ class PlotItem(GraphicsWidget):
                       (ie, use 'V' instead of 'mV'; 'm' will be added automatically)
         ============= =================================================================
         """
-        self.getScale(axis).setLabel(text=text, units=units, **args)
+        self.getAxis(axis).setLabel(text=text, units=units, **args)
         
     def showLabel(self, axis, show=True):
         """

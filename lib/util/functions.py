@@ -185,6 +185,7 @@ def fitPsp(x, y, guess, bounds=None, risePower=2.0, multiFit=False):
     ## pick some reasonable default bounds
     if bounds is None:
         bounds = [[None,None]] * 4
+        bounds[1][0] = -2e-3
         minTau = (x[1]-x[0]) * 0.5
         #bounds[2] = [minTau, None]
         #bounds[3] = [minTau, None]
@@ -356,59 +357,13 @@ def fitDoublePsp(x, y, guess, bounds=None, risePower=2.0):
     #print fit[2:]
     fit = fit[0]
     
-    ## try fixing some common errors
-    #corrected = False
-    #err = (errFn(fit, x, y)**2).sum()
-    #fit2 = fit.copy()
-    #for i in range(10):
-        #fit2[0] *= 0.5
-        #fit2[1] *= 0.5
-        #err2 = (errFn(fit2, x, y)**2).sum()
-        #if err2 < err:
-            #print "Made amp correction"
-            #err = err2.copy()
-            #fit = fit2.copy()
-            #corrected = True
-        #else:
-            #break
-    
-    #for i in range(10):
-        #fit2[0] *= 1.3
-        #fit2[1] *= 1.3
-        #fit2[4] /= 1.3
-        #fit2[5] /= 1.3
-        #err2 = (errFn(fit2, x, y)**2).sum()
-        #if err2 < err:
-            #print "Made amp/tau tradeoff"
-            #err = err2.copy()
-            #fit = fit2.copy()
-            #corrected = True
-        #else:
-            #break
-        
-    #if corrected:  ## try fitting again
-        #fit2 = scipy.optimize.leastsq(errFn, fit, args=(x, y), ftol=1e-3, factor=0.1)[0]
-        #err2 = (errFn(fit2, x, y)**2).sum()
-        #if err2 < err:
-            #print "  -> refit helped further"
-            #fit = fit2
-            #err = err2
-            
-    ## kick the fitter to see if we can do any better
-    #import pyqtgraph as pg
-    #p = pg.plot()
-    #for i in range(len(trials)):
-        #p.plot(trials[i], pen=(i,len(trials)*1.5))
-    #print "Ran %d times" % len(errs)
-    #print 'guess:', guess
-    
     err = (errFn(fit, x, y)**2).sum()
     #print "initial fit:", fit, err
     
     guess = fit.copy()
     bestFit = fit
     for ampx in (0.5, 2.0):
-        for taux in (0.5, 2.0):
+        for taux in (0.2, 0.5, 2.0):   ## The combination ampx=2, taux=0.2 seems to be particularly important.
             guess[:2] = fit[:2] * ampx
             guess[4:6] = fit[4:6] * taux
             fit2 = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-2, factor=0.1)[0]
@@ -1628,9 +1583,10 @@ def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshol
     ## We do this check early for performance--it eliminates the vast majority of events
     longEvents = np.argwhere(times[1:] - times[:-1] > minLength)
     if len(longEvents) < 1:
-        return []
-    longEvents = longEvents[:, 0]
-    nEvents = len(longEvents)
+        nEvents = 0
+    else:
+        longEvents = longEvents[:, 0]
+        nEvents = len(longEvents)
     
     ## Measure sum of values within each region between crossings, combine into single array
     if xvals is None:

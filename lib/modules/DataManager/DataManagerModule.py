@@ -41,8 +41,9 @@ class DataManager(Module):
         self.ui.logWidget = FileLogView.FileLogView(self.ui.logTab, self)
         self.ui.logTab.layout().addWidget(self.ui.logWidget)
         
+        self.win.show()
         w = self.ui.splitter.width()
-        self.ui.splitter.setSizes([int(w*0.3), int(w*0.7)])
+        self.ui.splitter.setSizes([int(w*0.25), int(w*0.75)])
         self.ui.logDock.hide()
         self.dialog = FileDialog()
         self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
@@ -76,7 +77,6 @@ class DataManager(Module):
         #self.win.statusBar().addPermanentWidget(self.logBtn)
         #self.win.statusBar().setFixedHeight(25)
         #self.win.statusBar().layout().setSpacing(0)
-        self.win.show()
         
     #def hasInterface(self, interface):
         #return interface in ['DataSource']

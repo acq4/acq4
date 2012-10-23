@@ -5,6 +5,7 @@ import numpy as np
 import scipy.ndimage as ndimage
 import pyqtgraph as pg
 import DataManager
+import debug
 
 class ImageCanvasItem(CanvasItem):
     def __init__(self, image=None, **opts):
@@ -61,15 +62,12 @@ class ImageCanvasItem(CanvasItem):
                         else:
                             info = self.data._info[-1]
                             opts['pos'] = info.get('imagePosition', None)
-                    else:
+                    elif hasattr(self.data, '_info'):
                         info = self.data._info[-1]
                         opts['scale'] = info.get('pixelSize', None)
                         opts['pos'] = info.get('imagePosition', None)
             except:
-                #print 'uga uga boom'
-                pass
-
-        print opts
+                debug.printExc('Error reading transformation for image file %s:' % image.name())
 
         if item is None:
             item = pg.ImageItem()
@@ -106,9 +104,10 @@ class ImageCanvasItem(CanvasItem):
         self.layout.addWidget(self.edgeBtn, thisRow, 0, 1, 1)
 
         self.maxBtn2 = QtGui.QPushButton('Max w/Filter')
-        self.maxBtn2.clicked.connect(self.max2Clicked)
+        self.maxBtn2.clicked.connect(self.maxClicked)
         self.layout.addWidget(self.maxBtn2, thisRow, 1, 1, 1)
-
+        print 'insttalled maxclicked...'
+        
         self.meanBtn = QtGui.QPushButton('Mean')
         self.meanBtn.clicked.connect(self.meanClicked)
         self.layout.addWidget(self.meanBtn, thisRow+1, 0, 1, 1)
@@ -150,7 +149,11 @@ class ImageCanvasItem(CanvasItem):
 
     def edgeClicked(self):
         ## unsharp mask to enhance fine details
-        fd = self.data.astype(float)
+# <<<<<<< TREE
+#         fd = self.data.copy()# .astype(float)
+# =======
+        fd = self.data.asarray().astype(float)
+#>>>>>>> MERGE-SOURCE
         blur = ndimage.gaussian_filter(fd, (0, 1, 1))
         blur2 = ndimage.gaussian_filter(fd, (0, 2, 2))
         dif = blur - blur2
@@ -160,20 +163,43 @@ class ImageCanvasItem(CanvasItem):
 
     def maxClicked(self):
         ## just the max of a stack
-        fd = self.data.astype(float)
+# <<<<<<< TREE
+#         print 'maxClicked'
+#         fd = self.data.copy()# .astype(float)
+#         print dir(fd)
+#         print fd.shape
+# =======
+        fd = self.data.asarray().astype(float)
+#>>>>>>> MERGE-SOURCE
         self.graphicsItem().updateImage(fd.max(axis=0))
+        print 'image udpate done'
         self.updateHistogram(autoLevels=True)
-
+        print 'histogram updated'
+        
     def max2Clicked(self):
         ## just the max of a stack, after a little 3d bluring
-        fd = self.data.astype(float)
+# <<<<<<< TREE
+#         print 'max2Clicked'
+#         fd = self.data.copy()# .astype(float)
+#         print dir(fd)
+#         print fd.shape
+# =======
+        fd = self.data.asarray().astype(float)
+#>>>>>>> MERGE-SOURCE
         blur = ndimage.gaussian_filter(fd, (1, 1, 1))
+        print 'image blurred'
         self.graphicsItem().updateImage(blur.max(axis=0))
+        print 'image udpate done'
         self.updateHistogram(autoLevels=True)
+        print 'histogram updated'
 
     def meanClicked(self):
         ## just the max of a stack
-        fd = self.data.astype(float)
+# <<<<<<< TREE
+#         fd = self.data.copy()# .astype(float)
+# =======
+        fd = self.data.asarray().astype(float)
+#>>>>>>> MERGE-SOURCE
         self.graphicsItem().updateImage(fd.mean(axis=0))
         self.updateHistogram(autoLevels=True)
 

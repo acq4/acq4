@@ -1,11 +1,15 @@
 import sys, os
 ## make sure this pyqtgraph is importable before any others
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui, USE_PYSIDE
 
-from exampleLoaderTemplate import Ui_Form
+if USE_PYSIDE:
+    from exampleLoaderTemplate_pyside import Ui_Form
+else:
+    from exampleLoaderTemplate_pyqt import Ui_Form
+    
 import os, sys
-from collections import OrderedDict
+from pyqtgraph.pgcollections import OrderedDict
 
 examples = OrderedDict([
     ('Command-line usage', 'CLIexample.py'),
@@ -18,6 +22,7 @@ examples = OrderedDict([
     ('Data Slicing', 'DataSlicing.py'),
     ('Plot Customization', 'customPlot.py'),
     ('Dock widgets', 'dockarea.py'),
+    ('Console', 'ConsoleWidget.py'),
     ('GraphicsItems', OrderedDict([
         ('Scatter Plot', 'ScatterPlot.py'),
         #('PlotItem', 'PlotItem.py'),
@@ -38,6 +43,7 @@ examples = OrderedDict([
     ('Widgets', OrderedDict([
         ('PlotWidget', 'PlotWidget.py'),
         ('SpinBox', 'SpinBox.py'),
+        ('ConsoleWidget', 'ConsoleWidget.py'),
         ('TreeWidget', 'TreeWidget.py'),
         ('DataTreeWidget', 'DataTreeWidget.py'),
         ('GradientWidget', 'GradientWidget.py'),

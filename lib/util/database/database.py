@@ -54,7 +54,13 @@ class SqliteDatabase:
                 c += 1
         else:
             self._connectionName = os.path.abspath(fileName)
-        self.db = QtSql.QSqlDatabase.addDatabase("QSQLITE", self._connectionName)
+            
+        if self._connectionName not in QtSql.QSqlDatabase.connectionNames():
+            self.db = QtSql.QSqlDatabase.addDatabase("QSQLITE", self._connectionName)
+        else:
+            self.db = QtSql.QSqlDatabase.database(self._connectionName)
+            
+            
         self.db.setDatabaseName(fileName)
         self.db.open()
         self.tables = None
@@ -66,9 +72,11 @@ class SqliteDatabase:
             return
         self.db.close()
         self.db = None
-        import gc
-        gc.collect()  ## try to convince python to clean up the db immediately so we can remove the connection
-        QtSql.QSqlDatabase.removeDatabase(self._connectionName)
+        
+        ## no need to remove the connection entirely.
+        #import gc
+        #gc.collect()  ## try to convince python to clean up the db immediately so we can remove the connection
+        #QtSql.QSqlDatabase.removeDatabase(self._connectionName)
 
     def exe(self, cmd, data=None, batch=False, toDict=True, toArray=False):
         """Execute an SQL query. If data is provided, it should be a list of dicts and each will 
@@ -264,7 +272,7 @@ class SqliteDatabase:
             chunkSize = int(chunkSize) ## just make sure
             offset = 0
             i = 0
-            while offset < len(records)-1:
+            while offset < len(records):
                 #print len(columns), len(records[0]), len(self.tableSchema(table))
                 chunk = records[offset:offset+chunkSize]
                 self.exe(cmd, chunk, batch=True)
@@ -294,7 +302,7 @@ class SqliteDatabase:
         with self.transaction():
             whereStr = self._buildWhereClause(where, table)
             setStr = ', '.join(['"%s"=:%s' % (k, k) for k in vals])
-            cmd = "UPDATE %s SET %s %s" % (table, setStr, where)
+            cmd = "UPDATE %s SET %s %s" % (table, setStr, whereStr)
             data = self._prepareData(table, [vals], batch=True)
             return self(cmd, data, batch=True)
 

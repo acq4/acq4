@@ -305,14 +305,37 @@ class MetaArray(object):
             #return lambda *args, **kwargs: MetaArray(getattr(a.view(ndarray), attr)(*args, **kwargs)
         
     def __eq__(self, b):
-        if isinstance(b, MetaArray):
-            b = b.asarray()
-        return self._data == b
+        return self._binop('__eq__', b)
         
     def __ne__(self, b):
+        return self._binop('__ne__', b)
+        #if isinstance(b, MetaArray):
+            #b = b.asarray()
+        #return self.asarray() != b
+        
+    def __sub__(self, b):
+        return self._binop('__sub__', b)
+        #if isinstance(b, MetaArray):
+            #b = b.asarray()
+        #return MetaArray(self.asarray() - b, info=self.infoCopy())
+
+    def __add__(self, b):
+        return self._binop('__add__', b)
+
+    def __mul__(self, b):
+        return self._binop('__mul__', b)
+        
+    def __div__(self, b):
+        return self._binop('__div__', b)
+        
+    def _binop(self, op, b):
         if isinstance(b, MetaArray):
             b = b.asarray()
-        return self._data != b
+        a = self.asarray()
+        c = getattr(a, op)(b)
+        if c.shape != a.shape:
+            raise Exception("Binary operators with MetaArray must return an array of the same shape (this shape is %s, result shape was %s)" % (a.shape, c.shape))
+        return MetaArray(c, info=self.infoCopy())
         
     def asarray(self):
         if isinstance(self._data, np.ndarray):
@@ -855,11 +878,17 @@ class MetaArray(object):
         if 'close' in kargs and readAllData is None: ## for backward compatibility
             readAllData = kargs['close']
        
-        if not HAVE_HDF5:
-            raise Exception("The file '%s' is HDF5-formatted, but the HDF5 library (h5py) was not found." % fileName)
-        
         if readAllData is True and writable is True:
             raise Exception("Incompatible arguments: readAllData=True and writable=True")
+        
+        if not HAVE_HDF5:
+            try:
+                assert writable==False
+                assert readAllData != False
+                self._readHDF5Remote(fileName)
+                return
+            except:
+                raise Exception("The file '%s' is HDF5-formatted, but the HDF5 library (h5py) was not found." % fileName)
         
         ## by default, readAllData=True for files < 500MB
         if readAllData is None:
@@ -884,6 +913,29 @@ class MetaArray(object):
         else:
             self._data = f['data'][:]
             f.close()
+            
+    def _readHDF5Remote(self, fileName):
+        ## Used to read HDF5 files via remote process.
+        ## This is needed in the case that HDF5 is not importable due to the use of python-dbg.
+        proc = getattr(MetaArray, '_hdf5Process', None)
+        
+        if proc == False:
+            raise Exception('remote read failed')
+        if proc == None:
+            import pyqtgraph.multiprocess as mp
+            #print "new process"
+            proc = mp.Process(executable='/usr/bin/python')
+            proc.setProxyOptions(deferGetattr=True)
+            MetaArray._hdf5Process = proc
+            MetaArray._h5py_metaarray = proc._import('pyqtgraph.metaarray')
+        ma = MetaArray._h5py_metaarray.MetaArray(file=fileName)
+        self._data = ma.asarray()._getValue()
+        self._info = ma._info._getValue()
+        #print MetaArray._hdf5Process
+        #import inspect
+        #print MetaArray, id(MetaArray), inspect.getmodule(MetaArray)
+        
+        
 
     @staticmethod
     def mapHDF5Array(data, writable=False):
