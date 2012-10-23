@@ -111,7 +111,7 @@ class ImagingModule(AnalysisModule):
                 dirhandle = frame['cmd']['protocol']['storageDir'] # grab directory
                 self.info={'detector': self.detectorDevice(), 'scanner': self.scannerDevice(), 'indices': prog['startStopIndices'], 
                            'scanPointList': prog['scanPointList'], 'nscans': prog['nScans'], 
-                           'positions': [[float(prog['points'][0].x()), float(prog['points'][0].y())], [float(prog['points'][1].x()), float(prog['points'][1].y())]],
+                           'positions': prog['points'],
                            'downSample': imageDownSample, 'daqDownSample': daqDownSample}
                 print 'totSamps: ', totSamps
                 print 'prog[startstop..]: ', prog['startStopIndices']
@@ -119,6 +119,7 @@ class ImagingModule(AnalysisModule):
                 ma = metaarray.MetaArray(imageData, info=info)
                 print 'I am writing imaging.ma'
                 dirhandle.writeFile(ma, 'Imaging.ma')
+                raise Exception()
 
         if prog['type'] == 'rectScan':
             samplesPerScan = int((prog['startStopIndices'][1]-prog['startStopIndices'][0])/prog['nScans'])

@@ -83,11 +83,9 @@ class ScreenBlanker:
     detector during acquisition.
     """
     def __init__(self):
-        pass
+        self.widgets = []
     
     def Blank(self):
-        self.widgets = []
-
         d = QtGui.QApplication.desktop()
         for i in range(d.screenCount()): # look for all screens
             w = Black()
