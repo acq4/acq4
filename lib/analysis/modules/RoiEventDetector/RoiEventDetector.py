@@ -68,20 +68,20 @@ class RoiEventDetector(EventDetector):
         #print "store clicked."
         try:
             self.store()
-            self.ctrl.ui.storeBtn.success('Stored!')
+            self.dbCtrl.ui.storeBtn.success('Stored!')
         except:
-            self.ctrl.ui.storeBtn.failure('Error')
+            self.dbCtrl.ui.storeBtn.failure('Error')
             raise
         
     def store(self):    
         if self.storageFile is None:
             raise Exception("No storage file is specified. Please open a storage file before storing events")
         
-        if self.ctrl.getSaveMode() == 'roi':
+        if self.dbCtrl.getSaveMode() == 'roi':
             self.write(self.flowchart.output()['events'])
-        elif self.ctrl.getSaveMode() == 'video':
+        elif self.dbCtrl.getSaveMode() == 'video':
             raise Exception('Saving whole video is not yet implemented')
-        elif self.ctrl.getSaveMode() == 'all':
+        elif self.dbCtrl.getSaveMode() == 'all':
             raise Exception('Saving everything loaded is not yet implemented')
     
     def write(self, data):
@@ -91,9 +91,11 @@ class RoiEventDetector(EventDetector):
             
         for d in data:
             self.storageFile.write(','.join([repr(x) for x in d])+'\n')
+            
+        self.storageFile.write('\n')
     
     def newStorageFileClicked(self):
-        self.fileDialog = pg.FileDialog(self, "New Storage File", self.fileLoader.baseDir().name(), "CSV File (*.csv);;All Files (*.*)")
+        self.fileDialog = pg.FileDialog(self.dbCtrl, "New Storage File", self.fileLoader.baseDir().name(), "CSV File (*.csv);;All Files (*.*)")
         #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
         self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
         #self.fileDialog.setOption(QtGui.QFileDialog.DontConfirmOverwrite)
@@ -110,10 +112,10 @@ class RoiEventDetector(EventDetector):
             self.outputFields = None
             
         self.storageFile = open(fileName, 'w')
-        self.ctrl.setFileName(fileName)
+        self.dbCtrl.setFileName(fileName)
         
     def openStorageFileClicked(self):
-            self.fileDialog = pg.FileDialog(self, "Load Storage File", self.fileLoader.baseDir().name(), "CSV file (*.csv);;All Files (*.*)")
+            self.fileDialog = pg.FileDialog(self.dbCtrl, "Load Storage File", self.fileLoader.baseDir().name(), "CSV file (*.csv);;All Files (*.*)")
             #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
             self.fileDialog.show()
             self.fileDialog.fileSelected.connect(self.openStorageFile)
@@ -128,9 +130,10 @@ class RoiEventDetector(EventDetector):
             self.outputFields = None
         
         self.storageFile = open(fileName, 'r+') ## possibly I want append mode instead ('a')
-        self.ctrl.setFileName(fileName)
+        self.dbCtrl.setFileName(fileName)
         
         header = ''
+        line=None
         while line != '':
             line = self.storageFile.readline()
             if 'SourceFile' in line: ## pick a name that is likely to be present in a header row -- I need a better method for this....
