@@ -28,7 +28,7 @@ class EventDetector(AnalysisModule):
         * SourceFile: the name of the file in which the event was detected. The name is relative to the SourceDir.                    
     
     """
-    def __init__(self, host, flowchartDir=None, dbIdentity="EventDetector"):
+    def __init__(self, host, flowchartDir=None, dbIdentity="EventDetector", dbCtrl=None):
         AnalysisModule.__init__(self, host)
         
         if flowchartDir is None:
@@ -42,9 +42,12 @@ class EventDetector(AnalysisModule):
         self.flowchart.addOutput('events')
         #self.flowchart.addOutput('regions', multi=True)
         self.flowchart.sigChartLoaded.connect(self.connectPlots)
-
-        self.dbCtrl = DBCtrl(self, identity=self.dbIdentity)
-        self.dbCtrl.storeBtn.clicked.connect(self.storeClicked)
+        
+        if dbCtrl == None:
+            self.dbCtrl = DBCtrl(self, identity=self.dbIdentity)
+            self.dbCtrl.storeBtn.clicked.connect(self.storeClicked)
+        else:
+            self.dbCtrl = dbCtrl(self, identity=self.dbIdentity)
 
         #self.ctrl = QtGui.QLabel('LABEL')
         self.ctrl = self.flowchart.widget()

@@ -1581,14 +1581,16 @@ class pbm_ImageAnalysis(AnalysisModule):
             print 'self.FData is empty!'
             return
         sh = np.shape(self.FData)
-        data = np.empty([sh[0]+1, sh[1]])
+        data = np.empty([sh[0]+2, sh[1]])
         data[0] = np.arange(0,sh[1])
+        data[1] = self.imageTimes.copy()
+        
         roiData = []
         for i in range(0, sh[0]):
-            data[i+1] = self.FData[i]
+            data[i+2] = self.FData[i]
             roiData.append([self.AllRois[i].pos().x(), self.AllRois[i].pos().y(),
                             self.AllRois[i].boundingRect().height(), self.AllRois[i].boundingRect().width()])
-        data = data.T
+        data = data.T ## transpose
         if fileName is None or fileName is False:
             fileName= QtGui.QFileDialog.getSaveFileName(None, "Save ROI as csv file", "", 
                 self.tr("CSV Files (*.csv)"))
@@ -1600,9 +1602,10 @@ class pbm_ImageAnalysis(AnalysisModule):
         stringVals=''
         for col in range(0, data.shape[1]): # write a header for our formatting.
             if col is 0:
-                fd.write('time,')
-            else:
-                stringVals = ['R%03d' % x for x in range(0, col)]
+                fd.write('time(index),')
+            elif col is 1:
+                fd.write('time(sec),')
+        stringVals = ['R%03d' % x for x in range(0, data.shape[1]-2)]
         fd.write(",".join(stringVals) + "\n")
         for row in range(0, data.shape[0]):
             stringVals = ["%f" % x for x in data[row]]

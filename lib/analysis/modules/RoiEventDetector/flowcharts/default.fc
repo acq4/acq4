@@ -1,0 +1,111 @@
+pos: (0.0, 0.0)
+connects: [('BesselFilter.0', 'Out', 'BesselFilter.1', 'In'), ('EventFitter.0', 'output', 'ColumnJoin.0', 'events'), ('DenoiseFilter.0', 'Out', 'HistogramDetrend.0', 'In'), ('ColumnJoin.0', 'output', 'Output', 'events'), ('ThresholdEvents.0', 'Out', 'NegativeEventFilter', 'input'), ('BesselFilter.1', 'Out', 'ThresholdEvents.0', 'In'), ('ColumnSelect.0', 'time', 'EventListPlotter.0', 'events'), ('NegativeEventFilter', 'output', 'EventFitter.0', 'events'), ('EventFitter.0', 'plot', u'Plot_000', 'In'), ('BesselFilter.1', 'Out', 'EventFitter.0', 'waveform'), ('Input', u'roi', 'GatherInfo', 'roi'), ('HistogramDetrend.0', 'Out', 'BesselFilter.0', 'In'), ('EventListPlotter.0', 'plot', 'Plot_001', 'In'), ('GatherInfo', 'info', 'ColumnJoin.0', 'info'), ('Input', 'dataIn', 'DenoiseFilter.0', 'In'), ('Input', 'dataIn', 'GatherInfo', 'input'), ('HistogramDetrend.0', 'Out', u'Plot_000', 'In'), ('EventListPlotter.0', 'plot', u'Plot_000', 'In'), ('BesselFilter.1', 'Out', 'Plot_001', 'In'), ('EventFitter.0', 'output', 'ColumnSelect.0', 'In')]
+terminals:
+    dataIn:
+        multi: False
+        io: 'in'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+    events:
+        multi: False
+        io: 'out'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+    regions:
+        multi: True
+        io: 'out'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+    roi:
+        multi: False
+        io: 'in'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+    roi.1:
+        multi: False
+        io: 'in'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+    roi.2:
+        multi: False
+        io: 'in'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+    roi.3:
+        multi: False
+        io: 'in'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+bypass: False
+inputNode:
+    terminals:
+        dataIn:
+            multi: False
+            io: 'out'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+        roi:
+            multi: False
+            io: 'out'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+        roi.1:
+            multi: False
+            io: 'out'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+        roi.2:
+            multi: False
+            io: 'out'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+        roi.3:
+            multi: False
+            io: 'out'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+    pos: (-45.23077449817663, -229.99999524470172)
+    bypass: False
+nodes: [{'state': {'pos': (1248.203161394927, -415.7082521747444), 'bypass': False}, 'pos': (1248.203161394927, -415.7082521747444), 'class': 'PlotWidget', 'name': u'Plot_000'}, {'state': {'pos': (99.12249666147031, -79.67203437382868), 'bypass': False, 'ctrl': {'threshold': 4.0, 'radius': 2}}, 'pos': (99.12249666147031, -79.67203437382868), 'class': 'DenoiseFilter', 'name': 'DenoiseFilter.0'}, {'state': {'terminals': OrderedDict([('output', {'multi': False, 'io': 'out', 'renamable': False, 'multiable': False, 'removable': False, 'optional': False}), ('events', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': False, 'removable': True, 'optional': False}), ('info', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': False, 'removable': True, 'optional': False})]), 'pos': (1075.960465846941, -198.62695748525593), 'bypass': False, 'order': ['events', 'info']}, 'pos': (1075.960465846941, -198.62695748525593), 'class': 'ColumnJoin', 'name': 'ColumnJoin.0'}, {'state': {'text': "# Access inputs as args['input_name']\n# return {'output': None} ## one key per output terminal\n\nreturn {'output': args['input'][args['input']['peak'] > 0]}\n", 'terminals': OrderedDict([('input', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False}), ('output', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False})]), 'pos': (693.1660158046665, 41.63138602133313), 'bypass': False}, 'pos': (693.1660158046665, 41.63138602133313), 'class': 'PythonEval', 'name': 'NegativeEventFilter'}, {'state': {'pos': (233.28781281958263, -79.34705628295436), 'bypass': False, 'ctrl': {'windowSize': 2000, 'numBins': 50}}, 'pos': (233.28781281958263, -79.34705628295436), 'class': 'HistogramDetrend', 'name': 'HistogramDetrend.0'}, {'state': {'pos': (1237.9067244521675, 155.7359164533637), 'bypass': False}, 'pos': (1237.9067244521675, 155.7359164533637), 'class': 'PlotWidget', 'name': 'Plot_001'}, {'state': {'pos': (554.5605740616927, 49.239628604015536), 'bypass': False, 'ctrl': {'minLength': 0, 'eventLimit': 100, 'deadTime': 0.0, 'adjustTimes': False, 'threshold': 0.004, 'minPeak': 0.005, 'reverseTime': 0.0, 'minSum': 0.0}}, 'pos': (554.5605740616927, 49.239628604015536), 'class': 'ThresholdEvents', 'name': 'ThresholdEvents.0'}, {'state': {'pos': (1070.5626070028525, -18.940134111926852), 'bypass': False, 'ctrl': {'color': (128, 128, 128, 255)}}, 'pos': (1070.5626070028525, -18.940134111926852), 'class': 'EventListPlotter', 'name': 'EventListPlotter.0'}, {'state': {'pos': (775.4767393905456, -110.33302131703587), 'bypass': False, 'ctrl': {'multiFit': False, 'plotEvents': False, 'plotFits': True, 'plotGuess': False}}, 'pos': (775.4767393905456, -110.33302131703587), 'class': 'EventFitter', 'name': 'EventFitter.0'}, {'state': {'columns': ['time'], 'pos': (908.784967527824, -14.5042973911888), 'bypass': False}, 'pos': (908.784967527824, -14.5042973911888), 'class': 'ColumnSelect', 'name': 'ColumnSelect.0'}, {'state': {'text': "# Access inputs as args['input_name']\n# return {'output': None} ## one key per output terminal\n\ninfo = args['input'].infoCopy()[-1]\narr = np.zeros(1, dtype=[('roiX', int), ('roiY', int), ('roiWidth', int), ('roiHeight', int), ('SourceFile', '|S100'),('roi', '|S10')])\n\nfor k in info.keys():\n   arr[k] = info[k]\n\narr['roi'] = args['roi']\n\nreturn {'info':arr}", 'terminals': OrderedDict([('input', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False}), ('info', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False}), ('roi', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': True, 'optional': False})]), 'pos': (558.3287508362596, -280.33981921343343), 'bypass': False}, 'pos': (558.3287508362596, -280.33981921343343), 'class': 'PythonEval', 'name': 'GatherInfo'}, {'state': {'pos': (223.25990789065588, 101.49222246178408), 'bypass': False, 'ctrl': {'band': u'lowpass', 'cutoff': 10.0, 'order': 4, 'bidir': True}}, 'pos': (223.25990789065588, 101.49222246178408), 'class': 'BesselFilter', 'name': 'BesselFilter.0'}, {'state': {'pos': (393.89740897515975, 65.46784417276439), 'bypass': False, 'ctrl': {'band': u'highpass', 'cutoff': 0.06, 'order': 4, 'bidir': True}}, 'pos': (393.89740897515975, 65.46784417276439), 'class': 'BesselFilter', 'name': 'BesselFilter.1'}]
+outputNode:
+    terminals:
+        events:
+            multi: False
+            io: 'in'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+        regions:
+            multi: True
+            io: 'in'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+    pos: (1277.6984775950882, -129.8876655920055)
+    bypass: False
