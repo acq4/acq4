@@ -450,6 +450,7 @@ class DirHandle(FileHandle):
         self._index = None
         self.lsCache = {}  # sortMode: [files...]
         self.cTimeCache = {}
+        self._indexFileExists = False
         
         if not os.path.isdir(self.path):
             if create:
