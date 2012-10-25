@@ -68,13 +68,21 @@ import flowchart.EventDetection as FCEventDetection
 
 
 class MapAnalyzer(AnalysisModule):
-    
+    dbIdentity = 'MapAnalyzer'
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         
         self.currentMap = None
+        self.analysisValid = False
         
-        self.ctrl = ptree.ParameterTree()
+        self.ctrlLayout = pg.LayoutWidget()
+        self.ctrl = ptree.ParameterTree(showHeader=False)
+        self.ctrlLayout.addWidget(self.ctrl, row=0, col=0)
+        self.recalcBtn = QtGui.QPushButton('Recalculate')
+        self.ctrlLayout.addWidget(self.recalcBtn, row=1, col=0)
+        self.storeBtn = QtGui.QPushButton('Store to DB')
+        self.ctrlLayout.addWidget(self.storeBtn, row=2, col=0)
+        
         
         self.loader = Loader(host=self, dm=host.dataManager())
         
@@ -85,7 +93,7 @@ class MapAnalyzer(AnalysisModule):
             ('Map Loader', {'type': 'ctrl', 'object': self.loader, 'size': (300, 300)}),
             ('Canvas', {'type': 'canvas', 'pos': ('right', 'Map Loader'), 'size': (800, 400)}),
             ('Color Mapper', {'type':'ctrl', 'object': self.colorMapper, 'size': (800,200), 'pos':('top', 'Canvas')}),
-            ('Options', {'type': 'ctrl', 'object': self.ctrl, 'size': (300, 500), 'pos': ('bottom', 'Map Loader')}),
+            ('Options', {'type': 'ctrl', 'object': self.ctrlLayout, 'size': (300, 500), 'pos': ('bottom', 'Map Loader')}),
             ('Data Plot', {'type': 'plot', 'pos': ('bottom', 'Canvas'), 'size': (800, 300)}),
             ('Score Histogram', {'type': 'plot', 'pos': ('below', 'Data Plot'), 'size': (800, 300)}),
             ('Timeline', {'type': 'plot', 'pos': ('below', 'Data Plot'), 'size': (800, 300)}),
@@ -103,8 +111,9 @@ class MapAnalyzer(AnalysisModule):
         params = [
             dict(name='Time Ranges', type='group', children=[
                 dict(name='Direct Start', type='float', value='0.498', suffix='s', step=0.001, siPrefix=True),
+                dict(name='Stimulus', type='float', value='0.5', suffix='s', step=0.001, siPrefix=True),
                 dict(name='Post Start', type='float', value='0.503', suffix='s', step=0.001, siPrefix=True),
-                dict(name='Post End', type='float', value='0.700', suffix='s', step=0.001, siPrefix=True),
+                dict(name='Post Stop', type='float', value='0.700', suffix='s', step=0.001, siPrefix=True),
             ]),
         ]
         
@@ -115,7 +124,10 @@ class MapAnalyzer(AnalysisModule):
         self.params = ptree.Parameter.create(name='options', type='group', children=params)
         self.ctrl.setParameters(self.params, showTop=False)
         
-        self.params.sigTreeStateChanged.connect(self.update)
+        self.params.sigTreeStateChanged.connect(self.invalidate)
+        self.recalcBtn.clicked.connect(self.update)
+        self.storeBtn.clicked.connect(self.storeToDB)
+        self.params.param('Time Ranges').sigTreeStateChanged.connect(self.updateTimes)
         
         self.getElement('Color Mapper', create=True).sigChanged.connect(self.colorMapChanged)
         
@@ -186,31 +198,47 @@ class MapAnalyzer(AnalysisModule):
         self.currentMap.recolor()
         
     def update(self):
-        map = self.currentMap
-        if map is None:
-            return
-        scans = map.scans
-        events = np.concatenate([s.getAllEvents().copy() for s in scans])
-        
-        filtered = self.filterStage.process(events)
-        
-        ## Get a list of all stimulations in the map and their times.
-        sites = []
-        for s in scans:
-            sites.extend(s.getTimes())
-        sites.sort(key=lambda i: i[1])
+        if not self.analysisValid:
+            map = self.currentMap
+            if map is None:
+                return
+            scans = map.scans
+            events = np.concatenate([s.getAllEvents().copy() for s in scans])
             
-        ## set up table of per-stimulation data
-        spontRates = np.empty(len(sites), dtype=[('ProtocolDir', object), ('start', float), ('stop', float), ('spontRate', float), ('filteredSpontRate', float)])
-        spontRates[:] = [s+(0,0) for s in sites] ## fill with data
+            filtered = self.filterStage.process(events)
+            
+            ## Get a list of all stimulations in the map and their times.
+            sites = []
+            for s in scans:
+                sites.extend(s.getTimes())
+            sites.sort(key=lambda i: i[1])
+                
+            ## set up table of per-stimulation data
+            spontRates = np.empty(len(sites), dtype=[('ProtocolDir', object), ('start', float), ('stop', float), ('spontRate', float), ('filteredSpontRate', float)])
+            spontRates[:] = [s+(0,0) for s in sites] ## fill with data
+            
+            ## compute spontaneous rates
+            sr = self.spontRateStage.process(spontRates, filtered)
+            spontRates['spontRate'] = sr['spontRate']
+            spontRates['filteredSpontRate'] = sr['filteredSpontRate']
+            
+            output = self.statsStage.process(map, spontRates, filtered, sr['ampMean'], sr['ampStdev'])
+            self.analysisValid = True
+        self.recolor()
         
-        ## compute spontaneous rates
-        sr = self.spontRateStage.process(spontRates, filtered)
-        spontRates['spontRate'] = sr['spontRate']
-        spontRates['filteredSpontRate'] = sr['filteredSpontRate']
-        
-        output = self.statsStage.process(map, spontRates, filtered, sr['ampMean'], sr['ampStdev'])
+    def recolor(self):
         map.recolor()
+        
+    def invalidate(self):
+        self.analysisValid = False
+        
+    def updateTimes(self):
+        self.params['Spontaneous Rate', 'Stop Time'] = self.params['Time Ranges', 'Direct Start']
+        self.params['Analysis Methods', 'Stimulus Time'] = self.params['Time Ranges', 'Stimulus']
+        self.params['Analysis Methods', 'Pre Stop'] = self.params['Time Ranges', 'Direct Start']
+        self.params['Analysis Methods', 'Post Start'] = self.params['Time Ranges', 'Post Start']
+        self.params['Analysis Methods', 'Post Stop'] = self.params['Time Ranges', 'Post Stop']
+        
         
     def scanPointClicked(self, gitem, points):
         plot = self.getElement('Data Plot', create=True)
@@ -232,7 +260,50 @@ class MapAnalyzer(AnalysisModule):
         
         self.getElement('Stats Table').setData(points[0].data())
 
-    
+    def storeToDB(self):
+        ## Determine currently selected table to store to
+        dbui = self.getElement('Database')
+        identity = self.dbIdentity+'.sites'
+        table = dbui.getTableName(identity)
+        db = dbui.getDb()
+
+        if db is None:
+            raise Exception("No DB selected")
+        
+        fields = OrderedDict([
+            ('CellDir', 'directory:Cell'),
+            ('Map', 'int'),
+            ('PoissonScore', 'real'),
+            ('PoissonScore_Pre', 'real'),
+            ('PoissonAmpScore', 'real'),
+            ('PoissonAmpScore_Pre', 'real'),
+            ('HasInput', 'int'),
+            ('FirstLatency', 'real'),
+            ('ZScore', 'real'),
+            ('FitAmpSum', 'real'),
+            ('FitAmpSum_Pre', 'real'),
+            ('NumEvents', 'real'),
+            ('SpontRate', 'real'),
+        ])
+        
+        with db.transaction():
+            ## Make sure target table exists and has correct columns, links to input file
+            db.checkTable(table, owner=identity, columns=fields, create=True, addUnknownColumns=True, indexes=[['CellDir'], ['Map']])
+            
+            # delete old
+            for source in set([d['ProtocolDir'] for d in data]):
+                #name = rec['SourceFile']
+                db.delete(table, where={'ProtocolDir': source})
+
+            # write new
+            with pg.ProgressDialog("Storing spot stats...", 0, 100) as dlg:
+                for n, nmax in db.iterInsert(table, data, chunkSize=30):
+                    dlg.setMaximum(nmax)
+                    dlg.setValue(n)
+                    if dlg.wasCanceled():
+                        raise HelpfulException("Scan store canceled by user.", msgType='status')
+        
+        
         
 #class EventFilterParameterItem(WidgetParameterItem):
     #def __init__(self, param, depth):
@@ -513,29 +584,29 @@ class EventStatisticsAnalyzer:
     
     
 
-class Loader(QtGui.QWidget):
+class Loader(pg.LayoutWidget):
     def __init__(self, parent=None, host=None, dm=None):
-        QtGui.QWidget.__init__(self, parent)
+        pg.LayoutWidget.__init__(self, parent)
         self.host = host
         
-        self.layout = QtGui.QGridLayout()
-        self.setLayout(self.layout)
-        self.dbGui = DatabaseGui.DatabaseGui(dm=dm, tables={'Photostim.events': None, 'Photostim.sites': None, 'Photostim.maps': None})
-        self.layout.addWidget(self.dbGui, 0, 0)
+        
+        self.dbGui = DatabaseGui.DatabaseGui(dm=dm, tables={'Photostim.events': None, 'Photostim.sites': None, 'Photostim.maps': None, MapAnalyzer.dbIdentity+'.sites': 'map_sites'})
+        self.addWidget(self.dbGui)
         
         self.tree = pg.TreeWidget()
-        self.layout.addWidget(self.tree, 1, 0)
+        self.tree.setHeaderHidden(True)
+        self.addWidget(self.tree, 1, 0)
 
-        self.refreshBtn = QtGui.QPushButton('Reload Map List')
-        self.layout.addWidget(self.refreshBtn, 2, 0)
-        self.refreshBtn.clicked.connect(self.populate)
-        
         self.loadBtn = QtGui.QPushButton('Load Map')
-        self.layout.addWidget(self.loadBtn, 3, 0)
+        self.addWidget(self.loadBtn, 2, 0)
         self.loadBtn.clicked.connect(self.load)
         
+        self.refreshBtn = QtGui.QPushButton('Reload Map List')
+        self.addWidget(self.refreshBtn, 3, 0)
+        self.refreshBtn.clicked.connect(self.populate)
+        
         self.loadedLabel = QtGui.QLabel("Loaded: [none]")
-        self.layout.addWidget(self.loadedLabel, 4, 0)
+        self.addWidget(self.loadedLabel, 4, 0)
         
         self.populate()
         

@@ -20,5 +20,6 @@ Contents:
     glvolumeitem
     glaxisitem
     glgraphicsitem
+    glscatterplotitem
     meshdata
 
