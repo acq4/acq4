@@ -11,8 +11,6 @@ class GLScatterPlotItem(GLGraphicsItem):
     def __init__(self, **kwds):
         GLGraphicsItem.__init__(self)
         self.pos = []
-        self.colors = None
-        self.sizes = None
         self.size = 10
         self.color = [1.0,1.0,1.0,0.5]
         self.pxMode = True
@@ -20,32 +18,30 @@ class GLScatterPlotItem(GLGraphicsItem):
     
     def setData(self, **kwds):
         """
-        Data may be either a list of dicts (one dict per point) or a numpy record array.
+        Update the data displayed by this item. All arguments are optional; 
+        for example it is allowed to update spot positions while leaving 
+        colors unchanged, etc.
         
         ====================  ==================================================
-        Arguments
-        data                  data to be plotted, including position, color, and
-                              size (see below).
-        pxMode                If True, size is interpreted as pixels. Otherwise,
-                              size is expressed in the item's coordinate system.
-        ====================  ==================================================
-        
-        
-        ====================  ==================================================
-        Allowed data fields:
+        Arguments:
         ------------------------------------------------------------------------
-        pos                   (x,y,z) tuple of coordinate values or QVector3D
-        color                 (r,g,b,a) tuple of floats (0.0-1.0) or QColor
-        size                  (float) diameter of spot
+        pos                   (N,3) array of floats specifying point locations.
+        color                 (N,4) array of floats (0.0-1.0) specifying
+                              spot colors OR a tuple of floats specifying
+                              a single color for all spots.
+        size                  (N,) array of floats specifying spot sizes or 
+                              a single value to apply to all spots.
+        pxMode                If True, spot sizes are expressed in pixels. 
+                              Otherwise, they are expressed in item coordinates.
         ====================  ==================================================
-        
-        
         """
+        args = ['pos', 'color', 'size', 'pxMode']
+        for k in kwds.keys():
+            if k not in args:
+                raise Exception('Invalid keyword argument: %s (allowed arguments are %s)' % (k, str(args)))
         self.pos = kwds.get('pos', self.pos)
         self.color = kwds.get('color', self.color)
         self.size = kwds.get('size', self.size)
-        self.colors = kwds.get('colors', self.colors)
-        self.sizes = kwds.get('sizes', self.sizes)
         self.pxMode = kwds.get('pxMode', self.pxMode)
         self.update()
 
@@ -80,46 +76,53 @@ class GLScatterPlotItem(GLGraphicsItem):
         #glPointParameterfv(GL_POINT_SIZE_MAX, (65500,))
         #glPointParameterfv(GL_POINT_SIZE_MIN, (0,))
         
+        glEnable(GL_POINT_SPRITE)
+        glActiveTexture(GL_TEXTURE0)
+        glEnable( GL_TEXTURE_2D )
+        glBindTexture(GL_TEXTURE_2D, self.pointTexture)
+    
+        glTexEnvi(GL_POINT_SPRITE, GL_COORD_REPLACE, GL_TRUE)
+        #glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE)    ## use texture color exactly
+        glTexEnvf( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE )  ## texture modulates current color
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
         
         if self.pxMode:     
             glVertexPointerf(self.pos)
-            if self.colors is None:
-                glColor4f(*self.color)
+            if isinstance(self.color, np.ndarray):
+                glColorPointerf(self.color)
             else:
-                glColorPointerf(self.colors)
+                if isinstance(self.color, QtGui.QColor):
+                    glColor4f(*fn.glColor(self.color))
+                else:
+                    glColor4f(*self.color)
+            
+            if isinstance(self.size, np.ndarray):
+                raise Exception('Array size not yet supported in pxMode (hopefully soon)')
+            
             glPointSize(self.size)
             glEnableClientState(GL_VERTEX_ARRAY)
+            glEnableClientState(GL_COLOR_ARRAY)
             glDrawArrays(GL_POINTS, 0, len(self.pos))
         else:
-            glEnable(GL_POINT_SPRITE)
-            glActiveTexture(GL_TEXTURE0)
-            glEnable( GL_TEXTURE_2D )
-            glBindTexture(GL_TEXTURE_2D, self.pointTexture)
-        
-            glTexEnvi(GL_POINT_SPRITE, GL_COORD_REPLACE, GL_TRUE)
-            #glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE)    ## use texture color exactly
-            glTexEnvf( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE )  ## texture modulates current color
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
             
             
             for i in range(len(self.pos)):
                 pos = self.pos[i]
                 
-                if self.colors is None:
+                if isinstance(self.color, np.ndarray):
+                    color = self.color[i]
+                else:
                     color = self.color
-                else:
-                    color = self.colors[i]
-                if isinstance(color, QtGui.QColor):
-                    color = fn.glColor(color)
+                if isinstance(self.color, QtGui.QColor):
+                    color = fn.glColor(self.color)
                     
-                if self.sizes is None:
+                if isinstance(self.size, np.ndarray):
+                    size = self.size[i]
+                else:
                     size = self.size
-                else:
-                    size = self.sizes[i]
-                    
                     
                 pxSize = self.view().pixelSize(QtGui.QVector3D(*pos))
                 
