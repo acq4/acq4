@@ -90,15 +90,15 @@ if 'events' not in locals():
     tab.addTab(gv, 'Morphology')
 
     ## 3D atlas
-    import lib.analysis.atlas.CochlearNucleus as CN
-    atlas = CN.CNAtlasDisplayWidget()
-    atlas.showLabel('DCN')
-    atlas.showLabel('AVCN')
-    atlas.showLabel('PVCN')
-    tab.addTab(atlas, 'Atlas')
+    #import lib.analysis.atlas.CochlearNucleus as CN
+    #atlas = CN.CNAtlasDisplayWidget()
+    #atlas.showLabel('DCN')
+    #atlas.showLabel('AVCN')
+    #atlas.showLabel('PVCN')
+    #tab.addTab(atlas, 'Atlas')
     
-    atlasPoints = gl.GLScatterPlotItem()
-    atlas.addItem(atlasPoints)
+    #atlasPoints = gl.GLScatterPlotItem()
+    #atlas.addItem(atlasPoints)
     
     win.show()
     win.resize(1000,800)
@@ -400,21 +400,21 @@ def showCell(**kwds):
     pw1.setTitle(title)
 
     
-    ## show cell in atlas
-    rec = db.select('CochlearNucleus_Cell', where={'CellDir': cell})
-    pts = []
-    if len(rec) > 0:
-        pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
-        pts = [{'pos': pos, 'size': 100e-6, 'color': (0.7, 0.7, 1.0, 1.0)}]
-        print pos
-    ## show event positions
-    evSpots = {}
-    for rec in ev:
-        p = (rec['right'], rec['anterior'], rec['dorsal'])
-        evSpots[p] = None
-    for pos in evSpots:
-        pts.append({'pos': pos, 'size': 90e-6, 'color': ((1.0, 1.0, 1.0, 0.5))})
-    atlasPoints.setData(pts)
+    ### show cell in atlas
+    #rec = db.select('CochlearNucleus_Cell', where={'CellDir': cell})
+    #pts = []
+    #if len(rec) > 0:
+        #pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
+        #pts = [{'pos': pos, 'size': 100e-6, 'color': (0.7, 0.7, 1.0, 1.0)}]
+        
+    ### show event positions
+    #evSpots = {}
+    #for rec in ev:
+        #p = (rec['right'], rec['anterior'], rec['dorsal'])
+        #evSpots[p] = None
+        
+    #pos = np.array(evSpots.keys())
+    #atlasPoints.setData(pos=pos, )
     
     
 def spontRate(ev, n):
