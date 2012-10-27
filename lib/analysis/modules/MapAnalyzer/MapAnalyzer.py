@@ -274,7 +274,7 @@ class MapAnalyzer(AnalysisModule):
                 raise Exception("No DB selected")
             
             fields = OrderedDict([
-                ('Map', ('int', None, mapTable)),
+                ('Map', {'Type': 'int', 'Link': mapTable}),
                 #('CellDir', 'directory:Cell'),
                 ('PoissonScore', 'real'),
                 ('PoissonScore_Pre', 'real'),
@@ -297,6 +297,7 @@ class MapAnalyzer(AnalysisModule):
                     if k in spot['data']:
                         rec[k] = spot['data'][k]
                 #rec['CellDir'] = mapRec['cell'] 
+                rec['Map'] = self.currentMap.rowID
                 data.append(rec)
                 
             
