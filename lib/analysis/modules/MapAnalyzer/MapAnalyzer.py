@@ -80,7 +80,7 @@ class MapAnalyzer(AnalysisModule):
         self.ctrlLayout.addWidget(self.ctrl, row=0, col=0)
         self.recalcBtn = QtGui.QPushButton('Recalculate')
         self.ctrlLayout.addWidget(self.recalcBtn, row=1, col=0)
-        self.storeBtn = QtGui.QPushButton('Store to DB')
+        self.storeBtn = pg.FeedbackButton('Store to DB')
         self.ctrlLayout.addWidget(self.storeBtn, row=2, col=0)
         
         
@@ -141,6 +141,7 @@ class MapAnalyzer(AnalysisModule):
         self.currentMap.sPlotItem.sigClicked.connect(self.mapPointClicked)
 
         self.getElement('Canvas').addGraphicsItem(self.currentMap.sPlotItem)
+        self.invalidate()
         self.update()
                 
     def loadScan(self, dh):
@@ -227,7 +228,7 @@ class MapAnalyzer(AnalysisModule):
         self.recolor()
         
     def recolor(self):
-        map.recolor()
+        self.currentMap.recolor()
         
     def invalidate(self):
         self.analysisValid = False
@@ -261,48 +262,62 @@ class MapAnalyzer(AnalysisModule):
         self.getElement('Stats Table').setData(points[0].data())
 
     def storeToDB(self):
-        ## Determine currently selected table to store to
-        dbui = self.getElement('Database')
-        identity = self.dbIdentity+'.sites'
-        table = dbui.getTableName(identity)
-        db = dbui.getDb()
+        try:
+            ## Determine currently selected table to store to
+            dbui = self.getElement('Map Loader').dbGui
+            identity = self.dbIdentity+'.sites'
+            mapTable = dbui.getTableName('Photostim.maps')
+            table = dbui.getTableName(identity)
+            db = dbui.getDb()
 
-        if db is None:
-            raise Exception("No DB selected")
-        
-        fields = OrderedDict([
-            ('CellDir', 'directory:Cell'),
-            ('Map', 'int'),
-            ('PoissonScore', 'real'),
-            ('PoissonScore_Pre', 'real'),
-            ('PoissonAmpScore', 'real'),
-            ('PoissonAmpScore_Pre', 'real'),
-            ('HasInput', 'int'),
-            ('FirstLatency', 'real'),
-            ('ZScore', 'real'),
-            ('FitAmpSum', 'real'),
-            ('FitAmpSum_Pre', 'real'),
-            ('NumEvents', 'real'),
-            ('SpontRate', 'real'),
-        ])
-        
-        with db.transaction():
-            ## Make sure target table exists and has correct columns, links to input file
-            db.checkTable(table, owner=identity, columns=fields, create=True, addUnknownColumns=True, indexes=[['CellDir'], ['Map']])
+            if db is None:
+                raise Exception("No DB selected")
             
-            # delete old
-            for source in set([d['ProtocolDir'] for d in data]):
-                #name = rec['SourceFile']
-                db.delete(table, where={'ProtocolDir': source})
+            fields = OrderedDict([
+                ('Map', ('int', None, mapTable)),
+                #('CellDir', 'directory:Cell'),
+                ('PoissonScore', 'real'),
+                ('PoissonScore_Pre', 'real'),
+                ('PoissonAmpScore', 'real'),
+                ('PoissonAmpScore_Pre', 'real'),
+                ('HasInput', 'int'),
+                ('FirstLatency', 'real'),
+                ('ZScore', 'real'),
+                ('FitAmpSum', 'real'),
+                ('FitAmpSum_Pre', 'real'),
+                ('NumEvents', 'real'),
+                ('SpontRate', 'real'),
+            ])
+            
+            mapRec = self.currentMap.getRecord()
+            data = []
+            for spot in self.currentMap.spots:
+                rec = {}
+                for k in fields:
+                    if k in spot['data']:
+                        rec[k] = spot['data'][k]
+                #rec['CellDir'] = mapRec['cell'] 
+                data.append(rec)
+                
+            
+            with db.transaction():
+                ## Make sure target table exists and has correct columns, links to input file
+                db.checkTable(table, owner=identity, columns=fields, create=True, addUnknownColumns=True, indexes=[['Map']])
+                
+                # delete old
+                db.delete(table, where={'Map': self.currentMap.rowID})
 
-            # write new
-            with pg.ProgressDialog("Storing spot stats...", 0, 100) as dlg:
-                for n, nmax in db.iterInsert(table, data, chunkSize=30):
-                    dlg.setMaximum(nmax)
-                    dlg.setValue(n)
-                    if dlg.wasCanceled():
-                        raise HelpfulException("Scan store canceled by user.", msgType='status')
-        
+                # write new
+                with pg.ProgressDialog("Storing map data...", 0, 100) as dlg:
+                    for n, nmax in db.iterInsert(table, data, chunkSize=100):
+                        dlg.setMaximum(nmax)
+                        dlg.setValue(n)
+                        if dlg.wasCanceled():
+                            raise HelpfulException("Scan store canceled by user.", msgType='status')
+            self.storeBtn.success()
+        except:
+            self.storeBtn.failure()            
+            raise
         
         
 #class EventFilterParameterItem(WidgetParameterItem):

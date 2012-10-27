@@ -72,7 +72,9 @@ class GLMeshItem(GLGraphicsItem):
 
                 
     def paint(self):
-        shaders.glUseProgram(self.shader)
-        glCallList(self.triList)
-        shaders.glUseProgram(0)
+        with self.shader:
+            glCallList(self.triList)
+        #shaders.glUseProgram(self.shader)
+        #glCallList(self.triList)
+        #shaders.glUseProgram(0)
         #glCallList(self.meshList)
