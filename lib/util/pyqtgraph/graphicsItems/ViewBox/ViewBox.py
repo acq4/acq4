@@ -1050,9 +1050,7 @@ class ViewBox(GraphicsWidget):
                 if ang == 0 or ang == 180:
                     pass
                 elif ang == 90 or ang == 270:
-                    tmp = useX
-                    useY = useX
-                    useX = tmp
+                    useX, useY = useY, useX
                 else:
                     continue  ## need to check for item rotations and decide how best to apply this boundary. 
             
