@@ -399,6 +399,8 @@ def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probT
     #results = []
     
     for i, c in enumerate(cells):
+        print "index:", i," = cell:", c
+        
         data = sites[sites['CellDir']==c]
         spontRate = data['numOfPreEvents'].sum()/data['PreRegionLen'].sum()
         data = afn.bendelsSpatialCorrelationAlgorithm(data, 90e-6, spontRate, timeWindow, eventsKey=eventKey)
@@ -413,7 +415,7 @@ def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probT
             sampling[i, x, y] = 1
               
         #results.append(arr[i].copy())
-        arr[i] = scipy.ndimage.gaussian_filter(arr[i], 2)
+        arr[i] = scipy.ndimage.gaussian_filter(arr[i], 2, mode='constant')
         arr[i] = arr[i]/0.039
         arr[i][arr[i] > 0.03] = 1
         arr[i][arr[i] <= 0.03] = 0
@@ -421,7 +423,15 @@ def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probT
         sampling[i] = scipy.ndimage.gaussian_filter(sampling[i], 2)
         sampling[i] = sampling[i]/0.039
         sampling[i][sampling[i] > 0.02] = 1
-        sampling[i][sampling[i] <= 0.02] = 0        
+        sampling[i][sampling[i] <= 0.02] = 0    
+    
+        #print arr.max()
+        xind = int(-xmin/spacing)
+        yind = int(data['CellYPos'][0]/spacing)
+        #print "yind=", ymin, '*', factor, '/', spacing
+        #print arr.shape, xind, yind
+        arr[i, xind-1:xind+2, yind-1:yind+2] = 2
+        #print arr.max()
 
     return arr, sampling
 
