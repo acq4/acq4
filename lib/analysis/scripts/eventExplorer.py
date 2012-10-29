@@ -267,7 +267,6 @@ def plotClicked(plt, pts):
     fitLen = pt.data()['fitDecayTau']*pt.data()['fitLengthOverDecay']
     x = np.linspace(time, time+fitLen, fitLen * 50e3)
     v = [pt.data()['fitAmplitude'], pt.data()['fitTime'], pt.data()['fitRiseTau'], pt.data()['fitDecayTau']]
-    print "Event fit params:", v
     y = fn.pspFunc(v, x, risePower=2.0) + data[np.argwhere(data.xvals('Time')>time)[0]-1]
     pw2.plot(x, y, pen='b')
     #plot.addItem(arrow)
