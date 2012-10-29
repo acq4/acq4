@@ -18,7 +18,7 @@ class ColorMapper(QtGui.QWidget):
     
     def __init__(self, parent=None, filePath=None):
         QtGui.QWidget.__init__(self, parent)      
-        
+        self._signalBlock = 0
         self.ui = CMTemplate.Ui_Form()
         self.ui.setupUi(self)
         
@@ -48,6 +48,10 @@ class ColorMapper(QtGui.QWidget):
         self.ui.deleteBtn.clicked.connect(self.deleteClicked)
         self.ui.fileCombo.currentIndexChanged[int].connect(self.load)
 
+    def blockSignals(self, b):
+        self._signalBlock += 1 if b else -1
+        QtGui.QWidget.blockSignals(self, self._signalBlock > 0)
+        
     def event(self, event): ## This is because QComboBox does not emit the editingFinished signal when enter is pressed.
         if event.type() == QtCore.QEvent.KeyPress and event.key() == QtCore.Qt.Key_Return:
             self.editDone()
@@ -64,17 +68,19 @@ class ColorMapper(QtGui.QWidget):
             files += os.listdir(self.filePath)
         
         combo.blockSignals(True)
-        combo.clear()
-        ind = 0
-        #print files
-        #print self.loadedFile
-        for i in range(len(files)):
-            f = files[i]
-            combo.addItem(f)
-            if f == self.loadedFile:
-                ind = i
-        combo.setCurrentIndex(ind)
-        combo.blockSignals(False)
+        try:
+            combo.clear()
+            ind = 0
+            #print files
+            #print self.loadedFile
+            for i in range(len(files)):
+                f = files[i]
+                combo.addItem(f)
+                if f == self.loadedFile:
+                    ind = i
+            combo.setCurrentIndex(ind)
+        finally:
+            combo.blockSignals(False)
         
     def load(self, ind):
         #print "Index changed to:", ind
@@ -125,13 +131,15 @@ class ColorMapper(QtGui.QWidget):
         #QtCore.QTimer.singleShot(200, self.unblink)
         
     def saveAs(self):
-        self.ui.fileCombo.currentIndexChanged[int].disconnect(self.load)
-        self.ui.fileCombo.addItem("New Color Scheme")
-        self.ui.fileCombo.setCurrentIndex(self.ui.fileCombo.count()-1)
-        self.ui.fileCombo.setEditable(True)
-        self.ui.fileCombo.lineEdit().selectAll()
-        self.ui.fileCombo.lineEdit().setFocus()
-        self.ui.fileCombo.currentIndexChanged[int].connect(self.load)
+        self.ui.fileCombo.blockSignals(True)
+        try:
+            self.ui.fileCombo.addItem("New Color Scheme")
+            self.ui.fileCombo.setCurrentIndex(self.ui.fileCombo.count()-1)
+            self.ui.fileCombo.setEditable(True)
+            self.ui.fileCombo.lineEdit().selectAll()
+            self.ui.fileCombo.lineEdit().setFocus()
+        finally:
+            self.ui.fileCombo.blockSignals(False)
 
     #def unblink(self):
         #self.ui.fileCombo.setStyleSheet(self.origStyle)
@@ -252,11 +260,16 @@ class ColorMapper(QtGui.QWidget):
         return state
         
     def restoreState(self, state):
-        for i in self.items[:]:
-            self.remItem(i)
-        self.setArgList(state['args'])
-        for i in state['items']:
-            self.addItem(i)
+        self.blockSignals(True)
+        try:
+            for i in self.items[:]:
+                self.remItem(i)
+            self.setArgList(state['args'])
+            for i in state['items']:
+                self.addItem(i)
+        finally:
+            self.blockSignals(False)
+        self.sigChanged.emit()
 
 
 class ColorMapperItem(QtGui.QTreeWidgetItem):
@@ -280,7 +293,7 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
         self.maxSpin.sigValueChanged.connect(self.emitChanged)
         self.opCombo.currentIndexChanged.connect(self.emitChanged)
         self.argCombo.currentIndexChanged.connect(self.emitChanged)
-        self.gradient.sigGradientChanged.connect(self.emitChanged)
+        self.gradient.sigGradientChangeFinished.connect(self.emitChanged)
         
     def getParamName(self):
         return str(self.argCombo.currentText())

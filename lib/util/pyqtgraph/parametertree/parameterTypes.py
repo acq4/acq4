@@ -5,6 +5,7 @@ from .ParameterItem import ParameterItem
 from pyqtgraph.widgets.SpinBox import SpinBox
 from pyqtgraph.widgets.ColorButton import ColorButton
 import pyqtgraph as pg
+import pyqtgraph.pixmaps as pixmaps
 import os
 from pyqtgraph.pgcollections import OrderedDict
 
@@ -39,7 +40,7 @@ class WidgetParameterItem(ParameterItem):
         self.defaultBtn.setFixedWidth(20)
         self.defaultBtn.setFixedHeight(20)
         modDir = os.path.dirname(__file__)
-        self.defaultBtn.setIcon(QtGui.QIcon(os.path.join(modDir, 'default.png')))
+        self.defaultBtn.setIcon(QtGui.QIcon(pixmaps.getPixmap('default')))
         self.defaultBtn.clicked.connect(self.defaultClicked)
         
         self.displayLabel = QtGui.QLabel()
@@ -515,6 +516,7 @@ class ListParameter(Parameter):
         if opts.get('limits', None) is None:
             opts['limits'] = []
         Parameter.__init__(self, **opts)
+        self.setLimits(opts['limits'])
         
     def setLimits(self, limits):
         self.forward, self.reverse = self.mapping(limits)
