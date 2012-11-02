@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Description:
     
@@ -51,7 +52,6 @@ Changes to event detector:
 """
 
 
-# -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
 import os
@@ -113,7 +113,7 @@ class MapAnalyzer(AnalysisModule):
             dict(name='Time Ranges', type='group', children=[
                 dict(name='Direct Start', type='float', value=0.498, suffix='s', step=0.001, siPrefix=True),
                 dict(name='Stimulus', type='float', value=0.5, suffix='s', step=0.001, siPrefix=True),
-                dict(name='Post Start', type='float', value=0.503, suffix='s', step=0.001, siPrefix=True),
+                dict(name='Post Start', type='float', value=0.502, suffix='s', step=0.001, siPrefix=True),
                 dict(name='Post Stop', type='float', value=0.700, suffix='s', step=0.001, siPrefix=True),
             ]),
         ]
@@ -126,7 +126,7 @@ class MapAnalyzer(AnalysisModule):
         self.ctrl.setParameters(self.params, showTop=False)
         
         self.params.sigTreeStateChanged.connect(self.invalidate)
-        self.recalcBtn.clicked.connect(self.update)
+        self.recalcBtn.clicked.connect(self.recalcClicked)
         self.storeBtn.clicked.connect(self.storeToDB)
         self.params.param('Time Ranges').sigTreeStateChanged.connect(self.updateTimes)
         
@@ -244,6 +244,10 @@ class MapAnalyzer(AnalysisModule):
     def invalidate(self):
         self.analysisValid = False
         self.colorsValid = False
+
+    def recalcClicked(self):
+        self.invalidate()
+        self.update()
         
     def updateTimes(self):
         self.params['Spontaneous Rate', 'Stop Time'] = self.params['Time Ranges', 'Direct Start']
@@ -290,6 +294,8 @@ class MapAnalyzer(AnalysisModule):
             fields = OrderedDict([
                 ('Map', {'Type': 'int', 'Link': mapTable}),
                 #('CellDir', 'directory:Cell'),
+                ('FirstSite', 'directory:Protocol'),
+                ('Sites', 'blob'),
                 ('PoissonScore', 'real'),
                 ('PoissonScore_Pre', 'real'),
                 ('PoissonAmpScore', 'real'),
@@ -312,6 +318,9 @@ class MapAnalyzer(AnalysisModule):
                         rec[k] = spot['data'][k]
                 #rec['CellDir'] = mapRec['cell'] 
                 rec['Map'] = self.currentMap.rowID
+                sites = [s[1] for s in spot['data']['sites']]
+                rec['FirstSite'] = sites[0]
+                rec['Sites'] = [db.getDirRowID(s) for s in sites]
                 data.append(rec)
                 
             
@@ -333,6 +342,45 @@ class MapAnalyzer(AnalysisModule):
         except:
             self.storeBtn.failure()            
             raise
+        
+    def loadFromDB(self):
+        ## read in analysis from DB
+        
+        dbui = self.getElement('Map Loader').dbGui
+        identity = self.dbIdentity+'.sites'
+        mapTable = dbui.getTableName('Photostim.maps')
+        table = dbui.getTableName(identity)
+        db = dbui.getDb()
+
+        if db is None:
+            raise Exception("No DB selected")
+        
+        fields = OrderedDict([
+            ('Map', {'Type': 'int', 'Link': mapTable}),
+            #('Sites', 'blob'),
+            ('PoissonScore', 'real'),
+            ('PoissonScore_Pre', 'real'),
+            ('PoissonAmpScore', 'real'),
+            ('PoissonAmpScore_Pre', 'real'),
+            ('HasInput', 'int'),
+            ('FirstLatency', 'real'),
+            ('ZScore', 'real'),
+            ('FitAmpSum', 'real'),
+            ('FitAmpSum_Pre', 'real'),
+            ('NumEvents', 'real'),
+            ('SpontRate', 'real'),
+        ])
+        
+        #mapRec = self.currentMap.getRecord()
+        recs = db.select(table, '*', where={'Map': self.currentMap.rowID})
+        for i, spot in enumerate(self.currentMap.spots):
+            
+            for k in fields:
+                spot['data'][k] = recs[i][k]
+        self.analysisValid = True
+        
+        
+        
         
         
 #class EventFilterParameterItem(WidgetParameterItem):
@@ -515,7 +563,7 @@ class EventStatisticsAnalyzer:
                 dict(name='Stimulus Time', type='float', value=0.5, suffix='s', siPrefix=True, step=0.001),
                 dict(name='Pre Start', type='float', value=0.0, suffix='s', siPrefix=True, step=0.001),
                 dict(name='Pre Stop', type='float', value=0.495, suffix='s', siPrefix=True, step=0.001),
-                dict(name='Post Start', type='float', value=0.505, suffix='s', siPrefix=True, step=0.001),
+                dict(name='Post Start', type='float', value=0.502, suffix='s', siPrefix=True, step=0.001),
                 dict(name='Post Stop', type='float', value=0.7, suffix='s', siPrefix=True, step=0.001),
                 #dict(name='Z-Score', type='bool', value=False),
                 #dict(name='Poisson', type='bool', value=False),
@@ -604,6 +652,9 @@ class EventStatisticsAnalyzer:
             preScores['PoissonScore'].append(site['data']['PoissonScore_Pre'])
             preScores['PoissonAmpScore'].append(site['data']['PoissonAmpScore_Pre'])
             
+            #if site['data']['sites'][0][1].shortName() == '051':
+                #raise Exception()
+            
             ## Compute some extra statistics for this map site
             stats = [s[0].getStats(s[1]) for s in site['data']['sites']]   ## pre-recorded stats for all sub-sites in this map site
             site['data']['ZScore'] = np.median([s['ZScore'] for s in stats])
@@ -636,6 +687,7 @@ class EventStatisticsAnalyzer:
         if pre is not None:
             self.histogram.plot(x=pre, y=np.arange(len(pre)), pen=None, symbol='o', symbolPen=None, symbolBrush=(0, 0, 255, 50))
         self.histogram.plot(x=post, y=np.arange(len(post)), pen=None, symbol='o', symbolPen=None, symbolBrush=(255, 255, 0, 50))
+        self.histogram.autoRange()
         #self.threshLine = pg.InfiniteLine(angle=90)
         #self.histogram.addItem(self.threshLine)
         #self.threshLine.setPos(self.params['Threshold'])
@@ -753,7 +805,7 @@ class TimelineMarker(pg.GraphicsObject):
         #p.drawRect(self.boundingRect())
             
     def clear(self):
-        self.xRange
+        self.xRange = [float('inf'), float('-inf')]
         s = self.scene()
         if s is not None:
             for t in self.times:

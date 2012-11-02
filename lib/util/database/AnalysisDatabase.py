@@ -460,22 +460,19 @@ class AnalysisDatabase(SqliteDatabase):
 
         with self.transaction():
             cmd = 'create view "%s" as select * from "%s"' % (viewName, tables[0])
-            for i in range(len(tables)-1):
-                t1 = tables[i]
-                t2 = tables[i+1]
+            for i in range(1,len(tables)):  ## figure out how to join each table one at a time
+                nextTable = tables[i]
                 
-                linkCol = None
-                for colName, config in self.getColumnConfig(t1).iteritems():
-                    if str(config['Link']).lower() == t2.lower():
-                        linkCol = config['Column']
+                cols = None
+                for joinTable in tables[:i]:
+                    cols = self.findJoinColumns(nextTable, joinTable)
+                    if cols is not None:
                         break
+                        
+                if cols is None:
+                    raise Exception("Could not find criteria to join table '%s' to any of '%s'" % (joinTable, str(tables[:i])) )
                 
-                if linkCol is None:
-                    for c in self.getColumnConfig(t1):
-                        print "  ", c
-                    raise Exception("No column linking table %s to %s.rowid" % (t1, t2))
-                
-                cmd += ' inner join "%s" on %s.%s=%s.rowid' % (t2, t1, linkCol, t2)
+                cmd += ' inner join "%s" on "%s"."%s"="%s"."%s"' % (nextTable, nextTable, cols[0], joinTable, cols[1])
             
             self(cmd)
             
@@ -493,7 +490,30 @@ class AnalysisDatabase(SqliteDatabase):
                     colIndex += 1
             self.insert('ColumnConfig', colDesc)
     
-    
+    def findJoinColumns(self, t1, t2):
+        """Return the column names that can be used to join two tables.
+        If no relationships are found, return None.
+        """
+        def strlower(x):  # convert strings to lower, everything else stays the same
+            if isinstance(x, basestring):
+                return x.lower()
+            return x
+            
+        links1 = [(strlower(x['Column']), strlower(x['Link'])) for x in self.getColumnConfig(t1).values()]
+        links2 = [(strlower(x['Column']), strlower(x['Link'])) for x in self.getColumnConfig(t2).values()]
+
+        for col, link in links1:   ## t1 explicity links to t2.rowid
+            if link == t2.lower():
+                return col, 'rowid'
+        for col, link in links2:   ## t2 explicitly links to t1.rowid
+            if link == t1.lower():
+                return 'rowid', col
+        for col1, link1 in links1:   ## t1 and t2 both link to the same table.rowid
+            for col2, link2 in links2:
+                if link1 is not None and link1 == link2:
+                    return col1, col2
+                   
+        return None  ## no links found
     
     
 

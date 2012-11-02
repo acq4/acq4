@@ -465,7 +465,11 @@ class PoissonAmpScore(PoissonScore):
                     (the output must have the same length)
             ampMean, ampStdev: population statistics of spontaneous events
         """
-        return 1.0 / np.clip(gaussProb(events['amp'], ampMean, ampStdev), 1e-100, np.inf)
+        if ampStdev == 0.0:    ## no stdev information; cannot determine probability.
+            return np.ones(len(events))
+        scores = 1.0 / np.clip(gaussProb(events['amp'], ampMean, ampStdev), 1e-100, np.inf)
+        assert(not np.any(np.isnan(scores) | np.isinf(scores)))
+        return scores
     
     
     ## This is perhaps way too complicated.
