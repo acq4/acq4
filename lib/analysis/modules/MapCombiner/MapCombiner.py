@@ -6,8 +6,8 @@ For combining photostimulation maps across cells and displaying against 3D atlas
 """
 from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
-#import os
-#from collections import OrderedDict
+import os
+from collections import OrderedDict
 #import DatabaseGui
 from ColorMapper import ColorMapper
 import pyqtgraph as pg
@@ -30,15 +30,18 @@ class MapCombiner(AnalysisModule):
 
         ## 3D atlas
         self.atlas = CN.CNAtlasDisplayWidget()
-        self.atlas.showLabel('DCN')
-        self.atlas.showLabel('AVCN')
-        self.atlas.showLabel('PVCN')
+        #self.atlas.showLabel('DCN')
+        #self.atlas.showLabel('AVCN')
+        #self.atlas.showLabel('PVCN')
+        
+        self.cellList = QtGui.QListWidget()
+        self.cellList.setSelectionMode(self.cellList.ExtendedSelection)
         
         modPath = os.path.abspath(os.path.dirname(__file__))
         self.colorMapper = ColorMapper(filePath=os.path.join(modPath, "colorMaps"))
         self._elements_ = OrderedDict([
             #('Database Query', {'type':'ctrl', 'object': DatabaseQueryWidget(self.dataManager()), 'size':(300,200), 'pos': 'left'}),
-            ('Options', {'type': 'ctrl', 'object': self.ctrlLayout, 'size': (300, 500), 'pos': ('bottom', 'Database Query')}),
+            ('Options', {'type': 'ctrl', 'object': self.ctrlLayout, 'size': (300, 500), 'pos': 'left'}),
             ('Atlas', {'type': 'ctrl', 'object': self.atlas, 'size': (600,500), 'pos': 'right'}),
             ('Color Mapper', {'type': 'ctrl', 'object': self.colorMapper, 'size': (600,200), 'pos': ('bottom', 'Atlas')}),
         ])
@@ -67,9 +70,9 @@ class MapCombiner(AnalysisModule):
         #db = dbq.currentDatabase()
         db = self.dataManager().currentDatabase()
         self.tableName = 'map_site_view'
-        if not db.hasTable(siteView):
+        if not db.hasTable(self.tableName):
             print "Creating DB views."
-            db.createView(siteView, ['map_sites', 'photostim_maps', 'dirtable_cell', 'cochlearnucleus_protocol', 'cochlearnucleus_cell'])
+            db.createView(self.tableName, ['map_sites', 'photostim_maps', 'dirtable_cell', 'cochlearnucleus_protocol', 'cochlearnucleus_cell'])
             ## view creation SQL:
             ## select * from map_sites 
                 ## inner join photostim_maps on "photostim_maps"."rowid"="map_sites"."map" 
@@ -79,38 +82,46 @@ class MapCombiner(AnalysisModule):
         self.reloadData()
         
     def reloadData(self):
+        db = self.dataManager().currentDatabase()
         self.data = db.select(self.tableName, toArray=True)
+        mapper = self.getElement('Color Mapper')
+        mapper.setArgList(self.data.dtype.names)
         
         
     def elementChanged(self, element, old, new):
         name = element.name()
 
-    def dbDataChanged(self):
-        data = self.getElement('Database Query').table()
-        mapper = self.getElement('Color Mapper')
-        mapper.setArgList(data.dtype.names)
+    #def dbDataChanged(self):
+        #data = self.getElement('Database Query').table()
+        #mapper = self.getElement('Color Mapper')
+        #mapper.setArgList(data.dtype.names)
         
     def update(self):
-        data = self.getElement('Database Query').table()
+        #data = self.getElement('Database Query').table()
         mapper = self.getElement('Color Mapper')
-        colors = mapper.getColor(data)
+        colors = mapper.getColorArray(self.data)
         pos = np.empty((len(data), 3))
-        for i,rec in enumerate(data):
+        pos[:,0] = data['right']
+        pos[:,0] = data['anterior']
+        pos[:,0] = data['dorsal']
+        
+        
+        #for i,rec in enumerate(data):
             
-        rec = db.select('CochlearNucleus_Cell', where={'CellDir': cell})
-        pts = []
-        if len(rec) > 0:
-            pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
-            pts = [{'pos': pos, 'size': 100e-6, 'color': (0.7, 0.7, 1.0, 1.0)}]
+        #rec = db.select('CochlearNucleus_Cell', where={'CellDir': cell})
+        #pts = []
+        #if len(rec) > 0:
+            #pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
+            #pts = [{'pos': pos, 'size': 100e-6, 'color': (0.7, 0.7, 1.0, 1.0)}]
             
-        ## show event positions
-        evSpots = {}
-        for rec in ev:
-            p = (rec['right'], rec['anterior'], rec['dorsal'])
-            evSpots[p] = None
+        ### show event positions
+        #evSpots = {}
+        #for rec in ev:
+            #p = (rec['right'], rec['anterior'], rec['dorsal'])
+            #evSpots[p] = None
             
-        pos = np.array(evSpots.keys())
-        atlasPoints.setData(pos=pos, )
+        #pos = np.array(evSpots.keys())
+        atlasPoints.setData(pos=pos)
         
 class Filter:
     def __init__(self):
@@ -155,7 +166,7 @@ class Filter:
             
         return events
 
-class FilterElement(ptree.GroupParameter):
-    def __init__(self, **opts):
-        ptree.GroupParameter.__init__(self, **opts)
-        self.field = ptree.Parameter(
+#class FilterElement(ptree.GroupParameter):
+    #def __init__(self, **opts):
+        #ptree.GroupParameter.__init__(self, **opts)
+        #self.field = ptree.Parameter(

@@ -50,6 +50,8 @@ class AnalysisHost(QtGui.QMainWindow):
             if pos is None:
                 pos = ()
             #print d, pos
+            if isinstance(pos, basestring):
+                pos = (pos,)
             self.dockArea.addDock(d, *pos)
         self.elements = elems
         

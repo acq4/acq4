@@ -671,7 +671,8 @@ class TableData:
             #return np.array([])  ## need to return empty array *with correct columns*, but this is very difficult, so just return None
             return None
         rec1 = self[0]
-        dtype = functions.suggestRecordDType(rec1)
+        dtype = functions.suggestRecordDType(rec1, singleRecord=True)
+        
         #print rec1, dtype
         arr = np.empty(len(self), dtype=dtype)
         arr[0] = tuple(rec1.values())
