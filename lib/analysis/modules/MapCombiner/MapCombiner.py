@@ -28,17 +28,27 @@ class MapCombiner(AnalysisModule):
         self.ctrlLayout = pg.LayoutWidget()
         self.ctrl = ptree.ParameterTree(showHeader=False)
         self.ctrlLayout.addWidget(self.ctrl, row=0, col=0)
+        self.filterBtn = QtGui.QPushButton('Filter')
+        self.ctrlLayout.addWidget(self.filterBtn, row='next', col=0)
+        
+        self.cellList = QtGui.QListWidget()
+        self.cellList.setSelectionMode(self.cellList.ExtendedSelection)
+        self.filterText = QtGui.QTextEdit("selected = data")
+        self.ctrlLayout.addWidget(self.filterText, row='next', col=0)
+        self.ctrlLayout.addWidget(self.cellList, row='next', col=0)
 
         ## 3D atlas
         self.atlas = CN.CNAtlasDisplayWidget()
-        self.atlasPoints = gl.GLScatterPlotItem()
-        self.atlas.addItem(self.atlasPoints)
+        self.stimPoints = gl.GLScatterPlotItem()
+        self.atlas.addItem(self.stimPoints)
+        self.cellPoints = gl.GLScatterPlotItem()
+        self.atlas.addItem(self.cellPoints)
         #self.atlas.showLabel('DCN')
         #self.atlas.showLabel('AVCN')
         #self.atlas.showLabel('PVCN')
         
-        self.cellList = QtGui.QListWidget()
-        self.cellList.setSelectionMode(self.cellList.ExtendedSelection)
+        
+        
         
         modPath = os.path.abspath(os.path.dirname(__file__))
         self.colorMapper = ColorMapper(filePath=os.path.join(modPath, "colorMaps"))
@@ -55,12 +65,10 @@ class MapCombiner(AnalysisModule):
         params = [
             dict(name='Display', type='group', children=[
                 dict(name='Cells', type='bool', value=True),
+                dict(name='Color by type', type='bool', value=True),
                 dict(name='Stimulus Sites', type='bool', value=True),
             ]),
-            dict(name='Filters', type='group', children=[
-                
-                
-            ]),
+            FilterList(name='Filter'),
         ]
         
         self.params = ptree.Parameter.create(name='options', type='group', children=params)
@@ -84,15 +92,32 @@ class MapCombiner(AnalysisModule):
                 ## inner join cochlearnucleus_cell on cochlearnucleus_cell.celldir=dirtable_cell.rowid;
         self.reloadData()
         
-        self.colorMapper.sigChanged.connect(self.update)
+        self.filterBtn.clicked.connect(self.refilter)
+        self.cellList.itemSelectionChanged.connect(self.selectCells)
+        self.colorMapper.sigChanged.connect(self.recolor)
+        self.params.param('Display').sigTreeStateChanged.connect(self.updateDisplay)
         
     def reloadData(self):
         db = self.dataManager().currentDatabase()
         self.data = db.select(self.tableName, toArray=True)
         mapper = self.getElement('Color Mapper')
         mapper.setArgList(self.data.dtype.names)
+        self.params.param('Filter').setData(self.data)
+        
+    def updateDisplay(self):
+        if not self.params['Display', 'Cells']:
+            self.cellPoints.hide()
+        else:
+            self.cellPoints.show()
+        
+        if not self.params['Display', 'Stimulus Sites']:
+            self.stimPoints.hide()
+        else:
+            self.stimPoints.show()
         
         
+        self.recolor()
+    
     def elementChanged(self, element, old, new):
         name = element.name()
 
@@ -101,77 +126,181 @@ class MapCombiner(AnalysisModule):
         #mapper = self.getElement('Color Mapper')
         #mapper.setArgList(data.dtype.names)
         
-    def update(self):
+    def refilter(self):
+        data = self.data
+        
+        data = self.params.param('Filter').process(data)
+        
+        exec self.filterText.toPlainText()
+        self.filtered = selected
+        cells = set(self.filtered['cell'])
+        self.cellList.clear()
+        for c in cells:
+            item = QtGui.QListWidgetItem(c.name())
+            item.dh = c
+            self.cellList.addItem(item)
+        self.cellList.selectAll()
+        self.selectCells()
+        
+    def selectCells(self):
+        if len(self.cellList.selectedItems()) == self.cellList.count():
+            self.selected = self.filtered
+        else:
+            mask = np.zeros(len(self.filtered), dtype=bool)
+            for c in self.cellList.selectedItems():
+                mask |= (self.filtered['cell'] == c.dh)
+            self.selected = self.filtered[mask]
+        self.recolor()
+        
+    def recolor(self):
         #data = self.getElement('Database Query').table()
+        if self.selected is None:
+            return
+            
+        data = self.selected
+        
         mapper = self.getElement('Color Mapper')
-        colors = mapper.getColorArray(self.data, opengl=True)
-        pos = np.empty((len(self.data), 3))
-        pos[:,0] = self.data['right']
-        pos[:,1] = self.data['anterior']
-        pos[:,2] = self.data['dorsal']
+        colors = mapper.getColorArray(data, opengl=True)
+        pos = np.empty((len(data), 3))
+        pos[:,0] = data['right']
+        pos[:,1] = data['anterior']
+        pos[:,2] = data['dorsal']
         
         
-        #for i,rec in enumerate(data):
-            
-        #rec = db.select('CochlearNucleus_Cell', where={'CellDir': cell})
-        #pts = []
-        #if len(rec) > 0:
-            #pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
-            #pts = [{'pos': pos, 'size': 100e-6, 'color': (0.7, 0.7, 1.0, 1.0)}]
-            
-        ### show event positions
-        #evSpots = {}
-        #for rec in ev:
-            #p = (rec['right'], rec['anterior'], rec['dorsal'])
-            #evSpots[p] = None
-            
-        #pos = np.array(evSpots.keys())
-        self.atlasPoints.setData(pos=pos, color=colors, pxMode=False, size=100e-6)
+        self.stimPoints.setData(pos=pos, color=colors, pxMode=False, size=100e-6)
         
-class Filter:
-    def __init__(self):
-        self.keyList = []
         
-        self.params = ptree.Parameter.create(name='Data Filter', type='group', addText='Add filter..', addList=self.keyList)
-        self.params.addNew = self.addNew
-        self.params.treeStateChanged.connect(self.stateChanged)
+        cells = set(data['cell'])
+        inds = np.array([np.argwhere(data['cell']==c).flatten()[0] for c in cells], dtype=int)
+        data = data[inds]
+        pos = np.empty((len(data), 3))
+        pos[:,0] = data['right:1']
+        pos[:,1] = data['anterior:1']
+        pos[:,2] = data['dorsal:1']
+        
+        
+        
+        if self.params['Display', 'Color by type']:
+            typeColors = {
+                'B': (0, 0, 1, 1),
+                'B?': (0.2, 0.2, 0.7, 1),
+                'S': (1, 1, 0, 1),
+                'S?': (0.7, 0.7, 0.3, 1),
+                'DS': (1, 0, 0, 1),
+                'DS?': (1, 0.5, 0, 1),
+                'TS': (0, 1, 0, 1),
+                'TS?': (0.5, 1, 0, 1),
+                '?': (0.5, 0.5, 0.5, 1),
+            }
             
-    def addNew(self, typ):
-        fp = ptree.Parameter.create(name='Filter', autoIncrementName=True, type='bool', value=True, removable=True, renamable=True, children=[
-            dict(name="Field", type='list', value=typ, values=self.keyList),
-            dict(name='Min', type='float', value=0.0),
-            dict(name='Max', type='float', value=1.0),
-            ])
-        self.params.addChild(fp)
+            color = np.empty((len(data),4))
+            for i in range(len(data)):
+                print data[i]['CellType:1']
+                color[i] = typeColors.get(data[i]['CellType:1'], typeColors['?'])
+            
+        else:
+            color = (1,1,1,1)
+        
+        self.cellPoints.setData(pos=pos, color=color, size=200e-6, pxMode=False)
+        
+        
+        
+        
+        
+class FilterList(ptree.types.GroupParameter):
+    def __init__(self, **kwds):
+        kwds['removable'] = True
+        kwds['renamable'] = True
+        ptree.types.GroupParameter.__init__(self, addText='Add filter..', **kwds)
+        #self.params.addNew = self.addNew
+        #self.params.treeStateChanged.connect(self.stateChanged)
+            
+    def addNew(self):
+        ch = FilterItem()
+        self.addChild(ch)
+        ch.setKeys(self.keyList())
     
-    def parameters(self):
-        return self.params
-        
-    def updateKeys(self, keys):
-        self.keyList = list(keys)
-        self.keyList.sort()
-        self.params.setAddList(keys)
-        for fp in self.params:
-            fp.param('Field').setLimits(keys)
+    def setData(self, data):
+        self.data = data
+        keys = self.keyList()
+        for ch in self:
+            ch.setKeys(keys)
     
-    def process(self, events):
-        if len(events) == 0:
-            return events
+    def keyList(self):
+        return sorted(list(self.data.dtype.names))
+    
+    def dataType(self, key):
+        kind = self.data.dtype.fields[key][0].kind
+        if kind in ('i', 'f'):
+            return kind, (self.data[key].min(), self.data[key].max())
+        else:
+            return kind, sorted(list(set(self.data[key])))
+    
+    def process(self, data):
+        if len(data) == 0:
+            return data
         
-        self.updateKeys(events.dtype.names)
+        for ch in self:
+            data = ch.process(data)
+        
+        return data
+        
+        #self.updateKeys(events.dtype.names)
         
         
-        for fp in self.params:
-            if fp.value() is False:
-                continue
-            key, mn, mx = fp['Field'], fp['Min'], fp['Max']
-            vals = events[key]
-            mask = (vals >= mn) * (vals < mx)  ## Use inclusive minimum and non-inclusive maximum. This makes it easier to create non-overlapping selections
-            events = events[mask]
+        #for fp in self.params:
+            #if fp.value() is False:
+                #continue
+            #key, mn, mx = fp['Field'], fp['Min'], fp['Max']
+            #vals = events[key]
+            #mask = (vals >= mn) * (vals < mx)  ## Use inclusive minimum and non-inclusive maximum. This makes it easier to create non-overlapping selections
+            #events = events[mask]
             
-        return events
+        #return events
+        
+        
+        
 
-#class FilterElement(ptree.GroupParameter):
-    #def __init__(self, **opts):
-        #ptree.GroupParameter.__init__(self, **opts)
-        #self.field = ptree.Parameter(
+class FilterItem(ptree.types.SimpleParameter):
+    def __init__(self, **opts):
+        opts['name'] = 'Filter'
+        opts['type'] = 'bool'
+        opts['value'] = True
+        opts['autoIncrementName'] = True
+        ptree.types.SimpleParameter.__init__(self, **opts)
+        
+        self.addChild(ptree.Parameter.create(name='Field', type='list'))
+        self.param('Field').sigValueChanged.connect(self.updateChildren)
+
+    def setKeys(self, keys):
+        self.param('Field').setLimits(keys)
+    
+    def updateChildren(self):
+        for ch in list(self.children()):
+            if ch is not self.param('Field'):
+                self.removeChild(ch)
+        typ, limits = self.parent().dataType(self['Field'])
+        self.filterType = typ
+        if typ in ('i', 'f'):
+            self.addChild(ptree.Parameter.create(name='Min', type='float', value=limits[0]))
+            self.addChild(ptree.Parameter.create(name='Max', type='float', value=limits[1]))
+        else:
+            for x in limits:
+                ch = self.addChild(ptree.Parameter.create(name=str(x), type='bool', value=True))
+                ch.selectValue = x
+    
+    def process(self, data):
+        if self.value() is False:
+            return data
+        key = self['Field']
+        if self.filterType in ('i', 'f'):
+            mask = (data[key] > self['Min']) & (data[key] < self['Max'])
+        else:
+            mask = np.zeros(len(data), dtype=bool)
+            for ch in self:
+                if ch is self.param('Field'):
+                    continue
+                if ch.value() is True:
+                    mask |= (data[key] == ch.selectValue)
+        return data[mask]
+    
