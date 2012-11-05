@@ -12,6 +12,7 @@ from collections import OrderedDict
 from ColorMapper import ColorMapper
 import pyqtgraph as pg
 import pyqtgraph.parametertree as ptree
+import pyqtgraph.opengl as gl
 import numpy as np
 #import lib.analysis.modules.Photostim.Scan as Scan
 #from lib.analysis.modules.Photostim.Map import Map
@@ -30,6 +31,8 @@ class MapCombiner(AnalysisModule):
 
         ## 3D atlas
         self.atlas = CN.CNAtlasDisplayWidget()
+        self.atlasPoints = gl.GLScatterPlotItem()
+        self.atlas.addItem(self.atlasPoints)
         #self.atlas.showLabel('DCN')
         #self.atlas.showLabel('AVCN')
         #self.atlas.showLabel('PVCN')
@@ -81,6 +84,8 @@ class MapCombiner(AnalysisModule):
                 ## inner join cochlearnucleus_cell on cochlearnucleus_cell.celldir=dirtable_cell.rowid;
         self.reloadData()
         
+        self.colorMapper.sigChanged.connect(self.update)
+        
     def reloadData(self):
         db = self.dataManager().currentDatabase()
         self.data = db.select(self.tableName, toArray=True)
@@ -99,11 +104,11 @@ class MapCombiner(AnalysisModule):
     def update(self):
         #data = self.getElement('Database Query').table()
         mapper = self.getElement('Color Mapper')
-        colors = mapper.getColorArray(self.data)
-        pos = np.empty((len(data), 3))
-        pos[:,0] = data['right']
-        pos[:,0] = data['anterior']
-        pos[:,0] = data['dorsal']
+        colors = mapper.getColorArray(self.data, opengl=True)
+        pos = np.empty((len(self.data), 3))
+        pos[:,0] = self.data['right']
+        pos[:,1] = self.data['anterior']
+        pos[:,2] = self.data['dorsal']
         
         
         #for i,rec in enumerate(data):
@@ -121,7 +126,7 @@ class MapCombiner(AnalysisModule):
             #evSpots[p] = None
             
         #pos = np.array(evSpots.keys())
-        atlasPoints.setData(pos=pos)
+        self.atlasPoints.setData(pos=pos, color=colors, pxMode=False, size=100e-6)
         
 class Filter:
     def __init__(self):

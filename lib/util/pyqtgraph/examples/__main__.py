@@ -127,9 +127,8 @@ class ExampleLoader(QtGui.QMainWindow):
         if fn is None:
             return
         if sys.platform.startswith('win'):
-            os.spawnl(os.P_NOWAIT, sys.executable, sys.executable, '"' + fn + '"', *extra)
+            os.spawnl(os.P_NOWAIT, sys.executable, '"'+sys.executable+'"', '"' + fn + '"', *extra)
         else:
-
             os.spawnl(os.P_NOWAIT, sys.executable, sys.executable, fn, *extra)
         
             

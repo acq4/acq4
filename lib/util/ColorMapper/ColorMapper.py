@@ -343,8 +343,11 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
         vals = data[arg]
         mn = self.minSpin.value()
         mx = self.maxSpin.value()        
+        lut = self.gradient.getLookupTable(512, alpha=True)
+        scaled = pg.rescaleData(np.clip(vals, mn, mx), lut.shape[0]/(mx-mn), mn, dtype=np.uint16)
+        return pg.applyLookupTable(scaled, lut)
         #norm = np.clip((vals - mn) / (mx - mn), 0.0, 1.0)
-        return pg.makeARGB(vals, self.gradient.getLookupTable(512), levels=[mn, mx], useRGBA=True)[0]
+        #return pg.makeARGB(vals, lut, levels=[mn, mx], useRGBA=True)[0]
 
     def getOp(self):
         return self.opCombo.currentText()
