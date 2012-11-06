@@ -143,6 +143,7 @@ class MapAnalyzer(AnalysisModule):
 
         self.getElement('Canvas').addGraphicsItem(self.currentMap.sPlotItem)
         self.invalidate()
+        self.loadFromDB()
         self.update()
                 
     def loadScan(self, dh):
@@ -233,6 +234,8 @@ class MapAnalyzer(AnalysisModule):
                 sr = self.spontRateStage.process(spontRates, filtered)
                 spontRates['spontRate'] = sr['spontRate']
                 spontRates['filteredSpontRate'] = sr['filteredSpontRate']
+            else:
+                sr = {'ampMean': 0, 'ampStdev': 0}
             
             output = self.statsStage.process(map, spontRates, filtered, sr['ampMean'], sr['ampStdev'])
             self.analysisValid = True
@@ -307,6 +310,7 @@ class MapAnalyzer(AnalysisModule):
                 ('FitAmpSum_Pre', 'real'),
                 ('NumEvents', 'real'),
                 ('SpontRate', 'real'),
+                ('DirectPeak', 'real'),
             ])
             
             mapRec = self.currentMap.getRecord()
@@ -373,11 +377,13 @@ class MapAnalyzer(AnalysisModule):
         
         #mapRec = self.currentMap.getRecord()
         recs = db.select(table, '*', where={'Map': self.currentMap.rowID})
-        for i, spot in enumerate(self.currentMap.spots):
-            
-            for k in fields:
-                spot['data'][k] = recs[i][k]
-        self.analysisValid = True
+        if len(recs) == len(self.currentMap.spots):
+            for i, spot in enumerate(self.currentMap.spots):
+                
+                for k in fields:
+                    spot['data'][k] = recs[i][k]
+            self.analysisValid = True
+            print "reloaded analysis from DB"
         
         
         

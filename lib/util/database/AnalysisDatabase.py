@@ -459,20 +459,21 @@ class AnalysisDatabase(SqliteDatabase):
         # db('create view "sites" as select * from photostim_sites inner join DirTable_Protocol on photostim_sites.ProtocolDir=DirTable_Protocol.rowid inner join DirTable_Cell on DirTable_Protocol.CellDir=DirTable_Cell.rowid')
 
         with self.transaction():
-            cmd = 'create view "%s" as select * from "%s"' % (viewName, tables[0])
-            for i in range(1,len(tables)):  ## figure out how to join each table one at a time
-                nextTable = tables[i]
+            sel = self.makeJoinStatement(tables)
+            cmd = 'create view "%s" as select * from %s' % (viewName, sel)
+            #for i in range(1,len(tables)):  ## figure out how to join each table one at a time
+                #nextTable = tables[i]
                 
-                cols = None
-                for joinTable in tables[:i]:
-                    cols = self.findJoinColumns(nextTable, joinTable)
-                    if cols is not None:
-                        break
+                #cols = None
+                #for joinTable in tables[:i]:
+                    #cols = self.findJoinColumns(nextTable, joinTable)
+                    #if cols is not None:
+                        #break
                         
-                if cols is None:
-                    raise Exception("Could not find criteria to join table '%s' to any of '%s'" % (joinTable, str(tables[:i])) )
+                #if cols is None:
+                    #raise Exception("Could not find criteria to join table '%s' to any of '%s'" % (joinTable, str(tables[:i])) )
                 
-                cmd += ' inner join "%s" on "%s"."%s"="%s"."%s"' % (nextTable, nextTable, cols[0], joinTable, cols[1])
+                #cmd += ' inner join "%s" on "%s"."%s"="%s"."%s"' % (nextTable, nextTable, cols[0], joinTable, cols[1])
             
             self(cmd)
             
@@ -489,6 +490,24 @@ class AnalysisDatabase(SqliteDatabase):
                     colDesc.append(config)
                     colIndex += 1
             self.insert('ColumnConfig', colDesc)
+    
+    def makeJoinStatement(self, tables):
+        ### construct an expresion that joins multiple tables automatically
+        cmd = '"%s"' % tables[0]
+        for i in range(1,len(tables)):  ## figure out how to join each table one at a time
+            nextTable = tables[i]
+            
+            cols = None
+            for joinTable in tables[:i]:
+                cols = self.findJoinColumns(nextTable, joinTable)
+                if cols is not None:
+                    break
+                    
+            if cols is None:
+                raise Exception("Could not find criteria to join table '%s' to any of '%s'" % (joinTable, str(tables[:i])) )
+            
+            cmd += ' inner join "%s" on "%s"."%s"="%s"."%s"' % (nextTable, nextTable, cols[0], joinTable, cols[1])
+        return cmd
     
     def findJoinColumns(self, t1, t2):
         """Return the column names that can be used to join two tables.

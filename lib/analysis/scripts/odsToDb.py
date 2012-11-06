@@ -34,10 +34,10 @@ columns = [
     # ODS column header, DB column name, [filter]
     ('cell', None),
     ('type', [('CellType', 'text')]),
-    ('slice plane', None),
+    ('slice plane', [('SlicePlane', 'text')]),
     ('atlas ok', None),
     ('mapping ok', None),
-    ('morphology', None),
+    ('morphology', [('Morphology', 'text')]),
     ('I/V Curves', None),
     ('temp', None),
     ('age', None),

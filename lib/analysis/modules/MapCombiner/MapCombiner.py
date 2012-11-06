@@ -26,8 +26,11 @@ class MapCombiner(AnalysisModule):
         AnalysisModule.__init__(self, host)
         
         self.ctrlLayout = pg.LayoutWidget()
+        
+        self.reloadBtn = QtGui.QPushButton('Reload Data')
+        self.ctrlLayout.addWidget(self.reloadBtn)
         self.ctrl = ptree.ParameterTree(showHeader=False)
-        self.ctrlLayout.addWidget(self.ctrl, row=0, col=0)
+        self.ctrlLayout.addWidget(self.ctrl, row='next', col=0)
         self.filterBtn = QtGui.QPushButton('Filter')
         self.ctrlLayout.addWidget(self.filterBtn, row='next', col=0)
         
@@ -43,12 +46,6 @@ class MapCombiner(AnalysisModule):
         self.atlas.addItem(self.stimPoints)
         self.cellPoints = gl.GLScatterPlotItem()
         self.atlas.addItem(self.cellPoints)
-        #self.atlas.showLabel('DCN')
-        #self.atlas.showLabel('AVCN')
-        #self.atlas.showLabel('PVCN')
-        
-        
-        
         
         modPath = os.path.abspath(os.path.dirname(__file__))
         self.colorMapper = ColorMapper(filePath=os.path.join(modPath, "colorMaps"))
@@ -63,10 +60,16 @@ class MapCombiner(AnalysisModule):
         
         
         params = [
+            dict(name='Transform', type='group', children=[
+                dict(name='Mirror RL', type='bool', value=True),
+                dict(name='Cell-centered', type='bool', value=False),
+            ]),
             dict(name='Display', type='group', children=[
                 dict(name='Cells', type='bool', value=True),
                 dict(name='Color by type', type='bool', value=True),
                 dict(name='Stimulus Sites', type='bool', value=True),
+                dict(name='Atlas', type='bool', value=False),
+                dict(name='Grid', type='bool', value=True),
             ]),
             FilterList(name='Filter'),
         ]
@@ -92,10 +95,15 @@ class MapCombiner(AnalysisModule):
                 ## inner join cochlearnucleus_cell on cochlearnucleus_cell.celldir=dirtable_cell.rowid;
         self.reloadData()
         
+        self.reloadBtn.clicked.connect(self.reloadData)
         self.filterBtn.clicked.connect(self.refilter)
         self.cellList.itemSelectionChanged.connect(self.selectCells)
         self.colorMapper.sigChanged.connect(self.recolor)
         self.params.param('Display').sigTreeStateChanged.connect(self.updateDisplay)
+        self.params.param('Transform').sigTreeStateChanged.connect(self.transform)
+        
+        self.transform()
+        self.refilter()
         
     def reloadData(self):
         db = self.dataManager().currentDatabase()
@@ -115,6 +123,19 @@ class MapCombiner(AnalysisModule):
         else:
             self.stimPoints.show()
         
+        if self.params['Display', 'Atlas']:
+            self.atlas.showLabel('DCN')
+            self.atlas.showLabel('AVCN')
+            self.atlas.showLabel('PVCN')
+        else:
+            self.atlas.showLabel('DCN', False)
+            self.atlas.showLabel('AVCN', False)
+            self.atlas.showLabel('PVCN', False)
+            
+        if self.params['Display', 'Grid']:
+            self.atlas.grid.show()
+        else:
+            self.atlas.grid.hide()
         
         self.recolor()
     
@@ -125,9 +146,30 @@ class MapCombiner(AnalysisModule):
         #data = self.getElement('Database Query').table()
         #mapper = self.getElement('Color Mapper')
         #mapper.setArgList(data.dtype.names)
+    def transform(self):
+        data = self.data.copy()
+        if self.params['Transform', 'Mirror RL']:
+            data['right'] = np.abs(data['right'])
+            data['right:1'] = np.abs(data['right:1'])
+            
+        if self.params['Transform', 'Cell-centered']:
+            r = data['right:1'].mean()
+            a = data['anterior:1'].mean()
+            d = data['dorsal:1'].mean()
+            
+            data['right'] += r - data['right:1']
+            data['anterior'] += a - data['anterior:1']
+            data['dorsal'] += d - data['dorsal:1']
+            data['right:1'] = r
+            data['anterior:1'] = a
+            data['dorsal:1'] = d
+        
+        self.transformed = data
+        self.refilter()
+        
         
     def refilter(self):
-        data = self.data
+        data = self.transformed
         
         data = self.params.param('Filter').process(data)
         
@@ -195,13 +237,12 @@ class MapCombiner(AnalysisModule):
             
             color = np.empty((len(data),4))
             for i in range(len(data)):
-                print data[i]['CellType:1']
                 color[i] = typeColors.get(data[i]['CellType:1'], typeColors['?'])
             
         else:
             color = (1,1,1,1)
         
-        self.cellPoints.setData(pos=pos, color=color, size=200e-6, pxMode=False)
+        self.cellPoints.setData(pos=pos, color=color, size=20, pxMode=True)
         
         
         
@@ -209,8 +250,6 @@ class MapCombiner(AnalysisModule):
         
 class FilterList(ptree.types.GroupParameter):
     def __init__(self, **kwds):
-        kwds['removable'] = True
-        kwds['renamable'] = True
         ptree.types.GroupParameter.__init__(self, addText='Add filter..', **kwds)
         #self.params.addNew = self.addNew
         #self.params.treeStateChanged.connect(self.stateChanged)
@@ -266,6 +305,8 @@ class FilterItem(ptree.types.SimpleParameter):
         opts['name'] = 'Filter'
         opts['type'] = 'bool'
         opts['value'] = True
+        opts['removable'] = True
+        opts['renamable'] = True
         opts['autoIncrementName'] = True
         ptree.types.SimpleParameter.__init__(self, **opts)
         

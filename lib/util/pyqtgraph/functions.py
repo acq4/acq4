@@ -860,9 +860,6 @@ def makeARGB(data, lut=None, levels=None, scale=None, useRGBA=False):
     prof.mark('6')
         
     prof.finish()
-    import pyqtgraph as pg
-    pg.dbg()
-    raise Exception()
     return imgData, alpha
     
 
