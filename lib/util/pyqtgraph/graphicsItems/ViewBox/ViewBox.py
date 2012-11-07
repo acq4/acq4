@@ -109,7 +109,6 @@ class ViewBox(GraphicsWidget):
 
             'background': None,
         }
-        self._updatingRange = False  ## Used to break recursive loops. See updateAutoRange.
         
         
         self.setFlag(self.ItemClipsChildrenToShape)
@@ -550,72 +549,50 @@ class ViewBox(GraphicsWidget):
                 oRange[ax] = targetRect[1-ax]
                 childRange = self.childrenBounds(frac=fractionVisible, orthoRange=oRange)
                 
-            fractionVisible = self.state['autoRange'][:]
-            for i in [0,1]:
-                if type(fractionVisible[i]) is bool:
-                    fractionVisible[i] = 1.0
-
-            childRange = None
-
-            order = [0,1]
-            if self.state['autoVisibleOnly'][0] is True:
-                order = [1,0]
-
-            args = {}
-            for ax in order:
-                if self.state['autoRange'][ax] is False:
-                    continue
-                if self.state['autoVisibleOnly'][ax]:
-                    oRange = [None, None]
-                    oRange[ax] = targetRect[1-ax]
-                    childRange = self.childrenBounds(frac=fractionVisible, orthoRange=oRange)
-                    
+            else:
+                if childRange is None:
+                    childRange = self.childrenBounds(frac=fractionVisible)
+            
+            ## Make corrections to range
+            xr = childRange[ax]
+            if xr is not None:
+                if self.state['autoPan'][0]:
+                    x = sum(xr) * 0.5
+                    #x = childRect.center().x()
+                    w2 = (targetRect[0][1]-targetRect[0][0]) / 2.
+                    #childRect.setLeft(x-w2)
+                    #childRect.setRight(x+w2)
+                    childRange[ax] = [x-w2, x+w2]
                 else:
-                    if childRange is None:
-                        childRange = self.childrenBounds(frac=fractionVisible)
-                
-                ## Make corrections to range
-                xr = childRange[ax]
-                if xr is not None:
-                    if self.state['autoPan'][ax]:
-                        x = sum(xr) * 0.5
-                        #x = childRect.center().x()
-                        w2 = (targetRect[ax][1]-targetRect[ax][0]) / 2.
-                        #childRect.setLeft(x-w2)
-                        #childRect.setRight(x+w2)
-                        childRange[ax] = [x-w2, x+w2]
-                    else:
-                        #wp = childRect.width() * 0.02
-                        wp = (xr[1] - xr[0]) * 0.02
-                        #childRect = childRect.adjusted(-wp, 0, wp, 0)
-                        childRange[ax][0] -= wp
-                        childRange[ax][1] += wp
-                    #targetRect[ax][0] = childRect.left()
-                    #targetRect[ax][1] = childRect.right()
-                    targetRect[ax] = childRange[ax]
-                    args['xRange' if ax == 0 else 'yRange'] = targetRect[ax]
+                    #wp = childRect.width() * 0.02
+                    wp = (xr[1] - xr[0]) * 0.02
+                    #childRect = childRect.adjusted(-wp, 0, wp, 0)
+                    childRange[ax][0] -= wp
+                    childRange[ax][1] += wp
+                #targetRect[ax][0] = childRect.left()
+                #targetRect[ax][1] = childRect.right()
+                targetRect[ax] = childRange[ax]
+                args['xRange' if ax == 0 else 'yRange'] = targetRect[ax]
+            #else:
+                ### Make corrections to Y range
+                #if self.state['autoPan'][1]:
+                    #y = childRect.center().y()
+                    #h2 = (targetRect[1][1]-targetRect[1][0]) / 2.
+                    #childRect.setTop(y-h2)
+                    #childRect.setBottom(y+h2)
                 #else:
-                    ### Make corrections to Y range
-                    #if self.state['autoPan'][1]:
-                        #y = childRect.center().y()
-                        #h2 = (targetRect[1][1]-targetRect[1][0]) / 2.
-                        #childRect.setTop(y-h2)
-                        #childRect.setBottom(y+h2)
-                    #else:
-                        #hp = childRect.height() * 0.02
-                        #childRect = childRect.adjusted(0, -hp, 0, hp)
-                        
-                    #targetRect[1][0] = childRect.top()
-                    #targetRect[1][1] = childRect.bottom()
-                    #args['yRange'] = targetRect[1]
-            if len(args) == 0:
-                return
-            args['padding'] = 0
-            args['disableAutoRange'] = False
-            #self.setRange(xRange=targetRect[0], yRange=targetRect[1], padding=0, disableAutoRange=False)
-            self.setRange(**args)
-        finally:
-            self._updatingRange = False
+                    #hp = childRect.height() * 0.02
+                    #childRect = childRect.adjusted(0, -hp, 0, hp)
+                    
+                #targetRect[1][0] = childRect.top()
+                #targetRect[1][1] = childRect.bottom()
+                #args['yRange'] = targetRect[1]
+        if len(args) == 0:
+            return
+        args['padding'] = 0
+        args['disableAutoRange'] = False
+        #self.setRange(xRange=targetRect[0], yRange=targetRect[1], padding=0, disableAutoRange=False)
+        self.setRange(**args)
         
     def setXLink(self, view):
         """Link this view's X axis to another view. (see LinkView)"""
