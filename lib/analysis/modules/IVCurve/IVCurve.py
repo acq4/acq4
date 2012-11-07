@@ -78,6 +78,11 @@ class IVCurve(AnalysisModule):
         self.lrpk = pg.LinearRegionItem([0, 1])
         self.data_plot.addItem(self.lrss)
         self.data_plot.addItem(self.lrpk)
+        self.lrss2 = pg.LinearRegionItem([0, 1])
+        self.lrpk2 = pg.LinearRegionItem([0, 1])
+        self.data_plot.addItem(self.lrss2)
+        self.data_plot.addItem(self.lrpk2)
+
         self.ctrl.IVCurve_ssTStart.setSuffix(' ms')
         self.ctrl.IVCurve_ssTStop.setSuffix(' ms')
         self.ctrl.IVCurve_pkTStart.setSuffix(' ms')
@@ -91,6 +96,8 @@ class IVCurve(AnalysisModule):
         # Plots are updated when the selected region changes
         self.lrss.sigRegionChanged.connect(self.update_ssAnalysis)
         self.lrpk.sigRegionChanged.connect(self.update_pkAnalysis)
+        self.lrss2.sigRegionChanged.connect(self.update_ss2Analysis)
+        self.lrpk2.sigRegionChanged.connect(self.update_pk2Analysis)
 
     def clearResults(self):
         """
