@@ -1393,6 +1393,7 @@ class ProgramMultipleLineScan(QtCore.QObject):
     def generateProtocol(self):
         points=self.roi.listPoints() # in local coordinates local to roi.
         points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
+        points = [(p.x(), p.y()) for p in points]   ## make sure we can write this data to HDF5 eventually..
         return {'type': 'multipleLineScan', 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 'sweepSpeed': self.params['sweepSpeed'], 
                 'endTime': self.params['endTime'], 'interSweepSpeed': self.params['interSweepSpeed'], 'nScans': self.params['nScans']}
                 

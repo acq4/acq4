@@ -173,11 +173,7 @@ class IVCurve(AnalysisModule):
             self.tdur = self.tend - self.tstart
             tr = traces
             #tr =  numpy.reshape(self.traces.asarray(), (len(traces),-1))
-            fsl = numpy.zeros(len(traces))
-            fisi = numpy.zeros(len(traces))
-            misi = numpy.zeros(len(traces))
-            ar = numpy.zeros(len(traces))
-            rmp = numpy.zeros(len(traces))
+            
             self.spikecount = numpy.zeros(len(traces))
             # for adaptation ratio:
             minspk = 4
@@ -192,6 +188,7 @@ class IVCurve(AnalysisModule):
             tx = cmd.xvals('Time').view(numpy.ndarray)
             #self.lr.setRegion([end *0.5, end * 0.6])
             threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 0.001
+
             for i in range(len(dirs)):
                 (spike, spk) = Utility.findspikes(tx, tr[i], 
                     threshold, t0=self.tstart, t1=self.tend, dt=sampInterval,

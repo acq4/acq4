@@ -1795,6 +1795,66 @@ class LineSegmentROI(ROI):
         
         for i, p in enumerate(positions):
             self.addFreeHandle(p, item=handles[i])
+
+
+            #l.sigRegionChanged.connect(self.roiChangedEvent)
+            #l.sigRegionChangeStarted.connect(self.roiChangeStartedEvent)
+            #l.sigRegionChangeFinished.connect(self.roiChangeFinishedEvent)                
+        #self.setZValue(1000)
+        #self.parentROI = None
+        #self.hasParentROI = False
+        #self.setAcceptsHandles(acceptsHandles)
+        
+    #def setParentROI(self, parent):
+        #self.parentROI = parent
+        #if parent != None:
+            #self.hasParentROI = True
+        #else:
+            #self.hasParentROI = False
+            
+    #def setAcceptsHandles(self, b):
+        #if b:
+            #self.setAcceptedMouseButtons(QtCore.Qt.LeftButton)
+        #else:
+            #self.setAcceptedMouseButtons(QtCore.Qt.NoButton)
+            
+    #def close(self):
+        ##for h in self.handles:
+            ##if len(h['item'].roi) == 1:
+                ##h['item'].scene().removeItem(h['item'])
+            ##elif h['item'].parentItem() == self:
+                ##h['item'].setParentItem(self.parentItem()) 
+                
+        #self.scene().removeItem(self)
+            
+    #def handleRemoved(self, handle):
+        #self.parentROI.handleRemoved(self, handle)
+        
+    #def hoverEvent(self, ev):
+        #if (self.translatable or self.acceptsHandles) and (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
+            ##print "       setHover: True"
+            #self.setMouseHover(True)
+            #self.sigHoverEvent.emit(self)
+        #else:
+            ##print "       setHover: False"
+            #self.setMouseHover(False)    
+            
+    #def mouseClickEvent(self, ev):
+        #ROI.mouseClickEvent(self, ev) ## only checks for Right-clicks (for now anyway)
+        #if ev.button() == QtCore.Qt.LeftButton:
+            #if self.acceptsHandles:
+                #ev.accept()
+                #self.newHandleRequested(ev.pos()) ## ev.pos is the position in this item's coordinates
+            #else:
+                #ev.ignore()
+                
+    #def newHandleRequested(self, evPos):
+        #print "newHandleRequested"
+        
+        #if evPos - self.handles[0].pos() == Point(0.,0.) or evPos-handles[1].pos() == Point(0.,0.):
+        #    return
+        #self.parentROI.newHandleRequested(self, self.mapToParent(evPos)) ## so now evPos should be passed in in the parents coordinate system
+
         
     def listPoints(self):
         return [p['item'].pos() for p in self.handles]

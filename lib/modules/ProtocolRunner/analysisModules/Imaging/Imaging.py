@@ -106,16 +106,20 @@ class ImagingModule(AnalysisModule):
             self.ui.histogram.imageChanged(autoLevel=True)
             storeFlag = frame['cmd']['protocol']['storeData'] # get flag 
             print "before StoreFlag and storeflag is:", storeFlag
+            print frame['cmd']
             if storeFlag:
                 dirhandle = frame['cmd']['protocol']['storageDir'] # grab directory
                 self.info={'detector': self.detectorDevice(), 'scanner': self.scannerDevice(), 'indices': prog['startStopIndices'], 
-                           'scanPointList': prog['scanPointList'], 'nscans': prog['nScans'], 'positions': [[prog['points'][0].x(), prog['points'][0].y()], [prog['points'][1].x(), prog['points'][1].y()]],
+                           'scanPointList': prog['scanPointList'], 'nscans': prog['nScans'], 
+                           'positions': prog['points'],
                            'downSample': imageDownSample, 'daqDownSample': daqDownSample}
-                print dict
-                info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]:prog['samplesPerScan']]), dict(name='Distance'), self.info]
+                print 'totSamps: ', totSamps
+                print 'prog[startstop..]: ', prog['startStopIndices']
+                info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]-int(totSamps):int(totSamps)]), dict(name='Distance'), self.info]
                 ma = metaarray.MetaArray(imageData, info=info)
                 print 'I am writing imaging.ma'
                 dirhandle.writeFile(ma, 'Imaging.ma')
+                raise Exception()
 
         if prog['type'] == 'rectScan':
             samplesPerScan = int((prog['startStopIndices'][1]-prog['startStopIndices'][0])/prog['nScans'])

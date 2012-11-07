@@ -166,7 +166,8 @@ class ViewBox(GraphicsWidget):
             ViewBox.NamedViews[name] = self
             ViewBox.updateAllViewLists()
             sid = id(self)
-            self.destroyed.connect(lambda: ViewBox.forgetView(sid, name) if ViewBox is not None else None)
+
+            self.destroyed.connect(lambda: ViewBox.forgetView(sid, name))
             #self.destroyed.connect(self.unregister)
 
     def unregister(self):
@@ -528,12 +529,26 @@ class ViewBox(GraphicsWidget):
         ## to a view change.
         if self._updatingRange:
             return
-        
-        self._updatingRange = True
-        try:
-            targetRect = self.viewRange()
-            if not any(self.state['autoRange']):
-                return
+
+        fractionVisible = self.state['autoRange'][:]
+        for i in [0,1]:
+            if type(fractionVisible[i]) is bool:
+                fractionVisible[i] = 1.0
+
+        childRange = None
+
+        order = [0,1]
+        if self.state['autoVisibleOnly'][0] is True:
+            order = [1,0]
+
+        args = {}
+        for ax in order:
+            if self.state['autoRange'][ax] is False:
+                continue
+            if self.state['autoVisibleOnly'][ax]:
+                oRange = [None, None]
+                oRange[ax] = targetRect[1-ax]
+                childRange = self.childrenBounds(frac=fractionVisible, orthoRange=oRange)
                 
             fractionVisible = self.state['autoRange'][:]
             for i in [0,1]:
@@ -1082,8 +1097,7 @@ class ViewBox(GraphicsWidget):
                     range[0] = [min(bounds.left(), range[0][0]), max(bounds.right(), range[0][1])]
                 else:
                     range[0] = [bounds.left(), bounds.right()]
-                    
-            #print "   range:", range
+
         
         return range
         

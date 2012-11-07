@@ -678,20 +678,21 @@ class Imager(Module):
         
         # code to display the image on the camera image
         self.img = PG.ImageItem(imgData) # make data into a pyqtgraph image
-        if self.ui.hide_check.isChecked() is False:
-            self.cameraModule.window().addItem(self.img)
-            w = imgData.shape[0]
-            h = imgData.shape[1]
-            localPts = map(PG.Vector, [[0,0], [w,0], [0, h], [0,0,1]]) # w and h of data of image in pixels.
-            globalPts = map(PG.Vector, [[Xpos, Ypos], [Xpos+self.width, Ypos], [Xpos, Ypos+self.height], [0, 0, 1]]) # actual values in global coordinates
-            ##imgData.shape[0]*imgData.shape[1] # prog['points'] # sort of. - 
-            m = PG.solve3DTransform(localPts, globalPts)
-            m[:,2] = m[:,3]
-            m[2] = m[3]
-            m[2,2] = 1
-    
-            tr = QtGui.QTransform(*m[:3,:3].transpose().reshape(9))
-            self.img.setTransform(tr)
+        self.cameraModule.window().addItem(self.img)
+        self.hideOverlayImage()
+        
+        w = imgData.shape[0]
+        h = imgData.shape[1]
+        localPts = map(PG.Vector, [[0,0], [w,0], [0, h], [0,0,1]]) # w and h of data of image in pixels.
+        globalPts = map(PG.Vector, [[Xpos, Ypos], [Xpos+self.width, Ypos], [Xpos, Ypos+self.height], [0, 0, 1]]) # actual values in global coordinates
+        ##imgData.shape[0]*imgData.shape[1] # prog['points'] # sort of. - 
+        m = PG.solve3DTransform(localPts, globalPts)
+        m[:,2] = m[:,3]
+        m[2] = m[3]
+        m[2,2] = 1
+
+        tr = QtGui.QTransform(*m[:3,:3].transpose().reshape(9))
+        self.img.setTransform(tr)
 # flip the PMT image LR, since that is how it is... there is a mirror in the path
 # (should this be a settable parameter? )
 

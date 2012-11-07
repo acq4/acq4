@@ -398,22 +398,23 @@ def showCell(**kwds):
     
     pw1.setTitle(title)
 
-    
-    ### show cell in atlas
-    #rec = db.select('CochlearNucleus_Cell', where={'CellDir': cell})
-    #pts = []
-    #if len(rec) > 0:
-        #pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
-        #pts = [{'pos': pos, 'size': 100e-6, 'color': (0.7, 0.7, 1.0, 1.0)}]
-        
-    ### show event positions
-    #evSpots = {}
-    #for rec in ev:
-        #p = (rec['right'], rec['anterior'], rec['dorsal'])
-        #evSpots[p] = None
-        
-    #pos = np.array(evSpots.keys())
-    #atlasPoints.setData(pos=pos, )
+
+
+    ## show cell in atlas
+    rec = db.select('CochlearNucleus_Cell', where={'CellDir': cell})
+    pts = []
+    if len(rec) > 0:
+        pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
+        pts = [{'pos': pos, 'size': 100e-6, 'color': (0.7, 0.7, 1.0, 1.0)}]
+        print pos
+    ## show event positions
+    evSpots = {}
+    for rec in ev:
+        p = (rec['right'], rec['anterior'], rec['dorsal'])
+        evSpots[p] = None
+    for pos in evSpots:
+        pts.append({'pos': pos, 'size': 90e-6, 'color': ((1.0, 1.0, 1.0, 0.5))})
+    atlasPoints.setData(pts)
     
     
 def spontRate(ev, n):

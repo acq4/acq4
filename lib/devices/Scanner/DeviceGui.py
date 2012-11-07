@@ -186,6 +186,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         ## Do fast scan of entire allowed command range
         (background, cameraResult, positions) = self.scan()
+        #self.calibrationResult = {'bg': background, 'frames': cameraResult, 'pos': positions}
 
         ## Forget first 2 frames since some cameras can't seem to get these right.
         origFrames = cameraResult.asArray()
@@ -193,14 +194,16 @@ class ScannerDeviceGui(QtGui.QWidget):
         positions = positions[2:]
         
         ## Do background subtraction
-        frames = origFrames.astype(np.int32) - background.astype(np.int32)
+        frames = origFrames.astype(float) - background.astype(float)
 
         ## Find a frame with a spot close to the center (within center 1/3)
         cx = frames.shape[1] / 3
         cy = frames.shape[2] / 3
-        centerSlice = frames[:, cx:cx*2, cy:cy*2].mean(axis=1).mean(axis=1)
+        centerSlice = blur(frames[:, cx:cx*2, cy:cy*2], (0, 5, 5)).max(axis=1).max(axis=1)
         maxIndex = argmax(centerSlice)
         maxFrame = frames[maxIndex]
+        #self.calibrationResult['maxFrame'] = maxFrame
+        #self.calibrationResult['maxIndex'] = maxIndex        
 
         ## Determine spot intensity and width
         mfBlur = blur(maxFrame, blurRadius)
@@ -219,6 +222,12 @@ class ScannerDeviceGui(QtGui.QWidget):
         spotWidth = fit[3] * pixelSize
         size = self.spotSize(mfBlur)
         #center = info['centerPosition']
+        #self.calibrationResult['size'] = size
+        #self.calibrationResult['spotWidth'] = spotWidth
+        #self.calibrationResult['spotAmplitude'] = spotAmplitude
+        #self.calibrationResult['spotFit'] = fit
+        
+        
 
         with pg.ProgressDialog("Calibrating scanner: Computing spot positions...", 0, 100) as dlg:
             ## Determine location of spot within each frame, 
@@ -341,8 +350,10 @@ class ScannerDeviceGui(QtGui.QWidget):
         """Return the normalized integral of all values in the frame that are between max and max/e"""
         med = median(frame)
         fr1 = frame - med   ## subtract median value so baseline is at 0
-        mask = fr1 > (fr1.max() / e)  ## find all values > max/e
-        return (fr1 * mask).sum() / mask.sum()  ## integrate values within mask, divide by mask area
+        mask = fr1 > (fr1.max() / np.e)  ## find all values > max/e
+        ss = (fr1 * mask).sum() / mask.sum()  ## integrate values within mask, divide by mask area
+        assert(not np.isnan(ss))
+        return ss
 
     def scan(self):
         """Scan over x and y ranges in a nPts x nPts grid, return the image recorded at each location."""
