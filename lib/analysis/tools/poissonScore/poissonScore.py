@@ -126,6 +126,12 @@ def poissonProb(n, t, l, clip=False):
     For a poisson process, return the probability of seeing at least *n* events in *t* seconds given
     that the process has a mean rate *l*.
     """
+    if l == 0:
+        if n == 0:
+            return 1.0
+        else:
+            return 1e-25
+    
     p = stats.poisson(l*t).sf(n)   
     if clip:
         p = np.clip(p, 0, 1.0-1e-25)
@@ -465,7 +471,11 @@ class PoissonAmpScore(PoissonScore):
                     (the output must have the same length)
             ampMean, ampStdev: population statistics of spontaneous events
         """
-        return 1.0 / np.clip(gaussProb(events['amp'], ampMean, ampStdev), 1e-100, np.inf)
+        if ampStdev == 0.0:    ## no stdev information; cannot determine probability.
+            return np.ones(len(events))
+        scores = 1.0 / np.clip(gaussProb(events['amp'], ampMean, ampStdev), 1e-100, np.inf)
+        assert(not np.any(np.isnan(scores) | np.isinf(scores)))
+        return scores
     
     
     ## This is perhaps way too complicated.

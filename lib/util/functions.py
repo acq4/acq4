@@ -2165,9 +2165,12 @@ def concatenateColumns(data):
             
     return out
     
-def suggestDType(x):
-    """Return a suitable dtype for x"""
-    if isinstance(x, list) or isinstance(x, tuple):
+def suggestDType(x, singleValue=False):
+    """Return a suitable dtype for x
+    If singleValue is True, then a sequence will be interpreted as dtype=object
+    rather than looking inside the sequence to determine its type.
+    """
+    if not singleValue and isinstance(x, list) or isinstance(x, tuple):
         if len(x) == 0:
             raise Exception('can not determine dtype for empty list')
         x = x[0]
@@ -2183,11 +2186,15 @@ def suggestDType(x):
     else:
         return object
     
-def suggestRecordDType(x):
-    """Given a dict of values, suggest a record array dtype to use"""
+def suggestRecordDType(x, singleRecord=False):
+    """Given a dict of values, suggest a record array dtype to use
+    If singleRecord is True, then x is interpreted as a single record 
+    rather than a dict-of-lists structure. This can resolve some ambiguities
+    when a single cell contains a sequence as its value.
+    """
     dt = []
     for k, v in x.iteritems():
-        dt.append((k, suggestDType(v)))
+        dt.append((k, suggestDType(v, singleValue=singleRecord)))
     return dt
     
     

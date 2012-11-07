@@ -22,15 +22,21 @@ SI_PREFIXES_ASCII = 'yzafpnum kMGTPEZY'
 
 
 
-from .Qt import QtGui, QtCore
+from .Qt import QtGui, QtCore, USE_PYSIDE
 import numpy as np
-import scipy.ndimage
 import decimal, re
+import ctypes
+
 try:
-    import scipy.weave
-    USE_WEAVE = True
-except:
-    USE_WEAVE = False
+    import scipy.ndimage
+    HAVE_SCIPY = True
+    try:
+        import scipy.weave
+        USE_WEAVE = True
+    except:
+        USE_WEAVE = False
+except ImportError:
+    HAVE_SCIPY = False
 
 from . import debug
 
@@ -218,13 +224,15 @@ def mkColor(*args):
     return QtGui.QColor(*args)
 
 
-def mkBrush(*args):
+def mkBrush(*args, **kwds):
     """
     | Convenience function for constructing Brush.
     | This function always constructs a solid brush and accepts the same arguments as :func:`mkColor() <pyqtgraph.mkColor>`
     | Calling mkBrush(None) returns an invisible brush.
     """
-    if len(args) == 1:
+    if 'color' in kwds:
+        color = kwds['color']
+    elif len(args) == 1:
         arg = args[0]
         if arg is None:
             return QtGui.QBrush(QtCore.Qt.NoBrush)
@@ -232,7 +240,7 @@ def mkBrush(*args):
             return QtGui.QBrush(arg)
         else:
             color = arg
-    if len(args) > 1:
+    elif len(args) > 1:
         color = args
     return QtGui.QBrush(mkColor(color))
 
@@ -401,7 +409,9 @@ def affineSlice(data, shape, origin, vectors, axes, order=1, returnCoords=False,
         affineSlice(data, shape=(20,20), origin=(40,0,0), vectors=((-1, 1, 0), (-1, 0, 1)), axes=(1,2,3))
     
     """
-    
+    if not HAVE_SCIPY:
+        raise Exception("This function requires the scipy library, but it does not appear to be importable.")
+
     # sanity check
     if len(shape) != len(vectors):
         raise Exception("shape and vectors must have same length.")
@@ -424,8 +434,10 @@ def affineSlice(data, shape, origin, vectors, axes, order=1, returnCoords=False,
     
 
     ## make sure vectors are arrays
-    vectors = np.array(vectors)
-    origin = np.array(origin)
+    if not isinstance(vectors, np.ndarray):
+        vectors = np.array(vectors)
+    if not isinstance(origin, np.ndarray):
+        origin = np.array(origin)
     origin.shape = (len(axes),) + (1,)*len(shape)
     
     ## Build array of sample locations. 
@@ -535,6 +547,8 @@ def solve3DTransform(points1, points2):
     Find a 3D transformation matrix that maps points1 onto points2
     points must be specified as a list of 4 Vectors.
     """
+    if not HAVE_SCIPY:
+        raise Exception("This function depends on the scipy library, but it does not appear to be importable.")
     A = np.array([[points1[i].x(), points1[i].y(), points1[i].z(), 1] for i in range(4)])
     B = np.array([[points2[i].x(), points2[i].y(), points2[i].z(), 1] for i in range(4)])
     
@@ -554,6 +568,8 @@ def solveBilinearTransform(points1, points2):
     
         mapped = np.dot(matrix, [x*y, x, y, 1])
     """
+    if not HAVE_SCIPY:
+        raise Exception("This function depends on the scipy library, but it does not appear to be importable.")
     ## A is 4 rows (points) x 4 columns (xy, x, y, 1)
     ## B is 4 rows (points) x 2 columns (x, y)
     A = np.array([[points1[i].x()*points1[i].y(), points1[i].x(), points1[i].y(), 1] for i in range(4)])
@@ -566,168 +582,247 @@ def solveBilinearTransform(points1, points2):
     
     return matrix
     
+def rescaleData(data, scale, offset, dtype=None):
+    """Return data rescaled and optionally cast to a new dtype::
     
-    
-    
-
-def makeARGB(data, lut=None, levels=None, useRGBA=False): 
+        data => (data-offset) * scale
+        
+    Uses scipy.weave (if available) to improve performance.
     """
-    Convert a 2D or 3D array into an ARGB array suitable for building QImages
-    Will optionally do scaling and/or table lookups to determine final colors.
+    global USE_WEAVE
+    if dtype is None:
+        dtype = data.dtype
+    
+    try:
+        if not USE_WEAVE:
+            raise Exception('Weave is disabled; falling back to slower version.')
+        
+        newData = np.empty((data.size,), dtype=dtype)
+        flat = np.ascontiguousarray(data).reshape(data.size)
+        size = data.size
+        
+        code = """
+        double sc = (double)scale;
+        double off = (double)offset;
+        for( int i=0; i<size; i++ ) {
+            newData[i] = ((double)flat[i] - off) * sc;
+        }
+        """
+        scipy.weave.inline(code, ['flat', 'newData', 'size', 'offset', 'scale'], compiler='gcc')
+        data = newData.reshape(data.shape)
+    except:
+        if USE_WEAVE:
+            debug.printExc("Error; disabling weave.")
+            USE_WEAVE = False
+        
+        #p = np.poly1d([scale, -offset*scale])
+        #data = p(data).astype(dtype)
+        d2 = data-offset
+        d2 *= scale
+        data = d2.astype(dtype)
+    return data
+    
+def applyLookupTable(data, lut):
+    """
+    Uses values in *data* as indexes to select values from *lut*.
+    The returned data has shape data.shape + lut.shape[1:]
+    
+    Uses scipy.weave to improve performance if it is available.
+    Note: color gradient lookup tables can be generated using GradientWidget.
+    """
+    global USE_WEAVE
+    
+    if data.dtype.kind not in ('i', 'u'):
+        data = data.astype(int)
+    
+    ## using np.take appears to be faster than even the scipy.weave method and takes care of clipping as well.
+    return np.take(lut, data, axis=0, mode='clip')  
+    
+    ### old methods: 
+    #data = np.clip(data, 0, lut.shape[0]-1)
+    
+    #try:
+        #if not USE_WEAVE:
+            #raise Exception('Weave is disabled; falling back to slower version.')
+        
+        ### number of values to copy for each LUT lookup
+        #if lut.ndim == 1:
+            #ncol = 1
+        #else:
+            #ncol = sum(lut.shape[1:])
+        
+        ### output array
+        #newData = np.empty((data.size, ncol), dtype=lut.dtype)
+        
+        ### flattened input arrays
+        #flatData = data.flatten()
+        #flatLut = lut.reshape((lut.shape[0], ncol))
+        
+        #dataSize = data.size
+        
+        ### strides for accessing each item 
+        #newStride = newData.strides[0] / newData.dtype.itemsize
+        #lutStride = flatLut.strides[0] / flatLut.dtype.itemsize
+        #dataStride = flatData.strides[0] / flatData.dtype.itemsize
+        
+        ### strides for accessing individual values within a single LUT lookup
+        #newColStride = newData.strides[1] / newData.dtype.itemsize
+        #lutColStride = flatLut.strides[1] / flatLut.dtype.itemsize
+        
+        #code = """
+        
+        #for( int i=0; i<dataSize; i++ ) {
+            #for( int j=0; j<ncol; j++ ) {
+                #newData[i*newStride + j*newColStride] = flatLut[flatData[i*dataStride]*lutStride + j*lutColStride];
+            #}
+        #}
+        #"""
+        #scipy.weave.inline(code, ['flatData', 'flatLut', 'newData', 'dataSize', 'ncol', 'newStride', 'lutStride', 'dataStride', 'newColStride', 'lutColStride'])
+        #newData = newData.reshape(data.shape + lut.shape[1:])
+        ##if np.any(newData != lut[data]):
+            ##print "mismatch!"
+            
+        #data = newData
+    #except:
+        #if USE_WEAVE:
+            #debug.printExc("Error; disabling weave.")
+            #USE_WEAVE = False
+        #data = lut[data]
+        
+    #return data
+
+
+def makeRGBA(*args, **kwds):
+    """Equivalent to makeARGB(..., useRGBA=True)"""
+    kwds['useRGBA'] = True
+    return makeARGB(*args, **kwds)
+
+def makeARGB(data, lut=None, levels=None, scale=None, useRGBA=False): 
+    """ 
+    Convert an array of values into an ARGB array suitable for building QImages, OpenGL textures, etc.
     
     Returns the ARGB array (values 0-255) and a boolean indicating whether there is alpha channel data.
+    This is a two stage process:
     
+        1) Rescale the data based on the values in the *levels* argument (min, max).
+        2) Determine the final output by passing the rescaled values through a lookup table.
+   
+    Both stages are optional.
+    
+    ============ ==================================================================================
     Arguments:
-        data  - 2D or 3D numpy array of int/float types
-        
-                For 2D arrays (x, y):
-                  * The color will be determined using a lookup table (see argument 'lut').
-                  * If levels are given, the data is rescaled and converted to int
-                    before using the lookup table.
+    data         numpy array of int/float types. If 
+    levels       List [min, max]; optionally rescale data before converting through the
+                 lookup table. The data is rescaled such that min->0 and max->*scale*::
                  
-                For 3D arrays (x, y, rgba):
-                  * The third axis must have length 3 or 4 and will be interpreted as RGBA.
-                  * The 'lut' argument is not allowed.
+                    rescaled = (clip(data, min, max) - min) * (*scale* / (max - min))
                  
-        lut   - Lookup table for 2D data. May be 1D or 2D (N,rgba) and must have dtype=ubyte.
-                Values in data will be converted to color by indexing directly from lut.
-                Lookup tables can be built using GradientWidget.
-        levels - List [min, max]; optionally rescale data before converting through the
-                lookup table.   rescaled = (data-min) * len(lut) / (max-min)
-        useRGBA - If True, the data is returned in RGBA order. The default is 
-                  False, which returns in BGRA order for use with QImage.
-                
-    """    
+                 It is also possible to use a 2D (N,2) array of values for levels. In this case,
+                 it is assumed that each pair of min,max values in the levels array should be 
+                 applied to a different subset of the input data (for example, the input data may 
+                 already have RGB values and the levels are used to independently scale each 
+                 channel). The use of this feature requires that levels.shape[0] == data.shape[-1].
+    scale        The maximum value to which data will be rescaled before being passed through the 
+                 lookup table (or returned if there is no lookup table). By default this will
+                 be set to the length of the lookup table, or 256 is no lookup table is provided.
+                 For OpenGL color specifications (as in GLColor4f) use scale=1.0
+    lut          Optional lookup table (array with dtype=ubyte).
+                 Values in data will be converted to color by indexing directly from lut.
+                 The output data shape will be input.shape + lut.shape[1:].
+                 
+                 Note: the output of makeARGB will have the same dtype as the lookup table, so
+                 for conversion to QImage, the dtype must be ubyte.
+                 
+                 Lookup tables can be built using GradientWidget.
+    useRGBA      If True, the data is returned in RGBA order (useful for building OpenGL textures). 
+                 The default is False, which returns in ARGB order for use with QImage 
+                 (Note that 'ARGB' is a term used by the Qt documentation; the _actual_ order 
+                 is BGRA).
+    ============ ==================================================================================
+    """
     prof = debug.Profiler('functions.makeARGB', disabled=True)
     
+    if lut is not None and not isinstance(lut, np.ndarray):
+        lut = np.array(lut)
+    if levels is not None and not isinstance(levels, np.ndarray):
+        levels = np.array(levels)
+    
     ## sanity checks
-    if data.ndim == 3:
-        if data.shape[2] not in (3,4):
-            raise Exception("data.shape[2] must be 3 or 4")
-        #if lut is not None:
-            #raise Exception("can not use lookup table with 3D data")
-    elif data.ndim != 2:
-        raise Exception("data must be 2D or 3D")
+    #if data.ndim == 3:
+        #if data.shape[2] not in (3,4):
+            #raise Exception("data.shape[2] must be 3 or 4")
+        ##if lut is not None:
+            ##raise Exception("can not use lookup table with 3D data")
+    #elif data.ndim != 2:
+        #raise Exception("data must be 2D or 3D")
         
-    if lut is not None:
-        if lut.ndim == 2:
-            if lut.shape[1] not in (3,4):
-                raise Exception("lut.shape[1] must be 3 or 4")
-        elif lut.ndim != 1:
-            raise Exception("lut must be 1D or 2D")
-        if lut.dtype != np.ubyte:
-            raise Exception('lookup table must have dtype=ubyte (got %s instead)' % str(lut.dtype))
+    #if lut is not None:
+        ##if lut.ndim == 2:
+            ##if lut.shape[1] :
+                ##raise Exception("lut.shape[1] must be 3 or 4")
+        ##elif lut.ndim != 1:
+            ##raise Exception("lut must be 1D or 2D")
+        #if lut.dtype != np.ubyte:
+            #raise Exception('lookup table must have dtype=ubyte (got %s instead)' % str(lut.dtype))
+            
 
     if levels is not None:
-        levels = np.array(levels)
-        if levels.shape == (2,):
-            pass
-        elif levels.shape in [(3,2), (4,2)]:
-            if data.ndim == 3:
-                raise Exception("Can not use 2D levels with 3D data.")
-            if lut is not None:
-                raise Exception('Can not use 2D levels and lookup table together.')
+        if levels.ndim == 1:
+            if len(levels) != 2:
+                raise Exception('levels argument must have length 2')
+        elif levels.ndim == 2:
+            if lut is not None and lut.ndim > 1:
+                raise Exception('Cannot make ARGB data when bot levels and lut have ndim > 2')
+            if levels.shape != (data.shape[-1], 2):
+                raise Exception('levels must have shape (data.shape[-1], 2)')
         else:
-            raise Exception("Levels must have shape (2,) or (3,2) or (4,2)")
+            print levels
+            raise Exception("levels argument must be 1D or 2D.")
+        #levels = np.array(levels)
+        #if levels.shape == (2,):
+            #pass
+        #elif levels.shape in [(3,2), (4,2)]:
+            #if data.ndim == 3:
+                #raise Exception("Can not use 2D levels with 3D data.")
+            #if lut is not None:
+                #raise Exception('Can not use 2D levels and lookup table together.')
+        #else:
+            #raise Exception("Levels must have shape (2,) or (3,2) or (4,2)")
         
     prof.mark('1')
 
-    if lut is not None:
-        lutLength = lut.shape[0]
-    else:
-        lutLength = 256
-
-    ## weave requires contiguous arrays
-    global USE_WEAVE
-    if (levels is not None or lut is not None) and USE_WEAVE:
-        data = np.ascontiguousarray(data)
+    if scale is None:
+        if lut is not None:
+            scale = lut.shape[0]
+        else:
+            scale = 255.
 
     ## Apply levels if given
     if levels is not None:
         
-        try:  ## use weave to speed up scaling
-            if not USE_WEAVE:
-                raise Exception('Weave is disabled; falling back to slower version.')
-            if levels.ndim == 1:
-                scale = float(lutLength) / (levels[1]-levels[0])
-                offset = float(levels[0])
-                data = rescaleData(data, scale, offset)
-            else:
-                if data.ndim == 2:
-                    newData = np.empty(data.shape+(levels.shape[0],), dtype=np.uint32)
-                    for i in range(levels.shape[0]):
-                        scale = float(lutLength / (levels[i,1]-levels[i,0]))
-                        offset = float(levels[i,0])
-                        newData[...,i] = rescaleData(data, scale, offset)
-                elif data.ndim == 3:
-                    newData = np.empty(data.shape, dtype=np.uint32)
-                    for i in range(data.shape[2]):
-                        scale = float(lutLength / (levels[i,1]-levels[i,0]))
-                        offset = float(levels[i,0])
-                        #print scale, offset, data.shape, newData.shape, levels.shape
-                        newData[...,i] = rescaleData(data[...,i], scale, offset)
-                data = newData
-        except:
-            if USE_WEAVE:
-                debug.printExc("Error; disabling weave.")
-                USE_WEAVE = False
-            
-            if levels.ndim == 1:
-                if data.ndim == 2:
-                    levels = levels[np.newaxis, np.newaxis, :]
-                else:
-                    levels = levels[np.newaxis, np.newaxis, np.newaxis, :]
-            else:
-                levels = levels[np.newaxis, np.newaxis, ...]
-                if data.ndim == 2:
-                    data = data[..., np.newaxis]
-            data = ((data-levels[...,0]) * lutLength) / (levels[...,1]-levels[...,0])
+        if isinstance(levels, np.ndarray) and levels.ndim == 2:
+            ## we are going to rescale each channel independently
+            if levels.shape[0] != data.shape[-1]:
+                raise Exception("When rescaling multi-channel data, there must be the same number of levels as channels (data.shape[-1] == levels.shape[0])")
+            newData = np.empty(data.shape, dtype=int)
+            for i in range(data.shape[-1]):
+                minVal, maxVal = levels[i]
+                if minVal == maxVal:
+                    maxVal += 1e-16
+                newData[...,i] = rescaleData(data[...,i], scale/(maxVal-minVal), minVal, dtype=int)
+            data = newData
+        else:
+            minVal, maxVal = levels
+            if minVal == maxVal:
+                maxVal += 1e-16
+            data = rescaleData(data, scale/(maxVal-minVal), minVal, dtype=int)
         
     prof.mark('2')
 
 
     ## apply LUT if given
-    if lut is not None and data.ndim == 2:
-        
-        if data.dtype.kind not in ('i', 'u'):
-            data = data.astype(int)
-            
-        data = np.clip(data, 0, lutLength-1)
-        try:
-            if not USE_WEAVE:
-                raise Exception('Weave is disabled; falling back to slower version.')
-            
-            newData = np.empty((data.size,) + lut.shape[1:], dtype=np.uint8)
-            flat = data.reshape(data.size)
-            size = data.size
-            ncol = lut.shape[1]
-            newStride = newData.strides[0]
-            newColStride = newData.strides[1]
-            lutStride = lut.strides[0]
-            lutColStride = lut.strides[1]
-            flatStride = flat.strides[0] / flat.dtype.itemsize
-            
-            #print "newData:", newData.shape, newData.dtype
-            #print "flat:", flat.shape, flat.dtype, flat.min(), flat.max()
-            #print "lut:", lut.shape, lut.dtype
-            #print "size:", size, "ncols:", ncol
-            #print "strides:", newStride, newColStride, lutStride, lutColStride, flatStride
-            
-            code = """
-            
-            for( int i=0; i<size; i++ ) {
-                for( int j=0; j<ncol; j++ ) {
-                    newData[i*newStride + j*newColStride] = lut[flat[i*flatStride]*lutStride + j*lutColStride];
-                }
-            }
-            """
-            scipy.weave.inline(code, ['flat', 'lut', 'newData', 'size', 'ncol', 'newStride', 'lutStride', 'flatStride', 'newColStride', 'lutColStride'])
-            data = newData.reshape(data.shape + lut.shape[1:])
-        except:
-            if USE_WEAVE:
-                debug.printExc("Error; disabling weave.")
-                USE_WEAVE = False
-            data = lut[data]
+    if lut is not None:
+        data = applyLookupTable(data, lut)
     else:
         if data.dtype is not np.ubyte:
             data = np.clip(data, 0, 255).astype(np.ubyte)
@@ -768,48 +863,116 @@ def makeARGB(data, lut=None, levels=None, useRGBA=False):
     return imgData, alpha
     
 
-def makeQImage(imgData, alpha):
-    """Turn an ARGB array into QImage"""
+def makeQImage(imgData, alpha=None, copy=True, transpose=True):
+    """
+    Turn an ARGB array into QImage.
+    By default, the data is copied; changes to the array will not
+    be reflected in the image. The image will be given a 'data' attribute
+    pointing to the array which shares its data to prevent python
+    freeing that memory while the image is in use.
+    
+    =========== ===================================================================
+    Arguments:
+    imgData     Array of data to convert. Must have shape (width, height, 3 or 4) 
+                and dtype=ubyte. The order of values in the 3rd axis must be 
+                (b, g, r, a).
+    alpha       If True, the QImage returned will have format ARGB32. If False,
+                the format will be RGB32. By default, _alpha_ is True if
+                array.shape[2] == 4.
+    copy        If True, the data is copied before converting to QImage.
+                If False, the new QImage points directly to the data in the array.
+                Note that the array must be contiguous for this to work.
+    transpose   If True (the default), the array x/y axes are transposed before 
+                creating the image. Note that Qt expects the axes to be in 
+                (height, width) order whereas pyqtgraph usually prefers the 
+                opposite.
+    =========== ===================================================================    
+    """
     ## create QImage from buffer
     prof = debug.Profiler('functions.makeQImage', disabled=True)
+    
+    ## If we didn't explicitly specify alpha, check the array shape.
+    if alpha is None:
+        alpha = (imgData.shape[2] == 4)
+        
+    copied = False
+    if imgData.shape[2] == 3:  ## need to make alpha channel (even if alpha==False; QImage requires 32 bpp)
+        if copy is True:
+            d2 = np.empty(imgData.shape[:2] + (4,), dtype=imgData.dtype)
+            d2[:,:,:3] = imgData
+            d2[:,:,3] = 255
+            imgData = d2
+            copied = True
+        else:
+            raise Exception('Array has only 3 channels; cannot make QImage without copying.')
     
     if alpha:
         imgFormat = QtGui.QImage.Format_ARGB32
     else:
         imgFormat = QtGui.QImage.Format_RGB32
         
-    imgData = imgData.transpose((1, 0, 2))  ## QImage expects the row/column order to be opposite
-    try:
-        buf = imgData.data
-    except AttributeError:  ## happens when image data is non-contiguous
+    if transpose:
+        imgData = imgData.transpose((1, 0, 2))  ## QImage expects the row/column order to be opposite
+    
+    if not imgData.flags['C_CONTIGUOUS']:
+        if copy is False:
+            extra = ' (try setting transpose=False)' if transpose else ''
+            raise Exception('Array is not contiguous; cannot make QImage without copying.'+extra)
         imgData = np.ascontiguousarray(imgData)
-        buf = imgData.data
+        copied = True
         
-    prof.mark('1')
-    qimage = QtGui.QImage(buf, imgData.shape[1], imgData.shape[0], imgFormat)
-    prof.mark('2')
-    qimage.data = imgData
-    prof.finish()
-    return qimage
+    if copy is True and copied is False:
+        imgData = imgData.copy()
+        
+    if USE_PYSIDE:
+        ch = ctypes.c_char.from_buffer(imgData, 0)
+        img = QtGui.QImage(ch, imgData.shape[1], imgData.shape[0], imgFormat)
+    else:
+        addr = ctypes.addressof(ctypes.c_char.from_buffer(imgData, 0))
+        img = QtGui.QImage(addr, imgData.shape[1], imgData.shape[0], imgFormat)
+    img.data = imgData
+    return img
+    #try:
+        #buf = imgData.data
+    #except AttributeError:  ## happens when image data is non-contiguous
+        #buf = imgData.data
+        
+    #prof.mark('1')
+    #qimage = QtGui.QImage(buf, imgData.shape[1], imgData.shape[0], imgFormat)
+    #prof.mark('2')
+    #qimage.data = imgData
+    #prof.finish()
+    #return qimage
 
-
-def rescaleData(data, scale, offset):
-    newData = np.empty((data.size,), dtype=np.int)
-    flat = data.reshape(data.size)
-    size = data.size
-    
-    code = """
-    double sc = (double)scale;
-    double off = (double)offset;
-    for( int i=0; i<size; i++ ) {
-        newData[i] = (int)(((double)flat[i] - off) * sc);
-    }
+def imageToArray(img, copy=False, transpose=True):
     """
-    scipy.weave.inline(code, ['flat', 'newData', 'size', 'offset', 'scale'], compiler='gcc')
-    data = newData.reshape(data.shape)
-    return data
+    Convert a QImage into numpy array. The image must have format RGB32, ARGB32, or ARGB32_Premultiplied.
+    By default, the image is not copied; changes made to the array will appear in the QImage as well (beware: if 
+    the QImage is collected before the array, there may be trouble).
+    The array will have shape (width, height, (b,g,r,a)).
+    """
+    fmt = img.format()
+    ptr = img.bits()
+    if USE_PYSIDE:
+        arr = np.frombuffer(ptr, dtype=np.ubyte)
+    else:
+        ptr.setsize(img.byteCount())
+        arr = np.asarray(ptr)
     
-
+    if fmt == img.Format_RGB32:
+        arr = arr.reshape(img.height(), img.width(), 3)
+    elif fmt == img.Format_ARGB32 or fmt == img.Format_ARGB32_Premultiplied:
+        arr = arr.reshape(img.height(), img.width(), 4)
+    
+    if copy:
+        arr = arr.copy()
+        
+    if transpose:
+        return arr.transpose((1,0,2))
+    else:
+        return arr
+    
+    
 #def isosurface(data, level):
     #"""
     #Generate isosurface from volumetric data using marching tetrahedra algorithm.
@@ -1365,9 +1528,62 @@ def invertQTransform(tr):
     bugs in that method. (specifically, Qt has floating-point precision issues
     when determining whether a matrix is invertible)
     """
-    #return tr.inverted()[0]
+    if not HAVE_SCIPY:
+        inv = tr.inverted()
+        if inv[1] is False:
+            raise Exception("Transform is not invertible.")
+        return inv[0]
     arr = np.array([[tr.m11(), tr.m12(), tr.m13()], [tr.m21(), tr.m22(), tr.m23()], [tr.m31(), tr.m32(), tr.m33()]])
     inv = scipy.linalg.inv(arr)
     return QtGui.QTransform(inv[0,0], inv[0,1], inv[0,2], inv[1,0], inv[1,1], inv[1,2], inv[2,0], inv[2,1])
     
     
+def pseudoScatter(data, spacing=None, shuffle=True):
+    """
+    Used for examining the distribution of values in a set.
+    
+    Given a list of x-values, construct a set of y-values such that an x,y scatter-plot
+    will not have overlapping points (it will look similar to a histogram).
+    """
+    inds = np.arange(len(data))
+    if shuffle:
+        np.random.shuffle(inds)
+        
+    data = data[inds]
+    
+    if spacing is None:
+        spacing = 2.*np.std(data)/len(data)**0.5
+    s2 = spacing**2
+    
+    yvals = np.empty(len(data))
+    yvals[0] = 0
+    for i in range(1,len(data)):
+        x = data[i]     # current x value to be placed
+        x0 = data[:i]   # all x values already placed
+        y0 = yvals[:i]  # all y values already placed
+        y = 0
+        
+        dx = (x0-x)**2  # x-distance to each previous point
+        xmask = dx < s2  # exclude anything too far away
+        
+        if xmask.sum() > 0:
+            dx = dx[xmask]
+            dy = (s2 - dx)**0.5   
+            limits = np.empty((2,len(dy)))  # ranges of y-values to exclude
+            limits[0] = y0[xmask] - dy
+            limits[1] = y0[xmask] + dy    
+            
+            while True:
+                # ignore anything below this y-value
+                mask = limits[1] >= y
+                limits = limits[:,mask]
+                
+                # are we inside an excluded region?
+                mask = (limits[0] < y) & (limits[1] > y)
+                if mask.sum() == 0:
+                    break
+                y = limits[:,mask].max()
+        
+        yvals[i] = y
+    
+    return yvals[np.argsort(inds)]  ## un-shuffle values before returning

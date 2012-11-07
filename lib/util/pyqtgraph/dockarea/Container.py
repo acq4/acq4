@@ -76,6 +76,7 @@ class Container(object):
                 pass
             self.updateStretch()
         
+        
     def childStretchChanged(self):
         #print "child", QtCore.QObject.sender(self), "changed shape, updating", self
         self.updateStretch()
