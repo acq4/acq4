@@ -25,14 +25,24 @@ class IVCurve(AnalysisModule):
         self.ctrlWidget = QtGui.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
+        self.main_layout =  pg.GraphicsView()
+        
+        # make fixed widget for the module output
+        self.widget = QtGui.QWidget()
+        self.gridLayout = QtGui.QGridLayout()
+        self.widget.setLayout(self.gridLayout)
+        self.gridLayout.setContentsMargins(0,0,0,0)
+        self.gridLayout.setSpacing(1)
         # Setup basic GUI
         self._elements_ = OrderedDict([
             ('File Loader', {'type': 'fileInput', 'size': (100, 300), 'host': self}),
             ('Parameters', {'type': 'ctrl', 'object': self.ctrlWidget, 'host': self, 'size': (100,300)}),
-            ('Data Plot', {'type': 'plot', 'pos': ('right', 'File Loader'), 'size': (400, 300)}),
-            ('IV Plot', {'type': 'plot', 'pos': ('right', 'Data Plot'), 'size': (400, 300)}),
-            ('FI Plot', {'type': 'plot', 'pos': ('right', 'Parameters'), 'size': (400, 300)}),
-            ('FSL/FISI Plot', {'type': 'plot', 'pos': ('right', 'FI Plot'), 'size': (400, 300)}),
+            ('Plots', {'type': 'ctrl', 'object': self.widget, 'pos': ('right',), 'size': (800, 600)}),
+#            ('Plots', {'type': 'graphicsLayout', 'pos': ('right',), 'size': (800, 600)}),
+#            ('Data Plot', {'type': 'plot', 'pos': ('right', 'File Loader'), 'size': (400, 300)}),
+#            ('IV Plot', {'type': 'plot', 'pos': ('right', 'Data Plot'), 'size': (400, 300)}),
+#            ('FI Plot', {'type': 'plot', 'pos': ('right', 'Parameters'), 'size': (400, 300)}),
+#            ('FSL/FISI Plot', {'type': 'plot', 'pos': ('right', 'FI Plot'), 'size': (400, 300)}),
         ])
         self.initializeElements()
         # grab input form the "Ctrl" window
@@ -43,12 +53,26 @@ class IVCurve(AnalysisModule):
 #        self.ctrl.IVCurve_pkTStart.valueChanged.connect(self.readParameters)
 #        self.ctrl.IVCurve_pkTStop.valueChanged.connect(self.readParameters)
         self.clearResults()
-        self.data_plot = self.getElement('Data Plot', create=True)
-        self.IV_plot = self.getElement('IV Plot', create=True)
-        self.fiPlot = self.getElement('FI Plot', create=True)
-        self.fslPlot = self.getElement('FSL/FISI Plot', create = True)
-        #self.IVScatterPlot_ss = pg.ScatterPlotItem(size=6, pen=pg.mkPen('w'), brush=pg.mkBrush(255, 255, 255, 255), identical=True)
-        #self.IVScatterPlot_pk = pg.ScatterPlotItem(size=6, pen=pg.mkPen('r'), brush=pg.mkBrush(255, 0, 0, 255), identical=True)
+        self.layout = self.getElement('Plots', create=True)
+#        print dir(self.plotView)
+#        mainLayout = pg.GraphicsLayout(border=pg.mkPen(0, 0, 255))
+        #print dir(mainLayout)
+#        self.data_plot = self.getElement('Data Plot', create=True)
+ 
+        self.data_plot = pg.PlotWidget()
+        self.gridLayout.addWidget(self.data_plot, 0, 0)# (row=0, col=0) # self.getElement('Data Plot', create=True)
+        self.labelUp(self.data_plot, 'T (ms)', 'V (mV)', 'Data')
+        self.IV_plot = pg.PlotWidget()
+        self.gridLayout.addWidget(self.IV_plot, 0, 1) # self.getElement('IV Plot', create=True)
+        self.labelUp(self.IV_plot, 'I (nA)', 'V (mV)', 'I-V')
+        self.fiPlot = pg.PlotWidget()
+        self.gridLayout.addWidget(self.fiPlot, 1, 0) # self.getElement('FI Plot', create=True)
+        self.labelUp(self.fiPlot, 'I (nA)', 'Spikes (#)', 'F-I')
+        self.fslPlot =  pg.PlotWidget()
+        self.gridLayout.addWidget(self.fslPlot, 1, 1) # self.getElement('FSL/FISI Plot', create = True)
+        self.labelUp(self.fslPlot, 'I (nA)', 'Fsl/Fisi (ms)', 'FSL/FISI')
+#        self.IVScatterPlot_ss = pg.ScatterPlotItem(size=6, pen=pg.mkPen('w'), brush=pg.mkBrush(255, 255, 255, 255), identical=True)
+#        self.IVScatterPlot_pk = pg.ScatterPlotItem(size=6, pen=pg.mkPen('r'), brush=pg.mkBrush(255, 0, 0, 255), identical=True)
 
         self.lrss = pg.LinearRegionItem([0, 1])
         self.lrpk = pg.LinearRegionItem([0, 1])
@@ -98,7 +122,7 @@ class IVCurve(AnalysisModule):
         self.filename = dh.name()
         dirs = dh.subDirs()
         c = 0
-        traces = []
+        traces = None
         self.values = []
         self.Sequence = self.dataModel.listSequenceParams(dh)
         maxplotpts = 1024
@@ -109,12 +133,12 @@ class IVCurve(AnalysisModule):
                 cf = self.dataModel.getClampFile(d)
                 if cf is None:  ## No clamp file for this iteration of the protocol (probably the protocol was stopped early)
                     continue
-                data = cf.read()
+                dataF = cf.read()
             except:
                 debug.printExc("Error loading data for protocol %s:" % d.name() )
                 continue  ## If something goes wrong here, we'll just try to carry on
-            cmd = self.dataModel.getClampCommand(data)
-            data = self.dataModel.getClampPrimary(data)
+            cmd = self.dataModel.getClampCommand(dataF)
+            data = self.dataModel.getClampPrimary(dataF)
             shdat = data.shape
             if shdat[0] > 2*maxplotpts:
                 decimate_factor = int(numpy.floor(shdat[0]/maxplotpts))
@@ -123,11 +147,14 @@ class IVCurve(AnalysisModule):
             else:
                 pass
                 # store primary channel data and read command amplitude
-            traces.append(data)
+            if traces is None:
+                traces = numpy.zeros((len(dirs), len(data)))
+            traces[c,:]  = data.view(numpy.ndarray) # .append(data)
             self.data_plot.plot(data, pen=pg.intColor(c, len(dirs), maxValue=200)) # , decimate=decimate_factor)
             self.values.append(cmd[len(cmd)/2])
             #c += 1.0 / len(dirs)
             c += 1
+        print 'done loading files'
         self.colorScale.setIntColorScale(0, len(dirs), maxValue=200)
         self.colorScale.setLabels({'%0.2g'%self.values[0]:0, '%0.2g'%self.values[-1]:1}) 
         
@@ -137,47 +164,45 @@ class IVCurve(AnalysisModule):
                 {'name': 'Command', 'units': cmd.axisUnits(-1), 'values': numpy.array(self.values)},
                 data.infoCopy('Time'), 
                 data.infoCopy(-1)]
+            #self.traces = traces # MetaArray(traces, info=info)
             self.traces = MetaArray(traces, info=info)
-            cmddata = cmd.asarray()
+            cmddata = cmd.view(numpy.ndarray)
             cmdtimes = numpy.argwhere(cmddata[1:]-cmddata[:-1] != 0)[:,0]
             self.tstart = cmd.xvals('Time')[cmdtimes[0]]
             self.tend = cmd.xvals('Time')[cmdtimes[1]]
             self.tdur = self.tend - self.tstart
-
-            tr =  numpy.reshape(self.traces.asarray(), (len(traces),-1))
-            fsl = numpy.zeros(len(traces))
-            fisi = numpy.zeros(len(traces))
-            misi = numpy.zeros(len(traces))
-            ar = numpy.zeros(len(traces))
-            rmp = numpy.zeros(len(traces))
+            tr = traces
+            #tr =  numpy.reshape(self.traces.asarray(), (len(traces),-1))
             
             self.spikecount = numpy.zeros(len(traces))
             # for adaptation ratio:
             minspk = 4
             maxspk = 10 # range of spike counts
 
-            info1 = self.traces.infoCopy()
+            info1 = info # self.traces.infoCopy()
             sfreq = info1[2]['DAQ']['primary']['rate']
             sampInterval = 1.0/sfreq
             self.tstart += sampInterval
             self.tend += sampInterval
             tmax = cmd.xvals('Time')[-1]
+            tx = cmd.xvals('Time').view(numpy.ndarray)
             #self.lr.setRegion([end *0.5, end * 0.6])
             threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 0.001
-            
-            for i in range(len(traces)):
-                (spike, spk) = Utility.findspikes(cmd.xvals('Time'), tr[i], 
+
+            for i in range(len(dirs)):
+                (spike, spk) = Utility.findspikes(tx, tr[i], 
                     threshold, t0=self.tstart, t1=self.tend, dt=sampInterval,
-                    mode = 'peak', interpolate=True)
-                if len(spike) > 0:
-                    self.spikecount[i] = len(spike)
-                    fsl[i] = spike[0]-self.tstart
+                    mode = 'schmitt', interpolate=False, debug=False)
+                if len(spike) == 0:
+                    continue
+                self.spikecount[i] = len(spike)
+                fsl[i] = spike[0]-self.tstart
                 if len(spike) > 1:
                     fisi[i] = spike[1]-spike[0]
                 if len(spike) >= minspk and len(spike) <= maxspk: # for Adaptation ratio analysis
                     misi = numpy.mean(numpy.diff(spike[-3:]))
                     ar[i] = misi/fisi[i]
-                (rmp[i], r2) = Utility.measure('mean', cmd.xvals('Time'), tr[i], 0.0, self.tstart)
+                (rmp[i], r2) = Utility.measure('mean', tx, tr[i], 0.0, self.tstart)
             iAR = numpy.where(ar > 0)
             ARmean = numpy.mean(ar[iAR]) # only where we made the measurement
             self.AdaptRatio = ARmean
@@ -351,4 +376,14 @@ class IVCurve(AnalysisModule):
         rgnx2 = self.ctrl.IVCurve_pkTStop.value()/1.0e3
         self.lrpk.setRegion([rgnx1, rgnx2])
         self.update_pkAnalysis(clear=False, pw = pw)
+
+
+#---- Helpers ---
+# Some of these would normally live in a pyqtgraph-related module, but are just stuck here to get the job done.
+    def labelUp(self, plot, xtext, ytext, title):
+        """helper to label up the plot"""
+        plot.setLabel('bottom', xtext)
+        plot.setLabel('left', ytext)
+        plot.setTitle(title)
+
 

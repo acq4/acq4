@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/Photostim/MapCtrlTemplate.ui'
 #
-# Created: Thu Aug 30 13:37:11 2012
+# Created: Wed Nov  7 15:11:39 2012
 #      by: PyQt4 UI code generator 4.9.4
 #
 # WARNING! All changes made in this file will be lost!

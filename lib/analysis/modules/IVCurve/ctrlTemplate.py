@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/IVCurve/ctrlTemplate.ui'
 #
-# Created: Wed Apr 18 13:40:10 2012
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Tue Oct  9 15:34:10 2012
+#      by: PyQt4 UI code generator 4.9.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -17,41 +17,12 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(281, 292)
+        Form.resize(281, 352)
         self.gridLayout = QtGui.QGridLayout(Form)
         self.gridLayout.setMargin(0)
         self.gridLayout.setSpacing(0)
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
         self.groupBox = QtGui.QGroupBox(Form)
-        palette = QtGui.QPalette()
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 255))
-        brush.setStyle(QtCore.Qt.SolidPattern)
-        palette.setBrush(QtGui.QPalette.Active, QtGui.QPalette.WindowText, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.SolidPattern)
-        palette.setBrush(QtGui.QPalette.Active, QtGui.QPalette.Base, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 128, 0))
-        brush.setStyle(QtCore.Qt.SolidPattern)
-        palette.setBrush(QtGui.QPalette.Active, QtGui.QPalette.Window, brush)
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 255))
-        brush.setStyle(QtCore.Qt.SolidPattern)
-        palette.setBrush(QtGui.QPalette.Inactive, QtGui.QPalette.WindowText, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.SolidPattern)
-        palette.setBrush(QtGui.QPalette.Inactive, QtGui.QPalette.Base, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 128, 0))
-        brush.setStyle(QtCore.Qt.SolidPattern)
-        palette.setBrush(QtGui.QPalette.Inactive, QtGui.QPalette.Window, brush)
-        brush = QtGui.QBrush(QtGui.QColor(69, 69, 69))
-        brush.setStyle(QtCore.Qt.SolidPattern)
-        palette.setBrush(QtGui.QPalette.Disabled, QtGui.QPalette.WindowText, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 128, 0))
-        brush.setStyle(QtCore.Qt.SolidPattern)
-        palette.setBrush(QtGui.QPalette.Disabled, QtGui.QPalette.Base, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 128, 0))
-        brush.setStyle(QtCore.Qt.SolidPattern)
-        palette.setBrush(QtGui.QPalette.Disabled, QtGui.QPalette.Window, brush)
-        self.groupBox.setPalette(palette)
         self.groupBox.setObjectName(_fromUtf8("groupBox"))
         self.gridLayout_2 = QtGui.QGridLayout(self.groupBox)
         self.gridLayout_2.setMargin(0)
@@ -61,8 +32,8 @@ class Ui_Form(object):
         font = QtGui.QFont()
         font.setFamily(_fromUtf8("Arial"))
         font.setPointSize(14)
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.label_5.setFont(font)
         self.label_5.setObjectName(_fromUtf8("label_5"))
         self.gridLayout_2.addWidget(self.label_5, 0, 0, 1, 2)
@@ -104,8 +75,8 @@ class Ui_Form(object):
         font = QtGui.QFont()
         font.setFamily(_fromUtf8("Arial"))
         font.setPointSize(14)
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.label_6.setFont(font)
         self.label_6.setObjectName(_fromUtf8("label_6"))
         self.gridLayout_2.addWidget(self.label_6, 4, 0, 1, 1)
@@ -184,8 +155,8 @@ class Ui_Form(object):
         font = QtGui.QFont()
         font.setFamily(_fromUtf8("Arial"))
         font.setPointSize(14)
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.label_10.setFont(font)
         self.label_10.setObjectName(_fromUtf8("label_10"))
         self.gridLayout_2.addWidget(self.label_10, 11, 0, 1, 1)

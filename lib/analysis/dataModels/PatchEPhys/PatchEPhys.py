@@ -314,6 +314,9 @@ def getParentInfo(dh, parentType):
     
 def getDayInfo(dh):
     return getParentInfo(dh, 'Day')
+    
+def getSliceInfo(dh):
+    return getParentInfo(dh, 'Slice')
 
 def getCellInfo(dh):
     return getParentInfo(dh, 'Cell')
