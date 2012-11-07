@@ -78,10 +78,8 @@ class IVCurve(AnalysisModule):
         self.lrpk = pg.LinearRegionItem([0, 1])
         self.data_plot.addItem(self.lrss)
         self.data_plot.addItem(self.lrpk)
-        self.lrss2 = pg.LinearRegionItem([0, 1])
-        self.lrpk2 = pg.LinearRegionItem([0, 1])
-        self.data_plot.addItem(self.lrss2)
-        self.data_plot.addItem(self.lrpk2)
+        self.lrtau = pg.LinearRegionItem([0, 1])
+        self.data_plot.addItem(self.lrtau)
 
         self.ctrl.IVCurve_ssTStart.setSuffix(' ms')
         self.ctrl.IVCurve_ssTStop.setSuffix(' ms')
@@ -96,8 +94,7 @@ class IVCurve(AnalysisModule):
         # Plots are updated when the selected region changes
         self.lrss.sigRegionChanged.connect(self.update_ssAnalysis)
         self.lrpk.sigRegionChanged.connect(self.update_pkAnalysis)
-        self.lrss2.sigRegionChanged.connect(self.update_ss2Analysis)
-        self.lrpk2.sigRegionChanged.connect(self.update_pk2Analysis)
+        self.lrtau.sigRegionChanged.connect(self.update_Tau2)
 
     def clearResults(self):
         """
@@ -115,6 +112,10 @@ class IVCurve(AnalysisModule):
         self.ivss = []
         self.ivpk = []
         self.traces=[]
+        self.fsl=[]
+        self.fisi=[]
+        self.ar=[]
+        
         
         
     def loadFileRequested(self, dh):
@@ -187,7 +188,12 @@ class IVCurve(AnalysisModule):
             maxspk = 10 # range of spike counts
 
             info1 = info # self.traces.infoCopy()
-            sfreq = info1[2]['DAQ']['primary']['rate']
+            print dir(info1[2])
+            if 'DAQ' in info1[2].keys():
+                sfreq = info1[2]['DAQ']['primary']['rate']
+            else:
+                print "Unable to find the DAQ key in the info... HELP!"
+                return
             sampInterval = 1.0/sfreq
             self.tstart += sampInterval
             self.tend += sampInterval
@@ -196,6 +202,10 @@ class IVCurve(AnalysisModule):
             #self.lr.setRegion([end *0.5, end * 0.6])
             threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 0.001
 
+            fsl = numpy.zeros(len(dirs))
+            fisi = numpy.zeros(len(dirs))
+            ar = numpy.zeros(len(dirs))
+            rmp = numpy.zeros(len(dirs))
             for i in range(len(dirs)):
                 (spike, spk) = Utility.findspikes(tx, tr[i], 
                     threshold, t0=self.tstart, t1=self.tend, dt=sampInterval,
@@ -321,6 +331,9 @@ class IVCurve(AnalysisModule):
         self.tau = meantau
         if printWindow:
             print 'Mean tau: %8.1f' % (meantau*1e3)
+
+    def update_Tau2(self):
+        pass
         
     def update_ssAnalysis(self, clear=True):
         if self.traces is None:
@@ -357,6 +370,7 @@ class IVCurve(AnalysisModule):
             self.ivpk = data2.min(axis=1)
         self.update_Tau(printWindow = pw)
         self.update_IVPlot()
+
 
     def update_IVPlot(self):
         self.IV_plot.clear()
