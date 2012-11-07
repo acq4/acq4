@@ -21,6 +21,7 @@ Contents:
     scatterplotitem
     isocurveitem
     axisitem
+    textitem
     arrowitem
     curvepoint
     curvearrow
@@ -28,6 +29,7 @@ Contents:
     scalebar
     labelitem
     vtickgroup
+    legenditem
     gradienteditoritem
     histogramlutitem
     gradientlegend

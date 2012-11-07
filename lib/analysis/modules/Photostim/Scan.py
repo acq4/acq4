@@ -68,7 +68,12 @@ class Scan(QtCore.QObject):
     def __init__(self, host, source, dirHandles, name=None, itemName=None):
         QtCore.QObject.__init__(self)
         self._source = source           ## DirHandle to data for this scan
-        self.dirHandles = dirHandles    ## List of DirHandles, one per spot
+        self.dirHandles = []            ## List of DirHandles, one per spot
+        
+        for d in dirHandles:       ## filter out any dirs which lack the proper data
+            info = d.info()
+            if 'Scanner' in info and 'position' in info['Scanner']:
+                self.dirHandles.append(d)
         
         self._canvasItem = None
         
@@ -85,8 +90,8 @@ class Scan(QtCore.QObject):
         self.eventCacheValid = set() ## if fh is in set, event flowchart has not changed since events were last computed
         self.statsStored = False 
         self.eventsStored = False
-        self.loadFromDB()
         self.canvasItem() ## create canvas item
+        self.loadFromDB()
         
     def canvasItem(self):
         if self._canvasItem is None:
@@ -116,7 +121,11 @@ class Scan(QtCore.QObject):
             if fh is None:
                 continue
             start = fh.info()['__timestamp__']
-            stop = start + dh.parent().info()['protocol']['conf']['duration']
+            p = dh.parent()
+            if self.dataModel.isSequence(p):
+                stop = start + dh.parent().info()['protocol']['conf']['duration']
+            else:
+                stop = start + dh.info()['protocol']['conf']['duration']
             times.append((dh, start, stop))
         return times
         
@@ -152,6 +161,7 @@ class Scan(QtCore.QObject):
         self.stats = {}
         self.statExample = None
         haveAll = True
+        haveAny = False
         
         if self.host.dataModel.dirType(sourceDir) == 'ProtocolSequence':
             allEvents, allStats = self.host.loadScanFromDB(sourceDir)
@@ -176,21 +186,23 @@ class Scan(QtCore.QObject):
                 self.stats[st['ProtocolDir']] = st
                 
             for dh in self.dirHandles:
-                #dh = spot.data()
-                #fh = self.host.getClampFile(dh)
                 fh = self.dataModel.getClampFile(dh)
-                #events, stats = self.host.loadSpotFromDB(dh)
-                
-                #events = allEvents[allEvents['SourceFile']==fh.name(relativeTo=self.source())]
-                #stats = allStats[allEvents['SourceFile']==dh.name(relativeTo=self.source())]
+                if fh not in self.events:
+                    if allEvents is None:
+                        self.events[fh] = {'events': []} ## what to do?? not sure how to get the dtype in this case.
+                    else:
+                        self.events[fh] = {'events': np.empty(0, dtype=allEvents.dtype)}
+                    
                 if dh not in self.stats:
-                #if len(stats) == 0:
-                    #print "  No data for spot", dh
                     haveAll = False
+                    for spot in self.spots():
+                        if spot.data() is dh:
+                            spot.setPen((100,0,0,200))
                     continue
                 else:
+                    haveAny = True
                     self.statExample = self.stats[dh]
-            #self.stats[dh] = stats[0]
+                    
             if haveAll:
                 #print "  have data for all spots; locking."
                 self.lockEvents()
@@ -198,6 +210,12 @@ class Scan(QtCore.QObject):
                 self.statsStored = True
                 self.eventsStored = True
                 self.sigStorageStateChanged.emit(self)
+            
+            ## If there is _no_ data for this scan, recolor spots grey.
+            if not haveAny:
+                for s in self.item.points():
+                    s.setPen((50,50,50,200))
+                
                 
 
     def getStatsKeys(self):
@@ -318,6 +336,12 @@ class Scan(QtCore.QObject):
 
     def getEvents(self, fh, process=True, signal=True):
         if fh not in self.events or (not self.eventsLocked and fh not in self.eventCacheValid):
+            
+            ## this should never happen
+            #p = fh.parent()  ## If we have stats but no events, then just return an empty list.
+            #if p in self.stats:
+                #return []
+            
             if process:
                 #print "No event cache for", fh.name(), "compute.."
                 events = self.host.processEvents(fh)  ## need ALL output from the flowchart; not just events
@@ -360,6 +384,10 @@ class Scan(QtCore.QObject):
         ## called from photostim.storeDBSpot
         self.events[self.host.dataModel.getClampFile(dh)] = events
         self.stats[dh] = stats
+        for spot in self.spots():
+            if spot.data() is dh:
+                spot.setPen((50,50,50))
+        
 
     def getSpot(self, dh):
         if dh not in self.spotDict:
@@ -436,6 +464,8 @@ class Scan(QtCore.QObject):
         self.sigStorageStateChanged.emit(self)
         self.lockEvents(True)
         self.lockStats(True)
+        for s in self.item.points():
+            s.setPen((50,50,50,200))
         
     def clearFromDB(self):
         self.host.clearDBScan(self)
@@ -446,7 +476,7 @@ class Scan(QtCore.QObject):
         self.lockStats(False)
         
         
-    def displayData(self, fh, plot, pen, evTime=None):
+    def displayData(self, fh, plot, pen, evTime=None, eventFilter=None):
         """
         Display data for a single site in a plot--ephys trace, detected events
         Returns all items added to the plot.
@@ -461,7 +491,7 @@ class Scan(QtCore.QObject):
             
         ## plot all data, incl. events
         data = fh.read()['primary']
-        data = fn.besselFilter(data, 10e3)
+        data = fn.besselFilter(data, 4e3)
         pc = plot.plot(data, pen=pen, clear=False)
         items.append(pc)
         
@@ -477,6 +507,9 @@ class Scan(QtCore.QObject):
             
         events = self.getEvents(fh)['events']
         
+        if eventFilter is not None:
+            events = eventFilter(events)
+        
         ## draw ticks over all detected events
         if len(events) > 0:
             if 'fitTime' in events.dtype.names:
@@ -485,5 +518,20 @@ class Scan(QtCore.QObject):
                 plot.addItem(ticks)
                 items.append(ticks)
                 #self.mapTicks.append(ticks)
+                
+            ## draw event fits
+            evPen = pg.mkPen(pen)
+            c = evPen.color()
+            c.setAlpha(c.alpha()/2)
+            evPen.setColor(c)
+            for ev in events:
+                time = ev['fitTime']
+                fitLen = ev['fitDecayTau']*ev['fitLengthOverDecay']
+                x = np.linspace(time, time+fitLen, fitLen * 50e3)
+                v = [ev['fitAmplitude'], ev['fitTime'], ev['fitRiseTau'], ev['fitDecayTau']]
+                y = fn.pspFunc(v, x, risePower=2.0) + data[np.argwhere(data.xvals('Time')>time)[0]-1]
+                evc = plot.plot(x, y, pen=evPen)
+                evc.setZValue(pc.zValue()-100)
+                
         return items
 

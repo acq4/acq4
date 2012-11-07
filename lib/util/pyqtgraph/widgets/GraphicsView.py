@@ -42,6 +42,7 @@ class GraphicsView(QtGui.QGraphicsView):
     enabled via enableMouse()  (but ordinarily, we use ViewBox for this functionality)."""
     
     sigRangeChanged = QtCore.Signal(object, object)
+    sigTransformChanged = QtCore.Signal(object)
     sigMouseReleased = QtCore.Signal(object)
     sigSceneMouseMoved = QtCore.Signal(object)
     #sigRegionChanged = QtCore.Signal(object)
@@ -119,6 +120,14 @@ class GraphicsView(QtGui.QGraphicsView):
         self.mouseEnabled = False
         self.scaleCenter = False  ## should scaling center around view center (True) or mouse click (False)
         self.clickAccepted = False
+        
+    def setAntialiasing(self, aa):
+        """Enable or disable default antialiasing.
+        Note that this will only affect items that do not specify their own antialiasing options."""
+        if aa:
+            self.setRenderHints(self.renderHints() | QtGui.QPainter.Antialiasing)
+        else:
+            self.setRenderHints(self.renderHints() & ~QtGui.QPainter.Antialiasing)
         
     def setBackground(self, background):
         """
@@ -204,6 +213,7 @@ class GraphicsView(QtGui.QGraphicsView):
                 self.fitInView(self.range, QtCore.Qt.IgnoreAspectRatio)
             
         self.sigRangeChanged.emit(self, self.range)
+        self.sigTransformChanged.emit(self)
         
         if propagate:
             for v in self.lockedViewports:

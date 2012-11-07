@@ -98,6 +98,7 @@ Notes on probability computation:
 ## Code for playing with poisson distributions
 
 import numpy as np
+import scipy
 import scipy.stats as stats
 import scipy.misc
 import scipy.interpolate
@@ -125,21 +126,34 @@ def poissonProb(n, t, l, clip=False):
     For a poisson process, return the probability of seeing at least *n* events in *t* seconds given
     that the process has a mean rate *l*.
     """
+    if l == 0:
+        if n == 0:
+            return 1.0
+        else:
+            return 1e-25
+    
     p = stats.poisson(l*t).sf(n)   
     if clip:
         p = np.clip(p, 0, 1.0-1e-25)
     return p
     
+#def gaussProb(amps, mean, stdev):
+    #"""
+    #Given a gaussian distribution with mean, stdev, return the improbability
+    #of seeing all of the given amplitudes consecutively, normalized for the number of events.
+    #"""
+    #if len(amps) == 0:
+        #return 1.0
+    #p = stats.norm(mean, stdev).sf(amps)
+    #return 1.0 / (p.prod() ** (1./len(amps)))
+
 def gaussProb(amps, mean, stdev):
-    """
-    Given a gaussian distribution with mean, stdev, return the improbability
-    of seeing all of the given amplitudes consecutively, normalized for the number of events.
-    """
+    ## Return the survival function for gaussian distribution 
     if len(amps) == 0:
         return 1.0
-    p = stats.norm(mean, stdev).sf(amps)
-    return 1.0 / (p.prod() ** (1./len(amps)))
-
+    return stats.norm(mean, stdev).sf(amps)
+    
+    
 class PoissonScore:
     """
     Class for computing a statistic that asks "what is the probability that a poisson process
@@ -240,7 +254,7 @@ class PoissonScore:
             cls.normalizationTable = cls.generateNormalizationTable()
             cls.extrapolateNormTable()
             
-        nind = np.log(n)/np.log(2)
+        nind = max(0, np.log(n)/np.log(2))
         n1 = np.clip(int(np.floor(nind)), 0, cls.normalizationTable.shape[1]-2)
         n2 = n1+1
         
@@ -271,6 +285,7 @@ class PoissonScore:
         #mapped = spline.ev(n, x)[0]
         #raise Exception()
         assert not (np.isinf(mapped) or np.isnan(mapped))
+        assert mapped>0
         return mapped
 
     #@classmethod
@@ -456,7 +471,48 @@ class PoissonAmpScore(PoissonScore):
                     (the output must have the same length)
             ampMean, ampStdev: population statistics of spontaneous events
         """
-        return [ gaussProb(events['amp'][events['time']<=t], ampMean, ampStdev) for t in events['time'] ]
+        if ampStdev == 0.0:    ## no stdev information; cannot determine probability.
+            return np.ones(len(events))
+        scores = 1.0 / np.clip(gaussProb(events['amp'], ampMean, ampStdev), 1e-100, np.inf)
+        assert(not np.any(np.isnan(scores) | np.isinf(scores)))
+        return scores
+    
+    
+    ## This is perhaps way too complicated.
+    #@classmethod
+    #def amplitudeScore(cls, events, ampMean=1.0, ampStdev=1.0, **kwds):
+        #"""Computes extra probability information about events based on their amplitude.
+        #Inputs to this method are:
+            #events: record array of events; fields include 'time' and 'amp'
+            #times:  the time points at which to compute probability values
+                    #(the output must have the same length)
+            #ampMean, ampStdev: population statistics of spontaneous events
+        #"""
+        ##score =  [ gaussProb(events['amp'][events['time']<=t], ampMean, ampStdev) for t in events['time'] ]
+        
+        ### Here's the procedure:
+        ### 1. sort the events by amplitude
+        ### 2. For each set of events[0:i], determine the probability of seeing n-i events with amplitude > amp[i-1]
+        ### 3. Return the maximum value
+        
+        #def prob(N, R, s):
+            ### Probability that, given N trials, we will see at least R trials with probability <= s
+            #k = np.arange(R, N+1)
+            #return (scipy.comb(N, k) * s**k * (1.0-s)**(N-k)).sum()
+            
+        #def score(amps, mean, stdev):
+            ### assign a score to this series of events indicating the probability that a random process would produce a similar set
+            #amps = sorted(amps)[::-1]
+            #s = gaussProb(amps, mean, stdev)
+            #N = len(amps)
+            #p = []
+            #for i, amp in enumerate(amps):
+                #R = i+1
+                #p.append(prob(N, R, s[i]))
+            #return 1.0 / min(p)
+                
+        #amps = events['amp']
+        #return np.array([score(amps[:i+1], ampMean, ampStdev) for i in range(len(amps))])
 
 
 
@@ -849,8 +905,8 @@ if __name__ == '__main__':
     algorithms = [
         ('Poisson Score', PoissonScore.score),
         ('Poisson Score + Amp', PoissonAmpScore.score),
-        ('Poisson Multi', PoissonRepeatScore.score),
-        ('Poisson Multi + Amp', PoissonRepeatAmpScore.score),
+        #('Poisson Multi', PoissonRepeatScore.score),
+        #('Poisson Multi + Amp', PoissonRepeatAmpScore.score),
     ]
 
     win = pg.GraphicsWindow(border=0.3)

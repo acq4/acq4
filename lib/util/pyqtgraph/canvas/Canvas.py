@@ -4,15 +4,21 @@ if __name__ == '__main__':
     md = os.path.dirname(os.path.abspath(__file__))
     sys.path = [os.path.dirname(md), os.path.join(md, '..', '..', '..')] + sys.path
     #print md
-    
-from .CanvasTemplate import *
+
+
 #from pyqtgraph.GraphicsView import GraphicsView
 #import pyqtgraph.graphicsItems as graphicsItems
 #from pyqtgraph.PlotWidget import PlotWidget
-from pyqtgraph.Qt import QtGui, QtCore
+from pyqtgraph.Qt import QtGui, QtCore, USE_PYSIDE
 from pyqtgraph.graphicsItems.ROI import ROI
 from pyqtgraph.graphicsItems.ViewBox import ViewBox
 from pyqtgraph.graphicsItems.GridItem import GridItem
+
+if USE_PYSIDE:
+    from .CanvasTemplate_pyside import *
+else:
+    from .CanvasTemplate_pyqt import *
+    
 #import DataManager
 import numpy as np
 from pyqtgraph import debug
@@ -178,7 +184,7 @@ class Canvas(QtGui.QWidget):
         #if gi is None:
             #return
         try:
-            citem = item.canvasItem
+            citem = item.canvasItem()
         except AttributeError:
             return
         if item.checkState(0) == QtCore.Qt.Checked:
@@ -232,7 +238,7 @@ class Canvas(QtGui.QWidget):
         """
         Return list of all selected canvasItems
         """
-        return [item.canvasItem for item in self.itemList.selectedItems() if item.canvasItem is not None]
+        return [item.canvasItem() for item in self.itemList.selectedItems() if item.canvasItem() is not None]
         
     #def selectedItem(self):
         #sel = self.itemList.selectedItems()
@@ -365,7 +371,7 @@ class Canvas(QtGui.QWidget):
             parent = parent.listItem
         
         ## set Z value above all other siblings if none was specified
-        siblings = [parent.child(i).canvasItem for i in range(parent.childCount())]
+        siblings = [parent.child(i).canvasItem() for i in range(parent.childCount())]
         z = citem.zValue()
         if z is None:
             zvals = [i.zValue() for i in siblings]
@@ -376,7 +382,7 @@ class Canvas(QtGui.QWidget):
                     z = max(zvals)+10
             else:
                 if len(zvals) == 0:
-                    z = parent.canvasItem.zValue()
+                    z = parent.canvasItem().zValue()
                 else:
                     z = max(zvals)+1
             citem.setZValue(z)
@@ -384,7 +390,7 @@ class Canvas(QtGui.QWidget):
         ## determine location to insert item relative to its siblings
         for i in range(parent.childCount()):
             ch = parent.child(i)
-            zval = ch.canvasItem.graphicsItem().zValue()  ## should we use CanvasItem.zValue here?
+            zval = ch.canvasItem().graphicsItem().zValue()  ## should we use CanvasItem.zValue here?
             if zval < z:
                 insertLocation = i
                 break
@@ -410,7 +416,7 @@ class Canvas(QtGui.QWidget):
         
         citem.name = name
         citem.listItem = node
-        node.canvasItem = citem
+        node.canvasItem = weakref.ref(citem)
         self.items.append(citem)
 
         ctrl = citem.ctrlWidget()
@@ -459,10 +465,10 @@ class Canvas(QtGui.QWidget):
     def treeItemMoved(self, item, parent, index):
         ##Item moved in tree; update Z values
         if parent is self.itemList.invisibleRootItem():
-            item.canvasItem.setParentItem(self.view.childGroup)
+            item.canvasItem().setParentItem(self.view.childGroup)
         else:
-            item.canvasItem.setParentItem(parent.canvasItem)
-        siblings = [parent.child(i).canvasItem for i in range(parent.childCount())]
+            item.canvasItem().setParentItem(parent.canvasItem())
+        siblings = [parent.child(i).canvasItem() for i in range(parent.childCount())]
         
         zvals = [i.zValue() for i in siblings]
         zvals.sort(reverse=True)

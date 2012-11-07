@@ -37,6 +37,8 @@ class DBCtrl(QtGui.QWidget):
         self.mapWidget = QtGui.QWidget()
         self.ui.setupUi(self.mapWidget)
         self.layout.addWidget(self.mapWidget)
+        self.ui.scanTree.setAcceptDrops(False)
+        self.ui.scanTree.setDragEnabled(False)
         
         
         labels = Map.mapFields.keys()[2:]
@@ -305,6 +307,7 @@ class DBCtrl(QtGui.QWidget):
                     dlg += 1
                     if dlg.wasCanceled():
                         raise Exception('Store canceled by user')
+            self.ui.scanTree.clearSelection()  ## We do this because it is too easy to forget to select the correct set of data before clicking store.
             self.ui.storeDBScanBtn.success("Stored.")
         except:
             self.ui.storeDBScanBtn.failure("Error.")

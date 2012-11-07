@@ -185,6 +185,7 @@ def fitPsp(x, y, guess, bounds=None, risePower=2.0, multiFit=False):
     ## pick some reasonable default bounds
     if bounds is None:
         bounds = [[None,None]] * 4
+        bounds[1][0] = -2e-3
         minTau = (x[1]-x[0]) * 0.5
         #bounds[2] = [minTau, None]
         #bounds[3] = [minTau, None]
@@ -1582,9 +1583,10 @@ def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshol
     ## We do this check early for performance--it eliminates the vast majority of events
     longEvents = np.argwhere(times[1:] - times[:-1] > minLength)
     if len(longEvents) < 1:
-        return []
-    longEvents = longEvents[:, 0]
-    nEvents = len(longEvents)
+        nEvents = 0
+    else:
+        longEvents = longEvents[:, 0]
+        nEvents = len(longEvents)
     
     ## Measure sum of values within each region between crossings, combine into single array
     if xvals is None:
@@ -2163,9 +2165,12 @@ def concatenateColumns(data):
             
     return out
     
-def suggestDType(x):
-    """Return a suitable dtype for x"""
-    if isinstance(x, list) or isinstance(x, tuple):
+def suggestDType(x, singleValue=False):
+    """Return a suitable dtype for x
+    If singleValue is True, then a sequence will be interpreted as dtype=object
+    rather than looking inside the sequence to determine its type.
+    """
+    if not singleValue and isinstance(x, list) or isinstance(x, tuple):
         if len(x) == 0:
             raise Exception('can not determine dtype for empty list')
         x = x[0]
@@ -2181,11 +2186,15 @@ def suggestDType(x):
     else:
         return object
     
-def suggestRecordDType(x):
-    """Given a dict of values, suggest a record array dtype to use"""
+def suggestRecordDType(x, singleRecord=False):
+    """Given a dict of values, suggest a record array dtype to use
+    If singleRecord is True, then x is interpreted as a single record 
+    rather than a dict-of-lists structure. This can resolve some ambiguities
+    when a single cell contains a sequence as its value.
+    """
     dt = []
     for k, v in x.iteritems():
-        dt.append((k, suggestDType(v)))
+        dt.append((k, suggestDType(v, singleValue=singleRecord)))
     return dt
     
     

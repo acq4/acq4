@@ -6,12 +6,12 @@ import pyqtgraph as pg
 import numpy as np
 import scipy.linalg
 
-class SRTTransform3D(QtGui.QMatrix4x4):
+class SRTTransform3D(pg.Transform3D):
     """4x4 Transform matrix that can always be represented as a combination of 3 matrices: scale * rotate * translate
     This transform has no shear; angles are always preserved.
     """
     def __init__(self, init=None):
-        QtGui.QMatrix4x4.__init__(self)
+        pg.Transform3D.__init__(self)
         self.reset()
         if init is None:
             return
@@ -117,12 +117,8 @@ class SRTTransform3D(QtGui.QMatrix4x4):
         The input matrix must be affine AND have no shear,
         otherwise the conversion will most likely fail.
         """
-        if isinstance(m, np.ndarray):
-            m=m.reshape(16)
-            m = QtGui.QMatrix4x4(*map(float,m))
         for i in range(4):
             self.setRow(i, m.row(i))
-            
         m = self.matrix().reshape(4,4)
         ## translation is 4th column
         self._state['pos'] = m[:3,3] 
@@ -187,29 +183,29 @@ class SRTTransform3D(QtGui.QMatrix4x4):
     def restoreState(self, state):
         self._state['pos'] = Vector(state.get('pos', (0.,0.,0.)))
         scale = state.get('scale', (1.,1.,1.))
-        scale = scale + (1.,) * (3-len(scale))
+        scale = tuple(scale) + (1.,) * (3-len(scale))
         self._state['scale'] = Vector(scale)
         self._state['angle'] = state.get('angle', 0.)
         self._state['axis'] = state.get('axis', (0, 0, 1))
         self.update()
 
     def update(self):
-        QtGui.QMatrix4x4.setToIdentity(self)
+        pg.Transform3D.setToIdentity(self)
         ## modifications to the transform are multiplied on the right, so we need to reverse order here.
-        QtGui.QMatrix4x4.translate(self, *self._state['pos'])
-        QtGui.QMatrix4x4.rotate(self, self._state['angle'], *self._state['axis'])
-        QtGui.QMatrix4x4.scale(self, *self._state['scale'])
+        pg.Transform3D.translate(self, *self._state['pos'])
+        pg.Transform3D.rotate(self, self._state['angle'], *self._state['axis'])
+        pg.Transform3D.scale(self, *self._state['scale'])
 
     def __repr__(self):
         return str(self.saveState())
         
     def matrix(self, nd=3):
         if nd == 3:
-            return np.array(self.copyDataTo())
+            return np.array(self.copyDataTo()).reshape(4,4)
         elif nd == 2:
-            m = np.array(self.copyDataTo())
+            m = np.array(self.copyDataTo()).reshape(4,4)
             m[2] = m[3]
-            m[:,2] = n[:,3]
+            m[:,2] = m[:,3]
             return m[:3,:3]
         else:
             raise Exception("Argument 'nd' must be 2 or 3")

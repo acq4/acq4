@@ -165,17 +165,21 @@ class Photostim(AnalysisModule):
         canvas = self.getElement('Canvas')
         model = self.dataModel
 
-        for fh in fhList:
-            try:
-                ## TODO: use more clever detection of Scan data here.
-                if fh.isFile() or model.dirType(fh) == 'Cell':
-                    canvas.addFile(fh)
-                else:
-                    self.loadScan(fh)
-                return True
-            except:
-                debug.printExc("Error loading file %s" % fh.name())
-                return False
+        with pg.ProgressDialog("Loading data..", 0, len(fhList)) as dlg:
+            for fh in fhList:
+                try:
+                    ## TODO: use more clever detection of Scan data here.
+                    if fh.isFile() or model.dirType(fh) == 'Cell':
+                        canvas.addFile(fh)
+                    else:
+                        self.loadScan(fh)
+                    return True
+                except:
+                    debug.printExc("Error loading file %s" % fh.name())
+                    return False
+                dlg += 1
+                if dlg.wasCancelled():
+                    return
 
     def loadScan(self, fh):
         ret = []
@@ -390,7 +394,7 @@ class Photostim(AnalysisModule):
         return self.mapper.getColor(stats)
 
     def processEvents(self, fh):
-        #print "Process Events:", fh
+        print "Process Events:", fh
         ret = self.detector.process(fh)
         return ret
         
@@ -476,6 +480,9 @@ class Photostim(AnalysisModule):
     def storeDBScan(self, scan, storeEvents=True):
         """Store all data for a scan, using cached values if possible"""
         p = debug.Profiler("Photostim.storeDBScan", disabled=True)
+        
+        if storeEvents:
+            self.clearDBScan(scan)
         
         with pg.BusyCursor():
             #dh = scan.source()

@@ -410,14 +410,17 @@ class GraphicsItem(object):
         if oldView is not None:
             #print "disconnect:", self, oldView
             oldView.sigRangeChanged.disconnect(self.viewRangeChanged)
+            oldView.sigTransformChanged.disconnect(self.viewTransformChanged)
             self._connectedView = None
 
         ## connect to new view
         if view is not None:
             #print "connect:", self, view
             view.sigRangeChanged.connect(self.viewRangeChanged)
+            view.sigTransformChanged.connect(self.viewTransformChanged)
             self._connectedView = weakref.ref(view)
             self.viewRangeChanged()
+            self.viewTransformChanged()
         
         ## inform children that their view might have changed
         self._replaceView(oldView)
@@ -441,3 +444,23 @@ class GraphicsItem(object):
         Called whenever the view coordinates of the ViewBox containing this item have changed.
         """
         pass
+    
+    def viewTransformChanged(self):
+        """
+        Called whenever the transformation matrix of the view has changed.
+        """
+        pass
+    
+    #def prepareGeometryChange(self):
+        #self._qtBaseClass.prepareGeometryChange(self)
+        #self.informViewBoundsChanged()
+        
+    def informViewBoundsChanged(self):
+        """
+        Inform this item's container ViewBox that the bounds of this item have changed.
+        This is used by ViewBox to react if auto-range is enabled.
+        """
+        view = self.getViewBox()
+        if view is not None and hasattr(view, 'implements') and view.implements('ViewBox'):
+            view.itemBoundsChanged(self)  ## inform view so it can update its range if it wants
+        
