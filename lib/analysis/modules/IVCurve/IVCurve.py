@@ -34,7 +34,8 @@ class IVCurve(AnalysisModule):
         self.lrpk_flag = True
         self.lrtau_flag = True
         self.regionsExist = False
-        
+        self.fit_curve = None
+        self.fitted_data = None
         # make fixed widget for the module output
         self.widget = QtGui.QWidget()
         self.gridLayout = QtGui.QGridLayout()
@@ -115,6 +116,7 @@ class IVCurve(AnalysisModule):
             self.lrpk.sigRegionChangeFinished.connect(self.update_pkAnalysis)
             self.lrtau.sigRegionChangeFinished.connect(self.update_Tauh)
             self.regionsExist = True
+            self.ctrl.IVCurve_tauh_Commands.currentIndexChanged.connect(self.updateAnalysis)
 
         self.showhide_lrpk(True)
         self.showhide_lrss(True)
@@ -218,12 +220,28 @@ class IVCurve(AnalysisModule):
         self.traces = MetaArray(traces, info=info)
         info1 = dataF.infoCopy()
         sfreq = self.dataModel.getSampleRate(data)
+        mode = self.dataModel.getClampMode(data)
+        self.ctrl.IVCurve_dataMode.setText(mode)
+        if mode == 'IC':
+            cmdUnits = 'nA'
+            scaleFactor = 1e9
+        else:
+            cmdUnits = 'mV'
+            scaleFactor = 1e3
+        self.ctrl.IVCurve_dataUnits.setText(cmdUnits)
         cmddata = cmd.view(numpy.ndarray)
         cmdtimes = numpy.argwhere(cmddata[1:]-cmddata[:-1] != 0)[:,0]
         self.tstart = cmd.xvals('Time')[cmdtimes[0]]
         self.tend = cmd.xvals('Time')[cmdtimes[1]]
         self.tdur = self.tend - self.tstart
         tr = traces
+        
+        # build the list of command values that are used for the fitting
+        cmdList = []
+        for i in range(len(self.values)):
+            cmdList.append('%8.3f' % (scaleFactor*self.values[i]))
+        self.ctrl.IVCurve_tauh_Commands.clear()
+        self.ctrl.IVCurve_tauh_Commands.addItems(cmdList)
         
         self.spikecount = numpy.zeros(len(traces))
         # for adaptation ratio:
@@ -262,13 +280,13 @@ class IVCurve(AnalysisModule):
         
         fisi = fisi*1.0e3
         fsl = fsl*1.0e3
-        current = numpy.array(self.values)
+        commands = numpy.array(self.values)
         iscale = 1.0e12 # convert to pA
         self.nospk = numpy.where(self.spikecount == 0)
         self.spk = numpy.where(self.spikecount > 0)
-        self.icmd = current[self.nospk]
-        self.spcmd = current[self.spk]
-        self.fiPlot.plot(x=current*iscale, y=self.spikecount, clear=True, pen='w', symbolSize=10, symbolPen='b', symbolBrush=(0, 0, 255, 200), symbol='s')
+        self.icmd = commands[self.nospk]
+        self.spcmd = commands[self.spk]
+        self.fiPlot.plot(x=commands*iscale, y=self.spikecount, clear=True, pen='w', symbolSize=10, symbolPen='b', symbolBrush=(0, 0, 255, 200), symbol='s')
         self.fslPlot.plot(x=self.spcmd*iscale, y=fsl[self.spk], pen='w', clear=True, symbolSize=6, symbolPen='g', symbolBrush=(0, 255, 0, 200), symbol='t')
         self.fslPlot.plot(x=self.spcmd*iscale, y=fisi[self.spk], pen='w', symbolSize=6, symbolPen='y', symbolBrush=(255, 255, 0, 200), symbol='s')
         if len(self.spcmd) > 0:
@@ -355,7 +373,7 @@ class IVCurve(AnalysisModule):
             print tautext % (meantau*1e3)
 
 
-    def update_Tauh(self, printWindow = True):
+    def update_Tauh(self, printWindow = False):
         """ compute tau (single exponential) from the onset of the markers
             using lrtau window, and only for the step closest to the selected
             current level. 
@@ -372,22 +390,27 @@ class IVCurve(AnalysisModule):
         fity = []
         initpars = [-80.0*1e-3, -10.0*1e-3, 50.0*1e-3]
         # find the current level that is closest to the target current
-        itarget = self.ctrl.IVCurve_Ih_current.value()
-        idiff = numpy.abs(numpy.array(self.icmd) - itarget*1e-9)
-        # print self.icmd
-        # print itarget
-        # print idiff
+        s_target = self.ctrl.IVCurve_tauh_Commands.currentIndex()
+        itarget = self.values[s_target] # retrive actual value from commands
+        idiff = numpy.abs(numpy.array(self.icmd) - itarget)
         amin = numpy.argmin(idiff)
-#        print 'amin: ', amin
         vrmp = numpy.mean(self.traces[amin][0:10])*1000. # rmp approximation.
         dpk = self.traces['Time' : rgnpk[0]:rgnpk[0]+0.001]
         vpk = numpy.mean(dpk[amin])*1000.
         dss = self.traces['Time' : rgnpk[1]-0.010:rgnpk[1]]
         vss = numpy.mean(dss[amin])*1000.
-        # print 'icmd: ', self.icmd[amin]
-        # print 'rmp: %.1f  vpk: %.1f  vss: %.1f' % (vrmp, vpk, vss)
         whichdata = [int(amin)]
         itaucmd = [self.icmd[amin]]
+        
+        fd = self.traces['Time': rgnpk[0]:rgnpk[1]][whichdata][0]
+        if self.fitted_data is None: # first time through.. 
+            self.fitted_data = self.data_plot.plot(fd, pen=pg.mkPen('w'))
+        else:
+            self.fitted_data.clear()
+            self.fitted_data = self.data_plot.plot(fd, pen=pg.mkPen('w'))
+            self.fitted_data.update()
+
+
         whichaxis = 0
         (fpar, xf, yf, names) = Fits.FitRegion(whichdata, whichaxis, 
                 self.traces.xvals('Time'), self.traces.view(numpy.ndarray), 
@@ -396,6 +419,13 @@ class IVCurve(AnalysisModule):
         if fpar == []:
             print 'tau_h fitting failed - see log'
             return
+        if self.fit_curve is None:
+            self.fit_curve = self.data_plot.plot(xf[0], yf[0], pen=pg.mkPen('r', width=1.5, style=QtCore.Qt.DashLine))
+        else:
+            self.fit_curve.clear()
+            self.fit_curve = self.data_plot.plot(xf[0], yf[0], pen=pg.mkPen('r', width = 1.5, style=QtCore.Qt.DashLine))
+            self.fit_curve.update()
+            
         outstr = ""
         s = numpy.shape(fpar)
         taus = []
@@ -470,15 +500,20 @@ class IVCurve(AnalysisModule):
         """
         Read the parameter window entries, set the lr regions, and do an update on the analysis
         """
-        rgnx1 = self.ctrl.IVCurve_ssTStart.value()/1.0e3
-        rgnx2 = self.ctrl.IVCurve_ssTStop.value()/1.0e3
-        self.lrss.setRegion([rgnx1, rgnx2])
-        self.update_ssAnalysis(clear=clearFlag)
+        if self.ctrl.IVCurve_showHide_lrss.isChecked():
+            rgnx1 = self.ctrl.IVCurve_ssTStart.value()/1.0e3
+            rgnx2 = self.ctrl.IVCurve_ssTStop.value()/1.0e3
+            self.lrss.setRegion([rgnx1, rgnx2])
+            self.update_ssAnalysis(clear=clearFlag)
 
-        rgnx1 = self.ctrl.IVCurve_pkTStart.value()/1.0e3
-        rgnx2 = self.ctrl.IVCurve_pkTStop.value()/1.0e3
-        self.lrpk.setRegion([rgnx1, rgnx2])
-        self.update_pkAnalysis(clear=False, pw = pw)
+        if self.ctrl.IVCurve_showHide_lrpk.isChecked():
+            rgnx1 = self.ctrl.IVCurve_pkTStart.value()/1.0e3
+            rgnx2 = self.ctrl.IVCurve_pkTStop.value()/1.0e3
+            self.lrpk.setRegion([rgnx1, rgnx2])
+            self.update_pkAnalysis(clear=False, pw = pw)
+        
+        if self.ctrl.IVCurve_showHide_lrtau.isChecked():
+            self.update_Tauh() # include tau in the list... if the tool is selected
 
 
 #---- Helpers ---
