@@ -335,6 +335,8 @@ class Manager(QtCore.QObject):
                         pg.setConfigOption('leftButtonPan', True)
                     else:
                         print "Warning: ignored config option 'defaultMouseMode'; value must be either 'oneButton' or 'threeButton'." 
+                elif key == 'useOpenGL':
+                    pg.setConfigOption('useOpenGL', cfg[key])
                     
                 ## Copy in any other configurations.
                 ## dicts are extended, all others are overwritten.
