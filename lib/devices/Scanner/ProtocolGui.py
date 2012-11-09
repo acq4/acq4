@@ -1336,6 +1336,24 @@ class ProgramLineScan(QtCore.QObject):
         return {'type': 'lineScan', 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 'sweepDuration': self.params['sweepDuration'], 
                 'endTime': self.params['endTime'], 'retraceDuration': self.params['retraceDuration'], 'nScans': self.params['nScans']}
 
+class MultiLineScanROI(pg.PolyLineROI):
+    """ custom class over ROI polyline to allow alternate coloring of different segments
+    """
+    def addSegment(self, *args, **kwds):
+        pg.PolyLineROI.addSegment(self, *args, **kwds)
+        self.recolor()
+    
+    def removeSegment(self, *args, **kwds):
+        pg.PolyLineROI.removeSegment(self, *args, **kwds)
+        self.recolor()
+    
+    def recolor(self):
+        for i, s in enumerate(self.segments):
+            if i % 2 == 0:
+                s.setPen(self.pen)
+            else:
+                s.setPen(fn.mkPen([75, 200, 75]))
+
 class ProgramMultipleLineScan(QtCore.QObject):
     
     sigStateChanged = QtCore.Signal(object)
@@ -1354,7 +1372,7 @@ class ProgramMultipleLineScan(QtCore.QObject):
             dict(name='endTime', type='float', value=5.5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2, readonly=True),
         ])
         self.params.ctrl = self        
-        self.roi = pg.PolyLineROI([[0.0, 0.0], [self.params['Length'], self.params['Length']]], alternate=True)
+        self.roi = MultiLineScanROI([[0.0, 0.0], [self.params['Length'], self.params['Length']]])
         self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
  #       print dir(self.roi)
         self.params.sigTreeStateChanged.connect(self.update)

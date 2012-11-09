@@ -1780,7 +1780,6 @@ class LineSegmentROI(ROI):
     """
     ROI subclass with two freely-moving handles defining a line.
     """
-    
     def __init__(self, positions=(None, None), pos=None, handles=(None,None), **args):
         if pos is None:
             pos = [0,0]

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/IVCurve/ctrlTemplate.ui'
 #
-# Created: Thu Nov  8 16:30:17 2012
+# Created: Fri Nov  9 17:17:14 2012
 #      by: PyQt4 UI code generator 4.9.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -290,19 +290,6 @@ class Ui_Form(object):
         font.setPointSize(12)
         self.label_16.setFont(font)
         self.label_16.setObjectName(_fromUtf8("label_16"))
-        self.IVCurve_Ih_current = QtGui.QDoubleSpinBox(self.groupBox)
-        self.IVCurve_Ih_current.setGeometry(QtCore.QRect(90, 170, 76, 25))
-        font = QtGui.QFont()
-        font.setFamily(_fromUtf8("Arial"))
-        font.setPointSize(12)
-        self.IVCurve_Ih_current.setFont(font)
-        self.IVCurve_Ih_current.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
-        self.IVCurve_Ih_current.setDecimals(2)
-        self.IVCurve_Ih_current.setMinimum(-2000.0)
-        self.IVCurve_Ih_current.setMaximum(2000.0)
-        self.IVCurve_Ih_current.setSingleStep(0.01)
-        self.IVCurve_Ih_current.setProperty("value", -0.6)
-        self.IVCurve_Ih_current.setObjectName(_fromUtf8("IVCurve_Ih_current"))
         self.label_6 = QtGui.QLabel(self.groupBox)
         self.label_6.setGeometry(QtCore.QRect(140, 295, 62, 16))
         font = QtGui.QFont()
@@ -317,6 +304,20 @@ class Ui_Form(object):
         font.setPointSize(12)
         self.IVCurve_FOType.setFont(font)
         self.IVCurve_FOType.setObjectName(_fromUtf8("IVCurve_FOType"))
+        self.IVCurve_tauh_Commands = QtGui.QComboBox(self.groupBox)
+        self.IVCurve_tauh_Commands.setGeometry(QtCore.QRect(85, 170, 86, 26))
+        self.IVCurve_tauh_Commands.setObjectName(_fromUtf8("IVCurve_tauh_Commands"))
+        self.IVCurve_tauh_Commands.addItem(_fromUtf8(""))
+        self.IVCurve_dataMode = QtGui.QLabel(self.groupBox)
+        self.IVCurve_dataMode.setGeometry(QtCore.QRect(175, 5, 106, 16))
+        font = QtGui.QFont()
+        font.setFamily(_fromUtf8("Arial"))
+        font.setPointSize(11)
+        self.IVCurve_dataMode.setFont(font)
+        self.IVCurve_dataMode.setObjectName(_fromUtf8("IVCurve_dataMode"))
+        self.IVCurve_dataUnits = QtGui.QLabel(self.groupBox)
+        self.IVCurve_dataUnits.setGeometry(QtCore.QRect(180, 175, 46, 16))
+        self.IVCurve_dataUnits.setObjectName(_fromUtf8("IVCurve_dataUnits"))
         self.gridLayout.addWidget(self.groupBox, 0, 0, 1, 1)
 
         self.retranslateUi(Form)
@@ -345,6 +346,9 @@ class Ui_Form(object):
         self.IVCurve_showHide_lrpk.setText(QtGui.QApplication.translate("Form", "IV:Peak", None, QtGui.QApplication.UnicodeUTF8))
         self.IVCurve_showHide_lrtau.setText(QtGui.QApplication.translate("Form", "Ih tool", None, QtGui.QApplication.UnicodeUTF8))
         self.label_5.setText(QtGui.QApplication.translate("Form", "b/a (%)", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_16.setText(QtGui.QApplication.translate("Form", "Current (nA)", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_16.setText(QtGui.QApplication.translate("Form", "Command", None, QtGui.QApplication.UnicodeUTF8))
         self.label_6.setText(QtGui.QApplication.translate("Form", "F&O Type", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_tauh_Commands.setItemText(0, QtGui.QApplication.translate("Form", "-0.6", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_dataMode.setText(QtGui.QApplication.translate("Form", "IVCurve_dataMode", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_dataUnits.setText(QtGui.QApplication.translate("Form", "nA", None, QtGui.QApplication.UnicodeUTF8))
 

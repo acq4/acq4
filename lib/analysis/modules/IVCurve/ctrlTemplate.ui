@@ -713,41 +713,7 @@ Ratio</string>
        </font>
       </property>
       <property name="text">
-       <string>Current (nA)</string>
-      </property>
-     </widget>
-     <widget class="QDoubleSpinBox" name="IVCurve_Ih_current">
-      <property name="geometry">
-       <rect>
-        <x>90</x>
-        <y>170</y>
-        <width>76</width>
-        <height>25</height>
-       </rect>
-      </property>
-      <property name="font">
-       <font>
-        <family>Arial</family>
-        <pointsize>12</pointsize>
-       </font>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-      </property>
-      <property name="decimals">
-       <number>2</number>
-      </property>
-      <property name="minimum">
-       <double>-2000.000000000000000</double>
-      </property>
-      <property name="maximum">
-       <double>2000.000000000000000</double>
-      </property>
-      <property name="singleStep">
-       <double>0.010000000000000</double>
-      </property>
-      <property name="value">
-       <double>-0.600000000000000</double>
+       <string>Command</string>
       </property>
      </widget>
      <widget class="QLabel" name="label_6">
@@ -783,6 +749,53 @@ Ratio</string>
         <family>Arial</family>
         <pointsize>12</pointsize>
        </font>
+      </property>
+     </widget>
+     <widget class="QComboBox" name="IVCurve_tauh_Commands">
+      <property name="geometry">
+       <rect>
+        <x>85</x>
+        <y>170</y>
+        <width>86</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <item>
+       <property name="text">
+        <string>-0.6</string>
+       </property>
+      </item>
+     </widget>
+     <widget class="QLabel" name="IVCurve_dataMode">
+      <property name="geometry">
+       <rect>
+        <x>175</x>
+        <y>5</y>
+        <width>106</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <family>Arial</family>
+        <pointsize>11</pointsize>
+       </font>
+      </property>
+      <property name="text">
+       <string>IVCurve_dataMode</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="IVCurve_dataUnits">
+      <property name="geometry">
+       <rect>
+        <x>180</x>
+        <y>175</y>
+        <width>46</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>nA</string>
       </property>
      </widget>
     </widget>
