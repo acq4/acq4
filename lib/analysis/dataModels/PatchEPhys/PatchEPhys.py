@@ -305,6 +305,15 @@ def getClampHoldingLevel(fh):
             return None
         
 
+def getSampleRate(data):
+    """given clamp data, return the data sampling rate """
+    #data = fh.read()
+    info = data._info[-1]
+    if 'DAQ' in info.keys():
+        return(info['DAQ']['primary']['rate'])
+    else:
+        return(info['rate'])
+    
 def getParentInfo(dh, parentType):
     dh = getParent(dh, parentType)
     if dh is None:

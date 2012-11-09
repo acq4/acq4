@@ -111,9 +111,9 @@ class IVCurve(AnalysisModule):
             self.ctrl.IVCurve_showHide_lrpk.clicked.connect(self.showhide_lrpk)
             self.ctrl.IVCurve_showHide_lrtau.clicked.connect(self.showhide_lrtau)
             # Plots are updated when the selected region changes
-            self.lrss.sigRegionChanged.connect(self.update_ssAnalysis)
-            self.lrpk.sigRegionChanged.connect(self.update_pkAnalysis)
-            self.lrtau.sigRegionChanged.connect(self.update_Tauh)
+            self.lrss.sigRegionChangeFinished.connect(self.update_ssAnalysis)
+            self.lrpk.sigRegionChangeFinished.connect(self.update_pkAnalysis)
+            self.lrtau.sigRegionChangeFinished.connect(self.update_Tauh)
             self.regionsExist = True
 
         self.showhide_lrpk(True)
@@ -217,7 +217,7 @@ class IVCurve(AnalysisModule):
             data.infoCopy(-1)]
         self.traces = MetaArray(traces, info=info)
         info1 = dataF.infoCopy()
-        sfreq = info1[2]['rate'] # ['DAQ']['primary']['rate']
+        sfreq = self.dataModel.getSampleRate(data)
         cmddata = cmd.view(numpy.ndarray)
         cmdtimes = numpy.argwhere(cmddata[1:]-cmddata[:-1] != 0)[:,0]
         self.tstart = cmd.xvals('Time')[cmdtimes[0]]
