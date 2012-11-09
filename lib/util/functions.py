@@ -452,8 +452,10 @@ def recursiveRegisterImages(i1, i2, hint=(0,0), maxDist=None, objSize=None):
     """Given images i1 and i2, recursively find the offset for i2 that best matches with i1"""
     time1 = time.clock()
     ## float images
-    im1 = i1.mean(axis=2).astype(float)
-    im2 = i2.mean(axis=2).astype(float)
+    im1 = i1.astype(float)
+    im2 = i2.astype(float)
+    #im1 = i1.mean(axis=2).astype(float)
+    #im2 = i2.mean(axis=2).astype(float)
     
     ## Decide how many iterations to perform, scale images
     if objSize != None:
@@ -527,6 +529,8 @@ def registerImages(im1, im2, searchRange):
         mode='valid'
         s1x = max(0, start[0])
         s1y = max(0, start[1])
+        print im1.shape
+        print im2.shape
         e1x = min(im1.shape[0], im2.shape[0]+end[0])
         e1y = min(im1.shape[1], im2.shape[1]+end[1])
         print "%d,%d - %d,%d" % (s1x, s1y, e1x, e1y)
@@ -557,9 +561,10 @@ def registerImages(im1, im2, searchRange):
             print img.shape, im2c.shape
             raise
         return abs(im2c - img).sum()
+    
     print im1c.shape, im2c.shape
     xc = scipy.ndimage.generic_filter(im1c, err, footprint=im2c) 
-    print xc.min(), xc.max()
+   # print xc.min(), xc.max()
     #xcb = ndimage.filters.gaussian_filter(xc, 20)
     #xc -= xcb
     

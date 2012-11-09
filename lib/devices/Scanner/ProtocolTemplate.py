@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'ProtocolTemplate.ui'
+# Form implementation generated from reading ui file './lib/devices/Scanner/ProtocolTemplate.ui'
 #
-# Created: Tue Mar 27 14:33:55 2012
+# Created: Fri Nov  9 12:54:11 2012
 #      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
@@ -157,11 +157,11 @@ class Ui_Form(object):
         self.gridLayout_9 = QtGui.QGridLayout()
         self.gridLayout_9.setObjectName(_fromUtf8("gridLayout_9"))
         spacerItem3 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-        self.gridLayout_9.addItem(spacerItem3, 0, 1, 1, 1)
+        self.gridLayout_9.addItem(spacerItem3, 0, 0, 1, 1)
         self.previewBtn = QtGui.QPushButton(self.groupBox_4)
         self.previewBtn.setEnabled(False)
         self.previewBtn.setObjectName(_fromUtf8("previewBtn"))
-        self.gridLayout_9.addWidget(self.previewBtn, 0, 2, 1, 1)
+        self.gridLayout_9.addWidget(self.previewBtn, 0, 1, 1, 1)
         self.gridLayout_6.addLayout(self.gridLayout_9, 1, 0, 1, 1)
         self.programTree = ParameterTree(self.groupBox_4)
         self.programTree.setObjectName(_fromUtf8("programTree"))

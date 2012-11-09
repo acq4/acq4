@@ -144,16 +144,19 @@ class Scanner(Device, OptomechDevice):
         """
         if opticState is None:
             opticState = self.getDeviceStateKey() ## this tells us about objectives, filters, etc
-        #print "camera:", x, y
         cal = self.getCalibration(laser, opticState)
         
         if cal is None:
             raise HelpfulException("The scanner device '%s' is not calibrated for this combination of laser and objective (%s, %s)" % (self.name(), laser, str(opticState)))
             
         ## map from global coordinates to parent
-        parentPos = self.mapGlobalToParent(pg.Point(x,y))
-        x = parentPos.x()
-        y = parentPos.y()
+        parentPos = self.mapGlobalToParent((x,y))
+        if isinstance(parentPos, QtCore.QPointF):
+            x = parentPos.x()
+            y = parentPos.y()
+        else:
+            x = parentPos[0]
+            y = parentPos[1]
             
         ## map to voltages using calibration
         cal = cal['params']
@@ -393,7 +396,10 @@ class ScannerTask(DeviceTask):
 
             ## record spot size from calibration data
             if 'laser' in self.cmd:
-                self.spotSize = self.dev.getCalibration(self.cmd['laser'])['spot'][1]
+                cal = self.dev.getCalibration(self.cmd['laser'])
+                if cal is None:
+                    raise Exception("Scanner is not calibrated for: %s, %s" % (self.cmd['laser'], self.dev.getDeviceStateKey()))
+                self.spotSize = cal['spot'][1]
                 prof.mark('getSpotSize')
             
             ## If position arrays are given, translate into voltages
@@ -446,7 +452,7 @@ class ScannerTask(DeviceTask):
     def generateProgramArrays(self, command):
         """LASER LOGO
         Turn a list of movement commands into arrays of x and y values.
-        prg looks like:
+        "command" looks like:
         { 
             numPts: 10000,
             duration: 1.0,
@@ -464,6 +470,7 @@ class ScannerTask(DeviceTask):
         """
         dt = command['duration'] / command['numPts']
         arr = np.empty((2, command['numPts']))
+
         cmds = command['program']
         lastPos = None
                 
@@ -471,8 +478,10 @@ class ScannerTask(DeviceTask):
         lastStopInd = 0
         for i in range(len(cmds)):
             cmd = cmds[i]
+            print dir(cmd)
             startInd = cmd['startTime'] / dt
             stopInd = cmd['endTime'] / dt
+            assert stopInd < arr.shape[1]
             arr[:,lastStopInd:startInd] = lastValue[:,np.newaxis]
             if cmd['type'] == 'step':
                 ## determine when to end the step
@@ -488,11 +497,12 @@ class ScannerTask(DeviceTask):
                 if pos == None:
                     pos = self.dev.getOffVoltage()
                 else:
-                    pos = self.dev.mapToScanner(pos[0], pos[1], self.cmd['camera'], self.cmd['laser'])
+                    pos = self.dev.mapToScanner(pos[0], pos[1], self.cmd['laser'])
                 lastPos = pos
                 
                 arr[0, startInd] = pos[0]
                 arr[1, startInd] = pos[1]
+                
                 
             elif cmd['type'] == 'line':
                 if lastPos is None:
@@ -501,7 +511,7 @@ class ScannerTask(DeviceTask):
                 
                 xPos = linspace(lastPos[0], pos[0], stopInd-startInd)
                 yPos = linspace(lastPos[1], pos[1], stopInd-startInd)
-                x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['camera'], self.cmd['laser'])
+                x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['laser'])
                 arr[0, startInd:stopInd] = x
                 arr[1, startInd:stopInd] = y
                 lastPos = pos
@@ -510,53 +520,54 @@ class ScannerTask(DeviceTask):
                 startPos = cmd['points'][0]                
                 stopPos = cmd['points'][1]               
                 scanLength = (stopInd - startInd)/cmd['nScans'] # in point indices, not time.
-                
+                retraceLength = cmd['retraceDuration']/dt
+                scanLength = scanLength - retraceLength # adjust for retrace
+                scanPause = np.ones(int(retraceLength))
+                cmd['samplesPerScan'] = scanLength
+                cmd['samplesPerPause'] = scanPause.shape[0]
                 xPos = np.linspace(startPos.x(), stopPos.x(), scanLength)
+                xPos = np.append(xPos, startPos.x()*scanPause)
+
                 yPos = np.linspace(startPos.y(), stopPos.y(), scanLength)
-                x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['camera'], self.cmd['laser'])
+                yPos = np.append(yPos, startPos.x()*scanPause)
+                x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['laser'])
                 x = np.tile(x, cmd['nScans'])
                 y = np.tile(y, cmd['nScans'])
                 arr[0, startInd:startInd + len(x)] = x
                 arr[1, startInd:startInd + len(y)] = y
-                arr[0, startInd + len(x):stopInd] = arr[0, startInd + len(x)-1]
+                arr[0, startInd + len(x):stopInd] = arr[0, startInd + len(x)-1] # fill in any unused sample on this scan section
                 arr[1, startInd + len(y):stopInd] = arr[1, startInd + len(y)-1]
                 lastPos = (x[-1], y[-1])
 
             elif cmd['type'] == 'rectScan':
-                startPos = cmd['points'][0] # lower left corner or so               
-                stopPos = cmd['points'][1]  # diagonal opposite corner
+                pts = cmd['points']
+                width  = (pts[1] -pts[0]).length()
+                height = (pts[2]- pts[0]).length()
+                n = int(height /cmd['lineSpacing'])
+                assert n > 0
+                m = int((stopInd - startInd)/(n * cmd['nScans']))
+                assert m > 0
+                r = np.mgrid[0:m, 0:n] .reshape(1,2,m,n) 
+                
+                dx = (pts[1] - pts[0])/m
+                dy = (pts[2] - pts[0])/n
+                v = np.array([[dx[0], dy[0]], [dx[1], dy[1]]]).reshape(2,2,1,1) 
+                q = (v*r).sum(axis=1)
+                q += np.array(pts[0]).reshape(2,1,1)
+                q = q.transpose(0,2,1).reshape(2,m*n)
+                x, y = self.dev.mapToScanner(q[0], q[1], self.cmd['laser'])
 
-                ylen = stopPos.y() - startPos.y()
-                yDir = 1;
-                if ylen < 0:
-                    ylen = 1
-                    yDir = -1
-                nYScans = int(ylen/cmd['lineSpacing'])
-                scanLength = (stopInd - startInd)/(cmd['nScans']*nYScans) # in point indices, not time.
-                xPos = np.linspace(startPos.x(), stopPos.x(), scanLength)
-                yPos = np.linspace(startPos.y(), startPos.y(), scanLength)
-                yStep = yDir*cmd['lineSpacing']
-                for nsc in range(0, cmd['nScans']):
-                    for yp in range(0,nYScans):
-                        yPos = yPos + yStep
-                        #yPos = np.linspace(startPos.y(), stopPos.y(), scanLength)
-                        xl, yl = self.dev.mapToScanner(xPos, yPos, self.cmd['camera'], self.cmd['laser'])
-                        if nsc == 0 and yp == 0:
-                            y = yl
-                            x = xl
-                        else:
-                            y = np.append(y, yl)
-                            x = np.append(x, xl)
-                #x = np.tile(x, cmd['nScans']*nYScans)
-                #y = np.tile(y, cmd['nScans'])
-                #print x.shape
-                #print y.shape
-                arr[0, startInd:startInd + len(x)] = x
-                arr[1, startInd:startInd + len(y)] = y
-                arr[0, startInd + len(x):stopInd] = arr[0, startInd + len(x)-1]
-                arr[1, startInd + len(y):stopInd] = arr[1, startInd + len(y)-1]
+                for i in range(cmd['nScans']):
+                    thisStart = startInd+i*n*m
+                    arr[0, thisStart:thisStart + len(x)] = x
+                    arr[1, thisStart:thisStart + len(y)] = y
+                arr[0, startInd+n*m*cmd['nScans']:stopInd] = arr[0, startInd+n*m*cmd['nScans'] -1] # fill in any unused sample on this scan section
+                arr[1, startInd+n*m*cmd['nScans']:stopInd] = arr[1, startInd+n*m*cmd['nScans'] -1]
                 lastPos = (x[-1], y[-1])
 
+            # A side-effect modification of the 'command' dict so that analysis can access
+            # this information later
+            cmd['startStopIndices'] = (startInd, stopInd)
             lastValue = arr[:,stopInd-1]
             lastStopInd = stopInd
         arr[:,lastStopInd:] = lastValue[:,np.newaxis]             
@@ -612,20 +623,21 @@ class ScannerTask(DeviceTask):
         #print "  >> GO"
             
     def getResult(self):
-        result = {}
-        for k in ['position', 'command']:
-            if k in self.cmd:
-                result[k] = self.cmd[k]
-        if self.spotSize is not None:
-            result['spotSize'] = self.spotSize
-    
+        #result = {}
+        #for k in ['position', 'command']:
+            #if k in self.cmd:
+                #result[k] = self.cmd[k]
+        #if self.spotSize is not None:
+            #result['spotSize'] = self.spotSize
+        result = self.cmd.copy()
+        
         ### These arrays stick around and cause memory errors if we don't get rid of them. 
         ## For some reason, the top-level protocol command dict is not being collected (refcount=2, but gc.get_referrers=[])
         ## So until that issue is solved, we need to make sure that extra data is cleaned out.
         if 'xCommand' in self.cmd:
-            self.cmd['xCommand'] = "dedeted in ScannerTask.getResult()"
+            self.cmd['xCommand'] = "deleted in ScannerTask.getResult()"
         if 'yCommand' in self.cmd:
-            self.cmd['yCommand'] = "dedeted in ScannerTask.getResult()"
+            self.cmd['yCommand'] = "deleted in ScannerTask.getResult()"
 
         return result
     
