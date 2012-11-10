@@ -1155,7 +1155,7 @@ class ViewBox(GraphicsWidget):
         if any(changed):
             self.sigRangeChanged.emit(self, self.state['viewRange'])
             
-        self.sigTransformChanged.emit(self)
+        self.sigTransformChanged.emit(self)  ## segfaults here: 1
 
     def paint(self, p, opt, widget):
         if self.border is not None:

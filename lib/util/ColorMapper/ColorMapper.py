@@ -216,8 +216,13 @@ class ColorMapper(QtGui.QWidget):
         color = np.clip(color*255, 0, 255).astype(int)
         return QtGui.QColor(*color)
     
-    def getColorArray(self, data):
-        colors = np.zeros(data.shape+(4,), dtype=float)
+    def getColorArray(self, data, opengl=False):
+        """
+        Given a record array, return an array of colors with the same dimensions.
+        Returns ubyte format by default; use opengl=True to return float32 0.0-1.0.
+        
+        """
+        colors = np.zeros(data.shape+(4,), dtype=np.float32)
         for item in self.items:
             c = item.getColorArray(data) / 255.
             op = item.getOp()
@@ -226,7 +231,8 @@ class ColorMapper(QtGui.QWidget):
             elif op == '*':
                 colors *= c
             colors = np.clip(colors, 0, 1.)
-        colors = np.clip(colors*255, 0, 255).astype(int)
+        if not opengl:
+            colors = np.clip(colors*255, 0, 255).astype(int)
         return colors
     
     def addClicked(self):
@@ -340,8 +346,11 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
         vals = data[arg]
         mn = self.minSpin.value()
         mx = self.maxSpin.value()        
+        lut = self.gradient.getLookupTable(512, alpha=True)
+        scaled = pg.rescaleData(np.clip(vals, mn, mx), lut.shape[0]/(mx-mn), mn, dtype=np.uint16)
+        return pg.applyLookupTable(scaled, lut)
         #norm = np.clip((vals - mn) / (mx - mn), 0.0, 1.0)
-        return pg.makeARGB(vals, self.gradient.getLookupTable(512), levels=[mn, mx], useRGBA=True)[0]
+        #return pg.makeARGB(vals, lut, levels=[mn, mx], useRGBA=True)[0]
 
     def getOp(self):
         return self.opCombo.currentText()
