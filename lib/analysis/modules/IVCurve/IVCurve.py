@@ -36,6 +36,9 @@ class IVCurve(AnalysisModule):
         self.regionsExist = False
         self.fit_curve = None
         self.fitted_data = None
+        self.dataMode = 'IC' # analysis may depend on the type of data we have.
+        self.ICModes = ['IC', 'CC', 'IClamp'] # list of modes that use current clamp
+        self.VCModes = ['VC', 'VClamp'] # modes that use voltage clamp analysis
         # make fixed widget for the module output
         self.widget = QtGui.QWidget()
         self.gridLayout = QtGui.QGridLayout()
@@ -84,9 +87,10 @@ class IVCurve(AnalysisModule):
         self.tau = 0.0
         self.AdaptRatio = 0.0
         self.traces = None
+        self.tx = None
         self.nospk = []
         self.spk=[]
-        self.icmd=[]
+        self.cmd=[]
         self.Sequence = ''
         self.ivss = []
         self.ivpk = []
@@ -220,47 +224,83 @@ class IVCurve(AnalysisModule):
         self.traces = MetaArray(traces, info=info)
         info1 = dataF.infoCopy()
         sfreq = self.dataModel.getSampleRate(data)
-        mode = self.dataModel.getClampMode(data)
-        self.ctrl.IVCurve_dataMode.setText(mode)
-        if mode == 'IC':
+        self.dataMode = self.dataModel.getClampMode(data)
+        self.ctrl.IVCurve_dataMode.setText(self.dataMode)
+        if self.dataMode == 'IC':
             cmdUnits = 'nA'
             scaleFactor = 1e9
+            self.labelUp(self.IV_plot, 'I (nA)', 'V (mV)', 'I-V')
+            self.labelUp(self.data_plot, 'T (ms)', 'V (mV)', 'Data')
         else:
             cmdUnits = 'mV'
             scaleFactor = 1e3
+            self.labelUp(self.IV_plot, 'V (V)', 'I (A)', 'V-I')
+            self.labelUp(self.data_plot, 'T (s)', 'I (A)', 'Data')
         self.ctrl.IVCurve_dataUnits.setText(cmdUnits)
         cmddata = cmd.view(numpy.ndarray)
-        cmdtimes = numpy.argwhere(cmddata[1:]-cmddata[:-1] != 0)[:,0]
+        cmddiff = numpy.abs(cmddata[1:] - cmddata[:-1])
+        if self.dataMode in self.ICModes:
+            mindiff = 1e-12
+        else:
+            mindiff = 1e-4
+        cmdtimes1 = numpy.argwhere(cmddiff >= mindiff)[:,0]
+        cmddiff2  = cmdtimes1[1:] - cmdtimes1[:-1]
+        cmdtimes2 = numpy.argwhere(cmddiff2 > 1)[:,0]
+        cmdtimes = numpy.append(cmdtimes1[0], cmddiff2[cmdtimes2])
         self.tstart = cmd.xvals('Time')[cmdtimes[0]]
-        self.tend = cmd.xvals('Time')[cmdtimes[1]]
+        self.tend = cmd.xvals('Time')[cmdtimes[1]]+ self.tstart
         self.tdur = self.tend - self.tstart
-        tr = traces
-        
+
         # build the list of command values that are used for the fitting
         cmdList = []
         for i in range(len(self.values)):
             cmdList.append('%8.3f' % (scaleFactor*self.values[i]))
         self.ctrl.IVCurve_tauh_Commands.clear()
         self.ctrl.IVCurve_tauh_Commands.addItems(cmdList)
+        self.sampInterval = 1.0/sfreq
+        self.tstart += self.sampInterval
+        self.tend += self.sampInterval
+        tmax = cmd.xvals('Time')[-1]
+        self.tx = cmd.xvals('Time').view(numpy.ndarray)
+        commands = numpy.array(self.values)
+
+        self.initialize_Regions() # now create the analysis regions
+        self.lrss.setRegion([(self.tend-(self.tdur/2.0)), self.tend]) # steady-state
+        self.lrpk.setRegion([self.tstart, self.tstart+(self.tdur/5.0)]) # "peak" during hyperpolarization
+        self.lrtau.setRegion([self.tstart+0.005, self.tend])
+
+        if self.dataMode in self.ICModes:
+                # for adaptation ratio:
+            print 'doing cc mode... '
+            self.countSpikes()
         
-        self.spikecount = numpy.zeros(len(traces))
-        # for adaptation ratio:
+        if self.dataMode in self.VCModes: 
+            self.cmd = commands
+
+        return True
+
+
+    def updateAnalysis(self):
+        self.readParameters(clearFlag = True, pw = True)
+        self.countSpikes()
+
+    def countSpikes(self):
+        if self.dataMode not in self.ICModes or self.tx is None:
+            return
         minspk = 4
         maxspk = 10 # range of spike counts
-        sampInterval = 1.0/sfreq
-        self.tstart += sampInterval
-        self.tend += sampInterval
-        tmax = cmd.xvals('Time')[-1]
-        tx = cmd.xvals('Time').view(numpy.ndarray)
-        threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 0.001
+        threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 1e-3
+        ntr = len(self.traces)
+        self.spikecount = numpy.zeros(ntr)
+        fsl = numpy.zeros(ntr)
+        fisi = numpy.zeros(ntr)
+        ar = numpy.zeros(ntr)
+        rmp = numpy.zeros(ntr)
+        self.Rmp = numpy.mean(rmp) # rmp is taken from the mean of all the baselines in the traces
 
-        fsl = numpy.zeros(len(dirs))
-        fisi = numpy.zeros(len(dirs))
-        ar = numpy.zeros(len(dirs))
-        rmp = numpy.zeros(len(dirs))
-        for i in range(len(dirs)):
-            (spike, spk) = Utility.findspikes(tx, tr[i], 
-                threshold, t0=self.tstart, t1=self.tend, dt=sampInterval,
+        for i in range(ntr):
+            (spike, spk) = Utility.findspikes(self.tx, self.traces[i], 
+                threshold, t0=self.tstart, t1=self.tend, dt=self.sampInterval,
                 mode = 'schmitt', interpolate=False, debug=False)
             if len(spike) == 0:
                 continue
@@ -271,37 +311,25 @@ class IVCurve(AnalysisModule):
             if len(spike) >= minspk and len(spike) <= maxspk: # for Adaptation ratio analysis
                 misi = numpy.mean(numpy.diff(spike[-3:]))
                 ar[i] = misi/fisi[i]
-            (rmp[i], r2) = Utility.measure('mean', tx, tr[i], 0.0, self.tstart)
+            (rmp[i], r2) = Utility.measure('mean', self.tx, self.traces[i], 0.0, self.tstart)
         iAR = numpy.where(ar > 0)
         ARmean = numpy.mean(ar[iAR]) # only where we made the measurement
         self.AdaptRatio = ARmean
-        self.Rmp = numpy.mean(rmp) # rmp is taken from the mean of all the baselines in the traces
         self.ctrl.IVCurve_AR.setText(u'%7.3f' % (ARmean))
-        
+    
         fisi = fisi*1.0e3
         fsl = fsl*1.0e3
-        commands = numpy.array(self.values)
         iscale = 1.0e12 # convert to pA
         self.nospk = numpy.where(self.spikecount == 0)
         self.spk = numpy.where(self.spikecount > 0)
-        self.icmd = commands[self.nospk]
+        commands = numpy.array(self.values)
+        self.cmd = commands[self.nospk]
         self.spcmd = commands[self.spk]
         self.fiPlot.plot(x=commands*iscale, y=self.spikecount, clear=True, pen='w', symbolSize=10, symbolPen='b', symbolBrush=(0, 0, 255, 200), symbol='s')
         self.fslPlot.plot(x=self.spcmd*iscale, y=fsl[self.spk], pen='w', clear=True, symbolSize=6, symbolPen='g', symbolBrush=(0, 255, 0, 200), symbol='t')
         self.fslPlot.plot(x=self.spcmd*iscale, y=fisi[self.spk], pen='w', symbolSize=6, symbolPen='y', symbolBrush=(255, 255, 0, 200), symbol='s')
         if len(self.spcmd) > 0:
             self.fslPlot.setXRange(0.0, numpy.max(self.spcmd*iscale))
-        self.initialize_Regions() # now create the analysis regions
-        self.lrss.setRegion([(self.tend-(self.tdur/2.0)), self.tend]) # steady-state
-        self.lrpk.setRegion([self.tstart, self.tstart+(self.tdur/5.0)]) # "peak" during hyperpolarization
-        self.lrtau.setRegion([self.tstart+0.005, self.tend])
-        
-        return True
-
-
-    def updateAnalysis(self):
-        self.readParameters(clearFlag = True, pw = True)
-
 
     def fileCellProtocol(self):
         """
@@ -335,17 +363,19 @@ class IVCurve(AnalysisModule):
         """ compute tau (single exponential) from the onset of the response
             using lrpk window, and only the smallest 3 steps...
         """
+        if self.cmd == []: # probably not ready yet to do the update.
+            return
         rgnpk= self.lrpk.getRegion()
         Func = 'exp1' # single exponential fit.
         Fits = Fitting.Fitting()
         fitx = []
         fity = []
         initpars = [-60.0*1e-3, -5.0*1e-3, 10.0*1e-3]
-        icmdneg = numpy.where(self.icmd < 0)
-        maxcmd = numpy.min(self.icmd)
-        ineg = numpy.where(self.icmd[icmdneg] >= maxcmd/3)
+        icmdneg = numpy.where(self.cmd < 0)
+        maxcmd = numpy.min(self.cmd)
+        ineg = numpy.where(self.cmd[icmdneg] >= maxcmd/3)
         whichdata = ineg[0]
-        itaucmd = self.icmd[ineg]
+        itaucmd = self.cmd[ineg]
         whichaxis = 0
         (fpar, xf, yf, names) = Fits.FitRegion(whichdata, whichaxis, 
                 self.traces.xvals('Time'), self.traces.view(numpy.ndarray), 
@@ -382,6 +412,8 @@ class IVCurve(AnalysisModule):
             Based on Fujino and Oertel, J. Neuroscience 2001 to identify
             cells based on different Ih kinetics and magnitude.
         """
+        if self.ctrl.IVCurve_showHide_lrtau.isChecked() is not True:
+            return
         bovera = 0.0
         rgnpk = self.lrtau.getRegion()
         Func = 'exp1' # single exponential fit to the whole region
@@ -392,7 +424,7 @@ class IVCurve(AnalysisModule):
         # find the current level that is closest to the target current
         s_target = self.ctrl.IVCurve_tauh_Commands.currentIndex()
         itarget = self.values[s_target] # retrive actual value from commands
-        idiff = numpy.abs(numpy.array(self.icmd) - itarget)
+        idiff = numpy.abs(numpy.array(self.cmd) - itarget)
         amin = numpy.argmin(idiff)
         vrmp = numpy.mean(self.traces[amin][0:10])*1000. # rmp approximation.
         dpk = self.traces['Time' : rgnpk[0]:rgnpk[0]+0.001]
@@ -400,7 +432,7 @@ class IVCurve(AnalysisModule):
         dss = self.traces['Time' : rgnpk[1]-0.010:rgnpk[1]]
         vss = numpy.mean(dss[amin])*1000.
         whichdata = [int(amin)]
-        itaucmd = [self.icmd[amin]]
+        itaucmd = [self.cmd[amin]]
         
         fd = self.traces['Time': rgnpk[0]:rgnpk[1]][whichdata][0]
         if self.fitted_data is None: # first time through.. 
@@ -462,8 +494,8 @@ class IVCurve(AnalysisModule):
             # Steady-state IV where there are no spikes
             self.ivss = data1.mean(axis=1)[self.nospk]
             # compute Rin from the SS IV:
-            if len(self.icmd) > 0 and len(self.ivss) > 0:
-                self.Rin = numpy.max(numpy.diff(self.ivss)/numpy.diff(self.icmd))
+            if len(self.cmd) > 0 and len(self.ivss) > 0:
+                self.Rin = numpy.max(numpy.diff(self.ivss)/numpy.diff(self.cmd))
                 self.ctrl.IVCurve_Rin.setText(u'%9.1f M\u03A9' % (self.Rin*1.0e-6))
             else:
                 self.ctrl.IVCurve_Rin.setText(u'No valid points')
