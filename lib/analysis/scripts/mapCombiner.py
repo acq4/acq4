@@ -425,7 +425,7 @@ def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probT
         sampling[i][sampling[i] > 0.02] = 1
         sampling[i][sampling[i] <= 0.02] = 0    
     
-        #print arr.max()
+        ## mark cell position
         xind = int(-xmin/spacing)
         yind = int(data['CellYPos'][0]/spacing)
         #print "yind=", ymin, '*', factor, '/', spacing
@@ -433,6 +433,15 @@ def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probT
         arr[i, xind-1:xind+2, yind-1:yind+2] = 2
         #print arr.max()
 
+    ## mark separation lines
+    arr[:, int((-xmin-150e-6)/spacing), :] = 3
+    arr[:, int((-xmin-450e-6)/spacing), :] = 3
+    arr[:, int((-xmin+150e-6)/spacing), :] = 3
+    arr[:, int((-xmin+450e-6)/spacing), :] = 3   
+    arr[:, :, int(130e-6*factor/spacing)] = 3
+    arr[:, :, int(310e-6*factor/spacing)] = 3
+    arr[:, :, int(450e-6*factor/spacing)] = 3
+    arr[:, :, int(720e-6*factor/spacing)] = 3
     return arr, sampling
 
 def randomizeData(data, fields):
