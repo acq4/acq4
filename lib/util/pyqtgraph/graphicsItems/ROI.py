@@ -1623,9 +1623,11 @@ class PolyLineROI(ROI):
     """Container class for multiple connected LineSegmentROIs. Responsible for adding new 
     line segments, and for translation/(rotation?) of multiple lines together."""
     def __init__(self, positions, closed=False, pos=None, **args):
-        
+        #print "PolyLineROI.__init__ called"
         if pos is None:
             pos = [0,0]
+        if 'size' in args.keys():
+            raise Exception("Use ROI.scale() instead of passing a size argument")
 
         ROI.__init__(self, pos, size=[1,1], **args)
         self.closed = closed
@@ -1636,9 +1638,13 @@ class PolyLineROI(ROI):
         for p in positions:
             self.addFreeHandle(p)
          
-        start = -1 if self.closed else 0
-        for i in range(start, len(self.handles)-1):
-            self.addSegment(self.handles[i]['item'], self.handles[i+1]['item'])
+        #start = -1 if self.closed else 0
+        stop = len(self.handles) if self.closed else len(self.handles)-1
+        #for i in range(start, len(self.handles)-1):
+        for i in range(0, stop):
+            #n=0
+            self.addSegment(self.handles[i]['item'], self.handles[(i+1)%len(self.handles)]['item'])
+            #print "Adding segment:", n, "   positions:", self.handles[i]['item'].pos(), self.handles[(i+1)%len(self.handles)]['item'].pos()
         #for i in range(len(positions)-1):
             #h2 = self.addFreeHandle(positions[i+1])
             #segment = LineSegmentROI(handles=(h, h2), pen=pen, parent=self, movable=False)
