@@ -126,6 +126,7 @@ class Node(QtCore.QObject):
     def __getattr__(self, attr):
         """Return the terminal with the given name"""
         if attr not in self.terminals:
+            print self.terminals
             raise AttributeError(attr)
         else:
             return self.terminals[attr]

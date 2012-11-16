@@ -85,14 +85,27 @@ class RoiEventDetector(EventDetector):
             raise Exception('Saving everything loaded is not yet implemented')
     
     def write(self, data):
-        if data.dtype.names != self.outputFields:
-            self.outputFields = data.dtype.names
-            self.storageFile.write(','.join(data.dtype.names) +'\n')
-            
-        for d in data:
-            self.storageFile.write(','.join([repr(x) for x in d])+'\n')
-            
-        self.storageFile.write('\n')
+        with open(self.storageFile, 'a') as f:
+            if data is not None and data.dtype.names != self.outputFields:
+                self.outputFields = data.dtype.names
+                f.write(','.join(data.dtype.names) +'\n')
+                
+            if data is not None:
+                for d in data:
+                    f.write(','.join([repr(x) for x in d])+'\n')
+            else:
+                item = self.fileLoader.ui.fileTree.currentItem()
+                data = self.data[str(item.parent().text(0))][str(item.text(0))]
+                roi = str(item.text(0))
+                info = data.infoCopy()[-1]
+                arr = np.zeros((1), dtype=[('roiX', int), ('roiY', int), ('roiWidth', int), ('roiHeight', int), ('SourceFile', '|S100'), ('roi', '|S10')])
+                for k in ['roiX', 'roiY', 'roiWidth', 'roiHeight', 'SourceFile']:
+                    arr[k] = info[k]
+                arr['roi'] = roi
+                
+                f.write("0,0,0,0,0,0,0,0,0,0,0,0,0,"+','.join([repr(x) for x in arr[0]])+ '\n')
+                
+            f.write('\n')
     
     def newStorageFileClicked(self):
         self.fileDialog = pg.FileDialog(self.dbCtrl, "New Storage File", self.fileLoader.baseDir().name(), "CSV File (*.csv);;All Files (*.*)")
@@ -108,10 +121,12 @@ class RoiEventDetector(EventDetector):
             return
         
         if self.storageFile is not None: ## close previous file, if there was one open
-            self.storageFile.close()
+            #self.storageFile.close()
             self.outputFields = None
             
-        self.storageFile = open(fileName, 'w')
+        self.storageFile = fileName  
+        f = open(fileName, 'w')
+        f.close()
         self.dbCtrl.setFileName(fileName)
         
     def openStorageFileClicked(self):
@@ -126,10 +141,12 @@ class RoiEventDetector(EventDetector):
             return 
         
         if self.storageFile is not None:
-            self.storageFile.close()
+            #self.storageFile.close()
             self.outputFields = None
         
-        self.storageFile = open(fileName, 'r+') ## possibly I want append mode instead ('a')
+        #f = open(fileName, 'r+') ## possibly I want append mode instead ('a')
+        self.storageFile = fileName
+        f = open(self.storageFile, 'r+')
         self.dbCtrl.setFileName(fileName)
         
         header = ''
@@ -142,11 +159,13 @@ class RoiEventDetector(EventDetector):
         self.outputFields = re.split(',', header)
         
     
-    def close(self):
-        ## called when module window is closed
-        ## make sure save file is closed
-        if self.storageFile is not None:
-            self.storageFile.close()
+    #def close(self):
+        ### called when module window is closed
+        ### make sure save file is closed
+        
+        ##if self.storageFile is not None:
+        ##    self.storageFile.close()
+        #pass
     
         
         
