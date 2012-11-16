@@ -1149,7 +1149,7 @@ def isosurface(data, level):
     *data*   3D numpy array of scalar values
     *level*  The level at which to generate an isosurface
     
-    Returns a list of faces; each face is a list of three vertexes and each vertex is a tuple of three floats.
+    Returns an array of vertex coordinates (N, 3, 3);
     
     This function is SLOW; plenty of room for optimization here.
     """
@@ -1516,7 +1516,7 @@ def isosurface(data, level):
                         pts.append(p)
                     facets.append(pts)
 
-    return facets
+    return np.array(facets)
 
 
     
