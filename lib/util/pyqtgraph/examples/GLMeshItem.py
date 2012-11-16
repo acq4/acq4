@@ -15,6 +15,8 @@ app = QtGui.QApplication([])
 w = gl.GLViewWidget()
 w.show()
 
+w.setCameraPosition(distance=40)
+
 g = gl.GLGridItem()
 g.scale(2,2,1)
 w.addItem(g)
@@ -45,45 +47,36 @@ data = np.abs(np.fromfunction(psi, (50,50,100)))
 print("Generating isosurface..")
 faces = pg.isosurface(data, data.max()/4.)
 
-md = gl.MeshData.MeshData()
-md.setFaces(faces)
+md = gl.MeshData.MeshData(faces=faces)
 
 
-#verts = np.empty((len(faces)*3, 3))
-#norms = np.empty((len(faces)*3, 3))
-#colors = np.empty((len(faces)*3, 4))
-#i = 0
-#for face in faces:
-    #for v,n,c in face:
-        #verts[i] = v
-        #norms[i] = n
-        #colors[i] = c
-        #i += 1
-
-verts = md.vertexes()
-norms = md.vertexNormals()
+verts = md.vertexes(index='faces')
+norms = md.vertexNormals(index='faces')
 
 colors = np.ones((verts.shape[0], 4), dtype=float)
 colors[:,3] = 0.3
 colors[:,2] = np.linspace(0, 1, colors.shape[0])
+faces = md.faces()
+#faceNormals = md.faceNormals()
 
-m = gl.GLMeshItem(vertexes=verts, normals=norms, color=colors, faces=md.faces())
-w.addItem(m)
-m.translate(-25, -25, -50)
+m1 = gl.GLMeshItem(vertexes=verts, normals=norms, color=colors, index=md.faces())
+
+w.addItem(m1)
+m1.translate(-25, -25, 50)
+
+verts = verts[faces.flatten()]
+norms = np.empty((faceNormals.shape[0], 3, 3))
+norms[:] = faceNormals[:,np.newaxis,:]
+colors = np.ones((verts.shape[0], 4), dtype=float)
+colors[:,3] = 0.3
+colors[:,2] = np.linspace(0, 1, colors.shape[0])
+
+m2 = gl.GLMeshItem(vertexes=verts, normals=norms, color=colors)
+
+w.addItem(m2)
+m2.translate(-25, -25, -50)
     
 
-    
-#data = np.zeros((5,5,5))
-#data[2,2,1:4] = 1
-#data[2,1:4,2] = 1
-#data[1:4,2,2] = 1
-#tr.translate(-2.5, -2.5, 0)
-#data = np.ones((2,2,2))
-#data[0, 1, 0] = 0
-#faces = pg.isosurface(data, 0.5)
-#m = gl.GLMeshItem(faces)
-#w.addItem(m)
-#m.setTransform(tr)
 
 ## Start Qt event loop unless running in interactive mode.
 if sys.flags.interactive != 1:

@@ -13,10 +13,41 @@ class MeshData(object):
     - normals per vertex or tri
     """
 
-    def __init__(self):
-        self._vertexes = []  # Mx3 array of vertex coordinates
+    def __init__(self, vertexes=None, faces=None, edges=None, ):
+        ##  Ways we could specify this data:
+        ##  
+        ##  Nv = len(vertexes),  Ne = len(edges),  Nf = len(triangles)
+        ##  vertexes - vertex list (Nv, 3), face list (Nf, 3, 3), or edge list (Ne, 2, 3)
+        ##  faceIndex - (Nf, 3)
+        ##  edgeIndex - (Ne, 2)
+        ##  vertexNormals - vertex list (Nv, 3), face list (Nf, 3, 3), 
+        ##  faceNormals - face list (Nf, 3)
+        ##  vertexColors - vertex list (Nv, 4), face list (Nf, 3, 4), edge list (Ne, 2, 4)
+        ##  faceColors - face list (Nf, 4)
+        ##  edgeColors - edge list (Ne, 4)
+        ##  
+        ##  quantization limits: 1e-16 ?
+        ##  
+        ##  
+        ##  
+        ##  Ways we could use this data:
+        ##  
+        ##  vertexes (Nv, 3), vertexNormals (Nv, 3), vertexColors (Nv, 4), faceIndex   (smooth, indexed)
+        ##  vertexes (Nf, 3, 3), vertexNormals (Nf, 3, 3), vertexColors (Nv, 3, 4)     (rough, non-indexed)
+        ##       note vertexNormals / vertexColors could be specified directly
+        ##       or computed from vertexColors / faceColors / edgeColors...
+             
+        
+        
+        
+        
+        
+        
+        
+        
+        self._vertexes = None  # Mx3 array of vertex coordinates
+        self._faces = None   # Nx3 array of indexes into self._vertexes specifying three vertexes for each face
         self._edges = None
-        self._faces = []   # Nx3 array of indexes into self._vertexes specifying three vertexes for each face
         self._vertexFaces = None  ## maps vertex ID to a list of face IDs
         self._vertexNormals = None
         self._faceNormals = None
@@ -24,6 +55,9 @@ class MeshData(object):
         self._edgeColors = None
         self._faceColors = None
         self._meshColor = (1, 1, 1, 0.1)  # default color to use if no face/edge/vertex colors are given
+        
+        if faces is not None:
+            self.setFaces(faces)
         
     def setFaces(self, faces, vertexes=None):
         """
@@ -125,7 +159,16 @@ class MeshData(object):
     def vertexes(self):
         return self._vertexes
         
-    def faceNormals(self):
+    def vertexColors(self):
+        return self._vertexColors
+        
+    def faceColors(self):
+        return self._faceColors
+        
+    def edgeColors(self):
+        return self._edgeColors
+        
+    def faceNormals(self, indexed=False):
         """
         Computes and stores normal of each face.
         """
@@ -164,15 +207,6 @@ class MeshData(object):
                 norm /= (norm**2).sum()**0.5  ## and re-normalize
                 self._vertexNormals[vindex] = norm
         return self._vertexNormals
-        
-    def vertexColors(self):
-        return self._vertexColors
-        
-    def faceColors(self):
-        return self._faceColors
-        
-    def edgeColors(self):
-        return self._edgeColors
         
     #def reverseNormals(self):
         #"""

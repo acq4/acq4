@@ -86,7 +86,7 @@ class GLMeshItem(GLGraphicsItem):
         glDisable( GL_DEPTH_TEST )
                 
     def paint(self):
-	self.setupGLState()
+        self.setupGLState()
         with self.shader:
             #glCallList(self.triList)
             
@@ -110,17 +110,13 @@ class GLMeshItem(GLGraphicsItem):
                 glEnableClientState(GL_NORMAL_ARRAY)
                 glNormalPointerf(self.normals)
                 
-                #glDrawArrays(GL_TRIANGLES, 0, len(self.pos))
-                faces = self.faces.astype(np.uint).flatten()
-                glDrawElements(GL_TRIANGLES, len(faces), GL_UNSIGNED_INT, faces)
+                if self.faces is None:
+                    glDrawArrays(GL_TRIANGLES, 0, len(self.vertexes))
+                else:
+                    faces = self.faces.astype(np.uint).flatten()
+                    glDrawElements(GL_TRIANGLES, len(faces), GL_UNSIGNED_INT, faces)
             finally:
                 glDisableClientState(GL_NORMAL_ARRAY)
                 glDisableClientState(GL_VERTEX_ARRAY)
                 glDisableClientState(GL_COLOR_ARRAY)
-                #posVBO.unbind()
             
-            
-        #shaders.glUseProgram(self.shader)
-        #glCallList(self.triList)
-        #shaders.glUseProgram(0)
-        #glCallList(self.meshList)
