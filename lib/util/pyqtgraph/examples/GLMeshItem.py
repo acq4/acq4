@@ -44,7 +44,30 @@ data = np.abs(np.fromfunction(psi, (50,50,100)))
 #data = np.fromfunction(lambda i,j,k: np.sin(0.2*((i-25)**2+(j-15)**2+k**2)**0.5), (50,50,50)); 
 print("Generating isosurface..")
 faces = pg.isosurface(data, data.max()/4.)
-m = gl.GLMeshItem(faces)
+
+md = gl.MeshData.MeshData()
+md.setFaces(faces)
+
+
+#verts = np.empty((len(faces)*3, 3))
+#norms = np.empty((len(faces)*3, 3))
+#colors = np.empty((len(faces)*3, 4))
+#i = 0
+#for face in faces:
+    #for v,n,c in face:
+        #verts[i] = v
+        #norms[i] = n
+        #colors[i] = c
+        #i += 1
+
+verts = md.vertexes()
+norms = md.vertexNormals()
+
+colors = np.ones((verts.shape[0], 4), dtype=float)
+colors[:,3] = 0.3
+colors[:,2] = np.linspace(0, 1, colors.shape[0])
+
+m = gl.GLMeshItem(vertexes=verts, normals=norms, color=colors, faces=md.faces())
 w.addItem(m)
 m.translate(-25, -25, -50)
     
