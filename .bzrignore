@@ -4,3 +4,6 @@
 lib/util/pyqtgraph/documentation/build
 documentation/build
 
+*.mod
+*.o
+*.c

@@ -81,7 +81,7 @@
         <widget class="QWidget" name="widget" native="true">
          <property name="geometry">
           <rect>
-           <x>150</x>
+           <x>145</x>
            <y>-20</y>
            <width>146</width>
            <height>396</height>
@@ -93,36 +93,11 @@
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
-         <widget class="QPushButton" name="ImagePhys_DetectSpikes">
-          <property name="geometry">
-           <rect>
-            <x>0</x>
-            <y>225</y>
-            <width>137</width>
-            <height>32</height>
-           </rect>
-          </property>
-          <property name="minimumSize">
-           <size>
-            <width>5</width>
-            <height>0</height>
-           </size>
-          </property>
-          <property name="font">
-           <font>
-            <family>Arial</family>
-            <pointsize>11</pointsize>
-           </font>
-          </property>
-          <property name="text">
-           <string>Detect Spikes</string>
-          </property>
-         </widget>
          <widget class="QDoubleSpinBox" name="ImagePhys_burstISI">
           <property name="geometry">
            <rect>
             <x>0</x>
-            <y>140</y>
+            <y>170</y>
             <width>106</width>
             <height>25</height>
            </rect>
@@ -155,7 +130,7 @@
           <property name="geometry">
            <rect>
             <x>0</x>
-            <y>165</y>
+            <y>195</y>
             <width>106</width>
             <height>25</height>
            </rect>
@@ -188,7 +163,7 @@
           <property name="geometry">
            <rect>
             <x>0</x>
-            <y>190</y>
+            <y>220</y>
             <width>106</width>
             <height>25</height>
            </rect>
@@ -216,7 +191,7 @@
          <property name="geometry">
           <rect>
            <x>0</x>
-           <y>205</y>
+           <y>255</y>
            <width>141</width>
            <height>32</height>
           </rect>
@@ -238,7 +213,7 @@
          <property name="geometry">
           <rect>
            <x>0</x>
-           <y>260</y>
+           <y>310</y>
            <width>141</width>
            <height>32</height>
           </rect>
@@ -257,7 +232,7 @@
          <property name="geometry">
           <rect>
            <x>0</x>
-           <y>230</y>
+           <y>280</y>
            <width>141</width>
            <height>32</height>
           </rect>
@@ -276,7 +251,7 @@
          <property name="geometry">
           <rect>
            <x>5</x>
-           <y>195</y>
+           <y>230</y>
            <width>131</width>
            <height>20</height>
           </rect>
@@ -462,7 +437,7 @@
          <property name="geometry">
           <rect>
            <x>5</x>
-           <y>175</y>
+           <y>205</y>
            <width>131</width>
            <height>25</height>
           </rect>
@@ -481,7 +456,7 @@
          <property name="geometry">
           <rect>
            <x>5</x>
-           <y>150</y>
+           <y>180</y>
            <width>123</width>
            <height>25</height>
           </rect>
@@ -500,7 +475,7 @@
          <property name="geometry">
           <rect>
            <x>5</x>
-           <y>125</y>
+           <y>155</y>
            <width>123</width>
            <height>25</height>
           </rect>
@@ -513,6 +488,31 @@
          </property>
          <property name="text">
           <string>Min Interburst Interval</string>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="ImagePhys_DetectSpikes">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>120</y>
+           <width>137</width>
+           <height>32</height>
+          </rect>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>5</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="font">
+          <font>
+           <family>Arial</family>
+           <pointsize>11</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Detect Spikes</string>
          </property>
         </widget>
        </widget>

@@ -39,6 +39,7 @@ import numpy.ma as ma
 #import numpy.linalg.lstsq
 import scipy.fftpack as spFFT
 import scipy.signal as spSignal
+from sets import Set
 
 from random import sample
 
@@ -196,7 +197,17 @@ def SignalFilter_LPFButter(signal, LPF, samplefreq, NPole = 8):
     zi = spSignal.lfilter_zi(b,a)
     out, zo = spSignal.lfilter(b, a, signal, zi=zi*signal[0])
     return(numpy.array(out))
-     
+
+# filter with Butterworth high pass, using time-causal lfilter 
+def SignalFilter_HPFButter(signal, HPF, samplefreq, NPole = 8):
+    flpf = float(HPF)
+    sf = float(samplefreq)
+    wn = [flpf/(sf/2.0)]
+    b, a = spSignal.butter(NPole, wn, btype='high', output='ba')
+    zi = spSignal.lfilter_zi(b,a)
+    out, zo = spSignal.lfilter(b, a, signal, zi=zi*signal[0])
+    return(numpy.array(out)) 
+        
 # filter signal with low-pass Bessel
 def SignalFilter_LPFBessel(signal, LPF, samplefreq, NPole = 8, reduce = False):
     """ Low pass filter a signal, possibly reducing the number of points in the
@@ -392,7 +403,7 @@ def RichardsonSilberberg(data, tau, time = None):
     else:
         return rn
 
-def findspikes(x, v, thresh, t0=None, t1= None, dt=1.0, mode=None, interpolate=False, debug=False):
+def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpolate=False, debug=False):
     """ findspikes identifies the times of action potential in the trace v, with the
     times in t. An action potential is simply timed at the first point that exceeds
     the threshold... or is the peak. 
@@ -401,61 +412,69 @@ def findspikes(x, v, thresh, t0=None, t1= None, dt=1.0, mode=None, interpolate=F
     if mode is peak, we return the time of the peak of the AP instead
     7/15/11 - added interpolation flag
     if True, the returned time is interpolated, based on a spline fit
-    if False, the returned time is just taken as the data time. 
+    if False, the returned time is just taken as the data time.
+    2012/10/9: Removed masked arrays and forced into ndarray from start
+    (metaarrays were really slow...) 
     """
-    if debug:
-    # this does not work with pyside...
-        import matplotlib
-        matplotlib.use('Qt4Agg')
-        import pylab
-        from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
-        from matplotlib.figure import Figure
+    # if debug:
+    # # this does not work with pyside...
+    #     import matplotlib
+    #     matplotlib.use('Qt4Agg')
+    #     import pylab
+    #     from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
+    #     from matplotlib.figure import Figure
+    #     
+    #     #MP.rcParams['interactive'] = False
         
-        #MP.rcParams['interactive'] = False
-        
+    xt = xin.view(numpy.ndarray)
+    v = vin.view(numpy.ndarray)
     if t1 is not None and t0 is not None:
-        xt = ma.masked_outside(x, t0, t1)
-        v = ma.array(v, mask = ma.getmask(xt))
-        xt = ma.compressed(xt) # convert back to usual numpy arrays then
-        v = ma.compressed(v)
-    else:
-        xt = numpy.array(x)
-        v = numpy.array(v)
-    if debug:
-        f = figure(1)
-        plot(xt, v, 'k-')
-        show()
-    dv = numpy.diff(v)/dt # compute slope
+        it0 = int(t0/dt)
+        it1 = int(t1/dt)
+        if not isinstance(xin, numpy.ndarray):
+            xt = xt[it0:it1]
+            v = v[it0:it1]
+        else:
+            xt = xt[it0:it1]
+            v = v[it0:it1]
+    # if debug:
+    #     f = pylab.figure(1)
+    #     print "xt: ", xt
+    #     print "v: ", v
+    #     pylab.plot(numpy.array(xt), v, 'k-')
+    #     pylab.draw()
+    #     pylab.show()
+
+    dv = numpy.diff(v, axis=0) # compute slope
+    dv /= dt
     st=numpy.array([])
     spk = []
     spv = numpy.where(v > thresh)[0].tolist() # find points above threshold
     sps = numpy.where(dv > 0.0)[0].tolist() # find points where slope is positive
-    sp = list(set(spv) & set(sps)) # intersection defines putative spike start times
+    sp = list(Set.intersection(Set(spv),Set(sps))) # intersection defines putative spikes
     sp.sort() # make sure all detected events are in order (sets is unordered)
     sp = tuple(sp) # convert to tuple
     if sp is ():
         return(st, spk) # nothing detected
     dx = 1
-    if mode is 'schmitt': # normal operating mode is fixed voltage threshold
-        for k in sp:
+    mingap = int(0.0005/dt) # 0.5 msec between spikes (a little unphysiological...)
+    # normal operating mode is fixed voltage threshold
+    # for this we need to just get the FIRST positive crossing,
+    if mode is 'schmitt':
+        sthra = list(numpy.where(numpy.diff(sp) > mingap))
+        sthr = [sp[x] for x in sthra[0]] # bump indices by 1
+        for k in sthr:
             x = xt[k-1:k+1]
             y = v[k-1:k+1]
             if interpolate:
                 dx = 0
                 m = (y[1]-y[0])/dt # local slope
                 b = y[0]-(x[0]*m)
-                st  = numpy.append(st, (thresh-b)/m)
+                s0 = (thresh-b)/m
             else:
-                st = numpy.append(st, x[1])
-        diffsp = numpy.diff(st)
-        spk = list(numpy.where(diffsp > 2*dt)) # look for non-sequential points in the array
-        for i in range(0,len(spk)):
-            spk[i] = spk[i] - dx
-        st = numpy.sort(numpy.array(st[spk]))
+                s0 = x[1]
+            st = numpy.append(st, x[1])
 
-#        print 'st returned: '
-#        print st[0:10]
-                
     elif mode is 'peak':
         pkwidth = 1.0e-3 # in same units as dt  - usually msec
         kpkw = int(pkwidth/dt)
@@ -551,8 +570,11 @@ def measureTrace2(x, y, t0 = 0, t1 = 10, thisaxis = 0, mode='mean', threshold = 
 def measure(mode, x, y, x0, x1, thresh = 0):
     """ return the a measure of y in the window x0 to x1
     """
-    xm = ma.masked_outside(x, x0, x1).T
-    ym = ma.array(y, mask = ma.getmask(xm))
+    xt = x.view(numpy.ndarray) # strip Metaarray stuff -much faster!
+    v = y.view(numpy.ndarray)
+    
+    xm = ma.masked_outside(xt, x0, x1).T
+    ym = ma.array(v, mask = ma.getmask(xm))
     if mode == 'mean':
         r1 = ma.mean(ym)
         r2 = ma.std(ym)
