@@ -225,14 +225,14 @@ class A1AtlasCtrlWidget(Atlas.AtlasCtrlWidget):
                 #cellPos = self.dataModel.getCellInfo(dh)['pos']
                 mapped = self.atlas.mapToAtlas(pg.Point(pos)) ## needs to return %depth and modXPosSlice 
                 #data[i] = (self.sliceDir, dh, mapped.x(), mapped.y(), mapped.z())
-                data['SliceDir'] = self.sliceDir
-                data[dirColumn] = dh
-                data['yPosSlice'] = pos[1]
+                data[i]['SliceDir'] = self.sliceDir
+                data[i][dirColumn] = dh
+                data[i]['yPosSlice'] = pos[1]
                 #data['yPosCell'] = pos[1]-cellPos[1]
-                data['percentDepth'] = mapped[1]
-                data['xPosSlice'] = pos[0]
+                data[i]['percentDepth'] = mapped[1]
+                data[i]['xPosSlice'] = pos[0]
                 #data['xPosCell'] = pos[0]-cellPos[0]
-                data['modXPosSlice'] = mapped[0]
+                data[i]['modXPosSlice'] = mapped[0]
                 #data['modXPosCell'] = mapped[0]-self.atlas.mapToAtlas(pg.Point(cellPos))[0]   
             prof.mark("filled cell data array")
         else:

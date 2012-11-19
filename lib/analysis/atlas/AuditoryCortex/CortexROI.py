@@ -38,7 +38,7 @@ class CortexROI(ROI.PolyLineROI):
         self.handles[3]['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[-1])))
         
         for i in range(1, n/2-1):
-            self.newHandleRequested(self.segments[i-1], pos=self.mapFromParent(QtCore.QPointF(*handles[i])))
+            self.segmentClicked(self.segments[i-1], pos=self.mapFromParent(QtCore.QPointF(*handles[i])))
         
         for i, h in enumerate(self.handles):
             h['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[i])))
