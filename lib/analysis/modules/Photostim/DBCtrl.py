@@ -247,7 +247,7 @@ class DBCtrl(QtGui.QWidget):
         dbui = self.host.getElement('Database')
         db = dbui.getDb()        
         spot = self.host.selectedSpot
-        dh = spot.data.name(relativeTo=db.baseDir())  
+        dh = spot.data().name(relativeTo=db.baseDir())  
         protocolID = db('Select rowid, Dir from DirTable_Protocol where Dir="%s"' %dh)
         if len(protocolID) > 0:
             protocolID = protocolID[0]['rowid']
