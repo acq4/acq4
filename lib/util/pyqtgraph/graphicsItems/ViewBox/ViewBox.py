@@ -166,7 +166,7 @@ class ViewBox(GraphicsWidget):
             ViewBox.NamedViews[name] = self
             ViewBox.updateAllViewLists()
             sid = id(self)
-            self.destroyed.connect(lambda: ViewBox.forgetView(sid, name) if ViewBox is not None else None)
+            self.destroyed.connect(lambda: ViewBox.forgetView(sid, name) if (ViewBox is not None and 'sid' in locals() and 'name' in locals()) else None)
             #self.destroyed.connect(self.unregister)
 
     def unregister(self):
