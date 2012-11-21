@@ -43,7 +43,7 @@ class IVCurve(AnalysisModule):
         self.widget = QtGui.QWidget()
         self.gridLayout = QtGui.QGridLayout()
         self.widget.setLayout(self.gridLayout)
-        self.gridLayout.setContentsMargins(0,0,0,0)
+        self.gridLayout.setContentsMargins(4,4,4,4)
         self.gridLayout.setSpacing(1)
         # Setup basic GUI
         self._elements_ = OrderedDict([
@@ -59,18 +59,24 @@ class IVCurve(AnalysisModule):
         self.layout = self.getElement('Plots', create=True)
  
         self.data_plot = pg.PlotWidget()
-        self.gridLayout.addWidget(self.data_plot, 0, 0)# (row=0, col=0) # self.getElement('Data Plot', create=True)
+        self.gridLayout.addWidget(self.data_plot, 0, 0, 2, 1)# (row=0, col=0) # self.getElement('Data Plot', create=True)
         self.labelUp(self.data_plot, 'T (ms)', 'V (mV)', 'Data')
+        self.cmd_plot = pg.PlotWidget()
+        self.gridLayout.addWidget(self.cmd_plot, 2, 0, 1, 1)
+       #self.cmd_plot.setGeometry(0, 50, 200, 10)
         self.IV_plot = pg.PlotWidget()
-        self.gridLayout.addWidget(self.IV_plot, 0, 1) # self.getElement('IV Plot', create=True)
-        self.labelUp(self.IV_plot, 'I (nA)', 'V (mV)', 'I-V')
+        self.gridLayout.addWidget(self.IV_plot, 0, 1, 1, 1) # self.getElement('IV Plot', create=True)
+        self.labelUp(self.IV_plot, 'I (pA)', 'V (mV)', 'I-V')
         self.fiPlot = pg.PlotWidget()
-        self.gridLayout.addWidget(self.fiPlot, 1, 0) # self.getElement('FI Plot', create=True)
-        self.labelUp(self.fiPlot, 'I (nA)', 'Spikes (#)', 'F-I')
+        self.gridLayout.addWidget(self.fiPlot, 1, 1, 1, 1) # self.getElement('FI Plot', create=True)
+        self.labelUp(self.fiPlot, 'I (pA)', 'Spikes (#)', 'F-I')
         self.fslPlot =  pg.PlotWidget()
-        self.gridLayout.addWidget(self.fslPlot, 1, 1) # self.getElement('FSL/FISI Plot', create = True)
-        self.labelUp(self.fslPlot, 'I (nA)', 'Fsl/Fisi (ms)', 'FSL/FISI')
-
+        self.gridLayout.addWidget(self.fslPlot, 2, 1, 1, 1) # self.getElement('FSL/FISI Plot', create = True)
+        self.labelUp(self.fslPlot, 'I (pA)', 'Fsl/Fisi (ms)', 'FSL/FISI')
+       # self.tailPlot = pg.PlotWidget()
+    #    self.gridLayout.addWidget(self.fslPlot, 3, 1, 1, 1) # self.getElement('FSL/FISI Plot', create = True)
+    #    self.labelUp(self.tailPlot, 'V (V)', 'I (A)', 'Tail Current')
+        
         # Add a color scale
         self.colorScale = pg.GradientLegend((20, 150), (-10, -10))
         self.data_plot.scene().addItem(self.colorScale)
@@ -172,10 +178,12 @@ class IVCurve(AnalysisModule):
         self.clearResults()
         dh = dh[0]
         self.data_plot.clearPlots()
+        self.cmd_plot.clearPlots()
         self.filename = dh.name()
         dirs = dh.subDirs()
         c = 0
         traces = None
+        cmd_wave = []
         self.values = []
         self.Sequence = self.dataModel.listSequenceParams(dh)
         maxplotpts = 1024
@@ -205,8 +213,11 @@ class IVCurve(AnalysisModule):
                 # store primary channel data and read command amplitude
             if traces is None:
                 traces = numpy.zeros((len(dirs), len(data)))
-            traces[c,:]  = data.view(numpy.ndarray) # .append(data)
+                cmd_wave = numpy.zeros((len(dirs), len(cmd)))
+            traces[c,:]  = data.view(numpy.ndarray)
+            cmd_wave[c,:] = cmd.view(numpy.ndarray)
             self.data_plot.plot(data, pen=pg.intColor(c, len(dirs), maxValue=200)) # , decimate=decimate_factor)
+            self.cmd_plot.plot(cmd, pen=pg.intColor(c, len(dirs), maxValue=200)) # , decimate=decimate_factor)
             self.values.append(cmd[len(cmd)/2])
             c += 1
         print 'Done loading files'
@@ -227,16 +238,16 @@ class IVCurve(AnalysisModule):
         self.dataMode = self.dataModel.getClampMode(data)
         self.ctrl.IVCurve_dataMode.setText(self.dataMode)
         if self.dataMode == 'IC':
-            cmdUnits = 'nA'
-            scaleFactor = 1e9
-            self.labelUp(self.IV_plot, 'I (nA)', 'V (mV)', 'I-V')
+            cmdUnits = 'pA'
+            scaleFactor = 1e12
+            self.labelUp(self.IV_plot, 'I (pA)', 'V (mV)', 'I-V')
             self.labelUp(self.data_plot, 'T (ms)', 'V (mV)', 'Data')
         else:
             cmdUnits = 'mV'
             scaleFactor = 1e3
             self.labelUp(self.IV_plot, 'V (V)', 'I (A)', 'V-I')
             self.labelUp(self.data_plot, 'T (s)', 'I (A)', 'Data')
-        self.ctrl.IVCurve_dataUnits.setText(cmdUnits)
+       # self.ctrl.IVCurve_dataUnits.setText(cmdUnits)
         cmddata = cmd.view(numpy.ndarray)
         cmddiff = numpy.abs(cmddata[1:] - cmddata[:-1])
         if self.dataMode in self.ICModes:
@@ -254,7 +265,7 @@ class IVCurve(AnalysisModule):
         # build the list of command values that are used for the fitting
         cmdList = []
         for i in range(len(self.values)):
-            cmdList.append('%8.3f' % (scaleFactor*self.values[i]))
+            cmdList.append('%8.3f %s' % (scaleFactor*self.values[i], cmdUnits))
         self.ctrl.IVCurve_tauh_Commands.clear()
         self.ctrl.IVCurve_tauh_Commands.addItems(cmdList)
         self.sampInterval = 1.0/sfreq
@@ -415,7 +426,7 @@ class IVCurve(AnalysisModule):
         if self.ctrl.IVCurve_showHide_lrtau.isChecked() is not True:
             return
         bovera = 0.0
-        rgnpk = self.lrtau.getRegion()
+        rgn = self.lrtau.getRegion()
         Func = 'exp1' # single exponential fit to the whole region
         Fits = Fitting.Fitting()
         fitx = []
@@ -427,14 +438,17 @@ class IVCurve(AnalysisModule):
         idiff = numpy.abs(numpy.array(self.cmd) - itarget)
         amin = numpy.argmin(idiff)
         vrmp = numpy.mean(self.traces[amin][0:10])*1000. # rmp approximation.
-        dpk = self.traces['Time' : rgnpk[0]:rgnpk[0]+0.001]
+        self.ctrl.IVCurve_vrmp.setText('%8.2f' % (vrmp))
+        dpk = self.traces['Time' : rgn[0]:rgn[0]+0.001]
         vpk = numpy.mean(dpk[amin])*1000.
-        dss = self.traces['Time' : rgnpk[1]-0.010:rgnpk[1]]
+        dss = self.traces['Time' : rgn[1]-0.010:rgn[1]]
         vss = numpy.mean(dss[amin])*1000.
         whichdata = [int(amin)]
         itaucmd = [self.cmd[amin]]
-        
-        fd = self.traces['Time': rgnpk[0]:rgnpk[1]][whichdata][0]
+        rgnss = self.lrss.getRegion()
+        self.ctrl.IVCurve_tau2TStart.setValue(rgn[0]*1.0e3)
+        self.ctrl.IVCurve_tau2TStop.setValue(rgn[1]*1.0e3)        
+        fd = self.traces['Time': rgn[0]:rgn[1]][whichdata][0]
         if self.fitted_data is None: # first time through.. 
             self.fitted_data = self.data_plot.plot(fd, pen=pg.mkPen('w'))
         else:
@@ -446,7 +460,7 @@ class IVCurve(AnalysisModule):
         whichaxis = 0
         (fpar, xf, yf, names) = Fits.FitRegion(whichdata, whichaxis, 
                 self.traces.xvals('Time'), self.traces.view(numpy.ndarray), 
-                dataType = '2d', t0=rgnpk[0], t1=rgnpk[1],
+                dataType = '2d', t0=rgn[0], t1=rgn[1],
                 fitFunc = Func, fitPars = initpars)
         if fpar == []:
             print 'tau_h fitting failed - see log'
@@ -474,6 +488,8 @@ class IVCurve(AnalysisModule):
         tautext = 'Mean Tauh: %8.1f'
         bovera = (vss-vrmp)/(vpk-vrmp)
         self.ctrl.IVCurve_Ih_ba.setText('%8.1f' % (bovera*100.))
+        self.ctrl.IVCurve_ssAmp.setText('%8.2f' % (vss-vrmp))
+        self.ctrl.IVCurve_pkAmp.setText('%8.2f' % (vpk-vrmp))
         if bovera < 0.55 and self.tau2 < 0.015: #
             self.ctrl.IVCurve_FOType.setText('D Stellate')
         else:
@@ -490,9 +506,12 @@ class IVCurve(AnalysisModule):
         self.ctrl.IVCurve_ssTStop.setValue(rgnss[1]*1.0e3)
         data1 = self.traces['Time': rgnss[0]:rgnss[1]]
         self.ivss=[]
+        commands = numpy.array(self.values)
         if len(self.nospk) >= 1:
             # Steady-state IV where there are no spikes
             self.ivss = data1.mean(axis=1)[self.nospk]
+            self.ivss_cmd = data1.mean(axis=0)[self.nospk]
+            self.cmd = commands[self.nospk]
             # compute Rin from the SS IV:
             if len(self.cmd) > 0 and len(self.ivss) > 0:
                 self.Rin = numpy.max(numpy.diff(self.ivss)/numpy.diff(self.cmd))
@@ -501,6 +520,7 @@ class IVCurve(AnalysisModule):
                 self.ctrl.IVCurve_Rin.setText(u'No valid points')
         else:
             self.ivss = data1.mean(axis=1) # all traces
+            self.cmd = commands
         self.update_IVPlot()
 
 
@@ -511,11 +531,14 @@ class IVCurve(AnalysisModule):
         self.ctrl.IVCurve_pkTStart.setValue(rgnpk[0]*1.0e3)
         self.ctrl.IVCurve_pkTStop.setValue(rgnpk[1]*1.0e3)
         data2 = self.traces['Time': rgnpk[0]:rgnpk[1]]
+        commands = numpy.array(self.values)
         if len(self.nospk) >= 1:
             # Peak (minimum voltage) IV where there are no spikes
             self.ivpk = data2.min(axis=1)[self.nospk]
+            self.cmd = commands[self.nospk]
         else:
             self.ivpk = data2.min(axis=1)
+            self.cmd = commands
         self.update_Tau(printWindow = pw)
         self.update_IVPlot()
 
@@ -523,9 +546,9 @@ class IVCurve(AnalysisModule):
     def update_IVPlot(self):
         self.IV_plot.clear()
         if len(self.ivss) > 0:
-            self.IV_plot.plot(self.ivss, symbolSize=6, symbolPen='w', symbolBrush='w')
+            self.IV_plot.plot(self.cmd, self.ivss, symbolSize=6, symbolPen='w', symbolBrush='w')
         if len(self.ivpk) > 0:
-            self.IV_plot.plot(self.ivpk, symbolSize=6, symbolPen='w', symbolBrush='r')
+            self.IV_plot.plot(self.cmd, self.ivpk, symbolSize=6, symbolPen='w', symbolBrush='r')
 
 
     def readParameters(self, clearFlag=False, pw=False):
