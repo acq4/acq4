@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>240</width>
-    <height>287</height>
+    <width>292</width>
+    <height>355</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -30,7 +30,7 @@
       </widget>
      </item>
      <item row="1" column="1" colspan="2">
-      <widget class="QComboBox" name="cameraModCombo"/>
+      <widget class="InterfaceCombo" name="cameraModCombo"/>
      </item>
      <item row="4" column="0">
       <widget class="QLabel" name="label_3">
@@ -40,7 +40,7 @@
       </widget>
      </item>
      <item row="4" column="1" colspan="2">
-      <widget class="QComboBox" name="clampDevCombo"/>
+      <widget class="InterfaceCombo" name="clampDevCombo"/>
      </item>
      <item row="5" column="0" colspan="3">
       <widget class="QListWidget" name="protList">
@@ -76,7 +76,7 @@
       </widget>
      </item>
      <item row="3" column="1" colspan="2">
-      <widget class="QComboBox" name="scannerDevCombo"/>
+      <widget class="InterfaceCombo" name="scannerDevCombo"/>
      </item>
      <item row="3" column="0">
       <widget class="QLabel" name="label_4">
@@ -157,63 +157,24 @@
        </property>
       </widget>
      </item>
-     <item row="17" column="1">
+     <item row="13" column="1">
       <widget class="QPushButton" name="recomputeBtn">
        <property name="text">
         <string>Recompute</string>
        </property>
       </widget>
      </item>
-     <item row="13" column="1" colspan="2">
-      <widget class="QCheckBox" name="displayImageCheck">
-       <property name="text">
-        <string>Display images</string>
-       </property>
-       <property name="checked">
-        <bool>true</bool>
-       </property>
-      </widget>
-     </item>
-     <item row="15" column="1">
-      <widget class="QDoubleSpinBox" name="spotToleranceSpin">
-       <property name="minimum">
-        <double>0.010000000000000</double>
-       </property>
-       <property name="maximum">
-        <double>100000000.000000000000000</double>
-       </property>
-       <property name="singleStep">
-        <double>0.100000000000000</double>
-       </property>
-       <property name="value">
-        <double>1000.000000000000000</double>
-       </property>
-      </widget>
-     </item>
-     <item row="15" column="0">
-      <widget class="QLabel" name="label_7">
-       <property name="text">
-        <string>Spot Cutoff</string>
-       </property>
-      </widget>
-     </item>
-     <item row="14" column="0">
-      <widget class="QLabel" name="label_2">
-       <property name="text">
-        <string>Frame:</string>
-       </property>
-      </widget>
-     </item>
-     <item row="14" column="1">
-      <widget class="QSpinBox" name="frame1Spin"/>
-     </item>
-     <item row="14" column="2">
-      <widget class="QSpinBox" name="frame2Spin"/>
-     </item>
     </layout>
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>InterfaceCombo</class>
+   <extends>QComboBox</extends>
+   <header>InterfaceCombo</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

@@ -24,14 +24,17 @@ os.chdir(wd)
 #data = opts['data']  ## convert to nA
 #dt = opts['dt']*1e3  ## convert to ms
 #leadTime = 1  #1ms for membrane to settle
+
+h.celsius = 22
+
 soma = h.Section()
 soma.insert('hh')
 soma.insert('pas')
 soma.insert('hcno')
 soma.L = 20
 soma.diam = 20
-soma(0.5).pas.g = 5e-4
-soma(0.5).hcno.gbar = 15e-3
+soma(0.5).pas.g = 2e-5
+soma(0.5).hcno.gbar = 15e-4
 
 ic = h.IClamp(soma(0.5))
 ic.dur = 1e9
@@ -85,6 +88,7 @@ def run(cmd):
     #t2 = t + dt * (len(data)+2)
     #print "run until:", t2
     neuron.init()
+    #neuron.finitialize(-65)
     neuron.run(dt * (len(data)+2))
     #neuron.run(t2)
     #t = t2
@@ -93,9 +97,9 @@ def run(cmd):
     #out = np.array(out)[:len(data)]
 
     if mode == 'ic':
-        out = np.array(icRec)[:len(data)] * 1e-3 + np.random.normal(size=len(data), scale=10.e-3)
+        out = np.array(icRec)[:len(data)] * 1e-3 + np.random.normal(size=len(data), scale=0.3e-3)
     elif mode == 'vc':
-        out = np.array(vcRec)[:len(data)] * 1e-9 + np.random.normal(size=len(data), scale=50.e-12)
+        out = np.array(vcRec)[:len(data)] * 1e-9 + np.random.normal(size=len(data), scale=3.e-12)
     
     return out
 

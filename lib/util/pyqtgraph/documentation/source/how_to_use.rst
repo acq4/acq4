@@ -17,7 +17,7 @@ Pyqtgraph makes it very easy to visualize data from the command line. Observe::
     import pyqtgraph as pg
     pg.plot(data)   # data can be a list of values or a numpy array
 
-The example above would open a window displaying a line plot of the data given. I don't think it could reasonably be any simpler than that. The call to pg.plot returns a handle to the plot widget that is created, allowing more data to be added to the same window.
+The example above would open a window displaying a line plot of the data given. The call to :func:`pg.plot <pyqtgraph.plot>` returns a handle to the :class:`plot widget <pyqtgraph.PlotWidget>` that is created, allowing more data to be added to the same window.
 
 Further examples::
     
@@ -43,5 +43,31 @@ While I consider this approach somewhat lazy, it is often the case that 'lazy' i
 Embedding widgets inside PyQt applications
 ------------------------------------------
 
-For the serious application developer, all of the functionality in pyqtgraph is available via widgets that can be embedded just like any other Qt widgets. Most importantly, see: PlotWidget, ImageView, GraphicsView, GraphicsLayoutWidget. Pyqtgraph's widgets can be included in Designer's ui files via the "Promote To..." functionality.
+For the serious application developer, all of the functionality in pyqtgraph is available via :ref:`widgets <api_widgets>` that can be embedded just like any other Qt widgets. Most importantly, see: :class:`PlotWidget <pyqtgraph.PlotWidget>`, :class:`ImageView <pyqtgraph.ImageView>`, :class:`GraphicsLayoutWidget <pyqtgraph.GraphicsLayoutWidget>`, and :class:`GraphicsView <pyqtgraph.GraphicsView>`. Pyqtgraph's widgets can be included in Designer's ui files via the "Promote To..." functionality:
+    
+#. In Designer, create a QGraphicsView widget ("Graphics View" under the "Display Widgets" category).
+#. Right-click on the QGraphicsView and select "Promote To...".
+#. Under "Promoted class name", enter the class name you wish to use ("PlotWidget", "GraphicsLayoutWidget", etc).
+#. Under "Header file", enter "pyqtgraph".
+#. Click "Add", then click "Promote".
 
+See the designer documentation for more information on promoting widgets.
+
+
+PyQt and PySide
+---------------
+
+Pyqtgraph supports two popular python wrappers for the Qt library: PyQt and PySide. Both packages provide nearly identical 
+APIs and functionality, but for various reasons (discussed elsewhere) you may prefer to use one package or the other. When
+pyqtgraph is first imported, it automatically determines which library to use by making the fillowing checks:
+    
+#. If PyQt4 is already imported, use that
+#. Else, if PySide is already imported, use that
+#. Else, attempt to import PyQt4
+#. If that import fails, attempt to import PySide. 
+
+If you have both libraries installed on your system and you wish to force pyqtgraph to use one or the other, simply
+make sure it is imported before pyqtgraph::
+    
+    import PySide  ## this will force pyqtgraph to use PySide instead of PyQt4
+    import pyqtgraph as pg

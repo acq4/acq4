@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from pyqtgraph.Qt import QtGui, QtCore
+from pyqtgraph.python2_3 import asUnicode
 
 import numpy as np
 try:
@@ -10,30 +11,32 @@ except:
 
 __all__ = ['TableWidget']
 class TableWidget(QtGui.QTableWidget):
-    """Extends QTableWidget with some useful functions for automatic data handling.
-    Can automatically format and display:
-        numpy arrays
-        numpy record arrays 
-        metaarrays
-        list-of-lists  [[1,2,3], [4,5,6]]
-        dict-of-lists  {'x': [1,2,3], 'y': [4,5,6]}
-        list-of-dicts  [
-                         {'x': 1, 'y': 4}, 
-                         {'x': 2, 'y': 5}, 
-                         {'x': 3, 'y': 6}
-                       ]
+    """Extends QTableWidget with some useful functions for automatic data handling
+    and copy / export context menu. Can automatically format and display:
+
+    - numpy arrays
+    - numpy record arrays 
+    - metaarrays
+    - list-of-lists  [[1,2,3], [4,5,6]]
+    - dict-of-lists  {'x': [1,2,3], 'y': [4,5,6]}
+    - list-of-dicts  [{'x': 1, 'y': 4}, {'x': 2, 'y': 5}, ...]
     """
     
     def __init__(self, *args):
         QtGui.QTableWidget.__init__(self, *args)
         self.setVerticalScrollMode(self.ScrollPerPixel)
+        self.setSelectionMode(QtGui.QAbstractItemView.ContiguousSelection)
         self.clear()
         self.contextMenu = QtGui.QMenu()
-        self.contextMenu.addAction('copy').triggered.connect(self.copy)
+        self.contextMenu.addAction('Copy Selection').triggered.connect(self.copySel)
+        self.contextMenu.addAction('Copy All').triggered.connect(self.copyAll)
+        self.contextMenu.addAction('Save Selection').triggered.connect(self.saveSel)
+        self.contextMenu.addAction('Save All').triggered.connect(self.saveAll)
         
     def clear(self):
         QtGui.QTableWidget.clear(self)
-        self.headersSet = False
+        self.verticalHeadersSet = False
+        self.horizontalHeadersSet = False
         self.items = []
         self.setRowCount(0)
         self.setColumnCount(0)
@@ -54,7 +57,7 @@ class TableWidget(QtGui.QTableWidget):
             return
         it0 = fn0(data)
         try:
-            first = it0.next()
+            first = next(it0)
         except StopIteration:
             return
         #if type(first) == type(np.float64(1)):
@@ -69,15 +72,16 @@ class TableWidget(QtGui.QTableWidget):
         firstVals = [x for x in fn1(first)]
         self.setColumnCount(len(firstVals))
         
-        if not self.headersSet:
-            if header0 is not None:
-                #print "set header 0:", header0
-                self.setRowCount(len(header0))
-                self.setVerticalHeaderLabels(header0)
-            if header1 is not None:
-                #print "set header 1:", header1
-                self.setHorizontalHeaderLabels(header1)
-            self.headersSet = True
+        #print header0, header1
+        if not self.verticalHeadersSet and header0 is not None:
+            #print "set header 0:", header0
+            self.setRowCount(len(header0))
+            self.setVerticalHeaderLabels(header0)
+            self.verticalHeadersSet = True
+        if not self.horizontalHeadersSet and header1 is not None:
+            #print "set header 1:", header1
+            self.setHorizontalHeaderLabels(header1)
+            self.horizontalHeadersSet = True
         
         self.setRow(0, firstVals)
         i = 1
@@ -90,26 +94,26 @@ class TableWidget(QtGui.QTableWidget):
         if isinstance(data, list):
             return lambda d: d.__iter__(), None
         elif isinstance(data, dict):
-            return lambda d: d.itervalues(), map(str, data.keys())
-        elif HAVE_METAARRAY and isinstance(data, metaarray.MetaArray):
+            return lambda d: iter(d.values()), list(map(str, data.keys()))
+        elif HAVE_METAARRAY and (hasattr(data, 'implements') and data.implements('MetaArray')):
             if data.axisHasColumns(0):
-                header = [str(data.columnName(0, i)) for i in xrange(data.shape[0])]
+                header = [str(data.columnName(0, i)) for i in range(data.shape[0])]
             elif data.axisHasValues(0):
-                header = map(str, data.xvals(0))
+                header = list(map(str, data.xvals(0)))
             else:
                 header = None
             return self.iterFirstAxis, header
         elif isinstance(data, np.ndarray):
             return self.iterFirstAxis, None
         elif isinstance(data, np.void):
-            return self.iterate, map(str, data.dtype.names)
+            return self.iterate, list(map(str, data.dtype.names))
         elif data is None:
             return (None,None)
         else:
             raise Exception("Don't know how to iterate over data type: %s" % str(type(data)))
         
     def iterFirstAxis(self, data):
-        for i in xrange(data.shape[0]):
+        for i in range(data.shape[0]):
             yield data[i]
             
     def iterate(self, data):  ## for numpy.void, which can be iterated but mysteriously has no __iter__ (??)
@@ -128,7 +132,7 @@ class TableWidget(QtGui.QTableWidget):
     def setRow(self, row, vals):
         if row > self.rowCount()-1:
             self.setRowCount(row+1)
-        for col in xrange(self.columnCount()):
+        for col in range(self.columnCount()):
             val = vals[col]
             if isinstance(val, float) or isinstance(val, np.floating):
                 s = "%0.3g" % val
@@ -140,20 +144,66 @@ class TableWidget(QtGui.QTableWidget):
             self.items.append(item)
             self.setItem(row, col, item)
             
+    def serialize(self, useSelection=False):
+        """Convert entire table (or just selected area) into tab-separated text values"""
+        if useSelection:
+            selection = self.selectedRanges()[0]
+            rows = list(range(selection.topRow(), selection.bottomRow()+1))
+            columns = list(range(selection.leftColumn(), selection.rightColumn()+1))        
+        else:
+            rows = list(range(self.rowCount()))
+            columns = list(range(self.columnCount()))
 
-    def copy(self):
-        """Copy selected data to clipboard."""
-        s = u''
-        for r in range(self.rowCount()):
+
+        data = []
+        if self.horizontalHeadersSet:
             row = []
-            for c in range(self.columnCount()):
+            if self.verticalHeadersSet:
+                row.append(asUnicode(''))
+            
+            for c in columns:
+                row.append(asUnicode(self.horizontalHeaderItem(c).text()))
+            data.append(row)
+        
+        for r in rows:
+            row = []
+            if self.verticalHeadersSet:
+                row.append(asUnicode(self.verticalHeaderItem(r).text()))
+            for c in columns:
                 item = self.item(r, c)
                 if item is not None:
-                    row.append(unicode(item.value))
+                    row.append(asUnicode(item.value))
                 else:
-                    row.append(u'')
-            s += (u'\t'.join(row) + u'\n')
-        QtGui.QApplication.clipboard().setText(s)
+                    row.append(asUnicode(''))
+            data.append(row)
+            
+        s = ''
+        for row in data:
+            s += ('\t'.join(row) + '\n')
+        return s
+
+    def copySel(self):
+        """Copy selected data to clipboard."""
+        QtGui.QApplication.clipboard().setText(self.serialize(useSelection=True))
+
+    def copyAll(self):
+        """Copy all data to clipboard."""
+        QtGui.QApplication.clipboard().setText(self.serialize(useSelection=False))
+
+    def saveSel(self):
+        """Save selected data to file."""
+        self.save(self.serialize(useSelection=True))
+
+    def saveAll(self):
+        """Save all data to file."""
+        self.save(self.serialize(useSelection=False))
+
+    def save(self, data):
+        fileName = QtGui.QFileDialog.getSaveFileName(self, "Save As..", "", "Tab-separated values (*.tsv)")
+        if fileName == '':
+            return
+        open(fileName, 'w').write(data)
+        
 
     def contextMenuEvent(self, ev):
         self.contextMenu.popup(ev.globalPos())
@@ -177,10 +227,12 @@ if __name__ == '__main__':
     
     ll = [[1,2,3,4,5]] * 20
     ld = [{'x': 1, 'y': 2, 'z': 3}] * 20
-    dl = {'x': range(20), 'y': range(20), 'z': range(20)}
+    dl = {'x': list(range(20)), 'y': list(range(20)), 'z': list(range(20))}
     
     a = np.ones((20, 5))
     ra = np.ones((20,), dtype=[('x', int), ('y', int), ('z', int)])
+    
+    t.setData(ll)
     
     if HAVE_METAARRAY:
         ma = metaarray.MetaArray(np.ones((20, 3)), info=[
@@ -191,6 +243,5 @@ if __name__ == '__main__':
                 {'name': 'z'},
             ]}
         ])
-    
-    t.setData(ll)
+        t.setData(ma)
     

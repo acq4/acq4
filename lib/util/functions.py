@@ -63,30 +63,8 @@ def expDecay(v, x):
     return v[0] * np.exp(-x / v[1]) + v[2]
 
 
-def pspInnerFunc(v, x):
-    return v[0] * (1.0 - np.exp(-x / v[2])) * np.exp(-x / v[3])
-    
-def pspFunc(v, x, risePower=1.0):
-    """Function approximating a PSP shape. 
-    v = [amplitude, x offset, rise tau, fall tau]
-    Uses absolute value of both taus, so fits may indicate negative tau.
-    """
-    ## determine scaling factor needed to achieve correct amplitude
-    v = [v[0], v[1], abs(v[2]), abs(v[3])]
-    maxX = v[2] * np.log(1 + (v[3]/v[2]))
-    maxVal = pspInnerFunc([1.0, 0, v[2], v[3]], maxX)
-    out = np.empty(x.shape, x.dtype)
-    mask = x > v[1]
-    out[~mask] = 0
-    xvals = x[mask]-v[1]
-    try:
-        out[mask] = 1.0 / maxVal * pspInnerFunc(v, xvals)
-    except:
-        print v[2], v[3], maxVal, xvals.shape, xvals.dtype
-        raise
-    return out
 
-def fit(function, xVals, yVals, guess, errFn=None, measureError=False, generateResult=False, resultXVals=None):
+def fit(function, xVals, yVals, guess, errFn=None, measureError=False, generateResult=False, resultXVals=None, **kargs):
     """fit xVals, yVals to the specified function. 
     If generateResult is True, then the fit is used to generate an array of points from function
     with the xVals supplied (useful for plotting the fit results with the original data). 
@@ -95,7 +73,7 @@ def fit(function, xVals, yVals, guess, errFn=None, measureError=False, generateR
         errFn = lambda v, x, y: function(v, x)-y
     if len(xVals) < len(guess):
         raise Exception("Too few data points to fit this function. (%d variables, %d points)" % (len(guess), len(xVals)))
-    fitResult = scipy.optimize.leastsq(errFn, guess, args=(xVals, yVals))
+    fitResult = scipy.optimize.leastsq(errFn, guess, args=(xVals, yVals), **kargs)
     error = None
     #if measureError:
         #error = errFn(fit[0], xVals, yVals)
@@ -121,72 +99,284 @@ def fitGaussian(xVals, yVals, guess=[1.0, 0.0, 1.0, 0.0], **kargs):
 def fitExpDecay(xVals, yVals, guess=[1.0, 1.0, 0.0], **kargs):
     return fit(expDecay, xVals, yVals, guess, **kargs)
 
-def fitPsp(xVals, yVals, guess=[1e-3, 0, 10e-3, 10e-3], bounds=None, **kargs):
-    vals, junk, comp, err =  fit(pspFunc, xVals, yVals, guess, **kargs)
-    amp, xoff, rise, fall = vals
-    ## fit may return negative tau values (since pspFunc uses abs(tau)); return the absolute value.
-    return (amp, xoff, abs(rise), abs(fall))#, junk, comp, err
-
-
-
-#def pspInnerFunc(x, rise, decay, power):
-    #out = np.zeros(x.shape, x.dtype)
-    #mask = x >= 0
-    #xvals = x[mask]
-    #out[mask] =  (1.0 - np.exp(-xvals / rise))**power * np.exp(-xvals / decay)
-    #return out
-
+#def pspInnerFunc(v, x):
+    #return v[0] * (1.0 - np.exp(-x / v[2])) * np.exp(-x / v[3])
+    
 #def pspFunc(v, x, risePower=1.0):
     #"""Function approximating a PSP shape. 
-    #v = [amplitude, x offset, rise tau, decay tau]
+    #v = [amplitude, x offset, rise tau, fall tau]
     #Uses absolute value of both taus, so fits may indicate negative tau.
     #"""
     ### determine scaling factor needed to achieve correct amplitude
-    #v[2] = abs(v[2])
-    #v[3] = abs(v[3])
-    #maxX = v[2] * np.log(1 + (v[3]*risePower / v[2]))
-    #maxVal = (1.0 - np.exp(-maxX / v[2]))**risePower * np.exp(-maxX / v[3])
-    ##maxVal = pspInnerFunc(np.array([maxX]), v[2], v[3], risePower)[0]
-    
+    #v = [v[0], v[1], abs(v[2]), abs(v[3])]
+    #maxX = v[2] * np.log(1 + (v[3]/v[2]))
+    #maxVal = pspInnerFunc([1.0, 0, v[2], v[3]], maxX)
+    #out = np.empty(x.shape, x.dtype)
+    #mask = x > v[1]
+    #out[~mask] = 0
+    #xvals = x[mask]-v[1]
     #try:
-        #out = v[0] / maxVal * pspInnerFunc(x-v[1], v[2], v[3], risePower)
+        #out[mask] = 1.0 / maxVal * pspInnerFunc(v, xvals)
     #except:
-        #print v[2], v[3], maxVal, x.shape, x.dtype
+        #print v[2], v[3], maxVal, xvals.shape, xvals.dtype
         #raise
     #return out
 
-#def fitPsp(x, y, guess, bounds=None, risePower=1.0):
-    #if bounds is None:
-        #dt = x[1]-x[0]
-        #bounds = np.array([
-            #[-np.inf, np.inf],
-            #[0, 10e-3],
-            #[dt, 20e-3],
-            #[dt, 200e-3]
-        #])
-    #else:
-        #bounds = np.array(bounds)
-    #boundCenter = (bounds[:,1] + bounds[:,0]) /2.
-    #boundWidth = bounds[:,1] - bounds[:,0]
-    #def errFn(v, x, y):
-        #maxX = v[2] * np.log(1 + (v[3]*risePower / v[2]))
-        #maxVal = pspInnerFunc(np.array([maxX]), v[2], v[3], risePower)[0]
-        #err = y - (v[0]/maxVal) * pspInnerFunc(x-v[1], v[2], v[3], risePower)
-        
-        ### compute error that grows as v leaves boundaries
-        #boundErr = np.clip(np.abs(v-boundCenter) - boundWidth, 0, np.inf) / boundWidth
-        #err += 10 * boundErr.sum()
-        
-        ##print "ERR: ", v, (abs(err)**2).sum()
-        #return err
-        
-    #fit = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-3, xtol=1e-3)[0]
+#def fitPsp(xVals, yVals, guess=[1e-3, 0, 10e-3, 10e-3], bounds=None, **kargs):
+    #vals, junk, comp, err =  fit(pspFunc, xVals, yVals, guess, **kargs)
+    #amp, xoff, rise, fall = vals
+    ### fit may return negative tau values (since pspFunc uses abs(tau)); return the absolute value.
+    #return (amp, xoff, abs(rise), abs(fall))#, junk, comp, err
+
+
+def pspInnerFunc(x, rise, decay, power):
+    out = np.zeros(x.shape, x.dtype)
+    mask = x >= 0
+    xvals = x[mask]
+    out[mask] =  (1.0 - np.exp(-xvals / rise))**power * np.exp(-xvals / decay)
+    return out
+
+def pspMaxTime(rise, decay, risePower=2.0):
+    """Return the time from start to peak for a psp with given parameters."""
+    return rise * np.log(1 + (decay * risePower / rise))
+
+def pspFunc(v, x, risePower=2.0):
+    """Function approximating a PSP shape. 
+    v = [amplitude, x offset, rise tau, decay tau]
+    Uses absolute value of both taus, so fits may indicate negative tau.
+    """
     
-    ### rescale amp to the actual peak value of the function
-    ##maxX = fit[2] * np.log(1 + (fit[3]*risePower / fit[2]))
-    ##maxVal = pspInnerFunc(np.array([maxX]), fit[2], fit[3], risePower)[0]
-    ##fit[0] *= maxVal
-    #return fit
+    if len(v) > 4:
+        v = processExtraVars(v)
+    
+    ## determine scaling factor needed to achieve correct amplitude
+    v[2] = abs(v[2])
+    v[3] = abs(v[3])
+    maxX = pspMaxTime(v[2], v[3], risePower)
+    maxVal = (1.0 - np.exp(-maxX / v[2]))**risePower * np.exp(-maxX / v[3])
+    #maxVal = pspInnerFunc(np.array([maxX]), v[2], v[3], risePower)[0]
+    
+    try:
+        out = v[0] / maxVal * pspInnerFunc(x-v[1], v[2], v[3], risePower)
+    except:
+        print v[2], v[3], maxVal, x.shape, x.dtype
+        raise
+    return out
+
+def fitPsp(x, y, guess, bounds=None, risePower=2.0, multiFit=False):
+    """
+        guess: [amp, xoffset, rise, fall]
+        bounds: [[ampMin, ampMax], ...]
+        
+        NOTE: This fit is more likely to converge correctly if the guess amplitude 
+        is larger (about 2x) than the actual amplitude.
+        
+        if multiFit is True, then attempt to improve the fit by brute-force searching
+        and re-fitting. (this is very slow)
+    """
+    if guess is None:
+        guess = [
+            (y.max()-y.min()) * 2,
+            0, 
+            x[-1]*0.25,
+            x[-1]
+        ]
+    
+    ## pick some reasonable default bounds
+    if bounds is None:
+        bounds = [[None,None]] * 4
+        bounds[1][0] = -2e-3
+        minTau = (x[1]-x[0]) * 0.5
+        #bounds[2] = [minTau, None]
+        #bounds[3] = [minTau, None]
+        
+    errCache = {}
+    def errFn(v, x, y):
+        key = tuple(v)
+        if key not in errCache:
+            for i in range(len(v)):
+                if bounds[i][0] is not None:
+                    v[i] = max(v[i], bounds[i][0])
+                if bounds[i][1] is not None:
+                    v[i] = min(v[i], bounds[i][1])
+            err = y - v[0] * pspInnerFunc(x-v[1], abs(v[2]), abs(v[3]), risePower)
+                    
+            errCache[key] = (err, v.copy())
+            return err
+        err, v2 = errCache[key]
+        v[:] = v2
+        return err
+        
+    ## initial fit
+    fit = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-2, factor=0.1)[0]
+    
+    
+    ## try on a few more fits
+    if multiFit:
+        err = (errFn(fit, x, y)**2).sum()
+        #print "fit:", err
+        bestFit = fit
+        for da in [0.5, 1.0, 2.0]:
+            for dt in [0.5, 1.0, 2.0]:
+                for dr in [0.5, 1.0, 2.0]:
+                    for do in [0.002, .0, 0.002]:
+                        if da == 1.0 and dt == 1.0 and dr == 1.0 and do == 0.0:
+                            continue
+                        guess = fit.copy()            
+                        guess[0] *= da
+                        guess[1] += do
+                        guess[3] *= dt
+                        guess[2] *= dr
+                        fit2 = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-1, factor=0.1)[0]
+                        err2 = (errFn(fit2, x, y)**2).sum()
+                        if err2 < err:
+                            bestFit = fit2
+                            #print "   found better PSP fit: %s -> %s" % (err, err2), da, dt, dr, do
+                            err = err2
+        
+        fit = bestFit
+    
+    
+    
+    fit[2:] = abs(fit[2:])
+    maxX = fit[2] * np.log(1 + (fit[3]*risePower / fit[2]))
+    maxVal = (1.0 - np.exp(-maxX / fit[2]))**risePower * np.exp(-maxX / fit[3])
+    fit[0] *= maxVal
+    return fit
+
+
+
+
+def doublePspFunc(v, x, risePower=2.0):
+    """Function approximating a PSP shape with double exponential decay. 
+    v = [amp1, amp2, x offset, rise tau, decay tau 1, decay tau 2]
+    Uses absolute value of both taus, so fits may indicate negative tau.
+    """
+    amp1, amp2, xoff, rise, decay1, decay2 = v
+    
+    x = x-xoff
+    
+    ### determine scaling factor needed to achieve correct amplitude
+    #v[2] = abs(v[2])
+    #v[3] = abs(v[3])
+    #maxX = pspMaxTime(v[2], v[3], risePower)
+    #maxVal = (1.0 - np.exp(-maxX / v[2]))**risePower * np.exp(-maxX / v[3])
+    ##maxVal = pspInnerFunc(np.array([maxX]), v[2], v[3], risePower)[0]
+    try:
+        out = np.zeros(x.shape, x.dtype)
+        mask = x >= 0
+        x = x[mask]
+        
+        riseExp = (1.0 - np.exp(-x / rise))**risePower
+        decayExp1 = amp1 * np.exp(-x / decay1)
+        decayExp2 = amp2 * np.exp(-x / decay2)
+        out[mask] =  riseExp * (decayExp1 + decayExp2)
+    except:
+        print v, x.shape, x.dtype
+        raise
+    return out
+
+def doublePspMax(v, risePower=2.0):
+    """
+    Return the time and value of the peak of a PSP with double-exponential decay.
+    """
+    ## create same params with negative amplitudes
+    v2 = list(v)[:]
+    if v2[0] > 0:
+        v2[0] *= -1
+    if v2[1] > 0:
+        v2[1] *= -1
+    xMax = scipy.optimize.fmin(lambda x: doublePspFunc(v2, x), [v[2]], disp=False)
+    yMax = doublePspFunc(v, xMax)
+    return xMax[0], yMax[0]
+    
+def fitDoublePsp(x, y, guess, bounds=None, risePower=2.0):
+    """
+    Fit a PSP shape with double exponential decay.
+    guess: [amp1, amp2, xoffset, rise, fall1, fall2]
+    bounds: [[amp1Min, amp1Max], ...]
+    
+    NOTE: This fit is more likely to converge correctly if the guess amplitude 
+    is larger (about 2x) than the actual amplitude.
+    """
+    ## normalize scale to assist fit
+    yScale = y.max() - y.min()
+    y = y / yScale
+    for i in [0, 1]:
+        guess[i] /= yScale
+        if bounds[i][0] is not None:
+            bounds[i][0] /= yScale
+        if bounds[i][1] is not None:
+            bounds[i][1] /= yScale
+    
+    #if guess is None:
+        #guess = [
+            #(y.max()-y.min()) * 2,
+            #0, 
+            #x[-1]*0.25,
+            #x[-1]
+        #]
+    
+    ### pick some reasonable default bounds
+    #if bounds is None:
+        #bounds = [[None,None]] * 4
+        #minTau = (x[1]-x[0]) * 0.5
+        ##bounds[2] = [minTau, None]
+        ##bounds[3] = [minTau, None]
+    #trials = []
+    errs = {}
+    def errFn(v, x, y):
+        key = tuple(v)
+        if key not in errs:
+            ## enforce max rise/fall ratio
+            #v[2] = min(v[2], v[3] / 2.)
+            f = doublePspFunc(v,x,risePower)
+            err = y - f
+            #trials.append(f)
+            
+            for i in range(len(v)):
+                if bounds[i][0] is not None and v[i] < bounds[i][0]:
+                    v[i] = bounds[i][0]
+                if bounds[i][1] is not None and v[i] > bounds[i][1]:
+                    v[i] = bounds[i][1]
+               
+            ## both amps must be either positive or negative
+            if (v[0] > 0 and v[1] < 0) or (v[0] < 0 and v[1] > 0):
+                if abs(v[0]) > abs(v[1]):
+                    v[1] = 0
+                else:
+                    v[0] = 0
+            errs[key] = (err, v.copy())
+            return err
+        err, v2 = errs[key]
+        v[:] = v2
+        return err
+        
+    #fit = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-3, factor=0.1, full_output=1)
+    fit = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-2)
+    #print fit[2:]
+    fit = fit[0]
+    
+    err = (errFn(fit, x, y)**2).sum()
+    #print "initial fit:", fit, err
+    
+    guess = fit.copy()
+    bestFit = fit
+    for ampx in (0.5, 2.0):
+        for taux in (0.2, 0.5, 2.0):   ## The combination ampx=2, taux=0.2 seems to be particularly important.
+            guess[:2] = fit[:2] * ampx
+            guess[4:6] = fit[4:6] * taux
+            fit2 = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-2, factor=0.1)[0]
+            err2 = (errFn(fit2, x, y)**2).sum()
+            if err2 < err:
+                #print "Improved fit:", ampx, taux, err2
+                bestFit = fit2
+                err = err2
+    fit = bestFit
+    #print "final fit:", fit, err
+    fit[0] *= yScale
+    fit[1] *= yScale
+    return tuple(fit[:4]) + (min(*fit[4:]), max(*fit[4:]))
 
 
 
@@ -211,7 +401,7 @@ def downsample(data, n, axis=0, xvals='subsample'):
     or downsampled to match.
     """
     ma = None
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         ma = data
         data = data.view(ndarray)
         
@@ -874,7 +1064,7 @@ def applyFilter(data, b, a, padding=100, bidir=True):
     if padding > 0:
         d1 = d1[padding:-padding]
         
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         return MetaArray(d1, info=data.infoCopy())
     else:
         return d1
@@ -893,7 +1083,7 @@ def besselFilter(data, cutoff, order=1, dt=None, btype='low', bidir=True):
     return applyFilter(data, b, a, bidir=bidir)
     #base = data.mean()
     #d1 = scipy.signal.lfilter(b, a, data.view(ndarray)-base) + base
-    #if isinstance(data, MetaArray):
+    #if (hasattr(data, 'implements') and data.implements('MetaArray')):
         #return MetaArray(d1, info=data.infoCopy())
     #return d1
 
@@ -1359,14 +1549,14 @@ def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshol
       - baseline is centered at 0 (high-pass filtering may be required to achieve this).
       - no 0 crossings within an event due to noise (low-pass filtering may be required to achieve this)
       - Events last more than minLength samples
-      Return an array of events where each row is (start, length, sum)
+      Return an array of events where each row is (start, length, sum, peak)
     """
     ## just make sure this is an ndarray and not a MetaArray before operating..
     #p = Profiler('findEvents')
     data1 = data.view(ndarray)
     #p.mark('view')
     xvals = None
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         try:
             xvals = data.xvals(0)
         except:
@@ -1376,16 +1566,22 @@ def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshol
     ## find all 0 crossings
     mask = data1 > 0
     diff = mask[1:] - mask[:-1]  ## mask is True every time the trace crosses 0 between i and i+1
-    times = np.argwhere(diff)[:, 0]  ## index of each point immediately before crossing.
+    times1 = np.argwhere(diff)[:, 0]  ## index of each point immediately before crossing.
+    
+    times = np.empty(len(times1)+2, dtype=times1.dtype)  ## add first/last indexes to list of crossing times
+    times[0] = 0                                         ## this is a bit suspicious, but we'd rather know
+    times[-1] = len(data1)                               ## about large events at the beginning/end
+    times[1:-1] = times1                                 ## rather than ignore them.
     #p.mark('find crossings')
     
     ## select only events longer than minLength.
     ## We do this check early for performance--it eliminates the vast majority of events
     longEvents = np.argwhere(times[1:] - times[:-1] > minLength)
     if len(longEvents) < 1:
-        return []
-    longEvents = longEvents[:, 0]
-    nEvents = len(longEvents)
+        nEvents = 0
+    else:
+        longEvents = longEvents[:, 0]
+        nEvents = len(longEvents)
     
     ## Measure sum of values within each region between crossings, combine into single array
     if xvals is None:
@@ -1446,7 +1642,7 @@ def thresholdEvents(data, threshold, adjustTimes=True):
     Optionally adjusts times to an extrapolated zero-crossing."""
     threshold = abs(threshold)
     data1 = data.view(ndarray)
-    #if isinstance(data, MetaArray):
+    #if (hasattr(data, 'implements') and data.implements('MetaArray')):
     try:
         xvals = data.xvals(0)
         dt = xvals[1]-xvals[0]
@@ -1625,7 +1821,7 @@ def adaptiveDetrend(data, x=None, threshold=3.0):
     base = lr[1] + lr[0]*x
     d4 = d - base
     
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         return MetaArray(d4, info=data.infoCopy())
     return d4
     
@@ -1662,7 +1858,7 @@ def modeFilter(data, window=500, step=None, bins=None):
     chunks.append(np.linspace(vals[-1], vals[-1], remain))
     d2 = np.hstack(chunks)
     
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         return MetaArray(d2, info=data.infoCopy())
     return d2
     
@@ -1686,7 +1882,7 @@ def histogramDetrend(data, window=500, bins=50, threshold=3.0):
     base = np.linspace(v[0], v[1], len(data))
     d3 = data.view(np.ndarray) - base
     
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         return MetaArray(d3, info=data.infoCopy())
     return d3
     
@@ -1712,7 +1908,7 @@ def subtractMedian(data, time=None, width=100, dt=None):
     med = scipy.ndimage.median_filter(d1, size=width)
     d2 = d1 - med
     
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         return MetaArray(d2, info=data.infoCopy())
     return d2
     
@@ -1727,7 +1923,7 @@ def subtractMedian(data, time=None, width=100, dt=None):
     #d3 = where(abs(d2) > stdev*threshold, 0, d2)
     #d4 = d2 - median_filter(d3, windows[1])
     
-    #if isinstance(data, MetaArray):
+    #if (hasattr(data, 'implements') and data.implements('MetaArray')):
         #return MetaArray(d4, info=data.infoCopy())
     #return d4
     
@@ -1758,7 +1954,7 @@ def denoise(data, radius=2, threshold=4):
     d6[:radius] = d1[:radius]
     d6[-radius:] = d1[-radius:]
     
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         return MetaArray(d6, info=data.infoCopy())
     return d6
 
@@ -1870,10 +2066,11 @@ def tauiness(data, win, step=10):
 
 def expDeconvolve(data, tau):
     dt = 1
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         dt = data.xvals(0)[1] - data.xvals(0)[0]
-    d = data[:-1] + (tau / dt) * (data[1:] - data[:-1])
-    if isinstance(data, MetaArray):
+    arr = data.view(np.ndarray)
+    d = arr[:-1] + (tau / dt) * (arr[1:] - arr[:-1])
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         info = data.infoCopy()
         if 'values' in info[0]:
             info[0]['values'] = info[0]['values'][:-1]
@@ -1883,12 +2080,14 @@ def expDeconvolve(data, tau):
         return d
 
     
-def expReconvolve(data, tau=None):
-    dt = 1
-    if isinstance(data, MetaArray):
-        dt = data.xvals(0)[1] - data.xvals(0)[0]
+def expReconvolve(data, tau=None, dt=None):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
+        if dt is None:
+            dt = data.xvals(0)[1] - data.xvals(0)[0]
         if tau is None:
             tau = data._info[-1].get('expDeconvolveTau', None)
+    if dt is None: 
+        dt = 1
     if tau is None:
         raise Exception("Must specify tau.")
     # x(k+1) = x(k) + dt * (f(k) - x(k)) / tau
@@ -1900,7 +2099,7 @@ def expReconvolve(data, tau=None):
     for i in range(1, len(d)):
         d[i] = dtti * d[i-1] + dtt * data[i-1]
     
-    if isinstance(data, MetaArray):
+    if (hasattr(data, 'implements') and data.implements('MetaArray')):
         info = data.infoCopy()
         #if 'values' in info[0]:
             #info[0]['values'] = info[0]['values'][:-1]
@@ -1961,9 +2160,12 @@ def concatenateColumns(data):
             
     return out
     
-def suggestDType(x):
-    """Return a suitable dtype for x"""
-    if isinstance(x, list) or isinstance(x, tuple):
+def suggestDType(x, singleValue=False):
+    """Return a suitable dtype for x
+    If singleValue is True, then a sequence will be interpreted as dtype=object
+    rather than looking inside the sequence to determine its type.
+    """
+    if not singleValue and isinstance(x, list) or isinstance(x, tuple):
         if len(x) == 0:
             raise Exception('can not determine dtype for empty list')
         x = x[0]
@@ -1979,11 +2181,15 @@ def suggestDType(x):
     else:
         return object
     
-def suggestRecordDType(x):
-    """Given a dict of values, suggest a record array dtype to use"""
+def suggestRecordDType(x, singleRecord=False):
+    """Given a dict of values, suggest a record array dtype to use
+    If singleRecord is True, then x is interpreted as a single record 
+    rather than a dict-of-lists structure. This can resolve some ambiguities
+    when a single cell contains a sequence as its value.
+    """
     dt = []
     for k, v in x.iteritems():
-        dt.append((k, suggestDType(v)))
+        dt.append((k, suggestDType(v, singleValue=singleRecord)))
     return dt
     
     

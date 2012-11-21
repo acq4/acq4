@@ -5,7 +5,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 
-from PyQt4 import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui
 import numpy as np
 import pyqtgraph as pg
 
@@ -104,7 +104,7 @@ rois.append(pg.PolygonROI([[2,0], [2.1,0], [2,.1]], pen=(5,9)))
 ## Add each ROI to the scene and link its data to a plot curve with the same color
 for r in rois:
     v.addItem(r)
-    c = pi1.plot(pen=r.pen)
+    c = pi1.plot(pen=r.pen())
     r.curve = c
     r.sigRegionChanged.connect(updateRoi)
 

@@ -5,6 +5,7 @@ import numpy as np
 import scipy.ndimage as ndimage
 import pyqtgraph as pg
 import DataManager
+import debug
 
 class ImageCanvasItem(CanvasItem):
     def __init__(self, image=None, **opts):
@@ -14,9 +15,9 @@ class ImageCanvasItem(CanvasItem):
         Options:
             image: May be a fileHandle, ndarray, or GraphicsItem.
             handle: May optionally be specified in place of image
-        
+
         """
-        
+
         ## If no image was specified, check for a file handle..
         if image is None:
             image = opts.get('handle', None)
@@ -24,7 +25,7 @@ class ImageCanvasItem(CanvasItem):
                 #image = opts['handle']
             #except KeyError:
                 #raise Exception("ImageCanvasItem must be initialized with either an image or an image file handle.")
-        
+
         item = None
         self.data = None
         if isinstance(image, QtGui.QGraphicsItem):
@@ -35,26 +36,43 @@ class ImageCanvasItem(CanvasItem):
             opts['handle'] = image
             self.handle = image
             self.data = self.handle.read()
-            
+
             #item = graphicsItems.ImageItem(self.data)
             if 'name' not in opts:
                 opts['name'] = self.handle.shortName()
 
             try:
-                if 'imagePosition' in self.handle.info():
-                    opts['scale'] = self.handle.info()['pixelSize']
-                    opts['pos'] = self.handle.info()['imagePosition']
-                else:
-                    info = self.data._info[-1]
-                    opts['scale'] = info.get('pixelSize', None)
-                    opts['pos'] = info.get('imagePosition', None)
+                if 'transform' in self.handle.info():
+                    tr = pg.SRTTransform3D(self.handle.info()['transform'])
+                    tr = pg.SRTTransform(tr)  ## convert to 2D
+                    opts['pos'] = tr.getTranslation()
+                    opts['scale'] = tr.getScale()
+                    opts['angle'] = tr.getRotation()
+                else:  ## check for older info formats
+                    if 'imagePosition' in self.handle.info():
+                        opts['scale'] = self.handle.info()['pixelSize']
+                        opts['pos'] = self.handle.info()['imagePosition']
+                    elif 'Downsample' in self.handle.info():
+                        opts['scale'] = self.handle.info()['pixelSize']
+                        if 'microscope' in self.handle.info():
+                            m = self.handle.info()['microscope']
+                            print 'm: ',m
+                            print 'mpos: ', m['position']
+                            opts['pos'] = m['position'][0:2]
+                        else:
+                            info = self.data._info[-1]
+                            opts['pos'] = info.get('imagePosition', None)
+                    elif hasattr(self.data, '_info'):
+                        info = self.data._info[-1]
+                        opts['scale'] = info.get('pixelSize', None)
+                        opts['pos'] = info.get('imagePosition', None)
             except:
-                pass
-        
+                debug.printExc('Error reading transformation for image file %s:' % image.name())
+
         if item is None:
             item = pg.ImageItem()
         CanvasItem.__init__(self, item, **opts)
-        
+
         self.histogram = pg.PlotWidget()
         self.blockHistogram = False
         self.histogram.setMaximumHeight(100)
@@ -69,13 +87,13 @@ class ImageCanvasItem(CanvasItem):
 
 
         self.updateHistogram(autoLevels=True)
-        
+
         # addWidget arguments: row, column, rowspan, colspan 
         self.layout.addWidget(self.histogram, self.layout.rowCount(), 0, 1, 2)
-        
+
         self.timeSlider = QtGui.QSlider(QtCore.Qt.Horizontal)
-        self.timeSlider.setMinimum(0)
-        self.timeSlider.setMaximum(self.data.shape[0]-1)
+        #self.timeSlider.setMinimum(0)
+        #self.timeSlider.setMaximum(self.data.shape[0]-1)
         self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 2)
         self.timeSlider.valueChanged.connect(self.timeChanged)
         self.timeSlider.sliderPressed.connect(self.timeSliderPressed)
@@ -96,18 +114,18 @@ class ImageCanvasItem(CanvasItem):
         self.maxBtn = QtGui.QPushButton('Max no Filter')
         self.maxBtn.clicked.connect(self.maxClicked)
         self.layout.addWidget(self.maxBtn, thisRow+1, 1, 1, 1)
-        
+
         ## controls that only appear if there is a time axis
         self.timeControls = [self.timeSlider, self.edgeBtn, self.maxBtn, self.meanBtn, self.maxBtn2]
-            
+
         if self.data is not None:
             self.updateImage(self.data)
-        
+
 
         self.graphicsItem().sigImageChanged.connect(self.updateHistogram)
         self.levelRgn.sigRegionChanged.connect(self.levelsChanged)
         self.levelRgn.sigRegionChangeFinished.connect(self.levelsChangeFinished)
-        
+
     @classmethod
     def checkFile(cls, fh):
         if not fh.isFile():
@@ -117,20 +135,20 @@ class ImageCanvasItem(CanvasItem):
             return 10
         elif ext in ['.ma', '.png', '.jpg', '.tif']:
             return 100
-        
+
         return 0
 
         #self.timeSlider
-        
+
     def timeChanged(self, t):
         self.graphicsItem().updateImage(self.data[t])
-        
+
     def timeSliderPressed(self):
         self.blockHistogram = True
-        
+
     def edgeClicked(self):
         ## unsharp mask to enhance fine details
-        fd = self.data.astype(float)
+        fd = self.data.asarray().astype(float)
         blur = ndimage.gaussian_filter(fd, (0, 1, 1))
         blur2 = ndimage.gaussian_filter(fd, (0, 2, 2))
         dif = blur - blur2
@@ -140,20 +158,20 @@ class ImageCanvasItem(CanvasItem):
 
     def maxClicked(self):
         ## just the max of a stack
-        fd = self.data.astype(float)
+        fd = self.data.asarray().astype(float)
         self.graphicsItem().updateImage(fd.max(axis=0))
         self.updateHistogram(autoLevels=True)
 
     def max2Clicked(self):
         ## just the max of a stack, after a little 3d bluring
-        fd = self.data.astype(float)
+        fd = self.data.asarray().astype(float)
         blur = ndimage.gaussian_filter(fd, (1, 1, 1))
         self.graphicsItem().updateImage(blur.max(axis=0))
         self.updateHistogram(autoLevels=True)
 
     def meanClicked(self):
         ## just the max of a stack
-        fd = self.data.astype(float)
+        fd = self.data.asarray().astype(float)
         self.graphicsItem().updateImage(fd.mean(axis=0))
         self.updateHistogram(autoLevels=True)
 
@@ -162,8 +180,8 @@ class ImageCanvasItem(CanvasItem):
     def timeSliderReleased(self):
         self.blockHistogram = False
         self.updateHistogram()
-        
-        
+
+
     def updateHistogram(self, autoLevels=False):
         if self.blockHistogram:
             return
@@ -178,7 +196,7 @@ class ImageCanvasItem(CanvasItem):
             self.levelRgn.blockSignals(True)
             self.levelRgn.setRegion([w, b])
             self.levelRgn.blockSignals(False)
-            
+
     def updateImage(self, data, autoLevels=True):
         self.data = data
         if data.ndim == 4:
@@ -190,7 +208,7 @@ class ImageCanvasItem(CanvasItem):
                 showTime = True
         else:
             showTime = False
-            
+
         if showTime:
             self.timeSlider.setMinimum(0)
             self.timeSlider.setMaximum(self.data.shape[0]-1)
@@ -205,15 +223,15 @@ class ImageCanvasItem(CanvasItem):
             #self.maxBtn.hide()
             self.graphicsItem().updateImage(data, autoLevels=autoLevels)
 
-	for widget in self.timeControls:
+        for widget in self.timeControls:
             widget.setVisible(showTime)
-            
+
         tr = self.saveTransform()
         self.resetUserTransform()
         self.restoreTransform(tr)
-            
+
         self.updateHistogram(autoLevels=autoLevels)
-        
+
     def levelsChanged(self):
         rgn = self.levelRgn.getRegion()
         self.graphicsItem().setLevels(rgn)
@@ -221,3 +239,5 @@ class ImageCanvasItem(CanvasItem):
 
     def levelsChangeFinished(self):
         self.showSelectBox()
+
+

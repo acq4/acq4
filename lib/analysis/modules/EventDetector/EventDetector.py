@@ -7,7 +7,7 @@ from collections import OrderedDict
 import debug
 import FileLoader
 import DatabaseGui
-import FeedbackButton
+import pyqtgraph as pg
 
 class EventDetector(AnalysisModule):
     """
@@ -40,7 +40,7 @@ class EventDetector(AnalysisModule):
         #self.ui.chartDock1.setWidget(self.flowchart.widget())
         self.flowchart.addInput("dataIn")
         self.flowchart.addOutput('events')
-        self.flowchart.addOutput('regions', multi=True)        
+        #self.flowchart.addOutput('regions', multi=True)
         self.flowchart.sigChartLoaded.connect(self.connectPlots)
 
         self.dbCtrl = DBCtrl(self, identity=self.dbIdentity)
@@ -95,10 +95,13 @@ class EventDetector(AnalysisModule):
         """Called by file loader when a file load is requested."""
         self.flowchart.setInput(dataIn=fh)
         self.currentFile = fh
+        #self.flowchart.nodes()['Plot_001'].redisplay()
         return True
 
     def process(self, fh):
-        return self.flowchart.process(dataIn=fh)
+        ret = self.flowchart.process(dataIn=fh)
+        #print "Return:", ret.keys()
+        return ret
 
     def outputChanged(self):
         table = self.getElement('Output Table')
@@ -120,8 +123,6 @@ class EventDetector(AnalysisModule):
         
         if data is None:
             data = self.flowchart.output()['events']
-        #if protoDir is None:
-            #protoDir = self.currentFile.parent()
             
         if len(data) == 0:
             return
@@ -131,81 +132,55 @@ class EventDetector(AnalysisModule):
         db = dbui.getDb()
         if db is None:
             raise Exception("No DB selected")
-        #if len(data) == 0:
-            #raise Exception("No data to store.")
-            
-            
-        ## make sure parent dir(s) are registered in DB, get table names
-        #pDir = self.currentFile.parent()
-        #pTable, pRow = db.addDir(protoDir)
-        #protoSeqDir = self.dataModel.getParent('ProtocolSequence', protoDir)
-        #if protoSeqDir is not None:
-            #psTable, psRow = db.addDir(protoSeqDir)
-            
-        #psTable = db.getDirTable('ProtocolSequence')
         
         p.mark("DB prep done")
         
         ## determine the set of fields we expect to find in the table
-        #fields = OrderedDict([
-            #('ProtocolSequenceDir', 'int'),  ## events that are not part of a sequence will have no vaue here.
-            #('ProtocolDir', 'int'),
-            #('SourceFile', 'text'),
-        #])
         columns = db.describeData(data)
         columns.update({
             'ProtocolSequenceDir': 'directory:ProtocolSequence',
             'ProtocolDir': 'directory:Protocol',
-            #'SourceFile': 'file'
         })
         
         
-        #fields['SourceFile'] = 'text'   ## SourceFile is currently a FileHandle, but will be converted to str.
         p.mark("field list done")
         
-        ## Make sure target table exists and has correct columns, links to input file
-        #links = [('ProtocolDir', 'Protocol'), ('ProtocolSequenceDir', 'ProtocolSequence')]
-        db.checkTable(table, owner=self.dbIdentity, columns=columns, create=True)
-        
-        ## convert source file handles to strings relative to the parent dir
-        #names = [fh.name(relativeTo=parentDir) for fh in data['SourceFile']]
-        #for i in xrange(len(data)):
-            #source = data[i]['SourceFile']
-            #name = source.name(relativeTo=parentDir)
-            #names.append(name)
-        p.mark("data prepared")
-        
-        ## collect all protocol/Sequence dirs
-        prots = {}
-        seqs = {}
-        for fh in set(data['SourceFile']):
-            prots[fh] = fh.parent()
-            seqs[fh] = self.dataModel.getParent(fh, 'ProtocolSequence')
+        with db.transaction():
+            ## Make sure target table exists and has correct columns, links to input file
+            db.checkTable(table, owner=self.dbIdentity, columns=columns, create=True, addUnknownColumns=True, indexes=[['SourceFile'], ['ProtocolSequenceDir']])
             
-        ## delete all records from table for current input files
-        for fh in set(data['SourceFile']):
-            db.delete(table, where={'SourceFile': fh})
-        p.mark("previous records deleted")
-        
-        ## assemble final list of records
-        records = {}
-        for col in data.dtype.names:
-            records[col] = data[col]
-        records['ProtocolSequenceDir'] = map(seqs.get, data['SourceFile'])
-        records['ProtocolDir'] = map(prots.get, data['SourceFile'])
-        
-        #for i in xrange(len(data)):
-            #d2 = data[i]
-            #rec = {'SourceDir': pRow, 'SourceFile': names[i]}
-            #rec2 = dict(zip(d2.dtype.names, d2))
-            #rec2.update(rec)
-            #records.append(rec2)
-        p.mark("record list assembled")
+            p.mark("data prepared")
             
-        ## insert all data to DB
-        db.insert(table, records)
-        p.mark("records inserted")
-        p.finish()
+            ## collect all protocol/Sequence dirs
+            prots = {}
+            seqs = {}
+            for fh in set(data['SourceFile']):
+                prots[fh] = fh.parent()
+                seqs[fh] = self.dataModel.getParent(fh, 'ProtocolSequence')
+                
+            ## delete all records from table for current input files
+            for fh in set(data['SourceFile']):
+                db.delete(table, where={'SourceFile': fh})
+            p.mark("previous records deleted")
+            
+            ## assemble final list of records
+            records = {}
+            for col in data.dtype.names:
+                records[col] = data[col]
+            records['ProtocolSequenceDir'] = map(seqs.get, data['SourceFile'])
+            records['ProtocolDir'] = map(prots.get, data['SourceFile'])
+            
+            p.mark("record list assembled")
+                
+            ## insert all data to DB
+            with pg.ProgressDialog("Storing events...", 0, 100) as dlg:
+                for n, nmax in db.iterInsert(table, records, chunkSize=50):
+                    dlg.setMaximum(nmax)
+                    dlg.setValue(n)
+                    if dlg.wasCanceled():
+                        raise HelpfulException("Scan store canceled by user.", msgType='status')
+            p.mark("records inserted")
+            p.finish()
 
         
         
@@ -273,7 +248,7 @@ class DBCtrl(QtGui.QWidget):
         self.layout = QtGui.QVBoxLayout()
         self.setLayout(self.layout)
         self.dbgui = DatabaseGui.DatabaseGui(dm=host.dataManager(), tables={identity: 'EventDetector_events'})
-        self.storeBtn = FeedbackButton.FeedbackButton("Store to DB")
+        self.storeBtn = pg.FeedbackButton("Store to DB")
         #self.storeBtn.clicked.connect(self.storeClicked)
         self.layout.addWidget(self.dbgui)
         self.layout.addWidget(self.storeBtn)

@@ -103,7 +103,7 @@ class AnalysisModule(QtCore.QObject):
         """Return a dict of all objects referenced by elements."""
         el = OrderedDict()
         for name in self.listElements():
-            el[k] = self.getElement(k)
+            el[name] = self.getElement(name)
         return el
         
 

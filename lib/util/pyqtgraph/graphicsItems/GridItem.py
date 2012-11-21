@@ -1,11 +1,14 @@
 from pyqtgraph.Qt import QtGui, QtCore
-from UIGraphicsItem import *
+from .UIGraphicsItem import *
 import numpy as np
 from pyqtgraph.Point import Point
+import pyqtgraph.functions as fn
 
 __all__ = ['GridItem']
 class GridItem(UIGraphicsItem):
     """
+    **Bases:** :class:`UIGraphicsItem <pyqtgraph.UIGraphicsItem>`
+    
     Displays a rectangular grid of lines indicating major divisions within a coordinate system.
     Automatically determines what divisions to use.
     """
@@ -19,7 +22,8 @@ class GridItem(UIGraphicsItem):
         self.picture = None
         
         
-    def viewChangedEvent(self):
+    def viewRangeChanged(self):
+        UIGraphicsItem.viewRangeChanged(self)
         self.picture = None
         #UIGraphicsItem.viewRangeChanged(self)
         #self.update()
@@ -44,7 +48,7 @@ class GridItem(UIGraphicsItem):
         p = QtGui.QPainter()
         p.begin(self.picture)
         
-        dt = self.viewTransform().inverted()[0]
+        dt = fn.invertQTransform(self.viewTransform())
         vr = self.getViewWidget().rect()
         unit = self.pixelWidth(), self.pixelHeight()
         dim = [vr.width(), vr.height()]
@@ -109,7 +113,7 @@ class GridItem(UIGraphicsItem):
                         texts.append((QtCore.QPointF(x, y), "%g"%p1[ax]))
         tr = self.deviceTransform()
         #tr.scale(1.5, 1.5)
-        p.setWorldTransform(tr.inverted()[0])
+        p.setWorldTransform(fn.invertQTransform(tr))
         for t in texts:
             x = tr.map(t[0]) + Point(0.5, 0.5)
             p.drawText(x, t[1])

@@ -64,7 +64,7 @@ def generateUi(opts):
         else:
             raise Exception("Unknown widget type '%s'" % str(t))
         if 'tip' in o:
-            w.setTooltip(o['tip'])
+            w.setToolTip(o['tip'])
         w.setObjectName(k)
         l.addRow(k, w)
         if o.get('hidden', False):
@@ -134,7 +134,7 @@ class CtrlNode(Node):
 
 def metaArrayWrapper(fn):
     def newFn(self, data, *args, **kargs):
-        if HAVE_METAARRAY and isinstance(data, metaarray.MetaArray):
+        if HAVE_METAARRAY and (hasattr(data, 'implements') and data.implements('MetaArray')):
             d1 = fn(self, data.view(np.ndarray), *args, **kargs)
             info = data.infoCopy()
             if d1.shape != data.shape:

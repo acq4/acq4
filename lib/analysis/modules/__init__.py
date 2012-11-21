@@ -9,6 +9,7 @@ def listModules():
             files.append(f)
         elif f[-3:] == '.py' and f != '__init__.py':
             files.append(f[:-3])
+    files.sort()
     return files
     
 def getModuleClass(modName):

@@ -4,15 +4,11 @@ from ..Node import Node
 from scipy.signal import detrend
 from scipy.ndimage import median_filter, gaussian_filter
 #from pyqtgraph.SignalProxy import SignalProxy
-import functions
-from common import *
+from . import functions
+from .common import *
 import numpy as np
 
-try:
-    import metaarray
-    HAVE_METAARRAY = True
-except:
-    HAVE_METAARRAY = False
+import pyqtgraph.metaarray as metaarray
 
 
 class Downsample(CtrlNode):
@@ -77,6 +73,29 @@ class Butterworth(CtrlNode):
         ret = functions.butterworthFilter(data, bidir=s['bidir'], btype=mode, wPass=s['wPass'], wStop=s['wStop'], gPass=s['gPass'], gStop=s['gStop'])
         return ret
 
+        
+class ButterworthNotch(CtrlNode):
+    """Butterworth notch filter"""
+    nodeName = 'ButterworthNotchFilter'
+    uiTemplate = [
+        ('low_wPass', 'spin', {'value': 1000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
+        ('low_wStop', 'spin', {'value': 2000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
+        ('low_gPass', 'spin', {'value': 2.0, 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
+        ('low_gStop', 'spin', {'value': 20.0, 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
+        ('high_wPass', 'spin', {'value': 3000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
+        ('high_wStop', 'spin', {'value': 4000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
+        ('high_gPass', 'spin', {'value': 2.0, 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
+        ('high_gStop', 'spin', {'value': 20.0, 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
+        ('bidir', 'check', {'checked': True})
+    ]
+    
+    def processData(self, data):
+        s = self.stateGroup.state()
+        
+        low = functions.butterworthFilter(data, bidir=s['bidir'], btype='low', wPass=s['low_wPass'], wStop=s['low_wStop'], gPass=s['low_gPass'], gStop=s['low_gStop'])
+        high = functions.butterworthFilter(data, bidir=s['bidir'], btype='high', wPass=s['high_wPass'], wStop=s['high_wStop'], gPass=s['high_gPass'], gStop=s['high_gStop'])
+        return low + high
+    
 
 class Mean(CtrlNode):
     """Filters data by taking the mean of a sliding window"""
@@ -145,11 +164,11 @@ class Derivative(CtrlNode):
     nodeName = 'DerivativeFilter'
     
     def processData(self, data):
-        if HAVE_METAARRAY and isinstance(data, metaarray.MetaArray):
+        if hasattr(data, 'implements') and data.implements('MetaArray'):
             info = data.infoCopy()
             if 'values' in info[0]:
                 info[0]['values'] = info[0]['values'][:-1]
-            return MetaArray(data[1:] - data[:-1], info=info)
+            return metaarray.MetaArray(data[1:] - data[:-1], info=info)
         else:
             return data[1:] - data[:-1]
 
@@ -187,59 +206,63 @@ class HistogramDetrend(CtrlNode):
     """Removes baseline from data by computing mode (from histogram) of beginning and end of data."""
     nodeName = 'HistogramDetrend'
     uiTemplate = [
-        ('windowSize', 'intSpin', {'value': 500, 'min': 10, 'max': 1000000}),
-        ('numBins', 'intSpin', {'value': 50, 'min': 3, 'max': 1000000})
+        ('windowSize', 'intSpin', {'value': 500, 'min': 10, 'max': 1000000, 'suffix': 'pts'}),
+        ('numBins', 'intSpin', {'value': 50, 'min': 3, 'max': 1000000}),
+        ('offsetOnly', 'check', {'checked': False}),
     ]
     
     def processData(self, data):
-        ws = self.ctrls['windowSize'].value()
-        bn = self.ctrls['numBins'].value()
-        return functions.histogramDetrend(data, window=ws, bins=bn)
+        s = self.stateGroup.state()
+        #ws = self.ctrls['windowSize'].value()
+        #bn = self.ctrls['numBins'].value()
+        #offset = self.ctrls['offsetOnly'].checked()
+        return functions.histogramDetrend(data, window=s['windowSize'], bins=s['numBins'], offsetOnly=s['offsetOnly'])
 
 
-class ExpDeconvolve(CtrlNode):
-    """Exponential deconvolution filter."""
-    nodeName = 'ExpDeconvolve'
+    
+class RemovePeriodic(CtrlNode):
+    nodeName = 'RemovePeriodic'
     uiTemplate = [
-        ('tau', 'spin', {'value': 10e-3, 'step': 1, 'minStep': 100e-6, 'dec': True, 'range': [0.0, None], 'suffix': 's', 'siPrefix': True})
+        #('windowSize', 'intSpin', {'value': 500, 'min': 10, 'max': 1000000, 'suffix': 'pts'}),
+        #('numBins', 'intSpin', {'value': 50, 'min': 3, 'max': 1000000})
+        ('f0', 'spin', {'value': 60, 'suffix': 'Hz', 'siPrefix': True, 'min': 0, 'max': None}),
+        ('harmonics', 'intSpin', {'value': 30, 'min': 0}),
+        ('samples', 'intSpin', {'value': 1, 'min': 1}),
     ]
-    
-    def processData(self, data):
-        tau = self.ctrls['tau'].value()
-        return functions.expDeconvolve(data, tau)
-        #dt = 1
-        #if isinstance(data, MetaArray):
-            #dt = data.xvals(0)[1] - data.xvals(0)[0]
-        #d = data[:-1] + (self.ctrls['tau'].value() / dt) * (data[1:] - data[:-1])
-        #if isinstance(data, MetaArray):
-            #info = data.infoCopy()
-            #if 'values' in info[0]:
-                #info[0]['values'] = info[0]['values'][:-1]
-            #return MetaArray(d, info=info)
-        #else:
-            #return d
 
-class ExpReconvolve(CtrlNode):
-    """Exponential reconvolution filter. Only works with MetaArrays that were previously deconvolved."""
-    nodeName = 'ExpReconvolve'
-    #uiTemplate = [
-        #('tau', 'spin', {'value': 10e-3, 'step': 1, 'minStep': 100e-6, 'dec': True, 'range': [0.0, None], 'suffix': 's', 'siPrefix': True})
-    #]
-    
     def processData(self, data):
-        return functions.expReconvolve(data)
-
-class Tauiness(CtrlNode):
-    """Sliding-window exponential fit"""
-    nodeName = 'Tauiness'
-    uiTemplate = [
-        ('window', 'intSpin', {'value': 100, 'min': 3, 'max': 1000000}),
-        ('skip', 'intSpin', {'value': 10, 'min': 0, 'max': 10000000})
-    ]
-    
-    def processData(self, data):
-        return functions.tauiness(data, self.ctrls['window'].value(), self.ctrls['skip'].value())
+        times = data.xvals('Time')
+        dt = times[1]-times[0]
+        
+        data1 = data.asarray()
+        ft = np.fft.fft(data1)
+        
+        ## determine frequencies in fft data
+        df = 1.0 / (len(data1) * dt)
+        freqs = np.linspace(0.0, (len(ft)-1) * df, len(ft))
+        
+        ## flatten spikes at f0 and harmonics
+        f0 = self.ctrls['f0'].value()
+        for i in xrange(1, self.ctrls['harmonics'].value()+2):
+            f = f0 * i # target frequency
+            
+            ## determine index range to check for this frequency
+            ind1 = int(np.floor(f / df))
+            ind2 = int(np.ceil(f / df)) + (self.ctrls['samples'].value()-1)
+            if ind1 > len(ft)/2.:
+                break
+            mag = (abs(ft[ind1-1]) + abs(ft[ind2+1])) * 0.5
+            for j in range(ind1, ind2+1):
+                phase = np.angle(ft[j])   ## Must preserve the phase of each point, otherwise any transients in the trace might lead to large artifacts.
+                re = mag * np.cos(phase)
+                im = mag * np.sin(phase)
+                ft[j] = re + im*1j
+                ft[len(ft)-j] = re - im*1j
+                
+        data2 = np.fft.ifft(ft).real
+        
+        ma = metaarray.MetaArray(data2, info=data.infoCopy())
+        return ma
         
         
-    
-    
+        

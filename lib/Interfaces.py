@@ -59,13 +59,40 @@ class InterfaceDirectory(QtCore.QObject):
                 
             self.sigInterfaceListChanged.emit(types)
         
-    def listInterfaces(self, types):
+    def removeObject(self, obj):
+        """Remove all occurrences of object from the interface directory"""
+        changedTypes = set()
+        
+        for typeName, objList in self.typeList.iteritems():
+            rem = []
+            for objName, obj2 in objList.iteritems():
+                if obj is obj2:
+                    rem.append(objName)
+                    changedTypes.add(typeName)
+            for objName in rem:
+                del objList[objName]
+                del self.nameList[objName][typeName]
+                if len(self.nameList[objName]) == 0:
+                    del self.nameList[objName]
+        self.sigInterfaceListChanged.emit(list(changedTypes))
+        
+    def listInterfaces(self, types=None):
+        """
+        Return a list or dictionary of interface names for specific types.
+        If *types* is a single string, return a list of interfaces for that type
+        If *types* is a list, return a dictionary {type: [interfaces...], ...} 
+        If *types* is None, return a dict tree of all interfaces.
+        """
         with self.lock:
-            if isinstance(types, basestring):
-                types = [types]
-            ints = []
+            if types is None:
+                types = self.typeList.keys()
+                #return dict([(k, dict(v)) for k,v in self.typeList.iteritems()])
+            elif isinstance(types, basestring):
+                return self.typeList.get(types, {}).keys()
+                
+            ints = {}
             for t in types:
-                ints.extend(self.typeList.get(t, {}).keys())
+                ints[t] = self.typeList.get(t, {}).keys()
                 #for n in self.typeList.get(t, []):
                     #ints.append(n)
             return ints

@@ -439,7 +439,7 @@ class AxoPatch200Task(DAQGenericTask):
         #dirHandle.setInfo(self.ampState)
         result = self.getResult()
         result._info[-1]['ClampState'] = self.ampState
-        dirHandle.writeFile(result, self.dev.name)
+        dirHandle.writeFile(result, self.dev.name())
         
 
     

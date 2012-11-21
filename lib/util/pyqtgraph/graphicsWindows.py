@@ -5,11 +5,11 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-from Qt import QtCore, QtGui
-from widgets.PlotWidget import *
-from imageview import *
-from widgets.GraphicsLayoutWidget import GraphicsLayoutWidget
-from widgets.GraphicsView import GraphicsView
+from .Qt import QtCore, QtGui
+from .widgets.PlotWidget import *
+from .imageview import *
+from .widgets.GraphicsLayoutWidget import GraphicsLayoutWidget
+from .widgets.GraphicsView import GraphicsView
 QAPP = None
 
 def mkQApp():
@@ -21,13 +21,13 @@ def mkQApp():
 class GraphicsWindow(GraphicsLayoutWidget):
     def __init__(self, title=None, size=(800,600), **kargs):
         mkQApp()
-        self.win = QtGui.QMainWindow()
+        #self.win = QtGui.QMainWindow()
         GraphicsLayoutWidget.__init__(self, **kargs)
-        self.win.setCentralWidget(self)
-        self.win.resize(*size)
+        #self.win.setCentralWidget(self)
+        self.resize(*size)
         if title is not None:
-            self.win.setWindowTitle(title)
-        self.win.show()
+            self.setWindowTitle(title)
+        self.show()
         
 
 class TabWindow(QtGui.QMainWindow):

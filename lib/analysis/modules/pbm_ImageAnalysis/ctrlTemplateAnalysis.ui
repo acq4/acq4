@@ -38,10 +38,16 @@
    <item row="0" column="0">
     <widget class="QGroupBox" name="groupBox">
      <property name="sizePolicy">
-      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+      <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
        <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>380</height>
+      </size>
      </property>
      <property name="title">
       <string>Imaging Analysis Functions</string>
@@ -77,18 +83,25 @@
        </widget>
       </item>
       <item row="1" column="0" rowspan="2">
-       <widget class="QWidget" name="widget_2" native="true">
+       <widget class="QWidget" name="IAFuncs_widget" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
         <widget class="QPushButton" name="IAFuncs_NetworkGraph">
          <property name="geometry">
           <rect>
-           <x>0</x>
-           <y>125</y>
-           <width>141</width>
+           <x>5</x>
+           <y>205</y>
+           <width>136</width>
            <height>32</height>
           </rect>
          </property>
          <property name="font">
           <font>
+           <family>Arial</family>
            <pointsize>11</pointsize>
           </font>
          </property>
@@ -121,12 +134,13 @@
           <rect>
            <x>5</x>
            <y>20</y>
-           <width>131</width>
-           <height>21</height>
+           <width>136</width>
+           <height>32</height>
           </rect>
          </property>
          <property name="font">
           <font>
+           <family>Arial</family>
            <pointsize>11</pointsize>
           </font>
          </property>
@@ -146,12 +160,13 @@ p, li { white-space: pre-wrap; }
           <rect>
            <x>5</x>
            <y>45</y>
-           <width>131</width>
-           <height>21</height>
+           <width>136</width>
+           <height>32</height>
           </rect>
          </property>
          <property name="font">
           <font>
+           <family>Arial</family>
            <pointsize>11</pointsize>
           </font>
          </property>
@@ -169,14 +184,15 @@ p, li { white-space: pre-wrap; }
         <widget class="QPushButton" name="IAFuncs_DistanceStrength">
          <property name="geometry">
           <rect>
-           <x>0</x>
-           <y>100</y>
-           <width>141</width>
+           <x>5</x>
+           <y>130</y>
+           <width>136</width>
            <height>32</height>
           </rect>
          </property>
          <property name="font">
           <font>
+           <family>Arial</family>
            <pointsize>11</pointsize>
           </font>
          </property>
@@ -211,7 +227,7 @@ p, li { white-space: pre-wrap; }
            <x>145</x>
            <y>-25</y>
            <width>146</width>
-           <height>396</height>
+           <height>361</height>
           </rect>
          </property>
          <property name="sizePolicy">
@@ -239,15 +255,16 @@ p, li { white-space: pre-wrap; }
          <widget class="QPushButton" name="IAFuncs_Analysis_AFFT_Individual">
           <property name="geometry">
            <rect>
-            <x>30</x>
-            <y>325</y>
-            <width>81</width>
-            <height>21</height>
+            <x>25</x>
+            <y>300</y>
+            <width>101</width>
+            <height>32</height>
            </rect>
           </property>
           <property name="font">
            <font>
-            <pointsize>9</pointsize>
+            <family>Arial</family>
+            <pointsize>11</pointsize>
            </font>
           </property>
           <property name="toolTip">
@@ -264,15 +281,16 @@ p, li { white-space: pre-wrap; }
          <widget class="QPushButton" name="IAFuncs_Analysis_FourierMap">
           <property name="geometry">
            <rect>
-            <x>30</x>
-            <y>350</y>
+            <x>35</x>
+            <y>330</y>
             <width>81</width>
-            <height>21</height>
+            <height>32</height>
            </rect>
           </property>
           <property name="font">
            <font>
-            <pointsize>9</pointsize>
+            <family>Arial</family>
+            <pointsize>11</pointsize>
            </font>
           </property>
           <property name="toolTip">
@@ -290,14 +308,15 @@ p, li { white-space: pre-wrap; }
           <property name="geometry">
            <rect>
             <x>30</x>
-            <y>300</y>
-            <width>81</width>
-            <height>21</height>
+            <y>270</y>
+            <width>91</width>
+            <height>32</height>
            </rect>
           </property>
           <property name="font">
            <font>
-            <pointsize>9</pointsize>
+            <family>Arial</family>
+            <pointsize>11</pointsize>
            </font>
           </property>
           <property name="toolTip">
@@ -308,7 +327,7 @@ p, li { white-space: pre-wrap; }
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;For Intrinsic Imaging: Compute the average FFT of images. &lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
           </property>
           <property name="text">
-           <string>Avg FFT</string>
+           <string notr="true">Avg FFT</string>
           </property>
          </widget>
          <widget class="QLabel" name="label_15">
@@ -322,7 +341,8 @@ p, li { white-space: pre-wrap; }
           </property>
           <property name="font">
            <font>
-            <pointsize>10</pointsize>
+            <family>Arial</family>
+            <pointsize>11</pointsize>
             <weight>75</weight>
             <bold>true</bold>
            </font>
@@ -334,15 +354,16 @@ p, li { white-space: pre-wrap; }
          <widget class="QLabel" name="label_13">
           <property name="geometry">
            <rect>
-            <x>5</x>
-            <y>280</y>
+            <x>20</x>
+            <y>255</y>
             <width>96</width>
             <height>21</height>
            </rect>
           </property>
           <property name="font">
            <font>
-            <pointsize>10</pointsize>
+            <family>Arial</family>
+            <pointsize>11</pointsize>
             <weight>75</weight>
             <bold>true</bold>
            </font>
@@ -354,14 +375,15 @@ p, li { white-space: pre-wrap; }
          <widget class="QPushButton" name="IAFuncs_Analysis_smcAnalyze">
           <property name="geometry">
            <rect>
-            <x>15</x>
+            <x>35</x>
             <y>190</y>
             <width>71</width>
-            <height>21</height>
+            <height>32</height>
            </rect>
           </property>
           <property name="font">
            <font>
+            <family>Arial</family>
             <pointsize>11</pointsize>
            </font>
           </property>
@@ -385,7 +407,8 @@ p, li { white-space: pre-wrap; }
               <widget class="QLabel" name="label_18">
                <property name="font">
                 <font>
-                 <pointsize>10</pointsize>
+                 <family>Arial</family>
+                 <pointsize>11</pointsize>
                 </font>
                </property>
                <property name="text">
@@ -425,7 +448,8 @@ p, li { white-space: pre-wrap; }
               <widget class="QLabel" name="label_19">
                <property name="font">
                 <font>
-                 <pointsize>10</pointsize>
+                 <family>Arial</family>
+                 <pointsize>11</pointsize>
                 </font>
                </property>
                <property name="text">
@@ -468,7 +492,8 @@ p, li { white-space: pre-wrap; }
               <widget class="QLabel" name="label_17">
                <property name="font">
                 <font>
-                 <pointsize>10</pointsize>
+                 <family>Arial</family>
+                 <pointsize>11</pointsize>
                 </font>
                </property>
                <property name="text">
@@ -505,7 +530,8 @@ p, li { white-space: pre-wrap; }
               <widget class="QLabel" name="label_16">
                <property name="font">
                 <font>
-                 <pointsize>10</pointsize>
+                 <family>Arial</family>
+                 <pointsize>11</pointsize>
                 </font>
                </property>
                <property name="text">
@@ -544,11 +570,12 @@ p, li { white-space: pre-wrap; }
             <x>10</x>
             <y>215</y>
             <width>126</width>
-            <height>21</height>
+            <height>32</height>
            </rect>
           </property>
           <property name="font">
            <font>
+            <family>Arial</family>
             <pointsize>11</pointsize>
            </font>
           </property>
@@ -560,10 +587,120 @@ p, li { white-space: pre-wrap; }
         <widget class="QPushButton" name="IAFuncs_Distance">
          <property name="geometry">
           <rect>
-           <x>0</x>
-           <y>70</y>
-           <width>141</width>
+           <x>5</x>
+           <y>105</y>
+           <width>136</width>
            <height>32</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <family>Arial</family>
+           <pointsize>11</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>ROI Distances</string>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="IAFuncs_Analysis_UnbiasedXC">
+         <property name="geometry">
+          <rect>
+           <x>5</x>
+           <y>75</y>
+           <width>136</width>
+           <height>32</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <family>Arial</family>
+           <pointsize>11</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Lucida Grande'; font-size:11pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Compute the cross-correlation between each pair of ROI's. The computation is done on the analog waveform.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         </property>
+         <property name="text">
+          <string>Unbiased XCorr (slow)</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label">
+         <property name="geometry">
+          <rect>
+           <x>5</x>
+           <y>170</y>
+           <width>86</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <family>Arial</family>
+           <pointsize>11</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>XCorr Threshold</string>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="IAFuncs_DistanceStrengthPrint">
+         <property name="geometry">
+          <rect>
+           <x>5</x>
+           <y>240</y>
+           <width>136</width>
+           <height>32</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <family>Arial</family>
+           <pointsize>11</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Print Dist-Strength</string>
+         </property>
+        </widget>
+        <widget class="QDoubleSpinBox" name="IAFuncs_XCorrThreshold">
+         <property name="geometry">
+          <rect>
+           <x>90</x>
+           <y>165</y>
+           <width>62</width>
+           <height>25</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>11</pointsize>
+          </font>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         </property>
+         <property name="maximum">
+          <double>1.000000000000000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.020000000000000</double>
+         </property>
+         <property name="value">
+          <double>0.250000000000000</double>
+         </property>
+        </widget>
+        <widget class="QCheckBox" name="IAFuncs_MatplotlibCheckBox">
+         <property name="geometry">
+          <rect>
+           <x>10</x>
+           <y>270</y>
+           <width>156</width>
+           <height>20</height>
           </rect>
          </property>
          <property name="font">
@@ -572,7 +709,7 @@ p, li { white-space: pre-wrap; }
           </font>
          </property>
          <property name="text">
-          <string>ROI Distances</string>
+          <string>MatPlotLib Graphs (slower)</string>
          </property>
         </widget>
        </widget>

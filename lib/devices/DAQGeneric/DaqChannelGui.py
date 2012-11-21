@@ -226,7 +226,7 @@ class OutputChannelGui(DaqChannelGui):
     
     def sequenceChanged(self):
         #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
-        self.sigSequenceChanged.emit(self.dev.name)
+        self.sigSequenceChanged.emit(self.dev.name())
         
     
     def generateProtocol(self, params=None):

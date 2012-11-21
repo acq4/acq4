@@ -1,17 +1,27 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
-## Add path to library (just for examples; you do not need this)
-import sys, os, time
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+"""
+Tests the speed of image updates for an ImageItem and RawImageWidget.
+The speed will generally depend on the type of data being shown, whether
+it is being scaled and/or converted by lookup table, and whether OpenGL
+is used by the view widget
+"""
 
 
-from PyQt4 import QtGui, QtCore
+import initExample ## Add path to library (just for examples; you do not need this)
+
+
+from pyqtgraph.Qt import QtGui, QtCore, USE_PYSIDE
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph import RawImageWidget
 import scipy.ndimage as ndi
 import pyqtgraph.ptime as ptime
-import VideoTemplate
+
+if USE_PYSIDE:
+    import VideoTemplate_pyside as VideoTemplate
+else:
+    import VideoTemplate_pyqt as VideoTemplate
+    
 
 #QtGui.QApplication.setGraphicsSystem('raster')
 app = QtGui.QApplication([])
@@ -24,6 +34,8 @@ ui.setupUi(win)
 win.show()
 ui.maxSpin1.setOpts(value=255, step=1)
 ui.minSpin1.setOpts(value=0, step=1)
+
+#ui.graphicsView.useOpenGL()  ## buggy, but you can try it if you need extra speed.
 
 vb = pg.ViewBox()
 ui.graphicsView.setCentralItem(vb)
@@ -49,37 +61,41 @@ ui.alphaCheck.toggled.connect(updateLUT)
 def updateScale():
     global ui
     spins = [ui.minSpin1, ui.maxSpin1, ui.minSpin2, ui.maxSpin2, ui.minSpin3, ui.maxSpin3]
-    if ui.rgbCheck.isChecked():
+    if ui.rgbLevelsCheck.isChecked():
         for s in spins[2:]:
             s.setEnabled(True)
     else:
         for s in spins[2:]:
             s.setEnabled(False)
-ui.rgbCheck.toggled.connect(updateScale)
+ui.rgbLevelsCheck.toggled.connect(updateScale)
     
 cache = {}
 def mkData():
     global data, cache, ui
-    dtype = ui.dtypeCombo.currentText()
+    dtype = (ui.dtypeCombo.currentText(), ui.rgbCheck.isChecked())
     if dtype not in cache:
-        if dtype == 'uint8':
+        if dtype[0] == 'uint8':
             dt = np.uint8
             loc = 128
             scale = 64
             mx = 255
-        elif dtype == 'uint16':
+        elif dtype[0] == 'uint16':
             dt = np.uint16
             loc = 4096
             scale = 1024
             mx = 2**16
-        elif dtype == 'float':
+        elif dtype[0] == 'float':
             dt = np.float
             loc = 1.0
             scale = 0.1
         
-        data = np.random.normal(size=(20,512,512), loc=loc, scale=scale)
-        data = ndi.gaussian_filter(data, (0, 3, 3))
-        if dtype != 'float':
+        if ui.rgbCheck.isChecked():
+            data = np.random.normal(size=(20,512,512,3), loc=loc, scale=scale)
+            data = ndi.gaussian_filter(data, (0, 6, 6, 0))
+        else:
+            data = np.random.normal(size=(20,512,512), loc=loc, scale=scale)
+            data = ndi.gaussian_filter(data, (0, 6, 6))
+        if dtype[0] != 'float':
             data = np.clip(data, 0, mx)
         data = data.astype(dt)
         cache[dtype] = data
@@ -88,7 +104,7 @@ def mkData():
     updateLUT()
 mkData()
 ui.dtypeCombo.currentIndexChanged.connect(mkData)
-
+ui.rgbCheck.toggled.connect(mkData)
 
 ptr = 0
 lastTime = ptime.time()
@@ -101,7 +117,7 @@ def update():
         useLut = None
 
     if ui.scaleCheck.isChecked():
-        if ui.rgbCheck.isChecked():
+        if ui.rgbLevelsCheck.isChecked():
             useScale = [
                 [ui.minSpin1.value(), ui.maxSpin1.value()], 
                 [ui.minSpin2.value(), ui.maxSpin2.value()], 
@@ -134,6 +150,7 @@ timer.start(0)
     
 
 
-## Start Qt event loop unless running in interactive mode.
-if sys.flags.interactive != 1:
+## Start Qt event loop unless running in interactive mode or using pyside.
+import sys
+if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
     app.exec_()

@@ -48,7 +48,7 @@ def isSequence(dh):
     #else:
         #return False
     
-def dirType(dh):
+def dirType(dh, allowRecurse=True):
     """
     Return a string representing the type of data stored in a directory.
     Usually, this is provided in the meta-info for the directory, but in a few
@@ -70,7 +70,9 @@ def dirType(dh):
         
         else:
             try:
-                if dirType(dh.parent()) == 'ProtocolSequence':
+                assert allowRecurse
+                parent = dh.parent()
+                if dirType(parent, allowRecurse=False) == 'ProtocolSequence':
                     type = 'Protocol'
                 #else:
                     #raise Exception()
@@ -209,6 +211,8 @@ def getClampFile(protoDH):
     """Given a protocol directory handle, return the clamp file handle within. 
     If there are multiple clamps, only the first is returned.
     Return None if no clamps are found."""
+    if protoDH.name()[-8:] == 'DS_Store': ## OS X filesystem puts .DS_Store files in all directories
+        return None
     files = protoDH.ls()
     names = deviceNames['Clamp']
     for n in names:
@@ -252,7 +256,7 @@ def getClampPrimary(data):
     
 def getClampMode(data):
     """Given a clamp file handle or MetaArray, return the recording mode."""
-    if not isinstance(data, MetaArray):
+    if not (hasattr(data, 'implements') and data.implements('MetaArray')):
         if not isClampFile(data):
             raise Exception('%s not a clamp file.' %fh.shortName())
         data = data.read()

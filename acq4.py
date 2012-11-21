@@ -7,17 +7,26 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 
 print "Loading ACQ4..."
 
-## rename any orphaned .pyc files -- these are probably leftover from 
-## a module being moved and may interfere with expected operation.
-import os, sys
-from lib.util.pycRename import pycRename
-modDir = os.path.abspath(os.path.split(__file__)[0])
-pycRename(modDir)
+## Path adjustments:
+##   - make sure 'lib' path is available for module search
+##   - add util to front of search path. This allows us to override some libs 
+##     that may be installed globally with local versions.
+import sys
+import os.path as osp
+d = osp.dirname(osp.abspath(__file__))
+sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
+
 
 import sip
 sip.setapi('QString', 2)
 sip.setapi('QVariant', 2)
     
+## rename any orphaned .pyc files -- these are probably leftover from 
+## a module being moved and may interfere with expected operation.
+import os, sys
+from lib.util.pyqtgraph import renamePyc
+modDir = os.path.abspath(os.path.split(__file__)[0])
+renamePyc(modDir)
 
 ## PyQt bug: make sure qt.conf was installed correctly
 #pyDir = os.path.split(sys.executable)[0]
@@ -46,15 +55,38 @@ if not hasattr(QtCore, 'Signal'):
 from lib.Manager import *
 from numpy import *
 
-
-## Disable long-term storage of exception stack frames
-## This fixes a potentially major memory leak, but
-## may break some debuggers.
-import disableExceptionStorage
-
 ## Initialize Qt
 #QtGui.QApplication.setGraphicsSystem('raster')  ## needed for specific composition modes
 app = QtGui.QApplication(sys.argv)
+
+## Install a simple message handler for Qt errors:
+def messageHandler(msgType, msg):
+    import traceback
+    print "Qt Error: (traceback follows)"
+    print msg
+    traceback.print_stack()
+    try:
+        logf = "crash.log"
+            
+        fh = open(logf, 'a')
+        fh.write(msg+'\n')
+        fh.write('\n'.join(traceback.format_stack()))
+        fh.close()
+    except:
+        print "Failed to write crash log:"
+        traceback.print_exc()
+        
+    
+    if msgType == QtCore.QtFatalMsg:
+        try:
+            print "Fatal error occurred; asking manager to quit."
+            global man, app
+            man.quit()
+            app.processEvents()
+        except:
+            pass
+    
+QtCore.qInstallMsgHandler(messageHandler)
 
 ## For logging ALL python activity
 #import pyconquer
@@ -73,12 +105,19 @@ man = Manager(config, sys.argv[1:])
 #QtCore.pyqtRemoveInputHook()
 
 ## Start Qt event loop unless running in interactive mode.
-try:
-    if sys.flags.interactive != 1:
-        raise Exception('non-interactive; start event loop')
-    if 'lib.util.PySideImporter' in sys.modules:
-        raise Exception('using pyside; start event loop')
-    
+interactive = (sys.flags.interactive == 1) and ('lib.util.PySideImporter' not in sys.modules)
+
+## Run python code periodically to allow interactive debuggers to interrupt the qt event loop
+timer = QtCore.QTimer()
+def donothing(*args):
+    x = 0
+    for i in range(0, 100):
+        x += i
+timer.timeout.connect(donothing)
+timer.start(1000)
+
+
+if interactive:
     print "Interactive mode; not starting event loop."
     
     ## import some things useful on the command line
@@ -108,21 +147,11 @@ try:
         else:
             readline.write_history_file(historyPath)
     atexit.register(save_history)
-
-
-except:
-    ## Run python code periodically to allow interactive debuggers to interrupt the qt event loop
-    timer = QtCore.QTimer()
-    def donothing(*args):
-        x = 0
-        for i in range(0, 100):
-            x += i
-    timer.timeout.connect(donothing)
-    timer.start(1000)
-    
-    print "Starting Qt event loop.."
+else:
     app.exec_()
-    print "Qt event loop exited."
+    
+    
+    
     
     
 #tr.stop()

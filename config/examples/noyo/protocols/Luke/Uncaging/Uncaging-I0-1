@@ -1,5 +1,5 @@
 protocol:
-    windowState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%03%00%00%00%00%00%00%04%C2%00%00%02%3E%FC%02%00%00%00%01%FC%00%00%01_%00%00%02%3E%00%00%00%00%00%FF%FF%FF%FA%00%00%00%00%01%00%00%00%01%FB%00%00%00%16%00S%00c%00a%00n%00n%00e%00r%00-%00R%00a%00w%00%00%00%00%00%00%00%04%C2%00%00%00%00%00%00%00%00%00%00%00%02%00%00%04q%00%00%01%5B%FC%01%00%00%00%04%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01%1B%00%00%01%1B%00%FF%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%01%1F%00%00%01%17%00%00%01%17%00%FF%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%02%3A%00%00%015%00%00%015%00%FF%FF%FF%FC%00%00%03s%00%00%00%FE%00%00%00%FE%00%FF%FF%FF%FA%00%00%00%01%01%00%00%00%04%FB%00%00%00%16%00T%00e%00m%00p%00e%00r%00a%00t%00u%00r%00e%01%00%00%00%00%FF%FF%FF%FF%00%00%00%9F%00%FF%FF%FF%FB%00%00%00%10%00U%00n%00c%00a%00g%00i%00n%00g%01%00%00%00%00%FF%FF%FF%FF%00%00%00%FE%00%FF%FF%FF%FB%00%00%00%06%00D%00A%00Q%01%00%00%00%00%FF%FF%FF%FF%00%00%00%C8%00%FF%FF%FF%FB%00%00%00%14%00d%00o%00c%00k%00W%00i%00d%00g%00e%00t%01%00%00%00%00%FF%FF%FF%FF%00%00%00S%00%FF%FF%FF%00%00%00%03%00%00%04q%00%00%01%D5%FC%01%00%00%00%01%FC%00%00%00%00%00%00%04q%00%00%01n%00%FF%FF%FF%FA%00%00%00%02%02%00%00%00%04%FB%00%00%00%0C%00C%00a%00m%00e%00r%00a%01%00%00%00%00%FF%FF%FF%FF%00%00%01p%00%FF%FF%FF%FB%00%00%00%0E%00S%00c%00a%00n%00n%00e%00r%01%00%00%00%00%FF%FF%FF%FF%00%00%00%F6%00%FF%FF%FF%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%00%00%FF%FF%FF%FF%00%00%00%DA%00%FF%FF%FF%FB%00%00%00%10%00L%00a%00s%00e%00r%00-%00U%00V%01%00%00%00%00%FF%FF%FF%FF%00%00%01%7B%00%FF%FF%FF%00%00%04q%00%00%00%00%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
+    windowState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%03%00%00%00%00%00%00%04%C2%00%00%02%3E%FC%02%00%00%00%01%FC%00%00%01_%00%00%02%3E%00%00%00%00%00%FF%FF%FF%FA%00%00%00%00%01%00%00%00%01%FB%00%00%00%16%00S%00c%00a%00n%00n%00e%00r%00-%00R%00a%00w%00%00%00%00%00%00%00%04%C2%00%00%00%00%00%00%00%00%00%00%00%02%00%00%04%C6%00%00%01Z%FC%01%00%00%00%04%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%011%00%00%01%14%00%FF%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%015%00%00%01%2C%00%00%01%18%00%FF%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%02e%00%00%01L%00%00%014%00%FF%FF%FF%FC%00%00%03%B5%00%00%01%11%00%00%00%FE%00%FF%FF%FF%FA%00%00%00%02%01%00%00%00%04%FB%00%00%00%16%00T%00e%00m%00p%00e%00r%00a%00t%00u%00r%00e%01%00%00%00%00%FF%FF%FF%FF%00%00%00%9B%00%FF%FF%FF%FB%00%00%00%10%00U%00n%00c%00a%00g%00i%00n%00g%01%00%00%00%00%FF%FF%FF%FF%00%00%00%FE%00%FF%FF%FF%FB%00%00%00%06%00D%00A%00Q%01%00%00%00%00%FF%FF%FF%FF%00%00%00%C1%00%FF%FF%FF%FB%00%00%00%14%00d%00o%00c%00k%00W%00i%00d%00g%00e%00t%01%00%00%00%00%FF%FF%FF%FF%00%00%00U%00%FF%FF%FF%00%00%00%03%00%00%04%C6%00%00%02f%FC%01%00%00%00%01%FC%00%00%00%00%00%00%04%C6%00%00%02%07%00%FF%FF%FF%FA%00%00%00%02%02%00%00%00%04%FB%00%00%00%0C%00C%00a%00m%00e%00r%00a%01%00%00%00%00%FF%FF%FF%FF%00%00%01e%00%FF%FF%FF%FB%00%00%00%0E%00S%00c%00a%00n%00n%00e%00r%01%00%00%00%00%FF%FF%FF%FF%00%00%01%CC%00%FF%FF%FF%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%00%00%FF%FF%FF%FF%00%00%00%C5%00%FF%FF%FF%FB%00%00%00%10%00L%00a%00s%00e%00r%00-%00U%00V%01%00%00%00%00%FF%FF%FF%FF%00%00%015%00%FF%FF%FF%00%00%04%C6%00%00%00%00%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
     params: [('Scanner', 'targets', True, [])]
     conf:
         continuous: False
@@ -8,21 +8,21 @@ protocol:
         duration: 1.5
         repetitions: 0
         leadTime: 0.01
-        loopCycleTime: 0.29999999999999999
+        loopCycleTime: 0.3
     analysis:
         Uncaging:
             clampTestStopSpin: 600.0
             displayImageCheck: False
             spotToleranceSpin: 4000.0
-            enabledCheck: True
-            cameraModCombo: 'Camera'
+            enabledCheck: False
+            cameraModCombo: u'Camera'
             alphaSlider: 150
             frame2Spin: 1
             clampBaseStartSpin: 450.0
-            clampDevCombo: 'Clamp1'
+            clampDevCombo: u'Clamp1'
             frame1Spin: 0
             clampBaseStopSpin: 500.0
-            scannerDevCombo: 'Scanner'
+            scannerDevCombo: u'Scanner'
             pspToleranceSpin: 10.0
             clampTestStartSpin: 500.0
 devices:
@@ -31,7 +31,7 @@ devices:
             xAutoRadio: True
             maxTracesCheck: False
             downsampleSpin: 1
-            xLinkCombo: ''
+            xLinkCombo: u''
             xMinText: '0'
             groupBox_2: False
             xMouseCheck: True
@@ -44,7 +44,7 @@ devices:
             alphaSlider: 1000
             yMaxText: '0'
             paramList:
-            yLinkCombo: ''
+            yLinkCombo: u''
             yManualRadio: False
             autoPointsCheck: True
             decimateGroup: True
@@ -65,16 +65,16 @@ devices:
             xLogCheck: False
         primarySignalCheck: False
         topPlotWidget:
-            xAutoRadio: False
+            xAutoRadio: True
             maxTracesCheck: True
             downsampleSpin: 1
-            xLinkCombo: ''
+            xLinkCombo: u''
             xMinText: '0'
             groupBox_2: False
             xMouseCheck: True
             yAutoPercentSpin: 100
             manualDecimateRadio: False
-            xManualRadio: True
+            xManualRadio: False
             maxTracesSpin: 1
             autoDecimateRadio: True
             xAutoPercentSpin: 100
@@ -82,7 +82,7 @@ devices:
             yMaxText: '0'
             paramList:
                 Scanner.targets: False
-            yLinkCombo: ''
+            yLinkCombo: u''
             yManualRadio: False
             autoPointsCheck: True
             decimateGroup: True
@@ -108,68 +108,95 @@ devices:
         primarySignal: 'Membrane Potential'
         primaryGainSpin: 2
         secondaryGainSpin: 1
-        splitter_2: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%00%CF%00%00%009%01%00%00%00%05%01%00%00%00%01'
+        splitter_2: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%00%EE%00%00%00%3C%01%00%00%00%05%01%00%00%00%01'
         i0ModeRadio: True
         waveGeneratorWidget:
             function: ''
             autoUpdate: False
-            params: ''
+            params:
+            advancedMode: True
         icModeRadio: False
-        primarySignalCombo: 'Membrane Potential'
+        primarySignalCombo: u'Membrane Potential'
         secondaryGainCheck: False
         primaryGainCheck: False
         secondarySignalCheck: False
         mode: 'I=0'
-        secondarySignalCombo: 'Command Current'
+        secondarySignalCombo: u'Command Current'
         secondarySignal: 'Command Current'
     Laser-UV:
-        splitter2: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%00%B0%00%00%00%B0%01%00%00%00%05%01%00%00%00%02'
-        splitter3: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%009%00%00%009%01%00%00%00%05%01%00%00%00%02'
-        splitter1: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%01%5E%00%00%03%05%01%00%00%00%05%01%00%00%00%01'
-        channels:
-            Shutter:
-                holdingCheck: False
-                holdingSpin: 0
-                functionCheck: True
-                preSetCheck: True
-                groupBox: True
-                displayCheck: True
-                preSetSpin: 0
-                waveGeneratorWidget:
-                    function: 'pulse(480, 22, 1)'
-                    autoUpdate: True
-                    params: ''
-            QSwitch:
-                holdingCheck: False
-                holdingSpin: 0
-                functionCheck: True
-                preSetCheck: True
-                groupBox: True
-                displayCheck: True
-                preSetSpin: 0
-                waveGeneratorWidget:
-                    function: 'pulse(500, 2, 1)'
-                    autoUpdate: True
-                    params: ''
+        daqState:
+            channels:
+                power:
+                    plot:
+                        xAutoRadio: True
+                        maxTracesCheck: False
+                        downsampleSpin: 1
+                        xLinkCombo: u''
+                        xMinText: '0'
+                        groupBox_2: False
+                        xMouseCheck: True
+                        yAutoPercentSpin: 100
+                        manualDecimateRadio: True
+                        xManualRadio: False
+                        maxTracesSpin: 0
+                        autoDecimateRadio: False
+                        xAutoPercentSpin: 100
+                        alphaSlider: 1000
+                        yMaxText: '0'
+                        paramList:
+                        yLinkCombo: u''
+                        yManualRadio: False
+                        autoPointsCheck: True
+                        decimateGroup: True
+                        yAutoRadio: True
+                        yLogCheck: False
+                        yMouseCheck: True
+                        groupBox: False
+                        gridGroup: False
+                        pointsGroup: True
+                        yMinText: '0'
+                        gridAlphaSlider: 70
+                        averageGroup: False
+                        autoAlphaCheck: False
+                        alphaGroup: True
+                        xMaxText: '0'
+                        powerSpectrumGroup: False
+                        forgetTracesCheck: False
+                        xLogCheck: False
+                    holdingCheck: False
+                    holdingSpin: 0.0
+                    functionCheck: False
+                    preSetCheck: False
+                    groupBox: True
+                    displayCheck: True
+                    preSetSpin: 0.0
+                    waveGeneratorWidget:
+                        function: ''
+                        autoUpdate: False
+                        stimuli:
+                        params:
+                        advancedMode: False
     Scanner:
+        laserCombo: u'Laser-UV'
+        simulateShutter: True
+        cameraCombo: u'Camera'
+        minDist: 0.0005
         minTime: 5.0
-        laserCombo: 'Laser-UV'
-        cameraCombo: 'Camera'
-        minDist: 0.00050000000000000001
+        spotSize: 9.92502216205e-05
     DAQ:
         butterworthStopband: 2.0
         denoiseThreshold: 4.0
-        denoiseMethod: 'None'
-        downsample: 30
-        filterMethod: 'None'
+        denoiseMethod: u'None'
+        downsample: 10
+        filterMethod: u'Bessel'
         butterworthPassband: 1.0
         butterworthPassDB: 2.0
         denoiseWidth: 1
         butterworthStopDB: 10.0
-        rate: 300000.0
-        besselOrder: 4
-        triggerDevice: 'No Trigger'
-        besselCutoff: 2.0
+        rate: 400000.0
+        besselOrder: 8
+        triggerDevice: u'No Trigger'
+        besselCutoff: 40000.0
     Camera:
         triggerCheck: False
         normGroup: False
@@ -188,19 +215,92 @@ devices:
             normROICheck: False
             channels:
                 trigger:
+                    plot:
+                        xAutoRadio: True
+                        maxTracesCheck: True
+                        downsampleSpin: 1
+                        xLinkCombo: u''
+                        xMinText: '0'
+                        groupBox_2: False
+                        xMouseCheck: True
+                        yAutoPercentSpin: 100
+                        manualDecimateRadio: True
+                        xManualRadio: False
+                        maxTracesSpin: 1
+                        autoDecimateRadio: False
+                        xAutoPercentSpin: 100
+                        alphaSlider: 1000
+                        yMaxText: '0'
+                        paramList:
+                        yLinkCombo: u''
+                        yManualRadio: False
+                        autoPointsCheck: True
+                        decimateGroup: True
+                        yAutoRadio: True
+                        yLogCheck: False
+                        yMouseCheck: True
+                        groupBox: False
+                        gridGroup: False
+                        pointsGroup: True
+                        yMinText: '0'
+                        gridAlphaSlider: 70
+                        averageGroup: False
+                        autoAlphaCheck: False
+                        alphaGroup: True
+                        xMaxText: '0'
+                        powerSpectrumGroup: False
+                        forgetTracesCheck: True
+                        xLogCheck: False
                     holdingCheck: True
-                    holdingSpin: 0
+                    holdingSpin: 1
                     functionCheck: True
                     preSetCheck: True
                     groupBox: True
                     displayCheck: True
-                    preSetSpin: 0
+                    preSetSpin: 1
                     waveGeneratorWidget:
-                        function: 'pulse([450, 500], 10, 1)'
+                        function: 'pulse([300, 500], 20, -1)'
                         autoUpdate: False
-                        params: ''
+                        params:
+                        advancedMode: True
                 exposure:
                     recordInitCheck: False
+                    plot:
+                        xAutoRadio: True
+                        maxTracesCheck: True
+                        downsampleSpin: 1
+                        xLinkCombo: u''
+                        xMinText: '0'
+                        groupBox_2: False
+                        xMouseCheck: True
+                        yAutoPercentSpin: 100
+                        manualDecimateRadio: True
+                        xManualRadio: False
+                        maxTracesSpin: 1
+                        autoDecimateRadio: False
+                        xAutoPercentSpin: 100
+                        alphaSlider: 1000
+                        yMaxText: '0'
+                        paramList:
+                        yLinkCombo: u''
+                        yManualRadio: False
+                        autoPointsCheck: True
+                        decimateGroup: True
+                        yAutoRadio: True
+                        yLogCheck: False
+                        yMouseCheck: True
+                        groupBox: False
+                        gridGroup: False
+                        pointsGroup: True
+                        yMinText: '0'
+                        gridAlphaSlider: 70
+                        averageGroup: False
+                        autoAlphaCheck: False
+                        alphaGroup: True
+                        xMaxText: '0'
+                        powerSpectrumGroup: False
+                        forgetTracesCheck: True
+                        xLogCheck: False
                     groupBox: True
                     recordCheck: True
                     displayCheck: True
@@ -211,7 +311,7 @@ devices:
                 xAutoRadio: True
                 maxTracesCheck: False
                 downsampleSpin: 1
-                xLinkCombo: ''
+                xLinkCombo: u''
                 xMinText: '0'
                 groupBox_2: False
                 xMouseCheck: True
@@ -224,7 +324,7 @@ devices:
                 alphaSlider: 1000
                 yMaxText: '0'
                 paramList:
-                yLinkCombo: ''
+                yLinkCombo: u''
                 yManualRadio: False
                 autoPointsCheck: True
                 decimateGroup: True
@@ -243,7 +343,7 @@ devices:
                 powerSpectrumGroup: False
                 forgetTracesCheck: False
                 xLogCheck: False
-            triggerModeCombo: 'Bulb'
+            triggerModeCombo: u'Bulb'
             normTimeRangeCheck: False
             splitter: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%01%0A%00%00%00%28%01%00%00%00%05%01%00%00%00%02'
             releaseBetweenRadio: False
@@ -260,7 +360,7 @@ devices:
             xAutoRadio: True
             maxTracesCheck: False
             downsampleSpin: 1
-            xLinkCombo: ''
+            xLinkCombo: u''
             xMinText: '0'
             groupBox_2: False
             xMouseCheck: True
@@ -273,7 +373,7 @@ devices:
             alphaSlider: 1000
             yMaxText: '0'
             paramList:
-            yLinkCombo: ''
+            yLinkCombo: u''
             yManualRadio: False
             autoPointsCheck: True
             decimateGroup: True
@@ -292,7 +392,7 @@ devices:
             powerSpectrumGroup: False
             forgetTracesCheck: False
             xLogCheck: False
-        triggerModeCombo: 'Bulb'
+        triggerModeCombo: u'Bulb'
         normTimeRangeCheck: False
         splitter: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%01%0A%00%00%00%28%01%00%00%00%05%01%00%00%00%02'
         releaseBetweenRadio: False
@@ -311,6 +411,42 @@ devices:
         channels:
             BathTemp:
                 recordInitCheck: True
+                plot:
+                    xAutoRadio: True
+                    maxTracesCheck: False
+                    downsampleSpin: 1
+                    xLinkCombo: u''
+                    xMinText: '0'
+                    groupBox_2: False
+                    xMouseCheck: True
+                    yAutoPercentSpin: 100
+                    manualDecimateRadio: True
+                    xManualRadio: False
+                    maxTracesSpin: 0
+                    autoDecimateRadio: False
+                    xAutoPercentSpin: 100
+                    alphaSlider: 1000
+                    yMaxText: '0'
+                    paramList:
+                    yLinkCombo: u''
+                    yManualRadio: False
+                    autoPointsCheck: True
+                    decimateGroup: True
+                    yAutoRadio: True
+                    yLogCheck: False
+                    yMouseCheck: True
+                    groupBox: False
+                    gridGroup: False
+                    pointsGroup: True
+                    yMinText: '0'
+                    gridAlphaSlider: 70
+                    averageGroup: False
+                    autoAlphaCheck: False
+                    alphaGroup: True
+                    xMaxText: '0'
+                    powerSpectrumGroup: False
+                    forgetTracesCheck: False
+                    xLogCheck: False
                 groupBox: True
                 recordCheck: False
                 displayCheck: False

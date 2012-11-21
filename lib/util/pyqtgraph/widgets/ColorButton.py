@@ -5,7 +5,17 @@ import pyqtgraph.functions as functions
 __all__ = ['ColorButton']
 
 class ColorButton(QtGui.QPushButton):
+    """
+    **Bases:** QtGui.QPushButton
     
+    Button displaying a color and allowing the user to select a new color.
+    
+    ====================== ============================================================
+    **Signals**:
+    sigColorChanging(self) emitted whenever a new color is picked in the color dialog
+    sigColorChanged(self)  emitted when the selected color is accepted (user clicks OK)
+    ====================== ============================================================
+    """
     sigColorChanging = QtCore.Signal(object)  ## emitted whenever a new color is picked in the color dialog
     sigColorChanged = QtCore.Signal(object)   ## emitted when the selected color is accepted (user clicks OK)
     
@@ -38,6 +48,7 @@ class ColorButton(QtGui.QPushButton):
         p.end()
     
     def setColor(self, color, finished=True):
+        """Sets the button's color and emits both sigColorChanged and sigColorChanging."""
         self._color = functions.mkColor(color)
         if finished:
             self.sigColorChanged.emit(self)
@@ -72,22 +83,3 @@ class ColorButton(QtGui.QPushButton):
     def widgetGroupInterface(self):
         return (self.sigColorChanged, ColorButton.saveState, ColorButton.restoreState)
     
-if __name__ == '__main__':
-    app = QtGui.QApplication([])
-    win = QtGui.QMainWindow()
-    btn = ColorButton()
-    win.setCentralWidget(btn)
-    win.show()
-    
-    def change(btn):
-        print "change", btn.color()
-    def done(btn):
-        print "done", btn.color()
-        
-    btn.sigColorChanging.connect(change)
-    btn.sigColorChanged.connect(done)
-    
-    ## Start Qt event loop unless running in interactive mode.
-    import sys
-    if sys.flags.interactive != 1:
-        app.exec_()

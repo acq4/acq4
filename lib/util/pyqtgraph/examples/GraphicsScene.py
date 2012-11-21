@@ -3,7 +3,7 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from PyQt4 import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 from pyqtgraph.GraphicsScene import GraphicsScene
 
@@ -26,9 +26,9 @@ class Obj(QtGui.QGraphicsObject):
         
     def mouseClickEvent(self, ev):
         if ev.double():
-            print "double click"
+            print("double click")
         else:
-            print "click"
+            print("click")
         ev.accept()
         
     #def mouseDragEvent(self, ev):
@@ -48,7 +48,7 @@ obj2 = Obj()
 win.addItem(obj2)
 
 def clicked():
-    print "button click"
+    print("button click")
 btn = QtGui.QPushButton("BTN")
 btn.clicked.connect(clicked)
 prox = QtGui.QGraphicsProxyWidget()

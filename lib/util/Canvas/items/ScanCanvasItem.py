@@ -52,8 +52,8 @@ class ScanCanvasItem(CanvasItem):
                 pts.append({'pos': pos, 'size': size, 'data': d})
         self.scatterPlotData = pts
         if len(pts) == 0:
-            raise Exception("No data found in scan.")
-        gitem = pg.ScatterPlotItem(pts, pxMode=False)
+            raise Exception("No data found in scan %s." % dirHandle.name(relativeTo=dirHandle.parent().parent()))
+        gitem = pg.ScatterPlotItem(pts, pxMode=False, pen=(50,50,50,200))
         #citem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
         #self._addCanvasItem(citem)
         #return [citem]
@@ -67,6 +67,7 @@ class ScanCanvasItem(CanvasItem):
         self.ui = ScanCanvasItemTemplate.Ui_Form()
         self.ui.setupUi(self._ctrlWidget)
         self.layout.addWidget(self._ctrlWidget, self.layout.rowCount(), 0, 1, 2)
+        self.ui.outlineColorBtn.setColor((50,50,50,200))
         
         self.addScanImageBtn = self.ui.loadSpotImagesBtn
         
@@ -75,6 +76,7 @@ class ScanCanvasItem(CanvasItem):
         self.ui.sizeSpin.setValue(self.originalSpotSize)
         self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
         self.ui.sizeFromCalibrationRadio.clicked.connect(self.updateSpotSize)
+        self.ui.outlineColorBtn.sigColorChanging.connect(self.updateOutline)
         
         self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
 
@@ -195,7 +197,7 @@ class ScanCanvasItem(CanvasItem):
                     continue
                 fh = d['Camera']['frames.ma']
                 handles.append(fh)
-                frames = fh.read()
+                frames = fh.read().asarray()
                 if self.ui.bgFrameCheck.isChecked():
                     image = frames[spotFrame]-frames[bgFrame]
                     image[frames[bgFrame] > frames[spotFrame]] = 0.  ## unsigned type; avoid negative values
@@ -258,6 +260,10 @@ class ScanCanvasItem(CanvasItem):
             self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
             size = self.originalSpotSize
         return size
+
+    def updateOutline(self):
+        color = self.ui.outlineColorBtn.color()
+        self.graphicsItem().setPen(color)
         
 class ScanImageCanvasItem(ImageCanvasItem):
     def __init__(self, img, handles, **kargs):

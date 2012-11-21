@@ -4,7 +4,7 @@ import os
 def listAtlases():
     d = os.path.split(__file__)[0]
     files = []
-    ignores = ['__init__.py', 'Atlas.py']
+    ignores = ['__init__.py', 'Atlas.py', 'atlasCtrlTemplate.py']
     for f in os.listdir(d):
         if os.path.isdir(os.path.join(d, f)):
             files.append(f)

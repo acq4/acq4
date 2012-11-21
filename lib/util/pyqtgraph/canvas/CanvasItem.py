@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
-from pyqtgraph.Qt import QtGui, QtCore, QtSvg
+from pyqtgraph.Qt import QtGui, QtCore, QtSvg, USE_PYSIDE
 from pyqtgraph.graphicsItems.ROI import ROI
 import pyqtgraph as pg
-import TransformGuiTemplate
-import debug
+if USE_PYSIDE:
+    from . import TransformGuiTemplate_pyside as TransformGuiTemplate
+else:
+    from . import TransformGuiTemplate_pyqt as TransformGuiTemplate
+
+from pyqtgraph import debug
 
 class SelectBox(ROI):
-    def __init__(self, scalable=False):
+    def __init__(self, scalable=False, rotatable=True):
         #QtGui.QGraphicsRectItem.__init__(self, 0, 0, size[0], size[1])
         ROI.__init__(self, [0,0], [1,1], invertible=True)
         center = [0.5, 0.5]
@@ -14,8 +18,9 @@ class SelectBox(ROI):
         if scalable:
             self.addScaleHandle([1, 1], center, lockAspect=True)
             self.addScaleHandle([0, 0], center, lockAspect=True)
-        self.addRotateHandle([0, 1], center)
-        self.addRotateHandle([1, 0], center)
+        if rotatable:
+            self.addRotateHandle([0, 1], center)
+            self.addRotateHandle([1, 0], center)
 
 class CanvasItem(QtCore.QObject):
     
@@ -30,7 +35,7 @@ class CanvasItem(QtCore.QObject):
     transformCopyBuffer = None
     
     def __init__(self, item, **opts):
-        defOpts = {'name': None, 'z': None, 'movable': True, 'scalable': False, 'visible': True, 'parent':None} #'pos': [0,0], 'scale': [1,1], 'angle':0,
+        defOpts = {'name': None, 'z': None, 'movable': True, 'scalable': False, 'rotatable': True, 'visible': True, 'parent':None} #'pos': [0,0], 'scale': [1,1], 'angle':0,
         defOpts.update(opts)
         self.opts = defOpts
         self.selectedAlone = False  ## whether this item is the only one selected
@@ -72,6 +77,7 @@ class CanvasItem(QtCore.QObject):
         self.transformGui.setupUi(self.transformWidget)
         self.layout.addWidget(self.transformWidget, 3, 0, 1, 2)
         self.transformGui.mirrorImageBtn.clicked.connect(self.mirrorY)
+        self.transformGui.reflectImageBtn.clicked.connect(self.mirrorXY)
         
         self.layout.addWidget(self.resetTransformBtn, 1, 0, 1, 2)
         self.layout.addWidget(self.copyBtn, 2, 0, 1, 1)
@@ -90,7 +96,7 @@ class CanvasItem(QtCore.QObject):
         if 'transform' in self.opts:
             self.baseTransform = self.opts['transform']
         else:
-            self.baseTransform = pg.Transform()
+            self.baseTransform = pg.SRTTransform()
             if 'pos' in self.opts and self.opts['pos'] is not None:
                 self.baseTransform.translate(self.opts['pos'])
             if 'angle' in self.opts and self.opts['angle'] is not None:
@@ -105,7 +111,7 @@ class CanvasItem(QtCore.QObject):
             
         ## every CanvasItem implements its own individual selection box 
         ## so that subclasses are free to make their own.
-        self.selectBox = SelectBox(scalable=self.opts['scalable'])
+        self.selectBox = SelectBox(scalable=self.opts['scalable'], rotatable=self.opts['rotatable'])
         #self.canvas.scene().addItem(self.selectBox)
         self.selectBox.hide()
         self.selectBox.setZValue(1e6)
@@ -118,8 +124,8 @@ class CanvasItem(QtCore.QObject):
         self.itemScale = QtGui.QGraphicsScale()
         self._graphicsItem.setTransformations([self.itemRotation, self.itemScale])
         
-        self.tempTransform = pg.Transform() ## holds the additional transform that happens during a move - gets added to the userTransform when move is done.
-        self.userTransform = pg.Transform() ## stores the total transform of the object
+        self.tempTransform = pg.SRTTransform() ## holds the additional transform that happens during a move - gets added to the userTransform when move is done.
+        self.userTransform = pg.SRTTransform() ## stores the total transform of the object
         self.resetUserTransform() 
         
         ## now happens inside resetUserTransform -> selectBoxToItem
@@ -194,7 +200,7 @@ class CanvasItem(QtCore.QObject):
         #flip = self.transformGui.mirrorImageCheck.isChecked()
         #tr = self.userTransform.saveState()
         
-        inv = pg.Transform()
+        inv = pg.SRTTransform()
         inv.scale(-1, 1)
         self.userTransform = self.userTransform * inv
         self.updateTransform()
@@ -220,6 +226,18 @@ class CanvasItem(QtCore.QObject):
                 #self.selectBoxFromUser()
                 #return
 
+    def mirrorXY(self):
+        if not self.isMovable():
+            return
+        self.rotate(180.)
+        # inv = pg.SRTTransform()
+        # inv.scale(-1, -1)
+        # self.userTransform = self.userTransform * inv #flip lr/ud
+        # s=self.updateTransform()
+        # self.setTranslate(-2*s['pos'][0], -2*s['pos'][1])
+        # self.selectBoxFromUser()
+        
+ 
     def hasUserTransform(self):
         #print self.userRotate, self.userTranslate
         return not self.userTransform.isIdentity()
@@ -297,7 +315,7 @@ class CanvasItem(QtCore.QObject):
 
 
     def resetTemporaryTransform(self):
-        self.tempTransform = pg.Transform()  ## don't use Transform.reset()--this transform might be used elsewhere.
+        self.tempTransform = pg.SRTTransform()  ## don't use Transform.reset()--this transform might be used elsewhere.
         self.updateTransform()
         
     def transform(self): 
@@ -306,7 +324,6 @@ class CanvasItem(QtCore.QObject):
     def updateTransform(self):
         """Regenerate the item position from the base, user, and temp transforms"""
         transform = self.baseTransform * self.userTransform * self.tempTransform ## order is important
-        
         s = transform.saveState()
         self._graphicsItem.setPos(*s['pos'])
         
@@ -315,6 +332,7 @@ class CanvasItem(QtCore.QObject):
         self.itemScale.setYScale(s['scale'][1])
 
         self.displayTransform(transform)
+        return(s) # return the transform state
         
     def displayTransform(self, transform):
         """Updates transform numbers in the ctrl widget."""
@@ -349,7 +367,7 @@ class CanvasItem(QtCore.QObject):
         try:
             #self.userTranslate = pg.Point(tr['trans'])
             #self.userRotate = tr['rot']
-            self.userTransform = pg.Transform(tr)
+            self.userTransform = pg.SRTTransform(tr)
             self.updateTransform()
             
             self.selectBoxFromUser() ## move select box to match
@@ -358,7 +376,7 @@ class CanvasItem(QtCore.QObject):
         except:
             #self.userTranslate = pg.Point([0,0])
             #self.userRotate = 0
-            self.userTransform = pg.Transform()
+            self.userTransform = pg.SRTTransform()
             debug.printExc("Failed to load transform:")
         #print "set transform", self, self.userTranslate
         

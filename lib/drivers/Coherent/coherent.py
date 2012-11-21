@@ -22,11 +22,11 @@ class Coherent(object):
         self.readPacket()
 
     def getPower(self):
+        v = self['UF']
         try:
-            v = self['UF']
             return float(v)
         except:
-            print v
+            print v, type(v)
             raise
     
     def getWavelength(self):

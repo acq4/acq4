@@ -7,13 +7,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from scipy import random
 from numpy import linspace
-from PyQt4 import QtGui, QtCore
+from pyqtgraph.Qt import QtGui, QtCore
 import pyqtgraph as pg
 from pyqtgraph import MultiPlotWidget
 try:
     from metaarray import *
 except:
-    print "MultiPlot is only used with MetaArray for now (and you do not have the metaarray package)"
+    print("MultiPlot is only used with MetaArray for now (and you do not have the metaarray package)")
     exit()
     
 app = QtGui.QApplication([])

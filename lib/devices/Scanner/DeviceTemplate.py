@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'DeviceTemplate.ui'
 #
-# Created: Sun Dec 18 19:30:02 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Mon May 28 19:40:02 2012
+#      by: PyQt4 UI code generator 4.9
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -75,20 +75,20 @@ class Ui_Form(object):
         self.yMaxSpin.setMinimum(-10.0)
         self.yMaxSpin.setMaximum(10.0)
         self.yMaxSpin.setSingleStep(0.1)
-        self.yMaxSpin.setProperty(_fromUtf8("value"), 2.0)
+        self.yMaxSpin.setProperty("value", 2.0)
         self.yMaxSpin.setObjectName(_fromUtf8("yMaxSpin"))
         self.gridLayout_2.addWidget(self.yMaxSpin, 5, 3, 1, 1)
         self.scanDurationSpin = QtGui.QDoubleSpinBox(self.groupBox)
         self.scanDurationSpin.setMinimum(0.01)
         self.scanDurationSpin.setMaximum(100.0)
-        self.scanDurationSpin.setProperty(_fromUtf8("value"), 5.0)
+        self.scanDurationSpin.setProperty("value", 5.0)
         self.scanDurationSpin.setObjectName(_fromUtf8("scanDurationSpin"))
         self.gridLayout_2.addWidget(self.scanDurationSpin, 2, 3, 1, 1)
         self.xMinSpin = QtGui.QDoubleSpinBox(self.groupBox)
         self.xMinSpin.setMinimum(-10.0)
         self.xMinSpin.setMaximum(10.0)
         self.xMinSpin.setSingleStep(0.1)
-        self.xMinSpin.setProperty(_fromUtf8("value"), -2.0)
+        self.xMinSpin.setProperty("value", -2.0)
         self.xMinSpin.setObjectName(_fromUtf8("xMinSpin"))
         self.gridLayout_2.addWidget(self.xMinSpin, 4, 1, 1, 1)
         self.scanLabel = QtGui.QLabel(self.groupBox)
@@ -99,14 +99,14 @@ class Ui_Form(object):
         self.label_2.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.label_2.setObjectName(_fromUtf8("label_2"))
         self.gridLayout_2.addWidget(self.label_2, 1, 0, 1, 1)
-        self.cameraCombo = QtGui.QComboBox(self.groupBox)
+        self.cameraCombo = InterfaceCombo(self.groupBox)
         self.cameraCombo.setObjectName(_fromUtf8("cameraCombo"))
         self.gridLayout_2.addWidget(self.cameraCombo, 1, 1, 1, 1)
         self.label_3 = QtGui.QLabel(self.groupBox)
         self.label_3.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.label_3.setObjectName(_fromUtf8("label_3"))
         self.gridLayout_2.addWidget(self.label_3, 2, 0, 1, 1)
-        self.laserCombo = QtGui.QComboBox(self.groupBox)
+        self.laserCombo = InterfaceCombo(self.groupBox)
         self.laserCombo.setObjectName(_fromUtf8("laserCombo"))
         self.gridLayout_2.addWidget(self.laserCombo, 2, 1, 1, 1)
         self.storeCamConfBtn = QtGui.QPushButton(self.groupBox)
@@ -118,14 +118,14 @@ class Ui_Form(object):
         self.yMinSpin.setMinimum(-10.0)
         self.yMinSpin.setMaximum(10.0)
         self.yMinSpin.setSingleStep(0.1)
-        self.yMinSpin.setProperty(_fromUtf8("value"), -2.0)
+        self.yMinSpin.setProperty("value", -2.0)
         self.yMinSpin.setObjectName(_fromUtf8("yMinSpin"))
         self.gridLayout_2.addWidget(self.yMinSpin, 4, 3, 1, 1)
         self.xMaxSpin = QtGui.QDoubleSpinBox(self.groupBox)
         self.xMaxSpin.setMinimum(-10.0)
         self.xMaxSpin.setMaximum(10.0)
         self.xMaxSpin.setSingleStep(0.1)
-        self.xMaxSpin.setProperty(_fromUtf8("value"), 2.0)
+        self.xMaxSpin.setProperty("value", 2.0)
         self.xMaxSpin.setObjectName(_fromUtf8("xMaxSpin"))
         self.gridLayout_2.addWidget(self.xMaxSpin, 5, 1, 1, 1)
         self.gridLayout_3.addLayout(self.gridLayout_2, 0, 0, 1, 1)
@@ -173,11 +173,10 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(0, QtGui.QApplication.translate("Form", "Camera", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(1, QtGui.QApplication.translate("Form", "Objective", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(2, QtGui.QApplication.translate("Form", "Laser", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(3, QtGui.QApplication.translate("Form", "Spot", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(4, QtGui.QApplication.translate("Form", "Date", None, QtGui.QApplication.UnicodeUTF8))
+        self.calibrationList.headerItem().setText(0, QtGui.QApplication.translate("Form", "Optics", None, QtGui.QApplication.UnicodeUTF8))
+        self.calibrationList.headerItem().setText(1, QtGui.QApplication.translate("Form", "Laser", None, QtGui.QApplication.UnicodeUTF8))
+        self.calibrationList.headerItem().setText(2, QtGui.QApplication.translate("Form", "Spot", None, QtGui.QApplication.UnicodeUTF8))
+        self.calibrationList.headerItem().setText(3, QtGui.QApplication.translate("Form", "Date", None, QtGui.QApplication.UnicodeUTF8))
         self.calibrateBtn.setText(QtGui.QApplication.translate("Form", "Calibrate", None, QtGui.QApplication.UnicodeUTF8))
         self.deleteBtn.setText(QtGui.QApplication.translate("Form", "Delete", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Calibration Parameters", None, QtGui.QApplication.UnicodeUTF8))
@@ -201,3 +200,4 @@ class Ui_Form(object):
         self.label_8.setText(QtGui.QApplication.translate("Form", "Y", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph import ImageView
+from InterfaceCombo import InterfaceCombo

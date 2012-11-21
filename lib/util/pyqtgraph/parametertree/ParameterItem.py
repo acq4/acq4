@@ -1,14 +1,16 @@
 from pyqtgraph.Qt import QtGui, QtCore
-import collections, os, weakref, re
+import os, weakref, re
 
 class ParameterItem(QtGui.QTreeWidgetItem):
     """
     Abstract ParameterTree item. 
     Used to represent the state of a Parameter from within a ParameterTree.
-        - Sets first column of item to name
-        - generates context menu if item is renamable or removable
-        - handles child added / removed events
-        - provides virtual functions for handling changes from parameter
+    
+    - Sets first column of item to name
+    - generates context menu if item is renamable or removable
+    - handles child added / removed events
+    - provides virtual functions for handling changes from parameter
+    
     For more ParameterItem types, see ParameterTree.parameterTypes module.
     """
     
@@ -26,6 +28,7 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         param.sigLimitsChanged.connect(self.limitsChanged)
         param.sigDefaultChanged.connect(self.defaultChanged)
         param.sigOptionsChanged.connect(self.optsChanged)
+        param.sigParentChanged.connect(self.parentChanged)
         
         
         opts = param.opts
@@ -38,7 +41,7 @@ class ParameterItem(QtGui.QTreeWidgetItem):
             flags |= QtCore.Qt.ItemIsEditable
             self.contextMenu.addAction('Rename').triggered.connect(self.editName)
         if opts.get('removable', False):
-            self.contextMenu.addAction("Remove").triggered.connect(self.param.remove)
+            self.contextMenu.addAction("Remove").triggered.connect(self.requestRemove)
         
         ## handle movable / dropEnabled options
         if opts.get('movable', False):
@@ -93,6 +96,10 @@ class ParameterItem(QtGui.QTreeWidgetItem):
                 self.takeChild(i)
                 break
                 
+    def parentChanged(self, param, parent):
+        ## called when the parameter's parent has changed.
+        pass
+                
     def contextMenuEvent(self, ev):
         if not self.param.opts.get('removable', False) and not self.param.opts.get('renamable', False):
             return
@@ -144,5 +151,9 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         """Called when this item has been selected (sel=True) OR deselected (sel=False)"""
         pass
 
-
+    def requestRemove(self):
+        ## called when remove is selected from the context menu.
+        ## we need to delay removal until the action is complete
+        ## since destroying the menu in mid-action will cause a crash.
+        QtCore.QTimer.singleShot(0, self.param.remove)
 

@@ -12,36 +12,71 @@ Widget used for displaying 2D or 3D data. Features:
   - ROI plotting
   - Image normalization through a variety of methods
 """
+from pyqtgraph.Qt import QtCore, QtGui, USE_PYSIDE
 
-from ImageViewTemplate import *
+if USE_PYSIDE:
+    from .ImageViewTemplate_pyside import *
+else:
+    from .ImageViewTemplate_pyqt import *
+    
 from pyqtgraph.graphicsItems.ImageItem import *
 from pyqtgraph.graphicsItems.ROI import *
 from pyqtgraph.graphicsItems.LinearRegionItem import *
 from pyqtgraph.graphicsItems.InfiniteLine import *
 from pyqtgraph.graphicsItems.ViewBox import *
 #from widgets import ROI
-from pyqtgraph.Qt import QtCore, QtGui
 import sys
 #from numpy import ndarray
-import ptime
+import pyqtgraph.ptime as ptime
 import numpy as np
-import debug
+import pyqtgraph.debug as debug
 
 from pyqtgraph.SignalProxy import SignalProxy
 
+#try:
+    #import pyqtgraph.metaarray as metaarray
+    #HAVE_METAARRAY = True
+#except:
+    #HAVE_METAARRAY = False
+    
+
 class PlotROI(ROI):
     def __init__(self, size):
-        ROI.__init__(self, pos=[0,0], size=size, scaleSnap=True, translateSnap=True)
+        ROI.__init__(self, pos=[0,0], size=size) #, scaleSnap=True, translateSnap=True)
         self.addScaleHandle([1, 1], [0, 0])
         self.addRotateHandle([0, 0], [0.5, 0.5])
 
 
 class ImageView(QtGui.QWidget):
+    """
+    Widget used for display and analysis of image data.
+    Implements many features:
     
+    * Displays 2D and 3D image data. For 3D data, a z-axis
+      slider is displayed allowing the user to select which frame is displayed.
+    * Displays histogram of image data with movable region defining the dark/light levels
+    * Editable gradient provides a color lookup table 
+    * Frame slider may also be moved using left/right arrow keys as well as pgup, pgdn, home, and end.
+    * Basic analysis features including:
+    
+        * ROI and embedded plot for measuring image values across frames
+        * Image normalization / background subtraction 
+    
+    Basic Usage::
+    
+        imv = pg.ImageView()
+        imv.show()
+        imv.setImage(data)
+    """
     sigTimeChanged = QtCore.Signal(object, object)
     sigProcessingChanged = QtCore.Signal(object)
     
-    def __init__(self, parent=None, name="ImageView", *args):
+    def __init__(self, parent=None, name="ImageView", view=None, imageItem=None, *args):
+        """
+        By default, this class creates an :class:`ImageItem <pyqtgraph.ImageItem>` to display image data
+        and a :class:`ViewBox <pyqtgraph.ViewBox>` to contain the ImageItem. Custom items may be given instead 
+        by specifying the *view* and/or *imageItem* arguments.
+        """
         QtGui.QWidget.__init__(self, parent, *args)
         self.levelMax = 4096
         self.levelMin = 0
@@ -63,7 +98,10 @@ class ImageView(QtGui.QWidget):
         #self.ui.graphicsView.setAspectLocked(True)
         #self.ui.graphicsView.invertY()
         #self.ui.graphicsView.enableMouse()
-        self.view = ViewBox()
+        if view is None:
+            self.view = ViewBox()
+        else:
+            self.view = view
         self.ui.graphicsView.setCentralItem(self.view)
         self.view.setAspectLocked(True)
         self.view.invertY()
@@ -75,7 +113,10 @@ class ImageView(QtGui.QWidget):
         #self.ui.gradientWidget.setTickColor(self.ticks[1], QtGui.QColor(255,255,255))
         #self.ui.gradientWidget.setOrientation('right')
         
-        self.imageItem = ImageItem()
+        if imageItem is None:
+            self.imageItem = ImageItem()
+        else:
+            self.imageItem = imageItem
         self.view.addItem(self.imageItem)
         self.currentIndex = 0
         
@@ -149,7 +190,173 @@ class ImageView(QtGui.QWidget):
         
         self.roiClicked() ## initialize roi plot to correct shape / visibility
 
+    def setImage(self, img, autoRange=True, autoLevels=True, levels=None, axes=None, xvals=None, pos=None, scale=None, transform=None):
+        """
+        Set the image to be displayed in the widget.
+        
+        ============== =======================================================================
+        **Arguments:**
+        *img*          (numpy array) the image to be displayed.
+        *xvals*        (numpy array) 1D array of z-axis values corresponding to the third axis
+                       in a 3D image. For video, this array should contain the time of each frame.
+        *autoRange*    (bool) whether to scale/pan the view to fit the image.
+        *autoLevels*   (bool) whether to update the white/black levels to fit the image.
+        *levels*       (min, max); the white and black level values to use.
+        *axes*         Dictionary indicating the interpretation for each axis.
+                       This is only needed to override the default guess. Format is::
+                       
+                           {'t':0, 'x':1, 'y':2, 'c':3}; 
+        ============== =======================================================================
+        """
+        prof = debug.Profiler('ImageView.setImage', disabled=True)
+        
+        if hasattr(img, 'implements') and img.implements('MetaArray'):
+            img = img.asarray()
+        
+        if not isinstance(img, np.ndarray):
+            raise Exception("Image must be specified as ndarray.")
+        self.image = img
+        
+        if xvals is not None:
+            self.tVals = xvals
+        elif hasattr(img, 'xvals'):
+            try:
+                self.tVals = img.xvals(0)
+            except:
+                self.tVals = np.arange(img.shape[0])
+        else:
+            self.tVals = np.arange(img.shape[0])
+        #self.ui.timeSlider.setValue(0)
+        #self.ui.normStartSlider.setValue(0)
+        #self.ui.timeSlider.setMaximum(img.shape[0]-1)
+        prof.mark('1')
+        
+        if axes is None:
+            if img.ndim == 2:
+                self.axes = {'t': None, 'x': 0, 'y': 1, 'c': None}
+            elif img.ndim == 3:
+                if img.shape[2] <= 4:
+                    self.axes = {'t': None, 'x': 0, 'y': 1, 'c': 2}
+                else:
+                    self.axes = {'t': 0, 'x': 1, 'y': 2, 'c': None}
+            elif img.ndim == 4:
+                self.axes = {'t': 0, 'x': 1, 'y': 2, 'c': 3}
+            else:
+                raise Exception("Can not interpret image with dimensions %s" % (str(img.shape)))
+        elif isinstance(axes, dict):
+            self.axes = axes.copy()
+        elif isinstance(axes, list) or isinstance(axes, tuple):
+            self.axes = {}
+            for i in range(len(axes)):
+                self.axes[axes[i]] = i
+        else:
+            raise Exception("Can not interpret axis specification %s. Must be like {'t': 2, 'x': 0, 'y': 1} or ('t', 'x', 'y', 'c')" % (str(axes)))
+            
+        for x in ['t', 'x', 'y', 'c']:
+            self.axes[x] = self.axes.get(x, None)
+        prof.mark('2')
+            
+        self.imageDisp = None
+        
+        
+        prof.mark('3')
+            
+        self.currentIndex = 0
+        self.updateImage()
+        if levels is None and autoLevels:
+            self.autoLevels()
+        if levels is not None:  ## this does nothing since getProcessedImage sets these values again.
+            self.levelMax = levels[1]
+            self.levelMin = levels[0]
+            
+        if self.ui.roiBtn.isChecked():
+            self.roiChanged()
+        prof.mark('4')
+            
+            
+        if self.axes['t'] is not None:
+            #self.ui.roiPlot.show()
+            self.ui.roiPlot.setXRange(self.tVals.min(), self.tVals.max())
+            self.timeLine.setValue(0)
+            #self.ui.roiPlot.setMouseEnabled(False, False)
+            if len(self.tVals) > 1:
+                start = self.tVals.min()
+                stop = self.tVals.max() + abs(self.tVals[-1] - self.tVals[0]) * 0.02
+            elif len(self.tVals) == 1:
+                start = self.tVals[0] - 0.5
+                stop = self.tVals[0] + 0.5
+            else:
+                start = 0
+                stop = 1
+            for s in [self.timeLine, self.normRgn]:
+                s.setBounds([start, stop])
+        #else:
+            #self.ui.roiPlot.hide()
+        prof.mark('5')
+            
+        self.imageItem.resetTransform()
+        if scale is not None:
+            self.imageItem.scale(*scale)
+        if pos is not None:
+            self.imageItem.setPos(*pos)
+        if transform is not None:
+            self.imageItem.setTransform(transform)
+        prof.mark('6')
+            
+        if autoRange:
+            self.autoRange()
+        self.roiClicked()
+        prof.mark('7')
+        prof.finish()
+
+        
+    def play(self, rate):
+        """Begin automatically stepping frames forward at the given rate (in fps).
+        This can also be accessed by pressing the spacebar."""
+        #print "play:", rate
+        self.playRate = rate
+        if rate == 0:
+            self.playTimer.stop()
+            return
+            
+        self.lastPlayTime = ptime.time()
+        if not self.playTimer.isActive():
+            self.playTimer.start(16)
+            
+        
+
+    def autoLevels(self):
+        """Set the min/max levels automatically to match the image data."""
+        #image = self.getProcessedImage()
+        self.setLevels(self.levelMin, self.levelMax)
+        
+        #self.ui.histogram.imageChanged(autoLevel=True)
+            
+
+    def setLevels(self, min, max):
+        """Set the min/max (bright and dark) levels."""
+        self.ui.histogram.setLevels(min, max)
+
+    def autoRange(self):
+        """Auto scale and pan the view around the image."""
+        image = self.getProcessedImage()
+        
+        #self.ui.graphicsView.setRange(QtCore.QRectF(0, 0, image.shape[self.axes['x']], image.shape[self.axes['y']]), padding=0., lockAspect=True)        
+        self.view.autoRange() ##setRange(self.imageItem.viewBoundingRect(), padding=0.)
+        
+    def getProcessedImage(self):
+        """Returns the image data after it has been processed by any normalization options in use."""
+        if self.imageDisp is None:
+            image = self.normalize(self.image)
+            self.imageDisp = image
+            self.levelMin, self.levelMax = list(map(float, ImageView.quickMinMax(self.imageDisp)))
+            self.ui.histogram.setHistogramRange(self.levelMin, self.levelMax)
+            
+        return self.imageDisp
+        
+        
     def close(self):
+        """Closes the widget nicely, making sure to clear the graphics scene and release memory."""
         self.ui.roiPlot.close()
         self.ui.graphicsView.close()
         #self.ui.gradientWidget.sigGradientChanged.disconnect(self.updateImage)
@@ -203,7 +410,7 @@ class ImageView(QtGui.QWidget):
         
     def evalKeyState(self):
         if len(self.keysPressed) == 1:
-            key = self.keysPressed.keys()[0]
+            key = list(self.keysPressed.keys())[0]
             if key == QtCore.Qt.Key_Right:
                 self.play(20)
                 self.jumpFrames(1)
@@ -224,17 +431,6 @@ class ImageView(QtGui.QWidget):
         else:
             self.play(0)
         
-    def play(self, rate):
-        #print "play:", rate
-        self.playRate = rate
-        if rate == 0:
-            self.playTimer.stop()
-            return
-            
-        self.lastPlayTime = ptime.time()
-        if not self.playTimer.isActive():
-            self.playTimer.start(16)
-            
         
     def timeout(self):
         now = ptime.time()
@@ -251,6 +447,7 @@ class ImageView(QtGui.QWidget):
             self.jumpFrames(n)
         
     def setCurrentIndex(self, ind):
+        """Set the currently displayed frame index."""
         self.currentIndex = np.clip(ind, 0, self.getProcessedImage().shape[0]-1)
         self.updateImage()
         self.ignoreTimeLine = True
@@ -258,7 +455,7 @@ class ImageView(QtGui.QWidget):
         self.ignoreTimeLine = False
 
     def jumpFrames(self, n):
-        """If this is a video, move ahead n frames"""
+        """Move video frame ahead n frames (may be negative)"""
         if self.axes['t'] is not None:
             self.setCurrentIndex(self.currentIndex + n)
 
@@ -349,148 +546,21 @@ class ImageView(QtGui.QWidget):
             axes = (1, 2)
         else:
             return
-        data = self.roi.getArrayRegion(image.view(np.ndarray), self.imageItem, axes)
+        data, coords = self.roi.getArrayRegion(image.view(np.ndarray), self.imageItem, axes, returnMappedCoords=True)
         if data is not None:
             while data.ndim > 1:
                 data = data.mean(axis=1)
             if image.ndim == 3:
                 self.roiCurve.setData(y=data, x=self.tVals)
             else:
-                self.roiCurve.setData(y=data, x=range(len(data)))
+                while coords.ndim > 2:
+                    coords = coords[:,:,0]
+                coords = coords - coords[:,0,np.newaxis]
+                xvals = (coords**2).sum(axis=0) ** 0.5
+                self.roiCurve.setData(y=data, x=xvals)
                 
             #self.ui.roiPlot.replot()
 
-    def setImage(self, img, autoRange=True, autoLevels=True, levels=None, axes=None, xvals=None, pos=None, scale=None):
-        """Set the image to be displayed in the widget.
-        Options are:
-          img:         ndarray; the image to be displayed.
-          autoRange:   bool; whether to scale/pan the view to fit the image.
-          autoLevels:  bool; whether to update the white/black levels to fit the image.
-          levels:      (min, max); the white and black level values to use.
-          axes:        {'t':0, 'x':1, 'y':2, 'c':3}; Dictionary indicating the interpretation for each axis.
-                       This is only needed to override the default guess.
-        """
-        prof = debug.Profiler('ImageView.setImage', disabled=True)
-        
-        if not isinstance(img, np.ndarray):
-            raise Exception("Image must be specified as ndarray.")
-        self.image = img
-        
-        if xvals is not None:
-            self.tVals = xvals
-        elif hasattr(img, 'xvals'):
-            try:
-                self.tVals = img.xvals(0)
-            except:
-                self.tVals = np.arange(img.shape[0])
-        else:
-            self.tVals = np.arange(img.shape[0])
-        #self.ui.timeSlider.setValue(0)
-        #self.ui.normStartSlider.setValue(0)
-        #self.ui.timeSlider.setMaximum(img.shape[0]-1)
-        prof.mark('1')
-        
-        if axes is None:
-            if img.ndim == 2:
-                self.axes = {'t': None, 'x': 0, 'y': 1, 'c': None}
-            elif img.ndim == 3:
-                if img.shape[2] <= 4:
-                    self.axes = {'t': None, 'x': 0, 'y': 1, 'c': 2}
-                else:
-                    self.axes = {'t': 0, 'x': 1, 'y': 2, 'c': None}
-            elif img.ndim == 4:
-                self.axes = {'t': 0, 'x': 1, 'y': 2, 'c': 3}
-            else:
-                raise Exception("Can not interpret image with dimensions %s" % (str(img.shape)))
-        elif isinstance(axes, dict):
-            self.axes = axes.copy()
-        elif isinstance(axes, list) or isinstance(axes, tuple):
-            self.axes = {}
-            for i in range(len(axes)):
-                self.axes[axes[i]] = i
-        else:
-            raise Exception("Can not interpret axis specification %s. Must be like {'t': 2, 'x': 0, 'y': 1} or ('t', 'x', 'y', 'c')" % (str(axes)))
-            
-        for x in ['t', 'x', 'y', 'c']:
-            self.axes[x] = self.axes.get(x, None)
-        prof.mark('2')
-            
-        self.imageDisp = None
-        
-        
-        prof.mark('3')
-            
-        self.currentIndex = 0
-        self.updateImage()
-        if levels is None and autoLevels:
-            self.autoLevels()
-        if levels is not None:  ## this does nothing since getProcessedImage sets these values again.
-            self.levelMax = levels[1]
-            self.levelMin = levels[0]
-            
-        if self.ui.roiBtn.isChecked():
-            self.roiChanged()
-        prof.mark('4')
-            
-            
-        if self.axes['t'] is not None:
-            #self.ui.roiPlot.show()
-            self.ui.roiPlot.setXRange(self.tVals.min(), self.tVals.max())
-            self.timeLine.setValue(0)
-            #self.ui.roiPlot.setMouseEnabled(False, False)
-            if len(self.tVals) > 1:
-                start = self.tVals.min()
-                stop = self.tVals.max() + abs(self.tVals[-1] - self.tVals[0]) * 0.02
-            elif len(self.tVals) == 1:
-                start = self.tVals[0] - 0.5
-                stop = self.tVals[0] + 0.5
-            else:
-                start = 0
-                stop = 1
-            for s in [self.timeLine, self.normRgn]:
-                s.setBounds([start, stop])
-        #else:
-            #self.ui.roiPlot.hide()
-        prof.mark('5')
-            
-        self.imageItem.resetTransform()
-        if scale is not None:
-            self.imageItem.scale(*scale)
-        if pos is not None:
-            self.imageItem.setPos(*pos)
-        prof.mark('6')
-            
-        if autoRange:
-            self.autoRange()
-        self.roiClicked()
-        prof.mark('7')
-        prof.finish()
-            
-    def autoLevels(self):
-        image = self.getProcessedImage()
-        
-        #self.ui.whiteSlider.setValue(self.ui.whiteSlider.maximum())
-        #self.ui.blackSlider.setValue(0)
-        
-        #self.ui.gradientWidget.setTickValue(self.ticks[0], 0.0)
-        #self.ui.gradientWidget.setTickValue(self.ticks[1], 1.0)
-        #self.imageItem.setLevels([self.blackLevel(), self.whiteLevel()])
-        
-        self.ui.histogram.imageChanged(autoLevel=True)
-            
-
-    def autoRange(self):
-        image = self.getProcessedImage()
-        
-        #self.ui.graphicsView.setRange(QtCore.QRectF(0, 0, image.shape[self.axes['x']], image.shape[self.axes['y']]), padding=0., lockAspect=True)        
-        self.view.setRange(self.imageItem.boundingRect(), padding=0.)
-        
-    def getProcessedImage(self):
-        if self.imageDisp is None:
-            image = self.normalize(self.image)
-            self.imageDisp = image
-            self.levelMin, self.levelMax = map(float, ImageView.quickMinMax(self.imageDisp))
-        return self.imageDisp
 
     @staticmethod
     def quickMinMax(data):
@@ -578,7 +648,7 @@ class ImageView(QtGui.QWidget):
             
             
     def timeIndex(self, slider):
-        """Return the time and frame index indicated by a slider"""
+        ## Return the time and frame index indicated by a slider
         if self.image is None:
             return (0,0)
         #v = slider.value()
@@ -613,4 +683,18 @@ class ImageView(QtGui.QWidget):
         #return self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[0])
         ##return self.levelMin + ((self.levelMax-self.levelMin) / self.ui.blackSlider.maximum()) * self.ui.blackSlider.value()
         
-    
+    def getView(self):
+        """Return the ViewBox (or other compatible object) which displays the ImageItem"""
+        return self.view
+        
+    def getImageItem(self):
+        """Return the ImageItem for this ImageView."""
+        return self.imageItem
+        
+    def getRoiPlot(self):
+        """Return the ROI PlotWidget for this ImageView"""
+        return self.ui.roiPlot
+       
+    def getHistogramWidget(self):
+        """Return the HistogramLUTWidget for this ImageView"""
+        return self.ui.histogram

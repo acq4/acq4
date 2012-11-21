@@ -4,7 +4,7 @@ This is a wrapper around HistogramLUTItem
 """
 
 from pyqtgraph.Qt import QtGui, QtCore
-from GraphicsView import GraphicsView
+from .GraphicsView import GraphicsView
 from pyqtgraph.graphicsItems.HistogramLUTItem import HistogramLUTItem
 
 __all__ = ['HistogramLUTWidget']
@@ -18,7 +18,7 @@ class HistogramLUTWidget(GraphicsView):
         self.item = HistogramLUTItem(*args, **kargs)
         self.setCentralItem(self.item)
         self.setSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding)
-        self.setMinimumWidth(92)
+        self.setMinimumWidth(95)
         
 
     def sizeHint(self):

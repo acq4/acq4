@@ -1,6 +1,6 @@
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.widgets.TreeWidget import TreeWidget
-import collections, os, weakref, re
+import os, weakref, re
 #import functions as fn
         
             
@@ -8,22 +8,26 @@ import collections, os, weakref, re
 class ParameterTree(TreeWidget):
     """Widget used to display or control data from a ParameterSet"""
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, showHeader=True):
         TreeWidget.__init__(self, parent)
         self.setVerticalScrollMode(self.ScrollPerPixel)
         self.setHorizontalScrollMode(self.ScrollPerPixel)
         self.setAnimated(False)
         self.setColumnCount(2)
         self.setHeaderLabels(["Parameter", "Value"])
-        self.setRootIsDecorated(False)
         self.setAlternatingRowColors(True)
         self.paramSet = None
         self.header().setResizeMode(QtGui.QHeaderView.ResizeToContents)
+        self.setHeaderHidden(not showHeader)
         self.itemChanged.connect(self.itemChangedEvent)
         self.lastSel = None
         self.setRootIsDecorated(False)
         
-    def setParameters(self, param, root=None, depth=0, showTop=True):
+    def setParameters(self, param, showTop=True):
+        self.clear()
+        self.addParameters(param, showTop=showTop)
+        
+    def addParameters(self, param, root=None, depth=0, showTop=True):
         item = param.makeTreeItem(depth=depth)
         if root is None:
             root = self.invisibleRootItem()
@@ -37,7 +41,11 @@ class ParameterTree(TreeWidget):
         item.treeWidgetChanged()
             
         for ch in param:
-            self.setParameters(ch, root=item, depth=depth+1)
+            self.addParameters(ch, root=item, depth=depth+1)
+
+    def clear(self):
+        self.invisibleRootItem().takeChildren()
+        
             
     def focusNext(self, item, forward=True):
         ## Give input focus to the next (or previous) item after 'item'
@@ -68,9 +76,9 @@ class ParameterTree(TreeWidget):
                 index = root.indexOfChild(startItem) - 1
             
         if forward:
-            inds = range(index, root.childCount())
+            inds = list(range(index, root.childCount()))
         else:
-            inds = range(index, -1, -1)
+            inds = list(range(index, -1, -1))
             
         for i in inds:
             item = root.child(i)
@@ -105,4 +113,6 @@ class ParameterTree(TreeWidget):
             sel[0].selected(True)
         return TreeWidget.selectionChanged(self, *args)
         
-
+    def wheelEvent(self, ev):
+        self.clearSelection()
+        return TreeWidget.wheelEvent(self, ev)

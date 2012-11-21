@@ -12,14 +12,11 @@ The class is responsible for:
 """
 
 
-## Path adjustments:
-##   - make sure 'lib' path is available for module search
-##   - add util to front of search path. This allows us to override some libs 
-##     that may be installed globally with local versions.
 import sys, gc
-import os.path as osp
-d = osp.dirname(osp.dirname(osp.abspath(__file__)))
-sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
+
+## install global exception handler for others to hook into.
+import pyqtgraph.exceptionHandling as exceptionHandling   
+exceptionHandling.setTracebackClearing(True)
 
 import time, atexit, weakref, reload
 from PyQt4 import QtCore, QtGui
@@ -36,9 +33,13 @@ from debug import *
 import getopt, glob
 import ptime
 from collections import OrderedDict
+import pyqtgraph as pg
 from pyqtgraph import ProgressDialog
 from LogWindow import LogWindow
 from HelpfulException import HelpfulException
+
+
+
 
 LOG = None
 
@@ -94,6 +95,27 @@ def logExc(msg, *args, **kwargs):
         print args
         print kwargs
 
+blockLogging = False
+def exceptionCallback(*args):
+    ## Called whenever there is an unhandled exception.
+    
+    ## unhandled exceptions generate an error message by default, but this
+    ## can be overridden by raising HelpfulException(msgType='...')
+    global blockLogging
+    if not blockLogging:  ## if an error occurs *while* trying to log another exception, disable any further logging to prevent recursion.
+        try:
+            blockLogging = True
+            logMsg("Unexpected error: ", exception=args, msgType='error')
+        except:
+            print "Error: Exception could no be logged."
+            original_excepthook(*sys.exc_info())
+        finally:
+            blockLogging = False
+exceptionHandling.register(exceptionCallback)        
+
+
+
+
 class Manager(QtCore.QObject):
     """Manager class is responsible for:
       - Loading/configuring device modules and storing their handles
@@ -116,6 +138,19 @@ class Manager(QtCore.QObject):
     single = None
     
     def __init__(self, configFile=None, argv=None):
+        self.lock = Mutex(recursive=True)  ## used for keeping some basic methods thread-safe
+        self.devices = OrderedDict()
+        self.modules = OrderedDict()
+        self.config = OrderedDict()
+        self.definedModules = OrderedDict()
+        self.currentDir = None
+        self.baseDir = None
+        self.gui = None
+        self.shortcuts = []
+        self.disableDevs = []
+        self.alreadyQuit = False
+        self.taskLock = Mutex(QtCore.QMutex.Recursive)
+        
         try:
             if Manager.CREATED:
                 raise Exception("Manager object already created!")
@@ -128,34 +163,24 @@ class Manager(QtCore.QObject):
             
             if argv is not None:
                 try:
-                    opts, args = getopt.getopt(argv, 'c:m:b:s:d:n', ['config=', 'module=', 'baseDir=', 'storageDir=', 'disable=', 'noManager'])
+                    opts, args = getopt.getopt(argv, 'c:a:m:b:s:d:n', ['config=', 'config-name=', 'module=', 'baseDir=', 'storageDir=', 'disable=', 'noManager'])
                 except getopt.GetoptError, err:
                     print str(err)
                     print """
     Valid options are:
-        -c --config=     configuration file
-        -m --module=     module name to load
-        -b --baseDir=    base directory to use
-        -s --storageDir= storage directory to use
-        -n --noManager   Do not load manager module
-        -d --disable=    Disable the device specified
+        -c --config=       Configuration file to load
+        -a --config-name=  Named configuration to load
+        -m --module=       Module name to load
+        -b --baseDir=      Base directory to use
+        -s --storageDir=   Storage directory to use
+        -n --noManager     Do not load manager module
+        -d --disable=      Disable the device specified
     """
-            QtCore.QObject.__init__(self)
-            self.alreadyQuit = False
-            self.taskLock = Mutex(QtCore.QMutex.Recursive)
-            atexit.register(self.quit)
-            self.devices = OrderedDict()
-            self.modules = OrderedDict()
-            self.config = OrderedDict()
-            self.definedModules = OrderedDict()
-            #self.devRack = None
-            #self.dataManager = DataManager()
-            self.currentDir = None
-            self.baseDir = None
-            self.gui = None
-            self.shortcuts = []
-            self.disableDevs = []
+                    raise
             
+            
+            QtCore.QObject.__init__(self)
+            atexit.register(self.quit)
             self.interfaceDir = InterfaceDirectory()
     
             
@@ -164,9 +189,12 @@ class Manager(QtCore.QObject):
             setBaseDir = None
             setStorageDir = None
             loadManager = True
+            loadConfigs = []
             for o, a in opts:
                 if o in ['-c', '--config']:
                     configFile = a
+                elif o in ['-a', '--config-name']:
+                    loadConfigs.append(a)
                 elif o in ['-m', '--module']:
                     loadModules.append(a)
                 elif o in ['-b', '--baseDir']:
@@ -193,6 +221,9 @@ class Manager(QtCore.QObject):
             
             ## Act on options if they were specified..
             try:
+                for name in loadConfigs:
+                    self.loadDefinedConfig(name)
+                        
                 if setBaseDir is not None:
                     self.setBaseDir(setBaseDir)
                 if setStorageDir is not None:
@@ -287,6 +318,23 @@ class Manager(QtCore.QObject):
                         QtGui.QApplication.instance().setStyleSheet(css)
                     except:
                         raise
+                
+                elif key == 'disableErrorPopups':
+                    if cfg[key] is True:
+                        self.logWindow.disablePopups(True)
+                    elif cfg[key] is False:
+                        self.logWindow.disablePopups(False)
+                    else:
+                        print "Warning: ignored config option 'disableErrorPopups'; value must be either True or False." 
+                    
+                elif key == 'defaultMouseMode':
+                    mode = cfg[key].lower()
+                    if mode == 'onebutton':
+                        pg.setConfigOption('leftButtonPan', False)
+                    elif mode == 'threebutton':
+                        pg.setConfigOption('leftButtonPan', True)
+                    else:
+                        print "Warning: ignored config option 'defaultMouseMode'; value must be either 'oneButton' or 'threeButton'." 
                     
                 ## Copy in any other configurations.
                 ## dicts are extended, all others are overwritten.
@@ -316,66 +364,76 @@ class Manager(QtCore.QObject):
 
     def listConfigurations(self):
         """Return a list of the named configurations available"""
-        if 'configurations' in self.config:
-            return self.config['configurations'].keys()
-        else:
-            return []
+        with self.lock:
+            if 'configurations' in self.config:
+                return self.config['configurations'].keys()
+            else:
+                return []
 
     def loadDefinedConfig(self, name):
-        if name in self.config['configurations']:
-            self.configure(self.config['configurations'][name])
-        else:
-            raise Exception("Could not find configuration named '%s'" % name)
+        with self.lock:
+            if name not in self.config['configurations']:
+                raise Exception("Could not find configuration named '%s'" % name)
+            cfg = self.config['configurations'].get(name, )
+        self.configure(cfg)
 
     #def __del__(self):
         #self.quit()
     
     def readConfigFile(self, fileName, missingOk=True):
-        fileName = self.configFileName(fileName)
-        if os.path.isfile(fileName):
-            return configfile.readConfigFile(fileName)
-        else:
-            if missingOk: 
-                return {}
+        with self.lock:
+            fileName = self.configFileName(fileName)
+            if os.path.isfile(fileName):
+                return configfile.readConfigFile(fileName)
             else:
-                raise Exception('Config file "%s" not found.' % fileName)
+                if missingOk: 
+                    return {}
+                else:
+                    raise Exception('Config file "%s" not found.' % fileName)
             
     def writeConfigFile(self, data, fileName):
         """Write a file into the currently used config directory."""
-        fileName = self.configFileName(fileName)
-        dirName = os.path.dirname(fileName)
-        if not os.path.exists(dirName):
-            os.makedirs(dirName)
-        return configfile.writeConfigFile(data, fileName)
+        with self.lock:
+            fileName = self.configFileName(fileName)
+            dirName = os.path.dirname(fileName)
+            if not os.path.exists(dirName):
+                os.makedirs(dirName)
+            return configfile.writeConfigFile(data, fileName)
     
     def appendConfigFile(self, data, fileName):
-        fileName = self.configFileName(fileName)
-        if os.path.exists(fileName):
-            return configfile.appendConfigFile(data, fileName)
-        else:
-            raise Exception("Could not find file %s" % fileName)
+        with self.lock:
+            fileName = self.configFileName(fileName)
+            if os.path.exists(fileName):
+                return configfile.appendConfigFile(data, fileName)
+            else:
+                raise Exception("Could not find file %s" % fileName)
         
         
     def configFileName(self, name):
-        return os.path.join(self.configDir, name)
+        with self.lock:
+            return os.path.join(self.configDir, name)
     
     def loadDevice(self, driverName, conf, name):
         """Load the code for a device. For this to work properly, there must be 
         a python module called lib.devices.driverName which contains a class called driverName."""
         mod = __import__('lib.devices.%s' % driverName, fromlist=['*'])
         devclass = getattr(mod, driverName)
-        self.devices[name] = devclass(self, conf, name)
-        return self.devices[name]
+        dev = devclass(self, conf, name)
+        with self.lock:
+            self.devices[name] = dev
+        return dev
     
     def getDevice(self, name):
-        name = str(name)
-        if name not in self.devices:
-            #print self.devices
-            raise Exception("No device named %s. Options are %s" % (name, str(self.devices.keys())))
-        return self.devices[name]
+        with self.lock:
+            name = str(name)
+            if name not in self.devices:
+                #print self.devices
+                raise Exception("No device named %s. Options are %s" % (name, str(self.devices.keys())))
+            return self.devices[name]
 
     def listDevices(self):
-        return self.devices.keys()
+        with self.lock:
+            return self.devices.keys()
 
     def loadModule(self, module, name, config=None, forceReload=False):
         """Create a new instance of an acq4 module. For this to work properly, there must be 
@@ -384,10 +442,11 @@ class Manager(QtCore.QObject):
         should have anticipated."""
         
         print 'Loading module "%s" as "%s"...' % (module, name)
-        if name in self.modules:
-            raise Exception('Module already exists with name "%s"' % name)
-        if config is None:
-            config = {}
+        with self.lock:
+            if name in self.modules:
+                raise Exception('Module already exists with name "%s"' % name)
+            if config is None:
+                config = {}
         
         #print "  import"
         mod = __import__('lib.modules.%s' % module, fromlist=['*'])
@@ -410,47 +469,59 @@ class Manager(QtCore.QObject):
             
         modclass = getattr(mod, module)
         #print "  create"
-        self.modules[name] = modclass(self, name, config)
+        mod = modclass(self, name, config)
         #print "  emit"
+        with self.lock:
+            self.modules[name] = mod
+            
         self.sigModulesChanged.emit()
         #print "  return"
-        return self.modules[name]
+        return mod
         
         
     def listModules(self):
         """List names of currently loaded modules. """
-        return self.modules.keys()[:]
+        with self.lock:
+            return self.modules.keys()[:]
 
     def getDirOfSelectedFile(self):
         """Returns the directory that is currently selected, or the directory of the file that is currently selected in Data Manager."""
-        try:
-            f = self.getModule("Data Manager").selectedFile()
-            if not isinstance(f, DataManager.DirHandle):
-                f = f.parent()
-        except Exception:
-            f = False
-            logMsg("Can't find currently selected directory, Data Manager has not been loaded.", msgType='warning')
-        return f
+        with self.lock:
+            try:
+                f = self.getModule("Data Manager").selectedFile()
+                if not isinstance(f, DataManager.DirHandle):
+                    f = f.parent()
+            except Exception:
+                f = False
+                logMsg("Can't find currently selected directory, Data Manager has not been loaded.", msgType='warning')
+            return f
 
     def getModule(self, name):
         """Return an already loaded module"""
-        name = str(name)
-        if name not in self.modules:
-            raise Exception("No module named %s" % name)
-        return self.modules[name]
+        with self.lock:
+            name = str(name)
+            if name not in self.modules:
+                raise Exception("No module named %s" % name)
+            return self.modules[name]
+        
+    def getCurrentDatabase(self):
+        """Return the database currently selected in the Data Manager"""
+        return self.getModule("Data Manager").currentDatabase()
 
         
     def listDefinedModules(self):
         """List module configurations defined in the config file"""
-        return self.definedModules.keys()
+        with self.lock:
+            return self.definedModules.keys()
 
 
     def loadDefinedModule(self, name, forceReload=False):
         """Load a module and configure as defined in the config file"""
-        if name not in self.definedModules:
-            print "Module '%s' is not defined. Options are: %s" % (name, str(self.definedModules.keys()))
-            return
-        conf = self.definedModules[name]
+        with self.lock:
+            if name not in self.definedModules:
+                print "Module '%s' is not defined. Options are: %s" % (name, str(self.definedModules.keys()))
+                return
+            conf = self.definedModules[name]
         
         mod = conf['module']
         if 'config' in conf:
@@ -473,11 +544,16 @@ class Manager(QtCore.QObject):
 
     
     def moduleHasQuit(self, mod):
-        if mod.name in self.modules:
-            del self.modules[mod.name]
-            self.sigModulesChanged.emit()
-            self.sigModuleHasQuit.emit(mod.name)
-            #print "Module", mod.name, "has quit"
+        
+        with self.lock:
+            if mod.name in self.modules:
+                del self.modules[mod.name]
+                self.interfaceDir.removeObject(mod)
+            else:
+                return
+        self.sigModulesChanged.emit()
+        self.sigModuleHasQuit.emit(mod.name)
+        #print "Module", mod.name, "has quit"
 
 
 
@@ -490,9 +566,12 @@ class Manager(QtCore.QObject):
             printExc("Error while requesting module '%s' quit." % name)
             
         ## Module should have called moduleHasQuit already, but just in case:
-        if name in self.modules:
-            del self.modules[name]
-            self.sigModulesChanged.emit()
+        with self.lock:
+            if name in self.modules:
+                del self.modules[name]
+            else:
+                return
+        self.sigModulesChanged.emit()
         #print "Unloaded module", name
 
     def reloadAll(self):
@@ -506,6 +585,7 @@ class Manager(QtCore.QObject):
         
 
     def createWindowShortcut(self, keys, win):
+        ## Note: this is probably not safe to call from other threads.
         try:
             sh = QtGui.QShortcut(QtGui.QKeySequence(keys), win)
             sh.setContext(QtCore.Qt.ApplicationShortcut)
@@ -513,7 +593,8 @@ class Manager(QtCore.QObject):
         except:
             printExc("Error creating shortcut '%s':" % keys)
         
-        self.shortcuts.append((sh, keys, weakref.ref(win)))
+        with self.lock:
+            self.shortcuts.append((sh, keys, weakref.ref(win)))
     
     def runProtocol(self, cmd):
         t = Task(self, cmd)
@@ -533,9 +614,10 @@ class Manager(QtCore.QObject):
     
     
     def getCurrentDir(self):
-        if self.currentDir is None:
-            raise Exception("Storage directory has not been set.")
-        return self.currentDir
+        with self.lock:
+            if self.currentDir is None:
+                raise Exception("Storage directory has not been set.")
+            return self.currentDir
     
     def setLogDir(self, d):
         self.logWindow.setLogDir(d)
@@ -579,19 +661,21 @@ class Manager(QtCore.QObject):
             
             
     def getBaseDir(self):
-        if self.baseDir is None:
-            raise Exception("Base storage directory has not been set!")
-        return self.baseDir
+        with self.lock:
+            if self.baseDir is None:
+                raise Exception("Base storage directory has not been set!")
+            return self.baseDir
 
     def setBaseDir(self, d):
-        if isinstance(d, basestring):
-            self.baseDir = self.dirHandle(d, create=False)
-        elif isinstance(d, DataManager.DirHandle):
-            self.baseDir = d
-        else:
-            raise Exception("Invalid argument type: ", type(d), d)
-        if not self.baseDir.isManaged():
-            self.baseDir.createIndex()
+        with self.lock:
+            if isinstance(d, basestring):
+                self.baseDir = self.dirHandle(d, create=False)
+            elif isinstance(d, DataManager.DirHandle):
+                self.baseDir = d
+            else:
+                raise Exception("Invalid argument type: ", type(d), d)
+            if not self.baseDir.isManaged():
+                self.baseDir.createIndex()
 
         #self.emit(QtCore.SIGNAL('baseDirChanged'))
         self.sigBaseDirChanged.emit()
@@ -636,28 +720,33 @@ class Manager(QtCore.QObject):
         
     ## These functions just wrap the functionality of an InterfaceDirectory
     def declareInterface(self, *args, **kargs):  ## args should be name, [types..], object  
-        return self.interfaceDir.declareInterface(*args, **kargs)
+        with self.lock:
+            return self.interfaceDir.declareInterface(*args, **kargs)
         
     def removeInterface(self, *args, **kargs):
-        return self.interfaceDir.removeInterface(*args, **kargs)
+        with self.lock:
+            return self.interfaceDir.removeInterface(*args, **kargs)
         
     def listInterfaces(self, *args, **kargs):
-        return self.interfaceDir.listInterfaces(*args, **kargs)
+        with self.lock:
+            return self.interfaceDir.listInterfaces(*args, **kargs)
         
     def getInterface(self, *args, **kargs):
-        return self.interfaceDir.getInterface(*args, **kargs)
+        with self.lock:
+            return self.interfaceDir.getInterface(*args, **kargs)
         
     
     def suggestedDirFields(self, file):
         """Given a DirHandle with a dirType, suggest a set of meta-info fields to use."""
-        fields = OrderedDict()
-        if isinstance(file, DataManager.DirHandle):
-            info = file.info()
-            if 'dirType' in info:
-                #infoKeys.remove('dirType')
-                dt = info['dirType']
-                if dt in self.config['folderTypes']:
-                    fields = self.config['folderTypes'][dt]['info']
+        with self.lock:
+            fields = OrderedDict()
+            if isinstance(file, DataManager.DirHandle):
+                info = file.info()
+                if 'dirType' in info:
+                    #infoKeys.remove('dirType')
+                    dt = info['dirType']
+                    if dt in self.config['folderTypes']:
+                        fields = self.config['folderTypes'][dt]['info']
         
         if 'notes' not in fields:
             fields['notes'] = 'text', 5
@@ -736,7 +825,8 @@ class Task:
         
         self.lockedDevs = []
         self.startedDevs = []
-        
+        self.startTime = None
+        self.stopTime = None
         
         #self.reserved = False
         try:
@@ -766,7 +856,6 @@ class Task:
                 continue
             self.devs[devName] = dev
             self.tasks[devName] = task
-        
         
     def execute(self, block=True, processEvents=True):
         """Start the protocol task.
@@ -903,6 +992,8 @@ class Task:
             self.abort()
             self.releaseAll()
             raise
+        finally:
+            prof.finish()
         
         
     def isDone(self):
@@ -925,7 +1016,24 @@ class Task:
             if not self.tasks[t].isDone():
                 #print "Task %s not finished" % t
                 return False
+        if self.stopTime is None:
+            self.stopTime = ptime.time()
         return True
+    
+    def duration(self):
+        """Return the requested protocol duration, or None if it was not given."""
+        return self.command.get('protocol', {}).get('duration', None)
+    
+    def runTime(self):
+        """Return the length of time since this protocol has been running.
+        If the task has already finished, return the length of time the task ran for.
+        If the task has not started yet, return None.
+        """
+        if self.startTime is None:
+            return None
+        if self.stopTime is None:
+            return ptime.time() - self.startTime
+        return self.stopTime - self.startTime
         
     def stop(self, abort=False):
         """Stop all tasks and read data. If abort is True, does not attempt to collect data from the run."""
@@ -973,6 +1081,8 @@ class Task:
                 prof.mark("store data")
         finally:   ## Regardless of any other problems, at least make sure we release hardware for future use
             ## Release all hardware for use elsewhere
+            if self.stopTime is None:
+                self.stopTime = ptime.time()
             
             self.releaseAll()
             prof.mark("release all")

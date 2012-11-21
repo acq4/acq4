@@ -1,27 +1,83 @@
 pos: (0.0, 0.0)
-connects: [('Input', 'events', 'EventFilter.0', 'events'), ('Input', 'regions', 'Scores', 'regions'), ('DirectScore', 'output', 'ReadSpotSize', 'data'), ('ReadSpotSize', 'output', 'Output', 'dataOut'), ('EventFilter.0', 'output', 'Scores', 'events'), ('Input', 'regions', 'DirectScore', 'regions'), ('Input', 'events', 'DirectScore', 'events'), ('Input', 'fileHandle', 'ReadSpotSize', 'file'), ('Scores', 'output', 'DirectScore', 'stats'), ('StatsCalculator.0', 'stats', 'Scores', 'stats'), ('Input', 'regions', 'StatsCalculator.0', 'regions'), ('EventFilter.0', 'output', 'StatsCalculator.0', 'data')]
+connects: [('Input', 'regions', 'ZScore', 'regions'), ('EventSignFilter', 'output', 'evokedLatency', 'events'), ('ReadSpotSize', 'output', 'MergeData', 'spotsize'), ('ZScore', 'score', 'MergeData', 'ZScore'), ('evokedLatency', 'output', 'MergeData', 'latency'), ('MergeData', 'output', 'Output', 'dataOut'), ('Input', u'directFit', 'Scores', 'directFit'), ('Input', 'events', 'EventSignFilter', 'events'), ('StatsCalculator.0', 'stats', 'MergeData', 'stats'), ('Input', 'regions', 'StatsCalculator.0', 'regions'), ('StatsEventFilter', 'output', 'StatsCalculator.0', 'data'), ('Input', u'directFit', 'MergeData', 'directFit'), ('Input', 'fileHandle', 'ReadSpotSize', 'file'), ('Input', 'regions', 'Scores', 'regions'), ('Input', 'fileHandle', 'ZScore', 'file'), ('Input', 'events', 'Scores', 'events'), ('Scores', 'output', 'MergeData', 'scores'), ('EventSignFilter', 'output', 'StatsEventFilter', 'events')]
 terminals:
     events:
         multi: False
-        optional: False
         io: 'in'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
     regions:
         multi: False
-        optional: False
         io: 'in'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
     fileHandle:
         multi: False
-        optional: False
         io: 'in'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
     dataOut:
         multi: False
-        optional: False
         io: 'out'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+    directFit:
+        multi: False
+        io: 'in'
+        renamable: True
+        multiable: False
+        removable: True
+        optional: False
 bypass: False
 inputNode:
+    terminals:
+        events:
+            multi: False
+            io: 'out'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+        regions:
+            multi: False
+            io: 'out'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+        fileHandle:
+            multi: False
+            io: 'out'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+        directFit:
+            multi: False
+            io: 'out'
+            renamable: True
+            multiable: False
+            removable: True
+            optional: False
     pos: (-403.0, 97.0)
     bypass: False
-nodes: [{'state': {'text': "events = args['events']\nstats = args['stats']\nrgn = {}\nfor term, r in args['regions'].iteritems():\n    rgn[term.node().name()] = r\n\npreLen = rgn['PreRegion'][1] - rgn['PreRegion'][0]\ndirLen = rgn['DirRegion'][1] - rgn['DirRegion'][0]\n\nnPre = (events['region']=='PreRegion').sum()\nnDir = (events['region']=='DirRegion').sum()\n\ndirScore = (nDir/dirLen) - (nPre/preLen)\nstats['DirScore'] = dirScore\nreturn {'output': stats}", 'terminals': {'regions': {'multi': False, 'optional': False, 'io': 'in'}, 'output': {'multi': False, 'optional': False, 'io': 'out'}, 'stats': {'multi': False, 'optional': False, 'io': 'in'}, 'events': {'multi': False, 'optional': False, 'io': 'in'}}, 'pos': (257.09847871881897, 73.86462273052518), 'bypass': False}, 'pos': (257.09847871881897, 73.86462273052518), 'class': 'PythonEval', 'name': 'DirectScore'}, {'state': {'pos': (-124.0, -34.0), 'bypass': False, 'ctrl': {'fitDecayTau': False, 'maxFitTime': 0.0, 'fitTime': False, 'minFitDecayTau': 0.0, 'maxFitAmp': 0.0, 'minFitRiseTau': 0.0, 'fitRiseTau': False, 'minFitTime': 0.0, 'maxFitDecayTau': 0.1, 'minFitAmp': 0.0, 'region': u'all', 'maxFitRiseTau': 0.0, 'fitAmplitude': False, 'fitFractionalError': False, 'maxFitFractionalError': 0.0, 'minFitFractionalError': 0.0}}, 'pos': (-124.0, -34.0), 'class': 'EventFilter', 'name': 'EventFilter.0'}, {'state': {'text': "events = args['events']\nstats = args['stats']\nrgn = {}\nfor term, r in args['regions'].iteritems():\n    rgn[term.node().name()] = r\n\npreLen = rgn['PreRegion'][1] - rgn['PreRegion'][0]\npostLen = rgn['PostRegion'][1] - rgn['PostRegion'][0]\n\nnPre = (events['region']=='PreRegion').sum()\nnPost = (events['region']=='PostRegion').sum()\n\npostScore = (nPost/postLen) - (nPre/preLen)\nstats['PostScore'] = postScore\nreturn {'output': stats}", 'terminals': {'regions': {'multi': False, 'optional': False, 'io': 'in'}, 'output': {'multi': False, 'optional': False, 'io': 'out'}, 'stats': {'multi': False, 'optional': False, 'io': 'in'}, 'events': {'multi': False, 'optional': False, 'io': 'in'}}, 'pos': (136.35582397924583, -34.901187874933115), 'bypass': False}, 'pos': (136.35582397924583, -34.901187874933115), 'class': 'PythonEval', 'name': 'Scores'}, {'state': {'text': "fh = args['file']\nd = args['data']\nd['spotSize'] = fh.info().get('Scanner', {}).get('spotSize', 0.0)\nreturn {'output': d}", 'terminals': {'output': {'multi': False, 'optional': False, 'io': 'out'}, 'data': {'multi': False, 'optional': False, 'io': 'in'}, 'file': {'multi': False, 'optional': False, 'io': 'in'}}, 'pos': (386.2894269142651, 148.34673058857572), 'bypass': False}, 'pos': (386.2894269142651, 148.34673058857572), 'class': 'PythonEval', 'name': 'ReadSpotSize'}, {'state': {'ui': {'rows': [['SourceFile', False, False, False, False, False, False], ['index', False, False, False, False, False, False], ['fitDecayTau', False, True, True, False, False, True], ['sum', True, True, False, False, False, False], ['fitTime', False, False, False, False, False, False], ['len', False, False, False, False, False, False], ['fitAmplitude', True, True, True, False, False, True], ['peak', False, False, False, False, False, False], ['time', False, False, False, False, False, False], ['region', False, False, False, False, False, False], ['fitError', True, True, True, False, False, False], ['fitRiseTau', False, True, True, False, False, True], ['peakIndex', False, False, False, False, False, False]], 'cols': ['sum', 'avg', 'med', 'min', 'max', 'std']}, 'pos': (-5.0, -178.0), 'bypass': False}, 'pos': (-5.0, -178.0), 'class': 'StatsCalculator', 'name': 'StatsCalculator.0'}]
+nodes: [{'state': {'text': "# Access inputs as args['input_name']\ndata = args['file']['Clamp1.ma'].read()['Channel': 'primary']\nrgns = args['regions']\n\nduration = 30e-3\npre = data['Time': rgns['PreRegion'][0]:rgns['PreRegion'][1]]\npost = data['Time': rgns['PostRegion'][0]:rgns['PostRegion'][0]+duration]\n\nreturn {'score': {'ZScore': abs(post.mean() - pre.mean()) / pre.std()}}", 'terminals': OrderedDict([('file', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False}), ('regions', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': True, 'optional': False}), ('score', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False})]), 'pos': (280.8760243139427, 395.78614328192884), 'bypass': False}, 'pos': (280.8760243139427, 395.78614328192884), 'class': 'PythonEval', 'name': 'ZScore'}, {'state': {'text': "import collections\nout = collections.OrderedDict()\nfor inp in args:\n    out.update(args[inp])\n\nreturn {'output': out}", 'terminals': OrderedDict([('output', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False}), ('scores', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False}), ('spotsize', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': True, 'optional': False}), ('latency', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': True, 'optional': False}), ('stats', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': True, 'optional': False}), ('directFit', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': True, 'optional': False}), ('ZScore', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': True, 'optional': False})]), 'pos': (418.9373169671712, 77.14172943562653), 'bypass': False}, 'pos': (418.9373169671712, 77.14172943562653), 'class': 'PythonEval', 'name': 'MergeData'}, {'state': {'pos': (28.276747294451468, 300.65470337693057), 'bypass': False, 'ctrl': {'fitDecayTau': False, 'maxFitTime': 0.0, 'fitTime': False, 'minFitDecayTau': 0.0, 'maxFitLengthOverDecay': 100.0, 'maxFitAmp': 0.0, 'fitLengthOverDecay': False, 'fitRiseTau': False, 'minFitTime': 0.0, 'maxFitDecayTau': 0.1, 'minFitLengthOverDecay': 1.0, 'minFitAmp': 0.0, 'region': u'all', 'maxFitRiseTau': 0.0, 'minFitRiseTau': 0.0, 'fitAmplitude': False, 'fitFractionalError': False, 'maxFitFractionalError': 0.6, 'minFitFractionalError': 0.0}}, 'pos': (28.276747294451468, 300.65470337693057), 'class': 'EventFilter', 'name': 'StatsEventFilter'}, {'state': {'pos': (-228.42735843801336, 252.26510707588858), 'bypass': False, 'ctrl': {'fitDecayTau': False, 'maxFitTime': 0.0, 'fitTime': False, 'minFitDecayTau': 0.0, 'maxFitLengthOverDecay': 0.0, 'maxFitAmp': 1.0, 'fitLengthOverDecay': False, 'fitRiseTau': False, 'minFitTime': 0.0, 'maxFitDecayTau': 0.0, 'minFitLengthOverDecay': 0.0, 'minFitAmp': 0.0, 'region': u'all', 'maxFitRiseTau': 0.0, 'minFitRiseTau': 0.0, 'fitAmplitude': True, 'fitFractionalError': False, 'maxFitFractionalError': 0.0, 'minFitFractionalError': 0.0}}, 'pos': (-228.42735843801336, 252.26510707588858), 'class': 'EventFilter', 'name': 'EventSignFilter'}, {'state': {'text': "events = args['events']\nrgn = args['regions']\n\n## region lengths\npreLen = rgn['PreRegion'][1] - rgn['PreRegion'][0]\npostLen = rgn['PostRegion'][1] - rgn['PostRegion'][0]\n\npreEvents = events[events['region']=='PreRegion']\nnPrePos = (preEvents['fitAmplitude'] > 0).sum()\nnPreNeg = len(preEvents) - nPrePos\n\npostEvents = events[events['region']=='PostRegion']\nnPostPos = (postEvents['fitAmplitude'] > 0).sum()\nnPostNeg = len(postEvents) - nPostPos\n\npostNegScore = (nPostNeg/postLen) - (nPreNeg/preLen)\nif postNegScore < 0:\n    postNegScore = 0.0\npostPosScore = (nPostPos/postLen) - (nPrePos/preLen)\nif postPosScore < 0:\n    postPosScore = 0.0\n\npostScore = postNegScore + postPosScore\n\n## direct score calculation\n\ndirScore = 0.0\n\ndirEvents = events[events['region']=='DirRegion']\nif len(dirEvents) > 0:\n    dirScore = np.abs(dirEvents['fitAmplitude']).sum() * 1e11\n\ndirFit = args['directFit']\nif dirFit['directFitValid'] and dirFit['directFitSubtracted']: \n    dirScore = np.abs(dirFit['directFitPeak']) * 1e11\n\nscores = {\n    'PostScore': postScore,\n    'DirScore': dirScore,\n    'PostPositiveScore': postPosScore,\n    'PostNegativeScore': postNegScore,\n}\nreturn {'output': scores}", 'terminals': OrderedDict([('output', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False}), ('regions', {'multi': False, 'io': 'in', 'renamable': False, 'multiable': False, 'removable': False, 'optional': False}), ('stats', {'multi': False, 'io': 'in', 'renamable': False, 'multiable': False, 'removable': False, 'optional': False}), ('events', {'multi': False, 'io': 'in', 'renamable': False, 'multiable': False, 'removable': False, 'optional': False}), ('directFit', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': True, 'optional': False})]), 'pos': (282.0635693663543, -39.50446482010368), 'bypass': False}, 'pos': (282.0635693663543, -39.50446482010368), 'class': 'PythonEval', 'name': 'Scores'}, {'state': {'text': "fh = args['file']\nspotSize = fh.info().get('Scanner', {}).get('spotSize', 0.0)\nreturn {'output': {'spotSize': spotSize}}", 'terminals': OrderedDict([('output', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False}), ('data', {'multi': False, 'io': 'in', 'renamable': False, 'multiable': False, 'removable': False, 'optional': False}), ('file', {'multi': False, 'io': 'in', 'renamable': False, 'multiable': False, 'removable': False, 'optional': False})]), 'pos': (285.34362560032037, 173.41874033534947), 'bypass': False}, 'pos': (285.34362560032037, 173.41874033534947), 'class': 'PythonEval', 'name': 'ReadSpotSize'}, {'state': {'ui': {'rows': [['SourceFile', False, False, False, False, False, False], ['index', False, False, False, False, False, False], ['fitDecayTau', False, True, True, False, False, False], ['fitTimeToPeak', False, True, True, False, False, False], ['sum', False, False, False, False, False, False], ['fitTime', False, False, False, False, False, False], ['len', False, False, False, False, False, False], ['fitError', False, False, False, False, False, False], ['fitAmplitude', True, True, True, False, False, False], ['peak', False, False, False, False, False, False], ['time', False, False, False, False, False, False], ['region', False, False, False, False, False, False], ['fitFractionalError', False, False, False, False, False, False], ['peakIndex', False, False, False, False, False, False], ['fitRiseTau', False, True, True, False, False, False], ['fitLengthOverDecay', False, False, False, False, False, False]], 'cols': ['sum', 'avg', 'med', 'min', 'max', 'std']}, 'pos': (283.7099672788758, 285.2663761833224), 'bypass': False}, 'pos': (283.7099672788758, 285.2663761833224), 'class': 'StatsCalculator', 'name': 'StatsCalculator.0'}, {'state': {'text': "ev = args['events']\npost = ev[ev['region'] == 'PostRegion']\nif len(post) == 0:\n    return {'output': {'evokedLatency': -1.0}}\nelse:\n    return {'output': {'evokedLatency': post[0]['fitTime'] - 0.3}}\n", 'terminals': OrderedDict([('output', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False}), ('events', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False})]), 'pos': (285.42835393905125, 68.42103039327043), 'bypass': False}, 'pos': (285.42835393905125, 68.42103039327043), 'class': 'PythonEval', 'name': 'evokedLatency'}]
 outputNode:
+    terminals:
+        dataOut:
+            multi: False
+            io: 'in'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
     pos: (526.516316260227, 75.49605150768275)
     bypass: False

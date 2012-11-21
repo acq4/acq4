@@ -66,4 +66,4 @@ class Ui_Form(object):
         self.tree.headerItem().setText(5, QtGui.QApplication.translate("Form", "remove", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph import TreeWidget
-from FeedbackButton import FeedbackButton
+from pyqtgraph import FeedbackButton

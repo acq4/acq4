@@ -31,8 +31,8 @@ class EventListPlotter(CtrlNode):
         if not display:
             return {'plot': None}
         conn = self['plot'].connections()
-        if len(events) > 200:
-            events = events[:200]
+        if len(events) > 2000:
+            events = events[:2000]
         color = self.ctrls['color'].color()
         
         ## don't keep items from last run; they may have been removed already.
@@ -50,7 +50,7 @@ class EventListPlotter(CtrlNode):
                 #self.items[c] = graphicsItems.VTickGroup(events, view=plot, pen=color)
                 #self.items[c].setYRange([0., 0.2], relative=True)
             #self.items[c] = graphicsItems.VTickGroup(events, view=plot, pen=color)
-            self.items[c] = pg.VTickGroup(events, yrange=[0.8, 1.], pen=color)
+            self.items[c] = pg.VTickGroup(events, yrange=[0.9, 1.], pen=color)
             #self.items[c].setYRange([0., 0.2], relative=True)
             self.items[c].setZValue(1000)
         return {'plot': self.items}

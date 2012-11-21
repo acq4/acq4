@@ -76,6 +76,7 @@ class Container(object):
                 pass
             self.updateStretch()
         
+        
     def childStretchChanged(self):
         #print "child", QtCore.QObject.sender(self), "changed shape, updating", self
         self.updateStretch()
@@ -264,4 +265,4 @@ class TContainer(Container, QtGui.QWidget):
         QtGui.QStackedWidget.childEvent(self.stack, ev)
         Container.childEvent(self, ev)
         
-import Dock
+from . import Dock
