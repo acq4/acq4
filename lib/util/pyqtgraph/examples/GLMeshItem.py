@@ -45,35 +45,19 @@ data = np.abs(np.fromfunction(psi, (50,50,100)))
 
 #data = np.fromfunction(lambda i,j,k: np.sin(0.2*((i-25)**2+(j-15)**2+k**2)**0.5), (50,50,50)); 
 print("Generating isosurface..")
-faces = pg.isosurface(data, data.max()/4.)
+verts = pg.isosurface(data, data.max()/4.)
 
-md = gl.MeshData.MeshData(faces=faces)
+md = gl.MeshData.MeshData(vertexes=verts)
 
-
-verts = md.vertexes()
-norms = md.vertexNormals()
-
-colors = np.ones((verts.shape[0], 4), dtype=float)
+colors = np.ones((md.vertexes(indexed='faces').shape[0], 4), dtype=float)
 colors[:,3] = 0.3
 colors[:,2] = np.linspace(0, 1, colors.shape[0])
-faces = md.faces()
-#faceNormals = md.faceNormals()
-
-m1 = gl.GLMeshItem(vertexes=verts, normals=norms, color=colors, faces=md.faces())
+m1 = gl.GLMeshItem(meshdata=md, color=colors, smooth=False)
 
 w.addItem(m1)
 m1.translate(-25, -25, -20)
 
-#verts = verts[faces.flatten()]
-#norms = np.empty((faceNormals.shape[0], 3, 3))
-#norms[:] = faceNormals[:,np.newaxis,:]
-verts = md.vertexes(indexed='faces')
-norms = md.faceNormals(indexed='faces')
-colors = np.ones((verts.shape[0], 4), dtype=float)
-colors[:,3] = 0.3
-colors[:,2] = np.linspace(0, 1, colors.shape[0])
-
-m2 = gl.GLMeshItem(vertexes=verts, normals=norms, color=colors)
+m2 = gl.GLMeshItem(vertexes=verts, color=colors, smooth=True)
 
 w.addItem(m2)
 m2.translate(-25, -25, -50)

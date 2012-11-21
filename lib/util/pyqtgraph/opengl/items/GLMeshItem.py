@@ -16,26 +16,47 @@ class GLMeshItem(GLGraphicsItem):
     
     Displays a 3D triangle mesh. 
     """
-    def __init__(self, meshdata=None, vertexes=None, faces=None, normals=None, color=None, shader=None):
+    def __init__(self, **kwds):
         """
-        See :class:`MeshData <pyqtgraph.opengl.MeshData>` for initialization arguments.
+        All initialization arguments are passed to setData(...)
         """
-        self.meshdata = meshdata
-        self.vertexes = vertexes
-        self.faces = faces
-        self.normals = normals
-        self.color = color
-        self.shader = shader
+        self.opts = {
+            'meshdata': None,
+            'vertexes': None,
+            'faces': None,
+            'normals': None,
+            'color': (1., 1., 1., 0.5),
+            'shader': 'balloon',
+            'smooth': True,
+        }
+        
+        GLGraphicsItem.__init__(self)
+        self.setData(**kwds)
+        #self.meshdata = meshdata
+        #self.vertexes = vertexes
+        #self.faces = faces
+        #self.normals = normals
+        #self.color = color
+        #self.shader = shader
         
         #if isinstance(faces, MeshData):
             #self.data = faces
         #else:
             #self.data = MeshData()
             #self.data.setFaces(faces, vertexes)
-        GLGraphicsItem.__init__(self)
+        
+    def setData(self, **kwds):
+        if kwds.get('meshdata', None) is not None:
+            self.opts['vectors'] = None
+            self.opts['normals'] = None
+            self.opts['faces'] = None
+        self.opts.update(kwds)
+        self.update()
+        
         
     def initializeGL(self):
-        self.shader = shaders.getShaderProgram('balloon')
+        pass
+        #self.shader = shaders.getShaderProgram(self.opts['shader'])
         
         #l = glGenLists(1)
         #self.triList = l
@@ -84,36 +105,72 @@ class GLMeshItem(GLGraphicsItem):
         #glAlphaFunc( GL_ALWAYS,0.5 )
         #glEnable( GL_POINT_SMOOTH )
         glDisable( GL_DEPTH_TEST )
+        self.shader = shaders.getShaderProgram(self.opts['shader'])
+                
+                
+    def parseMeshData(self):
+        ## interpret vertex / normal data before drawing
+        ## This can:
+        ##   - automatically generate normals if they were not specified
+        ##   - pull vertexes/noormals/faces from MeshData if that was specified
+        
+        if self.opts['vertexes'] is not None and self.opts['normals'] is not None:
+            return
+        if self.opts['normals'] is None:
+            if self.opts['meshdata'] is None:
+                self.opts['meshdata'] = MeshData(vertexes=self.opts['vertexes'], faces=self.opts['faces'])
+            #else:
+                #self.opts['meshdata'].setFaces(vertexes=self.opts['vertexes'], faces=self.opts['faces'])
+        if self.opts['meshdata'] is not None:
+            md = self.opts['meshdata']
+            if self.opts['smooth']:
+                self.opts['vertexes'] = md.vertexes()
+                self.opts['normals'] = md.vertexNormals()
+                self.opts['faces'] = md.faces()
+            else:
+                self.opts['vertexes'] = md.vertexes(indexed='faces')
+                self.opts['normals'] = md.faceNormals(indexed='faces')
+                self.opts['faces'] = None
+            return
+                
+        
                 
     def paint(self):
         self.setupGLState()
+        
+        self.parseMeshData()        
+        
         with self.shader:
             #glCallList(self.triList)
+            verts = self.opts['vertexes']
+            norms = self.opts['normals']
+            color = self.opts['color']
+            faces = self.opts['faces']
             
             glEnableClientState(GL_VERTEX_ARRAY)
             try:
-                glVertexPointerf(self.vertexes)
+                glVertexPointerf(verts)
                 
-                if isinstance(self.color, np.ndarray):
+                if isinstance(color, np.ndarray):
                     glEnableClientState(GL_COLOR_ARRAY)
-                    glColorPointerf(self.color)
+                    glColorPointerf(color)
                 else:
-                    if isinstance(self.color, QtGui.QColor):
-                        glColor4f(*fn.glColor(self.color))
+                    if isinstance(color, QtGui.QColor):
+                        glColor4f(*fn.glColor(color))
                     else:
-                        glColor4f(*self.color)
+                        glColor4f(*color)
                 
-                if self.normals is None:
+                if norms is None:
                     pass  ## construct normals here
                     
                 
                 glEnableClientState(GL_NORMAL_ARRAY)
-                glNormalPointerf(self.normals)
+                glNormalPointerf(norms)
                 
-                if self.faces is None:
-                    glDrawArrays(GL_TRIANGLES, 0, len(self.vertexes))
+                if faces is None:
+                    glDrawArrays(GL_TRIANGLES, 0, len(verts))
                 else:
-                    faces = self.faces.astype(np.uint).flatten()
+                    faces = faces.astype(np.uint).flatten()
                     glDrawElements(GL_TRIANGLES, len(faces), GL_UNSIGNED_INT, faces)
             finally:
                 glDisableClientState(GL_NORMAL_ARRAY)
