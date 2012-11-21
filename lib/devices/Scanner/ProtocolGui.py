@@ -146,6 +146,7 @@ class ScannerProtoGui(ProtocolGui):
         for item in self.items.values():
             item.resetParents()
             
+        #self.ui.simulateShutterCheck.setChecked(False)
         if 'offVoltage' not in self.dev.config: ## we don't have a voltage for virtual shuttering
             self.ui.simulateShutterCheck.setChecked(False)
             self.ui.simulateShutterCheck.setEnabled(False)
