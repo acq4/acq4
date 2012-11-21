@@ -245,7 +245,7 @@ class LaserDevGui(QtGui.QWidget):
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()
         for opticState, wavelength, trans, power, date in self.dev.getCalibrationList():
-            item = QtGui.QTreeWidgetItem([opticState, wavelength, '%.2f' %(trans*100) + '%', siFormat(power, suffix='W'), date])
+            item = QtGui.QTreeWidgetItem([str(opticState), str(wavelength), '%.2f' %(trans*100) + '%', siFormat(power, suffix='W'), date])
             self.ui.calibrationList.addTopLevelItem(item)
             
     def calibrateClicked(self):

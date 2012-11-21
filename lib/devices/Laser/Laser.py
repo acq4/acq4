@@ -397,8 +397,8 @@ class Laser(DAQGeneric, OptomechDevice):
             
         laserOff = resultOff[powerMeter][0][measurementStart:]
         laserOn = resultOn[powerMeter][0][measurementStart:]
-                          
-        t, prob = stats.ttest_ind(laserOn, laserOff)
+    
+        t, prob = stats.ttest_ind(laserOn.asarray(), laserOff.asarray())
         if prob > 0.001:
             raise Exception("Power meter device %s could not detect laser." %powerMeter)
         else:
