@@ -50,8 +50,8 @@ faces = pg.isosurface(data, data.max()/4.)
 md = gl.MeshData.MeshData(faces=faces)
 
 
-verts = md.vertexes(index='faces')
-norms = md.vertexNormals(index='faces')
+verts = md.vertexes()
+norms = md.vertexNormals()
 
 colors = np.ones((verts.shape[0], 4), dtype=float)
 colors[:,3] = 0.3
@@ -59,14 +59,16 @@ colors[:,2] = np.linspace(0, 1, colors.shape[0])
 faces = md.faces()
 #faceNormals = md.faceNormals()
 
-m1 = gl.GLMeshItem(vertexes=verts, normals=norms, color=colors, index=md.faces())
+m1 = gl.GLMeshItem(vertexes=verts, normals=norms, color=colors, faces=md.faces())
 
 w.addItem(m1)
-m1.translate(-25, -25, 50)
+m1.translate(-25, -25, -20)
 
-verts = verts[faces.flatten()]
-norms = np.empty((faceNormals.shape[0], 3, 3))
-norms[:] = faceNormals[:,np.newaxis,:]
+#verts = verts[faces.flatten()]
+#norms = np.empty((faceNormals.shape[0], 3, 3))
+#norms[:] = faceNormals[:,np.newaxis,:]
+verts = md.vertexes(indexed='faces')
+norms = md.faceNormals(indexed='faces')
 colors = np.ones((verts.shape[0], 4), dtype=float)
 colors[:,3] = 0.3
 colors[:,2] = np.linspace(0, 1, colors.shape[0])

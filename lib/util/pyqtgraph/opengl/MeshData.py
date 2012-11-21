@@ -154,59 +154,86 @@ class MeshData(object):
         return len(self._faces)
     
     def faces(self):
+        """Return an array (N, 3) of vertex indexes, three per triangular face in the mesh."""
         return self._faces
         
-    def vertexes(self):
-        return self._vertexes
+    def vertexes(self, indexed=None):
+        """Return an array (N,3) of the positions of vertexes in the mesh. 
+        By default, each unique vertex appears only once in the array.
+        If indexed is 'faces', then the array will instead contain three vertexes
+        per face in the mesh (and a single vertex may appear more than once in the array)."""
+        if indexed is None:
+            return self._vertexes
+        elif indexed == 'faces':
+            return self._vertexes[self.faces().flatten()]
+        else:
+            raise Exception("Invalid indexing mode. Accepts: None, 'faces'")
         
-    def vertexColors(self):
-        return self._vertexColors
         
-    def faceColors(self):
-        return self._faceColors
-        
-    def edgeColors(self):
-        return self._edgeColors
-        
-    def faceNormals(self, indexed=False):
+    def faceNormals(self, indexed=None):
         """
         Computes and stores normal of each face.
         """
+        
         if self._faceNormals is None:
-            self._faceNormals = np.empty(self._faces.shape, dtype=float)
-            for i in xrange(self._faces.shape[0]):
-                face = self._faces[i]
-                ## compute face normal
-                pts = [self._vertexes[vind] for vind in face]
-                #norm = QtGui.QVector3D.crossProduct(pts[1]-pts[0], pts[2]-pts[0])
-                #norm = norm / norm.length()  ## don't use .normalized(); doesn't work for small values.
-                norm = np.cross(pts[1]-pts[0], pts[2]-pts[0])
-                mag = (norm**2).sum()**0.5
-                self._faceNormals[i] = norm / mag
-        return self._faceNormals
+            #self._faceNormals = np.empty(self._faces.shape, dtype=float)
+            #for i in xrange(self._faces.shape[0]):
+                #face = self._faces[i]
+                ### compute face normal
+                #pts = [self._vertexes[vind] for vind in face]
+                #norm = np.cross(pts[1]-pts[0], pts[2]-pts[0])
+                #mag = (norm**2).sum()**0.5
+                #self._faceNormals[i] = norm / mag
+            v = self.vertexes()[self.faces()]
+            self._faceNormals = np.cross(v[:,1]-v[:,0], v[:,2]-v[:,0])
+        
+        if indexed is None:
+            return self._faceNormals
+        elif indexed == 'faces':
+            norms = np.empty((self._faceNormals.shape[0], 3, 3))
+            norms[:] = self._faceNormals[:,np.newaxis,:]
+            return norms
+        else:
+            raise Exception("Invalid indexing mode. Accepts: None, 'faces'")
+        
     
-    def vertexNormals(self):
+    def vertexNormals(self, indexed=None):
         """
-        Assigns each vertex the average of its connected face normals.
-        If face normals have not been computed yet, then generateFaceNormals will be called.
+        Return an array of normal vectors.
+        By default, the array will be (N, 3) with one entry per unique vertex in the mesh.
+        If indexed is 'faces', then the array will contain three normal vectors per face
+        (and some vertexes may be repeated).
         """
         if self._vertexNormals is None:
             faceNorms = self.faceNormals()
             vertFaces = self.vertexFaces()
             self._vertexNormals = np.empty(self._vertexes.shape, dtype=float)
             for vindex in xrange(self._vertexes.shape[0]):
-                #print vertFaces[vindex]
-                #norms = [faceNorms[findex] for findex in vertFaces[vindex]]
-                #norm = QtGui.QVector3D()
-                #for fn in norms:
-                    #norm += fn
-                #norm = norm / norm.length()  ## don't use .normalize(); doesn't work for small values.
-                
                 norms = faceNorms[vertFaces[vindex]]  ## get all face normals
                 norm = norms.sum(axis=0)       ## sum normals
                 norm /= (norm**2).sum()**0.5  ## and re-normalize
                 self._vertexNormals[vindex] = norm
-        return self._vertexNormals
+                
+        if indexed is None:
+            return self._vertexNormals
+        elif indexed == 'faces':
+            return self._vertexNormals[self.faces().flatten()]
+        else:
+            raise Exception("Invalid indexing mode. Accepts: None, 'faces'")
+        
+    def vertexColors(self, indexed=None):
+        if indexed is None:
+            return self._vertexColors
+        elif indexed == 'faces':
+            return self._vertexColors[self.faces().flatten()]
+        else:
+            raise Exception("Invalid indexing mode. Accepts: None, 'faces'")
+        
+    def faceColors(self):
+        return self._faceColors
+        
+    def edgeColors(self):
+        return self._edgeColors
         
     #def reverseNormals(self):
         #"""
