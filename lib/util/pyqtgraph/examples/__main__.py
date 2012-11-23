@@ -43,7 +43,8 @@ examples = OrderedDict([
     ])),
     ('3D Graphics', OrderedDict([
         ('Volumetric', 'GLVolumeItem.py'),
-        ('Isosurface', 'GLMeshItem.py'),
+        ('Isosurface', 'GLIsosurface.py'),
+        ('Mesh', 'GLMeshItem.py'),
         ('Image', 'GLImageItem.py'),
         ('Scatter Plot', 'GLScatterPlotItem.py'),
     ])),

@@ -6,13 +6,13 @@ from OpenGL.GL import shaders
 def initShaders():
     global Shaders
     Shaders = [
+        ShaderProgram(None, []),
         ShaderProgram('balloon', [   ## increases fragment alpha as the normal turns orthogonal to the view
             VertexShader("""
                 varying vec3 normal;
                 void main() {
+                    // compute here for use in fragment shader
                     normal = normalize(gl_NormalMatrix * gl_Normal);
-                    //vec4 color = normal;
-                    //normal.w = min(color.w + 2.0 * color.w * pow(normal.x*normal.x + normal.y*normal.y, 2.0), 1.0);
                     gl_FrontColor = gl_Color;
                     gl_BackColor = gl_Color;
                     gl_Position = ftransform();
@@ -27,7 +27,98 @@ def initShaders():
                 }
             """)
         ]),
-        ShaderProgram('point_sprite', [   ## allows specifying point size using normal.x
+        ShaderProgram('viewNormalColor', [   ## colors fragments based on face normals relative to view
+            VertexShader("""
+                varying vec3 normal;
+                void main() {
+                    // compute here for use in fragment shader
+                    normal = normalize(gl_NormalMatrix * gl_Normal);
+                    gl_FrontColor = gl_Color;
+                    gl_BackColor = gl_Color;
+                    gl_Position = ftransform();
+                }
+            """),
+            FragmentShader("""
+                varying vec3 normal;
+                void main() {
+                    vec4 color = gl_Color;
+                    color.x = (normal.x + 1) * 0.5;
+                    color.y = (normal.y + 1) * 0.5;
+                    color.z = (normal.z + 1) * 0.5;
+                    gl_FragColor = color;
+                }
+            """)
+        ]),
+        ShaderProgram('normalColor', [   ## colors fragments based on absolute face normals
+            VertexShader("""
+                varying vec3 normal;
+                void main() {
+                    // compute here for use in fragment shader
+                    normal = normalize(gl_Normal);
+                    gl_FrontColor = gl_Color;
+                    gl_BackColor = gl_Color;
+                    gl_Position = ftransform();
+                }
+            """),
+            FragmentShader("""
+                varying vec3 normal;
+                void main() {
+                    vec4 color = gl_Color;
+                    color.x = (normal.x + 1) * 0.5;
+                    color.y = (normal.y + 1) * 0.5;
+                    color.z = (normal.z + 1) * 0.5;
+                    gl_FragColor = color;
+                }
+            """)
+        ]),
+        ShaderProgram('shaded', [   ## very simple simulation of lighting
+            VertexShader("""
+                varying vec3 normal;
+                void main() {
+                    // compute here for use in fragment shader
+                    normal = normalize(gl_NormalMatrix * gl_Normal);
+                    gl_FrontColor = gl_Color;
+                    gl_BackColor = gl_Color;
+                    gl_Position = ftransform();
+                }
+            """),
+            FragmentShader("""
+                varying vec3 normal;
+                void main() {
+                    float p = dot(normal, normalize(vec3(1, -1, -1)));
+                    p = p < 0. ? 0. : p * 0.8;
+                    vec4 color = gl_Color;
+                    color.x = color.x * (0.2 + p);
+                    color.y = color.y * (0.2 + p);
+                    color.z = color.z * (0.2 + p);
+                    gl_FragColor = color;
+                }
+            """)
+        ]),
+        ShaderProgram('edgeHilight', [   ## colors get brighter near edges of object
+            VertexShader("""
+                varying vec3 normal;
+                void main() {
+                    // compute here for use in fragment shader
+                    normal = normalize(gl_NormalMatrix * gl_Normal);
+                    gl_FrontColor = gl_Color;
+                    gl_BackColor = gl_Color;
+                    gl_Position = ftransform();
+                }
+            """),
+            FragmentShader("""
+                varying vec3 normal;
+                void main() {
+                    vec4 color = gl_Color;
+                    float s = pow(normal.x*normal.x + normal.y*normal.y, 2.0);
+                    color.x = color.x + s * (1.0-color.x);
+                    color.y = color.y + s * (1.0-color.y);
+                    color.z = color.z + s * (1.0-color.z);
+                    gl_FragColor = color;
+                }
+            """)
+        ]),
+        ShaderProgram('pointSprite', [   ## allows specifying point size using normal.x
             ## See:
             ##
             ##  http://stackoverflow.com/questions/9609423/applying-part-of-a-texture-sprite-sheet-texture-map-to-a-point-sprite-in-ios
@@ -96,10 +187,12 @@ class ShaderProgram:
         return self.prog
         
     def __enter__(self):
-        glUseProgram(self.program())
+        if len(self.shaders) > 0:
+            glUseProgram(self.program())
         
     def __exit__(self, *args):
-        glUseProgram(0)
+        if len(self.shaders) > 0:
+            glUseProgram(0)
         
     def uniform(self, name):
         """Return the location integer for a uniform variable in this program"""

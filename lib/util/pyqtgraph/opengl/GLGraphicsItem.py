@@ -1,5 +1,31 @@
 from pyqtgraph.Qt import QtGui, QtCore
 from pyqtgraph import Transform3D
+from OpenGL.GL import *
+from OpenGL import GL
+
+GLOptions = {
+    'opaque': {
+        GL_DEPTH_TEST: True,
+        GL_BLEND: False,
+        GL_ALPHA_TEST: False,
+        GL_CULL_FACE: False,
+    },
+    'translucent': {
+        GL_DEPTH_TEST: True,
+        GL_BLEND: True,
+        GL_ALPHA_TEST: False,
+        GL_CULL_FACE: False,
+        'glBlendFunc': (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA),
+    },
+    'additive': {
+        GL_DEPTH_TEST: False,
+        GL_BLEND: True,
+        GL_ALPHA_TEST: False,
+        GL_CULL_FACE: False,
+        'glBlendFunc': (GL_SRC_ALPHA, GL_ONE),
+    },
+}    
+
 
 class GLGraphicsItem(QtCore.QObject):
     def __init__(self, parentItem=None):
@@ -11,6 +37,7 @@ class GLGraphicsItem(QtCore.QObject):
         self.__visible = True
         self.setParentItem(parentItem)
         self.setDepthValue(0)
+        self.__glOpts = {}
         
     def setParentItem(self, item):
         if self.__parent is not None:
@@ -23,7 +50,15 @@ class GLGraphicsItem(QtCore.QObject):
             if self.view() is not None:
                 self.view().removeItem(self)
             self.__parent.view().addItem(self)
+    
+    def updateGLOptions(self, opts):
+        self.__glOpts.update(opts)
         
+    def setGLOptions(self, opts):
+        if isinstance(opts, basestring):
+            opts = GLOptions[opts]
+        self.__glOpts = opts.copy()
+    
     def parentItem(self):
         return self.__parent
         
@@ -135,13 +170,28 @@ class GLGraphicsItem(QtCore.QObject):
         """
         pass
     
+    def setupGLState(self):
+        """
+        This method is responsible for preparing the GL state options needed to render 
+        this item (blending, depth testing, etc). The method is called immediately before painting the item.
+        """
+        for k,v in self.__glOpts.items():
+            if isinstance(k, basestring):
+                func = getattr(GL, k)
+                func(*v)
+            else:
+                if v is True:
+                    glEnable(k)
+                else:
+                    glDisable(k)
+    
     def paint(self):
         """
         Called by the GLViewWidget to draw this item.
         It is the responsibility of the item to set up its own modelview matrix,
         but the caller will take care of pushing/popping.
         """
-        pass
+        self.setupGLState()
         
     def update(self):
         v = self.view()
