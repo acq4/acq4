@@ -22,7 +22,7 @@ class GLMeshItem(GLGraphicsItem):
         """
         self.opts = {
             'meshdata': None,
-            'color': (1., 1., 1., 0.5),
+            'color': (1., 1., 1., 1.),
             'shader': None,
             'smooth': True,
             'computeNormals': True,
@@ -31,8 +31,10 @@ class GLMeshItem(GLGraphicsItem):
         GLGraphicsItem.__init__(self)
         glopts = kwds.pop('glOptions', 'opaque')
         self.setGLOptions(glopts)
+        shader = kwds.pop('shader', None)
+        self.setShader(shader)
         
-        self.setData(**kwds)
+        self.setMeshData(**kwds)
         
         ## storage for data compiled from MeshData object
         self.vertexes = None
@@ -52,8 +54,15 @@ class GLMeshItem(GLGraphicsItem):
         #else:
             #self.data = MeshData()
             #self.data.setFaces(faces, vertexes)
+            
+    def setShader(self, shader):
+        self.opts['shader'] = shader
+        self.update()
         
-    def setData(self, **kwds):
+    def shader(self):
+        return shaders.getShaderProgram(self.opts['shader'])
+        
+    def setMeshData(self, **kwds):
         md = kwds.get('meshdata', None)
         if md is None:
             opts = {}
@@ -68,6 +77,7 @@ class GLMeshItem(GLGraphicsItem):
         self.opts.update(kwds)
         self.update()
         
+    
         
     def initializeGL(self):
         pass
@@ -82,6 +92,12 @@ class GLMeshItem(GLGraphicsItem):
         ##glEnable( GL_POINT_SMOOTH )
         #glEnable(GL_DEPTH_TEST)  ## fragments are always drawn regardless of depth
     
+    def meshDataChanged(self):
+        self.vertexes = None
+        self.faces = None
+        self.normals = None
+        self.colors = None
+        self.update()
     
     def parseMeshData(self):
         ## interpret vertex / normal data before drawing
@@ -125,8 +141,7 @@ class GLMeshItem(GLGraphicsItem):
         
         self.parseMeshData()        
         
-        self.shader = shaders.getShaderProgram(self.opts['shader'])
-        with self.shader:
+        with self.shader():
             #glCallList(self.triList)
             verts = self.vertexes
             norms = self.normals
@@ -137,6 +152,8 @@ class GLMeshItem(GLGraphicsItem):
             #print norms
             #print color
             #print faces
+            if verts is None:
+                return
             glEnableClientState(GL_VERTEX_ARRAY)
             try:
                 glVertexPointerf(verts)

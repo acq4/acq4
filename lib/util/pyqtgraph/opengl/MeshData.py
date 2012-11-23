@@ -77,32 +77,46 @@ class MeshData(object):
         
         
         if vertexes is not None:
-            self.setFaces(vertexes=vertexes, faces=faces, vertexColors=vertexColors, faceColors=faceColors)
+            if faces is None:
+                self.setVertexes(vertexes, indexed='faces')
+                if vertexColors is not None:
+                    self.setVertexColors(vertexColors, indexed='faces')
+                if faceColors is not None:
+                    self.setFaceColors(faceColors, indexed='faces')
+            else:
+                self.setVertexes(vertexes)
+                self.setFaces(faces)
+                if vertexColors is not None:
+                    self.setVertexColors(vertexColors)
+                if faceColors is not None:
+                    self.setFaceColors(faceColors)
+            
+            #self.setFaces(vertexes=vertexes, faces=faces, vertexColors=vertexColors, faceColors=faceColors)
             
         
-    def setFaces(self, vertexes, faces=None, vertexColors=None, faceColors=None):
-        """
-        Set the faces in this data set.
-        Data may be provided either as an Nx3x3 array of floats (9 float coordinate values per face)::
+    #def setFaces(self, vertexes=None, faces=None, vertexColors=None, faceColors=None):
+        #"""
+        #Set the faces in this data set.
+        #Data may be provided either as an Nx3x3 array of floats (9 float coordinate values per face)::
         
-            faces = [ [(x, y, z), (x, y, z), (x, y, z)], ... ] 
+            #faces = [ [(x, y, z), (x, y, z), (x, y, z)], ... ] 
             
-        or as an Nx3 array of ints (vertex integers) AND an Mx3 array of floats (3 float coordinate values per vertex)::
+        #or as an Nx3 array of ints (vertex integers) AND an Mx3 array of floats (3 float coordinate values per vertex)::
         
-            faces = [ (p1, p2, p3), ... ]
-            vertexes = [ (x, y, z), ... ]
+            #faces = [ (p1, p2, p3), ... ]
+            #vertexes = [ (x, y, z), ... ]
             
-        """
-        if not isinstance(vertexes, np.ndarray):
-            vertexes = np.array(vertexes)
-        if vertexes.dtype != np.float:
-            vertexes = vertexes.astype(float)
-        if faces is None:
-            self._setIndexedFaces(vertexes, vertexColors, faceColors)
-        else:
-            self._setUnindexedFaces(faces, vertexes, vertexColors, faceColors)
-        #print self.vertexes().shape
-        #print self.faces().shape
+        #"""
+        #if not isinstance(vertexes, np.ndarray):
+            #vertexes = np.array(vertexes)
+        #if vertexes.dtype != np.float:
+            #vertexes = vertexes.astype(float)
+        #if faces is None:
+            #self._setIndexedFaces(vertexes, vertexColors, faceColors)
+        #else:
+            #self._setUnindexedFaces(faces, vertexes, vertexColors, faceColors)
+        ##print self.vertexes().shape
+        ##print self.faces().shape
         
     
     def setMeshColor(self, color):
@@ -137,6 +151,16 @@ class MeshData(object):
         """Return an array (N, 3) of vertex indexes, three per triangular face in the mesh."""
         return self._faces
         
+    def setFaces(self, faces):
+        self._faces = faces
+        self._vertexFaces = None
+        self._vertexesIndexedByFaces = None
+        self.resetNormals()
+        self._vertexColorsIndexedByFaces = None
+        self._faceColorsIndexedByFaces = None
+        
+        
+    
     def vertexes(self, indexed=None):
         """Return an array (N,3) of the positions of vertexes in the mesh. 
         By default, each unique vertex appears only once in the array.
@@ -292,10 +316,10 @@ class MeshData(object):
     def edgeColors(self):
         return self._edgeColors
         
-    def _setIndexedFaces(self, faces, vertexColors=None, faceColors=None):
-        self._vertexesIndexedByFaces = faces
-        self._vertexColorsIndexedByFaces = vertexColors
-        self._faceColorsIndexedByFaces = faceColors
+    #def _setIndexedFaces(self, faces, vertexColors=None, faceColors=None):
+        #self._vertexesIndexedByFaces = faces
+        #self._vertexColorsIndexedByFaces = vertexColors
+        #self._faceColorsIndexedByFaces = faceColors
         
     def _computeUnindexedVertexes(self):
         ## Given (Nv, 3, 3) array of vertexes-indexed-by-face, convert backward to unindexed vertexes
@@ -327,15 +351,15 @@ class MeshData(object):
                 self._faces[i,j] = index
         self._vertexes = np.array(self._vertexes, dtype=float)
     
-    def _setUnindexedFaces(self, faces, vertexes, vertexColors=None, faceColors=None):
-        self._vertexes = vertexes #[QtGui.QVector3D(*v) for v in vertexes]
-        self._faces = faces.astype(np.uint)
-        self._edges = None
-        self._vertexFaces = None
-        self._faceNormals = None
-        self._vertexNormals = None
-        self._vertexColors = vertexColors
-        self._faceColors = faceColors
+    #def _setUnindexedFaces(self, faces, vertexes, vertexColors=None, faceColors=None):
+        #self._vertexes = vertexes #[QtGui.QVector3D(*v) for v in vertexes]
+        #self._faces = faces.astype(np.uint)
+        #self._edges = None
+        #self._vertexFaces = None
+        #self._faceNormals = None
+        #self._vertexNormals = None
+        #self._vertexColors = vertexColors
+        #self._faceColors = faceColors
 
     def vertexFaces(self):
         """

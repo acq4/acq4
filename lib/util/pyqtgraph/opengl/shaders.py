@@ -152,23 +152,32 @@ def initShaders():
             """),
             FragmentShader("""
                 #version 140 // required for uniform blocks
-                uniform float colorMap[6];
+                uniform float colorMap[9];
                 varying vec4 pos;
                 out vec4 gl_FragColor;
                 in vec4 gl_Color;
                 void main() {
                     vec4 color = gl_Color;
-                    color.x = (pos.z * colorMap[0]) + colorMap[1];
+                    color.x = colorMap[0] * (pos.z + colorMap[1]);
+                    if (colorMap[2] != 1.0)
+                        color.x = pow(color.x, colorMap[2]);
                     color.x = color.x < 0 ? 0 : (color.x > 1 ? 1 : color.x);
-                    color.y = (pos.z * colorMap[2]) + colorMap[3];
+                    
+                    color.y = colorMap[3] * (pos.z + colorMap[4]);
+                    if (colorMap[5] != 1.0)
+                        color.y = pow(color.y, colorMap[5]);
                     color.y = color.y < 0 ? 0 : (color.y > 1 ? 1 : color.y);
-                    color.z = (pos.z * colorMap[4]) + colorMap[5];
+                    
+                    color.z = colorMap[6] * (pos.z + colorMap[7]);
+                    if (colorMap[8] != 1.0)
+                        color.z = pow(color.z, colorMap[8]);
                     color.z = color.z < 0 ? 0 : (color.z > 1 ? 1 : color.z);
+                    
                     color.w = 1.0;
                     gl_FragColor = color;
                 }
             """),
-        ], uniforms={'colorMap': [1, 1, 1, 0.5, 1, 0]}),
+        ], uniforms={'colorMap': [1, 1, 1, 1, 0.5, 1, 1, 0, 1]}),
         ShaderProgram('pointSprite', [   ## allows specifying point size using normal.x
             ## See:
             ##
