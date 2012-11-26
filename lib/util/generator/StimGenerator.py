@@ -400,7 +400,7 @@ class StimGenerator(QtGui.QWidget):
                 ns[i] = self.makeWaveFunction(i, arg)
         
         ## add current sequence parameter values into namespace
-        seq = self.paramSpace()
+        seq = self.paramSpace() # -- this is where the Laser bug was happening -- seq becomes 'Pulse_sum', but params was {'power.Pulse_sum': x}, so the default value is always used instead (fixed by removing 'power.' before the params are sent to stimGenerator, but perhaps there is a better place to fix this)
         for k in seq:
             if k in params:  ## select correct value from sequence list
                 try:

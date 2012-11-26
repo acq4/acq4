@@ -734,7 +734,6 @@ class LaserTask(DAQGenericTask):
         if 'wavelength' in self.cmd:
             self.dev.setWavelength(self.cmd['wavelength'])
             
-            
         ### send power/switch waveforms to device for pCell/qSwitch/shutter cmd calculation
         #print "Cmd:", self.cmd
         if 'powerWaveform' in self.cmd and not self.cmd.get('ignorePowerWaveform', False):
@@ -783,7 +782,6 @@ class LaserTask(DAQGenericTask):
         self.expectedPower = self.dev.getParam('expectedPower')
         
         DAQGenericTask.configure(self, tasks, startOrder) ## DAQGenericTask will use self.cmd['daqProtocol']
-
         
     def getResult(self):
         ## getResult from DAQGeneric, then add in command waveform
@@ -832,7 +830,6 @@ class LaserTask(DAQGenericTask):
         result._info[-1]['Laser'] = info
         
         result = metaarray.MetaArray(arr, info=result._info)
-        
         self.dev.lastResult = result
        
         return result
