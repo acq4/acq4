@@ -269,6 +269,7 @@ class PlotDataItem(GraphicsObject):
         if len(args) == 1:
             data = args[0]
             dt = dataType(data)
+            prof.mark("interpretting 1D data type %s"%str(dt))
             if dt == 'empty':
                 pass
             elif dt == 'listOfValues':
@@ -294,26 +295,45 @@ class PlotDataItem(GraphicsObject):
                 x = data.xvals(0).view(np.ndarray)
             else:
                 raise Exception('Invalid data type %s' % type(data))
+            prof.mark("got x, y data")
             
         elif len(args) == 2:
+            prof.mark("interpretting 2D data type")
             seq = ('listOfValues', 'MetaArray')
             if dataType(args[0]) not in seq or  dataType(args[1]) not in seq:
                 raise Exception('When passing two unnamed arguments, both must be a list or array of values. (got %s, %s)' % (str(type(args[0])), str(type(args[1]))))
+            prof.mark("check 1")
             if not isinstance(args[0], np.ndarray):
-                x = np.array(args[0])
+                prof.mark("checked isinstance x - 1")
+                if dataType(args[0]) == 'MetaArray':
+                    x = args[0].asarray()
+                else:
+                    x = np.array(args[0])  ## this is much slower than below (x = args[0].view(np.ndarray))
+                prof.mark("made x array")
             else:
+                prof.mark("checked isinstance x - 2")
                 x = args[0].view(np.ndarray)
+                prof.mark("viewed x as array")
+           
             if not isinstance(args[1], np.ndarray):
-                y = np.array(args[1])
+                prof.mark("checked isinstance y - 1, type(args[1]):%s"%str(type(args[1])))
+                if dataType(args[1]) == 'MetaArray':
+                    y = args[1].asarray()
+                else:
+                    y = np.array(args[1])
+                prof.mark("made y array")
             else:
+                prof.mark("checked isinstance y - 2")
                 y = args[1].view(np.ndarray)
+                prof.mark("viewed y as array")
+            prof.mark('got x, y data')
             
         if 'x' in kargs:
             x = kargs['x']
         if 'y' in kargs:
             y = kargs['y']
 
-        prof.mark('interpret data')
+        prof.mark('interpreted data')
         ## pull in all style arguments. 
         ## Use self.opts to fill in anything not present in kargs.
         
