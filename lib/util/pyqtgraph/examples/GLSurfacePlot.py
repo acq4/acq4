@@ -53,7 +53,7 @@ colors = np.ones((50,50,4), dtype=float)
 colors[...,0] = np.clip(np.cos(((x.reshape(50,1) ** 2) + (y.reshape(1,50) ** 2)) ** 0.5), 0, 1)
 colors[...,1] = colors[...,0]
 
-p3 = gl.GLSurfacePlotItem(z=z, colors=colors, shader='shaded')
+p3 = gl.GLSurfacePlotItem(z=z, colors=colors.reshape(50*50,4), shader='shaded', smooth=False)
 p3.scale(16./49., 16./49., 1.0)
 p3.translate(2, -18, 0)
 w.addItem(p3)

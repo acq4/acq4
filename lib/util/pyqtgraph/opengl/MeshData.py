@@ -11,40 +11,33 @@ class MeshData(object):
     - list of triangles
     - colors per vertex, edge, or tri
     - normals per vertex or tri
+    
+    This class handles conversion between the standard [list of vertexes, list of faces]
+    format (suitable for use with glDrawElements) and 'indexed' [list of vertexes] format
+    (suitable for use with glDrawArrays). It will automatically compute face normal
+    vectors as well as averaged vertex normal vectors. 
+    
+    The class attempts to be as efficient as possible in caching conversion results and
+    avoiding unnecessary conversions.
     """
 
     def __init__(self, vertexes=None, faces=None, edges=None, vertexColors=None, faceColors=None):
-        ##  Ways we could specify this data:
-        ##  
-        ##  Nv = len(vertexes),  Ne = len(edges),  Nf = len(triangles)
-        ##  vertexes - vertex list (Nv, 3), face list (Nf, 3, 3), or edge list (Ne, 2, 3)
-        ##  faceIndex - (Nf, 3)
-        ##  edgeIndex - (Ne, 2)
-        ##  vertexNormals - vertex list (Nv, 3), face list (Nf, 3, 3), 
-        ##  faceNormals - face list (Nf, 3)
-        ##  vertexColors - vertex list (Nv, 4), face list (Nf, 3, 4), edge list (Ne, 2, 4)
-        ##  faceColors - face list (Nf, 4)
-        ##  edgeColors - edge list (Ne, 4)
-        ##  
-        ##  quantization limits: 1e-16 ?
-        ##  
-        ##  
-        ##  
-        ##  Ways we could use this data:
-        ##  
-        ##  vertexes (Nv, 3), vertexNormals (Nv, 3), vertexColors (Nv, 4), faceIndex   (smooth, indexed)
-        ##  vertexes (Nf, 3, 3), vertexNormals (Nf, 3, 3), vertexColors (Nv, 3, 4)     (rough, non-indexed)
-        ##       note vertexNormals / vertexColors could be specified directly
-        ##       or computed from vertexColors / faceColors / edgeColors...
-             
+        """
+        ============= =====================================================
+        Arguments
+        vertexes      (Nv, 3) array of vertex coordinates. 
+                      If faces is not specified, then this will instead be
+                      interpreted as (Nf, 3, 3) array of coordinates.
+        faces         (Nf, 3) array of indexes into the vertex array.
+        edges         [not available yet]
+        vertexColors  (Nv, 4) array of vertex colors. 
+                      If faces is not specified, then this will instead be
+                      interpreted as (Nf, 3, 4) array of colors.
+        faceColors    (Nf, 4) array of face colors.
+        ============= =====================================================
         
-        
-        
-        
-        
-        
-        
-        
+        All arguments are optional.
+        """
         self._vertexes = None  # (Nv,3) array of vertex coordinates
         self._vertexesIndexedByFaces = None   #  (Nf, 3, 3) array of vertex coordinates
         self._vertexesIndexedByEdges = None   #  (Ne, 2, 3) array of vertex coordinates
@@ -119,39 +112,42 @@ class MeshData(object):
         ##print self.faces().shape
         
     
-    def setMeshColor(self, color):
-        """Set the color of the entire mesh. This removes any per-face or per-vertex colors."""
-        color = fn.Color(color)
-        self._meshColor = color.glColor()
-        self._vertexColors = None
-        self._faceColors = None
+    #def setMeshColor(self, color):
+        #"""Set the color of the entire mesh. This removes any per-face or per-vertex colors."""
+        #color = fn.Color(color)
+        #self._meshColor = color.glColor()
+        #self._vertexColors = None
+        #self._faceColors = None
     
         
-    def __iter__(self):
-        """Iterate over all faces, yielding a list of three tuples [(position, normal, color), ...] for each face."""
-        vnorms = self.vertexNormals()
-        vcolors = self.vertexColors()
-        for i in range(self._faces.shape[0]):
-            face = []
-            for j in [0,1,2]:
-                vind = self._faces[i,j]
-                pos = self._vertexes[vind]
-                norm = vnorms[vind]
-                if vcolors is None:
-                    color = self._meshColor
-                else:
-                    color = vcolors[vind]
-                face.append((pos, norm, color))
-            yield face
+    #def __iter__(self):
+        #"""Iterate over all faces, yielding a list of three tuples [(position, normal, color), ...] for each face."""
+        #vnorms = self.vertexNormals()
+        #vcolors = self.vertexColors()
+        #for i in range(self._faces.shape[0]):
+            #face = []
+            #for j in [0,1,2]:
+                #vind = self._faces[i,j]
+                #pos = self._vertexes[vind]
+                #norm = vnorms[vind]
+                #if vcolors is None:
+                    #color = self._meshColor
+                #else:
+                    #color = vcolors[vind]
+                #face.append((pos, norm, color))
+            #yield face
     
-    def __len__(self):
-        return len(self._faces)
+    #def __len__(self):
+        #return len(self._faces)
     
     def faces(self):
-        """Return an array (N, 3) of vertex indexes, three per triangular face in the mesh."""
+        """Return an array (Nf, 3) of vertex indexes, three per triangular face in the mesh."""
         return self._faces
         
     def setFaces(self, faces):
+        """Set the (Nf, 3) array of faces. Each rown in the array contains
+        three indexes into the vertex array, specifying the three corners 
+        of a triangular face."""
         self._faces = faces
         self._vertexFaces = None
         self._vertexesIndexedByFaces = None
@@ -178,6 +174,13 @@ class MeshData(object):
             raise Exception("Invalid indexing mode. Accepts: None, 'faces'")
         
     def setVertexes(self, verts=None, indexed=None, resetNormals=True):
+        """
+        Set the array (Nv, 3) of vertex coordinates.
+        If indexed=='faces', then the data must have shape (Nf, 3, 3) and is
+        assumed to be already indexed as a list of faces.
+        This will cause any pre-existing normal vectors to be cleared
+        unless resetNormals=False.
+        """
         if indexed is None:
             if verts is not None:
                 self._vertexes = verts
@@ -223,7 +226,10 @@ class MeshData(object):
     
     def faceNormals(self, indexed=None):
         """
-        Computes and stores normal of each face.
+        Return an array (Nf, 3) of normal vectors for each face.
+        If indexed='faces', then instead return an indexed array
+        (Nf, 3, 3)  (this is just the same array with each vector
+        copied three times).
         """
         if self._faceNormals is None:
             v = self.vertexes(indexed='faces')
@@ -266,6 +272,11 @@ class MeshData(object):
             raise Exception("Invalid indexing mode. Accepts: None, 'faces'")
         
     def vertexColors(self, indexed=None):
+        """
+        Return an array (Nv, 4) of vertex colors.
+        If indexed=='faces', then instead return an indexed array
+        (Nf, 3, 4). 
+        """
         if indexed is None:
             return self._vertexColors
         elif indexed == 'faces':
@@ -276,6 +287,11 @@ class MeshData(object):
             raise Exception("Invalid indexing mode. Accepts: None, 'faces'")
         
     def setVertexColors(self, colors, indexed=None):
+        """
+        Set the vertex color array (Nv, 4).
+        If indexed=='faces', then the array will be interpreted
+        as indexed and should have shape (Nf, 3, 4)
+        """
         if indexed is None:
             self._vertexColors = colors
             self._vertexColorsIndexedByFaces = None
@@ -286,6 +302,12 @@ class MeshData(object):
             raise Exception("Invalid indexing mode. Accepts: None, 'faces'")
         
     def faceColors(self, indexed=None):
+        """
+        Return an array (Nf, 4) of face colors.
+        If indexed=='faces', then instead return an indexed array
+        (Nf, 3, 4)  (note this is just the same array with each color
+        repeated three times). 
+        """
         if indexed is None:
             return self._faceColors
         elif indexed == 'faces':
@@ -298,6 +320,11 @@ class MeshData(object):
             raise Exception("Invalid indexing mode. Accepts: None, 'faces'")
         
     def setFaceColors(self, colors, indexed=None):
+        """
+        Set the face color array (Nf, 4).
+        If indexed=='faces', then the array will be interpreted
+        as indexed and should have shape (Nf, 3, 4)
+        """
         if indexed is None:
             self._faceColors = colors
             self._faceColorsIndexedByFaces = None
@@ -308,6 +335,9 @@ class MeshData(object):
             raise Exception("Invalid indexing mode. Accepts: None, 'faces'")
         
     def faceCount(self):
+        """
+        Return the number of faces in the mesh.
+        """
         if self._faces is not None:
             return self._faces.shape[0]
         elif self._vertexesIndexedByFaces is not None:
@@ -391,7 +421,21 @@ class MeshData(object):
     def save(self):
         """Serialize this mesh to a string appropriate for disk storage"""
         import pickle
-        names = ['_vertexes', '_edges', '_faces', '_vertexFaces', '_vertexNormals', '_faceNormals', '_vertexColors', '_edgeColors', '_faceColors', '_meshColor']
+        if self._faces is not None:
+            names = ['_vertexes', '_faces']
+        else:
+            names = ['_vertexesIndexedByFaces']
+            
+        if self._vertexColors is not None:
+            names.append('_vertexColors')
+        elif self._vertexColorsIndexedByFaces is not None:
+            names.append('_vertexColorsIndexedByFaces')
+            
+        if self._faceColors is not None:
+            names.append('_faceColors')
+        elif self._faceColorsIndexedByFaces is not None:
+            names.append('_faceColorsIndexedByFaces')
+            
         state = {n:getattr(self, n) for n in names}
         return pickle.dumps(state)
         
@@ -406,6 +450,10 @@ class MeshData(object):
 
 
 def sphere(rows, cols, radius=1.0, offset=True):
+    """
+    Return a MeshData instance with vertexes and faces computed
+    for a spherical surface.
+    """
     verts = np.empty((rows+1, cols, 3), dtype=float)
     
     ## compute vertexes
@@ -414,7 +462,7 @@ def sphere(rows, cols, radius=1.0, offset=True):
     verts[...,2] = radius * np.cos(phi)
     th = ((np.arange(cols) * 2 * np.pi / cols).reshape(1, cols)) 
     if offset:
-        th = th + ((np.pi / cols) * np.arange(rows+1).reshape(rows+1,1))  ## offset every other row
+        th = th + ((np.pi / cols) * np.arange(rows+1).reshape(rows+1,1))  ## rotate each row by 1/2 column
     verts[...,0] = s * np.cos(th)
     verts[...,1] = s * np.sin(th)
     verts = verts.reshape((rows+1)*cols, 3)[cols-1:-(cols-1)]  ## remove redundant vertexes from top and bottom

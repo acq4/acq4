@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
+"""
+Simple examples demonstrating the use of GLMeshItem.
 
-##  This example uses the isosurface function to convert a scalar field
-##  (a hydrogen orbital) into a mesh for 3D display.
+"""
 
 ## Add path to library (just for examples; you do not need this)
 import sys, os

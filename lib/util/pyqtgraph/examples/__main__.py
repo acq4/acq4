@@ -45,10 +45,10 @@ examples = OrderedDict([
         ('Volumetric', 'GLVolumeItem.py'),
         ('Isosurface', 'GLIsosurface.py'),
         ('Surface Plot', 'GLSurfacePlot.py'),
-        ('Mesh', 'GLMeshItem.py'),
-        ('Image', 'GLImageItem.py'),
         ('Scatter Plot', 'GLScatterPlotItem.py'),
         ('Shaders', 'GLshaders.py'),
+        ('Mesh', 'GLMeshItem.py'),
+        ('Image', 'GLImageItem.py'),
     ])),
     ('Widgets', OrderedDict([
         ('PlotWidget', 'PlotWidget.py'),

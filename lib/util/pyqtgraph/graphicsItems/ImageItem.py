@@ -281,6 +281,10 @@ class ImageItem(GraphicsObject):
             p.drawRect(self.boundingRect())
         prof.finish()
 
+    def save(self, fileName, *args):
+        if self.qimage is None:
+            self.render()
+        self.qimage.save(fileName, *args)
 
     def getHistogram(self, bins=500, step=3):
         """Returns x and y arrays containing the histogram values for the current image.
