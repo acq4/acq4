@@ -58,6 +58,10 @@ class GLMeshItem(GLGraphicsItem):
         self.opts['shader'] = shader
         self.update()
         
+    def setColor(self, c):
+        self.opts['color'] = c
+        self.update()
+        
     def shader(self):
         return shaders.getShaderProgram(self.opts['shader'])
         
