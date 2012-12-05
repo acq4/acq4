@@ -282,6 +282,7 @@ class ImageItem(GraphicsObject):
         prof.finish()
 
     def save(self, fileName, *args):
+        """Save this image to file. Note that this saves the visible image (after scale/color changes), not the original data."""
         if self.qimage is None:
             self.render()
         self.qimage.save(fileName, *args)
