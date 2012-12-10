@@ -66,13 +66,53 @@ class Loader(DirTreeWidget.DirTreeLoader):
         self.host.saveProtocol(handle)
         return True
         
+
+class Black(QtGui.QWidget):
+    """ make a black rectangle to fill screen when "blanking" """
+    def paintEvent(self, event):
+        p = QtGui.QPainter(self)
+        brush = pg.mkBrush(0.0)
+        p.fillRect(self.rect(), brush)
+        p.end()
+     
+
+class ScreenBlanker:
+    """
+    Perform the blanking on ALL screens that we can detect.
+    This is so that extraneous light does not leak into the 
+    detector during acquisition.
+    """
+    def __init__(self):
+        self.widgets = []
+    
+    def Blank(self):
+        d = QtGui.QApplication.desktop()
+        for i in range(d.screenCount()): # look for all screens
+            w = Black()
+            self.widgets.append(w) # make a black widget
+            sg = d.screenGeometry(i) # get the screen size
+            w.move(sg.x(), sg.y()) # put the widget there
+            w.showFullScreen() # duh
+        QtGui.QApplication.processEvents() # make it so
+        
+    def __exit__(self, *args):
+        pass
+    #for w in self.widgets:
+            #w.hide() # just take them away
+        #self.widgets = []
+    
+    def unBlank(self):
+        for w in self.widgets:
+            w.hide() # just take them away
+        self.widgets = []
+        
         
         
 class ProtocolRunner(Module):
     
     sigProtocolPaused = QtCore.Signal()
-    sigProtocolFinished = QtCore.Signal()
-    sigNewFrame = QtCore.Signal(object)
+    sigProtocolFinished = QtCore.Signal()       ## emitted when the task thread exits (end of protocol, end of sequence, or exit due to error)
+    sigNewFrame = QtCore.Signal(object)         ## emitted at the end of each individual protocol
     sigProtocolStarted = QtCore.Signal(object)  ## called whenever single protocol OR protocol sequence has started
     sigTaskStarted = QtCore.Signal(object)      ## called at start of EVERY protocol, including within sequences
     sigProtocolChanged = QtCore.Signal(object, object)
@@ -88,6 +128,7 @@ class ProtocolRunner(Module):
         self.deleteState = 0
         self.ui = Ui_MainWindow()
         self.win = Window(self)
+        self.SB = ScreenBlanker()
         
         g = self.win.geometry()
         self.ui.setupUi(self.win)
@@ -651,6 +692,7 @@ class ProtocolRunner(Module):
         self.runSingle(store=True)
         
     def testSingle(self):
+        self.SB.Blank()
         self.runSingle(store=False)
     
     def runSingle(self, store=True):
@@ -706,6 +748,7 @@ class ProtocolRunner(Module):
         
    
     def testSequence(self):
+        self.SB.Blank()
         self.runSequence(store=False)
        
     def runSequence(self, store=True):
@@ -874,14 +917,17 @@ class ProtocolRunner(Module):
         self.sigProtocolFinished.emit()
         if not self.loopEnabled:   ## what if we quit due to error?
             self.enableStartBtns(True)
+        self.SB.unBlank()
     
     def taskErrored(self):
         self.enableStartBtns(True)
+        self.SB.unBlank()
             
     def taskThreadPaused(self):
         #self.emit(QtCore.SIGNAL('protocolPaused'))
         self.sigProtocolPaused.emit()
-            
+        self.SB.unBlank()
+           
     def stopSingle(self):
         self.loopEnabled = False
         if self.taskThread.isRunning():

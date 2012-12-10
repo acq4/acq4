@@ -199,6 +199,7 @@ def fitPsp(x, y, guess, bounds=None, risePower=2.0, multiFit=False):
     ## pick some reasonable default bounds
     if bounds is None:
         bounds = [[None,None]] * 4
+        bounds[1][0] = -2e-3
         minTau = (x[1]-x[0]) * 0.5
         #bounds[2] = [minTau, None]
         #bounds[3] = [minTau, None]
@@ -370,59 +371,13 @@ def fitDoublePsp(x, y, guess, bounds=None, risePower=2.0):
     #print fit[2:]
     fit = fit[0]
     
-    ## try fixing some common errors
-    #corrected = False
-    #err = (errFn(fit, x, y)**2).sum()
-    #fit2 = fit.copy()
-    #for i in range(10):
-        #fit2[0] *= 0.5
-        #fit2[1] *= 0.5
-        #err2 = (errFn(fit2, x, y)**2).sum()
-        #if err2 < err:
-            #print "Made amp correction"
-            #err = err2.copy()
-            #fit = fit2.copy()
-            #corrected = True
-        #else:
-            #break
-    
-    #for i in range(10):
-        #fit2[0] *= 1.3
-        #fit2[1] *= 1.3
-        #fit2[4] /= 1.3
-        #fit2[5] /= 1.3
-        #err2 = (errFn(fit2, x, y)**2).sum()
-        #if err2 < err:
-            #print "Made amp/tau tradeoff"
-            #err = err2.copy()
-            #fit = fit2.copy()
-            #corrected = True
-        #else:
-            #break
-        
-    #if corrected:  ## try fitting again
-        #fit2 = scipy.optimize.leastsq(errFn, fit, args=(x, y), ftol=1e-3, factor=0.1)[0]
-        #err2 = (errFn(fit2, x, y)**2).sum()
-        #if err2 < err:
-            #print "  -> refit helped further"
-            #fit = fit2
-            #err = err2
-            
-    ## kick the fitter to see if we can do any better
-    #import pyqtgraph as pg
-    #p = pg.plot()
-    #for i in range(len(trials)):
-        #p.plot(trials[i], pen=(i,len(trials)*1.5))
-    #print "Ran %d times" % len(errs)
-    #print 'guess:', guess
-    
     err = (errFn(fit, x, y)**2).sum()
     #print "initial fit:", fit, err
     
     guess = fit.copy()
     bestFit = fit
     for ampx in (0.5, 2.0):
-        for taux in (0.5, 2.0):
+        for taux in (0.2, 0.5, 2.0):   ## The combination ampx=2, taux=0.2 seems to be particularly important.
             guess[:2] = fit[:2] * ampx
             guess[4:6] = fit[4:6] * taux
             fit2 = scipy.optimize.leastsq(errFn, guess, args=(x, y), ftol=1e-2, factor=0.1)[0]
@@ -511,8 +466,10 @@ def recursiveRegisterImages(i1, i2, hint=(0,0), maxDist=None, objSize=None):
     """Given images i1 and i2, recursively find the offset for i2 that best matches with i1"""
     time1 = time.clock()
     ## float images
-    im1 = i1.mean(axis=2).astype(float)
-    im2 = i2.mean(axis=2).astype(float)
+    im1 = i1.astype(float)
+    im2 = i2.astype(float)
+    #im1 = i1.mean(axis=2).astype(float)
+    #im2 = i2.mean(axis=2).astype(float)
     
     ## Decide how many iterations to perform, scale images
     if objSize != None:
@@ -586,6 +543,8 @@ def registerImages(im1, im2, searchRange):
         mode='valid'
         s1x = max(0, start[0])
         s1y = max(0, start[1])
+        print im1.shape
+        print im2.shape
         e1x = min(im1.shape[0], im2.shape[0]+end[0])
         e1y = min(im1.shape[1], im2.shape[1]+end[1])
         print "%d,%d - %d,%d" % (s1x, s1y, e1x, e1y)
@@ -616,9 +575,10 @@ def registerImages(im1, im2, searchRange):
             print img.shape, im2c.shape
             raise
         return abs(im2c - img).sum()
+    
     print im1c.shape, im2c.shape
     xc = scipy.ndimage.generic_filter(im1c, err, footprint=im2c) 
-    print xc.min(), xc.max()
+   # print xc.min(), xc.max()
     #xcb = ndimage.filters.gaussian_filter(xc, 20)
     #xc -= xcb
     
@@ -1637,9 +1597,10 @@ def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshol
     ## We do this check early for performance--it eliminates the vast majority of events
     longEvents = np.argwhere(times[1:] - times[:-1] > minLength)
     if len(longEvents) < 1:
-        return []
-    longEvents = longEvents[:, 0]
-    nEvents = len(longEvents)
+        nEvents = 0
+    else:
+        longEvents = longEvents[:, 0]
+        nEvents = len(longEvents)
     
     ## Measure sum of values within each region between crossings, combine into single array
     if xvals is None:
@@ -2219,9 +2180,12 @@ def concatenateColumns(data):
             
     return out
     
-def suggestDType(x):
-    """Return a suitable dtype for x"""
-    if isinstance(x, list) or isinstance(x, tuple):
+def suggestDType(x, singleValue=False):
+    """Return a suitable dtype for x
+    If singleValue is True, then a sequence will be interpreted as dtype=object
+    rather than looking inside the sequence to determine its type.
+    """
+    if not singleValue and isinstance(x, list) or isinstance(x, tuple):
         if len(x) == 0:
             raise Exception('can not determine dtype for empty list')
         x = x[0]
@@ -2237,11 +2201,15 @@ def suggestDType(x):
     else:
         return object
     
-def suggestRecordDType(x):
-    """Given a dict of values, suggest a record array dtype to use"""
+def suggestRecordDType(x, singleRecord=False):
+    """Given a dict of values, suggest a record array dtype to use
+    If singleRecord is True, then x is interpreted as a single record 
+    rather than a dict-of-lists structure. This can resolve some ambiguities
+    when a single cell contains a sequence as its value.
+    """
     dt = []
     for k, v in x.iteritems():
-        dt.append((k, suggestDType(v)))
+        dt.append((k, suggestDType(v, singleValue=singleRecord)))
     return dt
     
     

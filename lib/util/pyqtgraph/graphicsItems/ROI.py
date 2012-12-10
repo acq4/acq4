@@ -28,7 +28,7 @@ from .UIGraphicsItem import UIGraphicsItem
 __all__ = [
     'ROI', 
     'TestROI', 'RectROI', 'EllipseROI', 'CircleROI', 'PolygonROI', 
-    'LineROI', 'MultiLineROI', 'LineSegmentROI', 'PolyLineROI', 'SpiralROI',
+    'LineROI', 'MultiLineROI', 'MultiRectROI', 'LineSegmentROI', 'PolyLineROI', 'SpiralROI',
 ]
 
 
@@ -370,7 +370,9 @@ class ROI(GraphicsObject):
         else:
             return (self.handles[index]['name'], self.handles[index]['item'].scenePos())
         
-        
+    def getHandles(self):
+        return [h['item'] for h in self.handles]
+    
     def mapSceneToParent(self, pt):
         return self.mapToParent(self.mapFromScene(pt))
 
@@ -538,19 +540,27 @@ class ROI(GraphicsObject):
         return True
     
 
-    def movePoint(self, handle, pos, modifiers=QtCore.Qt.KeyboardModifier(), finish=True):
+    def movePoint(self, handle, pos, modifiers=QtCore.Qt.KeyboardModifier(), finish=True, coords='parent'):
         ## called by Handles when they are moved. 
         ## pos is the new position of the handle in scene coords, as requested by the handle.
         
         newState = self.stateCopy()
         index = self.indexOfHandle(handle)
         h = self.handles[index]
-        p0 = self.mapToScene(h['pos'] * self.state['size'])
+        p0 = self.mapToParent(h['pos'] * self.state['size'])
         p1 = Point(pos)
         
+        if coords == 'parent':
+            pass
+        elif coords == 'scene':
+            p1 = self.mapSceneToParent(p1)
+        else:
+            raise Exception("New point location must be given in either 'parent' or 'scene' coordinates.")
+
+        
         ## transform p0 and p1 into parent's coordinates (same as scene coords if there is no parent). I forget why.
-        p0 = self.mapSceneToParent(p0)
-        p1 = self.mapSceneToParent(p1)
+        #p0 = self.mapSceneToParent(p0)
+        #p1 = self.mapSceneToParent(p1)
 
         ## Handles with a 'center' need to know their local position relative to the center point (lp0, lp1)
         if 'center' in h:
@@ -566,8 +576,8 @@ class ROI(GraphicsObject):
             self.translate(p1-p0, snap=snap, update=False)
         
         elif h['type'] == 'f':
-            newPos = self.mapFromScene(pos)
-            h['item'].setPos(self.mapFromScene(pos))
+            newPos = self.mapFromParent(p1)
+            h['item'].setPos(newPos)
             h['pos'] = newPos
             self.freeHandleMoved = True
             #self.sigRegionChanged.emit(self)  ## should be taken care of by call to stateChanged()
@@ -800,7 +810,7 @@ class ROI(GraphicsObject):
         #print "  dshape", dShape
         
         ## Determine transform that maps ROI bounding box to image coordinates
-        tr = self.sceneTransform() * img.sceneTransform().inverted()[0] 
+        tr = self.sceneTransform() * fn.invertQTransform(img.sceneTransform())
         
         ## Modify transform to scale from image coords to data coords
         #m = QtGui.QTransform()
@@ -832,35 +842,43 @@ class ROI(GraphicsObject):
         else:
             return bounds, tr
 
-
-    def getArrayRegion(self, data, img, axes=(0,1)):
-        """Use the position of this ROI relative to an imageItem to pull a slice from an array."""
+    def getArrayRegion(self, data, img, axes=(0,1), returnMappedCoords=False, **kwds):
+        """Use the position and orientation of this ROI relative to an imageItem to pull a slice from an array.
         
+        This method uses :func:`affineSlice <pyqtgraph.affineSlice>` to generate
+        the slice from *data* and uses :func:`getAffineSliceParams <pyqtgraph.ROI.getAffineSliceParams>` to determine the parameters to 
+        pass to :func:`affineSlice <pyqtgraph.affineSlice>`.
         
-        shape = self.state['size']
+        If *returnMappedCoords* is True, then the method returns a tuple (result, coords) 
+        such that coords is the set of coordinates used to interpolate values from the original
+        data, mapped into the parent coordinate system of the image. This is useful, when slicing
+        data from images that have been transformed, for determining the location of each value
+        in the sliced data.
         
-        origin = self.mapToItem(img, QtCore.QPointF(0, 0))
+        All extra keyword arguments are passed to :func:`affineSlice <pyqtgraph.affineSlice>`.
+        """
         
-        ## vx and vy point in the directions of the slice axes, but must be scaled properly
-        vx = self.mapToItem(img, QtCore.QPointF(1, 0)) - origin
-        vy = self.mapToItem(img, QtCore.QPointF(0, 1)) - origin
-        
-        lvx = np.sqrt(vx.x()**2 + vx.y()**2)
-        lvy = np.sqrt(vy.x()**2 + vy.y()**2)
-        pxLen = img.width() / float(data.shape[axes[0]])
-        sx =  pxLen / lvx
-        sy =  pxLen / lvy
-        
-        vectors = ((vx.x()*sx, vx.y()*sx), (vy.x()*sy, vy.y()*sy))
-        shape = self.state['size']
-        shape = [abs(shape[0]/sx), abs(shape[1]/sy)]
-        
-        origin = (origin.x(), origin.y())
-        
-        #print "shape", shape, "vectors", vectors, "origin", origin
-        
-        return fn.affineSlice(data, shape=shape, vectors=vectors, origin=origin, axes=axes, order=1)
-        
+        shape, vectors, origin = self.getAffineSliceParams(data, img, axes)
+        if not returnMappedCoords:
+            return fn.affineSlice(data, shape=shape, vectors=vectors, origin=origin, axes=axes, **kwds)
+        else:
+            kwds['returnCoords'] = True
+            result, coords = fn.affineSlice(data, shape=shape, vectors=vectors, origin=origin, axes=axes, **kwds)
+            #tr = fn.transformToArray(img.transform())[:2]  ## remove perspective transform values
+            
+            ### separate translation from scale/rotate
+            #translate = tr[:,2]
+            #tr = tr[:,:2]
+            #tr = tr.reshape((2,2) + (1,)*(coords.ndim-1))
+            #coords = coords[np.newaxis, ...]
+            
+            ### map coordinates and return
+            #mapped = (tr*coords).sum(axis=0)  ## apply scale/rotate
+            #mapped += translate.reshape((2,1,1))
+            mapped = fn.transformCoordinates(img.transform(), coords)
+            return result, mapped
+            
+            
         ### transpose data so x and y are the first 2 axes
         #trAx = range(0, data.ndim)
         #trAx.remove(axes[0])
@@ -959,6 +977,39 @@ class ROI(GraphicsObject):
         ### Untranspose array before returning
         #return arr5.transpose(tr2)
 
+    def getAffineSliceParams(self, data, img, axes=(0,1)):
+        """
+        Returns the parameters needed to use :func:`affineSlice <pyqtgraph.affineSlice>` to 
+        extract a subset of *data* using this ROI and *img* to specify the subset.
+        
+        See :func:`getArrayRegion <pyqtgraph.ROI.getArrayRegion>` for more information.
+        """
+        if self.scene() is not img.scene():
+            raise Exception("ROI and target item must be members of the same scene.")
+        
+        shape = self.state['size']
+        
+        origin = self.mapToItem(img, QtCore.QPointF(0, 0))
+        
+        ## vx and vy point in the directions of the slice axes, but must be scaled properly
+        vx = self.mapToItem(img, QtCore.QPointF(1, 0)) - origin
+        vy = self.mapToItem(img, QtCore.QPointF(0, 1)) - origin
+        
+        lvx = np.sqrt(vx.x()**2 + vx.y()**2)
+        lvy = np.sqrt(vy.x()**2 + vy.y()**2)
+        pxLen = img.width() / float(data.shape[axes[0]])
+        #img.width is number of pixels or width of item?
+        #need pxWidth and pxHeight instead of pxLen ?
+        sx =  pxLen / lvx
+        sy =  pxLen / lvy
+        
+        vectors = ((vx.x()*sx, vx.y()*sx), (vy.x()*sy, vy.y()*sy))
+        shape = self.state['size']
+        shape = [abs(shape[0]/sx), abs(shape[1]/sy)]
+        
+        origin = (origin.x(), origin.y())
+        return shape, vectors, origin
+        
     def getGlobalTransform(self, relativeTo=None):
         """Return global transformation (rotation angle+translation) required to move 
         from relative state to current state. If relative state isn't specified,
@@ -1171,7 +1222,7 @@ class Handle(UIGraphicsItem):
         #print "point moved; inform %d ROIs" % len(self.roi)
         # A handle can be used by multiple ROIs; tell each to update its handle position
         for r in self.rois:
-            r.movePoint(self, pos, modifiers, finish=finish)
+            r.movePoint(self, pos, modifiers, finish=finish, coords='scene')
         
     def buildPath(self):
         size = self.radius
@@ -1223,9 +1274,9 @@ class Handle(UIGraphicsItem):
         if self._shape is None:
             s = self.generateShape()
             if s is None:
-                return self.shape
+                return self.path
             self._shape = s
-            self.prepareGeometryChange()
+            self.prepareGeometryChange()  ## beware--this can cause the view to adjust, which would immediately invalidate the shape.
         return self._shape
     
     def boundingRect(self):
@@ -1251,7 +1302,7 @@ class Handle(UIGraphicsItem):
         v = dt.map(QtCore.QPointF(1, 0)) - dt.map(QtCore.QPointF(0, 0))
         va = np.arctan2(v.y(), v.x())
         
-        dti = dt.inverted()[0]
+        dti = fn.invertQTransform(dt)
         devPos = dt.map(QtCore.QPointF(0,0))
         tr = QtGui.QTransform()
         tr.translate(devPos.x(), devPos.y())
@@ -1316,9 +1367,16 @@ class LineROI(ROI):
         self.addScaleRotateHandle([1, 0.5], [0, 0.5])
         self.addScaleHandle([0.5, 1], [0.5, 0.5])
         
+
         
-class MultiLineROI(QtGui.QGraphicsObject):
+class MultiRectROI(QtGui.QGraphicsObject):
+    """
+    Chain of rectangular ROIs connected by handles. 
     
+    This is generally used to mark a curved path through 
+    an image similarly to PolyLineROI. It differs in that each segment
+    of the chain is rectangular instead of linear and thus has width.
+    """
     sigRegionChangeFinished = QtCore.Signal(object)
     sigRegionChangeStarted = QtCore.Signal(object)
     sigRegionChanged = QtCore.Signal(object)
@@ -1327,27 +1385,17 @@ class MultiLineROI(QtGui.QGraphicsObject):
         QtGui.QGraphicsObject.__init__(self)
         self.pen = pen
         self.roiArgs = args
+        self.lines = []
         if len(points) < 2:
             raise Exception("Must start with at least 2 points")
-        self.lines = []
-        self.lines.append(ROI([0, 0], [1, 5], parent=self, pen=pen, **args))
-        self.lines[-1].addScaleHandle([0.5, 1], [0.5, 0.5])
-        h = self.lines[-1].addScaleRotateHandle([0, 0.5], [1, 0.5])
-        h.movePoint(points[0])
-        h.movePoint(points[0])
-        for i in range(1, len(points)):
-            h = self.lines[-1].addScaleRotateHandle([1, 0.5], [0, 0.5])
-            if i < len(points)-1:
-                self.lines.append(ROI([0, 0], [1, 5], parent=self, pen=pen, **args))
-                self.lines[-1].addScaleRotateHandle([0, 0.5], [1, 0.5], item=h)
-            h.movePoint(points[i])
-            h.movePoint(points[i])
-            
-        for l in self.lines:
-            l.translatable = False
-            l.sigRegionChanged.connect(self.roiChangedEvent)
-            l.sigRegionChangeStarted.connect(self.roiChangeStartedEvent)
-            l.sigRegionChangeFinished.connect(self.roiChangeFinishedEvent)
+        
+        ## create first segment
+        self.addSegment(points[1], connectTo=points[0], scaleHandle=True)
+        
+        ## create remaining segments
+        for p in points[2:]:
+            self.addSegment(p)
+        
         
     def paint(self, *args):
         pass
@@ -1370,7 +1418,13 @@ class MultiLineROI(QtGui.QGraphicsObject):
     def roiChangeFinishedEvent(self):
         self.sigRegionChangeFinished.emit(self)
         
-            
+    def getHandlePositions(self):
+        """Return the positions of all handles in local coordinates."""
+        pos = [self.mapFromScene(self.lines[0].getHandles()[0].scenePos())]
+        for l in self.lines:
+            pos.append(self.mapFromScene(l.getHandles()[1].scenePos()))
+        return pos
+        
     def getArrayRegion(self, arr, img=None, axes=(0,1)):
         rgns = []
         for l in self.lines:
@@ -1391,6 +1445,59 @@ class MultiLineROI(QtGui.QGraphicsObject):
         
         return np.concatenate(rgns, axis=axes[0])
         
+    def addSegment(self, pos=(0,0), scaleHandle=False, connectTo=None):
+        """
+        Add a new segment to the ROI connecting from the previous endpoint to *pos*.
+        (pos is specified in the parent coordinate system of the MultiRectROI)
+        """
+        
+        ## by default, connect to the previous endpoint
+        if connectTo is None:
+            connectTo = self.lines[-1].getHandles()[1]
+            
+        ## create new ROI
+        newRoi = ROI((0,0), [1, 5], parent=self, pen=self.pen, **self.roiArgs)
+        self.lines.append(newRoi)
+        
+        ## Add first SR handle
+        if isinstance(connectTo, Handle):
+            self.lines[-1].addScaleRotateHandle([0, 0.5], [1, 0.5], item=connectTo)
+            newRoi.movePoint(connectTo, connectTo.scenePos(), coords='scene')
+        else:
+            h = self.lines[-1].addScaleRotateHandle([0, 0.5], [1, 0.5])
+            newRoi.movePoint(h, connectTo, coords='scene')
+            
+        ## add second SR handle
+        h = self.lines[-1].addScaleRotateHandle([1, 0.5], [0, 0.5]) 
+        newRoi.movePoint(h, pos)
+        
+        ## optionally add scale handle (this MUST come after the two SR handles)
+        if scaleHandle:
+            newRoi.addScaleHandle([0.5, 1], [0.5, 0.5])
+            
+        newRoi.translatable = False 
+        newRoi.sigRegionChanged.connect(self.roiChangedEvent) 
+        newRoi.sigRegionChangeStarted.connect(self.roiChangeStartedEvent) 
+        newRoi.sigRegionChangeFinished.connect(self.roiChangeFinishedEvent)
+        self.sigRegionChanged.emit(self) 
+    
+
+    def removeSegment(self, index=-1): 
+        """Remove a segment from the ROI."""
+        roi = self.lines[index]
+        self.lines.pop(index)
+        self.scene().removeItem(roi)
+        roi.sigRegionChanged.disconnect(self.roiChangedEvent) 
+        roi.sigRegionChangeStarted.disconnect(self.roiChangeStartedEvent) 
+        roi.sigRegionChangeFinished.disconnect(self.roiChangeFinishedEvent)
+        
+        self.sigRegionChanged.emit(self)
+        
+        
+class MultiLineROI(MultiRectROI):
+    def __init__(self, *args, **kwds):
+        MultiRectROI.__init__(self, *args, **kwds)
+        print("Warning: MultiLineROI has been renamed to MultiRectROI. (and MultiLineROI may be redefined in the future)")
         
 class EllipseROI(ROI):
     def __init__(self, pos, size, **args):
@@ -1434,6 +1541,8 @@ class CircleROI(EllipseROI):
         self.addScaleHandle([0.5*2.**-0.5 + 0.5, 0.5*2.**-0.5 + 0.5], [0.5, 0.5])
         
 class PolygonROI(ROI):
+    ## deprecated. Use PloyLineROI instead.
+    
     def __init__(self, positions, pos=None, **args):
         if pos is None:
             pos = [0,0]
@@ -1442,16 +1551,17 @@ class PolygonROI(ROI):
         for p in positions:
             self.addFreeHandle(p)
         self.setZValue(1000)
+        print("Warning: PolygonROI is deprecated. Use PolyLineROI instead.")
         
             
     def listPoints(self):
         return [p['item'].pos() for p in self.handles]
             
-    def movePoint(self, *args, **kargs):
-        ROI.movePoint(self, *args, **kargs)
-        self.prepareGeometryChange()
-        for h in self.handles:
-            h['pos'] = h['item'].pos()
+    #def movePoint(self, *args, **kargs):
+        #ROI.movePoint(self, *args, **kargs)
+        #self.prepareGeometryChange()
+        #for h in self.handles:
+            #h['pos'] = h['item'].pos()
             
     def paint(self, p, *args):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
@@ -1646,74 +1756,14 @@ class LineSegmentROI(ROI):
         ROI.__init__(self, pos, [1,1], **args)
         #ROI.__init__(self, positions[0])
         if len(positions) > 2:
-            raise Exception("LineSegmentROI can only be defined by 2 positions. This is an API change.")
+            raise Exception("LineSegmentROI must be defined by exactly 2 positions. For more points, use PolyLineROI.")
         
         for i, p in enumerate(positions):
             self.addFreeHandle(p, item=handles[i])
                 
-        #self.setZValue(1000)
-        #self.parentROI = None
-        #self.hasParentROI = False
-        #self.setAcceptsHandles(acceptsHandles)
-        
-    #def setParentROI(self, parent):
-        #self.parentROI = parent
-        #if parent != None:
-            #self.hasParentROI = True
-        #else:
-            #self.hasParentROI = False
-            
-    #def setAcceptsHandles(self, b):
-        #if b:
-            #self.setAcceptedMouseButtons(QtCore.Qt.LeftButton)
-        #else:
-            #self.setAcceptedMouseButtons(QtCore.Qt.NoButton)
-            
-    #def close(self):
-        ##for h in self.handles:
-            ##if len(h['item'].roi) == 1:
-                ##h['item'].scene().removeItem(h['item'])
-            ##elif h['item'].parentItem() == self:
-                ##h['item'].setParentItem(self.parentItem()) 
-                
-        #self.scene().removeItem(self)
-            
-    #def handleRemoved(self, handle):
-        #self.parentROI.handleRemoved(self, handle)
-        
-    #def hoverEvent(self, ev):
-        #if (self.translatable or self.acceptsHandles) and (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
-            ##print "       setHover: True"
-            #self.setMouseHover(True)
-            #self.sigHoverEvent.emit(self)
-        #else:
-            ##print "       setHover: False"
-            #self.setMouseHover(False)    
-            
-    #def mouseClickEvent(self, ev):
-        #ROI.mouseClickEvent(self, ev) ## only checks for Right-clicks (for now anyway)
-        #if ev.button() == QtCore.Qt.LeftButton:
-            #if self.acceptsHandles:
-                #ev.accept()
-                #self.newHandleRequested(ev.pos()) ## ev.pos is the position in this item's coordinates
-            #else:
-                #ev.ignore()
-                
-    #def newHandleRequested(self, evPos):
-        #print "newHandleRequested"
-        
-        #if evPos - self.handles[0].pos() == Point(0.,0.) or evPos-handles[1].pos() == Point(0.,0.):
-        #    return
-        #self.parentROI.newHandleRequested(self, self.mapToParent(evPos)) ## so now evPos should be passed in in the parents coordinate system
         
     def listPoints(self):
         return [p['item'].pos() for p in self.handles]
-            
-    #def movePoint(self, *args, **kargs):
-        #ROI.movePoint(self, *args, **kargs)
-        #self.prepareGeometryChange()
-        #for h in self.handles:
-            #h['pos'] = h['item'].pos()
             
     def paint(self, p, *args):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
@@ -1721,28 +1771,18 @@ class LineSegmentROI(ROI):
         h1 = self.handles[0]['item'].pos()
         h2 = self.handles[1]['item'].pos()
         p.drawLine(h1, h2)
-        #p.setPen(fn.mkPen('w'))
-        #p.drawPath(self.shape())
-        
-        #for i in range(len(self.handles)-1):
-            #h1 = self.handles[i]['item'].pos()
-            #h2 = self.handles[i+1]['item'].pos()
-            #p.drawLine(h1, h2)
         
     def boundingRect(self):
         return self.shape().boundingRect()
-        #r = QtCore.QRectF()
-        #for h in self.handles:
-            #r |= self.mapFromItem(h['item'], h['item'].boundingRect()).boundingRect()   ## |= gives the union of the two QRectFs
-        #return r
     
     def shape(self):
         p = QtGui.QPainterPath()
-        #pw, ph = self.pixelSize()
-        #pHyp = 4 * (pw**2 + ph**2)**0.5
     
         h1 = self.handles[0]['item'].pos()
         h2 = self.handles[1]['item'].pos()
+        dh = h2-h1
+        if dh.length() == 0:
+            return p
         pxv = self.pixelVectors(h2-h1)[1]
         
         if pxv is None:
@@ -1758,14 +1798,6 @@ class LineSegmentROI(ROI):
       
         return p
     
-    #def stateCopy(self):
-        #sc = {}
-        #sc['pos'] = Point(self.state['pos'])
-        #sc['size'] = Point(self.state['size'])
-        #sc['angle'] = self.state['angle']
-        ##sc['handles'] = self.handles
-        #return sc
-
     def getArrayRegion(self, data, img, axes=(0,1)):
         """
         Use the position of this ROI relative to an imageItem to pull a slice from an array.
@@ -1808,11 +1840,11 @@ class SpiralROI(ROI):
         return QtCore.QRectF(-r*1.1, -r*1.1, 2.2*r, 2.2*r)
         #return self.bounds
     
-    def movePoint(self, *args, **kargs):
-        ROI.movePoint(self, *args, **kargs)
-        self.prepareGeometryChange()
-        for h in self.handles:
-            h['pos'] = h['item'].pos()/self.state['size'][0]
+    #def movePoint(self, *args, **kargs):
+        #ROI.movePoint(self, *args, **kargs)
+        #self.prepareGeometryChange()
+        #for h in self.handles:
+            #h['pos'] = h['item'].pos()/self.state['size'][0]
             
     def stateChanged(self):
         ROI.stateChanged(self)

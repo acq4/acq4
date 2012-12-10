@@ -642,15 +642,17 @@ class PatchThread(QtCore.QThread):
         ## Handle analysis differently depenting on clamp mode
         if params['mode'] == 'vc':
             #global iBase, iPulse, iPulseEnd
-            iBase = base['Channel': 'primary']
-            iPulse = pulse['Channel': 'primary'] 
+            iBase = base['Channel': 'primary'].asarray()
+            iPulse = pulse['Channel': 'primary']
             iPulseEnd = pulseEnd['Channel': 'primary'] 
-            vBase = base['Channel': 'command']
+            vBase = base['Channel': 'command'].asarray()
             vPulse = pulse['Channel': 'command'] 
             vStep = vPulse.mean() - vBase.mean()
             sign = [-1, 1][vStep > 0]
 
-            iStep = sign * max(1e-15, sign * (iPulseEnd.mean() - iBase.mean()))
+            iBaseMean = iBase.mean()
+            iPulseEndMean = iPulseEnd.asarray().mean()
+            iStep = sign * max(1e-15, sign * (iPulseEndMean - iBaseMean))
             iRes = vStep / iStep
             
             ## From Santos-Sacchi 1993
@@ -658,7 +660,7 @@ class PatchThread(QtCore.QThread):
             ## 1. compute charge transfered during the charging phase 
             pTimes = pulse.xvals('Time')
             iCapEnd = pTimes[-1]
-            iCap = iPulse['Time':pTimes[0]:iCapEnd] - iPulseEnd.mean()
+            iCap = iPulse['Time':pTimes[0]:iCapEnd] - iPulseEndMean
             #self.iCap1 = iCap
             ## Instead, we will use the fit to guess how much charge transfer there would have been 
             ## if the charging curve had gone all the way back to the beginning of the pulse
@@ -682,9 +684,9 @@ class PatchThread(QtCore.QThread):
             cap = Cm
             
         if params['mode'] == 'ic':
-            iBase = base['Channel': 'command']
+            iBase = base['Channel': 'command'].asarray()
             iPulse = pulse['Channel': 'command'] 
-            vBase = base['Channel': 'primary']
+            vBase = base['Channel': 'primary'].asarray()
             vPulse = pulse['Channel': 'primary'] 
             vPulseEnd = pulseEnd['Channel': 'primary'] 
             iStep = iPulse.mean() - iBase.mean()

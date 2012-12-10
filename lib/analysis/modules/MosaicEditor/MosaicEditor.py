@@ -6,6 +6,7 @@ import os
 from collections import OrderedDict
 import debug
 import numpy as np
+import weakref
 #import FileLoader
 #import DatabaseGui
 #import FeedbackButton
@@ -31,7 +32,8 @@ class MosaicEditor(AnalysisModule):
         self.initializeElements()
 
         self.ui.canvas = self.getElement('Canvas', create=True)
-        self.items = {}
+        self.items = weakref.WeakKeyDictionary()
+        self.files = weakref.WeakValueDictionary()
         self.cells = {}
         #self.loaded = []
         
@@ -95,10 +97,16 @@ class MosaicEditor(AnalysisModule):
             return
 
         for f in files:
+            if f in self.files:   ## Do not allow loading the same file more than once
+                item = self.files[f]
+                item.show()
+                continue
+            
             item = canvas.addFile(f)
             if isinstance(item, list):
                 item = item[0]
             self.items[item] = f
+            self.files[f] = item
             try:
                 item.timestamp = f.info()['__timestamp__']
             except:
@@ -149,3 +157,8 @@ class MosaicEditor(AnalysisModule):
         return self.items.values()
         
         
+    def quit(self):
+        self.files = None
+        self.cells = None
+        self.items = None
+        self.ui.canvas.clear()

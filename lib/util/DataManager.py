@@ -83,11 +83,11 @@ class DataManager(QtCore.QObject):
     def getDirHandle(self, dirName, create=False):
         with self.lock:
             dirName = os.path.abspath(dirName)
-            if not (create or os.path.isdir(dirName)):
-                if not os.path.exists(dirName):
-                    raise Exception("Directory %s does not exist" % dirName)
-                else:
-                    raise Exception("Not a directory: %s" % dirName)
+            #if not (create or os.path.isdir(dirName)):
+            #    if not os.path.exists(dirName):
+            #        raise Exception("Directory %s does not exist" % dirName)
+            #    else:
+            #        raise Exception("Not a directory: %s" % dirName)
             if not self._cacheHasName(dirName):
                 self._addHandle(dirName, DirHandle(dirName, self, create=create))
             return self._getCache(dirName)
@@ -95,10 +95,10 @@ class DataManager(QtCore.QObject):
     def getFileHandle(self, fileName):
         with self.lock:
             fileName = os.path.abspath(fileName)
-            if not os.path.exists(fileName):
-                raise Exception("File %s does not exist" % fileName)
-            if not os.path.isfile(fileName):
-                raise Exception("Not a regular file: %s" % fileName)
+            #if not os.path.exists(fileName):
+            #    raise Exception("File %s does not exist" % fileName)
+            #if not os.path.isfile(fileName):
+            #    raise Exception("Not a regular file: %s" % fileName)
             if not self._cacheHasName(fileName):
                 self._addHandle(fileName, FileHandle(fileName, self))
             return self._getCache(fileName)
@@ -217,7 +217,10 @@ class FileHandle(QtCore.QObject):
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.sigproxy = SignalProxy(self.sigChanged, slot=self.delayedChange)
         
+    def getFile(self, fn):
+        return getFileHandle(os.path.join(self.name(), fn))
         
+
     def __repr__(self):
         return "<%s '%s' (0x%x)>" % (self.__class__.__name__, self.name(), self.__hash__())
 
@@ -450,20 +453,23 @@ class DirHandle(FileHandle):
         self._index = None
         self.lsCache = {}  # sortMode: [files...]
         self.cTimeCache = {}
+        self._indexFileExists = False
         
         if not os.path.isdir(self.path):
             if create:
                 os.mkdir(self.path)
                 self.createIndex()
-            else:
-                raise Exception("Directory %s does not exist." % self.path)
+            #else:
+            #    raise Exception("Directory %s does not exist." % self.path)
         
-        if os.path.isfile(self._indexFile()):
-            ## read the index and cache it.
-            self._readIndex()
-        else:
-            ## If directory is unmanaged, just leave it that way.
-            pass
+        ## Let's avoid reading the index unless we really need to.
+        self._indexFileExists = os.path.isfile(self._indexFile())
+        #if os.path.isfile(self._indexFile()):
+            ### read the index and cache it.
+            #self._readIndex()
+        #else:
+            ### If directory is unmanaged, just leave it that way.
+            #pass
         
         
     #def __del__(self):
@@ -607,7 +613,7 @@ class DirHandle(FileHandle):
         """Return a DirHandle for the specified subdirectory. If the subdir does not exist, it will be created only if create==True"""
         with self.lock:
             ndir = os.path.join(self.path, subdir)
-            if os.path.isdir(ndir):
+            if not create or os.path.isdir(ndir):
                 return self.manager.getDirHandle(ndir)
             else:
                 if create:
@@ -620,8 +626,8 @@ class DirHandle(FileHandle):
         fullName = os.path.join(self.name(), fileName)
         #if create:
             #self.createFile(fileName, autoIncrement=autoIncrement, useExt=useExt)
-        if not os.path.isfile(fullName):
-            raise Exception('File "%s" does not exist.' % fullName)
+        #if not os.path.isfile(fullName):
+        #    raise Exception('File "%s" does not exist.' % fullName)
         fh = self[fileName]
         if not fh.isManaged():
             self.indexFile(fileName)
@@ -678,7 +684,7 @@ class DirHandle(FileHandle):
                     if f not in self.cTimeCache:
                         self.cTimeCache[f] = self._getFileCTime(f)
                     dlg += 1
-            files.sort(lambda a,b: cmp(self.cTimeCache[a], self.cTimeCache[b]))
+            files.sort(key=lambda f: (self.cTimeCache[f], f))  ## sort by time first, then name.
         elif sortMode == 'alpha':
             ## show directories first when sorting alphabetically.
             files.sort(lambda a,b: 2*cmp(os.path.isdir(os.path.join(self.name(),b)), os.path.isdir(os.path.join(self.name(),a))) + cmp(a,b))
@@ -738,6 +744,7 @@ class DirHandle(FileHandle):
         return len(self.ls()) > 0
     
     def info(self):
+        self._readIndex(unmanagedOk=True)  ## returns None if this directory has no index file
         return advancedTypes.ProtectedDict(self._fileInfo('.'))
     
     def _fileInfo(self, file):
@@ -881,7 +888,7 @@ class DirHandle(FileHandle):
         
     def isManaged(self, fileName=None):
         with self.lock:
-            if self._index is None:
+            if self._indexFileExists is False:
                 return False
             if fileName is None:
                 return True
@@ -979,11 +986,13 @@ class DirHandle(FileHandle):
             #print "Write", type(newIndex)
             self._index = newIndex
             self._indexMTime = os.path.getmtime(self._indexFile())
+            self._indexFileExists = True
 
     def _appendIndex(self, info):
         with self.lock:
             indexFile = self._indexFile()
             appendConfigFile(info, indexFile)
+            self._indexFileExists = True
             for k in info:
                 self._index[k] = info[k]
             self._indexMTime = os.path.getmtime(indexFile)

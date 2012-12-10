@@ -5,7 +5,7 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-from Qt import QtGui, QtCore
+from .Qt import QtGui, QtCore
 import numpy as np
 
 class Vector(QtGui.QVector3D):
@@ -56,4 +56,9 @@ class Vector(QtGui.QVector3D):
             return self.setZ(x)
         else:
             raise IndexError("Point has no index %s" % str(i))
+        
+    def __iter__(self):
+        yield(self.x())
+        yield(self.y())
+        yield(self.z())
         

@@ -199,7 +199,6 @@ class EventFitter(CtrlNode):
         
 def processEventFits(events, startEvent, stopEvent, opts):
     ## This function does all the processing work for EventFitter.
-    ## It is a static method to facilitate parallel processing 
     dt = opts['dt']
     origTau = opts['tau']
     multiFit = opts['multiFit']
@@ -239,19 +238,24 @@ def processEventFits(events, startEvent, stopEvent, opts):
             sliceLen = min(sliceLen, nextStart-start)
                 
         guessLen = events[i]['len']*dt
-        
         tau = origTau
         if tau is not None:
             guessLen += tau*2.
+        #print i, guessLen, tau, events[i]['len']*dt
+
+        #sliceLen = 50e-3
+        sliceLen = guessLen
+        if i+1 < len(events):  ## cut slice back if there is another event coming up
+            nextStart = events[i+1]['time']
+            sliceLen = min(sliceLen, nextStart-start)
         
-        sliceLen = min(guessLen*3., sliceLen)
         
         ## Figure out from where to pull waveform data that will be fitted
         startIndex = np.argwhere(tvals>=start)[0][0]
         stopIndex = startIndex + int(sliceLen/dt)
         eventData = waveform[startIndex:stopIndex]
         times = tvals[startIndex:stopIndex]
-        
+        #print i, startIndex, stopIndex, dt
         if len(times) < 4:  ## PSP fit requires at least 4 points; skip this one
             offset += 1
             continue
@@ -259,7 +263,7 @@ def processEventFits(events, startEvent, stopEvent, opts):
         ## reconvolve this chunk of the signal if it was previously deconvolved
         if tau is not None:
             eventData = functions.expReconvolve(eventData, tau=tau, dt=dt)
-
+        #print i, len(eventData)
         ## Make guesses as to the shape of the event
         mx = eventData.max()
         mn = eventData.min()
@@ -273,7 +277,6 @@ def processEventFits(events, startEvent, stopEvent, opts):
         guessStart = times[0]
         
         zc = functions.zeroCrossingEvents(eventData - (peakVal/3.))
-        
         ## eliminate events going the wrong direction
         if len(zc) > 0:
             if guessAmp > 0:
@@ -281,7 +284,8 @@ def processEventFits(events, startEvent, stopEvent, opts):
             else:
                 zc = zc[zc['peak']<0]
         #print zc    
-        ## measure properties for the largest event
+        ## measure properties for the largest event within 10ms of start
+        zc = zc[zc['index'] < 10e-3/dt]
         if len(zc) > 0:
             if guessAmp > 0:
                 zcInd = np.argmax(zc['sum']) ## the largest event in this clip
@@ -306,7 +310,7 @@ def processEventFits(events, startEvent, stopEvent, opts):
         #guess = [amp, times[0], guessLen/4., guessLen/2.]  ## careful! 
         bounds = [
             sorted((guessAmp * 0.1, guessAmp)),
-            sorted((guessStart-guessRise*2, guessStart+guessRise*2)), 
+            sorted((guessStart-min(guessRise, 0.01), guessStart+guessRise*2)), 
             sorted((dt*0.5, guessDecay)),
             sorted((dt*0.5, guessDecay * 50.))
         ]
@@ -748,10 +752,10 @@ class EventMasker(CtrlNode):
     Accepts a list of regions or a list of times (use padding to give width to each time point)"""
     nodeName = "EventMasker"
     uiTemplate = [
-        #('prePadding', 'spin', {'value': 0, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
-        #('postPadding', 'spin', {'value': 0.1, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
-        ('prePadding', 'intSpin', {'min': 0, 'max': 1e9}),
-        ('postPadding', 'intSpin', {'min': 0, 'max': 1e9}),
+        ('prePadding', 'spin', {'value': -2e-3, 'step': 1e-3, 'range': [None, 0], 'siPrefix': True, 'suffix': 's'}),
+        ('postPadding', 'spin', {'value': 1e-3, 'step': 1e-3, 'range': [0, None], 'siPrefix': True, 'suffix': 's'}),
+        #('prePadding', 'intSpin', {'min': 0, 'max': 1e9}),
+        #('postPadding', 'intSpin', {'min': 0, 'max': 1e9}),
     ]
     
     def __init__(self, name):
@@ -762,17 +766,26 @@ class EventMasker(CtrlNode):
         })
     
     def process(self, events, regions, display=True):
-        #print "From masker:", events
-        #events = events.copy()
+        ##print "From masker:", events
+        ###events = events.copy()
+        
+        #prep = self.ctrls['prePadding'].value()
+        #postp = self.ctrls['postPadding'].value()
+        
+        #starts = (regions['index']-prep)[:,np.newaxis]
+        #stops = (regions['index']+prep)[:,np.newaxis]
+        
+        #times = events['index'][np.newaxis, :]
+        #mask = ((times >= starts) * (times <= stops)).sum(axis=0) == 0
+        
         prep = self.ctrls['prePadding'].value()
         postp = self.ctrls['postPadding'].value()
         
-        starts = (regions['index']-prep)[:,np.newaxis]
-        stops = (regions['index']+prep)[:,np.newaxis]
+        starts = (regions['time']+prep)[:,np.newaxis]
+        stops = (regions['time']+postp)[:,np.newaxis]
         
-        times = events['index'][np.newaxis, :]
+        times = events['fitTime'][np.newaxis, :]
         mask = ((times >= starts) * (times <= stops)).sum(axis=0) == 0
-        
         return {'output': events[mask]}
         
 

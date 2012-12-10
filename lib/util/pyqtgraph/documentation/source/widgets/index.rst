@@ -1,3 +1,5 @@
+.. _api_widgets:
+
 Pyqtgraph's Widgets
 ===================
 
@@ -28,4 +30,11 @@ Contents:
     joystickbutton
     multiplotwidget
     verticallabel
-
+    remotegraphicsview
+    matplotlibwidget
+    feedbackbutton
+    combobox
+    layoutwidget
+    pathbutton
+    valuelabel
+    busycursor

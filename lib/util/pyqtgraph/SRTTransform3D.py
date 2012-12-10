@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-from Qt import QtCore, QtGui
-from Vector import Vector
-from SRTTransform import SRTTransform
+from .Qt import QtCore, QtGui
+from .Vector import Vector
+from .SRTTransform import SRTTransform
 import pyqtgraph as pg
 import numpy as np
 import scipy.linalg
 
-class SRTTransform3D(QtGui.QMatrix4x4):
+class SRTTransform3D(pg.Transform3D):
     """4x4 Transform matrix that can always be represented as a combination of 3 matrices: scale * rotate * translate
     This transform has no shear; angles are always preserved.
     """
     def __init__(self, init=None):
-        QtGui.QMatrix4x4.__init__(self)
+        pg.Transform3D.__init__(self)
         self.reset()
         if init is None:
             return
@@ -136,15 +136,15 @@ class SRTTransform3D(QtGui.QMatrix4x4):
         try:
             evals, evecs = scipy.linalg.eig(r)
         except:
-            print "Rotation matrix:", r
-            print "Scale:", scale
-            print "Original matrix:", m
+            print("Rotation matrix: %s" % str(r))
+            print("Scale: %s" % str(scale))
+            print("Original matrix: %s" % str(m))
             raise
         eigIndex = np.argwhere(np.abs(evals-1) < 1e-7)
         if len(eigIndex) < 1:
-            print "eigenvalues:", evals
-            print "eigenvectors:", evecs
-            print "index:", eigIndex, evals-1
+            print("eigenvalues: %s" % str(evals))
+            print("eigenvectors: %s" % str(evecs))
+            print("index: %s, %s" % (str(eigIndex), str(evals-1)))
             raise Exception("Could not determine rotation axis.")
         axis = evecs[eigIndex[0,0]].real
         axis /= ((axis**2).sum())**0.5
@@ -183,29 +183,29 @@ class SRTTransform3D(QtGui.QMatrix4x4):
     def restoreState(self, state):
         self._state['pos'] = Vector(state.get('pos', (0.,0.,0.)))
         scale = state.get('scale', (1.,1.,1.))
-        scale = scale + (1.,) * (3-len(scale))
+        scale = tuple(scale) + (1.,) * (3-len(scale))
         self._state['scale'] = Vector(scale)
         self._state['angle'] = state.get('angle', 0.)
         self._state['axis'] = state.get('axis', (0, 0, 1))
         self.update()
 
     def update(self):
-        QtGui.QMatrix4x4.setToIdentity(self)
+        pg.Transform3D.setToIdentity(self)
         ## modifications to the transform are multiplied on the right, so we need to reverse order here.
-        QtGui.QMatrix4x4.translate(self, *self._state['pos'])
-        QtGui.QMatrix4x4.rotate(self, self._state['angle'], *self._state['axis'])
-        QtGui.QMatrix4x4.scale(self, *self._state['scale'])
+        pg.Transform3D.translate(self, *self._state['pos'])
+        pg.Transform3D.rotate(self, self._state['angle'], *self._state['axis'])
+        pg.Transform3D.scale(self, *self._state['scale'])
 
     def __repr__(self):
         return str(self.saveState())
         
     def matrix(self, nd=3):
         if nd == 3:
-            return np.array(self.copyDataTo())
+            return np.array(self.copyDataTo()).reshape(4,4)
         elif nd == 2:
-            m = np.array(self.copyDataTo())
+            m = np.array(self.copyDataTo()).reshape(4,4)
             m[2] = m[3]
-            m[:,2] = n[:,3]
+            m[:,2] = m[:,3]
             return m[:3,:3]
         else:
             raise Exception("Argument 'nd' must be 2 or 3")
@@ -259,23 +259,23 @@ if __name__ == '__main__':
     tr3 = QtGui.QTransform()
     tr3.translate(20, 0)
     tr3.rotate(45)
-    print "QTransform -> Transform:", SRTTransform(tr3)
+    print("QTransform -> Transform: %s" % str(SRTTransform(tr3)))
     
-    print "tr1:", tr1
+    print("tr1: %s" % str(tr1))
     
     tr2.translate(20, 0)
     tr2.rotate(45)
-    print "tr2:", tr2
+    print("tr2: %s" % str(tr2))
     
     dt = tr2/tr1
-    print "tr2 / tr1 = ", dt
+    print("tr2 / tr1 = %s" % str(dt))
     
-    print "tr2 * tr1 = ", tr2*tr1
+    print("tr2 * tr1 = %s" % str(tr2*tr1))
     
     tr4 = SRTTransform()
     tr4.scale(-1, 1)
     tr4.rotate(30)
-    print "tr1 * tr4 = ", tr1*tr4
+    print("tr1 * tr4 = %s" % str(tr1*tr4))
     
     w1 = widgets.TestROI((19,19), (22, 22), invertible=True)
     #w2 = widgets.TestROI((0,0), (150, 150))

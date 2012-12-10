@@ -1,11 +1,6 @@
 from pyqtgraph.Qt import QtGui, QtCore
 import numpy as np
 import collections
-try:
-    import scipy.weave as weave
-    from scipy.weave import converters
-except:
-    pass
 import pyqtgraph.functions as fn
 import pyqtgraph.debug as debug
 from .GraphicsObject import GraphicsObject
@@ -40,7 +35,7 @@ class ImageItem(GraphicsObject):
         #self.pixmapItem = QtGui.QGraphicsPixmapItem(self)
         #self.qimage = QtGui.QImage()
         #self._pixmap = None
-        
+        self.menu = None
         self.image = None   ## original image data
         self.qimage = None  ## rendered image for display
         #self.clipMask = None
@@ -286,6 +281,11 @@ class ImageItem(GraphicsObject):
             p.drawRect(self.boundingRect())
         prof.finish()
 
+    def save(self, fileName, *args):
+        """Save this image to file. Note that this saves the visible image (after scale/color changes), not the original data."""
+        if self.qimage is None:
+            self.render()
+        self.qimage.save(fileName, *args)
 
     def getHistogram(self, bins=500, step=3):
         """Returns x and y arrays containing the histogram values for the current image.

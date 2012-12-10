@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from pyqtgraph.Qt import QtGui, QtCore
+from pyqtgraph.python2_3 import asUnicode
 from pyqtgraph.SignalProxy import SignalProxy
 
 import pyqtgraph.functions as fn
@@ -107,10 +108,13 @@ class SpinBox(QtGui.QAbstractSpinBox):
             'suffix': '',
             'siPrefix': False,   ## Set to True to display numbers with SI prefix (ie, 100pA instead of 1e-10A)
             
+            'delay': 0.3, ## delay sending wheel update signals for 300ms
+            
             'delayUntilEditFinished': True,   ## do not send signals until text editing has finished
             
             ## for compatibility with QDoubleSpinBox and QSpinBox
-            'decimals': 2
+            'decimals': 2,
+            
         }
         
         self.decOpts = ['step', 'minStep']
@@ -124,7 +128,13 @@ class SpinBox(QtGui.QAbstractSpinBox):
         
         
         self.editingFinished.connect(self.editingFinishedEvent)
-        self.proxy = SignalProxy(self.sigValueChanging, slot=self.delayedChange)
+        self.proxy = SignalProxy(self.sigValueChanging, slot=self.delayedChange, delay=self.opts['delay'])
+        
+    def event(self, ev):
+        ret = QtGui.QAbstractSpinBox.event(self, ev)
+        if ev.type() == QtCore.QEvent.KeyPress and ev.key() == QtCore.Qt.Key_Return:
+            ret = True  ## For some reason, spinbox pretends to ignore return key press
+        return ret
         
     ##lots of config options, just gonna stuff 'em all in here rather than do the get/set crap.
     def setOpts(self, **opts):
@@ -133,6 +143,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         allowed in :func:`__init__ <pyqtgraph.SpinBox.__init__>`.
         
         """
+        #print opts
         for k in opts:
             if k == 'bounds':
                 #print opts[k]
@@ -175,7 +186,10 @@ class SpinBox(QtGui.QAbstractSpinBox):
                 if ms < 1:
                     ms = 1
                 self.opts['minStep'] = ms
-            
+        
+        if 'delay' in opts:
+            self.proxy.setDelay(opts['delay'])
+        
         self.updateText()
 
 

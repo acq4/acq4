@@ -1,6 +1,6 @@
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.widgets.TreeWidget import TreeWidget
-import collections, os, weakref, re
+import os, weakref, re
 #import functions as fn
         
             
@@ -8,17 +8,17 @@ import collections, os, weakref, re
 class ParameterTree(TreeWidget):
     """Widget used to display or control data from a ParameterSet"""
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, showHeader=True):
         TreeWidget.__init__(self, parent)
         self.setVerticalScrollMode(self.ScrollPerPixel)
         self.setHorizontalScrollMode(self.ScrollPerPixel)
         self.setAnimated(False)
         self.setColumnCount(2)
         self.setHeaderLabels(["Parameter", "Value"])
-        self.setRootIsDecorated(False)
         self.setAlternatingRowColors(True)
         self.paramSet = None
         self.header().setResizeMode(QtGui.QHeaderView.ResizeToContents)
+        self.setHeaderHidden(not showHeader)
         self.itemChanged.connect(self.itemChangedEvent)
         self.lastSel = None
         self.setRootIsDecorated(False)

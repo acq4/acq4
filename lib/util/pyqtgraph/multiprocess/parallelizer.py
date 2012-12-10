@@ -1,4 +1,4 @@
-import os, sys, time, multiprocessing
+import os, sys, time, multiprocessing, re
 from processes import ForkedProcess
 from remoteproxy import ExitError
 
@@ -6,7 +6,7 @@ class CanceledError(Exception):
     """Raised when the progress dialog is canceled during a processing operation."""
     pass
 
-class Parallelize:
+class Parallelize(object):
     """
     Class for ultra-simple inline parallelization on multi-core CPUs
     
@@ -37,16 +37,20 @@ class Parallelize:
     since it is automatically sent via pipe back to the parent process.
     """
 
-    def __init__(self, tasks, workers=None, block=True, progressDialog=None, **kwds):
+    def __init__(self, tasks=None, workers=None, block=True, progressDialog=None, randomReseed=True, **kwds):
         """
         ===============  ===================================================================
         Arguments:
         tasks            list of objects to be processed (Parallelize will determine how to 
-                         distribute the tasks)
+                         distribute the tasks). If unspecified, then each worker will receive
+                         a single task with a unique id number.
         workers          number of worker processes or None to use number of CPUs in the 
                          system
         progressDialog   optional dict of arguments for ProgressDialog
                          to update while tasks are processed
+        randomReseed     If True, each forked process will reseed its random number generator
+                         to ensure independent results. Works with the built-in random
+                         and numpy.random.
         kwds             objects to be shared by proxy with child processes (they will 
                          appear as attributes of the tasker)
         ===============  ===================================================================
@@ -67,7 +71,10 @@ class Parallelize:
         if not hasattr(os, 'fork'):
             workers = 1
         self.workers = workers
+        if tasks is None:
+            tasks = range(workers)
         self.tasks = list(tasks)
+        self.reseed = randomReseed
         self.kwds = kwds.copy()
         self.kwds['_taskStarted'] = self._taskStarted
         
@@ -81,12 +88,14 @@ class Parallelize:
     def __exit__(self, *exc_info):
         
         if self.proc is not None:  ## worker 
+            exceptOccurred = exc_info[0] is not None ## hit an exception during processing.
+                
             try:
-                if exc_info[0] is not None:
+                if exceptOccurred:
                     sys.excepthook(*exc_info)
             finally:
                 #print os.getpid(), 'exit'
-                os._exit(0)
+                os._exit(1 if exceptOccurred else 0)
                 
         else:  ## parent
             if self.showProgress:
@@ -97,7 +106,7 @@ class Parallelize:
             self.progressDlg.__enter__()
             self.progressDlg.setMaximum(len(self.tasks))
         self.progress = {os.getpid(): []}
-        return Tasker(None, self.tasks, self.kwds)
+        return Tasker(self, None, self.tasks, self.kwds)
 
     
     def runParallel(self):
@@ -112,10 +121,10 @@ class Parallelize:
         
         ## fork and assign tasks to each worker
         for i in range(workers):
-            proc = ForkedProcess(target=None, preProxy=self.kwds)
+            proc = ForkedProcess(target=None, preProxy=self.kwds, randomReseed=self.reseed)
             if not proc.isParent:
                 self.proc = proc
-                return Tasker(proc, chunks[i], proc.forkedProxies)
+                return Tasker(self, proc, chunks[i], proc.forkedProxies)
             else:
                 self.childs.append(proc)
         
@@ -133,6 +142,7 @@ class Parallelize:
             ## process events from workers until all have exited.
                 
             activeChilds = self.childs[:]
+            self.exitCodes = []
             pollInterval = 0.01
             while len(activeChilds) > 0:
                 waitingChildren = 0
@@ -150,7 +160,18 @@ class Parallelize:
                 #print "remove:", [ch.childPid for ch in rem]
                 for ch in rem:
                     activeChilds.remove(ch)
-                    os.waitpid(ch.childPid, 0)
+                    while True:
+                        try:
+                            pid, exitcode = os.waitpid(ch.childPid, 0)
+                            self.exitCodes.append(exitcode)
+                            break
+                        except OSError as ex:
+                            if ex.errno == 4:  ## If we get this error, just try again
+                                continue
+                                #print "Ignored system call interruption"
+                            else:
+                                raise
+                    
                     #print [ch.childPid for ch in activeChilds]
                     
                 if self.showProgress and self.progressDlg.wasCanceled():
@@ -169,12 +190,36 @@ class Parallelize:
         finally:
             if self.showProgress:
                 self.progressDlg.__exit__(None, None, None)
+        if len(self.exitCodes) < len(self.childs):
+            raise Exception("Parallelizer started %d processes but only received exit codes from %d." % (len(self.childs), len(self.exitCodes)))
+        for code in self.exitCodes:
+            if code != 0:
+                raise Exception("Error occurred in parallel-executed subprocess (console output may have more information).")
         return []  ## no tasks for parent process.
     
     
     @staticmethod
     def suggestedWorkerCount():
-        return multiprocessing.cpu_count()  ## is this really the best option?
+        if 'linux' in sys.platform:
+            ## I think we can do a little better here..
+            ## cpu_count does not consider that there is little extra benefit to using hyperthreaded cores.
+            try:
+                cores = {}
+                pid = None
+                
+                for line in open('/proc/cpuinfo'):
+                    m = re.match(r'physical id\s+:\s+(\d+)', line)
+                    if m is not None:
+                        pid = m.groups()[0]
+                    m = re.match(r'cpu cores\s+:\s+(\d+)', line)
+                    if m is not None:
+                        cores[pid] = int(m.groups()[0])
+                return sum(cores.values())
+            except:
+                return multiprocessing.cpu_count()
+                
+        else:
+            return multiprocessing.cpu_count()
         
     def _taskStarted(self, pid, i, **kwds):
         ## called remotely by tasker to indicate it has started working on task i
@@ -188,9 +233,10 @@ class Parallelize:
         self.progress[pid].append(i)
     
     
-class Tasker:
-    def __init__(self, proc, tasks, kwds):
-        self.proc = proc
+class Tasker(object):
+    def __init__(self, parallelizer, process, tasks, kwds):
+        self.proc = process
+        self.par = parallelizer
         self.tasks = tasks
         for k, v in kwds.iteritems():
             setattr(self, k, v)
@@ -206,7 +252,20 @@ class Tasker:
             #print os.getpid(), 'no more tasks'
             self.proc.close()
     
+    def process(self):
+        """
+        Process requests from parent.
+        Usually it is not necessary to call this unless you would like to 
+        receive messages (such as exit requests) during an iteration.
+        """
+        if self.proc is not None:
+            self.proc.processRequests()
     
+    def numWorkers(self):
+        """
+        Return the number of parallel workers
+        """
+        return self.par.workers
     
 #class Parallelizer:
     #"""

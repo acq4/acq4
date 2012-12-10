@@ -10,7 +10,7 @@ import ColorMapper
 import pyqtgraph as pg
 #import pyqtgraph.ProgressDialog as ProgressDialog
 from HelpfulException import HelpfulException
-from Scan import Scan
+from Scan import Scan, loadScanSequence
 from DBCtrl import DBCtrl
 from ScatterPlotter import ScatterPlotter
 from Canvas import items
@@ -157,8 +157,7 @@ class Photostim(AnalysisModule):
         else:
             return
         #print "cells:", cells
-        for cell in cells:
-            self.dbCtrl.listMaps(cell)
+        self.dbCtrl.listMaps(cells)
 
             
 
@@ -166,17 +165,21 @@ class Photostim(AnalysisModule):
         canvas = self.getElement('Canvas')
         model = self.dataModel
 
-        for fh in fhList:
-            try:
-                ## TODO: use more clever detection of Scan data here.
-                if fh.isFile() or model.dirType(fh) == 'Cell':
-                    canvas.addFile(fh)
-                else:
-                    self.loadScan(fh)
-                return True
-            except:
-                debug.printExc("Error loading file %s" % fh.name())
-                return False
+        with pg.ProgressDialog("Loading data..", 0, len(fhList)) as dlg:
+            for fh in fhList:
+                try:
+                    ## TODO: use more clever detection of Scan data here.
+                    if fh.isFile() or model.dirType(fh) == 'Cell':
+                        canvas.addFile(fh)
+                    else:
+                        self.loadScan(fh)
+                    return True
+                except:
+                    debug.printExc("Error loading file %s" % fh.name())
+                    return False
+                dlg += 1
+                if dlg.wasCancelled():
+                    return
 
     def loadScan(self, fh):
         ret = []
@@ -193,51 +196,18 @@ class Photostim(AnalysisModule):
         
         ret = []
         
-        if self.dataModel.isSequence(fh):  ## If we are loading a sequence, there will be multiple spot locations and/or multiple scans.
-            ## get sequence parameters
-            params = self.dataModel.listSequenceParams(fh).deepcopy()  ## copy is required since this info is read-only.
-            if ('Scanner', 'targets') in params:
-                #params.remove(('Scanner', 'targets'))  ## removing this key enables us to process other sequence variables independently
-                del params[('Scanner', 'targets')]
-        
-            ## If the scan has sequence parameters other than the spot position, 
-            ## load each sub-scan separately.
-            if len(params) > 0:
-                seq = True
-                parent = canvas.addGroup(fh.shortName())
-            else:
-                seq = False
-                parent = None
-                
-            ## Determine the set of subdirs for each scan present in the sequence
-            ## (most sequences will have only one scan)
-            scans = {}
-            for dhName in fh.subDirs():
-                dh = fh[dhName]
-                key = '_'.join([str(dh.info()[p]) for p in params])
-                if key not in scans:
-                    scans[key] = []
-                scans[key].append(dh)
-
-        else:  ## If we are not loading a sequence, then there is only a single spot
-            scans = {None: [fh]}
-            seq = False
+        scans = loadScanSequence(fh, self)
+        if len(scans) > 1:
+            parent = canvas.addGroup(fh.shortName())
+        else:
             parent = None
-
-
-        ## Add each scan
-        
-        for key, subDirs in scans.iteritems():
-            if seq:
-                name = key
-                sname = fh.shortName() + '.' + key
-            else:
-                name = fh.shortName()
-                sname = name
-            canvasItem = Canvas.ScanCanvasItem(handle=fh, subDirs=subDirs, name=name, parent=parent)
+        print parent
+        for scan in scans:
+            canvasItem = scan.canvasItem()
+            if parent is not None:
+                canvasItem.setParentItem(parent)
             canvas.addItem(canvasItem)
             canvasItem.graphicsItem().sigClicked.connect(self.scanPointClicked)
-            scan = Scan(self, fh, canvasItem, name=sname)
             self.scans.append(scan)
             ret.append(scan)
             self.dbCtrl.scanLoaded(scan)
@@ -294,7 +264,7 @@ class Photostim(AnalysisModule):
     def mapPointClicked(self, scan, points):
         data = []
         for p in points:
-            for source in p.data():
+            for source in p.data()['sites']:
                 data.append([source[0], self.dataModel.getClampFile(source[1])])
             #data.extend(p.data)
         self.redisplayData(data)
@@ -314,7 +284,6 @@ class Photostim(AnalysisModule):
             plot.clear()
             eTable = self.getElement("Event Table")
             sTable = self.getElement("Stats")
-            self.mapTicks = []
             
             #num = len(point.data)
             num = len(points)
@@ -328,13 +297,13 @@ class Photostim(AnalysisModule):
                 except:
                     print points[i]
                     raise
-                if isinstance(fh, basestring):
-                    fh = scan.source()[fh]
                 
-                ## plot all data, incl. events
-                data = fh.read()['primary']
-                data = fn.besselFilter(data, 10e3)
-                pc = plot.plot(data, pen=color, clear=False)
+                if len(points[i]) == 3:
+                    evTime = points[i][2]
+                else:
+                    evTime = None
+                
+                scan.displayData(fh, plot, color, evTime)
                 
                 ## show stats
                 stats = scan.getStats(fh.parent())
@@ -343,24 +312,6 @@ class Photostim(AnalysisModule):
                 if len(events) > 0:
                     evList.append(events)
 
-                ## mark location of event if an event index was given
-                if len(points[i]) == 3:
-                    evTime = points[i][2]
-                    #pos = float(index)/len(data)
-                    pos = evTime / data.xvals('Time')[-1]
-                    #print evTime, data.xvals('Time')[-1], pos
-                    #print index
-                    self.arrow = pg.CurveArrow(pc, pos=pos)
-                    plot.addItem(self.arrow)
-                
-
-                ## draw ticks over all detected events
-                if len(events) > 0:
-                    if 'fitTime' in events.dtype.names:
-                        times = events['fitTime']
-                        ticks = pg.VTickGroup(times, [0.9, 1.0], pen=color)
-                        plot.addItem(ticks)
-                        self.mapTicks.append(ticks)
             
             sTable.setData(statList)
             if len(evList) > 0:
@@ -387,7 +338,7 @@ class Photostim(AnalysisModule):
         #print "STATE CHANGE"
         #print "Detector state changed"
         for scan in self.scans:
-            scan.forgetEvents()
+            scan.invalidateEvents()
         
     def detectorOutputChanged(self):
         if self.selectedSpot==None:
@@ -395,14 +346,14 @@ class Photostim(AnalysisModule):
         output = self.detector.flowchart.output()
         output['fileHandle']=self.selectedSpot.data()
         self.flowchart.setInput(**output)
-        errs = output['events']['fitFractionalError']
-        if len(errs) > 0:
-            print "Detector events error mean / median / max:", errs.mean(), np.median(errs), errs.max()
+        #errs = output['events']['fitFractionalError']
+        #if len(errs) > 0:
+            #print "Detector events error mean / median / max:", errs.mean(), np.median(errs), errs.max()
 
     def analyzerStateChanged(self):
         #print "Analyzer state changed."
         for scan in self.scans:
-            scan.forgetStats()
+            scan.invalidateStats()
         
     def analyzerOutputChanged(self):
         table = self.getElement('Stats')
@@ -437,12 +388,13 @@ class Photostim(AnalysisModule):
         #for i in range(len(self.maps)):
             #self.maps[i].recolor(self, i, len(self.maps))
 
-    def getColor(self, stats):
+    def getColor(self, stats, data=None):
+        ## Note: the data argument is used elsewhere (MapAnalyzer)
         #print "STATS:", stats
         return self.mapper.getColor(stats)
 
     def processEvents(self, fh):
-        #print "Process Events:", fh
+        print "Process Events:", fh
         ret = self.detector.process(fh)
         return ret
         
@@ -525,9 +477,12 @@ class Photostim(AnalysisModule):
         self.selectedScan.updateSpot(spot.data(), events, stats)
         
 
-    def storeDBScan(self, scan):
+    def storeDBScan(self, scan, storeEvents=True):
         """Store all data for a scan, using cached values if possible"""
         p = debug.Profiler("Photostim.storeDBScan", disabled=True)
+        
+        if storeEvents:
+            self.clearDBScan(scan)
         
         with pg.BusyCursor():
             #dh = scan.source()
@@ -559,20 +514,21 @@ class Photostim(AnalysisModule):
             db = dbui.getDb()
             with db.transaction():
                 ## Store all events for this scan
-                events = [x for x in events if len(x) > 0] 
-                
-                if len(events) > 0:
-                    ev = np.concatenate(events)
-                    p.mark("concatenate events")
-                    self.detector.storeToDB(ev)
-                    p.mark("stored all events")
+                if storeEvents:
+                    events = [x for x in events if len(x) > 0] 
+                    
+                    if len(events) > 0:
+                        ev = np.concatenate(events)
+                        p.mark("concatenate events")
+                        self.detector.storeToDB(ev)
+                        p.mark("stored all events")
                     
                 ## Store spot data
                 self.storeStats(stats)
                 p.mark("stored all stats")
                 p.finish()
                 #print "   scan %s is now locked" % scan.source().name()
-                scan.lock()
+                #scan.lock() ## handled by Scan now
 
     def rewriteSpotPositions(self, scan):
         ## for now, let's just rewrite everything.
@@ -619,8 +575,9 @@ class Photostim(AnalysisModule):
             db.delete(table, where={colName: dh})
         #db.delete(table, "SourceDir=%d" % pRow)
             
-        scan.unlock()
-        scan.forgetEvents()
+        #scan.unlock()
+        #scan.forgetEvents()
+        
         
 
 

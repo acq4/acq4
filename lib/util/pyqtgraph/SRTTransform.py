@@ -34,7 +34,11 @@ class SRTTransform(QtGui.QTransform):
     def getScale(self):
         return self._state['scale']
         
-    def getAngle(self):
+    def getAngle(self):  
+        ## deprecated; for backward compatibility
+        return self.getRotation()
+        
+    def getRotation(self):
         return self._state['angle']
         
     def getTranslation(self):
@@ -76,7 +80,7 @@ class SRTTransform(QtGui.QTransform):
         m = pg.SRTTransform3D(m)
         angle, axis = m.getRotation()
         if angle != 0 and (axis[0] != 0 or axis[1] != 0 or axis[2] != 1):
-            print angle, axis
+            print("angle: %s  axis: %s" % (str(angle), str(axis)))
             raise Exception("Can only convert 4x4 matrix to 3x3 if rotation is around Z-axis.")
         self._state = {
             'pos': Point(m.getTranslation()),

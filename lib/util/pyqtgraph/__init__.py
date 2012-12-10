@@ -1,41 +1,48 @@
 # -*- coding: utf-8 -*-
+REVISION = None
+
 ### import all the goodies and add some helper functions for easy CLI use
 
 ## 'Qt' is a local module; it is intended mainly to cover up the differences
 ## between PyQt4 and PySide.
-from .Qt import QtGui 
+from .Qt import QtGui
 
 ## not really safe--If we accidentally create another QApplication, the process hangs (and it is very difficult to trace the cause)
 #if QtGui.QApplication.instance() is None:
     #app = QtGui.QApplication([])
 
-import sys
+import os, sys
 
 ## check python version
-if sys.version_info[0] < 2 or (sys.version_info[0] == 2 and sys.version_info[1] != 7):
-    raise Exception("Pyqtgraph requires Python version 2.7 (this is %d.%d)" % (sys.version_info[0], sys.version_info[1]))
+## Allow anything >= 2.7
+if sys.version_info[0] < 2 or (sys.version_info[0] == 2 and sys.version_info[1] < 6):
+    raise Exception("Pyqtgraph requires Python version 2.6 or greater (this is %d.%d)" % (sys.version_info[0], sys.version_info[1]))
 
 ## helpers for 2/3 compatibility
 from . import python2_3
 
-    
+## install workarounds for numpy bugs
+from . import numpy_fix
+
 ## in general openGL is poorly supported with Qt+GraphicsView.
 ## we only enable it where the performance benefit is critical.
 ## Note this only applies to 2D graphics; 3D graphics always use OpenGL.
 if 'linux' in sys.platform:  ## linux has numerous bugs in opengl implementation
     useOpenGL = False
 elif 'darwin' in sys.platform: ## openGL can have a major impact on mac, but also has serious bugs
-    useOpenGL = False # True
+    useOpenGL = True
 else:
     useOpenGL = False  ## on windows there's a more even performance / bugginess tradeoff. 
                 
 CONFIG_OPTIONS = {
-    'useOpenGL': useOpenGL,   ## by default, this is platform-dependent (see widgets/GraphicsView). Set to True or False to explicitly enable/disable opengl.
+    'useOpenGL': useOpenGL, ## by default, this is platform-dependent (see widgets/GraphicsView). Set to True or False to explicitly enable/disable opengl.
     'leftButtonPan': True,  ## if false, left button drags a rubber band for zooming in viewbox
-    'foregroundColor': (200,200,200),
-    'backgroundColor': (0,0,0),
+    'foreground': (150, 150, 150),  ## default foreground color for axes, labels, etc.
+    'background': (0, 0, 0),        ## default background for GraphicsWidget
     'antialias': False,
+    'editorCommand': None,  ## command used to invoke code editor from ConsoleWidgets
 } 
+
 
 def setConfigOption(opt, value):
     CONFIG_OPTIONS[opt] = value
@@ -44,12 +51,33 @@ def getConfigOption(opt):
     return CONFIG_OPTIONS[opt]
 
 
+def systemInfo():
+    print("sys.platform: %s" % sys.platform)
+    print("sys.version: %s" % sys.version)
+    from .Qt import VERSION_INFO
+    print("qt bindings: %s" % VERSION_INFO)
+    
+    global REVISION
+    if REVISION is None:  ## this code was probably checked out from bzr; look up the last-revision file
+        lastRevFile = os.path.join(os.path.dirname(__file__), '.bzr', 'branch', 'last-revision')
+        if os.path.exists(lastRevFile):
+            REVISION = open(lastRevFile, 'r').read().strip()
+    
+    print("pyqtgraph: %s" % REVISION)
+    print("config:")
+    import pprint
+    pprint.pprint(CONFIG_OPTIONS)
+
 ## Rename orphaned .pyc files. This is *probably* safe :)
 
 def renamePyc(startDir):
     ### Used to rename orphaned .pyc files
     ### When a python file changes its location in the repository, usually the .pyc file
     ### is left behind, possibly causing mysterious and difficult to track bugs. 
+
+    ### Note that this is no longer necessary for python 3.2; from PEP 3147:
+    ### "If the py source file is missing, the pyc file inside __pycache__ will be ignored. 
+    ### This eliminates the problem of accidental stale pyc file imports."
     
     printed = False
     startDir = os.path.abspath(startDir)
@@ -76,42 +104,68 @@ def renamePyc(startDir):
                 
 import os
 path = os.path.split(__file__)[0]
-renamePyc(path)
+if not hasattr(sys, 'frozen'): ## If we are frozen, there's a good chance we don't have the original .py files anymore.
+    renamePyc(path)
 
 
 ## Import almost everything to make it available from a single namespace
 ## don't import the more complex systems--canvas, parametertree, flowchart, dockarea
 ## these must be imported separately.
-
-def importAll(path, excludes=()):
-    d = os.path.join(os.path.split(__file__)[0], path)
-    files = []
-    for f in os.listdir(d):
-        if os.path.isdir(os.path.join(d, f)) and f != '__pycache__':
-            files.append(f)
+from . import frozenSupport
+def importModules(path, globals, locals, excludes=()):
+    """Import all modules residing within *path*, return a dict of name: module pairs.
+    
+    Note that *path* MUST be relative to the module doing the import.    
+    """
+    d = os.path.join(os.path.split(globals['__file__'])[0], path)
+    files = set()
+    for f in frozenSupport.listdir(d):
+        if frozenSupport.isdir(os.path.join(d, f)) and f != '__pycache__':
+            files.add(f)
         elif f[-3:] == '.py' and f != '__init__.py':
-            files.append(f[:-3])
+            files.add(f[:-3])
+        elif f[-4:] == '.pyc' and f != '__init__.pyc':
+            files.add(f[:-4])
         
+    mods = {}
+    path = path.replace(os.sep, '.')
     for modName in files:
         if modName in excludes:
             continue
-        mod = __import__(path+"."+modName, globals(), locals(), fromlist=['*'])
+        try:
+            if len(path) > 0:
+                modName = path + '.' + modName
+            mod = __import__(modName, globals, locals, fromlist=['*'])
+            mods[modName] = mod
+        except:
+            import traceback
+            traceback.print_stack()
+            sys.excepthook(*sys.exc_info())
+            print("[Error importing module: %s]" % modName)
+            
+    return mods
+
+def importAll(path, globals, locals, excludes=()):
+    """Given a list of modules, import all names from each module into the global namespace."""
+    mods = importModules(path, globals, locals, excludes)
+    for mod in mods.values():
         if hasattr(mod, '__all__'):
             names = mod.__all__
         else:
             names = [n for n in dir(mod) if n[0] != '_']
         for k in names:
             if hasattr(mod, k):
-                globals()[k] = getattr(mod, k)
+                globals[k] = getattr(mod, k)
 
-importAll('graphicsItems')
-importAll('widgets', excludes=['MatplotlibWidget'])
+importAll('graphicsItems', globals(), locals())
+importAll('widgets', globals(), locals(), excludes=['MatplotlibWidget', 'RemoteGraphicsView'])
 
 from .imageview import *
 from .WidgetGroup import *
 from .Point import Point
 from .Vector import Vector
 from .SRTTransform import SRTTransform
+from .Transform3D import Transform3D
 from .SRTTransform3D import SRTTransform3D
 from .functions import *
 from .graphicsWindows import *
@@ -119,11 +173,14 @@ from .SignalProxy import *
 from .ptime import time
 
 
-## Workaround for Qt exit crash:
-## ALL QGraphicsItems must have a scene before they are deleted.
-## This is potentially very expensive, but preferred over crashing.
 import atexit
 def cleanup():
+    ViewBox.quit()  ## tell ViewBox that it doesn't need to deregister views anymore.
+    
+    ## Workaround for Qt exit crash:
+    ## ALL QGraphicsItems must have a scene before they are deleted.
+    ## This is potentially very expensive, but preferred over crashing.
+    ## Note: this appears to be fixed in PySide as of 2012.12, but it should be left in for a while longer..
     if QtGui.QApplication.instance() is None:
         return
     import gc
@@ -160,7 +217,7 @@ def plot(*args, **kargs):
     #if len(args)+len(kargs) > 0:
         #w.plot(*args, **kargs)
         
-    pwArgList = ['title', 'label', 'name', 'left', 'right', 'top', 'bottom']
+    pwArgList = ['title', 'labels', 'name', 'left', 'right', 'top', 'bottom']
     pwArgs = {}
     dataArgs = {}
     for k in kargs:
@@ -189,6 +246,21 @@ def image(*args, **kargs):
     w.show()
     return w
 show = image  ## for backward compatibility
+
+def dbg():
+    """
+    Create a console window and begin watching for exceptions.
+    """
+    mkQApp()
+    import console
+    c = console.ConsoleWidget()
+    c.catchAllExceptions()
+    c.show()
+    global consoles
+    try:
+        consoles.append(c)
+    except NameError:
+        consoles = [c]
     
     
 def mkQApp():

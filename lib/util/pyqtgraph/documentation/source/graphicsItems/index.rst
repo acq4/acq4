@@ -21,13 +21,16 @@ Contents:
     scatterplotitem
     isocurveitem
     axisitem
+    textitem
     arrowitem
+    fillbetweenitem
     curvepoint
     curvearrow
     griditem
     scalebar
     labelitem
     vtickgroup
+    legenditem
     gradienteditoritem
     histogramlutitem
     gradientlegend
@@ -36,4 +39,5 @@ Contents:
     graphicswidget
     graphicsitem
     uigraphicsitem
+    graphicswidgetanchor
 

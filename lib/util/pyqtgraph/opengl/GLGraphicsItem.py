@@ -1,4 +1,31 @@
 from pyqtgraph.Qt import QtGui, QtCore
+from pyqtgraph import Transform3D
+from OpenGL.GL import *
+from OpenGL import GL
+
+GLOptions = {
+    'opaque': {
+        GL_DEPTH_TEST: True,
+        GL_BLEND: False,
+        GL_ALPHA_TEST: False,
+        GL_CULL_FACE: False,
+    },
+    'translucent': {
+        GL_DEPTH_TEST: True,
+        GL_BLEND: True,
+        GL_ALPHA_TEST: False,
+        GL_CULL_FACE: False,
+        'glBlendFunc': (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA),
+    },
+    'additive': {
+        GL_DEPTH_TEST: False,
+        GL_BLEND: True,
+        GL_ALPHA_TEST: False,
+        GL_CULL_FACE: False,
+        'glBlendFunc': (GL_SRC_ALPHA, GL_ONE),
+    },
+}    
+
 
 class GLGraphicsItem(QtCore.QObject):
     def __init__(self, parentItem=None):
@@ -6,10 +33,11 @@ class GLGraphicsItem(QtCore.QObject):
         self.__parent = None
         self.__view = None
         self.__children = set()
-        self.__transform = QtGui.QMatrix4x4()
+        self.__transform = Transform3D()
         self.__visible = True
         self.setParentItem(parentItem)
         self.setDepthValue(0)
+        self.__glOpts = {}
         
     def setParentItem(self, item):
         if self.__parent is not None:
@@ -22,7 +50,53 @@ class GLGraphicsItem(QtCore.QObject):
             if self.view() is not None:
                 self.view().removeItem(self)
             self.__parent.view().addItem(self)
+    
+    def setGLOptions(self, opts):
+        """
+        Set the OpenGL state options to use immediately before drawing this item.
+        (Note that subclasses must call setupGLState before painting for this to work)
         
+        The simplest way to invoke this method is to pass in the name of
+        a predefined set of options (see the GLOptions variable):
+        
+        ============= ======================================================
+        opaque        Enables depth testing and disables blending
+        translucent   Enables depth testing and blending
+                      Elements must be drawn sorted back-to-front for
+                      translucency to work correctly.
+        additive      Disables depth testing, enables blending.
+                      Colors are added together, so sorting is not required.
+        ============= ======================================================
+        
+        It is also possible to specify any arbitrary settings as a dictionary. 
+        This may consist of {'functionName': (args...)} pairs where functionName must 
+        be a callable attribute of OpenGL.GL, or {GL_STATE_VAR: bool} pairs 
+        which will be interpreted as calls to glEnable or glDisable(GL_STATE_VAR).
+        
+        For example::
+            
+            {
+                GL_ALPHA_TEST: True,
+                GL_CULL_FACE: False,
+                'glBlendFunc': (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA),
+            }
+            
+        
+        """
+        if isinstance(opts, basestring):
+            opts = GLOptions[opts]
+        self.__glOpts = opts.copy()
+        self.update()
+        
+    def updateGLOptions(self, opts):
+        """
+        Modify the OpenGL state options to use immediately before drawing this item.
+        *opts* must be a dictionary as specified by setGLOptions.
+        Values may also be None, in which case the key will be ignored.
+        """
+        self.__glOpts.update(opts)
+        
+    
     def parentItem(self):
         return self.__parent
         
@@ -50,7 +124,7 @@ class GLGraphicsItem(QtCore.QObject):
         return self.__depthValue
         
     def setTransform(self, tr):
-        self.__transform = tr
+        self.__transform = Transform3D(tr)
         self.update()
         
     def resetTransform(self):
@@ -73,12 +147,22 @@ class GLGraphicsItem(QtCore.QObject):
     def transform(self):
         return self.__transform
         
+    def viewTransform(self):
+        tr = self.__transform
+        p = self
+        while True:
+            p = p.parentItem()
+            if p is None:
+                break
+            tr = p.transform() * tr
+        return Transform3D(tr)
+        
     def translate(self, dx, dy, dz, local=False):
         """
         Translate the object by (*dx*, *dy*, *dz*) in its parent's coordinate system.
         If *local* is True, then translation takes place in local coordinates.
         """
-        tr = QtGui.QMatrix4x4()
+        tr = Transform3D()
         tr.translate(dx, dy, dz)
         self.applyTransform(tr, local=local)
         
@@ -88,7 +172,7 @@ class GLGraphicsItem(QtCore.QObject):
         *angle* is in degrees.
         
         """
-        tr = QtGui.QMatrix4x4()
+        tr = Transform3D()
         tr.rotate(angle, x, y, z)
         self.applyTransform(tr, local=local)
     
@@ -97,7 +181,7 @@ class GLGraphicsItem(QtCore.QObject):
         Scale the object by (*dx*, *dy*, *dz*) in its local coordinate system.
         If *local* is False, then scale takes place in the parent's coordinates.
         """
-        tr = QtGui.QMatrix4x4()
+        tr = Transform3D()
         tr.scale(x, y, z)
         self.applyTransform(tr, local=local)
     
@@ -124,13 +208,30 @@ class GLGraphicsItem(QtCore.QObject):
         """
         pass
     
+    def setupGLState(self):
+        """
+        This method is responsible for preparing the GL state options needed to render 
+        this item (blending, depth testing, etc). The method is called immediately before painting the item.
+        """
+        for k,v in self.__glOpts.items():
+            if v is None:
+                continue
+            if isinstance(k, basestring):
+                func = getattr(GL, k)
+                func(*v)
+            else:
+                if v is True:
+                    glEnable(k)
+                else:
+                    glDisable(k)
+    
     def paint(self):
         """
         Called by the GLViewWidget to draw this item.
         It is the responsibility of the item to set up its own modelview matrix,
         but the caller will take care of pushing/popping.
         """
-        pass
+        self.setupGLState()
         
     def update(self):
         v = self.view()
@@ -138,8 +239,29 @@ class GLGraphicsItem(QtCore.QObject):
             return
         v.updateGL()
         
+    def mapToParent(self, point):
+        tr = self.transform()
+        if tr is None:
+            return point
+        return tr.map(point)
+        
     def mapFromParent(self, point):
         tr = self.transform()
         if tr is None:
             return point
         return tr.inverted()[0].map(point)
+        
+    def mapToView(self, point):
+        tr = self.viewTransform()
+        if tr is None:
+            return point
+        return tr.map(point)
+        
+    def mapFromView(self, point):
+        tr = self.viewTransform()
+        if tr is None:
+            return point
+        return tr.inverted()[0].map(point)
+        
+        
+        

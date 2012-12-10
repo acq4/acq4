@@ -1,8 +1,8 @@
 from pyqtgraph.Qt import QtCore, QtGui, QtOpenGL
 from OpenGL.GL import *
 import numpy as np
-
-Vector = QtGui.QVector3D
+from pyqtgraph import Vector
+##Vector = QtGui.QVector3D
 
 class GLViewWidget(QtOpenGL.QGLWidget):
     """
@@ -12,8 +12,16 @@ class GLViewWidget(QtOpenGL.QGLWidget):
         - Export options
 
     """
+    
+    ShareWidget = None
+    
     def __init__(self, parent=None):
-        QtOpenGL.QGLWidget.__init__(self, parent)
+        if GLViewWidget.ShareWidget is None:
+            ## create a dummy widget to allow sharing objects (textures, shaders, etc) between views
+            GLViewWidget.ShareWidget = QtOpenGL.QGLWidget()
+            
+        QtOpenGL.QGLWidget.__init__(self, parent, GLViewWidget.ShareWidget)
+        
         self.setFocusPolicy(QtCore.Qt.ClickFocus)
         
         self.opts = {
@@ -29,12 +37,18 @@ class GLViewWidget(QtOpenGL.QGLWidget):
         self.keysPressed = {}
         self.keyTimer = QtCore.QTimer()
         self.keyTimer.timeout.connect(self.evalKeyState)
+        
+        self.makeCurrent()
 
     def addItem(self, item):
         self.items.append(item)
         if hasattr(item, 'initializeGL'):
             self.makeCurrent()
-            item.initializeGL()
+            try:
+                item.initializeGL()
+            except:
+                self.checkOpenGLVersion('Error while adding item %s to GLViewWidget.' % str(item))
+                
         item._setView(self)
         #print "set view", item, self, item.view()
         self.update()
@@ -100,21 +114,41 @@ class GLViewWidget(QtOpenGL.QGLWidget):
                     glPushAttrib(GL_ALL_ATTRIB_BITS)
                     i.paint()
                 except:
-                    import sys
-                    sys.excepthook(*sys.exc_info())
-                    print("Error while drawing item", i)
+                    import pyqtgraph.debug
+                    pyqtgraph.debug.printExc()
+                    msg = "Error while drawing item %s." % str(item)
+                    ver = glGetString(GL_VERSION)
+                    if ver is not None:
+                        ver = ver.split()[0]
+                        if int(ver.split('.')[0]) < 2:
+                            print(msg + " The original exception is printed above; however, pyqtgraph requires OpenGL version 2.0 or greater for many of its 3D features and your OpenGL version is %s. Installing updated display drivers may resolve this issue." % ver)
+                        else:
+                            print(msg)
+                    
                 finally:
-                    glPopAttrib(GL_ALL_ATTRIB_BITS)
+                    glPopAttrib()
             else:
                 glMatrixMode(GL_MODELVIEW)
                 glPushMatrix()
-                tr = i.transform()
-                a = np.array(tr.copyDataTo()).reshape((4,4))
-                glMultMatrixf(a.transpose())
-                self.drawItemTree(i)
-                glMatrixMode(GL_MODELVIEW)
-                glPopMatrix()
+                try:
+                    tr = i.transform()
+                    a = np.array(tr.copyDataTo()).reshape((4,4))
+                    glMultMatrixf(a.transpose())
+                    self.drawItemTree(i)
+                finally:
+                    glMatrixMode(GL_MODELVIEW)
+                    glPopMatrix()
             
+    def setCameraPosition(self, pos=None, distance=None, elevation=None, azimuth=None):
+        if distance is not None:
+            self.opts['distance'] = distance
+        if elevation is not None:
+            self.opts['elevation'] = elevation
+        if azimuth is not None:
+            self.opts['azimuth'] = azimuth
+        self.update()
+        
+        
         
     def cameraPosition(self):
         """Return current position of camera based on center, dist, elevation, and azimuth"""
@@ -165,10 +199,14 @@ class GLViewWidget(QtOpenGL.QGLWidget):
     def pixelSize(self, pos):
         """
         Return the approximate size of a screen pixel at the location pos
-        
+        Pos may be a Vector or an (N,3) array of locations
         """
         cam = self.cameraPosition()
-        dist = (pos-cam).length()
+        if isinstance(pos, np.ndarray) and pos.ndim == 2:
+            cam = np.array(cam).reshape(1,3)
+            dist = ((pos-cam)**2).sum(axis=1)**0.5
+        else:
+            dist = (pos-cam).length()
         xDist = dist * 2. * np.tan(0.5 * self.opts['fov'] * np.pi / 180.)
         return xDist / self.width()
         
@@ -236,5 +274,16 @@ class GLViewWidget(QtOpenGL.QGLWidget):
                 self.keyTimer.start(16)
         else:
             self.keyTimer.stop()
+
+    def checkOpenGLVersion(self, msg):
+        ## Only to be called from within exception handler.
+        ver = glGetString(GL_VERSION).split()[0]
+        if int(ver.split('.')[0]) < 2:
+            import pyqtgraph.debug
+            pyqtgraph.debug.printExc()
+            raise Exception(msg + " The original exception is printed above; however, pyqtgraph requires OpenGL version 2.0 or greater for many of its 3D features and your OpenGL version is %s. Installing updated display drivers may resolve this issue." % ver)
+        else:
+            raise
+            
 
         

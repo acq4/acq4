@@ -10,9 +10,10 @@ as it can be converted to/from a string using repr and eval.
 """
 
 import re, os, sys
-from collections import OrderedDict
+from pgcollections import OrderedDict
 GLOBAL_PATH = None # so not thread safe.
 from . import units
+from .python2_3 import asUnicode
 
 class ParseError(Exception):
     def __init__(self, message, lineNum, line, fileName=None):

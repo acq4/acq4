@@ -7,7 +7,7 @@ from pyqtgraph.Point import Point
 #from PySide import QtCore, QtGui
 from .eq import *
 
-class Terminal:
+class Terminal(object):
     def __init__(self, node, name, io, optional=False, multi=False, pos=None, renamable=False, removable=False, multiable=False, bypass=None):
         """
         Construct a new terminal. 
@@ -85,6 +85,14 @@ class Terminal:
                 #if c.isInput():
                     #c.inputChanged(self)
         self.recolor()
+        
+    def setOpts(self, **opts):
+        self._renamable = opts.get('renamable', self._renamable)
+        self._removable = opts.get('removable', self._removable)
+        self._multiable = opts.get('multiable', self._multiable)
+        if 'multi' in opts:
+            self.setMultiValue(opts['multi'])
+        
 
     def connected(self, term):
         """Called whenever this terminal has been connected to another. (note--this function is called on both terminals)"""

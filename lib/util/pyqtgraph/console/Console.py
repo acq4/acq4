@@ -1,8 +1,12 @@
 
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui, USE_PYSIDE
 import sys, re, os, time, traceback, subprocess
 import pyqtgraph as pg
-import template
+if USE_PYSIDE:
+    from . import template_pyside as template
+else:
+    from . import template_pyqt as template
+    
 import pyqtgraph.exceptionHandling as exceptionHandling
 import pickle
 
@@ -22,7 +26,7 @@ class ConsoleWidget(QtGui.QWidget):
       be baffling and frustrating to users since it would appear the program has frozen.
     - some terminals (eg windows cmd.exe) have notoriously unfriendly interfaces
     - ability to add extra features like exception stack introspection
-    - ability to have multiple interactive prompts for remotely generated processes
+    - ability to have multiple interactive prompts, including for spawned sub-processes
     """
     
     def __init__(self, parent=None, namespace=None, historyFile=None, text=None, editor=None):
@@ -70,13 +74,13 @@ class ConsoleWidget(QtGui.QWidget):
         self.ui.historyList.itemDoubleClicked.connect(self.cmdDblClicked)
         self.ui.exceptionBtn.toggled.connect(self.ui.exceptionGroup.setVisible)
         
-        self.ui.catchAllExceptionsBtn.toggled.connect(self.catchAllToggled)
-        self.ui.catchNextExceptionBtn.toggled.connect(self.catchNextToggled)
+        self.ui.catchAllExceptionsBtn.toggled.connect(self.catchAllExceptions)
+        self.ui.catchNextExceptionBtn.toggled.connect(self.catchNextException)
         self.ui.clearExceptionBtn.clicked.connect(self.clearExceptionClicked)
         self.ui.exceptionStackList.itemClicked.connect(self.stackItemClicked)
         self.ui.exceptionStackList.itemDoubleClicked.connect(self.stackItemDblClicked)
+        self.ui.onlyUncaughtCheck.toggled.connect(self.updateSysTrace)
         
-        self.exceptionHandlerRunning = False
         self.currentTraceback = None
         
     def loadHistory(self):
@@ -213,6 +217,7 @@ class ConsoleWidget(QtGui.QWidget):
         for l in tb.split('\n'):
             lines.append(" "*indent + prefix + l)
         self.write('\n'.join(lines))
+        self.exceptionHandler(*sys.exc_info())
         
     def cmdSelected(self, item):
         index = -(self.ui.historyList.row(item)+1)
@@ -227,20 +232,39 @@ class ConsoleWidget(QtGui.QWidget):
     def flush(self):
         pass
 
-    def catchAllToggled(self, b):
-        if b:
+    def catchAllExceptions(self, catch=True):
+        """
+        If True, the console will catch all unhandled exceptions and display the stack
+        trace. Each exception caught clears the last.
+        """
+        self.ui.catchAllExceptionsBtn.setChecked(catch)
+        if catch:
             self.ui.catchNextExceptionBtn.setChecked(False)
-            exceptionHandling.register(self.allExceptionsHandler)
+            self.enableExceptionHandling()
+            self.ui.exceptionBtn.setChecked(True)
         else:
-            exceptionHandling.unregister(self.allExceptionsHandler)
+            self.disableExceptionHandling()
         
-    def catchNextToggled(self, b):
-        if b:
+    def catchNextException(self, catch=True):
+        """
+        If True, the console will catch the next unhandled exception and display the stack
+        trace.
+        """
+        self.ui.catchNextExceptionBtn.setChecked(catch)
+        if catch:
             self.ui.catchAllExceptionsBtn.setChecked(False)
-            exceptionHandling.register(self.nextExceptionHandler)
+            self.enableExceptionHandling()
+            self.ui.exceptionBtn.setChecked(True)
         else:
-            exceptionHandling.unregister(self.nextExceptionHandler)
+            self.disableExceptionHandling()
         
+    def enableExceptionHandling(self):
+        exceptionHandling.register(self.exceptionHandler)
+        self.updateSysTrace()
+        
+    def disableExceptionHandling(self):
+        exceptionHandling.unregister(self.exceptionHandler)
+        self.updateSysTrace()
         
     def clearExceptionClicked(self):
         self.currentTraceback = None
@@ -252,21 +276,48 @@ class ConsoleWidget(QtGui.QWidget):
         pass
     
     def stackItemDblClicked(self, item):
-        global EDITOR
+        editor = self.editor
+        if editor is None:
+            editor = pg.getConfigOption('editorCommand')
+        if editor is None:
+            return
         tb = self.currentFrame()
         lineNum = tb.tb_lineno
         fileName = tb.tb_frame.f_code.co_filename
-        subprocess.Popen(EDITOR.format(fileName=fileName, lineNum=lineNum), shell=True)
+        subprocess.Popen(self.editor.format(fileName=fileName, lineNum=lineNum), shell=True)
         
     
-    def allExceptionsHandler(self, *args):
-        self.exceptionHandler(*args)
+    #def allExceptionsHandler(self, *args):
+        #self.exceptionHandler(*args)
     
-    def nextExceptionHandler(self, *args):
-        self.ui.catchNextExceptionBtn.setChecked(False)
-        self.exceptionHandler(*args)
+    #def nextExceptionHandler(self, *args):
+        #self.ui.catchNextExceptionBtn.setChecked(False)
+        #self.exceptionHandler(*args)
 
+    def updateSysTrace(self):
+        ## Install or uninstall  sys.settrace handler 
+        
+        if not self.ui.catchNextExceptionBtn.isChecked() and not self.ui.catchAllExceptionsBtn.isChecked():
+            if sys.gettrace() == self.systrace:
+                sys.settrace(None)
+            return
+        
+        if self.ui.onlyUncaughtCheck.isChecked():
+            if sys.gettrace() == self.systrace:
+                sys.settrace(None)
+        else:
+            if sys.gettrace() is not None and sys.gettrace() != self.systrace:
+                self.ui.onlyUncaughtCheck.setChecked(False)
+                raise Exception("sys.settrace is in use; cannot monitor for caught exceptions.")
+            else:
+                sys.settrace(self.systrace)
+        
     def exceptionHandler(self, excType, exc, tb):
+        if self.ui.catchNextExceptionBtn.isChecked():
+            self.ui.catchNextExceptionBtn.setChecked(False)
+        elif not self.ui.catchAllExceptionsBtn.isChecked():
+            return
+        
         self.ui.clearExceptionBtn.setEnabled(True)
         self.currentTraceback = tb
         
@@ -275,14 +326,47 @@ class ConsoleWidget(QtGui.QWidget):
         self.ui.exceptionStackList.clear()
         for index, line in enumerate(traceback.extract_tb(tb)):
             self.ui.exceptionStackList.addItem('File "%s", line %s, in %s()\n  %s' % line)
-        
     
-    def quit(self):
-        if self.exceptionHandlerRunning:
-            self.exitHandler = True
-        try:
-            exceptionHandling.unregister(self.exceptionHandler)
-        except:
-            pass
+    def systrace(self, frame, event, arg):
+        if event == 'exception' and self.checkException(*arg):
+            self.exceptionHandler(*arg)
+        return self.systrace
         
+    def checkException(self, excType, exc, tb):
+        ## Return True if the exception is interesting; False if it should be ignored.
         
+        filename = tb.tb_frame.f_code.co_filename
+        function = tb.tb_frame.f_code.co_name
+        
+        ## Go through a list of common exception points we like to ignore:
+        if excType is GeneratorExit or excType is StopIteration:
+            return False
+        if excType is KeyError:
+            if filename.endswith('python2.7/weakref.py') and function in ('__contains__', 'get'):
+                return False
+            if filename.endswith('python2.7/copy.py') and function == '_keep_alive':
+                return False
+        if excType is AttributeError:
+            if filename.endswith('python2.7/collections.py') and function == '__init__':
+                return False
+            if filename.endswith('numpy/core/fromnumeric.py') and function in ('all', '_wrapit', 'transpose', 'sum'):
+                return False
+            if filename.endswith('numpy/core/arrayprint.py') and function in ('_array2string'):
+                return False
+            if filename.endswith('MetaArray.py') and function == '__getattr__':
+                for name in ('__array_interface__', '__array_struct__', '__array__'):  ## numpy looks for these when converting objects to array
+                    if name in exc:
+                        return False
+            if filename.endswith('flowchart/eq.py'):
+                return False
+            if filename.endswith('pyqtgraph/functions.py') and function == 'makeQImage':
+                return False
+        if excType is TypeError:
+            if filename.endswith('numpy/lib/function_base.py') and function == 'iterable':
+                return False
+        if excType is ZeroDivisionError:
+            if filename.endswith('python2.7/traceback.py'):
+                return False
+            
+        return True
+    

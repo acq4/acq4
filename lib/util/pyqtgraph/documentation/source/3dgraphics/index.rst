@@ -16,9 +16,12 @@ Contents:
     glviewwidget
 
     glgriditem
-    glmeshitem
+    glsurfaceplotitem
     glvolumeitem
+    glimageitem
+    glmeshitem
     glaxisitem
     glgraphicsitem
+    glscatterplotitem
     meshdata
 

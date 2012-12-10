@@ -13,7 +13,7 @@ class GLVolumeItem(GLGraphicsItem):
     """
     
     
-    def __init__(self, data, sliceDensity=1, smooth=True):
+    def __init__(self, data, sliceDensity=1, smooth=True, glOptions='translucent'):
         """
         ==============  =======================================================================================
         **Arguments:**
@@ -27,6 +27,7 @@ class GLVolumeItem(GLGraphicsItem):
         self.smooth = smooth
         self.data = data
         GLGraphicsItem.__init__(self)
+        self.setGLOptions(glOptions)
         
     def initializeGL(self):
         glEnable(GL_TEXTURE_3D)
@@ -43,6 +44,11 @@ class GLVolumeItem(GLGraphicsItem):
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER)
         shape = self.data.shape
         
+        ## Test texture dimensions first
+        glTexImage3D(GL_PROXY_TEXTURE_3D, 0, GL_RGBA, shape[0], shape[1], shape[2], 0, GL_RGBA, GL_UNSIGNED_BYTE, None)
+        if glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_WIDTH) == 0:
+            raise Exception("OpenGL failed to create 3D texture (%dx%dx%d); too large for this hardware." % shape[:3])
+        
         glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, shape[0], shape[1], shape[2], 0, GL_RGBA, GL_UNSIGNED_BYTE, self.data.transpose((2,1,0,3)))
         glDisable(GL_TEXTURE_3D)
         
@@ -57,15 +63,16 @@ class GLVolumeItem(GLGraphicsItem):
 
                 
     def paint(self):
+        self.setupGLState()
         
         glEnable(GL_TEXTURE_3D)
         glBindTexture(GL_TEXTURE_3D, self.texture)
         
-        glEnable(GL_DEPTH_TEST)
+        #glEnable(GL_DEPTH_TEST)
         #glDisable(GL_CULL_FACE)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-        glEnable( GL_BLEND )
-        glEnable( GL_ALPHA_TEST )
+        #glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        #glEnable( GL_BLEND )
+        #glEnable( GL_ALPHA_TEST )
         glColor4f(1,1,1,1)
 
         view = self.view()

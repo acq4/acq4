@@ -6,6 +6,7 @@ import DatabaseGui
 import MapCtrlTemplate
 from lib.Manager import logMsg, logExc
 import pyqtgraph as pg
+import os
 
 class DBCtrl(QtGui.QWidget):
     """GUI for reading and writing to the database."""
@@ -36,6 +37,8 @@ class DBCtrl(QtGui.QWidget):
         self.mapWidget = QtGui.QWidget()
         self.ui.setupUi(self.mapWidget)
         self.layout.addWidget(self.mapWidget)
+        self.ui.scanTree.setAcceptDrops(False)
+        self.ui.scanTree.setDragEnabled(False)
         
         
         labels = Map.mapFields.keys()[2:]
@@ -56,44 +59,14 @@ class DBCtrl(QtGui.QWidget):
 
     def scanLoaded(self, scan):
         ## Scan has been loaded, add a new item into the scanTree
-        item = QtGui.QTreeWidgetItem([scan.name(), '', ''])
+        item = ScanTreeItem(scan)
         self.ui.scanTree.addTopLevelItem(item)
-        scan.scanTreeItem = item
-        item.scan = scan
-        item.setCheckState(2, QtCore.Qt.Checked)
-        scan.sigLockChanged.connect(self.scanLockChanged)
-        self.scanLockChanged(scan)
-        scan.sigItemVisibilityChanged.connect(self.scanItemVisibilityChanged)
-        
-    def scanTreeItemChanged(self, item, col):
-        ## when scan items are checked/unchecked, show/hide the canvasItem
-        if col == 2:
-            vis = item.checkState(col) == QtCore.Qt.Checked
-            scan = item.scan
-            ci = scan.canvasItem
-            ci.setVisible(vis)
-        
-    def scanLockChanged(self, scan):
-        ## scan has been locked/unlocked (or newly loaded), update the indicator in the scanTree
-        item = scan.scanTreeItem
-        if scan.locked():
-            item.setText(1, 'Yes')
-        else:
-            item.setText(1, 'No')
-            
-    def scanItemVisibilityChanged(self, scan):
-        treeItem = scan.scanTreeItem
-        cItem = scan.canvasItem
-        checked = treeItem.checkState(2) == QtCore.Qt.Checked
-        vis = cItem.isVisible()
-        if vis == checked:
-            return
-        if vis:
-            treeItem.setCheckState(2, QtCore.Qt.Checked)
-        else:
-            treeItem.setCheckState(2, QtCore.Qt.Unchecked)
-            
 
+    def scanTreeItemChanged(self, item, col):
+        item.changed(col)
+        
+        
+        
     def newMap(self, rec=None):
         m = Map(self.host, rec)
         self.maps.append(m)
@@ -155,36 +128,41 @@ class DBCtrl(QtGui.QWidget):
         self.host.unregisterMap(map)
         
 
-    def listMaps(self, cell):
-        """List all maps associated with the file handle for cell"""
-        dbui = self.host.getElement('Database')
-        db = dbui.getDb()
-        if db is None:
-            logMsg("No database loaded in Data Manager.", msgType='error')
-            
-        ident = self.dbIdentity+'.maps'
-        table = dbui.getTableName(ident)
-        if not db.hasTable(table):
-            return
-        if db.tableOwner(table) != ident:
-            raise Exception("Table %s not owned by %s" % (table, ident))
+    def listMaps(self, cells):
+        """List all maps associated with the file handle for each cell in a list"""
+        self.ui.mapTable.clear()
+        self.maps = []
         
-        #row = db.getDirRowID(cell)
-        #if row is None:
-            #return
+        for cell in cells:
             
-        maps = db.select(table, ['rowid','*'], where={'cell': cell})
-        #print maps
-        for rec in maps:
-            scans = []
-            for rowid in rec['scans']:
-                if isinstance(rowid, tuple):
-                    fh = db.getDir(rowid[0], rowid[1])  ## single-spot maps specify the Protocol table instead
-                else:
-                    fh = db.getDir('ProtocolSequence', rowid)    ## NOTE: single-spot maps use a different table!
-                scans.append((fh, rowid))
-            rec['scans'] = scans
-            self.newMap(rec)
+            dbui = self.host.getElement('Database')
+            db = dbui.getDb()
+            if db is None:
+                logMsg("No database loaded in Data Manager.", msgType='error')
+                
+            ident = self.dbIdentity+'.maps'
+            table = dbui.getTableName(ident)
+            if not db.hasTable(table):
+                return
+            if db.tableOwner(table) != ident:
+                raise Exception("Table %s not owned by %s" % (table, ident))
+            
+            #row = db.getDirRowID(cell)
+            #if row is None:
+                #return
+                
+            maps = db.select(table, ['rowid','*'], where={'cell': cell})
+            #print maps
+            for rec in maps:
+                scans = []
+                for rowid in rec['scans']:
+                    if isinstance(rowid, tuple):
+                        fh = db.getDir(rowid[0], rowid[1])  ## single-spot maps specify the Protocol table instead
+                    else:
+                        fh = db.getDir('ProtocolSequence', rowid)    ## NOTE: single-spot maps use a different table!
+                    scans.append((fh, rowid))
+                rec['scans'] = scans
+                self.newMap(rec)
 
 
     def loadMap(self, map):
@@ -310,7 +288,8 @@ class DBCtrl(QtGui.QWidget):
             if len(scans) == 0:
                 raise Exception("No scans selected.")
             for scan in scans:
-                self.host.clearDBScan(scan)
+                scan.clearFromDB()
+                #self.host.clearDBScan(scan)
             self.ui.clearDBScanBtn.success("Cleared.")
         except:
             self.ui.clearDBScanBtn.failure("Error.")
@@ -323,10 +302,12 @@ class DBCtrl(QtGui.QWidget):
                 raise Exception("No scans selected.")
             with pg.ProgressDialog('Storing scan data to DB..', maximum=len(scans)) as dlg:
                 for scan in scans:
-                    self.host.storeDBScan(scan)
+                    scan.storeToDB()
+                    #self.host.storeDBScan(scan)
                     dlg += 1
                     if dlg.wasCanceled():
                         raise Exception('Store canceled by user')
+            self.ui.scanTree.clearSelection()  ## We do this because it is too easy to forget to select the correct set of data before clicking store.
             self.ui.storeDBScanBtn.success("Stored.")
         except:
             self.ui.storeDBScanBtn.failure("Error.")
@@ -343,3 +324,107 @@ class DBCtrl(QtGui.QWidget):
         except:
             self.ui.rewriteSpotPosBtn.failure("Error.")
             raise
+
+            
+
+            
+            
+            
+            
+            
+            
+class ScanTreeItem(pg.TreeWidgetItem):
+    def __init__(self, scan):
+        pg.TreeWidgetItem.__init__(self, [scan.name(), '', '', ''])
+        scan.scanTreeItem = self
+        self.scan = scan
+        self.setChecked(1, True)
+        self.eventWidget = SaveLockWidget()
+        self.statWidget = SaveLockWidget()
+        self.setWidget(2, self.eventWidget)
+        self.setWidget(3, self.statWidget)
+        self.scanLockChanged(scan)
+        self.scanStorageChanged(scan)
+        
+        self.eventWidget.sigLockClicked.connect(self.eventLockClicked)
+        self.statWidget.sigLockClicked.connect(self.statLockClicked)
+        scan.sigLockStateChanged.connect(self.scanLockChanged)
+        scan.sigStorageStateChanged.connect(self.scanStorageChanged)
+        scan.sigItemVisibilityChanged.connect(self.scanItemVisibilityChanged)
+        
+    def changed(self, col):
+        ## when scan items are checked/unchecked, show/hide the canvasItem
+        checked = self.checkState(col) == QtCore.Qt.Checked
+        if col == 1:
+            self.scan.canvasItem().setVisible(checked)
+            
+    def scanLockChanged(self, scan):
+        ## scan has been locked/unlocked (or newly loaded), update the indicator in the scanTree
+        item = scan.scanTreeItem
+        ev, st = scan.getLockState()
+        self.eventWidget.setLocked(ev)
+        self.statWidget.setLocked(st)
+
+    def eventLockClicked(self):
+        ev, st = self.scan.getLockState()
+        self.scan.lockEvents(not ev)
+        
+    def statLockClicked(self):
+        ev, st = self.scan.getLockState()
+        self.scan.lockStats(not st)
+        
+    def scanStorageChanged(self, scan):
+        ev, st = self.scan.getStorageState()
+        #print "set saved:", ev, st
+        self.eventWidget.setSaved(ev)
+        self.statWidget.setSaved(st)
+        
+    def scanItemVisibilityChanged(self, scan):
+        cItem = scan.canvasItem()
+        checked = self.checkState(1) == QtCore.Qt.Checked
+        vis = cItem.isVisible()
+        if vis == checked:
+            return
+        self.setCheckState(1, QtCore.Qt.Checked if vis else QtCore.Qt.Unchecked)
+            
+
+class SaveLockWidget(QtGui.QWidget):
+    sigLockClicked = QtCore.Signal(object)  # self, lock
+    
+    def __init__(self):
+        QtGui.QWidget.__init__(self)
+        self.layout = QtGui.QHBoxLayout()
+        self.setLayout(self.layout)
+        self.saveLabel = QtGui.QLabel()
+        self.saveLabel.setScaledContents(True)
+        self.lockBtn = QtGui.QPushButton()
+        self.lockBtn.setFixedWidth(20)
+        self.lockBtn.setFixedHeight(20)
+        self.saveLabel.setFixedWidth(20)
+        self.saveLabel.setFixedHeight(20)
+        self.layout.setSpacing(0)
+        self.layout.setContentsMargins(0,0,0,0)
+        self.layout.addWidget(self.lockBtn)
+        self.layout.addWidget(self.saveLabel)
+        self.setFixedWidth(40)
+        
+        path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'icons'))
+        images = [os.path.join(path, x) for x in ['locked.png', 'unlocked.png', 'saved.png', 'unsaved.png']]
+        self.images = [QtGui.QPixmap(img) for img in images]
+        self.icons = [QtGui.QIcon(img) for img in self.images[:2]]
+        if any([img.width() == 0 for img in self.images]):
+            raise Exception("Could not load icons:", images)
+        self.setSaved(False)
+        self.setLocked(False)
+        self.lockBtn.clicked.connect(self.lockClicked)
+        
+    def lockClicked(self):
+        self.sigLockClicked.emit(self)
+        
+    def setLocked(self, locked):
+        self.lockBtn.setIcon(self.icons[0 if locked else 1])
+       
+    def setSaved(self, saved):
+        self.saveLabel.setPixmap(self.images[2 if saved else 3])
+        
+        
