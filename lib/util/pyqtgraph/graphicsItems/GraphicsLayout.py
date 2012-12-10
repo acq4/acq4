@@ -149,8 +149,6 @@ class GraphicsLayout(GraphicsWidget):
     def clear(self):
         items = []
         for i in list(self.items.keys()):
-#            try:
             self.removeItem(i)
-#            except:
-#                pass
+
 

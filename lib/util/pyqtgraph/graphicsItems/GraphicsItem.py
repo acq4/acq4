@@ -92,9 +92,6 @@ class GraphicsItem(object):
         #ymag = abs(dt.m21())+abs(dt.m22())
         #if xmag * ymag == 0: 
         if dt.determinant() == 0:  ## occurs when deviceTransform is invalid because widget has not been displayed
-            print 'GraphicsItem.py: deviceTransform, dt.determinant was None'
-            print dt
-            print viewportTransform
             return None
         else:
             return dt

@@ -22,7 +22,7 @@ if sys.version_info[0] < 2 or (sys.version_info[0] == 2 and sys.version_info[1] 
 from . import python2_3
 
 ## install workarounds for numpy bugs
-import numpy_fix
+from . import numpy_fix
 
 ## in general openGL is poorly supported with Qt+GraphicsView.
 ## we only enable it where the performance benefit is critical.
@@ -111,7 +111,7 @@ if not hasattr(sys, 'frozen'): ## If we are frozen, there's a good chance we don
 ## Import almost everything to make it available from a single namespace
 ## don't import the more complex systems--canvas, parametertree, flowchart, dockarea
 ## these must be imported separately.
-import frozenSupport
+from . import frozenSupport
 def importModules(path, globals, locals, excludes=()):
     """Import all modules residing within *path*, return a dict of name: module pairs.
     
@@ -173,11 +173,14 @@ from .SignalProxy import *
 from .ptime import time
 
 
-## Workaround for Qt exit crash:
-## ALL QGraphicsItems must have a scene before they are deleted.
-## This is potentially very expensive, but preferred over crashing.
 import atexit
 def cleanup():
+    ViewBox.quit()  ## tell ViewBox that it doesn't need to deregister views anymore.
+    
+    ## Workaround for Qt exit crash:
+    ## ALL QGraphicsItems must have a scene before they are deleted.
+    ## This is potentially very expensive, but preferred over crashing.
+    ## Note: this appears to be fixed in PySide as of 2012.12, but it should be left in for a while longer..
     if QtGui.QApplication.instance() is None:
         return
     import gc

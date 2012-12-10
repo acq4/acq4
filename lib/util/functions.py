@@ -452,8 +452,8 @@ def recursiveRegisterImages(i1, i2, hint=(0,0), maxDist=None, objSize=None):
     """Given images i1 and i2, recursively find the offset for i2 that best matches with i1"""
     time1 = time.clock()
     ## float images
-    im1 = i1
-    im2 = i2
+    im1 = i1.astype(float)
+    im2 = i2.astype(float)
     #im1 = i1.mean(axis=2).astype(float)
     #im2 = i2.mean(axis=2).astype(float)
     
