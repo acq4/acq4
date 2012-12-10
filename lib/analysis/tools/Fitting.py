@@ -42,193 +42,310 @@ if the current curve and the current plot instance are passed.
 """
 
 import sys
-import scipy
-import scipy.optimize as optimize
-#import PySideImporter
-try:
-    import openopt
-    HAVE_OPENOPT = True
-except:
-    HAVE_OPENOPT = False
 import numpy
+import scipy
+import openopt
 import ctypes
 import numpy.random
-#from PySide import QtGui, QtCore
-#from PySide.QtUiTools import QUiLoader
-from metaarray import MetaArray
-from PyQt4 import Qt
-#import PyQt4.Qwt5 as Qwt
-#from PyQt4.Qwt5.anynumpy import *
-#from sets import *
+#from numba import autojit
 
 usingMPlot = False
 if usingMPlot:
     import MPlot # we include plotting as part of the fitting
-    plottype = 'mplot'
-usingPyqtgraph = True
-if usingPyqtgraph:
-    import pyqtgraph
-    plottype = 'pyqtgraph'
 
 def debug_trace():
   '''Set a tracepoint in the Python debugger that works with Qt'''
-  from PyQt4.QtCore import pyqtRemoveInputHook
+  if pyqt:
+      from PyQt4.QtCore import pyqtRemoveInputHook
   from pdb import set_trace
-  pyqtRemoveInputHook()
+  if pyqt:
+      pyqtRemoveInputHook()
   set_trace()
       
 class Fitting():
     # dictionary contains:
-    # name of function, function call, initial parameters, iterations, plot color, then x and y for testing
+    # name of function: function call, initial parameters, iterations, plot color, then x and y for testing
+    # target valutes, names of parameters, contant values, and derivative function if needed.
+    #
     def __init__(self):
         self.fitfuncmap = {
-        'exp0'  : (self.exp0eval, [0.0, 20.0], 2000, 'k', [0, 100],
-                   [1.0, 5.0], ['A0', 'tau'], None),
-        'exp1'  : (self.expeval, [0.0, 0.0, 20.0], 2000, 'k', [0, 100],
-                   [0.5, 1.0, 5.0], ['DC', 'A0', 'tau'], self.expevalprime),
-        'exp2'  : (self.exp2eval,  [-60.0, 10.0, 5.0, 2.0, 100.0], 5000, 'k',  [0, 100],
-                   [0.5, 1.0, 5.0, 1.0, 50.0], ['DC', 'A0', 'tau0', 'A1', 'tau1'], None),
-        'exppow'  : (self.exppoweval,  [0.0, 1.0, 100, ], 2000, 'k',  [0, 100],
-                   [0.0, 1.0, 100.0], ['DC', 'A0', 'tau'], None),
-        'boltz' : (self.boltzeval,  [0.0, 1.0, -50.0, 5.0], 1200, 'r', [-100., 100.],
-                   [0.5, 1.0, -25.0, 4.0],  ['DC', 'A0', 'x0', 'k'], None),
-        'gauss' : (self.gausseval,  [1.0, 0.0, 0.5], 2000, 'y',  [-10., 10.],
-                   [1.0, 1.0, 2.0], ['A', 'mu', 'sigma'], None),
-        'line'  : (self.lineeval,  [1.0, 0.0], 500, 'r', [-10., 10.],
-                   [0.0, 2.0], ['m', 'b'], None),
-        'poly2' : (self.poly2eval, [1.0, 1.0, 0.0], 500, 'r', [0, 100],
-                    [0.5, 1.0, 5.0], ['a', 'b', 'c'], None),
-        'poly3' : (self.poly3eval, [1.0, 1.0, 1.0, 0.0], 1000, 'r', [0., 100.],
-                   [0.5, 1.0, 5.0, 2.0], ['a', 'b', 'c', 'd'], None),
-        'poly4' : (self.poly4eval, [1.0, 1.0, 1.0, 1.0, 0.0], 1000, 'r', [0., 100.],
-                   [0.1, 0.5, 1.0, 5.0, 2.0], ['a', 'b', 'c', 'd', 'e'], None),
-        'sin'   : (self.sineeval, [-1., 1.0, 4.0, 0.0], 1000, 'r', [0., 100.],
-                   [0.0, 1.0, 9.0, 0.0], ['DC', 'A', 'f', 'phi'], None),
+        'exp0'  : (self.exp0eval, [0.0, 20.0], 2000, 'k', [0, 100, 1.],
+                   [1.0, 5.0], ['A0', 'tau'], None, None),
+        'exp1'  : (self.expeval, [0.0, 0.0, 20.0], 2000, 'k', [0, 100, 1.],
+                   [0.5, 1.0, 5.0], ['DC', 'A0', 'tau'], None, self.expevalprime),
+        'expsum'  : (self.expsumeval,  [0.0, -0.5, 200.0, -0.25, 450.0], 500000, 'k',  [0, 1000, 1.],
+                   [0.0, -1.0, 150.0, -0.25, 350.0], ['DC', 'A0', 'tau0', 'A1', 'tau1'], None, None),
+        'expsum2'  : (self.expsumeval2,  [0., -0.5, -0.250], 50000, 'k',  [0, 1000, 1.],
+                   [0., -0.5, -0.25], ['A0', 'A1'], [5., 20.], None),
+        'exp2'  : (self.exp2eval,  [0.0, -0.5, 200.0, -0.25, 450.0], 500000, 'k',  [0, 1000, 1.],
+                   [0.0, -1.0, 150.0, -0.25, 350.0], ['DC', 'A0', 'tau0', 'A1', 'tau1'], None, None),
+        'exppow'  : (self.exppoweval,  [0.0, 1.0, 100, ], 2000, 'k',  [0, 100, 0.1],
+                   [0.0, 1.0, 100.0], ['DC', 'A0', 'tau'], None, None),
+        'exppulse'  : (self.expPulse,  [3.0, 0.2, 2.5, 2.0, 3], 2000, 'k',  [0, 10, 0.1],
+                  [0.0, 0.75, 4., 1.5, 1.], ['DC', 'tau1', 'tau2', 'amp', 'width'], [3.], None),
+        'boltz' : (self.boltzeval,  [0.0, 1.0, -50.0, -5.0], 5000, 'r', [-130., -30., 1.],
+                   [0.00, 0.010, -100.0, 7.0],  ['DC', 'A0', 'x0', 'k'], None, None),
+
+        'gauss' : (self.gausseval,  [1.0, 0.0, 0.5], 2000, 'y',  [-10., 10., 0.2],
+                   [1.0, 1.0, 2.0], ['A', 'mu', 'sigma'], None, None),
+        'line'  : (self.lineeval,  [1.0, 0.0], 500, 'r', [-10., 10., 0.5],
+                   [0.0, 2.0], ['m', 'b'], None, None),
+        'poly2' : (self.poly2eval, [1.0, 1.0, 0.0], 500, 'r', [0, 100, 1.],
+                    [0.5, 1.0, 5.0], ['a', 'b', 'c'], None, None),
+        'poly3' : (self.poly3eval, [1.0, 1.0, 1.0, 0.0], 1000, 'r', [0., 100., 1.],
+                   [0.5, 1.0, 5.0, 2.0], ['a', 'b', 'c', 'd'], None, None),
+        'poly4' : (self.poly4eval, [1.0, 1.0, 1.0, 1.0, 0.0], 1000, 'r', [0., 100., 1.],
+                   [0.1, 0.5, 1.0, 5.0, 2.0], ['a', 'b', 'c', 'd', 'e'], None, None),
+        'sin'   : (self.sineeval, [-1., 1.0, 4.0, 0.0], 1000, 'r', [0., 100., 0.2],
+                   [0.0, 1.0, 9.0, 0.0], ['DC', 'A', 'f', 'phi'], None, None),
         'boltz2' : (self.boltzeval2,  [0.0, 0.5, -50.0, 5.0, 0.5, -20.0, 3.0], 1200, 'r',
-                    [-100., 50.], [0.0, 0.3, -45.0, 4.0, 0.7, 10.0, 12.0],  ['DC', 'A1', 'x1', 'k1', 'A2', 'x2', 'k2'], None),
-        'taucurve' : (self.taucurve,  [0.0, 200.0, 60.0, 10.0, 20.0, 60.0, 12.0], 5000, 'r',
-                    [-150., 50.], [0.025, 237.0, 60.0, 12.0, 17.0, 60.0, 14.0],  
-                    ['DC', 'a1', 'v1', 'k1', 'a2', 'v2', 'k2'], None),
+                    [-100., 50., 1.], [0.0, 0.3, -45.0, 4.0, 0.7, 10.0, 12.0],  
+                    ['DC', 'A1', 'x1', 'k1', 'A2', 'x2', 'k2'], None, None),
+        'taucurve' : (self.taucurve,  [50., 300.0, 60.0, 10.0, 8.0, 65.0, 10.0], 50000, 'r',
+                    [-150., 50., 1.], [0.0, 237.0, 60.0, 12.0, 17.0, 60.0, 14.0],  
+                    ['DC', 'a1', 'v1', 'k1', 'a2', 'v2', 'k2'],  None, self.taucurveder),
         }
         self.fitSum2Err = 0
 
     def getFunctions(self):
         return(self.fitfuncmap.keys())
 
-    def exp0eval(self, p, x, y=None, C = None):
+    def exp0eval(self, p, x, y=None, C = None, sumsq = False):
+        """
+        Exponential function with an amplitude and 0 offset
+        """
         yd = p[0] * numpy.exp(-x/p[1])
         if y is None:
-            return (yd)
+            return yd
         else:
-            return y - yd
+            if sumsq is True:
+                return numpy.sum((y - yd)**2)
+            else:
+                return y - yd
     
-    def expeval(self, p, x, y=None, C = None):
+    def expsumeval(self, p, x, y=None, C = None, sumsq = False, weights=None):
+        """
+        Sum of two exponentials with independent time constants and amplitudes, 
+        and a DC offset
+        """
+        yd = p[0] + (p[1]* numpy.exp(-x/p[2])) + (p[3]*numpy.exp(-x/p[4]))
+        if y is None:
+            return yd
+        else:
+            yerr = y - yd
+            if weights is not None:
+                yerr = yerr * weights
+            if sumsq is True:
+                return numpy.sum(yerr**2)
+            else:
+                return yerr
+
+    def expsumeval2(self, p, x, y=None, C = None, sumsq = False, weights=None):
+        """
+        Sum of two exponentials, with predefined time constants , allowing
+        only the amplitudes and DC offset to vary
+        """
+        yd = p[0] + (p[1]* numpy.exp(-x/C[0])) + (p[2]*numpy.exp(-x/C[1]))
+        if y is None:
+            return yd
+        else:
+            if sumsq is True:
+                return numpy.sum((y - yd)**2)
+            else:
+                return y - yd
+
+    
+    def expeval(self, p, x, y=None, C = None, sumsq = False, weights=None):
+        """
+        Exponential with offset
+        """
         yd = p[0] + p[1] * numpy.exp(-x/p[2])
         if y is None:
-            return (yd)
+            return yd
         else:
-            return y - yd
+            if sumsq is True:
+                return numpy.sum((y - yd)**2)
+            else:
+                return y - yd
 
-    def expevalprime(self, p, x, y=None, C = None):
+    def expevalprime(self, p, x, y=None, C = None, sumsq = False, weights=None):
+        """
+        Derivative for exponential with offset
+        """
         ydp = p[1] * numpy.exp(-x/p[2])/(p[2]*p[2])
         yd = p[0] + p[1] * numpy.exp(-x/p[2])
         print y
         if y is None:
             return (yd, ydp)
         else:
-            return (y - yd)
+            if sumsq is True:
+                return numpy.sum((y - yd)**2)
+            else:
+                return y - yd
 
-    def exppoweval(self, p, x, y=None, C = None):
+    def exppoweval(self, p, x, y=None, C = None, sumsq = False, weights=None):
+        """
+        Single exponential function, rising to a ppower
+        """
+        
         if C is None:
             cx = 1.0
         else:
             cx = C[0]
-        yd = p[0] + p[1] * (1-numpy.exp(-x/p[2]))**cx
+        yd = p[0] + p[1] * (1.0-numpy.exp(-x/p[2]))**cx
         if y is None:
-            return (yd)
+            return yd
         else:
-            return y - yd
+            if sumsq is True:
+                return numpy.sum((y - yd)**2)
+            else:
+                return y - yd
 
-    def exp2eval(self, p, x, y=None, C = None):
-        yd = p[0] + p[1] * numpy.exp(-x/p[2]) + p[3] * numpy.exp(-x/p[4])
+    def exp2eval(self, p, x, y=None, C = None, sumsq = False, weights=None):
+        """
+        For fit to activation currents...
+        """
+        yd = p[0] + (p[1] * (1.0 - numpy.exp(-x/p[2]))**2.0 ) + (p[3] * (1.0 - numpy.exp(-x/p[4])))
         if y == None:
-            return (yd)
+            return yd
         else:
-            return y - yd
+            if sumsq is True:
+                ss = numpy.sqrt(numpy.sum((y - yd)**2.0))
+#                if p[4] < 3.0*p[2]:
+#                    ss = ss*1e6 # penalize them being too close
+                return ss
+            else:
+                return y - yd
 
-    def boltzeval(self,p, x, y=None, C = None):
-        yd = p[0] + ((p[1]-p[0])/(1 + numpy.exp((x-p[2])/p[3])))
+#    @autojit
+    def expPulse(self, p, x, y=None, C=[0.0], sumsq = False, weights = None):
+        """Exponential pulse function (rising exponential with variable-length
+        plateau followed by falling exponential)
+        Parameter p is [offset, tau1, tau2, amp, width]
+        """
+        yOffset, tau1, tau2, amp, width = p
+        t0 = C[0] # must be a fixed value to avoid tradeoffs... 
+        yd = numpy.empty(x.shape)
+        yd[x<t0] = yOffset
+        m1 = (x>=t0)&(x<(t0+width))
+        m2 = (x>=(t0+width))
+        x1 = x[m1]
+        x2 = x[m2]
+        yd[m1] = amp*(1-numpy.exp(-(x1-t0)/tau1))+yOffset
+        amp2 = amp*(1-numpy.exp(-width/tau1)) ## y-value at start of decay
+        yd[m2] = ((amp2)*numpy.exp(-(x2-(width+t0))/tau2))+yOffset
         if y == None:
-            return (yd)
+            return yd
         else:
-            return y - yd
+            if sumsq is True:
+                ss = numpy.sqrt(numpy.sum((y-yd)**2.0))
+                return ss
+            else:
+                return y-yd
 
-    def boltzeval2(self,p, x, y=None, C = None):
+    def boltzeval(self,p, x, y=None, C = None, sumsq = False, weights=None):
+        yd = p[0] + (p[1]-p[0])/(1.0 + numpy.exp((x-p[2])/p[3]))
+        if y == None:
+            return yd
+        else:
+            if sumsq is True:
+                return numpy.sqrt(numpy.sum((y - yd)**2.0))
+            else:
+                return y - yd
+
+    def boltzeval2(self,p, x, y=None, C = None, sumsq = False, weights=None):
         yd = p[0] + p[1]/(1 + numpy.exp((x-p[2])/p[3])) + p[4]/(1 + numpy.exp((x-p[5])/p[6]))
         if y == None:
-            return (yd)
+            return yd
         else:
-            return y - yd
+            if sumsq is True:
+                return numpy.sum((y - yd)**2)
+            else:
+                return y - yd
 
-    def gausseval(self,p, x, y=None, C = None):
-        yd = (p[0]/(p[2]*sqrt(2.0*numpy.pi)))*numpy.exp(-((x - p[1])**2.0)/(2.0*(p[2]**2.0)))
+    def gausseval(self,p, x, y=None, C = None, sumsq = False, weights=None):
+        yd = (p[0]/(p[2]*numpy.sqrt(2.0*numpy.pi)))*numpy.exp(-((x - p[1])**2.0)/(2.0*(p[2]**2.0)))
         if y == None:
-            return (yd)
+            return yd
         else:
-            return y - yd
+            if sumsq is True:
+                return numpy.sum((y - yd)**2)
+            else:
+                return y - yd
 
-    def lineeval(self, p, x, y=None, C = None):
+    def lineeval(self, p, x, y=None, C = None, sumsq = False, weights=None):
         yd = p[0]*x + p[1]
         if y == None:
-            return (yd)
+            return yd
         else:
-            return y - yd
+            if sumsq is True:
+                return numpy.sum((y - yd)**2)
+            else:
+                return y - yd
 
-    def poly2eval(self, p, x, y=None, C = None):
+    def poly2eval(self, p, x, y=None, C = None, sumsq = False, weights=None):
         yd = p[0]*x**2.0 + p[1]*x + p[2]
         if y == None:
-            return (yd)
+            return yd
         else:
-            return y - yd
+            if sumsq is True:
+                return numpy.sum((y - yd)**2)
+            else:
+                return y - yd
 
-    def poly3eval(self, p, x, y=None, C = None):
+    def poly3eval(self, p, x, y=None, C = None, sumsq = False, weights=None):
         yd = p[0]*x**3.0 + p[1]*x**2.0 + p[2]*x +p[3]
         if y == None:
-            return (yd)
+            return yd
         else:
-            return y - yd
+            if sumsq is True:
+                return numpy.sum((y - yd)**2)
+            else:
+                return y - yd
 
-    def poly4eval(self, p, x, y=None, C = None):
+    def poly4eval(self, p, x, y=None, C = None, sumsq = False, weights=None):
         yd = p[0]*x**4.0 + p[1]*x**3.0 + p[2]*x**2.0 + p[3]*x +p[4]
         if y == None:
-            return (yd)
+            return yd
         else:
-            return y - yd
+            if sumsq is True:
+                return numpy.sum((y - yd)**2)
+            else:
+                return y - yd
 
-    def sineeval(self, p, x, y=None, C = None):
+    def sineeval(self, p, x, y=None, C = None, sumsq = False, weights=None):
         yd =  p[0] + p[1]*numpy.sin((x*2.0*numpy.pi/p[2])+p[3])
         if y == None:
-            return (yd)
+            return yd
         else:
-            return y - yd
+            if sumsq is True:
+                return numpy.sum((y - yd)**2)
+            else:
+                return y - yd
 
-    def taucurve(self, p, x, y=None, C = None):
+    def taucurve(self, p, x, y=None, C = None, sumsq=True, weights=None):
         """
+        HH-like description of activation/inactivation function
         'DC', 'a1', 'v1', 'k1', 'a2', 'v2', 'k2'
         """
-        if p[3] <= 0.0:
-            p[3] = 10.0
-        if p[6] <= 0.0:
-            p[6] = 10.0
-        if p[1] <= 0:
-            p[1] = 1000.0
-        if p[4] <= 0.0:
-            p[4] = 1000.0
-        yd = p[0]+1.0/(p[1]*numpy.exp((x+p[2])/p[3]) +p[4]*numpy.exp(-(x+p[5])/p[6]))
+        yd = p[0] + 1.0/(p[1]*numpy.exp((x+p[2])/p[3]) +p[4]*numpy.exp(-(x+p[5])/p[6]))
         if y == None:
-            return (yd)
+            return yd
         else:
-            return y - yd
+            if sumsq is True:
+                return numpy.sqrt(numpy.sum((y - yd)**2))
+            else:
+                return y - yd
+            
+    def taucurveder(self, p, x):
+        """
+        Derivative for taucurve
+        'DC', 'a1', 'v1', 'k1', 'a2', 'v2', 'k2'
+        """ 
+        y = -(p[1]*numpy.exp((p[2] + x)/p[3])/p[3] - p[4]*numpy.exp(-(p[5] + x)/p[6])/p[6])/(p[1]*numpy.exp((p[2] + x)/p[3]) +
+p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
+      #  print 'dy: ', y
+        return y
 
     def getClipData(self, tx, data, t0, t1):
         import Utility as U
@@ -241,17 +358,13 @@ class Fitting():
         return(numpy.array(t), numpy.array(dm))
 
     def FitRegion(self, whichdata, thisaxis, tdat, ydat, t0 = None, t1 = None,
-                  fitFunc = 'exp1', fitPars = None, fixedPars = None,
-                  fitPlot = None, plotInstance = None, PlotType = None,
-                  dataType= 'xy', bounds=None, boundsopt = 'openopt'):
+                  fitFunc = 'exp1', fitFuncDer = None, fitPars = None, fixedPars = None,
+                  fitPlot = None, plotInstance = None, dataType= 'xy', method = None,
+                  bounds=None, weights=None, constraints=()):
         """
         To call with tdat and ydat as simple arrays:
         FitRegion(1, 0, tdat, ydat, FitFunc = 'exp1')
         e.g., the first argument should be 1, but this axis is ignored if datatype is 'xy'
-        To call with one tdat and 1 ydat, each array is 1d, call with dataType='xy' (default)
-        To call with one tdat and a 2-d array of ydat, use "dataType=2d"
-        To call with "blocks" where there is a list of tdats and a lit of ydats, use "dataType=blocks"
-        
         """
         self.fitSum2Err = 0.0
         if t0 == t1:
@@ -277,78 +390,109 @@ class Fitting():
             fpars = func[1]
         else:
             fpars = fitPars
-        if dataType == 'blocks':
-            nblock = len(ydat) # set the number of potential blocks to analyze
-        else: # but if it is from a metaarray or is xy, we can have only one "block"
-            nblock = 1
-        for block in range(0, nblock):
-            for record in whichdata: # whichdata defines the records in the block
+        if method == 'simplex': # remap calls if needed for newer versions of scipy (>= 0.11)
+            method = 'Nelder-Mead'
+        for block in range(0, len(ydat)):
+            for record in whichdata:
                 if dataType == 'blocks':
                     (tx, dy) = self.getClipData(tdat[block], ydat[block][record, thisaxis, :], t0, t1)
-                elif dataType == '2d':
-                    (tx, dy) = self.getClipData(tdat, ydat[record,:], t0, t1)
-                else: # data is "x,y", where x and y are 1-d arrays
+                else:
                     (tx, dy) = self.getClipData(tdat, ydat, t0, t1)
                 yn.append(names)
-#                print 'R: %d fitting...t=[%f - %f], ymin/max: %f %f' % (record, numpy.min(tx), numpy.max(tx), numpy.min(dy), numpy.max(dy))
                 if not any(tx):
                     continue # no data in the window...
                 ier = 0
-                if bounds is None:
-                    plsq, cov, infodict, mesg, ier = optimize.leastsq(func[0], fpars,
-                                            args=(tx.astype('float64'), dy.astype('float64'), fixedPars),
-                                            full_output = 1, maxfev = func[2])
-                    if ier > 4:
-                        print "optimize.leastsq error flag is: %d" % (ier)
-                        print mesg
-                else:
-                    # unpack bounds
-                    if HAVE_OPENOPT and boundsopt == 'openopt':
+                # 
+                # Different optimization methods are included here. Not all have been tested fully with
+                # this wrapper.
+                #
+                if method is None: # use standard leastsq, no bounds
+                        plsq, cov, infodict, mesg, ier = scipy.optimize.leastsq(func[0], fpars,
+                                                args=(tx.astype('float64'), dy.astype('float64'), fixedPars),
+                                                full_output = 1, maxfev = func[2])
+                        if ier > 4:
+                            print "optimize.leastsq error flag is: %d" % (ier)
+                            print mesg
+                elif method == 'curve_fit':
+                    print fpars
+                    print fixedPars
+                    plsq, cov = scipy.optimize.curve_fit(func[0], tx.astype('float64'), dy.astype('float64'), p0=fpars)
+                    ier = 0
+                elif method in ['fmin', 'simplex', 'Nelder-Mead', 'bfgs', 'TNC', 'SLSQP', 'COBYLA', 'L-BFGS-B']: # use standard wrapper from scipy for those routintes
+                    res = scipy.optimize.minimize(func[0], fpars, args=(tx.astype('float64'), dy.astype('float64'), fixedPars, True),
+                     method=method, jac=None, hess=None, hessp=None, bounds = bounds, constraints=constraints, tol=None, callback=None, 
+                     options={'maxiter': func[2], 'disp': False })
+                    plsq = res.x
+                
+                # next section is replaced by the code above - kept here for reference if needed...
+                # elif method == 'fmin' or method == 'simplex':
+                #     plsq = scipy.optimize.fmin(func[0], fpars, args=(tx.astype('float64'), dy.astype('float64'), fixedPars, True),
+                #                 maxfun = func[2]) # , iprint=0)
+                #     ier = 0
+                # elif method == 'bfgs':
+                #     plsq, cov, infodict = scipy.optimize.fmin_l_bfgs_b(func[0], fpars, fprime=func[8], 
+                #                 args=(tx.astype('float64'), dy.astype('float64'), fixedPars, True, weights),
+                #                 maxfun = func[2], bounds = bounds,
+                #                 approx_grad = True) # , disp=0, iprint=-1)
+                elif method == 'openopt': # use OpenOpt's routines - usually slower, but sometimes they converge better
+                    if bounds is not None:
+                        # unpack bounds
                         lb = [y[0] for y in bounds]
                         ub = [y[1] for y in bounds]
-                        fopt = openopt.DFP(func[0], fpars, tx, dy, df = None, lb=lb, ub=ub)
+                        fopt = openopt.DFP(func[0], fpars, tx, dy, df = fitFuncDer, lb=lb, ub=ub)
+                       # fopt.df = func[8]
                         r = fopt.solve('nlp:ralg', plot=0, iprint = 10)
                         plsq = r.xf
                         ier = 0
                     else:
-                        plsq, cov, infodict = optimize.fmin_l_bfgs_b(func[0],  fpars, 
-                                            args=(tx.astype('float64'), dy.astype('float64'), fixedPars),
-                                            maxfun = func[2], bounds = bounds,
-                                            approx_grad = True)
+                        fopt = openopt.DFP(func[0], fpars, tx, dy, df = fitFuncDer)
+                        print func[8]
+                      #  fopt.df = func[7]
+                        fopt.checkdf()
+                        r = fopt.solve('nlp:ralg', plot=0, iprint = 10)
+                        plsq = r.xf
+                        ier = 0                        
+                else:
+                    print 'method %s not recognized, please check Fitting.py' % (method)
+                    return    
                 xfit = numpy.arange(min(tx), max(tx), (max(tx)-min(tx))/100.0)
                 yfit = func[0](plsq, xfit, C=fixedPars)
                 yy = func[0](plsq, tx, C=fixedPars) # calculate function
                 self.fitSum2Err = numpy.sum((dy - yy)**2)
-                if fitPlot != None and plotInstance != None and PlotType != None:
-                    self.FitPlot(xFit = xfit, yFit = yfit, fitFunc = 'exp1',
-                            fitPars = plsq, plot = fitPlot, plotInstance = plotInstance, plottype = PlotType)
+                if usingMPlot and FitPlot != None and plotInstance != None:
+                    self.FitPlot(xFit = xfit, yFit = yfit, fitFunc = fund[0],
+                            fitPars = plsq, plot = fitPlot, plotInstance = plotInstance)
                 xp.append(plsq) # parameter list
                 xf.append(xfit) # x plot point list
                 yf.append(yfit) # y fit point list
-        return(xp, xf, yf, yn,) # includes names with yn and range of tx
+        return(xp, xf, yf, yn) # includes names with yn and range of tx
 
     def FitPlot(self, xFit = None, yFit = None, fitFunc = 'exp1',
-                fitPars = None, fixedPars = None, fitPlot=None, plotInstance = None, plottype = None):
+                fitPars = None, fixedPars = None, fitPlot=None, plotInstance = None, 
+                color=None):
         """ Plot the fit data onto the fitPlot with the specified "plot Instance".
              if there is no xFit, or some parameters are missing, we just return.
              if there is xFit, but no yFit, then we try to compute the fit with
              what we have. The plot is superimposed on the specified "fitPlot" and
              the color is specified by the function color in the fitPars list.
              """
-        if xFit is None or fitPars is None or fitPlot is None or plotInstance is None or plottype is None:
+        if xFit is None or fitPars is None:
             return
         func = self.fitfuncmap[fitFunc]
+        if color is None:
+            fcolor = func[3]
+        else:
+            fcolor = color
         if yFit is None:
             yFit = numpy.array([])
             for k in range(0, len(fitPars)):
                 yFit[k] = func[0](fitPars[k], xFit[k], C=fixedPars)
+        if plotInstance is None or fitPlot is None:
+            return(yfit)
         for k in range(0, len(fitPars)):
-            if plottype == 'mplot':
-                plotInstance.PlotLine(fitPlot, xFit[k], yFit[k], color = func[3])
-            if plottype == 'pyqtgraph':
-                #self.plot1.plot(data, pen=pg.intColor(c, len(dirs), maxValue=200), decimate=decimate_factor)
-                plotInstance.plot(x=xFit[k], y=yFit[k], pen='r', decimate=5)
-
+            plotInstance.PlotLine(fitPlot, xFit[k], yFit[k], color = fcolor)
+        return(yfit)
+        
     def getFitErr(self):
         """ Return the fit error for the most recent fit
              """
@@ -368,7 +512,7 @@ class Fitting():
         constant (scaled in units of x).
         Relies on routines chebftd to generate polynomial coeffs, and chebint to compute the
         coefficients for the integral of the data. These are now included in this
-        .m file source.
+        .py file source.
         This version is based on the one in the pClamp manual: HOWEVER, since
         I use the bounded [-1 1] form for the Chebyshev polynomials, the coefficients are different,
         and the resulting equation for tau is different. I manually optimized the tau
@@ -441,10 +585,10 @@ class Fitting():
         fac = 2.0/n
         c=numpy.zeros(n)
         for j in range(0, n):
-            sum=0.0
-            for k in range(0, n):
-                sum = sum + f[k]*numpy.cos(numpy.pi*j*(k+0.5)/n)
-            c[j]=fac*sum
+           sum=0.0
+           for k in range(0, n):
+              sum = sum + f[k]*numpy.cos(numpy.pi*j*(k+0.5)/n)
+           c[j]=fac*sum
         return(c)
 
     def chebint(self, a, b, c, n):
@@ -492,23 +636,92 @@ if __name__ == "__main__":
 #    import matplotlib.pyplot as pyplot
     import timeit
     import Fitting
-    import matplotlib.pylab as MP
+    import matplotlib as MP
+    MP.use('Qt4Agg')
+    ################## Do not modify the following code 
+    # sets up matplotlib with sans-serif plotting... 
+    import matplotlib.gridspec as GS
+    # import mpl_toolkits.axes_grid1.inset_locator as INSETS
+    # #import inset_axes, zoomed_inset_axes
+    # import mpl_toolkits.axes_grid1.anchored_artists as ANCHOR
+    # # import AnchoredSizeBar
+
+    stdFont = 'Arial'
+
+    import  matplotlib.pyplot as pylab
+    pylab.rcParams['text.usetex'] = True
+    pylab.rcParams['interactive'] = False
+    pylab.rcParams['font.family'] = 'sans-serif'
+    pylab.rcParams['font.sans-serif'] = 'Arial'
+    pylab.rcParams['mathtext.default'] = 'sf'
+    pylab.rcParams['figure.facecolor'] = 'white'
+    # next setting allows pdf font to be readable in Adobe Illustrator
+    pylab.rcParams['pdf.fonttype'] = 42
+    pylab.rcParams['text.dvipnghack'] = True
+    ##################### to here (matplotlib stuff - touchy!
+    
     Fits = Fitting.Fitting()
-    x = arange(0, 100.0, 0.1)
-    y = 5.0-2.5*numpy.exp(-x/5.0)+0.5*random.randn(len(x))
-    (dc, aFit,tauFit) = Fits.expfit(x,y)
-    yf = dc + aFit*numpy.exp(-x/tauFit)
+#    x = numpy.arange(0, 100.0, 0.1)
+#    y = 5.0-2.5*numpy.exp(-x/5.0)+0.5*numpy.random.randn(len(x))
+#    (dc, aFit,tauFit) = Fits.expfit(x,y)
+#    yf = dc + aFit*numpy.exp(-x/tauFit)
  #   pyplot.figure(1)
   #  pyplot.plot(x,y,'k')
   #  pyplot.hold(True)
   #  pyplot.plot(x, yf, 'r')
   #  pyplot.show()
+    exploreError = True
 
+    if exploreError is True:
+        # explore the error surface for a function:
+
+        func = 'exppulse'
+        f = Fits.fitfuncmap[func]
+        p1range = numpy.arange(0.1, 5.0, 0.1)
+        p2range = numpy.arange(0.1, 5.0, 0.1)
+
+        err = numpy.zeros((len(p1range), len(p2range)))
+        x = numpy.array(numpy.arange(f[4][0], f[4][1], f[4][2]))
+        C = None
+        if func == 'expsum2':
+          C = f[7]
+
+        if func == 'exppulse':
+          C = f[7]
+     
+        # check exchange of tau1 ([1]) and width[4]
+        yOffset, tau1, tau2, amp, width = f[1] # get inital parameters
+        y0 = f[0](f[1], x, C=C)
+        noise = numpy.random.random(y0.shape) - 0.5
+        y0 += 0.0* noise
+        sh = err.shape
+        yp = numpy.zeros((sh[0], sh[1], len(y0)))
+        for i, p1 in enumerate(p1range):
+            tau1t = tau1*p1
+            for j, p2 in enumerate(p2range):
+                ampt = amp*p2
+                pars = (yOffset, tau1t, tau2, ampt, width) # repackage
+                err[i,j] = f[0](pars, x, y0, C=C, sumsq = True)
+                yp[i,j] = f[0](pars, x, C=C, sumsq = False)
+  
+        pylab.figure()
+        CS=pylab.contour(p1range*tau1, p2range*width, err, 25)
+        CB = pylab.colorbar(CS, shrink=0.8, extend='both')
+        pylab.figure()
+        for i, p1 in enumerate(p1range):
+            for j, p2 in enumerate(p2range):
+                pylab.plot(x, yp[i,j])
+        pylab.plot(x, y0, 'r-', linewidth=2.0)
+
+  
     # run tests for each type of fit, return results to compare parameters
 
+    cons = None
+    bnds = None
     for func in Fits.fitfuncmap:
-
-        print "Function: %s\nInitial: " % (func),
+        if func != 'exppulse':
+            continue
+        print "\nFunction: %s\nInitial: " % (func),
         f = Fits.fitfuncmap[func]
         for k in range(0,len(f[1])):
             print "%f " % (f[1][k]),
@@ -516,16 +729,57 @@ if __name__ == "__main__":
         for k in range(0,len(f[5])):
             print "%f " % (f[5][k]),
 
-        nstep = 20.0
-        if func == 'sin':
-            nstep = 100.0
-        x = numpy.array(arange(f[4][0], f[4][1], (f[4][1] - f[4][0])/nstep))
-        y = f[0](f[5], x)
+#        nstep = 500.0
+#        if func == 'sin':
+#            nstep = 100.0
+        x = numpy.array(numpy.arange(f[4][0], f[4][1], f[4][2]))
+        C = None
+        if func == 'expsum2':
+            C = f[7]
 
+        if func == 'exppulse':
+            C = f[7]
+            
+        y = f[0](f[1], x, C=C)
         yd = numpy.array(y)
+        noise = numpy.random.random(yd.shape) - 0.5
         my = numpy.amax(yd)
        # yd = yd + sigmax*0.05*my*(numpy.random.random_sample(shape(yd))-0.5)
-        (fpar, xf, yf, names) = Fits.FitRegion(array([1]), 0, x, yd, fitFunc = func)
+        testMethod = 'SLSQP'
+        if func == 'taucurve':
+            continue
+            bounds=[(0., 100.), (0., 1000.), (0.0, 500.0), (0.1, 50.0), 
+                (0., 1000), (0.0, 500.0), (0.1, 50.0)]
+            (fpar, xf, yf, names) = Fits.FitRegion(numpy.array([1]), 0, x, yd, fitFunc = func, bounds=bounds, method=testMethod)
+        elif func == 'boltz':
+            continue
+            bounds = [(-0.5,0.5), (0.0, 20.0), (-120., 0.), (-20., 0.)]
+            (fpar, xf, yf, names) = Fits.FitRegion(numpy.array([1]), 0, x, yd, fitFunc = func, bounds=bounds, method=testMethod)
+        
+        elif func == 'exp2':
+            bounds=[(-0.001, 0.001), (-5.0, 0.), (1.0, 500.0), (-5.0, 0.0), 
+                (1., 10000.)]
+            (fpar, xf, yf, names) = Fits.FitRegion(numpy.array([1]), 0, x, yd, fitFunc = func, bounds=bounds, method=testMethod)
+        
+        elif func == 'exppulse':
+            # set some constraints to the fitting
+            # yOffset, tau1, tau2, amp, width = f[1]  # order of constraings
+            bounds = [(-5, 5), (0., 1.0), (0.2, 10.), (0., 5.), (0., 5.)]
+            # cxample for constraints:
+            # cons = ({'type': 'ineq', 'fun': lambda x:   x[4] - 3.0*x[2]},
+            #         {'type': 'ineq', 'fun': lambda x:   - x[4] + 12*x[2]},
+            #         {'type': 'ineq', 'fun': lambda x:   x[2]},
+            #         {'type': 'ineq', 'fun': lambda x:  - x[4] + 2000},
+            #         )
+            cons = ({'type': 'ineq', 'fun': lambda x:   x[2] - x[1] }, # tau1 < tau2 
+                )
+            C = f[7]
+            (fpar, xf, yf, names) = Fits.FitRegion(
+                numpy.array([1]), 0, x, yd, fitFunc = func, fixedPars = C, constraints = cons, bounds = bnds, method=testMethod)
+        
+        else:
+            (fpar, xf, yf, names) = Fits.FitRegion(
+                numpy.array([1]), 0, x, yd, fitFunc = func, fixedPars = C, constraints = cons, bounds = bnds, method=testMethod)
         #print fpar
         outstr = ""
         s = numpy.shape(fpar)
@@ -535,9 +789,9 @@ if __name__ == "__main__":
 #            print "%f " % fpar[j][i],
             outstr = outstr + ('%s = %f, ' % (names[j][i], fpar[j][i]))
         print( "\nFIT(%d): %s" % (j, outstr) )
-        if func is 'taucurve':
-            MP.figure()
-            MP.plot(array(x), yd, 'ro')
-            MP.hold(True)
-            MP.plot(xf[0], yf[0], 'b-')
-            MP.show()
+        if func is 'exppulse':
+            pylab.figure()
+            pylab.plot(numpy.array(x), yd, 'ro')
+            pylab.hold(True)
+            pylab.plot(xf[0], yf[0], 'b-')
+            pylab.show()
