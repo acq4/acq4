@@ -79,6 +79,7 @@ class RoiEventDetector(EventDetector):
         
         if self.dbCtrl.getSaveMode() == 'roi':
             self.write(self.flowchart.output()['events'])
+            self.writeParams()
         elif self.dbCtrl.getSaveMode() == 'video':
             raise Exception('Saving whole video is not yet implemented')
         elif self.dbCtrl.getSaveMode() == 'all':
@@ -107,6 +108,35 @@ class RoiEventDetector(EventDetector):
                 
             f.write('\n')
     
+    def writeParams(self):
+        nodes = self.flowchart.nodes()
+        params = {}
+        excludes=['Input', 'Output', 'GatherInfo', 'NegativeEventFilter', 'EventListPlotter', 'ColumnJoin', 'ColumnSelect', 'Plot']
+            
+        for name in nodes.keys():
+            if name in excludes:
+                continue
+            node = nodes[name]
+            d = {}
+            if hasattr(node, 'ctrls'):
+                for k, v in node.ctrls.iteritems():
+                    if type(v) == type(QtGui.QCheckBox()):
+                        d[k] = v.isChecked()
+                    elif type(v) == type(QtGui.QComboBox()):
+                        d[k] = str(v.currentText())
+                    elif type(v) in [type(QtGui.QSpinBox()), type(QtGui.QDoubleSpinBox()), type(pg.SpinBox())]:
+                        d[k] = v.value()
+                    else:
+                        print("Not saving param %s for node %s because we don't know how to record value of type %s" %(k, name, str(type(v))))
+            d['bypassed'] = node.isBypassed()
+            params[name] = d
+        
+        item = self.fileLoader.ui.fileTree.currentItem()
+        roi = str(item.text(0))
+        pg.configfile.appendConfigFile({roi:params}, self.paramStorageFile)
+        
+        
+    
     def newStorageFileClicked(self):
         self.fileDialog = pg.FileDialog(self.dbCtrl, "New Storage File", self.fileLoader.baseDir().name(), "CSV File (*.csv);;All Files (*.*)")
         #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
@@ -129,6 +159,14 @@ class RoiEventDetector(EventDetector):
         f.close()
         self.dbCtrl.setFileName(fileName)
         
+        ## make paramStorageFile -- for storing flowchart params
+        if fileName[-4:] == '.csv':
+            fn = fileName[:-4]
+        else:
+            fn = fileName
+        self.paramStorageFile = fn + '.params'
+        
+        
     def openStorageFileClicked(self):
             self.fileDialog = pg.FileDialog(self.dbCtrl, "Load Storage File", self.fileLoader.baseDir().name(), "CSV file (*.csv);;All Files (*.*)")
             #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
@@ -146,8 +184,10 @@ class RoiEventDetector(EventDetector):
         
         #f = open(fileName, 'r+') ## possibly I want append mode instead ('a')
         self.storageFile = fileName
-        f = open(self.storageFile, 'r+')
+        self.paramStorageFile = fileName[:-4]+'.params'
+        #f = open(self.storageFile, 'r+')
         self.dbCtrl.setFileName(fileName)
+        
         
         header = ''
         line=None

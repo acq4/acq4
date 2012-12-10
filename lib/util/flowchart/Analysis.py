@@ -342,6 +342,15 @@ def processEventFits(events, startEvent, stopEvent, opts):
 
 class CaEventFitter(EventFitter):
     nodeName="CaEventFitter"
+    uiTemplate = [
+            ('multiFit', 'check', {'value': False}),
+            ('plotFits', 'check', {'value': True}),
+            ('plotGuess', 'check', {'value': False}),
+            ('plotEvents', 'check', {'value': False}),        
+            ('Amplitude_UpperBound', 'spin', {'value':5, 'step':0.1, 'minStep':1e-4, 'dec':True, 'range':[0, None]}),
+            ('RiseTau_UpperBound', 'spin', {'value':0.2, 'step':0.1, 'minStep':1e-6, 'dec':True, 'range':[0, None], 'siPrefix':True, 'suffix':'s'}),
+            ('DecayTau_UpperBound', 'spin', {'value':1, 'step':0.1, 'minStep':1e-6, 'dec':True, 'range':[0, None], 'siPrefix':True, 'suffix':'s'})
+        ]    
     
     def process(self, waveform, events, display=True):
         self.deletedFits = []
@@ -361,7 +370,11 @@ class CaEventFitter(EventFitter):
             'multiFit': self.ctrls['multiFit'].isChecked(),
             'waveform': waveform.view(np.ndarray),
             'tvals': waveform.xvals('Time'),
+            'ampMax':self.ctrls['Amplitude_UpperBound'].value(),
+            'riseTauMax':self.ctrls['RiseTau_UpperBound'].value(),
+            'decayTauMax':self.ctrls['DecayTau_UpperBound'].value()
         }       
+        
         
         output = self.fitEvents(events, startEvent=0, stopEvent=len(events), opts=opts)
         guesses = output['guesses']
