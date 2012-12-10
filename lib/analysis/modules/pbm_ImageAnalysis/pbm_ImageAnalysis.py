@@ -101,6 +101,10 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.specImageCalcFlag = False
         self.stdImage = []
         self.avgImage = []
+        
+        self.analogMode = True # if false, we are using digital mode.
+        self.csvFileName = None
+        self.csvData = None
                 
         self.spikesFoundpk = None
         self.withinBurstsFound = None
@@ -198,6 +202,10 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrlImageFunc.IAFuncs_Analysis_AXCorr.clicked.connect(self.Analog_Xcorr)
         self.ctrlImageFunc.IAFuncs_Analysis_UnbiasedXC.clicked.connect(self.Analog_Xcorr_unbiased)
         self.ctrlImageFunc.IAFuncs_DistanceStrengthPrint.clicked.connect(self.printDistStrength)
+        self.ctrlImageFunc.IAFuncs_AnalogRadioBtn.clicked.connect(self.setAnalogMode)
+        self.ctrlImageFunc.IAFuncs_DigitalRadioBtn.clicked.connect(self.setDigitalMode)
+        self.ctrlImageFunc.IAFuncs_GetCSFFile.clicked.connect(self.getCSVFile)
+        
 
     def initDataState(self):
         self.dataState = {'Loaded': False, 'bleachCorrection': False, 'Normalized': False,
@@ -208,6 +216,16 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ROIDistanceMap = []
         self.tc_bleach = []
 
+    def setAnalogMode(self):
+        self.analogMode = True
+        self.ctrlImageFunc.IA_Funcs.AnalogRadioBtn.checked(True)
+        self.ctrlImageFUnc.IA_Funcs.DigitalRadioBtn.checked(False)
+    
+    def setDigitalMode(self):
+        self.digitalMode = False
+        self.ctrlImageFunc.IA_Funcs.AnalogRadioBtn.checked(False)
+        self.ctrlImageFUnc.IA_Funcs.DigitalRadioBtn.checked(True)
+        
     def updateRectSelect(self):
         self.rectSelect = self.ctrl.ImagePhys_RectSelect.isChecked()
         if self.rectSelect:
@@ -531,6 +549,25 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.calculateAllROIs() # recompute the ROIS
         self.updateThisROI(self.lastROITouched)  #  and make sure plot reflects current ROI (not old data)  
         return True
+        
+        
+    def getCSVFile(self):
+        """ read the CSV file for the ROI timing data """
+        fd = QtGui.QFileDialog(self)
+        self.fileName = fd.getOpenFileName()
+        from os.path import isfile
+        if isfile(self.fileName):
+            self.statusBar().showMessage( "Loading: %s..." % (self.fileName) )
+            self.show()
+            csvfile = csv.reader(open(self.fileName), delimiter=",")
+            self.times = [];
+            self.nROI = 0
+            self.bkgd=[]
+            self.bkgdpos = None
+            self.timepos = 0
+            self.roilist = []
+            firstline = csvfile.next()
+        
 
     def updateAvgStdImage(self):
         """ update the reference image types and then make sure display agrees.
