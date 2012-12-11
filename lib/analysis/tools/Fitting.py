@@ -81,8 +81,8 @@ class Fitting():
                    [0.0, -1.0, 150.0, -0.25, 350.0], ['DC', 'A0', 'tau0', 'A1', 'tau1'], None, None),
         'exppow'  : (self.exppoweval,  [0.0, 1.0, 100, ], 2000, 'k',  [0, 100, 0.1],
                    [0.0, 1.0, 100.0], ['DC', 'A0', 'tau'], None, None),
-        'exppulse'  : (self.expPulse,  [3.0, 0.2, 2.5, 2.0, 3], 2000, 'k',  [0, 10, 0.1],
-                  [0.0, 0.75, 4., 1.5, 1.], ['DC', 'tau1', 'tau2', 'amp', 'width'], [3.], None),
+        'exppulse'  : (self.expPulse,  [3.0, 2.5, 0.2, 2.5, 2.0, 2.5], 2000, 'k',  [0, 10, 0.3],
+                  [0.0, 0., 0.75, 4., 1.5, 1.], ['DC', 't0', 'tau1', 'tau2', 'amp', 'width'], None, None),
         'boltz' : (self.boltzeval,  [0.0, 1.0, -50.0, -5.0], 5000, 'r', [-130., -30., 1.],
                    [0.00, 0.010, -100.0, 7.0],  ['DC', 'A0', 'x0', 'k'], None, None),
 
@@ -218,13 +218,12 @@ class Fitting():
                 return y - yd
 
 #    @autojit
-    def expPulse(self, p, x, y=None, C=[0.0], sumsq = False, weights = None):
+    def expPulse(self, p, x, y=None, C=None, sumsq = False, weights = None):
         """Exponential pulse function (rising exponential with variable-length
         plateau followed by falling exponential)
         Parameter p is [offset, tau1, tau2, amp, width]
         """
-        yOffset, tau1, tau2, amp, width = p
-        t0 = C[0] # must be a fixed value to avoid tradeoffs... 
+        yOffset, t0, tau1, tau2, amp, width = p
         yd = numpy.empty(x.shape)
         yd[x<t0] = yOffset
         m1 = (x>=t0)&(x<(t0+width))
@@ -670,7 +669,7 @@ if __name__ == "__main__":
   #  pyplot.hold(True)
   #  pyplot.plot(x, yf, 'r')
   #  pyplot.show()
-    exploreError = True
+    exploreError = False
 
     if exploreError is True:
         # explore the error surface for a function:
@@ -686,11 +685,10 @@ if __name__ == "__main__":
         if func == 'expsum2':
           C = f[7]
 
-        if func == 'exppulse':
-          C = f[7]
      
         # check exchange of tau1 ([1]) and width[4]
-        yOffset, tau1, tau2, amp, width = f[1] # get inital parameters
+        C = None
+        yOffset, t0, tau1, tau2, amp, width = f[1] # get inital parameters
         y0 = f[0](f[1], x, C=C)
         noise = numpy.random.random(y0.shape) - 0.5
         y0 += 0.0* noise
@@ -700,7 +698,7 @@ if __name__ == "__main__":
             tau1t = tau1*p1
             for j, p2 in enumerate(p2range):
                 ampt = amp*p2
-                pars = (yOffset, tau1t, tau2, ampt, width) # repackage
+                pars = (yOffset, t0, tau1t, tau2, ampt, width) # repackage
                 err[i,j] = f[0](pars, x, y0, C=C, sumsq = True)
                 yp[i,j] = f[0](pars, x, C=C, sumsq = False)
   
@@ -718,14 +716,15 @@ if __name__ == "__main__":
 
     cons = None
     bnds = None
+    signal_to_noise = 2.5
     for func in Fits.fitfuncmap:
         if func != 'exppulse':
             continue
-        print "\nFunction: %s\nInitial: " % (func),
+        print "\nFunction: %s\nTarget: " % (func),
         f = Fits.fitfuncmap[func]
         for k in range(0,len(f[1])):
             print "%f " % (f[1][k]),
-        print "\nTrue:     ",
+        print "\nStarting:     ",
         for k in range(0,len(f[5])):
             print "%f " % (f[5][k]),
 
@@ -742,9 +741,10 @@ if __name__ == "__main__":
             
         y = f[0](f[1], x, C=C)
         yd = numpy.array(y)
-        noise = numpy.random.random(yd.shape) - 0.5
+        noise = numpy.random.normal(0, 0.1, yd.shape)
         my = numpy.amax(yd)
-       # yd = yd + sigmax*0.05*my*(numpy.random.random_sample(shape(yd))-0.5)
+        #yd = yd + sigmax*0.05*my*(numpy.random.random_sample(shape(yd))-0.5)
+        yd += noise*my/signal_to_noise
         testMethod = 'SLSQP'
         if func == 'taucurve':
             continue
@@ -764,34 +764,44 @@ if __name__ == "__main__":
         elif func == 'exppulse':
             # set some constraints to the fitting
             # yOffset, tau1, tau2, amp, width = f[1]  # order of constraings
-            bounds = [(-5, 5), (0., 1.0), (0.2, 10.), (0., 5.), (0., 5.)]
+            dt = numpy.mean(numpy.diff(x))
+            bounds = [(-5, 5), (-15., 15.), (2*dt, 2.0), (2*dt, 10.), (0., 5.), (0., 5.)]
             # cxample for constraints:
             # cons = ({'type': 'ineq', 'fun': lambda x:   x[4] - 3.0*x[2]},
             #         {'type': 'ineq', 'fun': lambda x:   - x[4] + 12*x[2]},
             #         {'type': 'ineq', 'fun': lambda x:   x[2]},
             #         {'type': 'ineq', 'fun': lambda x:  - x[4] + 2000},
             #         )
-            cons = ({'type': 'ineq', 'fun': lambda x:   x[2] - x[1] }, # tau1 < tau2 
+            cons = ({'type': 'ineq', 'fun': lambda x:   x[3] - x[2] }, # tau1 < tau2 
                 )
-            C = f[7]
+            C = None
+
+            tv = f[5]
+            initialgr = f[0](f[5], x, None )
             (fpar, xf, yf, names) = Fits.FitRegion(
-                numpy.array([1]), 0, x, yd, fitFunc = func, fixedPars = C, constraints = cons, bounds = bnds, method=testMethod)
+                numpy.array([1]), 0, x, yd, fitFunc = func, fixedPars = C, constraints = cons, bounds = bounds, method=testMethod)
         
         else:
             (fpar, xf, yf, names) = Fits.FitRegion(
                 numpy.array([1]), 0, x, yd, fitFunc = func, fixedPars = C, constraints = cons, bounds = bnds, method=testMethod)
         #print fpar
-        outstr = ""
         s = numpy.shape(fpar)
         j = 0
         outstr = ""
+        initstr = ""
+        truestr = ""
         for i in range(0, len(names[j])):
 #            print "%f " % fpar[j][i],
             outstr = outstr + ('%s = %f, ' % (names[j][i], fpar[j][i]))
-        print( "\nFIT(%d): %s" % (j, outstr) )
+            initstr = initstr + '%s = %f, ' % (names[j][i], tv[i])
+            truestr = truestr + '%s = %f, ' % (names[j][i], f[1][i])
+        print( "\nTrue(%d) : %s" % (j, truestr) )
+        print( "FIT(%d)   : %s" % (j, outstr) )
+        print( "init(%d) : %s" % (j, initstr) )
         if func is 'exppulse':
             pylab.figure()
-            pylab.plot(numpy.array(x), yd, 'ro')
+            pylab.plot(numpy.array(x), yd, 'ro-')
             pylab.hold(True)
-            pylab.plot(xf[0], yf[0], 'b-')
+            pylab.plot(numpy.array(x), initialgr, 'k--')
+            pylab.plot(xf[0], yf[0], 'b-') # fit
             pylab.show()
