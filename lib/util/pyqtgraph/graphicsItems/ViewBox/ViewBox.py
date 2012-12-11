@@ -286,6 +286,12 @@ class ViewBox(GraphicsWidget):
         self.scene().removeItem(item)
         self.updateAutoRange()
 
+    def clear(self):
+        for i in self.addedItems[:]:
+            self.removeItem(i)
+        for ch in self.childGroup.childItems():
+            ch.setParent(None)
+        
     def resizeEvent(self, ev):
         #self.setRange(self.range, padding=0)
         #self.updateAutoRange()
@@ -1231,6 +1237,23 @@ class ViewBox(GraphicsWidget):
                 k.destroyed.disconnect()
             except RuntimeError:  ## signal is already disconnected.
                 pass
+            
+    def locate(self, item):
+        if item.scene() is not self.scene():
+            raise Exception("Item does not share a scene with this ViewBox.")
+        
+        c = self.mapToScene(self.viewRect().center())
+        p = item.sceneBoundingRect().center()
+        
+        self.locateLine = QtGui.QGraphicsLineItem(c.x(), c.y(), p.x(), p.y())
+        self.locateLine.setPen(pg.mkPen(color='y', width=3))
+        self.scene().addItem(self.locateLine)
+        self.locateLine.setZValue(1000000)
+        QtCore.QTimer.singleShot(3000, self.clearLocateLine)
+        
+    def clearLocateLine(self):
+        self.scene().removeItem(self.locateLine)
+        self.locateLine = None
         
         
 from .ViewBoxMenu import ViewBoxMenu
