@@ -491,9 +491,6 @@ def transformToArray(tr):
         ## map coordinates through transform
         mapped = np.dot(m, coords)
     """
-    if isinstance(tr, np.ndarray):
-        return tr
-    
     #return np.array([[tr.m11(), tr.m12(), tr.m13()],[tr.m21(), tr.m22(), tr.m23()],[tr.m31(), tr.m32(), tr.m33()]])
     ## The order of elements given by the method names m11..m33 is misleading--
     ## It is most common for x,y translation to occupy the positions 1,3 and 2,3 in
@@ -513,11 +510,8 @@ def transformCoordinates(tr, coords):
     The mapping will _ignore_ any perspective transformations.
     """
     nd = coords.shape[0]
-    if not isinstance(tr, np.ndarray):
-        m = transformToArray(tr)
-        m = m[:m.shape[0]-1]  # remove perspective
-    else:
-        m = tr
+    m = transformToArray(tr)    
+    m = m[:m.shape[0]-1]  # remove perspective
     
     ## If coords are 3D and tr is 2D, assume no change for Z axis
     if m.shape == (2,3) and nd == 3:
@@ -543,7 +537,7 @@ def transformCoordinates(tr, coords):
     m = m[:, :-1]
     
     ## map coordinates and return
-    mapped = (m*coords).sum(axis=1)  ## apply scale/rotate
+    mapped = (m*coords).sum(axis=0)  ## apply scale/rotate
     mapped += translate
     return mapped
     
@@ -782,7 +776,7 @@ def makeARGB(data, lut=None, levels=None, scale=None, useRGBA=False):
             if levels.shape != (data.shape[-1], 2):
                 raise Exception('levels must have shape (data.shape[-1], 2)')
         else:
-            print(levels)
+            print levels
             raise Exception("levels argument must be 1D or 2D.")
         #levels = np.array(levels)
         #if levels.shape == (2,):
@@ -1144,6 +1138,43 @@ def isocurve(data, level):
                 lines.append(pts)
 
     return lines ## a list of pairs of points
+    
+
+def traceImage(image, values, smooth=0.5):
+    """
+    Convert an image to a set of QPainterPath curves.
+    One curve will be generated for each item in values; each curve outlines the area
+    of the image that is closer to its value than to any others.
+    
+    If image is RGB or RGBA, then the shape of values should be (nvals, 3/4)
+    The parameter *smooth* is expressed in pixels.
+    """
+    import scipy.ndimage as ndi
+    if values.ndim == 2:
+        values = values.T
+    values = values[np.newaxis, np.newaxis, ...].astype(float)
+    image = image[..., np.newaxis].astype(float)
+    diff = np.abs(image-values)
+    if values.ndim == 4:
+        diff = diff.sum(axis=2)
+        
+    labels = np.argmin(diff, axis=2)
+    
+    paths = []
+    for i in range(diff.shape[-1]):    
+        d = (labels==i).astype(float)
+        d = ndi.gaussian_filter(d, (smooth, smooth))
+        path = QtGui.QPainterPath()
+        print i
+        print d
+        for line in isocurve(d, 0.5):
+            print line
+            path.moveTo(*line[0])
+            path.lineTo(*line[1])
+        paths.append(path)
+    return paths
+    
+    
     
     
 def isosurface(data, level):
