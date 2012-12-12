@@ -1231,7 +1231,7 @@ def isocurve(data, level, connected=False, extendToEdge=False):
 def traceImage(image, values, smooth=0.5):
     """
     Convert an image to a set of QPainterPath curves.
-    One curve will be generated for each item in values; each curve outlines the area
+    One curve will be generated for each item in *values*; each curve outlines the area
     of the image that is closer to its value than to any others.
     
     If image is RGB or RGBA, then the shape of values should be (nvals, 3/4)
@@ -1252,7 +1252,7 @@ def traceImage(image, values, smooth=0.5):
     for i in range(diff.shape[-1]):    
         d = (labels==i).astype(float)
         d = ndi.gaussian_filter(d, (smooth, smooth))
-        path = segmentsToPath(isocurve(d, 0.5))
+        path = isocurve(d, 0.5, connected=True, extendToEdge=True)
         paths.append(path)
     return paths
     
