@@ -352,9 +352,9 @@ class CaEventFitter(EventFitter):
             ('plotFits', 'check', {'value': True}),
             ('plotGuess', 'check', {'value': False}),
             ('plotEvents', 'check', {'value': False}),        
-            ('Amplitude_UpperBound', 'spin', {'value':5, 'step':0.1, 'minStep':1e-4, 'dec':True, 'range':[0, None]}),
-            ('RiseTau_UpperBound', 'spin', {'value':0.2, 'step':0.1, 'minStep':1e-6, 'dec':True, 'range':[0, None], 'siPrefix':True, 'suffix':'s'}),
-            ('DecayTau_UpperBound', 'spin', {'value':1, 'step':0.1, 'minStep':1e-6, 'dec':True, 'range':[0, None], 'siPrefix':True, 'suffix':'s'})
+            ('Amplitude_UpperBound', 'spin', {'value':0.2, 'step':0.1, 'minStep':1e-4, 'dec':True, 'range':[0, None]}),
+            ('RiseTau_UpperBound', 'spin', {'value':0.3, 'step':0.1, 'minStep':1e-6, 'dec':True, 'range':[0, None], 'siPrefix':True, 'suffix':'s'}),
+            ('DecayTau_UpperBound', 'spin', {'value':2, 'step':0.1, 'minStep':1e-6, 'dec':True, 'range':[0, None], 'siPrefix':True, 'suffix':'s'})
         ]    
     
     def process(self, waveform, events, display=True):
@@ -484,13 +484,14 @@ class CaEventFitter(EventFitter):
             guessAmp = (mx-mn)*2     ## fit converges more reliably if we start too large
             guessRise = guessLen/4.
             guessDecay = guessLen/4.
-            guessStart = times[0]
-            guessWidth = guessLen/2.
+            guessStart = times[10]
+            guessWidth = guessLen*0.75
             guessYOffset = eventData[0]
             
             ## fitting to exponential rise * decay
             ## parameters are [amplitude, x-offset, rise tau, fall tau]
-            guess = [guessStart,guessYOffset, guessRise, guessDecay, guessAmp, guessWidth]
+            guess = [guessStart, guessYOffset, guessRise, guessDecay, guessAmp, guessWidth]
+            guessFit = [guessYOffset, guessStart, guessRise, guessDecay, guessAmp, guessWidth]
             #guess = [amp, times[0], guessLen/4., guessLen/2.]  ## careful! 
             #bounds = [
                 #sorted((guessAmp * 0.1, guessAmp)),
@@ -507,19 +508,24 @@ class CaEventFitter(EventFitter):
                     (0.010, float(opts['riseTauMax'])), ## riseTau must be greater than 10 ms
                     (0.010, float(opts['decayTauMax'])), ## ditto for decayTau
                     (0., float(opts['ampMax'])), ## amp must be greater than 0
-                    (0, float(events[i]['len']*dt*2))]
+                    (0, float(events[i]['len']*dt*2))] ## width
+            
+            #print "Bounds", bounds
+            #print "times", times.min(), times.max()
             
             ## Use Paul's fitting algorithm so that we can put bounds/constraints on the fit params
             fitter = Fitting()
-            fitResults = fitter.FitRegion(np.array([1]), 0, times, yVals, fitFunc='exppulse', bounds=bounds,method='SLSQP')
+            fitResults = fitter.FitRegion([1], 0, times, yVals, fitPars=guessFit, fitFunc='exppulse', bounds=bounds, method='SLSQP', dataType='xy')
             fitParams, xPts, yPts, names = fitResults
+            #print "fitParams:", fitParams
+            #print "names", names
             #fitResult = functions.fit(functions.expPulse, times, yVals, guess, generateResult=True, resultXVals=times)                
             #fitParams, val, computed, err = fitResult
-            print 'fitParams:', fitParams
-            yOffset, t0, tau1, tau2, amp, width = fitParams
+            #print 'fitParams:', fitParams
+            yOffset, t0, tau1, tau2, amp, width = fitParams[0]
             #print "fitResult", fitResult
             #computed = fitResult[-2]
-            computed = fitter.expPulse(fitParams, tvals)
+            computed = fitter.expPulse(fitParams[0], times)
             diff = (yVals - computed)
             err = (diff**2).sum()
             fracError = diff.std() / computed.std()
