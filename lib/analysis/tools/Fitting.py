@@ -44,7 +44,10 @@ if the current curve and the current plot instance are passed.
 import sys
 import numpy
 import scipy
-import openopt
+try:
+    import openopt
+except ImportError:
+    print "There was an error importing openopt. Continuing...."
 import ctypes
 import numpy.random
 #from numba import autojit
@@ -219,9 +222,9 @@ class Fitting():
 
 #    @autojit
     def expPulse(self, p, x, y=None, C=None, sumsq = False, weights = None):
-        """Exponential pulse function (rising exponential with variable-length
+        """Exponential pulse function (rising exponential with optional variable-length
         plateau followed by falling exponential)
-        Parameter p is [offset, tau1, tau2, amp, width]
+        Parameter p is [yOffset, t0, tau1, tau2, amp, width]
         """
         yOffset, t0, tau1, tau2, amp, width = p
         yd = numpy.empty(x.shape)
@@ -361,6 +364,27 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                   fitPlot = None, plotInstance = None, dataType= 'xy', method = None,
                   bounds=None, weights=None, constraints=()):
         """
+        **Arguments**
+        ============= ===================================================
+        whichdata
+        thisaxis
+        tdat
+        ydat
+        t0            (optional) Minimum of time data - determined from tdat if left unspecified
+        t1            (optional) Maximum of time data - determined from tdat if left unspecified
+        fitFunc       (optional) The function to fit the data to (as defined in __init__). Default is 'exp1'.
+        fitFuncDer    (optional) default=None
+        fitPars       (optional) Initial fit parameters. Use the values defined in self.fitfuncmap if unspecified.
+        fixedPars     (optional) Fixed parameters to pass to the function. Default=None
+        fitPlot       (optional) default=None
+        plotInstance  (optional) default=None
+        dataType      (optional) Options are ['xy', 'blocks']. Default='xy'
+        method        (optional) Options are ['curve_fit', 'fmin', 'simplex', 'Nelder-Mead', 'bfgs', 'TNC', 'SLSQP', 'COBYLA', 'L-BFGS-B', 'openopt']. Default='leastsq'
+        bounds        (optional) default=None
+        weights       (optional) default=None
+        constraints   (optional) default=()
+        ============= ===================================================
+        
         To call with tdat and ydat as simple arrays:
         FitRegion(1, 0, tdat, ydat, FitFunc = 'exp1')
         e.g., the first argument should be 1, but this axis is ignored if datatype is 'xy'

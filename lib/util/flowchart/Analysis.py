@@ -9,6 +9,7 @@ import pyqtgraph as pg
 import metaarray
 #import pyqtgraph.CheckTable as CheckTable
 from collections import OrderedDict
+from lib.analysis.tools.Fitting import Fitting
 
 class EventFitter(CtrlNode):
     """Takes a waveform and event list as input, returns extra information about each event.
@@ -442,7 +443,7 @@ class CaEventFitter(EventFitter):
         #print "=========="
         for i in range(startEvent, stopEvent):
             start = events[i]['time']
-            sliceLen = events[i]['len']*dt +100.*dt## Ca2+ events are much longer than 50ms
+            sliceLen = events[i]['len']*dt +100.*dt ## Ca2+ events are much longer than 50ms
             if i+1 < len(events):
                 nextStart = events[i+1]['time']
                 #nextStart = events[i+1]['index']*dt
@@ -463,13 +464,14 @@ class CaEventFitter(EventFitter):
             ## Figure out from where to pull waveform data that will be fitted
             startIndex = np.argwhere(tvals>=start)[0][0]
             stopIndex = startIndex + int(sliceLen/dt)
+            startIndex -= 10 ## pull baseline data from before the event starts
             #print "    data to fit: indices:", startIndex, stopIndex, 'dt:', dt, "times:", startIndex*dt, stopIndex*dt
             eventData = waveform[startIndex:stopIndex]
             times = tvals[startIndex:stopIndex]
             
-            #if len(times) < 4:  ## PSP fit requires at least 4 points; skip this one
-            #    offset += 1
-            #    continue
+            if len(times) < 4:  ## PSP fit requires at least 4 points; skip this one
+                offset += 1
+                continue
             
             ## reconvolve this chunk of the signal if it was previously deconvolved
             if tau is not None:
@@ -478,44 +480,13 @@ class CaEventFitter(EventFitter):
             ## Make guesses as to the shape of the event
             mx = eventData.max()
             mn = eventData.min()
-            #if mx > -mn:
-            #    peakVal = mx
-            #else:
-            #    peakVal = mn
-            #guessAmp = peakVal * 2  ## fit converges more reliably if we start too large
+
             guessAmp = (mx-mn)*2     ## fit converges more reliably if we start too large
             guessRise = guessLen/4.
             guessDecay = guessLen/4.
             guessStart = times[0]
             guessWidth = guessLen/2.
             guessYOffset = eventData[0]
-
-            #zc = functions.zeroCrossingEvents(eventData - (peakVal/3.))
-                    
-            ### eliminate events going the wrong direction
-            #if len(zc) > 0:
-                #if guessAmp > 0:
-                    #zc = zc[zc['peak']>0]
-                #else:
-                    #zc = zc[zc['peak']<0]     
-                    
-            ### measure properties for the largest event
-            #if len(zc) > 0:
-                #if guessAmp > 0:
-                    #zcInd = np.argmax(zc['sum']) ## the largest event in this clip
-                #else:
-                    #zcInd = np.argmin(zc['sum']) ## the largest event in this clip
-                #zcEv = zc[zcInd]
-                ##guessLen = dt*zc[zcInd]['len']
-                #guessRise = .1e-3 #dt*zcEv['len'] * 0.2
-                #guessDecay = dt*zcEv['len'] * 0.8 
-                #guessStart = times[0] + dt*zcEv['index'] - guessRise*3.
-                
-                ### cull down the data set if possible
-                #cullLen = zcEv['index'] + zcEv['len']*3
-                #if len(eventData) > cullLen:
-                    #eventData = eventData[:cullLen]
-                    #times = times[:cullLen]      
             
             ## fitting to exponential rise * decay
             ## parameters are [amplitude, x-offset, rise tau, fall tau]
@@ -529,11 +500,26 @@ class CaEventFitter(EventFitter):
             #]
             yVals = eventData.view(np.ndarray)
             
-            fitResult = functions.fit(functions.expPulse, times, yVals, guess, generateResult=True, resultXVals=times)                
-            fitParams, val, computed, err = fitResult
-            t0, yoffset, tau1, tau2, amp, width = fitParams
+            ## Set bounds for parameters -
+            ## exppulse parameter order: yOffset, t0, tau1, tau2, amp, width
+            bounds=[(-10, 10), ## no bounds on yOffset
+                    (float(events[i]['time']-10*dt), float(events[i]['time']+5*dt)), ## t0 must be near the startpoint found by eventDetection
+                    (0.010, float(opts['riseTauMax'])), ## riseTau must be greater than 10 ms
+                    (0.010, float(opts['decayTauMax'])), ## ditto for decayTau
+                    (0., float(opts['ampMax'])), ## amp must be greater than 0
+                    (0, float(events[i]['len']*dt*2))]
+            
+            ## Use Paul's fitting algorithm so that we can put bounds/constraints on the fit params
+            fitter = Fitting()
+            fitResults = fitter.FitRegion(np.array([1]), 0, times, yVals, fitFunc='exppulse', bounds=bounds,method='SLSQP')
+            fitParams, xPts, yPts, names = fitResults
+            #fitResult = functions.fit(functions.expPulse, times, yVals, guess, generateResult=True, resultXVals=times)                
+            #fitParams, val, computed, err = fitResult
+            print 'fitParams:', fitParams
+            yOffset, t0, tau1, tau2, amp, width = fitParams
             #print "fitResult", fitResult
-            computed = fitResult[-2]
+            #computed = fitResult[-2]
+            computed = fitter.expPulse(fitParams, tvals)
             diff = (yVals - computed)
             err = (diff**2).sum()
             fracError = diff.std() / computed.std()
