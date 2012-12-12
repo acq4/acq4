@@ -84,7 +84,7 @@ class Fitting():
                    [0.0, -1.0, 150.0, -0.25, 350.0], ['DC', 'A0', 'tau0', 'A1', 'tau1'], None, None),
         'exppow'  : (self.exppoweval,  [0.0, 1.0, 100, ], 2000, 'k',  [0, 100, 0.1],
                    [0.0, 1.0, 100.0], ['DC', 'A0', 'tau'], None, None),
-        'exppulse'  : (self.expPulse,  [3.0, 2.5, 0.2, 2.5, 2.0, 2.5], 2000, 'k',  [0, 10, 0.3],
+        'exppulse'  : (self.expPulse,  [3.0, 2.5, 0.2, 2.5, 2.0, 0.5], 2000, 'k',  [0, 10, 0.3],
                   [0.0, 0., 0.75, 4., 1.5, 1.], ['DC', 't0', 'tau1', 'tau2', 'amp', 'width'], None, None),
         'boltz' : (self.boltzeval,  [0.0, 1.0, -50.0, -5.0], 5000, 'r', [-130., -30., 1.],
                    [0.00, 0.010, -100.0, 7.0],  ['DC', 'A0', 'x0', 'k'], None, None),
@@ -415,7 +415,11 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
             fpars = fitPars
         if method == 'simplex': # remap calls if needed for newer versions of scipy (>= 0.11)
             method = 'Nelder-Mead'
-        for block in range(0, len(ydat)):
+        if ydat.ndim == 1: # check if 1-d, then "pretend" its only a 1-element block 
+            nblock = 1
+        else:
+            nblock = ydat.shape[0] # otherwise, this is the number of traces in the block
+        for block in range(nblock):
             for record in whichdata:
                 if dataType == 'blocks':
                     (tx, dy) = self.getClipData(tdat[block], ydat[block][record, thisaxis, :], t0, t1)
@@ -740,7 +744,8 @@ if __name__ == "__main__":
 
     cons = None
     bnds = None
-    signal_to_noise = 2.5
+    
+    signal_to_noise = 100000.
     for func in Fits.fitfuncmap:
         if func != 'exppulse':
             continue
@@ -789,7 +794,7 @@ if __name__ == "__main__":
             # set some constraints to the fitting
             # yOffset, tau1, tau2, amp, width = f[1]  # order of constraings
             dt = numpy.mean(numpy.diff(x))
-            bounds = [(-5, 5), (-15., 15.), (2*dt, 2.0), (2*dt, 10.), (0., 5.), (0., 5.)]
+            bounds = [(-5, 5), (-15., 15.), (-2, 2.0), (2-10, 10.), (-5, 5.), (0., 5.)]
             # cxample for constraints:
             # cons = ({'type': 'ineq', 'fun': lambda x:   x[4] - 3.0*x[2]},
             #         {'type': 'ineq', 'fun': lambda x:   - x[4] + 12*x[2]},
@@ -804,6 +809,10 @@ if __name__ == "__main__":
             initialgr = f[0](f[5], x, None )
             (fpar, xf, yf, names) = Fits.FitRegion(
                 numpy.array([1]), 0, x, yd, fitFunc = func, fixedPars = C, constraints = cons, bounds = bounds, method=testMethod)
+            # print xf
+            # print yf
+            # print fpar
+            # print names
         
         else:
             (fpar, xf, yf, names) = Fits.FitRegion(
@@ -822,6 +831,7 @@ if __name__ == "__main__":
         print( "\nTrue(%d) : %s" % (j, truestr) )
         print( "FIT(%d)   : %s" % (j, outstr) )
         print( "init(%d) : %s" % (j, initstr) )
+        print( "Error:   : %f" % (Fits.fitSum2Err))
         if func is 'exppulse':
             pylab.figure()
             pylab.plot(numpy.array(x), yd, 'ro-')
