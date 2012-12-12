@@ -1060,15 +1060,37 @@ def imageToArray(img, copy=False, transpose=True):
     #return facets
     
 
-def isocurve(data, level):
+def isocurve(data, level, connected=False, extendToEdge=False):
     """
     Generate isocurve from 2D data using marching squares algorithm.
     
-    *data*   2D numpy array of scalar values
-    *level*  The level at which to generate an isosurface
+    ============= =========================================================
+    Arguments
+    data          2D numpy array of scalar values
+    level         The level at which to generate an isosurface
+    connected     If False, return a single long list of point pairs
+                  If True, return multiple long lists of connected point 
+                  locations. (This is slower but better for drawing 
+                  continuous lines)
+    extendToEdge  If True, extend the curves to reach the exact edges of 
+                  the data. 
+    ============= =========================================================
     
     This function is SLOW; plenty of room for optimization here.
     """    
+    
+    if extendToEdge:
+        d2 = np.empty((data.shape[0]+2, data.shape[1]+2), dtype=data.dtype)
+        d2[1:-1, 1:-1] = data
+        d2[0, 1:-1] = data[0]
+        d2[-1, 1:-1] = data[-1]
+        d2[1:-1, 0] = data[:, 0]
+        d2[1:-1, -1] = data[:, -1]
+        d2[0,0] = d2[0,1]
+        d2[0,-1] = d2[1,-1]
+        d2[-1,0] = d2[-1,1]
+        d2[-1,-1] = d2[-1,-2]
+        data = d2
     
     sideTable = [
     [],
@@ -1090,7 +1112,7 @@ def isocurve(data, level):
     ]
     
     edgeKey=[
-    [(0,1),(0,0)],
+    [(0,1), (0,0)],
     [(0,0), (1,0)],
     [(1,0), (1,1)],
     [(1,1), (0,1)]
@@ -1134,12 +1156,78 @@ def isocurve(data, level):
                         p1[0]*fi + p2[0]*f + i + 0.5, 
                         p1[1]*fi + p2[1]*f + j + 0.5
                         )
-                    pts.append(p)
+                    if extendToEdge:
+                        ## check bounds
+                        p = (
+                            min(data.shape[0]-2, max(0, p[0]-1)),
+                            min(data.shape[1]-2, max(0, p[1]-1)),                        
+                        )
+                    if connected:
+                        gridKey = i + (1 if edges[m]==2 else 0), j + (1 if edges[m]==3 else 0), edges[m]%2
+                        pts.append((p, gridKey))  ## give the actual position and a key identifying the grid location (for connecting segments)
+                    else:
+                        pts.append(p)
+                
                 lines.append(pts)
 
+    if not connected:
+        return lines
+                
+    ## turn disjoint list of segments into continuous lines
+
+    #lines = [[2,5], [5,4], [3,4], [1,3], [6,7], [7,8], [8,6], [11,12], [12,15], [11,13], [13,14]]
+    #lines = [[(float(a), a), (float(b), b)] for a,b in lines]
+    points = {}  ## maps each point to its connections
+    for a,b in lines:
+        if a[1] not in points:
+            points[a[1]] = []
+        points[a[1]].append([a,b])
+        if b[1] not in points:
+            points[b[1]] = []
+        points[b[1]].append([b,a])
+
+    ## rearrange into chains
+    for k in points.keys():
+        try:
+            chains = points[k]
+        except KeyError:   ## already used this point elsewhere
+            continue
+        #print "===========", k
+        for chain in chains:
+            #print "  chain:", chain
+            x = None
+            while True:
+                if x == chain[-1][1]:
+                    break ## nothing left to do on this chain
+                    
+                x = chain[-1][1]
+                if x == k:  
+                    break ## chain has looped; we're done and can ignore the opposite chain
+                y = chain[-2][1]
+                connects = points[x]
+                for conn in connects[:]:
+                    if conn[1][1] != y:
+                        #print "    ext:", conn
+                        chain.extend(conn[1:])
+                #print "    del:", x
+                del points[x]
+            if chain[0][1] == chain[-1][1]:  # looped chain; no need to continue the other direction
+                chains.pop()
+                break
+                
+
+    ## extract point locations 
+    lines = []
+    for chain in points.values():
+        if len(chain) == 2:
+            chain = chain[1][1:][::-1] + chain[0]  # join together ends of chain
+        else:
+            chain = chain[0]
+        lines.append([p[0] for p in chain])
     return lines ## a list of pairs of points
     
-
+    
+    
 def traceImage(image, values, smooth=0.5):
     """
     Convert an image to a set of QPainterPath curves.
@@ -1164,13 +1252,7 @@ def traceImage(image, values, smooth=0.5):
     for i in range(diff.shape[-1]):    
         d = (labels==i).astype(float)
         d = ndi.gaussian_filter(d, (smooth, smooth))
-        path = QtGui.QPainterPath()
-        print i
-        print d
-        for line in isocurve(d, 0.5):
-            print line
-            path.moveTo(*line[0])
-            path.lineTo(*line[1])
+        path = segmentsToPath(isocurve(d, 0.5))
         paths.append(path)
     return paths
     
