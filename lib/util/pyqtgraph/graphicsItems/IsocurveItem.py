@@ -118,4 +118,4 @@ class IsocurveItem(GraphicsObject):
             self.generatePath()
         p.setPen(self.pen)
         p.drawPath(self.path)
-        
+    

@@ -1060,7 +1060,7 @@ def imageToArray(img, copy=False, transpose=True):
     #return facets
     
 
-def isocurve(data, level, connected=False, extendToEdge=False):
+def isocurve(data, level, connected=False, extendToEdge=False, path=False):
     """
     Generate isocurve from 2D data using marching squares algorithm.
     
@@ -1074,10 +1074,15 @@ def isocurve(data, level, connected=False, extendToEdge=False):
                   continuous lines)
     extendToEdge  If True, extend the curves to reach the exact edges of 
                   the data. 
+    path          if True, return a QPainterPath rather than a list of 
+                  vertex coordinates. This forces connected=True.
     ============= =========================================================
     
     This function is SLOW; plenty of room for optimization here.
     """    
+    
+    if path is True:
+        connected = True
     
     if extendToEdge:
         d2 = np.empty((data.shape[0]+2, data.shape[1]+2), dtype=data.dtype)
@@ -1224,8 +1229,17 @@ def isocurve(data, level, connected=False, extendToEdge=False):
         else:
             chain = chain[0]
         lines.append([p[0] for p in chain])
-    return lines ## a list of pairs of points
     
+    if not path:
+        return lines ## a list of pairs of points
+    
+    path = QtGui.QPainterPath()
+    for line in lines:
+        path.moveTo(*line[0])
+        for p in line[1:]:
+            path.lineTo(*p)
+    
+    return path
     
     
 def traceImage(image, values, smooth=0.5):
@@ -1252,7 +1266,13 @@ def traceImage(image, values, smooth=0.5):
     for i in range(diff.shape[-1]):    
         d = (labels==i).astype(float)
         d = ndi.gaussian_filter(d, (smooth, smooth))
-        path = isocurve(d, 0.5, connected=True, extendToEdge=True)
+        lines = isocurve(d, 0.5, connected=True, extendToEdge=True)
+        path = QtGui.QPainterPath()
+        for line in lines:
+            path.moveTo(*line[0])
+            for p in line[1:]:
+                path.lineTo(*p)
+        
         paths.append(path)
     return paths
     
