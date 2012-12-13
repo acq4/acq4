@@ -349,15 +349,20 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
       #  print 'dy: ', y
         return y
 
+    #def getClipData(self, tx, data, t0, t1):
+        #import Utility as U
+        #if not isinstance(tx, list):
+            #tx = tx.squeeze()
+        #if not isinstance(data, list):
+            #data = data.squeeze()
+        #dm = U.mask(data, tx, t0, t1)
+        #t = U.mask(tx, tx, t0, t1)
+        #return(numpy.array(t), numpy.array(dm))
+        
     def getClipData(self, tx, data, t0, t1):
-        import Utility as U
-        if not isinstance(tx, list):
-            tx = tx.squeeze()
-        if not isinstance(data, list):
-            data = data.squeeze()
-        dm = U.mask(data, tx, t0, t1)
-        t = U.mask(tx, tx, t0, t1)
-        return(numpy.array(t), numpy.array(dm))
+        it0 = (numpy.abs(tx-t0)).argmin()
+        it1 = (numpy.abs(tx-t1)).argmin()
+        return(tx[it0:it1], data[it0:it1])    
 
     def FitRegion(self, whichdata, thisaxis, tdat, ydat, t0 = None, t1 = None,
                   fitFunc = 'exp1', fitFuncDer = None, fitPars = None, fixedPars = None,
