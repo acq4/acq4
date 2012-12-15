@@ -503,15 +503,28 @@ def transformToArray(tr):
     else:
         raise Exception("Transform argument must be either QTransform or QMatrix4x4.")
 
-def transformCoordinates(tr, coords):
+def transformCoordinates(tr, coords, transpose=False):
     """
     Map a set of 2D or 3D coordinates through a QTransform or QMatrix4x4.
     The shape of coords must be (2,...) or (3,...)
     The mapping will _ignore_ any perspective transformations.
+    
+    For coordinate arrays with ndim=2, this is basically equivalent to matrix multiplication.
+    Most arrays, however, prefer to put the coordinate axis at the end (eg. shape=(...,3)). To 
+    allow this, use transpose=True.
+    
     """
+    
+    if transpose:
+        ## move last axis to beginning. This transposition will be reversed before returning the mapped coordinates.
+        coords = coords.transpose((coords.ndim-1,) + tuple(range(0,coords.ndim-1)))
+    
     nd = coords.shape[0]
-    m = transformToArray(tr)    
-    m = m[:m.shape[0]-1]  # remove perspective
+    if isinstance(tr, np.ndarray):
+        m = tr
+    else:
+        m = transformToArray(tr)
+        m = m[:m.shape[0]-1]  # remove perspective
     
     ## If coords are 3D and tr is 2D, assume no change for Z axis
     if m.shape == (2,3) and nd == 3:
@@ -537,10 +550,16 @@ def transformCoordinates(tr, coords):
     m = m[:, :-1]
     
     ## map coordinates and return
-    mapped = (m*coords).sum(axis=0)  ## apply scale/rotate
+    mapped = (m*coords).sum(axis=1)  ## apply scale/rotate
     mapped += translate
+    
+    if transpose:
+        ## move first axis to end.
+        mapped = mapped.transpose(tuple(range(1,mapped.ndim)) + (0,))
     return mapped
     
+    
+
     
 def solve3DTransform(points1, points2):
     """
