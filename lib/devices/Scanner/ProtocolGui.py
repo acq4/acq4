@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from ProtocolTemplate import Ui_Form
 from lib.devices.Device import ProtocolGui
-from ScanProgramGenerator import *
+#from ScanProgramGenerator import *   ## removed until this file has been added to the repo.
 from PyQt4 import QtCore, QtGui
 from lib.Manager import getManager, logMsg, logExc
 import random
