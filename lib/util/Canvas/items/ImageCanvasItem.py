@@ -66,6 +66,9 @@ class ImageCanvasItem(CanvasItem):
                         info = self.data._info[-1]
                         opts['scale'] = info.get('pixelSize', None)
                         opts['pos'] = info.get('imagePosition', None)
+                    else:
+                        opts['scale'] = (1e-5, 1e-5)
+                        opts['scalable'] = True
             except:
                 debug.printExc('Error reading transformation for image file %s:' % image.name())
 

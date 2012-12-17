@@ -503,15 +503,28 @@ def transformToArray(tr):
     else:
         raise Exception("Transform argument must be either QTransform or QMatrix4x4.")
 
-def transformCoordinates(tr, coords):
+def transformCoordinates(tr, coords, transpose=False):
     """
     Map a set of 2D or 3D coordinates through a QTransform or QMatrix4x4.
     The shape of coords must be (2,...) or (3,...)
     The mapping will _ignore_ any perspective transformations.
+    
+    For coordinate arrays with ndim=2, this is basically equivalent to matrix multiplication.
+    Most arrays, however, prefer to put the coordinate axis at the end (eg. shape=(...,3)). To 
+    allow this, use transpose=True.
+    
     """
+    
+    if transpose:
+        ## move last axis to beginning. This transposition will be reversed before returning the mapped coordinates.
+        coords = coords.transpose((coords.ndim-1,) + tuple(range(0,coords.ndim-1)))
+    
     nd = coords.shape[0]
-    m = transformToArray(tr)    
-    m = m[:m.shape[0]-1]  # remove perspective
+    if isinstance(tr, np.ndarray):
+        m = tr
+    else:
+        m = transformToArray(tr)
+        m = m[:m.shape[0]-1]  # remove perspective
     
     ## If coords are 3D and tr is 2D, assume no change for Z axis
     if m.shape == (2,3) and nd == 3:
@@ -537,10 +550,16 @@ def transformCoordinates(tr, coords):
     m = m[:, :-1]
     
     ## map coordinates and return
-    mapped = (m*coords).sum(axis=0)  ## apply scale/rotate
+    mapped = (m*coords).sum(axis=1)  ## apply scale/rotate
     mapped += translate
+    
+    if transpose:
+        ## move first axis to end.
+        mapped = mapped.transpose(tuple(range(1,mapped.ndim)) + (0,))
     return mapped
     
+    
+
     
 def solve3DTransform(points1, points2):
     """
@@ -1060,15 +1079,42 @@ def imageToArray(img, copy=False, transpose=True):
     #return facets
     
 
-def isocurve(data, level):
+def isocurve(data, level, connected=False, extendToEdge=False, path=False):
     """
     Generate isocurve from 2D data using marching squares algorithm.
     
-    *data*   2D numpy array of scalar values
-    *level*  The level at which to generate an isosurface
+    ============= =========================================================
+    Arguments
+    data          2D numpy array of scalar values
+    level         The level at which to generate an isosurface
+    connected     If False, return a single long list of point pairs
+                  If True, return multiple long lists of connected point 
+                  locations. (This is slower but better for drawing 
+                  continuous lines)
+    extendToEdge  If True, extend the curves to reach the exact edges of 
+                  the data. 
+    path          if True, return a QPainterPath rather than a list of 
+                  vertex coordinates. This forces connected=True.
+    ============= =========================================================
     
     This function is SLOW; plenty of room for optimization here.
     """    
+    
+    if path is True:
+        connected = True
+    
+    if extendToEdge:
+        d2 = np.empty((data.shape[0]+2, data.shape[1]+2), dtype=data.dtype)
+        d2[1:-1, 1:-1] = data
+        d2[0, 1:-1] = data[0]
+        d2[-1, 1:-1] = data[-1]
+        d2[1:-1, 0] = data[:, 0]
+        d2[1:-1, -1] = data[:, -1]
+        d2[0,0] = d2[0,1]
+        d2[0,-1] = d2[1,-1]
+        d2[-1,0] = d2[-1,1]
+        d2[-1,-1] = d2[-1,-2]
+        data = d2
     
     sideTable = [
     [],
@@ -1090,7 +1136,7 @@ def isocurve(data, level):
     ]
     
     edgeKey=[
-    [(0,1),(0,0)],
+    [(0,1), (0,0)],
     [(0,0), (1,0)],
     [(1,0), (1,1)],
     [(1,1), (0,1)]
@@ -1134,10 +1180,122 @@ def isocurve(data, level):
                         p1[0]*fi + p2[0]*f + i + 0.5, 
                         p1[1]*fi + p2[1]*f + j + 0.5
                         )
-                    pts.append(p)
+                    if extendToEdge:
+                        ## check bounds
+                        p = (
+                            min(data.shape[0]-2, max(0, p[0]-1)),
+                            min(data.shape[1]-2, max(0, p[1]-1)),                        
+                        )
+                    if connected:
+                        gridKey = i + (1 if edges[m]==2 else 0), j + (1 if edges[m]==3 else 0), edges[m]%2
+                        pts.append((p, gridKey))  ## give the actual position and a key identifying the grid location (for connecting segments)
+                    else:
+                        pts.append(p)
+                
                 lines.append(pts)
 
-    return lines ## a list of pairs of points
+    if not connected:
+        return lines
+                
+    ## turn disjoint list of segments into continuous lines
+
+    #lines = [[2,5], [5,4], [3,4], [1,3], [6,7], [7,8], [8,6], [11,12], [12,15], [11,13], [13,14]]
+    #lines = [[(float(a), a), (float(b), b)] for a,b in lines]
+    points = {}  ## maps each point to its connections
+    for a,b in lines:
+        if a[1] not in points:
+            points[a[1]] = []
+        points[a[1]].append([a,b])
+        if b[1] not in points:
+            points[b[1]] = []
+        points[b[1]].append([b,a])
+
+    ## rearrange into chains
+    for k in points.keys():
+        try:
+            chains = points[k]
+        except KeyError:   ## already used this point elsewhere
+            continue
+        #print "===========", k
+        for chain in chains:
+            #print "  chain:", chain
+            x = None
+            while True:
+                if x == chain[-1][1]:
+                    break ## nothing left to do on this chain
+                    
+                x = chain[-1][1]
+                if x == k:  
+                    break ## chain has looped; we're done and can ignore the opposite chain
+                y = chain[-2][1]
+                connects = points[x]
+                for conn in connects[:]:
+                    if conn[1][1] != y:
+                        #print "    ext:", conn
+                        chain.extend(conn[1:])
+                #print "    del:", x
+                del points[x]
+            if chain[0][1] == chain[-1][1]:  # looped chain; no need to continue the other direction
+                chains.pop()
+                break
+                
+
+    ## extract point locations 
+    lines = []
+    for chain in points.values():
+        if len(chain) == 2:
+            chain = chain[1][1:][::-1] + chain[0]  # join together ends of chain
+        else:
+            chain = chain[0]
+        lines.append([p[0] for p in chain])
+    
+    if not path:
+        return lines ## a list of pairs of points
+    
+    path = QtGui.QPainterPath()
+    for line in lines:
+        path.moveTo(*line[0])
+        for p in line[1:]:
+            path.lineTo(*p)
+    
+    return path
+    
+    
+def traceImage(image, values, smooth=0.5):
+    """
+    Convert an image to a set of QPainterPath curves.
+    One curve will be generated for each item in *values*; each curve outlines the area
+    of the image that is closer to its value than to any others.
+    
+    If image is RGB or RGBA, then the shape of values should be (nvals, 3/4)
+    The parameter *smooth* is expressed in pixels.
+    """
+    import scipy.ndimage as ndi
+    if values.ndim == 2:
+        values = values.T
+    values = values[np.newaxis, np.newaxis, ...].astype(float)
+    image = image[..., np.newaxis].astype(float)
+    diff = np.abs(image-values)
+    if values.ndim == 4:
+        diff = diff.sum(axis=2)
+        
+    labels = np.argmin(diff, axis=2)
+    
+    paths = []
+    for i in range(diff.shape[-1]):    
+        d = (labels==i).astype(float)
+        d = ndi.gaussian_filter(d, (smooth, smooth))
+        lines = isocurve(d, 0.5, connected=True, extendToEdge=True)
+        path = QtGui.QPainterPath()
+        for line in lines:
+            path.moveTo(*line[0])
+            for p in line[1:]:
+                path.lineTo(*p)
+        
+        paths.append(path)
+    return paths
+    
+    
     
     
 def isosurface(data, level):

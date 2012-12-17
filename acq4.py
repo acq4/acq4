@@ -24,7 +24,7 @@ sip.setapi('QVariant', 2)
 ## rename any orphaned .pyc files -- these are probably leftover from 
 ## a module being moved and may interfere with expected operation.
 import os, sys
-from lib.util.pyqtgraph import renamePyc
+from pyqtgraph import renamePyc
 modDir = os.path.abspath(os.path.split(__file__)[0])
 renamePyc(modDir)
 

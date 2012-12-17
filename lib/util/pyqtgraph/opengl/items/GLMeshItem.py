@@ -18,11 +18,23 @@ class GLMeshItem(GLGraphicsItem):
     """
     def __init__(self, **kwds):
         """
-        All initialization arguments are passed to setData(...)
+        ============== =====================================================
+        Arguments
+        meshdata       MeshData object from which to determine geometry for 
+                       this item.
+        color          Default color used if no vertex or face colors are
+                       specified.
+        shader         Name of shader program to use (None for no shader)
+        smooth         If True, normal vectors are computed for each vertex
+                       and interpolated within each face.
+        computeNormals If False, then computation of normal vectors is 
+                       disabled. This can provide a performance boost for 
+                       meshes that do not make use of normals.
+        ============== =====================================================
         """
         self.opts = {
             'meshdata': None,
-            'color': (1., 1., 1., 0.5),
+            'color': (1., 1., 1., 1.),
             'shader': None,
             'smooth': True,
             'computeNormals': True,
@@ -31,8 +43,10 @@ class GLMeshItem(GLGraphicsItem):
         GLGraphicsItem.__init__(self)
         glopts = kwds.pop('glOptions', 'opaque')
         self.setGLOptions(glopts)
+        shader = kwds.pop('shader', None)
+        self.setShader(shader)
         
-        self.setData(**kwds)
+        self.setMeshData(**kwds)
         
         ## storage for data compiled from MeshData object
         self.vertexes = None
@@ -40,20 +54,26 @@ class GLMeshItem(GLGraphicsItem):
         self.colors = None
         self.faces = None
         
-        #self.meshdata = meshdata
-        #self.vertexes = vertexes
-        #self.faces = faces
-        #self.normals = normals
-        #self.color = color
-        #self.shader = shader
+    def setShader(self, shader):
+        """Set the shader used when rendering faces in the mesh. (see the GL shaders example)"""
+        self.opts['shader'] = shader
+        self.update()
         
-        #if isinstance(faces, MeshData):
-            #self.data = faces
-        #else:
-            #self.data = MeshData()
-            #self.data.setFaces(faces, vertexes)
+    def shader(self):
+        return shaders.getShaderProgram(self.opts['shader'])
         
-    def setData(self, **kwds):
+    def setColor(self, c):
+        """Set the default color to use when no vertex or face colors are specified."""
+        self.opts['color'] = c
+        self.update()
+        
+    def setMeshData(self, **kwds):
+        """
+        Set mesh data for this item. This can be invoked two ways:
+        
+        1. Specify *meshdata* argument with a new MeshData object
+        2. Specify keyword arguments to be passed to MeshData(..) to create a new instance.
+        """
         md = kwds.get('meshdata', None)
         if md is None:
             opts = {}
@@ -66,22 +86,21 @@ class GLMeshItem(GLGraphicsItem):
         
         self.opts['meshdata'] = md
         self.opts.update(kwds)
+        self.meshDataChanged()
         self.update()
         
+    
+    def meshDataChanged(self):
+        """
+        This method must be called to inform the item that the MeshData object
+        has been altered.
+        """
         
-    def initializeGL(self):
-        pass
-    
-    #def setupGLState(self):
-        #"""Prepare OpenGL state for drawing. This function is called immediately before painting."""
-        ##glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-        #glBlendFunc(GL_SRC_ALPHA, GL_ONE)
-        ##glEnable(GL_BLEND)
-        ##glEnable(GL_ALPHA_TEST)
-        ##glAlphaFunc(GL_ALWAYS, 0.5)  ## fragments are always drawn regardless of alpha
-        ##glEnable( GL_POINT_SMOOTH )
-        #glEnable(GL_DEPTH_TEST)  ## fragments are always drawn regardless of depth
-    
+        self.vertexes = None
+        self.faces = None
+        self.normals = None
+        self.colors = None
+        self.update()
     
     def parseMeshData(self):
         ## interpret vertex / normal data before drawing
@@ -125,18 +144,13 @@ class GLMeshItem(GLGraphicsItem):
         
         self.parseMeshData()        
         
-        self.shader = shaders.getShaderProgram(self.opts['shader'])
-        with self.shader:
-            #glCallList(self.triList)
+        with self.shader():
             verts = self.vertexes
             norms = self.normals
             color = self.colors
             faces = self.faces
-            #print "========"
-            #print verts
-            #print norms
-            #print color
-            #print faces
+            if verts is None:
+                return
             glEnableClientState(GL_VERTEX_ARRAY)
             try:
                 glVertexPointerf(verts)
@@ -144,7 +158,7 @@ class GLMeshItem(GLGraphicsItem):
                 if self.colors is None:
                     color = self.opts['color']
                     if isinstance(color, QtGui.QColor):
-                        glColor4f(*fn.glColor(color))
+                        glColor4f(*pg.glColor(color))
                     else:
                         glColor4f(*color)
                 else:

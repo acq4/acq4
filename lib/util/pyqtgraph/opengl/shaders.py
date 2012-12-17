@@ -49,9 +49,9 @@ def initShaders():
                 varying vec3 normal;
                 void main() {
                     vec4 color = gl_Color;
-                    color.x = (normal.x + 1) * 0.5;
-                    color.y = (normal.y + 1) * 0.5;
-                    color.z = (normal.z + 1) * 0.5;
+                    color.x = (normal.x + 1.0) * 0.5;
+                    color.y = (normal.y + 1.0) * 0.5;
+                    color.z = (normal.z + 1.0) * 0.5;
                     gl_FragColor = color;
                 }
             """)
@@ -73,9 +73,9 @@ def initShaders():
                 varying vec3 normal;
                 void main() {
                     vec4 color = gl_Color;
-                    color.x = (normal.x + 1) * 0.5;
-                    color.y = (normal.y + 1) * 0.5;
-                    color.z = (normal.z + 1) * 0.5;
+                    color.x = (normal.x + 1.0) * 0.5;
+                    color.y = (normal.y + 1.0) * 0.5;
+                    color.z = (normal.z + 1.0) * 0.5;
                     gl_FragColor = color;
                 }
             """)
@@ -97,7 +97,7 @@ def initShaders():
             FragmentShader("""
                 varying vec3 normal;
                 void main() {
-                    float p = dot(normal, normalize(vec3(1, -1, -1)));
+                    float p = dot(normal, normalize(vec3(1.0, -1.0, -1.0)));
                     p = p < 0. ? 0. : p * 0.8;
                     vec4 color = gl_Color;
                     color.x = color.x * (0.2 + p);
@@ -151,24 +151,32 @@ def initShaders():
                 }
             """),
             FragmentShader("""
-                #version 140 // required for uniform blocks
-                uniform float colorMap[6];
+                uniform float colorMap[9];
                 varying vec4 pos;
-                out vec4 gl_FragColor;
-                in vec4 gl_Color;
+                //out vec4 gl_FragColor;   // only needed for later glsl versions
+                //in vec4 gl_Color;
                 void main() {
                     vec4 color = gl_Color;
-                    color.x = (pos.z * colorMap[0]) + colorMap[1];
-                    color.x = color.x < 0 ? 0 : (color.x > 1 ? 1 : color.x);
-                    color.y = (pos.z * colorMap[2]) + colorMap[3];
-                    color.y = color.y < 0 ? 0 : (color.y > 1 ? 1 : color.y);
-                    color.z = (pos.z * colorMap[4]) + colorMap[5];
-                    color.z = color.z < 0 ? 0 : (color.z > 1 ? 1 : color.z);
+                    color.x = colorMap[0] * (pos.z + colorMap[1]);
+                    if (colorMap[2] != 1.0)
+                        color.x = pow(color.x, colorMap[2]);
+                    color.x = color.x < 0. ? 0. : (color.x > 1. ? 1. : color.x);
+                    
+                    color.y = colorMap[3] * (pos.z + colorMap[4]);
+                    if (colorMap[5] != 1.0)
+                        color.y = pow(color.y, colorMap[5]);
+                    color.y = color.y < 0. ? 0. : (color.y > 1. ? 1. : color.y);
+                    
+                    color.z = colorMap[6] * (pos.z + colorMap[7]);
+                    if (colorMap[8] != 1.0)
+                        color.z = pow(color.z, colorMap[8]);
+                    color.z = color.z < 0. ? 0. : (color.z > 1. ? 1. : color.z);
+                    
                     color.w = 1.0;
                     gl_FragColor = color;
                 }
             """),
-        ], uniforms={'colorMap': [1, 1, 1, 0.5, 1, 0]}),
+        ], uniforms={'colorMap': [1, 1, 1, 1, 0.5, 1, 1, 0, 1]}),
         ShaderProgram('pointSprite', [   ## allows specifying point size using normal.x
             ## See:
             ##
@@ -200,7 +208,7 @@ CompiledShaderPrograms = {}
 def getShaderProgram(name):
     return ShaderProgram.names[name]
 
-class Shader:
+class Shader(object):
     def __init__(self, shaderType, code):
         self.shaderType = shaderType
         self.code = code
@@ -225,9 +233,9 @@ class Shader:
                         msg = msg.strip()
                         if msg == '':
                             continue
-                        m = re.match(r'\d+\((\d+)\)', msg)
+                        m = re.match(r'(\d+\:)?\d+\((\d+)\)', msg)
                         if m is not None:
-                            line = int(m.groups()[0])
+                            line = int(m.groups()[1])
                             errNums[line-1] = errNums[line-1] + (str(i+1),)
                             #code[line-1] = '%d\t%s' % (i+1, code[line-1])
                         err = err + "%d %s\n" % (i+1, msg)
@@ -251,7 +259,7 @@ class FragmentShader(Shader):
         
         
 
-class ShaderProgram:
+class ShaderProgram(object):
     names = {}
     
     def __init__(self, name, shaders, uniforms=None):

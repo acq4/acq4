@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
+"""
+Demonstration of some of the shader programs included with pyqtgraph.
+"""
 
-##  This example uses the isosurface function to convert a scalar field
-##  (a hydrogen orbital) into a mesh for 3D display.
+
 
 ## Add path to library (just for examples; you do not need this)
 import sys, os
@@ -25,37 +27,35 @@ import numpy as np
 
 
 md = gl.MeshData.sphere(rows=10, cols=20)
-#colors = np.ones((md.faceCount(), 4), dtype=float)
-#colors[::2,0] = 0
-#colors[:,1] = np.linspace(0, 1, colors.shape[0])
-#md.setFaceColors(colors)
+x = np.linspace(-8, 8, 6)
+
 m1 = gl.GLMeshItem(meshdata=md, smooth=True, color=(1, 0, 0, 0.2), shader='balloon', glOptions='additive')
-m1.translate(-5, 0, 0)
+m1.translate(x[0], 0, 0)
 m1.scale(1, 1, 2)
 w.addItem(m1)
 
 m2 = gl.GLMeshItem(meshdata=md, smooth=True, shader='normalColor', glOptions='opaque')
-m2.translate(-2.5, 0, 0)
+m2.translate(x[1], 0, 0)
 m2.scale(1, 1, 2)
 w.addItem(m2)
 
 m3 = gl.GLMeshItem(meshdata=md, smooth=True, shader='viewNormalColor', glOptions='opaque')
-m3.translate(0, 0, 0)
+m3.translate(x[2], 0, 0)
 m3.scale(1, 1, 2)
 w.addItem(m3)
 
 m4 = gl.GLMeshItem(meshdata=md, smooth=True, shader='shaded', glOptions='opaque')
-m4.translate(2.5, 0, 0)
+m4.translate(x[3], 0, 0)
 m4.scale(1, 1, 2)
 w.addItem(m4)
 
 m5 = gl.GLMeshItem(meshdata=md, smooth=True, color=(1, 0, 0, 1), shader='edgeHilight', glOptions='opaque')
-m5.translate(5, 0, 0)
+m5.translate(x[4], 0, 0)
 m5.scale(1, 1, 2)
 w.addItem(m5)
 
 m6 = gl.GLMeshItem(meshdata=md, smooth=True, color=(1, 0, 0, 1), shader='heightColor', glOptions='opaque')
-m6.translate(7.5, 0, 0)
+m6.translate(x[5], 0, 0)
 m6.scale(1, 1, 2)
 w.addItem(m6)
 
@@ -104,5 +104,7 @@ w.addItem(m6)
 
 
 ## Start Qt event loop unless running in interactive mode.
-if sys.flags.interactive != 1:
-    app.exec_()
+if __name__ == '__main__':
+    import sys
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtGui.QApplication.instance().exec_()

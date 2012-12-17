@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
+"""
+Simple examples demonstrating the use of GLMeshItem.
 
-##  This example uses the isosurface function to convert a scalar field
-##  (a hydrogen orbital) into a mesh for 3D display.
+"""
 
 ## Add path to library (just for examples; you do not need this)
 import sys, os
@@ -128,5 +129,7 @@ w.addItem(m3)
 
 
 ## Start Qt event loop unless running in interactive mode.
-if sys.flags.interactive != 1:
-    app.exec_()
+if __name__ == '__main__':
+    import sys
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtGui.QApplication.instance().exec_()
