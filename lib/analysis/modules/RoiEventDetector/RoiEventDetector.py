@@ -26,7 +26,9 @@ class RoiEventDetector(EventDetector):
         self.fcZip = None
         self.outputFields = None
         
-        self.flowchart.addInput('roi')
+        #print self.flowchart.nodes()
+        if self.flowchart.nodes()['Input'].terminals.get('roi', None) is None:
+            self.flowchart.addInput('roi', removable=True)
         
         self.fileLoader = self.getElement('File Loader', create=True)
         self.fileLoader.sigSelectedFileChanged.connect(self.selectedFileChanged)
