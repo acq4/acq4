@@ -224,7 +224,6 @@ class Node(QtCore.QObject):
             self.setException(sys.exc_info())
             
             if signal:
-                #self.emit(QtCore.SIGNAL('outputChanged'), self)  ## triggers flowchart to propagate new data
                 self.sigOutputChanged.emit(self)  ## triggers flowchart to propagate new data
 
     def processBypassed(self, args):
@@ -239,7 +238,6 @@ class Node(QtCore.QObject):
 
     def setOutput(self, **vals):
         self.setOutputNoSignal(**vals)
-        #self.emit(QtCore.SIGNAL('outputChanged'), self)  ## triggers flowchart to propagate new data
         self.sigOutputChanged.emit(self)  ## triggers flowchart to propagate new data
 
     def setOutputNoSignal(self, **vals):
