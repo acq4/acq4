@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from ProtocolTemplate import Ui_Form
 from lib.devices.Device import ProtocolGui
-#from ScanProgramGenerator import *   ## removed until this file has been added to the repo.
+from ScanProgramGenerator import *
 from PyQt4 import QtCore, QtGui
 from lib.Manager import getManager, logMsg, logExc
 import random
@@ -49,6 +49,9 @@ class ProgramCtrlGroup(pTypes.GroupParameter):
     
     def addNew(self, typ):
         self.sigAddNewRequested.emit(self, typ)
+
+### Error IDs:
+###  1: Could not find spot size from calibration. (from ScannerProtoGui.pointSize)
 
 class ScannerProtoGui(ProtocolGui):
     
@@ -127,6 +130,15 @@ class ScannerProtoGui(ProtocolGui):
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
         self.spotMarker = TargetPoint(name="Last", ptSize=100e-6, movable=False)
         self.spotMarker.setPen(pg.mkPen(color=(255,255,255), width = 2))
+
+        #try:
+            #self.updateSpotSizes()
+        #except HelpfulException as exc:
+            #if exc.kwargs.get('errId',None) == 1:
+                #self.testTarget.hide()
+            #else:
+                #raise
+
         self.spotMarker.hide()
         self.updateSpotSizes()
 
@@ -134,6 +146,7 @@ class ScannerProtoGui(ProtocolGui):
         self.updateTDPlot()
         
             
+        #self.ui.simulateShutterCheck.setChecked(False)
         if 'offVoltage' not in self.dev.config: ## we don't have a voltage for virtual shuttering
             self.ui.simulateShutterCheck.setChecked(False)
             self.ui.simulateShutterCheck.setEnabled(False)
