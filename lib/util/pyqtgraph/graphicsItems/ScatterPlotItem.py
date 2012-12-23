@@ -237,8 +237,9 @@ class ScatterPlotItem(GraphicsObject):
         self.opts = {
             'pxMode': True, 
             'useCache': True,  ## If useCache is False, symbols are re-drawn on every paint. 
-            'antialias': pg.getConfigOption('antialias')
+            'antialias': pg.getConfigOption('antialias'),
         }   
+        self.exportOpts = False
         
         self.setPen(200,200,200, update=False)
         self.setBrush(100,100,150, update=False)
@@ -283,6 +284,9 @@ class ScatterPlotItem(GraphicsObject):
                                it is in the item's local coordinate system.
         *data*                 a list of python objects used to uniquely identify each spot.
         *identical*            *Deprecated*. This functionality is handled automatically now.
+        *antialias*            Whether to draw symbols with antialiasing. Note that if pxMode is True, symbols are 
+                               always rendered with antialiasing (since the rendered symbols can be cached, this 
+                               incurs very little performance cost)
         ====================== ===============================================================================================
         """
         oldData = self.data  ## this causes cached pixmaps to be preserved while new data is registered.
@@ -374,6 +378,8 @@ class ScatterPlotItem(GraphicsObject):
         
         if 'pxMode' in kargs:
             self.setPxMode(kargs['pxMode'])
+        if 'antialias' in kargs:
+            self.opts['antialias'] = kargs['antialias']
             
         ## Set any extra parameters provided in keyword arguments
         for k in ['pen', 'brush', 'symbol', 'size']:
@@ -383,7 +389,7 @@ class ScatterPlotItem(GraphicsObject):
         
         if 'data' in kargs:
             self.setPointData(kargs['data'], dataSet=newData)
-        
+            
         self.prepareGeometryChange()
         self.bounds = [None, None]
         self.invalidate()
@@ -669,10 +675,19 @@ class ScatterPlotItem(GraphicsObject):
             rect = QtCore.QRectF(y, x, h, w)
             self.fragments.append(QtGui.QPainter.PixmapFragment.create(pos, rect))
             
+    def setExportMode(self, export, opts):
+        if export:
+            self.exportOpts = opts
+            if 'antialias' not in opts:
+                self.exportOpts['antialias'] = True
+        else:
+            self.exportOpts = False
+            
+            
     def paint(self, p, *args):
         #p.setPen(fn.mkPen('r'))
         #p.drawRect(self.boundingRect())
-        if self.opts['pxMode']:
+        if self.opts['pxMode'] is True:
             atlas = self.fragmentAtlas.getAtlas()
             #arr = fn.imageToArray(atlas.toImage(), copy=True)
             #if hasattr(self, 'lastAtlas'):
@@ -686,9 +701,15 @@ class ScatterPlotItem(GraphicsObject):
                     
             p.resetTransform()
             
-            if not USE_PYSIDE and self.opts['useCache']:
+            if not USE_PYSIDE and self.opts['useCache'] and self.exportOpts is False:
                 p.drawPixmapFragments(self.fragments, atlas)
             else:
+                if self.exportOpts is not False:
+                    aa = self.exportOpts['antialias']
+                else:
+                    aa = self.opts['antialias']
+                p.setRenderHint(p.Antialiasing, aa)
+                
                 for i in range(len(self.data)):
                     rec = self.data[i]
                     frag = self.fragments[i]
@@ -706,6 +727,11 @@ class ScatterPlotItem(GraphicsObject):
                     drawSymbol(p2, *self.getSpotOpts(rec))
                 p2.end()
                 
+            if self.exportOpts is not False:
+                aa = self.exportOpts['antialias']
+            else:
+                aa = self.opts['antialias']
+            p.setRenderHint(p.Antialiasing, aa)
             self.picture.play(p)
 
         

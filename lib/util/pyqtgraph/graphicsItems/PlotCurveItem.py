@@ -169,7 +169,7 @@ class PlotCurveItem(GraphicsObject):
 
     def setData(self, *args, **kargs):
         """
-        ==============  =======================================================
+        ==============  ========================================================
         **Arguments:**
         x, y            (numpy arrays) Data to show 
         pen             Pen to use when drawing. Any single argument accepted by
@@ -182,7 +182,9 @@ class PlotCurveItem(GraphicsObject):
                         *fillLevel*
         brush           QBrush to use when filling. Any single argument accepted
                         by :func:`mkBrush <pyqtgraph.mkBrush>` is allowed.
-        ==============  =======================================================
+        antialias       (bool) Whether to use antialiasing when drawing. This
+                        is disabled by default because it decreases performance.
+        ==============  ========================================================
         
         If non-keyword arguments are used, they will be interpreted as
         setData(y) for a single argument and setData(x, y) for two
@@ -251,6 +253,8 @@ class PlotCurveItem(GraphicsObject):
             self.setFillLevel(kargs['fillLevel'])
         if 'brush' in kargs:
             self.setBrush(kargs['brush'])
+        if 'antialias' in kargs:
+            self.opts['antialias'] = kargs['antialias']
         
         
         prof.mark('set')
@@ -399,6 +403,14 @@ class PlotCurveItem(GraphicsObject):
             
         path = self.path
         prof.mark('generate path')
+        
+        if self.exportOpts is not False:
+            aa = self.exportOpts['antialias']
+        else:
+            aa = self.opts['antialias']
+        
+        p.setRenderHint(p.Antialiasing, aa)
+        
             
         if self.opts['brush'] is not None and self.opts['fillLevel'] is not None:
             if self.fillPath is None:
@@ -427,12 +439,6 @@ class PlotCurveItem(GraphicsObject):
             #pen.setColor(c)
             ##pen.setCosmetic(True)
             
-        if self.exportOpts is not False:
-            aa = self.exportOpts['antialias']
-        else:
-            aa = self.opts['antialias']
-        
-        p.setRenderHint(p.Antialiasing, aa)
             
             
         if sp is not None:
