@@ -8,6 +8,7 @@ import scipy.stats
 import weakref
 import pyqtgraph.debug as debug
 from pyqtgraph.pgcollections import OrderedDict
+import pyqtgraph as pg
 #import pyqtgraph as pg 
 
 __all__ = ['ScatterPlotItem', 'SpotItem']
@@ -233,7 +234,11 @@ class ScatterPlotItem(GraphicsObject):
         self.bounds = [None, None]  ## caches data bounds
         self._maxSpotWidth = 0      ## maximum size of the scale-variant portion of all spots
         self._maxSpotPxWidth = 0    ## maximum size of the scale-invariant portion of all spots
-        self.opts = {'pxMode': True, 'useCache': True}   ## If useCache is False, symbols are re-drawn on every paint.
+        self.opts = {
+            'pxMode': True, 
+            'useCache': True,  ## If useCache is False, symbols are re-drawn on every paint. 
+            'antialias': pg.getConfigOption('antialias')
+        }   
         
         self.setPen(200,200,200, update=False)
         self.setBrush(100,100,150, update=False)

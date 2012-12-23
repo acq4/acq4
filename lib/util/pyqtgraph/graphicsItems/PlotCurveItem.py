@@ -6,6 +6,7 @@ from .GraphicsObject import GraphicsObject
 import pyqtgraph.functions as fn
 from pyqtgraph import debug
 from pyqtgraph.Point import Point
+import pyqtgraph as pg
 import struct, sys
 
 __all__ = ['PlotCurveItem']
@@ -52,7 +53,6 @@ class PlotCurveItem(GraphicsObject):
         self.path = None
         self.fillPath = None
         self.exportOpts = False
-        self.antialias = False
         
             
         ## this is disastrous for performance.
@@ -65,7 +65,8 @@ class PlotCurveItem(GraphicsObject):
             'fillLevel': None,
             'brush': None,
             'stepMode': False,
-            'name': None
+            'name': None,
+            'antialias': pg.getConfigOption('antialias'),
         }
         self.setClickable(kargs.get('clickable', False))
         self.setData(*args, **kargs)
@@ -429,7 +430,7 @@ class PlotCurveItem(GraphicsObject):
         if self.exportOpts is not False:
             aa = self.exportOpts['antialias']
         else:
-            aa = self.antialias
+            aa = self.opts['antialias']
         
         p.setRenderHint(p.Antialiasing, aa)
             
