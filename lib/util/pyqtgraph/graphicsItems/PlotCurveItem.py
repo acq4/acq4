@@ -6,6 +6,7 @@ from .GraphicsObject import GraphicsObject
 import pyqtgraph.functions as fn
 from pyqtgraph import debug
 from pyqtgraph.Point import Point
+import pyqtgraph as pg
 import struct, sys
 
 __all__ = ['PlotCurveItem']
@@ -51,8 +52,6 @@ class PlotCurveItem(GraphicsObject):
         self.clear()
         self.path = None
         self.fillPath = None
-        self.exportOpts = False
-        self.antialias = False
         
             
         ## this is disastrous for performance.
@@ -65,7 +64,8 @@ class PlotCurveItem(GraphicsObject):
             'fillLevel': None,
             'brush': None,
             'stepMode': False,
-            'name': None
+            'name': None,
+            'antialias': pg.getConfigOption('antialias'),
         }
         self.setClickable(kargs.get('clickable', False))
         self.setData(*args, **kargs)
@@ -168,7 +168,7 @@ class PlotCurveItem(GraphicsObject):
 
     def setData(self, *args, **kargs):
         """
-        ==============  =======================================================
+        ==============  ========================================================
         **Arguments:**
         x, y            (numpy arrays) Data to show 
         pen             Pen to use when drawing. Any single argument accepted by
@@ -181,7 +181,9 @@ class PlotCurveItem(GraphicsObject):
                         *fillLevel*
         brush           QBrush to use when filling. Any single argument accepted
                         by :func:`mkBrush <pyqtgraph.mkBrush>` is allowed.
-        ==============  =======================================================
+        antialias       (bool) Whether to use antialiasing when drawing. This
+                        is disabled by default because it decreases performance.
+        ==============  ========================================================
         
         If non-keyword arguments are used, they will be interpreted as
         setData(y) for a single argument and setData(x, y) for two
@@ -250,6 +252,8 @@ class PlotCurveItem(GraphicsObject):
             self.setFillLevel(kargs['fillLevel'])
         if 'brush' in kargs:
             self.setBrush(kargs['brush'])
+        if 'antialias' in kargs:
+            self.opts['antialias'] = kargs['antialias']
         
         
         prof.mark('set')
@@ -398,6 +402,14 @@ class PlotCurveItem(GraphicsObject):
             
         path = self.path
         prof.mark('generate path')
+        
+        if self._exportOpts is not False:
+            aa = self._exportOpts.get('antialias', True)
+        else:
+            aa = self.opts['antialias']
+        
+        p.setRenderHint(p.Antialiasing, aa)
+        
             
         if self.opts['brush'] is not None and self.opts['fillLevel'] is not None:
             if self.fillPath is None:
@@ -426,12 +438,6 @@ class PlotCurveItem(GraphicsObject):
             #pen.setColor(c)
             ##pen.setCosmetic(True)
             
-        if self.exportOpts is not False:
-            aa = self.exportOpts['antialias']
-        else:
-            aa = self.antialias
-        
-        p.setRenderHint(p.Antialiasing, aa)
             
             
         if sp is not None:
@@ -480,13 +486,6 @@ class PlotCurveItem(GraphicsObject):
         ev.accept()
         self.sigClicked.emit(self)
 
-    def setExportMode(self, export, opts):
-        if export:
-            self.exportOpts = opts
-            if 'antialias' not in opts:
-                self.exportOpts['antialias'] = True
-        else:
-            self.exportOpts = False
 
 class ROIPlotItem(PlotCurveItem):
     """Plot curve that monitors an ROI and image for changes to automatically replot."""
