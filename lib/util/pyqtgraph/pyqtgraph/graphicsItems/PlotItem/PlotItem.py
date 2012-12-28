@@ -158,6 +158,8 @@ class PlotItem(GraphicsWidget):
         self.autoAlpha = True
         self.spectrumMode = False
         
+        self.legend = None
+        
         ## Create and place axis items
         if axisItems is None:
             axisItems = {}
@@ -538,7 +540,7 @@ class PlotItem(GraphicsWidget):
             #item.sigPlotChanged.connect(self.plotChanged)
             #self.plotChanged()
         name = kargs.get('name', getattr(item, 'opts', {}).get('name', None))
-        if name is not None and self.legend is not None:
+        if name is not None and hasattr(self, 'legend') and self.legend is not None:
             self.legend.addItem(item, name=name)
             
 
@@ -1107,7 +1109,7 @@ class PlotItem(GraphicsWidget):
         self.updateButtons()
         
     def updateButtons(self):
-        if self.mouseHovering and not self.buttonsHidden and not all(self.vb.autoRangeEnabled()):
+        if self._exportOpts is False and self.mouseHovering and not self.buttonsHidden and not all(self.vb.autoRangeEnabled()):
             self.autoBtn.show()
         else:
             self.autoBtn.hide()
@@ -1151,9 +1153,11 @@ class PlotItem(GraphicsWidget):
         return c
 
       
-    def setExportMode(self, export, opts):
-        if export:
-            self.autoBtn.hide()
-        else:
-            self.autoBtn.show()
+    def setExportMode(self, export, opts=None):
+        GraphicsWidget.setExportMode(self, export, opts)
+        self.updateButtons()
+        #if export:
+            #self.autoBtn.hide()
+        #else:
+            #self.autoBtn.show()
     
