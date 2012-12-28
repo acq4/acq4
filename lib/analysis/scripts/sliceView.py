@@ -82,3 +82,8 @@ def show():
         g.cellScale.text.setParentItem(g.cellScale)
         g.cellScale.text.setPos(sbLength*0.5, -50e-6/cellScale)
         g.cellScale.setPos(mimg2.mapRectToParent(mimg2.boundingRect()).bottomRight() + pg.Point(-sbLength, -sbLength))
+        
+        ## auto-range the view
+        bounds = bounds | g.mapFromItem(mimg2, mimg2.boundingRect()).boundingRect()
+        v.setRange(bounds)
+        
