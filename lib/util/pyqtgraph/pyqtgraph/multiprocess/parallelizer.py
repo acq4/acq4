@@ -1,6 +1,6 @@
 import os, sys, time, multiprocessing, re
-from processes import ForkedProcess
-from remoteproxy import ExitError
+from .processes import ForkedProcess
+from .remoteproxy import ClosedError
 
 class CanceledError(Exception):
     """Raised when the progress dialog is canceled during a processing operation."""
@@ -19,7 +19,7 @@ class Parallelize(object):
         for task in tasks:
             result = processTask(task)
             results.append(result)
-        print results
+        print(results)
         
         
         ## Here is the parallelized version:
@@ -30,7 +30,7 @@ class Parallelize(object):
             for task in tasker:
                 result = processTask(task)
                 tasker.results.append(result)
-        print results
+        print(results)
         
         
     The only major caveat is that *result* in the example above must be picklable,
@@ -152,7 +152,7 @@ class Parallelize(object):
                         n = ch.processRequests()
                         if n > 0:
                             waitingChildren += 1
-                    except ExitError:
+                    except ClosedError:
                         #print ch.childPid, 'process finished'
                         rem.append(ch)
                         if self.showProgress:

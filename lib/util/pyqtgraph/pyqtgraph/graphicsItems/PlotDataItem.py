@@ -164,6 +164,7 @@ class PlotDataItem(GraphicsObject):
         self.opts['fftMode'] = mode
         self.xDisp = self.yDisp = None
         self.updateItems()
+        self.informViewBoundsChanged()
     
     def setLogMode(self, xMode, yMode):
         if self.opts['logMode'] == [xMode, yMode]:
@@ -171,6 +172,7 @@ class PlotDataItem(GraphicsObject):
         self.opts['logMode'] = [xMode, yMode]
         self.xDisp = self.yDisp = None
         self.updateItems()
+        self.informViewBoundsChanged()
     
     def setPointMode(self, mode):
         if self.opts['pointMode'] == mode:
@@ -369,9 +371,10 @@ class PlotDataItem(GraphicsObject):
         self.updateItems()
         prof.mark('update items')
         
-        view = self.getViewBox()
-        if view is not None:
-            view.itemBoundsChanged(self)  ## inform view so it can update its range if it wants
+        self.informViewBoundsChanged()
+        #view = self.getViewBox()
+        #if view is not None:
+            #view.itemBoundsChanged(self)  ## inform view so it can update its range if it wants
         
         self.sigPlotChanged.emit(self)
         prof.mark('emit')
@@ -379,10 +382,7 @@ class PlotDataItem(GraphicsObject):
 
 
     def updateItems(self):
-        #for c in self.curves+self.scatters:
-            #if c.scene() is not None:
-                #c.scene().removeItem(c)
-            
+        
         curveArgs = {}
         for k,v in [('pen','pen'), ('shadowPen','shadowPen'), ('fillLevel','fillLevel'), ('fillBrush', 'brush'), ('antialias', 'antialias')]:
             curveArgs[v] = self.opts[k]
@@ -399,18 +399,12 @@ class PlotDataItem(GraphicsObject):
             self.curve.show()
         else:
             self.curve.hide()
-            #curve = PlotCurveItem(x=x, y=y, **curveArgs)
-            #curve.setParentItem(self)
-            #self.curves.append(curve)
         
         if scatterArgs['symbol'] is not None:
             self.scatter.setData(x=x, y=y, **scatterArgs)
             self.scatter.show()
         else:
             self.scatter.hide()
-            #sp = ScatterPlotItem(x=x, y=y, **scatterArgs)
-            #sp.setParentItem(self)
-            #self.scatters.append(sp)
 
 
     def getData(self):
