@@ -44,6 +44,7 @@ if the current curve and the current plot instance are passed.
 import sys
 import numpy
 import scipy
+import scipy.optimize
 import openopt
 import ctypes
 import numpy.random
@@ -346,16 +347,20 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
       #  print 'dy: ', y
         return y
 
-    def getClipData(self, tx, data, t0, t1):
-        import Utility as U
-        if not isinstance(tx, list):
-            tx = tx.squeeze()
-        if not isinstance(data, list):
-            data = data.squeeze()
-        dm = U.mask(data, tx, t0, t1)
-        t = U.mask(tx, tx, t0, t1)
-        return(numpy.array(t), numpy.array(dm))
-
+    def getClipData(self, x, y, t0, t1):
+        """
+        Return the values in y that match the x range in tx from
+        t0 to t1. x must be monotonic increasing or decreasing.
+        Allow for reverse ordering. """
+        it0 = (numpy.abs(x-t0)).argmin()
+        it1 = (numpy.abs(x-t1)).argmin()
+        if it0 > it1:
+            t = it1
+            it1 = it0
+            it0 = t
+        return(x[it0:it1], y[it0:it1])
+        
+        
     def FitRegion(self, whichdata, thisaxis, tdat, ydat, t0 = None, t1 = None,
                   fitFunc = 'exp1', fitFuncDer = None, fitPars = None, fixedPars = None,
                   fitPlot = None, plotInstance = None, dataType= 'xy', method = None,
@@ -401,6 +406,7 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                     (tx, dy) = self.getClipData(tdat[block], ydat[block][record, thisaxis, :], t0, t1)
                 else:
                     (tx, dy) = self.getClipData(tdat, ydat, t0, t1)
+              #  print 'Fitting.py: Fit data: ', tx, dy
                 yn.append(names)
                 if not any(tx):
                     continue # no data in the window...
@@ -409,7 +415,7 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                 # Different optimization methods are included here. Not all have been tested fully with
                 # this wrapper.
                 #
-                if method is None: # use standard leastsq, no bounds
+                if method is None or method == 'leastsq': # use standard leastsq, no bounds
                         plsq, cov, infodict, mesg, ier = scipy.optimize.leastsq(func[0], fpars,
                                                 args=(tx.astype('float64'), dy.astype('float64'), fixedPars),
                                                 full_output = 1, maxfev = func[2])
