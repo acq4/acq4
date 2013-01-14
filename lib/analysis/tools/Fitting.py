@@ -452,9 +452,12 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                     ier = 0
                 elif method in ['fmin', 'simplex', 'Nelder-Mead', 'bfgs', 'TNC', 'SLSQP', 'COBYLA', 'L-BFGS-B']: # use standard wrapper from scipy for those routintes
                     res = scipy.optimize.minimize(func[0], fpars, args=(tx.astype('float64'), dy.astype('float64'), fixedPars, True),
-                     method=method, jac=None, hess=None, hessp=None, bounds = bounds, constraints=constraints, tol=None, callback=None, 
+                     method=method, jac=None, hess=None, hessp=None, bounds=bounds, constraints=constraints, tol=None, callback=None, 
                      options={'maxiter': func[2], 'disp': False })
                     plsq = res.x
+                    print "    method:", method
+                    print "    bounds:", bounds
+                    print "    result:", plsq
                 
                 # next section is replaced by the code above - kept here for reference if needed...
                 # elif method == 'fmin' or method == 'simplex':

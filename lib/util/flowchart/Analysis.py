@@ -503,6 +503,7 @@ class CaEventFitter(EventFitter):
             
             ## Set bounds for parameters -
             ## exppulse parameter order: yOffset, t0, tau1, tau2, amp, width
+            #yOffset, t0, tau1, tau2, amp, width
             bounds=[(-10, 10), ## no bounds on yOffset
                     (float(events[i]['time']-10*dt), float(events[i]['time']+5*dt)), ## t0 must be near the startpoint found by eventDetection
                     (0.010, float(opts['riseTauMax'])), ## riseTau must be greater than 10 ms
@@ -514,6 +515,7 @@ class CaEventFitter(EventFitter):
             #print "times", times.min(), times.max()
             
             ## Use Paul's fitting algorithm so that we can put bounds/constraints on the fit params
+            print "event:", i, 'amp bounds:', bounds[4]
             fitter = Fitting()
             fitResults = fitter.FitRegion([1], 0, times, yVals, fitPars=guessFit, fitFunc='exppulse', bounds=bounds, method='SLSQP', dataType='xy')
             fitParams, xPts, yPts, names = fitResults
@@ -521,7 +523,7 @@ class CaEventFitter(EventFitter):
             #print "names", names
             #fitResult = functions.fit(functions.expPulse, times, yVals, guess, generateResult=True, resultXVals=times)                
             #fitParams, val, computed, err = fitResult
-            #print 'fitParams:', fitParams
+            print '  fitParams:', fitParams[0]
             yOffset, t0, tau1, tau2, amp, width = fitParams[0]
             #print "fitResult", fitResult
             #computed = fitResult[-2]
@@ -531,6 +533,8 @@ class CaEventFitter(EventFitter):
             fracError = diff.std() / computed.std()
             
             output[i-offset] = tuple(events[i]) + (amp, t0, tau1, tau2, width) + (err, fracError)
+            #print "amp:", amp
+            #print "output:", output[i-offset]
             
             outputState['guesses'].append(guess)
             outputState['eventData'].append(eventData)
