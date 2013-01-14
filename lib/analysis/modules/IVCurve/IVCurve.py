@@ -388,9 +388,11 @@ class IVCurve(AnalysisModule):
         whichdata = ineg[0]
         itaucmd = self.cmd[ineg]
         whichaxis = 0
+        # print whichdata
+        # print self.traces.view(numpy.ndarray).shape
         (fpar, xf, yf, names) = Fits.FitRegion(whichdata, whichaxis, 
                 self.traces.xvals('Time'), self.traces.view(numpy.ndarray), 
-                dataType = '2d', t0=rgnpk[0], t1=rgnpk[1],
+                dataType = 'xy', t0=rgnpk[0], t1=rgnpk[1],
                 fitFunc = Func, fitPars = initpars)
         if fpar == []:
             print 'tau fitting failed - see log'
@@ -398,6 +400,8 @@ class IVCurve(AnalysisModule):
         outstr = ""
         s = numpy.shape(fpar)
         taus = []
+        # print len(whichdata)
+        # print s[0]
         for j in range(0, s[0]):
             outstr = ""
             taus.append(fpar[j][2])
@@ -510,7 +514,7 @@ class IVCurve(AnalysisModule):
         if len(self.nospk) >= 1:
             # Steady-state IV where there are no spikes
             self.ivss = data1.mean(axis=1)[self.nospk]
-            self.ivss_cmd = data1.mean(axis=0)[self.nospk]
+            self.ivss_cmd = commands[self.nospk]
             self.cmd = commands[self.nospk]
             # compute Rin from the SS IV:
             if len(self.cmd) > 0 and len(self.ivss) > 0:
@@ -520,6 +524,7 @@ class IVCurve(AnalysisModule):
                 self.ctrl.IVCurve_Rin.setText(u'No valid points')
         else:
             self.ivss = data1.mean(axis=1) # all traces
+            self.ivss_cmd = commands
             self.cmd = commands
         self.update_IVPlot()
 
@@ -535,20 +540,24 @@ class IVCurve(AnalysisModule):
         if len(self.nospk) >= 1:
             # Peak (minimum voltage) IV where there are no spikes
             self.ivpk = data2.min(axis=1)[self.nospk]
+            self.ivpk_cmd = commands[self.nospk]
             self.cmd = commands[self.nospk]
         else:
             self.ivpk = data2.min(axis=1)
             self.cmd = commands
+            self.ivpk_cmd = commands
         self.update_Tau(printWindow = pw)
         self.update_IVPlot()
 
 
     def update_IVPlot(self):
         self.IV_plot.clear()
+#        print 'lens cmd ss pk: '
+#        print len(self.cmd), len(self.ivss), len(self.ivpk)
         if len(self.ivss) > 0:
-            self.IV_plot.plot(self.cmd, self.ivss, symbolSize=6, symbolPen='w', symbolBrush='w')
+            self.IV_plot.plot(self.ivss_cmd, self.ivss, symbolSize=6, symbolPen='w', symbolBrush='w')
         if len(self.ivpk) > 0:
-            self.IV_plot.plot(self.cmd, self.ivpk, symbolSize=6, symbolPen='w', symbolBrush='r')
+            self.IV_plot.plot(self.ivpk_cmd, self.ivpk, symbolSize=6, symbolPen='w', symbolBrush='r')
 
 
     def readParameters(self, clearFlag=False, pw=False):

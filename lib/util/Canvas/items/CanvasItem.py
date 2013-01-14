@@ -14,6 +14,8 @@ class CanvasItem(OrigCanvasItem):
             trans = self.opts['handle'].info().get('userTransform', None)
             if trans is not None:
                 self.restoreTransform(trans)
+            elif 'defaultUserTransform' in self.opts:
+                self.restoreTransform(self.opts['defaultUserTransform'])
             if self.opts['name'] is None:
                 self.opts['name'] = self.opts['handle'].shortName()
         

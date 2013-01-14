@@ -53,7 +53,9 @@ class ImageCanvasItem(CanvasItem):
                         opts['scale'] = self.handle.info()['pixelSize']
                         opts['pos'] = self.handle.info()['imagePosition']
                     elif 'Downsample' in self.handle.info():
-                        opts['scale'] = self.handle.info()['pixelSize']
+                        ### Needed to support an older format stored by 2p imager
+                        if 'pixelSize' in self.handle.info():
+                            opts['scale'] = self.handle.info()['pixelSize']
                         if 'microscope' in self.handle.info():
                             m = self.handle.info()['microscope']
                             print 'm: ',m
@@ -67,7 +69,7 @@ class ImageCanvasItem(CanvasItem):
                         opts['scale'] = info.get('pixelSize', None)
                         opts['pos'] = info.get('imagePosition', None)
                     else:
-                        opts['scale'] = (1e-5, 1e-5)
+                        opts['defaultUserTransform'] = {'scale': (1e-5, 1e-5)}
                         opts['scalable'] = True
             except:
                 debug.printExc('Error reading transformation for image file %s:' % image.name())

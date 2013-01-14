@@ -396,17 +396,22 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
             fpars = fitPars
         if method == 'simplex': # remap calls if needed for newer versions of scipy (>= 0.11)
             method = 'Nelder-Mead'
-        if ydat.ndim == 1: # check if 1-d, then "pretend" its only a 1-element block 
+        if ydat.ndim == 1 or dataType == 'xy' or dataType == '2d': # check if 1-d, then "pretend" its only a 1-element block 
             nblock = 1
         else:
             nblock = ydat.shape[0] # otherwise, this is the number of traces in the block
+        # print 'datatype: ', dataType
+        # print 'nblock: ', nblock
+        # print 'whichdata: ', whichdata
         for block in range(nblock):
             for record in whichdata:
                 if dataType == 'blocks':
                     (tx, dy) = self.getClipData(tdat[block], ydat[block][record, thisaxis, :], t0, t1)
                 else:
-                    (tx, dy) = self.getClipData(tdat, ydat, t0, t1)
+                    (tx, dy) = self.getClipData(tdat, ydat[record], t0, t1)
               #  print 'Fitting.py: Fit data: ', tx, dy
+              #  print tx.shape
+              #  print dy.shape
                 yn.append(names)
                 if not any(tx):
                     continue # no data in the window...
@@ -474,6 +479,8 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                 xp.append(plsq) # parameter list
                 xf.append(xfit) # x plot point list
                 yf.append(yfit) # y fit point list
+#        print xp
+#        print len(xp)
         return(xp, xf, yf, yn) # includes names with yn and range of tx
 
     def FitPlot(self, xFit = None, yFit = None, fitFunc = 'exp1',
