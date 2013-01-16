@@ -455,9 +455,9 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                      method=method, jac=None, hess=None, hessp=None, bounds=bounds, constraints=constraints, tol=None, callback=None, 
                      options={'maxiter': func[2], 'disp': False })
                     plsq = res.x
-                    print "    method:", method
-                    print "    bounds:", bounds
-                    print "    result:", plsq
+                    #print "    method:", method
+                    #print "    bounds:", bounds
+                    #print "    result:", plsq
                 
                 # next section is replaced by the code above - kept here for reference if needed...
                 # elif method == 'fmin' or method == 'simplex':

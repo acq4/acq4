@@ -447,7 +447,7 @@ class CaEventFitter(EventFitter):
             if i+1 < len(events):
                 nextStart = events[i+1]['time']
                 #nextStart = events[i+1]['index']*dt
-                #print "    picking between:", sliceLen, nextStart-start
+                #print "    picking between:", sliceLen, nextStart, '-', start, '=', nextStart-start
                 sliceLen = min(sliceLen, nextStart-start)
             #print "   chose:", sliceLen
                 
@@ -458,8 +458,9 @@ class CaEventFitter(EventFitter):
             tau = origTau
             if tau is not None:
                 guessLen += tau*2.              
-    
-            sliceLen = min(guessLen*3., sliceLen)
+            
+            #print "   picking between:", guessLen*3, sliceLen
+            #sliceLen = min(guessLen*3., sliceLen)
             
             ## Figure out from where to pull waveform data that will be fitted
             startIndex = np.argwhere(tvals>=start)[0][0]
@@ -515,7 +516,7 @@ class CaEventFitter(EventFitter):
             #print "times", times.min(), times.max()
             
             ## Use Paul's fitting algorithm so that we can put bounds/constraints on the fit params
-            print "event:", i, 'amp bounds:', bounds[4]
+            #print "event:", i, 'amp bounds:', bounds[4]
             fitter = Fitting()
             fitResults = fitter.FitRegion([1], 0, times, yVals, fitPars=guessFit, fitFunc='exppulse', bounds=bounds, method='SLSQP', dataType='xy')
             fitParams, xPts, yPts, names = fitResults
@@ -523,7 +524,7 @@ class CaEventFitter(EventFitter):
             #print "names", names
             #fitResult = functions.fit(functions.expPulse, times, yVals, guess, generateResult=True, resultXVals=times)                
             #fitParams, val, computed, err = fitResult
-            print '  fitParams:', fitParams[0]
+            #print '  fitParams:', fitParams[0]
             yOffset, t0, tau1, tau2, amp, width = fitParams[0]
             #print "fitResult", fitResult
             #computed = fitResult[-2]
