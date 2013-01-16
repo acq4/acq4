@@ -48,7 +48,7 @@ def axis(name=None, cols=None, values=None, units=None):
             ax['cols'].append(col)
     return ax
 
-class sliceGenerator:
+class sliceGenerator(object):
     """Just a compact way to generate tuples of slice objects."""
     def __getitem__(self, arg):
         return arg
@@ -342,6 +342,10 @@ class MetaArray(object):
             return self._data
         else:
             return np.array(self._data)
+            
+    def __array__(self):
+        ## supports np.array(metaarray_instance) 
+        return self.asarray()
             
     def view(self, typ):
         ## deprecated; kept for backward compatibility

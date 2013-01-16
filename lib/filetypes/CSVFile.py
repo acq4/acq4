@@ -41,9 +41,13 @@ class CSVFile(FileType):
     @classmethod
     def read(cls, fileHandle):
         """Read a file, return a data object"""
-        #fn = fileHandle.name()
-        #fd = open(fn)
-        #header = fd.readline().split(',')
-        
+        fn = fileHandle.name()
+        fd = open(fn)
+        header = fd.readline().split(',')
+        for i, h in enumerate(header):
+            if h[-1:] == '\n':
+                header[i] = h[:-1] 
+        if type(header[0]) == type('str'):
+            return loadtxt(fn, delimiter=',', skiprows=1, dtype=[(f, float) for f in header])
         
         return loadtxt(fn, delimiter=',')

@@ -139,6 +139,16 @@ class GLViewWidget(QtOpenGL.QGLWidget):
                     glMatrixMode(GL_MODELVIEW)
                     glPopMatrix()
             
+    def setCameraPosition(self, pos=None, distance=None, elevation=None, azimuth=None):
+        if distance is not None:
+            self.opts['distance'] = distance
+        if elevation is not None:
+            self.opts['elevation'] = elevation
+        if azimuth is not None:
+            self.opts['azimuth'] = azimuth
+        self.update()
+        
+        
         
     def cameraPosition(self):
         """Return current position of camera based on center, dist, elevation, and azimuth"""

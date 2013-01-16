@@ -109,6 +109,7 @@ class ViewBox(GraphicsWidget):
 
             'background': None,
         }
+        self._updatingRange = False  ## Used to break recursive loops. See updateAutoRange.
         
         
         self.setFlag(self.ItemClipsChildrenToShape)
@@ -165,8 +166,7 @@ class ViewBox(GraphicsWidget):
             ViewBox.NamedViews[name] = self
             ViewBox.updateAllViewLists()
             sid = id(self)
-
-            self.destroyed.connect(lambda: ViewBox.forgetView(sid, name))
+            self.destroyed.connect(lambda: ViewBox.forgetView(sid, name) if (ViewBox is not None and 'sid' in locals() and 'name' in locals()) else None)
             #self.destroyed.connect(self.unregister)
 
     def unregister(self):
@@ -528,71 +528,79 @@ class ViewBox(GraphicsWidget):
         ## to a view change.
         if self._updatingRange:
             return
-
-        fractionVisible = self.state['autoRange'][:]
-        for i in [0,1]:
-            if type(fractionVisible[i]) is bool:
-                fractionVisible[i] = 1.0
-
-        childRange = None
-
-        order = [0,1]
-        if self.state['autoVisibleOnly'][0] is True:
-            order = [1,0]
-
-        args = {}
-        for ax in order:
-            if self.state['autoRange'][ax] is False:
-                continue
-            if self.state['autoVisibleOnly'][ax]:
-                oRange = [None, None]
-                oRange[ax] = targetRect[1-ax]
-                childRange = self.childrenBounds(frac=fractionVisible, orthoRange=oRange)
+        
+        self._updatingRange = True
+        try:
+            targetRect = self.viewRange()
+            if not any(self.state['autoRange']):
+                return
                 
-            else:
-                if childRange is None:
-                    childRange = self.childrenBounds(frac=fractionVisible)
-            
-            ## Make corrections to range
-            xr = childRange[ax]
-            if xr is not None:
-                if self.state['autoPan'][0]:
-                    x = sum(xr) * 0.5
-                    #x = childRect.center().x()
-                    w2 = (targetRect[0][1]-targetRect[0][0]) / 2.
-                    #childRect.setLeft(x-w2)
-                    #childRect.setRight(x+w2)
-                    childRange[ax] = [x-w2, x+w2]
-                else:
-                    #wp = childRect.width() * 0.02
-                    wp = (xr[1] - xr[0]) * 0.02
-                    #childRect = childRect.adjusted(-wp, 0, wp, 0)
-                    childRange[ax][0] -= wp
-                    childRange[ax][1] += wp
-                #targetRect[ax][0] = childRect.left()
-                #targetRect[ax][1] = childRect.right()
-                targetRect[ax] = childRange[ax]
-                args['xRange' if ax == 0 else 'yRange'] = targetRect[ax]
-            #else:
-                ### Make corrections to Y range
-                #if self.state['autoPan'][1]:
-                    #y = childRect.center().y()
-                    #h2 = (targetRect[1][1]-targetRect[1][0]) / 2.
-                    #childRect.setTop(y-h2)
-                    #childRect.setBottom(y+h2)
-                #else:
-                    #hp = childRect.height() * 0.02
-                    #childRect = childRect.adjusted(0, -hp, 0, hp)
+            fractionVisible = self.state['autoRange'][:]
+            for i in [0,1]:
+                if type(fractionVisible[i]) is bool:
+                    fractionVisible[i] = 1.0
+
+            childRange = None
+
+            order = [0,1]
+            if self.state['autoVisibleOnly'][0] is True:
+                order = [1,0]
+
+            args = {}
+            for ax in order:
+                if self.state['autoRange'][ax] is False:
+                    continue
+                if self.state['autoVisibleOnly'][ax]:
+                    oRange = [None, None]
+                    oRange[ax] = targetRect[1-ax]
+                    childRange = self.childrenBounds(frac=fractionVisible, orthoRange=oRange)
                     
-                #targetRect[1][0] = childRect.top()
-                #targetRect[1][1] = childRect.bottom()
-                #args['yRange'] = targetRect[1]
-        if len(args) == 0:
-            return
-        args['padding'] = 0
-        args['disableAutoRange'] = False
-        #self.setRange(xRange=targetRect[0], yRange=targetRect[1], padding=0, disableAutoRange=False)
-        self.setRange(**args)
+                else:
+                    if childRange is None:
+                        childRange = self.childrenBounds(frac=fractionVisible)
+                
+                ## Make corrections to range
+                xr = childRange[ax]
+                if xr is not None:
+                    if self.state['autoPan'][ax]:
+                        x = sum(xr) * 0.5
+                        #x = childRect.center().x()
+                        w2 = (targetRect[ax][1]-targetRect[ax][0]) / 2.
+                        #childRect.setLeft(x-w2)
+                        #childRect.setRight(x+w2)
+                        childRange[ax] = [x-w2, x+w2]
+                    else:
+                        #wp = childRect.width() * 0.02
+                        wp = (xr[1] - xr[0]) * 0.02
+                        #childRect = childRect.adjusted(-wp, 0, wp, 0)
+                        childRange[ax][0] -= wp
+                        childRange[ax][1] += wp
+                    #targetRect[ax][0] = childRect.left()
+                    #targetRect[ax][1] = childRect.right()
+                    targetRect[ax] = childRange[ax]
+                    args['xRange' if ax == 0 else 'yRange'] = targetRect[ax]
+                #else:
+                    ### Make corrections to Y range
+                    #if self.state['autoPan'][1]:
+                        #y = childRect.center().y()
+                        #h2 = (targetRect[1][1]-targetRect[1][0]) / 2.
+                        #childRect.setTop(y-h2)
+                        #childRect.setBottom(y+h2)
+                    #else:
+                        #hp = childRect.height() * 0.02
+                        #childRect = childRect.adjusted(0, -hp, 0, hp)
+                        
+                    #targetRect[1][0] = childRect.top()
+                    #targetRect[1][1] = childRect.bottom()
+                    #args['yRange'] = targetRect[1]
+            if len(args) == 0:
+                return
+            args['padding'] = 0
+            args['disableAutoRange'] = False
+            #self.setRange(xRange=targetRect[0], yRange=targetRect[1], padding=0, disableAutoRange=False)
+            self.setRange(**args)
+        finally:
+            self._updatingRange = False
         
     def setXLink(self, view):
         """Link this view's X axis to another view. (see LinkView)"""
@@ -808,8 +816,7 @@ class ViewBox(GraphicsWidget):
     def viewPixelSize(self):
         """Return the (width, height) of a screen pixel in view coordinates."""
         o = self.mapToView(Point(0,0))
-        pv = self.pixelVectors()
-        px, py = [Point(self.mapToView(v) - o) for v in pv]
+        px, py = [Point(self.mapToView(v) - o) for v in self.pixelVectors()]
         return (px.length(), py.length())
         
         
@@ -1074,7 +1081,8 @@ class ViewBox(GraphicsWidget):
                     range[0] = [min(bounds.left(), range[0][0]), max(bounds.right(), range[0][1])]
                 else:
                     range[0] = [bounds.left(), bounds.right()]
-
+                    
+            #print "   range:", range
         
         return range
         
@@ -1207,11 +1215,22 @@ class ViewBox(GraphicsWidget):
         if ViewBox is None:     ## can happen as python is shutting down
             return
         ## Called with ID and name of view (the view itself is no longer available)
-        for v in ViewBox.AllViews.iterkeys():
+        for v in ViewBox.AllViews.keys():
             if id(v) == vid:
                 ViewBox.AllViews.pop(v)
                 break
         ViewBox.NamedViews.pop(name, None)
         ViewBox.updateAllViewLists()
 
+    @staticmethod
+    def quit():
+        ## called when the application is about to exit.
+        ## this disables all callbacks, which might otherwise generate errors if invoked during exit.
+        for k in ViewBox.AllViews:
+            try:
+                k.destroyed.disconnect()
+            except RuntimeError:  ## signal is already disconnected.
+                pass
+        
+        
 from .ViewBoxMenu import ViewBoxMenu

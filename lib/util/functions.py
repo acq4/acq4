@@ -62,6 +62,20 @@ def expDecay(v, x):
     """Exponential decay function valued at x. Parameter vector is [amplitude, tau, yOffset]"""
     return v[0] * np.exp(-x / v[1]) + v[2]
 
+def expPulse(v, x):
+    """Exponential pulse function (rising exponential with variable-length plateau followed by falling exponential)
+    Parameter v is [t0, y-offset, tau1, tau2, amp, width]"""
+    t0, yOffset, tau1, tau2, amp, width = v
+    y = np.empty(x.shape)
+    y[x<t0] = yOffset
+    m1 = (x>=t0)&(x<(t0+width))
+    m2 = (x>=(t0+width))
+    x1 = x[m1]
+    x2 = x[m2]
+    y[m1] = amp*(1-np.exp(-(x1-t0)/tau1))+yOffset
+    amp2 = amp*(1-np.exp(-width/tau1)) ## y-value at start of decay
+    y[m2] = ((amp2)*np.exp(-(x2-(width+t0))/tau2))+yOffset
+    return y
 
 
 def fit(function, xVals, yVals, guess, errFn=None, measureError=False, generateResult=False, resultXVals=None, **kargs):
@@ -452,8 +466,8 @@ def recursiveRegisterImages(i1, i2, hint=(0,0), maxDist=None, objSize=None):
     """Given images i1 and i2, recursively find the offset for i2 that best matches with i1"""
     time1 = time.clock()
     ## float images
-    im1 = i1
-    im2 = i2
+    im1 = i1.astype(float)
+    im2 = i2.astype(float)
     #im1 = i1.mean(axis=2).astype(float)
     #im2 = i2.mean(axis=2).astype(float)
     
@@ -1642,11 +1656,12 @@ def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshol
     return events
 
 
-def thresholdEvents(data, threshold, adjustTimes=True):
-    """Finds regions in a trace that cross a threshold value. Returns the index, time, length, peak, and sum of each event.
-    Optionally adjusts times to an extrapolated zero-crossing."""
+def thresholdEvents(data, threshold, adjustTimes=True, baseline=0.0):
+    """Finds regions in a trace that cross a threshold value (as measured by distance from baseline). Returns the index, time, length, peak, and sum of each event.
+    Optionally adjusts times to an extrapolated baseline-crossing."""
     threshold = abs(threshold)
     data1 = data.view(ndarray)
+    data1 = data1-baseline
     #if (hasattr(data, 'implements') and data.implements('MetaArray')):
     try:
         xvals = data.xvals(0)

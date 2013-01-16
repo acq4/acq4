@@ -6,6 +6,7 @@ import os
 from collections import OrderedDict
 import debug
 import numpy as np
+import weakref
 #import FileLoader
 #import DatabaseGui
 #import FeedbackButton
@@ -31,8 +32,8 @@ class MosaicEditor(AnalysisModule):
         self.initializeElements()
 
         self.ui.canvas = self.getElement('Canvas', create=True)
-        self.items = {}
-        self.files = {}
+        self.items = weakref.WeakKeyDictionary()
+        self.files = weakref.WeakValueDictionary()
         self.cells = {}
         #self.loaded = []
         

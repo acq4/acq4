@@ -92,9 +92,6 @@ class GraphicsItem(object):
         #ymag = abs(dt.m21())+abs(dt.m22())
         #if xmag * ymag == 0: 
         if dt.determinant() == 0:  ## occurs when deviceTransform is invalid because widget has not been displayed
-            print 'GraphicsItem.py: deviceTransform, dt.determinant was None'
-            print dt
-            print viewportTransform
             return None
         else:
             return dt
@@ -159,8 +156,7 @@ class GraphicsItem(object):
 
         dt = self.deviceTransform()
         if dt is None:
-            raise Exception("GraphicsItem: pixelVectors: no device Tranform?")
-        #return None, None
+            return None, None
         
         if direction is None:
             direction = Point(1, 0)  
@@ -169,28 +165,18 @@ class GraphicsItem(object):
             
         ## attempt to re-scale direction vector to fit within the precision of the coordinate system
         if direction.x() == 0:
-            #r = abs(dt.m32())/(abs(dt.m12()) + abs(dt.m22()))
-            r = 1.0/(abs(dt.m12()) + abs(dt.m22()))
+            r = abs(dt.m32())/(abs(dt.m12()) + abs(dt.m22()))
+            #r = 1.0/(abs(dt.m12()) + abs(dt.m22()))
         elif direction.y() == 0:
-            #r = abs(dt.m31())/(abs(dt.m11()) + abs(dt.m21()))
-            r = 1.0/(abs(dt.m11()) + abs(dt.m21()))
+            r = abs(dt.m31())/(abs(dt.m11()) + abs(dt.m21()))
+            #r = 1.0/(abs(dt.m11()) + abs(dt.m21()))
         else:
             r = ((abs(dt.m32())/(abs(dt.m12()) + abs(dt.m22()))) * (abs(dt.m31())/(abs(dt.m11()) + abs(dt.m21()))))**0.5
         directionr = direction * r
         
         viewDir = Point(dt.map(directionr) - dt.map(Point(0,0)))
         if viewDir.manhattanLength() == 0:
-            #print 'dt.m11: ', dt.m11()
-            #print 'dt.m12: ', dt.m12()
-            #print 'dt.m21: ', dt.m21()
-            #print 'dt.m22: ', dt.m22()
-            #print 'dt.m31: ', dt.m31()
-            #print 'dt.m32: ', dt.m32()
-            #print 'r, direction, dt: ', r, direction, directionr, dt
-            #print 'viewDir: ', viewDir
-            #print '...manhattan: ', viewDir.manhattanLength()
-            raise Exception("GraphicsItem::pixelVectors: Pixel size cannot be represetned on this scale")
-        #return None, None   ##  pixel size cannot be represented on this scale
+            return None, None   ##  pixel size cannot be represented on this scale
             
         orthoDir = Point(viewDir[1], -viewDir[0])  ## orthogonal to line in pixel-space
         

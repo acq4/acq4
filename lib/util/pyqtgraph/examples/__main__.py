@@ -1,4 +1,4 @@
-import sys, os
+import sys, os, subprocess, time
 ## make sure this pyqtgraph is importable before any others
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from pyqtgraph.Qt import QtCore, QtGui, USE_PYSIDE
@@ -43,9 +43,12 @@ examples = OrderedDict([
     ])),
     ('3D Graphics', OrderedDict([
         ('Volumetric', 'GLVolumeItem.py'),
-        ('Isosurface', 'GLMeshItem.py'),
-        ('Image', 'GLImageItem.py'),
+        ('Isosurface', 'GLIsosurface.py'),
+        ('Surface Plot', 'GLSurfacePlot.py'),
         ('Scatter Plot', 'GLScatterPlotItem.py'),
+        ('Shaders', 'GLshaders.py'),
+        ('Mesh', 'GLMeshItem.py'),
+        ('Image', 'GLImageItem.py'),
     ])),
     ('Widgets', OrderedDict([
         ('PlotWidget', 'PlotWidget.py'),
@@ -148,5 +151,86 @@ def run():
     
     app.exec_()
 
+def buildFileList(examples, files=None):
+    if files == None:
+        files = []
+    for key, val in examples.items():
+        #item = QtGui.QTreeWidgetItem([key])
+        if isinstance(val, basestring):
+            #item.file = val
+            files.append((key,val))
+        else:
+            buildFileList(val, files)
+    return files
+            
+def testFile(name, f, exe, lib):
+    global path
+    fn =  os.path.join(path,f)
+    #print "starting process: ", fn
+    
+    sys.stdout.write(name)
+    sys.stdout.flush()
+    
+    code = """
+try:
+    %s
+    import %s
+    import sys
+    print("test complete")
+    sys.stdout.flush()
+    import pyqtgraph as pg
+    import time
+    while True:  ## run a little event loop
+        pg.QtGui.QApplication.processEvents()
+        time.sleep(0.01)
+except:
+    print("test failed")
+    raise
+
+"""  % ("import %s" % lib if lib != '' else "", os.path.splitext(os.path.split(fn)[1])[0])
+    #print code
+    process = subprocess.Popen(['exec %s -i' % (exe)], shell=True, stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    process.stdin.write(code.encode('UTF-8'))
+    #process.stdin.close()
+    output = ''
+    fail = False
+    while True:
+        c = process.stdout.read(1).decode()
+        output += c
+        #sys.stdout.write(c)
+        #sys.stdout.flush()
+        if output.endswith('test complete'):
+            break
+        if output.endswith('test failed'):
+            fail = True
+            break
+    time.sleep(1)
+    process.kill()
+    #process.wait()
+    res = process.communicate()
+    
+    if fail or 'exception' in res[1].decode().lower() or 'error' in res[1].decode().lower():
+        print('.' * (50-len(name)) + 'FAILED')
+        print(res[0].decode())
+        print(res[1].decode())
+    else:
+        print('.' * (50-len(name)) + 'passed')
+    
+
+
 if __name__ == '__main__':
-    run()
+    if '--test' in sys.argv[1:]:
+        files = buildFileList(examples)
+        if '--pyside' in sys.argv[1:]:
+            lib = 'PySide'
+        elif '--pyqt' in sys.argv[1:]:
+            lib = 'PyQt4'
+        else:
+            lib = ''
+            
+        exe = sys.executable
+        print("Running tests:", lib, sys.executable)
+        for f in files:
+            testFile(f[0], f[1], exe, lib)
+    else: 
+        run()

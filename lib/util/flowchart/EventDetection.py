@@ -65,8 +65,9 @@ class ThresholdEvents(CtrlNode):
     """Detects regions of a waveform that cross a threshold (positive or negative) and returns the time, length, sum, and peak of each event."""
     nodeName = 'ThresholdEvents'
     uiTemplate = [
-        ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Events must reach this threshold to be detected.'}),
-        ('threshold', 'spin', {'value': 1e-12, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Events are detected only if they cross this threshold.'}),
+        ('baseline', 'spin', {'value':0, 'step':1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Set the baseline to measure the minPeak and threshold from'}),
+        ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Events must reach this far from baseline to be detected.'}),
+        ('threshold', 'spin', {'value': 1e-12, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Events are detected only if they cross this threshold (distance from baseline).'}),
         #('index', 'combo', {'values':['start','peak'], 'index':0}), 
         ('minLength', 'intSpin', {'value': 0, 'min': 0, 'max': 1e9, 'tip': 'Events must contain this many samples to be detected.'}),
         ('minSum', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
@@ -113,7 +114,9 @@ class ThresholdEvents(CtrlNode):
 
     def processData(self, data):
         s = self.stateGroup.state()
-        events = functions.thresholdEvents(data, s['threshold'], s['adjustTimes'])
+        #print "==== Threshold Events ====="
+        #print "   baseline:", s['baseline']
+        events = functions.thresholdEvents(data, s['threshold'], s['adjustTimes'], baseline=s['baseline'])
         
         ## apply first round of filters
         mask = events['len'] >= s['minLength']
