@@ -874,7 +874,7 @@ class ErrorDialog(QtGui.QDialog):
         ##   - Try to show friendly error messages
         ##   - If there are any helpfulExceptions, ONLY show those
         ##     otherwise, show everything
-        
+        self.lastEntry = entry
         
         ## extract list of exceptions
         exceptions = []
@@ -883,6 +883,11 @@ class ErrorDialog(QtGui.QDialog):
         exc = entry
         while key in exc:
             exc = exc[key]
+            
+            ## ignore this error if it was generated on the command line.
+            if 'File "<stdin>"' in exc.get('traceback', ['',''])[1]:
+                return False
+            
             if exc is None:
                 break
             key = 'oldExc'

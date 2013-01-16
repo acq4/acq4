@@ -14,7 +14,7 @@ print "Loading ACQ4..."
 import sys
 import os.path as osp
 d = osp.dirname(osp.abspath(__file__))
-sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
+sys.path = [osp.join(d, 'lib', 'util'), osp.join(d, 'lib', 'util', 'pyqtgraph')] + sys.path + [d]
 
 
 import sip
@@ -24,7 +24,7 @@ sip.setapi('QVariant', 2)
 ## rename any orphaned .pyc files -- these are probably leftover from 
 ## a module being moved and may interfere with expected operation.
 import os, sys
-from lib.util.pyqtgraph import renamePyc
+from pyqtgraph import renamePyc
 modDir = os.path.abspath(os.path.split(__file__)[0])
 renamePyc(modDir)
 
