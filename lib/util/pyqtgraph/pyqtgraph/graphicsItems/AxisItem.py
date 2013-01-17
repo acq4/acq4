@@ -287,14 +287,21 @@ class AxisItem(GraphicsWidget):
         if linkedView is None or self.grid is False:
             rect = self.mapRectFromParent(self.geometry())
             ## extend rect if ticks go in negative direction
+            ## also extend to account for text that flows past the edges
             if self.orientation == 'left':
-                rect.setRight(rect.right() - min(0,self.tickLength))
+                #rect.setRight(rect.right() - min(0,self.tickLength))
+                #rect.setTop(rect.top() - 15)
+                #rect.setBottom(rect.bottom() + 15)
+                rect = rect.adjusted(0, -15, -min(0,self.tickLength), 15)
             elif self.orientation == 'right':
-                rect.setLeft(rect.left() + min(0,self.tickLength))
+                #rect.setLeft(rect.left() + min(0,self.tickLength))
+                rect = rect.adjusted(min(0,self.tickLength), -15, 0, 15)
             elif self.orientation == 'top':
-                rect.setBottom(rect.bottom() - min(0,self.tickLength))
+                #rect.setBottom(rect.bottom() - min(0,self.tickLength))
+                rect = rect.adjusted(-15, 0, 15, -min(0,self.tickLength))
             elif self.orientation == 'bottom':
-                rect.setTop(rect.top() + min(0,self.tickLength))
+                #rect.setTop(rect.top() + min(0,self.tickLength))
+                rect = rect.adjusted(-15, min(0,self.tickLength), 15, 0)
             return rect
         else:
             return self.mapRectFromParent(self.geometry()) | linkedView.mapRectToItem(self, linkedView.boundingRect())

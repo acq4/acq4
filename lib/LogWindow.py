@@ -885,7 +885,8 @@ class ErrorDialog(QtGui.QDialog):
             exc = exc[key]
             
             ## ignore this error if it was generated on the command line.
-            if 'File "<stdin>"' in exc.get('traceback', ['',''])[1]:
+            tb = exc.get('traceback', ['',''])
+            if len(tb) > 1 and 'File "<stdin>"' in tb[1]:
                 return False
             
             if exc is None:
