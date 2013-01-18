@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/pbm_ImageAnalysis/ctrlTemplateAnalysis.ui'
 #
-# Created: Wed Jan 16 23:31:54 2013
+# Created: Fri Jan 18 11:21:59 2013
 #      by: PyQt4 UI code generator 4.9.4
 #
 # WARNING! All changes made in this file will be lost!

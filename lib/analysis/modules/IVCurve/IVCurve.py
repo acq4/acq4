@@ -16,6 +16,35 @@ from metaarray import MetaArray
 import numpy, scipy.signal
 import os
 
+import matplotlib as MP
+from matplotlib.ticker import FormatStrFormatter
+
+MP.use('TKAgg')
+################## Do not modify the following code 
+# sets up matplotlib with sans-serif plotting... 
+import matplotlib.gridspec as GS
+# import mpl_toolkits.axes_grid1.inset_locator as INSETS
+# #import inset_axes, zoomed_inset_axes
+# import mpl_toolkits.axes_grid1.anchored_artists as ANCHOR
+# # import AnchoredSizeBar
+
+stdFont = 'Arial'
+
+import  matplotlib.pyplot as pylab
+import matplotlib.gridspec as gridspec
+
+pylab.rcParams['text.usetex'] = True
+pylab.rcParams['interactive'] = False
+pylab.rcParams['font.family'] = 'sans-serif'
+pylab.rcParams['font.sans-serif'] = 'Arial'
+pylab.rcParams['mathtext.default'] = 'sf'
+pylab.rcParams['figure.facecolor'] = 'white'
+# next setting allows pdf font to be readable in Adobe Illustrator
+pylab.rcParams['pdf.fonttype'] = 42
+pylab.rcParams['text.dvipnghack'] = True
+##################### to here (matplotlib stuff - touchy!       
+
+
 import lib.analysis.tools.Utility as Utility # pbm's utilities...
 import lib.analysis.tools.Fitting as Fitting # pbm's fitting stuff... 
 
@@ -29,7 +58,7 @@ class IVCurve(AnalysisModule):
         self.ctrlWidget = QtGui.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
-        self.main_layout =  pg.GraphicsView()
+        self.main_layout =  pg.GraphicsView() # instead of GraphicsScene?
         self.lrss_flag = True # show is default
         self.lrpk_flag = True
         self.rmp_flag = True
@@ -55,8 +84,10 @@ class IVCurve(AnalysisModule):
         self.initializeElements()
         # grab input form the "Ctrl" window
         self.ctrl.IVCurve_Update.clicked.connect(self.updateAnalysis)
-        self.ctrl.IVCurve_PrintResults.clicked.connect(self.printAnalysis)
+        self.ctrl.IVCurve_PrintResults.clicked.connect(self.printAnalysis) 
+        self.ctrl.IVCurve_MPLExport.clicked.connect(self.matplotlibExport)
         self.ctrl.IVCurve_RMPMode.currentIndexChanged.connect(self.update_rmpAnalysis)
+        self.ctrl.dbStoreBtn.clicked.connect(self.dbStoreClicked)
         self.clearResults()
         self.layout = self.getElement('Plots', create=True)
  
@@ -151,7 +182,7 @@ class IVCurve(AnalysisModule):
         self.showhide_lrpk(True)
         self.showhide_lrss(True)
         self.showhide_lrrmp(True)
-        self.showhide_lrtau(False)
+        self.showhide_lrtau(True)
 
         self.ctrl.IVCurve_ssTStart.setSuffix(' ms')
         self.ctrl.IVCurve_ssTStop.setSuffix(' ms')
@@ -206,29 +237,34 @@ class IVCurve(AnalysisModule):
             raise Exception("Can only load one file at a time.")
         self.clearResults()
         dh = dh[0]
+        self.loaded = dh
         self.data_plot.clearPlots()
         self.cmd_plot.clearPlots()
         self.filename = dh.name()
         dirs = dh.subDirs()
-        c = 0
-        traces = None
+#        c = 0
+        traces = []
         cmd_wave = []
         self.values = []
         self.Sequence = self.dataModel.listSequenceParams(dh)
         self.traceTimes = []
         maxplotpts = 1024
         # Iterate over sequence
-        for dirName in dirs:
+        if ('Clamp1', 'Pulse_amplitude') in self.Sequence.keys():
+            sequenceValues = self.Sequence[('Clamp1', 'Pulse_amplitude')] 
+        else:
+            sequenceValues = [] # print self.Sequence.keys()
+        for i,dirName in enumerate(dirs):
             d = dh[dirName]
             try:
                 dataF = self.dataModel.getClampFile(d)
                 if dataF is None:  ## No clamp file for this iteration of the protocol (probably the protocol was stopped early)
                     print 'Missing data...'
-                    c += 1
+                    #c += 1
                     continue
             except:
                 debug.printExc("Error loading data for protocol %s:" % d.name() )
-                c += 1
+               # c += 1
                 continue  ## If something goes wrong here, we'll just try to carry on
             dataF = dataF.read()
             cmd = self.dataModel.getClampCommand(dataF)
@@ -243,32 +279,37 @@ class IVCurve(AnalysisModule):
                 # store primary channel data and read command amplitude
             info1 = data.infoCopy()
             self.traceTimes.append(info1[1]['startTime'])
-            if traces is None:
-                traces = numpy.zeros((len(dirs), len(data)))
-                cmd_wave = numpy.zeros((len(dirs), len(cmd)))
-            traces[c,:]  = data.view(numpy.ndarray)
-            cmd_wave[c,:] = cmd.view(numpy.ndarray) 
-            
-            self.data_plot.plot(data, pen=pg.intColor(c, len(dirs), maxValue=200)) # , decimate=decimate_factor)
-            self.cmd_plot.plot(cmd, pen=pg.intColor(c, len(dirs), maxValue=200)) # , decimate=decimate_factor)
-            self.values.append(cmd[len(cmd)/2])
-            c += 1
+            #if traces is None:  ## Don't know length of array since some data may be missing.
+                #traces = numpy.zeros((len(dirs), len(data)))
+                #cmd_wave = numpy.zeros((len(dirs), len(cmd)))
+            #traces[c,:]  = data.view(numpy.ndarray)
+            #cmd_wave[c,:] = cmd.view(numpy.ndarray)
+            traces.append(data.view(numpy.ndarray))
+            cmd_wave.append(cmd.view(numpy.ndarray))
+            self.data_plot.plot(data, pen=pg.intColor(i, len(dirs), maxValue=200)) # , decimate=decimate_factor)
+            self.cmd_plot.plot(cmd, pen=pg.intColor(i, len(dirs), maxValue=200)) # , decimate=decimate_factor)
+            if len(sequenceValues) > 0:
+                self.values.append(sequenceValues[i])
+            else:
+                self.values.append(cmd[len(cmd)/2])
+          #  c += 1
         print 'Done loading files'
         if traces is None or len(traces) == 0:
             print "No data found in this run..."
             return False
         self.traceTimes = self.traceTimes - self.traceTimes[0] # put relative to the start
-        print self.traceTimes
-        self.colorScale.setIntColorScale(0, c, maxValue=200)
+        traces = numpy.vstack(traces)
+        cmd_wave = numpy.vstack(cmd_wave)
+        self.cmd_wave = cmd_wave
+        self.colorScale.setIntColorScale(0, i, maxValue=200)
        # self.colorScale.setLabels({'%0.2g'%self.values[0]:0, '%0.2g'%self.values[-1]:1}) 
-        
         # set up the selection region correctly, prepare IV curves and find spikes
         info = [
             {'name': 'Command', 'units': cmd.axisUnits(-1), 'values': numpy.array(self.values)},
             data.infoCopy('Time'), 
             data.infoCopy(-1)]
+        traces = traces[:len(self.values)]
         self.traces = MetaArray(traces, info=info)
-        info1 = dataF.infoCopy()
         sfreq = self.dataModel.getSampleRate(data)
         self.dataMode = self.dataModel.getClampMode(data)
         self.ctrl.IVCurve_dataMode.setText(self.dataMode)
@@ -276,12 +317,12 @@ class IVCurve(AnalysisModule):
         if self.dataMode == 'IC':
             cmdUnits = 'pA'
             scaleFactor = 1e12
-            self.labelUp(self.IV_plot, 'I (pA)', 'V (mV)', 'I-V')
-            self.labelUp(self.data_plot, 'T (ms)', 'V (mV)', 'Data')
+            #self.labelUp(self.IV_plot, 'I (pA)', 'V (mV)', 'I-V')
+            self.labelUp(self.data_plot, 'T (s)', 'V (V)', 'Data')
         else:
             cmdUnits = 'mV'
             scaleFactor = 1e3
-            self.labelUp(self.IV_plot, 'V (V)', 'I (A)', 'V-I')
+           # self.labelUp(self.IV_plot, 'V (V)', 'I (A)', 'V-I')
             self.labelUp(self.data_plot, 'T (s)', 'I (A)', 'Data')
        # self.ctrl.IVCurve_dataUnits.setText(cmdUnits)
         cmddata = cmd.view(numpy.ndarray)
@@ -312,15 +353,16 @@ class IVCurve(AnalysisModule):
         commands = numpy.array(self.values)
 
         self.initialize_Regions() # now create the analysis regions
-        self.lrss.setRegion([(self.tend-(self.tdur/2.0)), self.tend]) # steady-state
+        self.lrss.setRegion([(self.tend-(self.tdur/5.0)), self.tend-0.001]) # steady-state
         self.lrpk.setRegion([self.tstart, self.tstart+(self.tdur/5.0)]) # "peak" during hyperpolarization
-        self.lrtau.setRegion([self.tstart+0.005, self.tend])
+#        self.lrtau.setRegion([self.tstart+0.005, self.tend])
+        self.lrtau.setRegion([self.tstart+(self.tdur/5.0)+0.005, self.tend])
         self.lrrmp.setRegion([1.e-4, self.tstart*0.9]) # rmp window
 
         if self.dataMode in self.ICModes:
                 # for adaptation ratio:
-            print 'doing cc mode... '
-            self.countSpikes()
+            self.updateAnalysis()
+            #self.countSpikes()
         
         if self.dataMode in self.VCModes: 
             self.cmd = commands
@@ -334,6 +376,7 @@ class IVCurve(AnalysisModule):
 
     def countSpikes(self):
         if self.dataMode not in self.ICModes or self.tx is None:
+            print 'Cannot count spikes : dataMode is ? ', self.dataMode
             return
         minspk = 4
         maxspk = 10 # range of spike counts
@@ -367,13 +410,15 @@ class IVCurve(AnalysisModule):
     
         fisi = fisi*1.0e3
         fsl = fsl*1.0e3
+        self.fsl = fsl
+        self.fisi = fisi
         iscale = 1.0e12 # convert to pA
         self.nospk = numpy.where(self.spikecount == 0)
         self.spk = numpy.where(self.spikecount > 0)
         commands = numpy.array(self.values)
         self.cmd = commands[self.nospk]
         self.spcmd = commands[self.spk]
-        self.fiPlot.plot(x=commands*iscale, y=self.spikecount, clear=True, pen='w', symbolSize=10, symbolPen='b', symbolBrush=(0, 0, 255, 200), symbol='s')
+        self.fiPlot.plot(x=commands*iscale, y=self.spikecount, clear=True, pen='w', symbolSize=6, symbolPen='b', symbolBrush=(0, 0, 255, 200), symbol='s')
         self.fslPlot.plot(x=self.spcmd*iscale, y=fsl[self.spk], pen='w', clear=True, symbolSize=6, symbolPen='g', symbolBrush=(0, 255, 0, 200), symbol='t')
         self.fslPlot.plot(x=self.spcmd*iscale, y=fisi[self.spk], pen='w', symbolSize=6, symbolPen='y', symbolBrush=(255, 255, 0, 200), symbol='s')
         if len(self.spcmd) > 0:
@@ -473,17 +518,36 @@ class IVCurve(AnalysisModule):
         fitx = []
         fity = []
         initpars = [-80.0*1e-3, -10.0*1e-3, 50.0*1e-3]
+        
         # find the current level that is closest to the target current
         s_target = self.ctrl.IVCurve_tauh_Commands.currentIndex()
         itarget = self.values[s_target] # retrive actual value from commands
+        self.neg_cmd = itarget
         idiff = numpy.abs(numpy.array(self.cmd) - itarget)
-        amin = numpy.argmin(idiff)
-        vrmp = numpy.mean(self.traces[amin][0:10])*1000. # rmp approximation.
+        
+        amin = numpy.argmin(idiff)  ## amin appears to be the same as s_target ??
+        
+        ## target trace (as selected in cmd drop-down list):
+        target = self.traces[amin]
+        
+        ## get Vrmp
+        vrmp = numpy.median(target['Time': 0.0:self.tstart-0.005])*1000. # rmp approximation.
         self.ctrl.IVCurve_vrmp.setText('%8.2f' % (vrmp))
-        dpk = self.traces['Time' : rgn[0]:rgn[0]+0.001]
-        vpk = numpy.mean(dpk[amin])*1000.
-        dss = self.traces['Time' : rgn[1]-0.010:rgn[1]]
-        vss = numpy.mean(dss[amin])*1000.
+        self.neg_vrmp = vrmp
+        
+        ## get peak and steady-state voltages
+        pkRgn = self.lrpk.getRegion()
+        ssRgn = self.lrss.getRegion()
+        
+        vpk = target['Time' : pkRgn[0]:pkRgn[1]].min() * 1000
+        #vpk = numpy.mean(dpk[amin])*1000.
+        self.neg_pk = (vpk-vrmp) / 1000.
+        
+        #dss = self.traces['Time' : rgn[1]-0.010:rgn[1]]
+        #vss = numpy.mean(dss[amin])*1000.
+        vss = numpy.median(target['Time' : ssRgn[0]:ssRgn[1]]) * 1000
+        self.neg_ss = (vss-vrmp) / 1000.
+        
         whichdata = [int(amin)]
         itaucmd = [self.cmd[amin]]
         rgnss = self.lrss.getRegion()
@@ -535,6 +599,12 @@ class IVCurve(AnalysisModule):
             self.ctrl.IVCurve_FOType.setText('D Stellate')
         else:
             self.ctrl.IVCurve_FOType.setText('T Stellate')
+            
+        ## estimate of Gh:
+        Gpk = itarget / self.neg_pk
+        Gss = itarget / self.neg_ss
+        self.Gh = Gss-Gpk
+        self.ctrl.IVCurve_Gh.setText('%8.2f nS' % (self.Gh*1e9))
             
       #  if printWindow:
       #      print tautext % (meantau*1e3)
@@ -606,21 +676,38 @@ class IVCurve(AnalysisModule):
         self.IV_plot.clear()
 #        print 'lens cmd ss pk: '
 #        print len(self.cmd), len(self.ivss), len(self.ivpk)
-        if len(self.ivss) > 0:
-            self.IV_plot.plot(self.ivss_cmd, self.ivss, symbolSize=6, symbolPen='w', symbolBrush='w')
-        if len(self.ivpk) > 0:
-            self.IV_plot.plot(self.ivpk_cmd, self.ivpk, symbolSize=6, symbolPen='w', symbolBrush='r')
+        if self.dataMode in self.ICModes:
+            if len(self.ivss) > 0:
+                self.IV_plot.plot(self.ivss_cmd*1e12, self.ivss*1e3, symbolSize=6, symbolPen='w', symbolBrush='w')
+            if len(self.ivpk) > 0:
+                self.IV_plot.plot(self.ivpk_cmd*1e12, self.ivpk*1e3, symbolSize=6, symbolPen='w', symbolBrush='r')
+            self.labelUp(self.IV_plot,'I (pA)', 'V (mV)', 'I-V (CC)')
+        if self.dataMode in self.VCModes:
+            if len(self.ivss) > 0:
+                self.IV_plot.plot(self.ivss_cmd*1e3, self.ivss*1e9, symbolSize=6, symbolPen='w', symbolBrush='w')
+            if len(self.ivpk) > 0:
+                self.IV_plot.plot(self.ivpk_cmd*1e3, self.ivpk*1e9, symbolSize=6, symbolPen='w', symbolBrush='r')
+            self.labelUp(self.IV_plot,'V (mV)', 'I (nA)', 'I-V (VC)')
 
     def update_RMPPlot(self):
         self.RMP_plot.clear()
         if len(self.ivrmp) > 0:
             mode  = self.ctrl.IVCurve_RMPMode.currentIndex()
+            if self.dataMode in self.ICModes:
+                sf = 1e3
+                self.RMP_plot.setLabel('left', 'V mV')
+            else:
+                sf = 1e12
+                self.RMP_plot.setLabel('left', 'I (pA)')
             if mode == 0:
-                self.RMP_plot.plot(self.traceTimes, 1.e3*numpy.array(self.ivrmp), symbolSize=6, symbolPen='w', symbolBrush='w')
+                self.RMP_plot.plot(self.traceTimes, sf*numpy.array(self.ivrmp), symbolSize=6, symbolPen='w', symbolBrush='w') 
+                self.RMP_plot.setLabel('bottom', 'T (s)') 
             elif mode == 1:
                 self.RMP_plot.plot(self.cmd, 1.e3*numpy.array(self.ivrmp), symbolSize=6, symbolPen='w', symbolBrush='w')
+                self.RMP_plot.setLabel('bottom', 'I (pA)') 
             elif mode == 2:
                 self.RMP_plot.plot(self.spikecount, 1.e3*numpy.array(self.ivrmp), symbolSize=6, symbolPen='w', symbolBrush='w')
+                self.RMP_plot.setLabel('bottom', 'Spikes') 
             else:
                 pass
             
@@ -649,7 +736,133 @@ class IVCurve(AnalysisModule):
         
         if self.ctrl.IVCurve_showHide_lrtau.isChecked():
             self.update_Tauh() # include tau in the list... if the tool is selected
+        
+    def update_RMPPlot_MP(self):
+        self.mplax['RMP'].clear()
+        if len(self.ivrmp) > 0:
+            mode  = self.ctrl.IVCurve_RMPMode.currentIndex()
+            ax = self.mplax['RMP']
+            ax.set_title('RMP', verticalalignment='top')
+            if self.dataMode in self.ICModes:
+                sf = 1e3
+                ax.set_ylabel('V (mV)')
+            else:
+                sf = 1e12
+                ax.set_ylabel('I (pA)')
+            if mode == 0:
+                ax.plot(self.traceTimes, sf*numpy.array(self.ivrmp), 'k-s', markersize=2) 
+                ax.set_xlabel('T (s)') 
+            elif mode == 1:
+                ax.plot(self.cmd, 1.e3*numpy.array(self.ivrmp) ,'k-s', markersize=2 )
+                ax.set_xlabel('I (pA)') 
+            elif mode == 2:
+                ax.plot(self.spikecount, 1.e3*numpy.array(self.ivrmp),  'k-s', markersize=2)
+                ax.set_xlabel('Spikes') 
+            else:
+                pass
+                
+    def update_IVPlot_MP(self):
+        self.mplax['IV'].clear()
+#        print 'lens cmd ss pk: '
+#        print len(self.cmd), len(self.ivss), len(self.ivpk)
+        ax = self.mplax['IV']
+        if self.dataMode in self.ICModes:
+            if len(self.ivss) > 0:
+                ax.plot(self.ivss_cmd*1e12, self.ivss*1e3, 'k-s', markersize = 3)
+            if len(self.ivpk) > 0:
+                ax.plot(self.ivpk_cmd*1e12, self.ivpk*1e3, 'r-o', markersize = 3)
+            ax.set_xlabel('I (pA)')
+            ax.set_ylabel('V (mV)')
+            ax.set_title('I-V (CC)', verticalalignment='top')
+        if self.dataMode in self.VCModes:
+            if len(self.ivss) > 0:
+                ax.plot(self.ivss_cmd*1e3, self.ivss*1e9, 'k-s', markersize = 3)
+            if len(self.ivpk) > 0:
+                ax.plot(self.ivpk_cmd*1e3, self.ivpk*1e9, 'r-o', markersize = 3)
+            ax.set_xlabel('V (mV)')
+            ax.set_ylabel('I (nA)')
+            ax.set_title('I-V (VC)', verticalalignment='top')
 
+    def matplotlibExport(self):
+        """
+        Make a matplotlib window that shows the current data in the same format as the pyqtgraph window"""
+        pylab.figure(1)
+        pylab.autoscale(enable=True, axis='both', tight=None)
+        self.mplax = {}
+        gs = gridspec.GridSpec(4,2)
+        self.mplax['data'] = pylab.subplot(gs[0:3,0])
+        self.mplax['cmd'] = pylab.subplot(gs[3,0])
+        self.mplax['IV'] = pylab.subplot(gs[0,1])
+        self.mplax['RMP'] = pylab.subplot(gs[1,1])
+        self.mplax['FI'] = pylab.subplot(gs[2,1])
+        self.mplax['FSL'] = pylab.subplot(gs[3,1])
+        gs.update(wspace=0.25, hspace=0.5)
+        self.mplax['data'].set_title('Data', verticalalignment='top')
+            
+        for i in range(len(self.traces)):
+            self.mplax['data'].plot(self.tx, self.traces[i]*1e3, 'k')
+            self.mplax['cmd'].plot(self.tx, self.cmd_wave[i]*1e12, 'k')
+        self.mplax['data'].set_ylabel('mV')
+        self.mplax['cmd'].set_ylabel('pA')
+        self.update_IVPlot_MP()
+        self.update_RMPPlot_MP() 
+        iscale = 1e12
+        self.mplax['FI'].plot(numpy.array(self.values)*iscale, self.spikecount, 's-b', markersize=3)
+        self.mplax['FI'].set_title('F-I', verticalalignment='top')
+        self.mplax['FI'].set_ylabel('\# spikes')
+        self.mplax['FI'].set_xlabel('I (pA)')
+        self.mplax['FSL'].plot(self.spcmd*iscale, self.fsl[self.spk], 'g-^', markersize=3)
+        self.mplax['FSL'].set_ylabel('FSL/FISI')
+        self.mplax['FSL'].set_xlabel('I (pA)')
+        self.mplax['FSL'].plot(self.spcmd*iscale, self.fisi[self.spk], 'y-s', markersize=3)
+        self.mplax['FSL'].set_title('FSL/FISI', verticalalignment='top')
+        for ax in self.mplax:
+            self.cleanAxes(self.mplax[ax])
+        for a in ['data', 'IV', 'FI', 'FSL', 'RMP', 'cmd']:
+            self.formatTicks(self.mplax[a], 'y', '%d')
+        for a in ['FI','IV', 'RMP', 'FSL']:
+            self.formatTicks(self.mplax[a], 'x', '%d')
+        pylab.show()                      
+            
+    def dbStoreClicked(self):
+        self.updateAnalysis()
+        db = self._host_.dm.currentDatabase()
+        table = 'DirTable_Cell'
+        columns = OrderedDict([
+            ('IVCurve_rmp', 'real'),
+            ('IVCurve_rinp', 'real'),
+            ('IVCurve_taum', 'real'),
+            ('IVCurve_neg_cmd', 'real'),
+            ('IVCurve_neg_pk', 'real'),
+            ('IVCurve_neg_ss', 'real'),
+            ('IVCurve_h_tau', 'real'),
+            ('IVCurve_h_g', 'real'),            
+        ])
+        
+        rec = {
+            'IVCurve_rmp': self.neg_vrmp/1000.,
+            'IVCurve_rinp': self.Rin,
+            'IVCurve_taum': self.tau,
+            'IVCurve_neg_cmd': self.neg_cmd,
+            'IVCurve_neg_pk': self.neg_pk,
+            'IVCurve_neg_ss': self.neg_ss,
+            'IVCurve_h_tau': self.tau2,
+            'IVCurve_h_g': self.Gh,
+        }
+        
+        with db.transaction():
+            
+            ## Add columns if needed
+            if 'IVCurve_rmp' not in db.tableSchema(table):
+                for col, typ in columns.items():
+                    db.addColumn(table, col, typ)
+                    
+            db.update(table, rec, where={'Dir': self.loaded.parent()})
+        
+        print "updated record for ", self.loaded.name()
+        print rec
+        
+        
 
 #---- Helpers ---
 # Some of these would normally live in a pyqtgraph-related module, but are just stuck here to get the job done.
@@ -657,5 +870,60 @@ class IVCurve(AnalysisModule):
         """helper to label up the plot"""
         plot.setLabel('bottom', xtext)
         plot.setLabel('left', ytext)
-        plot.setTitle(title)
+        plot.setTitle(title) 
+        
+# for matplotlib cleanup: 
+# These were borrowed from Manis' "PlotHelpers.py"
 
+    def cleanAxes(self, axl):
+        if type(axl) is not list:
+            axl = [axl]
+        for ax in axl:
+            for loc, spine in ax.spines.iteritems():
+                if loc in ['left', 'bottom']:
+                    pass
+                elif loc in ['right', 'top']:
+                    spine.set_color('none') # do not draw the spine
+                else:
+                    raise ValueError('Unknown spine location: %s' % loc)
+                # turn off ticks when there is no spine
+                ax.xaxis.set_ticks_position('bottom')
+                #pdb.set_trace()
+                ax.yaxis.set_ticks_position('left') # stopped working in matplotlib 1.10
+            self.update_font(ax)                                                                  
+
+    def update_font(self, axl, size=6, font=stdFont):
+        if type(axl) is not list:
+            axl = [axl]
+        fontProperties = {'family':'sans-serif','sans-serif':[font],
+                'weight' : 'normal', 'size' : size}
+        for ax in axl:
+            for tick in ax.xaxis.get_major_ticks():
+                  tick.label1.set_family('sans-serif')
+                  tick.label1.set_fontname(stdFont)
+                  tick.label1.set_size(size)
+
+            for tick in ax.yaxis.get_major_ticks():
+                  tick.label1.set_family('sans-serif')
+                  tick.label1.set_fontname(stdFont)
+                  tick.label1.set_size(size)
+            ax.set_xticklabels(ax.get_xticks(), fontProperties)
+            ax.set_yticklabels(ax.get_yticks(), fontProperties)
+            ax.xaxis.set_smart_bounds(True)
+            ax.yaxis.set_smart_bounds(True) 
+            ax.tick_params(axis = 'both', labelsize = 9)
+   
+    def formatTicks(self, axl, axis='xy', fmt='%d', font='Arial'):
+        """
+        Convert tick labels to intergers
+        to do just one axis, set axis = 'x' or 'y'
+        control the format with the formatting string
+        """
+        if type(axl) is not list:
+            axl = [axl]
+        majorFormatter = FormatStrFormatter(fmt)
+        for ax in axl:
+            if 'x' in axis:
+                ax.xaxis.set_major_formatter(majorFormatter)
+            if 'y' in axis:
+                ax.yaxis.set_major_formatter(majorFormatter)                    

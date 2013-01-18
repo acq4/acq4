@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/IVCurve/ctrlTemplate.ui'
 #
-# Created: Thu Jan 17 12:13:47 2013
+# Created: Fri Jan 18 08:37:34 2013
 #      by: PyQt4 UI code generator 4.9.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -295,6 +295,28 @@ class Ui_Form(object):
         self.IVCurve_RMPMode.addItem(_fromUtf8(""))
         self.IVCurve_RMPMode.addItem(_fromUtf8(""))
         self.gridLayout_3.addWidget(self.IVCurve_RMPMode, 1, 3, 1, 1)
+        self.dbStoreBtn = QtGui.QPushButton(self.groupBox)
+        font = QtGui.QFont()
+        font.setPointSize(12)
+        self.dbStoreBtn.setFont(font)
+        self.dbStoreBtn.setObjectName(_fromUtf8("dbStoreBtn"))
+        self.gridLayout_3.addWidget(self.dbStoreBtn, 12, 3, 1, 1)
+        self.label_8 = QtGui.QLabel(self.groupBox)
+        font = QtGui.QFont()
+        font.setPointSize(12)
+        self.label_8.setFont(font)
+        self.label_8.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.label_8.setObjectName(_fromUtf8("label_8"))
+        self.gridLayout_3.addWidget(self.label_8, 13, 3, 1, 1)
+        self.IVCurve_Gh = QtGui.QLineEdit(self.groupBox)
+        self.IVCurve_Gh.setObjectName(_fromUtf8("IVCurve_Gh"))
+        self.gridLayout_3.addWidget(self.IVCurve_Gh, 13, 5, 1, 1)
+        self.IVCurve_MPLExport = QtGui.QPushButton(self.groupBox)
+        font = QtGui.QFont()
+        font.setPointSize(11)
+        self.IVCurve_MPLExport.setFont(font)
+        self.IVCurve_MPLExport.setObjectName(_fromUtf8("IVCurve_MPLExport"))
+        self.gridLayout_3.addWidget(self.IVCurve_MPLExport, 19, 5, 1, 1)
         self.gridLayout.addWidget(self.groupBox, 0, 0, 1, 1)
 
         self.retranslateUi(Form)
@@ -334,4 +356,7 @@ class Ui_Form(object):
         self.IVCurve_RMPMode.setItemText(0, QtGui.QApplication.translate("Form", "T (s)", None, QtGui.QApplication.UnicodeUTF8))
         self.IVCurve_RMPMode.setItemText(1, QtGui.QApplication.translate("Form", "I (pA)", None, QtGui.QApplication.UnicodeUTF8))
         self.IVCurve_RMPMode.setItemText(2, QtGui.QApplication.translate("Form", "Sp (#/s)", None, QtGui.QApplication.UnicodeUTF8))
+        self.dbStoreBtn.setText(QtGui.QApplication.translate("Form", "-> db", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_8.setText(QtGui.QApplication.translate("Form", "gH", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_MPLExport.setText(QtGui.QApplication.translate("Form", "MPL Export", None, QtGui.QApplication.UnicodeUTF8))
 
