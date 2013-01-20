@@ -14,7 +14,7 @@ from collections import OrderedDict
 import pyqtgraph as pg
 from metaarray import MetaArray
 import numpy, scipy.signal
-import os
+import os, re, os.path
 
 import matplotlib as MP
 from matplotlib.ticker import FormatStrFormatter
@@ -62,7 +62,7 @@ class IVCurve(AnalysisModule):
         self.lrss_flag = True # show is default
         self.lrpk_flag = True
         self.rmp_flag = True
-        self.lrtau_flag = True
+        self.lrtau_flag = False
         self.regionsExist = False
         self.fit_curve = None
         self.fitted_data = None
@@ -86,7 +86,7 @@ class IVCurve(AnalysisModule):
         self.ctrl.IVCurve_Update.clicked.connect(self.updateAnalysis)
         self.ctrl.IVCurve_PrintResults.clicked.connect(self.printAnalysis) 
         self.ctrl.IVCurve_MPLExport.clicked.connect(self.matplotlibExport)
-        self.ctrl.IVCurve_RMPMode.currentIndexChanged.connect(self.update_rmpAnalysis)
+        [self.ctrl.IVCurve_RMPMode.currentIndexChanged.connect(x) for x in [self.update_rmpAnalysis, self.countSpikes]]
         self.ctrl.dbStoreBtn.clicked.connect(self.dbStoreClicked)
         self.clearResults()
         self.layout = self.getElement('Plots', create=True)
@@ -182,7 +182,7 @@ class IVCurve(AnalysisModule):
         self.showhide_lrpk(True)
         self.showhide_lrss(True)
         self.showhide_lrrmp(True)
-        self.showhide_lrtau(True)
+        self.showhide_lrtau(False)
 
         self.ctrl.IVCurve_ssTStart.setSuffix(' ms')
         self.ctrl.IVCurve_ssTStop.setSuffix(' ms')
@@ -243,6 +243,19 @@ class IVCurve(AnalysisModule):
         self.filename = dh.name()
         dirs = dh.subDirs()
 #        c = 0
+        tail = ''
+        fn = self.filename
+        self.protocol = ''
+        while tail != 'Manis':
+            (head, tail) = os.path.split(fn)
+            fn = head
+            if tail != 'Manis':
+                self.protocol = os.path.join(tail, self.protocol)
+            
+        subs = re.compile('[\/]')
+        self.protocol = re.sub(subs, '-', self.protocol)
+        self.protocol = self.protocol[:-1]  + '.pdf'
+        self.commonPrefix = os.path.join(fn,'Manis')
         traces = []
         cmd_wave = []
         self.values = []
@@ -254,17 +267,19 @@ class IVCurve(AnalysisModule):
             sequenceValues = self.Sequence[('Clamp1', 'Pulse_amplitude')] 
         else:
             sequenceValues = [] # print self.Sequence.keys()
+        if self.Sequence.has_key (('protocol', 'repetitions')): # if sequence has repeats, build pattern
+            reps = self.Sequence[('protocol', 'repetitions')]
+            sequenceValues = [x for y in range(len(dirs)) for x in sequenceValues]
+        
         for i,dirName in enumerate(dirs):
             d = dh[dirName]
             try:
                 dataF = self.dataModel.getClampFile(d)
                 if dataF is None:  ## No clamp file for this iteration of the protocol (probably the protocol was stopped early)
                     print 'Missing data...'
-                    #c += 1
                     continue
             except:
                 debug.printExc("Error loading data for protocol %s:" % d.name() )
-               # c += 1
                 continue  ## If something goes wrong here, we'll just try to carry on
             dataF = dataF.read()
             cmd = self.dataModel.getClampCommand(dataF)
@@ -276,7 +291,7 @@ class IVCurve(AnalysisModule):
                     decimate_factor = 2
             else:
                 pass
-                # store primary channel data and read command amplitude
+            # store primary channel data and read command amplitude
             info1 = data.infoCopy()
             self.traceTimes.append(info1[1]['startTime'])
             #if traces is None:  ## Don't know length of array since some data may be missing.
@@ -289,10 +304,9 @@ class IVCurve(AnalysisModule):
             self.data_plot.plot(data, pen=pg.intColor(i, len(dirs), maxValue=200)) # , decimate=decimate_factor)
             self.cmd_plot.plot(cmd, pen=pg.intColor(i, len(dirs), maxValue=200)) # , decimate=decimate_factor)
             if len(sequenceValues) > 0:
-                self.values.append(sequenceValues[i])
+                    self.values.append(sequenceValues[i])
             else:
                 self.values.append(cmd[len(cmd)/2])
-          #  c += 1
         print 'Done loading files'
         if traces is None or len(traces) == 0:
             print "No data found in this run..."
@@ -302,7 +316,7 @@ class IVCurve(AnalysisModule):
         cmd_wave = numpy.vstack(cmd_wave)
         self.cmd_wave = cmd_wave
         self.colorScale.setIntColorScale(0, i, maxValue=200)
-       # self.colorScale.setLabels({'%0.2g'%self.values[0]:0, '%0.2g'%self.values[-1]:1}) 
+        # self.colorScale.setLabels({'%0.2g'%self.values[0]:0, '%0.2g'%self.values[-1]:1}) 
         # set up the selection region correctly, prepare IV curves and find spikes
         info = [
             {'name': 'Command', 'units': cmd.axisUnits(-1), 'values': numpy.array(self.values)},
@@ -366,6 +380,7 @@ class IVCurve(AnalysisModule):
         
         if self.dataMode in self.VCModes: 
             self.cmd = commands
+            self.spikecount=numpy.zeros(len(numpy.array(self.values)))
 
         return True
 
@@ -377,6 +392,10 @@ class IVCurve(AnalysisModule):
     def countSpikes(self):
         if self.dataMode not in self.ICModes or self.tx is None:
             print 'Cannot count spikes : dataMode is ? ', self.dataMode
+            self.spikecount=[]
+            self.fiPlot.plot(x=[], y=[], clear=True, pen='w', symbolSize=6, symbolPen='b', symbolBrush=(0, 0, 255, 200), symbol='s')
+            self.fslPlot.plot(x=[], y=[], pen='w', clear=True, symbolSize=6, symbolPen='g', symbolBrush=(0, 255, 0, 200), symbol='t')
+            self.fslPlot.plot(x=[], y=[], pen='w', symbolSize=6, symbolPen='y', symbolBrush=(255, 255, 0, 200), symbol='s')
             return
         minspk = 4
         maxspk = 10 # range of spike counts
@@ -412,17 +431,9 @@ class IVCurve(AnalysisModule):
         fsl = fsl*1.0e3
         self.fsl = fsl
         self.fisi = fisi
-        iscale = 1.0e12 # convert to pA
         self.nospk = numpy.where(self.spikecount == 0)
         self.spk = numpy.where(self.spikecount > 0)
-        commands = numpy.array(self.values)
-        self.cmd = commands[self.nospk]
-        self.spcmd = commands[self.spk]
-        self.fiPlot.plot(x=commands*iscale, y=self.spikecount, clear=True, pen='w', symbolSize=6, symbolPen='b', symbolBrush=(0, 0, 255, 200), symbol='s')
-        self.fslPlot.plot(x=self.spcmd*iscale, y=fsl[self.spk], pen='w', clear=True, symbolSize=6, symbolPen='g', symbolBrush=(0, 255, 0, 200), symbol='t')
-        self.fslPlot.plot(x=self.spcmd*iscale, y=fisi[self.spk], pen='w', symbolSize=6, symbolPen='y', symbolBrush=(255, 255, 0, 200), symbol='s')
-        if len(self.spcmd) > 0:
-            self.fslPlot.setXRange(0.0, numpy.max(self.spcmd*iscale))
+        self.update_SpikePlots()
 
     def fileCellProtocol(self):
         """
@@ -432,7 +443,6 @@ class IVCurve(AnalysisModule):
         (p1, cell) = os.path.split(p0)
         (p2, date) = os.path.split(p1)
         return(date, cell, proto, p2)
-
 
     def printAnalysis(self):
         """
@@ -450,7 +460,6 @@ class IVCurve(AnalysisModule):
             seq, self.Rmp*1000., self.Rin*1e-6,
             self.tau*1000., self.AdaptRatio, self.tau2*1000)
         print '-'*80
-
 
     def update_Tau(self, printWindow = True, whichTau = 1):
         """ compute tau (single exponential) from the onset of the response
@@ -498,7 +507,6 @@ class IVCurve(AnalysisModule):
             
         if printWindow:
             print tautext % (meantau*1e3)
-
 
     def update_Tauh(self, printWindow = False):
         """ compute tau (single exponential) from the onset of the markers
@@ -635,7 +643,6 @@ class IVCurve(AnalysisModule):
             self.cmd = commands
         self.update_IVPlot()
 
-
     def update_pkAnalysis(self, clear=False, pw = False):
         if self.traces is None:
             return
@@ -671,11 +678,8 @@ class IVCurve(AnalysisModule):
         self.averageRMP = numpy.mean(self.ivrmp)
         self.update_RMPPlot()
 
-
     def update_IVPlot(self):
         self.IV_plot.clear()
-#        print 'lens cmd ss pk: '
-#        print len(self.cmd), len(self.ivss), len(self.ivpk)
         if self.dataMode in self.ICModes:
             if len(self.ivss) > 0:
                 self.IV_plot.plot(self.ivss_cmd*1e12, self.ivss*1e3, symbolSize=6, symbolPen='w', symbolBrush='w')
@@ -710,7 +714,43 @@ class IVCurve(AnalysisModule):
                 self.RMP_plot.setLabel('bottom', 'Spikes') 
             else:
                 pass
-            
+
+    def update_SpikePlots(self):
+        if self.dataMode in self.VCModes:
+            self.fiPlot.clear() # no plots of spikes in VC
+            self.fslPlot.clear()
+            return
+        mode  = self.ctrl.IVCurve_RMPMode.currentIndex() # get x axis mode
+        commands = numpy.array(self.values)
+        self.cmd = commands[self.nospk]
+        self.spcmd = commands[self.spk]
+        iscale = 1.0e12 # convert to pA
+        yfslsc = 1.0 # convert to msec
+        if mode == 0: # plot with time as x axis
+            xfi = self.traceTimes
+            xfsl = self.traceTimes
+            select  = range(len(self.traceTimes))
+            xlabel = 'T (s)' 
+        elif mode == 1: # plot with current as x
+            select = self.spk
+            xfi = commands*iscale
+            xfsl = self.spcmd*iscale
+            xlabel = 'I (pA)'
+        elif mode == 2: # plot with spike counts as x
+            xfi = self.spikecount
+            xfsl = self.spikecount
+            select = range(len(self.spikecount))
+            xlabel = 'Spikes (N)'
+        else:
+            return # mode not in available list
+        self.fiPlot.plot(x=xfi, y=self.spikecount, clear=True, pen='w', symbolSize=6, symbolPen='b', symbolBrush=(0, 0, 255, 200), symbol='s')
+        self.fslPlot.plot(x=xfsl, y=self.fsl[select]*yfslsc, pen='w', clear=True, symbolSize=6, symbolPen='g', symbolBrush=(0, 255, 0, 200), symbol='t')
+        self.fslPlot.plot(x=xfsl, y=self.fisi[select]*yfslsc, pen='w', symbolSize=6, symbolPen='y', symbolBrush=(255, 255, 0, 200), symbol='s')
+        if len(xfsl) > 0:
+            self.fslPlot.setXRange(0.0, numpy.max(xfsl))
+        self.fiPlot.setLabel('bottom', xlabel)
+        self.fslPlot.setLabel('bottom', xlabel)
+        
     def readParameters(self, clearFlag=False, pw=False):
         """
         Read the parameter window entries, set the lr regions, and do an update on the analysis
@@ -742,52 +782,120 @@ class IVCurve(AnalysisModule):
         if len(self.ivrmp) > 0:
             mode  = self.ctrl.IVCurve_RMPMode.currentIndex()
             ax = self.mplax['RMP']
-            ax.set_title('RMP', verticalalignment='top')
+            ax.set_title('RMP', verticalalignment='top', size = 11)
             if self.dataMode in self.ICModes:
-                sf = 1e3
-                ax.set_ylabel('V (mV)')
-            else:
                 sf = 1e12
-                ax.set_ylabel('I (pA)')
+                isf = 1e3
+                ax.set_ylabel('V (mV)', size=9) 
+            else:
+                sf = 1e3
+                isf = 1e12
+                ax.set_ylabel('I (pA)', size=9)
             if mode == 0:
-                ax.plot(self.traceTimes, sf*numpy.array(self.ivrmp), 'k-s', markersize=2) 
-                ax.set_xlabel('T (s)') 
+                ax.plot(self.traceTimes, isf*numpy.array(self.ivrmp), 'k-s', markersize=2) 
+                ax.set_xlabel('T (s)', size=9) 
             elif mode == 1:
-                ax.plot(self.cmd, 1.e3*numpy.array(self.ivrmp) ,'k-s', markersize=2 )
-                ax.set_xlabel('I (pA)') 
+                ax.plot(numpy.array(self.values)*sf, isf*numpy.array(self.ivrmp) ,'k-s', markersize=2 )
+                if self.dataMode in self.ICModes:
+                    ax.set_xlabel('I (pA)', size=9)
+                else:
+                    ax.set_xlabel('V (mV)', size = 9) 
             elif mode == 2:
-                ax.plot(self.spikecount, 1.e3*numpy.array(self.ivrmp),  'k-s', markersize=2)
-                ax.set_xlabel('Spikes') 
+                ax.plot(self.spikecount, isf*numpy.array(self.ivrmp),  'k-s', markersize=2)
+                ax.set_xlabel('Spikes', size=9) 
             else:
                 pass
                 
     def update_IVPlot_MP(self):
         self.mplax['IV'].clear()
-#        print 'lens cmd ss pk: '
-#        print len(self.cmd), len(self.ivss), len(self.ivpk)
         ax = self.mplax['IV']
         if self.dataMode in self.ICModes:
             if len(self.ivss) > 0:
                 ax.plot(self.ivss_cmd*1e12, self.ivss*1e3, 'k-s', markersize = 3)
             if len(self.ivpk) > 0:
                 ax.plot(self.ivpk_cmd*1e12, self.ivpk*1e3, 'r-o', markersize = 3)
-            ax.set_xlabel('I (pA)')
-            ax.set_ylabel('V (mV)')
-            ax.set_title('I-V (CC)', verticalalignment='top')
+            ax.set_xlabel('I (pA)', size=9)
+            ax.set_ylabel('V (mV)', size=9)
+            ax.set_title('I-V (CC)', verticalalignment='top', size=11)
         if self.dataMode in self.VCModes:
             if len(self.ivss) > 0:
                 ax.plot(self.ivss_cmd*1e3, self.ivss*1e9, 'k-s', markersize = 3)
             if len(self.ivpk) > 0:
                 ax.plot(self.ivpk_cmd*1e3, self.ivpk*1e9, 'r-o', markersize = 3)
-            ax.set_xlabel('V (mV)')
-            ax.set_ylabel('I (nA)')
-            ax.set_title('I-V (VC)', verticalalignment='top')
+            ax.set_xlabel('V (mV)', size=9)
+            ax.set_ylabel('I (nA)', size=9)
+            ax.set_title('I-V (VC)', verticalalignment='top', size=11)
 
+    def update_SpikePlots_MP(self):
+        axfi = self.mplax['FI']
+        axfi.clear()
+        axfsl = self.mplax['FSL']
+        axfsl.clear()
+        if self.dataMode in self.VCModes:
+            return
+        mode  = self.ctrl.IVCurve_RMPMode.currentIndex() # get x axis mode
+        commands = numpy.array(self.values)
+        self.cmd = commands[self.nospk]
+        self.spcmd = commands[self.spk]
+        iscale = 1.0e12 # convert to pA
+        yfslsc = 1.0e3 # convert to msec
+        if mode == 0: # plot with time as x axis
+            xfi = self.traceTimes
+            xfsl = self.traceTimes
+            select  = range(len(self.traceTimes))
+            xlabel = 'T (s)' 
+        elif mode == 1: # plot with current as x
+            select = self.spk
+            xfi = commands*iscale
+            xfsl = self.spcmd*iscale
+            xlabel = 'I (pA)'
+        elif mode == 2: # plot with spike counts as x
+            xfi = self.spikecount
+            xfsl = self.spikecount
+            select = range(len(self.spikecount))
+            xlabel = 'Spikes (N)'
+        else:
+            return # mode not in available list
+        axfi.plot(xfi, self.spikecount, 'b-s', markersize=3)
+        axfsl.plot(xfsl, self.fsl[select]*yfslsc, 'g-^', markersize=3)
+        axfsl.plot(xfsl, self.fisi[select]*yfslsc, 'y-s', markersize=3)
+        if len(self.spcmd) > 0:
+            axfsl.set_xlim([0.0, numpy.max(xfsl)])
+        axfi.set_xlabel(xlabel, size=9)
+        axfi.set_ylabel('\# spikes', size=9)
+        axfi.set_title('F-I', verticalalignment='top', size=11)
+        axfsl.set_xlabel(xlabel, size=9)
+        axfsl.set_ylabel('FSL/FISI', size=9)
+        axfsl.set_title('FSL/FISI', verticalalignment='top', size=11)
+
+
+    def cleanRepl(self, matchobj):
+        if matchobj.group(0) == '\\':
+            return '/'
+        if matchobj.group(0) == '_':
+            return '\_'
+        if matchobj.group(0) == '/':
+            return '/'
+        else:
+            return ''
+            
     def matplotlibExport(self):
         """
-        Make a matplotlib window that shows the current data in the same format as the pyqtgraph window"""
-        pylab.figure(1)
+        Make a matplotlib window that shows the current data in the same format as the pyqtgraph window
+        """
+        fig = pylab.figure(1)
+        # escape filename information so it can be rendered by removing common characters
+        # that trip up latex...:
+        escs = re.compile('[\\\/_]')
+        tiname = '%r' % self.filename
+        tiname = re.sub(escs, self.cleanRepl, tiname)
+        print tiname
+        fig.suptitle(tiname[1:-1])
         pylab.autoscale(enable=True, axis='both', tight=None)
+        if self.dataMode not in self.ICModes or self.tx is None:
+            iscale = 1e3
+        else:
+            iscale = 1e12
         self.mplax = {}
         gs = gridspec.GridSpec(4,2)
         self.mplax['data'] = pylab.subplot(gs[0:3,0])
@@ -797,31 +905,29 @@ class IVCurve(AnalysisModule):
         self.mplax['FI'] = pylab.subplot(gs[2,1])
         self.mplax['FSL'] = pylab.subplot(gs[3,1])
         gs.update(wspace=0.25, hspace=0.5)
-        self.mplax['data'].set_title('Data', verticalalignment='top')
-            
+        self.mplax['data'].set_title('Data', verticalalignment='top', size = 11)
+
         for i in range(len(self.traces)):
             self.mplax['data'].plot(self.tx, self.traces[i]*1e3, 'k')
-            self.mplax['cmd'].plot(self.tx, self.cmd_wave[i]*1e12, 'k')
-        self.mplax['data'].set_ylabel('mV')
-        self.mplax['cmd'].set_ylabel('pA')
+            self.mplax['cmd'].plot(self.tx, self.cmd_wave[i]*iscale, 'k')
+#        print dir(self.mplax['data'].axes)
+        self.mplax['data'].set_ylabel('mV', size=9)
+        self.mplax['data'].set_xlabel('T (s)', size=9)
+        self.mplax['cmd'].set_ylabel('pA', size=9)
+        self.mplax['cmd'].set_xlabel('T (s)', size=9)
         self.update_IVPlot_MP()
         self.update_RMPPlot_MP() 
-        iscale = 1e12
-        self.mplax['FI'].plot(numpy.array(self.values)*iscale, self.spikecount, 's-b', markersize=3)
-        self.mplax['FI'].set_title('F-I', verticalalignment='top')
-        self.mplax['FI'].set_ylabel('\# spikes')
-        self.mplax['FI'].set_xlabel('I (pA)')
-        self.mplax['FSL'].plot(self.spcmd*iscale, self.fsl[self.spk], 'g-^', markersize=3)
-        self.mplax['FSL'].set_ylabel('FSL/FISI')
-        self.mplax['FSL'].set_xlabel('I (pA)')
-        self.mplax['FSL'].plot(self.spcmd*iscale, self.fisi[self.spk], 'y-s', markersize=3)
-        self.mplax['FSL'].set_title('FSL/FISI', verticalalignment='top')
+        self.update_SpikePlots_MP()
+
         for ax in self.mplax:
             self.cleanAxes(self.mplax[ax])
         for a in ['data', 'IV', 'FI', 'FSL', 'RMP', 'cmd']:
             self.formatTicks(self.mplax[a], 'y', '%d')
         for a in ['FI','IV', 'RMP', 'FSL']:
             self.formatTicks(self.mplax[a], 'x', '%d')
+        pylab.draw()
+        pylab.savefig(os.path.join(self.commonPrefix,'PlotPDFs',self.protocol))
+        
         pylab.show()                      
             
     def dbStoreClicked(self):
