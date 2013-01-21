@@ -10,7 +10,10 @@ import ooolib
 import re
 import pyqtgraph as pg
 
+## Read data from this ODS file:
 odsFile = "/home/luke/data/analysis/cell_overview.ods"
+## Write data into this DB table:
+DBTable = 'DirTable_Cell'
 
 ## Functions for massaging cell values into DB values
 def splitStd(x):
@@ -29,16 +32,28 @@ def stripUnits(x):
     x = x.lstrip('~')
     return [pg.siEval(x)]
     
+## List of all columns in the ODS file.
+## Each column name is followed by one of:
+##    None, indicating the column should be ignored
+##    List of ('fieldName', 'type') and an optional function for mapping from the ODS cell's value to the DB value(s).
 
 columns = [
     # ODS column header, DB column name, [filter]
     ('cell', None),
     ('type', [('CellType', 'text')]),
     ('slice plane', [('SlicePlane', 'text')]),
+    ('internal', None),
     ('atlas ok', None),
     ('mapping ok', None),
     ('morphology', [('Morphology', 'text')]),
+    ('Mean', [('MorphologyBSMean', 'real')]),
+    ('Stdev', [('MorphologyBSStdev', 'real')]),
+    ('Mean', [('MorphologyTDMean', 'real')]),
+    ('Stdev', [('MorphologyTDStdev', 'real')]),
+    ('tracing', None),
     ('I/V Curves', None),
+    ('IV DB', None),
+    ('H tau', None),
     ('temp', None),
     ('age', None),
     ('region', None),
@@ -95,7 +110,7 @@ columns = [
     ('mcpg', None),
 ]
 
-## for generating column list
+## for initially generating column list:
 #for h in data[1]:
     #print "    ('%s', None)," % h
 
@@ -135,10 +150,11 @@ def readOds():
     
 
 def sync():
+    global DBTable
     man = lib.Manager.getManager()
     data = readOds()
     db = man.getModule('Data Manager').currentDatabase() 
-    table = 'DirTable_Cell'
+    table = DBTable
     tableCols = db.tableSchema(table)
     
     ## make sure DB has all the columns we need
