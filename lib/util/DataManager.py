@@ -83,6 +83,11 @@ class DataManager(QtCore.QObject):
     def getDirHandle(self, dirName, create=False):
         with self.lock:
             dirName = os.path.abspath(dirName)
+            if os.path.exists(dirName) and not os.path.isdir(dirName):
+                raise Exception("Cannot create DirHandle for path '%s'; not a directory." % dirName)
+            
+            ## Note that if the path does not exist at all, we still allow the handle to be created.
+            
             #if not (create or os.path.isdir(dirName)):
             #    if not os.path.exists(dirName):
             #        raise Exception("Directory %s does not exist" % dirName)
@@ -95,6 +100,11 @@ class DataManager(QtCore.QObject):
     def getFileHandle(self, fileName):
         with self.lock:
             fileName = os.path.abspath(fileName)
+            if os.path.exists(fileName) and not os.path.isfile(fileName):
+                raise Exception("Cannot create FileHandle for path '%s'; not a file." % fileName)
+            
+            ## Note that if the path does not exist at all, we still allow the handle to be created.
+            
             #if not os.path.exists(fileName):
             #    raise Exception("File %s does not exist" % fileName)
             #if not os.path.isfile(fileName):

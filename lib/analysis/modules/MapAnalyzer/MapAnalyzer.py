@@ -358,6 +358,8 @@ class MapAnalyzer(AnalysisModule):
 
         if db is None:
             raise Exception("No DB selected")
+        if not db.hasTable(table):
+            return None
         
         fields = OrderedDict([
             ('Map', {'Type': 'int', 'Link': mapTable}),

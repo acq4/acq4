@@ -14,7 +14,7 @@ print "Loading ACQ4..."
 import sys
 import os.path as osp
 d = osp.dirname(osp.abspath(__file__))
-sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
+sys.path = [osp.join(d, 'lib', 'util'), osp.join(d, 'lib', 'util', 'pyqtgraph')] + sys.path + [d]
 
 
 import sip

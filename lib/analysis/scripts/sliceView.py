@@ -26,18 +26,21 @@ if not initialized:
     w.show()
     initialized = True
 
-def show():
+def show(dh=None):
     """
     Display a graphic of the currently selected slice / cell
     """
     
     global v, g, atlas
+    if dh is None:
+        dh = man.currentFile
     v.clear()
-    if 'cell' in man.currentFile.shortName().lower():
-        cd = man.currentFile
+    
+    if 'cell' in dh.shortName().lower():
+        cd = dh
         sd = cd.parent()
     else:
-        sd = man.currentFile
+        sd = dh
         cd = None
     atlas.loadState(sd)
     g = atlas.schematicGraphicsItems()
@@ -54,12 +57,15 @@ def show():
         g.cellImg1 = mimg1
         
         ## larger image to be displayed above
-        cellScale = 10.
         cellGroup = pg.ItemGroup()
         g.cellGroup = cellGroup
         mimg2 = pg.ImageItem(imgd)
         mimg2.setParentItem(cellGroup)
         mimg2.setTransform(tr * g.sliceGroup.transform())
+        mimg2.scale(1.0 / g.sliceScaleFactor, 1.0 / g.sliceScaleFactor)
+        #angle = pg.SRTTransform(g.sliceGroup.transform()).getRotation()
+        #mimg2.rotate(angle)
+        cellScale = 50.
         cellGroup.scale(cellScale, cellScale)
         g.cellImg2 = mimg2
         
@@ -73,12 +79,54 @@ def show():
         cellGroup.setPos(pos)
         
         ## add scale bar
-        sbLength = 50e-6
+        sbLength = 25e-6
         g.cellScale = pg.QtGui.QGraphicsLineItem(0.0, 0.0, sbLength, 0.0)
         g.cellScale.setPen(pg.mkPen(color=0.0, width=100e-6/cellScale, cosmetic=False))
         g.cellScale.setParentItem(cellGroup)
         g.cellScale.setZValue(10)
-        g.cellScale.text = pg.TextItem(u"50 µm", anchor=(0.5, 1), color=(0,0,0))
+        g.cellScale.text = pg.TextItem(u"25 µm", anchor=(0.5, 1), color=(0,0,0))
         g.cellScale.text.setParentItem(g.cellScale)
         g.cellScale.text.setPos(sbLength*0.5, -50e-6/cellScale)
-        g.cellScale.setPos(mimg2.mapRectToParent(mimg2.boundingRect()).bottomRight() + pg.Point(-sbLength, -sbLength))
+        corner = mimg2.mapToParent(mimg2.boundingRect()).boundingRect().bottomRight()
+        g.cellScale.setPos(corner + pg.Point(-sbLength/2., -sbLength/3.))
+        
+        cell = dh
+        sl = cell.parent()
+        day = sl.parent()
+        name = day.shortName() + "_" + sl.shortName() + "_" + cell.shortName()
+        g.cellName = pg.TextItem(name, color=(0,0,0))
+        g.cellName.setParentItem(cellGroup)
+        g.cellName.setPos(corner + pg.Point(-sbLength*4,-sbLength/4.))
+        ## auto-range the view
+        #bounds = bounds | g.mapFromItem(mimg2, mimg2.boundingRect()).boundingRect()
+        #v.setRange(bounds)
+        
+def exportAll():
+    global v
+    with pg.ProgressDialog("exporting all..", 0, 1000) as dlg:
+        for day in man.baseDir.ls():
+            day = man.baseDir[day]
+            for sl in day.ls():
+                if 'slice' not in sl:
+                    continue
+                sl = day[sl]
+                for cell in sl.ls():
+                    if 'cell' not in cell:
+                        continue
+                    cell = sl[cell]
+                    try:
+                        m = cell['morphology.png']
+                    except:
+                        continue
+                    
+                    show(cell)
+                    pg.QtGui.QApplication.processEvents()
+                    pg.QtGui.QApplication.processEvents()
+                    
+                    name = day.shortName() + "_" + sl.shortName() + "_" + cell.shortName() + ".svg"
+                    ex = pg.exporters.SVGExporter.SVGExporter(v.scene())
+                    ex.export(name)
+                    print name
+                    
+                    if dlg.wasCanceled():
+                        raise Exception("export cancelled")
