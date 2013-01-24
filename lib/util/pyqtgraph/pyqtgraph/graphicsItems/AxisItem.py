@@ -58,13 +58,14 @@ class AxisItem(GraphicsWidget):
         self.labelUnitPrefix=''
         self.labelStyle = {}
         self.logMode = False
+        self.tickFont = None
         
         self.textHeight = 18
         self.tickLength = maxTickLength
         self._tickLevels = None  ## used to override the automatic ticking system with explicit ticks
         self.scale = 1.0
         self.autoScale = True
-            
+        
         self.setRange(0, 1)
         
         self.setPen(pen)
@@ -72,12 +73,12 @@ class AxisItem(GraphicsWidget):
         self._linkedView = None
         if linkView is not None:
             self.linkToView(linkView)
-            
+        
         self.showLabel(False)
         
         self.grid = False
         #self.setCacheMode(self.DeviceCoordinateCache)
-            
+        
     def close(self):
         self.scene().removeItem(self.label)
         self.label = None
@@ -98,6 +99,14 @@ class AxisItem(GraphicsWidget):
         """
         self.logMode = log
         self.picture = None
+        self.update()
+        
+    def setTickFont(self, font):
+        self.tickFont = font
+        self.picture = None
+        self.prepareGeometryChange()
+        ## Need to re-allocate space depending on font size?
+        
         self.update()
         
     def resizeEvent(self, ev=None):
@@ -630,6 +639,9 @@ class AxisItem(GraphicsWidget):
         prof.mark('draw ticks')
 
         ## Draw text until there is no more room (or no more text)
+        if self.tickFont is not None:
+            p.setFont(self.tickFont)
+        
         textRects = []
         for i in range(len(tickLevels)):
             ## Get the list of strings to display for this level
