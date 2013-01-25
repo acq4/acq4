@@ -511,7 +511,7 @@ class SqliteDatabase:
             #return np.array([])  ## need to return empty array *with correct columns*, but this is very difficult, so just return None
             return None
         rec1 = recs[0]
-        dtype = functions.suggestRecordDType(rec1)
+        dtype = functions.suggestRecordDType(rec1, singleValue=True)
         #print rec1, dtype
         arr = np.empty(len(recs), dtype=dtype)
         arr[0] = tuple(rec1.values())

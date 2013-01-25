@@ -25,12 +25,31 @@ def splitStd(x):
         return pg.siEval(x1), pg.siEval(x2)
     else:
         return pg.siEval(x.lstrip('~')), None
-    
+
 def stripUnits(x):
     if x is None or x == '-' or '?' in x:
         return [None]
     x = x.lstrip('~')
+    x.replace('%', '')  
     return [pg.siEval(x)]
+    
+def splitPair(x):
+    ## extract two values from strings like "10ms 30pA"
+    if x is None or x == '-' or '?' in x:
+        return None, None
+    a,b = x.strip().split(' ')
+    return stripUnits(a)[0], stripUnits(b)[0]
+
+def splitCsv3(x):
+    ## extract 3 comma-separated values
+    if x is None or x == '-' or '?' in x:
+        return None, None, None
+    return map(float, x.strip().split(','))
+    
+def toInt(x):
+    if not isinstance(x, float) and (x is None or x == '-' or '?' in x):
+        return [None]
+    return [int(x)]
     
 ## List of all columns in the ODS file.
 ## Each column name is followed by one of:
@@ -52,25 +71,19 @@ columns = [
     ('Stdev', [('MorphologyTDStdev', 'real')]),
     ('tracing', None),
     ('I/V Curves', None),
-    ('IV DB', None),
-    ('H tau', None),
     ('temp', None),
     ('age', None),
     ('region', None),
-    ('H-current', None),
     ('time post-dissection', None),
     ('electrode res.', None),
-    ('input res.', None),
     ('access res.', None),
-    ('capacitance', None),
     ('holding cur.', None),
-    ('time constant', None),
-    ('time to peak', None),
-    ('decay 1', None),
-    ('decay 2', None),
-    ('area &gt;0, &gt;20, &gt;100', None),
-    ('n spikes', None),
-    ('latency', None),
+    ('time to peak', [('DirectTimeToPeak', 'real')], stripUnits),
+    ('decay 1', [('DirectDecayTau1', 'real'), ('DirectDecayAmp1', 'real')], splitPair),
+    ('decay 2', [('DirectDecayTau2', 'real'), ('DirectDecayAmp2', 'real')], splitPair),
+    ('area &gt;0, &gt;20, &gt;100', [('DirectAreaGt0', 'int'), ('DirectAreaGt20', 'int'), ('DirectAreaGt100', 'int')], splitCsv3),
+    ('n spikes', [('DirectNSpikes', 'int')], toInt),
+    ('latency', [('DirectSpikeLatency', 'real')], stripUnits),
     ('rise',    [('SpontExRise', 'real'),   ('SpontExRiseStd', 'real')],   splitStd ),
     ('decay 1', [('SpontExDecay1', 'real'), ('SpontExDecay1Std', 'real')], splitStd ),
     ('decay 2', [('SpontExDecay2', 'real'), ('SpontExDecay2Std', 'real')], splitStd ),
@@ -96,10 +109,6 @@ columns = [
     ('ex str', None),
     ('tv str', None),
     ('ex rate', None),
-    ('direct spikes', None),
-    ('direct latency', None),
-    ('slow direct?', None),
-    ('Direct area', None),
     ('AVCN area', None),
     ('DCN area', None),
     ('isofreq aligned', None),
