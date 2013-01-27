@@ -18,6 +18,7 @@ class GraphItem(GraphicsObject):
         self.scatter.setParentItem(self)
         self.adjacency = None
         self.pos = None
+        self.picture = None
         self.pen = 'default'
         self.setData(**kwds)
         
@@ -46,6 +47,7 @@ class GraphItem(GraphicsObject):
         """
         if 'adj' in kwds:
             self.adjacency = kwds.pop('adj')
+            assert self.adjacency.dtype.kind in 'iu'
             self.picture = None
         if 'pos' in kwds:
             self.pos = kwds['pos']
@@ -56,6 +58,7 @@ class GraphItem(GraphicsObject):
         if 'symbolPen' in kwds:    
             kwds['pen'] = kwds.pop('symbolPen')
         self.scatter.setData(**kwds)
+        self.informViewBoundsChanged()
 
     def setPen(self, pen):
         self.pen = pen

@@ -50,6 +50,16 @@ def toInt(x):
     if not isinstance(x, float) and (x is None or x == '-' or '?' in x):
         return [None]
     return [int(x)]
+
+def fiType(x):
+    ## Convert B/S IVcurve types to 0 or 1
+    if x == 'B':
+        return [0]
+    elif x == 'S':
+        return [1]
+    else:
+        return [None]
+    
     
 ## List of all columns in the ODS file.
 ## Each column name is followed by one of:
@@ -70,7 +80,7 @@ columns = [
     ('Mean', [('MorphologyTDMean', 'real')]),
     ('Stdev', [('MorphologyTDStdev', 'real')]),
     ('tracing', None),
-    ('I/V Curves', None),
+    ('I/V Curves', [('FIType', 'real')], fiType),
     ('temp', None),
     ('age', None),
     ('region', None),
