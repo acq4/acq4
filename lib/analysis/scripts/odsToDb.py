@@ -184,7 +184,7 @@ def sync():
             if name not in tableCols:
                 db.addColumn(table, name, typ)
     
-    for rec in data[2:]:
+    for rec in data:
         
         ## get the cell's dir handle for this record
         parts = rec[0].split(' ')
@@ -216,7 +216,7 @@ def sync():
         
         
         ## update table
-        #print "Update:", dh, newRec
+        print "Update:", dh, newRec
         db.update(table, newRec, where={'Dir': dh})
         
     
