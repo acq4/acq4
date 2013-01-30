@@ -70,25 +70,29 @@ class GraphItem(GraphicsObject):
             return
         
         p = pg.QtGui.QPainter(self.picture)
-        pts = self.pos[self.adjacency]
-        pen = self.pen
-        if isinstance(pen, np.ndarray):
-            lastPen = None
-            for i in range(pts.shape[0]):
-                pen = self.pen[i]
-                if pen != lastPen:
-                    lastPen = pen
-                    p.setPen(pg.mkPen(color=(pen['red'], pen['green'], pen['blue'], pen['alpha']), width=pen['width']))
-                p.drawLine(pg.QtCore.QPointF(*pts[i][0]), pg.QtCore.QPointF(*pts[i][1]))
-        else:
-            if pen == 'default':
-                pen = pg.getConfigOption('foreground')
-            p.setPen(pg.mkPen(pen))
-            pts = pts.reshape((pts.shape[0]*pts.shape[1], pts.shape[2]))
-            path = fn.arrayToQPath(x=pts[:,0], y=pts[:,1], connect='pairs')
-            p.drawPath(path)
-        
-        p.end()
+        try:
+            pts = self.pos[self.adjacency]
+            pen = self.pen
+            if isinstance(pen, np.ndarray):
+                lastPen = None
+                for i in range(pts.shape[0]):
+                    pen = self.pen[i]
+                    if np.any(pen != lastPen):
+                        lastPen = pen
+                        if pen.dtype.fields is None:
+                            p.setPen(pg.mkPen(color=(pen[0], pen[1], pen[2], pen[3]), width=1))                            
+                        else:
+                            p.setPen(pg.mkPen(color=(pen['red'], pen['green'], pen['blue'], pen['alpha']), width=pen['width']))
+                    p.drawLine(pg.QtCore.QPointF(*pts[i][0]), pg.QtCore.QPointF(*pts[i][1]))
+            else:
+                if pen == 'default':
+                    pen = pg.getConfigOption('foreground')
+                p.setPen(pg.mkPen(pen))
+                pts = pts.reshape((pts.shape[0]*pts.shape[1], pts.shape[2]))
+                path = fn.arrayToQPath(x=pts[:,0], y=pts[:,1], connect='pairs')
+                p.drawPath(path)
+        finally:
+            p.end()
 
     def paint(self, p, *args):
         if self.picture == None:
