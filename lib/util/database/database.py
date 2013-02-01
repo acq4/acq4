@@ -800,6 +800,8 @@ class TableData:
         if self.mode == 'array':
             return self.data.dtype.names
         elif self.mode == 'list':
+            if len(self.data) == 0:
+                return []
             return self.data[0].keys()  ## all records must have all keys. 
             #names = set()
             #for row in self.data:
