@@ -608,13 +608,13 @@ class Parameter(QtCore.QObject):
     def __getattr__(self, attr):
         ## Leaving this undocumented because I might like to remove it in the future..
         #print type(self), attr
-        import traceback
-        traceback.print_stack()
-        print "Warning: Use of Parameter.subParam is deprecated. Use Parameter.param(name) instead."
         
         if 'names' not in self.__dict__:
             raise AttributeError(attr)
         if attr in self.names:
+            import traceback
+            traceback.print_stack()
+            print "Warning: Use of Parameter.subParam is deprecated. Use Parameter.param(name) instead."
             return self.param(attr)
         else:
             raise AttributeError(attr)

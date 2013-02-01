@@ -11,6 +11,8 @@ __all__ = ['SVGExporter']
 
 class SVGExporter(Exporter):
     Name = "Scalable Vector Graphics (SVG)"
+    allowCopy=True
+    
     def __init__(self, item):
         Exporter.__init__(self, item)
         #tr = self.getTargetRect()
@@ -37,8 +39,8 @@ class SVGExporter(Exporter):
     def parameters(self):
         return self.params
     
-    def export(self, fileName=None, toBytes=False):
-        if toBytes is False and fileName is None:
+    def export(self, fileName=None, toBytes=False, copy=False):
+        if toBytes is False and copy is False and fileName is None:
             self.fileSaveDialog(filter="Scalable Vector Graphics (*.svg)")
             return
         #self.svg = QtSvg.QSvgGenerator()
@@ -84,9 +86,14 @@ class SVGExporter(Exporter):
         
         if toBytes:
             return bytes(xml)
+        elif copy:
+            md = QtCore.QMimeData()
+            md.setData('image/svg+xml', QtCore.QByteArray(bytes(xml)))
+            QtGui.QApplication.clipboard().setMimeData(md)
         else:
             with open(fileName, 'w') as fh:
                 fh.write(xml.encode('UTF-8'))
+
 
 xmlHeader = """\
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
@@ -170,8 +177,12 @@ def _generateItemSvg(item, nodes=None, root=None):
     tr = QtGui.QTransform()
     if isinstance(item, QtGui.QGraphicsScene):
         xmlStr = "<g>\n</g>\n"
-        childs = [i for i in item.items() if i.parentItem() is None]
         doc = xml.parseString(xmlStr)
+        childs = [i for i in item.items() if i.parentItem() is None]
+    elif item.__class__.paint == QtGui.QGraphicsItem.paint:
+        xmlStr = "<g>\n</g>\n"
+        doc = xml.parseString(xmlStr)
+        childs = item.childItems()
     else:
         childs = item.childItems()
         tr = itemTransform(item, item.scene())

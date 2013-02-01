@@ -611,7 +611,7 @@ class GradientEditorItem(TickSliderItem):
             b = c1.blue() * (1.-f) + c2.blue() * f
             a = c1.alpha() * (1.-f) + c2.alpha() * f
             if toQColor:
-                return QtGui.QColor(r, g, b,a)
+                return QtGui.QColor(int(r), int(g), int(b), int(a))
             else:
                 return (r,g,b,a)
         elif self.colorMode == 'hsv':

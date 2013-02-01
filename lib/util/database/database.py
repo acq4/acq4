@@ -671,7 +671,23 @@ class TableData:
             #return np.array([])  ## need to return empty array *with correct columns*, but this is very difficult, so just return None
             return None
         rec1 = self[0]
-        dtype = functions.suggestRecordDType(rec1, singleRecord=True)
+        #dtype = functions.suggestRecordDType(self)
+        ## Need to look through all data before deciding on dtype.
+        ## It is not sufficient to look at just the first record,
+        ## nor to look at the column types.
+        types = {k:set() for k in self.keys()}
+        for rec in self:
+            for k,v in rec.items():
+                types[k].add(type(v))
+        dtype = []
+        for k in self.keys():
+            t = types[k]
+            if t == set([float]) or t == set([float, type(None)]):
+                dtype.append((k, float))
+            elif t == set([int]):
+                dtype.append((k, int))
+            else:
+                dtype.append((k, object))
         
         #print rec1, dtype
         arr = np.empty(len(self), dtype=dtype)
@@ -784,10 +800,11 @@ class TableData:
         if self.mode == 'array':
             return self.data.dtype.names
         elif self.mode == 'list':
-            names = set()
-            for row in self.data:
-                names.update(row.keys())
-            return list(names)
+            return self.data[0].keys()  ## all records must have all keys. 
+            #names = set()
+            #for row in self.data:
+                #names.update(row.keys())
+            #return list(names)
         elif self.mode == 'dict':
             return self.data.keys()
             

@@ -36,6 +36,7 @@ from .. LabelItem import LabelItem
 from .. LegendItem import LegendItem
 from .. GraphicsWidget import GraphicsWidget
 from .. ButtonItem import ButtonItem
+from .. InfiniteLine import InfiniteLine
 from pyqtgraph.WidgetGroup import WidgetGroup
 
 __all__ = ['PlotItem']
@@ -551,6 +552,24 @@ class PlotItem(GraphicsWidget):
     def addCurve(self, c, params=None):
         print("PlotItem.addCurve is deprecated. Use addItem instead.")
         self.addItem(c, params)
+
+    def addLine(self, x=None, y=None, **kwds):
+        """
+        Create an InfiniteLine and add to the plot. 
+        
+        If *x* is specified,
+        the line will be vertical. If *y* is specified, the line will be
+        horizontal. All extra keyword arguments are passed to
+        :func:`InfiniteLine.__init__() <pyqtgraph.InfiniteLine.__init__>`.
+        Returns the item created.
+        """
+        angle = 0 if x is None else 90
+        pos = x if x is not None else y
+        line = InfiniteLine(pos, angle, **kwds)
+        self.addItem(line)
+        return line
+        
+        
 
     def removeItem(self, item):
         """
