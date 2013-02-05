@@ -125,6 +125,14 @@ class WidgetParameterItem(ParameterItem):
             w.setValue = w.setColor
             self.hideWidget = False
             w.setFlat(True)
+        elif t == 'gradient':
+            w = GradientWidget(orientation='bottom')
+            w.sigChanged = w.sigGradientChangeFinished
+            w.sigChanging = w.sigGradientChanged
+            w.value = w.color
+            w.setValue = w.setColor
+            self.hideWidget = False
+            w.setFlat(True)
         else:
             raise Exception("Unknown type '%s'" % asUnicode(t))
         return w

@@ -553,7 +553,7 @@ class PlotItem(GraphicsWidget):
         print("PlotItem.addCurve is deprecated. Use addItem instead.")
         self.addItem(c, params)
 
-    def addLine(self, x=None, y=None, **kwds):
+    def addLine(self, x=None, y=None, z=None, **kwds):
         """
         Create an InfiniteLine and add to the plot. 
         
@@ -567,6 +567,8 @@ class PlotItem(GraphicsWidget):
         pos = x if x is not None else y
         line = InfiniteLine(pos, angle, **kwds)
         self.addItem(line)
+        if z is not None:
+            line.setZValue(z)
         return line
         
         

@@ -5,6 +5,8 @@ from .GraphicsObject import GraphicsObject
 from .GraphicsWidget import GraphicsWidget
 import weakref
 from pyqtgraph.pgcollections import OrderedDict
+from pyqtgraph.colormap import ColorMap
+
 import numpy as np
 
 __all__ = ['TickSliderItem', 'GradientEditorItem']
@@ -20,6 +22,9 @@ Gradients = OrderedDict([
     ('greyclip', {'ticks': [(0.0, (0, 0, 0, 255)), (0.99, (255, 255, 255, 255)), (1.0, (255, 0, 0, 255))], 'mode': 'rgb'}),
     ('grey', {'ticks': [(0.0, (0, 0, 0, 255)), (1.0, (255, 255, 255, 255))], 'mode': 'rgb'}),
 ])
+
+
+
 
 
 class TickSliderItem(GraphicsWidget):
@@ -489,6 +494,18 @@ class GradientEditorItem(TickSliderItem):
             self.hsvAction.blockSignals(False)
         self.colorMode = cm
         self.updateGradient()
+        
+    def colormap(self):
+        """Return a ColorMap object representing the current state of the editor."""
+        if self.colorMode == 'hsv':
+            raise NotImplementedError('hsv colormaps not yet supported')
+        pos = []
+        color = []
+        for t,x in self.listTicks():
+            pos.append(x)
+            c = t.color
+            color.append([c.red(), c.green(), c.blue(), c.alpha()])
+        return ColorMap(np.array(pos), np.array(color, dtype=np.ubyte))
         
     def updateGradient(self):
         #private
