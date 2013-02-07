@@ -549,6 +549,11 @@ class PlotItem(GraphicsWidget):
         print("PlotItem.addDataItem is deprecated. Use addItem instead.")
         self.addItem(item, *args)
         
+    def listDataItems(self):
+        """Return a list of all data items (PlotDataItem, PlotCurveItem, ScatterPlotItem, etc)
+        contained in this PlotItem."""
+        return self.dataItems[:]
+        
     def addCurve(self, c, params=None):
         print("PlotItem.addCurve is deprecated. Use addItem instead.")
         self.addItem(c, params)

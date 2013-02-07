@@ -1,46 +1,69 @@
 from pyqtgraph.Qt import QtGui, QtCore
 from .PlotWidget import PlotWidget
+from .DataFilterWidget import DataFilterParameter
+from .ColorMapWidget import ColorMapParameter
 import pyqtgraph.parametertree as ptree
 import pyqtgraph.functions as fn
 import numpy as np
+from pyqtgraph.pgcollections import OrderedDict
 
 __all__ = ['ScatterPlotWidget']
 
-class ScatterPlotWidget(QtGui.QWidget):
+class ScatterPlotWidget(QtGui.QSplitter):
     """
     Given a record array, display a scatter plot of a specific set of data.
     This widget includes controls for selecting the columns to plot,
     filtering data, and determining symbol color and shape. This widget allows
     the user to explore relationships between columns in a record array.
+    
+    The widget consists of four components:
+    
+    1) A list of column names from which the user may select 1 or 2 columns
+       to plot. If one column is selected, the data for that column will be
+       plotted in a histogram-like manner by using :func:`pseudoScatter()
+       <pyqtgraph.pseudoScatter>`. If two columns are selected, then the
+       scatter plot will be generated with x determined by the first column
+       that was selected and y by the second.
+    2) A DataFilter that allows the user to select a subset of the data by 
+       specifying multiple selection criteria.
+    3) A ColorMap that allows the user to determine how points are colored by
+       specifying multiple criteria.
+    4) A PlotWidget for displaying the data.
     """
     def __init__(self, parent=None):
-        QtGui.QWidget.__init__(self)
-        self.layout = QtGui.QGridLayout()
-        self.setLayout(self.layout)
+        QtGui.QSplitter.__init__(self, QtCore.Qt.Horizontal)
+        self.ctrlPanel = QtGui.QSplitter(QtCore.Qt.Vertical)
+        self.addWidget(self.ctrlPanel)
         self.fieldList = QtGui.QListWidget()
         self.fieldList.setSelectionMode(self.fieldList.ExtendedSelection)
-        self.filter = DataFilterWidget()
-        self.colorMap = ColorMapWidget()
+        self.ptree = ptree.ParameterTree(showHeader=False)
+        self.filter = DataFilterParameter()
+        self.colorMap = ColorMapParameter()
+        self.params = ptree.Parameter.create(name='params', type='group', children=[self.filter, self.colorMap])
+        self.ptree.setParameters(self.params, showTop=False)
+        
         self.plot = PlotWidget()
-        self.layout.addWidget(self.fieldList, 0, 0)
-        self.layout.addWidget(self.filter, 1, 0)
-        self.layout.addWidget(self.colorMap, 2, 0)
-        self.layout.addWidget(self.plot, 0, 1, 3, 1)
+        self.ctrlPanel.addWidget(self.fieldList)
+        self.ctrlPanel.addWidget(self.ptree)
+        self.addWidget(self.plot)
         
         self.data = None
+        self.style = dict(pen=None, symbol='o')
         
         self.fieldList.itemSelectionChanged.connect(self.fieldSelectionChanged)
         self.filter.sigFilterChanged.connect(self.filterChanged)
+        self.colorMap.sigColorMapChanged.connect(self.updatePlot)
     
     def setFields(self, fields):
         """
         Set the list of field names/units to be processed.
         Format is: [(name, units), ...]   
         """
+        self.fields = OrderedDict(fields)
         self.fieldList.clear()
-        for f in fields:
-            item = QtGui.QListWidgetItem(f[0])
-            item.units = f[1]
+        for f,opts in fields:
+            item = QtGui.QListWidgetItem(f)
+            item.opts = opts
             item = self.fieldList.addItem(item)
         self.filter.setFields(fields)
         self.colorMap.setFields(fields)
@@ -55,6 +78,15 @@ class ScatterPlotWidget(QtGui.QWidget):
         self.updatePlot()
         
     def fieldSelectionChanged(self):
+        sel = self.fieldList.selectedItems()
+        if len(sel) > 2:
+            self.fieldList.blockSignals(True)
+            try:
+                for item in sel[1:-1]:
+                    item.setSelected(False)
+            finally:
+                self.fieldList.blockSignals(False)
+                
         self.updatePlot()
         
     def filterChanged(self, f):
@@ -69,24 +101,33 @@ class ScatterPlotWidget(QtGui.QWidget):
         if self.filtered is None:
             self.filtered = self.filter.filterData(self.data)
         data = self.filtered
+        if len(data) == 0:
+            return
         
-        style = dict(pen=None, symbol='o')
+        colors = np.array([fn.mkBrush(*x) for x in self.colorMap.map(data)])
         
+        style = self.style.copy()
+        
+        ## Look up selected columns and units
         sel = list([str(item.text()) for item in self.fieldList.selectedItems()])
-        units = list([item.units for item in self.fieldList.selectedItems()])
+        units = list([item.opts.get('units', '') for item in self.fieldList.selectedItems()])
         if len(sel) == 0:
             self.plot.setTitle('')
-        elif len(sel) == 1:
+            return
+        
+
+        if len(sel) == 1:
             self.plot.setLabels(left=('N', ''), bottom=(sel[0], units[0]), title='')
             if len(data) == 0:
                 return
             x = data[sel[0]]
-            mask = ~np.isnan(x)
-            x = x[mask]
-            #if color is not None:
-                #style['symbolBrush'] = color[mask]
-            y = fn.pseudoScatter(x)
-            self.plot.plot(x, y, clear=True, **style)
+            #if x.dtype.kind == 'f':
+                #mask = ~np.isnan(x)
+            #else:
+                #mask = np.ones(len(x), dtype=bool)
+            #x = x[mask]
+            #style['symbolBrush'] = colors[mask]
+            y = None
         elif len(sel) == 2:
             self.plot.setLabels(left=(sel[1],units[1]), bottom=(sel[0],units[0]))
             if len(data) == 0:
@@ -100,144 +141,44 @@ class ScatterPlotWidget(QtGui.QWidget):
                     #d += np.random.normal(size=len(cells), scale=0.1)
                 xydata.append(d)
             x,y = xydata
-            mask = ~(np.isnan(x) | np.isnan(y))
-            x = x[mask]
-            y = y[mask]
-            #if color is not None:
-                #style['symbolBrush'] = color[mask]
-            self.plot.plot(x, y, **style)
-            #r,p = stats.pearsonr(x, y)
-            #plot.setLabels(title="r=%0.2f, p=%0.2g" % (r,p))
-        
-        
-class DataFilterWidget(QtGui.QWidget):
-    sigFilterChanged = QtCore.Signal(object)
-    def __init__(self):
-        QtGui.QWidget.__init__(self)
-        self.layout = QtGui.QGridLayout()
-        self.setLayout(self.layout)
-        self.ptree = ptree.ParameterTree()
-        self.layout.addWidget(self.ptree)
-        
-        self.fields = []
-        self.params = ptree.Parameter.create(name='Data Filter', type='group', addText='Add filter..', addList=[])
-        self.params.addNew = self.addNew
-        
-        self.ptree.setParameters(self.params)
-        self.params.sigTreeStateChanged.connect(self.filterChanged)
-    
-    def addNew(self, name):
-        #fp = ptree.Parameter.create(name='Filter', autoIncrementName=True, type='bool', value=True, removable=True, renamable=True, children=[
-            #dict(name="Field", type='list', value=typ, values=self.fieldNames()),
-            #dict(name='Min', type='float', value=0.0),
-            #dict(name='Max', type='float', value=1.0),
-            #])
-        self.params.addChild(FilterItem(name, self.units[name]))
-        
-    def filterChanged(self):
-        self.sigFilterChanged.emit(self)
-        
-    def fieldNames(self):
-        return [f[0] for f in self.fields]
-    
-    def parameters(self):
-        return self.params
-        
-    def setFields(self, fields):
-        self.fields = fields
-        #self.fields.sort()
-        names = self.fieldNames()
-        self.units = dict(fields)
-        self.params.setAddList(names)
-        #for fp in self.params:
-            #if fp.name() == 'Amplitude Sign':
-                #continue
-            #fp.param('Field').setLimits(names)
-    
-    def filterData(self, data):
-        if len(data) == 0:
-            return data
-        
-        #self.updateKeys(events.dtype.names)
-        
-        #if self.params['Amplitude Sign'] == '+':
-            #events = events[events['fitAmplitude'] > 0]
-        #else:
-            #events = events[events['fitAmplitude'] < 0]
-        
-        #for fp in self.params:
-            ##if fp.name() == 'Amplitude Sign':
-                ##continue
-            #if fp.value() is False:
-                #continue
-            #key, mn, mx = fp['Field'], fp['Min'], fp['Max']
-            #vals = data[key]
-            #mask = (vals >= mn) * (vals < mx)  ## Use inclusive minimum and non-inclusive maximum. This makes it easier to create non-overlapping selections
-            #data = data[mask]
-            
-        return data[self.generateMask(data)]
-    
-    def generateMask(self, data):
-        mask = np.ones(len(data), dtype=bool)
-        if len(data) == 0:
-            return mask
-        for fp in self.params:
-            #if fp.name() == 'Amplitude Sign':
-                #continue
-            if fp.value() is False:
-                continue
-            key, mn, mx = fp.fieldName, fp['Min'], fp['Max']
-            vals = data[key]
-            mask &= (vals >= mn)
-            mask &= (vals < mx)  ## Use inclusive minimum and non-inclusive maximum. This makes it easier to create non-overlapping selections
-        return mask
+            #mask = np.ones(len(x), dtype=bool)
+            #if x.dtype.kind == 'f':
+                #mask |= ~np.isnan(x)
+            #if y.dtype.kind == 'f':
+                #mask |= ~np.isnan(y)
+            #x = x[mask]
+            #y = y[mask]
+            #style['symbolBrush'] = colors[mask]
 
-class FilterItem(ptree.types.SimpleParameter):
-    def __init__(self, name, units):
-        self.fieldName = name
-        ptree.types.SimpleParameter.__init__(self, 
-            name=name, autoIncrementName=True, type='bool', value=True, removable=True, renamable=True, 
-            children=[
-                #dict(name="Field", type='list', value=name, values=fields),
-                dict(name='Min', type='float', value=0.0, suffix=units, siPrefix=True),
-                dict(name='Max', type='float', value=1.0, suffix=units, siPrefix=True),
-            ])
-    
-    
-class ColorMapWidget(QtGui.QWidget):
-    def __init__(self):
-        QtGui.QWidget.__init__(self)
-        self.layout = QtGui.QGridLayout()
-        self.setLayout(self.layout)
-        self.ptree = ptree.ParameterTree()
-        self.layout.addWidget(self.ptree)
+        ## convert enum-type fields to float, set axis labels
+        xy = [x,y]
+        for i in [0,1]:
+            axis = self.plot.getAxis(['bottom', 'left'][i])
+            if xy[i] is not None and xy[i].dtype.kind in ('S', 'O'):
+                vals = self.fields[sel[i]].get('values', list(set(xy[i])))
+                xy[i] = np.array([vals.index(x) if x in vals else None for x in xy[i]], dtype=float)
+                axis.setTicks([list(enumerate(vals))])
+            else:
+                axis.setTicks(None)  # reset to automatic ticking
+        x,y = xy
         
-        self.fields = []
-        self.params = ptree.Parameter.create(name='Color Map', type='group', addText='Add..')
-        self.params.addNew = self.addNew
+        ## mask out any nan values
+        mask = np.ones(len(x), dtype=bool)
+        if x.dtype.kind == 'f':
+            mask &= ~np.isnan(x)
+        if y is not None and y.dtype.kind == 'f':
+            mask &= ~np.isnan(y)
+        x = x[mask]
+        style['symbolBrush'] = colors[mask]
+
+        ## Scatter y-values for a histogram-like appearance
+        if y is None:
+            print x, x.dtype
+            y = fn.pseudoScatter(x)
+        else:
+            y = y[mask]
+                
+            
+        self.plot.plot(x, y, **style)
         
-        self.ptree.setParameters(self.params)
-        self.params.sigTreeStateChanged.connect(self.filterChanged)
-    
-    def addNew(self, name):
-        #fp = ptree.Parameter.create(name='Filter', autoIncrementName=True, type='bool', value=True, removable=True, renamable=True, children=[
-            #dict(name="Field", type='list', value=typ, values=self.fieldNames()),
-            #dict(name='Min', type='float', value=0.0),
-            #dict(name='Max', type='float', value=1.0),
-            #])
-        self.params.addChild(FilterItem())
         
-    def setFields(self, fields):
-        pass
-    
-class ColorMapItem(ptree.types.SimpleParameter):
-    def __init__(self, name, units):
-        self.fieldName = name
-        ptree.types.SimpleParameter.__init__(self, 
-            name=name, autoIncrementName=True, type='bool', value=True, removable=True, renamable=True, 
-            children=[
-                #dict(name="Field", type='list', value=name, values=fields),
-                dict(name='Min', type='float', value=0.0, suffix=units, siPrefix=True),
-                dict(name='Max', type='float', value=1.0, suffix=units, siPrefix=True),
-            ])
-    

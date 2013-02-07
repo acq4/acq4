@@ -60,7 +60,23 @@ def fiType(x):
     else:
         return [None]
     
-    
+def temperature(x):
+    try: 
+        return[float(x)]
+    except:
+        if x == 'RT':
+            return [20.]
+        else:
+            return [None]
+
+def mcpg(x):
+    if x == 'yes':
+        return [1.0]
+    elif x == 'no':
+        return [-1.0]
+    else:
+        return [None]
+
 ## List of all columns in the ODS file.
 ## Each column name is followed by one of:
 ##    None, indicating the column should be ignored
@@ -72,6 +88,7 @@ columns = [
     ('type', [('CellType', 'text')]),
     ('slice plane', [('SlicePlane', 'text')]),
     ('internal', None),
+    ('mcpg', [('MCPG', 'real')], mcpg),
     ('atlas ok', None),
     ('mapping ok', None),
     ('morphology', [('Morphology', 'text')]),
@@ -81,8 +98,8 @@ columns = [
     ('Stdev', [('MorphologyTDStdev', 'real')]),
     ('tracing', None),
     ('I/V Curves', [('FIType', 'real')], fiType),
-    ('temp', None),
-    ('age', None),
+    ('temp', [('Temperature', 'real')], temperature),
+    ('age', [('Age', 'real')]),
     ('region', None),
     ('time post-dissection', None),
     ('electrode res.', None),
@@ -126,7 +143,6 @@ columns = [
     ('TV?', None),
     ('Ex input?', None),
     ('GCA?', None),
-    ('mcpg', None),
 ]
 
 ## for initially generating column list:
@@ -216,7 +232,7 @@ def sync():
         
         
         ## update table
-        print "Update:", dh, newRec
+        #print "Update:", dh, newRec
         db.update(table, newRec, where={'Dir': dh})
         
     

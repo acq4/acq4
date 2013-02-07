@@ -88,25 +88,17 @@ class ColorMap(object):
     def mapToFloat(self, data):
         return self.map(data, mode=self.FLOAT)
     
-    #def getGradient(self, p1=None, p2=None):
-        #"""Return a QLinearGradient object."""
-        #if p1 = None:
-            #p1 = QtCore.QPointF(0,0)
-        #if p2 = None:
-            #p2 = QtCore.QPointF(self.length,0)
-        #g = QtGui.QLinearGradient(p1, p2)
+    def getGradient(self, p1=None, p2=None):
+        """Return a QLinearGradient object."""
+        if p1 == None:
+            p1 = QtCore.QPointF(0,0)
+        if p2 == None:
+            p2 = QtCore.QPointF(self.pos.max()-self.pos.min(),0)
+        g = QtGui.QLinearGradient(p1, p2)
         
-        #color = self.color
-        #if color.dtype.kind == 'f':
-            #color = (color*255).astype(np.ubyte)
-        
-        #stops = []
-        #for x, c1, c2, c3, c4, mode in self.stops:
-            #if mode == self.RGB:
-                #stops.append(x, QtGui.QColor
-            #else:
-
-        #g.setStops(stops)
+        pos, color = self.getStops(mode=self.BYTE)
+        color = [QtGui.QColor(*x) for x in color]
+        g.setStops(zip(pos, color))
         
         #if self.colorMode == 'rgb':
             #ticks = self.listTicks()
@@ -124,8 +116,25 @@ class ColorMap(object):
                     #stops.append((x, self.getColor(x)))
                 #stops.append((x2, self.getColor(x2)))
             #g.setStops(stops)
-        #return g
+        return g
     
+    def getColors(self, mode=None):
+        """Return list of all colors converted to the specified mode.
+        If mode is None, then no conversion is done."""
+        if isinstance(mode, basestring):
+            mode = self.enumMap[mode.lower()]
+        
+        color = self.color
+        if mode in [self.BYTE, self.QCOLOR] and color.dtype.kind == 'f':
+            color = (color * 255).astype(np.ubyte)
+        elif mode == self.FLOAT and color.dtype.kind != 'f':
+            color = color.astype(float) / 255.
+            
+        if mode == self.QCOLOR:
+            color = [QtGui.QColor(*x) for x in color]
+            
+        return color
+        
     def getStops(self, mode):
         ## Get fully-expanded set of RGBA stops in either float or byte mode.
         if mode not in self.stopsCache:

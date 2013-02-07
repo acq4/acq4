@@ -495,7 +495,7 @@ class GradientEditorItem(TickSliderItem):
         self.colorMode = cm
         self.updateGradient()
         
-    def colormap(self):
+    def colorMap(self):
         """Return a ColorMap object representing the current state of the editor."""
         if self.colorMode == 'hsv':
             raise NotImplementedError('hsv colormaps not yet supported')
@@ -766,6 +766,18 @@ class GradientEditorItem(TickSliderItem):
         for t in state['ticks']:
             c = QtGui.QColor(*t[1])
             self.addTick(t[0], c, finish=False)
+        self.updateGradient()
+        self.sigGradientChangeFinished.emit(self)
+        
+    def setColorMap(self, cm):
+        self.setColorMode('rgb')
+        for t in list(self.ticks.keys()):
+            self.removeTick(t, finish=False)
+        colors = cm.getColors(mode='qcolor')
+        for i in range(len(cm.pos)):
+            x = cm.pos[i]
+            c = colors[i]
+            self.addTick(x, c, finish=False)
         self.updateGradient()
         self.sigGradientChangeFinished.emit(self)
 

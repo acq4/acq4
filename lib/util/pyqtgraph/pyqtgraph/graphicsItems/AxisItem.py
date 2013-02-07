@@ -683,7 +683,7 @@ class AxisItem(GraphicsWidget):
                 if tickPositions[i][j] is None:
                     strings[j] = None
 
-            textRects.extend([p.boundingRect(QtCore.QRectF(0, 0, 100, 100), QtCore.Qt.AlignCenter, s) for s in strings if s is not None])
+            textRects.extend([p.boundingRect(QtCore.QRectF(0, 0, 100, 100), QtCore.Qt.AlignCenter, str(s)) for s in strings if s is not None])
             if i > 0:  ## always draw top level
                 ## measure all text, make sure there's enough room
                 if axis == 0:
@@ -698,7 +698,7 @@ class AxisItem(GraphicsWidget):
             #spacing, values = tickLevels[best]
             #strings = self.tickStrings(values, self.scale, spacing)
             for j in range(len(strings)):
-                vstr = strings[j]
+                vstr = str(strings[j])
                 if vstr is None:## this tick was ignored because it is out of bounds
                     continue
                 x = tickPositions[i][j]

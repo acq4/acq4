@@ -525,8 +525,9 @@ class Parameter(QtCore.QObject):
             self.removeChild(ch)
 
     def children(self):  
-        """Return a list of this parameter's children."""
-        ## warning -- this overrides QObject.children
+        """Return a list of this parameter's children.
+        Warning: this overrides QObject.children
+        """
         return self.childs[:]
     
     def hasChildren(self):
