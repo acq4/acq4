@@ -698,9 +698,10 @@ class AxisItem(GraphicsWidget):
             #spacing, values = tickLevels[best]
             #strings = self.tickStrings(values, self.scale, spacing)
             for j in range(len(strings)):
-                vstr = str(strings[j])
-                if vstr is None:## this tick was ignored because it is out of bounds
+                vstr = strings[j]
+                if vstr is None: ## this tick was ignored because it is out of bounds
                     continue
+                vstr = str(vstr)
                 x = tickPositions[i][j]
                 textRect = p.boundingRect(QtCore.QRectF(0, 0, 100, 100), QtCore.Qt.AlignCenter, vstr)
                 height = textRect.height()

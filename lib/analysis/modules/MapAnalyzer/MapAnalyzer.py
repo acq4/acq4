@@ -846,5 +846,5 @@ class TimelineMarker(pg.GraphicsObject):
         y2 = r.top() + r.height() * self.yRange[1]
         self.translate(0, y1)
         self.scale(1.0, abs(y2-y1))
-        print y1, y2
+        #print y1, y2
         

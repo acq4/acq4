@@ -173,7 +173,6 @@ class ScatterPlotWidget(QtGui.QSplitter):
 
         ## Scatter y-values for a histogram-like appearance
         if y is None:
-            print x, x.dtype
             y = fn.pseudoScatter(x)
         else:
             y = y[mask]
