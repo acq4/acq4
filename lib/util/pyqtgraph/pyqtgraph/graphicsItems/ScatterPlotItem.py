@@ -891,7 +891,7 @@ class SpotItem(object):
 
     def updateItem(self):
         self._data['fragCoords'] = None
-        self._plot.updateSpots([self._data])
+        self._plot.updateSpots(self._data.reshape(1))
         self._plot.invalidate()
 
 #class PixmapSpotItem(SpotItem, QtGui.QGraphicsPixmapItem):

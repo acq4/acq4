@@ -577,10 +577,11 @@ class ViewBox(GraphicsWidget):
                         childRange[ax] = [x-w2, x+w2]
                     else:
                         l = self.width() if ax==0 else self.height()
-                        padding = np.clip(1./(l**0.5), 0.02, 0.1)
-                        wp = (xr[1] - xr[0]) * padding
-                        childRange[ax][0] -= wp
-                        childRange[ax][1] += wp
+                        if l > 0:
+                            padding = np.clip(1./(l**0.5), 0.02, 0.1)
+                            wp = (xr[1] - xr[0]) * padding
+                            childRange[ax][0] -= wp
+                            childRange[ax][1] += wp
                     targetRect[ax] = childRange[ax]
                     args['xRange' if ax == 0 else 'yRange'] = targetRect[ax]
             if len(args) == 0:
