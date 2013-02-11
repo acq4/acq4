@@ -83,11 +83,6 @@ class DataManager(QtCore.QObject):
     def getDirHandle(self, dirName, create=False):
         with self.lock:
             dirName = os.path.abspath(dirName)
-            if os.path.exists(dirName) and not os.path.isdir(dirName):
-                raise Exception("Cannot create DirHandle for path '%s'; not a directory." % dirName)
-            
-            ## Note that if the path does not exist at all, we still allow the handle to be created.
-            
             #if not (create or os.path.isdir(dirName)):
             #    if not os.path.exists(dirName):
             #        raise Exception("Directory %s does not exist" % dirName)
@@ -100,11 +95,6 @@ class DataManager(QtCore.QObject):
     def getFileHandle(self, fileName):
         with self.lock:
             fileName = os.path.abspath(fileName)
-            if os.path.exists(fileName) and not os.path.isfile(fileName):
-                raise Exception("Cannot create FileHandle for path '%s'; not a file." % fileName)
-            
-            ## Note that if the path does not exist at all, we still allow the handle to be created.
-            
             #if not os.path.exists(fileName):
             #    raise Exception("File %s does not exist" % fileName)
             #if not os.path.isfile(fileName):
@@ -114,14 +104,17 @@ class DataManager(QtCore.QObject):
             return self._getCache(fileName)
         
     def getHandle(self, fileName):
+        """Return a FileHandle or DirHandle for the given fileName. 
+        If the file does not exist, this method returns a FileHandle.
+        """
         fn = os.path.abspath(fileName)
-        if not os.path.exists(fn):
-            raise Exception("File '%s' does not exist." % fn)
-        if os.path.isfile(fn):
-            return self.getFileHandle(fileName)
-        else:
+        #if not os.path.exists(fn):
+            #raise Exception("File '%s' does not exist." % fn)
+        if os.path.isdir(fn):
             return self.getDirHandle(fileName)
-            
+        else:
+            return self.getFileHandle(fileName)
+        
     def cleanup(self):
         """Attempt to free memory by allowing python to collect any unused handles."""
         import gc
@@ -977,7 +970,7 @@ class DirHandle(FileHandle):
                 try:
                     self._index = readConfigFile(indexFile)
                     self._indexMTime = os.path.getmtime(indexFile)
-                    self.checkIndex()
+                    #self.checkIndex()  ## This is a bad idea. Lots of ways this can lead to data loss.
                 except:
                     print "***************Error while reading index file %s!*******************" % indexFile
                     raise

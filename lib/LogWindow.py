@@ -330,6 +330,7 @@ class LogWidget(QtGui.QWidget):
     
     sigDisplayEntry = QtCore.Signal(object) ## for thread-safetyness
     sigAddEntry = QtCore.Signal(object) ## for thread-safetyness
+    sigScrollToAnchor = QtCore.Signal(object)  # for internal use.
     
     def __init__(self, parent, manager):
         QtGui.QWidget.__init__(self, parent)
@@ -364,6 +365,7 @@ class LogWidget(QtGui.QWidget):
         self.ui.importanceSlider.valueChanged.connect(self.filtersChanged)
         #self.ui.logView.linkClicked.connect(self.linkClicked)
         self.ui.output.anchorClicked.connect(self.linkClicked)
+        self.sigScrollToAnchor.connect(self.scrollToAnchor, QtCore.Qt.QueuedConnection)
         
         #page = self.ui.logView.page()
         #page.setLinkDelegationPolicy(page.DelegateAllLinks)
@@ -553,10 +555,19 @@ class LogWidget(QtGui.QWidget):
             self.displayedEntries.append(entry)
             
             if isMax:
-                QtGui.QApplication.processEvents()  ## can't scroll to end until the web frame has processed the html change
-                self.ui.output.scrollToAnchor(str(entry['id']))
+                ## can't scroll to end until the web frame has processed the html change
                 #frame.setScrollBarValue(QtCore.Qt.Vertical, frame.scrollBarMaximum(QtCore.Qt.Vertical))
+                
+                ## Calling processEvents anywhere inside an error handler is forbidden
+                ## because this can lead to Qt complaining about paint() recursion.
+                #QtGui.QApplication.processEvents()  
+                #self.ui.output.scrollToAnchor(str(entry['id']))
+                
+                self.sigScrollToAnchor.emit(str(entry['id']))  ## queued connection
             #self.ui.logView.update()
+            
+    def scrollToAnchor(self, anchor):
+        self.ui.output.scrollToAnchor(anchor)
                 
     def generateEntryHtml(self, entry):
         msg = self.cleanText(entry['message'])
