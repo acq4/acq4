@@ -129,7 +129,9 @@ class MapAnalyzer(AnalysisModule):
         self.params = ptree.Parameter.create(name='options', type='group', children=params)
         self.ctrl.setParameters(self.params, showTop=False)
         
-        self.params.sigTreeStateChanged.connect(self.invalidate)
+        
+        ## Note: need to reconnect this!!
+        #self.params.sigTreeStateChanged.connect(self.invalidate)
         self.recalcBtn.clicked.connect(self.recalcClicked)
         self.storeBtn.clicked.connect(self.storeToDB)
         self.params.param('Time Ranges').sigTreeStateChanged.connect(self.updateTimes)
@@ -232,6 +234,7 @@ class MapAnalyzer(AnalysisModule):
         
     def update(self):
         if not self.analysisValid:
+            print "Updating analysis.."
             map = self.currentMap
             if map is None:
                 return
@@ -274,6 +277,7 @@ class MapAnalyzer(AnalysisModule):
             self.colorsValid = True
         
     def invalidate(self):
+        print "invalidate."
         self.analysisValid = False
         self.colorsValid = False
 
@@ -384,7 +388,7 @@ class MapAnalyzer(AnalysisModule):
             pos = spot['pos']
             rgn = self.regions.getRegion(pos)
             spot['data']['Region'] = rgn
-            print dh,rgn
+            #print dh,rgn
             
         ## Store ROI positions with cell
         cell = self.currentMap.getRecord()['cell'] 
@@ -431,7 +435,8 @@ class MapAnalyzer(AnalysisModule):
                 for k in fields:
                     spot['data'][k] = recs[i].get(k, None)
             self.analysisValid = True
-            print "reloaded analysis from DB"
+            print "reloaded analysis from DB", self.currentMap.rowID
+            
         
         
         
