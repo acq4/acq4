@@ -1,0 +1,41 @@
+pos: (0.0, 0.0)
+connects: [('RegionSelect.0', 'region', 'AccessResistance', 'region'), ('AccessResistance', 'Ra', 'Output', 'Output'), ('ColumnSelect.0', 'Command', 'AccessResistance', 'voltage'), ('RegionSelect.0', 'widget', 'PlotWidget.0', 'In'), ('ColumnSelect.0', 'primary', 'AccessResistance', 'current'), ('ReadFile', 'output', 'ColumnSelect.0', 'In'), ('Input', 'Input', 'ReadFile', 'input'), ('ColumnSelect.0', 'primary', 'PlotWidget.0', 'In')]
+terminals:
+    Input:
+        multi: False
+        io: 'in'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+    Output:
+        multi: False
+        io: 'out'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+bypass: False
+inputNode:
+    terminals:
+        Input:
+            multi: False
+            io: 'out'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+    pos: (-608.2331725431286, -6.417831548223091)
+    bypass: False
+nodes: [{'state': {'pos': (180.02362490562507, -190.61324990007358), 'bypass': False}, 'pos': (180.02362490562507, -190.61324990007358), 'class': 'PlotWidget', 'name': 'PlotWidget.0'}, {'state': {'pos': (-154.61551924268815, -190.1113141998203), 'bypass': False, 'ctrl': {'start': 0.0473057227173, 'stop': 0.0533700733216, 'display': True, 'movable': True}}, 'pos': (-154.61551924268815, -190.1113141998203), 'class': 'RegionSelect', 'name': 'RegionSelect.0'}, {'state': {'columns': ['Command', 'primary'], 'pos': (-377.02681051774925, -6.011431548223115), 'bypass': False}, 'pos': (-377.02681051774925, -6.011431548223115), 'class': 'ColumnSelect', 'name': 'ColumnSelect.0'}, {'state': {'text': "# Access inputs as args['input_name']\nreturn {'output': args['input']['Clamp1.ma'].read()} ## one key per output terminal", 'terminals': OrderedDict([('input', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False}), ('output', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False})]), 'pos': (-494.4189073045511, -3.3703326192892007), 'bypass': False}, 'pos': (-494.4189073045511, -3.3703326192892007), 'class': 'PythonEval', 'name': 'ReadFile'}, {'state': {'text': "# Access inputs as args['input_name']\nstart, stop = args['region']\nV = args['voltage']['Time':start:stop]\nI = args['current']['Time':start:stop]\n\ncmd = V[-1] - V[0]\ndI = I.max() - I.min()\nif cmd < 0:\n    dI = -dI\n\nreturn {'Ra': cmd/dI} ## one key per output terminal\n\n", 'terminals': OrderedDict([('region', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False}), ('current', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': True, 'optional': False}), ('voltage', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': True, 'optional': False}), ('Ra', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False})]), 'pos': (-1.6612618084416795, -19.09995692958654), 'bypass': False}, 'pos': (-1.6612618084416795, -19.09995692958654), 'class': 'PythonEval', 'name': 'AccessResistance'}]
+outputNode:
+    terminals:
+        Output:
+            multi: False
+            io: 'in'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+    pos: (300.0, 0.0)
+    bypass: False
