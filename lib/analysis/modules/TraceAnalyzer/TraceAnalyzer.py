@@ -11,6 +11,7 @@ import numpy as np
 from DirTreeWidget import DirTreeLoader
 from FileLoader import FileLoader
 import pyqtgraph.flowchart as fc
+import pyqtgraph.debug as debug
 import os
 
 class TraceAnalyzer(AnalysisModule):
@@ -65,6 +66,8 @@ class TraceAnalyzer(AnalysisModule):
     def fileLoaded(self, dh):
         files = self.fileLoader.loadedFiles()
         self.flowchart.setInput(Input=files[0])
+        table = self.getElement('Results')
+        table.setData(None)
         
     def fileSelected(self, dh):
         self.flowchart.setInput(Input=dh)
@@ -87,7 +90,10 @@ class TraceAnalyzer(AnalysisModule):
         
         table = self.getElement('Results')
         for fh in self.fileLoader.loadedFiles():
-            output.append(self.flowchart.process(Input=fh))
+            try:
+                output.append(self.flowchart.process(Input=fh))
+            except:
+                debug.printExc('Error processing %s' % fh)
         table.setData(output)
     
     def outputChanged(self):
@@ -133,5 +139,7 @@ class DataLoader(FileLoader):
         self.sigFileLoaded.emit(dh)
             
     def selectedFileChanged(self):
-        self.sigSelectedFileChanged.emit(self.ui.fileTree.currentItem().file)
+        sel = self.ui.fileTree.currentItem()
+        if sel is not None:
+            self.sigSelectedFileChanged.emit(sel.file)
          

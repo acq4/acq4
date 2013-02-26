@@ -232,7 +232,7 @@ class FileHandle(QtCore.QObject):
 
     def name(self, relativeTo=None):
         """Return the full name of this file with its absolute path"""
-        #self.checkDeleted()
+        #self.checkExists()
         with self.lock:
             path = self.path
             if relativeTo == self:
@@ -246,7 +246,7 @@ class FileHandle(QtCore.QObject):
         
     def shortName(self):
         """Return the name of this file without its path"""
-        #self.checkDeleted()
+        #self.checkExists()
         return os.path.split(self.name())[1]
 
     def ext(self):
@@ -254,7 +254,7 @@ class FileHandle(QtCore.QObject):
         return os.path.splitext(self.name())[1]
 
     def parent(self):
-        self.checkDeleted()
+        self.checkExists()
         with self.lock:
             if self.parentDir is None:
                 dirName = os.path.split(self.name())[0]
@@ -262,7 +262,7 @@ class FileHandle(QtCore.QObject):
             return self.parentDir
         
     def info(self):
-        self.checkDeleted()
+        self.checkExists()
         info = self.parent()._fileInfo(self.shortName())
         return advancedTypes.ProtectedDict(info)
         
@@ -270,16 +270,16 @@ class FileHandle(QtCore.QObject):
         """Set meta-information for this file. Updates all keys specified in info, leaving others unchanged."""
         if info is None:
             info = args
-        self.checkDeleted()
+        self.checkExists()
         self.emitChanged('meta')
         return self.parent()._setFileInfo(self.shortName(), info)
         
     def isManaged(self):
-        self.checkDeleted()
+        self.checkExists()
         return self.parent().isManaged(self.shortName())
         
     def move(self, newDir):
-        self.checkDeleted()
+        self.checkExists()
         with self.lock:
             oldDir = self.parent()
             fn1 = self.name()
@@ -321,7 +321,7 @@ class FileHandle(QtCore.QObject):
         
     def rename(self, newName):
         #print "Rename %s -> %s" % (self.name(), newName)
-        self.checkDeleted()
+        self.checkExists()
         with self.lock:
             parent = self.parent()
             fn1 = self.name()
@@ -344,7 +344,7 @@ class FileHandle(QtCore.QObject):
             self.parent()._childChanged()
         
     def delete(self):
-        self.checkDeleted()
+        self.checkExists()
         with self.lock:
             parent = self.parent()
             fn1 = self.name()
@@ -361,7 +361,7 @@ class FileHandle(QtCore.QObject):
             parent._childChanged()
         
     def read(self, *args, **kargs):
-        self.checkDeleted()
+        self.checkExists()
         with self.lock:
             typ = self.fileType()
             
@@ -403,7 +403,7 @@ class FileHandle(QtCore.QObject):
         self.sigDelayedChange.emit(self, changes)
     
     def hasChildren(self):
-        self.checkDeleted()
+        self.checkExists()
         return False
     
     def _parentMoved(self, oldDir, newDir):
@@ -422,6 +422,15 @@ class FileHandle(QtCore.QObject):
         self.parentDir = None
         #print "parent of %s changed" % self.name()
         self.emitChanged('parent')
+        
+    def exists(self):
+        if self.path is None:
+            return False
+        return os.path.exists(self.path)
+
+    def checkExists(self):
+        if not self.exists():
+            raise Exception("File '%s' does not exist." % self.path)
 
     def checkDeleted(self):
         if self.path is None:

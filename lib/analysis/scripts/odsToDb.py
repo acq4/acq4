@@ -69,13 +69,19 @@ def temperature(x):
         else:
             return [None]
 
-def mcpg(x):
-    if x == 'yes':
+def yesno(x):
+    if x.startswith('yes'):
         return [1.0]
-    elif x == 'no':
+    elif x.startswith('no'):
         return [-1.0]
     else:
         return [None]
+    
+def access(x):
+    if x == '-':
+        return [None]
+    else:
+        return [float(x) * 1e6]
 
 ## List of all columns in the ODS file.
 ## Each column name is followed by one of:
@@ -88,9 +94,14 @@ columns = [
     ('type', [('CellType', 'text')]),
     ('slice plane', [('SlicePlane', 'text')]),
     ('internal', None),
-    ('mcpg', [('MCPG', 'real')], mcpg),
+    ('mcpg', [('MCPG', 'real')], yesno),
     ('atlas ok', None),
-    ('mapping ok', None),
+    ('mapping ok', [('MapOK', 'real')], yesno),
+    ('DCN map ok', [('DCNMapOK', 'real')], yesno),
+    ('Ra IV', None),
+    ('Ra ex', None),
+    ('Ra in', None),
+    ('Ra', [('AccessResistance', 'real')], access),
     ('morphology', [('Morphology', 'text')]),
     ('Mean', [('MorphologyBSMean', 'real')]),
     ('Stdev', [('MorphologyBSStdev', 'real')]),
