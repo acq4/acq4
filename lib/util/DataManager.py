@@ -423,9 +423,11 @@ class FileHandle(QtCore.QObject):
         #print "parent of %s changed" % self.name()
         self.emitChanged('parent')
         
-    def exists(self):
+    def exists(self, name=None):
         if self.path is None:
             return False
+        if name is not None:
+            raise Exception("Cannot check for subpath existence on FileHandle.")
         return os.path.exists(self.path)
 
     def checkExists(self):
@@ -924,9 +926,14 @@ class DirHandle(FileHandle):
 
         
 
-    def exists(self, name):
+    def exists(self, name=None):
         """Returns True if the file 'name' exists in this directory, False otherwise."""
         with self.lock:
+            if self.path is None:
+                return False
+            if name is None:
+                return os.path.exists(self.path)
+            
             try:
                 fn = os.path.abspath(os.path.join(self.path, name))
             except:
