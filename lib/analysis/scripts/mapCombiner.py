@@ -2,7 +2,7 @@ import lib.Manager
 import numpy as np
 import lib.analysis.tools.functions as afn
 import scipy
-from lib.util.pyqtgraph.multiprocess import Parallelize
+#from lib.util.pyqtgraph.multiprocess import Parallelize
 from pyqtgraph.debug import Profiler
 import os, sys
 try:
@@ -373,8 +373,8 @@ def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probT
             'mappedY': 'percentDepth'}
     if eventKey == None:
         eventKey = 'numOfPostEvents'
-    if timeWindow == None:
-        timeWindow = sites[0]['PostRgnLen']
+    #if timeWindow == None:
+    #    timeWindow = sites[0]['PostRgnLen']
             
     #avgCellX = np.array(list(set(sites['CellXPos']))).mean()
     #avgCellY = np.array(list(set(sites['CellYPos']))).mean()
@@ -397,11 +397,16 @@ def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probT
     arr = np.zeros((n, xdim, ydim), dtype=float)
     sampling = np.zeros((n, xdim, ydim), dtype=float)
     #results = []
+    counts = []
     
     for i, c in enumerate(cells):
         print "index:", i," = cell:", c
         
         data = sites[sites['CellDir']==c]
+        if timeWindow == None:
+            timeWindow = data[0]['PostRegionLen']
+        elif timeWindow == 'pre':
+            timeWindow = data[0]['PreRegionLen']
         spontRate = data['numOfPreEvents'].sum()/data['PreRegionLen'].sum()
         data = afn.bendelsSpatialCorrelationAlgorithm(data, 90e-6, spontRate, timeWindow, eventsKey=eventKey)
   
@@ -413,7 +418,8 @@ def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probT
             x, y = (int((s[keys['mappedX']]-xmin)/spacing), int((s[keys['mappedY']]*factor-ymin)/spacing))
             arr[i, x, y] = probs[j]
             sampling[i, x, y] = 1
-              
+        
+        counts.append(arr[i].sum()) 
         #results.append(arr[i].copy())
         arr[i] = scipy.ndimage.gaussian_filter(arr[i], 2, mode='constant')
         arr[i] = arr[i]/0.039
@@ -425,24 +431,24 @@ def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probT
         sampling[i][sampling[i] > 0.02] = 1
         sampling[i][sampling[i] <= 0.02] = 0    
     
-        ## mark cell position
-        xind = int(-xmin/spacing)
-        yind = int(data['CellYPos'][0]/spacing)
-        #print "yind=", ymin, '*', factor, '/', spacing
-        #print arr.shape, xind, yind
-        arr[i, xind-1:xind+2, yind-1:yind+2] = 2
-        #print arr.max()
+        ### mark cell position
+        #xind = int(-xmin/spacing)
+        #yind = int(data['CellYPos'][0]/spacing)
+        ##print "yind=", ymin, '*', factor, '/', spacing
+        ##print arr.shape, xind, yind
+        #arr[i, xind-1:xind+2, yind-1:yind+2] = 2
+        ##print arr.max()
 
-    ## mark separation lines
-    arr[:, int((-xmin-150e-6)/spacing), :] = 3
-    arr[:, int((-xmin-450e-6)/spacing), :] = 3
-    arr[:, int((-xmin+150e-6)/spacing), :] = 3
-    arr[:, int((-xmin+450e-6)/spacing), :] = 3   
-    arr[:, :, int(130e-6*factor/spacing)] = 3
-    arr[:, :, int(310e-6*factor/spacing)] = 3
-    arr[:, :, int(450e-6*factor/spacing)] = 3
-    arr[:, :, int(720e-6*factor/spacing)] = 3
-    return arr, sampling
+    ### mark separation lines
+    #arr[:, int((-xmin-150e-6)/spacing), :] = 3
+    #arr[:, int((-xmin-450e-6)/spacing), :] = 3
+    #arr[:, int((-xmin+150e-6)/spacing), :] = 3
+    #arr[:, int((-xmin+450e-6)/spacing), :] = 3   
+    #arr[:, :, int(130e-6*factor/spacing)] = 3
+    #arr[:, :, int(310e-6*factor/spacing)] = 3
+    #arr[:, :, int(450e-6*factor/spacing)] = 3
+    #arr[:, :, int(720e-6*factor/spacing)] = 3
+    return arr, counts
 
 def randomizeData(data, fields):
     """Return a record array with the data in specified fields randomly sorted.
