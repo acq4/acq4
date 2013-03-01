@@ -152,7 +152,7 @@ class RegionSelectNode(CtrlNode):
                     #print "  new rgn:", c, region
                     #self.items[c].setYRange([0., 0.2], relative=True)
         
-        if self.selected.isConnected():
+        if self['selected'].isConnected():
             if data is None:
                 sliced = None
             elif (hasattr(data, 'implements') and data.implements('MetaArray')):
@@ -182,8 +182,8 @@ class EvalNode(Node):
     def __init__(self, name):
         Node.__init__(self, name, 
             terminals = {
-                'input': {'io': 'in', 'renamable': True},
-                'output': {'io': 'out', 'renamable': True},
+                'input': {'io': 'in', 'renamable': True, 'multiable': True},
+                'output': {'io': 'out', 'renamable': True, 'multiable': True},
             },
             allowAddInput=True, allowAddOutput=True)
         
