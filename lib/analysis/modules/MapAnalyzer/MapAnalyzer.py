@@ -129,12 +129,15 @@ class MapAnalyzer(AnalysisModule):
         self.params = ptree.Parameter.create(name='options', type='group', children=params)
         self.ctrl.setParameters(self.params, showTop=False)
         
-        self.params.sigTreeStateChanged.connect(self.invalidate)
+        
+        ## Note: need to reconnect this!!
+        #self.params.sigTreeStateChanged.connect(self.invalidate)
         self.recalcBtn.clicked.connect(self.recalcClicked)
         self.storeBtn.clicked.connect(self.storeToDB)
         self.params.param('Time Ranges').sigTreeStateChanged.connect(self.updateTimes)
         
         self.getElement('Color Mapper', create=True).sigChanged.connect(self.colorMapChanged)
+        self.regions.sigRegionChanged.connect(self.processRegions)
         
     def elementChanged(self, element, old, new):
         name = element.name()
@@ -231,6 +234,7 @@ class MapAnalyzer(AnalysisModule):
         
     def update(self):
         if not self.analysisValid:
+            print "Updating analysis.."
             map = self.currentMap
             if map is None:
                 return
@@ -273,6 +277,7 @@ class MapAnalyzer(AnalysisModule):
             self.colorsValid = True
         
     def invalidate(self):
+        print "invalidate."
         self.analysisValid = False
         self.colorsValid = False
 
@@ -376,6 +381,20 @@ class MapAnalyzer(AnalysisModule):
             self.storeBtn.failure()            
             raise
         
+    def processRegions(self):
+        ## Compute regions for each spot
+        for spot in self.currentMap.spots:
+            dh = spot['data']['sites'][0][1]
+            pos = spot['pos']
+            rgn = self.regions.getRegion(pos)
+            spot['data']['Region'] = rgn
+            #print dh,rgn
+            
+        ## Store ROI positions with cell
+        cell = self.currentMap.getRecord()['cell'] 
+        rgns = self.regions.getRegions()
+        cell.setInfo(MapAnalyzer_Regions=rgns)
+        
     def loadFromDB(self):
         ## read in analysis from DB
         
@@ -416,7 +435,8 @@ class MapAnalyzer(AnalysisModule):
                 for k in fields:
                     spot['data'][k] = recs[i].get(k, None)
             self.analysisValid = True
-            print "reloaded analysis from DB"
+            print "reloaded analysis from DB", self.currentMap.rowID
+            
         
         
         
@@ -731,26 +751,56 @@ class EventStatisticsAnalyzer:
         #self.histogram.addItem(self.threshLine)
         #self.threshLine.setPos(self.params['Threshold'])
     
-class RegionMarker:
+class RegionMarker(QtCore.QObject):
     """Allows user to specify multiple anatomical regions for classifying cells.
     Region names are written into custom DB columns for each site."""
+    sigRegionChanged = QtCore.Signal(object)
+    
     def __init__(self, canvas):
+        QtCore.QObject.__init__(self)
         self.params = RegionsParameter(canvas)
+        self.params.sigRegionChanged.connect(self.sigRegionChanged)
     
     def parameters(self):
         return self.params
 
-    def process(self, map, spontRateTable, events, ampMean, ampStdev):
-        stimTime = self.params['Stimulus Time']
+    def getRegion(self, pos):
+        ## return the first region containing pos
+        for name,roi in self.params.getRegions():
+            if roi.mapToParent(roi.shape()).contains(pos):
+                return name
+        return None
+            
+    def getRegions(self):
+        ## Return a dict of all regions
+        rgns = {}
+        for name,roi in self.params.getRegions():
+            pts = []
+            for n,pos in roi.getLocalHandlePositions():
+                pos = roi.mapToView(pos)
+                pts.append((pos.x(), pos.y()))
+            rgns[name] = pts
+        return rgns
+        
+    #def process(self, map, spontRateTable, events, ampMean, ampStdev):
+        #stimTime = self.params['Stimulus Time']
     
 class RegionsParameter(ptree.types.GroupParameter):
+    
+    sigRegionChanged = QtCore.Signal(object)
+    
     def __init__(self, canvas):
         self.canvas = canvas
-        ptree.types.GroupParameter.__init__(self, name="Anatomical Regions", addText='Add Region..')
+        ptree.types.GroupParameter.__init__(self, name="Anatomical Regions", addText='Add Region..', children=[
+            ])
         self.sigTreeStateChanged.connect(self.treeChanged)
         
+    def getRegions(self):
+        return [(rgn.name(), rgn.roi) for rgn in self if hasattr(rgn, 'roi')]
+
+        
     def addNew(self):
-        rgn = ptree.Parameter.create(name='region', autoIncrementName=True, renamable=True, removable=True, type='bool', children=[
+        rgn = ptree.Parameter.create(name='region', autoIncrementName=True, renamable=True, removable=True, type='bool', value=True, children=[
             dict(name='DB Column', type='str', value='Region'),
             dict(name='Color', type='color'),
             ])
@@ -763,19 +813,23 @@ class RegionsParameter(ptree.types.GroupParameter):
         pts = [center, center+pg.Point(size[0], 0), center+pg.Point(0, size[1])]
         
         roi = pg.PolyLineROI(pts, closed=True)
+        roi.setZValue(1000)
         view.addItem(roi)
         rgn.roi = roi
         roi.rgn = rgn
         roi.sigRegionChangeFinished.connect(self.regionChanged)
         
     def regionChanged(self, roi):
-        print "changed:", roi.rgn.name()
+        self.sigRegionChanged.emit(self)
         
     def treeChanged(self, *args):
         for rgn in self:
             if not hasattr(rgn, 'roi'):
                 continue
             rgn.roi.setVisible(rgn.value())
+            rgn.roi.setPen(rgn['Color'])
+            
+        
 
 class Loader(pg.LayoutWidget):
     def __init__(self, parent=None, host=None, dm=None):

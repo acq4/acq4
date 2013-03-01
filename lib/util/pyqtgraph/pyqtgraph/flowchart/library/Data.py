@@ -219,7 +219,6 @@ class EvalNode(Node):
         text = str(self.text.toPlainText())
         if text != self.lastText:
             self.lastText = text
-            print("eval node update")
             self.update()
         return QtGui.QTextEdit.focusOutEvent(self.text, ev)
         
