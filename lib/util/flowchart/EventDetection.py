@@ -152,7 +152,7 @@ class ThresholdEvents(CtrlNode):
         ## apply first round of filters
         mask = events['len'] >= s['minLength']
         mask *= abs(events['sum']) >= s['minSum']
-        mask *= abs(events['peak']) >= s['minPeak']
+        mask *= abs(events['peak']) >= abs(s['minPeak'])
         events = events[mask]
         
         ## apply deadtime filter
