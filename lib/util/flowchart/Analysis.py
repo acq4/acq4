@@ -154,7 +154,7 @@ class EventFitter(CtrlNode):
 
     ## Intercept keypresses on any plot that is connected.
     def connected(self, local, remote):
-        if local is self.plot:
+        if local is self['plot']:
             self.filterPlot(remote.node())
             remote.node().sigPlotChanged.connect(self.filterPlot)
         CtrlNode.connected(self, local, remote)
