@@ -1625,7 +1625,7 @@ class PolygonROI(ROI):
 class PolyLineROI(ROI):
     """Container class for multiple connected LineSegmentROIs. Responsible for adding new 
     line segments, and for translation/(rotation?) of multiple lines together."""
-    def __init__(self, positions, closed=False, pos=None, **args):
+    def __init__(self, positions, closed=False, pos=None, alternateColors=False, **args):
         if pos is None:
             pos = [0,0]
         if 'size' in args.keys():
@@ -1636,7 +1636,7 @@ class PolyLineROI(ROI):
         pen=self.pen()
 
         self.segments = []
-        self.alternate = alternate
+        self.alternate = alternateColors
         
         for p in positions:
             self.addFreeHandle(p)
