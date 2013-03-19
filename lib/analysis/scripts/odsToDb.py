@@ -93,11 +93,12 @@ columns = [
     ('cell', None),
     ('type', [('CellType', 'text')]),
     ('slice plane', [('SlicePlane', 'text')]),
-    ('internal', None),
+    ('internal', [('Internal', 'text')]),
     ('mcpg', [('MCPG', 'real')], yesno),
-    ('atlas ok', None),
+    ('atlas ok', [('AtlasOK', 'real')], yesno),
     ('mapping ok', [('MapOK', 'real')], yesno),
     ('DCN map ok', [('DCNMapOK', 'real')], yesno),
+    ('morphology ok', [('MorphologyOK', 'real')], yesno),
     ('Ra IV', None),
     ('Ra ex', None),
     ('Ra in', None),
@@ -178,6 +179,8 @@ def readOds():
     
     data = []
     for row in range(3, rows + 1):
+        if doc.get_cell_value(1, row) == ('string', '__end__'):
+            break
         data.append([])
         for col in range(1, cols + 1):
             d = doc.get_cell_value(col, row)
