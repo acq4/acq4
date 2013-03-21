@@ -96,7 +96,7 @@ class MapAnalyzer(AnalysisModule):
             ('File Loader', {'type': 'fileInput', 'size': (300, 300), 'host': self, 'showFileTree': False}),
             ('Map Loader', {'type': 'ctrl', 'object': self.loader, 'size': (300, 300), 'pos': ('below', 'File Loader')}),
             ('Color Mapper', {'type':'ctrl', 'object': self.colorMapper, 'size': (800,200), 'pos': ('right', 'Map Loader')}),
-            ('Canvas', {'type': 'canvas', 'size': (800, 400), 'pos':('right', 'Color Mapper')}),
+            ('Canvas', {'type': 'canvas', 'size': (800, 400), 'pos':('right', 'Color Mapper'), 'args': {'name': 'MapAnalyzer'}}),
             ('Options', {'type': 'ctrl', 'object': self.ctrlLayout, 'size': (300, 500), 'pos': ('bottom', 'Map Loader')}),
             ('Data Plot', {'type': 'plot', 'pos': ('top', 'Color Mapper'), 'size': (800, 300)}),
             ('Score Histogram', {'type': 'plot', 'pos': ('bottom', 'Data Plot'), 'size': (800, 300)}),
@@ -129,6 +129,12 @@ class MapAnalyzer(AnalysisModule):
         self.params = ptree.Parameter.create(name='options', type='group', children=params)
         self.ctrl.setParameters(self.params, showTop=False)
         
+        canvas = self.getElement('Canvas', create=True)
+        #self.scalebar = pg.ScaleBar(100e-6)
+        #canvas.addGraphicsItem(self.scalebar, name="ScaleBar")
+        self.scalebar = pg.ScaleBar(size=500e-6)
+        self.scalebar.setParentItem(canvas.view)
+        self.scalebar.anchor((1, 1), (1, 1), offset=(-20, -20))
         
         ## Note: need to reconnect this!!
         #self.params.sigTreeStateChanged.connect(self.invalidate)
