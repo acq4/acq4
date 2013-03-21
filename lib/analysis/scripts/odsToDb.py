@@ -93,11 +93,12 @@ columns = [
     ('cell', None),
     ('type', [('CellType', 'text')]),
     ('slice plane', [('SlicePlane', 'text')]),
-    ('internal', None),
+    ('internal', [('Internal', 'text')]),
     ('mcpg', [('MCPG', 'real')], yesno),
-    ('atlas ok', None),
+    ('atlas ok', [('AtlasOK', 'real')], yesno),
     ('mapping ok', [('MapOK', 'real')], yesno),
     ('DCN map ok', [('DCNMapOK', 'real')], yesno),
+    ('morphology ok', [('MorphologyOK', 'real')], yesno),
     ('Ra IV', None),
     ('Ra ex', None),
     ('Ra in', None),
@@ -111,11 +112,11 @@ columns = [
     ('I/V Curves', [('FIType', 'real')], fiType),
     ('temp', [('Temperature', 'real')], temperature),
     ('age', [('Age', 'real')]),
-    ('region', None),
-    ('time post-dissection', None),
-    ('electrode res.', None),
-    ('access res.', None),
-    ('holding cur.', None),
+    #('region', None),
+    #('time post-dissection', None),
+    #('electrode res.', None),
+    #('access res.', None),
+    #('holding cur.', None),
     ('time to peak', [('DirectTimeToPeak', 'real')], stripUnits),
     ('decay 1', [('DirectDecayTau1', 'real'), ('DirectDecayAmp1', 'real')], splitPair),
     ('decay 2', [('DirectDecayTau2', 'real'), ('DirectDecayAmp2', 'real')], splitPair),
@@ -132,8 +133,8 @@ columns = [
     ('amp',     [('SpontInAmp', 'real'),    ('SpontInAmpStd', 'real')],    splitStd ),
     ('rate',    [('SpontInRate', 'real')],  stripUnits ),
     ('rise', None),
-    ('decay', None),
-    ('amp', None),
+    ('decay', [('EvokedExDecay', 'real')], stripUnits),
+    ('amp', [('EvokedExAmp', 'real')], stripUnits),
     ('n', None),
     ('rise', None),
     ('decay', None),
@@ -178,6 +179,8 @@ def readOds():
     
     data = []
     for row in range(3, rows + 1):
+        if doc.get_cell_value(1, row) == ('string', '__end__'):
+            break
         data.append([])
         for col in range(1, cols + 1):
             d = doc.get_cell_value(col, row)

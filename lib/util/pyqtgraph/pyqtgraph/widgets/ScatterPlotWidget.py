@@ -6,6 +6,7 @@ import pyqtgraph.parametertree as ptree
 import pyqtgraph.functions as fn
 import numpy as np
 from pyqtgraph.pgcollections import OrderedDict
+import pyqtgraph as pg
 
 __all__ = ['ScatterPlotWidget']
 
@@ -47,14 +48,22 @@ class ScatterPlotWidget(QtGui.QSplitter):
         self.ctrlPanel.addWidget(self.ptree)
         self.addWidget(self.plot)
         
+        bg = pg.mkColor(pg.getConfigOption('background'))
+        bg.setAlpha(150)
+        self.filterText = pg.TextItem(border=pg.getConfigOption('foreground'), color=bg)
+        self.filterText.setPos(60,20)
+        self.filterText.setParentItem(self.plot.plotItem)
+        
         self.data = None
+        self.mouseOverField = None
+        self.scatterPlot = None
         self.style = dict(pen=None, symbol='o')
         
         self.fieldList.itemSelectionChanged.connect(self.fieldSelectionChanged)
         self.filter.sigFilterChanged.connect(self.filterChanged)
         self.colorMap.sigColorMapChanged.connect(self.updatePlot)
     
-    def setFields(self, fields):
+    def setFields(self, fields, mouseOverField=None):
         """
         Set the list of field names/units to be processed.
         
@@ -62,6 +71,7 @@ class ScatterPlotWidget(QtGui.QSplitter):
         :func:`ColorMapWidget.setFields <pyqtgraph.widgets.ColorMapWidget.ColorMapParameter.setFields>`
         """
         self.fields = OrderedDict(fields)
+        self.mouseOverField = mouseOverField
         self.fieldList.clear()
         for f,opts in fields:
             item = QtGui.QListWidgetItem(f)
@@ -94,6 +104,13 @@ class ScatterPlotWidget(QtGui.QSplitter):
     def filterChanged(self, f):
         self.filtered = None
         self.updatePlot()
+        desc = self.filter.describe()
+        if len(desc) == 0:
+            self.filterText.setVisible(False)
+        else:
+            self.filterText.setText('\n'.join(desc))
+            self.filterText.setVisible(True)
+            
         
     def updatePlot(self):
         self.plot.clear()
@@ -158,7 +175,7 @@ class ScatterPlotWidget(QtGui.QSplitter):
             axis = self.plot.getAxis(['bottom', 'left'][i])
             if xy[i] is not None and xy[i].dtype.kind in ('S', 'O'):
                 vals = self.fields[sel[i]].get('values', list(set(xy[i])))
-                xy[i] = np.array([vals.index(x) if x in vals else None for x in xy[i]], dtype=float)
+                xy[i] = np.array([vals.index(x) if x in vals else len(vals) for x in xy[i]], dtype=float)
                 axis.setTicks([list(enumerate(vals))])
             else:
                 axis.setTicks(None)  # reset to automatic ticking
@@ -179,7 +196,16 @@ class ScatterPlotWidget(QtGui.QSplitter):
         else:
             y = y[mask]
                 
-            
-        self.plot.plot(x, y, **style)
+        if self.scatterPlot is not None:
+            try:
+                self.scatterPlot.sigPointsClicked.disconnect(self.plotClicked)
+            except:
+                pass
+        self.scatterPlot = self.plot.plot(x, y, data=data[mask], **style)
+        self.scatterPlot.sigPointsClicked.connect(self.plotClicked)
         
         
+    def plotClicked(self, plot, points):
+        pass
+
+

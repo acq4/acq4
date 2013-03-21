@@ -2,6 +2,7 @@ from pyqtgraph.Qt import QtGui, QtCore
 import pyqtgraph.parametertree as ptree
 import numpy as np
 from pyqtgraph.pgcollections import OrderedDict
+import pyqtgraph as pg
 
 __all__ = ['DataFilterWidget']
 
@@ -22,6 +23,7 @@ class DataFilterWidget(ptree.ParameterTree):
         
         self.setFields = self.params.setFields
         self.filterData = self.params.filterData
+        self.describe = self.params.describe
         
     def filterChanged(self):
         self.sigFilterChanged.emit(self)
@@ -77,11 +79,21 @@ class DataFilterParameter(ptree.types.GroupParameter):
             #mask &= (vals >= mn)
             #mask &= (vals < mx)  ## Use inclusive minimum and non-inclusive maximum. This makes it easier to create non-overlapping selections
         return mask
+    
+    def describe(self):
+        """Return a list of strings describing the currently enabled filters."""
+        desc = []
+        for fp in self:
+            if fp.value() is False:
+                continue
+            desc.append(fp.describe())
+        return desc
 
 class RangeFilterItem(ptree.types.SimpleParameter):
     def __init__(self, name, opts):
         self.fieldName = name
         units = opts.get('units', '')
+        self.units = units
         ptree.types.SimpleParameter.__init__(self, 
             name=name, autoIncrementName=True, type='bool', value=True, removable=True, renamable=True, 
             children=[
@@ -94,6 +106,8 @@ class RangeFilterItem(ptree.types.SimpleParameter):
         vals = data[self.fieldName]
         return (vals >= self['Min']) & (vals < self['Max'])  ## Use inclusive minimum and non-inclusive maximum. This makes it easier to create non-overlapping selections
     
+    def describe(self):
+        return "%s < %s < %s" % (pg.siFormat(self['Min'], suffix=self.units), self.fieldName, pg.siFormat(self['Max'], suffix=self.units))
     
 class EnumFilterItem(ptree.types.SimpleParameter):
     def __init__(self, name, opts):
@@ -104,6 +118,10 @@ class EnumFilterItem(ptree.types.SimpleParameter):
             ch = ptree.Parameter.create(name=str(v), type='bool', value=True)
             ch.maskValue = v
             childs.append(ch)
+        ch = ptree.Parameter.create(name='(other)', type='bool', value=True)
+        ch.maskValue = '__other__'
+        childs.append(ch)
+            
         ptree.types.SimpleParameter.__init__(self, 
             name=name, autoIncrementName=True, type='bool', value=True, removable=True, renamable=True, 
             children=childs)
@@ -111,9 +129,18 @@ class EnumFilterItem(ptree.types.SimpleParameter):
     def generateMask(self, data):
         vals = data[self.fieldName]
         mask = np.ones(len(data), dtype=bool)
+        otherMask = np.ones(len(data), dtype=bool)
         for c in self:
-            if c.value() is True:
-                continue
             key = c.maskValue
-            mask &= vals != key
+            if key == '__other__':
+                m = ~otherMask
+            else:
+                m = vals != key
+                otherMask &= m
+            if c.value() is False:
+                mask &= m
         return mask
+
+    def describe(self):
+        vals = [ch.name() for ch in self if ch.value() is True]
+        return "%s: %s" % (self.fieldName, ', '.join(vals))
