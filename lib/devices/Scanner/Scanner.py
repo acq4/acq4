@@ -627,9 +627,10 @@ class ScannerTask(DeviceTask):
         #for k in ['position', 'command']:
             #if k in self.cmd:
                 #result[k] = self.cmd[k]
-        #if self.spotSize is not None:
-            #result['spotSize'] = self.spotSize
+
         result = self.cmd.copy()
+        if self.spotSize is not None:
+            result['spotSize'] = self.spotSize
         
         ### These arrays stick around and cause memory errors if we don't get rid of them. 
         ## For some reason, the top-level protocol command dict is not being collected (refcount=2, but gc.get_referrers=[])

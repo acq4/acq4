@@ -480,9 +480,11 @@ class OptomechDevice(object):
         """return a dict of {devName: subdevName} pairs indicating the currently
         selected subdevices throughout the tree."""
         devices = [self] + self.parentDevices()
+        #print 'OptomechDevice.treeSubdeviceState(), devices:', devices
         subdevs = collections.OrderedDict()
         for dev in devices:
             subdev = dev.getSubdevice()
+            #print "    ", dev, subdev
             if subdev is not None:
                 subdevs[dev.name()] = subdev.name()
         return subdevs

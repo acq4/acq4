@@ -302,6 +302,7 @@ class Laser(DAQGeneric, OptomechDevice):
         #meter = str(self.ui.meterCombo.currentText())
         #obj = self.manager.getDevice(scope).getObjective()['name']
         opticState = self.getDeviceStateKey()
+        #print "Laser.calibrate() opticState:", opticState
         wavelength = siFormat(self.getWavelength(), suffix='m')
         date = time.strftime('%Y.%m.%d %H:%M', time.localtime())
         index = self.getCalibrationIndex()
