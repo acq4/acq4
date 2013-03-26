@@ -72,7 +72,7 @@ class DataFilterParameter(ptree.types.GroupParameter):
         for fp in self:
             if fp.value() is False:
                 continue
-            mask &= fp.generateMask(data)
+            mask &= fp.generateMask(data, mask.copy())
             #key, mn, mx = fp.fieldName, fp['Min'], fp['Max']
             
             #vals = data[key]
@@ -102,9 +102,10 @@ class RangeFilterItem(ptree.types.SimpleParameter):
                 dict(name='Max', type='float', value=1.0, suffix=units, siPrefix=True),
             ])
             
-    def generateMask(self, data):
-        vals = data[self.fieldName]
-        return (vals >= self['Min']) & (vals < self['Max'])  ## Use inclusive minimum and non-inclusive maximum. This makes it easier to create non-overlapping selections
+    def generateMask(self, data, mask):
+        vals = data[self.fieldName][mask]
+        mask[mask] = (vals >= self['Min']) & (vals < self['Max'])  ## Use inclusive minimum and non-inclusive maximum. This makes it easier to create non-overlapping selections
+        return mask
     
     def describe(self):
         return "%s < %s < %s" % (pg.siFormat(self['Min'], suffix=self.units), self.fieldName, pg.siFormat(self['Max'], suffix=self.units))
@@ -114,9 +115,11 @@ class EnumFilterItem(ptree.types.SimpleParameter):
         self.fieldName = name
         vals = opts.get('values', [])
         childs = []
-        for v in vals:
-            ch = ptree.Parameter.create(name=str(v), type='bool', value=True)
-            ch.maskValue = v
+        if isinstance(vals, list):
+            vals = OrderedDict([(v,str(v)) for v in vals])
+        for val,vname in vals.items():
+            ch = ptree.Parameter.create(name=vname, type='bool', value=True)
+            ch.maskValue = val
             childs.append(ch)
         ch = ptree.Parameter.create(name='(other)', type='bool', value=True)
         ch.maskValue = '__other__'
@@ -126,10 +129,10 @@ class EnumFilterItem(ptree.types.SimpleParameter):
             name=name, autoIncrementName=True, type='bool', value=True, removable=True, renamable=True, 
             children=childs)
     
-    def generateMask(self, data):
-        vals = data[self.fieldName]
-        mask = np.ones(len(data), dtype=bool)
-        otherMask = np.ones(len(data), dtype=bool)
+    def generateMask(self, data, startMask):
+        vals = data[self.fieldName][startMask]
+        mask = np.ones(len(vals), dtype=bool)
+        otherMask = np.ones(len(vals), dtype=bool)
         for c in self:
             key = c.maskValue
             if key == '__other__':
@@ -139,7 +142,8 @@ class EnumFilterItem(ptree.types.SimpleParameter):
                 otherMask &= m
             if c.value() is False:
                 mask &= m
-        return mask
+        startMask[startMask] = mask
+        return startMask
 
     def describe(self):
         vals = [ch.name() for ch in self if ch.value() is True]

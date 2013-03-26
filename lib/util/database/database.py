@@ -288,12 +288,13 @@ class SqliteDatabase:
             cmd = "DELETE FROM %s %s" % (table, whereStr)
             return self(cmd)
 
-    def update(self, table, vals, where=None, rowid=None):
+    def update(self, table, vals, where=None, rowid=None, sql=''):
         """Update records in the DB.
         Arguments:
             vals: dict of {column: value} pairs
             where: SQL clause specifying rows to update
-            rowid: int row IDs. Used instead of 'where'"""
+            rowid: int row IDs. Used instead of 'where'
+            sql: SQL string to append to end of statement"""
         if rowid is not None:
             if where is not None:
                 raise Exception("'where' and 'rowid' are mutually exclusive arguments.")
@@ -302,7 +303,7 @@ class SqliteDatabase:
         with self.transaction():
             whereStr = self._buildWhereClause(where, table)
             setStr = ', '.join(['"%s"=:%s' % (k, k) for k in vals])
-            cmd = "UPDATE %s SET %s %s" % (table, setStr, whereStr)
+            cmd = "UPDATE %s SET %s %s %s" % (table, setStr, whereStr, sql)
             data = self._prepareData(table, [vals], batch=True)
             return self(cmd, data, batch=True)
 
