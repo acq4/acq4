@@ -4,13 +4,13 @@ import pyqtgraph as pg
 import numpy as np
 import functions as fn
 
-man = lib.Manager.getManager() 
-dm = man.getModule('Data Manager')
-db = dm.currentDatabase()
-mod = man.dataModel
+#man = lib.Manager.getManager() 
+#dm = man.getModule('Data Manager')
+#db = dm.currentDatabase()
+#mod = man.dataModel
 
 
-sites = db.select('sites', toArray=True)
+#sites = db.select('sites', toArray=True)
 
 lasers = [1e-6, 2e-6, 3e-6, 4e-6, 5e-6, 6e-6, 7e-6] ## list of StimEnergys to calculate firing probability for
 distances = [0, 25e-6, 50e-6, 75e-6, 100e-6, 125e-6, 150e-6, 175e-6, 200e-6, 1e-3]
