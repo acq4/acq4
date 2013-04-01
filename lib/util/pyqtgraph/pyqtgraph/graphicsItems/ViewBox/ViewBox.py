@@ -141,6 +141,12 @@ class ViewBox(GraphicsWidget):
         self.rbScaleBox.hide()
         self.addItem(self.rbScaleBox, ignoreBounds=True)
         
+        ## show target rect for debugging
+        self.target = QtGui.QGraphicsRectItem(0, 0, 1, 1)
+        self.target.setPen(fn.mkPen('r'))
+        self.target.setParentItem(self)
+        self.target.hide()
+        
         self.axHistory = [] # maintain a history of zoom locations
         self.axHistoryPointer = -1 # pointer into the history. Allows forward/backward movement, not just "undo"
         
@@ -294,7 +300,7 @@ class ViewBox(GraphicsWidget):
         for i in self.addedItems[:]:
             self.removeItem(i)
         for ch in self.childGroup.childItems():
-            ch.setParent(None)
+            ch.setParentItem(None)
         
     def resizeEvent(self, ev):
         #self.setRange(self.range, padding=0)
@@ -389,10 +395,28 @@ class ViewBox(GraphicsWidget):
             p = (mx-mn) * xpad
             mn -= p
             mx += p
-            
             if self.state['targetRange'][ax] != [mn, mx]:
                 self.state['targetRange'][ax] = [mn, mx]
                 changed[ax] = True
+                
+                aspect = self.state['aspectLocked']  # size ratio / view ratio
+                if aspect is not False and len(changes) == 1:
+                    ## need to adjust orthogonal target range to match
+                    size = [self.width(), self.height()]
+                    tr1 = self.state['targetRange'][ax]
+                    tr2 = self.state['targetRange'][1-ax]
+                    if size[1] == 0 or aspect == 0:
+                        ratio = 1.0
+                    else:
+                        ratio = (size[0] / float(size[1])) / aspect
+                    if ax == 0:
+                        ratio = 1.0 / ratio
+                    w = (tr1[1]-tr1[0]) * ratio
+                    d = 0.5 * (w - (tr2[1]-tr2[0]))
+                    self.state['targetRange'][1-ax] = [tr2[0]-d, tr2[1]+d]
+                    
+                    
+                    
             
         if any(changed) and disableAutoRange:
             if all(changed):
@@ -405,6 +429,8 @@ class ViewBox(GraphicsWidget):
                 
                 
         self.sigStateChanged.emit(self)
+        
+        self.target.setRect(self.mapRectFromItem(self.childGroup, self.targetRect()))
         
         if update:
             self.updateMatrix(changed)
@@ -494,7 +520,7 @@ class ViewBox(GraphicsWidget):
         scale = Point(scale)
             
         if self.state['aspectLocked'] is not False:
-            scale[0] = self.state['aspectLocked'] * scale[1]
+            scale[0] = scale[1]
 
         vr = self.targetRect()
         if center is None:
@@ -706,6 +732,7 @@ class ViewBox(GraphicsWidget):
             else:
                 if self.autoRangeEnabled()[axis] is False:
                     slot()
+        
             
         self.sigStateChanged.emit(self)
         
@@ -807,13 +834,17 @@ class ViewBox(GraphicsWidget):
         """
         If the aspect ratio is locked, view scaling must always preserve the aspect ratio.
         By default, the ratio is set to 1; x and y both have the same scaling.
-        This ratio can be overridden (width/height), or use None to lock in the current ratio.
+        This ratio can be overridden (xScale/yScale), or use None to lock in the current ratio.
         """
         if not lock:
             self.state['aspectLocked'] = False
         else:
+            rect = self.rect()
             vr = self.viewRect()
-            currentRatio = vr.width() / vr.height()
+            if rect.height() == 0 or vr.width() == 0 or vr.height() == 0:
+                currentRatio = 1.0
+            else:
+                currentRatio = (rect.width()/float(rect.height())) / (vr.width()/vr.height())
             if ratio is None:
                 ratio = currentRatio
             self.state['aspectLocked'] = ratio
@@ -1194,32 +1225,41 @@ class ViewBox(GraphicsWidget):
         if changed is None:
             changed = [False, False]
         changed = list(changed)
-        #print "udpateMatrix:"
-        #print "  range:", self.range
         tr = self.targetRect()
-        bounds = self.rect() #boundingRect()
-        #print bounds
+        bounds = self.rect()
         
         ## set viewRect, given targetRect and possibly aspect ratio constraint
-        if self.state['aspectLocked'] is False or bounds.height() == 0:
+        aspect = self.state['aspectLocked']
+        if aspect is False or bounds.height() == 0:
             self.state['viewRange'] = [self.state['targetRange'][0][:], self.state['targetRange'][1][:]]
         else:
-            viewRatio = bounds.width() / bounds.height()
-            targetRatio = self.state['aspectLocked'] * tr.width() / tr.height()
+            ## aspect is (widget w/h) / (view range w/h)
+            
+            ## This is the view range aspect ratio we have requested
+            targetRatio = tr.width() / tr.height()
+            ## This is the view range aspect ratio we need to obey aspect constraint
+            viewRatio = (bounds.width() / bounds.height()) / aspect
+            
             if targetRatio > viewRatio:  
-                ## target is wider than view
-                dy = 0.5 * (tr.width() / (self.state['aspectLocked'] * viewRatio) - tr.height())
+                ## view range needs to be taller than target
+                dy = 0.5 * (tr.width() / viewRatio - tr.height())
                 if dy != 0:
                     changed[1] = True
-                self.state['viewRange'] = [self.state['targetRange'][0][:], [self.state['targetRange'][1][0] - dy, self.state['targetRange'][1][1] + dy]]
+                self.state['viewRange'] = [
+                    self.state['targetRange'][0][:], 
+                    [self.state['targetRange'][1][0] - dy, self.state['targetRange'][1][1] + dy]
+                    ]
             else:
-                dx = 0.5 * (tr.height() * viewRatio * self.state['aspectLocked'] - tr.width())
+                ## view range needs to be wider than target
+                dx = 0.5 * (tr.height() * viewRatio - tr.width())
                 if dx != 0:
                     changed[0] = True
-                self.state['viewRange'] = [[self.state['targetRange'][0][0] - dx, self.state['targetRange'][0][1] + dx], self.state['targetRange'][1][:]]
+                self.state['viewRange'] = [
+                    [self.state['targetRange'][0][0] - dx, self.state['targetRange'][0][1] + dx], 
+                    self.state['targetRange'][1][:]
+                    ]
         
         vr = self.viewRect()
-        #print "  bounds:", bounds
         if vr.height() == 0 or vr.width() == 0:
             return
         scale = Point(bounds.width()/vr.width(), bounds.height()/vr.height())
@@ -1253,6 +1293,12 @@ class ViewBox(GraphicsWidget):
             p.setPen(self.border)
             #p.fillRect(bounds, QtGui.QColor(0, 0, 0))
             p.drawPath(bounds)
+            
+        #p.setPen(fn.mkPen('r'))
+        #path = QtGui.QPainterPath()
+        #path.addRect(self.targetRect())
+        #tr = self.mapFromView(path)
+        #p.drawPath(tr)
 
     def updateBackground(self):
         bg = self.state['background']

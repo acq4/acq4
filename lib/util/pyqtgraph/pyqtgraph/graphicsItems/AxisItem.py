@@ -48,6 +48,12 @@ class AxisItem(GraphicsWidget):
             'autoExpandTextSpace': True,  ## automatically expand text space if needed
             'tickFont': None,
             'stopAxisAtTick': (False, False),  ## whether axis is drawn to edge of box or to last tick 
+            'textFillLimits': [  ## how much of the axis to fill up with tick text, maximally. 
+                (0, 0.8),    ## never fill more than 80% of the axis
+                (2, 0.6),    ## If we already have 2 ticks with text, fill no more than 60% of the axis
+                (4, 0.4),    ## If we already have 4 ticks with text, fill no more than 40% of the axis
+                (6, 0.2),    ## If we already have 6 ticks with text, fill no more than 20% of the axis
+                ]
         }
         
         self.textWidth = 30  ## Keeps track of maximum width / height of tick text 
@@ -430,7 +436,7 @@ class AxisItem(GraphicsWidget):
             return []
         
         ## decide optimal minor tick spacing in pixels (this is just aesthetics)
-        pixelSpacing = np.log(size+10) * 5
+        pixelSpacing = size / np.log(size)
         optimalTickCount = max(2., size / pixelSpacing)
         
         ## optimal minor tick spacing 
@@ -770,9 +776,16 @@ class AxisItem(GraphicsWidget):
                     textSize = np.sum([r.width() for r in textRects])
                     textSize2 = np.max([r.height() for r in textRects])
 
-                ## If the strings are too crowded, stop drawing text now
+                ## If the strings are too crowded, stop drawing text now.
+                ## We use three different crowding limits based on the number
+                ## of texts drawn so far.
                 textFillRatio = float(textSize) / lengthInPixels
-                if textFillRatio > 0.7:
+                finished = False
+                for nTexts, limit in self.style['textFillLimits']:
+                    if len(textSpecs) >= nTexts and textFillRatio >= limit:
+                        finished = True
+                        break
+                if finished:
                     break
             
             #spacing, values = tickLevels[best]
