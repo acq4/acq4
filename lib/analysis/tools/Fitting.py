@@ -45,9 +45,14 @@ import sys
 import numpy
 import scipy
 import scipy.optimize
-import openopt
 import ctypes
 import numpy.random
+try:
+    import openopt
+    HAVE_OPENOPT = True
+except ImportError:
+    HAVE_OPENOPT = False
+
 #from numba import autojit
 
 usingMPlot = False
@@ -449,6 +454,9 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                 #                 maxfun = func[2], bounds = bounds,
                 #                 approx_grad = True) # , disp=0, iprint=-1)
                 elif method == 'openopt': # use OpenOpt's routines - usually slower, but sometimes they converge better
+                    if not HAVE_OPENOPT:
+                        raise Exception("Requested openopt fitting method but openopt is not installed.")
+                    
                     if bounds is not None:
                         # unpack bounds
                         lb = [y[0] for y in bounds]
