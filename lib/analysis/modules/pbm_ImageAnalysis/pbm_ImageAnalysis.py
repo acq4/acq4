@@ -52,6 +52,8 @@ import cv2.cv as cv
 import pylab as PL
 from mpl_toolkits.axes_grid1 import AxesGrid
 
+print "Imports in pbm_imagealaysis done"
+
 """ 
 We use matplotlib/pylab for *some* figure generation.
 """
@@ -127,6 +129,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         
         self.initDataState()
         self.RGB = Utility.makeRGB()
+        print "now building GUI"
         
         ## Setup basic GUI
         self._elements_ = OrderedDict([
