@@ -15,7 +15,7 @@ import pyqtgraph as pg
 from metaarray import MetaArray
 import numpy, scipy.signal
 import os, re, os.path
-
+import itertools
 import matplotlib as MP
 from matplotlib.ticker import FormatStrFormatter
 
@@ -66,8 +66,10 @@ class IVCurve(AnalysisModule):
         self.fit_curve = None
         self.fitted_data = None
         self.keepAnalysisCount = 0 
-        self.colorList = ['w', 'g', 'b', 'r', 'y', 'c']
-        self.symbolList = ['o', 's', 't', 'd', '+']
+        self.colors = ['w', 'g', 'b', 'r', 'y', 'c']
+        self.symbols = ['o', 's', 't', 'd', '+']
+        self.colorList = itertools.cycle(self.colors)
+        self.symbolList = itertools.cycle(self.symbols)
         self.dataMode = 'IC' # analysis may depend on the type of data we have.
         self.ICModes = ['IC', 'CC', 'IClamp'] # list of modes that use current clamp
         self.VCModes = ['VC', 'VClamp'] # modes that use voltage clamp analysis
@@ -189,7 +191,7 @@ class IVCurve(AnalysisModule):
         self.showhide_lrss(True)
         self.showhide_lrrmp(True)
         self.showhide_lrtau(False)
-        self.showhide_leak(True)
+       # self.showhide_leak(True)
         self.ctrl.IVCurve_ssTStart.setSuffix(' ms')
         self.ctrl.IVCurve_ssTStop.setSuffix(' ms')
         self.ctrl.IVCurve_pkTStart.setSuffix(' ms')
@@ -351,7 +353,15 @@ class IVCurve(AnalysisModule):
         sfreq = self.dataModel.getSampleRate(data)
         self.dataMode = self.dataModel.getClampMode(data)
         self.ctrl.IVCurve_dataMode.setText(self.dataMode)
- 
+
+        if self.ctrl.IVCurve_KeepAnalysis.isChecked():
+            self.keepAnalysisCount += 1
+        else:
+            self.keepAnalysisCount = 0 # always make sure is reset
+            self.colorList = itertools.cycle(self.colors) # this is the only way to reset iterators.
+            self.symbolList = itertools.cycle(self.symbols)
+        self.makeMapSymbols()
+        
         if self.dataMode == 'IC':
             cmdUnits = 'pA'
             scaleFactor = 1e12
@@ -683,6 +693,8 @@ class IVCurve(AnalysisModule):
             self.ivss = data1.mean(axis=1) # all traces
             self.ivss_cmd = commands
             self.cmd = commands
+        if self.ctrl.IVCurve_SubRMP.isChecked():
+            self.ivss = self.ivss - self.ivrmp
         self.yleak = numpy.zeros(len(self.ivss))
         if self.ctrl.IVCurve_subLeak.isChecked():
             (x, y) = Utility.clipdata(self.ivss, self.ivss_cmd, 
@@ -693,8 +705,6 @@ class IVCurve(AnalysisModule):
             print 'x: ', x
             print 'y: ', y
             self.ivss = self.ivss - self.yleak
-        if self.ctrl.IVCurve_SubRMP.isChecked():
-            self.ivss = self.ivss - self.ivrmp
         self.update_IVPlot()
 
     def update_pkAnalysis(self, clear=False, pw = False):
@@ -718,10 +728,10 @@ class IVCurve(AnalysisModule):
             self.cmd = commands
             self.ivpk_cmd = commands
         self.update_Tau(printWindow = pw)
-        if self.ctrl.IVCurve_subLeak.isChecked():
-            self.ivpk = self.ivpk - self.yleak
         if self.ctrl.IVCurve_SubRMP.isChecked():
             self.ivpk = self.ivpk - self.ivrmp
+        if self.ctrl.IVCurve_subLeak.isChecked():
+            self.ivpk = self.ivpk - self.yleak
         self.update_IVPlot()
 
     def update_rmpAnalysis(self, clear=True, pw=False):
@@ -742,25 +752,30 @@ class IVCurve(AnalysisModule):
         self.averageRMP = numpy.mean(self.ivrmp)
         self.update_RMPPlot()
 
-    def mapSymbol(self):
+    def makeMapSymbols(self):
         """
         Given the current stat of things, (keep analysis count, for example),
         return a tuple of pen, fill color, empty color, a symbol from
         our lists, and a clearflag
         """
         n = self.keepAnalysisCount
-        np = n % len(self.colorList)
-        pen = self.colorList[np]
-        filledbrush = self.colorList[np]
+        pen = self.colorList.next()
+        filledbrush = pen
         emptybrush = None
-        ns = n % len(self.symbolList)
-        symbol = self.symbolList[ns]
+        symbol = self.symbolList.next()
         if n == 0:
             clearFlag = True
         else:
             clearFlag = False
-        return(pen, filledbrush, emptybrush, symbol, n, clearFlag)
-                
+        self.currentSymDict = {'pen': pen, 'filledbrush': filledbrush,
+            'emptybrush': emptybrush, 'symbol': symbol, 'n': n, 
+            'clearFlag': clearFlag}
+
+    def mapSymbol(self):
+        cd = self.currentSymDict
+        return(cd['pen'], cd['filledbrush'], cd['emptybrush'], cd['symbol'],
+            cd['n'], cd['clearFlag'])
+
     def update_IVPlot(self):
         """
             Draw the peak and steady-sate IV to the I-V window
@@ -895,11 +910,9 @@ class IVCurve(AnalysisModule):
             self.lrpk.setRegion([rgnx1, rgnx2])
             self.update_pkAnalysis(clear=clearFlag, pw = pw)
         
-        print 'readParameters?'
         if self.ctrl.IVCurve_subLeak.isChecked():
             rgnx1 = self.ctrl.IVCurve_LeakMin.value()/1e3
             rgnx2 = self.ctrl.IVCurve_LeakMax.value()/1e3
-            print 'regions: ', rgnx1, rgnx2
             self.lrleak.setRegion([rgnx1, rgnx2])
             self.update_ssAnalysis()
             self.update_pkAnalysis()
