@@ -53,6 +53,7 @@ class IVCurve(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
 
+
         self.ctrlWidget = QtGui.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
@@ -64,6 +65,9 @@ class IVCurve(AnalysisModule):
         self.regionsExist = False
         self.fit_curve = None
         self.fitted_data = None
+        self.keepAnalysisCount = 0 
+        self.colorList = ['w', 'g', 'b', 'r', 'y', 'c']
+        self.symbolList = ['o', 's', 't', 'd', '+']
         self.dataMode = 'IC' # analysis may depend on the type of data we have.
         self.ICModes = ['IC', 'CC', 'IClamp'] # list of modes that use current clamp
         self.VCModes = ['VC', 'VClamp'] # modes that use voltage clamp analysis
@@ -84,6 +88,7 @@ class IVCurve(AnalysisModule):
         self.ctrl.IVCurve_Update.clicked.connect(self.updateAnalysis)
         self.ctrl.IVCurve_PrintResults.clicked.connect(self.printAnalysis) 
         self.ctrl.IVCurve_MPLExport.clicked.connect(self.matplotlibExport)
+        self.ctrl.IVCurve_KeepAnalysis.clicked.connect(self.resetKeepAnalysis)
         [self.ctrl.IVCurve_RMPMode.currentIndexChanged.connect(x) for x in [self.update_rmpAnalysis, self.countSpikes]]
         self.ctrl.dbStoreBtn.clicked.connect(self.dbStoreClicked)
         self.clearResults()
@@ -120,6 +125,7 @@ class IVCurve(AnalysisModule):
     #    self.gridLayout.addWidget(self.fslPlot, 3, 1, 1, 1) # self.getElement('FSL/FISI Plot', create = True)
     #    self.labelUp(self.tailPlot, 'V (V)', 'I (A)', 'Tail Current')
 
+
         # Add a color scale
         self.colorScale = pg.GradientLegend((20, 150), (-10, -10))
         self.data_plot.scene().addItem(self.colorScale)
@@ -145,6 +151,10 @@ class IVCurve(AnalysisModule):
         self.fisi=[] # first isi
         self.ar=[] # adaptation ratio
         self.rmp=[] # resting membrane potential during sequence
+        
+    
+    def resetKeepAnalysis(self):
+        self.keepAnalysisCount = 0 # reset counter. 
 
     def initialize_Regions(self):
         """
@@ -152,29 +162,34 @@ class IVCurve(AnalysisModule):
         NOT happen until the plot has been created
         """
         if not self.regionsExist:
-            self.lrss = pg.LinearRegionItem([0, 1], brush=pg.mkBrush(0, 255, 0, 50.))
-            self.lrpk = pg.LinearRegionItem([0, 1], brush=pg.mkBrush(0, 0, 255, 50.))
-            self.lrtau = pg.LinearRegionItem([0, 1], brush=pg.mkBrush(255, 0, 0, 50.))
-            self.lrrmp = pg.LinearRegionItem([0,1], brush=pg.mkBrush(255,255,0,25.))
+            self.lrss =   pg.LinearRegionItem([0, 1], brush=pg.mkBrush(0, 255, 0, 50.))
+            self.lrpk =   pg.LinearRegionItem([0, 1], brush=pg.mkBrush(0, 0, 255, 50.))
+            self.lrtau =  pg.LinearRegionItem([0, 1], brush=pg.mkBrush(255, 0, 0, 50.))
+            self.lrrmp =  pg.LinearRegionItem([0, 1], brush=pg.mkBrush(255,255,0,25.))
+            self.lrleak = pg.LinearRegionItem([0, 1], brush=pg.mkBrush(255,0,255,25.))
             self.data_plot.addItem(self.lrss)
             self.data_plot.addItem(self.lrpk)
             self.data_plot.addItem(self.lrtau)
             self.data_plot.addItem(self.lrrmp)
+            self.IV_plot.addItem(self.lrleak)
             self.ctrl.IVCurve_showHide_lrss.clicked.connect(self.showhide_lrss)
             self.ctrl.IVCurve_showHide_lrpk.clicked.connect(self.showhide_lrpk)
             self.ctrl.IVCurve_showHide_lrtau.clicked.connect(self.showhide_lrtau)
             self.ctrl.IVCurve_showHide_lrrmp.clicked.connect(self.showhide_lrrmp)
+            self.ctrl.IVCurve_subLeak.clicked.connect(self.showhide_leak)
             # Plots are updated when the selected region changes
+            self.lrrmp.sigRegionChangeFinished.connect(self.update_rmpAnalysis)
             self.lrss.sigRegionChangeFinished.connect(self.update_ssAnalysis)
             self.lrpk.sigRegionChangeFinished.connect(self.update_pkAnalysis)
+            self.lrleak.sigRegionChangeFinished.connect(self.updateAnalysis)
             self.lrtau.sigRegionChangeFinished.connect(self.update_Tauh)
-            self.lrrmp.sigRegionChangeFinished.connect(self.update_rmpAnalysis)
             self.regionsExist = True
             self.ctrl.IVCurve_tauh_Commands.currentIndexChanged.connect(self.updateAnalysis)
         self.showhide_lrpk(True)
         self.showhide_lrss(True)
         self.showhide_lrrmp(True)
         self.showhide_lrtau(False)
+        self.showhide_leak(True)
         self.ctrl.IVCurve_ssTStart.setSuffix(' ms')
         self.ctrl.IVCurve_ssTStop.setSuffix(' ms')
         self.ctrl.IVCurve_pkTStart.setSuffix(' ms')
@@ -183,6 +198,8 @@ class IVCurve(AnalysisModule):
         #self.ctrl.IVCurve_tauTStop.setSuffix(' ms')
         self.ctrl.IVCurve_tau2TStart.setSuffix(' ms')
         self.ctrl.IVCurve_tau2TStop.setSuffix(' ms')
+        self.ctrl.IVCurve_LeakMin.setSuffix(' mV')
+        self.ctrl.IVCurve_LeakMax.setSuffix(' mV')
 
     ############
     # The next set of short routines control showing and hiding of regions
@@ -219,6 +236,15 @@ class IVCurve(AnalysisModule):
         else:
             self.lrrmp.hide()
             self.ctrl.IVCurve_showHide_lrrmp.setCheckState(QtCore.Qt.Unchecked)
+
+    def showhide_leak(self, flagvalue):
+        if flagvalue:
+            self.lrleak.show()
+            self.ctrl.IVCurve_subLeak.setCheckState(QtCore.Qt.Checked)
+        else:
+            self.lrleak.hide()
+            self.ctrl.IVCurve_subLeak.setCheckState(QtCore.Qt.Unchecked)
+
 
     def loadFileRequested(self, dh):
         """Called by file loader when a file load is requested.
@@ -344,9 +370,10 @@ class IVCurve(AnalysisModule):
         cmddiff2  = cmdtimes1[1:] - cmdtimes1[:-1]
         cmdtimes2 = numpy.argwhere(cmddiff2 > 1)[:,0]
         cmdtimes = numpy.append(cmdtimes1[0], cmddiff2[cmdtimes2])
-        self.tstart = cmd.xvals('Time')[cmdtimes[0]]
-        self.tend = cmd.xvals('Time')[cmdtimes[1]]+ self.tstart
-        self.tdur = self.tend - self.tstart
+        if self.ctrl.IVCurve_KeepT.isChecked() is False:
+            self.tstart = cmd.xvals('Time')[cmdtimes[0]]
+            self.tend = cmd.xvals('Time')[cmdtimes[1]]+ self.tstart
+            self.tdur = self.tend - self.tstart
 
         # build the list of command values that are used for the fitting
         cmdList = []
@@ -355,17 +382,20 @@ class IVCurve(AnalysisModule):
         self.ctrl.IVCurve_tauh_Commands.clear()
         self.ctrl.IVCurve_tauh_Commands.addItems(cmdList)
         self.sampInterval = 1.0/sfreq
-        self.tstart += self.sampInterval
-        self.tend += self.sampInterval
+        if self.ctrl.IVCurve_KeepT.isChecked() is False:
+            self.tstart += self.sampInterval
+            self.tend += self.sampInterval
         tmax = cmd.xvals('Time')[-1]
         self.tx = cmd.xvals('Time').view(numpy.ndarray)
         commands = numpy.array(self.values)
 
         self.initialize_Regions() # now create the analysis regions
-        self.lrss.setRegion([(self.tend-(self.tdur/5.0)), self.tend-0.001]) # steady-state
-        self.lrpk.setRegion([self.tstart, self.tstart+(self.tdur/5.0)]) # "peak" during hyperpolarization
-        self.lrtau.setRegion([self.tstart+(self.tdur/5.0)+0.005, self.tend])
-        self.lrrmp.setRegion([1.e-4, self.tstart*0.9]) # rmp window
+        if self.ctrl.IVCurve_KeepT.isChecked() is False:
+            self.lrss.setRegion([(self.tend-(self.tdur/5.0)), self.tend-0.001]) # steady-state
+            self.lrpk.setRegion([self.tstart, self.tstart+(self.tdur/5.0)]) # "peak" during hyperpolarization
+            self.lrtau.setRegion([self.tstart+(self.tdur/5.0)+0.005, self.tend])
+            self.lrrmp.setRegion([1.e-4, self.tstart*0.9]) # rmp window
+        self.lrleak.setRegion([self.ctrl.IVCurve_LeakMin.value(), self.ctrl.IVCurve_LeakMax.value()]) # rmp window
 
         if self.dataMode in self.ICModes:
                 # for adaptation ratio:
@@ -394,11 +424,15 @@ class IVCurve(AnalysisModule):
         self.spk: the indices of command levels were at least one spike was detected
         
         """
+        if self.keepAnalysisCount == 0:
+            clearFlag = True
+        else:
+            clearFlag = False
         if self.dataMode not in self.ICModes or self.tx is None:
             print 'IVCurve::countSpikes: Cannot count spikes, and dataMode is ', self.dataMode
             self.spikecount=[]
-            self.fiPlot.plot(x=[], y=[], clear=True, pen='w', symbolSize=6, symbolPen='b', symbolBrush=(0, 0, 255, 200), symbol='s')
-            self.fslPlot.plot(x=[], y=[], pen='w', clear=True, symbolSize=6, symbolPen='g', symbolBrush=(0, 255, 0, 200), symbol='t')
+            self.fiPlot.plot(x=[], y=[], clear=clearFlag, pen='w', symbolSize=6, symbolPen='b', symbolBrush=(0, 0, 255, 200), symbol='s')
+            self.fslPlot.plot(x=[], y=[], pen='w', clear=clearFlag, symbolSize=6, symbolPen='g', symbolBrush=(0, 255, 0, 200), symbol='t')
             self.fslPlot.plot(x=[], y=[], pen='w', symbolSize=6, symbolPen='y', symbolBrush=(255, 255, 0, 200), symbol='s')
             return
         minspk = 4
@@ -649,6 +683,18 @@ class IVCurve(AnalysisModule):
             self.ivss = data1.mean(axis=1) # all traces
             self.ivss_cmd = commands
             self.cmd = commands
+        self.yleak = numpy.zeros(len(self.ivss))
+        if self.ctrl.IVCurve_subLeak.isChecked():
+            (x, y) = Utility.clipdata(self.ivss, self.ivss_cmd, 
+                self.ctrl.IVCurve_LeakMin.value()*1e-3, self.ctrl.IVCurve_LeakMax.value()*1e-3)
+            p = numpy.polyfit(x, y, 1) # linear fit
+            self.yleak = numpy.polyval(p, self.ivss_cmd)
+            print 'yleak: ', self.yleak
+            print 'x: ', x
+            print 'y: ', y
+            self.ivss = self.ivss - self.yleak
+        if self.ctrl.IVCurve_SubRMP.isChecked():
+            self.ivss = self.ivss - self.ivrmp
         self.update_IVPlot()
 
     def update_pkAnalysis(self, clear=False, pw = False):
@@ -672,6 +718,10 @@ class IVCurve(AnalysisModule):
             self.cmd = commands
             self.ivpk_cmd = commands
         self.update_Tau(printWindow = pw)
+        if self.ctrl.IVCurve_subLeak.isChecked():
+            self.ivpk = self.ivpk - self.yleak
+        if self.ctrl.IVCurve_SubRMP.isChecked():
+            self.ivpk = self.ivpk - self.ivrmp
         self.update_IVPlot()
 
     def update_rmpAnalysis(self, clear=True, pw=False):
@@ -692,23 +742,52 @@ class IVCurve(AnalysisModule):
         self.averageRMP = numpy.mean(self.ivrmp)
         self.update_RMPPlot()
 
+    def mapSymbol(self):
+        """
+        Given the current stat of things, (keep analysis count, for example),
+        return a tuple of pen, fill color, empty color, a symbol from
+        our lists, and a clearflag
+        """
+        n = self.keepAnalysisCount
+        np = n % len(self.colorList)
+        pen = self.colorList[np]
+        filledbrush = self.colorList[np]
+        emptybrush = None
+        ns = n % len(self.symbolList)
+        symbol = self.symbolList[ns]
+        if n == 0:
+            clearFlag = True
+        else:
+            clearFlag = False
+        return(pen, filledbrush, emptybrush, symbol, n, clearFlag)
+                
     def update_IVPlot(self):
         """
             Draw the peak and steady-sate IV to the I-V window
             Note: x axis is always I or V, y axis V or I
         """
-        self.IV_plot.clear()
+        if self.ctrl.IVCurve_KeepAnalysis.isChecked() is False:
+            self.IV_plot.clear()
+        (pen, filledbrush, emptybrush, symbol, n, clearFlag) = self.mapSymbol()
         if self.dataMode in self.ICModes:
             if len(self.ivss) > 0:
-                self.IV_plot.plot(self.ivss_cmd*1e12, self.ivss*1e3, symbolSize=6, symbolPen='w', symbolBrush='w')
+                self.IV_plot.plot(self.ivss_cmd*1e12, self.ivss*1e3, 
+                    symbol=symbol, pen = pen, 
+                    symbolSize=6, symbolPen=pen, symbolBrush=filledbrush)
             if len(self.ivpk) > 0:
-                self.IV_plot.plot(self.ivpk_cmd*1e12, self.ivpk*1e3, symbolSize=6, symbolPen='w', symbolBrush='r')
+                self.IV_plot.plot(self.ivpk_cmd*1e12, self.ivpk*1e3, 
+                symbol=symbol, pen = pen, 
+                symbolSize=6, symbolPen=pen, symbolBrush=emptybrush)
             self.labelUp(self.IV_plot,'I (pA)', 'V (mV)', 'I-V (CC)')
         if self.dataMode in self.VCModes:
             if len(self.ivss) > 0:
-                self.IV_plot.plot(self.ivss_cmd*1e3, self.ivss*1e9, symbolSize=6, symbolPen='w', symbolBrush='w')
+                self.IV_plot.plot(self.ivss_cmd*1e3, self.ivss*1e9,
+                symbol=symbol, pen = pen, 
+                symbolSize=6, symbolPen=pen, symbolBrush=filledbrush)
             if len(self.ivpk) > 0:
-                self.IV_plot.plot(self.ivpk_cmd*1e3, self.ivpk*1e9, symbolSize=6, symbolPen='w', symbolBrush='r')
+                self.IV_plot.plot(self.ivpk_cmd*1e3, self.ivpk*1e9,
+                symbol=symbol, pen = pen, 
+                symbolSize=6, symbolPen=pen, symbolBrush=emptybrush)
             self.labelUp(self.IV_plot,'V (mV)', 'I (nA)', 'I-V (VC)')
 
     def update_RMPPlot(self):
@@ -716,8 +795,10 @@ class IVCurve(AnalysisModule):
             Draw the RMP to the I-V window
             Note: x axis can be I, T, or # spikes
         """
-        self.RMP_plot.clear()
+        if self.ctrl.IVCurve_KeepAnalysis.isChecked() is False:
+            self.RMP_plot.clear()
         if len(self.ivrmp) > 0:
+            (pen, filledbrush, emptybrush, symbol, n, clearFlag) = self.mapSymbol()
             mode  = self.ctrl.IVCurve_RMPMode.currentIndex()
             if self.dataMode in self.ICModes:
                 sf = 1e3
@@ -726,13 +807,19 @@ class IVCurve(AnalysisModule):
                 sf = 1e12
                 self.RMP_plot.setLabel('left', 'I (pA)')
             if mode == 0:
-                self.RMP_plot.plot(self.traceTimes, sf*numpy.array(self.ivrmp), symbolSize=6, symbolPen='w', symbolBrush='w') 
+                self.RMP_plot.plot(self.traceTimes, sf*numpy.array(self.ivrmp),
+                symbol=symbol, pen = pen, 
+                symbolSize=6, symbolPen=pen, symbolBrush=filledbrush)
                 self.RMP_plot.setLabel('bottom', 'T (s)') 
             elif mode == 1:
-                self.RMP_plot.plot(self.cmd, 1.e3*numpy.array(self.ivrmp), symbolSize=6, symbolPen='w', symbolBrush='w')
+                self.RMP_plot.plot(self.cmd, 1.e3*numpy.array(self.ivrmp), symbolSize=6, 
+                symbol=symbol, pen = pen, 
+                symbolPen=pen, symbolBrush=filledbrush)
                 self.RMP_plot.setLabel('bottom', 'I (pA)') 
             elif mode == 2:
-                self.RMP_plot.plot(self.spikecount, 1.e3*numpy.array(self.ivrmp), symbolSize=6, symbolPen='w', symbolBrush='w')
+                self.RMP_plot.plot(self.spikecount, 1.e3*numpy.array(self.ivrmp), symbolSize=6, 
+                symbol=symbol, pen = pen, 
+                symbolPen=pen, symbolBrush=emptybrush)
                 self.RMP_plot.setLabel('bottom', 'Spikes') 
             else:
                 pass
@@ -746,6 +833,7 @@ class IVCurve(AnalysisModule):
             self.fiPlot.clear() # no plots of spikes in VC
             self.fslPlot.clear()
             return
+        (pen, filledbrush, emptybrush, symbol, n, clearFlag) = self.mapSymbol()
         mode  = self.ctrl.IVCurve_RMPMode.currentIndex() # get x axis mode
         commands = numpy.array(self.values)
         self.cmd = commands[self.nospk]
@@ -769,9 +857,15 @@ class IVCurve(AnalysisModule):
             xlabel = 'Spikes (N)'
         else:
             return # mode not in available list
-        self.fiPlot.plot(x=xfi, y=self.spikecount, clear=True, pen='w', symbolSize=6, symbolPen='b', symbolBrush=(0, 0, 255, 200), symbol='s')
-        self.fslPlot.plot(x=xfsl, y=self.fsl[select]*yfslsc, pen='w', clear=True, symbolSize=6, symbolPen='g', symbolBrush=(0, 255, 0, 200), symbol='t')
-        self.fslPlot.plot(x=xfsl, y=self.fisi[select]*yfslsc, pen='w', symbolSize=6, symbolPen='y', symbolBrush=(255, 255, 0, 200), symbol='s')
+        self.fiPlot.plot(x=xfi, y=self.spikecount, clear=clearFlag, symbolSize = 6,
+            symbol=symbol, pen = pen, 
+            symbolPen=pen, symbolBrush=filledbrush)
+        self.fslPlot.plot(x=xfsl, y=self.fsl[select]*yfslsc, clear=clearFlag, symbolSize = 6,
+            symbol=symbol, pen = pen, 
+            symbolPen=pen, symbolBrush=filledbrush)
+        self.fslPlot.plot(x=xfsl, y=self.fisi[select]*yfslsc, symbolSize=6,
+            symbol=symbol, pen = pen, 
+            symbolPen=pen, symbolBrush=emptybrush)
         if len(xfsl) > 0:
             self.fslPlot.setXRange(0.0, numpy.max(xfsl))
         self.fiPlot.setLabel('bottom', xlabel)
@@ -781,6 +875,14 @@ class IVCurve(AnalysisModule):
         """
         Read the parameter window entries, set the lr regions, and do an update on the analysis
         """
+        (pen, filledbrush, emptybrush, symbol, n, clearFlag) = self.mapSymbol()
+
+        if self.ctrl.IVCurve_showHide_lrrmp.isChecked(): # update RMP first as we might use it for the others.
+            rgnx1 = self.ctrl.IVCurve_rmpTStart.value()/1.0e3
+            rgnx2 = self.ctrl.IVCurve_rmpTStop.value()/1.0e3
+            self.lrrmp.setRegion([rgnx1, rgnx2])
+            self.update_rmpAnalysis(clear=clearFlag, pw = pw)
+
         if self.ctrl.IVCurve_showHide_lrss.isChecked():
             rgnx1 = self.ctrl.IVCurve_ssTStart.value()/1.0e3
             rgnx2 = self.ctrl.IVCurve_ssTStop.value()/1.0e3
@@ -791,13 +893,16 @@ class IVCurve(AnalysisModule):
             rgnx1 = self.ctrl.IVCurve_pkTStart.value()/1.0e3
             rgnx2 = self.ctrl.IVCurve_pkTStop.value()/1.0e3
             self.lrpk.setRegion([rgnx1, rgnx2])
-            self.update_pkAnalysis(clear=False, pw = pw)
-
-        if self.ctrl.IVCurve_showHide_lrrmp.isChecked():
-            rgnx1 = self.ctrl.IVCurve_rmpTStart.value()/1.0e3
-            rgnx2 = self.ctrl.IVCurve_rmpTStop.value()/1.0e3
-            self.lrrmp.setRegion([rgnx1, rgnx2])
-            self.update_rmpAnalysis(clear=False, pw = pw)
+            self.update_pkAnalysis(clear=clearFlag, pw = pw)
+        
+        print 'readParameters?'
+        if self.ctrl.IVCurve_subLeak.isChecked():
+            rgnx1 = self.ctrl.IVCurve_LeakMin.value()/1e3
+            rgnx2 = self.ctrl.IVCurve_LeakMax.value()/1e3
+            print 'regions: ', rgnx1, rgnx2
+            self.lrleak.setRegion([rgnx1, rgnx2])
+            self.update_ssAnalysis()
+            self.update_pkAnalysis()
 
         if self.ctrl.IVCurve_showHide_lrtau.isChecked():
             self.update_Tauh() # include tau in the list... if the tool is selected
@@ -807,7 +912,8 @@ class IVCurve(AnalysisModule):
             Draw the RMP to the I-V window using matplotlib
             Note: x axis can be I, T, or # spikes
         """
-        self.mplax['RMP'].clear()
+        if self.ctrl.IVCurve_KeepAnalysis.isChecked() is False:
+            self.mplax['RMP'].clear()
         if len(self.ivrmp) > 0:
             mode  = self.ctrl.IVCurve_RMPMode.currentIndex()
             ax = self.mplax['RMP']
@@ -840,8 +946,10 @@ class IVCurve(AnalysisModule):
             Draw the IV o the I-V window using matplotlib
             Note: x axis can be I, T, or # spikes
         """
-        self.mplax['IV'].clear()
+        if self.ctrl.IVCurve_KeepAnalysis.isChecked() is False:
+            self.mplax['IV'].clear()
         ax = self.mplax['IV']
+        n = self.keepAnalysisCount
         if self.dataMode in self.ICModes:
             if len(self.ivss) > 0:
                 ax.plot(self.ivss_cmd*1e12, self.ivss*1e3, 'k-s', markersize = 3)
@@ -864,10 +972,11 @@ class IVCurve(AnalysisModule):
             Draw the spike count data the I-V window using matplotlib
             Note: x axis can be I, T, or # spikes
         """
-        axfi = self.mplax['FI']
-        axfi.clear()
-        axfsl = self.mplax['FSL']
-        axfsl.clear()
+        if self.ctrl.IVCurve_KeepAnalysis.isChecked() is False:
+            axfi = self.mplax['FI']
+            axfi.clear()
+            axfsl = self.mplax['FSL']
+            axfsl.clear()
         if self.dataMode in self.VCModes:
             return
         mode  = self.ctrl.IVCurve_RMPMode.currentIndex() # get x axis mode
@@ -875,7 +984,7 @@ class IVCurve(AnalysisModule):
         self.cmd = commands[self.nospk]
         self.spcmd = commands[self.spk]
         iscale = 1.0e12 # convert to pA
-        yfslsc = 1.0e3 # convert to msec
+        yfslsc = 1.0 # convert to msec
         if mode == 0: # plot with time as x axis
             xfi = self.traceTimes
             xfsl = self.traceTimes

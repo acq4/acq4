@@ -207,7 +207,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrlImageFunc.IAFuncs_DistanceStrengthPrint.clicked.connect(self.printDistStrength)
         self.ctrlImageFunc.IAFuncs_AnalogRadioBtn.clicked.connect(self.setAnalogMode)
         self.ctrlImageFunc.IAFuncs_DigitalRadioBtn.clicked.connect(self.setDigitalMode)
-        self.ctrlImageFunc.IAFuncs_GetCSFFile.clicked.connect(self.getCSVFile)
+        self.ctrlImageFunc.IAFuncs_GetCSVFile.clicked.connect(self.getCSVFile)
         
 
     def initDataState(self):
