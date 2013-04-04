@@ -568,8 +568,8 @@ class PlotItem(GraphicsWidget):
         :func:`InfiniteLine.__init__() <pyqtgraph.InfiniteLine.__init__>`.
         Returns the item created.
         """
-        angle = 0 if x is None else 90
-        pos = x if x is not None else y
+        pos = kwds.get('pos', x if x is not None else y)
+        angle = kwds.get('angle', 0 if x is None else 90)
         line = InfiniteLine(pos, angle, **kwds)
         self.addItem(line)
         if z is not None:
