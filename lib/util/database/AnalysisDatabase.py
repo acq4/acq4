@@ -580,7 +580,10 @@ class AnalysisDatabase(SqliteDatabase):
             
         if not self.hasTable(table):
             return None
-        rec = self.select(table, ['rowid'], sql="where Dir='%s'" % dirHandle.name(relativeTo=self.baseDir()))
+        name = dirHandle.name(relativeTo=self.baseDir())
+        name1 = name.replace('/', '\\')
+        name2 = name.replace('\\', '/')
+        rec = self.select(table, ['rowid'], sql="where Dir='%s' or Dir='%s'" % (name1, name2))
         if len(rec) < 1:
             return None
         #print rec[0]
@@ -717,7 +720,17 @@ class AnalysisDatabase(SqliteDatabase):
                 data[column] = map(handles.get, data[column])
                     
             elif conf.get('Type', None) == 'file':
-                data[column] = map(lambda f: None if f is None else self.baseDir()[f], data[column])
+                def getHandle(name):
+                    if name is None:
+                        return None
+                    else:
+                        if os.sep == '/':
+                            sep = '\\'
+                        else:
+                            sep = '/'
+                        name = name.replace(sep, os.sep) ## make sure file handles have an operating-system-appropriate separator (/ for Unix, \ for Windows)
+                        return self.baseDir()[name]
+                data[column] = map(getHandle, data[column])
                 
         prof.mark("converted file/dir handles")
                 
