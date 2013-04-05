@@ -187,9 +187,9 @@ class IVCurve(AnalysisModule):
             self.lrtau.sigRegionChangeFinished.connect(self.update_Tauh)
             self.regionsExist = True
             self.ctrl.IVCurve_tauh_Commands.currentIndexChanged.connect(self.updateAnalysis)
-        self.showhide_lrpk(True)
-        self.showhide_lrss(True)
-        self.showhide_lrrmp(True)
+        #self.showhide_lrpk(True)
+        #self.showhide_lrss(True)
+        self.showhide_lrrmp(True) # always... 
         self.showhide_lrtau(False)
        # self.showhide_leak(True)
         self.ctrl.IVCurve_ssTStart.setSuffix(' ms')
@@ -298,12 +298,13 @@ class IVCurve(AnalysisModule):
             reps = self.Sequence[('protocol', 'repetitions')]
             sequenceValues = [x for y in range(len(dirs)) for x in sequenceValues]
         
+        i = 0 # sometimes, the elements are not right... 
         for i,dirName in enumerate(dirs):
             d = dh[dirName]
             try:
                 dataF = self.dataModel.getClampFile(d)
                 if dataF is None:  ## No clamp file for this iteration of the protocol (probably the protocol was stopped early)
-                    print 'IVCurve::loadFileRequested: Missing data in %s' % (dirName)
+                    print 'IVCurve::loadFileRequested: Missing data in %s, element: %d' % (dirName, i)
                     continue
             except:
                 debug.printExc("Error loading data for protocol %s:" % d.name() )
@@ -311,6 +312,15 @@ class IVCurve(AnalysisModule):
             dataF = dataF.read()
             cmd = self.dataModel.getClampCommand(dataF)
             data = self.dataModel.getClampPrimary(dataF)
+            self.dataMode = self.dataModel.getClampMode(data)
+            if self.dataMode == 'IC':
+                sf = 1.0
+            else:
+                sf = 1e3
+            if self.ctrl.IVCurve_IVLimits.isChecked(): # only accept data in a particular range
+                if sf*sequenceValues[i] < self.ctrl.IVCurve_IVLimitMin.value() or sf*sequenceValues[i] > self.ctrl.IVCurve_IVLimitMax.value():
+                  #  print i, sf, sf*sequenceValues[i]
+                    continue # skip adding the data to the arrays
             shdat = data.shape
             if shdat[0] > 2*maxplotpts:
                 decimate_factor = int(numpy.floor(shdat[0]/maxplotpts))
@@ -334,6 +344,7 @@ class IVCurve(AnalysisModule):
                     self.values.append(sequenceValues[i])
             else:
                 self.values.append(cmd[len(cmd)/2])
+            i += 1
         print 'IVCurve::loadFileRequested: Done loading files'
         if traces is None or len(traces) == 0:
             print "IVCurve::loadFileRequested: No data found in this run..."
@@ -678,32 +689,41 @@ class IVCurve(AnalysisModule):
         data1 = self.traces['Time': rgnss[0]:rgnss[1]]
         self.ivss=[]
         commands = numpy.array(self.values)
-        if len(self.nospk) >= 1:
+
+        # check out whether there are spikes in the window that is selected
+        threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 1e-3
+        ntr = len(self.traces)
+        spikecount = numpy.zeros(ntr)
+        for i in range(ntr):
+            (spike, spk) = Utility.findspikes(self.tx, self.traces[i], 
+                threshold, t0=rgnss[0], t1=rgnss[1], dt=self.sampInterval,
+                mode = 'schmitt', interpolate=False, debug=False)
+            if len(spike) == 0:
+                continue
+            spikecount[i] = len(spike)
+        nospk = numpy.where(spikecount == 0)
+        self.ivss = data1.mean(axis=1) # all traces
+        if self.ctrl.IVCurve_SubRMP.isChecked():
+            self.ivss = self.ivss - self.ivrmp
+
+        if len(nospk) >= 1:
             # Steady-state IV where there are no spikes
-            self.ivss = data1.mean(axis=1)[self.nospk]
-            self.ivss_cmd = commands[self.nospk]
-            self.cmd = commands[self.nospk]
+            self.ivss = self.ivss[nospk]
+            self.ivss_cmd = commands[nospk]
+            self.cmd = commands[nospk]
             # compute Rin from the SS IV:
             if len(self.cmd) > 0 and len(self.ivss) > 0:
                 self.Rin = numpy.max(numpy.diff(self.ivss)/numpy.diff(self.cmd))
                 self.ctrl.IVCurve_Rin.setText(u'%9.1f M\u03A9' % (self.Rin*1.0e-6))
             else:
                 self.ctrl.IVCurve_Rin.setText(u'No valid points')
-        else:
-            self.ivss = data1.mean(axis=1) # all traces
-            self.ivss_cmd = commands
-            self.cmd = commands
-        if self.ctrl.IVCurve_SubRMP.isChecked():
-            self.ivss = self.ivss - self.ivrmp
+       # self.ivss = self.ivss.view(numpy.ndarray)
         self.yleak = numpy.zeros(len(self.ivss))
         if self.ctrl.IVCurve_subLeak.isChecked():
             (x, y) = Utility.clipdata(self.ivss, self.ivss_cmd, 
                 self.ctrl.IVCurve_LeakMin.value()*1e-3, self.ctrl.IVCurve_LeakMax.value()*1e-3)
             p = numpy.polyfit(x, y, 1) # linear fit
             self.yleak = numpy.polyval(p, self.ivss_cmd)
-            print 'yleak: ', self.yleak
-            print 'x: ', x
-            print 'y: ', y
             self.ivss = self.ivss - self.yleak
         self.update_IVPlot()
 
@@ -718,18 +738,29 @@ class IVCurve(AnalysisModule):
         self.ctrl.IVCurve_pkTStop.setValue(rgnpk[1]*1.0e3)
         data2 = self.traces['Time': rgnpk[0]:rgnpk[1]]
         commands = numpy.array(self.values)
-        if len(self.nospk) >= 1:
-            # Peak (minimum voltage) IV where there are no spikes
-            self.ivpk = data2.min(axis=1)[self.nospk]
-            self.ivpk_cmd = commands[self.nospk]
-            self.cmd = commands[self.nospk]
-        else:
-            self.ivpk = data2.min(axis=1)
-            self.cmd = commands
-            self.ivpk_cmd = commands
-        self.update_Tau(printWindow = pw)
+        # check out whether there are spikes in the window that is selected
+        threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 1e-3
+        ntr = len(self.traces)
+        spikecount = numpy.zeros(ntr)
+        for i in range(ntr):
+            (spike, spk) = Utility.findspikes(self.tx, self.traces[i], 
+                threshold, t0=rgnpk[0], t1=rgnpk[1], dt=self.sampInterval,
+                mode = 'schmitt', interpolate=False, debug=False)
+            if len(spike) == 0:
+                continue
+            spikecount[i] = len(spike)
+        nospk = numpy.where(spikecount == 0)
+        self.ivpk = data2.min(axis=1)
         if self.ctrl.IVCurve_SubRMP.isChecked():
             self.ivpk = self.ivpk - self.ivrmp
+
+        if len(nospk) >= 1:
+            # Peak (minimum voltage) IV where there are no spikes
+            self.ivpk = self.ivpk[nospk]
+            self.ivpk_cmd = commands[nospk]
+            self.cmd = commands[nospk]
+        self.ivpk = self.ivpk.view(numpy.ndarray)
+        self.update_Tau(printWindow = pw)
         if self.ctrl.IVCurve_subLeak.isChecked():
             self.ivpk = self.ivpk - self.yleak
         self.update_IVPlot()
@@ -744,6 +775,7 @@ class IVCurve(AnalysisModule):
         self.ctrl.IVCurve_rmpTStart.setValue(rgnrmp[0]*1.0e3)
         self.ctrl.IVCurve_rmpTStop.setValue(rgnrmp[1]*1.0e3)
         data1 = self.traces['Time': rgnrmp[0]:rgnrmp[1]]
+        data1 = data1.view(numpy.ndarray)
         self.ivrmp=[]
         commands = numpy.array(self.values)
         self.ivrmp = data1.mean(axis=1) # all traces
@@ -773,8 +805,13 @@ class IVCurve(AnalysisModule):
 
     def mapSymbol(self):
         cd = self.currentSymDict
-        return(cd['pen'], cd['filledbrush'], cd['emptybrush'], cd['symbol'],
+        if cd['filledbrush'] == 'w':
+           cd['filledbrush'] = pg.mkBrush((128,128,128))
+        if cd['pen'] == 'w':
+           cd['pen'] =  pg.mkPen((128,128,128))
+        self.lastSymbol = (cd['pen'], cd['filledbrush'], cd['emptybrush'], cd['symbol'],
             cd['n'], cd['clearFlag'])
+        return(self.lastSymbol)
 
     def update_IVPlot(self):
         """
@@ -785,21 +822,21 @@ class IVCurve(AnalysisModule):
             self.IV_plot.clear()
         (pen, filledbrush, emptybrush, symbol, n, clearFlag) = self.mapSymbol()
         if self.dataMode in self.ICModes:
-            if len(self.ivss) > 0:
+            if len(self.ivss) > 0  and self.ctrl.IVCurve_showHide_lrss.isChecked():
                 self.IV_plot.plot(self.ivss_cmd*1e12, self.ivss*1e3, 
                     symbol=symbol, pen = pen, 
                     symbolSize=6, symbolPen=pen, symbolBrush=filledbrush)
-            if len(self.ivpk) > 0:
+            if len(self.ivpk) > 0  and self.ctrl.IVCurve_showHide_lrpk.isChecked():
                 self.IV_plot.plot(self.ivpk_cmd*1e12, self.ivpk*1e3, 
                 symbol=symbol, pen = pen, 
                 symbolSize=6, symbolPen=pen, symbolBrush=emptybrush)
             self.labelUp(self.IV_plot,'I (pA)', 'V (mV)', 'I-V (CC)')
         if self.dataMode in self.VCModes:
-            if len(self.ivss) > 0:
+            if len(self.ivss) > 0  and self.ctrl.IVCurve_showHide_lrss.isChecked():
                 self.IV_plot.plot(self.ivss_cmd*1e3, self.ivss*1e9,
                 symbol=symbol, pen = pen, 
                 symbolSize=6, symbolPen=pen, symbolBrush=filledbrush)
-            if len(self.ivpk) > 0:
+            if len(self.ivpk) > 0  and self.ctrl.IVCurve_showHide_lrpk.isChecked():
                 self.IV_plot.plot(self.ivpk_cmd*1e3, self.ivpk*1e9,
                 symbol=symbol, pen = pen, 
                 symbolSize=6, symbolPen=pen, symbolBrush=emptybrush)
@@ -964,17 +1001,17 @@ class IVCurve(AnalysisModule):
         ax = self.mplax['IV']
         n = self.keepAnalysisCount
         if self.dataMode in self.ICModes:
-            if len(self.ivss) > 0:
+            if len(self.ivss) > 0 and self.ctrl.IVCurve_showHide_lrss.isChecked():
                 ax.plot(self.ivss_cmd*1e12, self.ivss*1e3, 'k-s', markersize = 3)
-            if len(self.ivpk) > 0:
+            if len(self.ivpk) > 0 and self.ctrl.IVCurve_showHide_lrpk.isChecked():
                 ax.plot(self.ivpk_cmd*1e12, self.ivpk*1e3, 'r-o', markersize = 3)
             ax.set_xlabel('I (pA)', size=9)
             ax.set_ylabel('V (mV)', size=9)
             ax.set_title('I-V (CC)', verticalalignment='top', size=11)
         if self.dataMode in self.VCModes:
-            if len(self.ivss) > 0:
+            if len(self.ivss) > 0 and self.ctrl.IVCurve_showHide_lrss.isChecked():
                 ax.plot(self.ivss_cmd*1e3, self.ivss*1e9, 'k-s', markersize = 3)
-            if len(self.ivpk) > 0:
+            if len(self.ivpk) > 0 and self.ctrl.IVCurve_showHide_lrpk.isChecked():
                 ax.plot(self.ivpk_cmd*1e3, self.ivpk*1e9, 'r-o', markersize = 3)
             ax.set_xlabel('V (mV)', size=9)
             ax.set_ylabel('I (nA)', size=9)
@@ -1055,7 +1092,7 @@ class IVCurve(AnalysisModule):
         escs = re.compile('[\\\/_]')
         tiname = '%r' % self.filename
         tiname = re.sub(escs, self.cleanRepl, tiname)
-        print tiname
+        #print tiname
         fig.suptitle(tiname[1:-1])
         pylab.autoscale(enable=True, axis='both', tight=None)
         if self.dataMode not in self.ICModes or self.tx is None:
@@ -1131,7 +1168,7 @@ class IVCurve(AnalysisModule):
 
             db.update(table, rec, where={'Dir': self.loaded.parent()})
         print "updated record for ", self.loaded.name()
-        print rec
+        #print rec
 
 #---- Helpers ----
 # Some of these would normally live in a pyqtgraph-related module, but are 
