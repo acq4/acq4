@@ -149,7 +149,7 @@ if interactive:
     atexit.register(save_history)
 else:
     app.exec_()
-    
+    pg.exit() ## force exit without garbage collection
     
     
     

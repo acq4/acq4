@@ -20,7 +20,7 @@ class FiniteCache(OrderedDict):
             del self[list(self.keys())[0]]
         
     def __getitem__(self, item):
-        val = dict.__getitem__(self, item)
+        val = OrderedDict.__getitem__(self, item)
         del self[item]
         self[item] = val  ## promote this key        
         return val
@@ -194,13 +194,18 @@ class GraphicsItem(object):
         dt = self.deviceTransform()
         if dt is None:
             return None, None
+            
+        ## Ignore translation. If the translation is much larger than the scale
+        ## (such as when looking at unix timestamps), we can get floating-point errors.
+        dt.setMatrix(dt.m11(), dt.m12(), 0, dt.m21(), dt.m22(), 0, 0, 0, 1)
         
         ## check local cache
         if direction is None and dt == self._pixelVectorCache[0]:
             return tuple(map(Point, self._pixelVectorCache[1]))  ## return a *copy*
         
         ## check global cache
-        key = (dt.m11(), dt.m21(), dt.m31(), dt.m12(), dt.m22(), dt.m32(), dt.m31(), dt.m32())
+        #key = (dt.m11(), dt.m21(), dt.m31(), dt.m12(), dt.m22(), dt.m32(), dt.m31(), dt.m32())
+        key = (dt.m11(), dt.m21(), dt.m12(), dt.m22())
         pv = self._pixelVectorGlobalCache.get(key, None)
         if direction is None and pv is not None:
             self._pixelVectorCache = [dt, pv]
@@ -213,15 +218,32 @@ class GraphicsItem(object):
             raise Exception("Cannot compute pixel length for 0-length vector.")
             
         ## attempt to re-scale direction vector to fit within the precision of the coordinate system
-        if direction.x() == 0:
-            r = abs(dt.m32())/(abs(dt.m12()) + abs(dt.m22()))
-            #r = 1.0/(abs(dt.m12()) + abs(dt.m22()))
-        elif direction.y() == 0:
-            r = abs(dt.m31())/(abs(dt.m11()) + abs(dt.m21()))
-            #r = 1.0/(abs(dt.m11()) + abs(dt.m21()))
-        else:
-            r = ((abs(dt.m32())/(abs(dt.m12()) + abs(dt.m22()))) * (abs(dt.m31())/(abs(dt.m11()) + abs(dt.m21()))))**0.5
-        directionr = direction * r
+        ## Here's the problem: we need to map the vector 'direction' from the item to the device, via transform 'dt'.
+        ## In some extreme cases, this mapping can fail unless the length of 'direction' is cleverly chosen.
+        ## Example:
+        ##   dt = [ 1, 0,    2 
+        ##          0, 2, 1e20
+        ##          0, 0,    1 ]
+        ## Then we map the origin (0,0) and direction (0,1) and get:
+        ##    o' = 2,1e20
+        ##    d' = 2,1e20  <-- should be 1e20+2, but this can't be represented with a 32-bit float
+        ##    
+        ##    |o' - d'|  == 0    <-- this is the problem.
+        
+        ## Perhaps the easiest solution is to exclude the transformation column from dt. Does this cause any other problems?
+        
+        #if direction.x() == 0:
+            #r = abs(dt.m32())/(abs(dt.m12()) + abs(dt.m22()))
+            ##r = 1.0/(abs(dt.m12()) + abs(dt.m22()))
+        #elif direction.y() == 0:
+            #r = abs(dt.m31())/(abs(dt.m11()) + abs(dt.m21()))
+            ##r = 1.0/(abs(dt.m11()) + abs(dt.m21()))
+        #else:
+            #r = ((abs(dt.m32())/(abs(dt.m12()) + abs(dt.m22()))) * (abs(dt.m31())/(abs(dt.m11()) + abs(dt.m21()))))**0.5
+        #if r == 0:
+            #r = 1.  ## shouldn't need to do this; probably means the math above is wrong?
+        #directionr = direction * r
+        directionr = direction
         
         ## map direction vector onto device
         #viewDir = Point(dt.map(directionr) - dt.map(Point(0,0)))
@@ -424,6 +446,14 @@ class GraphicsItem(object):
                 #print "   --> ", ch2.scene()
             #self.setChildScene(ch2)
 
+    def parentChanged(self):
+        """Called when the item's parent has changed. 
+        This method handles connecting / disconnecting from ViewBox signals
+        to make sure viewRangeChanged works properly. It should generally be 
+        extended, not overridden."""
+        self._updateView()
+        
+
     def _updateView(self):
         ## called to see whether this item has a new view to connect to
         ## NOTE: This is called from GraphicsObject.itemChange or GraphicsWidget.itemChange.
@@ -474,6 +504,12 @@ class GraphicsItem(object):
         ## inform children that their view might have changed
         self._replaceView(oldView)
         
+        self.viewChanged(view, oldView)
+        
+    def viewChanged(self, view, oldView):
+        """Called when this item's view has changed
+        (ie, the item has been added to or removed from a ViewBox)"""
+        pass
         
     def _replaceView(self, oldView, item=None):
         if item is None:

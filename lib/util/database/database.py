@@ -288,12 +288,13 @@ class SqliteDatabase:
             cmd = "DELETE FROM %s %s" % (table, whereStr)
             return self(cmd)
 
-    def update(self, table, vals, where=None, rowid=None):
+    def update(self, table, vals, where=None, rowid=None, sql=''):
         """Update records in the DB.
         Arguments:
             vals: dict of {column: value} pairs
             where: SQL clause specifying rows to update
-            rowid: int row IDs. Used instead of 'where'"""
+            rowid: int row IDs. Used instead of 'where'
+            sql: SQL string to append to end of statement"""
         if rowid is not None:
             if where is not None:
                 raise Exception("'where' and 'rowid' are mutually exclusive arguments.")
@@ -302,7 +303,7 @@ class SqliteDatabase:
         with self.transaction():
             whereStr = self._buildWhereClause(where, table)
             setStr = ', '.join(['"%s"=:%s' % (k, k) for k in vals])
-            cmd = "UPDATE %s SET %s %s" % (table, setStr, whereStr)
+            cmd = "UPDATE %s SET %s %s %s" % (table, setStr, whereStr, sql)
             data = self._prepareData(table, [vals], batch=True)
             return self(cmd, data, batch=True)
 
@@ -511,7 +512,7 @@ class SqliteDatabase:
             #return np.array([])  ## need to return empty array *with correct columns*, but this is very difficult, so just return None
             return None
         rec1 = recs[0]
-        dtype = functions.suggestRecordDType(rec1)
+        dtype = functions.suggestRecordDType(rec1, singleValue=True)
         #print rec1, dtype
         arr = np.empty(len(recs), dtype=dtype)
         arr[0] = tuple(rec1.values())
@@ -671,7 +672,23 @@ class TableData:
             #return np.array([])  ## need to return empty array *with correct columns*, but this is very difficult, so just return None
             return None
         rec1 = self[0]
-        dtype = functions.suggestRecordDType(rec1, singleRecord=True)
+        #dtype = functions.suggestRecordDType(self)
+        ## Need to look through all data before deciding on dtype.
+        ## It is not sufficient to look at just the first record,
+        ## nor to look at the column types.
+        types = {k:set() for k in self.keys()}
+        for rec in self:
+            for k,v in rec.items():
+                types[k].add(type(v))
+        dtype = []
+        for k in self.keys():
+            t = types[k]
+            if t == set([float]) or t == set([float, type(None)]):
+                dtype.append((k, float))
+            elif t == set([int]):
+                dtype.append((k, int))
+            else:
+                dtype.append((k, object))
         
         #print rec1, dtype
         arr = np.empty(len(self), dtype=dtype)
@@ -784,10 +801,13 @@ class TableData:
         if self.mode == 'array':
             return self.data.dtype.names
         elif self.mode == 'list':
-            names = set()
-            for row in self.data:
-                names.update(row.keys())
-            return list(names)
+            if len(self.data) == 0:
+                return []
+            return self.data[0].keys()  ## all records must have all keys. 
+            #names = set()
+            #for row in self.data:
+                #names.update(row.keys())
+            #return list(names)
         elif self.mode == 'dict':
             return self.data.keys()
             

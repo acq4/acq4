@@ -1,4 +1,4 @@
-from pyqtgraph.Qt import QtGui, QtCore
+from pyqtgraph.Qt import QtGui, QtCore, USE_PYSIDE
 import pyqtgraph.multiprocess as mp
 import pyqtgraph as pg
 from .GraphicsView import GraphicsView
@@ -21,18 +21,19 @@ class RemoteGraphicsView(QtGui.QWidget):
         self._sizeHint = (640,480)  ## no clue why this is needed, but it seems to be the default sizeHint for GraphicsView.
                                     ## without it, the widget will not compete for space against another GraphicsView.
         QtGui.QWidget.__init__(self)
-        self._proc = mp.QtProcess()
+        self._proc = mp.QtProcess(debug=False)
         self.pg = self._proc._import('pyqtgraph')
         self.pg.setConfigOptions(**self.pg.CONFIG_OPTIONS)
         rpgRemote = self._proc._import('pyqtgraph.widgets.RemoteGraphicsView')
         self._view = rpgRemote.Renderer(*args, **kwds)
         self._view._setProxyOptions(deferGetattr=True)
-        self.setFocusPolicy(QtCore.Qt.FocusPolicy(self._view.focusPolicy()))
+        
+        self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         self.setMouseTracking(True)
         self.shm = None
         shmFileName = self._view.shmFileName()
-        if 'win' in sys.platform:
+        if sys.platform.startswith('win'):
             self.shmtag = shmFileName
         else:
             self.shmFile = open(shmFileName, 'r')
@@ -60,7 +61,7 @@ class RemoteGraphicsView(QtGui.QWidget):
         if self.shm is None or self.shm.size != size:
             if self.shm is not None:
                 self.shm.close()
-            if 'win' in sys.platform:
+            if sys.platform.startswith('win'):
                 self.shmtag = newfile   ## on windows, we create a new tag for every resize
                 self.shm = mmap.mmap(-1, size, self.shmtag) ## can't use tmpfile on windows because the file can only be opened once.
             else:
@@ -114,12 +115,13 @@ class RemoteGraphicsView(QtGui.QWidget):
         return self._proc
     
 class Renderer(GraphicsView):
+    ## Created by the remote process to handle render requests
     
     sceneRendered = QtCore.Signal(object)
     
     def __init__(self, *args, **kwds):
         ## Create shared memory for rendered image
-        if 'win' in sys.platform:
+        if sys.platform.startswith('win'):
             self.shmtag = "pyqtgraph_shmem_" + ''.join([chr((random.getrandbits(20)%25) + 97) for i in range(20)])
             self.shm = mmap.mmap(-1, mmap.PAGESIZE, self.shmtag) # use anonymous mmap on windows
         else:
@@ -138,11 +140,11 @@ class Renderer(GraphicsView):
         
     def close(self):
         self.shm.close()
-        if 'win' not in sys.platform:
+        if sys.platform.startswith('win'):
             self.shmFile.close()
         
     def shmFileName(self):
-        if 'win' in sys.platform:
+        if sys.platform.startswith('win'):
             return self.shmtag
         else:
             return self.shmFile.name
@@ -164,7 +166,7 @@ class Renderer(GraphicsView):
                 return
             size = self.width() * self.height() * 4
             if size > self.shm.size():
-                if 'win' in sys.platform:
+                if sys.platform.startswith('win'):
                     ## windows says "WindowsError: [Error 87] the parameter is incorrect" if we try to resize the mmap
                     self.shm.close()
                     ## it also says (sometimes) 'access is denied' if we try to reuse the tag.
@@ -175,7 +177,12 @@ class Renderer(GraphicsView):
             address = ctypes.addressof(ctypes.c_char.from_buffer(self.shm, 0))
             
             ## render the scene directly to shared memory
-            self.img = QtGui.QImage(address, self.width(), self.height(), QtGui.QImage.Format_ARGB32)
+            if USE_PYSIDE:
+                ch = ctypes.c_char.from_buffer(self.shm, 0)
+                #ch = ctypes.c_char_p(address)
+                self.img = QtGui.QImage(ch, self.width(), self.height(), QtGui.QImage.Format_ARGB32)
+            else:
+                self.img = QtGui.QImage(address, self.width(), self.height(), QtGui.QImage.Format_ARGB32)
             self.img.fill(0xffffffff)
             p = QtGui.QPainter(self.img)
             self.render(p, self.viewRect(), self.rect())

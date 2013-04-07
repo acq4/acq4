@@ -27,6 +27,7 @@ from pyqtgraph import getConfigOption
 import numpy as np
 import decimal, re
 import ctypes
+import sys, struct
 
 try:
     import scipy.ndimage
@@ -565,8 +566,8 @@ def transformCoordinates(tr, coords, transpose=False):
     
 def solve3DTransform(points1, points2):
     """
-    Find a 3D transformation matrix that maps points1 onto points2
-    points must be specified as a list of 4 Vectors.
+    Find a 3D transformation matrix that maps points1 onto points2.
+    Points must be specified as a list of 4 Vectors.
     """
     if not HAVE_SCIPY:
         raise Exception("This function depends on the scipy library, but it does not appear to be importable.")
@@ -582,8 +583,8 @@ def solve3DTransform(points1, points2):
     
 def solveBilinearTransform(points1, points2):
     """
-    Find a bilinear transformation matrix (2x4) that maps points1 onto points2
-    points must be specified as a list of 4 Vector, Point, QPointF, etc.
+    Find a bilinear transformation matrix (2x4) that maps points1 onto points2.
+    Points must be specified as a list of 4 Vector, Point, QPointF, etc.
     
     To use this matrix to map a point [x,y]::
     
@@ -950,8 +951,15 @@ def makeQImage(imgData, alpha=None, copy=True, transpose=True):
         ch = ctypes.c_char.from_buffer(imgData, 0)
         img = QtGui.QImage(ch, imgData.shape[1], imgData.shape[0], imgFormat)
     else:
-        addr = ctypes.addressof(ctypes.c_char.from_buffer(imgData, 0))
-        img = QtGui.QImage(addr, imgData.shape[1], imgData.shape[0], imgFormat)
+        #addr = ctypes.addressof(ctypes.c_char.from_buffer(imgData, 0))
+        ## PyQt API for QImage changed between 4.9.3 and 4.9.6 (I don't know exactly which version it was)
+        ## So we first attempt the 4.9.6 API, then fall back to 4.9.3
+        addr = ctypes.c_char.from_buffer(imgData, 0)
+        try:
+            img = QtGui.QImage(addr, imgData.shape[1], imgData.shape[0], imgFormat)
+        except TypeError:  
+            addr = ctypes.addressof(addr)
+            img = QtGui.QImage(addr, imgData.shape[1], imgData.shape[0], imgFormat)
     img.data = imgData
     return img
     #try:
@@ -1040,6 +1048,102 @@ def colorToAlpha(data, color):
     return np.clip(output, 0, 255).astype(np.ubyte)
     
 
+
+def arrayToQPath(x, y, connect='all'):
+    """Convert an array of x,y coordinats to QPainterPath as efficiently as possible.
+    The *connect* argument may be 'all', indicating that each point should be
+    connected to the next; 'pairs', indicating that each pair of points
+    should be connected, or an array of int32 values (0 or 1) indicating
+    connections.
+    """
+    
+    ## Create all vertices in path. The method used below creates a binary format so that all 
+    ## vertices can be read in at once. This binary format may change in future versions of Qt, 
+    ## so the original (slower) method is left here for emergencies:
+    #path.moveTo(x[0], y[0])
+    #for i in range(1, y.shape[0]):
+    #    path.lineTo(x[i], y[i])
+        
+    ## Speed this up using >> operator
+    ## Format is:
+    ##    numVerts(i4)   0(i4)
+    ##    x(f8)   y(f8)   0(i4)    <-- 0 means this vertex does not connect
+    ##    x(f8)   y(f8)   1(i4)    <-- 1 means this vertex connects to the previous vertex
+    ##    ...
+    ##    0(i4)
+    ##
+    ## All values are big endian--pack using struct.pack('>d') or struct.pack('>i')
+    
+    path = QtGui.QPainterPath()
+    
+    #prof = debug.Profiler('PlotCurveItem.generatePath', disabled=True)
+    if sys.version_info[0] == 2:   ## So this is disabled for python 3... why??
+        n = x.shape[0]
+        # create empty array, pad with extra space on either end
+        arr = np.empty(n+2, dtype=[('x', '>f8'), ('y', '>f8'), ('c', '>i4')])
+        # write first two integers
+        #prof.mark('allocate empty')
+        arr.data[12:20] = struct.pack('>ii', n, 0)
+        #prof.mark('pack header')
+        # Fill array with vertex values
+        arr[1:-1]['x'] = x
+        arr[1:-1]['y'] = y
+        
+        # decide which points are connected by lines
+        if connect == 'pairs':
+            connect = np.empty((n/2,2), dtype=np.int32)
+            connect[:,0] = 1
+            connect[:,1] = 0
+            connect = connect.flatten()
+            
+        if connect == 'all':
+            arr[1:-1]['c'] = 1
+        elif isinstance(connect, np.ndarray):
+            arr[1:-1]['c'] = connect
+        else:
+            raise Exception('connect argument must be "all", "pairs", or array')
+            
+        #prof.mark('fill array')
+        # write last 0
+        lastInd = 20*(n+1)
+        arr.data[lastInd:lastInd+4] = struct.pack('>i', 0)
+        #prof.mark('footer')
+        # create datastream object and stream into path
+        
+        ## Avoiding this method because QByteArray(str) leaks memory in PySide
+        #buf = QtCore.QByteArray(arr.data[12:lastInd+4])  # I think one unnecessary copy happens here
+        
+        path.strn = arr.data[12:lastInd+4] # make sure data doesn't run away
+        buf = QtCore.QByteArray.fromRawData(path.strn)
+        #prof.mark('create buffer')
+        ds = QtCore.QDataStream(buf)
+            
+        ds >> path
+        #prof.mark('load')
+        
+        #prof.finish()
+    else:
+        ## This does exactly the same as above, but less efficiently (and more simply).
+        path.moveTo(x[0], y[0])
+        if connect == 'all':
+            for i in range(1, y.shape[0]):
+                path.lineTo(x[i], y[i])
+        elif connect == 'pairs':
+            for i in range(1, y.shape[0]):
+                if i%2 == 0:
+                    path.lineTo(x[i], y[i])
+                else:
+                    path.moveTo(x[i], y[i])
+        elif isinstance(connect, np.ndarray):
+            for i in range(1, y.shape[0]):
+                if connect[i] == 1:
+                    path.lineTo(x[i], y[i])
+                else:
+                    path.moveTo(x[i], y[i])
+        else:
+            raise Exception('connect argument must be "all", "pairs", or array')
+            
+    return path
 
 #def isosurface(data, level):
     #"""
@@ -1826,9 +1930,9 @@ def invertQTransform(tr):
     return QtGui.QTransform(inv[0,0], inv[0,1], inv[0,2], inv[1,0], inv[1,1], inv[1,2], inv[2,0], inv[2,1])
     
     
-def pseudoScatter(data, spacing=None, shuffle=True):
+def pseudoScatter(data, spacing=None, shuffle=True, bidir=False):
     """
-    Used for examining the distribution of values in a set.
+    Used for examining the distribution of values in a set. Produces scattering as in beeswarm or column scatter plots.
     
     Given a list of x-values, construct a set of y-values such that an x,y scatter-plot
     will not have overlapping points (it will look similar to a histogram).
@@ -1855,23 +1959,41 @@ def pseudoScatter(data, spacing=None, shuffle=True):
         xmask = dx < s2  # exclude anything too far away
         
         if xmask.sum() > 0:
-            dx = dx[xmask]
-            dy = (s2 - dx)**0.5   
-            limits = np.empty((2,len(dy)))  # ranges of y-values to exclude
-            limits[0] = y0[xmask] - dy
-            limits[1] = y0[xmask] + dy    
-            
-            while True:
-                # ignore anything below this y-value
-                mask = limits[1] >= y
-                limits = limits[:,mask]
-                
-                # are we inside an excluded region?
-                mask = (limits[0] < y) & (limits[1] > y)
-                if mask.sum() == 0:
-                    break
-                y = limits[:,mask].max()
-        
+            if bidir:
+                dirs = [-1, 1]
+            else:
+                dirs = [1]
+            yopts = []
+            for direction in dirs:
+                y = 0
+                dx2 = dx[xmask]
+                dy = (s2 - dx2)**0.5   
+                limits = np.empty((2,len(dy)))  # ranges of y-values to exclude
+                limits[0] = y0[xmask] - dy
+                limits[1] = y0[xmask] + dy    
+                while True:
+                    # ignore anything below this y-value
+                    if direction > 0:
+                        mask = limits[1] >= y
+                    else:
+                        mask = limits[0] <= y
+                        
+                    limits2 = limits[:,mask]
+                    
+                    # are we inside an excluded region?
+                    mask = (limits2[0] < y) & (limits2[1] > y)
+                    if mask.sum() == 0:
+                        break
+                        
+                    if direction > 0:
+                        y = limits2[:,mask].max()
+                    else:
+                        y = limits2[:,mask].min()
+                yopts.append(y)
+            if bidir:
+                y = yopts[0] if -yopts[0] < yopts[1] else yopts[1]
+            else:
+                y = yopts[0]
         yvals[i] = y
     
     return yvals[np.argsort(inds)]  ## un-shuffle values before returning

@@ -28,6 +28,15 @@ def ftrace(func):
         return rv
     return w
 
+def warnOnException(func):
+    """Decorator which catches/ignores exceptions and prints a stack trace."""
+    def w(*args, **kwds):
+        try:
+            func(*args, **kwds)
+        except:
+            printExc('Ignored exception:')
+    return w
+
 def getExc(indent=4, prefix='|  '):
     tb = traceback.format_exc()
     lines = []
@@ -917,3 +926,21 @@ def qObjectReport(verbose=False):
     for t in typs:
         print(count[t], "\t", t)
         
+
+class PrintDetector(object):
+    def __init__(self):
+        self.stdout = sys.stdout
+        sys.stdout = self
+    
+    def remove(self):
+        sys.stdout = self.stdout
+        
+    def __del__(self):
+        self.remove()
+    
+    def write(self, x):
+        self.stdout.write(x)
+        traceback.print_stack()
+        
+    def flush(self):
+        self.stdout.flush()
