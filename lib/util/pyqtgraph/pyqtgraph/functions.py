@@ -1948,6 +1948,8 @@ def pseudoScatter(data, spacing=None, shuffle=True, bidir=False):
     s2 = spacing**2
     
     yvals = np.empty(len(data))
+    if len(data) == 0:
+        return yvals
     yvals[0] = 0
     for i in range(1,len(data)):
         x = data[i]     # current x value to be placed
