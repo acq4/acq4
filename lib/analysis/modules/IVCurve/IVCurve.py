@@ -58,6 +58,7 @@ class IVCurve(AnalysisModule):
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
         self.main_layout =  pg.GraphicsView() # instead of GraphicsScene?
+        self.dirsSet = None
         self.lrss_flag = True # show is default
         self.lrpk_flag = True
         self.rmp_flag = True
@@ -86,11 +87,13 @@ class IVCurve(AnalysisModule):
             ('Plots', {'type': 'ctrl', 'object': self.widget, 'pos': ('right',), 'size': (800, 600)}),
         ])
         self.initializeElements()
+        self.fileLoaderInstance = self.getElement('File Loader', create=True)
         # grab input form the "Ctrl" window
         self.ctrl.IVCurve_Update.clicked.connect(self.updateAnalysis)
         self.ctrl.IVCurve_PrintResults.clicked.connect(self.printAnalysis) 
         self.ctrl.IVCurve_MPLExport.clicked.connect(self.matplotlibExport)
         self.ctrl.IVCurve_KeepAnalysis.clicked.connect(self.resetKeepAnalysis)
+        self.ctrl.IVCurve_getFileInfo.clicked.connect(self.getFileInfo)
         [self.ctrl.IVCurve_RMPMode.currentIndexChanged.connect(x) for x in [self.update_rmpAnalysis, self.countSpikes]]
         self.ctrl.dbStoreBtn.clicked.connect(self.dbStoreClicked)
         self.clearResults()
@@ -247,6 +250,49 @@ class IVCurve(AnalysisModule):
             self.lrleak.hide()
             self.ctrl.IVCurve_subLeak.setCheckState(QtCore.Qt.Unchecked)
 
+    def uniq(self, inlist): 
+        # order preserving detection of unique values in a list
+        uniques = []
+        for item in inlist:
+            if item not in uniques:
+                uniques.append(item)
+        return uniques
+
+    def getFileInfo(self):
+
+        dh = self.fileLoaderInstance.selectedFiles()
+        dh = dh[0]
+        dirs = dh.subDirs()
+        # w=None
+        # ndir  = len(dirs)
+        # for j, d in enumerate(dirs):
+        #     z = d.split('_')
+        #     if w is None:
+        #         nseq = len(z)
+        #         w = [[0 for x in range(ndir)] for y in range(nseq)]
+        #     for i, p in enumerate(z):
+        #         w[i][j]=p
+        # # w now contains the pairings, but split up
+        # print 'w: ', w
+        # leftseq = self.uniq(w[0])
+        # leftseq.insert(0, 'None')
+        # if nseq > 1:
+        #     rightseq = self.uniq(w[1])
+        #     rightseq.insert(0, 'None')
+        
+        self.Sequence = self.dataModel.listSequenceParams(dh)
+        keys = self.Sequence.keys()
+        print keys
+        print list(self.Sequence[keys[0]])
+        leftseq = [str(x) for x in self.Sequence[keys[0]]] # ''.join(map(str ,list(self.Sequence[keys[0]])))
+        rightseq = [str(x) for x in self.Sequence[keys[1]]]
+        leftseq.insert(0, 'None')
+        rightseq.insert(0, 'None')
+        self.ctrl.IVCurve_Sequence1.clear()
+        self.ctrl.IVCurve_Sequence2.clear()
+        self.ctrl.IVCurve_Sequence1.addItems(leftseq)
+        self.ctrl.IVCurve_Sequence2.addItems(rightseq)
+        self.dirsSet = dh
 
     def loadFileRequested(self, dh):
         """Called by file loader when a file load is requested.
@@ -273,10 +319,16 @@ class IVCurve(AnalysisModule):
         self.protocol = ''
         # this is WAY too specific, but needed it to get the overall name...
         # maybe count levels back up from protocol instead?
-        while tail != 'Manis':
+        # make a new list of directories... subsetted if need be
+        if dh != self.dirsSet:
+            self.ctrl.IVCurve_Sequence1.clear()
+            self.ctrl.IVCurve_Sequence2.clear()
+        
+        Users = ['Manis', 'Ruili']
+        while tail not in Users:
             (head, tail) = os.path.split(fn)
             fn = head
-            if tail != 'Manis':
+            if tail not in Users:
                 self.protocol = os.path.join(tail, self.protocol)
 
         subs = re.compile('[\/]')
@@ -297,6 +349,24 @@ class IVCurve(AnalysisModule):
         if self.Sequence.has_key (('protocol', 'repetitions')): # if sequence has repeats, build pattern
             reps = self.Sequence[('protocol', 'repetitions')]
             sequenceValues = [x for y in range(len(dirs)) for x in sequenceValues]
+        # potentially select subset of data by overriding the directory sequence... 
+        if self.dirsSet is not None:
+            ld = [self.ctrl.IVCurve_Sequence1.currentIndex()-1]
+            rd = [self.ctrl.IVCurve_Sequence2.currentIndex()-1]
+            print 'ld, rd: ', ld, rd
+            if ld[0] == -1 and rd[0] == -1:
+                pass
+            else:
+                if ld[0] == -1: # 'none'
+                    ld = range(self.ctrl.IVCurve_Sequence1.count()-1)
+                if rd[0] == -1: # 'none'
+                    rd = range(self.ctrl.IVCurve_Sequence2.count()-1)
+                dirs = []
+                for i in ld:
+                    for j in rd:
+                        dirs.append('%03d_%03d' % (i, j))
+            print dirs
+
         
         i = 0 # sometimes, the elements are not right... 
         for i,dirName in enumerate(dirs):
@@ -390,7 +460,11 @@ class IVCurve(AnalysisModule):
         cmdtimes1 = numpy.argwhere(cmddiff >= mindiff)[:,0]
         cmddiff2  = cmdtimes1[1:] - cmdtimes1[:-1]
         cmdtimes2 = numpy.argwhere(cmddiff2 > 1)[:,0]
-        cmdtimes = numpy.append(cmdtimes1[0], cmddiff2[cmdtimes2])
+        if len(cmdtimes1) > 0 and len(cmdtimes2) > 0:
+            cmdtimes = numpy.append(cmdtimes1[0], cmddiff2[cmdtimes2])
+        else: # just fake it
+            cmdtimes = numpy.array([0.01, 0.1])
+            
         if self.ctrl.IVCurve_KeepT.isChecked() is False:
             self.tstart = cmd.xvals('Time')[cmdtimes[0]]
             self.tend = cmd.xvals('Time')[cmdtimes[1]]+ self.tstart
@@ -750,6 +824,8 @@ class IVCurve(AnalysisModule):
                 continue
             spikecount[i] = len(spike)
         nospk = numpy.where(spikecount == 0)
+        if data2.shape[1] == 0:
+            return # skip it
         self.ivpk = data2.min(axis=1)
         if self.ctrl.IVCurve_SubRMP.isChecked():
             self.ivpk = self.ivpk - self.ivrmp
