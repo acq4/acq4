@@ -115,7 +115,8 @@ def showMap(dh=None):
     cd = dh
     sd = cd.parent()
     atlas.loadState(sd)
-    g = atlas.schematicGraphicsItems(contours=False, sliceScale=10)
+    
+    g = atlas.schematicGraphicsItems(contours=False, sliceScale=10, cellDir=cd)
     v.addItem(g)
     
     cellGroup = pg.ItemGroup()
@@ -130,7 +131,7 @@ def showMap(dh=None):
     ## reposition/rescale atlas group
     b1 = g.atlasGroup.mapRectToParent(g.atlasGroup.childrenBoundingRect())
     b2 = g.sliceClip.mapRectToParent(g.sliceClip.boundingRect())
-    g.atlasGroup.setPos(b2.right()-b1.left(), b2.top()-b1.top())
+    g.atlasGroup.setPos(b2.right()-b1.left()+0.001, b2.top()-b1.top())
     
     b1 = g.atlasGroup.mapRectToParent(g.atlasGroup.childrenBoundingRect())    
     bounds = b1 | b2
@@ -166,20 +167,20 @@ def showMap(dh=None):
         g.cellScale = pg.QtGui.QGraphicsLineItem(0.0, 0.0, sbLength, 0.0)
         g.cellScale.setPen(pg.mkPen(color=0.0, width=5))
         g.cellScale.setZValue(10)
-        g.cellScale.text = pg.TextItem(u"25 µm", anchor=(0.5, 1), color=(0,0,0))
+        g.cellScale.text = pg.TextItem(u"%d µm" % int(sbLength*1e6), anchor=(0.5, 1), color=(0,0,0))
         g.cellScale.text.setParentItem(g.cellScale)
         g.cellScale.text.setPos(sbLength*0.5, -50e-6/cellScale)
         #g.cellScale = pg.ScaleBar(sbLength)
         g.cellScale.setParentItem(cellGroup)
         corner = mimg2.mapToParent(mimg2.boundingRect()).boundingRect().bottomRight()
         g.cellScale.setPos(corner + pg.Point(-sbLength/2., -sbLength/3.))
-    else:
-        pos = pg.SRTTransform(cd.info()['userTransform']).map(pg.Point(0,0))
-        size = pg.Point(10e-6, 10e-6)
-        g.cellMarker = pg.QtGui.QGraphicsEllipseItem(pg.QtCore.QRectF(pos-size, pos+size))
-        g.cellMarker.setBrush(pg.mkBrush(100,100,255))
-        g.cellMarker.setParentItem(g.sliceGroup)
-        g.cellMarker.setZValue(100)
+    pos = pg.SRTTransform(cd.info()['userTransform']).map(pg.Point(0,0))
+    size = pg.Point(30e-6, 30e-6)
+    g.cellMarker = pg.QtGui.QGraphicsEllipseItem(pg.QtCore.QRectF(pos-size, pos+size))
+    g.cellMarker.setBrush(pg.mkBrush(100,100,255,150))
+    g.cellMarker.setPen(pg.mkPen('k', width=0.5))
+    g.cellMarker.setParentItem(g.sliceGroup)
+    g.cellMarker.setZValue(90)
         
     sites = db.select('map_site_view', ['ProtocolDir', 'HasInput'], where={'CellDir': cd})
     if len(sites) > 0:
@@ -189,7 +190,6 @@ def showMap(dh=None):
         else:
             tr = pg.SRTTransform(tr)
             
-        print len(sites)
         pos = []
         size = sites[0]['ProtocolDir'].info()['Scanner']['spotSize']
         brushes = []
@@ -212,6 +212,18 @@ def showMap(dh=None):
     sl = cell.parent()
     day = sl.parent()
     name = day.shortName() + "_" + sl.shortName() + "_" + cell.shortName()
+    rec = db.select('DirTable_Cell', '*', where={'Dir': cd})[0]
+    
+    name += "\nType: " + str(rec['CellType']) + "   Temp: " + str(rec['Temperature']) + "   Internal: " + str(rec['Internal']) + "   Age:" + str(rec['Age']) + "   Raccess: " + str(rec['AccessResistance'])
+    name += "\nDirect Area: %s>0pA %s>20pA %s>100pA" % (str(rec['DirectAreaGt0']), str(rec['DirectAreaGt20']), str(rec['DirectAreaGt100']))
+    name += "   Direct n spikes: " + str(rec['DirectNSpikes'])
+    name += "\nSpont Ex Decay: %s   Spont In Decay: %s" % (str(rec['SpontExDecay1']), str(rec['SpontInDecay']))
+    name += "\nExcitatory input" if (rec['EvokedExDecay'] is not None or rec['EvokedExAmp'] is not None) else ""
+    print rec
+    #name += '\nDirect Slow Decay: %s %s' % (str(rec['DirectAreaGT0']), str(rec['DirectAreaGT0']))
+    
+    
+    
     g.cellName = pg.TextItem(name, color=(0,0,0))
     g.cellName.setParentItem(g)
     g.cellName.setPos(0, bounds.bottom())
@@ -255,6 +267,7 @@ def exportAllMaps():
     global v
     db = man.getModule('Data Manager').currentDatabase()
     cells = db.select('DirTable_Cell', ['Dir'], where={'MapOK': 1})
+    cells.sort(key=lambda c: c['Dir'].name())
     with pg.ProgressDialog("exporting all..", 0, 1000) as dlg:
         for rec in cells:
             cell = rec['Dir']
