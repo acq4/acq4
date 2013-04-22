@@ -375,6 +375,7 @@ class PlotCurveItem(GraphicsObject):
                 return QtGui.QPainterPath()
         return self.path
 
+    @pg.debug.warnOnException  ## raising an exception here causes crash
     def paint(self, p, opt, widget):
         prof = debug.Profiler('PlotCurveItem.paint '+str(id(self)), disabled=True)
         if self.xData is None:
@@ -402,6 +403,7 @@ class PlotCurveItem(GraphicsObject):
             aa = self.opts['antialias']
         
         p.setRenderHint(p.Antialiasing, aa)
+        
             
         if self.opts['brush'] is not None and self.opts['fillLevel'] is not None:
             if self.fillPath is None:
