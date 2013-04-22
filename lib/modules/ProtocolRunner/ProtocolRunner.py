@@ -86,6 +86,7 @@ class ScreenBlanker:
         self.widgets = []
     
     def Blank(self):
+        return
         d = QtGui.QApplication.desktop()
         for i in range(d.screenCount()): # look for all screens
             w = Black()
