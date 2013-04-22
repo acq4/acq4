@@ -160,9 +160,10 @@ class LaserProtoGui(DAQGenericProtoGui):
         """Return a cmd dictionary suitable for passing to LaserTask."""
         
         ## Params looks like: {'amp': 7} where 'amp' is the name of a sequence parameter, and 7 is the 7th value in the list of 'amp'
-        if 'power.' in params.keys()[0]: ## need to take the 'power.' part of the name off so that StimGenerator will know to use the sequence value -- perhaps there is a better place to fix this?
-            p = params.keys()[0]
-            params = {p[6:]: params[p]}
+        for k,v in params.items():
+            if k.startswith('power.'):
+                del params[k]
+                params[k[6:]] = v
         rate = self.powerWidget.rate
         wave = self.powerWidget.getSingleWave(params)
         rawCmds = self.getChannelCmds(wave, rate)
