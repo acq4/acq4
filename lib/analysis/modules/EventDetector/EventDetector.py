@@ -28,7 +28,7 @@ class EventDetector(AnalysisModule):
         * SourceFile: the name of the file in which the event was detected. The name is relative to the SourceDir.                    
     
     """
-    def __init__(self, host, flowchartDir=None, dbIdentity="EventDetector"):
+    def __init__(self, host, flowchartDir=None, dbIdentity="EventDetector", dbCtrl=None):
         AnalysisModule.__init__(self, host)
         
         if flowchartDir is None:
@@ -42,9 +42,12 @@ class EventDetector(AnalysisModule):
         self.flowchart.addOutput('events')
         #self.flowchart.addOutput('regions', multi=True)
         self.flowchart.sigChartLoaded.connect(self.connectPlots)
-
-        self.dbCtrl = DBCtrl(self, identity=self.dbIdentity)
-        self.dbCtrl.storeBtn.clicked.connect(self.storeClicked)
+        
+        if dbCtrl == None:
+            self.dbCtrl = DBCtrl(self, identity=self.dbIdentity)
+            self.dbCtrl.storeBtn.clicked.connect(self.storeClicked)
+        else:
+            self.dbCtrl = dbCtrl(self, identity=self.dbIdentity)
 
         #self.ctrl = QtGui.QLabel('LABEL')
         self.ctrl = self.flowchart.widget()
@@ -124,9 +127,6 @@ class EventDetector(AnalysisModule):
         if data is None:
             data = self.flowchart.output()['events']
             
-        if len(data) == 0:
-            return
-            
         dbui = self.getElement('Database')
         table = dbui.getTableName(self.dbIdentity)
         db = dbui.getDb()
@@ -134,6 +134,23 @@ class EventDetector(AnalysisModule):
             raise Exception("No DB selected")
         
         p.mark("DB prep done")
+        
+        if len(data) == 0:
+            ## if there is no event data, then we need to delete previous event data
+            
+            dh = self.currentFile.name(relativeTo=db.baseDir())
+            if dh[-10:] == '/Clamp1.ma' or dh[-10:] == '/Clamp2.ma':
+                dh = dh[:-10]
+            protocolID = db('Select rowid, Dir from DirTable_Protocol where Dir="%s"' %dh)
+            if len(protocolID) > 0:
+                protocolID = protocolID[0]['rowid']
+            else:
+                return
+            db('Delete from %s where ProtocolDir=%i' %(table, protocolID))            
+            return
+            
+  
+        
         
         ## determine the set of fields we expect to find in the table
         columns = db.describeData(data)

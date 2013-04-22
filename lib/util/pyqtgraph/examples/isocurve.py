@@ -19,8 +19,10 @@ frames = 200
 data = np.random.normal(size=(frames,30,30), loc=0, scale=100)
 data = np.concatenate([data, data], axis=0)
 data = ndi.gaussian_filter(data, (10, 10, 10))[frames/2:frames + frames/2]
+data[:, 15:16, 15:17] += 1
 
 win = pg.GraphicsWindow()
+win.setWindowTitle('pyqtgraph example: Isocurve')
 vb = win.addViewBox()
 img = pg.ImageItem(data[0])
 vb.addItem(img)
@@ -53,6 +55,7 @@ timer.timeout.connect(update)
 timer.start(50)
     
 ## Start Qt event loop unless running in interactive mode or using pyside.
-import sys
-if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
-    app.exec_()
+if __name__ == '__main__':
+    import sys
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtGui.QApplication.instance().exec_()

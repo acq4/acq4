@@ -1,7 +1,7 @@
 from PyQt4 import QtCore, QtGui
 import lib.Manager
 import pyqtgraph as pg
-#import pyqtgraph.opengl as gl
+import pyqtgraph.opengl as gl
 
 import numpy as np
 import functions as fn
@@ -27,38 +27,42 @@ if 'events' not in locals():
     firstRun = True
 
     win = QtGui.QMainWindow()
-    cw = QtGui.QWidget()
-    layout = QtGui.QGridLayout()
-    layout.setContentsMargins(0,0,0,0)
-    layout.setSpacing(0)
-    cw.setLayout(layout)
-    win.setCentralWidget(cw)
+    #cw = QtGui.QWidget()
+    layout = pg.LayoutWidget()
+    #layout = QtGui.QGridLayout()
+    #layout.setContentsMargins(0,0,0,0)
+    #layout.setSpacing(0)
+    #cw.setLayout(layout)
+    win.setCentralWidget(layout)
 
     cellCombo = QtGui.QComboBox()
     cellCombo.setSizeAdjustPolicy(cellCombo.AdjustToContents)
-    layout.addWidget(cellCombo, 0, 0)
+    layout.addWidget(cellCombo)
+    
+    reloadBtn = QtGui.QPushButton('reload')
+    layout.addWidget(reloadBtn)
     
     separateCheck = QtGui.QCheckBox("color pre/post")
-    layout.addWidget(separateCheck, 0, 1)
+    layout.addWidget(separateCheck)
     
     colorCheck = QtGui.QCheckBox("color y position")
-    layout.addWidget(colorCheck, 0, 2)
+    layout.addWidget(colorCheck)
     
     errLimitSpin = pg.SpinBox(value=0.7, step=0.1)
-    layout.addWidget(errLimitSpin, 0, 3)
+    layout.addWidget(errLimitSpin)
 
     lengthRatioLimitSpin = pg.SpinBox(value=1.5, step=0.1)
-    layout.addWidget(lengthRatioLimitSpin, 0, 4)
+    layout.addWidget(lengthRatioLimitSpin)
 
     postRgnStartSpin = pg.SpinBox(value=0.500, step=0.01, siPrefix=True, suffix='s')
-    layout.addWidget(postRgnStartSpin, 0, 5)
+    layout.addWidget(postRgnStartSpin)
 
     postRgnStopSpin = pg.SpinBox(value=0.700, step=0.01, siPrefix=True, suffix='s')
-    layout.addWidget(postRgnStopSpin, 0, 6)
+    layout.addWidget(postRgnStopSpin)
 
     spl1 = QtGui.QSplitter()
     spl1.setOrientation(QtCore.Qt.Vertical)
-    layout.addWidget(spl1, 1, 0, 1, 7)
+    layout.addWidget(spl1, row=1, col=0, rowspan=1, colspan=8)
 
     pw1 = pg.PlotWidget()
     spl1.addWidget(pw1)
@@ -138,8 +142,12 @@ if 'events' not in locals():
     #cellSpin.setMaximum(len(cells)-1)
     print "Done."
 
-def loadCell(cell):
+    
+    
+def loadCell(cell, reloadData=False):
     global events
+    if reloadData:
+        events.pop(cell, None)
     if cell in events:
         return
     db = man.getModule('Data Manager').currentDatabase()
@@ -232,6 +240,7 @@ def init():
     colorCheck.toggled.connect(showCell)
     errLimitSpin.valueChanged.connect(showCell)
     lengthRatioLimitSpin.valueChanged.connect(showCell)
+    reloadBtn.clicked.connect(reloadCell)
     for s in [sp1, sp2, sp3, sp4]:
         s.sigPointsClicked.connect(plotClicked)
 
@@ -258,7 +267,6 @@ def plotClicked(plt, pts):
     fitLen = pt.data()['fitDecayTau']*pt.data()['fitLengthOverDecay']
     x = np.linspace(time, time+fitLen, fitLen * 50e3)
     v = [pt.data()['fitAmplitude'], pt.data()['fitTime'], pt.data()['fitRiseTau'], pt.data()['fitDecayTau']]
-    print "Event fit params:", v
     y = fn.pspFunc(v, x, risePower=2.0) + data[np.argwhere(data.xvals('Time')>time)[0]-1]
     pw2.plot(x, y, pen='b')
     #plot.addItem(arrow)
@@ -279,9 +287,12 @@ def select(ev, ex=True):
     ev = ev[ev['fitLengthOverDecay'] > lengthRatioLimitSpin.value()]
     return ev
     
+def reloadCell():
+    showCell(reloadData=True)
 
-def showCell():
+def showCell(**kwds):
     pw2.clear()
+    reloadData = kwds.get('reloadData', False)
     #global lock
     #if lock:
         #return
@@ -291,7 +302,7 @@ def showCell():
     cell = cells[cellCombo.currentIndex()-1]
     
     dh = cell #db.getDir('Cell', cell)
-    loadCell(dh)
+    loadCell(dh, reloadData=reloadData)
     
     try:
         image.setImage(dh['morphology.png'].read())
@@ -388,21 +399,21 @@ def showCell():
     pw1.setTitle(title)
 
     
-    ## show cell in atlas
-    rec = db.select('CochlearNucleus_Cell', where={'CellDir': cell})
-    pts = []
-    if len(rec) > 0:
-        pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
-        pts = [{'pos': pos, 'size': 100e-6, 'color': (0.7, 0.7, 1.0, 1.0)}]
-        print pos
-    ## show event positions
+    ### show cell in atlas
+    #rec = db.select('CochlearNucleus_Cell', where={'CellDir': cell})
+    #pts = []
+    #if len(rec) > 0:
+        #pos = (rec[0]['right'], rec[0]['anterior'], rec[0]['dorsal'])
+        #pts = [{'pos': pos, 'size': 100e-6, 'color': (0.7, 0.7, 1.0, 1.0)}]
+        
+    ### show event positions
     evSpots = {}
     for rec in ev:
         p = (rec['right'], rec['anterior'], rec['dorsal'])
         evSpots[p] = None
-    for pos in evSpots:
-        pts.append({'pos': pos, 'size': 90e-6, 'color': ((1.0, 1.0, 1.0, 0.5))})
-    atlasPoints.setData(pts)
+        
+    pos = np.array(evSpots.keys())
+    atlasPoints.setData(pos=pos, )
     
     
 def spontRate(ev, n):

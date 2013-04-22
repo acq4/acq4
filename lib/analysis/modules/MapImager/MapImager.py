@@ -25,9 +25,10 @@ import debug
 
 class MapImager(AnalysisModule):
     
+    
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
-        self.dbIdentity = 'Map Analyzer' ## how we identify to the database; this determines which tables we own
+        self.dbIdentity = 'MapImager' ## how we identify to the database; this determines which tables we own
         
         modPath = os.path.abspath(os.path.split(__file__)[0])
         
@@ -35,9 +36,9 @@ class MapImager(AnalysisModule):
             ('Database Query', {'type':'ctrl', 'object': DatabaseQueryWidget(self.dataManager()), 'size':(300,200), 'host':self}),
             ('File Loader', {'type':'fileInput', 'pos':('below', 'Database Query'), 'host':self, 'showFileTree':False}),
             
-            ('Color Mapper', {'type':'ctrl', 'object': ColorMapper(filePath=os.path.join(modPath, "colorMaps")), 'size': (200,300), 'pos':('right', 'Database Query')}),
+            ('Color Mapper', {'type':'ctrl', 'object': MapImagerColorMapper(filePath=os.path.join(modPath, "colorMaps"), host=self), 'size': (200,300), 'pos':('right', 'Database Query')}),
             ('Contour Plotter', {'type':'ctrl', 'object':ContourPlotter(host=self), 'pos':('below', 'Color Mapper')}),
-            ('Canvas', {'type': 'canvas', 'pos': ('bottom', 'Color Mapper'), 'size': (700,600), 'allowTransforms': False, 'hideCtrl': True, 'args': {'name': 'Map Analyzer'}}),
+            ('Canvas', {'type': 'canvas', 'pos': ('bottom', 'Color Mapper'), 'size': (700,600), 'allowTransforms': False, 'hideCtrl': True, 'args': {'name': 'MapImager'}}),
             ('Map Convolver', {'type':'ctrl', 'object': MapConvolver(), 'size': (200, 200), 'pos':('bottom', 'File Loader')}),
             ('Spatial Correlator', {'type':'ctrl', 'object':SpatialCorrelator(), 'size':(100,100), 'pos': ('bottom', 'Map Convolver')})          
             #('File Loader', {'type': 'fileInput', 'size': (100, 300), 'host': self, 'args': {'showFileTree': True}}),
@@ -73,12 +74,13 @@ class MapImager(AnalysisModule):
         
         self.dbquery.sigTableChanged.connect(self.setData)
         self.mapConvolver.sigOutputChanged.connect(self.convolverOutputChanged)
-        self.mapConvolver.sigFieldsChanged.connect(self.giveOptsToCM)
+        self.mapConvolver.sigFieldsChanged.connect(self.convolverFieldsChanged)
         self.spatialCorrelator.sigOutputChanged.connect(self.correlatorOutputChanged)
         self.colorMapper.sigChanged.connect(self.computeColors)
         
         
-        
+    def getFields(self):
+        return self.mapConvolver.getFields()
         
     def setData(self):
         data = self.dbquery.table()
@@ -94,7 +96,11 @@ class MapImager(AnalysisModule):
         
     def computeColors(self):
         if self.imgData is not None:
-            self.recolorMap(self.colorMapper.getColorArray(self.imgData))
+            try:
+                self.recolorMap(self.colorMapper.getColorArray(self.imgData))
+            except ValueError:
+                self.mapConvolver.process()
+                
             
     def correlatorOutputChanged(self, data):
         #newFields= [f for f in data.dtype.descr if f not in self.data.dtype.descr]
@@ -123,6 +129,9 @@ class MapImager(AnalysisModule):
             self.canvas.addItem(self.imgItem)
             return
         self.imgItem.updateImage(data)
+        
+    def convolverFieldsChanged(self, fields):
+        self.giveOptsToCM(fields)
             
     def giveOptsToCM(self, fields):
         self.colorMapper.setArgList(fields)
@@ -173,3 +182,20 @@ class MapImager(AnalysisModule):
             except:
                 debug.printExc("Error loading file %s" % fh.name())
                 return False
+            
+class MapImagerColorMapper(ColorMapper):
+    
+    def __init__(self, parent=None, filePath=None, host=None):
+        ColorMapper.__init__(self, parent, filePath)
+        self.host = host
+        
+    def getArgList(self):
+        return self.host.getFields()
+    
+    def restoreState(self, state):
+        for i in self.items[:]:
+            self.remItem(i)
+            
+        self.setArgList(self.getArgList())
+        for i in state['items']:
+            self.addItem(i)

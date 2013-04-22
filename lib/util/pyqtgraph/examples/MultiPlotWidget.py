@@ -1,8 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 ## Add path to library (just for examples; you do not need this)
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+import initExample
 
 
 from scipy import random
@@ -27,6 +26,8 @@ ma = MetaArray(random.random((3, 1000)), info=[{'name': 'Signal', 'cols': [{'nam
 pw.plot(ma)
 
 ## Start Qt event loop unless running in interactive mode.
-if sys.flags.interactive != 1:
-    app.exec_()
+if __name__ == '__main__':
+    import sys
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtGui.QApplication.instance().exec_()
 

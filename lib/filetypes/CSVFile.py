@@ -41,9 +41,28 @@ class CSVFile(FileType):
     @classmethod
     def read(cls, fileHandle):
         """Read a file, return a data object"""
-        #fn = fileHandle.name()
-        #fd = open(fn)
-        #header = fd.readline().split(',')
+        fn = fileHandle.name()
+        with open(fn) as fd:
         
+            header = fd.readline().split(',')
+            n = len(header)
+           
+            if header[-1] == '\n' or header[-1] == ' \n':
+                header.pop(-1)
+                dontUse = n-1
+            elif header[-1][-1:] == '\n':
+                header[i] = header[-1][:-1]             
+            
+            try:
+                [int(float(header[i])) for i in range(len(header))] ## if the first row of the file is not convertible to numbers, then this will raise a ValueError, and we use the first row as a header
+                cols = range(n)
+                cols.remove(dontUse)
+                return loadtxt(fn, delimiter=',', usecols=cols)
+            
+            except ValueError:
+                return loadtxt(fn, delimiter=',', skiprows=1, dtype=[(f, float) for f in header])
         
-        return loadtxt(fn, delimiter=',')
+        #if type(header[0]) == type('str'):
+        #    return loadtxt(fn, delimiter=',', skiprows=1, dtype=[(f, float) for f in header])
+
+        #return loadtxt(fn, delimiter=',')

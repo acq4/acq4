@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+"""
+Demonstrates a variety of uses for ROI. This class provides a user-adjustable
+region of interest marker. It is possible to customize the layout and 
+function of the scale/rotate handles in very flexible ways. 
+"""
+
 import initExample ## Add path to library (just for examples; you do not need this)
 
 import pyqtgraph as pg
@@ -22,6 +28,7 @@ arr += np.random.normal(size=(100,100))
 ## create GUI
 app = QtGui.QApplication([])
 w = pg.GraphicsWindow(size=(800,800), border=True)
+w.setWindowTitle('pyqtgraph example: ROI Examples')
 
 text = """Data Selection From Image.<br>\n
 Drag an ROI or its handles to update the selected image.<br>
@@ -36,16 +43,20 @@ img1a = pg.ImageItem(arr)
 v1a.addItem(img1a)
 img1b = pg.ImageItem()
 v1b.addItem(img1b)
+v1a.disableAutoRange('xy')
+v1b.disableAutoRange('xy')
+v1a.autoRange()
+v1b.autoRange()
 
 rois = []
 rois.append(pg.RectROI([20, 20], [20, 20], pen=(0,9)))
 rois[-1].addRotateHandle([1,0], [0.5, 0.5])
 rois.append(pg.LineROI([0, 60], [20, 80], width=5, pen=(1,9)))
-rois.append(pg.MultiLineROI([[20, 90], [50, 60], [60, 90]], width=5, pen=(2,9)))
+rois.append(pg.MultiRectROI([[20, 90], [50, 60], [60, 90]], width=5, pen=(2,9)))
 rois.append(pg.EllipseROI([60, 10], [30, 20], pen=(3,9)))
 rois.append(pg.CircleROI([80, 50], [20, 20], pen=(4,9)))
 #rois.append(pg.LineSegmentROI([[110, 50], [20, 20]], pen=(5,9)))
-#rois.append(pg.PolyLineROI([[110, 60], [20, 30], [50, 10]], pen=(6,9)))
+rois.append(pg.PolyLineROI([[80, 60], [90, 30], [60, 40]], pen=(6,9), closed=True))
 
 def update(roi):
     img1b.setImage(roi.getArrayRegion(arr, img1a), levels=(0, arr.max()))
@@ -70,6 +81,10 @@ r2a = pg.PolyLineROI([[0,0], [10,10], [10,30], [30,10]], closed=True)
 v2a.addItem(r2a)
 r2b = pg.PolyLineROI([[0,-20], [10,-10], [10,-30]], closed=False)
 v2a.addItem(r2b)
+v2a.disableAutoRange('xy')
+#v2b.disableAutoRange('xy')
+v2a.autoRange()
+#v2b.autoRange()
 
 text = """Building custom ROI types<Br>
 ROIs can be built with a variety of different handle types<br>
@@ -107,6 +122,9 @@ r3b.addRotateHandle([0, 1], [1, 0])
 r3b.addScaleRotateHandle([0, 0.5], [0.5, 0.5])
 r3b.addScaleRotateHandle([1, 0.5], [0.5, 0.5])
 
+v3.disableAutoRange('xy')
+v3.autoRange()
+
 
 text = """Transforming objects with ROI"""
 w4 = w.addLayout(row=1, col=1)
@@ -121,6 +139,9 @@ img4 = pg.ImageItem(arr)
 v4.addItem(r4)
 img4.setParentItem(r4)
 
+v4.disableAutoRange('xy')
+v4.autoRange()
+
 
 
 
@@ -129,6 +150,7 @@ img4.setParentItem(r4)
 
 
 ## Start Qt event loop unless running in interactive mode or using pyside.
-import sys
-if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
-    QtGui.QApplication.instance().exec_()
+if __name__ == '__main__':
+    import sys
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtGui.QApplication.instance().exec_()

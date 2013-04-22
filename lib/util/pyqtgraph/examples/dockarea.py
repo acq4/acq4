@@ -29,6 +29,7 @@ win = QtGui.QMainWindow()
 area = DockArea()
 win.setCentralWidget(area)
 win.resize(1000,500)
+win.setWindowTitle('pyqtgraph example: dockarea')
 
 ## Create docks, place them into the window one at a time.
 ## Note that size arguments are only a suggestion; docks will still have to
@@ -111,6 +112,7 @@ win.show()
 
 
 ## Start Qt event loop unless running in interactive mode or using pyside.
-import sys
-if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
-    QtGui.QApplication.instance().exec_()
+if __name__ == '__main__':
+    import sys
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtGui.QApplication.instance().exec_()

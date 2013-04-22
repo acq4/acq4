@@ -1,8 +1,14 @@
 # -*- coding: utf-8 -*-
-## Add path to library (just for examples; you do not need this)
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+"""
+Demonstrate a simple data-slicing task: given 3D data (displayed at top), select 
+a 2D plane and interpolate data along that plane to generate a slice image 
+(displayed at bottom). 
 
+
+"""
+
+## Add path to library (just for examples; you do not need this)
+import initExample
 
 import numpy as np
 import scipy
@@ -14,6 +20,7 @@ app = QtGui.QApplication([])
 ## Create window with two ImageView widgets
 win = QtGui.QMainWindow()
 win.resize(800,800)
+win.setWindowTitle('pyqtgraph example: DataSlicing')
 cw = QtGui.QWidget()
 win.setCentralWidget(cw)
 l = QtGui.QGridLayout()
@@ -52,5 +59,7 @@ imv1.setLevels(-0.003, 0.003)
 update()
 
 ## Start Qt event loop unless running in interactive mode.
-if sys.flags.interactive != 1:
-    app.exec_()
+if __name__ == '__main__':
+    import sys
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtGui.QApplication.instance().exec_()

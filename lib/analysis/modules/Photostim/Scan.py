@@ -186,18 +186,14 @@ class Scan(QtCore.QObject):
                 self.stats[st['ProtocolDir']] = st
                 
             for dh in self.dirHandles:
-                #dh = spot.data()
-                #fh = self.host.getClampFile(dh)
                 fh = self.dataModel.getClampFile(dh)
                 if fh not in self.events:
-                    self.events[fh] = {'events': np.empty(0, dtype=allEvents.dtype)}
-                #events, stats = self.host.loadSpotFromDB(dh)
-                
-                #events = allEvents[allEvents['SourceFile']==fh.name(relativeTo=self.source())]
-                #stats = allStats[allEvents['SourceFile']==dh.name(relativeTo=self.source())]
+                    if allEvents is None:
+                        self.events[fh] = {'events': []} ## what to do?? not sure how to get the dtype in this case.
+                    else:
+                        self.events[fh] = {'events': np.empty(0, dtype=allEvents.dtype)}
+                    
                 if dh not in self.stats:
-                #if len(stats) == 0:
-                    #print "  No data for spot", dh
                     haveAll = False
                     for spot in self.spots():
                         if spot.data() is dh:
@@ -206,7 +202,7 @@ class Scan(QtCore.QObject):
                 else:
                     haveAny = True
                     self.statExample = self.stats[dh]
-            #self.stats[dh] = stats[0]
+                    
             if haveAll:
                 #print "  have data for all spots; locking."
                 self.lockEvents()
@@ -480,7 +476,7 @@ class Scan(QtCore.QObject):
         self.lockStats(False)
         
         
-    def displayData(self, fh, plot, pen, evTime=None):
+    def displayData(self, fh, plot, pen, evTime=None, eventFilter=None):
         """
         Display data for a single site in a plot--ephys trace, detected events
         Returns all items added to the plot.
@@ -511,6 +507,9 @@ class Scan(QtCore.QObject):
             
         events = self.getEvents(fh)['events']
         
+        if eventFilter is not None:
+            events = eventFilter(events)
+        
         ## draw ticks over all detected events
         if len(events) > 0:
             if 'fitTime' in events.dtype.names:
@@ -519,5 +518,20 @@ class Scan(QtCore.QObject):
                 plot.addItem(ticks)
                 items.append(ticks)
                 #self.mapTicks.append(ticks)
+                
+            ## draw event fits
+            evPen = pg.mkPen(pen)
+            c = evPen.color()
+            c.setAlpha(c.alpha()/2)
+            evPen.setColor(c)
+            for ev in events:
+                time = ev['fitTime']
+                fitLen = ev['fitDecayTau']*ev['fitLengthOverDecay']
+                x = np.linspace(time, time+fitLen, fitLen * 50e3)
+                v = [ev['fitAmplitude'], ev['fitTime'], ev['fitRiseTau'], ev['fitDecayTau']]
+                y = fn.pspFunc(v, x, risePower=2.0) + data[np.argwhere(data.xvals('Time')>time)[0]-1]
+                evc = plot.plot(x, y, pen=evPen)
+                evc.setZValue(pc.zValue()-100)
+                
         return items
 

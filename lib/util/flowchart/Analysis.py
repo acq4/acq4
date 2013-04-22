@@ -9,6 +9,7 @@ import pyqtgraph as pg
 import metaarray
 #import pyqtgraph.CheckTable as CheckTable
 from collections import OrderedDict
+from lib.analysis.tools.Fitting import Fitting
 
 class EventFitter(CtrlNode):
     """Takes a waveform and event list as input, returns extra information about each event.
@@ -113,7 +114,7 @@ class EventFitter(CtrlNode):
             #output = np.concatenate(data)
             
         for i in range(len(indexes)):            
-            if display and self.plot.isConnected():
+            if display and self['plot'].isConnected():
                 if self.ctrls['plotFits'].isChecked():
                     item = pg.PlotDataItem(x=xVals[i], y=yVals[i], pen=(0, 0, 255), clickable=True)
                     item.setZValue(100)
@@ -154,13 +155,13 @@ class EventFitter(CtrlNode):
 
     ## Intercept keypresses on any plot that is connected.
     def connected(self, local, remote):
-        if local is self.plot:
+        if local is self['plot']:
             self.filterPlot(remote.node())
             remote.node().sigPlotChanged.connect(self.filterPlot)
         CtrlNode.connected(self, local, remote)
         
     def disconnected(self, local, remote):
-        if local is self.plot:
+        if local is self['plot']:
             self.filterPlot(remote.node(), install=False)
             try:
                 remote.node().sigPlotChanged.disconnect(self.filterPlot)
@@ -231,6 +232,11 @@ def processEventFits(events, startEvent, stopEvent, opts):
     
     for i in range(startEvent, stopEvent):
         start = events[i]['time']
+        #sliceLen = 50e-3
+        sliceLen = dt*500. ## Ca2+ events are much longer than 50ms
+        if i+1 < len(events):
+            nextStart = events[i+1]['time']
+            sliceLen = min(sliceLen, nextStart-start)
                 
         guessLen = events[i]['len']*dt
         tau = origTau
@@ -339,7 +345,211 @@ def processEventFits(events, startEvent, stopEvent, opts):
         
     return outputState
 
+class CaEventFitter(EventFitter):
+    nodeName="CaEventFitter"
+    uiTemplate = [
+            ('multiFit', 'check', {'value': False}),
+            ('plotFits', 'check', {'value': True}),
+            ('plotGuess', 'check', {'value': False}),
+            ('plotEvents', 'check', {'value': False}),        
+            ('Amplitude_UpperBound', 'spin', {'value':0.2, 'step':0.1, 'minStep':1e-4, 'dec':True, 'range':[0, None]}),
+            ('RiseTau_UpperBound', 'spin', {'value':0.3, 'step':0.1, 'minStep':1e-6, 'dec':True, 'range':[0, None], 'siPrefix':True, 'suffix':'s'}),
+            ('DecayTau_UpperBound', 'spin', {'value':2, 'step':0.1, 'minStep':1e-6, 'dec':True, 'range':[0, None], 'siPrefix':True, 'suffix':'s'})
+        ]    
+    
+    def process(self, waveform, events, display=True):
+        self.deletedFits = []
+        for item in self.plotItems:
+            try:
+                item.sigClicked.disconnect(self.fitClicked)
+            except:
+                pass
+        self.plotItems = []       
         
+        tau = waveform.infoCopy(-1).get('expDeconvolveTau', None)
+        dt = (waveform.xvals(0)[1:] - waveform.xvals(0)[:-1]).mean()
+        
+        opts = {
+            'dt': dt, 
+            'tau': tau, 
+            'multiFit': self.ctrls['multiFit'].isChecked(),
+            'waveform': waveform.view(np.ndarray),
+            'tvals': waveform.xvals('Time'),
+            'ampMax':self.ctrls['Amplitude_UpperBound'].value(),
+            'riseTauMax':self.ctrls['RiseTau_UpperBound'].value(),
+            'decayTauMax':self.ctrls['DecayTau_UpperBound'].value()
+        }       
+        
+        
+        output = self.fitEvents(events, startEvent=0, stopEvent=len(events), opts=opts)
+        guesses = output['guesses']
+        eventData = output['eventData']
+        indexes = output['indexes']
+        xVals = output['xVals']
+        yVals = output['yVals']
+        output = output['output'] 
+        
+        for i in range(len(indexes)):            
+            if display and self.plot.isConnected():
+                if self.ctrls['plotFits'].isChecked():
+                    item = pg.PlotDataItem(x=xVals[i], y=yVals[i], pen=(0, 0, 255), clickable=True)
+                    item.setZValue(100)
+                    self.plotItems.append(item)
+                    item.eventIndex = indexes[i]
+                    item.sigClicked.connect(self.fitClicked)
+                    item.deleted = False
+                if self.ctrls['plotGuess'].isChecked():
+                    item2 = pg.PlotDataItem(x=xVals[i], y=functions.expPulse(guesses[i], xVals[i]), pen=(255, 0, 0))
+                    item2.setZValue(100)
+                    self.plotItems.append(item2)
+                if self.ctrls['plotEvents'].isChecked():
+                    item2 = pg.PlotDataItem(x=xVals[i], y=eventData[i], pen=(0, 255, 0))
+                    item2.setZValue(100)
+                    self.plotItems.append(item2)
+                #plot = self.plot.connections().keys()[0].node().getPlot()
+                #plot.addItem(item)
+            
+        self.outputData = output
+        return {'output': output, 'plot': self.plotItems}
+
+    @staticmethod
+    def fitEvents(events, startEvent, stopEvent, opts):
+        dt = opts['dt']
+        origTau = opts['tau']
+        multiFit = opts['multiFit']
+        waveform = opts['waveform']
+        tvals = opts['tvals']        
+ 
+        dtype = [(n, events[n].dtype) for n in events.dtype.names]
+        output = np.empty(len(events), dtype=dtype + [
+            ('fitAmplitude', float), 
+            ('fitTime', float),
+            ('fitRiseTau', float), 
+            ('fitDecayTau', float), 
+            ('fitWidth', float),
+            ('fitError', float),
+            ('fitFractionalError', float)
+        ]) 
+        
+        offset = 0 ## not all input events will produce output events; offset keeps track of the difference.
+        
+        outputState = {
+                'guesses': [],
+                'eventData': [], 
+                'indexes': [], 
+                'xVals': [],
+                'yVals': []
+            }        
+        #print "=========="
+        for i in range(startEvent, stopEvent):
+            start = events[i]['time']
+            sliceLen = events[i]['len']*dt +100.*dt ## Ca2+ events are much longer than 50ms
+            if i+1 < len(events):
+                nextStart = events[i+1]['time']
+                #nextStart = events[i+1]['index']*dt
+                #print "    picking between:", sliceLen, nextStart, '-', start, '=', nextStart-start
+                sliceLen = min(sliceLen, nextStart-start)
+            #print "   chose:", sliceLen
+                
+                
+            guessLen = events[i]['len']*dt
+            #guessLen = sliceLen
+                    
+            tau = origTau
+            if tau is not None:
+                guessLen += tau*2.              
+            
+            #print "   picking between:", guessLen*3, sliceLen
+            #sliceLen = min(guessLen*3., sliceLen)
+            
+            ## Figure out from where to pull waveform data that will be fitted
+            startIndex = np.argwhere(tvals>=start)[0][0]
+            stopIndex = startIndex + int(sliceLen/dt)
+            startIndex -= 10 ## pull baseline data from before the event starts
+            #print "    data to fit: indices:", startIndex, stopIndex, 'dt:', dt, "times:", startIndex*dt, stopIndex*dt
+            eventData = waveform[startIndex:stopIndex]
+            times = tvals[startIndex:stopIndex]
+            
+            if len(times) < 4:  ## PSP fit requires at least 4 points; skip this one
+                offset += 1
+                continue
+            
+            ## reconvolve this chunk of the signal if it was previously deconvolved
+            if tau is not None:
+                eventData = functions.expReconvolve(eventData, tau=tau, dt=dt)                
+    
+            ## Make guesses as to the shape of the event
+            mx = eventData.max()
+            mn = eventData.min()
+
+            guessAmp = (mx-mn)*2     ## fit converges more reliably if we start too large
+            guessRise = guessLen/4.
+            guessDecay = guessLen/4.
+            guessStart = times[10]
+            guessWidth = guessLen*0.75
+            guessYOffset = eventData[0]
+            
+            ## fitting to exponential rise * decay
+            ## parameters are [amplitude, x-offset, rise tau, fall tau]
+            guess = [guessStart, guessYOffset, guessRise, guessDecay, guessAmp, guessWidth]
+            guessFit = [guessYOffset, guessStart, guessRise, guessDecay, guessAmp, guessWidth]
+            #guess = [amp, times[0], guessLen/4., guessLen/2.]  ## careful! 
+            #bounds = [
+                #sorted((guessAmp * 0.1, guessAmp)),
+                #sorted((guessStart-guessRise*2, guessStart+guessRise*2)), 
+                #sorted((dt*0.5, guessDecay)),
+                #sorted((dt*0.5, guessDecay * 50.))
+            #]
+            yVals = eventData.view(np.ndarray)
+            
+            ## Set bounds for parameters -
+            ## exppulse parameter order: yOffset, t0, tau1, tau2, amp, width
+            #yOffset, t0, tau1, tau2, amp, width
+            bounds=[(-10, 10), ## no bounds on yOffset
+                    (float(events[i]['time']-10*dt), float(events[i]['time']+5*dt)), ## t0 must be near the startpoint found by eventDetection
+                    (0.010, float(opts['riseTauMax'])), ## riseTau must be greater than 10 ms
+                    (0.010, float(opts['decayTauMax'])), ## ditto for decayTau
+                    (0., float(opts['ampMax'])), ## amp must be greater than 0
+                    (0, float(events[i]['len']*dt*2))] ## width
+            
+            #print "Bounds", bounds
+            #print "times", times.min(), times.max()
+            
+            ## Use Paul's fitting algorithm so that we can put bounds/constraints on the fit params
+            #print "event:", i, 'amp bounds:', bounds[4]
+            fitter = Fitting()
+            fitResults = fitter.FitRegion([1], 0, times, yVals, fitPars=guessFit, fitFunc='exppulse', bounds=bounds, method='SLSQP', dataType='xy')
+            fitParams, xPts, yPts, names = fitResults
+            #print "fitParams:", fitParams
+            #print "names", names
+            #fitResult = functions.fit(functions.expPulse, times, yVals, guess, generateResult=True, resultXVals=times)                
+            #fitParams, val, computed, err = fitResult
+            #print '  fitParams:', fitParams[0]
+            yOffset, t0, tau1, tau2, amp, width = fitParams[0]
+            #print "fitResult", fitResult
+            #computed = fitResult[-2]
+            computed = fitter.expPulse(fitParams[0], times)
+            diff = (yVals - computed)
+            err = (diff**2).sum()
+            fracError = diff.std() / computed.std()
+            
+            output[i-offset] = tuple(events[i]) + (amp, t0, tau1, tau2, width) + (err, fracError)
+            #print "amp:", amp
+            #print "output:", output[i-offset]
+            
+            outputState['guesses'].append(guess)
+            outputState['eventData'].append(eventData)
+            outputState['indexes'].append(i)
+            outputState['xVals'].append(times)
+            outputState['yVals'].append(computed)  
+                
+        if offset > 0:
+            output = output[:-offset]
+            
+        outputState['output'] = output
+            
+        return outputState                
+                
 class Histogram(CtrlNode):
     """Converts a list of values into a histogram."""
     nodeName = 'Histogram'

@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-
+"""
+Test programmatically setting log transformation modes.
+"""
 import initExample ## Add path to library (just for examples; you do not need this)
 
 import numpy as np
@@ -10,6 +12,7 @@ import pyqtgraph as pg
 app = QtGui.QApplication([])
 
 w = pg.GraphicsWindow()
+w.setWindowTitle('pyqtgraph example: logAxis')
 p1 = w.addPlot(0,0, title="X Semilog")
 p2 = w.addPlot(1,0, title="Y Semilog")
 p3 = w.addPlot(2,0, title="XY Log")
@@ -33,6 +36,7 @@ p3.plot(x, y)
 
 
 ## Start Qt event loop unless running in interactive mode or using pyside.
-import sys
-if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
-    app.exec_()
+if __name__ == '__main__':
+    import sys
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtGui.QApplication.instance().exec_()

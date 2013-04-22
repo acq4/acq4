@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+"""
+Demonstrate ability of ImageItem to be used as a canvas for painting with
+the mouse.
+
+"""
+
 import initExample ## Add path to library (just for examples; you do not need this)
 
 
@@ -12,6 +18,7 @@ app = QtGui.QApplication([])
 w = pg.GraphicsView()
 w.show()
 w.resize(800,800)
+w.setWindowTitle('pyqtgraph example: Draw')
 
 view = pg.ViewBox()
 w.setCentralItem(view)
@@ -36,6 +43,7 @@ img.setDrawKernel(kern, mask=kern, center=(1,1), mode='add')
 img.setLevels([0, 10])
 
 ## Start Qt event loop unless running in interactive mode or using pyside.
-import sys
-if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
-    app.exec_()
+if __name__ == '__main__':
+    import sys
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtGui.QApplication.instance().exec_()

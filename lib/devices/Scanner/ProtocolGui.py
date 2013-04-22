@@ -50,6 +50,9 @@ class ProgramCtrlGroup(pTypes.GroupParameter):
     def addNew(self, typ):
         self.sigAddNewRequested.emit(self, typ)
 
+### Error IDs:
+###  1: Could not find spot size from calibration. (from ScannerProtoGui.pointSize)
+
 class ScannerProtoGui(ProtocolGui):
     
     #sigSequenceChanged = QtCore.Signal(object)  ## inherited from Device
@@ -127,6 +130,15 @@ class ScannerProtoGui(ProtocolGui):
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
         self.spotMarker = TargetPoint(name="Last", ptSize=100e-6, movable=False)
         self.spotMarker.setPen(pg.mkPen(color=(255,255,255), width = 2))
+
+        #try:
+            #self.updateSpotSizes()
+        #except HelpfulException as exc:
+            #if exc.kwargs.get('errId',None) == 1:
+                #self.testTarget.hide()
+            #else:
+                #raise
+
         self.spotMarker.hide()
         self.updateSpotSizes()
 
@@ -134,6 +146,7 @@ class ScannerProtoGui(ProtocolGui):
         self.updateTDPlot()
         
             
+        #self.ui.simulateShutterCheck.setChecked(False)
         if 'offVoltage' not in self.dev.config: ## we don't have a voltage for virtual shuttering
             self.ui.simulateShutterCheck.setChecked(False)
             self.ui.simulateShutterCheck.setEnabled(False)
@@ -337,6 +350,7 @@ class ScannerProtoGui(ProtocolGui):
     def handleResult(self, result, params):
         if not self.spotMarker.isVisible():
             self.spotMarker.show()
+        #print 'ScannerProtoGui.handleResult() result:', result
         if 'position' in result:
             pos = result['position']
             ss = result['spotSize']
@@ -893,7 +907,7 @@ class TargetPoint(pg.EllipseROI):
         pg.ROI.__init__(self, (0,0), [ptSize] * 2, movable=args.get('movable', True))
         self.aspectLocked = True
         self.overPen = None
-        self.underPen = self.pen
+        self.underPen = self.pen()
         #self.treeItem = None
         self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         #self.host = args.get('host', None)
@@ -1207,7 +1221,7 @@ class TargetGrid(pg.ROI):
         p.save()
         r = QtCore.QRectF(0,0, self.state['size'][0], self.state['size'][1])
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(self.pen)
+        p.setPen(self.pen())
         p.translate(r.left(), r.top())
         p.scale(r.width(), r.height())
         p.drawRect(0, 0, 1, 1)
@@ -1224,7 +1238,7 @@ class TargetGrid(pg.ROI):
             if self.pens[i] != None:
                 p.setPen(self.pens[i])
             else:
-                p.setPen(self.pen)
+                p.setPen(self.pen())
             #p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
             p.drawEllipse(QtCore.QPointF(pt[0]/self.pointSize, pt[1]/self.pointSize), 0.5, 0.5)
             
@@ -1336,6 +1350,24 @@ class ProgramLineScan(QtCore.QObject):
         return {'type': 'lineScan', 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 'sweepDuration': self.params['sweepDuration'], 
                 'endTime': self.params['endTime'], 'retraceDuration': self.params['retraceDuration'], 'nScans': self.params['nScans']}
 
+class MultiLineScanROI(pg.PolyLineROI):
+    """ custom class over ROI polyline to allow alternate coloring of different segments
+    """
+    def addSegment(self, *args, **kwds):
+        pg.PolyLineROI.addSegment(self, *args, **kwds)
+        self.recolor()
+    
+    def removeSegment(self, *args, **kwds):
+        pg.PolyLineROI.removeSegment(self, *args, **kwds)
+        self.recolor()
+    
+    def recolor(self):
+        for i, s in enumerate(self.segments):
+            if i % 2 == 0:
+                s.setPen(self.pen)
+            else:
+                s.setPen(fn.mkPen([75, 200, 75]))
+
 class ProgramMultipleLineScan(QtCore.QObject):
     
     sigStateChanged = QtCore.Signal(object)
@@ -1354,7 +1386,7 @@ class ProgramMultipleLineScan(QtCore.QObject):
             dict(name='endTime', type='float', value=5.5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2, readonly=True),
         ])
         self.params.ctrl = self        
-        self.roi = pg.PolyLineROI([[0.0, 0.0], [self.params['Length'], self.params['Length']]], alternate=True)
+        self.roi = MultiLineScanROI([[0.0, 0.0], [self.params['Length'], self.params['Length']]])
         self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
  #       print dir(self.roi)
         self.params.sigTreeStateChanged.connect(self.update)

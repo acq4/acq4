@@ -1,3 +1,10 @@
+"""
+Demonstrates some customized mouse interaction by drawing a crosshair that follows 
+the mouse.
+
+
+"""
+
 import initExample ## Add path to library (just for examples; you do not need this)
 import numpy as np
 import scipy.ndimage as ndi
@@ -5,9 +12,10 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore
 from pyqtgraph.Point import Point
 
-#genearte layout
+#generate layout
 app = QtGui.QApplication([])
 win = pg.GraphicsWindow()
+win.setWindowTitle('pyqtgraph example: crosshair')
 label = pg.LabelItem(justify='right')
 win.addItem(label)
 p1 = win.addPlot(row=1, col=0)
@@ -72,6 +80,7 @@ proxy = pg.SignalProxy(p1.scene().sigMouseMoved, rateLimit=60, slot=mouseMoved)
 
 
 ## Start Qt event loop unless running in interactive mode or using pyside.
-import sys
-if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
-    app.exec_()
+if __name__ == '__main__':
+    import sys
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtGui.QApplication.instance().exec_()

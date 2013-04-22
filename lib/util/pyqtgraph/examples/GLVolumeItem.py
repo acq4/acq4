@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
+"""
+Demonstrates GLVolumeItem for displaying volumetric data.
+
+"""
+
 ## Add path to library (just for examples; you do not need this)
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+import initExample
 
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.opengl as gl
@@ -10,7 +14,7 @@ app = QtGui.QApplication([])
 w = gl.GLViewWidget()
 w.opts['distance'] = 200
 w.show()
-
+w.setWindowTitle('pyqtgraph example: GLVolumeItem')
 
 #b = gl.GLBoxItem()
 #w.addItem(b)
@@ -59,5 +63,7 @@ ax = gl.GLAxisItem()
 w.addItem(ax)
 
 ## Start Qt event loop unless running in interactive mode.
-if sys.flags.interactive != 1:
-    app.exec_()
+if __name__ == '__main__':
+    import sys
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtGui.QApplication.instance().exec_()

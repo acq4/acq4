@@ -52,7 +52,7 @@ class ScanCanvasItem(CanvasItem):
                 pts.append({'pos': pos, 'size': size, 'data': d})
         self.scatterPlotData = pts
         if len(pts) == 0:
-            raise Exception("No data found in scan.")
+            raise Exception("No data found in scan %s." % dirHandle.name(relativeTo=dirHandle.parent().parent()))
         gitem = pg.ScatterPlotItem(pts, pxMode=False, pen=(50,50,50,200))
         #citem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
         #self._addCanvasItem(citem)

@@ -481,6 +481,9 @@ class Photostim(AnalysisModule):
         """Store all data for a scan, using cached values if possible"""
         p = debug.Profiler("Photostim.storeDBScan", disabled=True)
         
+        if storeEvents:
+            self.clearDBScan(scan)
+        
         with pg.BusyCursor():
             #dh = scan.source()
             #print "Store scan:", scan.source().name()

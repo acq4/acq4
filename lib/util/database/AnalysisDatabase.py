@@ -271,21 +271,16 @@ class AnalysisDatabase(SqliteDatabase):
         records = []
         colTuples = []
         for name, col in columns.iteritems():
-            rec = {'Column': name, 'Table': table}
+            rec = {'Column': name, 'Table': table, 'Link': None, 'Constraints': None}
             rec.update(col)
             
             typ = rec['Type']
             typ, link = self.interpretColumnType(typ)
             if link is not None:
                 rec['Link'] = link
-            #if typ.startswith('directory'):
-                #rec['Link'] = self.dirTableName(typ.lstrip('directory:'))
-                #typ = 'int'
-            #elif typ == 'file':
-                #typ = 'text'
             
             tup = (rec['Column'], typ)
-            if 'Constraints' in rec:
+            if rec['Constraints'] is not None:
                 tup = tup + (rec['Constraints'],)
             colTuples.append(tup)
             records.append(rec)
@@ -459,23 +454,21 @@ class AnalysisDatabase(SqliteDatabase):
         # db('create view "sites" as select * from photostim_sites inner join DirTable_Protocol on photostim_sites.ProtocolDir=DirTable_Protocol.rowid inner join DirTable_Cell on DirTable_Protocol.CellDir=DirTable_Cell.rowid')
 
         with self.transaction():
-            cmd = 'create view "%s" as select * from "%s"' % (viewName, tables[0])
-            for i in range(len(tables)-1):
-                t1 = tables[i]
-                t2 = tables[i+1]
+            sel = self.makeJoinStatement(tables)
+            cmd = 'create view "%s" as select * from %s' % (viewName, sel)
+            #for i in range(1,len(tables)):  ## figure out how to join each table one at a time
+                #nextTable = tables[i]
                 
-                linkCol = None
-                for colName, config in self.getColumnConfig(t1).iteritems():
-                    if str(config['Link']).lower() == t2.lower():
-                        linkCol = config['Column']
-                        break
+                #cols = None
+                #for joinTable in tables[:i]:
+                    #cols = self.findJoinColumns(nextTable, joinTable)
+                    #if cols is not None:
+                        #break
+                        
+                #if cols is None:
+                    #raise Exception("Could not find criteria to join table '%s' to any of '%s'" % (joinTable, str(tables[:i])) )
                 
-                if linkCol is None:
-                    for c in self.getColumnConfig(t1):
-                        print "  ", c
-                    raise Exception("No column linking table %s to %s.rowid" % (t1, t2))
-                
-                cmd += ' inner join "%s" on %s.%s=%s.rowid' % (t2, t1, linkCol, t2)
+                #cmd += ' inner join "%s" on "%s"."%s"="%s"."%s"' % (nextTable, nextTable, cols[0], joinTable, cols[1])
             
             self(cmd)
             
@@ -493,7 +486,48 @@ class AnalysisDatabase(SqliteDatabase):
                     colIndex += 1
             self.insert('ColumnConfig', colDesc)
     
+    def makeJoinStatement(self, tables):
+        ### construct an expresion that joins multiple tables automatically
+        cmd = '"%s"' % tables[0]
+        for i in range(1,len(tables)):  ## figure out how to join each table one at a time
+            nextTable = tables[i]
+            
+            cols = None
+            for joinTable in tables[:i]:
+                cols = self.findJoinColumns(nextTable, joinTable)
+                if cols is not None:
+                    break
+                    
+            if cols is None:
+                raise Exception("Could not find criteria to join table '%s' to any of '%s'" % (joinTable, str(tables[:i])) )
+            
+            cmd += ' inner join "%s" on "%s"."%s"="%s"."%s"' % (nextTable, nextTable, cols[0], joinTable, cols[1])
+        return cmd
     
+    def findJoinColumns(self, t1, t2):
+        """Return the column names that can be used to join two tables.
+        If no relationships are found, return None.
+        """
+        def strlower(x):  # convert strings to lower, everything else stays the same
+            if isinstance(x, basestring):
+                return x.lower()
+            return x
+            
+        links1 = [(strlower(x['Column']), strlower(x['Link'])) for x in self.getColumnConfig(t1).values()]
+        links2 = [(strlower(x['Column']), strlower(x['Link'])) for x in self.getColumnConfig(t2).values()]
+
+        for col, link in links1:   ## t1 explicity links to t2.rowid
+            if link == t2.lower():
+                return col, 'rowid'
+        for col, link in links2:   ## t2 explicitly links to t1.rowid
+            if link == t1.lower():
+                return 'rowid', col
+        for col1, link1 in links1:   ## t1 and t2 both link to the same table.rowid
+            for col2, link2 in links2:
+                if link1 is not None and link1 == link2:
+                    return col1, col2
+                   
+        return None  ## no links found
     
     
 
@@ -546,7 +580,10 @@ class AnalysisDatabase(SqliteDatabase):
             
         if not self.hasTable(table):
             return None
-        rec = self.select(table, ['rowid'], sql="where Dir='%s'" % dirHandle.name(relativeTo=self.baseDir()))
+        name = dirHandle.name(relativeTo=self.baseDir())
+        name1 = name.replace('/', '\\')
+        name2 = name.replace('\\', '/')
+        rec = self.select(table, ['rowid'], sql="where Dir='%s' or Dir='%s'" % (name1, name2))
         if len(rec) < 1:
             return None
         #print rec[0]
@@ -557,7 +594,7 @@ class AnalysisDatabase(SqliteDatabase):
         res = self.select(table, ['Dir'], sql='where rowid=%d'%rowid)
         if len(res) < 1:
             raise Exception('rowid %d does not exist in %s' % (rowid, table)) 
-            #logMsg('rowid %d does not exist in %s' % (rowid, table), msgType='error') ### This needs to be caught further up in Photostim or somewhere, not here
+            #logMsg('rowid %d does not exist in %s' % (rowid, table), msgType='error') ### This needs to be caught further up in Photostim or somewhere, not here -- really this shouldn't be caught at all since it means something is wrong with the db
             #return None
         #print res
         #return self.baseDir()[res[0]['Dir']]
@@ -662,9 +699,11 @@ class AnalysisDatabase(SqliteDatabase):
 
     def select(self, table, columns='*', where=None, sql='', toDict=True, toArray=False, distinct=False, limit=None, offset=None):
         """Extends select to convert directory/file columns back into Dir/FileHandles"""
+        prof = debug.Profiler("AnalysisDatabase.select()", disabled=True)
         
         data = SqliteDatabase.select(self, table, columns, where=where, sql=sql, distinct=distinct, limit=limit, offset=offset, toDict=True, toArray=False)
         data = TableData(data)
+        prof.mark("got data from SQliteDatabase")
         
         config = self.getColumnConfig(table)
         
@@ -681,11 +720,25 @@ class AnalysisDatabase(SqliteDatabase):
                 data[column] = map(handles.get, data[column])
                     
             elif conf.get('Type', None) == 'file':
-                data[column] = map(lambda f: None if f is None else self.baseDir()[f], data[column])
+                def getHandle(name):
+                    if name is None:
+                        return None
+                    else:
+                        if os.sep == '/':
+                            sep = '\\'
+                        else:
+                            sep = '/'
+                        name = name.replace(sep, os.sep) ## make sure file handles have an operating-system-appropriate separator (/ for Unix, \ for Windows)
+                        return self.baseDir()[name]
+                data[column] = map(getHandle, data[column])
+                
+        prof.mark("converted file/dir handles")
                 
         ret = data.originalData()
         if toArray:
             ret = data.toArray()
+            prof.mark("converted data to array")
+        prof.finish()
         return ret
     
     def _prepareData(self, table, data, ignoreUnknownColumns=False, batch=False):

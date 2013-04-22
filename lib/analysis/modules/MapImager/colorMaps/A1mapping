@@ -1,2 +1,0 @@
-items: [{'gradient': {'ticks': [(1, (255, 0, 0, 255)), (0, (255, 255, 255, 255))], 'mode': 'rgb'}, 'max': 0.0, 'op': '+', 'min': -1e-11, 'arg': 'firstEventAmplitude'}]
-args: ['firstEventAmplitude']

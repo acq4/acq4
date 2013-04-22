@@ -2,7 +2,7 @@ from PyQt4 import QtCore, QtGui
 #import lib.Manager
 import pyqtgraph as pg
 import numpy as np
-#import functions as fn
+import functions as fn
 import MapConvolverTemplate
 import scipy
 from lib.analysis.tools import functions as afn
@@ -28,6 +28,7 @@ class MapConvolver(QtGui.QWidget):
         self.filePath = filePath
         self.data = data
         self.output = None
+        self._availableFields = None ## a list of fieldnames that are available for coloring/contouring
         
         self.ui.processBtn.hide()
         self.addBtn.clicked.connect(self.addItem)
@@ -82,7 +83,11 @@ class MapConvolver(QtGui.QWidget):
         fields = []
         for i in self.items:
             fields.append(i.getParamName())
+        self._availableFields = fields
         self.sigFieldsChanged.emit(fields)
+        
+    def getFields(self):
+        return self._availableFields
         
        
     def itemChanged(self):

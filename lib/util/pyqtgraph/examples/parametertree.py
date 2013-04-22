@@ -70,6 +70,7 @@ params = [
         {'name': 'Named List', 'type': 'list', 'values': {"one": 1, "two": 2, "three": 3}, 'value': 2},
         {'name': 'Boolean', 'type': 'bool', 'value': True, 'tip': "This is a checkbox"},
         {'name': 'Color', 'type': 'color', 'value': "FF0", 'tip': "This is a color button"},
+        {'name': 'Gradient', 'type': 'colormap'},
         {'name': 'Subgroup', 'type': 'group', 'children': [
             {'name': 'Sub-param 1', 'type': 'int', 'value': 10},
             {'name': 'Sub-param 2', 'type': 'float', 'value': 1.2e6},
@@ -139,6 +140,7 @@ p.param('Save/Restore functionality', 'Restore State').sigActivated.connect(rest
 t = ParameterTree()
 t.setParameters(p, showTop=False)
 t.show()
+t.setWindowTitle('pyqtgraph example: Parameter Tree')
 t.resize(400,800)
 t2 = ParameterTree()
 t2.setParameters(p, showTop=False)
@@ -151,6 +153,7 @@ p.restoreState(s)
 
 
 ## Start Qt event loop unless running in interactive mode or using pyside.
-import sys
-if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
-    QtGui.QApplication.instance().exec_()
+if __name__ == '__main__':
+    import sys
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtGui.QApplication.instance().exec_()
