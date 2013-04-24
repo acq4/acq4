@@ -40,7 +40,12 @@ class ScanProgramGenerator:
                 continue
             startInd = int(cmd['startTime'] / dt)
             stopInd = int(cmd['endTime'] / dt)
-            assert stopInd < arr.shape[1]
+            #print 'scanproggenerator;;;'
+            #print startInd, stopInd
+            #print dt
+            #print arr.shape
+            if stopInd >= arr.shape[1]:
+                raise HelpfulException('Scan Program duration is longer than protocol duration') 
             arr[:,lastStopInd:startInd] = lastValue[:,np.newaxis]
             if cmd['type'] == 'step':
                 pos = cmd['pos']

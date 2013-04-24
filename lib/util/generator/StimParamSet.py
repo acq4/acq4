@@ -238,7 +238,7 @@ class PulseParameter(GroupParameter):
         seq = {name:seq for name, seq in seqParams if seq is not None}
 
         ## If sequence is specified over sum, interpret that a bit differently.
-        (sumName, sumSeq) = self.sum.compile()
+        (sumName, sumSeq) = self.param('sum').compile()
         if sumSeq is not None:
             if self.sum['affect'] == 'length':
                 if not self.param('length').writable():
