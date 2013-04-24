@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>273</width>
-    <height>211</height>
+    <height>234</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -20,7 +20,7 @@
    <property name="spacing">
     <number>3</number>
    </property>
-   <item row="0" column="0" colspan="2">
+   <item row="1" column="0" colspan="2">
     <layout class="QHBoxLayout" name="horizontalLayout">
      <property name="spacing">
       <number>1</number>
@@ -41,7 +41,7 @@
      </item>
     </layout>
    </item>
-   <item row="1" column="0" colspan="2">
+   <item row="2" column="0" colspan="2">
     <layout class="QHBoxLayout" name="horizontalLayout_2">
      <property name="spacing">
       <number>1</number>
@@ -58,7 +58,7 @@
      </item>
     </layout>
    </item>
-   <item row="2" column="0" colspan="2">
+   <item row="3" column="0" colspan="2">
     <layout class="QHBoxLayout" name="horizontalLayout_3">
      <property name="spacing">
       <number>1</number>
@@ -75,21 +75,21 @@
      </item>
     </layout>
    </item>
-   <item row="5" column="0">
+   <item row="6" column="0">
     <widget class="QCheckBox" name="disableChk">
      <property name="text">
       <string>Disable</string>
      </property>
     </widget>
    </item>
-   <item row="5" column="1">
+   <item row="6" column="1">
     <widget class="QPushButton" name="processBtn">
      <property name="text">
       <string>re-Process</string>
      </property>
     </widget>
    </item>
-   <item row="4" column="0" colspan="2">
+   <item row="5" column="0" colspan="2">
     <widget class="QGroupBox" name="groupBox">
      <property name="title">
       <string>Output data:</string>
@@ -138,9 +138,24 @@
      </layout>
     </widget>
    </item>
+   <item row="0" column="1">
+    <widget class="ComboBox" name="eventCombo"/>
+   </item>
+   <item row="0" column="0">
+    <widget class="QLabel" name="label_5">
+     <property name="text">
+      <string>Event Parameter to use:</string>
+     </property>
+    </widget>
+   </item>
   </layout>
  </widget>
  <customwidgets>
+  <customwidget>
+   <class>ComboBox</class>
+   <extends>QComboBox</extends>
+   <header>pyqtgraph.widgets.ComboBox</header>
+  </customwidget>
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>

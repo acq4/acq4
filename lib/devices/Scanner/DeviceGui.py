@@ -194,7 +194,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         positions = positions[2:]
         
         ## Do background subtraction
-        frames = origFrames.astype(float) - background.astype(float)
+        frames = origFrames.astype(np.float32) - background.astype(np.float32)
 
         ## Find a frame with a spot close to the center (within center 1/3)
         cx = frames.shape[1] / 3

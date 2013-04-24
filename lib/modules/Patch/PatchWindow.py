@@ -549,6 +549,8 @@ class PatchThread(QtCore.QThread):
             self.sigNewFrame.emit(frame)
         except:
             printExc('Error in patch analysis:')
+        finally:
+            prof.finish()
             
     def analyze(self, data, params):
         #print "\n\nAnalysis parameters:", params

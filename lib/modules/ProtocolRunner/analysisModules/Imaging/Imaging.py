@@ -60,7 +60,11 @@ class ImagingModule(AnalysisModule):
         pmtdata = frame['result'][self.detectorDevice()]["Channel":'Input'].asarray()
         t = frame['result'][self.detectorDevice()].xvals('Time')
         dt = t[1]-t[0]
-        prog = frame['cmd'][self.scannerDevice()]['program'][0]
+        progs = frame['cmd'][self.scannerDevice()]['program']
+        if len(progs) == 0:
+            self.image.setImage(np.zeros((1,1)))
+            return
+        prog = progs[0]
         nscans = prog['nScans']
         limits = prog['points']
         dist = (pg.Point(limits[0])-pg.Point(limits[1])).length()

@@ -25,6 +25,7 @@ class Console(Module):
            man - The ACQ4 Manager object
                  man.currentFile  ## currently selected file
                  man.getCurrentDir()  ## current storage directory
+                 man.getCurrentDatabase() ## currently selected database
                  man.getDevice("Name")
                  man.getModule("Name")
            pg - pyqtgraph library

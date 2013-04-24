@@ -722,15 +722,20 @@ class EventStatisticsAnalyzer:
             
             ## Compute some extra statistics for this map site
             stats = [s[0].getStats(s[1]) for s in site['data']['sites']]   ## pre-recorded stats for all sub-sites in this map site
-            site['data']['ZScore'] = np.median([s['ZScore'] for s in stats])
-            site['data']['DirectPeak'] = np.median([s['directFitPeak'] for s in stats])
-            site['data']['FitAmpSum'] = np.median([s['fitAmplitude_PostRegion_sum'] for s in stats])
+            if 'ZScore' in s:
+                site['data']['ZScore'] = np.median([s['ZScore'] for s in stats])
+                postScores['ZScore'].append(site['data']['ZScore'])
+            if 'directFitPeak' in s:
+                site['data']['DirectPeak'] = np.median([s['directFitPeak'] for s in stats])
+            if 'fitAmplitude_PostRegion_sum' in s:
+                site['data']['FitAmpSum'] = np.median([s['fitAmplitude_PostRegion_sum'] for s in stats])
+                postScores['FitAmpSum'].append(site['data']['FitAmpSum'])
             #site['data']['FitAmpSum_Pre'] = np.median([s['fitAmplitude_PreRegion_sum'] for s in stats])  
             site['data']['FirstLatency'] = np.median(latencies)
             site['data']['NumEvents'] = np.median(nEvents)
             site['data']['SpontRate'] = np.median(rates)
-            postScores['ZScore'].append(site['data']['ZScore'])
-            postScores['FitAmpSum'].append(site['data']['FitAmpSum'])
+            
+            
             
             ## Decide whether this site has input
             tparam = self.params['Threshold Parameter']

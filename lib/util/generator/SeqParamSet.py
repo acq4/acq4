@@ -110,7 +110,7 @@ class SeqParameter(GroupParameter):
             ## if needed, add some more changes before releasing the signal
             for param, change, data in changes:
                 ## if the sequence value changes, hide/show other parameters
-                if param is self.sequence and change == 'value':
+                if param is self.param('sequence') and change == 'value':
                     vis = self.visibleParams[self['sequence']]
                     for ch in self:
                         if ch.name() in vis:
