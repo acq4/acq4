@@ -350,6 +350,7 @@ class ScannerProtoGui(ProtocolGui):
     def handleResult(self, result, params):
         if not self.spotMarker.isVisible():
             self.spotMarker.show()
+        #print 'ScannerProtoGui.handleResult() result:', result
         if 'position' in result:
             pos = result['position']
             ss = result['spotSize']
