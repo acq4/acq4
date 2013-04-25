@@ -438,7 +438,7 @@ class MapAnalyzer(AnalysisModule):
         if len(recs) == len(self.currentMap.spots):
             for i, spot in enumerate(self.currentMap.spots):
                 
-                for k in fields:
+                for k in fields.keys() + recs[i].keys():
                     spot['data'][k] = recs[i].get(k, None)
             self.analysisValid = True
             print "reloaded analysis from DB", self.currentMap.rowID

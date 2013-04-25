@@ -193,7 +193,11 @@ class ScatterPlotWidget(QtGui.QSplitter):
                 for i in range(int(xy[ax].max())+1):
                     keymask = xy[ax] == i
                     scatter = pg.pseudoScatter(xy[1-ax][keymask], bidir=True)
-                    scatter *= 0.2 / np.abs(scatter).max()
+                    if len(scatter) == 0:
+                        continue
+                    smax = np.abs(scatter).max()
+                    if smax != 0:
+                        scatter *= 0.2 / smax
                     xy[ax][keymask] += scatter
         
         if self.scatterPlot is not None:
