@@ -86,6 +86,7 @@ class ScreenBlanker:
         self.widgets = []
     
     def Blank(self):
+        return
         d = QtGui.QApplication.desktop()
         for i in range(d.screenCount()): # look for all screens
             w = Black()
@@ -692,7 +693,7 @@ class ProtocolRunner(Module):
         self.runSingle(store=True)
         
     def testSingle(self):
-        self.SB.Blank()
+        #self.SB.Blank() ## we don't need to blank the screen for every protocol, only the ones with imaging....
         self.runSingle(store=False)
     
     def runSingle(self, store=True):
@@ -748,7 +749,7 @@ class ProtocolRunner(Module):
         
    
     def testSequence(self):
-        self.SB.Blank()
+        #self.SB.Blank() ## we only need to blank the screen when we're imaging...
         self.runSequence(store=False)
        
     def runSequence(self, store=True):

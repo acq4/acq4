@@ -245,11 +245,11 @@ class LaserDevGui(QtGui.QWidget):
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()
         for opticState, wavelength, trans, power, date in self.dev.getCalibrationList():
-            item = QtGui.QTreeWidgetItem([opticState, wavelength, '%.2f' %(trans*100) + '%', siFormat(power, suffix='W'), date])
+            item = QtGui.QTreeWidgetItem([str(opticState), str(wavelength), '%.2f' %(trans*100) + '%', siFormat(power, suffix='W'), date])
+            item.key = opticState
             self.ui.calibrationList.addTopLevelItem(item)
             
     def calibrateClicked(self):
-        ## Delete button must be clicked twice.
         if self.calibrateBtnState == 0 and self.calibrateWarning is not None:
             self.ui.calibrateBtn.setText(self.calibrateWarning)
             self.calibrateBtnState = 1
@@ -283,7 +283,8 @@ class LaserDevGui(QtGui.QWidget):
         if cur is None:
             return
         #scope = str(cur.text(0))
-        opticState = str(cur.text(1))
+        #opticState = str(cur.text(0))
+        opticState = cur.key
         
         index = self.dev.getCalibrationIndex()
         

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/modules/DataManager/AnalysisTemplate.ui'
 #
-# Created: Sun Apr 14 15:34:06 2013
+# Created: Mon Apr 29 12:04:35 2013
 #      by: PyQt4 UI code generator 4.9.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -36,12 +36,13 @@ class Ui_Form(object):
         self.refreshDbBtn = QtGui.QPushButton(self.groupBox)
         self.refreshDbBtn.setObjectName(_fromUtf8("refreshDbBtn"))
         self.gridLayout.addWidget(self.refreshDbBtn, 0, 4, 1, 1)
-        self.databaseCombo = QtGui.QComboBox(self.groupBox)
+        self.databaseCombo = ComboBox(self.groupBox)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.databaseCombo.sizePolicy().hasHeightForWidth())
         self.databaseCombo.setSizePolicy(sizePolicy)
+        self.databaseCombo.setMinimumContentsLength(0)
         self.databaseCombo.setObjectName(_fromUtf8("databaseCombo"))
         self.gridLayout.addWidget(self.databaseCombo, 0, 1, 1, 1)
         self.gridLayout_3.addWidget(self.groupBox, 0, 0, 1, 2)
@@ -86,3 +87,4 @@ class Ui_Form(object):
         self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Analysis Modules", None, QtGui.QApplication.UnicodeUTF8))
         self.loadModuleBtn.setText(QtGui.QApplication.translate("Form", "Load Module", None, QtGui.QApplication.UnicodeUTF8))
 
+from pyqtgraph.widgets.ComboBox import ComboBox

@@ -303,7 +303,7 @@ class Flowchart(Node):
                     if len(inputs) == 0:
                         continue
                     if inp.isMultiValue():  ## multi-input terminals require a dict of all inputs
-                        args[inp.name()] = dict([(i, data[i]) for i in inputs])
+                        args[inp.name()] = dict([(i, data[i]) for i in inputs if i in data.keys()])
                     else:                   ## single-inputs terminals only need the single input value available
                         args[inp.name()] = data[inputs[0]]  
                         
@@ -322,6 +322,8 @@ class Flowchart(Node):
                         #print "    Output:", out, out.name()
                         #print out.name()
                         try:
+                            if out.name() == 'plot':
+                                continue
                             data[out] = result[out.name()]
                         except:
                             print(out, out.name())

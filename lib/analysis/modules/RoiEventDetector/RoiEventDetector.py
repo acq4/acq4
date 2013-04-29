@@ -1,4 +1,4 @@
-import os, re
+import os, re, zipfile
 from lib.analysis.modules.EventDetector.EventDetector import EventDetector
 from pyqtgraph.metaarray import MetaArray
 import pyqtgraph as pg
@@ -22,9 +22,13 @@ class RoiEventDetector(EventDetector):
         
         self.data = {} ## will be a nested dict of {'csvName':{'roiname': array()}} pairs
         self.storageFile = None
+        self.paramStorageFile = None
+        self.fcZip = None
         self.outputFields = None
         
-        self.flowchart.addInput('roi')
+        #print self.flowchart.nodes()
+        if self.flowchart.nodes()['Input'].terminals.get('roi', None) is None:
+            self.flowchart.addInput('roi', removable=True)
         
         self.fileLoader = self.getElement('File Loader', create=True)
         self.fileLoader.sigSelectedFileChanged.connect(self.selectedFileChanged)
@@ -79,21 +83,42 @@ class RoiEventDetector(EventDetector):
         
         if self.dbCtrl.getSaveMode() == 'roi':
             self.write(self.flowchart.output()['events'])
+            self.writeParams()
+            self.writeFcZip()
+            
         elif self.dbCtrl.getSaveMode() == 'video':
             raise Exception('Saving whole video is not yet implemented')
         elif self.dbCtrl.getSaveMode() == 'all':
             raise Exception('Saving everything loaded is not yet implemented')
+        
+    def writeFcZip(self):
+        info = self.flowchart.saveState()
+        roi = str(self.fileLoader.ui.fileTree.currentItem().text(0))
+        
+        with zipfile.ZipFile(self.fcZip, 'a') as z:
+            z.writestr(roi, str(info))
+                
+        
     
     def write(self, data):
-        with open(self.storageFile, 'a') as f:
-            if data is not None and data.dtype.names != self.outputFields:
-                self.outputFields = data.dtype.names
-                f.write(','.join(data.dtype.names) +'\n')
-                
+        roi = str(self.fileLoader.ui.fileTree.currentItem().text(0))
+        self.deleteOldROI(self.storageFile, roi)
+        
+        with open(self.storageFile, 'r+') as f:
+            
             if data is not None:
+                header = f.readline()
+                fields = ','.join(data.dtype.names) + '\n'
+                f.seek(0, 2)
+                
+                if header != fields: ## check to make sure the first line has the field names
+                    f.write(fields)           
+                    
                 for d in data:
                     f.write(','.join([repr(x) for x in d])+'\n')
-            else:
+                    
+            else: ## no events were found
+                f.seek(0,2)
                 item = self.fileLoader.ui.fileTree.currentItem()
                 data = self.data[str(item.parent().text(0))][str(item.text(0))]
                 roi = str(item.text(0))
@@ -106,12 +131,63 @@ class RoiEventDetector(EventDetector):
                 f.write("0,0,0,0,0,0,0,0,0,0,0,0,0,"+','.join([repr(x) for x in arr[0]])+ '\n')
                 
             f.write('\n')
+            
+    def deleteOldROI(self, filename, roi):
+        ## read all old lines
+        with open(self.storageFile, 'r') as f:
+            lines = f.readlines()
+            print "# of old lines:", len(lines)
+            
+        ## overwrite file, then write lines back in if they aren't ones we want to delete
+        with open(self.storageFile, 'w') as f:
+            if len(lines) < 1:
+                return
+            f.write(lines[0]) ## don't delete the header line
+            for l in lines[1:]: 
+                if roi not in l:
+                    f.write(l)
+                #else:
+                    #print "not writing ", l
+    
+    def writeParams(self):
+        nodes = self.flowchart.nodes()
+        params = {}
+        #excludes=['Input', 'Output', 'GatherInfo', 'NegativeEventFilter', 'EventListPlotter', 'ColumnJoin', 'ColumnSelect', 'Plot']
+        includes = ['DenoiseFilter','LowPassBesselFilter','HighPassBesselFilter','DetrendFilter','HistogramDetrend','ExpDeconvolve','ThresholdEvents','CaEventFitter']
+        
+        ## get previously stored values
+        if os.path.exists(self.paramStorageFile):
+            prev = pg.configfile.readConfigFile(self.paramStorageFile)
+        else:
+            prev = {}
+        
+        for name in includes:
+            node = nodes[name]
+            d = {}
+            if hasattr(node, 'ctrls'):
+                for k, v in node.ctrls.iteritems():
+                    if type(v) == type(QtGui.QCheckBox()):
+                        d[k] = v.isChecked()
+                    elif type(v) == type(QtGui.QComboBox()):
+                        d[k] = str(v.currentText())
+                    elif type(v) in [type(QtGui.QSpinBox()), type(QtGui.QDoubleSpinBox()), type(pg.SpinBox())]:
+                        d[k] = v.value()
+                    else:
+                        print("Not saving param %s for node %s because we don't know how to record value of type %s" %(k, name, str(type(v))))
+            d['bypassed'] = node.isBypassed()
+            params[name] = d
+        
+        item = self.fileLoader.ui.fileTree.currentItem()
+        roi = str(item.text(0))
+        
+        ## replace or add previously stored values
+        prev[roi] = params
+        pg.configfile.writeConfigFile(prev, self.paramStorageFile)
+        
     
     def newStorageFileClicked(self):
         self.fileDialog = pg.FileDialog(self.dbCtrl, "New Storage File", self.fileLoader.baseDir().name(), "CSV File (*.csv);;All Files (*.*)")
-        #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
         self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
-        #self.fileDialog.setOption(QtGui.QFileDialog.DontConfirmOverwrite)
         self.fileDialog.show()
         self.fileDialog.fileSelected.connect(self.createNewStorageFile)
         
@@ -120,14 +196,27 @@ class RoiEventDetector(EventDetector):
         if fileName is None:
             return
         
-        if self.storageFile is not None: ## close previous file, if there was one open
+        #if self.storageFile is not None: ## close previous file, if there was one open
             #self.storageFile.close()
-            self.outputFields = None
+        #    self.outputFields = None
             
         self.storageFile = fileName  
         f = open(fileName, 'w')
         f.close()
         self.dbCtrl.setFileName(fileName)
+        
+        ## make paramStorageFile -- for storing easy-readable flowchart params
+        if fileName[-4:] == '.csv':
+            fn = fileName[:-4]
+        else:
+            fn = fileName
+        self.paramStorageFile = fn + '.params'
+        
+        ## make fcZip -- for storing whole flowcharts
+        self.fcZip = fn+'_flowchart.zip'
+        z = zipfile.ZipFile(self.fcZip, 'w')
+        z.close()
+        
         
     def openStorageFileClicked(self):
             self.fileDialog = pg.FileDialog(self.dbCtrl, "Load Storage File", self.fileLoader.baseDir().name(), "CSV file (*.csv);;All Files (*.*)")
@@ -140,23 +229,21 @@ class RoiEventDetector(EventDetector):
         if fileName == '':
             return 
         
-        if self.storageFile is not None:
-            #self.storageFile.close()
-            self.outputFields = None
-        
-        #f = open(fileName, 'r+') ## possibly I want append mode instead ('a')
         self.storageFile = fileName
-        f = open(self.storageFile, 'r+')
+        self.paramStorageFile = fileName[:-4]+'.params'
+        self.fcZip = fileName[:-4]+'_flowchart.zip'
+        
         self.dbCtrl.setFileName(fileName)
         
-        header = ''
-        line=None
-        while line != '':
-            line = self.storageFile.readline()
-            if 'SourceFile' in line: ## pick a name that is likely to be present in a header row -- I need a better method for this....
-                header = line
+        
+        #header = ''
+        #line=None
+        #while line != '':
+            #line = self.storageFile.readline()
+            #if 'SourceFile' in line: ## pick a name that is likely to be present in a header row -- I need a better method for this....
+                #header = line
                 
-        self.outputFields = re.split(',', header)
+        #self.outputFields = re.split(',', header)
         
     
     #def close(self):
