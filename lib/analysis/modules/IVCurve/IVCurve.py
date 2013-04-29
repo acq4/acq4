@@ -286,7 +286,10 @@ class IVCurve(AnalysisModule):
 #        print keys
 #        print list(self.Sequence[keys[0]])
         leftseq = [str(x) for x in self.Sequence[keys[0]]] # ''.join(map(str ,list(self.Sequence[keys[0]])))
-        rightseq = [str(x) for x in self.Sequence[keys[1]]]
+        if len(keys) > 1:
+            rightseq = [str(x) for x in self.Sequence[keys[1]]]
+        else:
+            rightseq = []
         leftseq.insert(0, 'All')
         rightseq.insert(0, 'All')
         self.ctrl.IVCurve_Sequence1.clear()
@@ -338,7 +341,7 @@ class IVCurve(AnalysisModule):
         subs = re.compile('[\/]')
         self.protocol = re.sub(subs, '-', self.protocol)
         self.protocol = self.protocol[:-1]  + '.pdf'
-        self.commonPrefix = os.path.join(fn,'Manis')
+        self.commonPrefix = os.path.join(fn,'Ruili')
         traces = []
         cmd_wave = []
         self.values = []
@@ -1159,8 +1162,8 @@ class IVCurve(AnalysisModule):
             return '/'
         if matchobj.group(0) == '_':
             return '\_'
-#        if matchobj.group(0) == '/':
-#            return '/'
+        if matchobj.group(0) == '/':
+            return '/'
         else:
             return ''
 
@@ -1177,7 +1180,7 @@ class IVCurve(AnalysisModule):
         tiname = '%r' % self.filename
         tiname = re.sub(escs, self.cleanRepl, tiname)
         #print tiname
-        fig.suptitle(tiname[1:-1])
+        fig.suptitle(r''+tiname[1:-1])
         pylab.autoscale(enable=True, axis='both', tight=None)
         if self.dataMode not in self.ICModes or self.tx is None:
             iscale = 1e3
