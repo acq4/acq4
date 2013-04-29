@@ -4,11 +4,11 @@ from .Exporter import Exporter
 from pyqtgraph.parametertree import Parameter
 
 
-__all__ = ['CSVExporter']
+__all__ = ['CSVExporterZip']
     
     
-class CSVExporter(Exporter):
-    Name = "CSV from plot data"
+class CSVExporterZip(Exporter):
+    Name = "CSV from plot data, compressed"
     windows = []
     def __init__(self, item):
         Exporter.__init__(self, item)

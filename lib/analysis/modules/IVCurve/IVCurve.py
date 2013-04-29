@@ -388,6 +388,8 @@ class IVCurve(AnalysisModule):
             else:
                 sf = 1e3
             if self.ctrl.IVCurve_IVLimits.isChecked(): # only accept data in a particular range
+                print sf*sequenceValues[i]
+                print self.ctrl.IVCurve_IVLimitMin.value(), self.ctrl.IVCurve_IVLimitMax.value()
                 if sf*sequenceValues[i] < self.ctrl.IVCurve_IVLimitMin.value() or sf*sequenceValues[i] > self.ctrl.IVCurve_IVLimitMax.value():
                   #  print i, sf, sf*sequenceValues[i]
                     continue # skip adding the data to the arrays
