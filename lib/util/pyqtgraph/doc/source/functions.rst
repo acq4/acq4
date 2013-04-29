@@ -91,10 +91,12 @@ Mesh Generation Functions
 Miscellaneous Functions
 -----------------------
 
+.. autofunction:: pyqtgraph.arrayToQPath
+
 .. autofunction:: pyqtgraph.pseudoScatter
 
 .. autofunction:: pyqtgraph.systemInfo
 
-
+.. autofunction:: pyqtgraph.exit
 
 

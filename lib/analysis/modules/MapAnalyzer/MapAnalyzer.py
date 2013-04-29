@@ -71,6 +71,8 @@ class MapAnalyzer(AnalysisModule):
     dbIdentity = 'MapAnalyzer'
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
+        if self.dataModel is None:
+            raise Exception("MapAnalyzer module requires a data model, but none is loaded yet.")
         
         self.currentMap = None
         self.analysisValid = False
@@ -91,9 +93,10 @@ class MapAnalyzer(AnalysisModule):
         modPath = os.path.abspath(os.path.dirname(__file__))
         self.colorMapper = ColorMapper(filePath=os.path.join(modPath, "colorMaps"))
         self._elements_ = OrderedDict([
-            ('Map Loader', {'type': 'ctrl', 'object': self.loader, 'size': (300, 300)}),
+            ('File Loader', {'type': 'fileInput', 'size': (300, 300), 'host': self, 'showFileTree': False}),
+            ('Map Loader', {'type': 'ctrl', 'object': self.loader, 'size': (300, 300), 'pos': ('below', 'File Loader')}),
             ('Color Mapper', {'type':'ctrl', 'object': self.colorMapper, 'size': (800,200), 'pos': ('right', 'Map Loader')}),
-            ('Canvas', {'type': 'canvas', 'size': (800, 400), 'pos':('right', 'Color Mapper')}),
+            ('Canvas', {'type': 'canvas', 'size': (800, 400), 'pos':('right', 'Color Mapper'), 'args': {'name': 'MapAnalyzer'}}),
             ('Options', {'type': 'ctrl', 'object': self.ctrlLayout, 'size': (300, 500), 'pos': ('bottom', 'Map Loader')}),
             ('Data Plot', {'type': 'plot', 'pos': ('top', 'Color Mapper'), 'size': (800, 300)}),
             ('Score Histogram', {'type': 'plot', 'pos': ('bottom', 'Data Plot'), 'size': (800, 300)}),
@@ -107,7 +110,8 @@ class MapAnalyzer(AnalysisModule):
         self.filterStage = EventFilter()
         self.spontRateStage = SpontRateAnalyzer(plot=self.getElement('Timeline', create=True))
         self.statsStage = EventStatisticsAnalyzer(histogramPlot=self.getElement('Score Histogram', create=True))
-        self.stages = [self.filterStage, self.spontRateStage, self.statsStage]
+        self.regions = RegionMarker(self.getElement('Canvas', create=True))
+        self.stages = [self.filterStage, self.spontRateStage, self.statsStage, self.regions]
         
         params = [
             dict(name='Time Ranges', type='group', children=[
@@ -125,12 +129,21 @@ class MapAnalyzer(AnalysisModule):
         self.params = ptree.Parameter.create(name='options', type='group', children=params)
         self.ctrl.setParameters(self.params, showTop=False)
         
-        self.params.sigTreeStateChanged.connect(self.invalidate)
+        canvas = self.getElement('Canvas', create=True)
+        #self.scalebar = pg.ScaleBar(100e-6)
+        #canvas.addGraphicsItem(self.scalebar, name="ScaleBar")
+        self.scalebar = pg.ScaleBar(size=500e-6)
+        self.scalebar.setParentItem(canvas.view)
+        self.scalebar.anchor((1, 1), (1, 1), offset=(-20, -20))
+        
+        ## Note: need to reconnect this!!
+        #self.params.sigTreeStateChanged.connect(self.invalidate)
         self.recalcBtn.clicked.connect(self.recalcClicked)
         self.storeBtn.clicked.connect(self.storeToDB)
         self.params.param('Time Ranges').sigTreeStateChanged.connect(self.updateTimes)
         
         self.getElement('Color Mapper', create=True).sigChanged.connect(self.colorMapChanged)
+        self.regions.sigRegionChanged.connect(self.processRegions)
         
     def elementChanged(self, element, old, new):
         name = element.name()
@@ -141,7 +154,8 @@ class MapAnalyzer(AnalysisModule):
         self.currentMap.loadStubs()
         self.currentMap.sPlotItem.sigClicked.connect(self.mapPointClicked)
 
-        self.getElement('Canvas').addGraphicsItem(self.currentMap.sPlotItem)
+        self.getElement('Canvas').addGraphicsItem(self.currentMap.sPlotItem, movable=False)
+        
         self.invalidate()
         self.loadFromDB()
         self.update()
@@ -176,6 +190,29 @@ class MapAnalyzer(AnalysisModule):
         stats = db.select(statTable, '*', where={'ProtocolDir': sourceDir})
         events = db.select(eventTable, '*', where={'ProtocolDir': sourceDir}, toArray=True)
         return events, stats
+        
+    def loadFileRequested(self, fhList):
+        canvas = self.getElement('Canvas')
+        model = self.dataModel
+
+        with pg.ProgressDialog("Loading data..", 0, len(fhList)) as dlg:
+            for fh in fhList:
+                try:
+                    ## TODO: use more clever detection of Scan data here.
+                    if fh.isFile() or model.dirType(fh) == 'Cell':
+                        canvas.addFile(fh, movable=False)
+                    #else:
+                        #self.loadScan(fh)
+                        return True
+                    else:
+                        return False
+                except:
+                    debug.printExc("Error loading file %s" % fh.name())
+                    return False
+                dlg += 1
+                if dlg.wasCancelled():
+                    return
+        
 
     def getDb(self):
         db = self.loader.dbGui.getDb()
@@ -203,6 +240,7 @@ class MapAnalyzer(AnalysisModule):
         
     def update(self):
         if not self.analysisValid:
+            print "Updating analysis.."
             map = self.currentMap
             if map is None:
                 return
@@ -245,6 +283,7 @@ class MapAnalyzer(AnalysisModule):
             self.colorsValid = True
         
     def invalidate(self):
+        print "invalidate."
         self.analysisValid = False
         self.colorsValid = False
 
@@ -311,6 +350,7 @@ class MapAnalyzer(AnalysisModule):
                 ('NumEvents', 'real'),
                 ('SpontRate', 'real'),
                 ('DirectPeak', 'real'),
+                ('Region', 'text'),
             ])
             
             mapRec = self.currentMap.getRecord()
@@ -347,6 +387,20 @@ class MapAnalyzer(AnalysisModule):
             self.storeBtn.failure()            
             raise
         
+    def processRegions(self):
+        ## Compute regions for each spot
+        for spot in self.currentMap.spots:
+            dh = spot['data']['sites'][0][1]
+            pos = spot['pos']
+            rgn = self.regions.getRegion(pos)
+            spot['data']['Region'] = rgn
+            #print dh,rgn
+            
+        ## Store ROI positions with cell
+        cell = self.currentMap.getRecord()['cell'] 
+        rgns = self.regions.getRegions()
+        cell.setInfo(MapAnalyzer_Regions=rgns)
+        
     def loadFromDB(self):
         ## read in analysis from DB
         
@@ -358,6 +412,8 @@ class MapAnalyzer(AnalysisModule):
 
         if db is None:
             raise Exception("No DB selected")
+        if not db.hasTable(table):
+            return None
         
         fields = OrderedDict([
             ('Map', {'Type': 'int', 'Link': mapTable}),
@@ -373,6 +429,8 @@ class MapAnalyzer(AnalysisModule):
             ('FitAmpSum_Pre', 'real'),
             ('NumEvents', 'real'),
             ('SpontRate', 'real'),
+            ('DirectPeak', 'real'),
+            ('Region', 'text'),
         ])
         
         #mapRec = self.currentMap.getRecord()
@@ -381,9 +439,10 @@ class MapAnalyzer(AnalysisModule):
             for i, spot in enumerate(self.currentMap.spots):
                 
                 for k in fields:
-                    spot['data'][k] = recs[i][k]
+                    spot['data'][k] = recs[i].get(k, None)
             self.analysisValid = True
-            print "reloaded analysis from DB"
+            print "reloaded analysis from DB", self.currentMap.rowID
+            
         
         
         
@@ -663,15 +722,20 @@ class EventStatisticsAnalyzer:
             
             ## Compute some extra statistics for this map site
             stats = [s[0].getStats(s[1]) for s in site['data']['sites']]   ## pre-recorded stats for all sub-sites in this map site
-            site['data']['ZScore'] = np.median([s['ZScore'] for s in stats])
-            site['data']['DirectPeak'] = np.median([s['directFitPeak'] for s in stats])
-            site['data']['FitAmpSum'] = np.median([s['fitAmplitude_PostRegion_sum'] for s in stats])
+            if 'ZScore' in s:
+                site['data']['ZScore'] = np.median([s['ZScore'] for s in stats])
+                postScores['ZScore'].append(site['data']['ZScore'])
+            if 'directFitPeak' in s:
+                site['data']['DirectPeak'] = np.median([s['directFitPeak'] for s in stats])
+            if 'fitAmplitude_PostRegion_sum' in s:
+                site['data']['FitAmpSum'] = np.median([s['fitAmplitude_PostRegion_sum'] for s in stats])
+                postScores['FitAmpSum'].append(site['data']['FitAmpSum'])
             #site['data']['FitAmpSum_Pre'] = np.median([s['fitAmplitude_PreRegion_sum'] for s in stats])  
             site['data']['FirstLatency'] = np.median(latencies)
             site['data']['NumEvents'] = np.median(nEvents)
             site['data']['SpontRate'] = np.median(rates)
-            postScores['ZScore'].append(site['data']['ZScore'])
-            postScores['FitAmpSum'].append(site['data']['FitAmpSum'])
+            
+            
             
             ## Decide whether this site has input
             tparam = self.params['Threshold Parameter']
@@ -698,7 +762,85 @@ class EventStatisticsAnalyzer:
         #self.histogram.addItem(self.threshLine)
         #self.threshLine.setPos(self.params['Threshold'])
     
+class RegionMarker(QtCore.QObject):
+    """Allows user to specify multiple anatomical regions for classifying cells.
+    Region names are written into custom DB columns for each site."""
+    sigRegionChanged = QtCore.Signal(object)
     
+    def __init__(self, canvas):
+        QtCore.QObject.__init__(self)
+        self.params = RegionsParameter(canvas)
+        self.params.sigRegionChanged.connect(self.sigRegionChanged)
+    
+    def parameters(self):
+        return self.params
+
+    def getRegion(self, pos):
+        ## return the first region containing pos
+        for name,roi in self.params.getRegions():
+            if roi.mapToParent(roi.shape()).contains(pos):
+                return name
+        return None
+            
+    def getRegions(self):
+        ## Return a dict of all regions
+        rgns = {}
+        for name,roi in self.params.getRegions():
+            pts = []
+            for n,pos in roi.getLocalHandlePositions():
+                pos = roi.mapToView(pos)
+                pts.append((pos.x(), pos.y()))
+            rgns[name] = pts
+        return rgns
+        
+    #def process(self, map, spontRateTable, events, ampMean, ampStdev):
+        #stimTime = self.params['Stimulus Time']
+    
+class RegionsParameter(ptree.types.GroupParameter):
+    
+    sigRegionChanged = QtCore.Signal(object)
+    
+    def __init__(self, canvas):
+        self.canvas = canvas
+        ptree.types.GroupParameter.__init__(self, name="Anatomical Regions", addText='Add Region..', children=[
+            ])
+        self.sigTreeStateChanged.connect(self.treeChanged)
+        
+    def getRegions(self):
+        return [(rgn.name(), rgn.roi) for rgn in self if hasattr(rgn, 'roi')]
+
+        
+    def addNew(self):
+        rgn = ptree.Parameter.create(name='region', autoIncrementName=True, renamable=True, removable=True, type='bool', value=True, children=[
+            dict(name='DB Column', type='str', value='Region'),
+            dict(name='Color', type='color'),
+            ])
+        self.addChild(rgn)
+        
+        ## find the center of the view
+        view = self.canvas.view
+        center = view.viewRect().center()
+        size = [x*50 for x in view.viewPixelSize()]
+        pts = [center, center+pg.Point(size[0], 0), center+pg.Point(0, size[1])]
+        
+        roi = pg.PolyLineROI(pts, closed=True)
+        roi.setZValue(1000)
+        view.addItem(roi)
+        rgn.roi = roi
+        roi.rgn = rgn
+        roi.sigRegionChangeFinished.connect(self.regionChanged)
+        
+    def regionChanged(self, roi):
+        self.sigRegionChanged.emit(self)
+        
+    def treeChanged(self, *args):
+        for rgn in self:
+            if not hasattr(rgn, 'roi'):
+                continue
+            rgn.roi.setVisible(rgn.value())
+            rgn.roi.setPen(rgn['Color'])
+            
+        
 
 class Loader(pg.LayoutWidget):
     def __init__(self, parent=None, host=None, dm=None):
@@ -844,5 +986,5 @@ class TimelineMarker(pg.GraphicsObject):
         y2 = r.top() + r.height() * self.yRange[1]
         self.translate(0, y1)
         self.scale(1.0, abs(y2-y1))
-        print y1, y2
+        #print y1, y2
         

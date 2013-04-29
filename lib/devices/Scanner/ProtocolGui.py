@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from ProtocolTemplate import Ui_Form
 from lib.devices.Device import ProtocolGui
-#from ScanProgramGenerator import *   ## removed until this file has been added to the repo.
+#from ScanProgramGenerator import *
 from PyQt4 import QtCore, QtGui
 from lib.Manager import getManager, logMsg, logExc
 import random
@@ -49,6 +49,9 @@ class ProgramCtrlGroup(pTypes.GroupParameter):
     
     def addNew(self, typ):
         self.sigAddNewRequested.emit(self, typ)
+
+### Error IDs:
+###  1: Could not find spot size from calibration. (from ScannerProtoGui.pointSize)
 
 class ScannerProtoGui(ProtocolGui):
     
@@ -127,6 +130,15 @@ class ScannerProtoGui(ProtocolGui):
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
         self.spotMarker = TargetPoint(name="Last", ptSize=100e-6, movable=False)
         self.spotMarker.setPen(pg.mkPen(color=(255,255,255), width = 2))
+
+        #try:
+            #self.updateSpotSizes()
+        #except HelpfulException as exc:
+            #if exc.kwargs.get('errId',None) == 1:
+                #self.testTarget.hide()
+            #else:
+                #raise
+
         self.spotMarker.hide()
         self.updateSpotSizes()
 
@@ -134,6 +146,7 @@ class ScannerProtoGui(ProtocolGui):
         self.updateTDPlot()
         
             
+        #self.ui.simulateShutterCheck.setChecked(False)
         if 'offVoltage' not in self.dev.config: ## we don't have a voltage for virtual shuttering
             self.ui.simulateShutterCheck.setChecked(False)
             self.ui.simulateShutterCheck.setEnabled(False)
@@ -306,7 +319,7 @@ class ScannerProtoGui(ProtocolGui):
                 'minWaitTime': delay,
                 #'camera': self.cameraModule().config['camDev'], 
                 'laser': self.ui.laserCombo.currentText(),
-                'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
+              #  'simulateShutter': self.ui.simulateShutterCheck.isChecked(), ## was commented out... 
                 'duration': self.prot.getParam('duration')
             }
         else: # doing programmed scans
@@ -316,7 +329,7 @@ class ScannerProtoGui(ProtocolGui):
                 'minWaitTime': delay,
                 #'camera': self.cameraModule().config['camDev'], 
                 'laser': self.ui.laserCombo.currentText(),
-                #'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
+                'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
                 'duration': self.prot.getParam('duration'),
                 'numPts': self.prot.getDevice(daqName).currentState()['numPts'],
                 'program': [],
@@ -327,7 +340,8 @@ class ScannerProtoGui(ProtocolGui):
                #]
             }
             for ctrl in self.programCtrls:
-                prot['program'].append(ctrl.generateProtocol())
+                if ctrl.isActive():
+                    prot['program'].append(ctrl.generateProtocol())
         return prot
     
     def hideSpotMarker(self):
@@ -337,6 +351,7 @@ class ScannerProtoGui(ProtocolGui):
     def handleResult(self, result, params):
         if not self.spotMarker.isVisible():
             self.spotMarker.show()
+        #print 'ScannerProtoGui.handleResult() result:', result
         if 'position' in result:
             pos = result['position']
             ss = result['spotSize']
@@ -359,6 +374,7 @@ class ScannerProtoGui(ProtocolGui):
         cls = {'lineScan': ProgramLineScan, 'multipleLineScan': ProgramMultipleLineScan, 'rectangleScan': ProgramRectScan}[itemType]
         state = {}
         ctrl = cls(**state)
+        #ctrl.parameters().sigValueChanged.connect(self.itemActivationChanged)
         self.programCtrlGroup.addChild(ctrl.parameters())
         self.programCtrls.append(ctrl)
         camMod = self.cameraModule()
@@ -893,7 +909,7 @@ class TargetPoint(pg.EllipseROI):
         pg.ROI.__init__(self, (0,0), [ptSize] * 2, movable=args.get('movable', True))
         self.aspectLocked = True
         self.overPen = None
-        self.underPen = self.pen
+        self.underPen = self.pen()
         #self.treeItem = None
         self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         #self.host = args.get('host', None)
@@ -1207,7 +1223,7 @@ class TargetGrid(pg.ROI):
         p.save()
         r = QtCore.QRectF(0,0, self.state['size'][0], self.state['size'][1])
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(self.pen)
+        p.setPen(self.pen())
         p.translate(r.left(), r.top())
         p.scale(r.width(), r.height())
         p.drawRect(0, 0, 1, 1)
@@ -1224,7 +1240,7 @@ class TargetGrid(pg.ROI):
             if self.pens[i] != None:
                 p.setPen(self.pens[i])
             else:
-                p.setPen(self.pen)
+                p.setPen(self.pen())
             #p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
             p.drawEllipse(QtCore.QPointF(pt[0]/self.pointSize, pt[1]/self.pointSize), 0.5, 0.5)
             
@@ -1318,13 +1334,25 @@ class ProgramLineScan(QtCore.QObject):
 
     def isActive(self):
         return self.params.value()
-    
+
+    def setVisible(self, vis):
+        if vis:
+            self.roi.setOpacity(1.0)  ## have to hide this way since we still want the children to be visible
+            for h in self.roi.handles:
+                h['item'].setOpacity(1.0)
+        else:
+            self.roi.setOpacity(0.0)
+            for h in self.roi.handles:
+                h['item'].setOpacity(0.0)
+#        self.cameraModule().ui.update()            
+        
     def parameters(self):
         return self.params
     
     def update(self):
         self.params['endTime'] = self.params['startTime']+self.params['nScans']*(self.params['sweepDuration'] + self.params['retraceDuration'])
-    
+        self.setVisible(self.params.value())
+            
     def updateFromROI(self):
         p =self.roi.listPoints()
         dist = (pg.Point(p[0])-pg.Point(p[1])).length()
@@ -1350,9 +1378,9 @@ class MultiLineScanROI(pg.PolyLineROI):
     def recolor(self):
         for i, s in enumerate(self.segments):
             if i % 2 == 0:
-                s.setPen(self.pen)
+                s.setPen(self.pen())
             else:
-                s.setPen(fn.mkPen([75, 200, 75]))
+                s.setPen(pg.mkPen([75, 200, 75]))
 
 class ProgramMultipleLineScan(QtCore.QObject):
     
@@ -1383,6 +1411,16 @@ class ProgramMultipleLineScan(QtCore.QObject):
     def isActive(self):
         return self.params.value()
     
+    def setVisible(self, vis):
+        if vis:
+            self.roi.setOpacity(1.0)  ## have to hide this way since we still want the children to be visible
+            for h in self.roi.handles:
+                h['item'].setOpacity(1.0)
+        else:
+            self.roi.setOpacity(0.0)
+            for h in self.roi.handles:
+                h['item'].setOpacity(0.0)
+                
     def parameters(self):
         return self.params
     
@@ -1401,6 +1439,7 @@ class ProgramMultipleLineScan(QtCore.QObject):
                 scanTime += dist/(self.params['interSweepSpeed']*1000.)
             interScanFlag = not interScanFlag
         self.params['endTime'] = self.params['startTime']+(self.params['nScans']*scanTime)
+        self.setVisible(self.params.value())
     
     def updateFromROI(self):
         self.update()
@@ -1464,12 +1503,22 @@ class ProgramRectScan(QtCore.QObject):
 
     def isActive(self):
         return self.params.value()
-    
+ 
+    def setVisible(self, vis):
+        if vis:
+            self.roi.setOpacity(1.0)  ## have to hide this way since we still want the children to be visible
+            for h in self.roi.handles:
+                h['item'].setOpacity(1.0)
+        else:
+            self.roi.setOpacity(0.0)
+            for h in self.roi.handles:
+                h['item'].setOpacity(0.0)
+                
     def parameters(self):
         return self.params
 
     def update(self):
-        pass
+        self.setVisible(self.params.value())
     
     def updateFromROI(self):
         """ read the ROI rectangle width and height and repost

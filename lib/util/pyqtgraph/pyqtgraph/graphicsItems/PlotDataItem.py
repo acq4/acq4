@@ -84,13 +84,24 @@ class PlotDataItem(GraphicsObject):
         
         **Optimization keyword arguments:**
         
-            ==========   =====================================================================
+            ============ =====================================================================
             antialias    (bool) By default, antialiasing is disabled to improve performance.
                          Note that in some cases (in particluar, when pxMode=True), points 
                          will be rendered antialiased even if this is set to False.
+            decimate     (int) Sub-sample data by selecting every nth sample before plotting
+            onlyVisible  (bool) If True, only plot data that is visible within the X range of
+                         the containing ViewBox. This can improve performance when plotting
+                         very large data sets where only a fraction of the data is visible
+                         at any time.
+            autoResample (bool) If True, resample the data before plotting to avoid plotting
+                         multiple line segments per pixel. This can improve performance when
+                         viewing very high-density data, but increases the initial overhead 
+                         and memory usage.
+            sampleRate   (float) The sample rate of the data along the X axis (for data with
+                         a fixed sample rate). Providing this value improves performance of
+                         the *onlyVisible* and *autoResample* options.
             identical    *deprecated*
-            decimate     (int) sub-sample data by selecting every nth sample before plotting
-            ==========   =====================================================================
+            ============ =====================================================================
         
         **Meta-info keyword arguments:**
         
@@ -104,6 +115,7 @@ class PlotDataItem(GraphicsObject):
         self.yData = None
         self.xDisp = None
         self.yDisp = None
+        self.dataMask = None
         #self.curves = []
         #self.scatters = []
         self.curve = PlotCurveItem()
@@ -276,6 +288,7 @@ class PlotDataItem(GraphicsObject):
         if len(args) == 1:
             data = args[0]
             dt = dataType(data)
+            prof.mark("interpretting 1D data type %s"%str(dt))
             if dt == 'empty':
                 pass
             elif dt == 'listOfValues':
@@ -301,26 +314,45 @@ class PlotDataItem(GraphicsObject):
                 x = data.xvals(0).view(np.ndarray)
             else:
                 raise Exception('Invalid data type %s' % type(data))
+            prof.mark("got x, y data")
             
         elif len(args) == 2:
+            prof.mark("interpretting 2D data type")
             seq = ('listOfValues', 'MetaArray')
             if dataType(args[0]) not in seq or  dataType(args[1]) not in seq:
                 raise Exception('When passing two unnamed arguments, both must be a list or array of values. (got %s, %s)' % (str(type(args[0])), str(type(args[1]))))
+            prof.mark("check 1")
             if not isinstance(args[0], np.ndarray):
-                x = np.array(args[0])
+                prof.mark("checked isinstance x - 1")
+                if dataType(args[0]) == 'MetaArray':
+                    x = args[0].asarray()
+                else:
+                    x = np.array(args[0])  ## this is much slower than below (x = args[0].view(np.ndarray))
+                prof.mark("made x array")
             else:
+                prof.mark("checked isinstance x - 2")
                 x = args[0].view(np.ndarray)
+                prof.mark("viewed x as array")
+           
             if not isinstance(args[1], np.ndarray):
-                y = np.array(args[1])
+                prof.mark("checked isinstance y - 1, type(args[1]):%s"%str(type(args[1])))
+                if dataType(args[1]) == 'MetaArray':
+                    y = args[1].asarray()
+                else:
+                    y = np.array(args[1])
+                prof.mark("made y array")
             else:
+                prof.mark("checked isinstance y - 2")
                 y = args[1].view(np.ndarray)
+                prof.mark("viewed y as array")
+            prof.mark('got x, y data')
             
         if 'x' in kargs:
             x = kargs['x']
         if 'y' in kargs:
             y = kargs['y']
 
-        prof.mark('interpret data')
+        prof.mark('interpreted data')
         ## pull in all style arguments. 
         ## Use self.opts to fill in anything not present in kargs.
         
@@ -393,6 +425,7 @@ class PlotDataItem(GraphicsObject):
                 scatterArgs[v] = self.opts[k]
         
         x,y = self.getData()
+        scatterArgs['mask'] = self.dataMask
         
         if curveArgs['pen'] is not None or (curveArgs['brush'] is not None and curveArgs['fillLevel'] is not None):
             self.curve.setData(x=x, y=y, **curveArgs)
@@ -413,11 +446,15 @@ class PlotDataItem(GraphicsObject):
         if self.xDisp is None:
             nanMask = np.isnan(self.xData) | np.isnan(self.yData) | np.isinf(self.xData) | np.isinf(self.yData)
             if any(nanMask):
-                x = self.xData[~nanMask]
-                y = self.yData[~nanMask]
+                self.dataMask = ~nanMask
+                x = self.xData[self.dataMask]
+                y = self.yData[self.dataMask]
             else:
+                self.dataMask = None
                 x = self.xData
                 y = self.yData
+                
+            
             ds = self.opts['downsample']
             if ds > 1:
                 x = x[::ds]
@@ -435,8 +472,11 @@ class PlotDataItem(GraphicsObject):
             if any(self.opts['logMode']):  ## re-check for NANs after log
                 nanMask = np.isinf(x) | np.isinf(y) | np.isnan(x) | np.isnan(y)
                 if any(nanMask):
-                    x = x[~nanMask]
-                    y = y[~nanMask]
+                    self.dataMask = ~nanMask
+                    x = x[self.dataMask]
+                    y = y[self.dataMask]
+                else:
+                    self.dataMask = None
             self.xDisp = x
             self.yDisp = y
         #print self.yDisp.shape, self.yDisp.min(), self.yDisp.max()
@@ -462,33 +502,57 @@ class PlotDataItem(GraphicsObject):
                         and max)
         =============== =============================================================
         """
-        if frac <= 0.0:
-            raise Exception("Value for parameter 'frac' must be > 0. (got %s)" % str(frac))
         
-        (x, y) = self.getData()
-        if x is None or len(x) == 0:
-            return None
+        range = [None, None]
+        if self.curve.isVisible():
+            range = self.curve.dataBounds(ax, frac, orthoRange)
+        elif self.scatter.isVisible():
+            r2 = self.scatter.dataBounds(ax, frac, orthoRange)
+            range = [
+                r2[0] if range[0] is None else (range[0] if r2[0] is None else min(r2[0], range[0])),
+                r2[1] if range[1] is None else (range[1] if r2[1] is None else min(r2[1], range[1]))
+                ]
+        return range
+        
+        #if frac <= 0.0:
+            #raise Exception("Value for parameter 'frac' must be > 0. (got %s)" % str(frac))
+        
+        #(x, y) = self.getData()
+        #if x is None or len(x) == 0:
+            #return None
             
-        if ax == 0:
-            d = x
-            d2 = y
-        elif ax == 1:
-            d = y
-            d2 = x
+        #if ax == 0:
+            #d = x
+            #d2 = y
+        #elif ax == 1:
+            #d = y
+            #d2 = x
             
-        if orthoRange is not None:
-            mask = (d2 >= orthoRange[0]) * (d2 <= orthoRange[1])
-            d = d[mask]
-            #d2 = d2[mask]
+        #if orthoRange is not None:
+            #mask = (d2 >= orthoRange[0]) * (d2 <= orthoRange[1])
+            #d = d[mask]
+            ##d2 = d2[mask]
             
-        if len(d) > 0:
-            if frac >= 1.0:
-                return (np.min(d), np.max(d))
-            else:
-                return (scipy.stats.scoreatpercentile(d, 50 - (frac * 50)), scipy.stats.scoreatpercentile(d, 50 + (frac * 50)))
-        else:
-            return None
-
+        #if len(d) > 0:
+            #if frac >= 1.0:
+                #return (np.min(d), np.max(d))
+            #else:
+                #return (scipy.stats.scoreatpercentile(d, 50 - (frac * 50)), scipy.stats.scoreatpercentile(d, 50 + (frac * 50)))
+        #else:
+            #return None
+    
+    def pixelPadding(self):
+        """
+        Return the size in pixels that this item may draw beyond the values returned by dataBounds().
+        This method is called by ViewBox when auto-scaling.
+        """
+        pad = 0
+        if self.curve.isVisible():
+            pad = max(pad, self.curve.pixelPadding())
+        elif self.scatter.isVisible():
+            pad = max(pad, self.scatter.pixelPadding())
+        return pad
+        
 
     def clear(self):
         #for i in self.curves+self.scatters:

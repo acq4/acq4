@@ -1,5 +1,6 @@
 from pyqtgraph.Qt import QtGui, QtCore
 from pyqtgraph.SignalProxy import SignalProxy
+import sys
 
 
 class ComboBox(QtGui.QComboBox):
@@ -12,6 +13,9 @@ class ComboBox(QtGui.QComboBox):
         QtGui.QComboBox.__init__(self, parent)
         
         #self.value = default
+        if 'darwin' in sys.platform: ## because MacOSX can show names that are wider than the comboBox
+            self.setSizeAdjustPolicy(QtGui.QComboBox.AdjustToMinimumContentsLength)
+            #self.setMinimumContentsLength(10)
         
         if items is not None:
             self.addItems(items)

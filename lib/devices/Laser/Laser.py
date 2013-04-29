@@ -302,6 +302,7 @@ class Laser(DAQGeneric, OptomechDevice):
         #meter = str(self.ui.meterCombo.currentText())
         #obj = self.manager.getDevice(scope).getObjective()['name']
         opticState = self.getDeviceStateKey()
+        #print "Laser.calibrate() opticState:", opticState
         wavelength = siFormat(self.getWavelength(), suffix='m')
         date = time.strftime('%Y.%m.%d %H:%M', time.localtime())
         index = self.getCalibrationIndex()
@@ -397,8 +398,8 @@ class Laser(DAQGeneric, OptomechDevice):
             
         laserOff = resultOff[powerMeter][0][measurementStart:]
         laserOn = resultOn[powerMeter][0][measurementStart:]
-                          
-        t, prob = stats.ttest_ind(laserOn, laserOff)
+    
+        t, prob = stats.ttest_ind(laserOn.asarray(), laserOff.asarray())
         if prob > 0.001:
             raise Exception("Power meter device %s could not detect laser." %powerMeter)
         else:
@@ -734,7 +735,6 @@ class LaserTask(DAQGenericTask):
         if 'wavelength' in self.cmd:
             self.dev.setWavelength(self.cmd['wavelength'])
             
-            
         ### send power/switch waveforms to device for pCell/qSwitch/shutter cmd calculation
         #print "Cmd:", self.cmd
         if 'powerWaveform' in self.cmd and not self.cmd.get('ignorePowerWaveform', False):
@@ -783,7 +783,6 @@ class LaserTask(DAQGenericTask):
         self.expectedPower = self.dev.getParam('expectedPower')
         
         DAQGenericTask.configure(self, tasks, startOrder) ## DAQGenericTask will use self.cmd['daqProtocol']
-
         
     def getResult(self):
         ## getResult from DAQGeneric, then add in command waveform
@@ -832,7 +831,6 @@ class LaserTask(DAQGenericTask):
         result._info[-1]['Laser'] = info
         
         result = metaarray.MetaArray(arr, info=result._info)
-        
         self.dev.lastResult = result
        
         return result

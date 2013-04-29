@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from pyqtgraph.flowchart.library.common import *
+from pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine
 import numpy as np
 import functions
 
@@ -65,9 +66,10 @@ class ThresholdEvents(CtrlNode):
     """Detects regions of a waveform that cross a threshold (positive or negative) and returns the time, length, sum, and peak of each event."""
     nodeName = 'ThresholdEvents'
     uiTemplate = [
-        ('baseline', 'spin', {'value':0, 'step':1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Set the baseline to measure the minPeak and threshold from'}),
-        ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Events must reach this far from baseline to be detected.'}),
-        ('threshold', 'spin', {'value': 1e-12, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Events are detected only if they cross this threshold (distance from baseline).'}),
+        ('baseline', 'spin', {'value':0, 'step':1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Blue line -- Set the baseline to measure the minPeak and threshold from'}),
+        ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Yellow line -- Events must reach this far from baseline to be detected.'}),
+        ('threshold', 'spin', {'value': 1e-12, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Green line -- Events are detected only if they cross this threshold (distance from baseline).'}),
+        ('display', 'check', {'value':True, 'tip':'If checked display dragable lines for baseline, minPeak and threshold'}),
         #('index', 'combo', {'values':['start','peak'], 'index':0}), 
         ('minLength', 'intSpin', {'value': 0, 'min': 0, 'max': 1e9, 'tip': 'Events must contain this many samples to be detected.'}),
         ('minSum', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
@@ -79,38 +81,67 @@ class ThresholdEvents(CtrlNode):
 
     def __init__(self, name, **opts):
         CtrlNode.__init__(self, name, self.uiTemplate)
-        #self.addOutput('plot')
-        #self.remotePlot = None
+        self.plot = self.addOutput('plot', optional=True)
+        self.baseLine = InfiniteLine(angle=0, movable=True, pen='b')
+        self.minPeakLine = InfiniteLine(angle=0, movable=True, pen='y')
+        self.thresholdLine = InfiniteLine(angle=0, movable=True, pen='g')
+        self.lines = [self.baseLine, self.minPeakLine, self.thresholdLine]
         
-    #def connected(self, term, remote):
-        #CtrlNode.connected(self, term, remote)
-        #if term is not self.plot:
-            #return
-        #node = remote.node()
-        #node.sigPlotChanged.connect(self.connectToPlot)
-        #self.connectToPlot(node)
+        self.ctrls['display'].toggled.connect(self.displayToggled)
+        for line in self.lines:
+            line.sigPositionChangeFinished.connect(self.updateCtrlValues)
+        self.remotePlot = None
+        
+    def restoreState(self, state):
+        CtrlNode.restoreState(self, state)
+        for c in self.plot.connections():
+            print c
+            p = c.node().getPlot()
+            for l in self.lines:
+                p.addItem(l)
+        self.baseLine.setPos(self.ctrls['baseline'].value())
+        self.minPeakLine.setPos(self.ctrls['minPeak'].value())
+        self.thresholdLine.setPos(self.ctrls['threshold'].value())
+        
+    def displayToggled(self):
+        b = self.ctrls['display'].isChecked()
+        for item in self.lines:
+            item.setVisible(b)
+            
+    def updateCtrlValues(self, line):
+        self.ctrls['baseline'].setValue(self.baseLine.value())
+        self.ctrls['minPeak'].setValue(self.minPeakLine.value()-self.baseLine.value())
+        self.ctrls['threshold'].setValue(self.thresholdLine.value()-self.baseLine.value())
+            
+    def connected(self, term, remote):
+        CtrlNode.connected(self, term, remote)
+        if term is not self.plot:
+            return
+        node = remote.node()
+        node.sigPlotChanged.connect(self.connectToPlot)
+        self.connectToPlot(node)
 
-    #def connectToPlot(self, node):
+    def connectToPlot(self, node):
         #if self.remotePlot is not None:
-            #self.remotePlot = None
+        #    self.remotePlot = None
             
-        #if node.plot is None:
-            #return
-        #plot = self.plot.
+        if node.plot is None:
+            return
+        for l in self.lines:
+            node.getPlot().addItem(l)
             
-    #def disconnected(self, term, remote):
-        #CtrlNode.disconnected(self, term, remote)
-        #if term is not self.plot:
-            #return
-        #remote.node().sigPlotChanged.disconnect(self.connectToPlot)
-        #self.disconnectFromPlot()
+    def disconnected(self, term, remote):
+        CtrlNode.disconnected(self, term, remote)
+        if term is not self.plot:
+            return
+        remote.node().sigPlotChanged.disconnect(self.connectToPlot)
+        self.disconnectFromPlot(remote.node().getPlot())
 
-    #def disconnectFromPlot(self):
+    def disconnectFromPlot(self, plot):
         #if self.remotePlot is None:
-            #return
-        #for l in self.lines:
-            #l.scene().removeItem(l)
-        #self.lines = []
+        #    return
+        for l in self.lines:
+            plot.removeItem(l)
 
     def processData(self, data):
         s = self.stateGroup.state()
@@ -121,7 +152,7 @@ class ThresholdEvents(CtrlNode):
         ## apply first round of filters
         mask = events['len'] >= s['minLength']
         mask *= abs(events['sum']) >= s['minSum']
-        mask *= abs(events['peak']) >= s['minPeak']
+        mask *= abs(events['peak']) >= abs(s['minPeak'])
         events = events[mask]
         
         ## apply deadtime filter

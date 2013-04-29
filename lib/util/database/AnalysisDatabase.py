@@ -271,21 +271,16 @@ class AnalysisDatabase(SqliteDatabase):
         records = []
         colTuples = []
         for name, col in columns.iteritems():
-            rec = {'Column': name, 'Table': table}
+            rec = {'Column': name, 'Table': table, 'Link': None, 'Constraints': None}
             rec.update(col)
             
             typ = rec['Type']
             typ, link = self.interpretColumnType(typ)
             if link is not None:
                 rec['Link'] = link
-            #if typ.startswith('directory'):
-                #rec['Link'] = self.dirTableName(typ.lstrip('directory:'))
-                #typ = 'int'
-            #elif typ == 'file':
-                #typ = 'text'
             
             tup = (rec['Column'], typ)
-            if 'Constraints' in rec:
+            if rec['Constraints'] is not None:
                 tup = tup + (rec['Constraints'],)
             colTuples.append(tup)
             records.append(rec)
@@ -585,7 +580,10 @@ class AnalysisDatabase(SqliteDatabase):
             
         if not self.hasTable(table):
             return None
-        rec = self.select(table, ['rowid'], sql="where Dir='%s'" % dirHandle.name(relativeTo=self.baseDir()))
+        name = dirHandle.name(relativeTo=self.baseDir())
+        name1 = name.replace('/', '\\')
+        name2 = name.replace('\\', '/')
+        rec = self.select(table, ['rowid'], sql="where Dir='%s' or Dir='%s'" % (name1, name2))
         if len(rec) < 1:
             return None
         #print rec[0]
@@ -596,7 +594,7 @@ class AnalysisDatabase(SqliteDatabase):
         res = self.select(table, ['Dir'], sql='where rowid=%d'%rowid)
         if len(res) < 1:
             raise Exception('rowid %d does not exist in %s' % (rowid, table)) 
-            #logMsg('rowid %d does not exist in %s' % (rowid, table), msgType='error') ### This needs to be caught further up in Photostim or somewhere, not here
+            #logMsg('rowid %d does not exist in %s' % (rowid, table), msgType='error') ### This needs to be caught further up in Photostim or somewhere, not here -- really this shouldn't be caught at all since it means something is wrong with the db
             #return None
         #print res
         #return self.baseDir()[res[0]['Dir']]
@@ -701,9 +699,11 @@ class AnalysisDatabase(SqliteDatabase):
 
     def select(self, table, columns='*', where=None, sql='', toDict=True, toArray=False, distinct=False, limit=None, offset=None):
         """Extends select to convert directory/file columns back into Dir/FileHandles"""
+        prof = debug.Profiler("AnalysisDatabase.select()", disabled=True)
         
         data = SqliteDatabase.select(self, table, columns, where=where, sql=sql, distinct=distinct, limit=limit, offset=offset, toDict=True, toArray=False)
         data = TableData(data)
+        prof.mark("got data from SQliteDatabase")
         
         config = self.getColumnConfig(table)
         
@@ -720,11 +720,25 @@ class AnalysisDatabase(SqliteDatabase):
                 data[column] = map(handles.get, data[column])
                     
             elif conf.get('Type', None) == 'file':
-                data[column] = map(lambda f: None if f is None else self.baseDir().getDir(f), data[column])
+                def getHandle(name):
+                    if name is None:
+                        return None
+                    else:
+                        if os.sep == '/':
+                            sep = '\\'
+                        else:
+                            sep = '/'
+                        name = name.replace(sep, os.sep) ## make sure file handles have an operating-system-appropriate separator (/ for Unix, \ for Windows)
+                        return self.baseDir()[name]
+                data[column] = map(getHandle, data[column])
+                
+        prof.mark("converted file/dir handles")
                 
         ret = data.originalData()
         if toArray:
             ret = data.toArray()
+            prof.mark("converted data to array")
+        prof.finish()
         return ret
     
     def _prepareData(self, table, data, ignoreUnknownColumns=False, batch=False):

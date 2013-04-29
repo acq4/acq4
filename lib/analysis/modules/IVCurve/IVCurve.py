@@ -57,6 +57,7 @@ class IVCurve(AnalysisModule):
         self.ctrlWidget = QtGui.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
+        self.loaded = None
         self.main_layout =  pg.GraphicsView() # instead of GraphicsScene?
         self.dirsSet = None
         self.lrss_flag = True # show is default
@@ -282,17 +283,21 @@ class IVCurve(AnalysisModule):
         
         self.Sequence = self.dataModel.listSequenceParams(dh)
         keys = self.Sequence.keys()
-        print keys
-        print list(self.Sequence[keys[0]])
+#        print keys
+#        print list(self.Sequence[keys[0]])
         leftseq = [str(x) for x in self.Sequence[keys[0]]] # ''.join(map(str ,list(self.Sequence[keys[0]])))
-        rightseq = [str(x) for x in self.Sequence[keys[1]]]
-        leftseq.insert(0, 'None')
-        rightseq.insert(0, 'None')
+        if len(keys) > 1:
+            rightseq = [str(x) for x in self.Sequence[keys[1]]]
+        else:
+            rightseq = []
+        leftseq.insert(0, 'All')
+        rightseq.insert(0, 'All')
         self.ctrl.IVCurve_Sequence1.clear()
         self.ctrl.IVCurve_Sequence2.clear()
         self.ctrl.IVCurve_Sequence1.addItems(leftseq)
         self.ctrl.IVCurve_Sequence2.addItems(rightseq)
-        self.dirsSet = dh
+        self.dirsSet = dh # not sure we need this anymore... 
+        self.loaded = dh # this is critical!
 
     def loadFileRequested(self, dh):
         """Called by file loader when a file load is requested.
@@ -309,6 +314,8 @@ class IVCurve(AnalysisModule):
             raise Exception("IVCurve::loadFileRequested: Can only load one file at a time.")
         self.clearResults()
         dh = dh[0]
+        if self.loaded != dh:
+            self.getFileInfo() # get info frommost recent file requested
         self.loaded = dh
         self.data_plot.clearPlots()
         self.cmd_plot.clearPlots()
@@ -334,7 +341,7 @@ class IVCurve(AnalysisModule):
         subs = re.compile('[\/]')
         self.protocol = re.sub(subs, '-', self.protocol)
         self.protocol = self.protocol[:-1]  + '.pdf'
-        self.commonPrefix = os.path.join(fn,'Manis')
+        self.commonPrefix = os.path.join(fn,'Ruili')
         traces = []
         cmd_wave = []
         self.values = []
@@ -357,9 +364,9 @@ class IVCurve(AnalysisModule):
             if ld[0] == -1 and rd[0] == -1:
                 pass
             else:
-                if ld[0] == -1: # 'none'
+                if ld[0] == -1: # 'All'
                     ld = range(self.ctrl.IVCurve_Sequence1.count()-1)
-                if rd[0] == -1: # 'none'
+                if rd[0] == -1: # 'All'
                     rd = range(self.ctrl.IVCurve_Sequence2.count()-1)
                 dirs = []
                 for i in ld:
@@ -778,6 +785,10 @@ class IVCurve(AnalysisModule):
                 continue
             spikecount[i] = len(spike)
         nospk = numpy.where(spikecount == 0)
+        print data1.shape
+        if data1.shape[1] == 0 or data1.shape[0] == 1:
+            return # skip it
+
         self.ivss = data1.mean(axis=1) # all traces
         if self.ctrl.IVCurve_SubRMP.isChecked():
             self.ivss = self.ivss - self.ivrmp
@@ -1153,8 +1164,8 @@ class IVCurve(AnalysisModule):
             return '/'
         if matchobj.group(0) == '_':
             return '\_'
-#        if matchobj.group(0) == '/':
-#            return '/'
+        if matchobj.group(0) == '/':
+            return '/'
         else:
             return ''
 
@@ -1171,7 +1182,7 @@ class IVCurve(AnalysisModule):
         tiname = '%r' % self.filename
         tiname = re.sub(escs, self.cleanRepl, tiname)
         #print tiname
-        fig.suptitle(tiname[1:-1])
+        fig.suptitle(r''+tiname[1:-1])
         pylab.autoscale(enable=True, axis='both', tight=None)
         if self.dataMode not in self.ICModes or self.tx is None:
             iscale = 1e3

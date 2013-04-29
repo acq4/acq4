@@ -41,12 +41,20 @@ class AnalysisModule(QtGui.QWidget):
         self.stateGroup.setState(state)
         
     def quit(self):
-        #QtCore.QObject.disconnect(self.pr, QtCore.SIGNAL('newFrame'), self.newFrame)
-        self.pr.sigNewFrame.disconnect(self.newFrame)
-        #QtCore.QObject.disconnect(self.pr, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)
-        self.pr.sigProtocolStarted.disconnect(self.protocolStarted)
-        #QtCore.QObject.disconnect(self.pr, QtCore.SIGNAL('taskStarted'), self.taskStarted)
-        self.pr.sigTaskStarted.disconnect(self.taskStarted)
-        #QtCore.QObject.disconnect(self.pr, QtCore.SIGNAL('protocolFinished'), self.protocolFinished)
-        self.pr.sigProtocolFinished.disconnect(self.protocolFinished)
+        try:
+            self.pr.sigNewFrame.disconnect(self.newFrame)
+        except TypeError:
+            pass
+        try:
+            self.pr.sigProtocolStarted.disconnect(self.protocolStarted)
+        except TypeError:
+            pass
+        try:
+            self.pr.sigTaskStarted.disconnect(self.taskStarted)
+        except TypeError:
+            pass
+        try:
+            self.pr.sigProtocolFinished.disconnect(self.protocolFinished)
+        except TypeError:
+            pass
         

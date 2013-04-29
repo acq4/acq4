@@ -49,12 +49,15 @@
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QComboBox" name="databaseCombo">
+       <widget class="ComboBox" name="databaseCombo">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
+        </property>
+        <property name="minimumContentsLength">
+         <number>0</number>
         </property>
        </widget>
       </item>
@@ -69,7 +72,7 @@
      <property name="sizeHint" stdset="0">
       <size>
        <width>168</width>
-       <height>432</height>
+       <height>250</height>
       </size>
      </property>
     </spacer>
@@ -123,6 +126,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ComboBox</class>
+   <extends>QComboBox</extends>
+   <header>pyqtgraph.widgets.ComboBox</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>
