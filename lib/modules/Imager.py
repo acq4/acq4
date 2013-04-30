@@ -254,8 +254,8 @@ class Imager(Module):
         self.ui.cameraSnapBtn.clicked.connect(self.cameraSnap)
         
         self.param = PT.Parameter(name = 'param', children=[
-            dict(name="Preset", type='list', value='', 
-                 values=['', 'video-std', 'video-fast', 'StandardDef', 'HighDef']),
+            dict(name="Preset", type='list', value='StandardDef', 
+                 values=['StandardDef', 'HighDef', 'video-std', 'video-fast']),
             dict(name='Store', type='bool', value=True),
             dict(name='Blank Screen', type='bool', value=True),
             dict(name='Sample Rate', type='float', value=1.0e6, suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10e3, 5e6], siPrefix=True),
@@ -640,7 +640,7 @@ class Imager(Module):
                       }
                 }
             task = self.Manager.createTask(cmd)
-            if self.param['Blank Screen']:
+            if self.param['Blank Screen'] and not self.ui.video_button.isChecked(): # prevent video push from using blanking
                 with ScreenBlanker():
                     task.execute(block = False)
                     while not task.isDone():

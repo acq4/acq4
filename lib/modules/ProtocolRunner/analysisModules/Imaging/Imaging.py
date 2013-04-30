@@ -123,7 +123,7 @@ class ImagingModule(AnalysisModule):
                 ma = metaarray.MetaArray(imageData, info=info)
                 print 'I am writing imaging.ma'
                 dirhandle.writeFile(ma, 'Imaging.ma')
-                raise Exception()
+                #raise Exception()
 
         if prog['type'] == 'rectScan':
             samplesPerScan = int((prog['startStopIndices'][1]-prog['startStopIndices'][0])/prog['nScans'])
