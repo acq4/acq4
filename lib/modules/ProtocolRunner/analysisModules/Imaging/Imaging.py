@@ -87,7 +87,7 @@ class ImagingModule(AnalysisModule):
                 dirhandle = frame['cmd']['protocol']['storageDir'] # grab directory
                 self.info={'detector': self.detectorDevice(), 'scanner': self.scannerDevice(), 'indices': prog['startStopIndices'], 
                            'samplesPerScan': prog['samplesPerScan'], 'nscans': prog['nScans'], 'positions': [[prog['points'][0].x(), prog['points'][0].y()], [prog['points'][1].x(), prog['points'][1].y()]],
-                           'downSample': downSample, 'daqDownSample': daqDownSample}
+                           'downSample': imageDownSample, 'daqDownSample': daqDownSample}
 
                 info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]:prog['samplesPerScan']]), dict(name='Distance'), self.info]
                 ma = metaarray.MetaArray(imageData, info=info)
@@ -158,7 +158,7 @@ class ImagingModule(AnalysisModule):
                 #dirhandle = frame['cmd']['protocol']['storageDir'] # grab directory
                 #self.info={'detector': self.detectorDevice(), 'scanner': self.scannerDevice(), 'indices': prog['startStopIndices'], 
                            #'samplesPerScan': prog['samplesPerScan'], 'nscans': prog['nScans'], 'positions': [[prog['points'][0].x(), prog['points'][0].y()], [prog['points'][1].x(), prog['points'][1].y()]],
-                           #'downSample': downSample}
+                           #'downSample': imageDownSample}
                 #print dict
                 # to line below, add x, y for the camera (look at camera video output)
                 #info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]:prog['samplesPerScan']]), dict(name='Distance'), self.info]
