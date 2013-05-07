@@ -192,19 +192,34 @@ class Detrend(CtrlNode):
     def processData(self, data):
         return detrend(data)
     
-class RemoveBaseline(CtrlNode):
+class RemoveBaseline(PlottingCtrlNode):
     """Remove an arbitrary, graphically defined baseline from the data."""
     nodeName = 'RemoveBaseline'
     
-    def __init__(self):
+    def __init__(self, name):
         ## define inputs and outputs (one output needs to be a plot)
-        CtrlNode.__init__(self)
-        self.plot = self.addOutput('plot', optional=True)
+        PlottingCtrlNode.__init__(self, name)
+        self.line = PolyLineROI([[0,0],[1,0]])
         
-    
         ## create a PolyLineROI, add it to a plot -- actually, I think we want to do this after the node is connected to a plot (look at EventDetection.ThresholdEvents node for ideas), and possible after there is data. We will need to update the end positions of the line each time the input data changes
-        self.line = None ## will become a PolyLineROI
+        #self.line = None ## will become a PolyLineROI
         
+    def connectToPlot(self, node):
+        """Define what happens when the node is connected to a plot"""
+        ##raise Exception("Must be re-implemented in subclass")
+        if node.plot is None:
+            return
+        ##for l in self.lines:
+        node.getPlot().addItem(self.line)
+       
+    def disconnectFromPlot(self, plot):
+        """Define what happens when the node is disconnected from a plot"""
+        ##raise Exception("Must be re-implemented in subclass")
+        #if self.remotePlot is None:
+                #    return
+        ##for l in self.lines:
+        plot.removeItem(self.line)    
+    
     def processData(self, data):
         ## get array of baseline (from PolyLineROI)
         
