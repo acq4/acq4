@@ -9,6 +9,7 @@ from .common import *
 import numpy as np
 
 import pyqtgraph.metaarray as metaarray
+from pyqtgraph import PolyLineROI
 
 
 class Downsample(CtrlNode):
@@ -190,6 +191,26 @@ class Detrend(CtrlNode):
     @metaArrayWrapper
     def processData(self, data):
         return detrend(data)
+    
+class RemoveBaseline(CtrlNode):
+    """Remove an arbitrary, graphically defined baseline from the data."""
+    nodeName = 'RemoveBaseline'
+    
+    def __init__(self):
+        ## define inputs and outputs (one output needs to be a plot)
+        CtrlNode.__init__(self)
+        self.plot = self.addOutput('plot', optional=True)
+        
+    
+        ## create a PolyLineROI, add it to a plot -- actually, I think we want to do this after the node is connected to a plot (look at EventDetection.ThresholdEvents node for ideas), and possible after there is data. We will need to update the end positions of the line each time the input data changes
+        self.line = None ## will become a PolyLineROI
+        
+    def processData(self, data):
+        ## get array of baseline (from PolyLineROI)
+        
+        ## subtract baseline from data
+        pass
+        
 
 
 class AdaptiveDetrend(CtrlNode):
