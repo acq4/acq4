@@ -1,6 +1,6 @@
 import sys, os, subprocess, time
-## make sure this pyqtgraph is importable before any others
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+
+import initExample
 from pyqtgraph.Qt import QtCore, QtGui, USE_PYSIDE
 
 if USE_PYSIDE:
@@ -22,10 +22,14 @@ examples = OrderedDict([
     ('Dock widgets', 'dockarea.py'),
     ('Console', 'ConsoleWidget.py'),
     ('Histograms', 'histogram.py'),
+    ('Auto-range', 'PlotAutoRange.py'),
+    ('Remote Plotting', 'RemoteSpeedTest.py'),
     ('GraphicsItems', OrderedDict([
         ('Scatter Plot', 'ScatterPlot.py'),
         #('PlotItem', 'PlotItem.py'),
         ('IsocurveItem', 'isocurve.py'),
+        ('GraphItem', 'GraphItem.py'),
+        ('ErrorBarItem', 'ErrorBarItem.py'),
         ('ImageItem - video', 'ImageItem.py'),
         ('ImageItem - draw', 'Draw.py'),
         ('Region-of-Interest', 'ROIExamples.py'),
@@ -35,6 +39,7 @@ examples = OrderedDict([
         ('Linked Views', 'linkedViews.py'),
         ('Arrow', 'Arrow.py'),
         ('ViewBox', 'ViewBox.py'),
+        ('Custom Graphics', 'customGraphicsItem.py'),
     ])),
     ('Benchmarks', OrderedDict([
         ('Video speed test', 'VideoSpeedTest.py'),
@@ -47,6 +52,7 @@ examples = OrderedDict([
         ('Surface Plot', 'GLSurfacePlot.py'),
         ('Scatter Plot', 'GLScatterPlotItem.py'),
         ('Shaders', 'GLshaders.py'),
+        ('Line Plot', 'GLLinePlotItem.py'),
         ('Mesh', 'GLMeshItem.py'),
         ('Image', 'GLImageItem.py'),
     ])),
@@ -54,18 +60,20 @@ examples = OrderedDict([
         ('PlotWidget', 'PlotWidget.py'),
         ('SpinBox', 'SpinBox.py'),
         ('ConsoleWidget', 'ConsoleWidget.py'),
+        ('Histogram / lookup table', 'HistogramLUT.py'),
         ('TreeWidget', 'TreeWidget.py'),
         ('DataTreeWidget', 'DataTreeWidget.py'),
         ('GradientWidget', 'GradientWidget.py'),
-        #('TableWidget', '../widgets/TableWidget.py'),
+        ('TableWidget', 'TableWidget.py'),
         ('ColorButton', 'ColorButton.py'),
         #('CheckTable', '../widgets/CheckTable.py'),
         #('VerticalLabel', '../widgets/VerticalLabel.py'),
         ('JoystickButton', 'JoystickButton.py'),
     ])),
     
-    ('GraphicsScene', 'GraphicsScene.py'),
+    #('GraphicsScene', 'GraphicsScene.py'),
     ('Flowcharts', 'Flowchart.py'),
+    ('Custom Flowchart Nodes', 'FlowchartCustomNode.py'),
     #('Canvas', '../canvas'),
     #('MultiPlotWidget', 'MultiPlotWidget.py'),
 ])
@@ -80,7 +88,15 @@ class ExampleLoader(QtGui.QMainWindow):
         self.setCentralWidget(self.cw)
         self.ui.setupUi(self.cw)
         
+        self.codeBtn = QtGui.QPushButton('Run Edited Code')
+        self.codeLayout = QtGui.QGridLayout()
+        self.ui.codeView.setLayout(self.codeLayout)
+        self.codeLayout.addItem(QtGui.QSpacerItem(100,100,QtGui.QSizePolicy.Expanding,QtGui.QSizePolicy.Expanding), 0, 0)
+        self.codeLayout.addWidget(self.codeBtn, 1, 1)
+        self.codeBtn.hide()
+        
         global examples
+        self.itemCache = []
         self.populateTree(self.ui.exampleTree.invisibleRootItem(), examples)
         self.ui.exampleTree.expandAll()
         
@@ -92,6 +108,8 @@ class ExampleLoader(QtGui.QMainWindow):
         self.ui.exampleTree.itemDoubleClicked.connect(self.loadFile)
         self.ui.pyqtCheck.toggled.connect(self.pyqtToggled)
         self.ui.pysideCheck.toggled.connect(self.pysideToggled)
+        self.ui.codeView.textChanged.connect(self.codeEdited)
+        self.codeBtn.clicked.connect(self.runEditedCode)
 
     def pyqtToggled(self, b):
         if b:
@@ -105,6 +123,9 @@ class ExampleLoader(QtGui.QMainWindow):
     def populateTree(self, root, examples):
         for key, val in examples.items():
             item = QtGui.QTreeWidgetItem([key])
+            self.itemCache.append(item) # PyQt 4.9.6 no longer keeps references to these wrappers,
+                                        # so we need to make an explicit reference or else the .file
+                                        # attribute will disappear.
             if isinstance(val, basestring):
                 item.file = val
             else:
@@ -119,21 +140,37 @@ class ExampleLoader(QtGui.QMainWindow):
             return os.path.join(path, item.file)
         return None
     
-    def loadFile(self):
-        fn = self.currentFile()
+    def loadFile(self, edited=False):
+        
         extra = []
         if self.ui.pyqtCheck.isChecked():
             extra.append('pyqt')
         elif self.ui.pysideCheck.isChecked():
             extra.append('pyside')
-
-        if fn is None:
-            return
-        if sys.platform.startswith('win'):
-            os.spawnl(os.P_NOWAIT, sys.executable, '"'+sys.executable+'"', '"' + fn + '"', *extra)
-        else:
-            os.spawnl(os.P_NOWAIT, sys.executable, sys.executable, fn, *extra)
         
+        if self.ui.forceGraphicsCheck.isChecked():
+            extra.append(str(self.ui.forceGraphicsCombo.currentText()))
+
+        
+        #if sys.platform.startswith('win'):
+            #os.spawnl(os.P_NOWAIT, sys.executable, '"'+sys.executable+'"', '"' + fn + '"', *extra)
+        #else:
+            #os.spawnl(os.P_NOWAIT, sys.executable, sys.executable, fn, *extra)
+        
+        if edited:
+            path = os.path.abspath(os.path.dirname(__file__))
+            proc = subprocess.Popen([sys.executable, '-'] + extra, stdin=subprocess.PIPE, cwd=path)
+            code = str(self.ui.codeView.toPlainText()).encode('UTF-8')
+            proc.stdin.write(code)
+            proc.stdin.close()
+        else:
+            fn = self.currentFile()
+            if fn is None:
+                return
+            if sys.platform.startswith('win'):
+                os.spawnl(os.P_NOWAIT, sys.executable, '"'+sys.executable+'"', '"' + fn + '"', *extra)
+            else:
+                os.spawnl(os.P_NOWAIT, sys.executable, sys.executable, fn, *extra)
             
     def showFile(self):
         fn = self.currentFile()
@@ -144,6 +181,14 @@ class ExampleLoader(QtGui.QMainWindow):
             fn = os.path.join(fn, '__main__.py')
         text = open(fn).read()
         self.ui.codeView.setPlainText(text)
+        self.ui.loadedFileLabel.setText(fn)
+        self.codeBtn.hide()
+        
+    def codeEdited(self):
+        self.codeBtn.show()
+        
+    def runEditedCode(self):
+        self.loadFile(edited=True)
 
 def run():
     app = QtGui.QApplication([])
@@ -163,22 +208,27 @@ def buildFileList(examples, files=None):
             buildFileList(val, files)
     return files
             
-def testFile(name, f, exe, lib):
+def testFile(name, f, exe, lib, graphicsSystem=None):
     global path
     fn =  os.path.join(path,f)
     #print "starting process: ", fn
-    
+    os.chdir(path)
     sys.stdout.write(name)
     sys.stdout.flush()
     
+    import1 = "import %s" % lib if lib != '' else ''
+    import2 = os.path.splitext(os.path.split(fn)[1])[0]
+    graphicsSystem = '' if graphicsSystem is None else "pg.QtGui.QApplication.setGraphicsSystem('%s')" % graphicsSystem
     code = """
 try:
+    %s
+    import initExample
+    import pyqtgraph as pg
     %s
     import %s
     import sys
     print("test complete")
     sys.stdout.flush()
-    import pyqtgraph as pg
     import time
     while True:  ## run a little event loop
         pg.QtGui.QApplication.processEvents()
@@ -187,11 +237,15 @@ except:
     print("test failed")
     raise
 
-"""  % ("import %s" % lib if lib != '' else "", os.path.splitext(os.path.split(fn)[1])[0])
-    #print code
-    process = subprocess.Popen(['exec %s -i' % (exe)], shell=True, stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-    process.stdin.write(code.encode('UTF-8'))
-    #process.stdin.close()
+"""  % (import1, graphicsSystem, import2)
+
+    if sys.platform.startswith('win'):
+        process = subprocess.Popen([exe], stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        process.stdin.write(code.encode('UTF-8'))
+        process.stdin.close()
+    else:
+        process = subprocess.Popen(['exec %s -i' % (exe)], shell=True, stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        process.stdin.write(code.encode('UTF-8'))
     output = ''
     fail = False
     while True:

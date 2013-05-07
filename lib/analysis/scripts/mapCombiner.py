@@ -2,6 +2,15 @@ import lib.Manager
 import numpy as np
 import lib.analysis.tools.functions as afn
 import scipy
+#from lib.util.pyqtgraph.multiprocess import Parallelize
+from pyqtgraph.debug import Profiler
+import os, sys
+try:
+    import cv2
+    HAVE_CV2 = True
+except ImportError:
+    HAVE_CV2 = False
+    
 
 
 probabilityInputs = np.array([
@@ -108,7 +117,7 @@ def reserveArray(data, spacing=5e-6):
     return np.zeros((n, xdim, ydim), dtype=float)
     
     
-def calculateProb(sites, spacing=5e-6):
+def calculateProb(sites, spacing=5e-6, keys=None):
     cells = set(sites['CellDir'])
     arr = reserveArray(sites, spacing)
     
@@ -218,7 +227,50 @@ def interpolateCells(sites, spacing=5e-6, method='nearest', probThreshold=0.05):
     
     return arr, (xmin, ymin)
     
-def convolveCells(sites, spacing=5e-6, probThreshold=0.02, probRadius=90e-6):
+def convolveCells(sites, spacing=5e-6, probThreshold=0.02, probRadius=90e-6, timeWindow=0.1, eventKey='numOfPostEvents'):
+    #avgCellX = np.array(list(set(sites['xPosCell']))).mean()
+    #avgCellY = np.array(list(set(sites['yPosCell']))).mean()
+    #xmin = (sites['xPos']-sites['xPosCell']).min() ## point furthest left of the cell
+    xmin = sites['xPosCell'].min()
+    #ymin = (sites['yPos']-sites['yPosCell']).min() ## point furthest above the cell
+    ymin = sites['yPosCell'].min()
+    #xmax = (sites['xPos']-sites['xPosCell']).max()
+    xmax = sites['xPosCell'].max()
+    #ymax = (sites['yPos']-sites['yPosCell']).max()
+    ymax = sites['yPosCell'].max()
+    xdim = int((xmax-xmin)/spacing)+10
+    ydim = int((ymax-ymin)/spacing)+10
+    #avgCellIndex = np.array([int((avgCellX-xmin)/spacing)+5, int((avgCellY-ymin)/spacing)+5])
+    cells = set(sites['CellDir'])
+    n = len(cells)
+    
+    arr = np.zeros((n, xdim, ydim), dtype=float)
+    results = []
+    
+    for i, c in enumerate(cells):
+        data = sites[sites['CellDir']==c]
+        spontRate = data['numOfPreEvents'].sum()/data['PreRegionLen'].sum()
+        data = afn.bendelsSpatialCorrelationAlgorithm(data, probRadius, spontRate, timeWindow=timeWindow, eventKey=eventKey)
+  
+        probs = np.zeros(len(data))
+        probs[data['prob'] < probThreshold] = 1.
+        for j, s in enumerate(data):
+            trans1 = (data['CellXPos'][0] - avgCellX, data['CellYPos'][0]-avgCellY)
+            trans2 = (avgCellX+xmin, avgCellY+ymin)            
+            x, y = (int((s['xPos']-trans1[0]-trans2[0])/spacing), int((s['yPos']-trans1[1]-trans2[1])/spacing))
+            arr[i, x, y] = probs[j]
+              
+        results.append(arr[i].copy())
+        arr[i] = scipy.ndimage.gaussian_filter(arr[i], 2)
+        arr[i] = arr[i]/0.039
+        arr[i][arr[i] > 0.02] = 1
+        #arr[i][(arr[i] > 0.02)*(arr[i] <=0.04)] = 1
+        arr[i][arr[i] <= 0.02] = 0
+        
+    return arr, results
+    
+        
+def convolveCells_Xuying(sites, spacing=5e-6, probThreshold=0.02, probRadius=90e-6):
     #avgCellX = np.array(list(set(sites['xPosCell']))).mean()
     #avgCellY = np.array(list(set(sites['yPosCell']))).mean()
     #xmin = (sites['xPos']-sites['xPosCell']).min() ## point furthest left of the cell
@@ -285,4 +337,258 @@ def convolveCells(sites, spacing=5e-6, probThreshold=0.02, probRadius=90e-6):
             #arrs[p][np.isnan(arrs[p])] = 0
     #return arrs
         
+def reserveImageArray(sites, keys=None, spacing=5e-6, factor=1.11849):
+    """Return an 2-dimensional zero-filled array that fits the position data in *sites*.
+         **Arguments**
+         ================ ================================================
+         sites            a record-array with fields matching the specified keys
+         keys             {'x': field name for x position data, 'y': field name for y position data} ## specified values must be fields in sites
+                          if keys is not specified: {'x':'modXPosCell', 'y':'percentDepth'} is used
+         spacing          the spacing of the array (default is 1px = 5um)
+         factor           a magic factor to multiply the y-position data by (default is 1.11849 (optimized for Megan's data))
+         ================ ================================================
+         """
+    if keys == None:
+        keys = {
+            'x':'modXPosCell',
+            'y':'percentDepth'}    
         
+    xmin = sites[keys['x']].min()
+    ymin = (sites[keys['y']].min() if sites[keys['y']].min() < 0 else 0.) *factor
+    xmax = sites[keys['x']].max()
+    ymax = sites[keys['y']].max()*factor
+    
+    xdim = int((xmax-xmin)/spacing)+10
+    ydim = int((ymax-ymin)/spacing)+10  
+  
+    return np.zeros((xdim, ydim), dtype=float), xmin, ymin  
+    
+        
+def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probThreshold=0.02, sampleSpacing=35e-6, eventKey=None, timeWindow=None):
+    if keys == None:
+        keys = {
+            'x':'xPosCell',
+            'y':'yPosCell',
+            'mappedX': 'modXPosCell',
+            'mappedY': 'percentDepth'}
+    if eventKey == None:
+        eventKey = 'numOfPostEvents'
+    #if timeWindow == None:
+    #    timeWindow = sites[0]['PostRgnLen']
+            
+    #avgCellX = np.array(list(set(sites['CellXPos']))).mean()
+    #avgCellY = np.array(list(set(sites['CellYPos']))).mean()
+    #xmin = (sites['xPos']-sites['CellXPos']).min() ## point furthest left of the cell
+    xmin = sites[keys['mappedX']].min()
+    #ymin = (sites['yPos']-sites['CellYPos']).min() ## point furthest above the cell
+    ymin = (sites[keys['mappedY']].min() if sites[keys['mappedY']].min() < 0 else 0.) *factor
+    #xmax = (sites['xPos']-sites['CellXPos']).max()
+    xmax = sites[keys['mappedX']].max()
+    #ymax = (sites['yPos']-sites['CellXPos']).max()
+    ymax = sites[keys['mappedY']].max()*factor
+                 
+    xdim = int((xmax-xmin)/spacing)+10
+    ydim = int((ymax-ymin)/spacing)+10
+    #avgCellIndex = np.array([int((avgCellX-xmin)/spacing)+5, int((avgCellY-ymin)/spacing)+5])
+    
+    cells = set(sites['CellDir'])
+    n = len(cells)
+    
+    arr = np.zeros((n, xdim, ydim), dtype=float)
+    sampling = np.zeros((n, xdim, ydim), dtype=float)
+    #results = []
+    counts = []
+    
+    for i, c in enumerate(cells):
+        print "index:", i," = cell:", c
+        
+        data = sites[sites['CellDir']==c]
+        if timeWindow == None:
+            timeWindow = data[0]['PostRegionLen']
+        elif timeWindow == 'pre':
+            timeWindow = data[0]['PreRegionLen']
+        spontRate = data['numOfPreEvents'].sum()/data['PreRegionLen'].sum()
+        data = afn.bendelsSpatialCorrelationAlgorithm(data, 90e-6, spontRate, timeWindow, eventsKey=eventKey)
+  
+        probs = np.zeros(len(data))
+        probs[data['prob'] < probThreshold] = 1.
+        for j, s in enumerate(data):
+            #trans1 = (s[keys['mappedX']] - xmin, s[keys['mappedY']]-ymin)
+            #trans2 = (avgCellX+xmin, avgCellY+ymin)            
+            x, y = (int((s[keys['mappedX']]-xmin)/spacing), int((s[keys['mappedY']]*factor-ymin)/spacing))
+            arr[i, x, y] = probs[j]
+            sampling[i, x, y] = 1
+        
+        counts.append(arr[i].sum()) 
+        #results.append(arr[i].copy())
+        arr[i] = scipy.ndimage.gaussian_filter(arr[i], 2, mode='constant')
+        arr[i] = arr[i]/0.039
+        arr[i][arr[i] > 0.03] = 1
+        arr[i][arr[i] <= 0.03] = 0
+        
+        sampling[i] = scipy.ndimage.gaussian_filter(sampling[i], 2)
+        sampling[i] = sampling[i]/0.039
+        sampling[i][sampling[i] > 0.02] = 1
+        sampling[i][sampling[i] <= 0.02] = 0    
+    
+        ### mark cell position
+        #xind = int(-xmin/spacing)
+        #yind = int(data['CellYPos'][0]/spacing)
+        ##print "yind=", ymin, '*', factor, '/', spacing
+        ##print arr.shape, xind, yind
+        #arr[i, xind-1:xind+2, yind-1:yind+2] = 2
+        ##print arr.max()
+
+    ### mark separation lines
+    #arr[:, int((-xmin-150e-6)/spacing), :] = 3
+    #arr[:, int((-xmin-450e-6)/spacing), :] = 3
+    #arr[:, int((-xmin+150e-6)/spacing), :] = 3
+    #arr[:, int((-xmin+450e-6)/spacing), :] = 3   
+    #arr[:, :, int(130e-6*factor/spacing)] = 3
+    #arr[:, :, int(310e-6*factor/spacing)] = 3
+    #arr[:, :, int(450e-6*factor/spacing)] = 3
+    #arr[:, :, int(720e-6*factor/spacing)] = 3
+    return arr, counts
+
+def randomizeData(data, fields):
+    """Return a record array with the data in specified fields randomly sorted.
+         **Arguments**
+         =============   ==============================================
+         data            A record array
+         fields          A list of field names (or string of one field name) whose values should be randomly shuffled
+         =============   ==============================================
+    """
+    #prof = Profiler('randomizeData', disabled=False)
+    newArr = data.copy()
+    
+    if type(fields) == type(''):
+        fields = [fields]
+        
+    for f in fields:
+        d = data[f]
+        np.random.shuffle(d)
+        newArr[f]=d
+        
+    #prof.finish()
+    return newArr
+    
+    
+def randomProbTest(sites, cellDir, n=10, getContours=False, **kwargs):
+    #prof = Profiler('randomProbTest', disabled=False)
+    keys={
+       'x':'modXPosCell',
+       'y':'percentDepth',
+       'probThreshold': 0.02,
+       'timeWindow':0.1,
+       'eventKey':'numOfPostEvents',
+       'spacing':5e-6,
+       'factor':1.11849
+    }
+    for k in kwargs:
+        keys[k] = kwargs[k]
+        
+        
+    tasks = range(n)
+    results = np.zeros((n), dtype=[('numOfSpots', int), ('contourInfo', object)])
+    
+    data = sites[sites['CellDir']==cellDir]
+    spontRate = data['numOfPreEvents'].sum()/data['PreRegionLen'].sum()
+    #prof.mark('selected data, calculated spontRate')
+    
+    d = afn.bendelsSpatialCorrelationAlgorithm(data, 90e-6, spontRate, keys['timeWindow'], eventsKey=keys['eventKey'])
+    actualNum = len(d[d['prob'] < keys['probThreshold']])
+    #prof.mark('calculated actual number of spots')
+    if getContours:
+        img, xmin, ymin = reserveImageArray(sites)
+    
+    with Parallelize(tasks, workers=1, results=results)as tasker:
+        for task in tasker:
+            np.random.seed()
+            randomData = randomizeData(data, keys['eventKey'])
+            randomData = afn.bendelsSpatialCorrelationAlgorithm(randomData, 90e-6, spontRate, keys['timeWindow'], eventsKey=keys['eventKey'])
+            tasker.results[task]['numOfSpots'] = len(randomData[randomData['prob'] < keys['probThreshold']])
+            if getContours:
+                im = img.copy()
+                data = randomData[randomData['prob'] < probThreshold]
+                for i, s in enumerate(data):
+                    x, y = (int((s[keys['x']]-xmin)/keys['spacing']), int((s[keys['y']]*keys['factor']-ymin)/keys['spacing']))
+                    im[x,y] = 1
+                ## convolution params are good for 5um grid spacing and 35um spaced samples -- need to generalize for other options
+                im = scipy.ndimage.gaussian_filter(im, 2, mode='constant')
+                im /= 0.039
+                im[im > 0.03] = 1
+                im[im <= 0.03] = 0
+                stats = getContourStats(im, spacing=keys['spacing'])
+                tasker.results[task]['contourInfo'] = stats
+                
+    #prof.mark('calculated number of spots for %i random trials'%n)
+    #prof.finish()
+    return actualNum, results
+
+def getContourStats(arr, spacing=5e-6): 
+    """Return the an array with the center position and area of each contour found in arr. arr needs to be an array of binary values."""
+    global HAVE_CV2
+    if not HAVE_CV2:
+        raise Exception("Cannot get contours because OpenCV2 could not be imported")
+    #arr, sampling = convolveCells_newAtlas(sites, spacing=spacing)
+    xPositions = []
+    yPositions = []
+    areas = []
+    cells = []
+    
+    if len(arr.shape) == 3:
+        n=arr.shape[0]
+    elif len(arr.shape) == 2:
+        n=1
+    else:
+        raise Exception("Array argument needs to have either 2 (width, height) or 3 (n, width, height) dimensions")
+        
+    for i in range(n):
+        if n == 1:
+            data = arr.copy().astype('uint8')
+        else:
+            data = arr[i].copy().astype('uint8')
+            
+        contours, hierarchy = cv2.findContours(data.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+        if len(contours) is 0 or hierarchy is None:
+            continue
+        hierarchy = hierarchy[0]
+            
+        for j, c in enumerate(contours):
+            if hierarchy[j][3] != -1: ## means this is a hole in a larger contour and we don't want to count it
+                continue
+            xmin = c[:,:,1].min()-3
+            xmax = c[:,:,1].max()+3
+            ymin = c[:,:,0].min()-3
+            ymax = c[:,:,0].max()+3
+            print i, j
+            print '   x:', xmin, xmax
+            print '   y:', ymin, ymax
+            m = cv2.moments(data[xmin:xmax, ymin:ymax])
+            y = (m['m10']/m['m00'])+0.5 ## the contour/moments functions seem to leave off the right and bottom edge of contours, so we add it back
+            x = (m['m01']/m['m00'])+0.5
+            xPositions.append((x+xmin)*spacing)
+            yPositions.append((y+ymin)*spacing)
+            areas.append(m['m00']*(spacing**2))
+            cells.append(i)
+            
+    ret = np.zeros(len(areas), dtype=[('xCenterPos', float), ('yCenterPos', float), ('area', float), ('cell', int)])
+    ret['xCenterPos'] = np.array(xPositions)
+    ret['yCenterPos'] = np.array(yPositions)
+    ret['area'] = np.array(areas)
+    ret['cell'] = np.array(cells)
+    return ret
+    
+    
+    
+def test(n=10):
+    results = []
+    tasks = range(n)
+    with Parallelize(tasks, workers=2, results=results)as tasker:
+        for task in tasker: 
+            print 'hi' 
+            #print 'Task:', task, '    pid:', os.getpid() 
+            #sys.stdout.flush()
+            #raise Exception("This is the exception for testing Parallelize")
+            
+    return results

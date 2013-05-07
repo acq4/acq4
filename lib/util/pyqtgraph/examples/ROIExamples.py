@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+"""
+Demonstrates a variety of uses for ROI. This class provides a user-adjustable
+region of interest marker. It is possible to customize the layout and 
+function of the scale/rotate handles in very flexible ways. 
+"""
+
 import initExample ## Add path to library (just for examples; you do not need this)
 
 import pyqtgraph as pg
@@ -22,6 +28,7 @@ arr += np.random.normal(size=(100,100))
 ## create GUI
 app = QtGui.QApplication([])
 w = pg.GraphicsWindow(size=(800,800), border=True)
+w.setWindowTitle('pyqtgraph example: ROI Examples')
 
 text = """Data Selection From Image.<br>\n
 Drag an ROI or its handles to update the selected image.<br>
@@ -49,7 +56,7 @@ rois.append(pg.MultiRectROI([[20, 90], [50, 60], [60, 90]], width=5, pen=(2,9)))
 rois.append(pg.EllipseROI([60, 10], [30, 20], pen=(3,9)))
 rois.append(pg.CircleROI([80, 50], [20, 20], pen=(4,9)))
 #rois.append(pg.LineSegmentROI([[110, 50], [20, 20]], pen=(5,9)))
-#rois.append(pg.PolyLineROI([[110, 60], [20, 30], [50, 10]], pen=(6,9)))
+rois.append(pg.PolyLineROI([[80, 60], [90, 30], [60, 40]], pen=(6,9), closed=True))
 
 def update(roi):
     img1b.setImage(roi.getArrayRegion(arr, img1a), levels=(0, arr.max()))

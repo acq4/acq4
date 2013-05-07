@@ -114,7 +114,7 @@ class EventFitter(CtrlNode):
             #output = np.concatenate(data)
             
         for i in range(len(indexes)):            
-            if display and self.plot.isConnected():
+            if display and self['plot'].isConnected():
                 if self.ctrls['plotFits'].isChecked():
                     item = pg.PlotDataItem(x=xVals[i], y=yVals[i], pen=(0, 0, 255), clickable=True)
                     item.setZValue(100)
@@ -155,13 +155,13 @@ class EventFitter(CtrlNode):
 
     ## Intercept keypresses on any plot that is connected.
     def connected(self, local, remote):
-        if local is self.plot:
+        if local is self['plot']:
             self.filterPlot(remote.node())
             remote.node().sigPlotChanged.connect(self.filterPlot)
         CtrlNode.connected(self, local, remote)
         
     def disconnected(self, local, remote):
-        if local is self.plot:
+        if local is self['plot']:
             self.filterPlot(remote.node(), install=False)
             try:
                 remote.node().sigPlotChanged.disconnect(self.filterPlot)

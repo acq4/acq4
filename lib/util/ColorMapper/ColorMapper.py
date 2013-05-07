@@ -32,7 +32,7 @@ class ColorMapper(QtGui.QWidget):
         self.ui.tree.addTopLevelItem(item)
         self.ui.tree.setItemWidget(item, 0, self.addBtn)
         
-        self.argList = []
+        self._argList = []
         self.items = []
         self.loadedFile = None
         self.filePath = filePath
@@ -184,7 +184,7 @@ class ColorMapper(QtGui.QWidget):
     
     def setArgList(self, args):
         """Sets the list of variable names available for computing colors"""
-        self.argList = args
+        self._argList = args
         prev = []
         try:
             self.blockSignals(True)
@@ -197,6 +197,9 @@ class ColorMapper(QtGui.QWidget):
         
         if current != prev:
             self.emitChanged()
+            
+    def getArgList(self):
+        return self._argList
         
     def getColor(self, args):
         color = np.array([0.,0.,0.,0.])
@@ -259,7 +262,7 @@ class ColorMapper(QtGui.QWidget):
 
     def saveState(self):
         items = [self.ui.tree.topLevelItem(i) for i in range(self.ui.tree.topLevelItemCount()-1)]
-        state = {'args': self.argList, 'items': [i.saveState() for i in items]}
+        state = {'args': self.getArgList(), 'items': [i.saveState() for i in items]}
         return state
         
     def restoreState(self, state):
@@ -324,7 +327,7 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
             #self.argCombo.addItem(a)
             #if a == prev:
                 #self.argCombo.setCurrentIndex(self.argCombo.count()-1)
-        self.argCombo.updateList(self.cm.argList)
+        self.argCombo.updateList(self.cm.getArgList())
         
     def getColor(self, args):
         arg = str(self.argCombo.currentText())
@@ -332,7 +335,8 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
             raise Exception('Cannot generate color; value "%s" is not present in this data.' % arg)
         val = args[arg]
         if val is None:
-            raise Exception('Cannot generate color; value "%s" is empty (None).' % arg)
+            return pg.QtGui.QColor(100,100,100,255)
+            #raise Exception('Cannot generate color; value "%s" is empty (None).' % arg)
         mn = self.minSpin.value()
         mx = self.maxSpin.value()
         norm = np.clip((val - mn) / (mx - mn), 0.0, 1.0)
@@ -364,7 +368,8 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
         
     def restoreState(self, state):
         ind = self.argCombo.findText(state['arg'])
-        self.argCombo.setCurrentIndex(ind)
+        if ind != -1:
+            self.argCombo.setCurrentIndex(ind)
         ind = self.opCombo.findText(state['op'])
         self.opCombo.setCurrentIndex(ind)
         

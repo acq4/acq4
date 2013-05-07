@@ -505,6 +505,10 @@ class Manager(QtCore.QObject):
             if name not in self.modules:
                 raise Exception("No module named %s" % name)
             return self.modules[name]
+        
+    def getCurrentDatabase(self):
+        """Return the database currently selected in the Data Manager"""
+        return self.getModule("Data Manager").currentDatabase()
 
         
     def listDefinedModules(self):

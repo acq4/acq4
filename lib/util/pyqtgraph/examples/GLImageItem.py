@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
+"""
+Use GLImageItem to display image data on rectangular planes.
+
+In this example, the image data is sampled from a volume and the image planes 
+placed as if they slice through the volume.
+"""
 ## Add path to library (just for examples; you do not need this)
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+import initExample
 
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.opengl as gl
@@ -13,6 +18,7 @@ app = QtGui.QApplication([])
 w = gl.GLViewWidget()
 w.opts['distance'] = 200
 w.show()
+w.setWindowTitle('pyqtgraph example: GLImageItem')
 
 ## create volume data set to slice three images from
 shape = (100,100,70)

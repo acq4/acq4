@@ -5,8 +5,7 @@ This example demonstrates the use of GLSurfacePlotItem.
 
 
 ## Add path to library (just for examples; you do not need this)
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+import initExample
 
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
@@ -18,6 +17,7 @@ import numpy as np
 app = QtGui.QApplication([])
 w = gl.GLViewWidget()
 w.show()
+w.setWindowTitle('pyqtgraph example: GLSurfacePlot')
 w.setCameraPosition(distance=50)
 
 ## Add a grid to the view
@@ -63,7 +63,7 @@ w.addItem(p3)
 
 ## Animated example
 ## compute surface vertex data
-cols = 100
+cols = 90
 rows = 100
 x = np.linspace(-8, 8, cols+1).reshape(cols+1,1)
 y = np.linspace(-8, 8, rows+1).reshape(1,rows+1)

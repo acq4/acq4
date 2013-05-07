@@ -44,12 +44,18 @@ if the current curve and the current plot instance are passed.
 import sys
 import numpy
 import scipy
+
 try:
     import openopt
+    HAVE_OPENOPT = True
 except ImportError:
+    HAVE_OPENOPT = False
     print "There was an error importing openopt. Continuing...."
+
 import ctypes
 import numpy.random
+
+
 #from numba import autojit
 
 usingMPlot = False
@@ -349,21 +355,20 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
       #  print 'dy: ', y
         return y
 
-    #def getClipData(self, tx, data, t0, t1):
-        #import Utility as U
-        #if not isinstance(tx, list):
-            #tx = tx.squeeze()
-        #if not isinstance(data, list):
-            #data = data.squeeze()
-        #dm = U.mask(data, tx, t0, t1)
-        #t = U.mask(tx, tx, t0, t1)
-        #return(numpy.array(t), numpy.array(dm))
-        
-    def getClipData(self, tx, data, t0, t1):
-        it0 = (numpy.abs(tx-t0)).argmin()
-        it1 = (numpy.abs(tx-t1)).argmin()
-        return(tx[it0:it1], data[it0:it1])    
 
+    def getClipData(self, x, y, t0, t1):
+        """
+        Return the values in y that match the x range in tx from
+        t0 to t1. x must be monotonic increasing or decreasing.
+        Allow for reverse ordering. """
+        it0 = (numpy.abs(x-t0)).argmin()
+        it1 = (numpy.abs(x-t1)).argmin()
+        if it0 > it1:
+            t = it1
+            it1 = it0
+            it0 = t
+        return(x[it0:it1], y[it0:it1])
+        
     def FitRegion(self, whichdata, thisaxis, tdat, ydat, t0 = None, t1 = None,
                   fitFunc = 'exp1', fitFuncDer = None, fitPars = None, fixedPars = None,
                   fitPlot = None, plotInstance = None, dataType= 'xy', method = None,
@@ -420,16 +425,22 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
             fpars = fitPars
         if method == 'simplex': # remap calls if needed for newer versions of scipy (>= 0.11)
             method = 'Nelder-Mead'
-        if ydat.ndim == 1: # check if 1-d, then "pretend" its only a 1-element block 
+        if ydat.ndim == 1 or dataType == 'xy' or dataType == '2d': # check if 1-d, then "pretend" its only a 1-element block 
             nblock = 1
         else:
             nblock = ydat.shape[0] # otherwise, this is the number of traces in the block
+        # print 'datatype: ', dataType
+        # print 'nblock: ', nblock
+        # print 'whichdata: ', whichdata
         for block in range(nblock):
             for record in whichdata:
                 if dataType == 'blocks':
                     (tx, dy) = self.getClipData(tdat[block], ydat[block][record, thisaxis, :], t0, t1)
                 else:
-                    (tx, dy) = self.getClipData(tdat, ydat, t0, t1)
+                    (tx, dy) = self.getClipData(tdat, ydat[record], t0, t1)
+              #  print 'Fitting.py: Fit data: ', tx, dy
+              #  print tx.shape
+              #  print dy.shape
                 yn.append(names)
                 if not any(tx):
                     continue # no data in the window...
@@ -438,7 +449,7 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                 # Different optimization methods are included here. Not all have been tested fully with
                 # this wrapper.
                 #
-                if method is None: # use standard leastsq, no bounds
+                if method is None or method == 'leastsq': # use standard leastsq, no bounds
                         plsq, cov, infodict, mesg, ier = scipy.optimize.leastsq(func[0], fpars,
                                                 args=(tx.astype('float64'), dy.astype('float64'), fixedPars),
                                                 full_output = 1, maxfev = func[2])
@@ -470,6 +481,9 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                 #                 maxfun = func[2], bounds = bounds,
                 #                 approx_grad = True) # , disp=0, iprint=-1)
                 elif method == 'openopt': # use OpenOpt's routines - usually slower, but sometimes they converge better
+                    if not HAVE_OPENOPT:
+                        raise Exception("Requested openopt fitting method but openopt is not installed.")
+                    
                     if bounds is not None:
                         # unpack bounds
                         lb = [y[0] for y in bounds]
@@ -500,6 +514,8 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                 xp.append(plsq) # parameter list
                 xf.append(xfit) # x plot point list
                 yf.append(yfit) # y fit point list
+#        print xp
+#        print len(xp)
         return(xp, xf, yf, yn) # includes names with yn and range of tx
 
     def FitPlot(self, xFit = None, yFit = None, fitFunc = 'exp1',

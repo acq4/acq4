@@ -62,7 +62,7 @@ class ZeroCrossingEvents(CtrlNode):
         events = events[:s['eventLimit']]
         return events
 
-class ThresholdEvents(CtrlNode):
+class ThresholdEvents(PlottingCtrlNode):
     """Detects regions of a waveform that cross a threshold (positive or negative) and returns the time, length, sum, and peak of each event."""
     nodeName = 'ThresholdEvents'
     uiTemplate = [
@@ -80,8 +80,8 @@ class ThresholdEvents(CtrlNode):
     ]
 
     def __init__(self, name, **opts):
-        CtrlNode.__init__(self, name, self.uiTemplate)
-        self.plot = self.addOutput('plot', optional=True)
+        PlottingCtrlNode.__init__(self, name, self.uiTemplate)
+        #self.plotTerminal = self.addOutput('plot', optional=True)
         self.baseLine = InfiniteLine(angle=0, movable=True, pen='b')
         self.minPeakLine = InfiniteLine(angle=0, movable=True, pen='y')
         self.thresholdLine = InfiniteLine(angle=0, movable=True, pen='g')
@@ -90,12 +90,12 @@ class ThresholdEvents(CtrlNode):
         self.ctrls['display'].toggled.connect(self.displayToggled)
         for line in self.lines:
             line.sigPositionChangeFinished.connect(self.updateCtrlValues)
-        self.remotePlot = None
+        #self.remotePlot = None
         
     def restoreState(self, state):
         CtrlNode.restoreState(self, state)
-        for c in self.plot.connections():
-            print c
+        for c in self.plotTerminal.connections():
+            #print c
             p = c.node().getPlot()
             for l in self.lines:
                 p.addItem(l)
@@ -113,13 +113,13 @@ class ThresholdEvents(CtrlNode):
         self.ctrls['minPeak'].setValue(self.minPeakLine.value()-self.baseLine.value())
         self.ctrls['threshold'].setValue(self.thresholdLine.value()-self.baseLine.value())
             
-    def connected(self, term, remote):
-        CtrlNode.connected(self, term, remote)
-        if term is not self.plot:
-            return
-        node = remote.node()
-        node.sigPlotChanged.connect(self.connectToPlot)
-        self.connectToPlot(node)
+    #def connected(self, term, remote):
+        #CtrlNode.connected(self, term, remote)
+        #if term is not self.plot:
+            #return
+        #node = remote.node()
+        #node.sigPlotChanged.connect(self.connectToPlot)
+        #self.connectToPlot(node)
 
     def connectToPlot(self, node):
         #if self.remotePlot is not None:
@@ -130,12 +130,12 @@ class ThresholdEvents(CtrlNode):
         for l in self.lines:
             node.getPlot().addItem(l)
             
-    def disconnected(self, term, remote):
-        CtrlNode.disconnected(self, term, remote)
-        if term is not self.plot:
-            return
-        remote.node().sigPlotChanged.disconnect(self.connectToPlot)
-        self.disconnectFromPlot(remote.node().getPlot())
+    #def disconnected(self, term, remote):
+        #CtrlNode.disconnected(self, term, remote)
+        #if term is not self.plot:
+            #return
+        #remote.node().sigPlotChanged.disconnect(self.connectToPlot)
+        #self.disconnectFromPlot(remote.node().getPlot())
 
     def disconnectFromPlot(self, plot):
         #if self.remotePlot is None:
@@ -152,7 +152,7 @@ class ThresholdEvents(CtrlNode):
         ## apply first round of filters
         mask = events['len'] >= s['minLength']
         mask *= abs(events['sum']) >= s['minSum']
-        mask *= abs(events['peak']) >= s['minPeak']
+        mask *= abs(events['peak']) >= abs(s['minPeak'])
         events = events[mask]
         
         ## apply deadtime filter

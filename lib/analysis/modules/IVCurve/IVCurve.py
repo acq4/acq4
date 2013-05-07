@@ -55,6 +55,7 @@ class IVCurve(AnalysisModule):
         # grab input form the "Ctrl" window
         self.ctrl.IVCurve_Update.clicked.connect(self.updateAnalysis)
         self.ctrl.IVCurve_PrintResults.clicked.connect(self.printAnalysis)
+        self.ctrl.dbStoreBtn.clicked.connect(self.dbStoreClicked)
         self.clearResults()
         self.layout = self.getElement('Plots', create=True)
  
@@ -130,7 +131,7 @@ class IVCurve(AnalysisModule):
 
         self.showhide_lrpk(True)
         self.showhide_lrss(True)
-        self.showhide_lrtau(False)
+        self.showhide_lrtau(True)
 
         self.ctrl.IVCurve_ssTStart.setSuffix(' ms')
         self.ctrl.IVCurve_ssTStop.setSuffix(' ms')
@@ -177,12 +178,13 @@ class IVCurve(AnalysisModule):
             raise Exception("Can only load one file at a time.")
         self.clearResults()
         dh = dh[0]
+        self.loaded = dh
         self.data_plot.clearPlots()
         self.cmd_plot.clearPlots()
         self.filename = dh.name()
         dirs = dh.subDirs()
         c = 0
-        traces = None
+        traces = []
         cmd_wave = []
         self.values = []
         self.Sequence = self.dataModel.listSequenceParams(dh)
@@ -211,11 +213,13 @@ class IVCurve(AnalysisModule):
             else:
                 pass
                 # store primary channel data and read command amplitude
-            if traces is None:
-                traces = numpy.zeros((len(dirs), len(data)))
-                cmd_wave = numpy.zeros((len(dirs), len(cmd)))
-            traces[c,:]  = data.view(numpy.ndarray)
-            cmd_wave[c,:] = cmd.view(numpy.ndarray)
+            #if traces is None:  ## Don't know length of array since some data may be missing.
+                #traces = numpy.zeros((len(dirs), len(data)))
+                #cmd_wave = numpy.zeros((len(dirs), len(cmd)))
+            #traces[c,:]  = data.view(numpy.ndarray)
+            #cmd_wave[c,:] = cmd.view(numpy.ndarray)
+            traces.append(data.view(numpy.ndarray))
+            cmd_wave.append(cmd.view(numpy.ndarray))
             self.data_plot.plot(data, pen=pg.intColor(c, len(dirs), maxValue=200)) # , decimate=decimate_factor)
             self.cmd_plot.plot(cmd, pen=pg.intColor(c, len(dirs), maxValue=200)) # , decimate=decimate_factor)
             self.values.append(cmd[len(cmd)/2])
@@ -224,16 +228,17 @@ class IVCurve(AnalysisModule):
         if traces is None or len(traces) == 0:
             print "No data found in this run..."
             return False
+        traces = numpy.vstack(traces)
+        cmd_wave = numpy.vstack(cmd_wave)
         self.colorScale.setIntColorScale(0, c, maxValue=200)
        # self.colorScale.setLabels({'%0.2g'%self.values[0]:0, '%0.2g'%self.values[-1]:1}) 
-        
         # set up the selection region correctly, prepare IV curves and find spikes
         info = [
             {'name': 'Command', 'units': cmd.axisUnits(-1), 'values': numpy.array(self.values)},
             data.infoCopy('Time'), 
             data.infoCopy(-1)]
+        traces = traces[:len(self.values)]
         self.traces = MetaArray(traces, info=info)
-        info1 = dataF.infoCopy()
         sfreq = self.dataModel.getSampleRate(data)
         self.dataMode = self.dataModel.getClampMode(data)
         self.ctrl.IVCurve_dataMode.setText(self.dataMode)
@@ -276,14 +281,15 @@ class IVCurve(AnalysisModule):
         commands = numpy.array(self.values)
 
         self.initialize_Regions() # now create the analysis regions
-        self.lrss.setRegion([(self.tend-(self.tdur/2.0)), self.tend]) # steady-state
+        self.lrss.setRegion([(self.tend-(self.tdur/5.0)), self.tend-0.001]) # steady-state
         self.lrpk.setRegion([self.tstart, self.tstart+(self.tdur/5.0)]) # "peak" during hyperpolarization
-        self.lrtau.setRegion([self.tstart+0.005, self.tend])
+        self.lrtau.setRegion([self.tstart+(self.tdur/5.0)+0.005, self.tend])
 
         if self.dataMode in self.ICModes:
                 # for adaptation ratio:
             print 'doing cc mode... '
-            self.countSpikes()
+            self.updateAnalysis()
+            #self.countSpikes()
         
         if self.dataMode in self.VCModes: 
             self.cmd = commands
@@ -388,9 +394,11 @@ class IVCurve(AnalysisModule):
         whichdata = ineg[0]
         itaucmd = self.cmd[ineg]
         whichaxis = 0
+        # print whichdata
+        # print self.traces.view(numpy.ndarray).shape
         (fpar, xf, yf, names) = Fits.FitRegion(whichdata, whichaxis, 
                 self.traces.xvals('Time'), self.traces.view(numpy.ndarray), 
-                dataType = '2d', t0=rgnpk[0], t1=rgnpk[1],
+                dataType = 'xy', t0=rgnpk[0], t1=rgnpk[1],
                 fitFunc = Func, fitPars = initpars)
         if fpar == []:
             print 'tau fitting failed - see log'
@@ -398,6 +406,8 @@ class IVCurve(AnalysisModule):
         outstr = ""
         s = numpy.shape(fpar)
         taus = []
+        # print len(whichdata)
+        # print s[0]
         for j in range(0, s[0]):
             outstr = ""
             taus.append(fpar[j][2])
@@ -432,17 +442,36 @@ class IVCurve(AnalysisModule):
         fitx = []
         fity = []
         initpars = [-80.0*1e-3, -10.0*1e-3, 50.0*1e-3]
+        
         # find the current level that is closest to the target current
         s_target = self.ctrl.IVCurve_tauh_Commands.currentIndex()
         itarget = self.values[s_target] # retrive actual value from commands
+        self.neg_cmd = itarget
         idiff = numpy.abs(numpy.array(self.cmd) - itarget)
-        amin = numpy.argmin(idiff)
-        vrmp = numpy.mean(self.traces[amin][0:10])*1000. # rmp approximation.
+        
+        amin = numpy.argmin(idiff)  ## amin appears to be the same as s_target ??
+        
+        ## target trace (as selected in cmd drop-down list):
+        target = self.traces[amin]
+        
+        ## get Vrmp
+        vrmp = numpy.median(target['Time': 0.0:self.tstart-0.005])*1000. # rmp approximation.
         self.ctrl.IVCurve_vrmp.setText('%8.2f' % (vrmp))
-        dpk = self.traces['Time' : rgn[0]:rgn[0]+0.001]
-        vpk = numpy.mean(dpk[amin])*1000.
-        dss = self.traces['Time' : rgn[1]-0.010:rgn[1]]
-        vss = numpy.mean(dss[amin])*1000.
+        self.neg_vrmp = vrmp
+        
+        ## get peak and steady-state voltages
+        pkRgn = self.lrpk.getRegion()
+        ssRgn = self.lrss.getRegion()
+        
+        vpk = target['Time' : pkRgn[0]:pkRgn[1]].min() * 1000
+        #vpk = numpy.mean(dpk[amin])*1000.
+        self.neg_pk = (vpk-vrmp) / 1000.
+        
+        #dss = self.traces['Time' : rgn[1]-0.010:rgn[1]]
+        #vss = numpy.mean(dss[amin])*1000.
+        vss = numpy.median(target['Time' : ssRgn[0]:ssRgn[1]]) * 1000
+        self.neg_ss = (vss-vrmp) / 1000.
+        
         whichdata = [int(amin)]
         itaucmd = [self.cmd[amin]]
         rgnss = self.lrss.getRegion()
@@ -495,6 +524,12 @@ class IVCurve(AnalysisModule):
         else:
             self.ctrl.IVCurve_FOType.setText('T Stellate')
             
+        ## estimate of Gh:
+        Gpk = itarget / self.neg_pk
+        Gss = itarget / self.neg_ss
+        self.Gh = Gss-Gpk
+        self.ctrl.IVCurve_Gh.setText('%8.2f nS' % (self.Gh*1e9))
+            
       #  if printWindow:
       #      print tautext % (meantau*1e3)
 
@@ -510,7 +545,7 @@ class IVCurve(AnalysisModule):
         if len(self.nospk) >= 1:
             # Steady-state IV where there are no spikes
             self.ivss = data1.mean(axis=1)[self.nospk]
-            self.ivss_cmd = data1.mean(axis=0)[self.nospk]
+            self.ivss_cmd = commands[self.nospk]
             self.cmd = commands[self.nospk]
             # compute Rin from the SS IV:
             if len(self.cmd) > 0 and len(self.ivss) > 0:
@@ -520,6 +555,7 @@ class IVCurve(AnalysisModule):
                 self.ctrl.IVCurve_Rin.setText(u'No valid points')
         else:
             self.ivss = data1.mean(axis=1) # all traces
+            self.ivss_cmd = commands
             self.cmd = commands
         self.update_IVPlot()
 
@@ -535,20 +571,24 @@ class IVCurve(AnalysisModule):
         if len(self.nospk) >= 1:
             # Peak (minimum voltage) IV where there are no spikes
             self.ivpk = data2.min(axis=1)[self.nospk]
+            self.ivpk_cmd = commands[self.nospk]
             self.cmd = commands[self.nospk]
         else:
             self.ivpk = data2.min(axis=1)
             self.cmd = commands
+            self.ivpk_cmd = commands
         self.update_Tau(printWindow = pw)
         self.update_IVPlot()
 
 
     def update_IVPlot(self):
         self.IV_plot.clear()
+#        print 'lens cmd ss pk: '
+#        print len(self.cmd), len(self.ivss), len(self.ivpk)
         if len(self.ivss) > 0:
-            self.IV_plot.plot(self.cmd, self.ivss, symbolSize=6, symbolPen='w', symbolBrush='w')
+            self.IV_plot.plot(self.ivss_cmd, self.ivss, symbolSize=6, symbolPen='w', symbolBrush='w')
         if len(self.ivpk) > 0:
-            self.IV_plot.plot(self.cmd, self.ivpk, symbolSize=6, symbolPen='w', symbolBrush='r')
+            self.IV_plot.plot(self.ivpk_cmd, self.ivpk, symbolSize=6, symbolPen='w', symbolBrush='r')
 
 
     def readParameters(self, clearFlag=False, pw=False):
@@ -570,6 +610,46 @@ class IVCurve(AnalysisModule):
         if self.ctrl.IVCurve_showHide_lrtau.isChecked():
             self.update_Tauh() # include tau in the list... if the tool is selected
 
+            
+    def dbStoreClicked(self):
+        self.updateAnalysis()
+        db = self._host_.dm.currentDatabase()
+        table = 'DirTable_Cell'
+        columns = OrderedDict([
+            ('IVCurve_rmp', 'real'),
+            ('IVCurve_rinp', 'real'),
+            ('IVCurve_taum', 'real'),
+            ('IVCurve_neg_cmd', 'real'),
+            ('IVCurve_neg_pk', 'real'),
+            ('IVCurve_neg_ss', 'real'),
+            ('IVCurve_h_tau', 'real'),
+            ('IVCurve_h_g', 'real'),            
+        ])
+        
+        rec = {
+            'IVCurve_rmp': self.neg_vrmp/1000.,
+            'IVCurve_rinp': self.Rin,
+            'IVCurve_taum': self.tau,
+            'IVCurve_neg_cmd': self.neg_cmd,
+            'IVCurve_neg_pk': self.neg_pk,
+            'IVCurve_neg_ss': self.neg_ss,
+            'IVCurve_h_tau': self.tau2,
+            'IVCurve_h_g': self.Gh,
+        }
+        
+        with db.transaction():
+            
+            ## Add columns if needed
+            if 'IVCurve_rmp' not in db.tableSchema(table):
+                for col, typ in columns.items():
+                    db.addColumn(table, col, typ)
+                    
+            db.update(table, rec, where={'Dir': self.loaded.parent()})
+        
+        print "updated record for ", self.loaded.name()
+        print rec
+        
+        
 
 #---- Helpers ---
 # Some of these would normally live in a pyqtgraph-related module, but are just stuck here to get the job done.

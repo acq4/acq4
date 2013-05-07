@@ -10,7 +10,10 @@ import ooolib
 import re
 import pyqtgraph as pg
 
+## Read data from this ODS file:
 odsFile = "/home/luke/data/analysis/cell_overview.ods"
+## Write data into this DB table:
+DBTable = 'DirTable_Cell'
 
 ## Functions for massaging cell values into DB values
 def splitStd(x):
@@ -22,40 +25,104 @@ def splitStd(x):
         return pg.siEval(x1), pg.siEval(x2)
     else:
         return pg.siEval(x.lstrip('~')), None
-    
+
 def stripUnits(x):
     if x is None or x == '-' or '?' in x:
         return [None]
     x = x.lstrip('~')
+    x.replace('%', '')  
     return [pg.siEval(x)]
     
+def splitPair(x):
+    ## extract two values from strings like "10ms 30pA"
+    if x is None or x == '-' or '?' in x:
+        return None, None
+    a,b = x.strip().split(' ')
+    return stripUnits(a)[0], stripUnits(b)[0]
+
+def splitCsv3(x):
+    ## extract 3 comma-separated values
+    if x is None or x == '-' or '?' in x:
+        return None, None, None
+    return map(float, x.strip().split(','))
+    
+def toInt(x):
+    if not isinstance(x, float) and (x is None or x == '-' or '?' in x):
+        return [None]
+    return [int(x)]
+
+def fiType(x):
+    ## Convert B/S IVcurve types to 0 or 1
+    if x == 'B':
+        return [0]
+    elif x == 'S':
+        return [1]
+    else:
+        return [None]
+    
+def temperature(x):
+    try: 
+        return[float(x)]
+    except:
+        if x == 'RT':
+            return [20.]
+        else:
+            return [None]
+
+def yesno(x):
+    if x.startswith('yes'):
+        return [1.0]
+    elif x.startswith('no'):
+        return [-1.0]
+    else:
+        return [None]
+    
+def access(x):
+    if x == '-':
+        return [None]
+    else:
+        return [float(x) * 1e6]
+
+## List of all columns in the ODS file.
+## Each column name is followed by one of:
+##    None, indicating the column should be ignored
+##    List of ('fieldName', 'type') and an optional function for mapping from the ODS cell's value to the DB value(s).
 
 columns = [
     # ODS column header, DB column name, [filter]
     ('cell', None),
     ('type', [('CellType', 'text')]),
     ('slice plane', [('SlicePlane', 'text')]),
-    ('atlas ok', None),
-    ('mapping ok', None),
+    ('internal', [('Internal', 'text')]),
+    ('mcpg', [('MCPG', 'real')], yesno),
+    ('atlas ok', [('AtlasOK', 'real')], yesno),
+    ('mapping ok', [('MapOK', 'real')], yesno),
+    ('DCN map ok', [('DCNMapOK', 'real')], yesno),
+    ('morphology ok', [('MorphologyOK', 'real')], yesno),
+    ('Ra IV', None),
+    ('Ra ex', None),
+    ('Ra in', None),
+    ('Ra', [('AccessResistance', 'real')], access),
     ('morphology', [('Morphology', 'text')]),
-    ('I/V Curves', None),
-    ('temp', None),
-    ('age', None),
-    ('region', None),
-    ('H-current', None),
-    ('time post-dissection', None),
-    ('electrode res.', None),
-    ('input res.', None),
-    ('access res.', None),
-    ('capacitance', None),
-    ('holding cur.', None),
-    ('time constant', None),
-    ('time to peak', None),
-    ('decay 1', None),
-    ('decay 2', None),
-    ('area &gt;0, &gt;20, &gt;100', None),
-    ('n spikes', None),
-    ('latency', None),
+    ('Mean', [('MorphologyBSMean', 'real')]),
+    ('Stdev', [('MorphologyBSStdev', 'real')]),
+    ('Mean', [('MorphologyTDMean', 'real')]),
+    ('Stdev', [('MorphologyTDStdev', 'real')]),
+    ('tracing', None),
+    ('I/V Curves', [('FIType', 'real')], fiType),
+    ('temp', [('Temperature', 'real')], temperature),
+    ('age', [('Age', 'real')]),
+    #('region', None),
+    #('time post-dissection', None),
+    #('electrode res.', None),
+    #('access res.', None),
+    #('holding cur.', None),
+    ('time to peak', [('DirectTimeToPeak', 'real')], stripUnits),
+    ('decay 1', [('DirectDecayTau1', 'real'), ('DirectDecayAmp1', 'real')], splitPair),
+    ('decay 2', [('DirectDecayTau2', 'real'), ('DirectDecayAmp2', 'real')], splitPair),
+    ('area &gt;0, &gt;20, &gt;100', [('DirectAreaGt0', 'int'), ('DirectAreaGt20', 'int'), ('DirectAreaGt100', 'int')], splitCsv3),
+    ('n spikes', [('DirectNSpikes', 'int')], toInt),
+    ('latency', [('DirectSpikeLatency', 'real')], stripUnits),
     ('rise',    [('SpontExRise', 'real'),   ('SpontExRiseStd', 'real')],   splitStd ),
     ('decay 1', [('SpontExDecay1', 'real'), ('SpontExDecay1Std', 'real')], splitStd ),
     ('decay 2', [('SpontExDecay2', 'real'), ('SpontExDecay2Std', 'real')], splitStd ),
@@ -66,8 +133,8 @@ columns = [
     ('amp',     [('SpontInAmp', 'real'),    ('SpontInAmpStd', 'real')],    splitStd ),
     ('rate',    [('SpontInRate', 'real')],  stripUnits ),
     ('rise', None),
-    ('decay', None),
-    ('amp', None),
+    ('decay', [('EvokedExDecay', 'real')], stripUnits),
+    ('amp', [('EvokedExAmp', 'real')], stripUnits),
     ('n', None),
     ('rise', None),
     ('decay', None),
@@ -81,10 +148,6 @@ columns = [
     ('ex str', None),
     ('tv str', None),
     ('ex rate', None),
-    ('direct spikes', None),
-    ('direct latency', None),
-    ('slow direct?', None),
-    ('Direct area', None),
     ('AVCN area', None),
     ('DCN area', None),
     ('isofreq aligned', None),
@@ -92,10 +155,9 @@ columns = [
     ('TV?', None),
     ('Ex input?', None),
     ('GCA?', None),
-    ('mcpg', None),
 ]
 
-## for generating column list
+## for initially generating column list:
 #for h in data[1]:
     #print "    ('%s', None)," % h
 
@@ -117,6 +179,8 @@ def readOds():
     
     data = []
     for row in range(3, rows + 1):
+        if doc.get_cell_value(1, row) == ('string', '__end__'):
+            break
         data.append([])
         for col in range(1, cols + 1):
             d = doc.get_cell_value(col, row)
@@ -135,10 +199,11 @@ def readOds():
     
 
 def sync():
+    global DBTable
     man = lib.Manager.getManager()
     data = readOds()
     db = man.getModule('Data Manager').currentDatabase() 
-    table = 'DirTable_Cell'
+    table = DBTable
     tableCols = db.tableSchema(table)
     
     ## make sure DB has all the columns we need
@@ -149,7 +214,7 @@ def sync():
             if name not in tableCols:
                 db.addColumn(table, name, typ)
     
-    for rec in data[2:]:
+    for rec in data:
         
         ## get the cell's dir handle for this record
         parts = rec[0].split(' ')

@@ -1,8 +1,15 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+"""
+For testing rapid updates of ScatterPlotItem under various conditions.
+
+(Scatter plots are still rather slow to draw; expect about 20fps)
+"""
+
+
+
 ## Add path to library (just for examples; you do not need this)
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+import initExample
 
 
 from pyqtgraph.Qt import QtGui, QtCore, USE_PYSIDE
@@ -19,6 +26,7 @@ else:
     from ScatterPlotSpeedTestTemplate_pyqt import Ui_Form
 
 win = QtGui.QWidget()
+win.setWindowTitle('pyqtgraph example: ScatterPlotSpeedTest')
 ui = Ui_Form()
 ui.setupUi(win)
 win.show()

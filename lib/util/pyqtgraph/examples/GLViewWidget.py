@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
+"""
+Very basic 3D graphics example; create a view widget and add a few items.
+
+"""
 ## Add path to library (just for examples; you do not need this)
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+import initExample
 
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.opengl as gl
@@ -10,6 +13,7 @@ app = QtGui.QApplication([])
 w = gl.GLViewWidget()
 w.opts['distance'] = 20
 w.show()
+w.setWindowTitle('pyqtgraph example: GLViewWidget')
 
 ax = gl.GLAxisItem()
 ax.setSize(5,5,5)

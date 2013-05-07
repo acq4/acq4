@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-
-##  This example uses the isosurface function to convert a scalar field
-##  (a hydrogen orbital) into a mesh for 3D display.
+"""
+This example uses the isosurface function to convert a scalar field
+(a hydrogen orbital) into a mesh for 3D display.
+"""
 
 ## Add path to library (just for examples; you do not need this)
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+import initExample
 
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
@@ -14,6 +14,7 @@ import pyqtgraph.opengl as gl
 app = QtGui.QApplication([])
 w = gl.GLViewWidget()
 w.show()
+w.setWindowTitle('pyqtgraph example: GLIsosurface')
 
 w.setCameraPosition(distance=40)
 
@@ -45,9 +46,9 @@ data = np.abs(np.fromfunction(psi, (50,50,100)))
 
 
 print("Generating isosurface..")
-verts = pg.isosurface(data, data.max()/4.)
+verts, faces = pg.isosurface(data, data.max()/4.)
 
-md = gl.MeshData(vertexes=verts)
+md = gl.MeshData(vertexes=verts, faces=faces)
 
 colors = np.ones((md.faceCount(), 4), dtype=float)
 colors[:,3] = 0.2
