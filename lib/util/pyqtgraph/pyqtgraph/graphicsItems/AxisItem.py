@@ -215,14 +215,14 @@ class AxisItem(GraphicsWidget):
         ## to accomodate.
         if self.orientation in ['left', 'right']:
             mx = max(self.textWidth, x)
-            if mx > self.textWidth:
+            if mx > self.textWidth or mx < self.textWidth-10:
                 self.textWidth = mx
                 if self.style['autoExpandTextSpace'] is True:
                     self.setWidth()
                     #return True  ## size has changed
         else:
             mx = max(self.textHeight, x)
-            if mx > self.textHeight:
+            if mx > self.textHeight or mx < self.textHeight-10:
                 self.textHeight = mx
                 if self.style['autoExpandTextSpace'] is True:
                     self.setHeight()

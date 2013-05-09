@@ -127,10 +127,13 @@ def poissonProb(n, t, l, clip=False):
     that the process has a mean rate *l*.
     """
     if l == 0:
-        if n == 0:
-            return 1.0
+        if np.isscalar(n):
+            if n == 0:
+                return 1.0
+            else:
+                return 1e-25
         else:
-            return 1e-25
+            return np.where(n==0, 1.0, 1e-25)
     
     p = stats.poisson(l*t).sf(n)   
     if clip:
