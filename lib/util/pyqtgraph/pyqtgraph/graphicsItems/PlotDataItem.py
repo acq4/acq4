@@ -315,7 +315,7 @@ class PlotDataItem(GraphicsObject):
                 raise Exception('Invalid data type %s' % type(data))
             
         elif len(args) == 2:
-            seq = ('listOfValues', 'MetaArray')
+            seq = ('listOfValues', 'MetaArray', 'empty')
             if dataType(args[0]) not in seq or  dataType(args[1]) not in seq:
                 raise Exception('When passing two unnamed arguments, both must be a list or array of values. (got %s, %s)' % (str(type(args[0])), str(type(args[1]))))
             if not isinstance(args[0], np.ndarray):
