@@ -76,7 +76,8 @@ class ImagingModule(AnalysisModule):
             imageData = pmtdata[prog['startStopIndices'][0]:prog['startStopIndices'][0]+nscans*totSamps]
             imageData=imageData.reshape(nscans, totSamps)
             imageData = imageData[:,0:prog['samplesPerScan']] # trim off the pause data
-            imageData = fn.downsample(imageData, imageDownSample, axis=1)
+            if imageDownSample > 1:
+                imageData = fn.downsample(imageData, imageDownSample, axis=1)
             self.image.setImage(imageData)
             self.image.setRect(QtCore.QRectF(startT, 0.0, endT-startT, dist ))
             self.ui.plotWidget.autoRange()
@@ -90,6 +91,11 @@ class ImagingModule(AnalysisModule):
                            'downSample': imageDownSample, 'daqDownSample': daqDownSample}
 
                 info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]:prog['samplesPerScan']]), dict(name='Distance'), self.info]
+                print imageData.shape
+                print 'startstop[0]: ', prog['startStopIndices'][0]
+                print 'startstop[1]: ', prog['startStopIndices'][1]
+                print 'samplesperscan: ', prog['samplesPerScan']
+                # there is an error here that I haven't fixed. Use multilinescane until I do. 
                 ma = metaarray.MetaArray(imageData, info=info)
                 print 'I am writing imaging.ma'
                 dirhandle.writeFile(ma, 'Imaging.ma')

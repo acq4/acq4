@@ -154,7 +154,7 @@ class RegionCtrl(PG.ROI):
         PG.ROI.__init__(self, pos, size=size, pen=roiColor)
         self.addScaleHandle([0,0], [1,1])
         self.addScaleHandle([1,1], [0,0])
-        self.setZValue(1000)
+        self.setZValue(1200)
         #self.addRotateHandle([1,0], [0,1])
         #self.addRotateHandle([0,1], [1,0])
 
@@ -194,7 +194,8 @@ class Imager(Module):
         # ... not just yet anyway.
         # if this is to be allowed on a system, the change must be signaled to this class,
         # and we need to pick up the device in a routine that handles the change.
-        self.camdev = self.manager.getDevice('Camera')
+        cameraDevice = 'Camera-QuantEM'
+        self.camdev = self.manager.getDevice(cameraDevice)
         self.cameraModule = self.manager.getModule('Camera')
         self.scopeDev = self.camdev.scopeDev
         
@@ -207,9 +208,6 @@ class Imager(Module):
         self.regionCtrl = None
         self.currentRoi = None
         self.img = None # overlay image in the camera Window... 
-        
-
- 
        
         #self.buttonGrid = QtGui.QGridLayout()
         #self.l2.insertLayout(1, self.buttonGrid)
@@ -264,6 +262,7 @@ class Imager(Module):
             dict(name='Average', type='int', value=1, limits=[1,100]),
             dict(name='Pockels', type='float', value= 0.03, suffix='V', dec=True, minStep=1e-3, limits=[0, 1.5], step=0.1, siPrefix=True),
             dict(name='Objective', type='str', value='Unknown', readonly=True),
+            dict(name='Follow Stage', type='bool', value=True),
             dict(name='Image Width', type='int', value=500, readonly=False),
             dict(name='Image Height', type='int', value=500, readonly=False),
             #dict(name='Y = X', type='bool', value=True),
@@ -309,8 +308,8 @@ class Imager(Module):
         # insert an ROI into the camera image that corresponds to our scan area                
         self.objectiveUpdate() # force update of objective information and create appropriate ROI
 # check the devices...        
-        self.laserDev = self.manager.getDevice(self.param['Laser Device'])
-        self.scannerDev = self.manager.getDevice(self.param['Scanner Device'])
+       # self.laserDev = self.manager.getDevice(self.param['Laser Device'])
+       # self.scannerDev = self.manager.getDevice(self.param['Scanner Device'])
         self.update() # also force update now to make sure all parameters are synchronized
         self.param.sigTreeStateChanged.connect(self.update)
 
@@ -341,7 +340,7 @@ class Imager(Module):
             if obj == self.param['Objective']:
                 self.currentRoi = self.objectiveROImap[obj]
                 self.currentRoi.show()
-                self.updateFromROI() # do this now as well so that the parameter tree is correct. 
+                self.roiChanged() # do this now as well so that the parameter tree is correct. 
 
                 continue
             self.hideROI(self.objectiveROImap[obj])
@@ -350,9 +349,16 @@ class Imager(Module):
         """
         Report that the tranform has changed, which might include the objective, or
         perhaps the stage position, etc. This needs to be obtained to re-align
-        the scanner
+        the scanner ROI
         """
-        pass
+        globalTr = self.getScannerDevice().globalTransform()
+        pt1 = globalTr.map(self.currentRoi.scannerCoords[0])
+        pt2 = globalTr.map(self.currentRoi.scannerCoords[1])
+        diff = pt2 - pt1
+        self.currentRoi.setPos(pt1)
+        self.currentRoi.setSize(diff)
+        
+        
 
     def getObjectiveColor(self, objective):
         """
@@ -388,7 +394,7 @@ class Imager(Module):
         roi.setZValue(1000)
         self.cameraModule.window().addItem(roi)
         roi.setPos(cpos) # now is the time to do this. aaaaargh. Several hours later!!!
-        roi.sigRegionChangeFinished.connect(self.updateFromROI)
+        roi.sigRegionChangeFinished.connect(self.roiChanged)
         return roi
     
     def hideROI(self, roi):
@@ -397,7 +403,7 @@ class Imager(Module):
         """
         roi.hide()
     
-    def updateFromROI(self):
+    def roiChanged(self):
         """ read the ROI rectangle width and height and repost
         in the parameter tree """
         state = self.currentRoi.getState()
@@ -412,6 +418,18 @@ class Imager(Module):
         self.ui.ypos.setText('%g' % self.yPos) # param['Ypos'] = y
         self.pixelSize = self.width/self.param['Image Width']
         self.ui.pixelSize.setText('%g' % self.pixelSize)
+        
+        
+        # record position of ROI in Scanner's local coordinate system
+        # we can use this later to allow the ROI to track stage movement
+        tr = self.getScannerDevice().inverseGlobalTransform() # maps from global to device local
+        pt1 = PG.Point(self.xPos, self.yPos)
+        pt2 = PG.Point(self.xPos+self.width, self.yPos+self.height)
+        self.currentRoi.scannerCoords = [
+            tr.map(pt1),
+            tr.map(pt2),
+            ]
+        
 
     def update(self):
     #check the devices first        
@@ -456,6 +474,7 @@ class Imager(Module):
         
     def PMT_Run(self):
         info = {}
+        frameInfo = None  # will be filled in by takeImage()
         self.stopFlag = False
         if self.param['Z-Stack'] and self.param['Timed']:
             return
@@ -465,7 +484,8 @@ class Imager(Module):
             images = []
             nSteps = self.param['Z-Stack', 'Steps']
             for i in range(nSteps):
-                img = self.takeImage()[NP.newaxis, ...]
+                img, frameInfo = self.takeImage()
+                img = img[NP.newaxis, ...]
                 if img is None:
                     break
                 images.append(img)
@@ -484,7 +504,8 @@ class Imager(Module):
                 if self.stopFlag:
                     break
                 self.param['Timed', 'Current Frame'] = i
-                img = self.takeImage()[NP.newaxis, ...]
+                (img, frameInfo) = self.takeImage()
+                img = img[NP.newaxis, ...]
                 if img is None:
                    return
                 images.append(img)
@@ -498,13 +519,13 @@ class Imager(Module):
 
         else:
             info['2pImageType'] = 'Snap'
-            imgData = self.takeImage()
+            (imgData, frameInfo) = self.takeImage()
             if imgData is None:
                 return
 
         self.view.setImage(imgData)
-        info = self.param.getValues()
-        
+        #info = self.param.getValues()
+        info.update(frameInfo)
         if self.param['Store']:
             dh = self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
 
@@ -512,17 +533,14 @@ class Imager(Module):
         """
         Take one image as a snap, regardless of whether a Z stack or a Timed acquisition is selected
         """
-        imgData = self.takeImage()
+        (imgData, info) = self.takeImage()
         if self.testMode or imgData is None:
             return
         self.view.setImage(imgData)
-        info = self.param.getValues()
         info['2pImageType'] = 'Snap'
         if self.param['Store']:
-            info = self.param.getValues()
-            info['2pImageType'] = 'Snap'
             #microscope = self.#info['microscope'] = self.param['Scope Device'].value()
-            scope = self.Manager.getDevice(self.param['Scope Device'])
+            #scope = self.Manager.getDevice(self.param['Scope Device'])
             #print dir(scope)
             #m = self.handle.info()['microscope']
            ### this needs to be fixed so that the microscope info is stored in the file - current NOT
@@ -551,7 +569,22 @@ class Imager(Module):
 
     def PMT_Stop(self):
         self.stopFlag = True
+
+    def saveParams(self, root=None):
+        if root is None:
+            root = self.param
+            
+        params = {}
+        for child in root:
+            params[child.name()] = child.value()
+            if child.hasChildren() and child.value() is True:
+                for k,v in self.saveParams(child).items():
+                    params[child.name() + '.' + k] = v
         
+        return params
+                
+         
+         
     def takeImage(self):
         """
         Take an image using the scanning system and PMT, and return with the data.
@@ -703,7 +736,12 @@ class Imager(Module):
             PG.plot(y=imgData.reshape(imgData.shape[0]*imgData.shape[1]), x=x)
         if self.param['Show Mirror V']:
             PG.plot(y=xScan, x=NP.linspace(0, samples/self.param['Sample Rate'], xScan.size))
-        return imgData
+        
+        # generate all meta-data for this frame
+        info = self.saveParams()
+        info['transform'] = PG.SRTTransform3D(tr)
+        
+        return (imgData, info)
             
     def decomb(self, img, minShift=0, maxShift=100, auto=True, shift=None):
         ## split image into fields
@@ -749,7 +787,7 @@ class Imager(Module):
             
     def startVideo(self):
         while True:
-            img = self.takeImage()
+            (img, info) = self.takeImage()
             if img is None:
                 return
             self.view.setImage(img, autoLevels=False)
@@ -768,6 +806,9 @@ class Imager(Module):
             
     def getScopeDevice(self):
         return self.manager.getDevice(self.param['Scope Device'])
+            
+    def getScannerDevice(self):
+        return self.manager.getDevice(self.param['Scanner Device'])
             
     def setupCameraModule(self):
         modName = self.param['Camera Module']

@@ -955,6 +955,7 @@ def makeQImage(imgData, alpha=None, copy=True, transpose=True):
         ## PyQt API for QImage changed between 4.9.3 and 4.9.6 (I don't know exactly which version it was)
         ## So we first attempt the 4.9.6 API, then fall back to 4.9.3
         addr = ctypes.c_char.from_buffer(imgData, 0)
+#        img = QtGui.QImage(addr, imgData.shape[1], imgData.shape[0], imgFormat)
         try:
             img = QtGui.QImage(addr, imgData.shape[1], imgData.shape[0], imgFormat)
         except TypeError:  

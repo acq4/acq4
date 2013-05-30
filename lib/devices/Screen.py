@@ -1,11 +1,13 @@
 from lib.devices.Device import *
-from PyQt4 import QtGui
+from PyQt4 import QtGui, QtCore
 
 class Screen(Device):
-    
+    sigBlankScreen = QtCore.Signal(object, object)  # bool blank/unblank, QWaitCondition
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         dm.declareInterface(name, ['screen'], self)
+        self.blanker = ScreenBlanker()
+        self.sigBlankScreen.connect(self.blankRequested, QtCore.Qt.QueuedConnection)
 
     def protocolInterface(self, prot):
         return ScreenProtoGui(self, prot)
@@ -13,6 +15,33 @@ class Screen(Device):
     def createTask(self, cmd):
         return ScreenTask(self, cmd)
 
+    def blankScreen(self, blank=True, timeout=10.):
+        isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
+        if isGuiThread:
+            if blank:
+                self.blanker.blank()
+            else:
+                self.blanker.unBlank()
+        else:
+            mutex = QtCore.QMutex()
+            mutex.lock()
+            waitCond = QtCore.QWaitCondition()
+            self.sigBlankScreen.emit(blank, waitCond)
+            if not waitCond.wait(mutex, int(timeout*1000)):
+                raise Exception("Screen blanker threaded request timed out.")
+            
+        
+    def unBlankScreen(self):
+        self.blankScreen(False)
+
+    def blankRequested(self, blank, waitCond):
+        try:
+            if blank:
+                self.blankScreen()
+            else:
+                self.unBlankScreen()
+        finally:
+            waitCond.wakeAll()
 
 
 class Black(QtGui.QWidget):
@@ -61,7 +90,6 @@ class ScreenTask(DeviceTask):
     def __init__(self, dev, cmd):
         DeviceTask.__init__(self, dev, cmd)
         self.cmd = cmd
-        self.blanker = ScreenBlanker()
 
     def configure(self, tasks, startOrder):
         pass
@@ -69,10 +97,10 @@ class ScreenTask(DeviceTask):
     def start(self):
         ## possibly nothing required here, DAQ will start recording.
         if self.cmd['blank']:
-            self.blanker.blank()
+            self.dev.blankScreen()
         
     def stop(self, abort=False):
-        self.blanker.unBlank()
+        self.dev.unBlankScreen()
         
         
 class ScreenProtoGui(ProtocolGui):

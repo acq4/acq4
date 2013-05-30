@@ -345,8 +345,14 @@ class HoverEvent(object):
         return Point(self.currentItem.mapFromScene(self._lastScenePos))
 
     def __repr__(self):
-        lp = self.lastPos()
-        p = self.pos()
+        try:
+            lp = self.lastPos()
+        except:
+            lp = '???'
+        try:
+            p = self.pos()
+        except:
+            p = '???'
         return "<HoverEvent (%g,%g)->(%g,%g) buttons=%d enter=%s exit=%s>" % (lp.x(), lp.y(), p.x(), p.y(), int(self.buttons()), str(self.isEnter()), str(self.isExit()))
         
     def modifiers(self):
