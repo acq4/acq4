@@ -44,6 +44,8 @@ Presets = {
         'Downsample': 1,
         'Image Width': 256,
         'Image Height': 256,
+        'xSpan': 0.9,
+        'ySpan': 0.9,
         'Overscan': 70,
         'Store': False,
         'Blank Screen': False,
@@ -56,6 +58,8 @@ Presets = {
         'Downsample': 2,
         'Image Width': 128 ,
         'Image Height': 128,
+        'xSpan': 0.9,
+        'ySpan': 0.9,
         'Overscan': 68,
         'Store': False,
         'Blank Screen': False,
@@ -65,10 +69,27 @@ Presets = {
         ('Decomb', 'Auto'): False,
     },
 
+    'video-ultra': {
+        'Downsample': 2,
+        'Image Width': 64,
+        'Image Height': 64,
+        'xSpan': 0.15,
+        'ySpan': 0.15,
+        'Overscan': 250,
+        'Store': False,
+        'Blank Screen': False,
+        'Bidirectional': True,
+        'Decomb' : True,
+        ('Decomb', 'Shift'): 168e-6,
+        ('Decomb', 'Auto'): False,
+    },
+    
     'StandardDef': {
         'Downsample': 10,
         'Image Width': 512,
         'Image Height': 512,
+        'xSpan': 0.9,
+        'ySpan': 0.9,
         'Overscan': 25,
         'Store': False,
         'Blank Screen': True,
@@ -81,6 +102,8 @@ Presets = {
         'Downsample': 5,
         'Image Width': 1024,
         'Image Height': 1024,
+        'xSpan': 0.9,
+        'ySpan': 0.9,
         'Overscan': 25,
         'Store': False,
         'Blank Screen': True,
@@ -188,6 +211,7 @@ class Imager(Module):
         self.w1.addWidget(self.view)   # add the view to the right of w1     
         
         
+        self.originalROI = None
         self.currentStack = None
         self.currentStackLength = 0
         # we assume that you are not going to change the current camera or scope while running
@@ -250,10 +274,14 @@ class Imager(Module):
         self.ui.video_button.clicked.connect(self.toggleVideo)
         self.ui.record_button.toggled.connect(self.recordToggled)
         self.ui.cameraSnapBtn.clicked.connect(self.cameraSnap)
+        self.ui.restoreROI.clicked.connect(self.restoreROI)
+        self.ui.saveROI.clicked.connect(self.saveROI)
+        
         
         self.param = PT.Parameter(name = 'param', children=[
             dict(name="Preset", type='list', value='StandardDef', 
-                 values=['StandardDef', 'HighDef', 'video-std', 'video-fast']),
+                 values=['StandardDef', 'HighDef', 'video-std', 'video-fast', 
+                         'video-ultra']),
             dict(name='Store', type='bool', value=True),
             dict(name='Blank Screen', type='bool', value=True),
             dict(name='Sample Rate', type='float', value=1.0e6, suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10e3, 5e6], siPrefix=True),
@@ -267,8 +295,8 @@ class Imager(Module):
             dict(name='Image Height', type='int', value=500, readonly=False),
             #dict(name='Y = X', type='bool', value=True),
             #dict(name='Pixel Size', type='float', value=0.2e-7, readonly=True), #suffix='m', limits=[1.e-8, 1e-4], step=1e-7, siPrefix=True, readonly=True),
-            #dict(name='Width', type='float', value = 50.0e-6, suffix = 'm'), #limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
-            #dict(name='Height', type = 'float', value = 50.0e-6, suffix='m'), # limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True),
+            dict(name='xSpan', type='float', value = 0.9, limits=[0.01, 2.5]), #limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
+            dict(name='ySpan', type = 'float', value = 0.9, limits=[0.01, 2.5]), # limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True),
             #dict(name='Xpos', type='float', value = 0.0e-6, suffix = 'm'), #, limits=[-50e-3, 50e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
             #dict(name='Ypos', type = 'float', value = 0.0e-6, suffix='m'), #, limits=[-50e-3, 50e-3], step=10e-6, siPrefix=True, readonly=True),
 
@@ -357,6 +385,7 @@ class Imager(Module):
         diff = pt2 - pt1
         self.currentRoi.setPos(pt1)
         self.currentRoi.setSize(diff)
+        #self.originalROI = [diff.x, diff.y, pt1.x, pt1.y]
         
         
 
@@ -387,14 +416,17 @@ class Imager(Module):
         height = brect.height()
         x = brect.x()+width*0.05
         y = brect.y()+height*0.05
-        csize= [width*0.9,  height*0.9]
+        print self.param['xSpan']
+        csize= [width*self.param['xSpan'],  height*self.param['ySpan']]
         cpos = [x, y]
         roiColor = self.getObjectiveColor(self.scopeDev.currentObjective) # pick up an objective color...
         roi = RegionCtrl(cpos, csize, roiColor) # Note that the position actually gets over ridden by the camera additem below..
-        roi.setZValue(1000)
+        roi.setZValue(10000)
         self.cameraModule.window().addItem(roi)
         roi.setPos(cpos) # now is the time to do this. aaaaargh. Several hours later!!!
         roi.sigRegionChangeFinished.connect(self.roiChanged)
+        #self.originalROI = [width, height, x, y]
+        #print 'originalROI: ', self.originalROI
         return roi
     
     def hideROI(self, roi):
@@ -403,6 +435,22 @@ class Imager(Module):
         """
         roi.hide()
     
+    def restoreROI(self):
+        if self.originalROI is not None:
+            (width, height, x, y) = self.originalROI
+            #print self.originalROI
+            self.currentRoi.setSize([width, height])
+            self.currentRoi.setPos([x, y])
+#            print'Roi shyould be reset'
+            self.roiChanged()
+
+    def saveROI(self):
+        state = self.currentRoi.getState()
+        width, height = state['size']
+        x, y = state['pos']
+        self.originalROI = [width, height, x, y]
+        
+        
     def roiChanged(self):
         """ read the ROI rectangle width and height and repost
         in the parameter tree """
