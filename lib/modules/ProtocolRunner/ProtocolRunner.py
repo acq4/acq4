@@ -657,6 +657,9 @@ class ProtocolRunner(Module):
         
         if self.protoStateGroup.state()['loop']:
             self.loopEnabled = True
+            
+        # good time to collect garbage
+        gc.collect()
         #print "RunSingle"
         #if self.taskThread.isRunning():
             #import traceback
@@ -711,6 +714,9 @@ class ProtocolRunner(Module):
     def runSequence(self, store=True):
         ## Disable all start buttons
         self.enableStartBtns(False)
+        
+        # good time to collect garbage
+        gc.collect()
         
         ## Find all top-level items in the sequence parameter list
         try:
@@ -934,6 +940,10 @@ class ProtocolRunner(Module):
             t = max(0, ct - (ptime.time() - self.lastProtoTime))
             QtCore.QTimer.singleShot(int(t*1000.), self.loop)
         prof.finish()
+        
+        # good time to collect garbage
+        gc.collect()
+        
             
     def loop(self):
         """Run one iteration when in loop mode"""
@@ -1151,6 +1161,9 @@ class TaskThread(QtCore.QThread):
         #print "TaskThread:run() finished"
                     
     def runOnce(self, params=None):
+        # good time to collect garbage
+        gc.collect()
+        
         #print "TaskThread:runOnce"
         prof = Profiler("ProtocolRunner.TaskThread.runOnce", disabled=True, delayed=False)
         startTime = ptime.time()
