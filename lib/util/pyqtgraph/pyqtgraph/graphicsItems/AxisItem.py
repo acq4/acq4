@@ -42,7 +42,7 @@ class AxisItem(GraphicsWidget):
             self.label.rotate(-90)
             
         self.style = {
-            'tickTextOffset': 3,  ## spacing between text and axis
+            'tickTextOffset': (5, 2),  ## (horizontal, vertical) spacing between text and axis 
             'tickTextWidth': 30,  ## space reserved for tick text
             'tickTextHeight': 18, 
             'autoExpandTextSpace': True,  ## automatically expand text space if needed
@@ -215,14 +215,14 @@ class AxisItem(GraphicsWidget):
         ## to accomodate.
         if self.orientation in ['left', 'right']:
             mx = max(self.textWidth, x)
-            if mx > self.textWidth:
+            if mx > self.textWidth or mx < self.textWidth-10:
                 self.textWidth = mx
                 if self.style['autoExpandTextSpace'] is True:
                     self.setWidth()
                     #return True  ## size has changed
         else:
             mx = max(self.textHeight, x)
-            if mx > self.textHeight:
+            if mx > self.textHeight or mx < self.textHeight-10:
                 self.textHeight = mx
                 if self.style['autoExpandTextSpace'] is True:
                     self.setHeight()
@@ -242,7 +242,7 @@ class AxisItem(GraphicsWidget):
                 h = self.textHeight
             else:
                 h = self.style['tickTextHeight']
-            h += max(0, self.tickLength) + self.style['tickTextOffset']
+            h += max(0, self.tickLength) + self.style['tickTextOffset'][1]
             if self.label.isVisible():
                 h += self.label.boundingRect().height() * 0.8
         self.setMaximumHeight(h)
@@ -258,7 +258,7 @@ class AxisItem(GraphicsWidget):
                 w = self.textWidth
             else:
                 w = self.style['tickTextWidth']
-            w += max(0, self.tickLength) + self.style['tickTextOffset']
+            w += max(0, self.tickLength) + self.style['tickTextOffset'][0]
             if self.label.isVisible():
                 w += self.label.boundingRect().height() * 0.8  ## bounding rect is usually an overestimate
         self.setMaximumWidth(w)
@@ -726,7 +726,7 @@ class AxisItem(GraphicsWidget):
 
         
         
-        textOffset = self.style['tickTextOffset']  ## spacing between axis and text
+        textOffset = self.style['tickTextOffset'][axis]  ## spacing between axis and text
         #if self.style['autoExpandTextSpace'] is True:
             #textWidth = self.textWidth
             #textHeight = self.textHeight
@@ -734,7 +734,7 @@ class AxisItem(GraphicsWidget):
             #textWidth = self.style['tickTextWidth'] ## space allocated for horizontal text
             #textHeight = self.style['tickTextHeight'] ## space allocated for horizontal text
             
-        
+        textSize2 = 0
         textRects = []
         textSpecs = []  ## list of draw
         for i in range(len(tickLevels)):
