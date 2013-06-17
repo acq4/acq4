@@ -10,6 +10,7 @@ __all__ = ['CSVExporterZip']
 class CSVExporterZip(Exporter):
     Name = "CSV from plot data, compressed"
     windows = []
+    allowCopy = False
     def __init__(self, item):
         Exporter.__init__(self, item)
         self.params = Parameter(name='params', type='group', children=[

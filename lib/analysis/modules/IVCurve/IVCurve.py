@@ -331,11 +331,12 @@ class IVCurve(AnalysisModule):
             self.ctrl.IVCurve_Sequence1.clear()
             self.ctrl.IVCurve_Sequence2.clear()
         
-        Users = ['Manis', 'Ruili']
-        while tail not in Users:
+        #Users = ['Manis', 'Ruili']
+        mre = re.compile('(\d{4})\.(\d{2}).(\d{2})') # a day directory format, like '2013.01.01'
+        while tail is not '/' and re.match(mre, tail) is None:
             (head, tail) = os.path.split(fn)
             fn = head
-            if tail not in Users:
+            if re.match(mre, tail) is not None:
                 self.protocol = os.path.join(tail, self.protocol)
 
         subs = re.compile('[\/]')
