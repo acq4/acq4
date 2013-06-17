@@ -335,7 +335,8 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
             raise Exception('Cannot generate color; value "%s" is not present in this data.' % arg)
         val = args[arg]
         if val is None:
-            raise Exception('Cannot generate color; value "%s" is empty (None).' % arg)
+            return pg.QtGui.QColor(100,100,100,255)
+            #raise Exception('Cannot generate color; value "%s" is empty (None).' % arg)
         mn = self.minSpin.value()
         mx = self.maxSpin.value()
         norm = np.clip((val - mn) / (mx - mn), 0.0, 1.0)

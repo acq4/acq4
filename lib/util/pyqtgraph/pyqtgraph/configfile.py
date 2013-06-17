@@ -15,6 +15,8 @@ GLOBAL_PATH = None # so not thread safe.
 from . import units
 from .python2_3 import asUnicode
 
+
+
 class ParseError(Exception):
     def __init__(self, message, lineNum, line, fileName=None):
         self.lineNum = lineNum
@@ -100,7 +102,10 @@ def parseString(lines, start=0):
         
     indent = measureIndent(lines[start])
     ln = start - 1
-    
+
+    ## Strip out some stuff that we don't need in some intermediate info files...
+    ptsstr = re.compile('Point\(')
+    qptsstr = re.compile('PyQt4.QtCore.QPointF\(')
     try:
         while True:
             ln += 1
@@ -130,6 +135,8 @@ def parseString(lines, start=0):
             (k, p, v) = l.partition(':')
             k = k.strip()
             v = v.strip()
+            v = re.sub(ptsstr, '(', v)
+            v = re.sub(qptsstr, '(', v)
             
             ## set up local variables to use for eval
             local = units.allUnits.copy()
@@ -157,6 +164,7 @@ def parseString(lines, start=0):
                 else:
                     #print "Going deeper..", ln+1
                     (ln, val) = parseString(lines, start=ln+1)
+            print 'val: ', val
             data[k] = val
         #print k, repr(val)
     except ParseError:

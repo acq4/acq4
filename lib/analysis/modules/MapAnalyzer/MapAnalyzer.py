@@ -434,15 +434,16 @@ class MapAnalyzer(AnalysisModule):
         ])
         
         #mapRec = self.currentMap.getRecord()
-        recs = db.select(table, '*', where={'Map': self.currentMap.rowID})
+        recs = db.select(table, ['rowid', '*'], where={'Map': self.currentMap.rowID})
         if len(recs) == len(self.currentMap.spots):
             for i, spot in enumerate(self.currentMap.spots):
                 
-                for k in fields:
+                for k in fields.keys() + recs[i].keys():
                     spot['data'][k] = recs[i].get(k, None)
             self.analysisValid = True
             print "reloaded analysis from DB", self.currentMap.rowID
-            
+        else:
+            print "analysis incomplete:", len(recs), len(self.currentMap.spots)
         
         
         
@@ -610,8 +611,12 @@ class SpontRateAnalyzer:
                     filtered[i] = self.gauss(spontRate, sites['start'], now, window)
         
         self.filterPlot.setData(x=sites['start'], y=filtered)
-        
-        return {'spontRate': spontRate, 'filteredSpontRate': filtered, 'ampMean': np.mean(amps), 'ampStdev': np.std(amps)}
+        if len(amps) == 0:
+            ret = {'spontRate': spontRate, 'filteredSpontRate': filtered, 'ampMean': 0, 'ampStdev': 0}
+        else:
+            ret = {'spontRate': spontRate, 'filteredSpontRate': filtered, 'ampMean': np.mean(amps), 'ampStdev': np.std(amps)}
+        assert not np.isnan(ret['ampMean']) and not np.isnan(ret['ampStdev'])
+        return ret
         
     @staticmethod
     def gauss(values, times, mean, sigma):

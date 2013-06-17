@@ -163,7 +163,7 @@ def loadCell(cell, reloadData=False):
     print tot, "total events.."
     
     with pg.ProgressDialog('Loading event data...', maximum=tot, wait=0) as dlg:
-        for ev in db.iterSelect(eventView, ['ProtocolSequenceDir', 'SourceFile', 'fitAmplitude', 'fitTime', 'fitDecayTau', 'fitRiseTau', 'fitTimeToPeak', 'fitLengthOverDecay', 'fitFractionalError', 'userTransform', 'type', 'CellDir', 'ProtocolDir'], where={'CellDir': cell}, toArray=True, chunkSize=200):
+        for ev in db.iterSelect(eventView, ['ProtocolSequenceDir', 'SourceFile', 'fitAmplitude', 'fitTime', 'fitDecayTau', 'fitRiseTau', 'fitTimeToPeak', 'fitLengthOverDecay', 'fitFractionalError', 'userTransform', 'CellType', 'CellDir', 'ProtocolDir'], where={'CellDir': cell}, toArray=True, chunkSize=200):
             extra = np.empty(ev.shape, dtype=[('right', float), ('anterior', float), ('dorsal', float), ('holding', float)])
             
             ## insert holding levels
@@ -376,9 +376,9 @@ def showCell(**kwds):
             sp3.hide()
     
     try:
-        typ = ev2[0]['type']
+        typ = ev2[0]['CellType']
     except:
-        typ = ev3[0]['type']
+        typ = ev3[0]['CellType']
         
     sr = spontRate(ev2, numExSites)
     sri = spontRate(ev3, numInSites)
