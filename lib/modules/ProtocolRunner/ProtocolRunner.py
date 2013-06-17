@@ -66,47 +66,6 @@ class Loader(DirTreeWidget.DirTreeLoader):
         self.host.saveProtocol(handle)
         return True
         
-
-class Black(QtGui.QWidget):
-    """ make a black rectangle to fill screen when "blanking" """
-    def paintEvent(self, event):
-        p = QtGui.QPainter(self)
-        brush = pg.mkBrush(0.0)
-        p.fillRect(self.rect(), brush)
-        p.end()
-     
-
-class ScreenBlanker:
-    """
-    Perform the blanking on ALL screens that we can detect.
-    This is so that extraneous light does not leak into the 
-    detector during acquisition.
-    """
-    def __init__(self):
-        self.widgets = []
-    
-    def Blank(self):
-        return
-        d = QtGui.QApplication.desktop()
-        for i in range(d.screenCount()): # look for all screens
-            w = Black()
-            self.widgets.append(w) # make a black widget
-            sg = d.screenGeometry(i) # get the screen size
-            w.move(sg.x(), sg.y()) # put the widget there
-            w.showFullScreen() # duh
-        QtGui.QApplication.processEvents() # make it so
-        
-    def __exit__(self, *args):
-        pass
-    #for w in self.widgets:
-            #w.hide() # just take them away
-        #self.widgets = []
-    
-    def unBlank(self):
-        for w in self.widgets:
-            w.hide() # just take them away
-        self.widgets = []
-        
         
         
 class ProtocolRunner(Module):
@@ -129,7 +88,6 @@ class ProtocolRunner(Module):
         self.deleteState = 0
         self.ui = Ui_MainWindow()
         self.win = Window(self)
-        self.SB = ScreenBlanker()
         
         g = self.win.geometry()
         self.ui.setupUi(self.win)
@@ -693,13 +651,15 @@ class ProtocolRunner(Module):
         self.runSingle(store=True)
         
     def testSingle(self):
-        #self.SB.Blank() ## we don't need to blank the screen for every protocol, only the ones with imaging....
         self.runSingle(store=False)
     
     def runSingle(self, store=True):
         
         if self.protoStateGroup.state()['loop']:
             self.loopEnabled = True
+            
+        # good time to collect garbage
+        gc.collect()
         #print "RunSingle"
         #if self.taskThread.isRunning():
             #import traceback
@@ -749,12 +709,14 @@ class ProtocolRunner(Module):
         
    
     def testSequence(self):
-        #self.SB.Blank() ## we only need to blank the screen when we're imaging...
         self.runSequence(store=False)
        
     def runSequence(self, store=True):
         ## Disable all start buttons
         self.enableStartBtns(False)
+        
+        # good time to collect garbage
+        gc.collect()
         
         ## Find all top-level items in the sequence parameter list
         try:
@@ -918,16 +880,13 @@ class ProtocolRunner(Module):
         self.sigProtocolFinished.emit()
         if not self.loopEnabled:   ## what if we quit due to error?
             self.enableStartBtns(True)
-        self.SB.unBlank()
     
     def taskErrored(self):
         self.enableStartBtns(True)
-        self.SB.unBlank()
             
     def taskThreadPaused(self):
         #self.emit(QtCore.SIGNAL('protocolPaused'))
         self.sigProtocolPaused.emit()
-        self.SB.unBlank()
            
     def stopSingle(self):
         self.loopEnabled = False
@@ -981,6 +940,10 @@ class ProtocolRunner(Module):
             t = max(0, ct - (ptime.time() - self.lastProtoTime))
             QtCore.QTimer.singleShot(int(t*1000.), self.loop)
         prof.finish()
+        
+        # good time to collect garbage
+        gc.collect()
+        
             
     def loop(self):
         """Run one iteration when in loop mode"""
@@ -1198,6 +1161,9 @@ class TaskThread(QtCore.QThread):
         #print "TaskThread:run() finished"
                     
     def runOnce(self, params=None):
+        # good time to collect garbage
+        gc.collect()
+        
         #print "TaskThread:runOnce"
         prof = Profiler("ProtocolRunner.TaskThread.runOnce", disabled=True, delayed=False)
         startTime = ptime.time()

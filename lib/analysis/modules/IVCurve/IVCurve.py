@@ -614,6 +614,9 @@ class IVCurve(AnalysisModule):
         """
         if self.cmd == []: # probably not ready yet to do the update.
             return
+        print self.dataMode
+        if self.dataMode == 'VC': # don't try this in voltage clamp mode
+            return
         rgnpk= self.lrpk.getRegion()
         Func = 'exp1' # single exponential fit.
         Fits = Fitting.Fitting()
