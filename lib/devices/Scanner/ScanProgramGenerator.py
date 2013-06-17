@@ -77,11 +77,13 @@ class ScanProgramGenerator:
                 retraceLength = cmd['retraceDuration']/dt
                 scanLength = scanLength - retraceLength # adjust for retrace
                 scanPause = np.ones(int(retraceLength))
+                scanPointList = []
                 cmd['samplesPerScan'] = scanLength
                 cmd['samplesPerPause'] = scanPause.shape[0]
                 xPos = np.linspace(startPos.x(), stopPos.x(), scanLength)
                 xPos = np.append(xPos, startPos.x()*scanPause)
-
+                scanPointList.append(int(scanLength/dt))
+                cmd['scanPointList'] = scanPointList
                 yPos = np.linspace(startPos.y(), stopPos.y(), scanLength)
                 yPos = np.append(yPos, startPos.x()*scanPause)
                 x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['laser'])

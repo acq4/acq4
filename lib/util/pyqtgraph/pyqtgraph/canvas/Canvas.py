@@ -57,6 +57,7 @@ class Canvas(QtGui.QWidget):
         
         #self.view.enableMouse()
         self.view.setAspectLocked(True)
+
         # self.view.invertY()
         
         grid = GridItem()

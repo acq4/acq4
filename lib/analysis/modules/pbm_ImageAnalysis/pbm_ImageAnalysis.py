@@ -44,9 +44,13 @@ from lib.analysis.tools import PlotHelpers as PH # matlab plotting helpers
 from lib.util import functions as FN
 from HelpfulException import HelpfulException
 
-import cv2
-import cv2.cv as cv
-
+try:
+    import cv2
+    import cv2.cv as cv
+    openCVInstalled = True
+except:
+    openCVInstalled=False
+    
 #import smc as SMC # Vogelstein's OOPSI analysis for calcium transients
 
 import pylab as PL
@@ -1960,6 +1964,8 @@ class pbm_ImageAnalysis(AnalysisModule):
             3. We filter candidate ROIs by distances, so that there are no overlapping ROIs.
                         
             """
+        if openCVInstalled is False:
+            return
         if self.ctrl.ImagePhys_StdRB.isChecked():
             imstd = self.stdImage
         else:

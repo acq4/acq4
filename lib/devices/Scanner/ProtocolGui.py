@@ -387,7 +387,8 @@ class ScannerProtoGui(ProtocolGui):
     def programCtrlRemoved(self, parent, param):
         ctrl = param.ctrl
         for item in ctrl.getGraphicsItems():
-            item.scene().removeItem(item)
+            if item.scene() is not None: # only try this when we have a scene that the item was inserted into (pbm 6/6/2013)
+                item.scene().removeItem(item)
         self.programCtrls.remove(ctrl)
         
         #item.parameters().sigValueChanged.disconnect(self.itemActivationChanged)
