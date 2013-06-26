@@ -60,7 +60,7 @@ def gaussian(v, x):
 
 def expDecay(v, x):
     """Exponential decay function valued at x. Parameter vector is [amplitude, tau, yOffset]"""
-    return v[0] * np.exp(-x / v[1]) + v[2]
+    return v[0] * np.exp(-x / v[1]) #+ v[2]
 
 def expPulse(v, x):
     """Exponential pulse function (rising exponential with variable-length plateau followed by falling exponential)
@@ -2072,8 +2072,8 @@ def tauiness(data, win, step=10):
     result = np.empty((len(ivals), 4), dtype=float)
     for i in range(len(ivals)):
         j = ivals[i]
-        v = fitExpDecay(np.arange(win), data[j:j+win], measureError=True)
-        result[i] = np.array(list(v[0]) + [sum(abs(v[3]))])
+        v = fitExpDecay(np.arange(win), data.asarray()[j:j+win], measureError=True)
+        result[i] = np.array(list(v[0]) + [v[3]])
         #result[i][0] = xvals[j]
         #result[i][1] = j
     result = MetaArray(result, info=[

@@ -434,7 +434,7 @@ class MapAnalyzer(AnalysisModule):
         ])
         
         #mapRec = self.currentMap.getRecord()
-        recs = db.select(table, '*', where={'Map': self.currentMap.rowID})
+        recs = db.select(table, ['rowid', '*'], where={'Map': self.currentMap.rowID})
         if len(recs) == len(self.currentMap.spots):
             for i, spot in enumerate(self.currentMap.spots):
                 

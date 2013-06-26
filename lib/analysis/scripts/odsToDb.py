@@ -104,6 +104,8 @@ columns = [
     ('Ra ex', None),
     ('Ra in', None),
     ('Ra', [('AccessResistance', 'real')], access),
+    ('VC IH decay @ -100mV', [('IVCurve_VC_100_Htau', 'real')], stripUnits),
+    ('VC IH fast decay @ -130mV', [('IVCurve_VC_130_Htau_fast', 'real')], stripUnits),
     ('morphology', [('Morphology', 'text')]),
     ('Mean', [('MorphologyBSMean', 'real')]),
     ('Stdev', [('MorphologyBSStdev', 'real')]),
