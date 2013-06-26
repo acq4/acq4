@@ -222,10 +222,9 @@ class RemoveBaseline(PlottingCtrlNode):
     
     def processData(self, data):
         ## get array of baseline (from PolyLineROI)
-        
-        ## subtract baseline from data
-        pass
-        
+        print "listPoints:", self.line.listPoints()
+        print "localHandlePos", self.line.getLocalHandlePositions()
+        print "sceneHandlePos", self.line.getSceneHandlePositions()
 
 
 class AdaptiveDetrend(CtrlNode):
