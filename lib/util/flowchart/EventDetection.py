@@ -88,6 +88,9 @@ class ThresholdEvents(PlottingCtrlNode):
         self.lines = [self.baseLine, self.minPeakLine, self.thresholdLine]
         
         self.ctrls['display'].toggled.connect(self.displayToggled)
+        self.ctrls['baseline'].sigValueChanged.connect(self.adjustBaseLine)
+        self.ctrls['threshold'].sigValueChanged.connect(self.adjustThresholdLine)
+        self.ctrls['minPeak'].sigValueChanged.connect(self.adjustPeakLine)
         for line in self.lines:
             line.sigPositionChangeFinished.connect(self.updateCtrlValues)
         #self.remotePlot = None
@@ -107,6 +110,16 @@ class ThresholdEvents(PlottingCtrlNode):
         b = self.ctrls['display'].isChecked()
         for item in self.lines:
             item.setVisible(b)
+    
+    def adjustBaseLine(self, sb):
+        #print "vlaue:", value
+        self.baseLine.setValue(sb.value())
+        
+    def adjustThresholdLine(self, sb):
+        self.thresholdLine.setValue(sb.value()+self.baseLine.value())
+        
+    def adjustPeakLine(self, sb):
+        self.minPeakLine.setValue(sb.value()+self.baseLine.value())
             
     def updateCtrlValues(self, line):
         self.ctrls['baseline'].setValue(self.baseLine.value())

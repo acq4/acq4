@@ -318,7 +318,7 @@ class PlotDataItem(GraphicsObject):
             
         elif len(args) == 2:
             prof.mark("interpretting 2D data type")
-            seq = ('listOfValues', 'MetaArray')
+            seq = ('listOfValues', 'MetaArray', 'empty')
             if dataType(args[0]) not in seq or  dataType(args[1]) not in seq:
                 raise Exception('When passing two unnamed arguments, both must be a list or array of values. (got %s, %s)' % (str(type(args[0])), str(type(args[1]))))
             prof.mark("check 1")

@@ -233,7 +233,7 @@ def processEventFits(events, startEvent, stopEvent, opts):
     for i in range(startEvent, stopEvent):
         start = events[i]['time']
         #sliceLen = 50e-3
-        sliceLen = dt*500. ## Ca2+ events are much longer than 50ms
+        sliceLen = dt*300. ## Ca2+ events are much longer than 50ms
         if i+1 < len(events):
             nextStart = events[i+1]['time']
             sliceLen = min(sliceLen, nextStart-start)

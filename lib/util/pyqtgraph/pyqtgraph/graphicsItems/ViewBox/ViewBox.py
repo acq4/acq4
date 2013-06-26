@@ -281,6 +281,9 @@ class ViewBox(GraphicsWidget):
         """
         if item.zValue() < self.zValue():
             item.setZValue(self.zValue()+1)
+        scene = self.scene()
+        if scene is not None and scene is not item.scene():
+            scene.addItem(item)  ## Necessary due to Qt bug: https://bugreports.qt-project.org/browse/QTBUG-18616
         item.setParentItem(self.childGroup)
         if not ignoreBounds:
             self.addedItems.append(item)
@@ -1123,10 +1126,10 @@ class ViewBox(GraphicsWidget):
                 xr = item.dataBounds(0, frac=frac[0], orthoRange=orthoRange[0])
                 yr = item.dataBounds(1, frac=frac[1], orthoRange=orthoRange[1])
                 pxPad = 0 if not hasattr(item, 'pixelPadding') else item.pixelPadding()
-                if xr is None or xr == (None, None) or np.isnan(xr).any() or np.isinf(xr).any():
+                if xr is None or (xr[0] is None and xr[1] is None) or np.isnan(xr).any() or np.isinf(xr).any():
                     useX = False
                     xr = (0,0)
-                if yr is None or yr == (None, None) or np.isnan(yr).any() or np.isinf(yr).any():
+                if yr is None or (yr[0] is None and yr[1] is None) or np.isnan(yr).any() or np.isinf(yr).any():
                     useY = False
                     yr = (0,0)
 

@@ -698,7 +698,7 @@ class AnalysisDatabase(SqliteDatabase):
         return columns
 
     def select(self, table, columns='*', where=None, sql='', toDict=True, toArray=False, distinct=False, limit=None, offset=None):
-        """Extends select to convert directory/file columns back into Dir/FileHandles"""
+        """Extends select to convert directory/file columns back into Dir/FileHandles. If the file doesn't exist, you will still get a handle, but it may not be the correct type."""
         prof = debug.Profiler("AnalysisDatabase.select()", disabled=True)
         
         data = SqliteDatabase.select(self, table, columns, where=where, sql=sql, distinct=distinct, limit=limit, offset=offset, toDict=True, toArray=False)

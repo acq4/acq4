@@ -215,14 +215,14 @@ class AxisItem(GraphicsWidget):
         ## to accomodate.
         if self.orientation in ['left', 'right']:
             mx = max(self.textWidth, x)
-            if mx > self.textWidth:
+            if mx > self.textWidth or mx < self.textWidth-10:
                 self.textWidth = mx
                 if self.style['autoExpandTextSpace'] is True:
                     self.setWidth()
                     #return True  ## size has changed
         else:
             mx = max(self.textHeight, x)
-            if mx > self.textHeight:
+            if mx > self.textHeight or mx < self.textHeight-10:
                 self.textHeight = mx
                 if self.style['autoExpandTextSpace'] is True:
                     self.setHeight()
@@ -654,7 +654,7 @@ class AxisItem(GraphicsWidget):
         ## determine mapping between tick values and local coordinates
         dif = self.range[1] - self.range[0]
         if dif == 0:
-            xscale = 1
+            xScale = 1
             offset = 0
         else:
             if axis == 0:

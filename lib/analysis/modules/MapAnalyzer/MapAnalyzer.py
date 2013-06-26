@@ -434,7 +434,7 @@ class MapAnalyzer(AnalysisModule):
         ])
         
         #mapRec = self.currentMap.getRecord()
-        recs = db.select(table, '*', where={'Map': self.currentMap.rowID})
+        recs = db.select(table, ['rowid', '*'], where={'Map': self.currentMap.rowID})
         if len(recs) == len(self.currentMap.spots):
             for i, spot in enumerate(self.currentMap.spots):
                 
@@ -442,7 +442,8 @@ class MapAnalyzer(AnalysisModule):
                     spot['data'][k] = recs[i].get(k, None)
             self.analysisValid = True
             print "reloaded analysis from DB", self.currentMap.rowID
-            
+        else:
+            print "analysis incomplete:", len(recs), len(self.currentMap.spots)
         
         
         
@@ -610,8 +611,12 @@ class SpontRateAnalyzer:
                     filtered[i] = self.gauss(spontRate, sites['start'], now, window)
         
         self.filterPlot.setData(x=sites['start'], y=filtered)
-        
-        return {'spontRate': spontRate, 'filteredSpontRate': filtered, 'ampMean': np.mean(amps), 'ampStdev': np.std(amps)}
+        if len(amps) == 0:
+            ret = {'spontRate': spontRate, 'filteredSpontRate': filtered, 'ampMean': 0, 'ampStdev': 0}
+        else:
+            ret = {'spontRate': spontRate, 'filteredSpontRate': filtered, 'ampMean': np.mean(amps), 'ampStdev': np.std(amps)}
+        assert not np.isnan(ret['ampMean']) and not np.isnan(ret['ampStdev'])
+        return ret
         
     @staticmethod
     def gauss(values, times, mean, sigma):
@@ -670,7 +675,7 @@ class EventStatisticsAnalyzer:
         preMask = (events['fitTime'] > preStart)  &  (events['fitTime'] < preStop)
         preEvents = events[preMask]
         
-        preScores = {'PoissonScore': [], 'PoissonAmpScore': []}
+        preScores = {'PoissonScore': [], 'PoissonAmpScore': [], 'SpontZScore':[]}
         postScores = {'PoissonScore': [], 'PoissonAmpScore': [], 'ZScore': [], 'FitAmpSum': []}
         
         
@@ -722,12 +727,14 @@ class EventStatisticsAnalyzer:
             
             ## Compute some extra statistics for this map site
             stats = [s[0].getStats(s[1]) for s in site['data']['sites']]   ## pre-recorded stats for all sub-sites in this map site
-            if 'ZScore' in s:
+            if 'ZScore' in stats[0].keys():
                 site['data']['ZScore'] = np.median([s['ZScore'] for s in stats])
+                site['data']['SpontZScore'] = np.median([s['SpontZScore'] for s in stats])
                 postScores['ZScore'].append(site['data']['ZScore'])
-            if 'directFitPeak' in s:
+                preScores['SpontZScore'].append(site['data']['SpontZScore'])
+            if 'directFitPeak' in stats[0].keys():
                 site['data']['DirectPeak'] = np.median([s['directFitPeak'] for s in stats])
-            if 'fitAmplitude_PostRegion_sum' in s:
+            if 'fitAmplitude_PostRegion_sum' in stats[0].keys():
                 site['data']['FitAmpSum'] = np.median([s['fitAmplitude_PostRegion_sum'] for s in stats])
                 postScores['FitAmpSum'].append(site['data']['FitAmpSum'])
             #site['data']['FitAmpSum_Pre'] = np.median([s['fitAmplitude_PreRegion_sum'] for s in stats])  
@@ -749,6 +756,12 @@ class EventStatisticsAnalyzer:
             pre, post = preScores['PoissonScore'], postScores['PoissonScore']
         elif self.params['Threshold Parameter'] == 'PoissonAmpScore':
             pre, post = preScores['PoissonAmpScore'], postScores['PoissonAmpScore']
+        elif self.params['Threshold Parameter'] == 'ZScore':
+            if 'SpontZScore' in site['data'].keys():
+                pre, post = preScores['SpontZScore'], postScores['ZScore']
+            else:
+                pre = None
+                post = postScores[self.params['Threshold Parameter']]                
         else:
             pre = None
             post = postScores[self.params['Threshold Parameter']]
