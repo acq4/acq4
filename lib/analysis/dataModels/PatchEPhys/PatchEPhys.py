@@ -4,6 +4,7 @@ import SequenceRunner
 from collections import OrderedDict
 import functools
 from metaarray import *
+import numpy as np
 
 protocolNames = {
     'IV Curve': ('cciv.*', 'vciv.*'),
@@ -228,9 +229,10 @@ def isClampFile(fh):
     else:
         return True
         
-def getClampCommand(data):    
+def getClampCommand(data, generateEmpty=True):    
     """Returns the command data from a clamp MetaArray.
-    If there was no command specified, the function will optionally return all zeros."""
+    If there was no command specified, the function will return all zeros if generateEmpty=True (default)."""
+    
     if data.hasColumn('Channel', 'Command'):
         return data['Channel': 'Command']
     elif data.hasColumn('Channel', 'command'):
@@ -243,7 +245,7 @@ def getClampCommand(data):
                 units = 'V'
             else:
                 units = 'A'
-            return MetaArray(zeros(tVals.shape), info=[{'name': 'Time', 'values': tVals, 'units': 's'}, {'units': units}])
+            return MetaArray(np.zeros(tVals.shape), info=[{'name': 'Time', 'values': tVals, 'units': 's'}, {'units': units}])
     return None
 
 def getClampPrimary(data):
