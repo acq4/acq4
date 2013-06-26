@@ -10,6 +10,7 @@ import numpy as np
 
 import pyqtgraph.metaarray as metaarray
 from pyqtgraph import PolyLineROI
+from pyqtgraph import Point
 
 
 class Downsample(CtrlNode):
@@ -206,25 +207,66 @@ class RemoveBaseline(PlottingCtrlNode):
         
     def connectToPlot(self, node):
         """Define what happens when the node is connected to a plot"""
-        ##raise Exception("Must be re-implemented in subclass")
+
         if node.plot is None:
             return
-        ##for l in self.lines:
         node.getPlot().addItem(self.line)
        
     def disconnectFromPlot(self, plot):
         """Define what happens when the node is disconnected from a plot"""
-        ##raise Exception("Must be re-implemented in subclass")
-        #if self.remotePlot is None:
-                #    return
-        ##for l in self.lines:
         plot.removeItem(self.line)    
     
     def processData(self, data):
         ## get array of baseline (from PolyLineROI)
         print "listPoints:", self.line.listPoints()
-        print "localHandlePos", self.line.getLocalHandlePositions()
-        print "sceneHandlePos", self.line.getSceneHandlePositions()
+        #print "localHandlePos", self.line.getLocalHandlePositions()
+        #print "sceneHandlePos", self.line.getSceneHandlePositions()
+        h0 = self.line.getHandles()[0]
+        h1 = self.line.getHandles()[-1]
+        
+        timeVals = data.xvals(0)
+        h0.setPos(timeVals[0], h0.pos()[1])
+        h1.setPos(timeVals[-1], h1.pos()[1])
+        
+        #print "firstPos:", h0.pos()
+        #print "lastPos:", lastHandle.pos()
+        #print "dataEnds:", data[0], data[-1]
+        #print "listPoints:", self.line.listPoints()
+        
+        
+        pts = self.line.listPoints() ## lists line handles in same coordinates as data
+        pts, indices = self.adjustXPositions(pts, timeVals)
+        
+        arr = np.zeros(len(data), dtype=float)
+        
+        n = 1
+        arr[0] = pts[0].y()
+        for i in range(len(pts)-1):
+            x1 = pts[i].x()
+            x2 = pts[i+1].x()
+            y1 = pts[i].y()
+            y2 = pts[i+1].y()
+            m = (y2-y1)/(x2-x1)
+            b = y1
+            
+            
+            times = timeVals[(timeVals > x1)*(timeVals <= x2)]
+            arr[n:n+len(times)] = (m*times)+b
+            n += len(times)
+                
+        return data - arr
+        
+    def adjustXPositions(self, pts, data):
+        """Return a list of Point() where the x position is set to the nearest x value in *data* for each point in *pts*."""
+        points = []
+        timeIndices = []
+        for p in pts:
+            x = np.argwhere(abs(data - p.x()) == abs(data - p.x()).min())
+            points.append(Point(data[x], p.y()))
+            timeIndices.append(x)
+            
+        return points, timeIndices
+        
 
 
 class AdaptiveDetrend(CtrlNode):
