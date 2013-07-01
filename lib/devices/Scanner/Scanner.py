@@ -5,6 +5,7 @@ from lib.Manager import logMsg, logExc
 from Mutex import Mutex, MutexLocker
 from DeviceGui import ScannerDeviceGui
 from ProtocolGui import ScannerProtoGui
+from ScanProgramGenerator import *
 import os, pickle 
 import ptime
 from debug import *
@@ -450,129 +451,8 @@ class ScannerTask(DeviceTask):
         self.cmd['yCommand'][~mask] = offPos[1]
         
     def generateProgramArrays(self, command):
-        """LASER LOGO
-        Turn a list of movement commands into arrays of x and y values.
-        "command" looks like:
-        { 
-            numPts: 10000,
-            duration: 1.0,
-            commands: [
-               {'type': 'step', 'time': 0.0, 'pos': None),           ## start with step to "off" position 
-               ('type': 'step', 'time': 0.2, 'pos': (1.3e-6, 4e-6)), ## step to the given location after 200ms
-               ('type': 'line', 'time': (0.2, 0.205), 'pos': (1.3e-6, 4e-6))  ## 5ms sweep to the new position 
-               ('type': 'step', 'time': 0.205, 'pos': None),           ## finish step to "off" position at 205ms
-           ]
-        }
-        
-        Commands we might add in the future:
-          - circle
-          - spiral
-        """
-        dt = command['duration'] / command['numPts']
-        arr = np.empty((2, command['numPts']))
-
-        cmds = command['program']
-        lastPos = None
-                
-        lastValue = np.array(self.dev.getVoltage())
-        lastStopInd = 0
-        for i in range(len(cmds)):
-            cmd = cmds[i]
-            print dir(cmd)
-            startInd = cmd['startTime'] / dt
-            stopInd = cmd['endTime'] / dt
-            assert stopInd < arr.shape[1]
-            arr[:,lastStopInd:startInd] = lastValue[:,np.newaxis]
-            if cmd['type'] == 'step':
-                ## determine when to end the step
-                #if i+1 < len(cmds):
-                    #nextTime = cmds[i+1]['time']
-                    #if type(nextTime) is tuple:
-                        #nextTime = nextTime[0]
-                    #stopInd = nextTime / dt
-                #else:
-                    #stopInd = -1
-                
-                pos = cmd['pos']
-                if pos == None:
-                    pos = self.dev.getOffVoltage()
-                else:
-                    pos = self.dev.mapToScanner(pos[0], pos[1], self.cmd['laser'])
-                lastPos = pos
-                
-                arr[0, startInd] = pos[0]
-                arr[1, startInd] = pos[1]
-                
-                
-            elif cmd['type'] == 'line':
-                if lastPos is None:
-                    raise Exception("'line' command with no defined starting position")
-                pos = cmd['pos']
-                
-                xPos = linspace(lastPos[0], pos[0], stopInd-startInd)
-                yPos = linspace(lastPos[1], pos[1], stopInd-startInd)
-                x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['laser'])
-                arr[0, startInd:stopInd] = x
-                arr[1, startInd:stopInd] = y
-                lastPos = pos
-                
-            elif cmd['type'] == 'lineScan':
-                startPos = cmd['points'][0]                
-                stopPos = cmd['points'][1]               
-                scanLength = (stopInd - startInd)/cmd['nScans'] # in point indices, not time.
-                retraceLength = cmd['retraceDuration']/dt
-                scanLength = scanLength - retraceLength # adjust for retrace
-                scanPause = np.ones(int(retraceLength))
-                cmd['samplesPerScan'] = scanLength
-                cmd['samplesPerPause'] = scanPause.shape[0]
-                xPos = np.linspace(startPos.x(), stopPos.x(), scanLength)
-                xPos = np.append(xPos, startPos.x()*scanPause)
-
-                yPos = np.linspace(startPos.y(), stopPos.y(), scanLength)
-                yPos = np.append(yPos, startPos.x()*scanPause)
-                x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['laser'])
-                x = np.tile(x, cmd['nScans'])
-                y = np.tile(y, cmd['nScans'])
-                arr[0, startInd:startInd + len(x)] = x
-                arr[1, startInd:startInd + len(y)] = y
-                arr[0, startInd + len(x):stopInd] = arr[0, startInd + len(x)-1] # fill in any unused sample on this scan section
-                arr[1, startInd + len(y):stopInd] = arr[1, startInd + len(y)-1]
-                lastPos = (x[-1], y[-1])
-
-            elif cmd['type'] == 'rectScan':
-                pts = cmd['points']
-                width  = (pts[1] -pts[0]).length()
-                height = (pts[2]- pts[0]).length()
-                n = int(height /cmd['lineSpacing'])
-                assert n > 0
-                m = int((stopInd - startInd)/(n * cmd['nScans']))
-                assert m > 0
-                r = np.mgrid[0:m, 0:n] .reshape(1,2,m,n) 
-                
-                dx = (pts[1] - pts[0])/m
-                dy = (pts[2] - pts[0])/n
-                v = np.array([[dx[0], dy[0]], [dx[1], dy[1]]]).reshape(2,2,1,1) 
-                q = (v*r).sum(axis=1)
-                q += np.array(pts[0]).reshape(2,1,1)
-                q = q.transpose(0,2,1).reshape(2,m*n)
-                x, y = self.dev.mapToScanner(q[0], q[1], self.cmd['laser'])
-
-                for i in range(cmd['nScans']):
-                    thisStart = startInd+i*n*m
-                    arr[0, thisStart:thisStart + len(x)] = x
-                    arr[1, thisStart:thisStart + len(y)] = y
-                arr[0, startInd+n*m*cmd['nScans']:stopInd] = arr[0, startInd+n*m*cmd['nScans'] -1] # fill in any unused sample on this scan section
-                arr[1, startInd+n*m*cmd['nScans']:stopInd] = arr[1, startInd+n*m*cmd['nScans'] -1]
-                lastPos = (x[-1], y[-1])
-
-            # A side-effect modification of the 'command' dict so that analysis can access
-            # this information later
-            cmd['startStopIndices'] = (startInd, stopInd)
-            lastValue = arr[:,stopInd-1]
-            lastStopInd = stopInd
-        arr[:,lastStopInd:] = lastValue[:,np.newaxis]             
-        self.dev.dm.somename = arr
-
+        generator = ScanProgramGenerator(self.dev, command)
+        arr = generator.generate()
         self.cmd['xCommand'] = arr[0] ## arrays of voltage values
         self.cmd['yCommand'] = arr[1]
 

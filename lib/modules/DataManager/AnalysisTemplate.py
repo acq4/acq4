@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'AnalysisTemplate.ui'
+# Form implementation generated from reading ui file './lib/modules/DataManager/AnalysisTemplate.ui'
 #
-# Created: Tue Sep 18 14:14:37 2012
-#      by: PyQt4 UI code generator 4.9
+# Created: Mon Apr 29 12:04:35 2013
+#      by: PyQt4 UI code generator 4.9.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -46,7 +46,7 @@ class Ui_Form(object):
         self.databaseCombo.setObjectName(_fromUtf8("databaseCombo"))
         self.gridLayout.addWidget(self.databaseCombo, 0, 1, 1, 1)
         self.gridLayout_3.addWidget(self.groupBox, 0, 0, 1, 2)
-        spacerItem = QtGui.QSpacerItem(168, 432, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        spacerItem = QtGui.QSpacerItem(168, 250, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.gridLayout_3.addItem(spacerItem, 3, 0, 1, 2)
         self.groupBox_3 = QtGui.QGroupBox(Form)
         self.groupBox_3.setObjectName(_fromUtf8("groupBox_3"))

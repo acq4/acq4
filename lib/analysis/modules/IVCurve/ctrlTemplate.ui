@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>326</width>
-    <height>334</height>
+    <height>475</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -47,35 +47,7 @@
       <property name="margin">
        <number>5</number>
       </property>
-      <item row="7" column="1" colspan="2">
-       <widget class="QDoubleSpinBox" name="IVCurve_tau2TStart">
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-        <property name="decimals">
-         <number>1</number>
-        </property>
-        <property name="maximum">
-         <double>5000.000000000000000</double>
-        </property>
-       </widget>
-      </item>
-      <item row="14" column="0">
-       <widget class="QLabel" name="label_2">
-        <property name="text">
-         <string>R&lt;sub&gt;in&lt;/sub&gt;</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="1" colspan="2">
+      <item row="5" column="1" colspan="2">
        <widget class="QDoubleSpinBox" name="IVCurve_ssTStop">
         <property name="font">
          <font>
@@ -93,83 +65,7 @@
         </property>
        </widget>
       </item>
-      <item row="7" column="4" colspan="2">
-       <widget class="QDoubleSpinBox" name="IVCurve_tau2TStop">
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-        <property name="maximum">
-         <double>5000.000000000000000</double>
-        </property>
-       </widget>
-      </item>
-      <item row="5" column="4" colspan="2">
-       <widget class="QDoubleSpinBox" name="IVCurve_pkTStop">
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-        <property name="minimum">
-         <double>-5000.000000000000000</double>
-        </property>
-        <property name="maximum">
-         <double>50000.000000000000000</double>
-        </property>
-       </widget>
-      </item>
-      <item row="16" column="0">
-       <widget class="QLabel" name="label_9">
-        <property name="text">
-         <string>&amp;tau;&lt;sub&gt;m&lt;/sub&gt; (ms)</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item row="17" column="0">
-       <widget class="QLabel" name="label_11">
-        <property name="text">
-         <string>Adapt 
-Ratio</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item row="12" column="0">
-       <widget class="QLabel" name="label_10">
-        <property name="text">
-         <string>Results</string>
-        </property>
-       </widget>
-      </item>
-      <item row="14" column="2">
-       <widget class="QLineEdit" name="IVCurve_Rin">
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-        <property name="readOnly">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="5" column="1" colspan="2">
+      <item row="7" column="1" colspan="2">
        <widget class="QDoubleSpinBox" name="IVCurve_pkTStart">
         <property name="font">
          <font>
@@ -187,8 +83,8 @@ Ratio</string>
         </property>
        </widget>
       </item>
-      <item row="3" column="4" colspan="2">
-       <widget class="QDoubleSpinBox" name="IVCurve_ssTStart">
+      <item row="9" column="1" colspan="2">
+       <widget class="QDoubleSpinBox" name="IVCurve_tau2TStart">
         <property name="font">
          <font>
           <pointsize>12</pointsize>
@@ -197,205 +93,22 @@ Ratio</string>
         <property name="alignment">
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
         </property>
-        <property name="minimum">
-         <double>-5000.000000000000000</double>
+        <property name="decimals">
+         <number>2</number>
         </property>
         <property name="maximum">
-         <double>50000.000000000000000</double>
+         <double>5000.000000000000000</double>
         </property>
        </widget>
       </item>
-      <item row="17" column="2">
-       <widget class="QLineEdit" name="IVCurve_AR">
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-        <property name="readOnly">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="16" column="2">
-       <widget class="QLineEdit" name="IVCurve_Tau">
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-        <property name="readOnly">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="8" column="0">
-       <widget class="QLabel" name="label_4">
+      <item row="14" column="0">
+       <widget class="QLabel" name="label_10">
         <property name="text">
-         <string>Spike Thr</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         <string>Results</string>
         </property>
        </widget>
       </item>
-      <item row="18" column="0">
-       <widget class="QLabel" name="label_17">
-        <property name="text">
-         <string>Pk Amp</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item row="18" column="2">
-       <widget class="QLineEdit" name="IVCurve_pkAmp">
-        <property name="readOnly">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="8" column="4" colspan="2">
-       <widget class="QComboBox" name="IVCurve_tauh_Commands">
-        <item>
-         <property name="text">
-          <string>-0.6</string>
-         </property>
-        </item>
-       </widget>
-      </item>
-      <item row="8" column="3">
-       <widget class="QLabel" name="label_16">
-        <property name="text">
-         <string>Command</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="0">
-       <widget class="QCheckBox" name="IVCurve_showHide_lrss">
-        <property name="font">
-         <font>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="layoutDirection">
-         <enum>Qt::RightToLeft</enum>
-        </property>
-        <property name="text">
-         <string>IV:SS</string>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="5" column="0">
-       <widget class="QCheckBox" name="IVCurve_showHide_lrpk">
-        <property name="font">
-         <font>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="layoutDirection">
-         <enum>Qt::RightToLeft</enum>
-        </property>
-        <property name="text">
-         <string>IV:Peak</string>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="7" column="0">
-       <widget class="QCheckBox" name="IVCurve_showHide_lrtau">
-        <property name="font">
-         <font>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="layoutDirection">
-         <enum>Qt::RightToLeft</enum>
-        </property>
-        <property name="autoFillBackground">
-         <bool>false</bool>
-        </property>
-        <property name="text">
-         <string>Ih tool</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="5">
-       <widget class="QLabel" name="label_3">
-        <property name="text">
-         <string>T Stop</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="0">
-       <widget class="QLabel" name="IVCurve_dataMode">
-        <property name="text">
-         <string>IVCurve_dataMode</string>
-        </property>
-       </widget>
-      </item>
-      <item row="13" column="0">
-       <widget class="QLabel" name="label_7">
-        <property name="text">
-         <string>RMP/I&lt;sub&gt;0&lt;/sub&gt;</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item row="13" column="2">
-       <widget class="QLineEdit" name="IVCurve_vrmp">
-        <property name="readOnly">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="2">
-       <widget class="QLabel" name="label">
-        <property name="text">
-         <string>T Start</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item row="10" column="0" colspan="6">
-       <widget class="Line" name="line">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-       </widget>
-      </item>
-      <item row="12" column="5">
+      <item row="14" column="5">
        <widget class="QPushButton" name="IVCurve_PrintResults">
         <property name="sizePolicy">
          <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
@@ -408,14 +121,14 @@ Ratio</string>
         </property>
        </widget>
       </item>
-      <item row="12" column="2">
+      <item row="14" column="2">
        <widget class="QPushButton" name="IVCurve_Update">
         <property name="text">
          <string>Update</string>
         </property>
        </widget>
       </item>
-      <item row="8" column="1" colspan="2">
+      <item row="10" column="1" colspan="2">
        <widget class="QDoubleSpinBox" name="IVCurve_SpikeThreshold">
         <property name="font">
          <font>
@@ -436,14 +149,225 @@ Ratio</string>
         </property>
        </widget>
       </item>
-      <item row="19" column="3" colspan="3">
-       <widget class="QPushButton" name="dbStoreBtn">
+      <item row="10" column="0">
+       <widget class="QLabel" name="label_4">
         <property name="text">
-         <string>DB Store</string>
+         <string>Spike Thr</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
         </property>
        </widget>
       </item>
-      <item row="13" column="3">
+      <item row="10" column="4" colspan="2">
+       <widget class="QComboBox" name="IVCurve_tauh_Commands">
+        <item>
+         <property name="text">
+          <string>-0.6</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="10" column="3">
+       <widget class="QLabel" name="label_16">
+        <property name="text">
+         <string>Command</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="0">
+       <widget class="QCheckBox" name="IVCurve_showHide_lrss">
+        <property name="font">
+         <font>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="layoutDirection">
+         <enum>Qt::RightToLeft</enum>
+        </property>
+        <property name="text">
+         <string>IV:SS</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="0">
+       <widget class="QCheckBox" name="IVCurve_showHide_lrpk">
+        <property name="font">
+         <font>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="layoutDirection">
+         <enum>Qt::RightToLeft</enum>
+        </property>
+        <property name="text">
+         <string>IV:Peak</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="0">
+       <widget class="QCheckBox" name="IVCurve_showHide_lrtau">
+        <property name="font">
+         <font>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="layoutDirection">
+         <enum>Qt::RightToLeft</enum>
+        </property>
+        <property name="autoFillBackground">
+         <bool>false</bool>
+        </property>
+        <property name="text">
+         <string>Ih tool</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="2">
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>T Start</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QCheckBox" name="IVCurve_showHide_lrrmp">
+        <property name="font">
+         <font>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="layoutDirection">
+         <enum>Qt::RightToLeft</enum>
+        </property>
+        <property name="text">
+         <string>IV:RMP</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1" colspan="2">
+       <widget class="QDoubleSpinBox" name="IVCurve_rmpTStart">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+        <property name="decimals">
+         <number>2</number>
+        </property>
+        <property name="maximum">
+         <double>10000.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="14" column="3">
+       <widget class="QPushButton" name="dbStoreBtn">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>-&gt; db</string>
+        </property>
+       </widget>
+      </item>
+      <item row="12" column="0" colspan="6">
+       <widget class="Line" name="line">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="15" column="2">
+       <widget class="QLineEdit" name="IVCurve_vrmp"/>
+      </item>
+      <item row="19" column="0">
+       <widget class="QLabel" name="label_11">
+        <property name="text">
+         <string>Adapt 
+Ratio</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="16" column="2">
+       <widget class="QLineEdit" name="IVCurve_Rin">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="15" column="3">
+       <widget class="QLabel" name="label_8">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>gH</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="15" column="0">
+       <widget class="QLabel" name="label_7">
+        <property name="text">
+         <string>RMP/I&lt;sub&gt;0&lt;/sub&gt;</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="18" column="2">
+       <widget class="QLineEdit" name="IVCurve_Tau">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="16" column="3">
        <widget class="QLabel" name="label_15">
         <property name="text">
          <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
@@ -457,8 +381,38 @@ p, li { white-space: pre-wrap; }
         </property>
        </widget>
       </item>
-      <item row="13" column="5">
-       <widget class="QLineEdit" name="IVCurve_Tauh">
+      <item row="16" column="0">
+       <widget class="QLabel" name="label_2">
+        <property name="text">
+         <string>R&lt;sub&gt;in&lt;/sub&gt;</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="18" column="0">
+       <widget class="QLabel" name="label_9">
+        <property name="text">
+         <string>&amp;tau;&lt;sub&gt;m&lt;/sub&gt; (ms)</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="20" column="0">
+       <widget class="QLabel" name="label_17">
+        <property name="text">
+         <string>Pk Amp</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="19" column="2">
+       <widget class="QLineEdit" name="IVCurve_AR">
         <property name="font">
          <font>
           <pointsize>12</pointsize>
@@ -467,22 +421,18 @@ p, li { white-space: pre-wrap; }
         <property name="alignment">
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
         </property>
-        <property name="readOnly">
-         <bool>true</bool>
+       </widget>
+      </item>
+      <item row="19" column="5">
+       <widget class="QLineEdit" name="IVCurve_FOType">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
         </property>
        </widget>
       </item>
-      <item row="14" column="3">
-       <widget class="QLabel" name="label_5">
-        <property name="text">
-         <string>b/a (%)</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item row="14" column="5">
+      <item row="18" column="5">
        <widget class="QLineEdit" name="IVCurve_Ih_ba">
         <property name="font">
          <font>
@@ -492,34 +442,9 @@ p, li { white-space: pre-wrap; }
         <property name="alignment">
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
         </property>
-        <property name="readOnly">
-         <bool>true</bool>
-        </property>
        </widget>
       </item>
-      <item row="16" column="3">
-       <widget class="QLabel" name="label_6">
-        <property name="text">
-         <string>F&amp;O Type</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item row="16" column="5">
-       <widget class="QLineEdit" name="IVCurve_FOType">
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="readOnly">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="17" column="3">
+      <item row="20" column="3">
        <widget class="QLabel" name="label_12">
         <property name="text">
          <string>SS Amp</string>
@@ -529,27 +454,387 @@ p, li { white-space: pre-wrap; }
         </property>
        </widget>
       </item>
-      <item row="17" column="5">
-       <widget class="QLineEdit" name="IVCurve_ssAmp">
-        <property name="readOnly">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="18" column="3">
-       <widget class="QLabel" name="label_8">
-        <property name="text">
-         <string>Gh</string>
+      <item row="16" column="5">
+       <widget class="QLineEdit" name="IVCurve_Tauh">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
         </property>
         <property name="alignment">
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
         </property>
        </widget>
       </item>
-      <item row="18" column="5">
-       <widget class="QLineEdit" name="IVCurve_Gh">
-        <property name="readOnly">
-         <bool>true</bool>
+      <item row="20" column="2">
+       <widget class="QLineEdit" name="IVCurve_pkAmp"/>
+      </item>
+      <item row="20" column="5">
+       <widget class="QLineEdit" name="IVCurve_ssAmp"/>
+      </item>
+      <item row="19" column="3">
+       <widget class="QLabel" name="label_6">
+        <property name="text">
+         <string>F&amp;O Type</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="18" column="3">
+       <widget class="QLabel" name="label_5">
+        <property name="text">
+         <string>b/a (%)</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="15" column="5">
+       <widget class="QLineEdit" name="IVCurve_Gh"/>
+      </item>
+      <item row="21" column="5">
+       <widget class="QPushButton" name="IVCurve_MPLExport">
+        <property name="font">
+         <font>
+          <pointsize>11</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>MPL Export</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0">
+       <widget class="QCheckBox" name="IVCurve_subLeak">
+        <property name="font">
+         <font>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="layoutDirection">
+         <enum>Qt::RightToLeft</enum>
+        </property>
+        <property name="text">
+         <string>IV:Leak</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1" colspan="2">
+       <widget class="QDoubleSpinBox" name="IVCurve_LeakMin">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+        <property name="decimals">
+         <number>1</number>
+        </property>
+        <property name="minimum">
+         <double>-200.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>200.000000000000000</double>
+        </property>
+        <property name="value">
+         <double>-5.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="21" column="3">
+       <widget class="QPushButton" name="pushButton">
+        <property name="text">
+         <string>Reset</string>
+        </property>
+       </widget>
+      </item>
+      <item row="21" column="0">
+       <widget class="QCheckBox" name="IVCurve_KeepT">
+        <property name="layoutDirection">
+         <enum>Qt::LeftToRight</enum>
+        </property>
+        <property name="text">
+         <string>Keep
+Times</string>
+        </property>
+       </widget>
+      </item>
+      <item row="21" column="2">
+       <widget class="QCheckBox" name="IVCurve_KeepAnalysis">
+        <property name="layoutDirection">
+         <enum>Qt::LeftToRight</enum>
+        </property>
+        <property name="text">
+         <string>Keep 
+Analysis</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="5">
+       <widget class="QDoubleSpinBox" name="IVCurve_IVLimitMax">
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+        <property name="decimals">
+         <number>1</number>
+        </property>
+        <property name="minimum">
+         <double>-2000.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>2000.000000000000000</double>
+        </property>
+        <property name="singleStep">
+         <double>5.000000000000000</double>
+        </property>
+        <property name="value">
+         <double>100.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="3">
+       <widget class="QDoubleSpinBox" name="IVCurve_IVLimitMin">
+        <property name="decimals">
+         <number>1</number>
+        </property>
+        <property name="minimum">
+         <double>-2000.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>2000.000000000000000</double>
+        </property>
+        <property name="singleStep">
+         <double>5.000000000000000</double>
+        </property>
+        <property name="value">
+         <double>-160.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="2">
+       <widget class="QCheckBox" name="IVCurve_IVLimits">
+        <property name="layoutDirection">
+         <enum>Qt::LeftToRight</enum>
+        </property>
+        <property name="text">
+         <string>Limits</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_13">
+        <property name="text">
+         <string>IV Limits</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QComboBox" name="IVCurve_Sequence1">
+        <item>
+         <property name="text">
+          <string>None</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>001</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>002</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>003</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>004</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_14">
+        <property name="text">
+         <string>Seq #1</string>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="3">
+       <widget class="QDoubleSpinBox" name="IVCurve_tau2TStop">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+        <property name="maximum">
+         <double>5000.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="3">
+       <widget class="QDoubleSpinBox" name="IVCurve_pkTStop">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+        <property name="minimum">
+         <double>-5000.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>50000.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="3">
+       <widget class="QDoubleSpinBox" name="IVCurve_ssTStart">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+        <property name="minimum">
+         <double>-5000.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>50000.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="3">
+       <widget class="QDoubleSpinBox" name="IVCurve_LeakMax">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+        <property name="decimals">
+         <number>1</number>
+        </property>
+        <property name="minimum">
+         <double>-200.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>203.000000000000000</double>
+        </property>
+        <property name="value">
+         <double>5.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="3">
+       <widget class="QDoubleSpinBox" name="IVCurve_rmpTStop">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+        <property name="maximum">
+         <double>10000.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="3">
+       <widget class="QLabel" name="label_3">
+        <property name="text">
+         <string>T Stop</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="5">
+       <widget class="QCheckBox" name="IVCurve_SubRMP">
+        <property name="text">
+         <string>Sub RMP</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="5">
+       <widget class="QLabel" name="label_18">
+        <property name="text">
+         <string>Abcissa</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="5">
+       <widget class="QComboBox" name="IVCurve_RMPMode">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <item>
+         <property name="text">
+          <string>T (s)</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>I (pA)</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Sp (#/s)</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="1" column="3">
+       <widget class="QLabel" name="label_19">
+        <property name="text">
+         <string>Seq #2</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="5">
+       <widget class="QComboBox" name="IVCurve_Sequence2">
+        <item>
+         <property name="text">
+          <string>None</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="IVCurve_dataMode">
+        <property name="text">
+         <string>DataMode</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="5">
+       <widget class="QPushButton" name="IVCurve_getFileInfo">
+        <property name="text">
+         <string>FileInfo</string>
         </property>
        </widget>
       </item>

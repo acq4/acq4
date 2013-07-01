@@ -43,7 +43,7 @@ class DataManager(Module):
         
         self.win.show()
         w = self.ui.splitter.width()
-        self.ui.splitter.setSizes([int(w*0.25), int(w*0.75)])
+        self.ui.splitter.setSizes([int(w*0.4), int(w*0.6)])
         self.ui.logDock.hide()
         self.dialog = FileDialog()
         self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)

@@ -873,11 +873,13 @@ class _CameraClass:
     def _buildParamList(self):
         """Builds the list of attributes for each remote parameter"""
         plist = self.pvcam.listParams()
-        plist = filter(self.paramAvailable, plist)
         rem = ['ADC_OFFSET']  ## Set by manufacturer; do not change.
         for r in rem:
             if r in plist:
                 plist.remove(r)
+        plist = filter(self.paramAvailable, plist)
+        if len(plist) == 0:
+            raise Exception('PVCam reported that camera %s has no parameters (this is bad; try restarting your camera)' % self.name)
         params = OrderedDict()
         
         numTypes = [LIB.TYPE_INT8, LIB.TYPE_UNS8, LIB.TYPE_INT16, LIB.TYPE_UNS16, LIB.TYPE_INT32, LIB.TYPE_UNS32, LIB.TYPE_FLT64]
@@ -897,7 +899,6 @@ class _CameraClass:
             else:
                 vals = None
             params[p] = [vals, self.paramWritable(p), self.paramReadable(p), []]
-        
         return params
 
 
