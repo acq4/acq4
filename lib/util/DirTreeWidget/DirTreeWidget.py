@@ -345,14 +345,16 @@ class DirTreeWidget(QtGui.QTreeWidget):
 
 
     def dropMimeData(self, parent, index, data, action):
-        print "dropMimeData:", parent, index, self.currentItem()
-        source = self.handle(self.currentItem())
+        #print "dropMimeData:", parent, index, self.selectedFiles()
+        #source = [self.handle(s) for s in self.selectedItems()]
+        source = self.selectedFiles()
         if parent is None:
             target = self.baseDir
         else:
             target = self.handle(parent)
         try:
-            source.move(target)
+            for s in source:
+                s.move(target)
             return True
         except:
             printExc('Move failed:')
