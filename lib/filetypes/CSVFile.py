@@ -51,7 +51,7 @@ class CSVFile(FileType):
                 header.pop(-1)
                 dontUse = n-1
             elif header[-1][-1:] == '\n':
-                header[i] = header[-1][:-1]             
+                header[-1] = header[-1][:-1]             
             
             try:
                 [int(float(header[i])) for i in range(len(header))] ## if the first row of the file is not convertible to numbers, then this will raise a ValueError, and we use the first row as a header

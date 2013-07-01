@@ -390,7 +390,7 @@ class CaEventFitter(EventFitter):
         output = output['output'] 
         
         for i in range(len(indexes)):            
-            if display and self.plot.isConnected():
+            if display and self['plot'].isConnected():
                 if self.ctrls['plotFits'].isChecked():
                     item = pg.PlotDataItem(x=xVals[i], y=yVals[i], pen=(0, 0, 255), clickable=True)
                     item.setZValue(100)

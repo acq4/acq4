@@ -1759,11 +1759,6 @@ class PolyLineROI(ROI):
         self.segments.remove(seg)
         seg.sigClicked.disconnect(self.segmentClicked)
         self.scene().removeItem(seg)
-        for i, s in enumerate(self.segments):
-            if i % 2 == 0:
-                s.setPen(self.pen)
-            else:
-                s.setPen(fn.mkPen([75, 200, 75]))
         self.recolor()
     
     def recolor(self):
