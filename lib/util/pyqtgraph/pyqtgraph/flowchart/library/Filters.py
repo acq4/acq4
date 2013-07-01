@@ -218,27 +218,18 @@ class RemoveBaseline(PlottingCtrlNode):
     
     def processData(self, data):
         ## get array of baseline (from PolyLineROI)
-        print "listPoints:", self.line.listPoints()
-        #print "localHandlePos", self.line.getLocalHandlePositions()
-        #print "sceneHandlePos", self.line.getSceneHandlePositions()
         h0 = self.line.getHandles()[0]
         h1 = self.line.getHandles()[-1]
         
         timeVals = data.xvals(0)
         h0.setPos(timeVals[0], h0.pos()[1])
-        h1.setPos(timeVals[-1], h1.pos()[1])
-        
-        #print "firstPos:", h0.pos()
-        #print "lastPos:", lastHandle.pos()
-        #print "dataEnds:", data[0], data[-1]
-        #print "listPoints:", self.line.listPoints()
-        
+        h1.setPos(timeVals[-1], h1.pos()[1])      
         
         pts = self.line.listPoints() ## lists line handles in same coordinates as data
-        pts, indices = self.adjustXPositions(pts, timeVals)
+        pts, indices = self.adjustXPositions(pts, timeVals) ## maxe sure x positions match x positions of data points
         
+        ## construct an array that represents the baseline
         arr = np.zeros(len(data), dtype=float)
-        
         n = 1
         arr[0] = pts[0].y()
         for i in range(len(pts)-1):
@@ -249,12 +240,11 @@ class RemoveBaseline(PlottingCtrlNode):
             m = (y2-y1)/(x2-x1)
             b = y1
             
-            
             times = timeVals[(timeVals > x1)*(timeVals <= x2)]
-            arr[n:n+len(times)] = (m*times)+b
+            arr[n:n+len(times)] = (m*(times-times[0]))+b
             n += len(times)
                 
-        return data - arr
+        return data - arr ## subract baseline from data
         
     def adjustXPositions(self, pts, data):
         """Return a list of Point() where the x position is set to the nearest x value in *data* for each point in *pts*."""
