@@ -557,6 +557,7 @@ class Manager(QtCore.QObject):
                 self.interfaceDir.removeObject(mod)
             else:
                 return
+        self.removeWindowShortcut(mod.window())
         self.sigModulesChanged.emit()
         self.sigModuleHasQuit.emit(mod.name)
         #print "Module", mod.name, "has quit"
@@ -601,6 +602,18 @@ class Manager(QtCore.QObject):
         
         with self.lock:
             self.shortcuts.append((sh, keys, weakref.ref(win)))
+            
+    def removeWindowShortcut(self, win):
+        ## Need to remove shortcuts after window is closed, because the shortcut is hanging on to all the widgets in the window
+        ind = None
+        for i, s in enumerate(self.shortcuts):
+            if s[2]() == win:
+                ind = i
+                break
+        
+        if ind is not None:
+            with self.lock:
+                self.shortcuts.pop(ind)
     
     def runProtocol(self, cmd):
         t = Task(self, cmd)
