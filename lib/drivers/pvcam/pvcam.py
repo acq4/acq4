@@ -720,6 +720,7 @@ class _CameraClass:
             self.call('pl_exp_stop_cont', self.hCam, LIB.CCS_CLEAR_CLOSE_SHTR)
             #LIB.pl_exp_stop_cont(self.hCam, LIB.CCS_CLEAR_CLOSE_SHTR)
         self.mode = 0
+        self.buf = None ## clear out array
 
     def getParamRange(self, param):
         param = self.pvcam.paramFromString(param)
