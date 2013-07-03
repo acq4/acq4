@@ -23,7 +23,7 @@ SI_PREFIXES_ASCII = 'yzafpnum kMGTPEZY'
 
 
 from .Qt import QtGui, QtCore, USE_PYSIDE
-from pyqtgraph import getConfigOption
+import pyqtgraph as pg
 import numpy as np
 import decimal, re
 import ctypes
@@ -32,12 +32,12 @@ import sys, struct
 try:
     import scipy.ndimage
     HAVE_SCIPY = True
-    WEAVE_DEBUG = getConfigOption('weaveDebug')
-    try:
-        import scipy.weave
-        USE_WEAVE = getConfigOption('useWeave')
-    except:
-        USE_WEAVE = False
+    WEAVE_DEBUG = pg.getConfigOption('weaveDebug')
+    if pg.getConfigOption('useWeave'):
+        try:
+            import scipy.weave
+        except ImportError:
+            pg.setConfigOptions(useWeave=False)
 except ImportError:
     HAVE_SCIPY = False
 
@@ -614,15 +614,24 @@ def rescaleData(data, scale, offset, dtype=None):
         
     Uses scipy.weave (if available) to improve performance.
     """
-    global USE_WEAVE
     if dtype is None:
         dtype = data.dtype
+    else:
+        dtype = np.dtype(dtype)
     
     try:
-        if not USE_WEAVE:
+        if not pg.getConfigOption('useWeave'):
             raise Exception('Weave is disabled; falling back to slower version.')
         
-        newData = np.empty((data.size,), dtype=dtype)
+        ## require native dtype when using weave
+        if not data.dtype.isnative:
+            data = data.astype(data.dtype.newbyteorder('='))
+        if not dtype.isnative:
+            weaveDtype = dtype.newbyteorder('=')
+        else:
+            weaveDtype = dtype
+        
+        newData = np.empty((data.size,), dtype=weaveDtype)
         flat = np.ascontiguousarray(data).reshape(data.size)
         size = data.size
         
@@ -634,12 +643,14 @@ def rescaleData(data, scale, offset, dtype=None):
         }
         """
         scipy.weave.inline(code, ['flat', 'newData', 'size', 'offset', 'scale'], compiler='gcc')
+        if dtype != weaveDtype:
+            newData = newData.astype(dtype)
         data = newData.reshape(data.shape)
     except:
-        if USE_WEAVE:
-            if WEAVE_DEBUG:
+        if pg.getConfigOption('useWeave'):
+            if pg.getConfigOption('weaveDebug'):
                 debug.printExc("Error; disabling weave.")
-            USE_WEAVE = False
+            pg.setConfigOption('useWeave', False)
         
         #p = np.poly1d([scale, -offset*scale])
         #data = p(data).astype(dtype)
@@ -656,8 +667,6 @@ def applyLookupTable(data, lut):
     Uses scipy.weave to improve performance if it is available.
     Note: color gradient lookup tables can be generated using GradientWidget.
     """
-    global USE_WEAVE
-    
     if data.dtype.kind not in ('i', 'u'):
         data = data.astype(int)
     
@@ -842,7 +851,6 @@ def makeARGB(data, lut=None, levels=None, scale=None, useRGBA=False):
             if minVal == maxVal:
                 maxVal += 1e-16
             data = rescaleData(data, scale/(maxVal-minVal), minVal, dtype=int)
-        
     prof.mark('2')
 
 
@@ -852,7 +860,6 @@ def makeARGB(data, lut=None, levels=None, scale=None, useRGBA=False):
     else:
         if data.dtype is not np.ubyte:
             data = np.clip(data, 0, 255).astype(np.ubyte)
-
     prof.mark('3')
 
 
@@ -907,7 +914,8 @@ def makeQImage(imgData, alpha=None, copy=True, transpose=True):
                 array.shape[2] == 4.
     copy        If True, the data is copied before converting to QImage.
                 If False, the new QImage points directly to the data in the array.
-                Note that the array must be contiguous for this to work.
+                Note that the array must be contiguous for this to work
+                (see numpy.ascontiguousarray).
     transpose   If True (the default), the array x/y axes are transposed before 
                 creating the image. Note that Qt expects the axes to be in 
                 (height, width) order whereas pyqtgraph usually prefers the 
@@ -957,12 +965,22 @@ def makeQImage(imgData, alpha=None, copy=True, transpose=True):
         #addr = ctypes.addressof(ctypes.c_char.from_buffer(imgData, 0))
         ## PyQt API for QImage changed between 4.9.3 and 4.9.6 (I don't know exactly which version it was)
         ## So we first attempt the 4.9.6 API, then fall back to 4.9.3
-        addr = ctypes.c_char.from_buffer(imgData, 0)
+        #addr = ctypes.c_char.from_buffer(imgData, 0)
+        #try:
+            #img = QtGui.QImage(addr, imgData.shape[1], imgData.shape[0], imgFormat)
+        #except TypeError:  
+            #addr = ctypes.addressof(addr)
+            #img = QtGui.QImage(addr, imgData.shape[1], imgData.shape[0], imgFormat)
         try:
-            img = QtGui.QImage(addr, imgData.shape[1], imgData.shape[0], imgFormat)
-        except TypeError:  
-            addr = ctypes.addressof(addr)
-            img = QtGui.QImage(addr, imgData.shape[1], imgData.shape[0], imgFormat)
+            img = QtGui.QImage(imgData.ctypes.data, imgData.shape[1], imgData.shape[0], imgFormat)
+        except:
+            if copy:
+                # does not leak memory, is not mutable
+                img = QtGui.QImage(buffer(imgData), imgData.shape[1], imgData.shape[0], imgFormat)
+            else:
+                # mutable, but leaks memory
+                img = QtGui.QImage(memoryview(imgData), imgData.shape[1], imgData.shape[0], imgFormat)
+                
     img.data = imgData
     return img
     #try:
