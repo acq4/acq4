@@ -11,6 +11,7 @@ class GLLinePlotItem(GLGraphicsItem):
     """Draws line plots in 3D."""
     
     def __init__(self, **kwds):
+        """All keyword arguments are passed to setData()"""
         GLGraphicsItem.__init__(self)
         glopts = kwds.pop('glOptions', 'additive')
         self.setGLOptions(glopts)
@@ -22,7 +23,7 @@ class GLLinePlotItem(GLGraphicsItem):
     def setData(self, **kwds):
         """
         Update the data displayed by this item. All arguments are optional; 
-        for example it is allowed to update spot positions while leaving 
+        for example it is allowed to update vertex positions while leaving 
         colors unchanged, etc.
         
         ====================  ==================================================
@@ -32,13 +33,14 @@ class GLLinePlotItem(GLGraphicsItem):
         color                 tuple of floats (0.0-1.0) specifying
                               a color for the entire item.
         width                 float specifying line width
+        antialias             enables smooth line drawing
         ====================  ==================================================
         """
-        args = ['pos', 'color', 'width', 'connected']
+        args = ['pos', 'color', 'width', 'connected', 'antialias']
         for k in kwds.keys():
             if k not in args:
                 raise Exception('Invalid keyword argument: %s (allowed arguments are %s)' % (k, str(args)))
-            
+        self.antialias = False
         for arg in args:
             if arg in kwds:
                 setattr(self, arg, kwds[arg])
@@ -72,8 +74,15 @@ class GLLinePlotItem(GLGraphicsItem):
         try:
             glVertexPointerf(self.pos)
             glColor4f(*self.color)
+            glLineWidth(self.width)
+            #glPointSize(self.width)
             
-            glPointSize(self.width)
+            if self.antialias:
+                glEnable(GL_LINE_SMOOTH)
+                glEnable(GL_BLEND)
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+                glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+                
             glDrawArrays(GL_LINE_STRIP, 0, self.pos.size / self.pos.shape[-1])
         finally:
             glDisableClientState(GL_VERTEX_ARRAY)
