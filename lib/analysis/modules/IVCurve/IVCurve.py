@@ -295,7 +295,7 @@ class IVCurve(AnalysisModule):
         self.ctrl.IVCurve_Sequence1.clear()
         self.ctrl.IVCurve_Sequence2.clear()
         self.ctrl.IVCurve_Sequence1.addItems(leftseq)
-        self.ctrl.IVCurve_Sequence2.addItems(rightseq)        
+        self.ctrl.IVCurve_Sequence2.addItems(rightseq)
         self.dirsSet = dh # not sure we need this anymore... 
         self.loaded = dh # this is critical!
 
@@ -331,11 +331,12 @@ class IVCurve(AnalysisModule):
             self.ctrl.IVCurve_Sequence1.clear()
             self.ctrl.IVCurve_Sequence2.clear()
         
-        Users = ['Manis', 'Ruili']
-        while tail not in Users:
+        #Users = ['Manis', 'Ruili']
+        mre = re.compile('(\d{4})\.(\d{2}).(\d{2})') # a day directory format, like '2013.01.01'
+        while tail is not '/' and re.match(mre, tail) is None:
             (head, tail) = os.path.split(fn)
             fn = head
-            if tail not in Users:
+            if re.match(mre, tail) is not None:
                 self.protocol = os.path.join(tail, self.protocol)
 
         subs = re.compile('[\/]')
@@ -395,6 +396,8 @@ class IVCurve(AnalysisModule):
             else:
                 sf = 1e3
             if self.ctrl.IVCurve_IVLimits.isChecked(): # only accept data in a particular range
+                print sf*sequenceValues[i]
+                print self.ctrl.IVCurve_IVLimitMin.value(), self.ctrl.IVCurve_IVLimitMax.value()
                 if sf*sequenceValues[i] < self.ctrl.IVCurve_IVLimitMin.value() or sf*sequenceValues[i] > self.ctrl.IVCurve_IVLimitMax.value():
                   #  print i, sf, sf*sequenceValues[i]
                     continue # skip adding the data to the arrays

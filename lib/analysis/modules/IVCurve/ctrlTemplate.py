@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/IVCurve/ctrlTemplate.ui'
 #
-# Created: Sat Apr 13 07:59:02 2013
+# Created: Mon Apr 29 12:15:59 2013
 #      by: PyQt4 UI code generator 4.9.4
 #
 # WARNING! All changes made in this file will be lost!
