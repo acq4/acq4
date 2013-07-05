@@ -40,7 +40,12 @@ class ScanProgramGenerator:
                 continue
             startInd = int(cmd['startTime'] / dt)
             stopInd = int(cmd['endTime'] / dt)
-            assert stopInd < arr.shape[1]
+            #print 'scanproggenerator;;;'
+            #print startInd, stopInd
+            #print dt
+            #print arr.shape
+            if stopInd >= arr.shape[1]:
+                raise HelpfulException('Scan Program duration is longer than protocol duration') 
             arr[:,lastStopInd:startInd] = lastValue[:,np.newaxis]
             if cmd['type'] == 'step':
                 pos = cmd['pos']
@@ -72,11 +77,13 @@ class ScanProgramGenerator:
                 retraceLength = cmd['retraceDuration']/dt
                 scanLength = scanLength - retraceLength # adjust for retrace
                 scanPause = np.ones(int(retraceLength))
+                scanPointList = []
                 cmd['samplesPerScan'] = scanLength
                 cmd['samplesPerPause'] = scanPause.shape[0]
                 xPos = np.linspace(startPos.x(), stopPos.x(), scanLength)
                 xPos = np.append(xPos, startPos.x()*scanPause)
-
+                scanPointList.append(int(scanLength/dt))
+                cmd['scanPointList'] = scanPointList
                 yPos = np.linspace(startPos.y(), stopPos.y(), scanLength)
                 yPos = np.append(yPos, startPos.x()*scanPause)
                 x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['laser'])

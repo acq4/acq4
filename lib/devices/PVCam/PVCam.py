@@ -89,6 +89,7 @@ class PVCam(Camera):
                                 ### it is not safe to stop the camera immediately--this can hang the (lame) driver
                 time.sleep(1.0)
             self.cam.stop()
+            self.acqBuffer = None
         
     def newFrames(self):
         """Return a list of all frames acquired since the last call to newFrames."""

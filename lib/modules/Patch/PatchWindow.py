@@ -19,6 +19,9 @@ from StatusBar import StatusBar
 
 
 class PatchWindow(QtGui.QMainWindow):
+    
+    sigWindowClosed = QtCore.Signal(object)
+    
     def __init__(self, dm, clampName):
         QtGui.QMainWindow.__init__(self)
         self.setWindowTitle(clampName)
@@ -162,6 +165,7 @@ class PatchWindow(QtGui.QMainWindow):
         
     def closeEvent(self, ev):
         self.quit()
+        self.sigWindowClosed.emit(self)
     
     def bathMode(self):
         self.ui.vcPulseCheck.setChecked(True)

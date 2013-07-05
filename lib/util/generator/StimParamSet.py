@@ -114,7 +114,7 @@ class SeqParameter(SimpleParameter):
             ## if needed, add some more changes before releasing the signal
             for param, change, data in changes:
                 ## if the sequence value changes, hide/show other parameters
-                if param is self.sequence and change == 'value':
+                if param is self.param('sequence') and change == 'value':
                     vis = self.visibleParams[self['sequence']]
                     for ch in self:
                         if ch.name() in vis:
@@ -158,7 +158,7 @@ class SeqParameter(SimpleParameter):
         if 'readonly' in opts:  ## if this param is set to readonly, then disable sequencing.
             if opts['readonly'] is False:
                 self['sequence'] = 'off'
-            self.sequence.setOpts(readonly=opts['readonly'], visible=False)
+            self.param('sequence').setOpts(readonly=opts['readonly'], visible=False)
     
     def setState(self, state):
         self.setValue(state['value'])
@@ -200,29 +200,29 @@ class PulseParameter(GroupParameter):
                     'children': [{'name': 'affect', 'type': 'list', 'values': ['length', 'amplitude'], 'value': 'length'}]
                     }),
             ], **kargs)
-        self.length.sigValueChanged.connect(self.lenChanged)
-        self.amplitude.sigValueChanged.connect(self.ampChanged)
-        self.sum.sigValueChanged.connect(self.sumChanged)
+        self.param('length').sigValueChanged.connect(self.lenChanged)
+        self.param('amplitude').sigValueChanged.connect(self.ampChanged)
+        self.param('sum').sigValueChanged.connect(self.sumChanged)
         
     def lenChanged(self):
-        self.sum.setValue(abs(self['length']) * self['amplitude'], blockSignal=self.sumChanged)
+        self.param('sum').setValue(abs(self['length']) * self['amplitude'], blockSignal=self.sumChanged)
 
     def ampChanged(self):
-        self.sum.setValue(abs(self['length']) * self['amplitude'], blockSignal=self.sumChanged)
+        self.param('sum').setValue(abs(self['length']) * self['amplitude'], blockSignal=self.sumChanged)
 
     def sumChanged(self):
         if self['sum', 'affect'] == 'length':
             sign = 1 if self['length'] >= 0 else -1
             if self['amplitude'] == 0:
-                self.length.setValue(0, blockSignal=self.lenChanged)
+                self.param('length').setValue(0, blockSignal=self.lenChanged)
             else:
-                self.length.setValue(sign * self['sum'] / self['amplitude'], blockSignal=self.lenChanged)
+                self.param('length').setValue(sign * self['sum'] / self['amplitude'], blockSignal=self.lenChanged)
         else:
             sign = 1 if self['amplitude'] >= 0 else -1
             if self['length'] == 0:
-                self.amplitude.setValue(0, blockSignal=self.ampChanged)
+                self.param('amplitude').setValue(0, blockSignal=self.ampChanged)
             else:
-                self.amplitude.setValue(sign * self['sum'] / self['length'], blockSignal=self.ampChanged)
+                self.param('amplitude').setValue(sign * self['sum'] / self['length'], blockSignal=self.ampChanged)
 
     def varName(self):
         name = self.name()
@@ -231,14 +231,14 @@ class PulseParameter(GroupParameter):
 
     def preCompile(self):
         ## prepare data for compile
-        seqParams = [self.start.compile(), self.length.compile(), self.amplitude.compile()] 
+        seqParams = [self.param('start').compile(), self.param('length').compile(), self.param('amplitude').compile()] 
         (start, startSeq) = seqParams[0]
         (length, lenSeq) = seqParams[1]
         (amp, ampSeq) = seqParams[2]
         seq = {name:seq for name, seq in seqParams if seq is not None}
 
         ## If sequence is specified over sum, interpret that a bit differently.
-        (sumName, sumSeq) = self.sum.compile()
+        (sumName, sumSeq) = self.param('sum').compile()
         if sumSeq is not None:
             if self.sum['affect'] == 'length':
                 if not self.param('length').writable():
@@ -294,7 +294,7 @@ class PulseTrainParameter(PulseParameter):
     def preCompile(self):
         start, length, amp, seq = PulseParameter.preCompile(self)
         
-        seqParams = [self.interpulse_length.compile(), self.pulse_number.compile()] 
+        seqParams = [self.param('interpulse_length').compile(), self.param('pulse_number').compile()] 
         (interval, intSeq) = seqParams[0]
         (number, numSeq) = seqParams[1]
         seq.update({name:seq for name, seq in seqParams if seq is not None})
