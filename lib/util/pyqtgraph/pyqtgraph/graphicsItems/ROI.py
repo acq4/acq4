@@ -25,7 +25,6 @@ import pyqtgraph.functions as fn
 from .GraphicsObject import GraphicsObject
 from .UIGraphicsItem import UIGraphicsItem
 
-
 __all__ = [
     'ROI', 
     'TestROI', 'RectROI', 'EllipseROI', 'CircleROI', 'PolygonROI', 
@@ -39,6 +38,21 @@ def rectStr(r):
 class ROI(GraphicsObject):
     """Generic region-of-interest widget. 
     Can be used for implementing many types of selection box with rotate/translate/scale handles.
+    
+    Signals
+    ----------------------- ----------------------------------------------------
+    sigRegionChangeFinished Emitted when the user stops dragging the ROI (or
+                            one of its handles) or if the ROI is changed
+                            programatically.
+    sigRegionChangeStarted  Emitted when the user starts dragging the ROI (or
+                            one of its handles).
+    sigRegionChanged        Emitted any time the position of the ROI changes,
+                            including while it is being dragged by the user.
+    sigHoverEvent           Emitted when the mouse hovers over the ROI.
+    sigClicked              Emitted when the user clicks on the ROI
+    sigRemoveRequested      Emitted when the user selects 'remove' from the 
+                            ROI's context menu (if available).
+    ----------------------- ----------------------------------------------------
     """
     
     sigRegionChangeFinished = QtCore.Signal(object)
@@ -47,8 +61,8 @@ class ROI(GraphicsObject):
     sigHoverEvent = QtCore.Signal(object)
     sigClicked = QtCore.Signal(object, object)
     sigRemoveRequested = QtCore.Signal(object)
-
-    def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None, pen=None, hoverPen=None, movable=True, removable=False):
+    
+    def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None, pen=None, movable=True, removable=False):
         #QObjectWorkaround.__init__(self)
         GraphicsObject.__init__(self, parent)
         self.setAcceptedMouseButtons(QtCore.Qt.NoButton)
@@ -62,14 +76,9 @@ class ROI(GraphicsObject):
         
         self.freeHandleMoved = False ## keep track of whether free handles have moved since last change signal was emitted.
         self.mouseHovering = False
-
         if pen is None:
             pen = (255, 255, 255)
         self.setPen(pen)
-        
-        if hoverPen is None:
-            hoverPen = (255, 255, 0)
-        self.setHoverPen(hoverPen)
         
         self.handlePen = QtGui.QPen(QtGui.QColor(150, 255, 255))
         self.handles = []
@@ -90,8 +99,6 @@ class ROI(GraphicsObject):
         self.rotateSnap = rotateSnap
         self.scaleSnap = scaleSnap
         #self.setFlag(self.ItemIsSelectable, True)
-        self.preMoveState = self.getState()
-
     
     def getState(self):
         return self.stateCopy()
@@ -125,24 +132,9 @@ class ROI(GraphicsObject):
         return self.mapToParent(self.boundingRect()).boundingRect()
 
     def setPen(self, pen):
-        self._pen = fn.mkPen(pen)
-        #self.currentPen = self.pen
+        self.pen = fn.mkPen(pen)
+        self.currentPen = self.pen
         self.update()
-        
-    def setHoverPen(self, pen):
-        self._hoverPen = fn.mkPen(pen)
-    
-    def pen(self):
-        return self._pen
-
-    def hoverPen(self):
-        return self._hoverPen
-        
-    def currentPen(self):
-        if self.mouseHovering:
-            return self._hoverPen
-        else:
-            return self._pen
         
     def size(self):
         return self.getState()['size']
@@ -436,10 +428,10 @@ class ROI(GraphicsObject):
         if self.mouseHovering == hover:
             return
         self.mouseHovering = hover
-        #if hover:
-        #    self.currentPen = fn.mkPen(255, 255, 0)
-        #else:
-        #    self.currentPen = self.pen
+        if hover:
+            self.currentPen = fn.mkPen(255, 255, 0)
+        else:
+            self.currentPen = self.pen
         self.update()
 
     def contextMenuEnabled(self):
@@ -754,11 +746,8 @@ class ROI(GraphicsObject):
             changed = True
         else:
             for k in list(self.state.keys()):
-                if k in self.lastState.keys(): # protect against mismatched keys.
-                    if self.state[k] != self.lastState[k]:
-                        changed = True
-                else:
-                    raise Exception ("ROI:stateChanged: old and new state Keys do no match for key: %s"  % (k))
+                if self.state[k] != self.lastState[k]:
+                    changed = True
         
         self.prepareGeometryChange()
         if changed:
@@ -817,7 +806,7 @@ class ROI(GraphicsObject):
         p.save()
         r = self.boundingRect()
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(self.currentPen())
+        p.setPen(self.currentPen)
         p.translate(r.left(), r.top())
         p.scale(r.width(), r.height())
         p.drawRect(0, 0, 1, 1)
@@ -1416,7 +1405,7 @@ class MultiRectROI(QtGui.QGraphicsObject):
     
     def __init__(self, points, width, pen=None, **args):
         QtGui.QGraphicsObject.__init__(self)
-        self._pen = pen
+        self.pen = pen
         self.roiArgs = args
         self.lines = []
         if len(points) < 2:
@@ -1432,9 +1421,6 @@ class MultiRectROI(QtGui.QGraphicsObject):
         
     def paint(self, *args):
         pass
-    
-    def pen(self):
-        return self._pen
     
     def boundingRect(self):
         return QtCore.QRectF()
@@ -1492,7 +1478,7 @@ class MultiRectROI(QtGui.QGraphicsObject):
             connectTo = self.lines[-1].getHandles()[1]
             
         ## create new ROI
-        newRoi = ROI((0,0), [1, 5], parent=self, pen=self.pen(), **self.roiArgs)
+        newRoi = ROI((0,0), [1, 5], parent=self, pen=self.pen, **self.roiArgs)
         self.lines.append(newRoi)
         
         ## Add first SR handle
@@ -1545,8 +1531,7 @@ class EllipseROI(ROI):
     def paint(self, p, opt, widget):
         r = self.boundingRect()
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(self.currentPen())
-
+        p.setPen(self.currentPen)
         
         p.scale(r.width(), r.height())## workaround for GL bug
         r = QtCore.QRectF(r.x()/r.width(), r.y()/r.height(), 1,1)
@@ -1602,7 +1587,7 @@ class PolygonROI(ROI):
             
     def paint(self, p, *args):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(self.currentPen())
+        p.setPen(self.currentPen)
         for i in range(len(self.handles)):
             h1 = self.handles[i]['item'].pos()
             h2 = self.handles[i-1]['item'].pos()
@@ -1632,77 +1617,37 @@ class PolygonROI(ROI):
 class PolyLineROI(ROI):
     """Container class for multiple connected LineSegmentROIs. Responsible for adding new 
     line segments, and for translation/(rotation?) of multiple lines together."""
-    def __init__(self, positions, closed=False, pos=None, alternateColors=False, **args):
+    def __init__(self, positions, closed=False, pos=None, **args):
+        
         if pos is None:
             pos = [0,0]
-        if 'size' in args.keys():
-            raise Exception("Use ROI.scale() instead of passing a size argument")
-
+            
         ROI.__init__(self, pos, size=[1,1], **args)
         self.closed = closed
-        pen=self.pen()
-
         self.segments = []
-        self.alternate = alternateColors
         
         for p in positions:
             self.addFreeHandle(p)
          
-        #start = -1 if self.closed else 0
-        stop = len(self.handles) if self.closed else len(self.handles)-1
-        #for i in range(start, len(self.handles)-1):
-        for i in range(0, stop):
-            #n=0
-            self.addSegment(self.handles[i]['item'], self.handles[(i+1)%len(self.handles)]['item'])
-            #print "Adding segment:", n, "   positions:", self.handles[i]['item'].pos(), self.handles[(i+1)%len(self.handles)]['item'].pos()
-        #for i in range(len(positions)-1):
-            #h2 = self.addFreeHandle(positions[i+1])
-            #segment = LineSegmentROI(handles=(h, h2), pen=pen, parent=self, movable=False)
-            #self.segments.append(segment)
-            #h = h2
-            
-        
-        #for i, s in enumerate(self.segments):
-            #h = s.handles[0]
-            #self.addFreeHandle(h['pos'], item=h['item'])
-            #s.setZValue(self.zValue() +1)
-           
-        #h = self.segments[-1].handles[1]
-        #self.addFreeHandle(h['pos'], item=h['item'])
-            
-        #if closed:
-            #h1 = self.handles[-1]['item']
-            #h2 = self.handles[0]['item']
-            #self.segments.append(LineSegmentROI([positions[-1], positions[0]], pos=pos, handles=(h1, h2), pen=pen, parent=self, movable=False))
-            #h2.setParentItem(self.segments[-1])
-            
-            
-        #for s in self.segments:
-            #self.setSegmentSettings(s)
-            
-    #def movePoint(self, *args, **kargs):
-        #pass
+        start = -1 if self.closed else 0
+        for i in range(start, len(self.handles)-1):
+            self.addSegment(self.handles[i]['item'], self.handles[i+1]['item'])
 
     def addSegment(self, h1, h2, index=None):
-        seg = LineSegmentROI(handles=(h1, h2), pen=self.pen(), parent=self, movable=False)
+        seg = LineSegmentROI(handles=(h1, h2), pen=self.pen, parent=self, movable=False)
         if index is None:
             self.segments.append(seg)
         else:
             self.segments.insert(index, seg)
-            
         seg.sigClicked.connect(self.segmentClicked)
         seg.setAcceptedMouseButtons(QtCore.Qt.LeftButton)
         seg.setZValue(self.zValue()+1)
         for h in seg.handles:
             h['item'].setDeletable(True)
             h['item'].setAcceptedMouseButtons(h['item'].acceptedMouseButtons() | QtCore.Qt.LeftButton) ## have these handles take left clicks too, so that handles cannot be added on top of other handles
-        self.recolor()
-            
+        
     def setMouseHover(self, hover):
         ## Inform all the ROI's segments that the mouse is(not) hovering over it
-        #if self.mouseHovering == hover:
-            #return
-        #self.mouseHovering = hover
         ROI.setMouseHover(self, hover)
         for s in self.segments:
             s.setMouseHover(hover)
@@ -1719,7 +1664,6 @@ class PolyLineROI(ROI):
             pos = pos
         else:
             raise Exception("Either an event or a position must be given.")
-
         h1 = segment.handles[0]['item']
         h2 = segment.handles[1]['item']
         
@@ -1727,15 +1671,6 @@ class PolyLineROI(ROI):
         h3 = self.addFreeHandle(pos, index=self.indexOfHandle(h2))
         self.addSegment(h3, h2, index=i+1)
         segment.replaceHandle(h2, h3)
-        
-
-    #def report(self):
-        #for s in self.segments:
-            #print s
-            #for h in s.handles:
-                #print "  ", h
-        #for h in self.handles:
-            #print h
         
     def removeHandle(self, handle, updateSegments=True):
         ROI.removeHandle(self, handle)
@@ -1759,17 +1694,6 @@ class PolyLineROI(ROI):
         self.segments.remove(seg)
         seg.sigClicked.disconnect(self.segmentClicked)
         self.scene().removeItem(seg)
-        self.recolor()
-    
-    def recolor(self):
-        if not self.alternate:
-            return
-        for i, s in enumerate(self.segments):
-            if i % 2 == 0:
-                s.setPen(self.pen)
-            else:
-                s.setPen(fn.mkPen([75, 200, 75]))
-            
         
     def checkRemoveHandle(self, h):
         ## called when a handle is about to display its context menu
@@ -1777,15 +1701,14 @@ class PolyLineROI(ROI):
             return len(self.handles) > 3
         else:
             return len(self.handles) > 2
-
-    def listPoints(self):
-        return [p['item'].pos() for p in self.handles]
-    
-    def countSegments(self):
-        ## return the number of line segments 
-        return(len(self.handles)-1)
-    
+        
     def paint(self, p, *args):
+        #for s in self.segments:
+            #s.update()
+        #p.setPen(self.currentPen)
+        #p.setPen(fn.mkPen('w'))
+        #p.drawRect(self.boundingRect())
+        #p.drawPath(self.shape())
         pass
     
     def boundingRect(self):
@@ -1824,13 +1747,14 @@ class PolyLineROI(ROI):
         shape = [1] * data.ndim
         shape[axes[0]] = sliced.shape[axes[0]]
         shape[axes[1]] = sliced.shape[axes[1]]
-        return sliced * mask
+        return sliced * mask.reshape(shape)
 
 
 class LineSegmentROI(ROI):
     """
     ROI subclass with two freely-moving handles defining a line.
     """
+    
     def __init__(self, positions=(None, None), pos=None, handles=(None,None), **args):
         if pos is None:
             pos = [0,0]
@@ -1849,7 +1773,7 @@ class LineSegmentROI(ROI):
             
     def paint(self, p, *args):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(self.currentPen())
+        p.setPen(self.currentPen)
         h1 = self.handles[0]['item'].pos()
         h2 = self.handles[1]['item'].pos()
         p.drawLine(h1, h2)
@@ -1961,13 +1885,13 @@ class SpiralROI(ROI):
     def paint(self, p, *args):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         #path = self.shape()
-        p.setPen(self.currentPen())
+        p.setPen(self.currentPen)
         p.drawPath(self.path)
-        #p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
-        #p.drawPath(self.shape())
-        #p.setPen(QtGui.QPen(QtGui.QColor(0,0,255)))
-       # p.drawRect(self.boundingRect())
-
+        p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
+        p.drawPath(self.shape())
+        p.setPen(QtGui.QPen(QtGui.QColor(0,0,255)))
+        p.drawRect(self.boundingRect())
+        
     
 
             
