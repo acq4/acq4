@@ -127,9 +127,6 @@ class EventDetector(AnalysisModule):
         if data is None:
             data = self.flowchart.output()['events']
             
-        if len(data) == 0:
-            return
-            
         dbui = self.getElement('Database')
         table = dbui.getTableName(self.dbIdentity)
         db = dbui.getDb()
@@ -137,6 +134,23 @@ class EventDetector(AnalysisModule):
             raise Exception("No DB selected")
         
         p.mark("DB prep done")
+        
+        if len(data) == 0:
+            ## if there is no event data, then we need to delete previous event data
+            
+            dh = self.currentFile.name(relativeTo=db.baseDir())
+            if dh[-10:] == '/Clamp1.ma' or dh[-10:] == '/Clamp2.ma':
+                dh = dh[:-10]
+            protocolID = db('Select rowid, Dir from DirTable_Protocol where Dir="%s"' %dh)
+            if len(protocolID) > 0:
+                protocolID = protocolID[0]['rowid']
+            else:
+                return
+            db('Delete from %s where ProtocolDir=%i' %(table, protocolID))            
+            return
+            
+  
+        
         
         ## determine the set of fields we expect to find in the table
         columns = db.describeData(data)

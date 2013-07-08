@@ -105,10 +105,11 @@ class _PVCamClass:
         #self.pvcam = windll.Pvcam32
         if _PVCamClass.PVCAM_CREATED:
             raise Exception("Will not create another pvcam instance--use the pre-existing PVCam object.")
-        if LIB.pvcam_init() < 1:
+        init = LIB.pvcam_init()()
+        if init < 1:
             raise Exception("Could not initialize pvcam library (pl_pvcam_init): %s" % self.error())
         # This should happen before every new exposure (?)
-        if LIB.exp_init_seq() < 1:
+        if LIB.exp_init_seq()() < 1:
             raise Exception("Could not initialize pvcam library (pl_exp_init_seq): %s" % self.error())
         _PVCamClass.PVCAM_CREATED = True
         
@@ -720,6 +721,7 @@ class _CameraClass:
             self.call('pl_exp_stop_cont', self.hCam, LIB.CCS_CLEAR_CLOSE_SHTR)
             #LIB.pl_exp_stop_cont(self.hCam, LIB.CCS_CLEAR_CLOSE_SHTR)
         self.mode = 0
+        self.buf = None ## clear out array
 
     def getParamRange(self, param):
         param = self.pvcam.paramFromString(param)
@@ -873,11 +875,13 @@ class _CameraClass:
     def _buildParamList(self):
         """Builds the list of attributes for each remote parameter"""
         plist = self.pvcam.listParams()
-        plist = filter(self.paramAvailable, plist)
         rem = ['ADC_OFFSET']  ## Set by manufacturer; do not change.
         for r in rem:
             if r in plist:
                 plist.remove(r)
+        plist = filter(self.paramAvailable, plist)
+        if len(plist) == 0:
+            raise Exception('PVCam reported that camera %s has no parameters (this is bad; try restarting your camera)' % self.name)
         params = OrderedDict()
         
         numTypes = [LIB.TYPE_INT8, LIB.TYPE_UNS8, LIB.TYPE_INT16, LIB.TYPE_UNS16, LIB.TYPE_INT32, LIB.TYPE_UNS32, LIB.TYPE_FLT64]
@@ -897,7 +901,6 @@ class _CameraClass:
             else:
                 vals = None
             params[p] = [vals, self.paramWritable(p), self.paramReadable(p), []]
-        
         return params
 
 

@@ -137,6 +137,7 @@ class Map:
 
     def generateDefaults(self, scan):
         rec = {}
+        dm = self.host.dataModel
         source = scan.source()
         sinfo = source.info()
         if 'sequenceParams' in sinfo:
@@ -144,39 +145,46 @@ class Map:
         else:
             next = source
         
-        if next.exists('Clamp1.ma'):
-            cname = 'Clamp1'
-            file = next['Clamp1.ma']
-        elif next.exists('Clamp2.ma'):
-            cname = 'Clamp2'
-            file = next['Clamp2.ma']
-        else:
-            raise Exception("No clamp file found in %s" % next.name())
+        file = dm.getClampFile(next)
+        #if next.exists('Clamp1.ma'):
+        #    cname = 'Clamp1'
+        #    file = next['Clamp1.ma']
+        #elif next.exists('Clamp2.ma'):
+        #    cname = 'Clamp2'
+        #    file = next['Clamp2.ma']
+        #else:
+        #    raise Exception("No clamp file found in %s" % next.name())
             
         data = file.read()
         info = data._info[-1]
-        if 'ClampState' in info:
-            rec['mode'] = info['ClampState']['mode']
-            rec['holding'] = info['ClampState']['holding']
-        else:  ## older meta-info format for MultiClamp
-            rec['mode'] = info['mode']
-            try:
-                rec['holding'] = float(sinfo['devices'][cname]['holdingSpin'])*1000.
-            except:
-                pass
+        rec['mode'] = dm.getClampMode(file)
+        rec['holding'] = dm.getClampHoldingLevel(file)
+        #if 'ClampState' in info:
+        #    rec['mode'] = info['ClampState']['mode']
+        #    rec['holding'] = info['ClampState']['holding']
+        #else:  ## older meta-info format for MultiClamp
+        #    rec['mode'] = info['mode']
+        #    try:
+        #        rec['holding'] = float(sinfo['devices'][cname]['holdingSpin'])*1000.
+        #    except:
+        #        pass
         
         cell = source.parent()
-        day = cell.parent().parent()
-        dinfo = day.info()
-        rec['acsf'] = dinfo.get('solution', '')
-        rec['internal'] = dinfo.get('internal', '')
-        rec['temp'] = dinfo.get('temperature', '')
+        #day = cell.parent().parent()
+        #dinfo = day.info()
+        #rec['acsf'] = dinfo.get('solution', '')
+        #rec['internal'] = dinfo.get('internal', '')
+        #rec['temp'] = dinfo.get('temperature', '')
+        rec['acsf'] = dm.getACSF(source)
+        rec['internal'] = dm.getInternalSoln(source)
+        rec['temp'] = dm.getTemp(file)
         
-        rec['cellType'] = cell.info().get('type', '')
+        #rec['cellType'] = cell.info().get('type', '')
+        rec['cellType'] = dm.getCellType(source)
         
-        ninfo = next.info()
-        if 'Temperature.BathTemp' in ninfo:
-            rec['temp'] = ninfo['Temperature.BathTemp']
+        #ninfo = next.info()
+        #if 'Temperature.BathTemp' in ninfo:
+        #    rec['temp'] = ninfo['Temperature.BathTemp']
         rec['description'] = self.name(source.parent(), rec)
         return rec
 

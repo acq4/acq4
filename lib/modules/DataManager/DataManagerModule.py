@@ -43,10 +43,11 @@ class DataManager(Module):
         
         self.win.show()
         w = self.ui.splitter.width()
-        self.ui.splitter.setSizes([int(w*0.25), int(w*0.75)])
+        self.ui.splitter.setSizes([int(w*0.4), int(w*0.6)])
         self.ui.logDock.hide()
         self.dialog = FileDialog()
         self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
+        self.ui.fileTreeWidget.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
         ## Load values into GUI
         #self.model = DMModel(self.manager.getBaseDir())
         #self.ui.fileTreeView.setModel(self.model)

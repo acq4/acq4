@@ -247,7 +247,7 @@ class DBCtrl(QtGui.QWidget):
         dbui = self.host.getElement('Database')
         db = dbui.getDb()        
         spot = self.host.selectedSpot
-        dh = spot.data.name(relativeTo=db.baseDir())  
+        dh = spot.data().name(relativeTo=db.baseDir())  
         protocolID = db('Select rowid, Dir from DirTable_Protocol where Dir="%s"' %dh)
         if len(protocolID) > 0:
             protocolID = protocolID[0]['rowid']
@@ -255,7 +255,7 @@ class DBCtrl(QtGui.QWidget):
             return
         db('Delete from Photostim_events where ProtocolDir=%i' %protocolID)
         db('Delete from Photostim_sites where ProtocolDir=%i' %protocolID)
-        db('Delete from DirTable_Protocol where Dir="%s"' %dh)
+        #db('Delete from DirTable_Protocol where Dir="%s"' %dh)## don't delete the protocol, because other things like atlas tables reference the protocol, only delete from tables we own
         print "Removed data for %s" %dh
         
         

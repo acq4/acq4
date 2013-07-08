@@ -426,6 +426,10 @@ def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpola
     #     
     #     #MP.rcParams['interactive'] = False
         
+    st=numpy.array([])
+    spk = []
+    if xin is None:
+        return(st, spk)
     xt = xin.view(numpy.ndarray)
     v = vin.view(numpy.ndarray)
     if t1 is not None and t0 is not None:

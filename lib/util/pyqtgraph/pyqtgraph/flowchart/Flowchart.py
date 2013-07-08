@@ -194,6 +194,7 @@ class Flowchart(Node):
                     break
                 n += 1
                 
+        print "nodeType:", nodeType, "name:", name
         node = library.getNodeType(nodeType)(name)
         self.addNode(node, name, pos)
         return node
@@ -303,7 +304,7 @@ class Flowchart(Node):
                     if len(inputs) == 0:
                         continue
                     if inp.isMultiValue():  ## multi-input terminals require a dict of all inputs
-                        args[inp.name()] = dict([(i, data[i]) for i in inputs])
+                        args[inp.name()] = dict([(i, data[i]) for i in inputs if i in data.keys()])
                     else:                   ## single-inputs terminals only need the single input value available
                         args[inp.name()] = data[inputs[0]]  
                         
@@ -322,6 +323,8 @@ class Flowchart(Node):
                         #print "    Output:", out, out.name()
                         #print out.name()
                         try:
+                            if out.name() == 'plot':
+                                continue
                             data[out] = result[out.name()]
                         except:
                             print(out, out.name())
@@ -560,6 +563,7 @@ class Flowchart(Node):
             self.fileDialog.fileSelected.connect(self.saveFile)
             return
             #fileName = QtGui.QFileDialog.getSaveFileName(None, "Save Flowchart..", startDir, "Flowchart (*.fc)")
+        fileName = str(fileName)
         configfile.writeConfigFile(self.saveState(), fileName)
         self.sigFileSaved.emit(fileName)
 
@@ -681,7 +685,7 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         #self.setCurrentFile(newFile)
         
     def fileSaved(self, fileName):
-        self.setCurrentFile(fileName)
+        self.setCurrentFile(str(fileName))
         self.ui.saveBtn.success("Saved.")
         
     def saveClicked(self):
@@ -710,7 +714,7 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         #self.setCurrentFile(newFile)
             
     def setCurrentFile(self, fileName):
-        self.currentFileName = fileName
+        self.currentFileName = str(fileName)
         if fileName is None:
             self.ui.fileNameLabel.setText("<b>[ new ]</b>")
         else:

@@ -148,6 +148,7 @@ class Manager(QtCore.QObject):
         self.gui = None
         self.shortcuts = []
         self.disableDevs = []
+        self.disableAllDevs = False
         self.alreadyQuit = False
         self.taskLock = Mutex(QtCore.QMutex.Recursive)
         
@@ -163,7 +164,7 @@ class Manager(QtCore.QObject):
             
             if argv is not None:
                 try:
-                    opts, args = getopt.getopt(argv, 'c:a:m:b:s:d:n', ['config=', 'config-name=', 'module=', 'baseDir=', 'storageDir=', 'disable=', 'noManager'])
+                    opts, args = getopt.getopt(argv, 'c:a:m:b:s:d:nD', ['config=', 'config-name=', 'module=', 'base-dir=', 'storage-dir=', 'disable=', 'no-manager', 'disable-all'])
                 except getopt.GetoptError, err:
                     print str(err)
                     print """
@@ -171,10 +172,11 @@ class Manager(QtCore.QObject):
         -c --config=       Configuration file to load
         -a --config-name=  Named configuration to load
         -m --module=       Module name to load
-        -b --baseDir=      Base directory to use
-        -s --storageDir=   Storage directory to use
-        -n --noManager     Do not load manager module
+        -b --base-dir=     Base directory to use
+        -s --storage-dir=  Storage directory to use
+        -n --no-manager    Do not load manager module
         -d --disable=      Disable the device specified
+        -D --disable-all   Disable all devices
     """
                     raise
             
@@ -205,6 +207,8 @@ class Manager(QtCore.QObject):
                     loadManager = False
                 elif o in ['-d', '--disable']:
                     self.disableDevs.append(a)
+                elif o in ['-D', '--disable-all']:
+                    self.disableAllDevs = True
                 else:
                     print "Unhandled option", o, a
             
@@ -287,7 +291,7 @@ class Manager(QtCore.QObject):
                 ## configure new devices
                 if key == 'devices':
                     for k in cfg['devices']:
-                        if k in self.disableDevs:
+                        if self.disableAllDevs or k in self.disableDevs:
                             print "    --> Ignoring device '%s' -- disabled by request" % k
                             continue
                         print "  === Configuring device '%s' ===" % k
@@ -505,6 +509,10 @@ class Manager(QtCore.QObject):
             if name not in self.modules:
                 raise Exception("No module named %s" % name)
             return self.modules[name]
+        
+    def getCurrentDatabase(self):
+        """Return the database currently selected in the Data Manager"""
+        return self.getModule("Data Manager").currentDatabase()
 
         
     def listDefinedModules(self):
@@ -549,6 +557,7 @@ class Manager(QtCore.QObject):
                 self.interfaceDir.removeObject(mod)
             else:
                 return
+        self.removeWindowShortcut(mod.window())
         self.sigModulesChanged.emit()
         self.sigModuleHasQuit.emit(mod.name)
         #print "Module", mod.name, "has quit"
@@ -593,6 +602,18 @@ class Manager(QtCore.QObject):
         
         with self.lock:
             self.shortcuts.append((sh, keys, weakref.ref(win)))
+            
+    def removeWindowShortcut(self, win):
+        ## Need to remove shortcuts after window is closed, because the shortcut is hanging on to all the widgets in the window
+        ind = None
+        for i, s in enumerate(self.shortcuts):
+            if s[2]() == win:
+                ind = i
+                break
+        
+        if ind is not None:
+            with self.lock:
+                self.shortcuts.pop(ind)
     
     def runProtocol(self, cmd):
         t = Task(self, cmd)

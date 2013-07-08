@@ -500,6 +500,7 @@ class SqliteDatabase:
         return newData
 
     def _queryToDict(self, q):
+        prof = debug.Profiler("_queryToDict", disabled=True)
         res = []
         while q.next():
             res.append(self._readRecord(q.record()))
@@ -507,21 +508,26 @@ class SqliteDatabase:
 
 
     def _queryToArray(self, q):
+        prof = debug.Profiler("_queryToArray", disabled=True)
         recs = self._queryToDict(q)
+        prof.mark("got records")
         if len(recs) < 1:
             #return np.array([])  ## need to return empty array *with correct columns*, but this is very difficult, so just return None
             return None
         rec1 = recs[0]
-        dtype = functions.suggestRecordDType(rec1, singleValue=True)
+        dtype = functions.suggestRecordDType(rec1, singleRecord=True)
         #print rec1, dtype
         arr = np.empty(len(recs), dtype=dtype)
         arr[0] = tuple(rec1.values())
         for i in xrange(1, len(recs)):
             arr[i] = tuple(recs[i].values())
+        prof.mark('converted to array')
+        prof.finish()
         return arr
 
 
     def _readRecord(self, rec):
+        prof = debug.Profiler("_readRecord", disabled=True)
         data = collections.OrderedDict()
         for i in range(rec.count()):
             f = rec.field(i)
@@ -548,6 +554,7 @@ class SqliteDatabase:
                 if isinstance(val, QtCore.QByteArray):
                     val = pickle.loads(str(val))
             data[n] = val
+        prof.finish()
         return data
 
     def _readTableList(self):
