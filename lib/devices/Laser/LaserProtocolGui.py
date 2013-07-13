@@ -231,3 +231,7 @@ class LaserProtoGui(DAQGenericProtoGui):
         for p in ['shutterPlot', 'qSwitchPlot', 'pCellPlot']:
             if hasattr(self, p):
                 getattr(self, p).clear()
+                
+    def quit(self):
+        self.dev.lastResult = None
+        DAQGenericProtoGui.quit(self)

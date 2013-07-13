@@ -6,6 +6,7 @@ from .GraphicsWidget import GraphicsWidget
 import weakref
 from pyqtgraph.pgcollections import OrderedDict
 from pyqtgraph.colormap import ColorMap
+from pyqtgraph.widgets.SpinBox import SpinBox
 
 import numpy as np
 
@@ -432,13 +433,14 @@ class GradientEditorItem(TickSliderItem):
         self.menu.addAction(self.rgbAction)
         self.menu.addAction(self.hsvAction)
         
-        
         for t in list(self.ticks.keys()):
             self.removeTick(t)
         self.addTick(0, QtGui.QColor(0,0,0), True)
         self.addTick(1, QtGui.QColor(255,0,0), True)
         self.setColorMode('rgb')
         self.updateGradient()
+        
+        
     
     def setOrientation(self, orientation):
         ## public
@@ -537,22 +539,82 @@ class GradientEditorItem(TickSliderItem):
     def tickClicked(self, tick, ev):
         #private
         if ev.button() == QtCore.Qt.LeftButton:
-            if not tick.colorChangeAllowed:
-                return
-            self.currentTick = tick
-            self.currentTickColor = tick.color
-            self.colorDialog.setCurrentColor(tick.color)
-            self.colorDialog.open()
+            self.raiseColorDialog(tick)
+            #if not tick.colorChangeAllowed:
+                #return
+            #self.currentTick = tick
+            #self.currentTickColor = tick.color
+            #self.colorDialog.setCurrentColor(tick.color)
+            #self.colorDialog.open()
             #color = QtGui.QColorDialog.getColor(tick.color, self, "Select Color", QtGui.QColorDialog.ShowAlphaChannel)
             #if color.isValid():
                 #self.setTickColor(tick, color)
                 #self.updateGradient()
         elif ev.button() == QtCore.Qt.RightButton:
-            if not tick.removeAllowed:
-                return
-            if len(self.ticks) > 2:
-                self.removeTick(tick)
-                self.updateGradient()
+            #if not tick.removeAllowed:
+            #    return
+            #if len(self.ticks) > 2:
+            #    self.removeTick(tick)
+            #    self.updateGradient()
+            self.raiseTickContextMenu(tick, ev)
+            
+    def raiseColorDialog(self, tick):
+        if not tick.colorChangeAllowed:
+            return
+        self.currentTick = tick
+        self.currentTickColor = tick.color
+        self.colorDialog.setCurrentColor(tick.color)
+        self.colorDialog.open()
+        
+    def buildTickMenu(self, tick):
+        menu = QtGui.QMenu()
+        
+        a = menu.addAction("Remove Tick", lambda: self.removeTick(tick))
+        if not tick.removeAllowed:
+            a.setEnabled(False)
+        if len(self.ticks) < 3:
+            a.setEnabled(False)
+            
+        menu.addAction("Set Position", lambda: self.newPositionFromUser(tick))
+        a = menu.addAction("Set Color", lambda: self.raiseColorDialog(tick))
+        if not tick.colorChangeAllowed:
+            a.setEnabled(False)
+        return menu    
+            
+    def raiseTickContextMenu(self, tick, ev):
+        self.tickMenu = self.buildTickMenu(tick)
+        self.tickMenu.popup(ev.screenPos().toQPoint())
+        
+    def mkPositionDialog(self):
+        """Return a dialog box for letting a user pick the position of a tick. 
+        Useful attributes that can be modified include dialog.positionSpin (a SpinBox), 
+        and dialog.label (the text label that appears above the SpinBox)."""
+        dialog = QtGui.QDialog()
+        l = QtGui.QGridLayout()
+        dialog.positionSpin = SpinBox()
+        dialog.setLayout(l)
+        dialog.label = QtGui.QLabel("Position (fractional):")
+        l.addWidget(dialog.label)
+        l.addWidget(dialog.positionSpin)
+        okBtn = QtGui.QPushButton("Okay")
+        okBtn.setDefault(True)
+        okBtn.clicked.connect(dialog.accept)
+        cancelBtn = QtGui.QPushButton("Cancel")
+        cancelBtn.clicked.connect(dialog.reject)
+        l.addWidget(cancelBtn, 2, 0)
+        l.addWidget(okBtn, 2, 1)
+        return dialog
+    
+    def newPositionFromUser(self, tick):
+        value = round(self.tickValue(tick), 2)
+        dialog = self.mkPositionDialog()
+        dialog.positionSpin.setOpts(bounds=(0.0, 1.0), value=value, step=0.01, decimals=2)
+        okay = dialog.exec_()
+        newValue = dialog.positionSpin.value()
+        if okay == QtGui.QDialog.Accepted:
+            pos = tick.pos()
+            pos.setX(newValue * self.length)
+            self.tickMoved(tick, pos)
                 
     def tickMoved(self, tick, pos):
         #private
