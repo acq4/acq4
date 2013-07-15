@@ -763,6 +763,7 @@ class Imager(Module):
         # code to display the image on the camera image
         self.img = PG.ImageItem(imgData) # make data into a pyqtgraph image
         self.cameraModule.window().addItem(self.img)
+        self.currentRoi.setZValue(10)
         self.hideOverlayImage()
         
         w = imgData.shape[0]
