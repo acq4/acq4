@@ -628,6 +628,9 @@ class Imager(Module):
             if child.hasChildren() and child.value() is True:
                 for k,v in self.saveParams(child).items():
                     params[child.name() + '.' + k] = v
+                    
+        params['wavelength'] = self.laserDev.getWavelength()
+        params['laserOutputPower'] = self.laserDev.outputPower()
         
         return params
                 
