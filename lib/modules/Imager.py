@@ -628,6 +628,9 @@ class Imager(Module):
             if child.hasChildren() and child.value() is True:
                 for k,v in self.saveParams(child).items():
                     params[child.name() + '.' + k] = v
+                    
+        params['wavelength'] = self.laserDev.getWavelength()
+        params['laserOutputPower'] = self.laserDev.outputPower()
         
         return params
                 
@@ -760,6 +763,7 @@ class Imager(Module):
         # code to display the image on the camera image
         self.img = PG.ImageItem(imgData) # make data into a pyqtgraph image
         self.cameraModule.window().addItem(self.img)
+        self.currentRoi.setZValue(10)
         self.hideOverlayImage()
         
         w = imgData.shape[0]
