@@ -526,7 +526,10 @@ class Scan(QtCore.QObject):
             evPen.setColor(c)
             for ev in events:
                 time = ev['fitTime']
-                fitLen = ev['fitDecayTau']*ev['fitLengthOverDecay']
+                try:
+                    fitLen = ev['fitDecayTau']*ev['fitLengthOverDecay']
+                except IndexError:
+                    fitLen = ev['fitDecayTau']*4.
                 x = np.linspace(time, time+fitLen, fitLen * 50e3)
                 v = [ev['fitAmplitude'], ev['fitTime'], ev['fitRiseTau'], ev['fitDecayTau']]
                 y = fn.pspFunc(v, x, risePower=2.0) + data[np.argwhere(data.xvals('Time')>time)[0]-1]
