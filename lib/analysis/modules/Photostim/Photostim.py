@@ -425,10 +425,19 @@ class Photostim(AnalysisModule):
         if stats is None:
             raise Exception('No data returned from analysis (check flowchart for errors).')
             
-        pos = spot.viewPos()
-        stats['xPos'] = pos.x()
-        stats['yPos'] = pos.y()
-        
+        # print 'spot: ', spot
+        # print 'dir spot: ', dir(spot)
+        # print 'spot pos: ', spot.pos()
+        try:
+            pos = spot.viewPos()
+            # print 'Photostim: pos = ', pos
+            stats['xPos'] = pos.x()
+            stats['yPos'] = pos.y()
+        except:
+            # just try substituting with spot.pos:
+            p = spot.pos()
+            stats['xPos'] = p[0]
+            stats['yPos'] = p[1]
         #d = spot.data.parent()
         #size = d.info().get('Scanner', {}).get('spotSize', 100e-6)
         #stats['spotSize'] = size

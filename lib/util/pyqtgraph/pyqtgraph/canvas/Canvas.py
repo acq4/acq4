@@ -128,7 +128,16 @@ class Canvas(QtGui.QWidget):
         self.resizeEvent()
 
     def autoRange(self):
-        self.view.autoRange()
+        # select the source image first
+        #mod = man.getInterface('analysisMod', 'MosaicEditor')
+        levels = self.selectedItems()[0].levelRgn.getRegion()
+        print levels
+        levels = (-0.01, 2.0)
+        # now select all images
+        for i in self.selectedItems():
+          i.levelRgn.setRegion(levels) 
+        
+        #self.view.autoRange()
 
     def resizeEvent(self, ev=None):
         if ev is not None:
