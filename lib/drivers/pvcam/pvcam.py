@@ -105,10 +105,11 @@ class _PVCamClass:
         #self.pvcam = windll.Pvcam32
         if _PVCamClass.PVCAM_CREATED:
             raise Exception("Will not create another pvcam instance--use the pre-existing PVCam object.")
-        if LIB.pvcam_init() < 1:
+        init = LIB.pvcam_init()()
+        if init < 1:
             raise Exception("Could not initialize pvcam library (pl_pvcam_init): %s" % self.error())
         # This should happen before every new exposure (?)
-        if LIB.exp_init_seq() < 1:
+        if LIB.exp_init_seq()() < 1:
             raise Exception("Could not initialize pvcam library (pl_exp_init_seq): %s" % self.error())
         _PVCamClass.PVCAM_CREATED = True
         

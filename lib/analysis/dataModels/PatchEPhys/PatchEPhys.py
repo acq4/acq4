@@ -348,7 +348,9 @@ def getTemp(dh):
 
 def getCellType(dh):
     cellInfo = getCellInfo(dh)
-    return cellInfo.get('type', '')
-
+    if cellInfo is not None:
+        return cellInfo.get('type', '')
+    else:
+        return('Unknown')
     
 
