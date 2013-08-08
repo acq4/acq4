@@ -11,6 +11,8 @@ __all__ = ['HDF5Exporter']
 class HDF5Exporter(Exporter):
     Name = "HDF5 Export from plot data"
     windows = []
+    allowCopy = False
+
     def __init__(self, item):
         Exporter.__init__(self, item)
         self.params = Parameter(name='params', type='group', children=[

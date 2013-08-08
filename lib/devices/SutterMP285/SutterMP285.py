@@ -69,6 +69,9 @@ class SutterMP285(Device, OptomechDevice):
         
         self.mThread.setLimits(self.limits)
         self.storeConfig()
+
+    def getLimit(self):
+            return(self.limits)
         
     def setMaxSpeed(self, val):
         self.mThread.setMaxSpeed(val)
@@ -132,6 +135,11 @@ class SMP285Interface(QtGui.QWidget):
             [self.ui.yMinBtn, self.ui.yMaxBtn],
             [self.ui.zMinBtn, self.ui.zMaxBtn],
         ]
+        self.limitSpins = [
+            [self.ui.xMinSpin, self.ui.xMaxSpin],
+            [self.ui.yMinSpin, self.ui.yMaxSpin],
+            [self.ui.zMinSpin, self.ui.zMaxSpin],
+        ]
         self.limitChecks = [
             [self.ui.xMinCheck, self.ui.xMaxCheck],
             [self.ui.yMinCheck, self.ui.yMaxCheck],
@@ -141,11 +149,12 @@ class SMP285Interface(QtGui.QWidget):
             return lambda: fn(*args)
         for axis in range(3):
             for limit in range(2):
-                self.limitBtns[axis][limit].clicked.connect(mkLimitCallback(self.updateLimit, axis, limit))
+                self.limitBtns[axis][limit].clicked.connect(mkLimitCallback(self.getLimit, axis, limit))
+                self.limitSpins[axis][limit].valueChanged.connect(mkLimitCallback(self.updateLimit, axis, limit))
                 self.limitChecks[axis][limit].toggled.connect(mkLimitCallback(self.enableLimit, axis, limit))
                 pos, enabled = self.dev.limits[axis][limit]
                 #self.limitLabels[axis][limit].setText(pg.siFormat(pos, suffix='m', precision=5))
-                self.limitBtns[axis][limit].setText(pg.siFormat(pos, suffix='m', precision=5))
+                self.limitSpins[axis][limit].setValue(pos)
                 self.limitChecks[axis][limit].setChecked(enabled)
         
         self.ui.maxSpeedSpin.setOpts(value=self.dev.maxSpeed, siPrefix=True, dec=True, suffix='m/s', step=0.1, minStep=1e-6)
@@ -156,10 +165,18 @@ class SMP285Interface(QtGui.QWidget):
         self.ui.fineStepRadio.toggled.connect(self.resolutionChanged)
 
         
+    def getLimit(self, axis, limit):
+        ## called when the limit buttons are pressed in the GUI - gets limit and stores in the spin box
+        pos = self.dev.getPosition()[axis]
+        self.limitSpins[axis][limit].setValue(pos)
+        self.updateLimit(axis, pos)
+        #self.dev.setLimit(axis, limit, val=pos)
+        #self.limitChecks[axis][limit].setChecked(True)
+
     def updateLimit(self, axis, limit):
         ## called when the limit buttons are pressed in the GUI
-        pos = self.dev.getPosition()[axis]
-        self.limitBtns[axis][limit].setText(pg.siFormat(pos, suffix='m', precision=5))
+        pos = self.limitSpins[axis][limit].value() 
+        #self.dev.getPosition()[axis]
         self.dev.setLimit(axis, limit, val=pos)
         self.limitChecks[axis][limit].setChecked(True)
         

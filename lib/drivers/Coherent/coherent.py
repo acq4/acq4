@@ -46,7 +46,7 @@ class Coherent(object):
         return float(self['TMIN']), float(self['TMAX'])
         
     def isTuning(self):
-        """Returns True if the laser is currently tuning its weavelength"""
+        """Returns True if the laser is currently tuning its wavelength"""
         return self['TS'] != '0'
         
     def getShutter(self):

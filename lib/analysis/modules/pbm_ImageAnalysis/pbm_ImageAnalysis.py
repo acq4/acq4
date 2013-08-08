@@ -435,7 +435,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             dh = dh[0]
         self.currentFileName = dh.name()
         self.imageScaleUnit = 'pixels'
-
+        self.imageTimes = np.array([])
         if self.dataStruct is 'flat':
             #print 'getting Flat data structure!'
             if dh.isFile():
@@ -465,7 +465,13 @@ class pbm_ImageAnalysis(AnalysisModule):
             # reduce image size if it is too big:
             self.imageData = self.imageData[fi:]
             self.baseImage = self.imageData[0] # just to show after processing...
-            self.imageTimes = self.imageInfo[0].values()[1]
+            print self.imageInfo
+            print self.imageInfo[3]
+            if 'Frame Time' in self.imageInfo[3].keys():
+                self.imageTimes = np.append(self.imageTimes, self.imageInfo[3]['Frame Time'])
+                print self.imageTimes
+            else:
+                self.imageTimes = self.imageInfo[0].values()[1]
             self.imageTimes = self.imageTimes[fi:]
             print 'original: ', self.imageTimes.shape
             if self.downSample > 1:
@@ -861,8 +867,9 @@ class pbm_ImageAnalysis(AnalysisModule):
         xsize = image_sh[1]
         ysize = image_sh[2]
         print 'Writing tiff images to %s\n' % (tiffpath)
+        #print dir(Image.Image)
         for i in range(0, nframes):
-            ai = Image.fromarray(self.imageData[i,:,:]*8192.0)
+            ai = Image.Image.fromarray(self.imageData[i,:,:]*8192.0)
             fn = tiffpath + 'acq4_ImageAnalysis_%05d.tiff' % (i)
             ai.save(fn)
 #

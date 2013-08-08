@@ -69,8 +69,6 @@ class ScanCanvasItem(CanvasItem):
         self.layout.addWidget(self._ctrlWidget, self.layout.rowCount(), 0, 1, 2)
         self.ui.outlineColorBtn.setColor((50,50,50,200))
         
-        self.addScanImageBtn = self.ui.loadSpotImagesBtn
-        
         #self.transformGui.mirrorImageBtn.clicked.connect(self.mirrorY)
         self.ui.sizeSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[1e-6, None])
         self.ui.sizeSpin.setValue(self.originalSpotSize)
@@ -78,9 +76,13 @@ class ScanCanvasItem(CanvasItem):
         self.ui.sizeFromCalibrationRadio.clicked.connect(self.updateSpotSize)
         self.ui.outlineColorBtn.sigColorChanging.connect(self.updateOutline)
         
+        self.addScanImageBtn = self.ui.loadSpotImagesBtn
+        self.createGradientBtn = self.ui.createGradientBtn
+        self.removeGradientBtn = self.ui.removeGradientBtn
         self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
-
-
+        self.createGradientBtn.connect(self.createGradientBtn, QtCore.SIGNAL('clicked()'), self.createGradient)
+        self.removeGradientBtn.connect(self.removeGradientBtn, QtCore.SIGNAL('clicked()'), self.removeGradient)
+        self.gradientNumber = self.ui.gradSpin
 
     #def addScan(self, dirHandle, **opts):
         #"""Returns a list of ScanCanvasItems."""
@@ -264,6 +266,44 @@ class ScanCanvasItem(CanvasItem):
     def updateOutline(self):
         color = self.ui.outlineColorBtn.color()
         self.graphicsItem().setPen(color)
+        
+        
+        
+    def createGradient(self):
+       # Generate a current scale bar from the console:
+
+        # some of this from command line...
+ 
+        man = lib.Manager.getManager()
+        pm = man.getInterface('analysisMod', 'Photostim')
+        gradnum = self.gradientNumber.value()
+        # get the current color gradient. If you have multiple lines in the color mapper, you may need to 
+        # change the index to 'items'
+        nitems =len(pm.mapper.items)
+        if gradnum >= nitems:
+            gradnum = nitems-1
+            self.gradientNumber.setValue(gradnum)
+        colormap = pm.mapper.items[gradnum] 
+        gradient = colormap.gradient.getGradient()
+
+        # build a legend
+        self.gradientLegend = pg.GradientLegend((50, 150), (-10, -10))
+        self.gradientLegend.scale(1, -1)  # optional, depending on whether the canvas is y-inverted
+        self.gradientLegend.setGradient(gradient)
+       # minStr = '%0.2g' % colormap.minSpin.value()
+       # maxStr = '%0.2g' % colormap.maxSpin.value()
+       # self.gradientLegendsetLabels({minStr: 0.0, maxStr: 1.0})
+
+       # A full set of labels:
+        self.gradientLegend.setLabels(dict((('- %3.1f' % x), x) for x in np.arange(0, 1+0.2, 0.2))) 
+        # now show it
+        self.canvas.addGraphicsItem(self.gradientLegend, name = 'Gradient_%d' % gradnum)
+
+        #The '-' puts a tick mark about at the right location. That's the best I can do without writing a routine to actually put ticks on the gradient bar. 
+
+    def removeGradient(self):
+        self.canvas.removeItem(self.gradientLegend)
+        
         
 class ScanImageCanvasItem(ImageCanvasItem):
     def __init__(self, img, handles, **kargs):
