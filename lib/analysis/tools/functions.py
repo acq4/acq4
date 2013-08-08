@@ -107,3 +107,63 @@ def bendelsSpatialCorrelationAlgorithm(data, radius, spontRate, timeWindow, prin
     #prof.finish()
     
     return data
+
+def spatialCorrelationAlgorithm_ZScore(data, radius, printProcess=False, eventsKey='ZScore', spontKey='SpontZScore', threshold=1.645):
+    ## check that data has 'xPos', 'yPos' and 'numOfPostEvents'
+    #SpatialCorrelator.checkArrayInput(data) 
+    #prof = Profiler("bendelsSpatialCorrelationAlgorithm", disabled=True)
+    fields = data.dtype.names
+    if 'xPos' not in fields or 'yPos' not in fields or eventsKey not in fields or spontKey not in fields:
+        raise HelpfulException("Array input needs to have the following fields: 'xPos', 'yPos', the fields specified in *eventsKey* and *spontKey*. Current fields are: %s" %str(fields))   
+    #prof.mark("checked fields")
+    
+    ## add 'prob' field to data array
+    if 'prob' not in data.dtype.names:
+        arr = utilFn.concatenateColumns([data, np.zeros(len(data), dtype=[('prob', float)])])
+        #arr[:] = data     
+        data = arr
+    else:
+        data['prob']=0
+    #prof.mark("set 'prob' field")
+        
+    table = np.zeros((200, 200)) ## add a lookup table so that we don't have to calculate the same probabilities over and over...saves a bit of time
+    
+    ## spatial correlation algorithm from :
+    ## Bendels, MHK; Beed, P; Schmitz, D; Johenning, FW; and Leibold C. Detection of input sites in 
+    ## scanning photostimulation data based on spatial correlations. 2010. Journal of Neuroscience Methods.
+    
+    ## calculate probability of seeing a spontaneous event in time window -- for ZScore method, calculate probability that ZScore is spontaneously high
+    p = len(data[data[spontKey] < -threshold])/float(len(data))
+    #p = 1-np.exp(-spontRate*timeWindow)
+    #if printProcess:
+    #    print "======  Spontaneous Probability: %f =======" % p
+    #prof.mark('calculated spontaneous probability')
+    
+        
+    ## for each spot, calculate the probability of having the events in nearby spots occur randomly
+    for x in data:
+        spots = data[(np.sqrt((data['xPos']-x['xPos'])**2+(data['yPos']-x['yPos'])**2)) < radius]
+        nSpots = len(spots)
+        nEventSpots = len(spots[spots[eventsKey] < -threshold])
+        
+        prob = 0
+        if table[nEventSpots, nSpots] != 0: ## try looking up value in table (it was stored there if we calculated it before), otherwise calculate it now
+            prob = table[nEventSpots, nSpots]
+            #prof.mark('look-up')
+        else: 
+            for j in range(nEventSpots, nSpots+1):
+                a = ((p**j)*((1-p)**(nSpots-j))*math.factorial(nSpots))/(math.factorial(j)*math.factorial(nSpots-j))
+                if printProcess:
+                    print "        Prob for %i events: %f     Total: %f" %(j, a, prob+a)
+                prob += a
+            table[nEventSpots, nSpots] = prob
+            #prof.mark('calculate')
+        if printProcess: ## for debugging
+            print "    %i out of %i spots had events. Probability: %f" %(nEventSpots, nSpots, prob)
+        x['prob'] = prob
+        
+        
+    #prof.mark("calculated probabilities")
+    #prof.finish()
+    
+    return data
