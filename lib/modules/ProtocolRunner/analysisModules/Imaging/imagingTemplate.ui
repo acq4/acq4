@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>340</width>
+    <width>368</width>
     <height>416</height>
    </rect>
   </property>
@@ -14,7 +14,30 @@
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="0" column="5">
+   <item row="4" column="0" colspan="7">
+    <widget class="QSplitter" name="splitter">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <widget class="PlotWidget" name="plotWidget" native="true"/>
+     <widget class="HistogramLUTWidget" name="histogram" native="true"/>
+    </widget>
+   </item>
+   <item row="1" column="2">
+    <widget class="QLabel" name="label_4">
+     <property name="text">
+      <string>ROI alpha</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="2">
+    <widget class="QLabel" name="label_3">
+     <property name="text">
+      <string>Downsampling</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="4">
     <spacer name="horizontalSpacer">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
@@ -56,7 +79,7 @@
      </property>
     </widget>
    </item>
-   <item row="1" column="5">
+   <item row="1" column="4">
     <spacer name="horizontalSpacer_2">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
@@ -98,36 +121,6 @@
     <widget class="QLabel" name="label_2">
      <property name="text">
       <string>Detector</string>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="2">
-    <widget class="QLabel" name="label_4">
-     <property name="text">
-      <string>ROI alpha</string>
-     </property>
-    </widget>
-   </item>
-   <item row="4" column="0" colspan="8">
-    <widget class="QSplitter" name="splitter">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-     <widget class="PlotWidget" name="plotWidget" native="true"/>
-     <widget class="HistogramLUTWidget" name="histogram" native="true"/>
-    </widget>
-   </item>
-   <item row="0" column="2">
-    <widget class="QLabel" name="label_3">
-     <property name="text">
-      <string>Downsampling</string>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="4">
-    <widget class="QCheckBox" name="blankCheck">
-     <property name="text">
-      <string>Blank Screen</string>
      </property>
     </widget>
    </item>

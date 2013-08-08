@@ -44,6 +44,8 @@ Presets = {
         'Downsample': 1,
         'Image Width': 256,
         'Image Height': 256,
+        'xSpan': 0.9,
+        'ySpan': 0.9,
         'Overscan': 70,
         'Store': False,
         'Blank Screen': False,
@@ -56,6 +58,8 @@ Presets = {
         'Downsample': 2,
         'Image Width': 128 ,
         'Image Height': 128,
+        'xSpan': 0.9,
+        'ySpan': 0.9,
         'Overscan': 68,
         'Store': False,
         'Blank Screen': False,
@@ -65,10 +69,27 @@ Presets = {
         ('Decomb', 'Auto'): False,
     },
 
+    'video-ultra': {
+        'Downsample': 2,
+        'Image Width': 64,
+        'Image Height': 64,
+        'xSpan': 0.15,
+        'ySpan': 0.15,
+        'Overscan': 250,
+        'Store': False,
+        'Blank Screen': False,
+        'Bidirectional': True,
+        'Decomb' : True,
+        ('Decomb', 'Shift'): 168e-6,
+        ('Decomb', 'Auto'): False,
+    },
+    
     'StandardDef': {
         'Downsample': 10,
         'Image Width': 512,
         'Image Height': 512,
+        'xSpan': 0.9,
+        'ySpan': 0.9,
         'Overscan': 25,
         'Store': False,
         'Blank Screen': True,
@@ -81,6 +102,8 @@ Presets = {
         'Downsample': 5,
         'Image Width': 1024,
         'Image Height': 1024,
+        'xSpan': 0.9,
+        'ySpan': 0.9,
         'Overscan': 25,
         'Store': False,
         'Blank Screen': True,
@@ -154,7 +177,7 @@ class RegionCtrl(PG.ROI):
         PG.ROI.__init__(self, pos, size=size, pen=roiColor)
         self.addScaleHandle([0,0], [1,1])
         self.addScaleHandle([1,1], [0,0])
-        self.setZValue(1000)
+        self.setZValue(1200)
         #self.addRotateHandle([1,0], [0,1])
         #self.addRotateHandle([0,1], [1,0])
 
@@ -188,13 +211,15 @@ class Imager(Module):
         self.w1.addWidget(self.view)   # add the view to the right of w1     
         
         
+        self.originalROI = None
         self.currentStack = None
         self.currentStackLength = 0
         # we assume that you are not going to change the current camera or scope while running
         # ... not just yet anyway.
         # if this is to be allowed on a system, the change must be signaled to this class,
         # and we need to pick up the device in a routine that handles the change.
-        self.camdev = self.manager.getDevice('Camera')
+        cameraDevice = 'Camera-QuantEM'
+        self.camdev = self.manager.getDevice(cameraDevice)
         self.cameraModule = self.manager.getModule('Camera')
         self.scopeDev = self.camdev.scopeDev
         
@@ -207,9 +232,6 @@ class Imager(Module):
         self.regionCtrl = None
         self.currentRoi = None
         self.img = None # overlay image in the camera Window... 
-        
-
- 
        
         #self.buttonGrid = QtGui.QGridLayout()
         #self.l2.insertLayout(1, self.buttonGrid)
@@ -252,10 +274,14 @@ class Imager(Module):
         self.ui.video_button.clicked.connect(self.toggleVideo)
         self.ui.record_button.toggled.connect(self.recordToggled)
         self.ui.cameraSnapBtn.clicked.connect(self.cameraSnap)
+        self.ui.restoreROI.clicked.connect(self.restoreROI)
+        self.ui.saveROI.clicked.connect(self.saveROI)
+        
         
         self.param = PT.Parameter(name = 'param', children=[
-            dict(name="Preset", type='list', value='', 
-                 values=['', 'video-std', 'video-fast', 'StandardDef', 'HighDef']),
+            dict(name="Preset", type='list', value='StandardDef', 
+                 values=['StandardDef', 'HighDef', 'video-std', 'video-fast', 
+                         'video-ultra']),
             dict(name='Store', type='bool', value=True),
             dict(name='Blank Screen', type='bool', value=True),
             dict(name='Sample Rate', type='float', value=1.0e6, suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10e3, 5e6], siPrefix=True),
@@ -264,12 +290,13 @@ class Imager(Module):
             dict(name='Average', type='int', value=1, limits=[1,100]),
             dict(name='Pockels', type='float', value= 0.03, suffix='V', dec=True, minStep=1e-3, limits=[0, 1.5], step=0.1, siPrefix=True),
             dict(name='Objective', type='str', value='Unknown', readonly=True),
+            dict(name='Follow Stage', type='bool', value=True),
             dict(name='Image Width', type='int', value=500, readonly=False),
             dict(name='Image Height', type='int', value=500, readonly=False),
             #dict(name='Y = X', type='bool', value=True),
             #dict(name='Pixel Size', type='float', value=0.2e-7, readonly=True), #suffix='m', limits=[1.e-8, 1e-4], step=1e-7, siPrefix=True, readonly=True),
-            #dict(name='Width', type='float', value = 50.0e-6, suffix = 'm'), #limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
-            #dict(name='Height', type = 'float', value = 50.0e-6, suffix='m'), # limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True),
+            dict(name='xSpan', type='float', value = 0.9, limits=[0.01, 2.5]), #limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
+            dict(name='ySpan', type = 'float', value = 0.9, limits=[0.01, 2.5]), # limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True),
             #dict(name='Xpos', type='float', value = 0.0e-6, suffix = 'm'), #, limits=[-50e-3, 50e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
             #dict(name='Ypos', type = 'float', value = 0.0e-6, suffix='m'), #, limits=[-50e-3, 50e-3], step=10e-6, siPrefix=True, readonly=True),
 
@@ -309,8 +336,8 @@ class Imager(Module):
         # insert an ROI into the camera image that corresponds to our scan area                
         self.objectiveUpdate() # force update of objective information and create appropriate ROI
 # check the devices...        
-        self.laserDev = self.manager.getDevice(self.param['Laser Device'])
-        self.scannerDev = self.manager.getDevice(self.param['Scanner Device'])
+       # self.laserDev = self.manager.getDevice(self.param['Laser Device'])
+       # self.scannerDev = self.manager.getDevice(self.param['Scanner Device'])
         self.update() # also force update now to make sure all parameters are synchronized
         self.param.sigTreeStateChanged.connect(self.update)
 
@@ -341,7 +368,7 @@ class Imager(Module):
             if obj == self.param['Objective']:
                 self.currentRoi = self.objectiveROImap[obj]
                 self.currentRoi.show()
-                self.updateFromROI() # do this now as well so that the parameter tree is correct. 
+                self.roiChanged() # do this now as well so that the parameter tree is correct. 
 
                 continue
             self.hideROI(self.objectiveROImap[obj])
@@ -350,9 +377,17 @@ class Imager(Module):
         """
         Report that the tranform has changed, which might include the objective, or
         perhaps the stage position, etc. This needs to be obtained to re-align
-        the scanner
+        the scanner ROI
         """
-        pass
+        globalTr = self.getScannerDevice().globalTransform()
+        pt1 = globalTr.map(self.currentRoi.scannerCoords[0])
+        pt2 = globalTr.map(self.currentRoi.scannerCoords[1])
+        diff = pt2 - pt1
+        self.currentRoi.setPos(pt1)
+        self.currentRoi.setSize(diff)
+        #self.originalROI = [diff.x, diff.y, pt1.x, pt1.y]
+        
+        
 
     def getObjectiveColor(self, objective):
         """
@@ -381,14 +416,17 @@ class Imager(Module):
         height = brect.height()
         x = brect.x()+width*0.05
         y = brect.y()+height*0.05
-        csize= [width*0.9,  height*0.9]
+        print self.param['xSpan']
+        csize= [width*self.param['xSpan'],  height*self.param['ySpan']]
         cpos = [x, y]
         roiColor = self.getObjectiveColor(self.scopeDev.currentObjective) # pick up an objective color...
         roi = RegionCtrl(cpos, csize, roiColor) # Note that the position actually gets over ridden by the camera additem below..
-        roi.setZValue(1000)
+        roi.setZValue(10000)
         self.cameraModule.window().addItem(roi)
         roi.setPos(cpos) # now is the time to do this. aaaaargh. Several hours later!!!
-        roi.sigRegionChangeFinished.connect(self.updateFromROI)
+        roi.sigRegionChangeFinished.connect(self.roiChanged)
+        #self.originalROI = [width, height, x, y]
+        #print 'originalROI: ', self.originalROI
         return roi
     
     def hideROI(self, roi):
@@ -397,7 +435,23 @@ class Imager(Module):
         """
         roi.hide()
     
-    def updateFromROI(self):
+    def restoreROI(self):
+        if self.originalROI is not None:
+            (width, height, x, y) = self.originalROI
+            #print self.originalROI
+            self.currentRoi.setSize([width, height])
+            self.currentRoi.setPos([x, y])
+#            print'Roi shyould be reset'
+            self.roiChanged()
+
+    def saveROI(self):
+        state = self.currentRoi.getState()
+        width, height = state['size']
+        x, y = state['pos']
+        self.originalROI = [width, height, x, y]
+        
+        
+    def roiChanged(self):
         """ read the ROI rectangle width and height and repost
         in the parameter tree """
         state = self.currentRoi.getState()
@@ -412,6 +466,18 @@ class Imager(Module):
         self.ui.ypos.setText('%g' % self.yPos) # param['Ypos'] = y
         self.pixelSize = self.width/self.param['Image Width']
         self.ui.pixelSize.setText('%g' % self.pixelSize)
+        
+        
+        # record position of ROI in Scanner's local coordinate system
+        # we can use this later to allow the ROI to track stage movement
+        tr = self.getScannerDevice().inverseGlobalTransform() # maps from global to device local
+        pt1 = PG.Point(self.xPos, self.yPos)
+        pt2 = PG.Point(self.xPos+self.width, self.yPos+self.height)
+        self.currentRoi.scannerCoords = [
+            tr.map(pt1),
+            tr.map(pt2),
+            ]
+        
 
     def update(self):
     #check the devices first        
@@ -456,6 +522,7 @@ class Imager(Module):
         
     def PMT_Run(self):
         info = {}
+        frameInfo = None  # will be filled in by takeImage()
         self.stopFlag = False
         if self.param['Z-Stack'] and self.param['Timed']:
             return
@@ -465,7 +532,8 @@ class Imager(Module):
             images = []
             nSteps = self.param['Z-Stack', 'Steps']
             for i in range(nSteps):
-                img = self.takeImage()[NP.newaxis, ...]
+                img, frameInfo = self.takeImage()
+                img = img[NP.newaxis, ...]
                 if img is None:
                     break
                 images.append(img)
@@ -484,7 +552,8 @@ class Imager(Module):
                 if self.stopFlag:
                     break
                 self.param['Timed', 'Current Frame'] = i
-                img = self.takeImage()[NP.newaxis, ...]
+                (img, frameInfo) = self.takeImage()
+                img = img[NP.newaxis, ...]
                 if img is None:
                    return
                 images.append(img)
@@ -498,13 +567,13 @@ class Imager(Module):
 
         else:
             info['2pImageType'] = 'Snap'
-            imgData = self.takeImage()
+            (imgData, frameInfo) = self.takeImage()
             if imgData is None:
                 return
 
         self.view.setImage(imgData)
-        info = self.param.getValues()
-        
+        #info = self.param.getValues()
+        info.update(frameInfo)
         if self.param['Store']:
             dh = self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
 
@@ -512,17 +581,14 @@ class Imager(Module):
         """
         Take one image as a snap, regardless of whether a Z stack or a Timed acquisition is selected
         """
-        imgData = self.takeImage()
+        (imgData, info) = self.takeImage()
         if self.testMode or imgData is None:
             return
         self.view.setImage(imgData)
-        info = self.param.getValues()
         info['2pImageType'] = 'Snap'
         if self.param['Store']:
-            info = self.param.getValues()
-            info['2pImageType'] = 'Snap'
             #microscope = self.#info['microscope'] = self.param['Scope Device'].value()
-            scope = self.Manager.getDevice(self.param['Scope Device'])
+            #scope = self.Manager.getDevice(self.param['Scope Device'])
             #print dir(scope)
             #m = self.handle.info()['microscope']
            ### this needs to be fixed so that the microscope info is stored in the file - current NOT
@@ -551,7 +617,25 @@ class Imager(Module):
 
     def PMT_Stop(self):
         self.stopFlag = True
+
+    def saveParams(self, root=None):
+        if root is None:
+            root = self.param
+            
+        params = {}
+        for child in root:
+            params[child.name()] = child.value()
+            if child.hasChildren() and child.value() is True:
+                for k,v in self.saveParams(child).items():
+                    params[child.name() + '.' + k] = v
+                    
+        params['wavelength'] = self.laserDev.getWavelength()
+        params['laserOutputPower'] = self.laserDev.outputPower()
         
+        return params
+                
+         
+         
     def takeImage(self):
         """
         Take an image using the scanning system and PMT, and return with the data.
@@ -640,7 +724,7 @@ class Imager(Module):
                       }
                 }
             task = self.Manager.createTask(cmd)
-            if self.param['Blank Screen']:
+            if self.param['Blank Screen'] and not self.ui.video_button.isChecked(): # prevent video push from using blanking
                 with ScreenBlanker():
                     task.execute(block = False)
                     while not task.isDone():
@@ -679,6 +763,7 @@ class Imager(Module):
         # code to display the image on the camera image
         self.img = PG.ImageItem(imgData) # make data into a pyqtgraph image
         self.cameraModule.window().addItem(self.img)
+        self.currentRoi.setZValue(10)
         self.hideOverlayImage()
         
         w = imgData.shape[0]
@@ -703,7 +788,12 @@ class Imager(Module):
             PG.plot(y=imgData.reshape(imgData.shape[0]*imgData.shape[1]), x=x)
         if self.param['Show Mirror V']:
             PG.plot(y=xScan, x=NP.linspace(0, samples/self.param['Sample Rate'], xScan.size))
-        return imgData
+        
+        # generate all meta-data for this frame
+        info = self.saveParams()
+        info['transform'] = PG.SRTTransform3D(tr)
+        
+        return (imgData, info)
             
     def decomb(self, img, minShift=0, maxShift=100, auto=True, shift=None):
         ## split image into fields
@@ -749,7 +839,7 @@ class Imager(Module):
             
     def startVideo(self):
         while True:
-            img = self.takeImage()
+            (img, info) = self.takeImage()
             if img is None:
                 return
             self.view.setImage(img, autoLevels=False)
@@ -768,6 +858,9 @@ class Imager(Module):
             
     def getScopeDevice(self):
         return self.manager.getDevice(self.param['Scope Device'])
+            
+    def getScannerDevice(self):
+        return self.manager.getDevice(self.param['Scanner Device'])
             
     def setupCameraModule(self):
         modName = self.param['Camera Module']

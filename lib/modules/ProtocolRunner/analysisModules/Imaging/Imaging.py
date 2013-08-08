@@ -60,39 +60,58 @@ class ImagingModule(AnalysisModule):
         pmtdata = frame['result'][self.detectorDevice()]["Channel":'Input'].asarray()
         t = frame['result'][self.detectorDevice()].xvals('Time')
         dt = t[1]-t[0]
-        prog = frame['cmd'][self.scannerDevice()]['program'][0]
+        progs = frame['cmd'][self.scannerDevice()]['program']
+        if len(progs) == 0:
+            self.image.setImage(np.zeros((1,1)))
+            return
+        prog = progs[0]
         nscans = prog['nScans']
         limits = prog['points']
         dist = (pg.Point(limits[0])-pg.Point(limits[1])).length()
         startT = prog['startTime']
         endT = prog['endTime']
         
-        if prog['type'] == 'lineScan':
-            totSamps = prog['samplesPerScan']+prog['samplesPerPause']
-            imageData = pmtdata[prog['startStopIndices'][0]:prog['startStopIndices'][0]+nscans*totSamps]
-            imageData=imageData.reshape(nscans, totSamps)
-            imageData = imageData[:,0:prog['samplesPerScan']] # trim off the pause data
-            imageData = fn.downsample(imageData, imageDownSample, axis=1)
-            self.image.setImage(imageData)
-            self.image.setRect(QtCore.QRectF(startT, 0.0, endT-startT, dist ))
-            self.ui.plotWidget.autoRange()
-            self.ui.histogram.imageChanged(autoLevel=True)
-            storeFlag = frame['cmd']['protocol']['storeData'] # get flag 
-            print "before StoreFlag and storeflag is:", storeFlag
-            if storeFlag:
-                dirhandle = frame['cmd']['protocol']['storageDir'] # grab directory
-                self.info={'detector': self.detectorDevice(), 'scanner': self.scannerDevice(), 'indices': prog['startStopIndices'], 
-                           'samplesPerScan': prog['samplesPerScan'], 'nscans': prog['nScans'], 'positions': [[prog['points'][0].x(), prog['points'][0].y()], [prog['points'][1].x(), prog['points'][1].y()]],
-                           'downSample': downSample, 'daqDownSample': daqDownSample}
+        #if prog['type'] == 'lineScan':
+            #totSamps = prog['samplesPerScan']+prog['samplesPerPause']
+            #imageData = pmtdata[prog['startStopIndices'][0]:prog['startStopIndices'][0]+nscans*totSamps]
+            #imageData=imageData.reshape(nscans, totSamps)
+            #imageData = imageData[:,0:prog['samplesPerScan']] # trim off the pause data
+            #if imageDownSample > 1:
+                #imageData = fn.downsample(imageData, imageDownSample, axis=1)
+            #self.image.setImage(imageData)
+            #self.image.setRect(QtCore.QRectF(startT, 0.0, endT-startT, dist ))
+            #self.ui.plotWidget.autoRange()
+            #self.ui.histogram.imageChanged(autoLevel=True)
+            #storeFlag = frame['cmd']['protocol']['storeData'] # get flag 
+            #print "before StoreFlag and storeflag is:", storeFlag
+            #if storeFlag:
+                #dirhandle = frame['cmd']['protocol']['storageDir'] # grab directory
+                #self.info={'detector': self.detectorDevice(), 'scanner': self.scannerDevice(), 'indices': prog['startStopIndices'], 
+                           #'samplesPerScan': prog['samplesPerScan'], 'nscans': prog['nScans'], 
+                           #'scanPointList': prog['scanPointList'],
+                           #'positions': prog['points'],
+                           #'downSample': imageDownSample, 'daqDownSample': daqDownSample}
 
-                info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]:prog['samplesPerScan']]), dict(name='Distance'), self.info]
-                ma = metaarray.MetaArray(imageData, info=info)
-                print 'I am writing imaging.ma'
-                dirhandle.writeFile(ma, 'Imaging.ma')
+                #info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]:prog['samplesPerScan']]),
+                        #dict(name='Distance'), self.info]
+                #print imageData.shape
+                #print prog
+                #print 'startstop[0]: ', prog['startStopIndices'][0]
+                #print 'startstop[1]: ', prog['startStopIndices'][1]
+                #print 'samplesperscan: ', prog['samplesPerScan']
+                #print info
+                ## there is an error here that I haven't fixed. Use multilinescane until I do. 
+                #ma = metaarray.MetaArray(imageData, info=info)
+                #print 'I am writing imaging.ma for a simple line scan'
+                #dirhandle.writeFile(ma, 'Imaging.ma')
 
-        if prog['type'] == 'multipleLineScan':
+        if prog['type'] == 'multipleLineScan': # try treagin the same... 
             totSamps = int(np.sum(prog['scanPointList'])) # samples per scan, before downsampling
             imageData = pmtdata[prog['startStopIndices'][0]:prog['startStopIndices'][0]+int((nscans*totSamps))].copy()           
+            #print imageData.shape
+            #print nscans
+            #print totSamps
+            #print prog['samplesPerPause']
             imageData = imageData.reshape(nscans, totSamps)
             csum = np.cumsum(prog['scanPointList'])
             for i in xrange(0, len(csum), 2):
@@ -105,21 +124,21 @@ class ImagingModule(AnalysisModule):
             self.ui.plotWidget.autoRange()
             self.ui.histogram.imageChanged(autoLevel=True)
             storeFlag = frame['cmd']['protocol']['storeData'] # get flag 
-            print "before StoreFlag and storeflag is:", storeFlag
-            print frame['cmd']
+           # print "before StoreFlag and storeflag is:", storeFlag
+           # print frame['cmd']
             if storeFlag:
                 dirhandle = frame['cmd']['protocol']['storageDir'] # grab directory
                 self.info={'detector': self.detectorDevice(), 'scanner': self.scannerDevice(), 'indices': prog['startStopIndices'], 
                            'scanPointList': prog['scanPointList'], 'nscans': prog['nScans'], 
                            'positions': prog['points'],
                            'downSample': imageDownSample, 'daqDownSample': daqDownSample}
-                print 'totSamps: ', totSamps
-                print 'prog[startstop..]: ', prog['startStopIndices']
+                #print 'totSamps: ', totSamps
+                #print 'prog[startstop..]: ', prog['startStopIndices']
                 info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]-int(totSamps):int(totSamps)]), dict(name='Distance'), self.info]
                 ma = metaarray.MetaArray(imageData, info=info)
-                print 'I am writing imaging.ma'
+                print 'I am writing imaging.ma for a multiple line scan'
                 dirhandle.writeFile(ma, 'Imaging.ma')
-                raise Exception()
+                #raise Exception()
 
         if prog['type'] == 'rectScan':
             samplesPerScan = int((prog['startStopIndices'][1]-prog['startStopIndices'][0])/prog['nScans'])
@@ -150,16 +169,19 @@ class ImagingModule(AnalysisModule):
             m[2,2] = 1
             tr = QtGui.QTransform(*m[:3,:3].transpose().reshape(9))
             self.img.setTransform(tr)
-            #if storeFlag:
-                #dirhandle = frame['cmd']['protocol']['storageDir'] # grab directory
-                #self.info={'detector': self.detectorDevice(), 'scanner': self.scannerDevice(), 'indices': prog['startStopIndices'], 
-                           #'samplesPerScan': prog['samplesPerScan'], 'nscans': prog['nScans'], 'positions': [[prog['points'][0].x(), prog['points'][0].y()], [prog['points'][1].x(), prog['points'][1].y()]],
-                           #'downSample': downSample}
+            if storeFlag:
+                dirhandle = frame['cmd']['protocol']['storageDir'] # grab directory
+                self.info={'detector': self.detectorDevice(), 'scanner': self.scannerDevice(), 'indices': prog['startStopIndices'], 
+                           'samplesPerScan': prog['samplesPerScan'], 'nscans': prog['nScans'], 
+                           'positions': prog['points'],
+                           'downSample': imageDownSample}
                 #print dict
                 # to line below, add x, y for the camera (look at camera video output)
-                #info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]:prog['samplesPerScan']]), dict(name='Distance'), self.info]
-                #ma = metaarray.MetaArray(imageData, info=info)
-                #dirhandle.writeFile(ma, 'Imaging.ma')
+                info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]:prog['samplesPerScan']]), 
+                        dict(name='Distance'), self.info]
+                ma = metaarray.MetaArray(imageData, info=info)
+                # do everyting except write...
+#                dirhandle.writeFile(ma, 'Imaging.ma')
         
         
     def imageAlphaAdjust(self):

@@ -160,6 +160,10 @@ class LaserProtoGui(DAQGenericProtoGui):
         """Return a cmd dictionary suitable for passing to LaserTask."""
         
         ## Params looks like: {'amp': 7} where 'amp' is the name of a sequence parameter, and 7 is the 7th value in the list of 'amp'
+        for k,v in params.items():
+            if k.startswith('power.'):
+                del params[k]
+                params[k[6:]] = v
         rate = self.powerWidget.rate
         wave = self.powerWidget.getSingleWave(params)
         rawCmds = self.getChannelCmds(wave, rate)
@@ -227,3 +231,7 @@ class LaserProtoGui(DAQGenericProtoGui):
         for p in ['shutterPlot', 'qSwitchPlot', 'pCellPlot']:
             if hasattr(self, p):
                 getattr(self, p).clear()
+                
+    def quit(self):
+        self.dev.lastResult = None
+        DAQGenericProtoGui.quit(self)

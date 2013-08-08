@@ -1,6 +1,7 @@
 from pyqtgraph.widgets.FileDialog import FileDialog
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore, QtSvg
+from pyqtgraph.python2_3 import asUnicode
 import os, re
 LastExportDirectory = None
 
@@ -9,8 +10,7 @@ class Exporter(object):
     """
     Abstract class used for exporting graphics to file / printer / whatever.
     """    
-    allowCopy = False  # subclasses set this to True if they can use the copy buffer
-    
+
     def __init__(self, item):
         """
         Initialize with the item to be exported.
@@ -26,11 +26,10 @@ class Exporter(object):
         """Return the parameters used to configure this exporter."""
         raise Exception("Abstract method must be overridden in subclass.")
         
-    def export(self, fileName=None, toBytes=False, copy=False):
+    def export(self, fileName=None, toBytes=False):
         """
         If *fileName* is None, pop-up a file dialog.
-        If *toBytes* is True, return a bytes object rather than writing to file.
-        If *copy* is True, export to the copy buffer rather than writing to file.
+        If *toString* is True, return a bytes object rather than writing to file.
         """
         raise Exception("Abstract method must be overridden in subclass.")
 
@@ -56,17 +55,17 @@ class Exporter(object):
         return
         
     def fileSaveFinished(self, fileName):
-        fileName = str(fileName)
+        fileName = asUnicode(fileName)
         global LastExportDirectory
         LastExportDirectory = os.path.split(fileName)[0]
         
         ## If file name does not match selected extension, append it now
         ext = os.path.splitext(fileName)[1].lower().lstrip('.')
-        selectedExt = re.search(r'\*\.(\w+)\b', str(self.fileDialog.selectedNameFilter()))
+        selectedExt = re.search(r'\*\.(\w+)\b', asUnicode(self.fileDialog.selectedNameFilter()))
         if selectedExt is not None:
             selectedExt = selectedExt.groups()[0].lower()
             if ext != selectedExt:
-                fileName = fileName + '.' + selectedExt.lstrip('.')
+                fileName = fileName + selectedExt
         
         self.export(fileName=fileName, **self.fileDialog.opts)
         

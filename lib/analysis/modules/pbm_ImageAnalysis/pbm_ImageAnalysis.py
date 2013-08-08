@@ -44,13 +44,19 @@ from lib.analysis.tools import PlotHelpers as PH # matlab plotting helpers
 from lib.util import functions as FN
 from HelpfulException import HelpfulException
 
-import cv2
-import cv2.cv as cv
-
+try:
+    import cv2
+    import cv2.cv as cv
+    openCVInstalled = True
+except:
+    openCVInstalled=False
+    
 #import smc as SMC # Vogelstein's OOPSI analysis for calcium transients
 
 import pylab as PL
 from mpl_toolkits.axes_grid1 import AxesGrid
+
+print "Imports in pbm_imagealaysis done"
 
 """ 
 We use matplotlib/pylab for *some* figure generation.
@@ -127,6 +133,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         
         self.initDataState()
         self.RGB = Utility.makeRGB()
+        print "now building GUI"
         
         ## Setup basic GUI
         self._elements_ = OrderedDict([
@@ -204,7 +211,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrlImageFunc.IAFuncs_DistanceStrengthPrint.clicked.connect(self.printDistStrength)
         self.ctrlImageFunc.IAFuncs_AnalogRadioBtn.clicked.connect(self.setAnalogMode)
         self.ctrlImageFunc.IAFuncs_DigitalRadioBtn.clicked.connect(self.setDigitalMode)
-        self.ctrlImageFunc.IAFuncs_GetCSFFile.clicked.connect(self.getCSVFile)
+        self.ctrlImageFunc.IAFuncs_GetCSVFile.clicked.connect(self.getCSVFile)
         
 
     def initDataState(self):
@@ -1957,6 +1964,8 @@ class pbm_ImageAnalysis(AnalysisModule):
             3. We filter candidate ROIs by distances, so that there are no overlapping ROIs.
                         
             """
+        if openCVInstalled is False:
+            return
         if self.ctrl.ImagePhys_StdRB.isChecked():
             imstd = self.stdImage
         else:
