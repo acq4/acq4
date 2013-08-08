@@ -49,9 +49,9 @@ class DepthProfiler(AnalysisModule):
         self.view = self.getElement('view', create=True)
         #view.addItem(self.imageItem)
         
-        self.dataRgn = pg.widgets.RectROI(pos=(120,0), size=(100,100), pen=(0,255,0))
+        self.dataRgn = pg.RectROI(pos=(120,0), size=(100,100), pen=(0,255,0))
         self.dataRgn.addRotateHandle((1,0), (0.5, 0.5))
-        self.bgRgn = pg.widgets.ROI(pos=(0,0), size=(100,100), pen=(255, 0,0), parent=self.dataRgn)
+        self.bgRgn = pg.ROI(pos=(0,0), size=(100,100), pen=(255, 0,0), parent=self.dataRgn)
         self.bgRgn.addRotateHandle((1,0), (0.5, 0.5))
         self.bgRgn.addScaleHandle((1, 0.5), (0, 0.5))
         #self.bgRgn.setParentItem(self.dataRgn)
@@ -92,15 +92,22 @@ class DepthProfiler(AnalysisModule):
         
         
     def updateImage(self):
-        self.bgRgn.setSize([self.bgRgn.size()[0], self.dataRgn.size()[1]+1])
-        
-        bg = self.bgRgn.getArrayRegion(self.image, self.view.imageItem)
-        bg = bg.mean(axis=0)
-        data = self.dataRgn.getArrayRegion(self.image, self.view.imageItem)
-        data = data.astype(float) / bg[np.newaxis, :data.shape[1]]
-        self.normData = data
-        norm = self.getElement('normalized')
-        norm.setImage(data)
+        #print "Update image"
+        #import traceback
+        #traceback.print_stack()
+        self.bgRgn.sigRegionChanged.disconnect(self.updateImage)
+        try:
+            self.bgRgn.setSize([self.bgRgn.size()[0], self.dataRgn.size()[1]+1])
+            
+            bg = self.bgRgn.getArrayRegion(self.image, self.view.imageItem)
+            bg = bg.mean(axis=0)
+            data = self.dataRgn.getArrayRegion(self.image, self.view.imageItem)
+            data = data.astype(float) / bg[np.newaxis, :data.shape[1]]
+            self.normData = data
+            norm = self.getElement('normalized')
+            norm.setImage(data)
+        finally:
+            self.bgRgn.sigRegionChanged.connect(self.updateImage)
         
         
     def updateProfiles(self):
