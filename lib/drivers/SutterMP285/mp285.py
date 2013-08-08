@@ -27,19 +27,20 @@ class SutterMP285(object):
         self.baud = baud
         self.sp = serial.Serial(int(self.port), baudrate=self.baud, bytesize=serial.EIGHTBITS)
         self._scale = None
-        time.sleep(0.3)  ## Give devices a moment to chill after opening the serial line.
+        time.sleep(1.0)  ## Give devices a moment to chill after opening the serial line.
+        self.setSpeed(777) ## may be required to be sure Sutter is behaving (voodoo...)
         self.read()
 
     def getPos(self, scaled=True):
         """Get current position reported by controller. Returns a tuple (x,y,z); values given in m."""
         ## request position
-        self.write('c\r')
-        packet = self.readPacket(expect=12, timeout=2.0)
+        self.write('c\r') # request is directly to Sutter MP285 in this case.
+        packet = self.readPacket(expect=12, timeout=5.0)
         if len(packet) != 12:
-            raise Exception("Sutter MP285: bad position packet: '%s'" % repr(packet))
+            raise Exception("Sutter MP285: getPos: bad position packet: <%s> expected 12, got %d" % (repr(packet), len(packet)))
         
         pos = [packet[:4], packet[4:8], packet[8:]]
-        pos = [struct.unpack('l', x)[0] for x in pos]
+        pos = [struct.unpack('=l', x)[0] for x in pos]
         if not scaled:
             return pos
         scale = self.scale()
@@ -47,17 +48,19 @@ class SutterMP285(object):
         return pos
 
     def getImmediatePos(self, returnButtons=False):
-        """This is a non-standard command provided by custom hardware.
+        """This is a non-standard command provided by custom hardware (Arduino controller).
         It returns an estimated position even while the ROE is in use. 
         (if getPos() is called while the ROE is in use, the MP285 will very likely crash.)
         """
-        self.write('p')  
-        packet = self.readPacket(expect=13);
-        if len(packet) != 13:
-            raise Exception("Sutter MP285: bad position packet: '%s' (%d)" % (repr(packet),len(packet)))
-        
+        self.clearBuffer() 
+        # self.readPacket(block=False)
+        self.write('p')  # talks to Arduino only.
+        packet = self.readPacket(expect=12, timeout=2.0)
+        if len(packet) != 12:
+            raise Exception("Sutter MP285: getImmediatePos: bad position packet: <%s> (%d)" % (repr(packet),len(packet)))
+     
         pos = [packet[:4], packet[4:8], packet[8:12]]
-        pos = [struct.unpack('l', x)[0] for x in pos]
+        pos = [struct.unpack('=l', x)[0] for x in pos]
         scale = self.scale()
         pos = [x*scale for x in pos]
         if returnButtons:
@@ -65,7 +68,7 @@ class SutterMP285(object):
             btns = [ord(btn) & x == 0 for x in [1, 4, 16, 64]]
             return pos, btns
         return pos
-    
+        
     def getButtonState(self):
         p,b = self.getImmediatePos(returnButtons=True)
         return b
@@ -86,7 +89,7 @@ class SutterMP285(object):
             currentPos = self.getPos(scaled=False)
         pos = [(pos[i]/scale if pos[i] is not None else currentPos[i]) for i in range(3)]
             
-        cmd = 'm' + struct.pack('3l', int(pos[0]), int(pos[1]), int(pos[2])) + '\r'
+        cmd = 'm' + struct.pack('=3l', int(pos[0]), int(pos[1]), int(pos[2])) + '\r'
         self.write(cmd)
         if block:
             self.readPacket(timeout=timeout)  ## could take a long time..
@@ -105,7 +108,7 @@ class SutterMP285(object):
         currentPos = self.getPos(scaled=False)
         pos = [pos[i]/scale + currentPos[i] for i in range(3)]
             
-        cmd = 'm' + struct.pack('3l', int(pos[0]), int(pos[1]), int(pos[2])) + '\r'
+        cmd = 'm' + struct.pack('=3l', int(pos[0]), int(pos[1]), int(pos[2])) + '\r'
         self.write(cmd)
         if block:
             self.readPacket(timeout=timeout)  ## could take a long time..
@@ -153,21 +156,21 @@ class SutterMP285(object):
         #print "MP285 speed:", v
         if fine:
             v |= 0x8000
-        cmd = 'V' + struct.pack('H', v) + '\r'
+        cmd = 'V' + struct.pack('=H', v) + '\r'
         self.write(cmd)
         self.readPacket()
             
         
     def stat(self, ):
         self.write('s\r')
-        s = self.readPacket(expect=32)
-        if len(s) != 32:
+        packet = self.readPacket(expect=32)
+        if len(packet) != 32:
             raise Exception("Sutter MP285: bad stat packet: '%s'" % repr(packet))
             
         paramNames = ['flags', 'udirx', 'udiry', 'udirz', 'roe_vari', 'uoffset', 'urange', 'pulse', 
                       'uspeed', 'indevice', 'flags2', 'jumpspd', 'highspd', 'dead', 'watch_dog',
                       'step_div', 'step_mul', 'xspeed', 'version']
-        vals = struct.unpack('4B5H2B8H', s)
+        vals = struct.unpack('=4B5H2B8H', packet)
         params = collections.OrderedDict()
         for i,n in enumerate(paramNames):
             params[n] = vals[i]
@@ -203,7 +206,7 @@ class SutterMP285(object):
         scale = self.scale()
         useLims = [(1 if x is not None else 0) for x in limits]
         limits = [(0 if x is None else int(x/scale)) for x in limits]
-        data = struct.pack("6l6B", *(limits + useLims))
+        data = struct.pack("=6l6B", *(limits + useLims))
         self.write('l'+data+'\r');
         self.readPacket()
         
@@ -284,7 +287,7 @@ class SutterMP285(object):
                 errors.append((ord(err), "Unknown error code", ""))
         raise MP285Error(errors)
                     
-    def readPacket(self, expect=0, timeout=3, block=True):
+    def readPacket(self, expect=0, timeout=5, block=True):
         ## Read until a carriage return is encountered (or timeout).
         ## If expect is >0, then try to get a packet of that length, ignoring \r within that data
         ## if block is False, then return immediately if no data is available.
@@ -340,7 +343,7 @@ if __name__ == '__main__':
     s = SutterMP285(port=2, baud=9600)
     def pos():
         p = s.getPos()
-        print "x: %0.2fum  y: %0.2fum,  z: %0.2fum" % (p[0]*1e6, p[1]*1e6, p[2]*1e6)
+        print "<mp285> x: %0.2fum  y: %0.2fum,  z: %0.2fum" % (p[0]*1e6, p[1]*1e6, p[2]*1e6)
         
     def ipos():
         p = s.getImmediatePos()
