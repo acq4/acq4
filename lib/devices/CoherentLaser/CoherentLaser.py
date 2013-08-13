@@ -54,6 +54,26 @@ class CoherentLaser(Laser):
         with self.driverLock:
             bounds = self.driver.getWavelengthRange()
         return bounds[0]*1e-9, bounds[1]*1e-9
+    
+    
+    def getGDDMinMax(self):
+        with self.driverLock:
+            gddlims = self.driver.getGDDMinMax()
+        return gddlims
+    
+    def setGDD(self, value):
+        with self.driverLock:
+            self.driver.setGDD(value)
+           # print 'comp is %s' % self.driver.getComp()
+            #print 'Gdd set to %s, reading back gives %s' % (value, self.driver.getGDD())
+       # with self.driverLock:
+       #     print 'Gdd set to %s, reading back gives %s' % (value, self.driver.getGDD())
+
+            
+            
+    def clearGDD(self):
+        with self.driverLock:
+            self.driver.clearGDD()
         
     ## Shutter functions are disabled because coherent lasers are not really designed to 
     ## operate their shutters this way. Use an external shutter instead.

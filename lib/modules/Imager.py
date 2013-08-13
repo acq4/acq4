@@ -53,7 +53,7 @@ Presets = {
         'Blank Screen': False,
         'Bidirectional': True,
         'Decomb': True,
-        ('Decomb', 'Shift'): 170e-6,
+        ('Decomb', 'Shift'): 169e-6,
         ('Decomb', 'Auto'): False,
     },
     'video-fast': {
@@ -208,7 +208,7 @@ class Imager(Module):
         # create the user interface
         self.tree = PT.ParameterTree()
         self.w2s.addWidget(self.tree) # put the parameters on the bottom
-        self.w2s.setSizes([1,1,1,1,900]) # Ui top widget has multiple splitters itself - force small space..
+        self.w2s.setSizes([1,1,900]) # Ui top widget has multiple splitters itself - force small space..
         self.view = ImageView()
         self.w1.addWidget(self.view)   # add the view to the right of w1     
         
@@ -229,10 +229,14 @@ class Imager(Module):
         self.camdev = self.manager.getDevice(cameraDevice)
         self.cameraModule = self.manager.getModule('Camera')
         self.scopeDev = self.camdev.scopeDev
+        self.laserDev = None
         self.laserDev = self.manager.getDevice('Laser-2P')
+        #self.shutterDev = self.manager.getDevice('Shutter')
         self.scopeDev.sigObjectiveChanged.connect(self.objectiveUpdate)
         self.scopeDev.sigGlobalTransformChanged.connect(self.transformChanged)
         self.scannerDev = self.manager.getDevice('Scanner')
+        self.stageDev = self.manager.getDevice('SutterStage')
+        
         self.objectiveROImap = {} # this is a dict that we will populate with the name
         # of the objective and the associated ROI object .
         # That way, each objective has a scan region appopriate for it's magnification.
@@ -245,11 +249,14 @@ class Imager(Module):
         self.ui.snap_Standard_Button.clicked.connect(self.PMT_Snap_std)
         self.ui.snap_High_Button.clicked.connect(self.PMT_Snap_high)
         
-        self.ui.stop_button.clicked.connect(self.PMT_Stop)
         self.ui.video_button.clicked.connect(self.toggleVideo)
         self.ui.video_std_button.clicked.connect(self.toggleVideo_std)
         self.ui.video_fast_button.clicked.connect(self.toggleVideo_fast)
         self.ui.record_button.toggled.connect(self.recordToggled)
+        
+        self.ui.run_button.clicked.connect(self.PMT_Run)
+        self.ui.stop_button.clicked.connect(self.PMT_Stop)
+        
         #self.ui.cameraSnapBtn.clicked.connect(self.cameraSnap)
         self.ui.restoreROI.clicked.connect(self.restoreROI)
         self.ui.saveROI.clicked.connect(self.saveROI)
@@ -293,6 +300,15 @@ class Imager(Module):
             dict(name='Scanner Device', type='interface', interfaceTypes=['scanner']),
             dict(name='Laser Device', type='interface', interfaceTypes=['laser']),
             dict(name='Camera Module', type='interface', interfaceTypes=['cameraModule']),
+            dict(name="Tiles", type="bool", value=False, children=[
+                dict(name='Stage', type='interface', interfaceTypes='stage'),
+                dict(name="X0", type="float", value=-100., suffix='um', dec=True, minStep=1, step=1, limits=[-1e3,1e3], siPrefix=True),
+                dict(name="X1", type="float", value=100., suffix='um', dec=True, minStep=1, step=1, limits=[-1e3,1e3], siPrefix=True),
+                dict(name="Y0", type="float", value=-100., suffix='um', dec=True, minStep=1, step=1, limits=[-1e3,1e3], siPrefix=True),
+                dict(name="Y1", type="float", value=100., suffix='um', dec=True, minStep=1, step=1, limits=[-1e3,1e3], siPrefix=True),
+                dict(name="StepSize", type="float", value=100, suffix='um', dec=True, minStep=1e-5, step=0.5, limits=[1e-5,1e3], siPrefix=True),
+                
+            ]),
             dict(name="Z-Stack", type="bool", value=False, children=[
                 dict(name='Stage', type='interface', interfaceTypes='stage'),
                 dict(name="Step Size", type="float", value=5e-6, suffix='m', dec=True, minStep=1e-7, step=0.5, limits=[1e-9,1], siPrefix=True),
@@ -475,9 +491,12 @@ class Imager(Module):
         self.loadPreset(preset)
         #self.ui.laserWavelength.setText("%5d nm" % (self.laserDev.getWavelength()*1e9))
         #self.ui.laserPower.setText("%6.1f W" % (self.laserDev.coherentPower))
-        self.param['Wavelength'] = (self.laserDev.getWavelength()*1e9)
-        self.param['Power'] = (self.laserDev.coherentPower)
-
+        if self.laserDev is not None:
+            self.param['Wavelength'] = (self.laserDev.getWavelength()*1e9)
+            self.param['Power'] = (self.laserDev.coherentPower)
+        else:
+            self.param['Wavelength'] = 0.0
+            self.param['Power'] = 0.0
         
     def loadPreset(self, preset):
         """
@@ -523,11 +542,23 @@ class Imager(Module):
             self.img.show()
         
     def PMT_Run(self):
+        """
+        This routine handles special cases where we want multiple frames to be
+        automatically collected. The 3 modes implemented are:
+        Z-stack (currently not used as the stage isn't good enough...)
+        Tiles - collect a tiled x-y sequence of images as single images.
+        Timed - collect a series of images as a 2p-stack. 
+        The parameters for each are set in the paramtree, and the
+        data collection is initiated with the "Run" button and
+        can be terminated early with the "stop" button.
+        """
+        
         info = {}
         frameInfo = None  # will be filled in by takeImage()
         self.stopFlag = False
-        if self.param['Z-Stack'] and self.param['Timed']:
-            return
+        if (self.param['Z-Stack'] and self.param['Timed']) or (self.param['Z-Stack'] and self.param['Tiles']) or self.param['Timed'] and self.param['Tiles']:
+            return # only one mode at a time... 
+        
         if self.param['Z-Stack']: # moving in z for a focus stack
             info['2pImageType'] = 'Z-Stack'
             stage = self.manager.getDevice(self.param['Z-Stack', 'Stage'])
@@ -545,6 +576,63 @@ class Imager(Module):
                     ## speed 20 is quite slow; timeouts may occur if we go much slower than that..
                     stage.moveBy([0.0, 0.0, self.param['Z-Stack', 'Step Size']], speed=20, block=True)  
             imgData = NP.concatenate(images, axis=0)
+        
+        if self.param['Tiles']: # moving in x and y to get a tiled image set
+            info['2pImageType'] = 'Tiles'
+            stage = self.manager.getDevice(self.param['Tiles', 'Stage'])
+            self.param['Timed', 'Current Frame'] = 0
+            images = []
+            currentPos = stage.pos
+            state = self.currentRoi.getState()
+            self.width, self.height = state['size']
+            mp285speed = 100
+            print 'Current stage position: ', currentPos
+            x0 = self.param['Tiles', 'X0']*1e-6 # convert back to meters
+            x1 = self.param['Tiles', 'X1']*1e-6
+            y0 = self.param['Tiles', 'Y0']*1e-6
+            y1 = self.param['Tiles', 'Y1']*1e-6
+            tileXY = self.param['Tiles', 'StepSize']*1e-6
+            print self.width, self.height
+            nXTiles = NP.ceil((x1-x0)/self.width)
+            nYTiles = NP.ceil((y1-y0)/self.height)
+            xHalf = nXTiles*tileXY/2.0
+            yHalf = nYTiles*tileXY/2.0
+            xLeft = currentPos[0] - xHalf
+            xRight = xLeft + xHalf
+            yTop = currentPos[1] + yHalf
+            yBottom = currentPos[1] - yHalf
+            print 'nxtiles, nytiles, xhalf, ylhalf: ', nXTiles, nYTiles, xHalf, yHalf
+            print 'xl, yt, first delta', xLeft, yTop, xLeft-currentPos[0], yTop-currentPos[1]
+            stage.moveBy([xLeft-currentPos[0], yTop-currentPos[1], 0.0], speed=mp285speed, block=False) # move and wait until complete.  
+            xpl = NP.arange(xLeft, xRight, tileXY)
+            print yTop, yBottom, tileXY
+            ypl = NP.arange(yBottom, yTop, tileXY)
+            xsign = 1
+            print xpl
+            print ypl
+            for i in range(len(ypl)):
+                if self.stopFlag:
+                    break
+                for j in range(len(xpl)):
+                    if self.stopFlag:
+                        break
+                    self.PMT_Snap()
+                    #img, frameInfo = self.takeImage()
+                    #img = img[NP.newaxis, ...]
+                    #if img is None:
+                    #    break
+                    #images.append(img)
+                    #self.view.setImage(img)
+                    print 'j: %d   X moveby: %f' % (j, xsign*tileXY)
+                    stage.moveBy([xsign*tileXY, 0., 0.], speed=mp285speed, block=True)
+                xsign = xsign*-1 # change direction each pass
+                
+                if i < len(ypl):
+                    ## speed 20 is quite slow; timeouts may occur if we go much slower than that..
+                    print 'i: %d   y moveby: %f' % (i, tileXY)
+                    stage.moveBy([0.0, tileXY, 0.0], speed=mp285speed, block=True) # move and wait until complete.  
+            imgData = NP.concatenate(images, axis=0)
+            
         elif self.param['Timed']: # 
             info['2pImageType'] = 'Timed'
             self.param['Timed', 'Current Frame'] = 0
@@ -593,10 +681,10 @@ class Imager(Module):
         """            
         #self.ui.laserWavelength.setText("%5d nm" % (self.laserDev.getWavelength()*1e9))
         #self.ui.laserPower.setText("%6.1f W" % (self.laserDev.coherentPower))
-        if self.laserDev.hasShutter:
+        if self.laserDev is not None and self.laserDev.hasShutter:
             self.laserDev.openShutter()
         (imgData, info) = self.takeImage()
-        if self.laserDev.hasShutter:
+        if self.laserDev is not None and self.laserDev.hasShutter:
             self.laserDev.closeShutter()
         if self.testMode or imgData is None:
             return
