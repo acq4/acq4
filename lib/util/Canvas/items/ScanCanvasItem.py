@@ -82,7 +82,7 @@ class ScanCanvasItem(CanvasItem):
         self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
         self.createGradientBtn.connect(self.createGradientBtn, QtCore.SIGNAL('clicked()'), self.createGradient)
         self.removeGradientBtn.connect(self.removeGradientBtn, QtCore.SIGNAL('clicked()'), self.removeGradient)
-
+        self.gradientNumber = self.ui.gradSpin
 
     #def addScan(self, dirHandle, **opts):
         #"""Returns a list of ScanCanvasItems."""
@@ -273,16 +273,17 @@ class ScanCanvasItem(CanvasItem):
        # Generate a current scale bar from the console:
 
         # some of this from command line...
-        # print dir(lib.Manager)
-        # model = lib.Manager.getManager().dataModel
-        #print dir(lib.Manager.getManager().PhotoStim)
+ 
         man = lib.Manager.getManager()
         pm = man.getInterface('analysisMod', 'Photostim')
-        #canvas = pm.getElement('Canvas')
-
+        gradnum = self.gradientNumber.value()
         # get the current color gradient. If you have multiple lines in the color mapper, you may need to 
         # change the index to 'items'
-        colormap = pm.mapper.items[0] # (was pm.ampper...)
+        nitems =len(pm.mapper.items)
+        if gradnum >= nitems:
+            gradnum = nitems-1
+            self.gradientNumber.setValue(gradnum)
+        colormap = pm.mapper.items[gradnum] 
         gradient = colormap.gradient.getGradient()
 
         # build a legend
@@ -296,7 +297,7 @@ class ScanCanvasItem(CanvasItem):
        # A full set of labels:
         self.gradientLegend.setLabels(dict((('- %3.1f' % x), x) for x in np.arange(0, 1+0.2, 0.2))) 
         # now show it
-        self.canvas.addGraphicsItem(self.gradientLegend)
+        self.canvas.addGraphicsItem(self.gradientLegend, name = 'Gradient_%d' % gradnum)
 
         #The '-' puts a tick mark about at the right location. That's the best I can do without writing a routine to actually put ticks on the gradient bar. 
 

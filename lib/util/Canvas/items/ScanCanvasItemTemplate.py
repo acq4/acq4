@@ -60,8 +60,14 @@ class Ui_Form(object):
         self.removeGradientBtn.setToolTip(QtGui.QApplication.translate("Form", "Removes the gradient on the plot", None, QtGui.QApplication.UnicodeUTF8))
         self.removeGradientBtn.setText(QtGui.QApplication.translate("Form", "X Gradient", None, QtGui.QApplication.UnicodeUTF8))
         self.removeGradientBtn.setObjectName(_fromUtf8("removeGradientBtn"))
-        self.gridLayout.addWidget(self.removeGradientBtn, 9, 1, 1, 2)
-        
+        self.gridLayout.addWidget(self.removeGradientBtn, 9, 2, 1, 3)
+
+        self.gradSpin = QtGui.QSpinBox(Form)
+        self.gradSpin.setValue(0)
+        self.gradSpin.setRange(0,32)
+        self.gradSpin.setObjectName(_fromUtf8("gradSpin"))
+        self.gridLayout.addWidget(self.gradSpin, 9, 1, 1, 3)
+                
         self.label = QtGui.QLabel(Form)
         self.label.setText(QtGui.QApplication.translate("Form", "Spot Frame Number", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setObjectName(_fromUtf8("label"))
