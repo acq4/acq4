@@ -105,12 +105,12 @@ class DataManager(QtCore.QObject):
         
     def getHandle(self, fileName):
         """Return a FileHandle or DirHandle for the given fileName. 
-        If the file does not exist, this method returns a FileHandle.
+        If the file does not exist, a handle will still be returned, but is not guaranteed to have the correct type.
         """
         fn = os.path.abspath(fileName)
         #if not os.path.exists(fn):
             #raise Exception("File '%s' does not exist." % fn)
-        if os.path.isdir(fn):
+        if os.path.isdir(fn) or (not os.path.exists(fn) and fn.endswith(os.path.sep)):
             return self.getDirHandle(fileName)
         else:
             return self.getFileHandle(fileName)

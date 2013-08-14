@@ -437,7 +437,7 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                 if dataType == 'blocks':
                     (tx, dy) = self.getClipData(tdat[block], ydat[block][record, thisaxis, :], t0, t1)
                 else:
-                    (tx, dy) = self.getClipData(tdat, ydat[record], t0, t1)
+                    (tx, dy) = self.getClipData(tdat, ydat, t0, t1)
               #  print 'Fitting.py: Fit data: ', tx, dy
               #  print tx.shape
               #  print dy.shape

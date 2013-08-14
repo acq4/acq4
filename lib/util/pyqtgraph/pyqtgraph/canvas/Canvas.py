@@ -13,6 +13,7 @@ from pyqtgraph.Qt import QtGui, QtCore, USE_PYSIDE
 from pyqtgraph.graphicsItems.ROI import ROI
 from pyqtgraph.graphicsItems.ViewBox import ViewBox
 from pyqtgraph.graphicsItems.GridItem import GridItem
+import pyqtgraph as pg
 
 if USE_PYSIDE:
     from .CanvasTemplate_pyside import *
@@ -75,6 +76,8 @@ class Canvas(QtGui.QWidget):
         self.ui.itemList.itemChanged.connect(self.treeItemChanged)
         self.ui.itemList.sigItemMoved.connect(self.treeItemMoved)
         self.ui.itemList.itemSelectionChanged.connect(self.treeItemSelected)
+        print dir(self.ui)
+        self.ui.autoShadingBtn.clicked.connect(self.autoShading)
         self.ui.autoRangeBtn.clicked.connect(self.autoRange)
         self.ui.storeSvgBtn.clicked.connect(self.storeSvg)
         self.ui.storePngBtn.clicked.connect(self.storePng)
@@ -104,11 +107,54 @@ class Canvas(QtGui.QWidget):
             
 
     def storeSvg(self):
-        self.ui.view.writeSvg()
+
+        from pyqtgraph.GraphicsScene.exportDialog import ExportDialog
+        print dir(ExportDialog)
+        ex = ExportDialog(self.ui.view)
+        ex.show()
+       #ex.fileSaveDialog()
+        #self.ui.view.writeSvg()
 
     def storePng(self):
         self.ui.view.writeImage()
+        
+    def autoShading(self):
+        import numpy as np
+        import scipy
+        import scipy.stats
+        
+        nsel =  len(self.selectedItems())
+        if nsel == 0:
+            return
+       # print dir(self.selectedItems()[0].data)
+        nxm = self.selectedItems()[0].data.shape
+        meanImage = np.zeros((nsel, nxm[0], nxm[1]))
+        #$meanImage = np.mean(self.selectedItems().asarray(), axis=0)
+        n = 0
+        for i in range(nsel):
+            try:
+                meanImage[n,:,:] = self.selectedItems()[i].data.asarray()
+                n = n + 1
+            except:
+                print 'image i = %d failed' % i
+        meanImage = np.mean(meanImage[0:n], axis=0)
+        filtwidth = np.floor(nxm[0]/10+1)
+        blimg = scipy.ndimage.filters.gaussian_filter(meanImage, filtwidth, order = 0, mode='reflect')
+        
+        # now rescale each individually
+        for i in range(nsel):
+            d = self.selectedItems()[i].data.asarray()
+            hm = np.histogram(d, 512) # return (count, bins)
+            m = np.argmax(hm[0]) # returns the index of the max count
+            xh = d.shape # capture shape just in case it is not right (have data that is NOT !!)
+            newImage = d / blimg[0:xh[0], 0:xh[1]] # (d - imin)/(blimg - imin) # rescale image. 
+            hn = np.histogram(newImage, 512)
+            n = np.argmax(hn[0])
+            newImage = (hm[1][m]/hn[1][n])*newImage # rescale to the original median.
+            self.selectedItems()[i].updateImage(newImage)
+            self.selectedItems()[i].levelRgn.setRegion([0, 2.0])
 
+       
     def splitterMoved(self):
         self.resizeEvent()
 
@@ -128,7 +174,21 @@ class Canvas(QtGui.QWidget):
         self.resizeEvent()
 
     def autoRange(self):
-        self.view.autoRange()
+        # select the source image first
+        #mod = man.getInterface('analysisMod', 'MosaicEditor')
+        if len(self.selectedItems()) == 0:
+            #print self.selectedItems().levelRgn.getRegion()
+            self.view.autoRange()
+            return
+        levels = self.selectedItems()[0].levelRgn.getRegion()
+#        print levels
+        if max(levels) < 10.0:
+            levels = (-0.01, 2.0)
+        # now select all images
+        for i in self.selectedItems():
+          i.levelRgn.setRegion(levels) 
+        
+        #
 
     def resizeEvent(self, ev=None):
         if ev is not None:
@@ -580,7 +640,9 @@ class Canvas(QtGui.QWidget):
         self.menu.popup(ev.globalPos())
         
     def removeClicked(self):
-        self.removeItem(self.menuItem)
+        #self.removeItem(self.menuItem)
+        for item in self.selectedItems():
+            self.removeItem(item)
         self.menuItem = None
         import gc
         gc.collect()

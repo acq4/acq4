@@ -47,6 +47,7 @@ class DataManager(Module):
         self.ui.logDock.hide()
         self.dialog = FileDialog()
         self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
+        self.ui.fileTreeWidget.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
         ## Load values into GUI
         #self.model = DMModel(self.manager.getBaseDir())
         #self.ui.fileTreeView.setModel(self.model)
