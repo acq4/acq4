@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'devTemplate.ui'
+# Form implementation generated from reading ui file '.\lib\devices\Laser\devTemplate.ui'
 #
-# Created: Tue May 29 14:57:08 2012
-#      by: PyQt4 UI code generator 4.9
+# Created: Tue Aug 13 14:46:53 2013
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -104,6 +104,16 @@ class Ui_Form(object):
         self.wavelengthCombo.setObjectName(_fromUtf8("wavelengthCombo"))
         self.wavelengthCombo.addItem(_fromUtf8(""))
         self.gridLayout_5.addWidget(self.wavelengthCombo, 0, 2, 1, 1)
+        self.GDDEnableCheck = QtGui.QCheckBox(self.wavelengthGroup)
+        self.GDDEnableCheck.setObjectName(_fromUtf8("GDDEnableCheck"))
+        self.gridLayout_5.addWidget(self.GDDEnableCheck, 1, 0, 1, 1)
+        self.GDDSpin = QtGui.QSpinBox(self.wavelengthGroup)
+        self.GDDSpin.setMaximum(32000)
+        self.GDDSpin.setObjectName(_fromUtf8("GDDSpin"))
+        self.gridLayout_5.addWidget(self.GDDSpin, 1, 1, 1, 1)
+        self.GDDLimits = QtGui.QLabel(self.wavelengthGroup)
+        self.GDDLimits.setObjectName(_fromUtf8("GDDLimits"))
+        self.gridLayout_5.addWidget(self.GDDLimits, 1, 2, 1, 1)
         self.gridLayout.addWidget(self.wavelengthGroup, 3, 0, 1, 3)
         self.groupBox_2 = QtGui.QGroupBox(Form)
         self.groupBox_2.setAlignment(QtCore.Qt.AlignCenter)
@@ -251,6 +261,8 @@ class Ui_Form(object):
         self.powerAlertCheck.setText(QtGui.QApplication.translate("Form", "Alert me to power changes larger than:", None, QtGui.QApplication.UnicodeUTF8))
         self.label_7.setText(QtGui.QApplication.translate("Form", "Current Wavelength: ", None, QtGui.QApplication.UnicodeUTF8))
         self.wavelengthCombo.setItemText(0, QtGui.QApplication.translate("Form", "Set wavelength for:", None, QtGui.QApplication.UnicodeUTF8))
+        self.GDDEnableCheck.setText(QtGui.QApplication.translate("Form", "GDD Enable", None, QtGui.QApplication.UnicodeUTF8))
+        self.GDDLimits.setText(QtGui.QApplication.translate("Form", "GDD Limits", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Power Calibration", None, QtGui.QApplication.UnicodeUTF8))
         self.calibrationList.headerItem().setText(0, QtGui.QApplication.translate("Form", "Optics", None, QtGui.QApplication.UnicodeUTF8))
         self.calibrationList.headerItem().setText(1, QtGui.QApplication.translate("Form", "Wavelength", None, QtGui.QApplication.UnicodeUTF8))
