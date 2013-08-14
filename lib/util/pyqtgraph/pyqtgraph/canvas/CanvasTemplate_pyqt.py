@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './canvas/CanvasTemplate.ui'
+# Form implementation generated from reading ui file './lib/util/pyqtgraph/pyqtgraph/canvas/CanvasTemplate.ui'
 #
-# Created: Sun Sep  9 14:41:30 2012
-#      by: PyQt4 UI code generator 4.9.1
+# Created: Tue Jul 30 17:16:14 2013
+#      by: PyQt4 UI code generator 4.9.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -45,7 +45,7 @@ class Ui_Form(object):
         sizePolicy.setHeightForWidth(self.autoRangeBtn.sizePolicy().hasHeightForWidth())
         self.autoRangeBtn.setSizePolicy(sizePolicy)
         self.autoRangeBtn.setObjectName(_fromUtf8("autoRangeBtn"))
-        self.gridLayout_2.addWidget(self.autoRangeBtn, 3, 0, 1, 2)
+        self.gridLayout_2.addWidget(self.autoRangeBtn, 3, 0, 1, 1)
         self.horizontalLayout = QtGui.QHBoxLayout()
         self.horizontalLayout.setSpacing(0)
         self.horizontalLayout.setObjectName(_fromUtf8("horizontalLayout"))
@@ -79,6 +79,9 @@ class Ui_Form(object):
         self.reflectSelectionBtn = QtGui.QPushButton(self.layoutWidget)
         self.reflectSelectionBtn.setObjectName(_fromUtf8("reflectSelectionBtn"))
         self.gridLayout_2.addWidget(self.reflectSelectionBtn, 4, 1, 1, 1)
+        self.autoShadingBtn = QtGui.QPushButton(self.layoutWidget)
+        self.autoShadingBtn.setObjectName(_fromUtf8("autoShadingBtn"))
+        self.gridLayout_2.addWidget(self.autoShadingBtn, 3, 1, 1, 1)
         self.gridLayout.addWidget(self.splitter, 0, 0, 1, 1)
 
         self.retranslateUi(Form)
@@ -94,6 +97,7 @@ class Ui_Form(object):
         self.resetTransformsBtn.setText(QtGui.QApplication.translate("Form", "Reset Transforms", None, QtGui.QApplication.UnicodeUTF8))
         self.mirrorSelectionBtn.setText(QtGui.QApplication.translate("Form", "Mirror Selection", None, QtGui.QApplication.UnicodeUTF8))
         self.reflectSelectionBtn.setText(QtGui.QApplication.translate("Form", "MirrorXY", None, QtGui.QApplication.UnicodeUTF8))
+        self.autoShadingBtn.setText(QtGui.QApplication.translate("Form", "Auto Shade", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph.widgets.GraphicsView import GraphicsView
 from CanvasManager import CanvasCombo

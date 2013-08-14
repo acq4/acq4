@@ -109,7 +109,6 @@ def parseString(lines, start=0):
     try:
         while True:
             ln += 1
-            #print ln
             if ln >= len(lines):
                 break
             
@@ -135,8 +134,14 @@ def parseString(lines, start=0):
             (k, p, v) = l.partition(':')
             k = k.strip()
             v = v.strip()
-            v = re.sub(ptsstr, '(', v)
-            v = re.sub(qptsstr, '(', v)
+            # print 'configfile.py -- v: ', v
+            vo = re.sub(ptsstr, '(', v)
+            vo = re.sub(qptsstr, '(', vo)
+            # if v != vo:
+            #     print 'Vo: ', vo
+            # else:
+            #     print 'vo no change: ', vo
+            v = vo
             
             ## set up local variables to use for eval
             local = units.allUnits.copy()
@@ -164,7 +169,7 @@ def parseString(lines, start=0):
                 else:
                     #print "Going deeper..", ln+1
                     (ln, val) = parseString(lines, start=ln+1)
-           # print 'val: ', val
+
             data[k] = val
         #print k, repr(val)
     except ParseError:

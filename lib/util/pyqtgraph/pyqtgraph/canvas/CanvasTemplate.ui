@@ -42,7 +42,7 @@
          </property>
         </widget>
        </item>
-       <item row="3" column="0" colspan="2">
+       <item row="3" column="0">
         <widget class="QPushButton" name="autoRangeBtn">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
@@ -118,6 +118,13 @@
         <widget class="QPushButton" name="reflectSelectionBtn">
          <property name="text">
           <string>MirrorXY</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="1">
+        <widget class="QPushButton" name="autoShadingBtn">
+         <property name="text">
+          <string>Auto Shade</string>
          </property>
         </widget>
        </item>
