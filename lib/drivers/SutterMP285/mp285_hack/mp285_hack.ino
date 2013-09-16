@@ -399,8 +399,8 @@ void runSerial() {
 
 
 void setup() {
-  Serial.begin(115200);
-  Serial1.begin(19200);
+  Serial.begin(115200); // Open serial line to computer
+  Serial1.begin(9600);  // Open serial line to MP285
   Serial.println("Good morning.");
 
   DDRA = B10101010;  // 0 == input; 1 == output
