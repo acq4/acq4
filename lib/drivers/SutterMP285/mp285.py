@@ -27,7 +27,7 @@ class SutterMP285(object):
         self.baud = baud
         self.sp = serial.Serial(int(self.port), baudrate=self.baud, bytesize=serial.EIGHTBITS)
         self._scale = None
-        time.sleep(0.3)  ## Give devices a moment to chill after opening the serial line.
+        time.sleep(1.0)  ## Give devices a moment to chill after opening the serial line.
         self.read()
 
     def getPos(self, scaled=True):
@@ -52,8 +52,8 @@ class SutterMP285(object):
         (if getPos() is called while the ROE is in use, the MP285 will very likely crash.)
         """
         self.write('p')  
-        packet = self.readPacket(expect=13);
-        if len(packet) != 13:
+        packet = self.readPacket(expect=12); 
+        if len(packet) != 12:
             raise Exception("Sutter MP285: bad position packet: '%s' (%d)" % (repr(packet),len(packet)))
         
         pos = [packet[:4], packet[4:8], packet[8:12]]
@@ -336,8 +336,8 @@ class SutterMP285(object):
                 raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % repr(res))
         
 if __name__ == '__main__':
-    #s = SutterMP285(port=5, baud=115200)
-    s = SutterMP285(port=2, baud=9600)
+    s = SutterMP285(port=5, baud=115200)
+    #s = SutterMP285(port=2, baud=9600)
     def pos():
         p = s.getPos()
         print "x: %0.2fum  y: %0.2fum,  z: %0.2fum" % (p[0]*1e6, p[1]*1e6, p[2]*1e6)
@@ -383,6 +383,6 @@ if __name__ == '__main__':
                 z += zstep
                 s.setPos([None,None,z])
         
-    #ipos()
+    ipos()
     pos()
         

@@ -26,7 +26,11 @@ class SutterMP285(Device, OptomechDevice):
         self.config = config
         self.configFile = os.path.join('devices', name + '_config.cfg')
         self.lock = Mutex(QtCore.QMutex.Recursive)
-        self.port = config['port']-1  ## windows com ports start at COM1, pyserial ports start at 0
+        self.port = config['port']  ## windows com ports start at COM1, pyserial ports start at 0
+        # Interpret "COM1" as port 0
+        if isinstance(self.port, basestring) and self.port.lower()[:3] == 'com':
+            self.port = int(self.port[3:]) - 1
+        
         self.scale = config.get('scale', None) ## Allow config to apply extra scale factor
         self.baud = config.get('baud', 9600)   ## 9600 is probably factory default
         self.pos = [0, 0, 0]
