@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'CameraInterfaceTemplate.ui'
+# Form implementation generated from reading ui file 'lib/devices/Camera/CameraInterfaceTemplate.ui'
 #
-# Created: Fri May 25 14:24:21 2012
+# Created: Thu Aug 29 12:38:50 2013
 #      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(234, 791)
+        Form.resize(198, 791)
         self.verticalLayout = QtGui.QVBoxLayout(Form)
         self.verticalLayout.setSpacing(15)
         self.verticalLayout.setMargin(0)
@@ -115,31 +115,50 @@ class Ui_Form(object):
         self.gridLayout_2.setSpacing(0)
         self.gridLayout_2.setContentsMargins(-1, 0, -1, -1)
         self.gridLayout_2.setObjectName(_fromUtf8("gridLayout_2"))
-        self.histogram = HistogramLUTWidget(self.displayCtrlWidget)
-        self.histogram.setObjectName(_fromUtf8("histogram"))
-        self.gridLayout_2.addWidget(self.histogram, 0, 0, 1, 2)
+        self.label_8 = QtGui.QLabel(self.displayCtrlWidget)
+        self.label_8.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.label_8.setObjectName(_fromUtf8("label_8"))
+        self.gridLayout_2.addWidget(self.label_8, 3, 0, 1, 1)
+        self.zoomLiveBtn = QtGui.QPushButton(self.displayCtrlWidget)
+        self.zoomLiveBtn.setObjectName(_fromUtf8("zoomLiveBtn"))
+        self.gridLayout_2.addWidget(self.zoomLiveBtn, 6, 0, 1, 2)
         self.btnAutoGain = QtGui.QPushButton(self.displayCtrlWidget)
         self.btnAutoGain.setCheckable(True)
         self.btnAutoGain.setChecked(False)
         self.btnAutoGain.setObjectName(_fromUtf8("btnAutoGain"))
         self.gridLayout_2.addWidget(self.btnAutoGain, 1, 0, 1, 2)
-        self.label_6 = QtGui.QLabel(self.displayCtrlWidget)
-        self.label_6.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
-        self.label_6.setObjectName(_fromUtf8("label_6"))
-        self.gridLayout_2.addWidget(self.label_6, 2, 0, 1, 1)
-        self.spinAutoGainSpeed = QtGui.QDoubleSpinBox(self.displayCtrlWidget)
-        self.spinAutoGainSpeed.setProperty("value", 2.0)
-        self.spinAutoGainSpeed.setObjectName(_fromUtf8("spinAutoGainSpeed"))
-        self.gridLayout_2.addWidget(self.spinAutoGainSpeed, 2, 1, 1, 1)
-        self.label_8 = QtGui.QLabel(self.displayCtrlWidget)
-        self.label_8.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
-        self.label_8.setObjectName(_fromUtf8("label_8"))
-        self.gridLayout_2.addWidget(self.label_8, 3, 0, 1, 1)
         self.spinAutoGainCenterWeight = QtGui.QDoubleSpinBox(self.displayCtrlWidget)
         self.spinAutoGainCenterWeight.setMaximum(1.0)
         self.spinAutoGainCenterWeight.setSingleStep(0.1)
         self.spinAutoGainCenterWeight.setObjectName(_fromUtf8("spinAutoGainCenterWeight"))
         self.gridLayout_2.addWidget(self.spinAutoGainCenterWeight, 3, 1, 1, 1)
+        self.spinAutoGainSpeed = QtGui.QDoubleSpinBox(self.displayCtrlWidget)
+        self.spinAutoGainSpeed.setProperty("value", 2.0)
+        self.spinAutoGainSpeed.setObjectName(_fromUtf8("spinAutoGainSpeed"))
+        self.gridLayout_2.addWidget(self.spinAutoGainSpeed, 2, 1, 1, 1)
+        self.histogram = HistogramLUTWidget(self.displayCtrlWidget)
+        self.histogram.setObjectName(_fromUtf8("histogram"))
+        self.gridLayout_2.addWidget(self.histogram, 0, 0, 1, 2)
+        self.label_6 = QtGui.QLabel(self.displayCtrlWidget)
+        self.label_6.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.label_6.setObjectName(_fromUtf8("label_6"))
+        self.gridLayout_2.addWidget(self.label_6, 2, 0, 1, 1)
+        self.label_4 = QtGui.QLabel(self.displayCtrlWidget)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Preferred)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.label_4.sizePolicy().hasHeightForWidth())
+        self.label_4.setSizePolicy(sizePolicy)
+        self.label_4.setAlignment(QtCore.Qt.AlignCenter)
+        self.label_4.setObjectName(_fromUtf8("label_4"))
+        self.gridLayout_2.addWidget(self.label_4, 4, 0, 1, 2)
+        self.alphaSlider = QtGui.QSlider(self.displayCtrlWidget)
+        self.alphaSlider.setMaximum(100)
+        self.alphaSlider.setSingleStep(1)
+        self.alphaSlider.setProperty("value", 100)
+        self.alphaSlider.setOrientation(QtCore.Qt.Horizontal)
+        self.alphaSlider.setObjectName(_fromUtf8("alphaSlider"))
+        self.gridLayout_2.addWidget(self.alphaSlider, 5, 0, 1, 2)
         self.verticalLayout.addWidget(self.displayCtrlWidget)
         self.bgSubtractWidget = QtGui.QWidget(Form)
         self.bgSubtractWidget.setObjectName(_fromUtf8("bgSubtractWidget"))
@@ -209,21 +228,23 @@ class Ui_Form(object):
         self.label_3.setText(QtGui.QApplication.translate("Form", "Exposure", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("Form", "Binning", None, QtGui.QApplication.UnicodeUTF8))
         self.spinExposure.setToolTip(QtGui.QApplication.translate("Form", "Sets the exposure time for each frame.", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_8.setText(QtGui.QApplication.translate("Form", "Frame Center Weight", None, QtGui.QApplication.UnicodeUTF8))
+        self.zoomLiveBtn.setText(QtGui.QApplication.translate("Form", "Zoom to Live Image", None, QtGui.QApplication.UnicodeUTF8))
         self.btnAutoGain.setToolTip(QtGui.QApplication.translate("Form", "Determines the behavior of the white/black level sliders.\n"
 "When enabled, the sliders maximum and minimum values are set\n"
 "to the maximum and minimum intensity values in the image.\n"
 "When disabled, the minimum is 0 and the maximum is the largest \n"
 "possible intensity given the bit depth of the camera.", None, QtGui.QApplication.UnicodeUTF8))
         self.btnAutoGain.setText(QtGui.QApplication.translate("Form", "Auto Gain", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_6.setText(QtGui.QApplication.translate("Form", "Auto Gain Delay", None, QtGui.QApplication.UnicodeUTF8))
+        self.spinAutoGainCenterWeight.setToolTip(QtGui.QApplication.translate("Form", "Weights the auto gain measurement to the center 1/3 of\n"
+"the frame when set to 1.0. A value of 0.0 meters from \n"
+"the entire frame.", None, QtGui.QApplication.UnicodeUTF8))
         self.spinAutoGainSpeed.setToolTip(QtGui.QApplication.translate("Form", "Smooths out the auto gain control, prevents very\n"
 "brief flashes from affecting the gain. Larger values\n"
 "indicate more smoothing.\n"
 "", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_8.setText(QtGui.QApplication.translate("Form", "Frame Center Weight", None, QtGui.QApplication.UnicodeUTF8))
-        self.spinAutoGainCenterWeight.setToolTip(QtGui.QApplication.translate("Form", "Weights the auto gain measurement to the center 1/3 of\n"
-"the frame when set to 1.0. A value of 0.0 meters from \n"
-"the entire frame.", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_6.setText(QtGui.QApplication.translate("Form", "Auto Gain Delay", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_4.setText(QtGui.QApplication.translate("Form", "Transparency", None, QtGui.QApplication.UnicodeUTF8))
         self.bgBlurSpin.setToolTip(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
