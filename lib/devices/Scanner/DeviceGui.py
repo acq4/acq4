@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from DeviceTemplate import Ui_Form
-import time, os, sys
+import time, os, sys, gc
 from PyQt4 import QtCore, QtGui
 #from pyqtgraph.graphicsItems import ImageItem
 import lib.Manager
@@ -194,8 +194,21 @@ class ScannerDeviceGui(QtGui.QWidget):
         positions = positions[2:]
         
         ## Do background subtraction
-        frames = origFrames.astype(np.float32) - background.astype(np.float32)
+        ## TODO: put this inside a while loop so that it keeps taking out half the data until it can do the calculation without having a MemoryError.
+        try:
+            frames = origFrames.astype(np.float32)
+            frames -= background.astype(np.float32)
+            print "used all frames"
 
+        except MemoryError:
+            frames = origFrames[::2,:,:].astype(np.float32)
+            frames -= background.astype(np.float32)
+            #frames = origFrames[::10,:,:].astype(np.float32) - background.astype(np.float32)
+            positions = positions[::2]
+            print "used half of frames"
+            
+        del origFrames
+        gc.collect()
         ## Find a frame with a spot close to the center (within center 1/3)
         cx = frames.shape[1] / 3
         cy = frames.shape[2] / 3
