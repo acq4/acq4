@@ -168,6 +168,9 @@ class CameraInterface(QtCore.QObject):
         self.ui.histogram.sigLevelsChanged.connect(self.levelsChanged)
         self.ui.btnAutoGain.toggled.connect(self.toggleAutoGain)
         self.ui.btnAutoGain.setChecked(True)
+        self.ui.zoomLiveBtn.clicked.connect(self.module.centerView)
+        self.alpha = 1
+        self.ui.alphaSlider.valueChanged.connect(self.alphaChanged)
 
         ## Check for new frame updates every 16ms
         ## Some checks may be skipped even if there is a new frame waiting to avoid drawing more than
@@ -302,6 +305,9 @@ class CameraInterface(QtCore.QObject):
             #print "\n".join(traceback.format_stack())
             self.autoGainLevels = newLevels
         #self.requestFrameUpdate()
+        
+    def alphaChanged(self, val):
+        self.alpha = val/100.0 ## slider only works in integers and we need a 0 to 1 value
 
 
     def requestFrameUpdate(self):
@@ -644,6 +650,7 @@ class CameraInterface(QtCore.QObject):
             
             ## update image in viewport
             self.imageItem.updateImage(data)#, levels=[bl, wl])
+            self.imageItem.setOpacity(self.alpha)
             self.imageItem.setTransform(self.currentFrame.frameTransform().as2D())
             prof.mark()
             

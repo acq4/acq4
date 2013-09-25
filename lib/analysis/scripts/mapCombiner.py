@@ -450,6 +450,92 @@ def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probT
     #arr[:, :, int(720e-6*factor/spacing)] = 3
     return arr, counts
 
+def convolveCells_newAtlas_ZScore(sites, keys=None, factor=1.11849, spacing=5e-6, probThreshold=0.02, sampleSpacing=35e-6, eventKey='ZScore', spontKey='SpontZScore', zscoreThreshold=1.645):
+    if keys == None:
+        keys = {
+            'x':'xPosCell',
+            'y':'yPosCell',
+            'mappedX': 'modXPosCell',
+            'mappedY': 'percentDepth'}
+    #if eventKey == None:
+    #    eventKey = 'numOfPostEvents'
+    #if timeWindow == None:
+    #    timeWindow = sites[0]['PostRgnLen']
+            
+    #avgCellX = np.array(list(set(sites['CellXPos']))).mean()
+    #avgCellY = np.array(list(set(sites['CellYPos']))).mean()
+    #xmin = (sites['xPos']-sites['CellXPos']).min() ## point furthest left of the cell
+    xmin = sites[keys['mappedX']].min()
+    #ymin = (sites['yPos']-sites['CellYPos']).min() ## point furthest above the cell
+    ymin = (sites[keys['mappedY']].min() if sites[keys['mappedY']].min() < 0 else 0.) *factor
+    #xmax = (sites['xPos']-sites['CellXPos']).max()
+    xmax = sites[keys['mappedX']].max()
+    #ymax = (sites['yPos']-sites['CellXPos']).max()
+    ymax = sites[keys['mappedY']].max()*factor
+                 
+    xdim = int((xmax-xmin)/spacing)+10
+    ydim = int((ymax-ymin)/spacing)+10
+    #avgCellIndex = np.array([int((avgCellX-xmin)/spacing)+5, int((avgCellY-ymin)/spacing)+5])
+    
+    cells = set(sites['CellDir'])
+    n = len(cells)
+    
+    arr = np.zeros((n, xdim, ydim), dtype=float)
+    sampling = np.zeros((n, xdim, ydim), dtype=float)
+    #results = []
+    counts = []
+    
+    for i, c in enumerate(cells):
+        print "index:", i," = cell:", c
+        
+        data = sites[sites['CellDir']==c]
+        #if timeWindow == None:
+        #    timeWindow = data[0]['PostRegionLen']
+        #elif timeWindow == 'pre':
+        #    timeWindow = data[0]['PreRegionLen']
+        #spontRate = data['numOfPreEvents'].sum()/data['PreRegionLen'].sum()
+        data = afn.spatialCorrelationAlgorithm_ZScore(data, 90e-6, eventsKey=eventKey, spontKey=spontKey, threshold=zscoreThreshold)
+  
+        probs = np.zeros(len(data))
+        probs[data['prob'] < probThreshold] = 1.
+        for j, s in enumerate(data):
+            #trans1 = (s[keys['mappedX']] - xmin, s[keys['mappedY']]-ymin)
+            #trans2 = (avgCellX+xmin, avgCellY+ymin)            
+            x, y = (int((s[keys['mappedX']]-xmin)/spacing), int((s[keys['mappedY']]*factor-ymin)/spacing))
+            arr[i, x, y] = probs[j]
+            sampling[i, x, y] = 1
+        
+        counts.append(arr[i].sum()) 
+        #results.append(arr[i].copy())
+        arr[i] = scipy.ndimage.gaussian_filter(arr[i], 2, mode='constant')
+        arr[i] = arr[i]/0.039
+        arr[i][arr[i] > 0.03] = 1
+        arr[i][arr[i] <= 0.03] = 0
+        
+        sampling[i] = scipy.ndimage.gaussian_filter(sampling[i], 2)
+        sampling[i] = sampling[i]/0.039
+        sampling[i][sampling[i] > 0.02] = 1
+        sampling[i][sampling[i] <= 0.02] = 0    
+    
+        ### mark cell position
+        #xind = int(-xmin/spacing)
+        #yind = int(data['CellYPos'][0]/spacing)
+        ##print "yind=", ymin, '*', factor, '/', spacing
+        ##print arr.shape, xind, yind
+        #arr[i, xind-1:xind+2, yind-1:yind+2] = 2
+        ##print arr.max()
+
+    ### mark separation lines
+    #arr[:, int((-xmin-150e-6)/spacing), :] = 3
+    #arr[:, int((-xmin-450e-6)/spacing), :] = 3
+    #arr[:, int((-xmin+150e-6)/spacing), :] = 3
+    #arr[:, int((-xmin+450e-6)/spacing), :] = 3   
+    #arr[:, :, int(130e-6*factor/spacing)] = 3
+    #arr[:, :, int(310e-6*factor/spacing)] = 3
+    #arr[:, :, int(450e-6*factor/spacing)] = 3
+    #arr[:, :, int(720e-6*factor/spacing)] = 3
+    return arr, counts
+
 def randomizeData(data, fields):
     """Return a record array with the data in specified fields randomly sorted.
          **Arguments**
@@ -592,3 +678,31 @@ def test(n=10):
             #raise Exception("This is the exception for testing Parallelize")
             
     return results
+
+
+def generateEventStatsCSV(events, filename):
+    cells = list(set(events['CellDir']))
+    preTau = []
+    postTau = []
+    preAmp = []
+    postAmp = []
+    preRise = []
+    postRise = []
+    
+    for c in cells:
+        data = events[events['CellDir'] == c]
+        pre = data[data['latency'] < -0.01]
+        post = data[(data['latency'] > 0.005)*(data['latency'] < 0.055)]
+        preTau.append(pre['fitDecayTau'].mean())
+        postTau.append(post['fitDecayTau'].mean())
+        preAmp.append(pre['fitAmplitude'].mean())
+        postAmp.append(post['fitAmplitude'].mean())
+        preRise.append(pre['fitRiseTime'].mean())
+        postRise.append(post['fitRiseTime'].mean())
+        
+    f = open(filename+'.csv', 'w')
+    f.write('Cell, preAmp, postAmp, preTau, postTau, preRise, postRise\n')
+    for i, c in enumerate(cells):
+        f.write('%i, %g, %g, %g, %g, %g, %g\n' % (c, preAmp[i], postAmp[i], preTau[i], postTau[i], preRise[i], postRise[i]))
+    f.close()
+    

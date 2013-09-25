@@ -52,8 +52,7 @@ class HistogramLUTItem(GraphicsWidget):
         self.vb.setMaximumWidth(152)
         self.vb.setMinimumWidth(45)
         self.vb.setMouseEnabled(x=False, y=True)
-        #self.gradient = GradientEditorItem()
-        self.gradient = LUTGradientEditorItem(self)
+        self.gradient = GradientEditorItem(dataParent=self)
         self.gradient.setOrientation('right')
         self.gradient.loadPreset('grey')
         self.region = LinearRegionItem([0, 1], LinearRegionItem.Horizontal)
@@ -204,36 +203,3 @@ class HistogramLUTItem(GraphicsWidget):
         
     def setLevels(self, mn, mx):
         self.region.setRegion([mn, mx])
-
-class LUTGradientEditorItem(GradientEditorItem):
-    
-    def __init__(self, parent, *args, **kargs):
-        GradientEditorItem.__init__(self, *args, **kargs)
-        self.lutParent = parent
-        
-    def newPositionFromUser(self, tick):
-        tickValue = self.tickValue(tick) ## in 0 to 1 units
-        dialog = self.mkPositionDialog()
-        dialog.label.setText("Position in data units:")
-        mn, mx = self.lutParent.getLevels()
-    
-        value = tickValue * (mx-mn) + mn ## in data units
-        
-        dialog.positionSpin.setOpts(value=value)
-        
-        okay = dialog.exec_()
-        newValue = dialog.positionSpin.value() ## in data units
-            
-        if okay == QtGui.QDialog.Accepted:
-            if newValue < mn:
-                mn = newValue
-                self.lutParent.setLevels(newValue, mx)
-            elif newValue > mx:
-                mx = newValue
-                self.lutParent.setLevels(mn, newValue)    
-                
-            pos = tick.pos() ## in graphics units
-            
-            newTickValue = (newValue - mn)/(mx-mn) ## in 0-1 units
-            pos.setX(newTickValue * self.length)
-            self.tickMoved(tick, pos)

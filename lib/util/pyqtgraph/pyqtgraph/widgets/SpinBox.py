@@ -51,7 +51,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         value          (float/int) initial value. Default is 0.0.
         bounds         (min,max) Minimum and maximum values allowed in the SpinBox. 
                        Either may be None to leave the value unbounded. By default, values are unbounded.
-        suffix         (str) suffix (units) to display after the numerical value. By default, suffix is and empty str.
+        suffix         (str) suffix (units) to display after the numerical value. By default, suffix is an empty str.
         siPrefix       (bool) If True, then an SI prefix is automatically prepended
                        to the units and the value is scaled accordingly. For example,
                        if value=0.003 and suffix='V', then the SpinBox will display

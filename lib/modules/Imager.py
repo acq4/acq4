@@ -731,6 +731,9 @@ class Imager(Module):
             if child.hasChildren() and child.value() is True:
                 for k,v in self.saveParams(child).items():
                     params[child.name() + '.' + k] = v
+                    
+        params['wavelength'] = self.laserDev.getWavelength()
+        params['laserOutputPower'] = self.laserDev.outputPower()
         
         return params
     
@@ -835,6 +838,17 @@ class Imager(Module):
                 
         if overScanPixels > 0:
             imgData = imgData[overScanPixels:-overScanPixels]  ## remove overscan
+
+        if self.img is not None:
+            self.cameraModule.window().removeItem(self.img)
+            self.img = None
+        
+        # code to display the image on the camera image
+        self.img = PG.ImageItem(imgData) # make data into a pyqtgraph image
+        self.cameraModule.window().addItem(self.img)
+        self.currentRoi.setZValue(10)
+        self.hideOverlayImage()
+        
         w = imgData.shape[0]
         h = imgData.shape[1]
         localPts = map(PG.Vector, [[0,0], [w,0], [0, h], [0,0,1]]) # w and h of data of image in pixels.

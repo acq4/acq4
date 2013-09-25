@@ -114,8 +114,8 @@ class CameraWindow(QtGui.QMainWindow):
         #grid = pg.GridItem()
         #self.view.addItem(grid)
         
-        ## Scale bar
-        self.scaleBar = pg.ScaleBar(100e-6)
+        ##Scale bar
+        self.scaleBar = pg.ScaleBar(100e-6, offset=(-20,-20))
         self.scaleBar.setParentItem(self.view)
         
         ### Set up status bar labels
