@@ -585,52 +585,51 @@ class Imager(Module):
             currentPos = stage.pos
             state = self.currentRoi.getState()
             self.width, self.height = state['size']
-            mp285speed = 100
-            print 'Current stage position: ', currentPos
+            mp285speed = 1000
+            
+            #print 'Current stage position: ', currentPos
             x0 = self.param['Tiles', 'X0']*1e-6 # convert back to meters
             x1 = self.param['Tiles', 'X1']*1e-6
             y0 = self.param['Tiles', 'Y0']*1e-6
             y1 = self.param['Tiles', 'Y1']*1e-6
             tileXY = self.param['Tiles', 'StepSize']*1e-6
-            print self.width, self.height
-            nXTiles = NP.ceil((x1-x0)/self.width)
-            nYTiles = NP.ceil((y1-y0)/self.height)
-            xHalf = nXTiles*tileXY/2.0
-            yHalf = nYTiles*tileXY/2.0
-            xLeft = currentPos[0] - xHalf
-            xRight = xLeft + xHalf
-            yTop = currentPos[1] + yHalf
-            yBottom = currentPos[1] - yHalf
-            print 'nxtiles, nytiles, xhalf, ylhalf: ', nXTiles, nYTiles, xHalf, yHalf
-            print 'xl, yt, first delta', xLeft, yTop, xLeft-currentPos[0], yTop-currentPos[1]
-            stage.moveBy([xLeft-currentPos[0], yTop-currentPos[1], 0.0], speed=mp285speed, block=False) # move and wait until complete.  
-            xpl = NP.arange(xLeft, xRight, tileXY)
-            print yTop, yBottom, tileXY
-            ypl = NP.arange(yBottom, yTop, tileXY)
-            xsign = 1
-            print xpl
-            print ypl
-            for i in range(len(ypl)):
+            nXTiles = NP.ceil((x1-x0)/tileXY)
+            nYTiles = NP.ceil((y1-y0)/tileXY)
+           
+            xpos = NP.arange(x0, x1+tileXY, tileXY)
+            ypos = NP.arange(y0, y1+tileXY, tileXY)
+            print 'xpos: ', xpos
+            print 'ypos: ', ypos
+            print 'currentPos: ', currentPos
+            stage.moveBy([xpos[0], ypos[0], 0.0], speed=mp285speed, fine = True, block=False) # move and wait until complete.  
+
+            ypath = 0
+            for yp in ypos:
                 if self.stopFlag:
                     break
-                for j in range(len(xpl)):
+                xpath = 0
+                for xp in xpos:
                     if self.stopFlag:
                         break
                     self.PMT_Snap()
+                    
                     #img, frameInfo = self.takeImage()
                     #img = img[NP.newaxis, ...]
                     #if img is None:
                     #    break
                     #images.append(img)
                     #self.view.setImage(img)
-                    print 'j: %d   X moveby: %f' % (j, xsign*tileXY)
-                    stage.moveBy([xsign*tileXY, 0., 0.], speed=mp285speed, block=True)
-                xsign = xsign*-1 # change direction each pass
-                
-                if i < len(ypl):
-                    ## speed 20 is quite slow; timeouts may occur if we go much slower than that..
-                    print 'i: %d   y moveby: %f' % (i, tileXY)
-                    stage.moveBy([0.0, tileXY, 0.0], speed=mp285speed, block=True) # move and wait until complete.  
+                   # print 'X move to: ',  [xp + currentPos[0], yp + currentPos[1], 0.]
+                  #  print 'X move by: ', tileXY, 0
+                    stage.moveBy([tileXY, 0.], speed=mp285speed, fine = True, block=True)
+                    xpath += tileXY
+                #print 'Y: end of x row, moveBy ', 0, tileXY
+                #print 'moveby: ', -xpath, tileXY 
+                stage.moveBy([-xpath, tileXY, 0.], block=True) # take back all the x moves
+                xpath = 0
+                ypath += tileXY
+            print 'xpath ypath: ', xpath, ypath
+            stage.moveBy([-xpath, - ypath, 0.], speed=mp285speed, fine = True, block=True)
             imgData = NP.concatenate(images, axis=0)
             
         elif self.param['Timed']: # 

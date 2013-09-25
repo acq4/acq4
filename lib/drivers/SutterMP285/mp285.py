@@ -35,7 +35,7 @@ class SutterMP285(object):
         """Get current position reported by controller. Returns a tuple (x,y,z); values given in m."""
         ## request position
         self.write('c\r') # request is directly to Sutter MP285 in this case.
-        packet = self.readPacket(expect=12, timeout=5.0)
+        packet = self.readPacket(expect=12, timeout=8.0)
         if len(packet) != 12:
             raise Exception("Sutter MP285: getPos: bad position packet: <%s> expected 12, got %d" % (repr(packet), len(packet)))
         
@@ -55,7 +55,7 @@ class SutterMP285(object):
         self.clearBuffer() 
         # self.readPacket(block=False)
         self.write('p')  # talks to Arduino only.
-        packet = self.readPacket(expect=12, timeout=2.0)
+        packet = self.readPacket(expect=12, timeout=5.0)
         if len(packet) != 12:
             raise Exception("Sutter MP285: getImmediatePos: bad position packet: <%s> (%d)" % (repr(packet),len(packet)))
      

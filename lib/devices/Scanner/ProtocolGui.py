@@ -910,7 +910,7 @@ class TargetPoint(pg.EllipseROI):
         pg.ROI.__init__(self, (0,0), [ptSize] * 2, movable=args.get('movable', True))
         self.aspectLocked = True
         self.overPen = None
-        self.underPen = self.pen()
+        self.underPen = self.pen
         #self.treeItem = None
         self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         #self.host = args.get('host', None)
