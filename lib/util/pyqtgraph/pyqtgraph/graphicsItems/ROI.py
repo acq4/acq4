@@ -1656,6 +1656,9 @@ class PolyLineROI(ROI):
         h = ROI.addHandle(self, info, index=index)
         h.sigRemoveRequested.connect(self.removeHandle)
         return h
+    
+    def listPoints(self):
+        return [p['item'].pos() for p in self.handles]    
         
     def segmentClicked(self, segment, ev=None, pos=None): ## pos should be in this item's coordinate system
         if ev != None:

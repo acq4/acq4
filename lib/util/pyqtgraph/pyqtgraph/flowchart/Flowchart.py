@@ -194,7 +194,7 @@ class Flowchart(Node):
                     break
                 n += 1
                 
-        print "nodeType:", nodeType, "name:", name
+        #print "nodeType:", nodeType, "name:", name
         node = library.getNodeType(nodeType)(name)
         self.addNode(node, name, pos)
         return node
