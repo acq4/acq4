@@ -125,6 +125,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         ## Run calibration
         (cal, spot) = self.runCalibration()
+        #gc.collect() ## a lot of memory is used in running calibration, make sure we collect all the leftovers now
         #cal = MetaArray((512, 512, 2))
         #spot = 100e-6
         date = time.strftime('%Y.%m.%d %H:%M', time.localtime())
@@ -189,26 +190,25 @@ class ScannerDeviceGui(QtGui.QWidget):
         #self.calibrationResult = {'bg': background, 'frames': cameraResult, 'pos': positions}
 
         ## Forget first 2 frames since some cameras can't seem to get these right.
-        origFrames = cameraResult.asArray()
-        origFrames = origFrames[2:]
+        frames = cameraResult.asArray()
+        frames = frames[2:]
         positions = positions[2:]
         
         ## Do background subtraction
         ## TODO: put this inside a while loop so that it keeps taking out half the data until it can do the calculation without having a MemoryError.
-        try:
-            frames = origFrames.astype(np.float32)
-            frames -= background.astype(np.float32)
-            print "used all frames"
-
-        except MemoryError:
-            frames = origFrames[::2,:,:].astype(np.float32)
-            frames -= background.astype(np.float32)
-            #frames = origFrames[::10,:,:].astype(np.float32) - background.astype(np.float32)
-            positions = positions[::2]
-            print "used half of frames"
+        finished = False
+        while not finished:
+            try:
+                frames = frames.astype(np.float32)
+                frames -= background.astype(np.float32)
+                finished=True
+            except MemoryError:
+                frames = frames[::2,:,:]
+                positions = positions[::2]
+                finished = False
             
-        del origFrames
-        gc.collect()
+        #del origFrames
+        #gc.collect()
         ## Find a frame with a spot close to the center (within center 1/3)
         cx = frames.shape[1] / 3
         cy = frames.shape[2] / 3

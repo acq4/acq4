@@ -628,8 +628,8 @@ class CameraTaskResult:
     def asArray(self):
         with self.lock:
             if self._arr is None:
-                data = self._frames
-                if len(data) > 0:
+                #data = self._frames
+                if len(self._frames) > 0:
                     self._arr = concatenate([f.data()[newaxis,...] for f in self._frames])
         return self._arr
     
