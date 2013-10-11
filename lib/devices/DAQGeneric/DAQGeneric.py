@@ -463,10 +463,10 @@ class DAQGenericTask(DeviceTask):
             info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'DAQ': daqState}]
             
             
-            protInfo = self._DAQCmd.copy()  ## copy everything but the command arrays 
+            protInfo = self._DAQCmd.copy()  ## copy everything but the command arrays and low-level configuration info
             for ch in protInfo:
-                if 'command' in protInfo[ch]:
-                    del protInfo[ch]['command']
+                protInfo[ch].pop('command', None)
+                protInfo[ch].pop('lowLevelConf', None)
             info[-1]['Protocol'] = protInfo
                 
             marr = MetaArray(arr, info=info)
