@@ -56,9 +56,9 @@ class SutterMP285(object):
         # self.readPacket(block=False)
         self.write('p')  # talks to Arduino only.
         packet = self.readPacket(expect=12, timeout=2.0)
+
         if len(packet) != 12:
             raise Exception("Sutter MP285: getImmediatePos: bad position packet: <%s> (%d)" % (repr(packet),len(packet)))
-     
         pos = [packet[:4], packet[4:8], packet[8:12]]
         pos = [struct.unpack('=l', x)[0] for x in pos]
         scale = self.scale()
@@ -339,8 +339,8 @@ class SutterMP285(object):
                 raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % repr(res))
         
 if __name__ == '__main__':
-    #s = SutterMP285(port=5, baud=115200)
-    s = SutterMP285(port=2, baud=9600)
+    s = SutterMP285(port=5, baud=115200)
+    #s = SutterMP285(port=2, baud=9600)
     def pos():
         p = s.getPos()
         print "<mp285> x: %0.2fum  y: %0.2fum,  z: %0.2fum" % (p[0]*1e6, p[1]*1e6, p[2]*1e6)
@@ -386,6 +386,6 @@ if __name__ == '__main__':
                 z += zstep
                 s.setPos([None,None,z])
         
-    #ipos()
+    ipos()
     pos()
         
