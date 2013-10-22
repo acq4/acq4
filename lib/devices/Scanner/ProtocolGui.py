@@ -1400,7 +1400,7 @@ class MultiLineScanROI(pg.PolyLineROI):
     def recolor(self):
         for i, s in enumerate(self.segments):
             if i % 2 == 0:
-                s.setPen(self.pen())
+                s.setPen(self.pen)
             else:
                 s.setPen(pg.mkPen([75, 200, 75]))
 

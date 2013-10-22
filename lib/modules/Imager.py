@@ -136,6 +136,64 @@ class ImagerWindow(QtGui.QMainWindow):
     def closeEvent(self, ev):
         self.module.quit()
 
+class ImagerView(PG.ImageView):
+    """
+    Subclass ImageView so that we can display the ROI differently.
+    This one just catches the Roi data.
+    
+    10/2/2013 pbm
+    """
+    def __init__(self):
+        PG.ImageView.__init__(self)
+        self.resetFrameCount()
+        
+    def resetFrameCount(self):
+        self.ImagerFrameCount = 0
+        self.ImagerFrameArray = NP.zeros(0)
+        self.ImagerFrameData = NP.zeros(0)
+
+    def setImage(self, *args, **kargs):
+        PG.ImageView.setImage(self, *args, **kargs)
+        self.newFrameROI()
+
+    def roiChanged(self):
+        pass
+    
+    def newFrameROI(self):
+        """
+        override ROI display information
+        """
+        if self.image is None:
+            return           
+        image = self.getProcessedImage()
+        if image.ndim == 2:
+            axes = (0, 1)
+        elif image.ndim == 3:
+            axes = (1, 2)
+        else:
+            return
+        data, coords = self.roi.getArrayRegion(image.view(NP.ndarray), self.imageItem, axes, returnMappedCoords=True)
+        if data is not None:
+            while data.ndim > 1:
+                data = data.mean(axis=1)
+            self.ImagerFrameCount += 1
+            #if self.ImagerFrameCount == 2:
+            #    raise NameError('this is an error')
+
+            self.ImagerFrameArray = NP.append(self.ImagerFrameArray, self.ImagerFrameCount)
+            self.ImagerFrameData = NP.append(self.ImagerFrameData, data.mean())
+            print self.ImagerFrameArray
+            print self.ImagerFrameData
+            self.roiCurve.setData(x = self.ImagerFrameArray, y = self.ImagerFrameData)
+            #if image.ndim == 3:
+                #self.roiCurve.setData(y=data, x=self.tVals)
+            #else:
+                #while coords.ndim > 2:
+                    #coords = coords[:,:,0]
+                #coords = coords - coords[:,0,np.newaxis]
+                #xvals = (coords**2).sum(axis=0) ** 0.5
+                #self.roiCurve.setData(y=data, x=xvals)
+
 
 class Black(QtGui.QWidget):
     """ make a black rectangle to fill screen when "blanking" """
@@ -209,7 +267,7 @@ class Imager(Module):
         self.tree = PT.ParameterTree()
         self.w2s.addWidget(self.tree) # put the parameters on the bottom
         self.w2s.setSizes([1,1,900]) # Ui top widget has multiple splitters itself - force small space..
-        self.view = ImageView()
+        self.view = ImagerView()
         self.w1.addWidget(self.view)   # add the view to the right of w1     
         
         self.originalROI = None
@@ -558,6 +616,7 @@ class Imager(Module):
         self.stopFlag = False
         if (self.param['Z-Stack'] and self.param['Timed']) or (self.param['Z-Stack'] and self.param['Tiles']) or self.param['Timed'] and self.param['Tiles']:
             return # only one mode at a time... 
+        self.view.resetFrameCount() # always reset the ROI display in the imager window (different than in camera window) if it is being used
         
         if self.param['Z-Stack']: # moving in z for a focus stack
             info['2pImageType'] = 'Z-Stack'
@@ -577,7 +636,7 @@ class Imager(Module):
                     stage.moveBy([0.0, 0.0, self.param['Z-Stack', 'Step Size']], speed=20, block=True)  
             imgData = NP.concatenate(images, axis=0)
         
-        if self.param['Tiles']: # moving in x and y to get a tiled image set
+        elif self.param['Tiles']: # moving in x and y to get a tiled image set
             info['2pImageType'] = 'Tiles'
             stage = self.manager.getDevice(self.param['Tiles', 'Stage'])
             self.param['Timed', 'Current Frame'] = 0
@@ -660,7 +719,7 @@ class Imager(Module):
             if imgData is None:
                 return
 
-        self.view.setImage(imgData)
+            self.view.setImage(imgData)
         #info = self.param.getValues()
         info.update(frameInfo)
         if self.param['Store']:
@@ -953,6 +1012,8 @@ class Imager(Module):
     def startVideo(self):
         if self.laserDev.hasShutter:
             self.laserDev.openShutter()
+        self.view.resetFrameCount() # always reset the ROI in the imager display if it is being used
+
         while True:
             (img, info) = self.takeImage()
             if img is None:
