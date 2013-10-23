@@ -53,7 +53,7 @@ Presets = {
         'Blank Screen': False,
         'Bidirectional': True,
         'Decomb': True,
-        ('Decomb', 'Shift'): 169e-6,
+        ('Decomb', 'Shift'): 170e-6,
         ('Decomb', 'Auto'): False,
     },
     'video-fast': {
@@ -182,8 +182,8 @@ class ImagerView(PG.ImageView):
 
             self.ImagerFrameArray = NP.append(self.ImagerFrameArray, self.ImagerFrameCount)
             self.ImagerFrameData = NP.append(self.ImagerFrameData, data.mean())
-            print self.ImagerFrameArray
-            print self.ImagerFrameData
+#            print self.ImagerFrameArray
+#            print self.ImagerFrameData
             self.roiCurve.setData(x = self.ImagerFrameArray, y = self.ImagerFrameData)
             #if image.ndim == 3:
                 #self.roiCurve.setData(y=data, x=self.tVals)
@@ -737,8 +737,7 @@ class Imager(Module):
         """
         Take one image as a snap, regardless of whether a Z stack or a Timed acquisition is selected
         """            
-        #self.ui.laserWavelength.setText("%5d nm" % (self.laserDev.getWavelength()*1e9))
-        #self.ui.laserPower.setText("%6.1f W" % (self.laserDev.coherentPower))
+
         if self.laserDev is not None and self.laserDev.hasShutter:
             self.laserDev.openShutter()
         (imgData, info) = self.takeImage()
@@ -801,6 +800,13 @@ class Imager(Module):
         """
         Take an image using the scanning system and PMT, and return with the data.
         """
+        # first make sure laser information is updated on the module interface
+        if self.laserDev is not None:
+            self.param['Wavelength'] = (self.laserDev.coherentWavelength*1e9)
+            self.param['Power'] = (self.laserDev.coherentPower)
+        else:
+            self.param['Wavelength'] = 0.0
+            self.param['Power'] = 0.0
         #
         # get image parameters from the ROI:
         #

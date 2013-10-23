@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file '.\lib\modules\ProtocolRunner\analysisModules\Imaging\imagingTemplate.ui'
 #
-# Created: Tue Apr 30 19:43:33 2013
-#      by: PyQt4 UI code generator 4.9
+# Created: Wed Oct 23 15:58:24 2013
+#      by: PyQt4 UI code generator 4.9.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -23,10 +23,8 @@ class Ui_Form(object):
         self.splitter = QtGui.QSplitter(Form)
         self.splitter.setOrientation(QtCore.Qt.Horizontal)
         self.splitter.setObjectName(_fromUtf8("splitter"))
-        self.plotWidget = PlotWidget(self.splitter)
+        self.plotWidget = ImageView(self.splitter)
         self.plotWidget.setObjectName(_fromUtf8("plotWidget"))
-        self.histogram = HistogramLUTWidget(self.splitter)
-        self.histogram.setObjectName(_fromUtf8("histogram"))
         self.gridLayout.addWidget(self.splitter, 4, 0, 1, 7)
         self.label_4 = QtGui.QLabel(Form)
         self.label_4.setObjectName(_fromUtf8("label_4"))
@@ -78,5 +76,5 @@ class Ui_Form(object):
         self.label.setText(QtGui.QApplication.translate("Form", "Scanner", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("Form", "Detector", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph import HistogramLUTWidget, PlotWidget
+from pyqtgraph import ImageView
 from InterfaceCombo import InterfaceCombo
