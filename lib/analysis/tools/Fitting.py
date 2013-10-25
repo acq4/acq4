@@ -169,6 +169,8 @@ class Fitting():
         Exponential with offset
         """
         yd = p[0] + p[1] * numpy.exp(-x/p[2])
+#        print yd.shape
+#        print y.shape
         if y is None:
             return yd
         else:
@@ -432,15 +434,15 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
         # print 'datatype: ', dataType
         # print 'nblock: ', nblock
         # print 'whichdata: ', whichdata
-        for block in range(nblock):
+        # for block in range(nblock):
             for record in whichdata:
                 if dataType == 'blocks':
                     (tx, dy) = self.getClipData(tdat[block], ydat[block][record, thisaxis, :], t0, t1)
                 else:
-                    (tx, dy) = self.getClipData(tdat, ydat, t0, t1)
-              #  print 'Fitting.py: Fit data: ', tx, dy
-              #  print tx.shape
-              #  print dy.shape
+                    (tx, dy) = self.getClipData(tdat, ydat[record,:], t0, t1)
+                # print 'Fitting.py: block, type, Fit data: ', block, dataType
+                # print tx.shape
+                # print dy.shape
                 yn.append(names)
                 if not any(tx):
                     continue # no data in the window...

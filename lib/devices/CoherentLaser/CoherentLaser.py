@@ -144,7 +144,9 @@ class CoherentThread(QtCore.QThread):
             try:
                 with self.driverLock:
                     power = self.driver.getPower() * 1e-3
+                    wl = self.driver.getWavelength()*1e-9
                 self.sigPowerChanged.emit(power)
+                self.sigWavelengthChanged.emit(wl)
                 time.sleep(0.5)
             except:
                 debug.printExc("Error in Coherent laser communication thread:")

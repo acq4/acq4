@@ -27,6 +27,7 @@ class LaserDevGui(QtGui.QWidget):
             self.ui.wavelengthGroup.setDisabled(True)
         else:
             for x in self.dev.config.get('namedWavelengths', {}).keys():
+                print 'laserdevgui: x = ', x
                 self.ui.wavelengthCombo.addItem(x)
             self.ui.wavelengthSpin.setOpts(bounds=self.dev.getWavelengthRange())
                 
@@ -180,13 +181,18 @@ class LaserDevGui(QtGui.QWidget):
             self.ui.wavelengthCombo.setCurrentIndex(0)
     
     def wavelengthComboChanged(self):
-        if self.ui.wavelengthCombo.currentIndex() == 0:
-            return
+        if self.ui.wavelengthCombo.currentIndex() == 0: # "Set wavelength for..."
+            return # not selected
         text = unicode(self.ui.wavelengthCombo.currentText())
         wl = self.dev.config.get('namedWavelengths', {}).get(text, None)
         if wl is not None:
-            self.ui.wavelengthSpin.setValue(wl)
-    
+            if len(wl) == 1:
+                self.ui.wavelengthSpin.setValue(wl)
+            elif len(wl) > 1:
+                self.ui.wavelengthSpin.setValue(wl[0])
+                gddValue = self.ui.GDDSpin.setValue(wl[1])
+            else:
+                print 'bad entry in devices.cfg for wavelength, GDD value'
     #def microscopeChanged(self):
         #pass
     

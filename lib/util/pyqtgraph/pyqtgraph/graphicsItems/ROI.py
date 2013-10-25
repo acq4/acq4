@@ -1632,6 +1632,9 @@ class PolyLineROI(ROI):
         start = -1 if self.closed else 0
         for i in range(start, len(self.handles)-1):
             self.addSegment(self.handles[i]['item'], self.handles[i+1]['item'])
+    
+    def listPoints(self):
+        return [p['item'].pos() for p in self.handles]
 
     def addSegment(self, h1, h2, index=None):
         seg = LineSegmentROI(handles=(h1, h2), pen=self.pen, parent=self, movable=False)

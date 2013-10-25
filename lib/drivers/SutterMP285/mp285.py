@@ -28,6 +28,7 @@ class SutterMP285(object):
         self.sp = serial.Serial(int(self.port), baudrate=self.baud, bytesize=serial.EIGHTBITS)
         self._scale = None
         time.sleep(1.0)  ## Give devices a moment to chill after opening the serial line.
+
         self.setSpeed(777) ## may be required to be sure Sutter is behaving (voodoo...)
         self.read()
 
@@ -35,7 +36,7 @@ class SutterMP285(object):
         """Get current position reported by controller. Returns a tuple (x,y,z); values given in m."""
         ## request position
         self.write('c\r') # request is directly to Sutter MP285 in this case.
-        packet = self.readPacket(expect=12, timeout=5.0)
+        packet = self.readPacket(expect=12, timeout=8.0)
         if len(packet) != 12:
             raise Exception("Sutter MP285: getPos: bad position packet: <%s> expected 12, got %d" % (repr(packet), len(packet)))
         
@@ -52,10 +53,12 @@ class SutterMP285(object):
         It returns an estimated position even while the ROE is in use. 
         (if getPos() is called while the ROE is in use, the MP285 will very likely crash.)
         """
+
         self.clearBuffer() 
         # self.readPacket(block=False)
         self.write('p')  # talks to Arduino only.
-        packet = self.readPacket(expect=12, timeout=2.0)
+        packet = self.readPacket(expect=12, timeout=5.0)
+
         if len(packet) != 12:
             raise Exception("Sutter MP285: getImmediatePos: bad position packet: <%s> (%d)" % (repr(packet),len(packet)))
      
@@ -339,8 +342,8 @@ class SutterMP285(object):
                 raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % repr(res))
         
 if __name__ == '__main__':
-    #s = SutterMP285(port=5, baud=115200)
-    s = SutterMP285(port=2, baud=9600)
+    s = SutterMP285(port=5, baud=115200)
+    #s = SutterMP285(port=2, baud=9600)
     def pos():
         p = s.getPos()
         print "<mp285> x: %0.2fum  y: %0.2fum,  z: %0.2fum" % (p[0]*1e6, p[1]*1e6, p[2]*1e6)
@@ -386,6 +389,6 @@ if __name__ == '__main__':
                 z += zstep
                 s.setPos([None,None,z])
         
-    #ipos()
+    ipos()
     pos()
         

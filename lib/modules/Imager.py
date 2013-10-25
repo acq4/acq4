@@ -53,7 +53,7 @@ Presets = {
         'Blank Screen': False,
         'Bidirectional': True,
         'Decomb': True,
-        ('Decomb', 'Shift'): 169e-6,
+        ('Decomb', 'Shift'): 170e-6,
         ('Decomb', 'Auto'): False,
     },
     'video-fast': {
@@ -136,6 +136,64 @@ class ImagerWindow(QtGui.QMainWindow):
     def closeEvent(self, ev):
         self.module.quit()
 
+class ImagerView(PG.ImageView):
+    """
+    Subclass ImageView so that we can display the ROI differently.
+    This one just catches the Roi data.
+    
+    10/2/2013 pbm
+    """
+    def __init__(self):
+        PG.ImageView.__init__(self)
+        self.resetFrameCount()
+        
+    def resetFrameCount(self):
+        self.ImagerFrameCount = 0
+        self.ImagerFrameArray = NP.zeros(0)
+        self.ImagerFrameData = NP.zeros(0)
+
+    def setImage(self, *args, **kargs):
+        PG.ImageView.setImage(self, *args, **kargs)
+        self.newFrameROI()
+
+    def roiChanged(self):
+        pass
+    
+    def newFrameROI(self):
+        """
+        override ROI display information
+        """
+        if self.image is None:
+            return           
+        image = self.getProcessedImage()
+        if image.ndim == 2:
+            axes = (0, 1)
+        elif image.ndim == 3:
+            axes = (1, 2)
+        else:
+            return
+        data, coords = self.roi.getArrayRegion(image.view(NP.ndarray), self.imageItem, axes, returnMappedCoords=True)
+        if data is not None:
+            while data.ndim > 1:
+                data = data.mean(axis=1)
+            self.ImagerFrameCount += 1
+            #if self.ImagerFrameCount == 2:
+            #    raise NameError('this is an error')
+
+            self.ImagerFrameArray = NP.append(self.ImagerFrameArray, self.ImagerFrameCount)
+            self.ImagerFrameData = NP.append(self.ImagerFrameData, data.mean())
+#            print self.ImagerFrameArray
+#            print self.ImagerFrameData
+            self.roiCurve.setData(x = self.ImagerFrameArray, y = self.ImagerFrameData)
+            #if image.ndim == 3:
+                #self.roiCurve.setData(y=data, x=self.tVals)
+            #else:
+                #while coords.ndim > 2:
+                    #coords = coords[:,:,0]
+                #coords = coords - coords[:,0,np.newaxis]
+                #xvals = (coords**2).sum(axis=0) ** 0.5
+                #self.roiCurve.setData(y=data, x=xvals)
+
 
 class Black(QtGui.QWidget):
     """ make a black rectangle to fill screen when "blanking" """
@@ -209,7 +267,7 @@ class Imager(Module):
         self.tree = PT.ParameterTree()
         self.w2s.addWidget(self.tree) # put the parameters on the bottom
         self.w2s.setSizes([1,1,900]) # Ui top widget has multiple splitters itself - force small space..
-        self.view = ImageView()
+        self.view = ImagerView()
         self.w1.addWidget(self.view)   # add the view to the right of w1     
         
         self.originalROI = None
@@ -558,6 +616,7 @@ class Imager(Module):
         self.stopFlag = False
         if (self.param['Z-Stack'] and self.param['Timed']) or (self.param['Z-Stack'] and self.param['Tiles']) or self.param['Timed'] and self.param['Tiles']:
             return # only one mode at a time... 
+        self.view.resetFrameCount() # always reset the ROI display in the imager window (different than in camera window) if it is being used
         
         if self.param['Z-Stack']: # moving in z for a focus stack
             info['2pImageType'] = 'Z-Stack'
@@ -577,7 +636,7 @@ class Imager(Module):
                     stage.moveBy([0.0, 0.0, self.param['Z-Stack', 'Step Size']], speed=20, block=True)  
             imgData = NP.concatenate(images, axis=0)
         
-        if self.param['Tiles']: # moving in x and y to get a tiled image set
+        elif self.param['Tiles']: # moving in x and y to get a tiled image set
             info['2pImageType'] = 'Tiles'
             stage = self.manager.getDevice(self.param['Tiles', 'Stage'])
             self.param['Timed', 'Current Frame'] = 0
@@ -585,52 +644,51 @@ class Imager(Module):
             currentPos = stage.pos
             state = self.currentRoi.getState()
             self.width, self.height = state['size']
-            mp285speed = 100
-            print 'Current stage position: ', currentPos
+            mp285speed = 1000
+            
+            #print 'Current stage position: ', currentPos
             x0 = self.param['Tiles', 'X0']*1e-6 # convert back to meters
             x1 = self.param['Tiles', 'X1']*1e-6
             y0 = self.param['Tiles', 'Y0']*1e-6
             y1 = self.param['Tiles', 'Y1']*1e-6
             tileXY = self.param['Tiles', 'StepSize']*1e-6
-            print self.width, self.height
-            nXTiles = NP.ceil((x1-x0)/self.width)
-            nYTiles = NP.ceil((y1-y0)/self.height)
-            xHalf = nXTiles*tileXY/2.0
-            yHalf = nYTiles*tileXY/2.0
-            xLeft = currentPos[0] - xHalf
-            xRight = xLeft + xHalf
-            yTop = currentPos[1] + yHalf
-            yBottom = currentPos[1] - yHalf
-            print 'nxtiles, nytiles, xhalf, ylhalf: ', nXTiles, nYTiles, xHalf, yHalf
-            print 'xl, yt, first delta', xLeft, yTop, xLeft-currentPos[0], yTop-currentPos[1]
-            stage.moveBy([xLeft-currentPos[0], yTop-currentPos[1], 0.0], speed=mp285speed, block=False) # move and wait until complete.  
-            xpl = NP.arange(xLeft, xRight, tileXY)
-            print yTop, yBottom, tileXY
-            ypl = NP.arange(yBottom, yTop, tileXY)
-            xsign = 1
-            print xpl
-            print ypl
-            for i in range(len(ypl)):
+            nXTiles = NP.ceil((x1-x0)/tileXY)
+            nYTiles = NP.ceil((y1-y0)/tileXY)
+           
+            xpos = NP.arange(x0, x1+tileXY, tileXY)
+            ypos = NP.arange(y0, y1+tileXY, tileXY)
+            print 'xpos: ', xpos
+            print 'ypos: ', ypos
+            print 'currentPos: ', currentPos
+            stage.moveBy([xpos[0], ypos[0], 0.0], speed=mp285speed, fine = True, block=False) # move and wait until complete.  
+
+            ypath = 0
+            for yp in ypos:
                 if self.stopFlag:
                     break
-                for j in range(len(xpl)):
+                xpath = 0
+                for xp in xpos:
                     if self.stopFlag:
                         break
                     self.PMT_Snap()
+                    
                     #img, frameInfo = self.takeImage()
                     #img = img[NP.newaxis, ...]
                     #if img is None:
                     #    break
                     #images.append(img)
                     #self.view.setImage(img)
-                    print 'j: %d   X moveby: %f' % (j, xsign*tileXY)
-                    stage.moveBy([xsign*tileXY, 0., 0.], speed=mp285speed, block=True)
-                xsign = xsign*-1 # change direction each pass
-                
-                if i < len(ypl):
-                    ## speed 20 is quite slow; timeouts may occur if we go much slower than that..
-                    print 'i: %d   y moveby: %f' % (i, tileXY)
-                    stage.moveBy([0.0, tileXY, 0.0], speed=mp285speed, block=True) # move and wait until complete.  
+                   # print 'X move to: ',  [xp + currentPos[0], yp + currentPos[1], 0.]
+                  #  print 'X move by: ', tileXY, 0
+                    stage.moveBy([tileXY, 0.], speed=mp285speed, fine = True, block=True)
+                    xpath += tileXY
+                #print 'Y: end of x row, moveBy ', 0, tileXY
+                #print 'moveby: ', -xpath, tileXY 
+                stage.moveBy([-xpath, tileXY, 0.], block=True) # take back all the x moves
+                xpath = 0
+                ypath += tileXY
+            print 'xpath ypath: ', xpath, ypath
+            stage.moveBy([-xpath, - ypath, 0.], speed=mp285speed, fine = True, block=True)
             imgData = NP.concatenate(images, axis=0)
             
         elif self.param['Timed']: # 
@@ -661,7 +719,7 @@ class Imager(Module):
             if imgData is None:
                 return
 
-        self.view.setImage(imgData)
+            self.view.setImage(imgData)
         #info = self.param.getValues()
         info.update(frameInfo)
         if self.param['Store']:
@@ -679,8 +737,7 @@ class Imager(Module):
         """
         Take one image as a snap, regardless of whether a Z stack or a Timed acquisition is selected
         """            
-        #self.ui.laserWavelength.setText("%5d nm" % (self.laserDev.getWavelength()*1e9))
-        #self.ui.laserPower.setText("%6.1f W" % (self.laserDev.coherentPower))
+
         if self.laserDev is not None and self.laserDev.hasShutter:
             self.laserDev.openShutter()
         (imgData, info) = self.takeImage()
@@ -732,6 +789,9 @@ class Imager(Module):
             if child.hasChildren() and child.value() is True:
                 for k,v in self.saveParams(child).items():
                     params[child.name() + '.' + k] = v
+                    
+        params['wavelength'] = self.laserDev.getWavelength()
+        params['laserOutputPower'] = self.laserDev.outputPower()
         
         return params
     
@@ -740,6 +800,13 @@ class Imager(Module):
         """
         Take an image using the scanning system and PMT, and return with the data.
         """
+        # first make sure laser information is updated on the module interface
+        if self.laserDev is not None:
+            self.param['Wavelength'] = (self.laserDev.coherentWavelength*1e9)
+            self.param['Power'] = (self.laserDev.coherentPower)
+        else:
+            self.param['Wavelength'] = 0.0
+            self.param['Power'] = 0.0
         #
         # get image parameters from the ROI:
         #
@@ -836,6 +903,17 @@ class Imager(Module):
                 
         if overScanPixels > 0:
             imgData = imgData[overScanPixels:-overScanPixels]  ## remove overscan
+
+        if self.img is not None:
+            self.cameraModule.window().removeItem(self.img)
+            self.img = None
+        
+        # code to display the image on the camera image
+        self.img = PG.ImageItem(imgData) # make data into a pyqtgraph image
+        self.cameraModule.window().addItem(self.img)
+        self.currentRoi.setZValue(10)
+        self.hideOverlayImage()
+        
         w = imgData.shape[0]
         h = imgData.shape[1]
         localPts = map(PG.Vector, [[0,0], [w,0], [0, h], [0,0,1]]) # w and h of data of image in pixels.
@@ -940,6 +1018,8 @@ class Imager(Module):
     def startVideo(self):
         if self.laserDev.hasShutter:
             self.laserDev.openShutter()
+        self.view.resetFrameCount() # always reset the ROI in the imager display if it is being used
+
         while True:
             (img, info) = self.takeImage()
             if img is None:

@@ -159,22 +159,25 @@ class ScanProgramGenerator:
                 
             elif cmd['type'] == 'rectScan':
                 pts = cmd['points']
-                width  = (pts[1] -pts[0]).length()
-                height = (pts[2]- pts[0]).length()
-                n = int(height /cmd['lineSpacing'])
+                width  = (pts[1] -pts[0]).length() # width is x in M
+                height = (pts[2]- pts[0]).length() # heigh in M
+                n = int(height /cmd['lineSpacing']) # number of rows scanned
                 assert n > 0
-                m = int((stopInd - startInd)/(n * cmd['nScans']))
+                m = int((stopInd - startInd)/(n * cmd['nScans'])) # number of points per row
                 assert m > 0
-                r = np.mgrid[0:m, 0:n] .reshape(1,2,m,n) 
-                
-                dx = (pts[1] - pts[0])/m
-                dy = (pts[2] - pts[0])/n
+                r = np.mgrid[0:m, 0:n].reshape(1,2,m,n) 
+                # convert image coordinates to physical coordinates to pass to scanner.
+                dx = (pts[1] - pts[0])/m # step size per "pixel" in x
+                dy = (pts[2] - pts[0])/n # step size per "pixel" in y
                 v = np.array([[dx[0], dy[0]], [dx[1], dy[1]]]).reshape(2,2,1,1) 
                 q = (v*r).sum(axis=1)
                 q += np.array(pts[0]).reshape(2,1,1)
                 q = q.transpose(0,2,1).reshape(2,m*n)
+                # convert physical coordinates to scanner voltages
                 x, y = self.dev.mapToScanner(q[0], q[1], self.cmd['laser'])
-
+                #cmd['xy'] = (x,y)
+                cmd['imageSize'] = (m,n)                    
+                # repeat scanner voltages once per scan
                 for i in range(cmd['nScans']):
                     thisStart = startInd+i*n*m
                     arr[0, thisStart:thisStart + len(x)] = x
