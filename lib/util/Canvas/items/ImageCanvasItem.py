@@ -37,7 +37,8 @@ class ImageCanvasItem(CanvasItem):
 
             if 'name' not in opts:
                 opts['name'] = self.handle.shortName()
-
+           # print self.handle.info()
+            
             try:
                 if 'transform' in self.handle.info():
                     tr = pg.SRTTransform3D(self.handle.info()['transform'])

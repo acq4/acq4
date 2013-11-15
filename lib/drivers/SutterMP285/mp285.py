@@ -55,7 +55,7 @@ class SutterMP285(object):
         """
 
         self.clearBuffer() 
-        # self.readPacket(block=False)
+       # self.readPacket(block=False)
         self.write('p')  # talks to Arduino only.
         packet = self.readPacket(expect=12, timeout=5.0)
 
@@ -96,6 +96,8 @@ class SutterMP285(object):
         self.write(cmd)
         if block:
             self.readPacket(timeout=timeout)  ## could take a long time..
+        else:
+            raise Exception("non-blocking is a bad idea.")
 
 
     def moveBy(self, pos, block=True, timeout=10.):
@@ -115,10 +117,8 @@ class SutterMP285(object):
         self.write(cmd)
         if block:
             self.readPacket(timeout=timeout)  ## could take a long time..
-
-
-
-
+        else:
+            raise Exception("non-blocking is a bad idea.")
 
     def scale(self):
         ## Scale of position values in msteps/m
@@ -138,9 +138,8 @@ class SutterMP285(object):
                 if e[0] == 8:   ## move interrupted, like we asked for
                     return
             raise
-                    
-            
-    def setSpeed(self, speed, fine=True):
+                     
+    def setSpeed(self, speed, fine=True, block=True, timeout = 10.):
         """Set the speed of movements used when setPos is called.
         
         Arguments:
@@ -160,8 +159,12 @@ class SutterMP285(object):
         if fine:
             v |= 0x8000
         cmd = 'V' + struct.pack('=H', v) + '\r'
+
         self.write(cmd)
-        self.readPacket()
+        if block:
+            self.readPacket(timeout=timeout)  ## could take a long time..        self.readPacket()
+        else:
+            raise Exception("non-blocking is a bad idea.")
             
         
     def stat(self, ):
@@ -330,7 +333,8 @@ class SutterMP285(object):
                 if len(packets) == 1:  ## success
                     return packets[0]
                 if len(packets) > 1:
-                    raise Exception("Too many packets read.", packets)
+                    return packets[0]
+                                #raise Exception("Too many packets read.", str(packets))
             
             #if len(s) > 0:
                 #if s != '\r' and s[0] != '=':
@@ -342,7 +346,7 @@ class SutterMP285(object):
                 raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % repr(res))
         
 if __name__ == '__main__':
-    s = SutterMP285(port=5, baud=115200)
+    s = SutterMP285(port=5, baud=115200) # Arduino baud rate, NOT MP285 baud rate.
     #s = SutterMP285(port=2, baud=9600)
     def pos():
         p = s.getPos()

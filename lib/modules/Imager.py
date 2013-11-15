@@ -512,10 +512,6 @@ class Imager(Module):
         in the parameter tree """
         state = self.currentRoi.getState()
         self.width, self.height = state['size']
-#        if self.param['Y = X']: # causes recursion, can crash... 
-#            self.height = self.width
-#            self.currentRoi.setSize([self.width, self.height]) # force screen to match
-        #print self.width
         self.ui.width.setText('%8.1f' % (self.width*1e6)) # express in microns
         self.ui.height.setText('%8.1f' % (self.height*1e6))
         self.xPos, self.yPos = state['pos']
@@ -547,8 +543,6 @@ class Imager(Module):
         # use the presets if they are engaged
         preset = self.param['Preset']
         self.loadPreset(preset)
-        #self.ui.laserWavelength.setText("%5d nm" % (self.laserDev.getWavelength()*1e9))
-        #self.ui.laserPower.setText("%6.1f W" % (self.laserDev.coherentPower))
         if self.laserDev is not None:
             self.param['Wavelength'] = (self.laserDev.getWavelength()*1e9)
             self.param['Power'] = (self.laserDev.coherentPower)
@@ -572,13 +566,6 @@ class Imager(Module):
         self.width, self.height = state['size']
         self.pixelSize = self.width/self.param['Image Width']
         self.ui.pixelSize.setText('%8.3f' % (self.pixelSize*1e6))
-        #self.param['Image Width'] = int(self.param['Width']/self.param['Pixel Size'])
-        #if self.param['Y = X']:
-        #    self.param['YSweep'] = self.param['XSweep']
-        #    self.param['Image Height'] = self.param['Image Width']
-        #else:
-        #    self.param['Image Height'] = int(self.param['Height']/self.param['Pixel Size'])
-
         self.param['Frame Time'] = self.param['Image Width']*self.param['Image Height']*self.param['Downsample']/self.param['Sample Rate']
         self.param['Z-Stack', 'Depth'] = self.param['Z-Stack', 'Step Size'] * (self.param['Z-Stack', 'Steps']-1)
         self.param['Timed', 'Duration'] = self.param['Timed', 'Interval'] * (self.param['Timed', 'N Intervals']-1)
@@ -619,6 +606,7 @@ class Imager(Module):
         self.view.resetFrameCount() # always reset the ROI display in the imager window (different than in camera window) if it is being used
         
         if self.param['Z-Stack']: # moving in z for a focus stack
+            imageFilename = '2pZstack'
             info['2pImageType'] = 'Z-Stack'
             stage = self.manager.getDevice(self.param['Z-Stack', 'Stage'])
             images = []
@@ -635,13 +623,21 @@ class Imager(Module):
                     ## speed 20 is quite slow; timeouts may occur if we go much slower than that..
                     stage.moveBy([0.0, 0.0, self.param['Z-Stack', 'Step Size']], speed=20, block=True)  
             imgData = NP.concatenate(images, axis=0)
+            info.update(frameInfo)
+            if self.param['Store']:
+                dh = self.manager.getCurrentDir().writeFile(imgData, imageFilename + '.ma', info=info, autoIncrement=True)
         
         elif self.param['Tiles']: # moving in x and y to get a tiled image set
             info['2pImageType'] = 'Tiles'
+            dirhandle = self.manager.getCurrentDir()
+            if self.param['Store']:
+                dirhandle = dirhandle.mkdir('2PTiles', autoIncrement=True, info=info)
+            imageFilename = '2pImage'
+            
             stage = self.manager.getDevice(self.param['Tiles', 'Stage'])
             self.param['Timed', 'Current Frame'] = 0
             images = []
-            currentPos = stage.pos
+            originalPos = stage.pos
             state = self.currentRoi.getState()
             self.width, self.height = state['size']
             mp285speed = 1000
@@ -655,43 +651,32 @@ class Imager(Module):
             nXTiles = NP.ceil((x1-x0)/tileXY)
             nYTiles = NP.ceil((y1-y0)/tileXY)
            
-            xpos = NP.arange(x0, x1+tileXY, tileXY)
-            ypos = NP.arange(y0, y1+tileXY, tileXY)
-            print 'xpos: ', xpos
-            print 'ypos: ', ypos
-            print 'currentPos: ', currentPos
-            stage.moveBy([xpos[0], ypos[0], 0.0], speed=mp285speed, fine = True, block=False) # move and wait until complete.  
-
+            xpos = NP.arange(x0, x0+nXTiles*tileXY, tileXY)+originalPos[0]
+            ypos = NP.arange(y0, y0+nYTiles*tileXY, tileXY)+originalPos[1]
+            stage.moveTo([xpos[0], ypos[0], 0.0],
+                         speed=mp285speed, fine = True, block=True) # move and wait until complete.  
             ypath = 0
+            xdir = 1 # positive movement direction (serpentine tracking)
+            xpos1 = xpos
             for yp in ypos:
                 if self.stopFlag:
                     break
-                xpath = 0
-                for xp in xpos:
+                for xp in xpos1:
                     if self.stopFlag:
                         break
-                    self.PMT_Snap()
-                    
-                    #img, frameInfo = self.takeImage()
-                    #img = img[NP.newaxis, ...]
-                    #if img is None:
-                    #    break
-                    #images.append(img)
-                    #self.view.setImage(img)
-                   # print 'X move to: ',  [xp + currentPos[0], yp + currentPos[1], 0.]
-                  #  print 'X move by: ', tileXY, 0
-                    stage.moveBy([tileXY, 0.], speed=mp285speed, fine = True, block=True)
-                    xpath += tileXY
-                #print 'Y: end of x row, moveBy ', 0, tileXY
-                #print 'moveby: ', -xpath, tileXY 
-                stage.moveBy([-xpath, tileXY, 0.], block=True) # take back all the x moves
-                xpath = 0
-                ypath += tileXY
-            print 'xpath ypath: ', xpath, ypath
-            stage.moveBy([-xpath, - ypath, 0.], speed=mp285speed, fine = True, block=True)
-            imgData = NP.concatenate(images, axis=0)
+                    stage.moveTo([xp, yp, 0.], speed=mp285speed, fine = True, block=True, timeout = 10.)
+                    (images, frameInfo) = self.PMT_Snap(dirhandle = dirhandle) # now take image
+                    #  stage.moveBy([tileXY*xdir, 0.], speed=mp285speed, fine = True, block=True, timeout = 10.)
+                xdir *= -1 # reverse direction
+                if xdir < 0:
+                    xpos1 = xpos[::-1] # reverse order of array, serpentine movement.
+                else:
+                    xpos1 = xpos
+            stage.moveTo([originalPos[0], originalPos[1], 0.0],
+                         speed=mp285speed, fine = True, block=True, timeout = 30.) # move and wait until complete.  
             
         elif self.param['Timed']: # 
+            imageFilename = '2pTimed'
             info['2pImageType'] = 'Timed'
             self.param['Timed', 'Current Frame'] = 0
             images = []
@@ -712,18 +697,21 @@ class Imager(Module):
                 if i < nSteps-1:
                     time.sleep(self.param['Timed', 'Interval'])
             imgData = NP.concatenate(images, axis=0)
+            info.update(frameInfo)
+            if self.param['Store']:
+                dh = self.manager.getCurrentDir().writeFile(imgData, imageFilename + '.ma', info=info, autoIncrement=True)
 
         else:
+            imageFilename = '2pImage'
             info['2pImageType'] = 'Snap'
             (imgData, frameInfo) = self.takeImage()
             if imgData is None:
                 return
-
             self.view.setImage(imgData)
-        #info = self.param.getValues()
-        info.update(frameInfo)
-        if self.param['Store']:
-            dh = self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
+            info.update(frameInfo)
+            if self.param['Store']:
+                dh = self.manager.getCurrentDir().writeFile(imgData, imageFilename + '.ma', info=info, autoIncrement=True)
+
             
     def PMT_Snap_std(self):
         self.loadPreset('StandardDef')
@@ -733,7 +721,7 @@ class Imager(Module):
         self.loadPreset('HighDef')
         self.PMT_Snap()
         
-    def PMT_Snap(self):
+    def PMT_Snap(self, dirhandle=None):
         """
         Take one image as a snap, regardless of whether a Z stack or a Timed acquisition is selected
         """            
@@ -745,6 +733,8 @@ class Imager(Module):
             self.laserDev.closeShutter()
         if self.testMode or imgData is None:
             return
+        if dirhandle is None:
+            dirhandle = self.manager.getCurrentDir()
         self.view.setImage(imgData)
         info['2pImageType'] = 'Snap'
         if self.param['Store']:
@@ -763,10 +753,10 @@ class Imager(Module):
                     {'name': 'Y'},
                     info
                 ]
-                    
+                #print 'info: ', info    
                 data = MA.MetaArray(imgData[NP.newaxis, ...], info=mainfo, appendAxis='Frame')
                 if self.currentStack is None:
-                    fh = self.manager.getCurrentDir().writeFile(data, '2pStack.ma', info=info, autoIncrement=True)
+                    fh = dirhandle.writeFile(data, '2pStack.ma', info=info, autoIncrement=True)
                     self.currentStack = fh
                 else:
                     data.write(self.currentStack.name(), appendAxis='Frame')
@@ -774,8 +764,9 @@ class Imager(Module):
                 self.ui.record_button.setText('Recording (%d)' % self.currentStackLength)
                 
             else:
-                self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
-
+                dirhandle.writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
+        return(imgData, info)
+    
     def PMT_Stop(self):
         self.stopFlag = True
 
@@ -789,7 +780,7 @@ class Imager(Module):
             if child.hasChildren() and child.value() is True:
                 for k,v in self.saveParams(child).items():
                     params[child.name() + '.' + k] = v
-                    
+        # add the laser information            
         params['wavelength'] = self.laserDev.getWavelength()
         params['laserOutputPower'] = self.laserDev.outputPower()
         
@@ -937,7 +928,6 @@ class Imager(Module):
             self.hideOverlayImage()
             self.img.setTransform(tr)
         
-
 # flip the PMT image LR, since that is how it is... there is a mirror in the path
 # (should this be a settable parameter? )
 
@@ -952,9 +942,9 @@ class Imager(Module):
         # generate all meta-data for this frame
         info = self.saveParams()
         info['transform'] = PG.SRTTransform3D(tr)
-        
+        #print 'info: ', info                            
         return (imgData, info)
-            
+    
     def decomb(self, img, minShift=0, maxShift=100, auto=True, shift=None):
         ## split image into fields
         nr = 2 * (img.shape[1] // 2)

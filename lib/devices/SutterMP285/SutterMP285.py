@@ -111,7 +111,7 @@ class SutterMP285(Device, OptomechDevice):
     def deviceInterface(self, win):
         return SMP285Interface(self, win)
 
-    def moveBy(self, pos, speed=400, fine=True, block=True):
+    def moveBy(self, pos, speed=400, fine=True, block=True, timeout = 10.):
         """Move by the specified amounts. 
         pos must be a sequence (dx, dy, dz) with values in meters.
         speed will be set before moving unless speed=None
@@ -119,7 +119,18 @@ class SutterMP285(Device, OptomechDevice):
         with self.driverLock:
             if speed is not None:
                 self.mp285.setSpeed(speed, fine)
-            self.mp285.moveBy(pos, block=block)
+            self.mp285.moveBy(pos, block=block, timeout = timeout)
+
+    def moveTo(self, pos, speed=400, fine=True, block=True, timeout = 10.):
+        """Move by the absolute position. 
+        pos must be a sequence (dx, dy, dz) with values in meters.
+        speed will be set before moving unless speed=None
+        """
+        with self.driverLock:
+            if speed is not None:
+                self.mp285.setSpeed(speed, fine)
+            self.mp285.setPos(pos, block=block, timeout = timeout)
+
 
 
 class SMP285Interface(QtGui.QWidget):

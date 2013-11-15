@@ -93,7 +93,7 @@ class ImagingModule(AnalysisModule):
                            'positions': prog['points'],
                            'downSample': imageDownSample, 'daqDownSample': daqDownSample}
 
-                info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]:prog['samplesPerScan']]),
+                info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]-prog['samplesPerScan']:prog['samplesPerScan']]),
                         dict(name='Distance'), self.info]
                 print 'imageData.shape: ', imageData.shape
                 print 'prog: ', prog
@@ -101,7 +101,7 @@ class ImagingModule(AnalysisModule):
                 print 'startstop[1]: ', prog['startStopIndices'][1]
                 print 'samplesperscan: ', prog['samplesPerScan']
                 print 'info: ', info
-                # there is an error here that I haven't fixed. Use multilinescane until I do. 
+                # there is an error here that I haven't fixed. Use multilinescan until I do. 
                 ma = metaarray.MetaArray(imageData, info=info)
                 print 'I am writing imaging.ma for a simple line scan'
                 dirhandle.writeFile(ma, 'Imaging.ma')
@@ -128,6 +128,7 @@ class ImagingModule(AnalysisModule):
             storeFlag = frame['cmd']['protocol']['storeData'] # get flag 
            # print "before StoreFlag and storeflag is:", storeFlag
            # print frame['cmd']
+           # print prog['points']
             if storeFlag:
                 dirhandle = frame['cmd']['protocol']['storageDir'] # grab directory
                 self.info={'detector': self.detectorDevice(), 'scanner': self.scannerDevice(), 'indices': prog['startStopIndices'], 
@@ -136,7 +137,10 @@ class ImagingModule(AnalysisModule):
                            'downSample': imageDownSample, 'daqDownSample': daqDownSample}
                 #print 'totSamps: ', totSamps
                 #print 'prog[startstop..]: ', prog['startStopIndices']
-                info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]-int(totSamps):int(totSamps)]), dict(name='Distance'), self.info]
+                info = [dict(name='Time', units='s', 
+                             values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]-int(totSamps):int(totSamps)]), 
+                        dict(name='Distance'), self.info]
+            #    print info
                 ma = metaarray.MetaArray(imageData, info=info)
                 print 'I am writing imaging.ma for a multiple line scan'
                 dirhandle.writeFile(ma, 'Imaging.ma')
@@ -153,9 +157,9 @@ class ImagingModule(AnalysisModule):
             # imageData = fn.downsample(imageData, imageDownSample, axis=0)
             self.ui.plotWidget.setImage(imageData)
             pts = prog['points']
+            floatpoints =[ (float(x[0]), float(x[1])) for x in pts]
             width  = (pts[1] -pts[0]).length() # width is x in M
             height = (pts[2]- pts[0]).length() # heigh in M
-            print "hw: ", height, width
             self.ui.plotWidget.getView().setAspectLocked(True)
             self.ui.plotWidget.imageItem.setRect(QtCore.QRectF(0., 0., width, height))
             self.ui.plotWidget.autoRange()
@@ -179,18 +183,24 @@ class ImagingModule(AnalysisModule):
             tr = QtGui.QTransform(*m[:3,:3].transpose().reshape(9))
             self.img.setTransform(tr)
             storeFlag = frame['cmd']['protocol']['storeData'] # get flag 
+           # print 'srttransform: ', pg.SRTTransform3D(tr)
             if storeFlag:
                 dirhandle = frame['cmd']['protocol']['storageDir'] # grab directory
                 self.info={'detector': self.detectorDevice(), 'scanner': self.scannerDevice(), 'indices': prog['startStopIndices'], 
                            'samplesPerScan': samplesPerScan, 'nscans': prog['nScans'], 
-                           'positions': prog['points'],
-                           'downSample': imageDownSample}
-                #print dict
+                           'positions': floatpoints, # prog['points'],
+                           'downSample': imageDownSample,
+                           'transform': pg.SRTTransform3D(tr),
+                           }
+                           
                 # to line below, add x, y for the camera (look at camera video output)
-                info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]:samplesPerScan]), 
+                info = [dict(name='Time', units='s', 
+                             values=t[prog['startStopIndices'][0]:prog['startStopIndices'][0]+nscans*samplesPerScan:samplesPerScan]), 
                         dict(name='Distance'), self.info]
+                print self.info
+                print info
                 ma = metaarray.MetaArray(imageData, info=info)
-                # do everyting except write...
+                
                 dirhandle.writeFile(ma, 'Imaging.ma')
         
         

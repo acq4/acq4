@@ -76,7 +76,7 @@ class Canvas(QtGui.QWidget):
         self.ui.itemList.itemChanged.connect(self.treeItemChanged)
         self.ui.itemList.sigItemMoved.connect(self.treeItemMoved)
         self.ui.itemList.itemSelectionChanged.connect(self.treeItemSelected)
-        print dir(self.ui)
+        #print dir(self.ui)
         self.ui.autoShadingBtn.clicked.connect(self.autoShading)
         self.ui.autoRangeBtn.clicked.connect(self.autoRange)
         self.ui.storeSvgBtn.clicked.connect(self.storeSvg)
@@ -109,7 +109,7 @@ class Canvas(QtGui.QWidget):
     def storeSvg(self):
 
         from pyqtgraph.GraphicsScene.exportDialog import ExportDialog
-        print dir(ExportDialog)
+        #print dir(ExportDialog)
         ex = ExportDialog(self.ui.view)
         ex.show()
        #ex.fileSaveDialog()
@@ -133,7 +133,7 @@ class Canvas(QtGui.QWidget):
         n = 0
         for i in range(nsel):
             try:
-                meanImage[n,:,:] = self.selectedItems()[i].data.asarray()
+                meanImage[n,:,:] = np.array(self.selectedItems()[i].data)
                 n = n + 1
             except:
                 print 'image i = %d failed' % i
@@ -143,7 +143,7 @@ class Canvas(QtGui.QWidget):
         
         # now rescale each individually
         for i in range(nsel):
-            d = self.selectedItems()[i].data.asarray()
+            d = np.array(self.selectedItems()[i].data)
             hm = np.histogram(d, 512) # return (count, bins)
             m = np.argmax(hm[0]) # returns the index of the max count
             xh = d.shape # capture shape just in case it is not right (have data that is NOT !!)
@@ -152,7 +152,7 @@ class Canvas(QtGui.QWidget):
             n = np.argmax(hn[0])
             newImage = (hm[1][m]/hn[1][n])*newImage # rescale to the original median.
             self.selectedItems()[i].updateImage(newImage)
-            self.selectedItems()[i].levelRgn.setRegion([0, 2.0])
+            #self.selectedItems()[i].levelRgn.setRegion([0, 2.0])
 
        
     def splitterMoved(self):
@@ -186,7 +186,7 @@ class Canvas(QtGui.QWidget):
             levels = (-0.01, 2.0)
         # now select all images
         for i in self.selectedItems():
-          i.levelRgn.setRegion(levels) 
+            i.levelRgn.setRegion(levels) 
         
         #
 
