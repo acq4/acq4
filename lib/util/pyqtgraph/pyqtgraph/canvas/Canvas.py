@@ -13,6 +13,7 @@ from pyqtgraph.Qt import QtGui, QtCore, USE_PYSIDE
 from pyqtgraph.graphicsItems.ROI import ROI
 from pyqtgraph.graphicsItems.ViewBox import ViewBox
 from pyqtgraph.graphicsItems.GridItem import GridItem
+import pyqtgraph as pg
 
 if USE_PYSIDE:
     from .CanvasTemplate_pyside import *
@@ -103,7 +104,13 @@ class Canvas(QtGui.QWidget):
             
 
     def storeSvg(self):
-        self.ui.view.writeSvg()
+
+        from pyqtgraph.GraphicsScene.exportDialog import ExportDialog
+        #print dir(ExportDialog)
+        ex = ExportDialog(self.ui.view)
+        ex.show()
+       #ex.fileSaveDialog()
+        #self.ui.view.writeSvg()
 
     def storePng(self):
         self.ui.view.writeImage()
@@ -579,7 +586,9 @@ class Canvas(QtGui.QWidget):
         self.menu.popup(ev.globalPos())
         
     def removeClicked(self):
-        self.removeItem(self.menuItem)
+        #self.removeItem(self.menuItem)
+        for item in self.selectedItems():
+            self.removeItem(item)
         self.menuItem = None
         import gc
         gc.collect()

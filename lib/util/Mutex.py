@@ -24,11 +24,11 @@ class Mutex(QtCore.QMutex):
 
     def tryLock(self, timeout=None, id=None):
         if timeout is None:
-            l = QtCore.QMutex.tryLock(self)
+            locked = QtCore.QMutex.tryLock(self)
         else:
-            l = QtCore.QMutex.tryLock(self, timeout)
+            locked = QtCore.QMutex.tryLock(self, timeout)
 
-        if self.debug and l:
+        if self.debug and locked:
             self.l.lock()
             try:
                 if id is None:
@@ -38,7 +38,7 @@ class Mutex(QtCore.QMutex):
                 #print 'trylock', self, len(self.tb)
             finally:
                 self.l.unlock()
-        return l
+        return locked
         
     def lock(self, id=None):
         c = 0
@@ -47,16 +47,17 @@ class Mutex(QtCore.QMutex):
             if self.tryLock(waitTime, id):
                 break
             c += 1
-            self.l.lock()
-            try:
-                print "Waiting for mutex lock (%0.1f sec). Traceback follows:" % (c*waitTime/1000.)
-                traceback.print_stack()
-                if len(self.tb) > 0:
-                    print "Mutex is currently locked from:\n", self.tb[-1]
-                else:
-                    print "Mutex is currently locked from [???]"
-            finally:
-                self.l.unlock()
+            if self.debug:
+                self.l.lock()
+                try:
+                    print "Waiting for mutex lock (%0.1f sec). Traceback follows:" % (c*waitTime/1000.)
+                    traceback.print_stack()
+                    if len(self.tb) > 0:
+                        print "Mutex is currently locked from:\n", self.tb[-1]
+                    else:
+                        print "Mutex is currently locked from [???]"
+                finally:
+                    self.l.unlock()
         #print 'lock', self, len(self.tb)
 
     def unlock(self):

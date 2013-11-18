@@ -367,6 +367,7 @@ class ScannerProtoGui(ProtocolGui):
         item.scene().removeItem(item)
         item.parameters().sigValueChanged.disconnect(self.itemActivationChanged)
         del self.items[item.name]
+        self.updateGridLinkCombos()
         self.itemChanged()
         
     def addProgramCtrl(self, param, itemType):
@@ -548,6 +549,17 @@ class ScannerProtoGui(ProtocolGui):
         self.itemChanged(item)
         #self.updateDeviceTargetList(item)
         self.storeConfiguration()
+        self.updateGridLinkCombos()
+        
+    def updateGridLinkCombos(self):
+        grids = [g for g in self.items.keys() if g[:4] == 'Grid']
+        for k,v in self.items.iteritems():
+            l = []
+            for g in grids:
+                if g != v.name:
+                    l.append(g)
+            l.sort()
+            v.updateLinkCombo(l)
 
     #def addTarget(self, t, name):
         #self.sequenceChanged()
@@ -910,7 +922,7 @@ class TargetPoint(pg.EllipseROI):
         pg.ROI.__init__(self, (0,0), [ptSize] * 2, movable=args.get('movable', True))
         self.aspectLocked = True
         self.overPen = None
-        self.underPen = self.pen()
+        self.underPen = self.pen
         #self.treeItem = None
         self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         #self.host = args.get('host', None)
@@ -1001,10 +1013,11 @@ class TargetGrid(pg.ROI):
         self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
             dict(name='layout', type='list', value=args.get('layout', 'Hexagonal'), values=['Square', 'Hexagonal']),
             dict(name='spacing', type='float', value=args.get('spacing', ptSize), suffix='m', siPrefix=True, bounds=[1e-9, None], step=10e-6),
+            dict(name='snap-to grid', type='list', value=args.get('snapToGrid', None), values=[])
         ])
         self.params.item = self
-        self.params.layout.sigStateChanged.connect(self.regeneratePoints)
-        self.params.spacing.sigStateChanged.connect(self.regeneratePoints)
+        self.params.param('layout').sigStateChanged.connect(self.regeneratePoints)
+        self.params.param('spacing').sigStateChanged.connect(self.regeneratePoints)
         pg.ROI.__init__(self, pos=(0,0), size=args.get('size', [ptSize*4]*2), angle=args.get('angle', 0))
         self.addScaleHandle([0, 0], [1, 1])
         self.addScaleHandle([1, 1], [0, 0])
@@ -1014,6 +1027,7 @@ class TargetGrid(pg.ROI):
         #self.connect(QtCore.SIGNAL('regionChanged'), self.rgnChanged)
         self.sigRegionChanged.connect(self.rgnChanging)
         self.sigRegionChangeFinished.connect(self.rgnChanged)
+        self.params.param('snap-to grid').sigValueChanged.connect(self.linkGridChanged)
         self.points = []
         self.pens = []
         self.pointSize = ptSize
@@ -1033,7 +1047,14 @@ class TargetGrid(pg.ROI):
     
     def parameters(self):
         return self.params
+    
+    def updateLinkCombo(self, grids):
+        print 'updating Combo:', self, grids
+        self.params.param('snap-to grid').setLimits(['']+grids)
         
+    def linkGridChanged(self, val):
+        print "linkGridChanged called.", self.name, val
+    
     #def updateInit(self, host):
         #self.treeItem.graphicsItem = self ## make grid accessible from tree
         #self.treeItem.treeWidget().setItemWidget(self.treeItem, 1, self.gridSpacingSpin)
@@ -1224,7 +1245,7 @@ class TargetGrid(pg.ROI):
         p.save()
         r = QtCore.QRectF(0,0, self.state['size'][0], self.state['size'][1])
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(self.pen())
+        p.setPen(self.pen)
         p.translate(r.left(), r.top())
         p.scale(r.width(), r.height())
         p.drawRect(0, 0, 1, 1)
@@ -1241,7 +1262,7 @@ class TargetGrid(pg.ROI):
             if self.pens[i] != None:
                 p.setPen(self.pens[i])
             else:
-                p.setPen(self.pen())
+                p.setPen(self.pen)
             #p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
             p.drawEllipse(QtCore.QPointF(pt[0]/self.pointSize, pt[1]/self.pointSize), 0.5, 0.5)
             
@@ -1379,7 +1400,7 @@ class MultiLineScanROI(pg.PolyLineROI):
     def recolor(self):
         for i, s in enumerate(self.segments):
             if i % 2 == 0:
-                s.setPen(self.pen())
+                s.setPen(self.pen)
             else:
                 s.setPen(pg.mkPen([75, 200, 75]))
 

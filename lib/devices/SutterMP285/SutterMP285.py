@@ -91,17 +91,29 @@ class SutterMP285(Device, OptomechDevice):
 
     def posChanged(self, data): 
         with self.lock:
-            self.pos[:len(data['abs'])] = data['abs']
             rel = [0] * len(self.pos)
-            rel[:len(data['rel'])] = data['rel']
+            if 'rel' in data:
+                rel[:len(data['rel'])] = data['rel']
+            else:
+                rel[:len(data['abs'])] = [data['abs'][i] - self.pos[i] for i in range(len(data['abs']))]
+            self.pos[:len(data['abs'])] = data['abs']
         self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
         
         tr = pg.SRTTransform3D()
         tr.translate(*self.pos)
         self.setDeviceTransform(tr) ## this informs rigidly-connected devices that they have moved
 
-    def getPosition(self):
+    def getPosition(self, refresh=False):
+        """
+        Return the position of the stage.
+        If refresh==False, the last known position is returned. Otherwise, the current position is requested from the controller.
+        """
+        if refresh:
+            with self.driverLock:
+                pos = np.array(self.mp285.getPos()) * self.scale
         with self.lock:
+            if refresh and not np.all(pos == self.pos):
+                self.posChanged({'abs': pos})
             return self.pos[:]
 
     def getState(self):
@@ -111,7 +123,7 @@ class SutterMP285(Device, OptomechDevice):
     def deviceInterface(self, win):
         return SMP285Interface(self, win)
 
-    def moveBy(self, pos, speed=400, fine=True, block=True):
+    def moveBy(self, pos, speed=400, fine=True, block=True, timeout = 10.):
         """Move by the specified amounts. 
         pos must be a sequence (dx, dy, dz) with values in meters.
         speed will be set before moving unless speed=None
@@ -119,7 +131,19 @@ class SutterMP285(Device, OptomechDevice):
         with self.driverLock:
             if speed is not None:
                 self.mp285.setSpeed(speed, fine)
-            self.mp285.moveBy(pos, block=block)
+            self.mp285.moveBy(pos, block=block, timeout = timeout)
+        self.getPosition(refresh=True)
+
+    def moveTo(self, pos, speed=400, fine=True, block=True, timeout = 10.):
+        """Move by the absolute position. 
+        pos must be a sequence (dx, dy, dz) with values in meters.
+        speed will be set before moving unless speed=None
+        """
+        with self.driverLock:
+            if speed is not None:
+                self.mp285.setSpeed(speed, fine)
+            self.mp285.setPos(pos, block=block, timeout = timeout)
+        self.getPosition(refresh=True)
 
 
 class SMP285Interface(QtGui.QWidget):
@@ -276,8 +300,8 @@ class SutterMP285Thread(QtCore.QThread):
             #self.sp.read(self.sp.inWaiting())
         #import wingdbstub
         print "  Starting MP285 thread: 0x%x" % int(QtCore.QThread.currentThreadId())
-        import sip
-        print "    also known as 0x%x" % sip.unwrapinstance(self)
+        #import sip
+        #print "    also known as 0x%x" % sip.unwrapinstance(self)
         velocity = np.array([0,0,0])
         pos = [0,0,0]
         

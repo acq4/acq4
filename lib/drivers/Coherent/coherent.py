@@ -44,6 +44,38 @@ class Coherent(object):
                     
     def getWavelengthRange(self):
         return float(self['TMIN']), float(self['TMAX'])
+
+    def getGDDMinMax(self):
+        """
+        find the gdd min and max for current wavelength, and return the tuple
+        """
+        gddmin = int(self['GDDMIN'])
+        gddmax = int(self['GDDMAX'])
+        return((gddmin, gddmax))
+    
+    def getGDD(self):
+        return(self['GDD'])
+    
+    def getComp(self):
+        comp = self['COMP']
+        return comp
+    
+    def setGDD(self, gddValue):
+        """
+        set the GDD value as requested. We do nothing if it is outside the range
+        """
+        gddMinMax = self.getGDDMinMax()
+        if int(gddValue) < gddMinMax[0] or int(gddValue) > gddMinMax[1]:
+#            print 'apparently outside range'
+            return
+        self['GDD'] = gddValue
+
+    def clearGDD(self):
+        """
+        set GDD curve to curve 0 (no dispersion)
+        """
+        self['GDDCURVE'] = 0
+        
         
     def isTuning(self):
         """Returns True if the laser is currently tuning its wavelength"""

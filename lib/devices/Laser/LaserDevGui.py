@@ -107,6 +107,9 @@ class LaserDevGui(QtGui.QWidget):
         self.ui.checkPowerBtn.clicked.connect(self.dev.outputPower)
         self.ui.powerAlertCheck.toggled.connect(self.powerAlertToggled)
         
+        self.ui.GDDEnableCheck.toggled.connect(self.GDDEnableToggled)
+        self.ui.GDDSpin.valueChanged.connect(self.GDDSpinChanged)
+
         self.dev.sigOutputPowerChanged.connect(self.outputPowerChanged)
         self.dev.sigSamplePowerChanged.connect(self.samplePowerChanged)
         try:
@@ -115,6 +118,22 @@ class LaserDevGui(QtGui.QWidget):
             pass
         
         self.powerMeterChanged() ## populate channel combo for default power meter
+
+    def GDDEnableToggled(self, b):
+        if b:
+            gddlims = self.dev.getGDDMinMax()
+            self.ui.GDDLimits.setText("Min %d, Max %d" % (gddlims[0], gddlims[1]))
+            gddValue = self.ui.GDDSpin.value()
+          #  print 'gdd Value at enable checked: ', gddValue
+            self.dev.setGDD(gddValue)
+        elif not b:
+            self.dev.clearGDD() # turn it off. 
+        
+    def GDDSpinChanged(self, value):
+        if self.ui.GDDEnableCheck.isChecked():
+         #   print 'gdd value from spinchanged: ', value
+            self.dev.setGDD(value)
+        
         
     def currentPowerToggled(self, b):
         if b:
@@ -161,13 +180,18 @@ class LaserDevGui(QtGui.QWidget):
             self.ui.wavelengthCombo.setCurrentIndex(0)
     
     def wavelengthComboChanged(self):
-        if self.ui.wavelengthCombo.currentIndex() == 0:
-            return
+        if self.ui.wavelengthCombo.currentIndex() == 0: # "Set wavelength for..."
+            return # not selected
         text = unicode(self.ui.wavelengthCombo.currentText())
         wl = self.dev.config.get('namedWavelengths', {}).get(text, None)
         if wl is not None:
-            self.ui.wavelengthSpin.setValue(wl)
-    
+            if len(wl) == 1:
+                self.ui.wavelengthSpin.setValue(wl)
+            elif len(wl) > 1:
+                self.ui.wavelengthSpin.setValue(wl[0])
+                gddValue = self.ui.GDDSpin.setValue(wl[1])
+            else:
+                print 'bad entry in devices.cfg for wavelength, GDD value'
     #def microscopeChanged(self):
         #pass
     
