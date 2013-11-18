@@ -41,6 +41,7 @@ unsigned long lastUpdateTime = 0; // Last time a serial update was run
 unsigned long lastStatusTime = 0; // Last time the MP285's status was requested
 unsigned long lastRoeTick = 0;    // Last time a tick was received from the ROE
 unsigned long lastInputTime = 0; // Last time when serial input was seen from PC
+bool blockSerial = false;        // Whether the arduino is allowed to initiate serial communications with the MP285
 
 byte bytesLeftInPacket = 0; // number of bytes remaining until the expected end of a command packet from the PC
 
@@ -341,65 +342,217 @@ void flashLights() {
   DDRA = B10101010;  // 0 == input; 1 == output
 }  
 
-
 void runSerial() {
-  // Forward serial data between PC and MP285, catch any commands intended for the arduino.
+  if( ! Serial.available() )
+    return;
+
+  unsigned char b = Serial.read();
+  //Serial.write(b);
+  if( b == 'p' ) {
+    printPos();
+    return;
+  }
+  if( b == 'l' ) {
+    setLimits();
+    return;
+  }
+  else if( b == 0xFF ) {
+    // This is junk sent by the PC when it connected; ignore.
+    // NOTE: this data depends on the baud rate!
+    //   115200:  0xf0
+    //   19200:  0xff 0xff
+    while( Serial.available() ) {  
+      Serial.read();
+    }
+    return;
+  }
+  else if( b == 0x3 ) {  // 0x3 is stop command; pass through immediately.
+    Serial1.write(b);  
+    disableROE = millis() + 1000;    
+    return;
+  }
   
-  // first flush any junk coming from the 285:
-  while( Serial1.available() ){
+  
+  // send packet to mp285, wait for reply, and send that back to the pc
+  byte lens[] =      {1,13,3,1,100,3,3,1,1,1,1,1,1};  // all other commands, we guess how many more bytes to expect before the end of the command packet.
+  byte replyLens[] = {13,1,1,1,1,1,1,1,1,1,1,0,33};  // how many bytes to expect in the reply packet from the mp285
+  char cmds[] = {"cmVodkuabenrs"};
+  int bytesLeft = 0;
+  int replyBytesLeft = 0;
+  int i;
+  for( i=0; i<13; i++ ) {
+    if( b == cmds[i] ) {
+      bytesLeft = lens[i];
+      replyBytesLeft = replyLens[i];
+      break;
+    }
+  }
+  
+  unsigned long start = millis();
+  unsigned long now;
+  if( bytesLeft == 0 ) {  // invalid command
+    Serial.write(0x4);  // send error; junk the next 100ms of input
+    Serial.write(b);
+    Serial.write('\r');
+    while( millis() - start < 100 ) {
+      while( Serial.available() ) {
+        Serial.read();
+      }
+    }
+    return;
+  }
+  
+  // Send command packet to mp285
+  Serial1.write(b);
+  
+  for( i=0; i<bytesLeft; i++ ) {
+    while ( ! Serial.available() ) {
+       // check for timeout 
+       now = millis();
+       if( now < start ) {    // see whether millis wrapped
+         start = 0;
+       }
+       if( now - start > 5000 ) {
+         // abandoned packet!
+         Serial.write(64);
+         Serial.write('\r');
+         return;
+       }
+    }
+    Serial1.write(Serial.read());
+  }
+  
+  // Get reply packet from mp285
+  start = millis();
+  unsigned char nextByte;
+  for( i=0; i<replyBytesLeft; i++ ) {
+    while ( ! Serial1.available() ) {
+       // check for timeout: 60 seconds for move, 5 seconds for any other command
+       now = millis();
+       if( now < start ) {  // see whether millis wrapped
+         start = 0;
+       }
+       if( b == 'm' ) {
+         if( now-start > 60000 ) {
+           // abandoned packet!
+           Serial.write(32);
+           Serial.write('\r');
+           disableROE = millis() + 1000;    
+           return;
+         }
+         // While waiting for move to complete, see whether we received a stop command.
+         if( nextByte == 0x0 && Serial.available() ) {
+           nextByte = Serial.read();
+           if( nextByte == 0x3 ) {
+             // send stop command
+             Serial1.write(0x3);
+             start = millis();
+             
+             // wait for response
+             while(true) {
+               if( Serial1.available() ) {
+                 b = Serial1.read();
+                 Serial.write(b);
+                 if( b == '\r' ) {
+                   break;
+                 }  
+               }
+               if( millis() - start > 5000 ) {
+                 // did not get expected response from arduino
+                 Serial.write(32);
+                 Serial.write('\r');
+                 break;
+               }
+             }
+             
+             disableROE = millis() + 1000;    
+             return;
+           }
+         }
+           
+       }
+       else if( now-start > 5000 ) {         
+         // abandoned packet!
+         Serial.write(32);
+         Serial.write('\r');
+         disableROE = millis() + 1000;    
+         return;
+       }
+    }
     Serial.write(Serial1.read());
   }
   
-  if( ! Serial.available() )
-    return;
-    
-  unsigned long now = millis();
-  if( now - lastInputTime > 500 ) {  // long time since anything was received; assume any unfinished packets are dead.
-    bytesLeftInPacket = 0;
-  }
-  while( Serial.available() ){
-    unsigned char b = Serial.read();
-    if( bytesLeftInPacket == 0 ) {  // this is the beginning of a packet; see if we need to handle it or forward it to the MP285
-      if( b == 'p' ) {
-        printPos();
-        return;
-      }
-      if( b == 'l' ) {
-        setLimits();
-        return;
-      }
-      else if( b == 0xF0 ) {
-        // This is junk sent by the PC when it connected; ignore.
-        return;
-      }
-      else if( b != 0x3 ) {  // 0x3 is stop command; pass through immediately.
-//        if( b == 'm' )  // schedule position request
-//          gotNewTicks = True;
-          
-        byte lens[] = {1,13,3,1,100,3,3,1,1,1,1,1,1};  // all other commands, we guess how many more bytes to expect before the end of the packet.
-        char cmds[] = {"cmVodkuabenrs"};
-        for( int i=0; i<13; i++ ) {
-          if( b == cmds[i] ) {
-            bytesLeftInPacket = lens[i];
-            break;
-          }
-        }
-      }
-    }
-    else {
-        bytesLeftInPacket--;
-    }  
-    Serial1.write(b);
-  }
-  lastInputTime = now;
-    
   // Disable ROE for 1 second after any serial data is sent to the controller.
-  disableROE = millis() + 1000;
+  disableROE = millis() + 1000;    
 }
 
 
+//void runSerial() {
+//  // Forward serial data between PC and MP285, catch any commands intended for the arduino.
+//  
+//  // first flush any junk coming from the 285:
+//  unsigned char b;
+//  while( Serial1.available() ){
+//    b = Serial1.read();
+//    // If we were waiting for a response from the mp285 and have received \r, then we are probably
+//    // safe to generate new requests to the mp285 again
+//    if( blockSerial and b == '\r' )  
+//      blockSerial = false;
+//    Serial.write(b);
+//  }
+//  
+//  if( ! Serial.available() )
+//    return;
+//    
+//  unsigned long now = millis();
+//  if( now - lastInputTime > 500 ) {  // long time since anything was received; assume any unfinished packets are dead.
+//    bytesLeftInPacket = 0;
+//    blockSerial = false;
+//  }
+//  while( Serial.available() ){
+//    b = Serial.read();
+//    if( bytesLeftInPacket == 0 ) {  // this is the beginning of a packet; see if we need to handle it or forward it to the MP285
+//      if( b == 'p' ) {
+//        printPos();
+//        return;
+//      }
+//      if( b == 'l' ) {
+//        setLimits();
+//        return;
+//      }
+//      else if( b == 0xF0 ) {
+//        // This is junk sent by the PC when it connected; ignore.
+//        return;
+//      }
+//      else if( b != 0x3 ) {  // 0x3 is stop command; pass through immediately.
+////        if( b == 'm' )  // schedule position request
+////          gotNewTicks = True;
+//          
+//        byte lens[] = {1,13,3,1,100,3,3,1,1,1,1,1,1};  // all other commands, we guess how many more bytes to expect before the end of the packet.
+//        char cmds[] = {"cmVodkuabenrs"};
+//        for( int i=0; i<13; i++ ) {
+//          if( b == cmds[i] ) {
+//            bytesLeftInPacket = lens[i];
+//            break;
+//          }
+//        }
+//        blockSerial = true;
+//      }
+//    }
+//    else {
+//        bytesLeftInPacket--;
+//    }  
+//    Serial1.write(b);
+//  }
+//  lastInputTime = now;
+//    
+//  // Disable ROE for 1 second after any serial data is sent to the controller.
+//  disableROE = millis() + 1000;
+//}
+
+
 void setup() {
-  Serial.begin(115200); // Open serial line to computer
+  Serial.begin(19200); // Open serial line to computer
   Serial1.begin(9600);  // Open serial line to MP285
   Serial.println("Good morning.");
 
@@ -493,10 +646,13 @@ void loop() {
   if (now-lastUpdateTime > 100 && (pinc == 0xFF || pinc == B11000000)) {  // only run serial loop if no ROE lines are active OR the ROE is disconnected.
     lastUpdateTime = now;
     runSerial();
-    if( gotNewTicks && now - lastRoeTick > 500 )  // NOTE: it's ok to get the position within 500ms of an ROI tick, but not 
+    // only allowed to request position / status if blockSerial is false.
+    // when block serial is true, the PC is waiting for a request from the mp285, so 
+    // we cannot send new data until that transaction is complete.
+    if( !blockSerial && gotNewTicks && now - lastRoeTick > 500 )  // NOTE: it's ok to get the position within 500ms of an ROI tick, but not 
                                                   // between 500ms and 1s.
       getPos();  // sets gotNewTicks to 0 if successful.
-    if( now - lastStatusTime > 5000 && now - lastRoeTick > 5000 ) {
+    if( !blockSerial && now - lastStatusTime > 5000 && now - lastRoeTick > 5000 ) {
       getStatus();
       getPos();
     }

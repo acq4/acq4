@@ -653,7 +653,7 @@ class Imager(Module):
            
             xpos = NP.arange(x0, x0+nXTiles*tileXY, tileXY)+originalPos[0]
             ypos = NP.arange(y0, y0+nYTiles*tileXY, tileXY)+originalPos[1]
-            stage.moveTo([xpos[0], ypos[0], 0.0],
+            stage.moveTo([xpos[0], ypos[0]],
                          speed=mp285speed, fine = True, block=True) # move and wait until complete.  
             ypath = 0
             xdir = 1 # positive movement direction (serpentine tracking)
@@ -664,7 +664,7 @@ class Imager(Module):
                 for xp in xpos1:
                     if self.stopFlag:
                         break
-                    stage.moveTo([xp, yp, 0.], speed=mp285speed, fine = True, block=True, timeout = 10.)
+                    stage.moveTo([xp, yp], speed=mp285speed, fine = True, block=True, timeout = 10.)
                     (images, frameInfo) = self.PMT_Snap(dirhandle = dirhandle) # now take image
                     #  stage.moveBy([tileXY*xdir, 0.], speed=mp285speed, fine = True, block=True, timeout = 10.)
                 xdir *= -1 # reverse direction
@@ -672,7 +672,7 @@ class Imager(Module):
                     xpos1 = xpos[::-1] # reverse order of array, serpentine movement.
                 else:
                     xpos1 = xpos
-            stage.moveTo([originalPos[0], originalPos[1], 0.0],
+            stage.moveTo([originalPos[0], originalPos[1]],
                          speed=mp285speed, fine = True, block=True, timeout = 30.) # move and wait until complete.  
             
         elif self.param['Timed']: # 

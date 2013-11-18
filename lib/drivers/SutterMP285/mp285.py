@@ -1,4 +1,4 @@
-import serial, struct, time, collections
+import serial, struct, time, collections, threading
 
 ErrorVals = {
     0: ('SP Over-run', 'The previous character was not unloaded before the latest was received.'),
@@ -19,24 +19,31 @@ class MP285Error(Exception):
     pass
 
 class SutterMP285(object):
-
+    """
+    Class for communicating with Sutter MP-285 via serial port.
+    
+    Note that this class is NOT thread-safe.
+    """
     def __init__(self, port, baud=9600):
         """
         port: serial COM port (0 => com1)"""
         self.port = port
         self.baud = baud
-        self.sp = serial.Serial(int(self.port), baudrate=self.baud, bytesize=serial.EIGHTBITS)
+        self.sp = serial.Serial(int(self.port), baudrate=self.baud, bytesize=serial.EIGHTBITS, timeout=0)
         self._scale = None
+        self.moving = False
+        
         time.sleep(1.0)  ## Give devices a moment to chill after opening the serial line.
-
+        self.clearBuffer()
         self.setSpeed(777) ## may be required to be sure Sutter is behaving (voodoo...)
-        self.read()
+        self.clearBuffer()
+        
 
     def getPos(self, scaled=True):
         """Get current position reported by controller. Returns a tuple (x,y,z); values given in m."""
         ## request position
         self.write('c\r') # request is directly to Sutter MP285 in this case.
-        packet = self.readPacket(expect=12, timeout=8.0)
+        packet = self.read(length=13, timeout=8.0, term='\r')
         if len(packet) != 12:
             raise Exception("Sutter MP285: getPos: bad position packet: <%s> expected 12, got %d" % (repr(packet), len(packet)))
         
@@ -54,10 +61,9 @@ class SutterMP285(object):
         (if getPos() is called while the ROE is in use, the MP285 will very likely crash.)
         """
 
-        self.clearBuffer() 
        # self.readPacket(block=False)
         self.write('p')  # talks to Arduino only.
-        packet = self.readPacket(expect=12, timeout=5.0)
+        packet = self.read(length=13, timeout=5.0, term='\r')
 
         if len(packet) != 12:
             raise Exception("Sutter MP285: getImmediatePos: bad position packet: <%s> (%d)" % (repr(packet),len(packet)))
@@ -94,11 +100,29 @@ class SutterMP285(object):
             
         cmd = 'm' + struct.pack('=3l', int(pos[0]), int(pos[1]), int(pos[2])) + '\r'
         self.write(cmd)
+        self.moving = True
         if block:
-            self.readPacket(timeout=timeout)  ## could take a long time..
-        else:
-            raise Exception("non-blocking is a bad idea.")
+            self.blockWhileMoving(timeout=timeout)
 
+    def checkMoving(self):
+        """
+        Return bool whether the stage is currently moving. 
+        """
+        if self.sp.inWaiting() > 0:
+            self.read(length=1, term='\r') 
+            self.moving = False
+        if not self.moving:
+            return False
+        return True
+
+    def blockWhileMoving(self, timeout=10.0):
+        """
+        Blocks until stage is done moving, or until timeour.
+        """
+        if not self.moving:
+            return
+        self.read(length=1, timeout=timeout, term='\r')
+        self.moving = False        
 
     def moveBy(self, pos, block=True, timeout=10.):
         """Move by the specified distance. 
@@ -116,9 +140,7 @@ class SutterMP285(object):
         cmd = 'm' + struct.pack('=3l', int(pos[0]), int(pos[1]), int(pos[2])) + '\r'
         self.write(cmd)
         if block:
-            self.readPacket(timeout=timeout)  ## could take a long time..
-        else:
-            raise Exception("non-blocking is a bad idea.")
+            self.blockWhileMoving(timeout=timeout)
 
     def scale(self):
         ## Scale of position values in msteps/m
@@ -139,7 +161,7 @@ class SutterMP285(object):
                     return
             raise
                      
-    def setSpeed(self, speed, fine=True, block=True, timeout = 10.):
+    def setSpeed(self, speed, fine=True, timeout=10.):
         """Set the speed of movements used when setPos is called.
         
         Arguments:
@@ -161,15 +183,12 @@ class SutterMP285(object):
         cmd = 'V' + struct.pack('=H', v) + '\r'
 
         self.write(cmd)
-        if block:
-            self.readPacket(timeout=timeout)  ## could take a long time..        self.readPacket()
-        else:
-            raise Exception("non-blocking is a bad idea.")
+        self.read(1, term='\r', timeout=timeout)
             
         
     def stat(self, ):
         self.write('s\r')
-        packet = self.readPacket(expect=32)
+        packet = self.read(33, term='\r')
         if len(packet) != 32:
             raise Exception("Sutter MP285: bad stat packet: '%s'" % repr(packet))
             
@@ -259,22 +278,23 @@ class SutterMP285(object):
         self.readPacket()
 
     def clearBuffer(self):
-        d = self.read()
+        d = self.readAll()
         time.sleep(0.1)
-        d += self.read()
+        d += self.readAll()
         if len(d) > 0:
             print "Sutter MP285: Warning: tossed data ", repr(d)
         return d
     
-    def read(self):
+    def readAll(self):
         ## read all bytes waiting in buffer; non-blocking.
         n = self.sp.inWaiting()
         if n > 0:
             return self.sp.read(n)
         return ''
     
-    def write(self, data):
-        self.read()  ## always empty buffer before sending command
+    def write(self, data, timeout=10.0):
+        self.blockWhileMoving(timeout=timeout) # If the stage is still moving, wait until it is done before sending another packet.
+        #self.readAll()  ## always empty buffer before sending command
         self.sp.write(data)
         
     def close(self):
@@ -292,6 +312,28 @@ class SutterMP285(object):
             if not hit:
                 errors.append((ord(err), "Unknown error code", ""))
         raise MP285Error(errors)
+
+    def read(self, length, timeout=5, term=None):
+        ## Read *length* bytes or raise exception on timeout.
+        ## if *term* is given, check that the last byte is *term* and remove it
+        ## from the returned packet.
+        #self.sp.setTimeout(timeout) #broken!
+        packet = self.readWithTimeout(length, timeout)
+        if len(packet) < length:
+            raise Exception("MP285: Timed out waiting for serial data (received so far: %s)" % repr(packet))
+        if term is not None:
+            if packet[-len(term):] != term:
+                self.clearBuffer()
+                raise Exception("MP285: Packet corrupt: %s (len=%d)" % (repr(packet), len(packet)))
+            return packet[:-len(term)]
+        return packet
+        
+    def readWithTimeout(self, nBytes, timeout):
+        start = time.time()
+        packet = ''
+        while len(packet) < nBytes and time.time()-start < timeout:
+            packet += self.sp.read(1)
+        return packet
                     
     def readPacket(self, expect=0, timeout=5, block=True):
         ## Read until a carriage return is encountered (or timeout).
@@ -301,9 +343,9 @@ class SutterMP285(object):
         res = ''
         errors = []
         packets = []
+        
         while True:
-            s = self.read()
-            #print "read:", repr(s)
+            s = self.readAll()
             if not block and len(s) == 0:
                 return
             
@@ -333,8 +375,7 @@ class SutterMP285(object):
                 if len(packets) == 1:  ## success
                     return packets[0]
                 if len(packets) > 1:
-                    return packets[0]
-                                #raise Exception("Too many packets read.", str(packets))
+                    raise Exception("Too many packets read.", packets)
             
             #if len(s) > 0:
                 #if s != '\r' and s[0] != '=':
@@ -345,8 +386,10 @@ class SutterMP285(object):
             if time.time() - start > timeout:
                 raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % repr(res))
         
+
+        
 if __name__ == '__main__':
-    s = SutterMP285(port=5, baud=115200) # Arduino baud rate, NOT MP285 baud rate.
+    s = SutterMP285(port=5, baud=19200) # Arduino baud rate, NOT MP285 baud rate.
     #s = SutterMP285(port=2, baud=9600)
     def pos():
         p = s.getPos()
