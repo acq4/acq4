@@ -201,6 +201,7 @@ class RemoveBaseline(PlottingCtrlNode):
         ## define inputs and outputs (one output needs to be a plot)
         PlottingCtrlNode.__init__(self, name)
         self.line = PolyLineROI([[0,0],[1,0]])
+        self.line.sigRegionChanged.connect(self.changed)
         
         ## create a PolyLineROI, add it to a plot -- actually, I think we want to do this after the node is connected to a plot (look at EventDetection.ThresholdEvents node for ideas), and possible after there is data. We will need to update the end positions of the line each time the input data changes
         #self.line = None ## will become a PolyLineROI

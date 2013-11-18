@@ -134,7 +134,7 @@ class PlottingCtrlNode(CtrlNode):
     """Abstract class for CtrlNodes that can connect to plots."""
     
     def __init__(self, name, ui=None, terminals=None):
-        print "PlottingCtrlNode.__init__ called."
+        #print "PlottingCtrlNode.__init__ called."
         CtrlNode.__init__(self, name, ui=ui, terminals=terminals)
         self.plotTerminal = self.addOutput('plot', optional=True)
         
