@@ -1007,11 +1007,15 @@ class Grid(pg.CrosshairROI):
         self.rgns = []
         self.pointSize = ptSize
         self._points = []
-        #self.params.param('Active Regions').sigValueChanged.connect(self.addActiveRegion)
-        #self.params.param('layout').sigStateChanged.connect(self.regeneratePoints)
-        #self.params.param('spacing').sigStateChanged.connect(self.regeneratePoints)
+        self.params.param('layout').sigStateChanged.connect(self.regeneratePoints)
+        self.params.param('spacing').sigStateChanged.connect(self.regeneratePoints)
+        #a = self.params
+        #b = self.params.param('Active Regions')
+        #c = self.params.param('Active Regions').sigChildRemoved
+        #d = self.params.param('Active Regions').sigChildRemoved.connect
+        self.params.param('Active Regions').sigChildRemoved.connect(self.rgnRemoved)
         
-        pg.CrosshairROI.__init__(self, pos=(0,0), size=args.get('size', [ptSize*4]*2), angle=args.get('angle', 0))
+        pg.CrosshairROI.__init__(self, pos=(0,0), size=args.get('size', [ptSize*4]*2), angle=args.get('angle', 0), **args)
         self.sigRegionChanged.connect(self.regeneratePoints)
         
     def isActive(self):
@@ -1043,6 +1047,18 @@ class Grid(pg.CrosshairROI):
         self.rgns.append(rgn)
         self.getViewBox().addItem(roi)
         roi.sigRegionChanged.connect(self.regeneratePoints)
+        rgn.sigValueChanged.connect(self.rgnToggled)
+        self.regeneratePoints()
+        
+    def rgnToggled(self, rgn, b):
+        if b:
+            rgn.item.setVisible(True)
+        else:
+            rgn.item.setVisible(False)
+            
+    def rgnRemoved(self, rgn):
+        roi = rgn.item
+        roi.scene().removeItem(roi)
         
                                                      
     def getNextRgnName(self, base):
@@ -1069,6 +1085,11 @@ class Grid(pg.CrosshairROI):
                 points.append(pt)
         points = list(set(points))
         return points
+    
+    def setPointSize(self, displaySize, realSize):
+        self.pointSize = displaySize
+        #self.params.spacing.setDefault(displaySize)
+        self.update()
     
     def regeneratePoints(self, emit=True):
         layout = self.params['layout']
@@ -1119,17 +1140,14 @@ class Grid(pg.CrosshairROI):
     
         layout = self.params['layout']
         spacing = self.params['spacing']
-        #layout = self.gridLayoutCombo.currentText()
         
         if layout == 'Square':
-            #snap = Point(self.pointSize * self.gridPacking, self.pointSize*self.gridPacking)
             snap = pg.Point(spacing, spacing)
             w = round(pos[0] / snap[0]) * snap[0]
             h = round(pos[1] / snap[1]) * snap[1]
             return pg.Point(w, h)
         
         elif layout == 'Hexagonal':
-            #snap1 = Point(self.pointSize*self.gridPacking, self.pointSize*self.gridPacking*3.0**0.5)
             snap1 = pg.Point(spacing, spacing*3.0**0.5)
             dx = 0.5*snap1[0]
             dy = 0.5*snap1[1]
@@ -1137,28 +1155,24 @@ class Grid(pg.CrosshairROI):
             h1 = round(pos[1] / snap1[1]) * snap1[1]
             w2 = round((pos[0]-dx) / snap1[0]) * snap1[0] + dx
             h2 = round((pos[1]-dy) / snap1[1]) * snap1[1] + dy
-            #snap2 = snap1 + Point(snap1[0]*0.5, snap1[1]/2)
-            #w2 = round(pos[0] / snap2[0]) * snap2[0]
-            #h2 = round(pos[1] / snap2[1]) * snap2[1] 
             if (pg.Point(w1, h1)-pos).length() < (pg.Point(w2,h2) - pos).length():
                 return pg.Point(w1, h1)
             else:
                 return pg.Point(w2, h2)
+    
+    def boundingRect(self):
+        rect= pg.CrosshairROI.boundingRect(self)
+        for r in self.rgns:
+            rect |= self.mapRectFromItem(r.item, r.item.boundingRect())
+        return rect
                                            
     def paint(self, p, *opts):
-        #print "Grid.paint"
         pg.CrosshairROI.paint(self, p, *opts)
         ## paint spots
         p.scale(self.pointSize, self.pointSize) ## do scaling here because otherwise we end up with squares instead of circles (GL bug)
-        p.setPen(pg.mkPen('b'))
+        p.setPen(pg.mkPen('w'))
         for pt in self.listPoints():
-            #if self.pens[i] != None:
-                #p.setPen(self.pens[i])
-            #else:
-                #p.setPen(self.pen)
-            #p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
             p.drawEllipse(QtCore.QPointF(pt[0]/self.pointSize, pt[1]/self.pointSize), 0.5, 0.5)
-        #print "   drew %i points" %len(self._points)
             
 
 class TargetGrid(pg.ROI):

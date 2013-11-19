@@ -1919,6 +1919,12 @@ class CrosshairROI(ROI):
         size = self.size()
         return QtCore.QRectF(-size[0]/2., -size[1]/2., size[0], size[1]).normalized()
     
+    def getRect(self):
+        ## same as boundingRect -- for internal use so that boundingRect can be re-implemented in subclasses
+        size = self.size()
+        return QtCore.QRectF(-size[0]/2., -size[1]/2., size[0], size[1]).normalized()
+        
+    
     def shape(self):
         p = QtGui.QPainterPath()
     
@@ -1961,7 +1967,7 @@ class CrosshairROI(ROI):
     
     def paint(self, p, *args):
         p.save()
-        r = self.boundingRect()
+        r = self.getRect()
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         p.setPen(self.currentPen)
         p.translate(r.left(), r.top())
