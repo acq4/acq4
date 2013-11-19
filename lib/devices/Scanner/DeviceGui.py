@@ -197,6 +197,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## Do background subtraction
         ## take out half the data until it can do the calculation without having a MemoryError.
         finished = False
+        gc.collect()
         while not finished:
             try:
                 frames = frames.astype(np.float32)
