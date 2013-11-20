@@ -28,7 +28,7 @@ from .UIGraphicsItem import UIGraphicsItem
 __all__ = [
     'ROI', 
     'TestROI', 'RectROI', 'EllipseROI', 'CircleROI', 'PolygonROI', 
-    'LineROI', 'MultiLineROI', 'MultiRectROI', 'LineSegmentROI', 'PolyLineROI', 'SpiralROI',
+    'LineROI', 'MultiLineROI', 'MultiRectROI', 'LineSegmentROI', 'PolyLineROI', 'SpiralROI', 'CrosshairROI',
 ]
 
 
@@ -701,8 +701,10 @@ class ROI(GraphicsObject):
         elif h['type'] == 'sr':
             if h['center'][0] == h['pos'][0]:
                 scaleAxis = 1
+                nonScaleAxis=0
             else:
                 scaleAxis = 0
+                nonScaleAxis=1
             
             if lp1.length() == 0 or lp0.length() == 0:
                 return
@@ -721,6 +723,8 @@ class ROI(GraphicsObject):
                 newState['size'][scaleAxis] = round(newState['size'][scaleAxis] / self.snapSize) * self.snapSize
             if newState['size'][scaleAxis] == 0:
                 newState['size'][scaleAxis] = 1
+            if self.aspectLocked:
+                newState['size'][nonScaleAxis] = newState['size'][scaleAxis]
                 
             c1 = c * newState['size']
             tr = QtGui.QTransform()
@@ -1904,6 +1908,80 @@ class SpiralROI(ROI):
         p.drawRect(self.boundingRect())
         
     
-
+class CrosshairROI(ROI):
+    """A crosshair ROI whose position is at the center of the crosshairs. By default, it is scalable, rotatable and translatable."""
+    
+    def __init__(self, pos=None, size=None, **kargs):
+        if size == None:
+            #size = [100e-6,100e-6]
+            size=[1,1]
+        if pos == None:
+            pos = [0,0]
+        ROI.__init__(self, pos, size, **kargs)
+        
+        
+        self.addScaleRotateHandle(Point(0.5,0), Point(0, 0))
+        self.aspectLocked = True
+        
+    def boundingRect(self):
+        size = self.size()
+        return QtCore.QRectF(-size[0]/2., -size[1]/2., size[0], size[1]).normalized()
+    
+    def getRect(self):
+        ## same as boundingRect -- for internal use so that boundingRect can be re-implemented in subclasses
+        size = self.size()
+        return QtCore.QRectF(-size[0]/2., -size[1]/2., size[0], size[1]).normalized()
+        
+    
+    def shape(self):
+        p = QtGui.QPainterPath()
+    
+        #h1 = self.handles[0]['item'].pos()
+        #h2 = self.handles[1]['item'].pos()
+        w1 = Point(-0.5, 0)*self.size()
+        w2 = Point(0.5, 0)*self.size()
+        h1 = Point(0, -0.5)*self.size()
+        h2 = Point(0, 0.5)*self.size()
+        
+        dh = h2-h1
+        dw = w2-w1
+        if dh.length() == 0 or dw.length() == 0:
+            return p
+        pxv = self.pixelVectors(dh)[1]
+        if pxv is None:
+            return p
             
-
+        pxv *= 4
+        
+        p.moveTo(h1+pxv)
+        p.lineTo(h2+pxv)
+        p.lineTo(h2-pxv)
+        p.lineTo(h1-pxv)
+        p.lineTo(h1+pxv)
+        
+        pxv = self.pixelVectors(dw)[1]
+        if pxv is None:
+            return p
+            
+        pxv *= 4
+        
+        p.moveTo(w1+pxv)
+        p.lineTo(w2+pxv)
+        p.lineTo(w2-pxv)
+        p.lineTo(w1-pxv)
+        p.lineTo(w1+pxv)
+        
+        return p
+    
+    def paint(self, p, *args):
+        p.save()
+        r = self.getRect()
+        p.setRenderHint(QtGui.QPainter.Antialiasing)
+        p.setPen(self.currentPen)
+        p.translate(r.left(), r.top())
+        p.scale(r.width()/10., r.height()/10.) ## need to scale up a little because drawLine has trouble dealing with 0.5
+        p.drawLine(0,5, 10,5)
+        p.drawLine(5,0, 5,10)
+        p.restore()
+        
+        
