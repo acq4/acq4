@@ -1638,6 +1638,9 @@ class PolyLineROI(ROI):
         for i in range(start, len(self.handles)-1):
             self.addSegment(self.handles[i]['item'], self.handles[i+1]['item'])
 
+    def listPoints(self):
+        return [p['item'].pos() for p in self.handles]
+
     def addSegment(self, h1, h2, index=None):
         seg = LineSegmentROI(handles=(h1, h2), pen=self.pen, parent=self, movable=False)
         if index is None:
@@ -1661,6 +1664,9 @@ class PolyLineROI(ROI):
         h = ROI.addHandle(self, info, index=index)
         h.sigRemoveRequested.connect(self.removeHandle)
         return h
+        
+    def listPoints(self):
+        return [p['item'].pos() for p in self.handles]    
         
     def segmentClicked(self, segment, ev=None, pos=None): ## pos should be in this item's coordinate system
         if ev != None:

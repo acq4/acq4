@@ -101,14 +101,12 @@ xmlHeader = """\
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"  version="1.2" baseProfile="tiny">
 <title>pyqtgraph SVG export</title>
 <desc>Generated with Qt and pyqtgraph</desc>
-<defs>
-</defs>
 """
 
 def generateSvg(item):
     global xmlHeader
     try:
-        node = _generateItemSvg(item)
+        node, defs = _generateItemSvg(item)
     finally:
         ## reset export mode for all items in the tree
         if isinstance(item, QtGui.QGraphicsScene):
@@ -123,7 +121,11 @@ def generateSvg(item):
     
     cleanXml(node)
     
-    return xmlHeader + node.toprettyxml(indent='    ') + "\n</svg>\n"
+    defsXml = "<defs>\n"
+    for d in defs:
+        defsXml += d.toprettyxml(indent='    ')
+    defsXml += "</defs>\n"
+    return xmlHeader + defsXml + node.toprettyxml(indent='    ') + "\n</svg>\n"
 
 
 def _generateItemSvg(item, nodes=None, root=None):
@@ -231,6 +233,10 @@ def _generateItemSvg(item, nodes=None, root=None):
         g1 = doc.getElementsByTagName('g')[0]
         ## get list of sub-groups
         g2 = [n for n in g1.childNodes if isinstance(n, xml.Element) and n.tagName == 'g']
+        
+        defs = doc.getElementsByTagName('defs')
+        if len(defs) > 0:
+            defs = [n for n in defs[0].childNodes if isinstance(n, xml.Element)]
     except:
         print(doc.toxml())
         raise
@@ -239,7 +245,7 @@ def _generateItemSvg(item, nodes=None, root=None):
 
     ## Get rid of group transformation matrices by applying
     ## transformation to inner coordinates
-    correctCoordinates(g1, item)
+    correctCoordinates(g1, defs, item)
     prof.mark('correct')
     ## make sure g1 has the transformation matrix
     #m = (tr.m11(), tr.m12(), tr.m21(), tr.m22(), tr.m31(), tr.m32())
@@ -276,7 +282,9 @@ def _generateItemSvg(item, nodes=None, root=None):
             path = QtGui.QGraphicsPathItem(item.mapToScene(item.shape()))
             item.scene().addItem(path)
             try:
-                pathNode = _generateItemSvg(path, root=root).getElementsByTagName('path')[0]
+                #pathNode = _generateItemSvg(path, root=root).getElementsByTagName('path')[0]
+                pathNode = _generateItemSvg(path, root=root)[0].getElementsByTagName('path')[0]
+                # assume <defs> for this path is empty.. possibly problematic.
             finally:
                 item.scene().removeItem(path)
             
@@ -295,15 +303,20 @@ def _generateItemSvg(item, nodes=None, root=None):
     ## Add all child items as sub-elements.
     childs.sort(key=lambda c: c.zValue())
     for ch in childs:
-        cg = _generateItemSvg(ch, nodes, root)
-        if cg is None:
+        csvg = _generateItemSvg(ch, nodes, root)
+        if csvg is None:
             continue
+        cg, cdefs = csvg
         childGroup.appendChild(cg)  ### this isn't quite right--some items draw below their parent (good enough for now)
+        defs.extend(cdefs)
+        
     prof.mark('children')
     prof.finish()
-    return g1
+    return g1, defs
 
-def correctCoordinates(node, item):
+def correctCoordinates(node, defs, item):
+    # TODO: correct gradient coordinates inside defs
+    
     ## Remove transformation matrices from <g> tags by applying matrix to coordinates inside.
     ## Each item is represented by a single top-level group with one or more groups inside.
     ## Each inner group contains one or more drawing primitives, possibly of different types.

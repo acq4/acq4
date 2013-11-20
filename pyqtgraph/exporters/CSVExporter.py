@@ -32,23 +32,19 @@ class CSVExporter(Exporter):
         fd = open(fileName, 'w')
         data = []
         header = []
-        for c in self.item.curves:
+        
+        for n, c in enumerate(self.item.curves):
             data.append(c.getData())
-            header.extend(['x', 'y'])
+            header.extend(['x%04d' % n, 'y%0d' % n])  # headers should be unique for every column for import
 
         if self.params['separator'] == 'comma':
             sep = ','
-        else:
-            sep = '\t'
-            
-        fd.write(sep.join(header) + '\n')
-        i = 0
-        numFormat = '%%0.%dg' % self.params['precision']
+
         numRows = reduce(max, [len(d[0]) for d in data])
         for i in range(numRows):
             for d in data:
-                if i < len(d[0]):
-                    fd.write(numFormat % d[0][i] + sep + numFormat % d[1][i] + sep)
+                if d is not None and i < len(d[0]):
+                    fd.write('%g%s%g%s'%(d[0][i], sep, d[1][i], sep))
                 else:
                     fd.write(' %s %s' % (sep, sep))
             fd.write('\n')

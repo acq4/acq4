@@ -776,6 +776,14 @@ class ViewBox(GraphicsWidget):
                 return
             args['padding'] = 0
             args['disableAutoRange'] = False
+            
+             # check for and ignore bad ranges
+            for k in ['xRange', 'yRange']:
+                if k in args:
+                    if not np.all(np.isfinite(args[k])):
+                        r = args.pop(k)
+                        print "Warning: %s is invalid: %s" % (k, str(r))
+                        
             self.setRange(**args)
         finally:
             self._autoRangeNeedsUpdate = False

@@ -33,13 +33,15 @@ class TickSliderItem(GraphicsWidget):
     
     A rectangular item with tick marks along its length that can (optionally) be moved by the user."""
         
-    def __init__(self, orientation='bottom', allowAdd=True, **kargs):
+    def __init__(self, orientation='bottom', allowAdd=True, dataParent=None, **kargs):
         """
         ============= =================================================================================
         **Arguments**
         orientation   Set the orientation of the gradient. Options are: 'left', 'right'
                       'top', and 'bottom'.
         allowAdd      Specifies whether ticks can be added to the item by the user.
+        dataParent    (optional) A parent object that the TickSliderItem uses to get the values that its 0 and 1 
+                      ends map to. The dataParent must have the functions getLevels and setLevels.
         tickPen       Default is white. Specifies the color of the outline of the ticks.
                       Can be any of the valid arguments for :func:`mkPen <pyqtgraph.mkPen>`
         ============= =================================================================================        
@@ -52,6 +54,7 @@ class TickSliderItem(GraphicsWidget):
         self.ticks = {}
         self.maxDim = 20
         self.allowAdd = allowAdd
+        self.dataParent = dataParent
         if 'tickPen' in kargs:
             self.tickPen = fn.mkPen(kargs['tickPen'])
         else:
@@ -236,7 +239,14 @@ class TickSliderItem(GraphicsWidget):
             pos.setX(min(max(pos.x(), 0), self.length))
             self.addTick(pos.x()/self.length)
         elif ev.button() == QtCore.Qt.RightButton:
-            self.showMenu(ev)
+            if self.moving:
+                ev.accept()
+                self.setPos(self.startPosition)
+                self.moving = False
+                self.sigMoving.emit(self)
+                self.sigMoved.emit(self)
+            else:
+                self.showMenu(ev)
         
         #if  ev.button() == QtCore.Qt.RightButton:
             #if self.moving:
@@ -279,7 +289,7 @@ class TickSliderItem(GraphicsWidget):
         tick.update()
         #tick.setBrush(QtGui.QBrush(QtGui.QColor(tick.color)))
 
-    def setTickValue(self, tick, val):
+    def setTickValue(self, tick, val, dataUnits=False):
         ## public
         """
         Set the position (along the slider) of the tick.
@@ -289,18 +299,41 @@ class TickSliderItem(GraphicsWidget):
         tick          Can be either an integer corresponding to the index of the tick 
                       or a Tick object. Ex: if you had a slider with 3 ticks and you 
                       wanted to change the middle tick, the index would be 1.
-        val           The desired position of the tick. If val is < 0, position will be 
-                      set to 0. If val is > 1, position will be set to 1.
+        val           The desired position of the tick. 
+                          When dataUnits is False (default): If val is < 0, position will be 
+                               set to 0. If val is > 1, position will be set to 1.
+                          When dataUnits is True: If val is outside the bounds of the current data levels, the data levels will be expanded to include the new value and the tick will be set to a 0 or 1 position. All other ticks will keep their 0 to 1 values.
+                             
+        dataUnits     If True, set the value of the tick in data units using the mapping levels from self.dataParent.
         ============= ==================================================================        
         """
-        tick = self.getTick(tick)
-        val = min(max(0.0, val), 1.0)
-        x = val * self.length
-        pos = tick.pos()
-        pos.setX(x)
-        tick.setPos(pos)
-        self.ticks[tick] = val
-        
+        if dataUnits is False:
+            tick = self.getTick(tick)
+            val = min(max(0.0, val), 1.0)
+            x = val * self.length
+            pos = tick.pos()
+            pos.setX(x)
+            tick.setPos(pos)
+            self.ticks[tick] = val
+        else:
+            if self.dataParent is None:
+                raise Exception("Cannot set values in data units without a dataParent being specified. See TickSliderItem.__init__ or TickSliderItem.setDataParent.")
+            tick = self.getTick(tick)
+            mn, mx = self.dataParent.getLevels()
+            if val < mn:
+                mn = val
+                self.dataParent.setLevels(val, mx)
+            elif val > mx:
+                mx = val
+                self.dataParent.setLevels(mn, val)    
+            
+            newTickValue = (val - mn)/(mx-mn) ## in 0-1 units
+            self.setTickValue(tick, newTickValue)
+            
+    def setDataParent(self, parent):
+        """Set the parent object to use for mapping tick values to data units. parent must have the funtions setLevels and getLevels."""
+        self.dataParent = parent
+    
     def tickValue(self, tick):
         ## public
         """Return the value (from 0.0 to 1.0) of the specified tick.
@@ -314,7 +347,28 @@ class TickSliderItem(GraphicsWidget):
         """
         tick = self.getTick(tick)
         return self.ticks[tick]
+
+
+    def tickDataValue(self, tick):
+        """If a dataParent object has been specified, return the value of the specified 
+        tick in data units, else return None (Use :func:`tickValue <TickSlicerItem.tickValue>` instead). 
+        ============= ==================================================================
+        **Arguments** 
+        tick          Can be either an integer corresponding to the index of the tick 
+                      or a Tick object. Ex: if you had a slider with 3 ticks and you 
+                      wanted the value of the middle tick, the index would be 1.
+        ============= ==================================================================
+        """
+        if self.dataParent is None:
+            return 
         
+        val = self.tickValue(tick)
+        levels = self.dataParent.getLevels()
+        
+        return (val * (levels[1] - levels[0])) + levels[0]
+
+ 
+
     def getTick(self, tick):
         ## public
         """Return the Tick object at the specified index.
@@ -537,24 +591,22 @@ class GradientEditorItem(TickSliderItem):
     def tickClicked(self, tick, ev):
         #private
         if ev.button() == QtCore.Qt.LeftButton:
-            if not tick.colorChangeAllowed:
-                return
-            self.currentTick = tick
-            self.currentTickColor = tick.color
-            self.colorDialog.setCurrentColor(tick.color)
-            self.colorDialog.open()
-            #color = QtGui.QColorDialog.getColor(tick.color, self, "Select Color", QtGui.QColorDialog.ShowAlphaChannel)
-            #if color.isValid():
-                #self.setTickColor(tick, color)
-                #self.updateGradient()
+            self.raiseColorDialog(tick)
         elif ev.button() == QtCore.Qt.RightButton:
-            if not tick.removeAllowed:
-                return
-            if len(self.ticks) > 2:
-                self.removeTick(tick)
-                self.updateGradient()
-                
-    def tickMoved(self, tick, pos):
+            self.raiseTickContextMenu(tick, ev)
+            
+    def raiseColorDialog(self, tick):
+        if not tick.colorChangeAllowed:
+            return
+        self.currentTick = tick
+        self.currentTickColor = tick.color
+        self.colorDialog.setCurrentColor(tick.color)
+        self.colorDialog.open()
+        
+    def raiseTickContextMenu(self, tick, ev):
+        self.tickMenu = TickMenu(tick, self)
+        self.tickMenu.popup(ev.screenPos().toQPoint())
+            def tickMoved(self, tick, pos):
         #private
         TickSliderItem.tickMoved(self, tick, pos)
         self.updateGradient()
@@ -867,44 +919,61 @@ class Tick(QtGui.QGraphicsObject):  ## NOTE: Making this a subclass of GraphicsO
             self.currentPen = self.pen
         self.update()
         
-    #def mouseMoveEvent(self, ev):
-        ##print self, "move", ev.scenePos()
-        #if not self.movable:
-            #return
-        #if not ev.buttons() & QtCore.Qt.LeftButton:
-            #return
-            
-            
-        #newPos = ev.scenePos() + self.mouseOffset
-        #newPos.setY(self.pos().y())
-        ##newPos.setX(min(max(newPos.x(), 0), 100))
-        #self.setPos(newPos)
-        #self.view().tickMoved(self, newPos)
-        #self.movedSincePress = True
-        ##self.emit(QtCore.SIGNAL('tickChanged'), self)
-        #ev.accept()
 
-    #def mousePressEvent(self, ev):
-        #self.movedSincePress = False
-        #if ev.button() == QtCore.Qt.LeftButton:
-            #ev.accept()
-            #self.mouseOffset = self.pos() - ev.scenePos()
-            #self.pressPos = ev.scenePos()
-        #elif ev.button() == QtCore.Qt.RightButton:
-            #ev.accept()
-            ##if self.endTick:
-                ##return
-            ##self.view.tickChanged(self, delete=True)
-            
-    #def mouseReleaseEvent(self, ev):
-        ##print self, "release", ev.scenePos()
-        #if not self.movedSincePress:
-            #self.view().tickClicked(self, ev)
+class TickMenu(QtGui.QMenu):
+    
+    def __init__(self, tick, sliderItem):
+        QtGui.QMenu.__init__(self)
         
-        ##if ev.button() == QtCore.Qt.LeftButton and ev.scenePos() == self.pressPos:
-            ##color = QtGui.QColorDialog.getColor(self.color, None, "Select Color", QtGui.QColorDialog.ShowAlphaChannel)
-            ##if color.isValid():
-                ##self.color = color
-                ##self.setBrush(QtGui.QBrush(QtGui.QColor(self.color)))
-                ###self.emit(QtCore.SIGNAL('tickChanged'), self)
-                ##self.view.tickChanged(self)
+        self.tick = weakref.ref(tick)
+        self.sliderItem = weakref.ref(sliderItem)
+        
+        self.removeAct = self.addAction("Remove Tick", lambda: self.sliderItem().removeTick(tick))
+        if (not self.tick().removeAllowed) or len(self.sliderItem().ticks) < 3:
+            self.removeAct.setEnabled(False)
+            
+        positionMenu = self.addMenu("Set Position")
+        w = QtGui.QWidget()
+        l = QtGui.QGridLayout()
+        w.setLayout(l)
+        
+        dataVal = value=sliderItem.tickDataValue(tick)
+        if dataVal == None:
+            dataVal = 0
+        self.fracPosSpin = SpinBox()
+        self.fracPosSpin.setOpts(value=sliderItem.tickValue(tick), bounds=(0.0, 1.0), step=0.01, decimals=2)
+        self.dataPosSpin = SpinBox(value=dataVal)
+        self.dataPosSpin.setOpts(decimals=3, siPrefix=True)
+                
+        l.addWidget(QtGui.QLabel("Position (fractional):"), 0,0)
+        l.addWidget(self.fracPosSpin, 0, 1)
+        l.addWidget(QtGui.QLabel("Position (data units):"), 1, 0)
+        l.addWidget(self.dataPosSpin, 1,1)
+        
+        if self.sliderItem().dataParent is None:
+            self.dataPosSpin.setEnabled(False)
+        
+        a = QtGui.QWidgetAction(self)
+        a.setDefaultWidget(w)
+        positionMenu.addAction(a)        
+        
+        self.fracPosSpin.valueChanged.connect(self.fractionalValueChanged)
+        self.dataPosSpin.valueChanged.connect(self.dataValueChanged)
+        
+        colorAct = self.addAction("Set Color", lambda: self.gradientItem().raiseColorDialog(self.tick()))
+        if not self.tick().colorChangeAllowed:
+            colorAct.setEnabled(False)
+
+    def fractionalValueChanged(self, val):
+        self.sliderItem().setTickValue(self.tick(), val)
+        if self.sliderItem().dataParent is not None:
+            self.dataPosSpin.blockSignals(True)
+            self.dataPosSpin.setValue(self.sliderItem().tickDataValue(self.tick()))
+            self.dataPosSpin.blockSignals(False)
+            
+    def dataValueChanged(self, val):
+        self.sliderItem().setTickValue(self.tick(), val, dataUnits=True)
+        self.fracPosSpin.blockSignals(True)
+        self.fracPosSpin.setValue(self.sliderItem().tickValue(self.tick()))
+        self.fracPosSpin.blockSignals(False)
+
