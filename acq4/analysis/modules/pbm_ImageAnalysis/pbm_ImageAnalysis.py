@@ -10,7 +10,6 @@ This module provides:
         simple spike detection (on cell, intracellular)
     5. Cross-correlation of ROI signals in the imaging data (pairwise), and some
         display of the results
-    To be done:
     6. Cross-correlation of ROI and spike trains.
     
     Fall, 2011
@@ -21,7 +20,7 @@ This module provides:
         DC004551 (Cellular mechanisms of auditory information processing)
         DC000425 (Physiology of the Dorsal Cochlear Nucleus Molecular Layer)
         DC009809 (Auditory Cortex: Synaptic organization and plasticity)
-
+    Has potential dependency on openCV for some functions.
 """
 
 from PyQt4 import QtGui, QtCore
