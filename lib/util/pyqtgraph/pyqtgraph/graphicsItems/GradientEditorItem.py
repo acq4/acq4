@@ -606,7 +606,8 @@ class GradientEditorItem(TickSliderItem):
     def raiseTickContextMenu(self, tick, ev):
         self.tickMenu = TickMenu(tick, self)
         self.tickMenu.popup(ev.screenPos().toQPoint())
-            def tickMoved(self, tick, pos):
+    
+    def tickMoved(self, tick, pos):
         #private
         TickSliderItem.tickMoved(self, tick, pos)
         self.updateGradient()
