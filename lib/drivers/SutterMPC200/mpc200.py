@@ -1,4 +1,11 @@
-import serial, struct, time, collections, threading
+import serial, struct, time, collections
+
+try:
+    # this is nicer because it provides deadlock debugging information
+    from lib.util.Mutex import RecursiveMutex as RLock
+except ImportError:
+    from threading import RLock
+
 try:
     from ..SerialDevce import SerialDevice, TimeoutError, DataError
 except ValueError:
@@ -49,7 +56,7 @@ class SutterMPC200(SerialDevice):
         """
         port: serial COM port (eg. COM3 or /dev/ttyACM0)
         """
-        self.lock = threading.RLock()
+        self.lock = RLock()
         self.port = port
         self.pos = [None]*4  # used to remember position of each drive
         SerialDevice.__init__(self, port=self.port, baudrate=128000)
