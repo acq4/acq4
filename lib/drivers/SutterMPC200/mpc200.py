@@ -16,21 +16,6 @@ except ValueError:
         from SerialDevice import SerialDevice, TimeoutError, DataError
 
 
-# ErrorVals = {
-#     0: ('SP Over-run', 'The previous character was not unloaded before the latest was received.'),
-#     1: ('Frame Error', 'A valid stop bit was not received during the appropriate time period.'), 
-#     2: ('Buffer Over-run', 'The input buffer is filled and CR has not been received.'),
-#     4: ('Bad Command', 'Input can not be interpreted -- command byte not valid.'),
-#     8: ('Move Interrupted', 'A requested move was interrupted by input on the serial port.'),
-#     16:('Arduino error', 'Error was reported by arduino interface.'),
-#     32:('MP285 Timeout', 'Arduino timed out waiting for response from MP285.'),
-#     64:('Command timeout', 'Arduino timed out waiting for full command from computer.'),
-# }
-
-
-class MPC200Error(Exception):
-    pass
-
 
 def threadsafe(method):
     # decorator for automatic mutex lock/unlock
@@ -58,7 +43,8 @@ class SutterMPC200(SerialDevice):
         """
         self.lock = RLock()
         self.port = port
-        self.pos = [None]*4  # used to remember position of each drive
+        self.pos = [(None,None)]*4  # used to remember position of each drive
+        self.currentDrive = None
         SerialDevice.__init__(self, port=self.port, baudrate=128000)
         self.scale = [0.0625e-6]*3  # default is 16 usteps per micron
         # time.sleep(1.0)  ## Give devices a moment to chill after opening the serial line.
@@ -117,8 +103,11 @@ class SutterMPC200(SerialDevice):
         drive, x, y, z = struct.unpack('=Blll', packet)
         pos = (x, y, z)
 
-        if self.pos[drive] != pos:
-            self.posChanged(drive, pos)
+        if drive != self.currentDrive:
+            self.driveChanged(drive, self.currentDrive)
+            self.currentDrive = drive
+        if pos != self.pos[drive][0]:
+            self.posChanged(drive, pos, self.pos[drive][0])
         self.pos[drive] = pos, time.time()  # record new position
 
         if not scaled:
@@ -126,10 +115,19 @@ class SutterMPC200(SerialDevice):
         pos = [pos[i]*self.scale[i] for i in [0,1,2]]
         return drive, pos
 
-    def posChanged(self, drive, pos):
+    def posChanged(self, drive, newPos, oldPos):
         """
         Method called whenever the position of a drive has changed. This is initiated by calling getPos().
-        Override this method to respond to position changes; the default does nothing.
+        Override this method to respond to position changes; the default does nothing. Note
+        that the values passed to this method are unscaled; multiply element-wise
+        by self.scale to obtain the scaled position values.
+        """
+        pass
+
+    def driveChanged(self, newDrive, oldDrive):
+        """
+        Method called whenever the current drive has changed. This is initiated by calling getPos().
+        Override this method to respond to drive changes; the default does nothing.
         """
         pass
 
@@ -169,7 +167,7 @@ class SutterMPC200(SerialDevice):
         Positions must be specified in meters unless *scaled* = False, in which 
         case position is specified in motor steps. 
         """
-        
+        raise NotImplementedError()
         if drive is not None:
             self.setDrive(drive)
         
@@ -191,175 +189,18 @@ class SutterMPC200(SerialDevice):
 
 
 
-# class MPC200Drive(object):
-#     """
-#     Represents a single drive on a Sutter MPC-200.
-#     """
-#     def __init__(self, mpc200, drive):
-#         self.mpc200 = mpc200
-#         self.drive = drive
-#         self.pos = None
-
-#     def getPos(self, scaled=True):
-#         if self.pos is not None:
-#             return self.pos
-    
-        
-        
-        
-        
-
-    #def setPos(self, pos, block=True, timeout=10.):
-        #"""Set the position. 
-        #Arguments:
-            #pos: tuple (x, y, z) values must be given in meters.
-                 #Setting a coordinate to None leaves it unchanged.
-            #block: bool, if true then the function does not return until the move is complete.
-        #"""
-        #scale = self.scale()
-        #if len(pos) < 3:
-            #pos = list(pos) + [None] * (3-len(pos))
-            
-        #if None in pos:
-            #currentPos = self.getPos(scaled=False)
-        #pos = [(pos[i]/scale if pos[i] is not None else currentPos[i]) for i in range(3)]
-            
-        #cmd = 'm' + struct.pack('=3l', int(pos[0]), int(pos[1]), int(pos[2])) + '\r'
-        #self.write(cmd)
-        #if block:
-            #self.readPacket(timeout=timeout)  ## could take a long time..
-
-
-    #def moveBy(self, pos, block=True, timeout=10.):
-        #"""Move by the specified distance. 
-        #Arguments:
-            #pos: tuple (dx, dy, dz) values must be given in meters.
-            #block: bool, if true then the function does not return until the move is complete.
-        #"""
-        #scale = self.scale()
-        #if len(pos) < 3:
-            #pos = list(pos) + [0.0] * (3-len(pos))
-            
-        #currentPos = self.getPos(scaled=False)
-        #pos = [pos[i]/scale + currentPos[i] for i in range(3)]
-            
-        #cmd = 'm' + struct.pack('=3l', int(pos[0]), int(pos[1]), int(pos[2])) + '\r'
-        #self.write(cmd)
-        #if block:
-            #self.readPacket(timeout=timeout)  ## could take a long time..
-
-
-
-
-
-    #def scale(self):
-        ### Scale of position values in msteps/m
-        ### Does this value change during operation?
-        ### Should I be using step_mul for anything?
-        #if self._scale is None:
-            #stat = self.stat()
-            #self._scale = 1e-6 / stat['step_div']
-        #return self._scale
-    
-    #def stop(self):
-        #self.write('\3')
-        #try:
-            #self.readPacket()
-        #except MP285Error as err:
-            #for e in err.args[0]:
-                #if e[0] == 8:   ## move interrupted, like we asked for
-                    #return
-            #raise
-                    
-            
-    #def setSpeed(self, speed, fine=True):
-        #"""Set the speed of movements used when setPos is called.
-        
-        #Arguments:
-            #speed: integer from 1 to 6550 in coarse mode, 1310 in fine mode. 
-                   #Note that small numbers can result in imperceptibly slow movement.
-            #fine:  bool; True => 50uSteps/step    False => 10uSteps/step
-        #"""
-        #v = int(speed)
-        
-        ### arbitrary speed limits.. do these apply to all devices?
-        #maxSpd = 6550
-        #if fine:
-            #maxSpd = 1310
-            
-        #v = max(min(v, maxSpd), 1)
-        ##print "MP285 speed:", v
-        #if fine:
-            #v |= 0x8000
-        #cmd = 'V' + struct.pack('=H', v) + '\r'
-        #self.write(cmd)
-        #self.readPacket()
-            
-        
-    #def setLimits(self, limits):
-        #"""Set position limits on the device which may not be exceeded.
-        #This command is only available when using custom hardware.
-        #limits = [+x, -x, +y, -y, +z, -z]
-        #If a limit is None, it will be ignored.
-        #"""
-        #scale = self.scale()
-        #useLims = [(1 if x is not None else 0) for x in limits]
-        #limits = [(0 if x is None else int(x/scale)) for x in limits]
-        #data = struct.pack("=6l6B", *(limits + useLims))
-        #self.write('l'+data+'\r');
-        #self.readPacket()
-        
-
-
         
 if __name__ == '__main__':
-    s = SutterMPC200(port='COM3')
-    
-    def pos():
-        d, p = s.getPos()
-        print "<mpc200> x: %0.2fum  y: %0.2fum,  z: %0.2fum" % (p[0]*1e6, p[1]*1e6, p[2]*1e6)
-        
-    #def ipos():
-        #p = s.getImmediatePos()
-        #print "x: %0.2fum  y: %0.2fum,  z: %0.2fum" % (p[0]*1e6, p[1]*1e6, p[2]*1e6)
-        
-    #def stat():
-        #st = s.stat()
-        #for k in st:
-            #print "%s:%s%s" % (k, " "*(15-len(k)), str(st[k]))
-            
-    def monitor():
-        while True:
-            pos()
+    class MPC200(SutterMPC200):
+        """Test subclass that overrides position- and drive-change callbacks"""
+        def posChanged(self, drive, newpos, oldpos):
+            print drive, newpos, oldpos
 
-    #def clock(speed, fine=False, runtime=2.0):
-        #s.setSpeed(6500, fine=False)
-        #s.setPos([-0.01, 0, 0])
-        #pos = s.getPos()
-        #s.setSpeed(speed, fine)
-        #time.clock()
-        #t = time.clock()
-        #dist = runtime*speed*1e-6
-        #s.setPos([pos[0]+dist, pos[1], pos[2]], timeout=runtime*2)
-        #s.setPos(pos, timeout=runtime*2)
-        #dt = 0.5*(time.clock()-t)
-        #print "%d: dt=%0.2gs, dx=%0.2gm, %0.2f mm/s" % (int(speed), dt, dist, dist*1e3/dt)
-        
-    #def saw(dx, dz, zstep=5e-6):
-        #p1 = s.getPos()
-        #z = p1[2]
-        #p1 = p1[:2]
-        #p2 = [p1[0] + dx, p1[1]]
-        
-        #n = int(dz/zstep)
-        #for i in range(n):
-            #print "step:", i
-            #s.setPos(p2)
-            #s.setPos(p1)
-            #if i < n-1:
-                #z += zstep
-                #s.setPos([None,None,z])
-        
-    #ipos()
-    #pos()
-        
+        def driveChanged(self, newdrive, olddrive):
+            print newdrive, olddrive
+
+    s = MPC200(port='COM3')
+    
+    while True:
+        s.getPos()
+
