@@ -1,4 +1,4 @@
-import serial, time
+import serial, time, sys
 
 class TimeoutError(Exception):
     """Raised when a serial communication times out."""
@@ -33,6 +33,18 @@ class SerialDevice(object):
         if 'port' in kwds and 'baudrate' in self.__serialOpts:
             self.open()
 
+    @classmethod
+    def normalizePortName(self, port):
+        """
+        Return a 'normalized' port name that is always the same for a particular serial port.
+        On windows, this means 'com1', 'COM1', and 0 will all normalize to 0. On unix,
+        the port name is unchanged.
+        """
+        if sys.platform.startswith('win'):
+            if isinstance(port, basestring) and port.lower()[:3] == 'com':
+                port = int(port[3:]) - 1
+        return port
+
 
     def open(self, port=None, baudrate=None, **kwds):
         """ Open a serial port. If this port was previously closed, then calling 
@@ -44,8 +56,7 @@ class SerialDevice(object):
         if baudrate is None:
             baudrate = self.__serialOpts['baudrate']
 
-        if isinstance(port, basestring) and port.lower()[:3] == 'com':
-            port = int(port[3:]) - 1
+        port = SerialDevice.normalizePortName(port)
 
         self.__serialOpts.update({
             'port': int(port),

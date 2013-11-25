@@ -7,14 +7,13 @@ except ImportError:
     from threading import RLock
 
 try:
-    from ..SerialDevce import SerialDevice, TimeoutError, DataError
+    from ..SerialDevice import SerialDevice, TimeoutError, DataError
 except ValueError:
     ## relative imports not allowed when running from command prompt
     if __name__ == '__main__':
         import sys, os
         sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
         from SerialDevice import SerialDevice, TimeoutError, DataError
-
 
 
 def threadsafe(method):
@@ -36,6 +35,19 @@ def resetDrive(method):
 
 
 class SutterMPC200(SerialDevice):
+
+    DEVICES = {}
+
+    @classmethod
+    def getDevice(cls, port):
+        """
+        Return a SutterMPC200 instance for the specified serial port. Only one instance will 
+        be created for each port.
+        """
+        port = SerialDevice.normalizePortName(port)
+        if port not in cls.DEVICES:
+            cls.DEVICES[port] = SutterMPC200(port=port)
+        return cls.DEVICES[port]
 
     def __init__(self, port):
         """
