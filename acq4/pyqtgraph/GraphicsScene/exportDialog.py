@@ -52,7 +52,7 @@ class ExportDialog(QtGui.QWidget):
             self.shown = True
             vcenter = self.scene.getViewWidget().geometry().center()
             self.setGeometry(vcenter.x()-self.width()/2, vcenter.y()-self.height()/2, self.width(), self.height())
-        
+
     def updateItemList(self, select=None):
         self.ui.itemTree.clear()
         si = QtGui.QTreeWidgetItem(["Entire Scene"])
