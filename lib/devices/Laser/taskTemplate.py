@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'protoTemplate.ui'
+# Form implementation generated from reading ui file 'taskTemplate.ui'
 #
 # Created: Tue May 29 01:21:48 2012
 #      by: PyQt4 UI code generator 4.8.5
@@ -93,7 +93,7 @@ class Ui_Form(object):
         self.adjustLengthCheck.setObjectName(_fromUtf8("adjustLengthCheck"))
         self.gridLayout_2.addWidget(self.adjustLengthCheck, 3, 0, 1, 3)
         self.checkPowerCheck = QtGui.QCheckBox(Form)
-        self.checkPowerCheck.setText(QtGui.QApplication.translate("Form", "Check power before protocol start", None, QtGui.QApplication.UnicodeUTF8))
+        self.checkPowerCheck.setText(QtGui.QApplication.translate("Form", "Check power before task start", None, QtGui.QApplication.UnicodeUTF8))
         self.checkPowerCheck.setChecked(True)
         self.checkPowerCheck.setObjectName(_fromUtf8("checkPowerCheck"))
         self.gridLayout_2.addWidget(self.checkPowerCheck, 2, 0, 1, 3)

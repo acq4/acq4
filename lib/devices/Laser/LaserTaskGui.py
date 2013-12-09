@@ -3,16 +3,16 @@ from pyqtgraph import PlotWidget
 from lib.devices.DAQGeneric import DAQGenericProtoGui
 from SequenceRunner import runSequence
 from pyqtgraph.functions import siFormat
-import protoTemplate
+import taskTemplate
 from HelpfulException import HelpfulException
 
 #from FeedbackButton import FeedbackButton
 
 class LaserProtoGui(DAQGenericProtoGui):
-    def __init__(self, dev, prot):
-        DAQGenericProtoGui.__init__(self, dev, prot, ownUi=False)
+    def __init__(self, dev, task):
+        DAQGenericProtoGui.__init__(self, dev, task, ownUi=False)
         
-        self.ui = protoTemplate.Ui_Form()
+        self.ui = taskTemplate.Ui_Form()
         
         
         self.cache = {}
@@ -147,7 +147,7 @@ class LaserProtoGui(DAQGenericProtoGui):
         return desc
     
     def prepareProtocolStart(self):
-        ## check power before starting protocol.
+        ## check power before starting task.
         if self.ui.checkPowerCheck.isChecked():
             power, valid = self.dev.outputPower()  ## request current power from laser
             if power is None:
@@ -169,7 +169,7 @@ class LaserProtoGui(DAQGenericProtoGui):
         rawCmds = self.getChannelCmds(wave, rate)
         #rawCmds = self.cache.get(id(wave), self.dev.getChannelCmds({'powerWaveform':wave}, rate)) ## returns {'shutter': array(...), 'qSwitch':array(..), 'pCell':array(...)}
         
-        ### structure protocol in DAQGeneric-compatible way
+        ### structure task in DAQGeneric-compatible way
         cmd = {}
         for k in rawCmds:
             cmd[k] = {}

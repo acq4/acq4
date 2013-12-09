@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericProtoGui, DataMapping
+from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui, DataMapping
 from Mutex import Mutex, MutexLocker
 #from lib.devices.Device import *
 from PyQt4 import QtCore, QtGui
@@ -160,8 +160,8 @@ class AxoPatch200(DAQGeneric):
     def createTask(self, cmd):
         return AxoPatch200Task(self, cmd)
         
-    def protocolInterface(self, prot):
-        return AxoPatchProtoGui(self, prot)
+    def taskInterface(self, task):
+        return AxoPatchTaskGui(self, task)
         
     def deviceInterface(self, win):
         return AxoPatchDevGui(self)
@@ -443,9 +443,9 @@ class AxoPatch200Task(DAQGenericTask):
         
 
     
-class AxoPatchProtoGui(DAQGenericProtoGui):
-    def __init__(self, dev, prot):
-        DAQGenericProtoGui.__init__(self, dev, prot, ownUi=False)
+class AxoPatchTaskGui(DAQGenericTaskGui):
+    def __init__(self, dev, task):
+        DAQGenericTaskGui.__init__(self, dev, task, ownUi=False)
         
         self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0,0,0,0)
@@ -497,7 +497,7 @@ class AxoPatchProtoGui(DAQGenericProtoGui):
     def saveState(self):
         """Return a dictionary representing the current state of the widget."""
         state = {}
-        state['daqState'] = DAQGenericProtoGui.saveState(self)
+        state['daqState'] = DAQGenericTaskGui.saveState(self)
         state['mode'] = self.getMode()
         #state['holdingEnabled'] = self.ctrl.holdingCheck.isChecked()
         #state['holding'] = self.ctrl.holdingSpin.value()
@@ -510,18 +510,18 @@ class AxoPatchProtoGui(DAQGenericProtoGui):
         #self.ctrl.holdingCheck.setChecked(state['holdingEnabled'])
         #if state['holdingEnabled']:
         #    self.ctrl.holdingSpin.setValue(state['holding'])
-        return DAQGenericProtoGui.restoreState(self, state['daqState'])
+        return DAQGenericTaskGui.restoreState(self, state['daqState'])
     
-    def generateProtocol(self, params=None):
-        daqProto = DAQGenericProtoGui.generateProtocol(self, params)
+    def generateTask(self, params=None):
+        daqTask = DAQGenericTaskGui.generateTask(self, params)
         
-        proto = {
+        task = {
             'mode': self.getMode(),
-            'daqProtocol': daqProto
+            'daqProtocol': daqTask
         }
         
             
-        return proto
+        return task
         
     def modeChanged(self):
         global ivModes

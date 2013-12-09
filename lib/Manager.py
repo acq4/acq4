@@ -8,7 +8,7 @@ This class must be invoked once to initialize the ACQ4 core system.
 The class is responsible for:
     - Configuring devices
     - Invoking/managing modules
-    - Creating and executing protocol tasks. 
+    - Creating and executing acquisition tasks. 
 """
 
 
@@ -120,7 +120,7 @@ class Manager(QtCore.QObject):
     """Manager class is responsible for:
       - Loading/configuring device modules and storing their handles
       - Managing the device rack GUI
-      - Creating protocol task handles
+      - Creating acquisition task handles
       - Loading gui modules and storing their handles
       - Creating and managing DirectoryHandle objects
       - Providing unified timestamps
@@ -353,16 +353,6 @@ class Manager(QtCore.QObject):
                     else:
                         self.config[key] = cfg[key]
                 
-                ### set new protocol directory
-                #if 'protocolDir' in cfg:
-                    #self.config['protocolDir'] = cfg['protocolDir']
-                    
-                ### copy in new folder type definitions
-                #if 'folderTypes' in cfg:
-                    #if 'folderTypes' not in self.config:
-                        #self.config['folderTypes'] = {}
-                    #for t in cfg['folderTypes']:
-                        #self.config['folderTypes'][t] = cfg['folderTypes'][t]
             except:
                 printExc("Error in ACQ4 configuration:")
         #print self.config
@@ -615,12 +605,18 @@ class Manager(QtCore.QObject):
             with self.lock:
                 self.shortcuts.pop(ind)
     
-    def runProtocol(self, cmd):
+    def runTask(self, cmd):
+        """
+        Convenience function that runs a task and returns its results.
+        """
         t = Task(self, cmd)
         t.execute()
         return t.getResult()
 
     def createTask(self, cmd):
+        """
+        Creates a new Task instance from the specified command structure.
+        """
         t = Task(self, cmd)
         self.sigTaskCreated.emit(cmd, t)
         return t
@@ -633,15 +629,24 @@ class Manager(QtCore.QObject):
     
     
     def getCurrentDir(self):
+        """
+        Return a directory handle to the currently-selected directory for data storage.
+        """
         with self.lock:
             if self.currentDir is None:
                 raise Exception("Storage directory has not been set.")
             return self.currentDir
     
     def setLogDir(self, d):
+        """
+        Set the directory to which log messages are stored.
+        """
         self.logWindow.setLogDir(d)
         
     def setCurrentDir(self, d):
+        """
+        Set the currently-selected directory for data storage.
+        """
         if self.currentDir is not None:
             try:
                 self.currentDir.sigChanged.disconnect(self.currentDirChanged)
@@ -680,12 +685,19 @@ class Manager(QtCore.QObject):
             
             
     def getBaseDir(self):
+        """
+        Return a directory handle to the base directory for data storage. 
+        This is the highest-level directory where acquired data may be stored.
+        """
         with self.lock:
             if self.baseDir is None:
                 raise Exception("Base storage directory has not been set!")
             return self.baseDir
 
     def setBaseDir(self, d):
+        """
+        Set the base directory for data storage. 
+        """
         with self.lock:
             if isinstance(d, basestring):
                 self.baseDir = self.dirHandle(d, create=False)
@@ -701,7 +713,7 @@ class Manager(QtCore.QObject):
         self.setCurrentDir(self.baseDir)
 
     def dirHandle(self, d, create=False):
-        """Return a directory handle for d."""
+        """Return a directory handle for the specified directory string."""
         #return self.dataManager.getDirHandle(d, create)
         return DataManager.getDirHandle(d, create=create)
 
@@ -712,7 +724,7 @@ class Manager(QtCore.QObject):
         
     def lockReserv(self):
         """Lock the reservation system so that only one task may reserve its set of devices at a time.
-        This prevents deadlocks where two protocols use the same two devices but reserve them in opposite order."""
+        This prevents deadlocks where two tasks use the same two devices but reserve them in opposite order."""
         if self.taskLock.tryLock(10e3):
             return True
         else:
@@ -854,7 +866,7 @@ class Task:
             print "================== Manager Task.__init__ command: ================="
             print command
             print "==========================================================="
-            raise Exception("Command specified for protocol is invalid. (Must be dictionary with 'protocol' key)")
+            raise Exception("Command specified for task is invalid. (Must be dictionary with 'protocol' key)")
         self.id = Task.id
         Task.id += 1
         
@@ -864,20 +876,20 @@ class Task:
         self.devNames.remove('protocol')
         self.devs = {}
         
-        ## Create task objects. Each task object is a handle to the device which is unique for this protocol run.
+        ## Create task objects. Each task object is a handle to the device which is unique for this task run.
         self.tasks = {}
         #print "devNames: ", self.devNames
         for devName in self.devNames:
             dev = self.dm.getDevice(devName)
             task = dev.createTask(self.command[devName])
             if task is None:
-                printExc("Device '%s' does not have a protocol interface; ignoring." % devName)
+                printExc("Device '%s' does not have a task interface; ignoring." % devName)
                 continue
             self.devs[devName] = dev
             self.tasks[devName] = task
         
     def execute(self, block=True, processEvents=True):
-        """Start the protocol task.
+        """Start the task.
         If block is true, then the function blocks until the task is complete.
         if processEvents is true, then Qt events are processed while waiting for the task to complete."""
         self.lockedDevs = []
@@ -965,7 +977,7 @@ class Task:
                 try:
                     self.tasks[devName].start()
                 except:
-                    raise HelpfulException("Error starting device '%s'; aborting protocol." % devName)
+                    raise HelpfulException("Error starting device '%s'; aborting task." % devName)
                 self.startedDevs.append(devName)
                 prof.mark('start %s' % devName)
             self.startTime = ptime.time()
@@ -990,16 +1002,16 @@ class Task:
                 now = ptime.time()
                 elapsed = now - self.startTime
                 if timeout is not None and elapsed > timeout:
-                    raise Exception("Protocol timed out (>%0.2fs); aborting." % timeout)
+                    raise Exception("Task timed out (>%0.2fs); aborting." % timeout)
                 if isGuiThread:
                     if processEvents and now-lastProcess > 20e-3:  ## only process Qt events every 20ms
                         QtGui.QApplication.processEvents()
                         lastProcess = ptime.time()
                     
-                if elapsed < self.cfg['duration']-10e-3:  ## If the protocol duration has not elapsed yet, only wake up every 10ms, and attempt to wake up 5ms before the end
+                if elapsed < self.cfg['duration']-10e-3:  ## If the task duration has not elapsed yet, only wake up every 10ms, and attempt to wake up 5ms before the end
                     sleep = min(10e-3, self.cfg['duration']-elapsed-5e-3)
                 else:
-                    sleep = 1.0e-3  ## afterward, wake up more quickly so we can respond as soon as the protocol finishes
+                    sleep = 1.0e-3  ## afterward, wake up more quickly so we can respond as soon as the task finishes
                 #print "sleep for", sleep
                 time.sleep(sleep)
             #print "all tasks finshed."
@@ -1007,7 +1019,7 @@ class Task:
             self.stop()
             #print "  %d execute complete" % self.id
         except: 
-            #printExc("==========  Error in protocol execution:  ==============")
+            #printExc("==========  Error in task execution:  ==============")
             self.abort()
             self.releaseAll()
             raise
@@ -1040,11 +1052,11 @@ class Task:
         return True
     
     def duration(self):
-        """Return the requested protocol duration, or None if it was not given."""
+        """Return the requested task duration, or None if it was not given."""
         return self.command.get('protocol', {}).get('duration', None)
     
     def runTime(self):
-        """Return the length of time since this protocol has been running.
+        """Return the length of time since this task has been running.
         If the task has already finished, return the length of time the task ran for.
         If the task has not started yet, return None.
         """

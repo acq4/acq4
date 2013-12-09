@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from lib.modules.ProtocolRunner.analysisModules import AnalysisModule
+from lib.modules.TaskRunner.analysisModules import AnalysisModule
 from lib.Manager import getManager
 from PyQt4 import QtCore, QtGui
 from UncagingTemplate import Ui_Form
@@ -27,21 +27,21 @@ class UncagingModule(AnalysisModule):
         self.ui.cameraModCombo.setTypes('cameraModule')
         
         
-        self.prots = {}
-        self.currentProt = None
+        self.tasks = {}
+        self.currentTask = None
         self.ui.deleteBtn.clicked.connect(self.deleteSelected)
         self.stateGroup.sigChanged.connect(self.stateChanged)
-        self.ui.protList.currentItemChanged.connect(self.itemSelected)
-        self.ui.protList.itemClicked.connect(self.itemClicked)
+        self.ui.taskList.currentItemChanged.connect(self.itemSelected)
+        self.ui.taskList.itemClicked.connect(self.itemClicked)
         self.ui.recomputeBtn.clicked.connect(self.recompute)
         #self.man.sigModulesChanged.connect(self.fillModuleList)
         
     def quit(self):
         AnalysisModule.quit(self)
-        for k in self.prots:
-            self.prots[k].close()
-        self.prots.clear()
-        self.currentProt = None
+        for k in self.tasks:
+            self.tasks[k].close()
+        self.tasks.clear()
+        self.currentTask = None
         
         
     #def fillModuleList(self):
@@ -50,79 +50,79 @@ class UncagingModule(AnalysisModule):
         #for m in mods:
             #self.ui.cameraModCombo.addItem(m)
         
-    def protocolStarted(self, *args):
+    def taskStarted(self, *args):
         #print "start:",args
-        #self.newProt()
+        #self.newTask()
         pass
     
-    def protocolFinished(self):
-        self.currentProt = None
+    def taskFinished(self):
+        self.currentTask = None
         
     def newFrame(self, frame):
         if not self.ui.enabledCheck.isChecked():
             return
-        if self.currentProt is None:
-            self.newProt()
-        self.currentProt.addFrame(frame)
+        if self.currentTask is None:
+            self.newTask()
+        self.currentTask.addFrame(frame)
 
-    def newProt(self):
-        n = self.pr.currentProtocol.name()
+    def newTask(self):
+        n = self.pr.currentTask.name()
         if n is None:
             n = 'protocol'
        
         i = 0
         while True:
             name = n + ("_%03d" % i)
-            if name not in self.prots:
+            if name not in self.tasks:
                 break
             i += 1
-        p = Prot(name, self)
-        self.currentProt = p
-        self.prots[name] = p
+        p = Task(name, self)
+        self.currentTask = p
+        self.tasks[name] = p
         item = QtGui.QListWidgetItem(name)
         item.setCheckState(QtCore.Qt.Checked)
-        self.ui.protList.addItem(item)
-        self.ui.protList.setCurrentItem(item)
+        self.ui.taskList.addItem(item)
+        self.ui.taskList.setCurrentItem(item)
 
     def deleteSelected(self):
-        row = self.ui.protList.currentRow()
+        row = self.ui.taskList.currentRow()
         if row == -1:
             return
-        item = self.ui.protList.takeItem(row)
+        item = self.ui.taskList.takeItem(row)
         name = str(item.text())
-        self.prots[name].close()
-        del self.prots[name]
-        if self.currentProt is not None and self.currentProt.name == name:
-            self.currentProt = None
+        self.tasks[name].close()
+        del self.tasks[name]
+        if self.currentTask is not None and self.currentTask.name == name:
+            self.currentTask = None
     
-    def selectedProt(self):
-        row = self.ui.protList.currentRow()
+    def selectedTask(self):
+        row = self.ui.taskList.currentRow()
         if row == -1:
             return None
-        item = self.ui.protList.item(row)
+        item = self.ui.taskList.item(row)
         name = str(item.text())
-        return self.prots[name]
+        return self.tasks[name]
         
     
     def stateChanged(self, *args):
-        sp = self.selectedProt()
+        sp = self.selectedTask()
         if sp is not None:
             sp.updateParams(*args)
             
     def itemSelected(self, *args):
-        sp = self.selectedProt()
+        sp = self.selectedTask()
         if sp is not None:
             self.stateGroup.setState(sp.getState())
             
     def itemClicked(self, item):
-        prot = self.prots[str(item.text())]
+        task = self.tasks[str(item.text())]
         if item.checkState() == QtCore.Qt.Checked:
-            prot.show()
+            task.show()
         else:
-            prot.hide()
+            task.hide()
 
     def recompute(self):
-        sp = self.selectedProt()
+        sp = self.selectedTask()
         if sp is not None:
             sp.recalculate(allFrames=True)
 
@@ -130,7 +130,7 @@ class UncagingModule(AnalysisModule):
         #QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
         #getManager().sigModulesChanged.disconnect(self.fillModuleList)
         AnalysisModule.quit(self)
-        for p in self.prots.values():
+        for p in self.tasks.values():
             p.close()
             
     def cameraModule(self):
@@ -152,7 +152,7 @@ class UncagingModule(AnalysisModule):
         return str(self.ui.scannerDevCombo.currentText())
         
         
-class Prot:
+class Task:
     z = 500
     #params = ['alphaSlider', 'frame1Spin', 'frame2Spin', 'clampBaseStartSpin', 'clampBaseStopSpin', 'clampTestStartSpin', 'clampTestStopSpin', 'pspToleranceSpin', 'spotToleranceSpin', 'displayImageCheck']
     params = ['alphaSlider', 'clampBaseStartSpin', 'clampBaseStopSpin', 'clampTestStartSpin', 'clampTestStopSpin', 'pspToleranceSpin']
@@ -165,8 +165,8 @@ class Prot:
         self.items = [] #[self.imgItem, [0,0], [1,1]]]
         #self.img = None
         self.updateParams()
-        self.z = Prot.z
-        Prot.z += 1
+        self.z = Task.z
+        Task.z += 1
         
         
     def addFrame(self, frame):
@@ -207,7 +207,7 @@ class Prot:
     def updateParams(self, param=None, val=None):
         state = self.ui().stateGroup.state().copy()
         self.state = {}
-        for k in Prot.params:
+        for k in Task.params:
             self.state[k] = state[k]
         if param == 'alphaSlider':
             self.updateAlpha()

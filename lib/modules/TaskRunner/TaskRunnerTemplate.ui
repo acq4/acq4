@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Protocol Runner</string>
+   <string>Task Runner</string>
   </property>
   <property name="styleSheet">
    <string notr="true"/>
@@ -42,7 +42,7 @@
    </attribute>
    <widget class="QWidget" name="dockWidgetContents"/>
   </widget>
-  <widget class="QDockWidget" name="ProtocolDock">
+  <widget class="QDockWidget" name="TaskDock">
    <property name="enabled">
     <bool>true</bool>
    </property>
@@ -53,7 +53,7 @@
     <set>Qt::BottomDockWidgetArea|Qt::TopDockWidgetArea</set>
    </property>
    <property name="windowTitle">
-    <string>Protocol</string>
+    <string>Task</string>
    </property>
    <attribute name="dockWidgetArea">
     <number>4</number>
@@ -85,7 +85,7 @@
         <bool>false</bool>
        </property>
        <property name="toolTip">
-        <string>Protocol runs continuously without 
+        <string>Task runs continuously without 
 gaps until stopped (not yet implemented).</string>
        </property>
        <property name="text">
@@ -113,7 +113,7 @@ gaps until stopped (not yet implemented).</string>
      <item row="3" column="1">
       <widget class="QCheckBox" name="protoLoopCheck">
        <property name="toolTip">
-        <string>Protocol will run repeatedly until stopped and 
+        <string>Task will run repeatedly until stopped and 
 waits a minimum of Cycle Time between episodes.
 Not the same as continuous acquisition (there 
 will be a time gap between each recording).</string>
@@ -169,7 +169,7 @@ will be a time gap between each recording).</string>
         </spacer>
        </item>
        <item>
-        <widget class="QPushButton" name="runProtocolBtn">
+        <widget class="QPushButton" name="runTaskBtn">
          <property name="enabled">
           <bool>true</bool>
          </property>
@@ -209,7 +209,7 @@ will be a time gap between each recording).</string>
         </size>
        </property>
        <property name="toolTip">
-        <string>Duration of stimulus/acquisition in the protocol.</string>
+        <string>Duration of stimulus/acquisition in the task.</string>
        </property>
        <property name="value">
         <double>0.100000000000000</double>

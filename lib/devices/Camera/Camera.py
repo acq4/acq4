@@ -9,7 +9,7 @@ from PyQt4 import QtCore
 import time
 from numpy import *
 from metaarray import *
-from protoGUI import *
+from taskGUI import *
 from deviceGUI import *
 import ptime as ptime
 from Mutex import Mutex
@@ -20,7 +20,7 @@ from CameraInterface import CameraInterface
 
 class Camera(DAQGeneric, OptomechDevice):
     """Generic camera device class. All cameras should extend from this interface.
-     - The class handles protocol tasks, scope integration, expose/trigger lines
+     - The class handles acquisition tasks, scope integration, expose/trigger lines
      - Subclasses should handle the connection to the camera driver by overriding
         listParams, getParams, and setParams.
      - Subclasses may need to create their own AcquireThread
@@ -289,8 +289,8 @@ class Camera(DAQGeneric, OptomechDevice):
         
 
 
-    def protocolInterface(self, prot):
-        return CameraProtoGui(self, prot)
+    def taskInterface(self, task):
+        return CameraTaskGui(self, task)
 
     def deviceInterface(self, win):
         return CameraDeviceGui(self, win)
@@ -467,7 +467,7 @@ class Frame(object):
     
         
 class CameraTask(DAQGenericTask):
-    """Default implementation of camera protocol task.
+    """Default implementation of camera acquisition task.
     Some of these functions may need to be reimplemented for subclasses."""
 
 

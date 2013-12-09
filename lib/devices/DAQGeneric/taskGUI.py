@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import sys
-from ProtocolTemplate import *
+from TaskTemplate import *
 from DaqChannelGui import *
-from lib.devices.Device import ProtocolGui
+from lib.devices.Device import TaskGui
 from SequenceRunner import *
 from pyqtgraph.WidgetGroup import WidgetGroup
 #from PyQt4 import Qwt5 as Qwt
@@ -12,12 +12,12 @@ import numpy
 import weakref
 from debug import *
 
-class DAQGenericProtoGui(ProtocolGui):
+class DAQGenericTaskGui(TaskGui):
     
     #sigSequenceChanged = QtCore.Signal(object)  ## defined upstream
     
     def __init__(self, dev, prot, ownUi=True):
-        ProtocolGui.__init__(self, dev, prot)
+        TaskGui.__init__(self, dev, prot)
         self.plots = weakref.WeakValueDictionary()
         self.channels = {}
         
@@ -113,7 +113,7 @@ class DAQGenericProtoGui(ProtocolGui):
         #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name())
         self.sigSequenceChanged.emit(self.dev.name())
         
-    def taskStarted(self, params):  ## automatically invoked from ProtocolGui
+    def taskStarted(self, params):  ## automatically invoked from TaskGui
         ## Pull out parameters for this device
         params = dict([(p[1], params[p]) for p in params if p[0] == self.dev.name()])
         
@@ -126,13 +126,13 @@ class DAQGenericProtoGui(ProtocolGui):
                     chParams[k[len(search):]] = params[k]
             self.channels[ch].taskStarted(chParams)
             
-    def protocolStarted(self):  ## automatically invoked from ProtocolGui
+    def taskStarted(self):  ## automatically invoked from TaskGui
         for ch in self.channels:
-            self.channels[ch].protocolStarted()
+            self.channels[ch].taskStarted()
         
         
-    def generateProtocol(self, params=None):
-        #print "generating protocol with:", params
+    def generateTask(self, params=None):
+        #print "generating task with:", params
         if params is None:
             params = {}
         p = {}
@@ -143,9 +143,9 @@ class DAQGenericProtoGui(ProtocolGui):
             for k in params:
                 if k[:len(search)] == search:
                     chParams[k[len(search):]] = params[k]
-            ## request the protocol from the channel
-            #print "  requesting %s protocol with params:"%ch, chParams
-            p[ch] = self.channels[ch].generateProtocol(chParams)
+            ## request the task from the channel
+            #print "  requesting %s task with params:"%ch, chParams
+            p[ch] = self.channels[ch].generateTask(chParams)
         #print p
         return p
         
@@ -166,11 +166,11 @@ class DAQGenericProtoGui(ProtocolGui):
                 self.channels[ch].handleResult(result[ch], params)
             
     def getChanHolding(self, chan):
-        """Return the holding value that this channel will use when the protocol is run."""
+        """Return the holding value that this channel will use when the task is run."""
         return self.dev.getChanHolding(chan)
             
     def quit(self):
-        ProtocolGui.quit(self)
+        TaskGui.quit(self)
         for ch in self.channels:
             self.channels[ch].quit()
         

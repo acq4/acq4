@@ -3,7 +3,7 @@ from lib.devices.Device import *
 from metaarray import MetaArray, axis
 from Mutex import Mutex
 import numpy as np
-from protoGUI import *
+from taskGUI import *
 from debug import *
 from pyqtgraph import siFormat
 import DeviceTemplate
@@ -167,7 +167,7 @@ class DAQGeneric(Device):
             if block:
                 daqDev.setChannelValue(chan, val, block=True)
             else:
-                daqDev.setChannelValue(chan, val, block=False, delaySetIfBusy=True)  ## Note: If a protocol is running, this will not be set until it completes.
+                daqDev.setChannelValue(chan, val, block=False, delaySetIfBusy=True)  ## Note: If a task is running, this will not be set until it completes.
         self.sigHoldingChanged.emit(channel, val)
         
     def getChanHolding(self, chan):
@@ -197,9 +197,9 @@ class DAQGeneric(Device):
         """Return a widget with a UI to put in the device rack"""
         return DAQDevGui(self)
         
-    def protocolInterface(self, prot):
-        """Return a widget with a UI to put in the protocol rack"""
-        return DAQGenericProtoGui(self, prot)
+    def taskInterface(self, prot):
+        """Return a widget with a UI to put in the task rack"""
+        return DAQGenericTaskGui(self, prot)
 
     def getDAQName(self, channel):
         #return self._DGConfig[channel]['channel'][0]

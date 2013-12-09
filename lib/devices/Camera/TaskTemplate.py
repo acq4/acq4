@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'ProtocolTemplate.ui'
+# Form implementation generated from reading ui file 'TaskTemplate.ui'
 #
 # Created: Fri May 25 14:24:21 2012
 #      by: PyQt4 UI code generator 4.9.1
@@ -108,10 +108,10 @@ class Ui_Form(object):
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'Sans Serif\'; font-size:7pt; font-weight:400; font-style:normal;\">\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Checking this forces the camera to start <span style=\" font-style:italic;\">after</span> all</p>\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">other devices in the protocol have started so that it</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">other devices in the task have started so that it</p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">can correctly act as a starting trigger.</p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.triggerCheck.setText(QtGui.QApplication.translate("Form", "Camera triggers protocol", None, QtGui.QApplication.UnicodeUTF8))
-        self.releaseBetweenRadio.setText(QtGui.QApplication.translate("Form", "Release between protocols", None, QtGui.QApplication.UnicodeUTF8))
+        self.triggerCheck.setText(QtGui.QApplication.translate("Form", "Camera triggers task", None, QtGui.QApplication.UnicodeUTF8))
+        self.releaseBetweenRadio.setText(QtGui.QApplication.translate("Form", "Release between tasks", None, QtGui.QApplication.UnicodeUTF8))
         self.releaseAfterRadio.setText(QtGui.QApplication.translate("Form", "Release after sequence", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph import ImageView

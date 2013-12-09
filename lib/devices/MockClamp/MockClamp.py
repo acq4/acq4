@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericProtoGui
+from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui
 from Mutex import Mutex, MutexLocker
 #from lib.devices.Device import *
 from PyQt4 import QtCore, QtGui
@@ -134,8 +134,8 @@ class MockClamp(DAQGeneric):
     def createTask(self, cmd):
         return MockClampTask(self, cmd)
         
-    def protocolInterface(self, prot):
-        return MockClampProtoGui(self, prot)
+    def taskInterface(self, task):
+        return MockClampTaskGui(self, task)
         
     def deviceInterface(self, win):
         return MockClampDevGui(self)
@@ -429,9 +429,9 @@ class MockClampTask(DAQGenericTask):
         
 
     
-class MockClampProtoGui(DAQGenericProtoGui):
-    def __init__(self, dev, prot):
-        DAQGenericProtoGui.__init__(self, dev, prot, ownUi=False)
+class MockClampTaskGui(DAQGenericTaskGui):
+    def __init__(self, dev, task):
+        DAQGenericTaskGui.__init__(self, dev, task, ownUi=False)
         
         self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0,0,0,0)
@@ -480,7 +480,7 @@ class MockClampProtoGui(DAQGenericProtoGui):
     def saveState(self):
         """Return a dictionary representing the current state of the widget."""
         state = {}
-        state['daqState'] = DAQGenericProtoGui.saveState(self)
+        state['daqState'] = DAQGenericTaskGui.saveState(self)
         state['mode'] = self.getMode()
         #state['holdingEnabled'] = self.ctrl.holdingCheck.isChecked()
         #state['holding'] = self.ctrl.holdingSpin.value()
@@ -490,27 +490,27 @@ class MockClampProtoGui(DAQGenericProtoGui):
     def restoreState(self, state):
         """Restore the state of the widget from a dictionary previously generated using saveState"""
         #print 'state: ', state
-        #print 'DaqGeneric : ', dir(DAQGenericProtoGui)
+        #print 'DaqGeneric : ', dir(DAQGenericTaskGui)
         if 'mode' in state:
             self.modeCombo.setCurrentIndex(self.modeCombo.findText(state['mode']))
         #self.ctrl.holdingCheck.setChecked(state['holdingEnabled'])
         #if state['holdingEnabled']:
         #    self.ctrl.holdingSpin.setValue(state['holding'])
         if 'daqState' in state:
-            return DAQGenericProtoGui.restoreState(self, state['daqState'])
+            return DAQGenericTaskGui.restoreState(self, state['daqState'])
         else:
             return None
             
-    def generateProtocol(self, params=None):
-        daqProto = DAQGenericProtoGui.generateProtocol(self, params)
+    def generateTask(self, params=None):
+        daqTask = DAQGenericTaskGui.generateTask(self, params)
         
-        proto = {
+        task = {
             'mode': self.getMode(),
-            'daqProtocol': daqProto
+            'daqProtocol': daqTask
         }
         
             
-        return proto
+        return task
         
         
     def modeChanged(self):

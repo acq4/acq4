@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #from __future__ import with_statement
 from lib.modules.Module import *
-from ProtocolRunnerTemplate import *
+from TaskRunnerTemplate import *
 from PyQt4 import QtGui, QtCore
 #from DirTreeModel import *
 import DirTreeWidget
@@ -55,27 +55,27 @@ class Loader(DirTreeWidget.DirTreeLoader):
         self.host = host
 
     def new(self):
-        self.host.newProtocol()
+        self.host.newTask()
         return True
     
     def load(self, handle):
-        self.host.loadProtocol(handle)
+        self.host.loadTask(handle)
         return True
         
     def save(self, handle):
-        self.host.saveProtocol(handle)
+        self.host.saveTask(handle)
         return True
         
         
         
-class ProtocolRunner(Module):
+class TaskRunner(Module):
     
-    sigProtocolPaused = QtCore.Signal()
-    sigProtocolFinished = QtCore.Signal()       ## emitted when the task thread exits (end of protocol, end of sequence, or exit due to error)
-    sigNewFrame = QtCore.Signal(object)         ## emitted at the end of each individual protocol
-    sigProtocolStarted = QtCore.Signal(object)  ## called whenever single protocol OR protocol sequence has started
-    sigTaskStarted = QtCore.Signal(object)      ## called at start of EVERY protocol, including within sequences
-    sigProtocolChanged = QtCore.Signal(object, object)
+    sigTaskPaused = QtCore.Signal()
+    sigTaskFinished = QtCore.Signal()       ## emitted when the task thread exits (end of task, end of sequence, or exit due to error)
+    sigNewFrame = QtCore.Signal(object)         ## emitted at the end of each individual task
+    sigTaskStarted = QtCore.Signal(object)  ## called whenever single task OR task sequence has started
+    sigTaskStarted = QtCore.Signal(object)      ## called at start of EVERY task, including within sequences
+    sigTaskChanged = QtCore.Signal(object, object)
     
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
@@ -112,13 +112,13 @@ class ProtocolRunner(Module):
         ])
         
         try:
-            self.protocolList = Loader(self, self.manager.config['protocolDir'])
+            self.taskList = Loader(self, self.manager.config['taskDir'])
         except KeyError:
-            raise HelpfulException("Config is missing 'protocolDir'; cannot load protocol list.")
+            raise HelpfulException("Config is missing 'taskDir'; cannot load task list.")
         
-        self.ui.LoaderDock.setWidget(self.protocolList)
+        self.ui.LoaderDock.setWidget(self.taskList)
         
-        self.currentProtocol = None   ## pointer to current protocol object
+        self.currentTask = None   ## pointer to current task object
         
         for m in analysisModules.MODULES:
             item = QtGui.QListWidgetItem(m, self.ui.analysisList)
@@ -127,17 +127,17 @@ class ProtocolRunner(Module):
         
         self.taskThread = TaskThread(self)
         
-        self.newProtocol()
+        self.newTask()
         
         self.ui.testSingleBtn.clicked.connect(self.testSingleClicked)
-        self.ui.runProtocolBtn.clicked.connect(self.runSingleClicked)
+        self.ui.runTaskBtn.clicked.connect(self.runSingleClicked)
         self.ui.testSequenceBtn.clicked.connect(self.testSequence)
         self.ui.runSequenceBtn.clicked.connect(self.runSequenceClicked)
         self.ui.stopSingleBtn.clicked.connect(self.stopSingle)
         self.ui.stopSequenceBtn.clicked.connect(self.stopSequence)
         self.ui.pauseSequenceBtn.toggled.connect(self.pauseSequence)
         self.ui.deviceList.itemClicked.connect(self.deviceItemClicked)
-        self.protocolList.sigCurrentFileChanged.connect(self.fileChanged)  ## called if loaded protocol file is renamed or moved
+        self.taskList.sigCurrentFileChanged.connect(self.fileChanged)  ## called if loaded task file is renamed or moved
         self.taskThread.finished.connect(self.taskThreadStopped)
         self.taskThread.sigNewFrame.connect(self.handleFrame)
         self.taskThread.sigPaused.connect(self.taskThreadPaused)
@@ -150,15 +150,15 @@ class ProtocolRunner(Module):
         
         
     def protoGroupChanged(self, param, value):
-        #self.emit(QtCore.SIGNAL('protocolChanged'), param, value)
-        self.sigProtocolChanged.emit(param, value)
+        #self.emit(QtCore.SIGNAL('taskChanged'), param, value)
+        self.sigTaskChanged.emit(param, value)
         if param == 'repetitions':
             self.updateSeqParams()
         if param in ['duration', 'cycleTime', 'leadTime']:
             self.updateSeqReport()
         
     def getDevice(self, dev):
-        """Return the protocolGui for dev. Used by some devices to detect changes in others."""
+        """Return the taskGui for dev. Used by some devices to detect changes in others."""
         if dev not in self.docks:
             ## Create the device if needed
             try:
@@ -171,21 +171,21 @@ class ProtocolRunner(Module):
         return self.docks[dev].widget()
         
     def getParam(self, param):
-        """Return the value of a named protocol parameter"""
+        """Return the value of a named task parameter"""
         return self.protoStateGroup.state()[param]
         
-    def updateDeviceList(self, protocol=None):
-        """Update the device list to reflect only the devices that exist in the system or are referenced by the current protocol. Update the color and checkstate of each item as well."""
+    def updateDeviceList(self, task=None):
+        """Update the device list to reflect only the devices that exist in the system or are referenced by the current task. Update the color and checkstate of each item as well."""
         devList = self.manager.listDevices()
         
-        if protocol is not None:
-            protList = protocol.devices.keys()
-        elif self.currentProtocol is not None:
-            protList = self.currentProtocol.devices.keys()
+        if task is not None:
+            protList = task.devices.keys()
+        elif self.currentTask is not None:
+            protList = self.currentTask.devices.keys()
         else:
             protList = []
             
-        ## Remove all devices that do not exist and are not referenced by the protocol
+        ## Remove all devices that do not exist and are not referenced by the task
         rem = []
         for d in self.devListItems:
             if d not in devList and d not in protList:
@@ -204,7 +204,7 @@ class ProtocolRunner(Module):
             self.devListItems[d].setForeground(QtGui.QBrush(QtGui.QColor(0,0,0)))
             
             
-        ## Add all devices that are referenced by the protocol but do not exist
+        ## Add all devices that are referenced by the task but do not exist
         
         for d in protList:
             if d not in self.devListItems:
@@ -220,12 +220,12 @@ class ProtocolRunner(Module):
                 self.devListItems[d].setCheckState(QtCore.Qt.Unchecked)
         
     def deviceItemClicked(self, item):
-        """Respond to clicks in the device list. Add/remove devices from the current protocol and update docks."""
+        """Respond to clicks in the device list. Add/remove devices from the current task and update docks."""
         name = str(item.text())
         if item.checkState() == QtCore.Qt.Unchecked:
-            self.currentProtocol.removeDevice(name)
+            self.currentTask.removeDevice(name)
         else:
-            self.currentProtocol.addDevice(name)
+            self.currentTask.addDevice(name)
         self.updateDeviceDocks([name])
             
     #def deviceItemChanged(self, item):
@@ -241,7 +241,7 @@ class ProtocolRunner(Module):
           
         #if newName in self.devListItems:
             ### Destroy old dock if needed
-            #if newName in self.currentProtocol.enabledDevices():
+            #if newName in self.currentTask.enabledDevices():
                 #self.devListItems[newName].setCheckState(QtCore.Qt.Unchecked)
                 #self.updateDeviceDocks()
             ### remove from list
@@ -252,7 +252,7 @@ class ProtocolRunner(Module):
         #item.setData(32, QtCore.QVariant(newName))
         #self.devListItems[newName] = item
         #del self.devListItems[oldName]
-        #self.currentProtocol.renameDevice(oldName, newName)
+        #self.currentTask.renameDevice(oldName, newName)
         #self.updateDeviceList()
         
         ### If the new name is an existing device, load and configure its dock
@@ -261,11 +261,11 @@ class ProtocolRunner(Module):
         
         ### Configure docks
         #if newName in self.docks:
-            #self.docks[newName].widget().restoreState(self.currentProtocol.conf['devices'][newName])
+            #self.docks[newName].widget().restoreState(self.currentTask.conf['devices'][newName])
             
             ### Configure dock positions
-            #if 'winState' in self.currentProtocol.conf:
-                #self.win.restoreState(QtCore.QByteArray.fromPercentEncoding(self.currentProtocol.conf['winState']))
+            #if 'winState' in self.currentTask.conf:
+                #self.win.restoreState(QtCore.QByteArray.fromPercentEncoding(self.currentTask.conf['winState']))
             
         
     def analysisItemClicked(self, item):
@@ -312,30 +312,30 @@ class ProtocolRunner(Module):
         
         
     #def protoListClicked(self, ind):
-        #sel = list(self.ui.protocolList.selectedIndexes())
+        #sel = list(self.ui.taskList.selectedIndexes())
         #if len(sel) == 1:
-            #self.ui.deleteProtocolBtn.setEnabled(True)
+            #self.ui.deleteTaskBtn.setEnabled(True)
         #else:
-            #self.ui.deleteProtocolBtn.setEnabled(False)
+            #self.ui.deleteTaskBtn.setEnabled(False)
         #self.resetDeleteState()
             
     def fileChanged(self, handle, change, args):
         if change == 'renamed' or change == 'moved':
-            self.currentProtocol.fileName = handle.name()
+            self.currentTask.fileName = handle.name()
             
         
         
     #def fileRenamed(self, fn1, fn2):
-        #"""Update the current protocol state to follow a file that has been moved or renamed"""
-        #if fn1 == self.currentProtocol.fileName:
-            #self.currentProtocol.fileName = fn2
-            #pn = fn2.replace(self.protocolList.baseDir, '')
-            #self.ui.currentProtocolLabel.setText(pn)
+        #"""Update the current task state to follow a file that has been moved or renamed"""
+        #if fn1 == self.currentTask.fileName:
+            #self.currentTask.fileName = fn2
+            #pn = fn2.replace(self.taskList.baseDir, '')
+            #self.ui.currentTaskLabel.setText(pn)
             #return
-        #if os.path.isdir(fn2) and fn1 in self.currentProtocol.fileName:
-            #self.currentProtocol.fileName = self.currentProtocol.fileName.replace(fn1, fn2)
-            #pn = self.currentProtocol.fileName.replace(self.protocolList.baseDir, '')
-            #self.ui.currentProtocolLabel.setText(pn)
+        #if os.path.isdir(fn2) and fn1 in self.currentTask.fileName:
+            #self.currentTask.fileName = self.currentTask.fileName.replace(fn1, fn2)
+            #pn = self.currentTask.fileName.replace(self.taskList.baseDir, '')
+            #self.ui.currentTaskLabel.setText(pn)
             #return
             
     def updateSeqParams(self, dev='protocol'):
@@ -346,7 +346,7 @@ class ProtocolRunner(Module):
                 params = {}
             else:
                 params = {'repetitions': range(rep)}
-        elif dev not in self.currentProtocol.enabledDevices():
+        elif dev not in self.currentTask.enabledDevices():
             return
         else:
             params = self.docks[dev].widget().listSequence()
@@ -395,9 +395,9 @@ class ProtocolRunner(Module):
     def updateDeviceDocks(self, devNames=None):
         """Create/unhide new docks if they are needed and hide old docks if they are not.
         If a list of device names is given, only those device docks will be affected."""
-        protocol = self.currentProtocol
-        #print "update docks", protocol.name()
-        #print "  devices:", protocol.enabledDevices()
+        task = self.currentTask
+        #print "update docks", task.name()
+        #print "  devices:", task.enabledDevices()
         
         ## (un)hide docks as needed
         for d in self.docks:
@@ -406,7 +406,7 @@ class ProtocolRunner(Module):
             #print "  check", d
             if self.docks[d] is None:
                 continue
-            if d not in protocol.enabledDevices():
+            if d not in task.enabledDevices():
                 #print "  hide", d
                 self.hideDock(d)
             else:
@@ -415,7 +415,7 @@ class ProtocolRunner(Module):
             
         ## Create docks that don't exist
         #pdb.set_trace()
-        for d in protocol.enabledDevices():
+        for d in task.enabledDevices():
             if devNames is not None and d not in devNames:
                 continue
             
@@ -426,7 +426,7 @@ class ProtocolRunner(Module):
                 #print "  Create", d
                 try:
                     dev = self.manager.getDevice(d)
-                    dw = dev.protocolInterface(self)
+                    dw = dev.taskInterface(self)
                 except:
                     printExc("Error while creating dock '%s':" % d)
                     del self.docks[d]
@@ -479,26 +479,26 @@ class ProtocolRunner(Module):
         Module.quit(self)
 
     #def protParamsChanged(self):
-        #self.currentProtocol.conf = self.protoStateGroup.state()
-        ##self.currentProtocol.conf['duration'] = self.ui.protoDurationSpin.value()
-        ##self.currentProtocol.conf['continuous'] = self.ui.protoContinuousCheck.isChecked()
-        ##self.currentProtocol.conf['cycleTime'] = self.ui.seqCycleTimeSpin.value()
+        #self.currentTask.conf = self.protoStateGroup.state()
+        ##self.currentTask.conf['duration'] = self.ui.protoDurationSpin.value()
+        ##self.currentTask.conf['continuous'] = self.ui.protoContinuousCheck.isChecked()
+        ##self.currentTask.conf['cycleTime'] = self.ui.seqCycleTimeSpin.value()
         ##self.currentIsModified(True)
         
     #def currentIsModified(self, v):
-        ### Inform the module whether the current protocol is modified from its stored state
-        #self.currentProtocol.modified = v
-        #if (not v) or (self.currentProtocol.fileName is not None):
-            #self.ui.saveProtocolBtn.setEnabled(v)
+        ### Inform the module whether the current task is modified from its stored state
+        #self.currentTask.modified = v
+        #if (not v) or (self.currentTask.fileName is not None):
+            #self.ui.saveTaskBtn.setEnabled(v)
         
-    def newProtocol(self):
+    def newTask(self):
         self.stopSingle()
         
         ## Remove all docks
         self.clearDocks()
         
-        ## Create new empty protocol object
-        self.currentProtocol = Protocol(self)
+        ## Create new empty task object
+        self.currentTask = Task(self)
         
         self.protoStateGroup.setState({
             'continuous': False,
@@ -510,7 +510,7 @@ class ProtocolRunner(Module):
             'repetitions': 0
         })
         
-        #self.currentProtocol.conf = self.protoStateGroup.state()
+        #self.currentTask.conf = self.protoStateGroup.state()
         
         ## Clear extra devices in dev list
         self.updateDeviceList()
@@ -520,16 +520,16 @@ class ProtocolRunner(Module):
         ## Clear sequence parameters, disable sequence dock
         self.updateSeqParams()
         
-        #self.ui.currentProtocolLabel.setText('[ new ]')
+        #self.ui.currentTaskLabel.setText('[ new ]')
         
-        #self.ui.saveProtocolBtn.setEnabled(False)
+        #self.ui.saveTaskBtn.setEnabled(False)
         #self.currentIsModified(False)
         
         
     
     #def updateProtParams(self, prot=None):
         #if prot is None:
-            #prot = self.currentProtocol
+            #prot = self.currentTask
             
         #self.protoStateGroup.setState(prot.conf)
         ##self.ui.protoDurationSpin.setValue(prot.conf['duration'])
@@ -541,17 +541,17 @@ class ProtocolRunner(Module):
             ##self.ui.protoContinuousCheck.setCheckState(QtCore.Qt.Unchecked)
     
     #def getSelectedFileName(self):
-        #"""Return the file name of the selected protocol"""
-        #sel = list(self.ui.protocolList.selectedIndexes())
+        #"""Return the file name of the selected task"""
+        #sel = list(self.ui.taskList.selectedIndexes())
         #if len(sel) == 1:
             #index = sel[0]
         #else:
             #raise Exception("Can not load--%d items selected" % len(sel))
-        #return self.protocolList.getFileName(index)
+        #return self.taskList.getFileName(index)
     
-    #def loadProtocol(self, index=None):
-    def loadProtocol(self, handle):
-        prof = Profiler('ProtocolRunner.loadProtocol', disabled=True)
+    #def loadTask(self, index=None):
+    def loadTask(self, handle):
+        prof = Profiler('TaskRunner.loadTask', disabled=True)
         try:
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
             self.stopSingle()
@@ -559,28 +559,28 @@ class ProtocolRunner(Module):
             prof.mark('stopped')
             ## Determine selected item
             #if index is None:
-                #sel = list(self.ui.protocolList.selectedIndexes())
+                #sel = list(self.ui.taskList.selectedIndexes())
                 #if len(sel) == 1:
                     #index = sel[0]
                 #else:
                     #raise Exception("Can not load--%d items selected" % len(sel))
                 
-            #fn = self.protocolList.getFileName(index)
+            #fn = self.taskList.getFileName(index)
             fn = handle.name()
             
             ## Remove all docks
             self.clearDocks()
             prof.mark('cleared')
             
-            ## Create protocol object from requested file
-            prot = Protocol(self, fileName=fn)
-            ## Set current protocol
-            self.currentProtocol = prot
-            prof.mark('made protocol')
+            ## Create task object from requested file
+            prot = Task(self, fileName=fn)
+            ## Set current task
+            self.currentTask = prot
+            prof.mark('made task')
             
             #print "Docks cleared."
             
-            ## Update protocol parameters
+            ## Update task parameters
             self.protoStateGroup.setState(prot.conf['conf'])
             #self.updateProtParams(prot)
             prof.mark('set state')
@@ -604,7 +604,7 @@ class ProtocolRunner(Module):
                         self.docks[d].widget().restoreState(prot.devices[d])
                         prof.mark('configured dock: ' + d)
                     except:
-                        printExc("Error while loading protocol dock:")
+                        printExc("Error while loading task dock:")
     
             ## create and configure analysis docks
             if 'analysis' in prot.conf:
@@ -620,7 +620,7 @@ class ProtocolRunner(Module):
     
             ## Load sequence parameter state (must be done after docks have loaded)
             self.ui.sequenceParamList.loadState(prot.conf['params'])
-            self.updateSeqParams('protocol')
+            self.updateSeqParams('task')
             prof.mark('load seq params')
             
             ## Configure dock positions
@@ -632,17 +632,17 @@ class ProtocolRunner(Module):
             
                 
                 
-            #pn = fn.replace(self.protocolList.baseDir, '')
-            #self.ui.currentProtocolLabel.setText(pn)
-            #self.ui.saveProtocolBtn.setEnabled(True)
+            #pn = fn.replace(self.taskList.baseDir, '')
+            #self.ui.currentTaskLabel.setText(pn)
+            #self.ui.saveTaskBtn.setEnabled(True)
             #self.currentIsModified(False)
         finally:
             QtGui.QApplication.restoreOverrideCursor()
             prof.finish()
             
-    def saveProtocol(self, fileHandle=None):
-        ## Write protocol config to file
-        self.currentProtocol.write(fileHandle.name())
+    def saveTask(self, fileHandle=None):
+        ## Write task config to file
+        self.currentTask.write(fileHandle.name())
 
     def testSingleClicked(self):
         self.testSingle()
@@ -674,35 +674,35 @@ class ProtocolRunner(Module):
         try:
             if store:
                 currentDir = self.manager.getCurrentDir()
-                name = self.currentProtocol.name()
+                name = self.currentTask.name()
                 if name is None:
                     name = 'protocol'
-                info = self.protocolInfo()
+                info = self.taskInfo()
                 info['dirType'] = 'Protocol'
-                ## Create storage directory with all information about the protocol to be executed
+                ## Create storage directory with all information about the task to be executed
                 dh = currentDir.mkdir(name, autoIncrement=True, info=info)
             else:
                 dh = None
 
-            ## Tell devices to prepare for protocol start.
-            for d in self.currentProtocol.devices:
-                if self.currentProtocol.deviceEnabled(d):
-                    self.docks[d].widget().prepareProtocolStart()
+            ## Tell devices to prepare for task start.
+            for d in self.currentTask.devices:
+                if self.currentTask.deviceEnabled(d):
+                    self.docks[d].widget().prepareTaskStart()
             
-            ## Generate executable conf from protocol object
-            prot = self.generateProtocol(dh)
+            ## Generate executable conf from task object
+            prot = self.generateTask(dh)
             #print prot
-            #self.emit(QtCore.SIGNAL('protocolStarted'), {})
-            self.sigProtocolStarted.emit({})
+            #self.emit(QtCore.SIGNAL('taskStarted'), {})
+            self.sigTaskStarted.emit({})
             #print "runSingle: Starting taskThread.."
-            self.taskThread.startProtocol(prot)
+            self.taskThread.startTask(prot)
             #print "runSingle: taskThreadStarted"
         except:
             exc = sys.exc_info()
             self.enableStartBtns(True)
             self.loopEnabled = False
-            #print "Error starting protocol. "
-            raise HelpfulException("Error occurred while starting protocol", exc=exc)      
+            #print "Error starting task. "
+            raise HelpfulException("Error occurred while starting task", exc=exc)      
    
     def runSequenceClicked(self):
         self.runSequence(store=True)
@@ -741,53 +741,53 @@ class ProtocolRunner(Module):
             ## Set storage dir
             if store:
                 currentDir = self.manager.getCurrentDir()
-                name = self.currentProtocol.name()
+                name = self.currentTask.name()
                 if name is None:
                     name = 'protocol'
-                info = self.protocolInfo(params)
+                info = self.taskInfo(params)
                 info['dirType'] = 'ProtocolSequence'
                 dh = currentDir.mkdir(name, autoIncrement=True, info=info)
             else:
                 dh = None
                 
-            ## Tell devices to prepare for protocol start.
-            for d in self.currentProtocol.devices:
-                if self.currentProtocol.deviceEnabled(d):
-                    self.docks[d].widget().prepareProtocolStart()
+            ## Tell devices to prepare for task start.
+            for d in self.currentTask.devices:
+                if self.currentTask.deviceEnabled(d):
+                    self.docks[d].widget().prepareTaskStart()
                     
             #print params, linkedParams
             ## Generate the complete array of command structures. This can take a long time, so we start a progress dialog.
-            with pg.ProgressDialog("Generating protocol commands..", 0, pLen) as progressDlg:
+            with pg.ProgressDialog("Generating task commands..", 0, pLen) as progressDlg:
                 #progressDlg.setMinimumDuration(500)  ## If this takes less than 500ms, progress dialog never appears.
                 self.lastQtProcessTime = ptime.time()
-                prot = runSequence(lambda p: self.generateProtocol(dh, p, progressDlg), paramInds, paramInds.keys(), linkedParams=linkedParams)
+                prot = runSequence(lambda p: self.generateTask(dh, p, progressDlg), paramInds, paramInds.keys(), linkedParams=linkedParams)
                 #progressDlg.setValue(pLen)
             if dh is not None:
-                dh.flushSignals()  ## do this now rather than later as protocol is running
+                dh.flushSignals()  ## do this now rather than later as task is running
             
-            #print "==========Sequence Protocol=============="
+            #print "==========Sequence Task=============="
             #print prot
-            #self.emit(QtCore.SIGNAL('protocolStarted'), {})
-            self.sigProtocolStarted.emit({})
-            logMsg('Started %s protocol sequence of length %i' %(self.currentProtocol.name(),pLen), importance=6)
-            #print 'PR protocol positions:
-            self.taskThread.startProtocol(prot, paramInds)
+            #self.emit(QtCore.SIGNAL('taskStarted'), {})
+            self.sigTaskStarted.emit({})
+            logMsg('Started %s task sequence of length %i' %(self.currentTask.name(),pLen), importance=6)
+            #print 'PR task positions:
+            self.taskThread.startTask(prot, paramInds)
             
         except:
             self.enableStartBtns(True)
 
             raise
         
-    def generateProtocol(self, dh, params=None, progressDlg=None):
-        #prof = Profiler("Generate Protocol: %s" % str(params))
+    def generateTask(self, dh, params=None, progressDlg=None):
+        #prof = Profiler("Generate Task: %s" % str(params))
         ## params should be in the form {(dev, param): value, ...}
-        ## Generate executable conf from protocol object
+        ## Generate executable conf from task object
         #prot = {'protocol': {
-            #'duration': self.currentProtocol.conf['duration'], 
+            #'duration': self.currentTask.conf['duration'], 
             #'storeData': store,
             #'mode': 'single',
-            #'name': self.currentProtocol.fileName,
-            #'cycleTime': self.currentProtocol.conf['cycleTime'], 
+            #'name': self.currentTask.fileName,
+            #'cycleTime': self.currentTask.conf['cycleTime'], 
         #}}
         #print "generate:", params
         ## Never put {} in the function signature
@@ -809,13 +809,13 @@ class ProtocolRunner(Module):
                 dh1 = dh
             prot['protocol']['storageDir'] = dh1
         #prof.mark('selected storage dir.')
-        prot['protocol']['name'] = self.currentProtocol.fileName
+        prot['protocol']['name'] = self.currentTask.fileName
         
-        for d in self.currentProtocol.devices:
-            if self.currentProtocol.deviceEnabled(d):
+        for d in self.currentTask.devices:
+            if self.currentTask.deviceEnabled(d):
                 ## select out just the parameters needed for this device
                 p = dict([(i[1], params[i]) for i in params.keys() if i[0] == d])
-                ## Ask the device to generate its protocol command
+                ## Ask the device to generate its task command
                 if d not in self.docks:
                     raise HelpfulException("The device '%s' currently has no dock loaded." % d,
                                            reasons=[
@@ -825,10 +825,10 @@ class ProtocolRunner(Module):
                                            tags={},
                                            importance=8,
 
-                                           docSections=['userGuide/modules/ProtocolRunner/loadingNonexistentDevices']
+                                           docSections=['userGuide/modules/TaskRunner/loadingNonexistentDevices']
                                            )
-                prot[d] = self.docks[d].widget().generateProtocol(p)
-                #prof.mark("get protocol from %s" % d)
+                prot[d] = self.docks[d].widget().generateTask(p)
+                #prof.mark("get task from %s" % d)
         #print prot['protocol']['storageDir'].name()
         
         if progressDlg is not None:
@@ -843,10 +843,10 @@ class ProtocolRunner(Module):
         #prof.mark('done')
         return prot
     
-    def protocolInfo(self, params=None):
+    def taskInfo(self, params=None):
         """
-        Generate a complete description of the protocol.
-        This data is stored with the results of each protocol run.
+        Generate a complete description of the task.
+        This data is stored with the results of each task run.
         """
         conf = self.saveState()
         del conf['windowState']
@@ -856,7 +856,7 @@ class ProtocolRunner(Module):
         devs = {}
         ## store individual dock states
         for d in self.docks:
-            if self.currentProtocol.deviceEnabled(d):
+            if self.currentTask.deviceEnabled(d):
                 devs[d] = self.docks[d].widget().describe(params=params)
         
         ## Remove unused devices before writing
@@ -871,13 +871,13 @@ class ProtocolRunner(Module):
     
     
     def enableStartBtns(self, v):
-        btns = [self.ui.testSingleBtn, self.ui.runProtocolBtn, self.ui.testSequenceBtn, self.ui.runSequenceBtn]
+        btns = [self.ui.testSingleBtn, self.ui.runTaskBtn, self.ui.testSequenceBtn, self.ui.runSequenceBtn]
         for b in btns:
             b.setEnabled(v)
             
     def taskThreadStopped(self):
-        #self.emit(QtCore.SIGNAL('protocolFinished'))
-        self.sigProtocolFinished.emit()
+        #self.emit(QtCore.SIGNAL('taskFinished'))
+        self.sigTaskFinished.emit()
         if not self.loopEnabled:   ## what if we quit due to error?
             self.enableStartBtns(True)
     
@@ -885,8 +885,8 @@ class ProtocolRunner(Module):
         self.enableStartBtns(True)
             
     def taskThreadPaused(self):
-        #self.emit(QtCore.SIGNAL('protocolPaused'))
-        self.sigProtocolPaused.emit()
+        #self.emit(QtCore.SIGNAL('taskPaused'))
+        self.sigTaskPaused.emit()
            
     def stopSingle(self):
         self.loopEnabled = False
@@ -921,7 +921,7 @@ class ProtocolRunner(Module):
         ## Request each device handles its own data
         ## Note that this is only used to display results; data storage is handled by Manager and the individual devices.
         #print "got frame", frame
-        prof = Profiler('ProtocolRunner.handleFrame', disabled=True)
+        prof = Profiler('TaskRunner.handleFrame', disabled=True)
         for d in frame['result']:
             try:
                 if d != 'protocol':
@@ -934,7 +934,7 @@ class ProtocolRunner(Module):
         self.sigNewFrame.emit(frame)
         prof.mark('emit newFrame')
                 
-        ## If this is a single-mode protocol and looping is turned on, schedule the next run
+        ## If this is a single-mode task and looping is turned on, schedule the next run
         if self.loopEnabled:
             ct = self.protoStateGroup.state()['loopCycleTime']
             t = max(0, ct - (ptime.time() - self.lastProtoTime))
@@ -951,7 +951,7 @@ class ProtocolRunner(Module):
             self.enableStartBtns(True)
             return
 
-        if self.taskThread.isRunning():  ## If a protocol is still running, delay 10ms and try again
+        if self.taskThread.isRunning():  ## If a task is still running, delay 10ms and try again
             QtCore.QTimer.singleShot(10, self.loop)
         else:
             self.testSingle()
@@ -975,7 +975,7 @@ class ProtocolRunner(Module):
         
 
     
-class Protocol:
+class Task:
     def __init__(self, ui, fileName=None):
         self.ui = ui
         
@@ -1019,12 +1019,12 @@ class Protocol:
         
         
     def write(self, fileName=None):
-        ## Write this protocol to a file. Called by ProtocolRunner.saveProtocol()
+        ## Write this task to a file. Called by TaskRunner.saveTask()
         info = self.saveState()
                 
         if fileName is None:
             if self.fileName is None:
-                raise Exception("Can not write protocol--no file name specified")
+                raise Exception("Can not write task--no file name specified")
             fileName = self.fileName
         self.fileName = fileName
         configfile.writeConfigFile(info, fileName)
@@ -1035,8 +1035,8 @@ class Protocol:
         return os.path.split(self.fileName)[1]
     
     def saveState(self):
-        ## Generate a description of this protocol. The description 
-        ## can be used to save/reload the protocol (calls saveState on all devices). 
+        ## Generate a description of this task. The description 
+        ## can be used to save/reload the task (calls saveState on all devices). 
         
         self.conf = self.ui.saveState()
         
@@ -1104,24 +1104,24 @@ class TaskThread(QtCore.QThread):
         self.abortThread = False
         self.paused = False
                 
-    def startProtocol(self, protocol, paramSpace=None):
-        #print "TaskThread:startProtocol", self.lock.depth(), self.lock
+    def startTask(self, task, paramSpace=None):
+        #print "TaskThread:startTask", self.lock.depth(), self.lock
         with MutexLocker(self.lock):
-            #print "TaskThread:startProtocol got lock", self.lock.depth(), "    tracebacks follow:\n==========="
+            #print "TaskThread:startTask got lock", self.lock.depth(), "    tracebacks follow:\n==========="
             #print "\n\n".join(self.lock.traceback())
             #print "======================"
             while self.isRunning():
                 #l.unlock()
-                raise Exception("Already running another protocol")
-            self.protocol = protocol
+                raise Exception("Already running another task")
+            self.task = task
             self.paramSpace = paramSpace
             self.lastRunTime = None
             #l.unlock()
-            #print "TaskThread:startProtocol starting..", self.lock.depth()
+            #print "TaskThread:startTask starting..", self.lock.depth()
             self.start() ### causes self.run() to be called from somewhere in C code
-            #name = '' if protocol.fileName is None else protocol.fileName
-            logMsg("Protocol started.", importance=1)
-            #print "TaskThread:startProtocol started", self.lock.depth()
+            #name = '' if task.fileName is None else task.fileName
+            logMsg("Task started.", importance=1)
+            #print "TaskThread:startTask started", self.lock.depth()
     
     def pause(self, pause):
         with MutexLocker(self.lock):
@@ -1151,13 +1151,13 @@ class TaskThread(QtCore.QThread):
                 runSequence(self.runOnce, self.paramSpace, self.paramSpace.keys())
             
         except:
-            self.protocol = None  ## free up this memory
+            self.task = None  ## free up this memory
             self.paramSpace = None
-            printExc("Error in protocol thread, exiting.")
+            printExc("Error in task thread, exiting.")
             #self.emit(QtCore.SIGNAL('exitFromError'))
             self.sigExitFromError.emit()
         #finally:
-            #self.emit(QtCore.SIGNAL("protocolFinished()"))
+            #self.emit(QtCore.SIGNAL("taskFinished()"))
         #print "TaskThread:run() finished"
                     
     def runOnce(self, params=None):
@@ -1165,7 +1165,7 @@ class TaskThread(QtCore.QThread):
         gc.collect()
         
         #print "TaskThread:runOnce"
-        prof = Profiler("ProtocolRunner.TaskThread.runOnce", disabled=True, delayed=False)
+        prof = Profiler("TaskRunner.TaskThread.runOnce", disabled=True, delayed=False)
         startTime = ptime.time()
         if params is None:
             params = {}
@@ -1173,14 +1173,14 @@ class TaskThread(QtCore.QThread):
             l.unlock()
         
             ## Select correct command to execute
-            cmd = self.protocol
+            cmd = self.task
             #print "Sequence array:", cmd.shape, cmd.infoCopy()
             if params is not None:
                 for p in params:
                     #print "Selecting %s: %s from sequence array" % (str(p), str(params[p]))
                     cmd = cmd[p: params[p]]
             prof.mark('select command')        
-            #print "Protocol:", cmd
+            #print "Task:", cmd
                     
             ## Wait before starting if we've already run too recently
             #print "sleep until next run time..", ptime.time(), self.lastRunTime, cmd['protocol']['cycleTime']
@@ -1188,7 +1188,7 @@ class TaskThread(QtCore.QThread):
                 l.relock()
                 if self.abortThread or self.stopThread:
                     l.unlock()
-                    #print "Protocol run aborted by user"
+                    #print "Task run aborted by user"
                     return
                 l.unlock()
                 time.sleep(1e-3)
@@ -1216,12 +1216,12 @@ class TaskThread(QtCore.QThread):
             
             #print "BEFORE:\n", cmd
             if type(cmd) is not dict:
-                print "========= ProtocolRunner.runOnce cmd: =================="
+                print "========= TaskRunner.runOnce cmd: =================="
                 print cmd
-                print "========= ProtocolRunner.runOnce params: =================="
+                print "========= TaskRunner.runOnce params: =================="
                 print "Params:", params
                 print "==========================="
-                raise Exception("ProtocolRunner.runOnce failed to generate a proper command structure. Object type was '%s', should have been 'dict'." % type(cmd))
+                raise Exception("TaskRunner.runOnce failed to generate a proper command structure. Object type was '%s', should have been 'dict'." % type(cmd))
                 
             
             task = self.dm.createTask(cmd)
@@ -1239,9 +1239,9 @@ class TaskThread(QtCore.QThread):
                     task.stop(abort=True)
                 except:
                     pass
-                printExc("\nError starting protocol:")
+                printExc("\nError starting task:")
                 exc = sys.exc_info()
-                raise HelpfulException("\nError starting protocol:", exc)
+                raise HelpfulException("\nError starting task:", exc)
             
             prof.mark('start task')
             ### Do not put code outside of these try: blocks; may cause device lockup
@@ -1263,11 +1263,11 @@ class TaskThread(QtCore.QThread):
                 result = task.getResult()
             except:
                 ## Make sure the task is fully stopped if there was a failure at any point.
-                #printExc("\nError during protocol execution:")
+                #printExc("\nError during task execution:")
                 print "\nStopping task.."
                 task.stop(abort=True)
                 print ""
-                raise HelpfulException("\nError during protocol execution:", sys.exc_info())
+                raise HelpfulException("\nError during task execution:", sys.exc_info())
             #print "\nAFTER:\n", cmd
             prof.mark('getResult')
             

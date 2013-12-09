@@ -8,7 +8,7 @@ from PyQt4 import QtCore
 from numpy import *
 import sys, traceback
 from DeviceGui import *
-from protoGUI import *
+from taskGUI import *
 from debug import *
 
 class MultiClamp(Device):
@@ -141,9 +141,9 @@ class MultiClamp(Device):
                 self.devRackGui = MCDeviceGui(self, win)
             return self.devRackGui
 
-    def protocolInterface(self, prot):
+    def taskInterface(self, task):
         with MutexLocker(self.lock):
-            return MultiClampProtoGui(self, prot)
+            return MultiClampTaskGui(self, task)
 
     #def setParams(self, params):
         #with MutexLocker(self.lock):
@@ -479,10 +479,10 @@ class MultiClampTask(DeviceTask):
             
             info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'ClampState': self.state, 'DAQ': daqState}]
             
-            protInfo = self.cmd.copy()
-            if 'command' in protInfo:
-                del protInfo['command']
-            info[-1]['Protocol'] = protInfo
+            taskInfo = self.cmd.copy()
+            if 'command' in taskInfo:
+                del taskInfo['command']
+            info[-1]['Protocol'] = taskInfo
             info[-1]['startTime'] = result[result.keys()[0]]['info']['startTime']
             
             marr = MetaArray(arr, info=info)
