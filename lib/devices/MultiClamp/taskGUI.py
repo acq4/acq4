@@ -162,7 +162,7 @@ class MultiClampTaskGui(TaskGui):
         self.ui.bottomPlotWidget.clear()
         self.currentCmdPlot = None
 
-    def taskStarted(self):
+    def taskSequenceStarted(self):
         self.resetInpPlots = True
 
     def clearInpPlots(self):

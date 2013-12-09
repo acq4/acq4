@@ -50,7 +50,7 @@ class UncagingModule(AnalysisModule):
         #for m in mods:
             #self.ui.cameraModCombo.addItem(m)
         
-    def taskStarted(self, *args):
+    def taskSequenceStarted(self, *args):
         #print "start:",args
         #self.newTask()
         pass

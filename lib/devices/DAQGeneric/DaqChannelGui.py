@@ -139,7 +139,7 @@ class DaqChannelGui(QtGui.QWidget):
     def taskStarted(self, params):
         pass
     
-    def taskStarted(self):
+    def taskSequenceStarted(self):
         pass
     
     def quit(self):
@@ -354,7 +354,7 @@ class InputChannelGui(DaqChannelGui):
         self.postUiInit()
         self.clearBeforeNextPlot = False
          
-    def taskStarted(self):
+    def taskSequenceStarted(self):
         self.clearBeforeNextPlot = True
         #self.clearPlots()
          

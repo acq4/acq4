@@ -126,9 +126,9 @@ class DAQGenericTaskGui(TaskGui):
                     chParams[k[len(search):]] = params[k]
             self.channels[ch].taskStarted(chParams)
             
-    def taskStarted(self):  ## automatically invoked from TaskGui
+    def taskSequenceStarted(self):  ## automatically invoked from TaskGui
         for ch in self.channels:
-            self.channels[ch].taskStarted()
+            self.channels[ch].taskSequenceStarted()
         
         
     def generateTask(self, params=None):

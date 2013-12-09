@@ -132,7 +132,7 @@ class TaskGui(QtGui.QWidget):
             #QtCore.QObject.connect(self.task, QtCore.SIGNAL('taskStarted'), self.taskStarted)        
             #QtCore.QObject.connect(self.task, QtCore.SIGNAL('taskStarted'), self.taskStarted)     
             #QtCore.QObject.connect(self.task, QtCore.SIGNAL('taskFinished'), self.taskFinished) 
-            self.task.sigTaskStarted.connect(self.taskStarted) ## called at the beginning of a task/sequence
+            self.task.sigTaskSequenceStarted.connect(self.taskSequenceStarted) ## called at the beginning of a task/sequence
             self.task.sigTaskStarted.connect(self.taskStarted)## called at the beginning of all task runs
             self.task.sigTaskFinished.connect(self.taskFinished) ## called at the end of a task/sequence
             self._PGConnected = True
@@ -143,7 +143,7 @@ class TaskGui(QtGui.QWidget):
             #QtCore.QObject.disconnect(self.task, QtCore.SIGNAL('taskStarted'), self.taskStarted)
             #QtCore.QObject.disconnect(self.task, QtCore.SIGNAL('taskFinished'), self.taskFinished)
             try:
-                self.task.sigTaskStarted.disconnect(self.taskStarted)
+                self.task.sigTaskSequenceStarted.disconnect(self.taskSequenceStarted)
             except TypeError:
                 pass
             try:
@@ -188,7 +188,7 @@ class TaskGui(QtGui.QWidget):
         Does NOT handle file storage; this is handled by the device itself."""
         pass
 
-    def taskStarted(self):
+    def taskSequenceStarted(self):
         """Automatically invoked before a task or sequence is started.
         Note: this signal is emitted AFTER generateTask() has been run for all devices,
         and before the task is started.

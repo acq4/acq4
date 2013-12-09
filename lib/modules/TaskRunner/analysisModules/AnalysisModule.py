@@ -6,13 +6,9 @@ class AnalysisModule(QtGui.QWidget):
     def __init__(self, taskRunner):
         QtGui.QWidget.__init__(self)
         self.pr = taskRunner
-        #QtCore.QObject.connect(self.pr, QtCore.SIGNAL('newFrame'), self.newFrame)
         self.pr.sigNewFrame.connect(self.newFrame)
-        #QtCore.QObject.connect(self.pr, QtCore.SIGNAL('taskStarted'), self.taskStarted)
+        self.pr.sigTaskSequenceStarted.connect(self.taskSequenceStarted)
         self.pr.sigTaskStarted.connect(self.taskStarted)
-        #QtCore.QObject.connect(self.pr, QtCore.SIGNAL('taskStarted'), self.taskStarted)
-        self.pr.sigTaskStarted.connect(self.taskStarted)
-        #QtCore.QObject.connect(self.pr, QtCore.SIGNAL('taskFinished'), self.taskFinished)
         self.pr.sigTaskFinished.connect(self.taskFinished)
 
     def postGuiInit(self):
@@ -30,7 +26,7 @@ class AnalysisModule(QtGui.QWidget):
     def taskFinished(self):
         pass
     
-    def taskStarted(self, *args):
+    def taskSequenceStarted(self, *args):
         pass
         #print "taskStarted!"
     
@@ -46,7 +42,7 @@ class AnalysisModule(QtGui.QWidget):
         except TypeError:
             pass
         try:
-            self.pr.sigTaskStarted.disconnect(self.taskStarted)
+            self.pr.sigTaskSequenceStarted.disconnect(self.taskSequenceStarted)
         except TypeError:
             pass
         try:

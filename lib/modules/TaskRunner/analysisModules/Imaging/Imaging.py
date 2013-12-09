@@ -34,7 +34,7 @@ class ImagingModule(AnalysisModule):
     def quit(self):
         AnalysisModule.quit(self)
         
-    def taskStarted(self, *args):
+    def taskSequenceStarted(self, *args):
         pass
     
     def taskFinished(self):

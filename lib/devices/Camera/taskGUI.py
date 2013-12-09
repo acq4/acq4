@@ -10,8 +10,8 @@ import pyqtgraph as pg
 #from PyQt4 import Qwt5 as Qwt
 
 class CameraTaskGui(DAQGenericTaskGui):
-    def __init__(self, dev, prot):
-        DAQGenericTaskGui.__init__(self, dev, prot, ownUi=False)  ## When initializing superclass, make sure it knows this class is creating the ui.
+    def __init__(self, dev, task):
+        DAQGenericTaskGui.__init__(self, dev, task, ownUi=False)  ## When initializing superclass, make sure it knows this class is creating the ui.
         
         self.ui = Ui_Form()
         self.ui.setupUi(self)
@@ -78,8 +78,8 @@ class CameraTaskGui(DAQGenericTaskGui):
         #QtCore.QObject.connect(self.ui.imageView, QtCore.SIGNAL('timeChanged'), self.timeChanged)
         self.ui.imageView.sigTimeChanged.connect(self.timeChanged)
         
-        #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolPaused'), self.protocolPaused)
-        self.prot.sigTaskPaused.connect(self.taskPaused)
+        #QtCore.QObject.connect(self.task, QtCore.SIGNAL('taskPaused'), self.taskPaused)
+        self.task.sigTaskPaused.connect(self.taskPaused)
         #QtCore.QObject.connect(self.ui.imageView.ui.roiBtn, QtCore.SIGNAL('clicked'), self.connectROI)
         
         
@@ -112,7 +112,7 @@ class CameraTaskGui(DAQGenericTaskGui):
         if params is None:
             params = {}
         state = self.currentState()
-        prot = {
+        task = {
             'record': state['recordCheck'],
             #'recordExposeChannel': state['recordExposeCheck'],
             'triggerProtocol': state['triggerCheck'],
@@ -120,14 +120,14 @@ class CameraTaskGui(DAQGenericTaskGui):
                 'triggerMode': state['triggerModeCombo']
             }
         }
-        prot['channels'] = daqProt
+        task['channels'] = daqProt
         if state['releaseBetweenRadio']:
-            prot['pushState'] = None
-            prot['popState'] = None
-        return prot
+            task['pushState'] = None
+            task['popState'] = None
+        return task
         
-    def taskStarted(self):
-        DAQGenericTaskGui.taskStarted(self)
+    def taskSequenceStarted(self):
+        DAQGenericTaskGui.taskSequenceStarted(self)
         if self.ui.releaseAfterRadio.isChecked():
             self.dev.pushState('cam_proto_state')
         
@@ -168,7 +168,7 @@ class CameraTaskGui(DAQGenericTaskGui):
 
     #def recordExposeClicked(self):
         #daq = self.dev.config['exposeChannel'][0]
-        #self.prot.getDevice(daq)
+        #self.task.getDevice(daq)
         
     def quit(self):
         self.ui.imageView.close()

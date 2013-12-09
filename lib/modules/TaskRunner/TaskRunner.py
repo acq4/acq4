@@ -73,7 +73,7 @@ class TaskRunner(Module):
     sigTaskPaused = QtCore.Signal()
     sigTaskFinished = QtCore.Signal()       ## emitted when the task thread exits (end of task, end of sequence, or exit due to error)
     sigNewFrame = QtCore.Signal(object)         ## emitted at the end of each individual task
-    sigTaskStarted = QtCore.Signal(object)  ## called whenever single task OR task sequence has started
+    sigTaskSequenceStarted = QtCore.Signal(object)  ## called whenever single task OR task sequence has started
     sigTaskStarted = QtCore.Signal(object)      ## called at start of EVERY task, including within sequences
     sigTaskChanged = QtCore.Signal(object, object)
     
@@ -696,8 +696,7 @@ class TaskRunner(Module):
             ## Generate executable conf from task object
             prot = self.generateTask(dh)
             #print prot
-            #self.emit(QtCore.SIGNAL('taskStarted'), {})
-            self.sigTaskStarted.emit({})
+            self.sigTaskSequenceStarted.emit({})
             #print "runSingle: Starting taskThread.."
             self.taskThread.startTask(prot)
             #print "runSingle: taskThreadStarted"
@@ -771,8 +770,8 @@ class TaskRunner(Module):
             
             #print "==========Sequence Task=============="
             #print prot
-            #self.emit(QtCore.SIGNAL('taskStarted'), {})
-            self.sigTaskStarted.emit({})
+            #self.emit(QtCore.SIGNAL('taskSequenceStarted'), {})
+            self.sigTaskSequenceStarted.emit({})
             logMsg('Started %s task sequence of length %i' %(self.currentTask.name(),pLen), importance=6)
             #print 'PR task positions:
             self.taskThread.startTask(prot, paramInds)
