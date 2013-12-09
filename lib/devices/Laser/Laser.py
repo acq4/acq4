@@ -271,8 +271,8 @@ class Laser(DAQGeneric, OptomechDevice):
         
     
     
-    def createTask(self, cmd):
-        return LaserTask(self, cmd)
+    def createTask(self, cmd, parentTask):
+        return LaserTask(self, cmd, parentTask)
         
     def protocolInterface(self, prot):
         return LaserProtoGui(self, prot)
@@ -685,7 +685,7 @@ class LaserTask(DAQGenericTask):
     }
     
     """
-    def __init__(self, dev, cmd):
+    def __init__(self, dev, cmd, parentTask):
         self.cmd = cmd
         self.dev = dev ## this happens in DAQGeneric initialization, but we need it here too since it is used in making the waveforms that go into DaqGeneric.__init__
         if 'shutterMode' not in cmd:
@@ -717,9 +717,9 @@ class LaserTask(DAQGenericTask):
                     raise Exception("Alignment mode by power not implemented yet.")
                 
 
-        DAQGenericTask.__init__(self, dev, cmd['daqProtocol'])
+        DAQGenericTask.__init__(self, dev, cmd['daqProtocol'], parentTask)
         
-    def configure(self, tasks, startOrder):
+    def configure(self):
         ##  Get rate: first get name of DAQ, then ask the DAQ task for its rate
         daqName, ch = self.dev.getDAQName()
         if daqName is None:
@@ -782,7 +782,7 @@ class LaserTask(DAQGenericTask):
         self.currentPower = self.dev.getParam('currentPower')
         self.expectedPower = self.dev.getParam('expectedPower')
         
-        DAQGenericTask.configure(self, tasks, startOrder) ## DAQGenericTask will use self.cmd['daqProtocol']
+        DAQGenericTask.configure(self) ## DAQGenericTask will use self.cmd['daqProtocol']
         
     def getResult(self):
         ## getResult from DAQGeneric, then add in command waveform

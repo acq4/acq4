@@ -202,3 +202,14 @@ class PVCam(Camera):
         with self.camLock:
             return self.cam.getParam(param)
 
+    def createTask(self, cmd, task):
+        return PVCamTask(self, cmd, task)
+    
+    
+class PVCamTask(CameraTask):
+    def getPrepTimeEstimate(self):
+        # if restart needed and triggering
+        #return 0.5  # long time to prepare for trigger!
+        return 0
+    
+    

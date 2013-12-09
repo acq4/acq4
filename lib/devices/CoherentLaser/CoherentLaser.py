@@ -92,8 +92,8 @@ class CoherentLaser(Laser):
         #with self.driverLock:
             #return self.driver.getShutter()
         
-    def createTask(self, cmd):
-        return CoherentTask(self, cmd)
+    def createTask(self, cmd, parentTask):
+        return CoherentTask(self, cmd, parentTask)
         
 class CoherentTask(LaserTask):
     def start(self):

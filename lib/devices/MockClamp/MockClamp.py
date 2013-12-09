@@ -131,8 +131,8 @@ class MockClamp(DAQGeneric):
             
         dm.declareInterface(name, ['clamp'], self)
 
-    def createTask(self, cmd):
-        return MockClampTask(self, cmd)
+    def createTask(self, cmd, parentTask):
+        return MockClampTask(self, cmd, parentTask)
         
     def protocolInterface(self, prot):
         return MockClampProtoGui(self, prot)
@@ -315,7 +315,7 @@ class MockClamp(DAQGeneric):
         DAQGeneric.quit(self)
         
 class MockClampTask(DAQGenericTask):
-    def __init__(self, dev, cmd):
+    def __init__(self, dev, cmd, parentTask):
         ## make a few changes for compatibility with multiclamp        
         #print "task:"
         #print cmd
@@ -343,7 +343,7 @@ class MockClampTask(DAQGenericTask):
         
         
         cmd['daqProtocol']['primary'] = {'record': True, 'lowLevelConf': {'mockFunc': self.read}}
-        DAQGenericTask.__init__(self, dev, cmd['daqProtocol'])
+        DAQGenericTask.__init__(self, dev, cmd['daqProtocol'], parentTask)
         
         #print cmd
         
@@ -352,7 +352,7 @@ class MockClampTask(DAQGenericTask):
         modPath = os.path.abspath(os.path.split(__file__)[0])
         
 
-    def configure(self, tasks, startOrder):
+    def configure(self):
         ### Record initial state or set initial value
         ##if 'holding' in self.cmd:
         ##    self.dev.setHolding(self.cmd['mode'], self.cmd['holding'])
@@ -361,7 +361,7 @@ class MockClampTask(DAQGenericTask):
         self.ampState = {'mode': self.dev.getMode()}
         
         ### Do not configure daq until mode is set. Otherwise, holding values may be incorrect.
-        DAQGenericTask.configure(self, tasks, startOrder)
+        DAQGenericTask.configure(self)
 
     def read(self):
         #print "read"

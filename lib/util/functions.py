@@ -2442,7 +2442,6 @@ def getSpikeTemplate(ivc, traces):
     return traces[thrIndex][['Time', 'Inp0'], start:stop]
 
 
-    
 
 
 

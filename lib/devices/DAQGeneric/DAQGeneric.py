@@ -126,8 +126,8 @@ class DAQGeneric(Device):
     def getMapping(self, chans=None):
         return DataMapping(self, chans)
             
-    def createTask(self, cmd):
-        return DAQGenericTask(self, cmd)
+    def createTask(self, cmd, parentTask):
+        return DAQGenericTask(self, cmd, parentTask)
     
     def getConfigParam(self, param):
         return self._DGConfig.get(param, None)
@@ -251,8 +251,8 @@ class DAQGeneric(Device):
             
 
 class DAQGenericTask(DeviceTask):
-    def __init__(self, dev, cmd):
-        DeviceTask.__init__(self, dev, cmd)
+    def __init__(self, dev, cmd, parentTask):
+        DeviceTask.__init__(self, dev, cmd, parentTask)
         self.daqTasks = {}
         self.initialState = {}
         self._DAQCmd = cmd
@@ -264,7 +264,7 @@ class DAQGenericTask(DeviceTask):
         daqs = set([self.dev.getDAQName(ch) for ch in self._DAQCmd])
         return ([], list(daqs))  ## this device should be configured before its DAQs
         
-    def configure(self, tasks, startOrder):
+    def configure(self):
         ## Record initial state or set initial value
         ## NOTE:
         ## Subclasses should call this function only _after_ making any changes that will affect the mapping between
