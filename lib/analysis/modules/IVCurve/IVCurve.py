@@ -386,8 +386,8 @@ class IVCurve(AnalysisModule):
         self.protocol = tail
         subs = re.compile('[\/]')
         self.protocol = re.sub(subs, '-', self.protocol)
-        self.protocol = self.protocol[:-1] + '.pdf'
-        self.commonPrefix = os.path.join(fn, 'Ruili')
+        self.protocol = self.protocol + '.pdf'
+        self.commonPrefix = fn # os.path.join(fn, 'Ruili')
         traces = []
         cmd_wave = []
         self.tx = None
@@ -396,6 +396,7 @@ class IVCurve(AnalysisModule):
         self.traceTimes = numpy.zeros(0)
         maxplotpts = 1024
          # Iterate over sequence
+        print self.Sequence.keys()
         if ('Clamp1', 'Pulse_amplitude') in self.Sequence.keys():
             sequenceValues = self.Sequence[('Clamp1', 'Pulse_amplitude')]
         else:
@@ -1358,8 +1359,7 @@ class IVCurve(AnalysisModule):
         for a in ['FI', 'IV', 'RMP', 'FSL']:
             self.formatTicks(self.mplax[a], 'x', '%d')
         pylab.draw()
-        pylab.savefig(os.path.join(self.commonPrefix,
-                      'PlotPDFs', self.protocol))
+        pylab.savefig(os.path.join(self.commonPrefix,self.protocol))
         pylab.show()
 
     def dbStoreClicked(self):

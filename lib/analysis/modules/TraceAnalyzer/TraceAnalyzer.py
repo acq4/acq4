@@ -25,12 +25,14 @@ from FileLoader import FileLoader
 import pyqtgraph.flowchart as fc
 import pyqtgraph.debug as debug
 import os
-import lib.analysis.scripts.chr2analysis as ChR2
+import glob
+import lib.analysis.scripts.chr2analysis
 
 class TraceAnalyzer(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
-        
+        self.ChR2 = lib.analysis.scripts.chr2analysis.ChR2() # create instance of the analysis
+
         fcpath = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "flowcharts")
         confpath = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "configs")
         self.dbIdentity = "TraceAnalysis"  ## how we identify to the database; this determines which tables we own
@@ -40,12 +42,17 @@ class TraceAnalyzer(AnalysisModule):
         self.fileLoader = DataLoader(self, host.dataManager())
         self.addPlotBtn = QtGui.QPushButton('Add Plot')
         self.processWidget = QtGui.QWidget()
-        self.processLayout = QtGui.QHBoxLayout()
+        self.processLayout = QtGui.QGridLayout()
         self.processWidget.setLayout(self.processLayout)
-        self.processBtn = QtGui.QPushButton('Process')
+        self.processProtocolBtn = QtGui.QPushButton('Process Protocol')
+        self.processSliceBtn = QtGui.QPushButton('Process Slice')
+        self.processCellBtn = QtGui.QPushButton('Process Cell')
         self.processCheck = QtGui.QCheckBox('Auto')
-        self.processLayout.addWidget(self.processBtn)
-        self.processLayout.addWidget(self.processCheck)
+        self.processLayout.addWidget(self.processSliceBtn, 0, 0)
+        self.processLayout.addWidget(self.processCellBtn, 1, 0)
+        self.processLayout.addWidget(self.processProtocolBtn, 2, 0)
+        self.processLayout.addWidget(self.processCheck, 3, 0)
+        self.confWidget = QtGui.QWidget()
         self.confLayout = QtGui.QGridLayout()
         self.confWidget.setLayout(self.confLayout)
         self.confLayout.addWidget(self.confLoader, 0, 0)
@@ -88,17 +95,52 @@ class TraceAnalyzer(AnalysisModule):
         self.initializeElements()
         
         self.addPlotBtn.clicked.connect(self.addPlotClicked)
-        self.processBtn.clicked.connect(self.processClicked)
+        self.processSliceBtn.clicked.connect(self.processSliceClicked)
+        self.processCellBtn.clicked.connect(self.processCellClicked)
+        self.processProtocolBtn.clicked.connect(self.processProtocolClicked)
         self.flowchart.sigOutputChanged.connect(self.outputChanged)
         self.fileLoader.sigFileLoaded.connect(self.fileLoaded)
         self.fileLoader.sigSelectedFileChanged.connect(self.fileSelected)
+
+    def processSliceClicked(self):
+        """
+        The slice directory is selected. For every Cell in the slice,
+        process the cell.
+        """
+        slicedir = self.fileLoader.ui.dirTree.selectedFiles()[0]
+        if not slicedir.isDir():
+            raise Exception('Must select exactly 1 slice directory to process')
+        dircontents = glob.glob(os.path.join(slicedir.name(), 'cell_*'))
+        for d in dircontents:
+                self.processCellClicked(sel = d)
+        print '\nAnalysis of Slice completed'
+
+    def processCellClicked(self, sel = None):
+        """
+        A cell directory is selected. For each protocol that matches
+        our protocol selector, process the protocol for this cell.
+
+        """
+        print 'ProcessCell received a request for: ', sel
+
+        if sel is None or sel is False: # called from gui - convert handle to str for consistency
+            sel = self.fileLoader.ui.dirTree.selectedFiles()[0].name() # select the cell
+        if not os.path.isdir(sel):
+            raise Exception('Must select a cell Directory to process')
+        dircontents = glob.glob(os.path.join(sel, 'BlueLED*'))
+        if dircontents == []:
+            raise Exception('Cell directory had no protocol matching BlueLED')
+        for d in dircontents:
+            self.fileLoader.loadFile([self.dataManager().dm.getDirHandle(d)])
+            self.processProtocolClicked()
+        print "\nAnalysis of cell completed"
 
     def fileLoaded(self, dh):
         files = self.fileLoader.loadedFiles()
         self.flowchart.setInput(Input=files[0])
         table = self.getElement('Results')
         table.setData(None)
-        ChR2.clearSummary()
+        self.ChR2.clearSummary()
         
     def fileSelected(self, dh):
         self.flowchart.setInput(Input=dh)
@@ -122,24 +164,26 @@ class TraceAnalyzer(AnalysisModule):
         dock.addWidget(plot)
         #dock.setTitle(name)
         
-    def processClicked(self):
+    def processProtocolClicked(self):
        # print ChR2.getSummary()
-        ChR2.clearSummary()
+        self.ChR2.clearSummary()
 
         output = []
         table = self.getElement('Results')
         for fh in self.fileLoader.loadedFiles():
             try:
-                res = self.flowchart.process(Input=fh)
+                res = self.flowchart.process(Input=fh, Output = self.ChR2.protocolInfo, Instance=self.ChR2)
                 output.append(res) # [res[k] for k in res.keys()])
             except:
-                debug.printExc('Error processing %s' % fh)
+                print 'Error processing %s' % fh
         table.setData(output)
+        self.ChR2.printSummary()
         pl = []
         for i in ['1', '2', '3']:
             name = 'Scatter Plot%s' % i
             pl.append(self.getElement(name, create=False))
-            ChR2.printSummary(plotWidget = pl)
+            self.ChR2.plotSummary(plotWidget = pl)
+        print '\nAnalysis of protocol finished'
 
     def outputChanged(self):
         if self.processCheck.isChecked():
@@ -165,7 +209,10 @@ class DataLoader(FileLoader):
     def __init__(self, host, dm):
         self.host = host
         FileLoader.__init__(self, dm)
-        
+
+    def getHost(self):
+        return self.host
+
     def loadFile(self, files):
         if len(files) != 1:
             raise Exception('Must select exactly 1 protocol directory to load')

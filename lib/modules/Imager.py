@@ -252,7 +252,7 @@ class Imager(Module):
         self.ui = Ui_Form()
         self.testMode = False # set to True to just display the scan signals
         self.win.show()
-        self.win.setWindowTitle('Multiphoton Imager V 1.01')
+        self.win.setWindowTitle('Multiphoton Imager V 1.1')
         self.win.resize(1200, 900) # make the window big enough to use on a large monitor...
 
         self.w1 = QtGui.QSplitter() # divide l, r
@@ -286,9 +286,12 @@ class Imager(Module):
         cameraDevice = 'Camera-QuantEM'
         self.camdev = self.manager.getDevice(cameraDevice)
         self.cameraModule = self.manager.getModule('Camera')
+        # now we need to pick up all the hardware we need to know about
+        # in order to handle the various transformations
         self.scopeDev = self.camdev.scopeDev
         self.laserDev = None
         self.laserDev = self.manager.getDevice('Laser-2P')
+        # This module does not need to address the shutter
         #self.shutterDev = self.manager.getDevice('Shutter')
         self.scopeDev.sigObjectiveChanged.connect(self.objectiveUpdate)
         self.scopeDev.sigGlobalTransformChanged.connect(self.transformChanged)
@@ -302,11 +305,11 @@ class Imager(Module):
         self.ui.hide_check.stateChanged.connect(self.hideOverlayImage)
         self.ui.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
 
-        #self.ui.run_Button.clicked.connect(self.PMT_Run)
         self.ui.snap_Button.clicked.connect(self.PMT_Snap)
         self.ui.snap_Standard_Button.clicked.connect(self.PMT_Snap_std)
         self.ui.snap_High_Button.clicked.connect(self.PMT_Snap_high)
-        
+        #self.ui.cameraSnapBtn.clicked.connect(self.cameraSnap)
+
         self.ui.video_button.clicked.connect(self.toggleVideo)
         self.ui.video_std_button.clicked.connect(self.toggleVideo_std)
         self.ui.video_fast_button.clicked.connect(self.toggleVideo_fast)
@@ -315,7 +318,6 @@ class Imager(Module):
         self.ui.run_button.clicked.connect(self.PMT_Run)
         self.ui.stop_button.clicked.connect(self.PMT_Stop)
         
-        #self.ui.cameraSnapBtn.clicked.connect(self.cameraSnap)
         self.ui.restoreROI.clicked.connect(self.restoreROI)
         self.ui.saveROI.clicked.connect(self.saveROI)
         self.ui.Align_to_Camera.clicked.connect(self.reAlign)
