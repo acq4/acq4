@@ -16,8 +16,8 @@ class DAQGenericTaskGui(TaskGui):
     
     #sigSequenceChanged = QtCore.Signal(object)  ## defined upstream
     
-    def __init__(self, dev, prot, ownUi=True):
-        TaskGui.__init__(self, dev, prot)
+    def __init__(self, dev, task, ownUi=True):
+        TaskGui.__init__(self, dev, task)
         self.plots = weakref.WeakValueDictionary()
         self.channels = {}
         
@@ -61,11 +61,11 @@ class DAQGenericTaskGui(TaskGui):
         p.registerPlot(self.dev.name() + '.' + ch)
         
         if conf['type'] in ['ao', 'do']:
-            w = OutputChannelGui(self, ch, conf, p, self.dev, self.prot, daqName)
+            w = OutputChannelGui(self, ch, conf, p, self.dev, self.task, daqName)
             #QtCore.QObject.connect(w, QtCore.SIGNAL('sequenceChanged'), self.sequenceChanged)
             w.sigSequenceChanged.connect(self.sequenceChanged)
         elif conf['type'] in ['ai', 'di']:
-            w = InputChannelGui(self, ch, conf, p, self.dev, self.prot, daqName)
+            w = InputChannelGui(self, ch, conf, p, self.dev, self.task, daqName)
         else:
             raise Exception("Unrecognized device type '%s'" % conf['type'])
         # w.setUnits(units)

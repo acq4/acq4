@@ -3,7 +3,7 @@ from debug import *
     
 from lib.devices.Device import *
 import time, traceback, sys
-from protoGUI import *
+from taskGUI import *
 #from numpy import byte
 import numpy
 #from scipy.signal import resample, bessel, lfilter
@@ -108,8 +108,8 @@ class NiDAQ(Device):
             self.release()
         return val
         
-    def protocolInterface(self, prot):
-        return NiDAQProto(self, prot)
+    def taskInterface(self, task):
+        return NiDAQTask(self, task)
         
     #def listTriggerPorts(self):
         #p = self.n.listDILines()
@@ -257,7 +257,7 @@ class Task(DeviceTask):
         startOrder.remove(self.dev.name())
         startOrder.append(self.dev.name())
         
-        ## Determine how the protocol will be triggered
+        ## Determine how the task will be triggered
         if 'triggerChan' in self.cmd:
             self.st.setTrigger(trigger)
         elif 'triggerDevice' in self.cmd:

@@ -112,7 +112,11 @@ class TaskRunner(Module):
         ])
         
         try:
-            self.taskList = Loader(self, self.manager.config['taskDir'])
+            try:
+                taskDir = self.manager.config['taskDir']
+            except KeyError:
+                taskDir = self.manager.config['protocolDir'] # for backward compatibility
+            self.taskList = Loader(self, taskDir)
         except KeyError:
             raise HelpfulException("Config is missing 'taskDir'; cannot load task list.")
         
