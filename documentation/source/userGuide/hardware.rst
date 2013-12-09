@@ -4,18 +4,18 @@
 Hardware Configuration
 ======================
 
-It is ultimately up to the experimenter to understand their hardware and decide how best to configure it. For the most part, deciding on a hardware configuration will depend on 1) the capabilities required by the experimenter and 2) the limitations of the hardware. Wherever possible, we have avoided imposing any unnecessary limitations through the software (although there are a few). Below is an example setup which makes use of most of the current capabilities in ACQ4.
+It is ultimately up to the experimenter to understand their hardware and decide how best to configure it. For the most part, deciding on a hardware configuration will depend on 1) the capabilities required by the experimenter and 2) the limitations of the hardware. Wherever possible, we have avoided imposing any unnecessary limitations through the software (although there are a few). Below is an example setup which makes use of many of the current capabilities in ACQ4.
 
 .. figure:: images/hardware.png
 
-    Example hardware configuration.
+    Example hardware configuration for photostimulation experiments.
     
     This setup includes:
         
     #. DAQ (NI 6259) which communicates with and synchronizes most of the hardware
     #. Two-channel MultiClamp
     #. Camera (Photometrics QuantEM 512) with trigger input and exposure output connected to DIO lines on the DAQ
-    #. Sutter MP-285 for reading the position of the microscope stage
+    #. Sutter MPC200 for reading the position of the microscope stage
     #. Scanning galvometric mirrors controlled by DAQ analog output
     #. Laser controlled by two DO lines: one to activate the Q-switch, and one to open a shutter
     #. Digitally controlled LEDs for fluorescence imaging
@@ -50,10 +50,18 @@ That takes care of starting the DAQ and camera simultaneously. In addition, we i
 .. index::
     pair: stage; hardware configuration
     
+Scanning Galvanometric Mirrors
+------------------------------
+
+Scan mirrors may be used in conjunction with one or more laser sources to do scanning laser photostimulation and microscopy. These require only the availability of two analog outputs from the DAQ board and digital or analog control of a Pockels cell, shutter, Q-switch, or some combination of these. In the diagram above, a Zeiss Axioskop FS2 has been modified for use with scanning laser input. 
+    
+    
 Stage Position Control
 ----------------------
 
-Currently there is no way to *control* the position of a Sutter MP-285 stage via ACQ4 (but this is coming soon). It is possible to read the stage position, but with one caveat: the MP-285 is often controlled by a 2 or 3-axis wheel input device. If the computer attempts to read the controller position at the same time the wheel input is in use, it will crash the controller. This is a limitation of the MP-285 which can be worked around, but you will have to contact Sutter for more information. We are currently looking for better solutions (also coming soon).
+ACQ supports the use of the Sutter MPC200 for stage control and position readout. This position information is used in several modules to track the movement of the sample relative to cameras and laser scanning systems. Stage control may also be used to automate the acquisition of tiled image mosaics.
 
-Another option exists for the intrepid-adventurer type (or for those looking for less expensive options). Many electrophysiology stages are controlled by manual micromanipulators. It is possible to read the position of the stage by attaching some variety of rotary encoder to the micromanipulators. A simple option is to use the hardware from a serial mouse to accomplish this task, and ACQ4 will support the use of serial mice as positioning devices. Similarly, an arduino board fitted with rotary encoders could be programmed to output serial mouse protocol.
+The MP-285 is also supported for this purpose, but with one caveat: this device is often controlled by a 2 or 3-axis rotary input device. If the computer attempts to read the controller position at the same time the wheel input is in use, it will crash the controller. This is a limitation of the MP-285 which can be worked around with the addition of a custom microcontroller (see lib/drivers/SutterMP285/mp285_hack).
+
+Another option exists for the intrepid-adventurer type (or for those looking for less expensive options). Many electrophysiology stages are controlled by manual micromanipulators. It is possible to read the position of the stage by attaching some variety of rotary encoder to the micromanipulators. A simple option is to use the hardware from a serial mouse to accomplish this task, and ACQ4 supports the use of serial mice as positioning devices. Similarly, an arduino board fitted with rotary encoders could be programmed to output serial mouse protocol.
 

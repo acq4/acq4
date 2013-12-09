@@ -44,6 +44,3 @@ All of the parameters will be calulated (and saved if record is pressed). You ca
 bottom plot window by selecting the check box next to the parameter. You can reset the plot by clicking Reset History. Whenever
 you press record, data for all the time that is in the plot window is saved, and incoming data is also saved. 
 
-Data Storage
-============
-
