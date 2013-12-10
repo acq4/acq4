@@ -46,6 +46,7 @@ class Parameter(QtCore.QObject):
                                          including during editing.
     sigChildAdded(self, child, index)    Emitted when a child is added
     sigChildRemoved(self, child)         Emitted when a child is removed
+    sigRemoved(self)                     Emitted when this parameter is removed
     sigParentChanged(self, parent)       Emitted when this parameter's parent has changed
     sigLimitsChanged(self, limits)       Emitted when this parameter's limits have changed
     sigDefaultChanged(self, default)     Emitted when this parameter's default value has changed
@@ -61,6 +62,7 @@ class Parameter(QtCore.QObject):
     
     sigChildAdded = QtCore.Signal(object, object, object)  ## self, child, index
     sigChildRemoved = QtCore.Signal(object, object)  ## self, child
+    sigRemoved = QtCore.Signal(object) ## self
     sigParentChanged = QtCore.Signal(object, object)  ## self, parent
     sigLimitsChanged = QtCore.Signal(object, object)  ## self, limits
     sigDefaultChanged = QtCore.Signal(object, object)  ## self, default
@@ -550,6 +552,7 @@ class Parameter(QtCore.QObject):
         if parent is None:
             raise Exception("Cannot remove; no parent.")
         parent.removeChild(self)
+        self.sigRemoved.emit(self)
 
     def incrementName(self, name):
         ## return an unused name by adding a number to the name given
