@@ -842,7 +842,7 @@ class AcquireThread(QtCore.QThread):
                             'pixelSize': [ps[0] * binning[0], ps[1] * binning[1]],  ## size of image pixel
                             #'scopePosition': ss['scopePosition'],
                             #'centerPosition': pos,
-                            'objective': ss['objective'],
+                            'objective': ss.get('objective', None),
                             #'imagePosition': pos2
                             #'cameraTransform': ss['transform'],
                             'cameraTransform': transform,
