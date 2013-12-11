@@ -197,7 +197,7 @@ class SMP285Interface(QtGui.QWidget):
         ## called when the limit buttons are pressed in the GUI - gets limit and stores in the spin box
         pos = self.dev.getPosition()[axis]
         self.limitSpins[axis][limit].setValue(pos)
-        self.updateLimit(axis, pos)
+        self.updateLimit(axis, limit)
         #self.dev.setLimit(axis, limit, val=pos)
         #self.limitChecks[axis][limit].setChecked(True)
 
