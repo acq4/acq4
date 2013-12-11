@@ -278,6 +278,7 @@ class ScannerDeviceGui(QtGui.QWidget):
                 ## convert pixel location to coordinate system of scanner's parent
                 globalPos = frameTransform.map(pg.Point(x, y))  ## Map from frame pixel location to global coordinates
                 localPos = self.dev.mapGlobalToParent(globalPos)  ## map from global to parent coordinate system. This is the position we calibrate to.
+                print (x, y), (globalPos.x(), globalPos.y()), (localPos.x(), localPos.y())
                 
                 spotLocations.append([localPos.x(), localPos.y()])
                 globalSpotLocations.append([globalPos.x(), globalPos.y()])
@@ -347,11 +348,14 @@ class ScannerDeviceGui(QtGui.QWidget):
         #print "fit stage 1:", xFit, yFit
         
         ## then fit the parabolic equations, using the linear fit as the seed
-        xFit = leastsq(erf2, list(xFit)+[0, 0], (loc, cmd[:,0]))[0]
-        yFit = leastsq(erf2, list(yFit)+[0, 0], (loc, cmd[:,1]))[0]
+        #xFit = leastsq(erf2, list(xFit)+[0, 0], (loc, cmd[:,0]))[0]
+        #yFit = leastsq(erf2, list(yFit)+[0, 0], (loc, cmd[:,1]))[0]
+        
+        # 2nd stage disabled -- we can bring this back when we have a good method
+        # for optimization with constraints.
+        xFit = list(xFit)+[0,0]
+        yFit = list(yFit)+[0,0]
         #print "fit stage 2:", xFit, yFit
-        #xFit = list(xFit)+[0,0]
-        #yFit = list(yFit)+[0,0]
         
         ## compute fit error
         errx = abs(erf2(xFit,  loc,  cmd[:, 0])).mean()
@@ -440,9 +444,11 @@ class ScannerDeviceGui(QtGui.QWidget):
                 time.sleep(0.2)
         
         result = task.getResult()
-
-        frames = result[camera].asMetaArray()
         
+        frames = result[camera].asMetaArray()
+        if frames._info[-1]['preciseTiming'] is not True:
+            raise HelpfulException("Calibration could not accurately measure camera frame timing.",
+                                   reasons=["The exposure signal from the camera was not recorded by the DAQ."])
         #print "scan shape:", frames.shape
         #print "parameters:", camParams
         

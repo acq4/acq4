@@ -614,6 +614,7 @@ class CameraTaskResult:
         self._marr = None
         self._arr = None
         self._frameTimes = None
+        self._frameTimesPrecise = False
         
     def frames(self):
         """Return a list of Frame instances collected during the task"""
@@ -623,7 +624,9 @@ class CameraTaskResult:
         """Return meta-info for the first frame recorded or {} if there were no frames."""
         if len(self._frames) == 0:
             return {}
-        return self._frames[0].info()
+        info = self._frames[0].info().copy()
+        info.update({'preciseTiming': self._frameTimesPrecise})
+        return info
     
     def asArray(self):
         with self.lock:
@@ -639,7 +642,7 @@ class CameraTaskResult:
             if self._marr is None:
                 arr = self.asArray()
                 if arr is not None:
-                    times = self.frameTimes()[:arr.shape[0]]
+                    times, precise = self.frameTimes()[:arr.shape[0]]
                     info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), self.info()]
                     #print info
                     self._marr = MetaArray(arr, info=info)
@@ -654,6 +657,7 @@ class CameraTaskResult:
         if self._frameTimes is None:
             ## generate MetaArray of images collected during recording
             times = None
+            precise = False # becomes True if we are able to determine precise frame times.
             with self.lock:
                 if len(self._frames) > 0:  ## extract frame times as reported by camera. This is a first approximation.
                     try:
@@ -695,7 +699,7 @@ class CameraTaskResult:
                 ## Determine average exposure time (excluding first frame, which is often shorter)
                 expLen = (offTimes[1:len(onTimes)] - onTimes[1:len(offTimes)]).mean()
                 
-                if self._task.camCmd['params']['triggerMode'] == 'Normal' and not self._task.camCmd.get('triggerProtocol', False):
+                if self._task.camCmd['params'].get('triggerMode', 'Normal') == 'Normal' and not self._task.camCmd.get('triggerProtocol', False):
                     ## Can we make a good guess about frame times even without having triggered the first frame?
                     ## frames are marked with their arrival time. We will assume that a frame most likely 
                     ## corresponds to the last complete exposure signal. 
@@ -719,11 +723,14 @@ class CameraTaskResult:
                     if framePeriod is not None:
                         for i in range(len(onTimes), len(times)):
                             lastTime += framePeriod
-                            times[i] = lastTime 
+                            times[i] = lastTime
+                            
+                    precise = True
                 
             self._frameTimes = times
+            self._frameTimesPrecise = precise
             
-        return self._frameTimes
+        return self._frameTimes, self._frameTimesPrecise
         
         
 class AcquireThread(QtCore.QThread):
