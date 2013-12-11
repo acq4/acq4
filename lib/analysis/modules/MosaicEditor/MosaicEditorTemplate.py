@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/analysis/modules/MosaicEditor/MosaicEditorTemplate.ui'
+# Form implementation generated from reading ui file 'MosaicEditorTemplate.ui'
 #
-# Created: Wed May 18 20:44:12 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Wed Dec 11 13:21:27 2013
+#      by: PyQt4 UI code generator 4.9
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -32,6 +32,7 @@ class Ui_Form(object):
         self.gridLayout_3.setMargin(0)
         self.gridLayout_3.setObjectName(_fromUtf8("gridLayout_3"))
         self.groupBox_2 = QtGui.QGroupBox(self.layoutWidget)
+        self.groupBox_2.setEnabled(False)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(10)
         sizePolicy.setVerticalStretch(0)
@@ -43,12 +44,15 @@ class Ui_Form(object):
         self.verticalLayout.setMargin(0)
         self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
         self.normalizeBtn = QtGui.QPushButton(self.groupBox_2)
+        self.normalizeBtn.setEnabled(False)
         self.normalizeBtn.setObjectName(_fromUtf8("normalizeBtn"))
         self.verticalLayout.addWidget(self.normalizeBtn)
         self.blendBtn = QtGui.QPushButton(self.groupBox_2)
+        self.blendBtn.setEnabled(False)
         self.blendBtn.setObjectName(_fromUtf8("blendBtn"))
         self.verticalLayout.addWidget(self.blendBtn)
         self.autoRangeBtn = QtGui.QPushButton(self.groupBox_2)
+        self.autoRangeBtn.setEnabled(False)
         self.autoRangeBtn.setObjectName(_fromUtf8("autoRangeBtn"))
         self.verticalLayout.addWidget(self.autoRangeBtn)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
