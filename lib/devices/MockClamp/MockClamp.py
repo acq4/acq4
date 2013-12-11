@@ -17,37 +17,6 @@ import pyqtgraph.multiprocess as mp
 ivModes = {'i=0':'ic', 'vc':'vc', 'ic':'ic'}
 modeNames = ['vc', 'i=0', 'ic']
 
-#import multiprocessing as m
-
-#class NeuronProc(m.Process):
-    #def __init__(self):
-        #self.pipe = m.Pipe()
-        #m.Process.__init__(self)
-        #self.daemon = True
-        
-    #def send(self, data):
-        #self.pipe[0].send(data)
-        
-    #def recv(self):
-        #return self.pipe[0].recv()
-        
-    #def run(self):
-        #import neuronSim as nrn
-        #while True:
-            #cmd = self.pipe[1].recv()
-            #if cmd is None:
-                #break
-            #try:
-                #result = nrn.run(cmd)
-                #self.pipe[1].send(result)
-            #except:
-                #import sys
-                #ex = sys.exc_info()
-                #sys.excepthook(*ex)
-                ##self.pipe[1].send(ex)
-                ##print "sim: exception"
-                #self.pipe[1].send(None)
-
 
 class MockClamp(DAQGeneric):
     
@@ -80,17 +49,15 @@ class MockClamp(DAQGeneric):
         except:
             printExc("Error while setting holding value:")
             
-        
-        #self.process = NeuronProc()
-        #self.process.start()
+        # Start a remote process to run the simulation.
         self.process = mp.Process()
         rsys = self.process._import('sys')
         rsys._setProxyOptions(returnType='proxy') # need to access remote path by proxy, not by value
         rsys.path.append(os.path.abspath(os.path.dirname(__file__)))
-        try:
-            self.simulator = self.process._import('neuronSima')
-        except ImportError:
+        if config['simulator'] == 'builtin':
             self.simulator = self.process._import('hhSim')
+        elif config['simulator'] == 'neuron':
+            self.simulator = self.process._import('neuronSima')
         
         dm.declareInterface(name, ['clamp'], self)
 
@@ -248,6 +215,7 @@ class MockClampTask(DAQGenericTask):
         
     def stop(self, abort=False):
         DAQGenericTask.stop(self, abort)
+        
         
         
 
