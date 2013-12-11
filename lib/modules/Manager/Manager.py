@@ -23,7 +23,7 @@ class Manager(Module):
                 if dw is None:
                     continue
                 dock = QtGui.QDockWidget(d)
-                dock.setFeatures(dock.AllDockWidgetFeatures)
+                dock.setFeatures(dock.DockWidgetMovable | dock.DockWidgetFloatable)
                 dock.setObjectName(d)
                 dock.setWidget(dw)
                 
