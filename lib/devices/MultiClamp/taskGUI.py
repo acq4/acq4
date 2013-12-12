@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import sys
-from lib.devices.Device import ProtocolGui
+from lib.devices.Device import TaskGui
 from SequenceRunner import *
 from pyqtgraph.WidgetGroup import WidgetGroup
 import numpy
-from ProtocolTemplate import *
+from TaskTemplate import *
 from debug import *
 import sip
 
-class MultiClampProtoGui(ProtocolGui):
+class MultiClampTaskGui(TaskGui):
     
     #sigSequenceChanged = QtCore.Signal(object)  ## defined upstream
     
-    def __init__(self, dev, prot):
-        ProtocolGui.__init__(self, dev, prot)
+    def __init__(self, dev, task):
+        TaskGui.__init__(self, dev, task)
         daqDev = self.dev.getDAQName()
-        self.daqUI = self.prot.getDevice(daqDev)
+        self.daqUI = self.task.getDevice(daqDev)
         
         self.traces = {}  ## Stores traces from a sequence to allow average plotting
         self.resetInpPlots = False  ## Signals result handler to clear plots before adding a new one
@@ -116,7 +116,7 @@ class MultiClampProtoGui(ProtocolGui):
                 self.setSignals(state['primarySignal'], state['secondarySignal'])
             self.stateGroup.setState(state)
         except:
-            printExc('Error while restoring MultiClamp protocol GUI state:')
+            printExc('Error while restoring MultiClamp task GUI state:')
             
         #self.ui.waveGeneratorWidget.update() ## should be called as a result of stateGroup.setState; don't need to call again
         
@@ -162,7 +162,7 @@ class MultiClampProtoGui(ProtocolGui):
         self.ui.bottomPlotWidget.clear()
         self.currentCmdPlot = None
 
-    def protocolStarted(self):
+    def taskSequenceStarted(self):
         self.resetInpPlots = True
 
     def clearInpPlots(self):
@@ -187,35 +187,35 @@ class MultiClampProtoGui(ProtocolGui):
         
         return plot
         
-    def generateProtocol(self, params=None):
+    def generateTask(self, params=None):
         state = self.stateGroup.state()
         if params is None:
             params = {}
-        prot = {}
+        task = {}
         mode = self.getMode()
-        prot['mode'] = mode
-        prot['recordState'] = True
+        task['mode'] = mode
+        task['recordState'] = True
         #if self.ui.primarySignalCheck.isChecked():
-            #prot['primary'] = self.ui.primarySignalCombo.currentText()
+            #task['primary'] = self.ui.primarySignalCombo.currentText()
         #if self.ui.secondarySignalCheck.isChecked():
-            #prot['secondary'] = self.ui.secondarySignalCombo.currentText()
+            #task['secondary'] = self.ui.secondarySignalCombo.currentText()
         if state['primarySignalCheck']:
-            prot['primarySignal'] = state['primarySignalCombo']
+            task['primarySignal'] = state['primarySignalCombo']
         if state['secondarySignalCheck']:
-            prot['secondarySignal'] = state['secondarySignalCombo']
+            task['secondarySignal'] = state['secondarySignalCombo']
         if state['primaryGainCheck']:
-            prot['primaryGain'] = state['primaryGainSpin']
+            task['primaryGain'] = state['primaryGainSpin']
         if state['secondaryGainCheck']:
-            prot['secondaryGain'] = state['secondaryGainSpin']
+            task['secondaryGain'] = state['secondaryGainSpin']
         if mode != 'I=0':
-            ## Must scale command to V or A before sending to protocol system.
+            ## Must scale command to V or A before sending to task system.
             wave = self.getSingleWave(params)
             if wave is not None:
-                prot['command'] = wave
+                task['command'] = wave
             if state['holdingCheck']:
-                prot['holding'] = state['holdingSpin']
-        #print "Protocol:", prot
-        return prot
+                task['holding'] = state['holdingSpin']
+        #print "Task:", task
+        return task
     
     def getSingleWave(self, params=None):
         state = self.stateGroup.state()
@@ -344,7 +344,7 @@ class MultiClampProtoGui(ProtocolGui):
         plot = self.ui.topPlotWidget.plot(result['primary'].view(numpy.ndarray), x=result.xvals('Time'), params=params)
         
     def quit(self):
-        ProtocolGui.quit(self)
+        TaskGui.quit(self)
         if not sip.isdeleted(self.daqUI):
             QtCore.QObject.disconnect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
         self.ui.topPlotWidget.close()

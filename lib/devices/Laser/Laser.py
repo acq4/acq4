@@ -5,7 +5,7 @@ from Mutex import Mutex
 from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from lib.devices.OptomechDevice import OptomechDevice
 from LaserDevGui import LaserDevGui
-from LaserProtocolGui import LaserProtoGui
+from LaserTaskGui import LaserTaskGui
 import os
 import time
 import numpy as np
@@ -79,7 +79,7 @@ class Laser(DAQGeneric, OptomechDevice):
         
         
         
-    Protocol examples:
+    Task examples:
     
     { 'wavelength': 780*nm, 'powerWaveform': array([...]) }  ## calibrated; float array in W
     { 'switchWaveform': array([...]) }                       ## uncalibrated; 0=off -> 1=full power
@@ -200,7 +200,7 @@ class Laser(DAQGeneric, OptomechDevice):
     def setAlignmentMode(self, b):
         """If true, configures the laser for low-power alignment mode. 
         Note: If the laser achieves low power solely through PWM, then
-        alignment mode will only be available during protocols."""
+        alignment mode will only be available during tasks."""
         
         pass
     
@@ -274,8 +274,8 @@ class Laser(DAQGeneric, OptomechDevice):
     def createTask(self, cmd):
         return LaserTask(self, cmd)
         
-    def protocolInterface(self, prot):
-        return LaserProtoGui(self, prot)
+    def taskInterface(self, prot):
+        return LaserTaskGui(self, prot)
         
     def deviceInterface(self, win):
         return LaserDevGui(self)
@@ -293,7 +293,7 @@ class Laser(DAQGeneric, OptomechDevice):
                 daqName = DAQGeneric.getDAQName(self, 'qSwitch')
             else:
                 return (None, None)
-            #raise HelpfulException("LaserTask can't find name of DAQ device to use for this protocol.")
+            #raise HelpfulException("LaserTask can't find name of DAQ device to use for this task.")
             return (daqName, ch)
         else:
             return DAQGeneric.getDAQName(self, channel)
@@ -434,7 +434,7 @@ class Laser(DAQGeneric, OptomechDevice):
         """
         
         if self.hasPowerIndicator:
-            ## run a protocol that checks the power
+            ## run a task that checks the power
             daqName =  self.getDAQName('shutter')
             powerInd = self.config['powerIndicator']['channel']
             rate = self.config['powerIndicator']['rate']
@@ -614,7 +614,7 @@ class Laser(DAQGeneric, OptomechDevice):
         return daqCmd
 
             
-    def testProtocol(self):
+    def testTask(self):
         daqName = self.getDAQName('shutter')
         powerInd = self.config['powerIndicator']['channel']
         rate = self.config['powerIndicator']['rate']
@@ -650,7 +650,7 @@ class Laser(DAQGeneric, OptomechDevice):
 class LaserTask(DAQGenericTask):
     """
     
-    Example protocol command structure:
+    Example task command structure:
     {                                  #### powerWaveform, switchWaveform and pulses are mutually exclusive; result of specifying more than one is undefined
         'powerWaveform': array(...),   ## array of power values (specifies the power that should enter the sample)
                                        ## only useful if there is an analog modulator of some kind (Pockel cell, etc)
@@ -673,14 +673,14 @@ class LaserTask(DAQGenericTask):
         'shutterMode': 'auto',         ## specifies how the shutter should be used:
                                        ##   auto -- the shutter is opened immediately (with small delay) before laser output is needed
                                        ##           and closed immediately (with no delay) after. Default.
-                                       ##   open -- the shutter is opened for the whole protocol and returned to its holding state afterward
-                                       ##   closed -- the shutter is kept closed for the protocol and returned to its holding state afterward
+                                       ##   open -- the shutter is opened for the whole task and returned to its holding state afterward
+                                       ##   closed -- the shutter is kept closed for the task and returned to its holding state afterward
                                        
-        'wavelength': x,               ## sets the wavelength before executing the protocol
-        'checkPower': True,            ## If true, the laser will check its output power before executing the protocol. 
+        'wavelength': x,               ## sets the wavelength before executing the task
+        'checkPower': True,            ## If true, the laser will check its output power before executing the task. 
         'ignorePowerWaveform': False   ## If True, the power waveform is merely passed through to the task results 
                                        ## (it is assumed the command also has raw waveforms in this case)
-        'alignMode': False             ## If true, put the laser into alignment mode for the entire duration of the protocol.
+        'alignMode': False             ## If true, put the laser into alignment mode for the entire duration of the task.
         
     }
     
@@ -691,7 +691,7 @@ class LaserTask(DAQGenericTask):
         if 'shutterMode' not in cmd:
             cmd['shutterMode'] = 'auto'
             
-        ## create protocol structure to pass to daqGeneric, and retain a pointer to it here; DAQGeneric protocols will get filled in from LaserTask when self.configure() gets called
+        ## create task structure to pass to daqGeneric, and retain a pointer to it here; DAQGeneric tasks will get filled in from LaserTask when self.configure() gets called
         cmd['daqProtocol'] = {}
         if 'shutter' in dev.config:
             cmd['daqProtocol']['shutter'] = {}

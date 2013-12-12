@@ -34,7 +34,7 @@ import numpy as NP
 import metaarray as MA
 import time
 import pprint
-from lib.modules.imagerTemplate import Ui_Form
+from .imagerTemplate import Ui_Form
 
 
 """
@@ -283,7 +283,7 @@ class Imager(Module):
         # ... not just yet anyway.
         # if this is to be allowed on a system, the change must be signaled to this class,
         # and we need to pick up the device in a routine that handles the change.
-        cameraDevice = 'Camera-QuantEM'
+        cameraDevice = 'Camera'
         self.camdev = self.manager.getDevice(cameraDevice)
         self.cameraModule = self.manager.getModule('Camera')
         self.scopeDev = self.camdev.scopeDev

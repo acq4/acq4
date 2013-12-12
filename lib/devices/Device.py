@@ -35,9 +35,9 @@ class Device(QtCore.QObject):
         """Return a widget with a UI to put in the device rack"""
         return None
         
-    def protocolInterface(self, prot):
-        """Return a widget with a UI to put in the protocol rack"""
-        return ProtocolGui(self, prot)
+    def taskInterface(self, task):
+        """Return a widget with a UI to put in the task rack"""
+        return TaskGui(self, task)
         
 
     def reserve(self, block=True, timeout=20):
@@ -116,48 +116,48 @@ class DeviceTask:
     def abort(self):
         self.stop(abort=True)
     
-class ProtocolGui(QtGui.QWidget):
+class TaskGui(QtGui.QWidget):
     
     sigSequenceChanged = QtCore.Signal(object)
     
-    def __init__(self, dev, prot):
+    def __init__(self, dev, task):
         QtGui.QWidget.__init__(self)
         self.dev = dev
-        self.prot = prot
+        self.task = task
         self._PGConnected = False
         self.enable()
         
     def enable(self):
         if not self._PGConnected:
-            #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)        
-            #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('taskStarted'), self.taskStarted)     
-            #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolFinished'), self.protocolFinished) 
-            self.prot.sigProtocolStarted.connect(self.protocolStarted) ## called at the beginning of a protocol/sequence
-            self.prot.sigTaskStarted.connect(self.taskStarted)## called at the beginning of all protocol runs
-            self.prot.sigProtocolFinished.connect(self.protocolFinished) ## called at the end of a protocol/sequence
+            #QtCore.QObject.connect(self.task, QtCore.SIGNAL('taskStarted'), self.taskStarted)        
+            #QtCore.QObject.connect(self.task, QtCore.SIGNAL('taskStarted'), self.taskStarted)     
+            #QtCore.QObject.connect(self.task, QtCore.SIGNAL('taskFinished'), self.taskFinished) 
+            self.task.sigTaskSequenceStarted.connect(self.taskSequenceStarted) ## called at the beginning of a task/sequence
+            self.task.sigTaskStarted.connect(self.taskStarted)## called at the beginning of all task runs
+            self.task.sigTaskFinished.connect(self.taskFinished) ## called at the end of a task/sequence
             self._PGConnected = True
         
     def disable(self):
         if self._PGConnected:
-            #QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)
-            #QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('taskStarted'), self.taskStarted)
-            #QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolFinished'), self.protocolFinished)
+            #QtCore.QObject.disconnect(self.task, QtCore.SIGNAL('taskStarted'), self.taskStarted)
+            #QtCore.QObject.disconnect(self.task, QtCore.SIGNAL('taskStarted'), self.taskStarted)
+            #QtCore.QObject.disconnect(self.task, QtCore.SIGNAL('taskFinished'), self.taskFinished)
             try:
-                self.prot.sigProtocolStarted.disconnect(self.protocolStarted)
+                self.task.sigTaskSequenceStarted.disconnect(self.taskSequenceStarted)
             except TypeError:
                 pass
             try:
-                self.prot.sigTaskStarted.disconnect(self.taskStarted)
+                self.task.sigTaskStarted.disconnect(self.taskStarted)
             except TypeError:
                 pass
             try:
-                self.prot.sigProtocolFinished.disconnect(self.protocolFinished)
+                self.task.sigTaskFinished.disconnect(self.taskFinished)
             except TypeError:
                 pass
             self._PGConnected = False
         
-    def prepareProtocolStart(self):
-        """Called once before the start of each protocol or protocol sequence. Allows the device to execute any one-time preparations it needs."""
+    def prepareTaskStart(self):
+        """Called once before the start of each task or task sequence. Allows the device to execute any one-time preparations it needs."""
         pass
         
     def saveState(self):
@@ -170,37 +170,37 @@ class ProtocolGui(QtGui.QWidget):
         pass
         
     def describe(self, params=None):
-        """Return a nested-dict structure that describes what the device will do during a protocol.
-        This data will be stored along with results from a protocol run."""
+        """Return a nested-dict structure that describes what the device will do during a task.
+        This data will be stored along with results from a task run."""
         return self.saveState()  ## lazy; implement something nicer for your devices!
         
     def listSequence(self):
         """Return an OrderedDict of sequence parameter names and lengths {name: length}"""
         return {}
         
-    def generateProtocol(self, params=None):
+    def generateTask(self, params=None):
         if params is None:
             params = {}
         return {}
         
     def handleResult(self, result, params):
-        """Display (or otherwise handle) the results of the protocol generated by this device.
+        """Display (or otherwise handle) the results of the task generated by this device.
         Does NOT handle file storage; this is handled by the device itself."""
         pass
 
-    def protocolStarted(self):
-        """Automatically invoked before a protocol or sequence is started.
-        Note: this signal is emitted AFTER generateProtocol() has been run for all devices,
-        and before the protocol is started.
+    def taskSequenceStarted(self):
+        """Automatically invoked before a task or sequence is started.
+        Note: this signal is emitted AFTER generateTask() has been run for all devices,
+        and before the task is started.
         """
         pass
 
     def taskStarted(self, params):
-        """Automatically invoked before a single protocol task is started, including each task within a sequence."""
+        """Automatically invoked before a single task task is started, including each task within a sequence."""
         pass
         
-    def protocolFinished(self):
-        """Automatically invoked after a protocol or sequence has finished"""
+    def taskFinished(self):
+        """Automatically invoked after a task or sequence has finished"""
         pass
 
     def quit(self):

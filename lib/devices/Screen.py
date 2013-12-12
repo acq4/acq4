@@ -9,8 +9,8 @@ class Screen(Device):
         self.blanker = ScreenBlanker()
         self.sigBlankScreen.connect(self.blankRequested, QtCore.Qt.QueuedConnection)
 
-    def protocolInterface(self, prot):
-        return ScreenProtoGui(self, prot)
+    def taskInterface(self, task):
+        return ScreenTaskGui(self, task)
 
     def createTask(self, cmd):
         return ScreenTask(self, cmd)
@@ -103,10 +103,10 @@ class ScreenTask(DeviceTask):
         self.dev.unBlankScreen()
         
         
-class ScreenProtoGui(ProtocolGui):
+class ScreenTaskGui(TaskGui):
     
-    def __init__(self, dev, prot):
-        ProtocolGui.__init__(self, dev, prot)
+    def __init__(self, dev, task):
+        TaskGui.__init__(self, dev, task)
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
         self.blankCheck = QtGui.QCheckBox("Blank Screen")
@@ -122,6 +122,6 @@ class ScreenProtoGui(ProtocolGui):
     def listSequence(self):
         return []
         
-    def generateProtocol(self, params=None):
+    def generateTask(self, params=None):
         return self.saveState()
         

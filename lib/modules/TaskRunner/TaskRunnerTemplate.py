@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'ProtocolRunnerTemplate.ui'
+# Form implementation generated from reading ui file 'TaskRunnerTemplate.ui'
 #
 # Created: Sun Dec 18 19:23:34 2011
 #      by: PyQt4 UI code generator 4.8.3
@@ -36,11 +36,11 @@ class Ui_MainWindow(object):
         self.dockWidgetContents.setObjectName(_fromUtf8("dockWidgetContents"))
         self.LoaderDock.setWidget(self.dockWidgetContents)
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.LoaderDock)
-        self.ProtocolDock = QtGui.QDockWidget(MainWindow)
-        self.ProtocolDock.setEnabled(True)
-        self.ProtocolDock.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable|QtGui.QDockWidget.DockWidgetVerticalTitleBar)
-        self.ProtocolDock.setAllowedAreas(QtCore.Qt.BottomDockWidgetArea|QtCore.Qt.TopDockWidgetArea)
-        self.ProtocolDock.setObjectName(_fromUtf8("ProtocolDock"))
+        self.TaskDock = QtGui.QDockWidget(MainWindow)
+        self.TaskDock.setEnabled(True)
+        self.TaskDock.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable|QtGui.QDockWidget.DockWidgetVerticalTitleBar)
+        self.TaskDock.setAllowedAreas(QtCore.Qt.BottomDockWidgetArea|QtCore.Qt.TopDockWidgetArea)
+        self.TaskDock.setObjectName(_fromUtf8("TaskDock"))
         self.dockWidgetContents_5 = QtGui.QWidget()
         self.dockWidgetContents_5.setObjectName(_fromUtf8("dockWidgetContents_5"))
         self.gridLayout = QtGui.QGridLayout(self.dockWidgetContents_5)
@@ -81,10 +81,10 @@ class Ui_MainWindow(object):
         self.horizontalLayout_2.addWidget(self.testSingleBtn)
         spacerItem1 = QtGui.QSpacerItem(13, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.horizontalLayout_2.addItem(spacerItem1)
-        self.runProtocolBtn = QtGui.QPushButton(self.dockWidgetContents_5)
-        self.runProtocolBtn.setEnabled(True)
-        self.runProtocolBtn.setObjectName(_fromUtf8("runProtocolBtn"))
-        self.horizontalLayout_2.addWidget(self.runProtocolBtn)
+        self.runTaskBtn = QtGui.QPushButton(self.dockWidgetContents_5)
+        self.runTaskBtn.setEnabled(True)
+        self.runTaskBtn.setObjectName(_fromUtf8("runTaskBtn"))
+        self.horizontalLayout_2.addWidget(self.runTaskBtn)
         spacerItem2 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.horizontalLayout_2.addItem(spacerItem2)
         self.stopSingleBtn = QtGui.QPushButton(self.dockWidgetContents_5)
@@ -103,8 +103,8 @@ class Ui_MainWindow(object):
         self.protoCycleTimeSpin = SpinBox(self.dockWidgetContents_5)
         self.protoCycleTimeSpin.setObjectName(_fromUtf8("protoCycleTimeSpin"))
         self.gridLayout.addWidget(self.protoCycleTimeSpin, 4, 2, 1, 2)
-        self.ProtocolDock.setWidget(self.dockWidgetContents_5)
-        MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.ProtocolDock)
+        self.TaskDock.setWidget(self.dockWidgetContents_5)
+        MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.TaskDock)
         self.SequenceDock = QtGui.QDockWidget(MainWindow)
         self.SequenceDock.setEnabled(True)
         self.SequenceDock.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable|QtGui.QDockWidget.DockWidgetVerticalTitleBar)
@@ -216,25 +216,25 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
-        MainWindow.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Protocol Runner", None, QtGui.QApplication.UnicodeUTF8))
+        MainWindow.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Task Runner", None, QtGui.QApplication.UnicodeUTF8))
         self.LoaderDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Loader", None, QtGui.QApplication.UnicodeUTF8))
-        self.ProtocolDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Protocol", None, QtGui.QApplication.UnicodeUTF8))
+        self.TaskDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Task", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("MainWindow", "Devices", None, QtGui.QApplication.UnicodeUTF8))
-        self.protoContinuousCheck.setToolTip(QtGui.QApplication.translate("MainWindow", "Protocol runs continuously without \n"
+        self.protoContinuousCheck.setToolTip(QtGui.QApplication.translate("MainWindow", "Task runs continuously without \n"
 "gaps until stopped (not yet implemented).", None, QtGui.QApplication.UnicodeUTF8))
         self.protoContinuousCheck.setText(QtGui.QApplication.translate("MainWindow", "Continuous", None, QtGui.QApplication.UnicodeUTF8))
         self.label_8.setText(QtGui.QApplication.translate("MainWindow", "Duration", None, QtGui.QApplication.UnicodeUTF8))
         self.label_6.setText(QtGui.QApplication.translate("MainWindow", "Lead Time", None, QtGui.QApplication.UnicodeUTF8))
-        self.protoLoopCheck.setToolTip(QtGui.QApplication.translate("MainWindow", "Protocol will run repeatedly until stopped and \n"
+        self.protoLoopCheck.setToolTip(QtGui.QApplication.translate("MainWindow", "Task will run repeatedly until stopped and \n"
 "waits a minimum of Cycle Time between episodes.\n"
 "Not the same as continuous acquisition (there \n"
 "will be a time gap between each recording).", None, QtGui.QApplication.UnicodeUTF8))
         self.protoLoopCheck.setText(QtGui.QApplication.translate("MainWindow", "Loop", None, QtGui.QApplication.UnicodeUTF8))
         self.label_7.setText(QtGui.QApplication.translate("MainWindow", "Cycle Time", None, QtGui.QApplication.UnicodeUTF8))
         self.testSingleBtn.setText(QtGui.QApplication.translate("MainWindow", "Test", None, QtGui.QApplication.UnicodeUTF8))
-        self.runProtocolBtn.setText(QtGui.QApplication.translate("MainWindow", "Record Single", None, QtGui.QApplication.UnicodeUTF8))
+        self.runTaskBtn.setText(QtGui.QApplication.translate("MainWindow", "Record Single", None, QtGui.QApplication.UnicodeUTF8))
         self.stopSingleBtn.setText(QtGui.QApplication.translate("MainWindow", "Stop Single", None, QtGui.QApplication.UnicodeUTF8))
-        self.protoDurationSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "Duration of stimulus/acquisition in the protocol.", None, QtGui.QApplication.UnicodeUTF8))
+        self.protoDurationSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "Duration of stimulus/acquisition in the task.", None, QtGui.QApplication.UnicodeUTF8))
         self.protoLeadTimeSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "Duration of time to wait before acquisition starts \n"
 "(the hardware is reserved so nothing else can \n"
 "run during this time).", None, QtGui.QApplication.UnicodeUTF8))

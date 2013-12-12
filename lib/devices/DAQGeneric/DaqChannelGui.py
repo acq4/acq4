@@ -12,7 +12,7 @@ import weakref
 from pyqtgraph import siFormat, SpinBox, WidgetGroup
 #from pyqtgraph.SpinBox import SpinBox
 
-###### For protocol GUIs
+###### For task GUIs
 
 class DaqChannelGui(QtGui.QWidget):
     def __init__(self, parent, name, config, plot, dev, prot, daqName=None):
@@ -21,8 +21,8 @@ class DaqChannelGui(QtGui.QWidget):
         ## Name of this channel
         self.name = name
         
-        ## Parent protoGui object
-        self.protoGui = weakref.ref(parent)
+        ## Parent taskGui object
+        self.taskGui = weakref.ref(parent)
         
         ## Configuration for this channel defined in the device configuration file
         self.config = config
@@ -33,10 +33,10 @@ class DaqChannelGui(QtGui.QWidget):
         ## The device handle for this channel's DAQGeneric device
         self.dev = dev
         
-        ## The protocol GUI window which contains this object
+        ## The task GUI window which contains this object
         self.prot = weakref.ref(prot)
         
-        ## Make sure protocol interface includes our DAQ device
+        ## Make sure task interface includes our DAQ device
         if daqName is None:
             self.daqDev = self.dev.getDAQName(self.name)
         else:
@@ -139,7 +139,7 @@ class DaqChannelGui(QtGui.QWidget):
     def taskStarted(self, params):
         pass
     
-    def protocolStarted(self):
+    def taskSequenceStarted(self):
         pass
     
     def quit(self):
@@ -229,7 +229,7 @@ class OutputChannelGui(DaqChannelGui):
         self.sigSequenceChanged.emit(self.dev.name())
         
     
-    def generateProtocol(self, params=None):
+    def generateTask(self, params=None):
         if params is None:
             params = {}
         prot = {}
@@ -332,12 +332,12 @@ class OutputChannelGui(DaqChannelGui):
             self.ui.waveGeneratorWidget.setOffset(hv)
             
     def getHoldingValue(self):
-        """Return the value for this channel that will be used when the protocol is run
+        """Return the value for this channel that will be used when the task is run
         (by default, this is just the current holding value)"""
         if self.ui.holdingCheck.isChecked():
             return self.ui.holdingSpin.value()
         else:
-            return self.protoGui().getChanHolding(self.name)
+            return self.taskGui().getChanHolding(self.name)
         
     def waveFunctionChanged(self):
         if self.ui.waveGeneratorWidget.functionString() != "":
@@ -350,18 +350,18 @@ class InputChannelGui(DaqChannelGui):
         DaqChannelGui.__init__(self, *args)
         self.ui = InputChannelTemplate.Ui_Form()
         self.ui.setupUi(self)
-        #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.clearPlots)
+        #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('taskStarted'), self.clearPlots)
         self.postUiInit()
         self.clearBeforeNextPlot = False
          
-    def protocolStarted(self):
+    def taskSequenceStarted(self):
         self.clearBeforeNextPlot = True
         #self.clearPlots()
          
     def listSequence(self):
         return []
     
-    def generateProtocol(self, params=None):
+    def generateTask(self, params=None):
         if params is None:
             params = {}
         state = self.stateGroup.state()

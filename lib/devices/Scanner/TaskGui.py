@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-from ProtocolTemplate import Ui_Form
-from lib.devices.Device import ProtocolGui
+from TaskTemplate import Ui_Form
+from lib.devices.Device import TaskGui
 #from ScanProgramGenerator import *
 from PyQt4 import QtCore, QtGui
 from lib.Manager import getManager, logMsg, logExc
@@ -17,7 +17,7 @@ from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, reg
 
 
 ### Error IDs:
-###  1: Could not find spot size from calibration. (from ScannerProtoGui.pointSize)
+###  1: Could not find spot size from calibration. (from ScannerTaskGui.pointSize)
 
 
 class PositionCtrlGroup(pTypes.GroupParameter):
@@ -51,12 +51,12 @@ class ProgramCtrlGroup(pTypes.GroupParameter):
         self.sigAddNewRequested.emit(self, typ)
 
 
-class ScannerProtoGui(ProtocolGui):
+class ScannerTaskGui(TaskGui):
     
     #sigSequenceChanged = QtCore.Signal(object)  ## inherited from Device
     
-    def __init__(self, dev, prot):
-        ProtocolGui.__init__(self, dev, prot)
+    def __init__(self, dev, task):
+        TaskGui.__init__(self, dev, task)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         dm = getManager()
@@ -102,7 +102,7 @@ class ScannerProtoGui(ProtocolGui):
             (self.ui.minDistSpin, 'minDist'),
             (self.ui.simulateShutterCheck, 'simulateShutter'),
             (self.ui.sizeSpin, 'spotSize'),
-#            (self.ui.packingSpin, 'packingDensity')  ## packing density should be suggested by device rather than loaded with protocol (I think..)
+#            (self.ui.packingSpin, 'packingDensity')  ## packing density should be suggested by device rather than loaded with task (I think..)
         ])
         self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6, 'sizeSpin':100e-6})
         self.tdPlot = self.ui.tdPlotWidget.plotItem
@@ -250,7 +250,7 @@ class ScannerProtoGui(ProtocolGui):
             #try:
                 #self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
             #except TypeError:
-                #logExc("A TypeError was caught in ScannerProtoGui.pointSize(). It was probably caused by a reload.", msgType='status', importance=0)
+                #logExc("A TypeError was caught in ScannerTaskGui.pointSize(). It was probably caused by a reload.", msgType='status', importance=0)
             self.stateGroup.setState({'spotSize':ss})
             #self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
             self.displaySize[(laser, self.currentOpticState)] = None
@@ -298,9 +298,9 @@ class ScannerProtoGui(ProtocolGui):
         else:
             return {}
         
-    def generateProtocol(self, params=None):
+    def generateTask(self, params=None):
         if self.cameraModule() is None:
-            raise Exception('No camera module selected, can not build protocol.')
+            raise Exception('No camera module selected, can not build task.')
         
         if params is None or 'targets' not in params:
             target = self.testTarget.listPoints()[0]
@@ -312,24 +312,24 @@ class ScannerProtoGui(ProtocolGui):
             (target, delay) = self.targets[params['targets']]
             
         if len(self.programCtrls) == 0: # doing regular position mapping
-            prot = {
+            task = {
                 'position': target, 
                 'minWaitTime': delay,
                 #'camera': self.cameraModule().config['camDev'], 
                 'laser': self.ui.laserCombo.currentText(),
               #  'simulateShutter': self.ui.simulateShutterCheck.isChecked(), ## was commented out... 
-                'duration': self.prot.getParam('duration')
+                'duration': self.task.getParam('duration')
             }
         else: # doing programmed scans
             daqName = self.dev.getDaqName()
-            prot = {
+            task = {
                # 'position': target, 
                 'minWaitTime': delay,
                 #'camera': self.cameraModule().config['camDev'], 
                 'laser': self.ui.laserCombo.currentText(),
                 'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
-                'duration': self.prot.getParam('duration'),
-                'numPts': self.prot.getDevice(daqName).currentState()['numPts'],
+                'duration': self.task.getParam('duration'),
+                'numPts': self.task.getDevice(daqName).currentState()['numPts'],
                 'program': [],
                    #('step', 0.0, None),           ## start with step to "off" position 
                    #('step', 0.2, (1.3e-6, 4e-6)), ## step to the given location after 200ms
@@ -339,8 +339,8 @@ class ScannerProtoGui(ProtocolGui):
             }
             for ctrl in self.programCtrls:
                 if ctrl.isActive():
-                    prot['program'].append(ctrl.generateProtocol())
-        return prot
+                    task['program'].append(ctrl.generateTask())
+        return task
     
     def hideSpotMarker(self):
         self.spotMarker.hide()
@@ -349,7 +349,7 @@ class ScannerProtoGui(ProtocolGui):
     def handleResult(self, result, params):
         if not self.spotMarker.isVisible():
             self.spotMarker.show()
-        #print 'ScannerProtoGui.handleResult() result:', result
+        #print 'ScannerTaskGui.handleResult() result:', result
         if 'position' in result:
             pos = result['position']
             ss = result['spotSize']
@@ -706,7 +706,7 @@ class ScannerProtoGui(ProtocolGui):
         
     
     #def updateDeviceTargetList(self, item):
-        #"""For keeping track of items outside of an individual scanner device. Allows multiple protocols to access the same items."""
+        #"""For keeping track of items outside of an individual scanner device. Allows multiple tasks to access the same items."""
         #name = str(item.name)
         #state = item.stateCopy()
         #if isinstance(item, TargetPoint):
@@ -782,7 +782,7 @@ class ScannerProtoGui(ProtocolGui):
 
     def generateTargets(self):
         #items = self.activeItems()
-        #prof= Profiler('ScanerProtoGui.generateTargets()')
+        #prof= Profiler('ScanerTaskGui.generateTargets()')
         self.targets = []
         locations = self.getTargetList()
         
@@ -797,7 +797,7 @@ class ScannerProtoGui(ProtocolGui):
         #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
         #progressDlg.setMinimumDuration(500)
         #prof.mark('progressDlg')
-        deadTime = self.prot.getParam('duration')
+        deadTime = self.task.getParam('duration')
 
         state = self.stateGroup.state()
         minTime = state['minTime']
@@ -1191,7 +1191,7 @@ class TargetGrid(pg.ROI):
         #self.gridLayoutCombo.addItems(["Hexagonal", "Square"])
         #self.gridSpacingSpin.valueChanged.connect(self.updateGridSpacing)
         #self.gridLayoutCombo.currentIndexChanged.connect(self.regeneratePoints)
-        #self.treeItem = None ## will become a QTreeWidgetItem when ScannerProtoGui runs addItem()
+        #self.treeItem = None ## will become a QTreeWidgetItem when ScannerTaskGui runs addItem()
         
         self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
             dict(name='layout', type='list', value=args.get('layout', 'Hexagonal'), values=['Square', 'Hexagonal']),
@@ -1563,7 +1563,7 @@ class ProgramLineScan(QtCore.QObject):
         dist = (pg.Point(p[0])-pg.Point(p[1])).length()
         self.params['length'] = dist
         
-    def generateProtocol(self):
+    def generateTask(self):
         points = self.roi.listPoints() # in local coordinates local to roi.
         points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
         return {'type': 'lineScan', 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 'sweepDuration': self.params['sweepDuration'], 
@@ -1652,7 +1652,7 @@ class ProgramMultipleLineScan(QtCore.QObject):
         #dist = (pg.Point(p[0])-pg.Point(p[1])).length()
         #self.params['length'] = dist
         
-    def generateProtocol(self):
+    def generateTask(self):
         points=self.roi.listPoints() # in local coordinates local to roi.
         points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
         points = [(p.x(), p.y()) for p in points]   ## make sure we can write this data to HDF5 eventually..
@@ -1733,7 +1733,7 @@ class ProgramRectScan(QtCore.QObject):
         self.params['width'] = w
         self.params['height'] = h
         
-    def generateProtocol(self):
+    def generateTask(self):
         state = self.roi.getState()
         w, h = state['size']
         p0 = pg.Point(0,0)

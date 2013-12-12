@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from lib.modules.ProtocolRunner.analysisModules import AnalysisModule
+from lib.modules.TaskRunner.analysisModules import AnalysisModule
 from lib.Manager import getManager
 from PyQt4 import QtCore, QtGui
 from imagingTemplate import Ui_Form
@@ -34,15 +34,15 @@ class ImagingModule(AnalysisModule):
     def quit(self):
         AnalysisModule.quit(self)
         
-    def protocolStarted(self, *args):
+    def taskSequenceStarted(self, *args):
         pass
     
-    def protocolFinished(self):
+    def taskFinished(self):
         pass
         
     def newFrame(self, frame):
         """
-        Called when protocol is finished (truly completes, no errors/abort)
+        Called when task is finished (truly completes, no errors/abort)
         frame contains all of the data returned from all devices
         """
         imageDownSample = self.ui.downSampling.value() # this is the "image" downsample,

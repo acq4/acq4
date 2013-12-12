@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
-from ProtocolTemplate import *
-from lib.devices.Device import ProtocolGui
+from TaskTemplate import *
+from lib.devices.Device import TaskGui
 from debug import *
 from pyqtgraph.WidgetGroup import WidgetGroup
 import sys
 
-class NiDAQProto(ProtocolGui):
+class NiDAQTask(TaskGui):
     
     sigChanged = QtCore.Signal(object)
     
-    def __init__(self, dev, prot):
-        ProtocolGui.__init__(self, dev, prot)
+    def __init__(self, dev, task):
+        TaskGui.__init__(self, dev, task)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.nPts = 0
@@ -49,15 +49,15 @@ class NiDAQProto(ProtocolGui):
         self.ui.rateSpin.valueChanged.connect(self.rateChanged)
         self.ui.periodSpin.sigValueChanging.connect(self.updateRateSpin)
         self.ui.rateSpin.sigValueChanging.connect(self.updatePeriodSpin)
-        self.prot.sigProtocolChanged.connect(self.protocolChanged)
+        self.task.sigTaskChanged.connect(self.taskChanged)
         self.ui.denoiseCombo.currentIndexChanged.connect(self.ui.denoiseStack.setCurrentIndex)
         self.ui.filterCombo.currentIndexChanged.connect(self.ui.filterStack.setCurrentIndex)
         self.ui.rateSpin.setValue(self.rate)
         
         
     def quit(self):
-        ProtocolGui.quit(self)
-        QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolChanged'), self.protocolChanged)
+        TaskGui.quit(self)
+        QtCore.QObject.disconnect(self.task, QtCore.SIGNAL('taskChanged'), self.taskChanged)
         
     def saveState(self):
         return self.stateGroup.state()
@@ -81,24 +81,24 @@ class NiDAQProto(ProtocolGui):
             self.stateGroup.setState(state)
         except:
             #sys.excepthook(*sys.exc_info())
-            printExc("Error while loading DAQ protocol GUI configuration (proceeding with default configuration) :")
+            printExc("Error while loading DAQ task GUI configuration (proceeding with default configuration) :")
         
-    def generateProtocol(self, params=None):
-        prot = self.currentState()
-        prot2 = {}
+    def generateTask(self, params=None):
+        task = self.currentState()
+        task2 = {}
         
         # just for cleanliness, remove any filtering parameters that are not in use:
         remNames = ['butterworth', 'bessel']
-        if prot['filterMethod'].lower() in remNames:
-            remNames.remove(prot['filterMethod'].lower())
-        if prot['denoiseMethod'] == 'None':
+        if task['filterMethod'].lower() in remNames:
+            remNames.remove(task['filterMethod'].lower())
+        if task['denoiseMethod'] == 'None':
             remNames.append('denoiseWidth')
             remNames.append('denoiseThreshold')
-        for k in prot:
+        for k in task:
             if not any(map(k.startswith, remNames)):
-                prot2[k] = prot[k]
+                task2[k] = task[k]
         
-        return prot2
+        return task2
         
     def currentState(self):
         self.updateNPts()
@@ -138,14 +138,14 @@ class NiDAQProto(ProtocolGui):
         self.sigChanged.emit(self.currentState())
         
         
-    def protocolChanged(self, n, v):
-        #print "caught protocol change", n, v
+    def taskChanged(self, n, v):
+        #print "caught task change", n, v
         if n == 'duration':
             self.updateNPts()
             self.sigChanged.emit(self.currentState())
         
     def updateNPts(self):
-        dur = self.prot.getParam('duration')
+        dur = self.task.getParam('duration')
         nPts = int(dur * self.rate)
         if nPts != self.nPts:
             self.nPts = nPts
@@ -157,7 +157,7 @@ class NiDAQProto(ProtocolGui):
         ## convert device names into device handles
         allDevs = [self.dev.dm.getDevice(d) for d in allDevNames]
         ## select out devices which have trigger channel to this DAQ
-        self.devs = [d.name for d in allDevs if d.getTriggerChannel(self.dev.name) is not None]
+        self.devs = [d.name() for d in allDevs if d.getTriggerChannel(self.dev.name()) is not None]
             
             
         self.ui.triggerDevList.clear()

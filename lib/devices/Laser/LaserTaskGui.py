@@ -1,18 +1,18 @@
 from PyQt4 import QtGui, QtCore
 from pyqtgraph import PlotWidget
-from lib.devices.DAQGeneric import DAQGenericProtoGui
+from lib.devices.DAQGeneric import DAQGenericTaskGui
 from SequenceRunner import runSequence
 from pyqtgraph.functions import siFormat
-import protoTemplate
+import taskTemplate
 from HelpfulException import HelpfulException
 
 #from FeedbackButton import FeedbackButton
 
-class LaserProtoGui(DAQGenericProtoGui):
-    def __init__(self, dev, prot):
-        DAQGenericProtoGui.__init__(self, dev, prot, ownUi=False)
+class LaserTaskGui(DAQGenericTaskGui):
+    def __init__(self, dev, task):
+        DAQGenericTaskGui.__init__(self, dev, task, ownUi=False)
         
-        self.ui = protoTemplate.Ui_Form()
+        self.ui = taskTemplate.Ui_Form()
         
         
         self.cache = {}
@@ -133,12 +133,12 @@ class LaserProtoGui(DAQGenericProtoGui):
     def saveState(self):
         """Return a dictionary representing the current state of the widget."""
         state = {}
-        state['daqState'] = DAQGenericProtoGui.saveState(self)
+        state['daqState'] = DAQGenericTaskGui.saveState(self)
         return state
         
     def restoreState(self, state):
         """Restore the state of the widget from a dictionary previously generated using saveState"""
-        return DAQGenericProtoGui.restoreState(self, state['daqState'])
+        return DAQGenericTaskGui.restoreState(self, state['daqState'])
     
     def describe(self, params=None):
         state = self.saveState()
@@ -146,8 +146,8 @@ class LaserProtoGui(DAQGenericProtoGui):
         desc = {'mode': 'power', 'command': ps['waveGeneratorWidget']}
         return desc
     
-    def prepareProtocolStart(self):
-        ## check power before starting protocol.
+    def prepareTaskStart(self):
+        ## check power before starting task.
         if self.ui.checkPowerCheck.isChecked():
             power, valid = self.dev.outputPower()  ## request current power from laser
             if power is None:
@@ -156,7 +156,7 @@ class LaserProtoGui(DAQGenericProtoGui):
                 powerStr = siFormat(power, suffix='W')
                 raise HelpfulException("The current laser power for '%s' (%s) is outside the expected range." % (self.dev.name, powerStr))
     
-    def generateProtocol(self, params=None):
+    def generateTask(self, params=None):
         """Return a cmd dictionary suitable for passing to LaserTask."""
         
         ## Params looks like: {'amp': 7} where 'amp' is the name of a sequence parameter, and 7 is the 7th value in the list of 'amp'
@@ -169,7 +169,7 @@ class LaserProtoGui(DAQGenericProtoGui):
         rawCmds = self.getChannelCmds(wave, rate)
         #rawCmds = self.cache.get(id(wave), self.dev.getChannelCmds({'powerWaveform':wave}, rate)) ## returns {'shutter': array(...), 'qSwitch':array(..), 'pCell':array(...)}
         
-        ### structure protocol in DAQGeneric-compatible way
+        ### structure task in DAQGeneric-compatible way
         cmd = {}
         for k in rawCmds:
             cmd[k] = {}
@@ -234,4 +234,4 @@ class LaserProtoGui(DAQGenericProtoGui):
                 
     def quit(self):
         self.dev.lastResult = None
-        DAQGenericProtoGui.quit(self)
+        DAQGenericTaskGui.quit(self)

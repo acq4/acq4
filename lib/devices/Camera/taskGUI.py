@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
-from ProtocolTemplate import *
-from lib.devices.DAQGeneric.protoGUI import DAQGenericProtoGui
-from lib.devices.Device import ProtocolGui
+from TaskTemplate import *
+from lib.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
+from lib.devices.Device import TaskGui
 #from pyqtgraph.WidgetGroup import WidgetGroup
 from numpy import ndarray
 import pyqtgraph as pg
 #from pyqtgraph.graphicsItems import InfiniteLine, VTickGroup
 #from PyQt4 import Qwt5 as Qwt
 
-class CameraProtoGui(DAQGenericProtoGui):
-    def __init__(self, dev, prot):
-        DAQGenericProtoGui.__init__(self, dev, prot, ownUi=False)  ## When initializing superclass, make sure it knows this class is creating the ui.
+class CameraTaskGui(DAQGenericTaskGui):
+    def __init__(self, dev, task):
+        DAQGenericTaskGui.__init__(self, dev, task, ownUi=False)  ## When initializing superclass, make sure it knows this class is creating the ui.
         
         self.ui = Ui_Form()
         self.ui.setupUi(self)
@@ -19,7 +19,7 @@ class CameraProtoGui(DAQGenericProtoGui):
         self.ui.horizSplitter.setStretchFactor(0, 0)
         self.ui.horizSplitter.setStretchFactor(1, 1)
         
-        DAQGenericProtoGui.createChannelWidgets(self, self.ui.ctrlSplitter, self.ui.plotSplitter)
+        DAQGenericTaskGui.createChannelWidgets(self, self.ui.ctrlSplitter, self.ui.plotSplitter)
         self.ui.plotSplitter.setStretchFactor(0, 10)
         self.ui.plotSplitter.setStretchFactor(1, 1)
         self.ui.plotSplitter.setStretchFactor(2, 1)
@@ -78,8 +78,8 @@ class CameraProtoGui(DAQGenericProtoGui):
         #QtCore.QObject.connect(self.ui.imageView, QtCore.SIGNAL('timeChanged'), self.timeChanged)
         self.ui.imageView.sigTimeChanged.connect(self.timeChanged)
         
-        #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolPaused'), self.protocolPaused)
-        self.prot.sigProtocolPaused.connect(self.protocolPaused)
+        #QtCore.QObject.connect(self.task, QtCore.SIGNAL('taskPaused'), self.taskPaused)
+        self.task.sigTaskPaused.connect(self.taskPaused)
         #QtCore.QObject.connect(self.ui.imageView.ui.roiBtn, QtCore.SIGNAL('clicked'), self.connectROI)
         
         
@@ -97,22 +97,22 @@ class CameraProtoGui(DAQGenericProtoGui):
 
     def saveState(self):
         s = self.currentState()
-        s['daqState'] = DAQGenericProtoGui.saveState(self)
+        s['daqState'] = DAQGenericTaskGui.saveState(self)
         return s
         
     def restoreState(self, state):
         self.stateGroup.setState(state)
         if 'daqState' in state:
-            DAQGenericProtoGui.restoreState(self, state['daqState'])
+            DAQGenericTaskGui.restoreState(self, state['daqState'])
         
         
-    def generateProtocol(self, params=None):
-        daqProt = DAQGenericProtoGui.generateProtocol(self, params)
+    def generateTask(self, params=None):
+        daqProt = DAQGenericTaskGui.generateTask(self, params)
         
         if params is None:
             params = {}
         state = self.currentState()
-        prot = {
+        task = {
             'record': state['recordCheck'],
             #'recordExposeChannel': state['recordExposeCheck'],
             'triggerProtocol': state['triggerCheck'],
@@ -120,23 +120,23 @@ class CameraProtoGui(DAQGenericProtoGui):
                 'triggerMode': state['triggerModeCombo']
             }
         }
-        prot['channels'] = daqProt
+        task['channels'] = daqProt
         if state['releaseBetweenRadio']:
-            prot['pushState'] = None
-            prot['popState'] = None
-        return prot
+            task['pushState'] = None
+            task['popState'] = None
+        return task
         
-    def protocolStarted(self):
-        DAQGenericProtoGui.protocolStarted(self)
+    def taskSequenceStarted(self):
+        DAQGenericTaskGui.taskSequenceStarted(self)
         if self.ui.releaseAfterRadio.isChecked():
             self.dev.pushState('cam_proto_state')
         
-    def protocolFinished(self):
-        DAQGenericProtoGui.protocolFinished(self)
+    def taskFinished(self):
+        DAQGenericTaskGui.taskFinished(self)
         if self.ui.releaseAfterRadio.isChecked():
             self.dev.popState('cam_proto_state')
 
-    def protocolPaused(self):  ## If the protocol is paused, return the camera to its previous state until we start again
+    def taskPaused(self):  ## If the task is paused, return the camera to its previous state until we start again
         if self.ui.releaseAfterRadio.isChecked():
             self.dev.popState('cam_proto_state')
             self.dev.pushState('cam_proto_state')
@@ -150,13 +150,13 @@ class CameraProtoGui(DAQGenericProtoGui):
         state = self.stateGroup.state()
         if state['displayCheck']:
             if result is None or len(result.frames()) == 0:
-                print "No images returned from camera protocol."
+                print "No images returned from camera task."
             else:
                 self.ui.imageView.setImage(result.asMetaArray())
                 #print "  frame times:", list(result['frames'].xvals('Time'))
                 self.frameTicks.setXVals(result.frameTimes())
                 
-        DAQGenericProtoGui.handleResult(self, result.daqResult(), params)
+        DAQGenericTaskGui.handleResult(self, result.daqResult(), params)
         #if state['displayExposureCheck'] and 'expose' in result and result['expose'] is not None:
             #d = result['expose']
             #if self.exposeCurve is None:
@@ -168,9 +168,9 @@ class CameraProtoGui(DAQGenericProtoGui):
 
     #def recordExposeClicked(self):
         #daq = self.dev.config['exposeChannel'][0]
-        #self.prot.getDevice(daq)
+        #self.task.getDevice(daq)
         
     def quit(self):
         self.ui.imageView.close()
-        DAQGenericProtoGui.quit(self)
+        DAQGenericTaskGui.quit(self)
         
