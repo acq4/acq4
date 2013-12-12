@@ -365,7 +365,7 @@ class ScannerProtoGui(ProtocolGui):
         item.scene().removeItem(item)
         item.parameters().sigValueChanged.disconnect(self.itemActivationChanged)
         del self.items[item.name]
-        self.updateGridLinkCombos()
+        #self.updateGridLinkCombos()
         self.itemChanged()
         
     def addProgramCtrl(self, param, itemType):
@@ -549,15 +549,15 @@ class ScannerProtoGui(ProtocolGui):
         self.storeConfiguration()
         #self.updateGridLinkCombos()
         
-    def updateGridLinkCombos(self):
-        grids = [g for g in self.items.keys() if g[:4] == 'Grid']
-        for k,v in self.items.iteritems():
-            l = []
-            for g in grids:
-                if g != v.name:
-                    l.append(g)
-            l.sort()
-            v.updateLinkCombo(l)
+    #def updateGridLinkCombos(self):
+        #grids = [g for g in self.items.keys() if g[:4] == 'Grid']
+        #for k,v in self.items.iteritems():
+            #l = []
+            #for g in grids:
+                #if g != v.name:
+                    #l.append(g)
+            #l.sort()
+            #v.updateLinkCombo(l)
 
     #def addTarget(self, t, name):
         #self.sequenceChanged()
