@@ -13,8 +13,8 @@ print "Loading ACQ4..."
 ##     that may be installed globally with local versions.
 import sys
 import os.path as osp
-d = osp.dirname(osp.abspath(__file__))
-sys.path = [osp.join(d, 'lib', 'util'), osp.join(d, 'lib', 'util', 'pyqtgraph')] + sys.path + [d]
+path = osp.dirname(osp.abspath(__file__))
+sys.path = [osp.join(path, 'lib', 'util'), osp.join(path, 'lib', 'util', 'pyqtgraph')] + sys.path + [path]
 
 
 import sip
@@ -28,22 +28,9 @@ from pyqtgraph import renamePyc
 modDir = os.path.abspath(os.path.split(__file__)[0])
 renamePyc(modDir)
 
-## PyQt bug: make sure qt.conf was installed correctly
-#pyDir = os.path.split(sys.executable)[0]
-#qtConf = os.path.join(pyDir, 'qt.conf')
-#if not os.path.exists(qtConf):
-    #import shutil
-    #pyqtConf = os.path.join(pyDir, 'Lib', 'site-packages', 'PyQt4', 'qt.conf')
-    #if os.path.exists(pyqtConf):
-        #print "PyQt fix: installing qt.conf where it should be.."
-        #shutil.copy(pyqtConf, qtConf)
 
 #import lib.util.PySideImporter  ## Use PySide instead of PyQt
 from PyQt4 import QtGui, QtCore
-#QtCore.QString = str
-#def noop(x):
-#    return x
-#QtCore.QVariant = noop
 
 ## Needed to keep compatibility between pyside and pyqt
 ## (this can go away once the transition to PySide is complete)
@@ -93,13 +80,34 @@ QtCore.qInstallMsgHandler(messageHandler)
 #tr = pyconquer.Logger(fileregex="(Manager|DataManager|modules|devices|drivers)")
 #tr.start()
 
-## Configuration file to load
-config = 'config/default.cfg'
+## Try a few default config file locations
+configs = [
+    osp.join(path, 'config', 'default.cfg'),
+    osp.join(path, 'config', 'example', 'default.cfg'), # last, load the example config
+    ]
 
+for config in configs:
+    if osp.isfile(config):
+        break
 
 ## Create Manager. This configures devices and creates the main manager window.
 man = Manager(config, sys.argv[1:])
 
+# If example config was loaded, offer more help to the user.
+message = "No configuration file found. ACQ4 is running from an example configuration file at %s. This configuration defines several simulated devices that allow you to test the capabilities of ACQ4." % config
+if config == configs[-1]:
+    mbox = QtGui.QMessageBox()
+    mbox.setText(message)
+    mbox.setStandardButtons(mbox.Ok)
+    mbox.exec_()
+#message = "No configuration file found. ACQ4 is running from an example configuration file at %s. This configuration defines several simulated devices that allow you to test the capabilities of ACQ4. Would you like to load the tutorial now?" % config
+#if config == configs[-1]:
+    #mbox = QtGui.QMessageBox()
+    #mbox.setText(message)
+    #mbox.setStandardButtons(mbox.No | mbox.Yes)
+    #if mbox.exec_():
+        #man.showDocumentation('tutorial')
+    
 
 ## for debugging with pdb
 #QtCore.pyqtRemoveInputHook()
