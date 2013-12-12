@@ -113,7 +113,7 @@ class TaskRunner(Module):
         
         try:
             try:
-                taskDir = self.manager.config['taskDir']
+                taskDir = config['taskDir']
             except KeyError:
                 taskDir = self.manager.config['protocolDir'] # for backward compatibility
             self.taskList = Loader(self, taskDir)
