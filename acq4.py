@@ -94,13 +94,19 @@ for config in configs:
 man = Manager(config, sys.argv[1:])
 
 # If example config was loaded, offer more help to the user.
-message = "No configuration file found. ACQ4 is running from an example configuration file at %s. This configuration defines several simulated devices that allow you to test the capabilities of ACQ4. Would you like to load the tutorial now?" % config
+message = "No configuration file found. ACQ4 is running from an example configuration file at %s. This configuration defines several simulated devices that allow you to test the capabilities of ACQ4." % config
 if config == configs[-1]:
     mbox = QtGui.QMessageBox()
     mbox.setText(message)
-    mbox.setStandardButtons(mbox.No | mbox.Yes)
-    if mbox.exec_():
-        man.showDocumentation('tutorial')
+    mbox.setStandardButtons(mbox.Ok)
+    mbox.exec_()
+#message = "No configuration file found. ACQ4 is running from an example configuration file at %s. This configuration defines several simulated devices that allow you to test the capabilities of ACQ4. Would you like to load the tutorial now?" % config
+#if config == configs[-1]:
+    #mbox = QtGui.QMessageBox()
+    #mbox.setText(message)
+    #mbox.setStandardButtons(mbox.No | mbox.Yes)
+    #if mbox.exec_():
+        #man.showDocumentation('tutorial')
     
 
 ## for debugging with pdb
