@@ -15,6 +15,15 @@ Cameras support the following features:
 Note that the exact features available may differ depending on the capabilities of the camera hardware.
 
 
+Camera device subclasses:
+    
+.. toctree::
+    :maxdepth: 1
+    
+    QCamDevice
+    PVCamDevice
+    MockCameraDevice
+
 
 Hardware Configuration
 ----------------------

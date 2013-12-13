@@ -9,19 +9,10 @@ Devices
     NiDAQDevice
     DAQGenericDevice
     CameraDevice
-    QCamDevice
-    PVCamDevice
-    MockCameraDevice
-    MultiClampDevice
-    AxoPatch200Device
-    MockClampDevice
+    PatchClampDevices
     StageDevice
-    SutterMP285Device
-    SutterMPC200Device
-    SerialMouseDevice
     ScannerDevice
     LaserDevice
-    CoherentLaserDevice
     MicroscopeDevice
     TriggerDevice
     DIOSwitchDevice

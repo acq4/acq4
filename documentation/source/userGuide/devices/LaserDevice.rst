@@ -9,7 +9,13 @@ Lasers provide:
     * Pockel cell attenuation
     * Pulse-width modulation
 * Output calibration accounts for attenuation factors which are dependent on optical pathway (for example, each objective lens may have a different attenuation factor).
+
+Laser device subclasses:
     
+.. toctree::
+    :maxdepth: 1
+    
+    CoherentLaserDevice
 
 Configuration Options
 ---------------------
