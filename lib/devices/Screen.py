@@ -12,8 +12,8 @@ class Screen(Device):
     def taskInterface(self, task):
         return ScreenTaskGui(self, task)
 
-    def createTask(self, cmd):
-        return ScreenTask(self, cmd)
+    def createTask(self, cmd, parentTask):
+        return ScreenTask(self, cmd, parentTask)
 
     def blankScreen(self, blank=True, timeout=10.):
         isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
@@ -87,8 +87,8 @@ class ScreenBlanker:
 
 class ScreenTask(DeviceTask):
     
-    def __init__(self, dev, cmd):
-        DeviceTask.__init__(self, dev, cmd)
+    def __init__(self, dev, cmd, parentTask):
+        DeviceTask.__init__(self, dev, cmd, parentTask)
         self.cmd = cmd
 
     def configure(self, tasks, startOrder):

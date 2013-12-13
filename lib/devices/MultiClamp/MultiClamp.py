@@ -153,9 +153,9 @@ class MultiClamp(Device):
         #with MutexLocker(self.lock):
             #return self.getParam(param)
     
-    def createTask(self, cmd):
+    def createTask(self, cmd, parentTask):
         with MutexLocker(self.lock):
-            return MultiClampTask(self, cmd)
+            return MultiClampTask(self, cmd, parentTask)
     
     #def getMode(self):
         #with MutexLocker(self.lock):
@@ -276,8 +276,8 @@ class MultiClampTask(DeviceTask):
     
     recordParams = ['Holding', 'HoldingEnable', 'PipetteOffset', 'FastCompCap', 'SlowCompCap', 'FastCompTau', 'SlowCompTau', 'NeutralizationEnable', 'NeutralizationCap', 'WholeCellCompEnable', 'WholeCellCompCap', 'WholeCellCompResist', 'RsCompEnable', 'RsCompBandwidth', 'RsCompCorrection', 'PrimarySignalLPF', 'PrimarySignalHPF', 'OutputZeroEnable', 'OutputZeroAmplitude', 'LeakSubEnable', 'LeakSubResist', 'BridgeBalEnable', 'BridgeBalResist']
     
-    def __init__(self, dev, cmd):
-        DeviceTask.__init__(self, dev, cmd)
+    def __init__(self, dev, cmd, parentTask):
+        DeviceTask.__init__(self, dev, cmd, parentTask)
         self.cmd = cmd
         with MutexLocker(self.dev.lock):
             self.usedChannels = None
@@ -307,7 +307,7 @@ class MultiClampTask(DeviceTask):
         """return lists of devices that should be configured (before, after) this device"""
         return ([], [self.dev.getDAQName()])
 
-    def configure(self, tasks, startOrder):
+    def configure(self):
         """Sets the state of a remote multiclamp to prepare for a program run."""
         #print "mc configure"
         with MutexLocker(self.dev.lock):

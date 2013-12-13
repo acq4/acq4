@@ -157,8 +157,8 @@ class AxoPatch200(DAQGeneric):
             
         dm.declareInterface(name, ['clamp'], self)
 
-    def createTask(self, cmd):
-        return AxoPatch200Task(self, cmd)
+    def createTask(self, cmd, parentTask):
+        return AxoPatch200Task(self, cmd, parentTask)
         
     def taskInterface(self, task):
         return AxoPatchTaskGui(self, task)
@@ -387,7 +387,7 @@ class AxoPatch200(DAQGeneric):
                 self.reconfigureChannel('secondary', self.config['SecondaryICSignal'])
         
 class AxoPatch200Task(DAQGenericTask):
-    def __init__(self, dev, cmd):
+    def __init__(self, dev, cmd, parentTask):
         ## make a few changes for compatibility with multiclamp        
         if 'daqProtocol' not in cmd:
             cmd['daqProtocol'] = {}
@@ -408,10 +408,10 @@ class AxoPatch200Task(DAQGenericTask):
         
         
         cmd['daqProtocol']['primary'] = {'record': True}
-        DAQGenericTask.__init__(self, dev, cmd['daqProtocol'])
+        DAQGenericTask.__init__(self, dev, cmd['daqProtocol'], parentTask)
         self.cmd = cmd
 
-    def configure(self, tasks, startOrder):
+    def configure(self):
         ## Record initial state or set initial value
         #if 'holding' in self.cmd:
         #    self.dev.setHolding(self.cmd['mode'], self.cmd['holding'])
@@ -420,7 +420,7 @@ class AxoPatch200Task(DAQGenericTask):
         self.ampState = {'mode': self.dev.getMode(), 'LPF': self.dev.getLPF(), 'gain': self.dev.getGain()}
         
         ## Do not configure daq until mode is set. Otherwise, holding values may be incorrect.
-        DAQGenericTask.configure(self, tasks, startOrder)
+        DAQGenericTask.configure(self)
         self.mapping.setMode(self.ampState['mode']) 
         
     #def getChanScale(self, chan):

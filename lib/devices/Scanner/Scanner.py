@@ -309,9 +309,9 @@ class Scanner(Device, OptomechDevice):
         return self._configDir
         
     
-    def createTask(self, cmd):
+    def createTask(self, cmd, parentTask):
         with self.lock:
-            return ScannerTask(self, cmd)
+            return ScannerTask(self, cmd, parentTask)
     
     def taskInterface(self, task):
         with self.lock:
@@ -365,8 +365,8 @@ class ScannerTask(DeviceTask):
                           in 'off' position except when laser is active
         program:          A list of high-level directives for generating position commands
     """
-    def __init__(self, dev, cmd):
-        DeviceTask.__init__(self, dev, cmd)
+    def __init__(self, dev, cmd, parentTask):
+        DeviceTask.__init__(self, dev, cmd, parentTask)
         self.cmd = cmd
         self.daqTasks = []
         self.spotSize = None
@@ -378,7 +378,7 @@ class ScannerTask(DeviceTask):
         else:
             return ([],[])
 
-    def configure(self, tasks, startOrder):
+    def configure(self):
         prof = Profiler('ScannerTask.configure', disabled=True)
         with self.dev.lock:
             prof.mark('got lock')

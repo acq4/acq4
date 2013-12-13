@@ -874,19 +874,74 @@ class Task:
         #print "Task command", command
         self.devNames = command.keys()
         self.devNames.remove('protocol')
-        self.devs = {}
+        self.devs = {devName: self.dm.getDevice(devName) for devName in self.devNames}
+        
+        self.configDeps = {devName: [] for devName in self.devNames}
+        self.configCosts = {}
+        self.startDeps = {devName: [] for devName in self.devNames}
+        self.startCosts = {}
         
         ## Create task objects. Each task object is a handle to the device which is unique for this task run.
         self.tasks = {}
         #print "devNames: ", self.devNames
+        
         for devName in self.devNames:
-            dev = self.dm.getDevice(devName)
-            task = dev.createTask(self.command[devName])
+            task = self.devs[devName].createTask(self.command[devName], self)
             if task is None:
                 printExc("Device '%s' does not have a task interface; ignoring." % devName)
                 continue
-            self.devs[devName] = dev
             self.tasks[devName] = task
+
+    #def addConfigDependency(self, task, before=None, after=None, cost=None):
+        #"""
+        #Declare that *task* must be configured before or after other devices.
+        #Arguments *before* and *after* may be either Devices or their names.
+        #"""
+        #task = task.name() if isinstance(task, Device) else task
+        #dep = [d.name() if isinstance(d, Device) else d for d in dep]
+        #self.configDeps[task].extend(*dep)
+        
+    @staticmethod
+    def getDevName(obj):
+        if isinstance(obj, basestring):
+            return obj
+        elif isinstance(obj, Device):
+            return obj.name()
+        elif isinstance(obj, DeviceTask):
+            return obj.dev.name()
+            
+    def getConfigOrder(self):
+        ## determine the order in which tasks must be configured
+        ## This is determined by tasks having called Task.addConfigDependency()
+        ## when they were initialized.
+            
+        # request config order dependencies from devices
+        deps = {devName: [] for devName in self.devNames}
+        for devName, task in self.tasks.items():
+            before, after = task.getConfigOrder()
+            deps[devName].extend(map(Task.getDevName, before))
+            for t in map(self.getDevName, after):
+                deps[t].append(devName)
+                
+        # request estimated configure time
+        cost = {devName: self.tasks[devName].getPrepTimeEstimate() for devName in self.devNames}
+        
+        #return sorted order
+        return self.toposort(deps, cost)
+        
+    def getStartOrder(self):
+        ## determine the order in which tasks must be started
+        ## This is determined by tasks having called Task.addStartDependency()
+        ## when they were initialized.
+        deps = {devName: [] for devName in self.devNames}
+        for devName, task in self.tasks.items():
+            before, after = task.getStartOrder()
+            deps[devName].extend(map(Task.getDevName, before))
+            for t in map(self.getDevName, after):
+                deps[t].append(devName)
+                
+        #return sorted order
+        return self.toposort(deps)
         
     def execute(self, block=True, processEvents=True):
         """Start the task.
@@ -930,35 +985,18 @@ class Task:
             prof.mark('reserve')
 
             ## Determine order of device configuration.
-            configOrder = self.tasks.keys()
-            for devName in self.tasks.keys():
-                before, after = self.tasks[devName].getConfigOrder()
-                for d in before: 
-                    if d not in configOrder:
-                        continue
-                    i1 = configOrder.index(devName)
-                    i2 = configOrder.index(d)
-                    if i2 > i1:
-                        configOrder.pop(i2)
-                        configOrder.insert(i1, d)
-                for d in after: 
-                    if d not in configOrder:
-                        continue
-                    i1 = configOrder.index(devName)
-                    i2 = configOrder.index(d)
-                    if i2 < i1:
-                        configOrder.pop(i2)
-                        configOrder.insert(i1+1, d)
+            configOrder = self.getConfigOrder()
                 
 
             ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
             ## This is how we allow multiple devices to communicate and decide how to operate together.
             ## Each task may modify the startOrder list to suit its needs.
             #print "Configuring subtasks.."
-            self.startOrder = self.devs.keys()
             for devName in configOrder:
-                self.tasks[devName].configure(self.tasks, self.startOrder)
+                self.tasks[devName].configure()
                 prof.mark('configure %s' % devName)
+                
+            startOrder = self.getStartOrder()
             #print "done"
 
             if 'leadTime' in self.cfg:
@@ -972,7 +1010,7 @@ class Task:
             
             ## Start tasks in specific order
             #print "Starting tasks.."
-            for devName in self.startOrder:
+            for devName in startOrder:
                 #print "  ", devName
                 try:
                     self.tasks[devName].start()
@@ -1145,7 +1183,93 @@ class Task:
     def abort(self):
         """Stop all tasks, to not attempt to get data."""
         self.stop(abort=True)
+
+    @staticmethod
+    def toposort(deps, cost=None):
+        """Topological sort. Arguments are:
+        deps       Dictionary describing dependencies where a:[b,c] means "a 
+                    depends on b and c"
+        cost       Optional dictionary of per-node cost values. This will be used
+                    to sort independent graph branches by total cost. 
+                
+        Examples::
+
+            # Sort the following graph:
+            # 
+            #   B ──┬─────> C <── D
+            #       │       │       
+            #   E <─┴─> A <─┘
+            #     
+            deps = {'a': ['b', 'c'], 'c': ['b', 'd'], 'e': ['b']}
+            toposort(deps)
+            => ['b', 'e', 'd', 'c', 'a']
+            
+            # This example is underspecified; there are several orders
+            # that correctly satisfy the graph. However, we may use the
+            # 'cost' argument to impose more constraints on the sort order.
+            
+            # Let each node have the following cost:
+            cost = {'a': 0, 'b': 0, 'c': 1, 'e': 1, 'd': 3}
+            
+            # Then the total cost of following any node is its own cost plus
+            # the cost of all nodes that follow it:
+            #   A = cost[a]
+            #   B = cost[b] + cost[c] + cost[e] + cost[a]
+            #   C = cost[c] + cost[a]
+            #   D = cost[d] + cost[c] + cost[a]
+            #   E = cost[e]
+            # If we sort independent branches such that the highest cost comes 
+            # first, the output is:
+            toposort(deps, cost=cost)
+            => ['d', 'b', 'c', 'e', 'a']
+        """
+        # copy deps and make sure all nodes have a key in deps
+        deps0 = deps
+        deps = {}
+        for k,v in deps0.items():
+            deps[k] = v[:]
+            for k2 in v:
+                if k2 not in deps:
+                    deps[k2] = []
+
+        # Compute total branch cost for each node
+        key = None
+        if cost is not None:
+            order = Task.toposort(deps)
+            allDeps = {n: set(n) for n in order}
+            for n in order[::-1]:
+                for n2 in deps.get(n, []):
+                    allDeps[n2] |= allDeps.get(n, set())
+                    
+            totalCost = {n: sum([cost.get(x, 0) for x in allDeps[n]]) for n in allDeps}
+            key = lambda x: totalCost.get(x, 0)
+
+        # compute weighted order
+        order = []
+        while len(deps) > 0:
+            # find all nodes with no remaining dependencies
+            ready = [k for k in deps if len(deps[k]) == 0]
+            
+            # If no nodes are ready, then there must be a cycle in the graph
+            if len(ready) == 0:
+                print deps
+                raise Exception("Cannot resolve requested device configure/start order.")
+            
+            # sort by branch cost
+            if key is not None:
+                ready.sort(key=key, reverse=True)
+            
+            # add the highest-cost node to the order, then remove it from the
+            # entire set of dependencies
+            order.append(ready[0])
+            del deps[ready[0]]
+            for v in deps.values():
+                try:
+                    v.remove(ready[0])
+                except ValueError:
+                    pass
         
+        return order
         
 
     

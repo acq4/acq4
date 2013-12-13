@@ -274,9 +274,9 @@ class Camera(DAQGeneric, OptomechDevice):
         #print "Camera device quit."
         
     #@ftrace
-    def createTask(self, cmd):
+    def createTask(self, cmd, parentTask):
         with self.lock:
-            return CameraTask(self, cmd)
+            return CameraTask(self, cmd, parentTask)
     
     #@ftrace
     def getTriggerChannel(self, daq):
@@ -476,13 +476,14 @@ class CameraTask(DAQGenericTask):
     Some of these functions may need to be reimplemented for subclasses."""
 
 
-    def __init__(self, dev, cmd):
+    def __init__(self, dev, cmd, parentTask):
         #print "Camera task:", cmd
         daqCmd = {}
         if 'channels' in cmd:
             daqCmd = cmd['channels']
-        DAQGenericTask.__init__(self, dev, daqCmd)
+        DAQGenericTask.__init__(self, dev, daqCmd, parentTask)
         
+        self.__startOrder = [], []
         self.camCmd = cmd
         self.lock = Mutex()
         self.recordHandle = None
@@ -494,7 +495,7 @@ class CameraTask(DAQGenericTask):
         self.stopRecording = False
         self.resultObj = None
         
-    def configure(self, tasks, startOrder):
+    def configure(self):
         ## Merge command into default values:
         prof = Profiler('Camera.CameraTask.configure', disabled=True)
         #print "CameraTask.configure"
@@ -522,16 +523,17 @@ class CameraTask(DAQGenericTask):
         if self.camCmd.get('triggerProtocol', False):
             restart = True
             daqName = self.dev.camConfig['triggerOutChannel']['device']
-            startOrder.remove(name)
-            startOrder.insert(startOrder.index(daqName)+1, name)
+            self.__startOrder = [daqName], []
+            #startOrder.remove(name)
+            #startOrder.insert(startOrder.index(daqName)+1, name)
             prof.mark('conf 1')
         
         ## If we are not triggering the daq, request that we start before everyone else
         ## (no need to stop, we will simply record frames as they are collected)
-        else:
-            startOrder.remove(name)
-            startOrder.insert(0, name)
-            prof.mark('conf 2')
+        #else:
+            #startOrder.remove(name)
+            #startOrder.insert(0, name)
+            #prof.mark('conf 2')
             
         ## We want to avoid this if at all possible since it may be very expensive
         if restart:
@@ -543,9 +545,13 @@ class CameraTask(DAQGenericTask):
         self.dev.acqThread.connectCallback(self.newFrame)
         
         ## Call the DAQ configure
-        DAQGenericTask.configure(self, tasks, startOrder)
+        DAQGenericTask.configure(self)
         prof.mark('DAQ configure')
         prof.finish()
+        
+    def getStartOrder(self):
+        order = DAQGenericTask.getStartOrder(self)
+        return order[0]+self.__startOrder[0], order[1]+self.__startOrder[1]
             
     def newFrame(self, frame):
         disconnect = False
