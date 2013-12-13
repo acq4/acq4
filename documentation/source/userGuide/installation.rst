@@ -27,17 +27,17 @@ Download and install all prerequisites in order:
 #. PyQt4: http://www.riverbankcomputing.co.uk/software/pyqt/download  (Be sure to get the version built for python 2.7)
 #. Numpy *and* Scipy: http://scipy.org/Download (look for the 'superpack' files for python 2.7)
 #. h5py:  http://code.google.com/p/h5py/downloads/list   (Windows installer for Python 2.7)
-#. pypasring version *1.5.2* http://sourceforge.net/projects/pyparsing/files/pyparsing/pyparsing-1.5.2/  (later versions do not work yet)
+#. pypasring version <=1.5.2 or >=1.5.6 http://sourceforge.net/projects/pyparsing/files/pyparsing/  
 #. pyserial: http://pypi.python.org/pypi/pyserial
 #. Python Imaging Library: http://www.pythonware.com/products/pil/
 
 I know it is tempting to use easy_install or cygwin for this. Don't. 
 Once all prerequisites are installed, download ACQ4 (stable or development branch):
     
-#. Download and install bazaar: http://wiki.bazaar.canonical.com/Download
+#. Download and install git: http://git-scm.com/downloads
 #. Start a command shell (or powershell or cygwin, if you prefer) and download a copy of the ACQ4 code::
     
-    bzr branch lp:acq4
+    git clone https://github.com/acq4/acq4.git
     
 If all goes well, you now have everything ready and can proceed to configuration.
 
@@ -49,8 +49,8 @@ Linux Installation
 
 Make all your windows-using friends jealous::
 
-    $ sudo apt-get install python-qt4 python-qt4-gl python-qt4-sql python-pyserial python-scipy python-pyparsing python-h5py python-imaging bzr python2.7-dev
-    $ bzr branch lp:acq4
+    $ sudo apt-get install python-qt4 python-qt4-gl python-qt4-sql python-pyserial python-scipy python-pyparsing python-h5py python-imaging git python2.7-dev
+    $ git clone https://github.com/acq4/acq4.git
     
 If you wish to develop modules / devices / analysis, you will probably need a few more packages: qt4-designer pyqt4-dev-tools
     
@@ -83,7 +83,6 @@ You will need to have xcode installed on your machine.
 Download and install the following packages in order:
     
 #. **Python 2.7**: http://python.org (available as a dmg)
-#. **Bazaar**: http://wiki.bazaar.canonical.com/Download (This needs to be done before installing Qt/PyQt)
 #. | **Qt 4.7**: http://qt.nokia.com 
    | Unfortunately the SDK installation does not work on 10.5 - But installing the libraries should be fine. 
    | The libraries are available as dmg
@@ -217,4 +216,4 @@ That's it, you're done and ready to setup configuration files.
 
 Resources:
 http://www.thisisthegreenroom.com/2011/installing-python-numpy-scipy-matplotlib-and-ipython-on-lion/
-http://luke.campagnola.me/code/acq4/download.html
+http://www.acq4.org/download.html
