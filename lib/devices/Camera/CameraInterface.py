@@ -695,7 +695,8 @@ class CameraInterface(QtCore.QObject):
         if self.currentFrame is None:
             return
         #im = QtGui.QGraphicsPixmapItem(px.copy())
-        im = pg.ImageItem(self.currentFrame.data(), levels=self.ui.histogram.getLevels(), removable=True)
+        data = self.currentFrame.data()
+        im = pg.ImageItem(data, levels=self.ui.histogram.getLevels(), lut=self.ui.histogram.getLookupTable(img=data), removable=True)
         im.sigRemoveRequested.connect(self.removePersistentFrame)
         #im.setCacheMode(im.NoCache)
         if len(self.persistentFrames) == 0:
