@@ -466,6 +466,7 @@ class RemoteEventHandler(object):
     def close(self, callSync='off', noCleanup=False, **kwds):
         try:
             self.send(request='close', opts=dict(noCleanup=noCleanup), callSync=callSync, **kwds)
+            self.exited = True
         except ClosedError:
             pass
     
