@@ -781,6 +781,7 @@ class GradientEditorItem(TickSliderItem):
     def removeTick(self, tick, finish=True):
         TickSliderItem.removeTick(self, tick)
         if finish:
+            self.updateGradient()
             self.sigGradientChangeFinished.emit(self)
         
         
