@@ -133,8 +133,8 @@ class SeqParameter(SimpleParameter):
                 'sequence': self['sequence'],
             }
             if self['sequence'] == 'range':
-                seqData['start'] = self.valueString(self.start)
-                seqData['stop'] = self.valueString(self.stop)
+                seqData['start'] = self.valueString(self.param('start'))
+                seqData['stop'] = self.valueString(self.param('stop'))
                 seqData['steps'] = self['steps']
                 seqData['log spacing'] = self['log spacing']
                 seqData['randomize'] = self['randomize']

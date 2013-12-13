@@ -16,8 +16,6 @@ import pyqtgraph as pg
 
 class MockCamera(Camera):
     
-    sigParamsChanged = QtCore.Signal(object)
-    
     def __init__(self, *args, **kargs):
         self.camLock = Mutex(Mutex.Recursive)  ## Lock to protect access to camera
         self.ringSize = 100
