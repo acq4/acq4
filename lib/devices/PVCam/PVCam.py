@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.devices.Camera import Camera
+from lib.devices.Camera import Camera, CameraTask
 from lib.drivers.pvcam import PVCam as PVCDriver
 from PyQt4 import QtCore
 import time, sys, traceback

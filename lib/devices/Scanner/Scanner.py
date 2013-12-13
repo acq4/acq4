@@ -370,7 +370,11 @@ class ScannerTask(DeviceTask):
         self.cmd = cmd
         self.daqTasks = []
         self.spotSize = None
-        #print "Scanner task:", cmd
+        
+        # We use this flag to exit from the sleep loop in start() in case the 
+        # task is aborted during that time.
+        self.aborted = False
+        self.abortLock = Mutex(recursive=True)
         
     def getConfigOrder(self):
         if self.cmd.get('simulateShutter', False) or 'program' in self.cmd:
@@ -478,13 +482,15 @@ class ScannerTask(DeviceTask):
                 daqTask.setWaveform(chConf['channel'], self.cmd[cmdName])
 
     def stop(self, abort=False):
+        if abort:
+            with self.abortLock:
+                print "Abort!"
+                self.aborted = True
         with MutexLocker(self.dev.lock):
             for t in self.daqTasks:
                 t.stop(abort=abort)
             self.dev.lastRunTime = ptime.time()
-            #for ch in self.cmd:
-                #if 'holding' in self.cmd[ch]:
-                    #self.dev.setHolding(ch, self.cmd[ch]['holding'])
+            
 
     def start(self):
         #print "start"
@@ -493,14 +499,21 @@ class ScannerTask(DeviceTask):
         if lastRunTime is None:
             #print "  no wait"
             return
-        now = ptime.time()
+        
+        # Task specifies that we have a minimum wait from the end of the previous
+        # task to the start of this one. This is used in photostimulation experiments
+        # that require variable downtime depending on the proximity of subsequent
+        # stimulations.
         if 'minWaitTime' in self.cmd:
-            
-            wait = self.cmd['minWaitTime'] - (now - lastRunTime)
-            #print "  min wait is ", self.cmd['minWaitTime'], "; sleep", wait
-            if wait > 0:
+            while True:
+                now = ptime.time()
+                wait = min(0.1, self.cmd['minWaitTime'] - (now - lastRunTime))
+                if wait <= 0:
+                    break
+                with self.abortLock:
+                    if self.aborted:
+                        return
                 time.sleep(wait)
-        #print "  >> GO"
             
     def getResult(self):
         #result = {}

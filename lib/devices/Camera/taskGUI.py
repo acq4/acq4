@@ -4,7 +4,7 @@ from TaskTemplate import *
 from lib.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
 from lib.devices.Device import TaskGui
 #from pyqtgraph.WidgetGroup import WidgetGroup
-from numpy import ndarray
+import numpy as np
 import pyqtgraph as pg
 #from pyqtgraph.graphicsItems import InfiniteLine, VTickGroup
 #from PyQt4 import Qwt5 as Qwt
@@ -151,10 +151,13 @@ class CameraTaskGui(DAQGenericTaskGui):
         if state['displayCheck']:
             if result is None or len(result.frames()) == 0:
                 print "No images returned from camera task."
+                self.ui.imageView.clear()
             else:
                 self.ui.imageView.setImage(result.asMetaArray())
                 #print "  frame times:", list(result['frames'].xvals('Time'))
-                self.frameTicks.setXVals(result.frameTimes())
+                frameTimes, precise = result.frameTimes()
+                if precise:
+                    self.frameTicks.setXVals(frameTimes)
                 
         DAQGenericTaskGui.handleResult(self, result.daqResult(), params)
         #if state['displayExposureCheck'] and 'expose' in result and result['expose'] is not None:

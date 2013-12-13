@@ -163,6 +163,12 @@ class ImageItem(GraphicsObject):
         self.translate(rect.left(), rect.top())
         self.scale(rect.width() / self.width(), rect.height() / self.height())
 
+    def clear(self):
+        self.image = None
+        self.prepareGeometryChange()
+        self.informViewBoundsChanged()
+        self.update()
+
     def setImage(self, image=None, autoLevels=None, **kargs):
         """
         Update the image displayed by this item. For more information on how the image

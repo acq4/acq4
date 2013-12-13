@@ -511,9 +511,20 @@ class CameraTask(DAQGenericTask):
             self.dev.pushState(stateName)
         prof.mark('collect params')
 
-        ## If we are sending a one-time trigger to start the camera, then it must be restarted to arm the trigger        
+        ## If we are sending a one-time trigger to start the camera, then it must be restarted to arm the trigger
+        ## (bulb and strobe modes only require a restart if the trigger mode is not already set; this is handled later)
         if params['triggerMode'] == 'TriggerStart':
             restart = True
+            
+        ## If the DAQ is triggering the camera, then the camera must start before the DAQ
+        if params['triggerMode'] != 'Normal':
+            daqName = self.dev.camConfig['triggerInChannel']['device']
+            self.__startOrder[1].append(daqName)
+            
+            ## Make sure we haven't requested something stupid..
+            if self.camCmd.get('triggerProtocol', False) and self.dev.camConfig['triggerOutChannel']['device'] == daqName:
+                raise Exception("Task requested camera to trigger and be triggered by the same device.")
+        
         (newParams, restart) = self.dev.setParams(params, autoCorrect=True, autoRestart=False)  ## we'll restart in a moment if needed..
         
         prof.mark('set params')
@@ -653,7 +664,8 @@ class CameraTaskResult:
             if self._marr is None:
                 arr = self.asArray()
                 if arr is not None:
-                    times, precise = self.frameTimes()[:arr.shape[0]]
+                    times, precise = self.frameTimes()
+                    times = times[:arr.shape[0]]
                     info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), self.info()]
                     #print info
                     self._marr = MetaArray(arr, info=info)

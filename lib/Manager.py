@@ -876,10 +876,10 @@ class Task:
         self.devNames.remove('protocol')
         self.devs = {devName: self.dm.getDevice(devName) for devName in self.devNames}
         
-        self.configDeps = {devName: [] for devName in self.devNames}
-        self.configCosts = {}
-        self.startDeps = {devName: [] for devName in self.devNames}
-        self.startCosts = {}
+        #self.configDeps = {devName: set() for devName in self.devNames}
+        #self.configCosts = {}
+        #self.startDeps = {devName: set() for devName in self.devNames}
+        #self.startCosts = {}
         
         ## Create task objects. Each task object is a handle to the device which is unique for this task run.
         self.tasks = {}
@@ -916,32 +916,58 @@ class Task:
         ## when they were initialized.
             
         # request config order dependencies from devices
-        deps = {devName: [] for devName in self.devNames}
+        deps = {devName: set() for devName in self.devNames}
         for devName, task in self.tasks.items():
             before, after = task.getConfigOrder()
-            deps[devName].extend(map(Task.getDevName, before))
+            deps[devName] |= set(map(Task.getDevName, before))
             for t in map(self.getDevName, after):
-                deps[t].append(devName)
+                deps[t].add(devName)
                 
         # request estimated configure time
         cost = {devName: self.tasks[devName].getPrepTimeEstimate() for devName in self.devNames}
         
+        # convert sets to lists
+        deps = dict([(k, list(deps[k])) for k in deps.keys()])
+        
+        # for testing, randomize the key order and ensure all devices are still started in the correct order
+        #keys = deps.keys()
+        #import random
+        #random.shuffle(keys)
+        #deps = OrderedDict([(k, deps[k]) for k in keys])
+        
         #return sorted order
-        return self.toposort(deps, cost)
+        order = self.toposort(deps, cost)
+        #print "Config Order:"
+        #print "    deps:", deps
+        #print "    cost:", cost
+        #print "    order:", order
+        return order
         
     def getStartOrder(self):
         ## determine the order in which tasks must be started
         ## This is determined by tasks having called Task.addStartDependency()
         ## when they were initialized.
-        deps = {devName: [] for devName in self.devNames}
+        deps = {devName: set() for devName in self.devNames}
         for devName, task in self.tasks.items():
             before, after = task.getStartOrder()
-            deps[devName].extend(map(Task.getDevName, before))
+            deps[devName] |= set(map(Task.getDevName, before))
             for t in map(self.getDevName, after):
-                deps[t].append(devName)
+                deps[t].add(devName)
                 
+        deps = dict([(k, list(deps[k])) for k in deps.keys()])
+        
+        # for testing, randomize the key order and ensure all devices are still started in the correct order
+        #keys = deps.keys()
+        #import random
+        #random.shuffle(keys)
+        #deps = OrderedDict([(k, deps[k]) for k in keys])
+        
         #return sorted order
-        return self.toposort(deps)
+        #print "Start Order:"
+        #print "    deps:", deps
+        order = self.toposort(deps)
+        #print "    order:", order
+        return order
         
     def execute(self, block=True, processEvents=True):
         """Start the task.
@@ -1013,10 +1039,11 @@ class Task:
             for devName in startOrder:
                 #print "  ", devName
                 try:
+                    self.startedDevs.append(devName)
                     self.tasks[devName].start()
                 except:
+                    self.startedDevs.remove(devName)
                     raise HelpfulException("Error starting device '%s'; aborting task." % devName)
-                self.startedDevs.append(devName)
                 prof.mark('start %s' % devName)
             self.startTime = ptime.time()
             

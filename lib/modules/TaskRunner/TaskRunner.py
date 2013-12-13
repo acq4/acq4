@@ -1106,6 +1106,7 @@ class TaskThread(QtCore.QThread):
         self.stopThread = True
         self.abortThread = False
         self.paused = False
+        self._currentTask = None
                 
     def startTask(self, task, paramSpace=None):
         #print "TaskThread:startTask", self.lock.depth(), self.lock
@@ -1232,12 +1233,18 @@ class TaskThread(QtCore.QThread):
             
             self.lastRunTime = ptime.time()
             #self.emit(QtCore.SIGNAL('taskStarted'), params)
-            self.sigTaskStarted.emit(params)
             
             try:
+                l.relock()
+                self._currentTask = task
+                l.unlock()
                 task.execute(block=False)
+                self.sigTaskStarted.emit(params)
                 prof.mark('execute')
             except:
+                l.relock()
+                self._currentTask = None
+                l.unlock()
                 try:
                     task.stop(abort=True)
                 except:
@@ -1258,7 +1265,8 @@ class TaskThread(QtCore.QThread):
                     l.relock()
                     if self.abortThread:
                         l.unlock()
-                        task.stop(abort=True)
+                        # should be taken care of in TaskThread.abort()
+                        #task.stop(abort=True)
                         return
                     l.unlock()
                     time.sleep(1e-3)
@@ -1271,6 +1279,10 @@ class TaskThread(QtCore.QThread):
                 task.stop(abort=True)
                 print ""
                 raise HelpfulException("\nError during task execution:", sys.exc_info())
+            finally:
+                l.relock()
+                self._currentTask = None
+                l.unlock()
             #print "\nAFTER:\n", cmd
             prof.mark('getResult')
             
@@ -1288,21 +1300,23 @@ class TaskThread(QtCore.QThread):
         prof.finish()
         
     def checkStop(self):
-        with MutexLocker(self.lock):
+        with self.lock:
             if self.stopThread:
                 raise Exception('stop')
         
         
     def stop(self, block=False):
-        with MutexLocker(self.lock):
+        with self.lock:
             self.stopThread = True
         if block:
             if not self.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
             
     def abort(self):
-        with MutexLocker(self.lock):
-            self.abortThread = True
+        with self.lock:
+            if self._currentTask is not None:
+                self._currentTask.stop(abort=True)
+                self.abortThread = True
 
 
 

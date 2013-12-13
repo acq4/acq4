@@ -288,6 +288,9 @@ class ImageView(QtGui.QWidget):
         prof.mark('7')
         prof.finish()
 
+    def clear(self):
+        self.image = None
+        self.imageItem.clear()
         
     def play(self, rate):
         """Begin automatically stepping frames forward at the given rate (in fps).
