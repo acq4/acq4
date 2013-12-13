@@ -379,8 +379,14 @@ class Camera(DAQGeneric, OptomechDevice):
         with self.lock:
             self.scopeState['objective'] = obj.name()
             self.scopeState['id'] += 1
-        
-        
+    @staticmethod 
+    def makeFrameTransform(region, binning):
+        """Make a transform that maps from image coordinates to whole-sensor coordinates,
+        given the region-of-interest and binning used to acquire the image."""
+        tr = SRTTransform3D()
+        tr.translate(*region[:2])
+        tr.scale(binning[0], binning[1], 1)
+        return tr
         
     ### Proxy signals and functions for acqThread:
     ###############################################
@@ -410,13 +416,12 @@ class Frame(object):
         self._data = data
         self._info = info
         
-        ## make frame transform
-        rgn = self._info['region']
-        binn = self._info['binning']
-        tr = SRTTransform3D()
-        tr.translate(*rgn[:2])
-        tr.scale(binn[0], binn[1], 1)
+        ## make frame transform to map from image coordinates to sensor coordinates.
+        ## (these may differ due to binning and region of interest settings)
+        tr = Camera.makeFrameTransform(self._info['region'], self._info['binning'])
         self._frameTransform = tr
+        
+        ## Complete transform maps from image coordinates to global.
         self._info['transform'] = SRTTransform3D(self.cameraTransform() * tr)
         
         

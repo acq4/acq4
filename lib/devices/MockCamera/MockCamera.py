@@ -218,7 +218,12 @@ class MockCamera(Camera):
             
             ## draw cells
             px = (self.pixelVectors()[0]**2).sum() ** 0.5
-            tr = pg.SRTTransform(self.inverseGlobalTransform())
+            
+            ## Generate transform that maps grom global coordinates to image coordinates
+            cameraTr = pg.SRTTransform3D(self.inverseGlobalTransform())
+            frameTr = self.makeFrameTransform(region, [1, 1]).inverted()[0] # note we use binning=(1,1) here because the image is downsampled later.
+            tr = pg.SRTTransform(frameTr * cameraTr)
+            
             for cell in self.cells:
                 w = cell['size'] / px
                 pos = pg.Point(cell['x'], cell['y'])
@@ -226,7 +231,7 @@ class MockCamera(Camera):
                 start = (int(imgPos.x()), int(imgPos.y()))
                 stop = (start[0]+w, start[1]+w)
                 val = cell['intensity'] * cell['value'] * self.getParam('exposure')
-                data[start[0]:stop[0], start[1]:stop[1]] += val
+                data[max(0,start[0]):max(0,stop[0]), max(0,start[1]):max(0,stop[1])] += val
             
             
             data = fn.downsample(data, bin[0], axis=0)
