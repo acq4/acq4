@@ -400,6 +400,10 @@ class RemoteEventHandler(object):
                                       traceback
         =============  =====================================================================
         """
+        if self.exited:
+            self.debugMsg('  send: exited already; raise ClosedError.')
+            raise ClosedError()
+        
         with self.sendLock:
             #if len(kwds) > 0:
                 #print "Warning: send() ignored args:", kwds
@@ -460,7 +464,10 @@ class RemoteEventHandler(object):
                 return req
         
     def close(self, callSync='off', noCleanup=False, **kwds):
-        self.send(request='close', opts=dict(noCleanup=noCleanup), callSync=callSync, **kwds)
+        try:
+            self.send(request='close', opts=dict(noCleanup=noCleanup), callSync=callSync, **kwds)
+        except ClosedError:
+            pass
     
     def getResult(self, reqId):
         ## raises NoResultError if the result is not available yet
