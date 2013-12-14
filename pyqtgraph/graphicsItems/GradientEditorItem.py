@@ -6,6 +6,7 @@ from .GraphicsWidget import GraphicsWidget
 import weakref
 from pyqtgraph.pgcollections import OrderedDict
 from pyqtgraph.colormap import ColorMap
+import pyqtgraph as pg
 
 import numpy as np
 
@@ -55,6 +56,7 @@ class TickSliderItem(GraphicsWidget):
         self.maxDim = 20
         self.allowAdd = allowAdd
         self.dataParent = dataParent
+        self.moving = False
         if 'tickPen' in kargs:
             self.tickPen = fn.mkPen(kargs['tickPen'])
         else:
@@ -606,7 +608,8 @@ class GradientEditorItem(TickSliderItem):
     def raiseTickContextMenu(self, tick, ev):
         self.tickMenu = TickMenu(tick, self)
         self.tickMenu.popup(ev.screenPos().toQPoint())
-            def tickMoved(self, tick, pos):
+    
+    def tickMoved(self, tick, pos):
         #private
         TickSliderItem.tickMoved(self, tick, pos)
         self.updateGradient()
@@ -778,6 +781,7 @@ class GradientEditorItem(TickSliderItem):
     def removeTick(self, tick, finish=True):
         TickSliderItem.removeTick(self, tick)
         if finish:
+            self.updateGradient()
             self.sigGradientChangeFinished.emit(self)
         
         
@@ -940,9 +944,9 @@ class TickMenu(QtGui.QMenu):
         dataVal = value=sliderItem.tickDataValue(tick)
         if dataVal == None:
             dataVal = 0
-        self.fracPosSpin = SpinBox()
+        self.fracPosSpin = pg.SpinBox()
         self.fracPosSpin.setOpts(value=sliderItem.tickValue(tick), bounds=(0.0, 1.0), step=0.01, decimals=2)
-        self.dataPosSpin = SpinBox(value=dataVal)
+        self.dataPosSpin = pg.SpinBox(value=dataVal)
         self.dataPosSpin.setOpts(decimals=3, siPrefix=True)
                 
         l.addWidget(QtGui.QLabel("Position (fractional):"), 0,0)

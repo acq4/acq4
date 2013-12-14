@@ -25,36 +25,6 @@ def strDict(d):
     return dict([(str(k), v) for k, v in d.items()])
 
 
-def toposort(deps, nodes=None, seen=None, stack=None, depth=0):
-    """Topological sort. Arguments are:
-      deps    dictionary describing dependencies where a:[b,c] means "a depends on b and c"
-      nodes   optional, specifies list of starting nodes (these should be the nodes 
-              which are not depended on by any other nodes) 
-    """
-    
-    if nodes is None:
-        ## run through deps to find nodes that are not depended upon
-        rem = set()
-        for dep in deps.values():
-            rem |= set(dep)
-        nodes = set(deps.keys()) - rem
-    if seen is None:
-        seen = set()
-        stack = []
-    sorted = []
-    #print "  "*depth, "Starting from", nodes
-    for n in nodes:
-        if n in stack:
-            raise Exception("Cyclic dependency detected", stack + [n])
-        if n in seen:
-            continue
-        seen.add(n)
-        #print "  "*depth, "  descending into", n, deps[n]
-        sorted.extend( toposort(deps, deps[n], seen, stack+[n], depth=depth+1))
-        #print "  "*depth, "  Added", n
-        sorted.append(n)
-        #print "  "*depth, "  ", sorted
-    return sorted
         
 
 class Flowchart(Node):
@@ -350,7 +320,7 @@ class Flowchart(Node):
         #print "DEPS:", deps
         ## determine correct node-processing order
         #deps[self] = []
-        order = toposort(deps)
+        order = pg.toposort(deps)
         #print "ORDER1:", order
         
         ## construct list of operations
@@ -399,7 +369,7 @@ class Flowchart(Node):
                     deps[node].extend(t.dependentNodes())
             
             ## determine order of updates 
-            order = toposort(deps, nodes=[startNode])
+            order = pg.toposort(deps, nodes=[startNode])
             order.reverse()
             
             ## keep track of terminals that have been updated
