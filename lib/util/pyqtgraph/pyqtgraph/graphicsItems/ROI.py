@@ -1206,11 +1206,7 @@ class Handle(UIGraphicsItem):
         
     def getMenu(self):
         return self.menu
-                
-            
-    def getContextMenus(self, event):
-        return [self.menu]
-    
+
     def raiseContextMenu(self, ev):
         menu = self.scene().addParentContextMenus(self, self.getMenu(), ev)
         
