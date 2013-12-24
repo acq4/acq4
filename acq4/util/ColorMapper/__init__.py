@@ -1,1 +1,1 @@
-from acq4.util.ColorMapper import ColorMapper
+from .ColorMapper import ColorMapper

@@ -1,1 +1,1 @@
-from acq4.util.DatabaseGui import DatabaseGui
+from .DatabaseGui import DatabaseGui

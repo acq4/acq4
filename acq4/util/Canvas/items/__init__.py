@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import os, inspect
-from CanvasItem import CanvasItem
+from .CanvasItem import CanvasItem
 #import acq4.pyqtgraph.canvas.items as items
 
 def listMods():
