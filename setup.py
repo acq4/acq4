@@ -24,6 +24,7 @@ if m is None or len(m.groups()) != 1:
     raise Exception("Cannot determine __version__ from init file: '%s'!" % initfile)
 version = m.group(1).strip('\'\"')
 initVersion = version
+print "Current base version:", version
 
 # If this is a git checkout, try to generate a more decriptive version string
 try:
@@ -33,7 +34,7 @@ try:
             assert commit[:7] == 'commit '
             return commit[7:]
         
-        # Find last tag matching "pyqtgraph-.*"
+        # Find last tag matching "acq4-.*"
         tagNames = check_output(['git', 'tag'], universal_newlines=True).strip().split('\n')
         while True:
             if len(tagNames) == 0:
