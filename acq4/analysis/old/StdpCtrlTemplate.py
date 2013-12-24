@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/analysis/old/StdpCtrlTemplate.ui'
+# Form implementation generated from reading ui file './acq4/analysis/old/StdpCtrlTemplate.ui'
 #
-# Created: Wed May 18 20:44:10 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Tue Dec 24 01:49:15 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_StdpCtrlWidget(object):
     def setupUi(self, StdpCtrlWidget):
@@ -56,11 +65,11 @@ class Ui_StdpCtrlWidget(object):
         QtCore.QMetaObject.connectSlotsByName(StdpCtrlWidget)
 
     def retranslateUi(self, StdpCtrlWidget):
-        StdpCtrlWidget.setWindowTitle(QtGui.QApplication.translate("StdpCtrlWidget", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("StdpCtrlWidget", "PspThreshold:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("StdpCtrlWidget", "Post-stim Duration (ms):", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("StdpCtrlWidget", "Slope width:", None, QtGui.QApplication.UnicodeUTF8))
-        self.apExclusionCheck.setText(QtGui.QApplication.translate("StdpCtrlWidget", "Exclude APs", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("StdpCtrlWidget", "Exclusion Threshold (mV):", None, QtGui.QApplication.UnicodeUTF8))
+        StdpCtrlWidget.setWindowTitle(_translate("StdpCtrlWidget", "Form", None))
+        self.label.setText(_translate("StdpCtrlWidget", "PspThreshold:", None))
+        self.label_2.setText(_translate("StdpCtrlWidget", "Post-stim Duration (ms):", None))
+        self.label_4.setText(_translate("StdpCtrlWidget", "Slope width:", None))
+        self.apExclusionCheck.setText(_translate("StdpCtrlWidget", "Exclude APs", None))
+        self.label_3.setText(_translate("StdpCtrlWidget", "Exclusion Threshold (mV):", None))
 
 from SpinBox import SpinBox

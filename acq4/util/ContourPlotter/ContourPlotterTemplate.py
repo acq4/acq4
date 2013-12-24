@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'ContourPlotterTemplate.ui'
+# Form implementation generated from reading ui file './acq4/util/ContourPlotter/ContourPlotterTemplate.ui'
 #
-# Created: Thu Mar 22 11:09:49 2012
-#      by: PyQt4 UI code generator 4.9
+# Created: Tue Dec 24 01:49:16 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -34,12 +43,12 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.drawBtn.setText(QtGui.QApplication.translate("Form", "Draw", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(0, QtGui.QApplication.translate("Form", "Param", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(1, QtGui.QApplication.translate("Form", "Threshold", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(2, QtGui.QApplication.translate("Form", "% of max", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(3, QtGui.QApplication.translate("Form", "Color", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(4, QtGui.QApplication.translate("Form", "Remove", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.drawBtn.setText(_translate("Form", "Draw", None))
+        self.tree.headerItem().setText(0, _translate("Form", "Param", None))
+        self.tree.headerItem().setText(1, _translate("Form", "Threshold", None))
+        self.tree.headerItem().setText(2, _translate("Form", "% of max", None))
+        self.tree.headerItem().setText(3, _translate("Form", "Color", None))
+        self.tree.headerItem().setText(4, _translate("Form", "Remove", None))
 
-from acq4.pyqtgraph import TreeWidget
+from pyqtgraph import TreeWidget

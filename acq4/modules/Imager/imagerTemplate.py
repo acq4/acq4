@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file '.\lib\modules\imagerTemplate.ui'
+# Form implementation generated from reading ui file './acq4/modules/Imager/imagerTemplate.ui'
 #
-# Created: Tue Aug 06 15:28:11 2013
-#      by: PyQt4 UI code generator 4.9.1
+# Created: Tue Dec 24 01:49:10 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -302,31 +311,31 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_6.setText(QtGui.QApplication.translate("Form", "Xpos (mm)", None, QtGui.QApplication.UnicodeUTF8))
-        self.xpos.setText(QtGui.QApplication.translate("Form", "TextLabel", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Width (um)", None, QtGui.QApplication.UnicodeUTF8))
-        self.width.setText(QtGui.QApplication.translate("Form", "TextLabel", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_8.setText(QtGui.QApplication.translate("Form", "Ypos (mm)", None, QtGui.QApplication.UnicodeUTF8))
-        self.ypos.setText(QtGui.QApplication.translate("Form", "TextLabel", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("Form", "Height (um)", None, QtGui.QApplication.UnicodeUTF8))
-        self.height.setText(QtGui.QApplication.translate("Form", "TextLabel", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_11.setText(QtGui.QApplication.translate("Form", "Pixel (um)", None, QtGui.QApplication.UnicodeUTF8))
-        self.pixelSize.setText(QtGui.QApplication.translate("Form", "TextLabel", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("Form", "Dwell  (us)", None, QtGui.QApplication.UnicodeUTF8))
-        self.dwellTime.setText(QtGui.QApplication.translate("Form", "TextLabel", None, QtGui.QApplication.UnicodeUTF8))
-        self.snap_Button.setText(QtGui.QApplication.translate("Form", "Snap", None, QtGui.QApplication.UnicodeUTF8))
-        self.video_button.setText(QtGui.QApplication.translate("Form", "Video", None, QtGui.QApplication.UnicodeUTF8))
-        self.snap_Standard_Button.setText(QtGui.QApplication.translate("Form", "Snap Std", None, QtGui.QApplication.UnicodeUTF8))
-        self.video_std_button.setText(QtGui.QApplication.translate("Form", "Video Std", None, QtGui.QApplication.UnicodeUTF8))
-        self.snap_High_Button.setText(QtGui.QApplication.translate("Form", "Snap High", None, QtGui.QApplication.UnicodeUTF8))
-        self.video_fast_button.setText(QtGui.QApplication.translate("Form", "Video Fast", None, QtGui.QApplication.UnicodeUTF8))
-        self.record_button.setText(QtGui.QApplication.translate("Form", "Record Stack", None, QtGui.QApplication.UnicodeUTF8))
-        self.Align_to_Camera.setText(QtGui.QApplication.translate("Form", "Align to Camera", None, QtGui.QApplication.UnicodeUTF8))
-        self.saveROI.setText(QtGui.QApplication.translate("Form", "Save ROI", None, QtGui.QApplication.UnicodeUTF8))
-        self.set_TilesButton.setText(QtGui.QApplication.translate("Form", "Set Tile Area", None, QtGui.QApplication.UnicodeUTF8))
-        self.restoreROI.setText(QtGui.QApplication.translate("Form", "Restore ROI", None, QtGui.QApplication.UnicodeUTF8))
-        self.run_button.setText(QtGui.QApplication.translate("Form", "Run", None, QtGui.QApplication.UnicodeUTF8))
-        self.stop_button.setText(QtGui.QApplication.translate("Form", "Stop", None, QtGui.QApplication.UnicodeUTF8))
-        self.hide_check.setText(QtGui.QApplication.translate("Form", "Hide Overlay", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.label_6.setText(_translate("Form", "Xpos (mm)", None))
+        self.xpos.setText(_translate("Form", "TextLabel", None))
+        self.label.setText(_translate("Form", "Width (um)", None))
+        self.width.setText(_translate("Form", "TextLabel", None))
+        self.label_8.setText(_translate("Form", "Ypos (mm)", None))
+        self.ypos.setText(_translate("Form", "TextLabel", None))
+        self.label_4.setText(_translate("Form", "Height (um)", None))
+        self.height.setText(_translate("Form", "TextLabel", None))
+        self.label_11.setText(_translate("Form", "Pixel (um)", None))
+        self.pixelSize.setText(_translate("Form", "TextLabel", None))
+        self.label_3.setText(_translate("Form", "Dwell  (us)", None))
+        self.dwellTime.setText(_translate("Form", "TextLabel", None))
+        self.snap_Button.setText(_translate("Form", "Snap", None))
+        self.video_button.setText(_translate("Form", "Video", None))
+        self.snap_Standard_Button.setText(_translate("Form", "Snap Std", None))
+        self.video_std_button.setText(_translate("Form", "Video Std", None))
+        self.snap_High_Button.setText(_translate("Form", "Snap High", None))
+        self.video_fast_button.setText(_translate("Form", "Video Fast", None))
+        self.record_button.setText(_translate("Form", "Record Stack", None))
+        self.Align_to_Camera.setText(_translate("Form", "Align to Camera", None))
+        self.saveROI.setText(_translate("Form", "Save ROI", None))
+        self.set_TilesButton.setText(_translate("Form", "Set Tile Area", None))
+        self.restoreROI.setText(_translate("Form", "Restore ROI", None))
+        self.run_button.setText(_translate("Form", "Run", None))
+        self.stop_button.setText(_translate("Form", "Stop", None))
+        self.hide_check.setText(_translate("Form", "Hide Overlay", None))
 

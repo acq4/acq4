@@ -5,6 +5,7 @@ from .TextItem import TextItem
 import numpy as np
 from .. import functions as fn
 from .. import getConfigOption
+from ..Point import Point
 
 __all__ = ['ScaleBar']
 
@@ -60,7 +61,7 @@ class ScaleBar(GraphicsObject, GraphicsWidgetAnchor):
     def setParentItem(self, p):
         ret = GraphicsObject.setParentItem(self, p)
         if self.offset is not None:
-            offset = pg.Point(self.offset)
+            offset = Point(self.offset)
             anchorx = 1 if offset[0] <= 0 else 0
             anchory = 1 if offset[1] <= 0 else 0
             anchor = (anchorx, anchory)

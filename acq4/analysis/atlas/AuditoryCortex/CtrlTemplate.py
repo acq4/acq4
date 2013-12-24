@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './acq4/analysis/atlas/AuditoryCortex/CtrlTemplate.ui'
 #
-# Created: Mon Dec 23 22:47:00 2013
+# Created: Tue Dec 24 01:49:12 2013
 #      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!

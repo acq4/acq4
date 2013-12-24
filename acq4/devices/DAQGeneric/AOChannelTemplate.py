@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './acq4/devices/DAQGeneric/AOChannelTemplate.ui'
 #
-# Created: Mon Dec 23 22:46:58 2013
+# Created: Tue Dec 24 01:49:08 2013
 #      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
@@ -130,5 +130,5 @@ class Ui_Form(object):
         self.functionCheck.setText(_translate("Form", "Enable Function", None))
         self.displayCheck.setText(_translate("Form", "Display", None))
 
-from acq4.util.generator.StimGenerator import StimGenerator
 from acq4.pyqtgraph import SpinBox
+from acq4.util.generator.StimGenerator import StimGenerator

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/analysis/old/AnalyzerTemplate.ui'
+# Form implementation generated from reading ui file './acq4/analysis/old/AnalyzerTemplate.ui'
 #
-# Created: Wed May 18 20:44:09 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Tue Dec 24 01:49:15 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -120,23 +129,23 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
-        MainWindow.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Analysis", None, QtGui.QApplication.UnicodeUTF8))
-        self.loaderDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Loader", None, QtGui.QApplication.UnicodeUTF8))
-        self.dataDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Data", None, QtGui.QApplication.UnicodeUTF8))
-        self.loadDataBtn.setText(QtGui.QApplication.translate("MainWindow", "Load Data", None, QtGui.QApplication.UnicodeUTF8))
-        self.loadSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Load Sequence", None, QtGui.QApplication.UnicodeUTF8))
-        self.loadSessionBtn.setText(QtGui.QApplication.translate("MainWindow", "Load Session", None, QtGui.QApplication.UnicodeUTF8))
-        self.dataSourceCombo.setItemText(0, QtGui.QApplication.translate("MainWindow", "Select source..", None, QtGui.QApplication.UnicodeUTF8))
-        self.recompSelectedBtn.setText(QtGui.QApplication.translate("MainWindow", "Recompute Selected", None, QtGui.QApplication.UnicodeUTF8))
-        self.recompAllBtn.setText(QtGui.QApplication.translate("MainWindow", "Recompute All", None, QtGui.QApplication.UnicodeUTF8))
-        self.saveSelectedBtn.setText(QtGui.QApplication.translate("MainWindow", "Save Selected", None, QtGui.QApplication.UnicodeUTF8))
-        self.saveAllBtn.setText(QtGui.QApplication.translate("MainWindow", "Save Session", None, QtGui.QApplication.UnicodeUTF8))
-        self.dockWidget_3.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Components", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("MainWindow", "Add:", None, QtGui.QApplication.UnicodeUTF8))
-        self.addOutputBtn.setText(QtGui.QApplication.translate("MainWindow", "Output", None, QtGui.QApplication.UnicodeUTF8))
-        self.addPlotBtn.setText(QtGui.QApplication.translate("MainWindow", "Plot", None, QtGui.QApplication.UnicodeUTF8))
-        self.addCanvasBtn.setText(QtGui.QApplication.translate("MainWindow", "Canvas", None, QtGui.QApplication.UnicodeUTF8))
-        self.addTableBtn.setText(QtGui.QApplication.translate("MainWindow", "Table", None, QtGui.QApplication.UnicodeUTF8))
-        self.removeDockBtn.setText(QtGui.QApplication.translate("MainWindow", "Remove", None, QtGui.QApplication.UnicodeUTF8))
+        MainWindow.setWindowTitle(_translate("MainWindow", "Analysis", None))
+        self.loaderDock.setWindowTitle(_translate("MainWindow", "Loader", None))
+        self.dataDock.setWindowTitle(_translate("MainWindow", "Data", None))
+        self.loadDataBtn.setText(_translate("MainWindow", "Load Data", None))
+        self.loadSequenceBtn.setText(_translate("MainWindow", "Load Sequence", None))
+        self.loadSessionBtn.setText(_translate("MainWindow", "Load Session", None))
+        self.dataSourceCombo.setItemText(0, _translate("MainWindow", "Select source..", None))
+        self.recompSelectedBtn.setText(_translate("MainWindow", "Recompute Selected", None))
+        self.recompAllBtn.setText(_translate("MainWindow", "Recompute All", None))
+        self.saveSelectedBtn.setText(_translate("MainWindow", "Save Selected", None))
+        self.saveAllBtn.setText(_translate("MainWindow", "Save Session", None))
+        self.dockWidget_3.setWindowTitle(_translate("MainWindow", "Components", None))
+        self.label.setText(_translate("MainWindow", "Add:", None))
+        self.addOutputBtn.setText(_translate("MainWindow", "Output", None))
+        self.addPlotBtn.setText(_translate("MainWindow", "Plot", None))
+        self.addCanvasBtn.setText(_translate("MainWindow", "Canvas", None))
+        self.addTableBtn.setText(_translate("MainWindow", "Table", None))
+        self.removeDockBtn.setText(_translate("MainWindow", "Remove", None))
 
 from acq4.util.InterfaceCombo import InterfaceCombo

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/analysis/modules/pbm_ImageAnalysis/ctrlTemplatePhysiology.ui'
+# Form implementation generated from reading ui file './acq4/analysis/modules/pbm_ImageAnalysis/ctrlTemplatePhysiology.ui'
 #
-# Created: Sat Jun 23 18:12:53 2012
-#      by: PyQt4 UI code generator 4.9.1
+# Created: Tue Dec 24 01:49:14 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -226,20 +235,20 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Physiology Analysis Functions", None, QtGui.QApplication.UnicodeUTF8))
-        self.ImagePhys_STA.setText(QtGui.QApplication.translate("Form", "Spike-triggered Average", None, QtGui.QApplication.UnicodeUTF8))
-        self.ImagePhys_RevSTA.setText(QtGui.QApplication.translate("Form", "Rev STA", None, QtGui.QApplication.UnicodeUTF8))
-        self.ImagePhys_BTA.setText(QtGui.QApplication.translate("Form", "Burst-triggered Average", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("Form", "Event Thresh", None, QtGui.QApplication.UnicodeUTF8))
-        self.ImagePhys_PhysThresh.setSuffix(QtGui.QApplication.translate("Form", " pA", None, QtGui.QApplication.UnicodeUTF8))
-        self.ImagePhys_PhysSign.setItemText(0, QtGui.QApplication.translate("Form", "+", None, QtGui.QApplication.UnicodeUTF8))
-        self.ImagePhys_PhysSign.setItemText(1, QtGui.QApplication.translate("Form", "-", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_7.setText(QtGui.QApplication.translate("Form", "LPF", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Event Sign", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_6.setText(QtGui.QApplication.translate("Form", "Physiology", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("Form", "Minimum # spikes/burst", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_8.setText(QtGui.QApplication.translate("Form", "Max burst ISI (msec)", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_9.setText(QtGui.QApplication.translate("Form", "Min Interburst Interval", None, QtGui.QApplication.UnicodeUTF8))
-        self.ImagePhys_DetectSpikes.setText(QtGui.QApplication.translate("Form", "Detect Spikes", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.groupBox.setTitle(_translate("Form", "Physiology Analysis Functions", None))
+        self.ImagePhys_STA.setText(_translate("Form", "Spike-triggered Average", None))
+        self.ImagePhys_RevSTA.setText(_translate("Form", "Rev STA", None))
+        self.ImagePhys_BTA.setText(_translate("Form", "Burst-triggered Average", None))
+        self.label_4.setText(_translate("Form", "Event Thresh", None))
+        self.ImagePhys_PhysThresh.setSuffix(_translate("Form", " pA", None))
+        self.ImagePhys_PhysSign.setItemText(0, _translate("Form", "+", None))
+        self.ImagePhys_PhysSign.setItemText(1, _translate("Form", "-", None))
+        self.label_7.setText(_translate("Form", "LPF", None))
+        self.label_2.setText(_translate("Form", "Event Sign", None))
+        self.label_6.setText(_translate("Form", "Physiology", None))
+        self.label_5.setText(_translate("Form", "Minimum # spikes/burst", None))
+        self.label_8.setText(_translate("Form", "Max burst ISI (msec)", None))
+        self.label_9.setText(_translate("Form", "Min Interburst Interval", None))
+        self.ImagePhys_DetectSpikes.setText(_translate("Form", "Detect Spikes", None))
 

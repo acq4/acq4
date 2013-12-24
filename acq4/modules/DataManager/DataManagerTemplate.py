@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/modules/DataManager/DataManagerTemplate.ui'
+# Form implementation generated from reading ui file './acq4/modules/DataManager/DataManagerTemplate.ui'
 #
-# Created: Sun Apr 14 15:34:07 2013
-#      by: PyQt4 UI code generator 4.9.4
+# Created: Tue Dec 24 01:49:09 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -170,18 +179,18 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
-        MainWindow.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Data Manager", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("MainWindow", "Top-level Directory:", None, QtGui.QApplication.UnicodeUTF8))
-        self.selectDirBtn.setText(QtGui.QApplication.translate("MainWindow", "...", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("MainWindow", "Storage Directory:", None, QtGui.QApplication.UnicodeUTF8))
-        self.setCurrentDirBtn.setText(QtGui.QApplication.translate("MainWindow", "Set", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("MainWindow", "Log Directory:", None, QtGui.QApplication.UnicodeUTF8))
-        self.setLogDirBtn.setText(QtGui.QApplication.translate("MainWindow", "Set", None, QtGui.QApplication.UnicodeUTF8))
-        self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab), QtGui.QApplication.translate("MainWindow", "Info", None, QtGui.QApplication.UnicodeUTF8))
-        self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.logTab), QtGui.QApplication.translate("MainWindow", "Log", None, QtGui.QApplication.UnicodeUTF8))
-        self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab_3), QtGui.QApplication.translate("MainWindow", "Data", None, QtGui.QApplication.UnicodeUTF8))
-        self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.analysisTab), QtGui.QApplication.translate("MainWindow", "Analysis", None, QtGui.QApplication.UnicodeUTF8))
-        self.logDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Current Log", None, QtGui.QApplication.UnicodeUTF8))
+        MainWindow.setWindowTitle(_translate("MainWindow", "Data Manager", None))
+        self.label_2.setText(_translate("MainWindow", "Top-level Directory:", None))
+        self.selectDirBtn.setText(_translate("MainWindow", "...", None))
+        self.label.setText(_translate("MainWindow", "Storage Directory:", None))
+        self.setCurrentDirBtn.setText(_translate("MainWindow", "Set", None))
+        self.label_3.setText(_translate("MainWindow", "Log Directory:", None))
+        self.setLogDirBtn.setText(_translate("MainWindow", "Set", None))
+        self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab), _translate("MainWindow", "Info", None))
+        self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.logTab), _translate("MainWindow", "Log", None))
+        self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab_3), _translate("MainWindow", "Data", None))
+        self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.analysisTab), _translate("MainWindow", "Analysis", None))
+        self.logDock.setWindowTitle(_translate("MainWindow", "Current Log", None))
 
 from FileInfoView import FileInfoView
 from acq4.util.DirTreeWidget import DirTreeWidget

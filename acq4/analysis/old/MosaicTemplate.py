@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/analysis/old/MosaicTemplate.ui'
+# Form implementation generated from reading ui file './acq4/analysis/old/MosaicTemplate.ui'
 #
-# Created: Wed May 18 20:44:10 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Tue Dec 24 01:49:16 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -143,25 +152,25 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
-        MainWindow.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Mosaic", None, QtGui.QApplication.UnicodeUTF8))
-        self.setRootBtn.setText(QtGui.QApplication.translate("MainWindow", "--> Set Root Directory", None, QtGui.QApplication.UnicodeUTF8))
-        self.loadBtn.setText(QtGui.QApplication.translate("MainWindow", "Load Selected -->", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("MainWindow", "Transformations", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("MainWindow", "Translate", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("MainWindow", "Rotate", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("MainWindow", "Scale", None, QtGui.QApplication.UnicodeUTF8))
-        self.saveBtn.setText(QtGui.QApplication.translate("MainWindow", "Save", None, QtGui.QApplication.UnicodeUTF8))
-        self.saveAllBtn.setText(QtGui.QApplication.translate("MainWindow", "Save All", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_3.setTitle(QtGui.QApplication.translate("MainWindow", "Markers", None, QtGui.QApplication.UnicodeUTF8))
-        self.addMarkerBtn.setText(QtGui.QApplication.translate("MainWindow", "Add...", None, QtGui.QApplication.UnicodeUTF8))
-        self.delMarkerPen.setText(QtGui.QApplication.translate("MainWindow", "Del", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_2.setTitle(QtGui.QApplication.translate("MainWindow", "Image Correction", None, QtGui.QApplication.UnicodeUTF8))
-        self.normalizeBtn.setText(QtGui.QApplication.translate("MainWindow", "Normalize", None, QtGui.QApplication.UnicodeUTF8))
-        self.blendBtn.setText(QtGui.QApplication.translate("MainWindow", "Blend", None, QtGui.QApplication.UnicodeUTF8))
-        self.autoRangeBtn.setText(QtGui.QApplication.translate("MainWindow", "Auto Range", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_4.setTitle(QtGui.QApplication.translate("MainWindow", "Export", None, QtGui.QApplication.UnicodeUTF8))
-        self.exportSvgBtn.setText(QtGui.QApplication.translate("MainWindow", "SVG", None, QtGui.QApplication.UnicodeUTF8))
-        self.exportPngBtn.setText(QtGui.QApplication.translate("MainWindow", "PNG", None, QtGui.QApplication.UnicodeUTF8))
+        MainWindow.setWindowTitle(_translate("MainWindow", "Mosaic", None))
+        self.setRootBtn.setText(_translate("MainWindow", "--> Set Root Directory", None))
+        self.loadBtn.setText(_translate("MainWindow", "Load Selected -->", None))
+        self.groupBox.setTitle(_translate("MainWindow", "Transformations", None))
+        self.label.setText(_translate("MainWindow", "Translate", None))
+        self.label_2.setText(_translate("MainWindow", "Rotate", None))
+        self.label_3.setText(_translate("MainWindow", "Scale", None))
+        self.saveBtn.setText(_translate("MainWindow", "Save", None))
+        self.saveAllBtn.setText(_translate("MainWindow", "Save All", None))
+        self.groupBox_3.setTitle(_translate("MainWindow", "Markers", None))
+        self.addMarkerBtn.setText(_translate("MainWindow", "Add...", None))
+        self.delMarkerPen.setText(_translate("MainWindow", "Del", None))
+        self.groupBox_2.setTitle(_translate("MainWindow", "Image Correction", None))
+        self.normalizeBtn.setText(_translate("MainWindow", "Normalize", None))
+        self.blendBtn.setText(_translate("MainWindow", "Blend", None))
+        self.autoRangeBtn.setText(_translate("MainWindow", "Auto Range", None))
+        self.groupBox_4.setTitle(_translate("MainWindow", "Export", None))
+        self.exportSvgBtn.setText(_translate("MainWindow", "SVG", None))
+        self.exportPngBtn.setText(_translate("MainWindow", "PNG", None))
 
-from acq4.util.Canvas import Canvas
 from acq4.util.DirTreeWidget import DirTreeWidget
+from acq4.util.Canvas import Canvas

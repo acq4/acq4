@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'RackTemplate.ui'
+# Form implementation generated from reading ui file './acq4/devices/MultiClamp/RackTemplate.ui'
 #
-# Created: Sun Dec 18 17:54:58 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Tue Dec 24 01:49:06 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -76,12 +85,12 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_6.setText(QtGui.QApplication.translate("Form", "Host", None, QtGui.QApplication.UnicodeUTF8))
-        self.clearCacheBtn.setText(QtGui.QApplication.translate("Form", "Clear Cache", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("Form", "DAQ Device", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("Form", "Channel", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Command", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Scaled Output", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("Form", "Raw Output", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.label_6.setText(_translate("Form", "Host", None))
+        self.clearCacheBtn.setText(_translate("Form", "Clear Cache", None))
+        self.label_4.setText(_translate("Form", "DAQ Device", None))
+        self.label_5.setText(_translate("Form", "Channel", None))
+        self.label.setText(_translate("Form", "Command", None))
+        self.label_2.setText(_translate("Form", "Scaled Output", None))
+        self.label_3.setText(_translate("Form", "Raw Output", None))
 

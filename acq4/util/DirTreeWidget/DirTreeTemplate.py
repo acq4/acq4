@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/util/DirTreeWidget/DirTreeTemplate.ui'
+# Form implementation generated from reading ui file './acq4/util/DirTreeWidget/DirTreeTemplate.ui'
 #
-# Created: Wed May 18 20:44:18 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Tue Dec 24 01:49:17 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -65,8 +74,8 @@ class Ui_Form(object):
         sizePolicy.setHeightForWidth(self.currentLabel.sizePolicy().hasHeightForWidth())
         self.currentLabel.setSizePolicy(sizePolicy)
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.currentLabel.setFont(font)
         self.currentLabel.setText(_fromUtf8(""))
         self.currentLabel.setObjectName(_fromUtf8("currentLabel"))
@@ -86,14 +95,14 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.titleLabel.setText(QtGui.QApplication.translate("Form", "Protocols", None, QtGui.QApplication.UnicodeUTF8))
-        self.newBtn.setText(QtGui.QApplication.translate("Form", "New", None, QtGui.QApplication.UnicodeUTF8))
-        self.loadBtn.setText(QtGui.QApplication.translate("Form", "Load", None, QtGui.QApplication.UnicodeUTF8))
-        self.saveBtn.setText(QtGui.QApplication.translate("Form", "Save", None, QtGui.QApplication.UnicodeUTF8))
-        self.saveAsBtn.setText(QtGui.QApplication.translate("Form", "Save As..", None, QtGui.QApplication.UnicodeUTF8))
-        self.deleteBtn.setText(QtGui.QApplication.translate("Form", "Delete", None, QtGui.QApplication.UnicodeUTF8))
-        self.currentTitleLabel.setText(QtGui.QApplication.translate("Form", "Current Protocol:", None, QtGui.QApplication.UnicodeUTF8))
-        self.newDirBtn.setText(QtGui.QApplication.translate("Form", "New Dir", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.titleLabel.setText(_translate("Form", "Protocols", None))
+        self.newBtn.setText(_translate("Form", "New", None))
+        self.loadBtn.setText(_translate("Form", "Load", None))
+        self.saveBtn.setText(_translate("Form", "Save", None))
+        self.saveAsBtn.setText(_translate("Form", "Save As..", None))
+        self.deleteBtn.setText(_translate("Form", "Delete", None))
+        self.currentTitleLabel.setText(_translate("Form", "Current Protocol:", None))
+        self.newDirBtn.setText(_translate("Form", "New Dir", None))
 
 from acq4.util.DirTreeWidget import DirTreeWidget

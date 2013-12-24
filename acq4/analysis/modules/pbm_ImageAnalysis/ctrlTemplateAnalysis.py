@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/analysis/modules/pbm_ImageAnalysis/ctrlTemplateAnalysis.ui'
+# Form implementation generated from reading ui file './acq4/analysis/modules/pbm_ImageAnalysis/ctrlTemplateAnalysis.ui'
 #
-# Created: Fri Jan 18 11:21:59 2013
-#      by: PyQt4 UI code generator 4.9.4
+# Created: Tue Dec 24 01:49:14 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -342,60 +351,60 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Imaging Analysis Functions", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_checkbox_TraceLabels.setText(QtGui.QApplication.translate("Form", "Trace Labels", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_Analysis_AFFT_Individual.setToolTip(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.groupBox.setTitle(_translate("Form", "Imaging Analysis Functions", None))
+        self.IAFuncs_checkbox_TraceLabels.setText(_translate("Form", "Trace Labels", None))
+        self.IAFuncs_Analysis_AFFT_Individual.setToolTip(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'Lucida Grande\'; font-size:11pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">For Intrinsic Imaging: Compute the FFT of each image.</p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_Analysis_AFFT_Individual.setText(QtGui.QApplication.translate("Form", "Individual FFT", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_Analysis_FourierMap.setToolTip(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">For Intrinsic Imaging: Compute the FFT of each image.</p></body></html>", None))
+        self.IAFuncs_Analysis_AFFT_Individual.setText(_translate("Form", "Individual FFT", None))
+        self.IAFuncs_Analysis_FourierMap.setToolTip(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'Lucida Grande\'; font-size:11pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">For Intrinsic Imaging: Compute the Fourier Phase map relative the the stimulus (Valatsky et al., 2003)</p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_Analysis_FourierMap.setText(QtGui.QApplication.translate("Form", "Fourier Map", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_Analysis_AFFT.setToolTip(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">For Intrinsic Imaging: Compute the Fourier Phase map relative the the stimulus (Valatsky et al., 2003)</p></body></html>", None))
+        self.IAFuncs_Analysis_FourierMap.setText(_translate("Form", "Fourier Map", None))
+        self.IAFuncs_Analysis_AFFT.setToolTip(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'Lucida Grande\'; font-size:11pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">For Intrinsic Imaging: Compute the average FFT of images. </p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_15.setText(QtGui.QApplication.translate("Form", "SMC-Calcium Event Detection", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_13.setText(QtGui.QApplication.translate("Form", "Intrinsic Imaging", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_Analysis_smcAnalyze.setText(QtGui.QApplication.translate("Form", "SMC", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_18.setText(QtGui.QApplication.translate("Form", "Kd (nM)", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_19.setText(QtGui.QApplication.translate("Form", "TCa  (sec)", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_17.setText(QtGui.QApplication.translate("Form", "C0 (uM)", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_16.setText(QtGui.QApplication.translate("Form", "A (uM)", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_Analysis_SpikeXCorr.setText(QtGui.QApplication.translate("Form", "Digital Xcorr", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_Analysis_AXCorr_Individual.setToolTip(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">For Intrinsic Imaging: Compute the average FFT of images. </p></body></html>", None))
+        self.label_15.setText(_translate("Form", "SMC-Calcium Event Detection", None))
+        self.label_13.setText(_translate("Form", "Intrinsic Imaging", None))
+        self.IAFuncs_Analysis_smcAnalyze.setText(_translate("Form", "SMC", None))
+        self.label_18.setText(_translate("Form", "Kd (nM)", None))
+        self.label_19.setText(_translate("Form", "TCa  (sec)", None))
+        self.label_17.setText(_translate("Form", "C0 (uM)", None))
+        self.label_16.setText(_translate("Form", "A (uM)", None))
+        self.IAFuncs_Analysis_SpikeXCorr.setText(_translate("Form", "Digital Xcorr", None))
+        self.IAFuncs_Analysis_AXCorr_Individual.setToolTip(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'Lucida Grande\'; font-size:11pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Compute the cross-correlation between each pair of ROI\'s. The computation is done on the analog waveform.</p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_Analysis_AXCorr_Individual.setText(QtGui.QApplication.translate("Form", "Individual XCorr", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_Analysis_UnbiasedXC.setToolTip(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Compute the cross-correlation between each pair of ROI\'s. The computation is done on the analog waveform.</p></body></html>", None))
+        self.IAFuncs_Analysis_AXCorr_Individual.setText(_translate("Form", "Individual XCorr", None))
+        self.IAFuncs_Analysis_UnbiasedXC.setToolTip(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'Lucida Grande\'; font-size:11pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Compute the cross-correlation between each pair of ROI\'s. The computation is done on the analog waveform.</p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_Analysis_UnbiasedXC.setText(QtGui.QApplication.translate("Form", "Unbiased XCorr (slow)", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_Distance.setText(QtGui.QApplication.translate("Form", "ROI Distances", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_DistanceStrength.setText(QtGui.QApplication.translate("Form", "Distance-Strength", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "XCorr Thr", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_NetworkGraph.setText(QtGui.QApplication.translate("Form", "Network Graph", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_DistanceStrengthPrint.setText(QtGui.QApplication.translate("Form", "Print Dist-Strength", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_MatplotlibCheckBox.setText(QtGui.QApplication.translate("Form", "MatPlotLib (slower)", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_Analysis_AXCorr.setToolTip(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Compute the cross-correlation between each pair of ROI\'s. The computation is done on the analog waveform.</p></body></html>", None))
+        self.IAFuncs_Analysis_UnbiasedXC.setText(_translate("Form", "Unbiased XCorr (slow)", None))
+        self.IAFuncs_Distance.setText(_translate("Form", "ROI Distances", None))
+        self.IAFuncs_DistanceStrength.setText(_translate("Form", "Distance-Strength", None))
+        self.label.setText(_translate("Form", "XCorr Thr", None))
+        self.IAFuncs_NetworkGraph.setText(_translate("Form", "Network Graph", None))
+        self.IAFuncs_DistanceStrengthPrint.setText(_translate("Form", "Print Dist-Strength", None))
+        self.IAFuncs_MatplotlibCheckBox.setText(_translate("Form", "MatPlotLib (slower)", None))
+        self.IAFuncs_Analysis_AXCorr.setToolTip(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'Lucida Grande\'; font-size:11pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Compute the average cross-correlation across all pairs of ROIs in the field over time. The computation is done on the analog waveform.</p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_Analysis_AXCorr.setText(QtGui.QApplication.translate("Form", "Average XCorr", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_14.setText(QtGui.QApplication.translate("Form", "Correlation Mode", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_DigitalRadioBtn.setText(QtGui.QApplication.translate("Form", "CSV (digital)", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_AnalogRadioBtn.setText(QtGui.QApplication.translate("Form", "Analog", None, QtGui.QApplication.UnicodeUTF8))
-        self.IAFuncs_GetCSVFile.setText(QtGui.QApplication.translate("Form", "Select CSV File", None, QtGui.QApplication.UnicodeUTF8))
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Compute the average cross-correlation across all pairs of ROIs in the field over time. The computation is done on the analog waveform.</p></body></html>", None))
+        self.IAFuncs_Analysis_AXCorr.setText(_translate("Form", "Average XCorr", None))
+        self.label_14.setText(_translate("Form", "Correlation Mode", None))
+        self.IAFuncs_DigitalRadioBtn.setText(_translate("Form", "CSV (digital)", None))
+        self.IAFuncs_AnalogRadioBtn.setText(_translate("Form", "Analog", None))
+        self.IAFuncs_GetCSVFile.setText(_translate("Form", "Select CSV File", None))
 

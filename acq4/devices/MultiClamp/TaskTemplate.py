@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './acq4/devices/MultiClamp/TaskTemplate.ui'
 #
-# Created: Mon Dec 23 22:46:56 2013
+# Created: Tue Dec 24 01:49:06 2013
 #      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
@@ -179,5 +179,5 @@ class Ui_Form(object):
         self.primaryGainCheck.setText(_translate("Form", "Set Gain", None))
         self.waveGeneratorLabel.setText(_translate("Form", "Command Function (A)", None))
 
-from acq4.util.generator.StimGenerator import StimGenerator
 from acq4.pyqtgraph import SpinBox, PlotWidget
+from acq4.util.generator.StimGenerator import StimGenerator
