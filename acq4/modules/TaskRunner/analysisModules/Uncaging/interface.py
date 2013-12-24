@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-from lib.modules.TaskRunner.analysisModules import AnalysisModule
-from lib.Manager import getManager
+from acq4.modules.TaskRunner.analysisModules import AnalysisModule
+from acq4.Manager import getManager
 from PyQt4 import QtCore, QtGui
 from UncagingTemplate import Ui_Form
-#from pyqtgraph import ImageItem
+#from acq4.pyqtgraph import ImageItem
 from numpy import *
 from scipy.ndimage.filters import gaussian_filter
 from metaarray import MetaArray

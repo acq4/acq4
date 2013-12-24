@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
-from pyqtgraph.WidgetGroup import WidgetGroup
+from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 
 class AnalysisModule(QtGui.QWidget):
     def __init__(self, taskRunner):

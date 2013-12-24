@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import atlasCtrlTemplate
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 from debug import Profiler
 
 class Atlas(QtCore.QObject):

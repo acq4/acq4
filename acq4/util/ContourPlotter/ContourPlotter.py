@@ -1,7 +1,7 @@
 from PyQt4 import QtGui, QtCore
-import pyqtgraph as pg
-from pyqtgraph.widgets.SpinBox import SpinBox
-from pyqtgraph.widgets.ColorButton import ColorButton
+import acq4.pyqtgraph as pg
+from acq4.pyqtgraph.widgets.SpinBox import SpinBox
+from acq4.pyqtgraph.widgets.ColorButton import ColorButton
 import ContourPlotterTemplate
 
 

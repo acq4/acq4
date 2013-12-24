@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'ProtocolTemplate.ui'
+# Form implementation generated from reading ui file './acq4/devices/MultiClamp/TaskTemplate.ui'
 #
-# Created: Sun Dec 18 17:54:57 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Mon Dec 23 22:46:56 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -157,18 +166,18 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.icModeRadio.setText(QtGui.QApplication.translate("Form", "IC", None, QtGui.QApplication.UnicodeUTF8))
-        self.i0ModeRadio.setText(QtGui.QApplication.translate("Form", "I=0", None, QtGui.QApplication.UnicodeUTF8))
-        self.vcModeRadio.setText(QtGui.QApplication.translate("Form", "VC", None, QtGui.QApplication.UnicodeUTF8))
-        self.holdingCheck.setText(QtGui.QApplication.translate("Form", "Holding", None, QtGui.QApplication.UnicodeUTF8))
-        self.primarySignalCheck.setText(QtGui.QApplication.translate("Form", "Primary:", None, QtGui.QApplication.UnicodeUTF8))
-        self.secondarySignalCheck.setText(QtGui.QApplication.translate("Form", "Secondary:", None, QtGui.QApplication.UnicodeUTF8))
-        self.primarySignalCombo.setItemText(0, QtGui.QApplication.translate("Form", "MembranePotential", None, QtGui.QApplication.UnicodeUTF8))
-        self.secondarySignalCombo.setItemText(0, QtGui.QApplication.translate("Form", "MembraneCurrent", None, QtGui.QApplication.UnicodeUTF8))
-        self.secondaryGainCheck.setText(QtGui.QApplication.translate("Form", "Set Gain", None, QtGui.QApplication.UnicodeUTF8))
-        self.primaryGainCheck.setText(QtGui.QApplication.translate("Form", "Set Gain", None, QtGui.QApplication.UnicodeUTF8))
-        self.waveGeneratorLabel.setText(QtGui.QApplication.translate("Form", "Command Function (A)", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.icModeRadio.setText(_translate("Form", "IC", None))
+        self.i0ModeRadio.setText(_translate("Form", "I=0", None))
+        self.vcModeRadio.setText(_translate("Form", "VC", None))
+        self.holdingCheck.setText(_translate("Form", "Holding", None))
+        self.primarySignalCheck.setText(_translate("Form", "Primary:", None))
+        self.secondarySignalCheck.setText(_translate("Form", "Secondary:", None))
+        self.primarySignalCombo.setItemText(0, _translate("Form", "MembranePotential", None))
+        self.secondarySignalCombo.setItemText(0, _translate("Form", "MembraneCurrent", None))
+        self.secondaryGainCheck.setText(_translate("Form", "Set Gain", None))
+        self.primaryGainCheck.setText(_translate("Form", "Set Gain", None))
+        self.waveGeneratorLabel.setText(_translate("Form", "Command Function (A)", None))
 
 from generator.StimGenerator import StimGenerator
-from pyqtgraph import SpinBox, PlotWidget
+from acq4.pyqtgraph import SpinBox, PlotWidget

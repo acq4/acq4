@@ -2,7 +2,7 @@ import serial, struct, time, collections
 
 try:
     # this is nicer because it provides deadlock debugging information
-    from lib.util.Mutex import RecursiveMutex as RLock
+    from acq4.util.Mutex import RecursiveMutex as RLock
 except ImportError:
     from threading import RLock
 

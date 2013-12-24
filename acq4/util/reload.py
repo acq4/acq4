@@ -1,1 +1,1 @@
-from pyqtgraph.reload import *
+from acq4.pyqtgraph.reload import *

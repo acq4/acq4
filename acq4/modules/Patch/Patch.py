@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from lib.modules.Module import *
+from acq4.modules.Module import *
 from PatchWindow import *
 import os
 from PyQt4 import QtGui

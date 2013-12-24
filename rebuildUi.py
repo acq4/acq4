@@ -4,6 +4,8 @@ if len(sys.argv) > 1 and sys.argv[1] == 'pyside':
     uic = 'pyside-uic'
 
 for path, sd, files in os.walk('.'):
+    if os.path.join('acq4', 'pyqtgraph') in path:
+        continue
     for f in files:
         base, ext = os.path.splitext(f)
         if ext != '.ui':

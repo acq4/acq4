@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from lib.devices.Device import *
+from acq4.devices.Device import *
 from PyQt4 import QtCore, QtGui
 import Mutex
 

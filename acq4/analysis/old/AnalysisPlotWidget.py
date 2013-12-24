@@ -1,5 +1,5 @@
 
-from pyqtgraph.PlotWidget import *
+from acq4.pyqtgraph.PlotWidget import *
 from AnalysisPlotWidgetTemplate import *
 import exceptions
 

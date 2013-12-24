@@ -1,7 +1,7 @@
 from PyQt4 import QtCore, QtGui
 from Device import Device
 from Mutex import Mutex
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 import collections
 import numpy as np
 

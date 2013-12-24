@@ -1,6 +1,6 @@
 from PyQt4 import QtCore, QtGui
-import lib.Manager
-import pyqtgraph as pg
+import acq4.Manager
+import acq4.pyqtgraph as pg
 import numpy as np
 import functions as fn
 

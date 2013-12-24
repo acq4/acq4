@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import modules
-import pyqtgraph.dockarea as dockarea
-import lib.Manager
-#from lib.LogWindow import LogButton
+import acq4.pyqtgraph.dockarea as dockarea
+import acq4.Manager
+#from acq4.LogWindow import LogButton
 from StatusBar import StatusBar
 
 class AnalysisHost(QtGui.QMainWindow):

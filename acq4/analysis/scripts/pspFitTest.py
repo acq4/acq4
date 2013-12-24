@@ -6,7 +6,7 @@ import os, sys, user, time
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'util'))
 sys.path.append(path)
 
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 import functions as fn
 from PyQt4 import QtGui, QtCore
 

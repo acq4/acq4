@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.devices.Device import *
-from pyqtgraph.SignalProxy import SignalProxy
+from acq4.devices.Device import *
+from acq4.pyqtgraph.SignalProxy import SignalProxy
 import serial, os, time
 from Mutex import Mutex, MutexLocker
 #import pdb

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-from pyqtgraph.flowchart.Node import Node
+from acq4.pyqtgraph.flowchart.Node import Node
 from PyQt4 import QtGui, QtCore
 import numpy as np
 import metaarray
-from pyqtgraph.flowchart.library.common import *
+from acq4.pyqtgraph.flowchart.library.common import *
 import functions
 
 

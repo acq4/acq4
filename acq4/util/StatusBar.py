@@ -1,7 +1,7 @@
 
 
 from PyQt4 import QtGui
-from lib.LogWindow import LogButton
+from acq4.LogWindow import LogButton
 
 
 

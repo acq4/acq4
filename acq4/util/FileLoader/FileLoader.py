@@ -2,7 +2,7 @@
 import template
 from PyQt4 import QtCore, QtGui
 from HelpfulException import HelpfulException
-from lib.Manager import logMsg, logExc, getManager
+from acq4.Manager import logMsg, logExc, getManager
 
 
 class FileLoader(QtGui.QWidget):

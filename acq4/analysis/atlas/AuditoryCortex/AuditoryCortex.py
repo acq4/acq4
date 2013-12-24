@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 #import CtrlTemplate
-#import pyqtgraph.WidgetGroup
+#import acq4.pyqtgraph.WidgetGroup
 #import advancedTypes
 import collections
-import lib.analysis.atlas.Atlas as Atlas
+import acq4.analysis.atlas.Atlas as Atlas
 import os
 from PyQt4 import QtCore, QtGui
 import DataManager
-from lib.analysis.atlas.AuditoryCortex.CortexROI import CortexROI
+from acq4.analysis.atlas.AuditoryCortex.CortexROI import CortexROI
 import numpy as np
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 import scipy
 from debug import Profiler
 

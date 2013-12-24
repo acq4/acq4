@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 from ..Stage import Stage
-from lib.drivers.SutterMPC200 import SutterMPC200 as MPC200_Driver
-from lib.util.Mutex import Mutex
-from pyqtgraph import debug
+from acq4.drivers.SutterMPC200 import SutterMPC200 as MPC200_Driver
+from acq4.util.Mutex import Mutex
+from acq4.pyqtgraph import debug
 import time
 
 class ChangeNotifier(QtCore.QObject):

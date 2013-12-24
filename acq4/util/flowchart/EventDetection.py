@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from pyqtgraph.flowchart.library.common import *
-from pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine
+from acq4.pyqtgraph.flowchart.library.common import *
+from acq4.pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine
 import numpy as np
 import functions
 

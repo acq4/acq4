@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
-#import lib.util.PySideImporter  ## Use PySide instead of PyQt
+#import acq4.util.PySideImporter  ## Use PySide instead of PyQt
 
 from PyQt4 import QtCore, QtGui
 import os
 import database
 from AnalysisTemplate import *
-import lib.Manager
-import lib.analysis.modules as analysis
-import lib.analysis.AnalysisHost as AnalysisHost
-import lib.analysis.dataModels as models
+import acq4.Manager
+import acq4.analysis.modules as analysis
+import acq4.analysis.AnalysisHost as AnalysisHost
+import acq4.analysis.dataModels as models
 #QtCore.QString = str
 #def noop(x):
 #   return x
 #QtCore.QVariant = noop
-from pyqtgraph import FileDialog
+from acq4.pyqtgraph import FileDialog
 
 class FileAnalysisView(QtGui.QWidget):
     

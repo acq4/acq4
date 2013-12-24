@@ -1,5 +1,5 @@
 from PyQt4 import QtCore
-import lib.Manager
+import acq4.Manager
 import imageAnalysis
 
 run = True

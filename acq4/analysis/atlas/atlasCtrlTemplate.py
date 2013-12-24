@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'atlasCtrlTemplate.ui'
+# Form implementation generated from reading ui file './acq4/analysis/atlas/atlasCtrlTemplate.ui'
 #
-# Created: Mon May 28 16:29:00 2012
-#      by: PyQt4 UI code generator 4.9
+# Created: Mon Dec 23 22:46:59 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -55,12 +64,12 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.setSliceBtn.setText(QtGui.QApplication.translate("Form", "Set current slice from selecion", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Current slice:", None, QtGui.QApplication.UnicodeUTF8))
-        self.sliceLabel.setText(QtGui.QApplication.translate("Form", "None", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Database Tables", None, QtGui.QApplication.UnicodeUTF8))
-        self.storeBtn.setText(QtGui.QApplication.translate("Form", "Store item positions to DB", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.setSliceBtn.setText(_translate("Form", "Set current slice from selecion", None))
+        self.label_2.setText(_translate("Form", "Current slice:", None))
+        self.sliceLabel.setText(_translate("Form", "None", None))
+        self.groupBox.setTitle(_translate("Form", "Database Tables", None))
+        self.storeBtn.setText(_translate("Form", "Store item positions to DB", None))
 
-from pyqtgraph.widgets.FeedbackButton import FeedbackButton
 from DatabaseGui import DatabaseGui
+from acq4.pyqtgraph.widgets.FeedbackButton import FeedbackButton

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-from pyqtgraph.flowchart.Node import Node
-from pyqtgraph.flowchart.library.common import *
-import pyqtgraph as pg
+from acq4.pyqtgraph.flowchart.Node import Node
+from acq4.pyqtgraph.flowchart.library.common import *
+import acq4.pyqtgraph as pg
 import weakref
-#from pyqtgraph import graphicsItems
+#from acq4.pyqtgraph import graphicsItems
 from PyQt4 import QtCore, QtGui
 import numpy as np
 

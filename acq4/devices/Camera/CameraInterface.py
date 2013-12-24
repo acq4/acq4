@@ -1,8 +1,8 @@
 import time, types, os.path, re, sys
 from PyQt4 import QtGui, QtCore
-import pyqtgraph as pg
-from pyqtgraph import SignalProxy, Point
-import pyqtgraph.dockarea as dockarea
+import acq4.pyqtgraph as pg
+from acq4.pyqtgraph import SignalProxy, Point
+import acq4.pyqtgraph.dockarea as dockarea
 import ptime
 from Mutex import Mutex
 import numpy as np
@@ -10,10 +10,10 @@ import scipy.ndimage
 from debug import *
 import debug
 from metaarray import *
-import lib.Manager as Manager
+import acq4.Manager as Manager
 from RecordThread import RecordThread
 from CameraInterfaceTemplate import Ui_Form as CameraInterfaceTemplate
-from lib.devices.OptomechDevice import DeviceTreeItemGroup
+from acq4.devices.OptomechDevice import DeviceTreeItemGroup
 
         
 class CameraInterface(QtCore.QObject):
@@ -148,7 +148,7 @@ class CameraInterface(QtCore.QObject):
         self.ui.btnFullFrame.clicked.connect(lambda: self.setRegion())
         #self.ui.scaleToImageBtn.clicked.connect(self.scaleToImage)
         self.proxy1 = SignalProxy(self.ui.binningCombo.currentIndexChanged, slot=self.binningComboChanged)
-        self.ui.spinExposure.valueChanged.connect(self.setExposure)  ## note that this signal (from lib.util.SpinBox) is delayed.
+        self.ui.spinExposure.valueChanged.connect(self.setExposure)  ## note that this signal (from acq4.util.SpinBox) is delayed.
 
         ## Signals from Camera device
         self.cam.sigNewFrame.connect(self.newFrame)

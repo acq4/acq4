@@ -1,4 +1,4 @@
-from pyqtgraph.canvas import Canvas as OrigCanvas
+from acq4.pyqtgraph.canvas import Canvas as OrigCanvas
 import items
 
 class Canvas(OrigCanvas):

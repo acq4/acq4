@@ -1,12 +1,12 @@
 import time
-from lib.filetypes.ImageFile import *
+from acq4.filetypes.ImageFile import *
 from Mutex import Mutex
 from PyQt4 import QtGui, QtCore
 import debug
 from metaarray import MetaArray
 import numpy as np
 import ptime
-import lib.Manager
+import acq4.Manager
 
 class RecordThread(QtCore.QThread):
     """

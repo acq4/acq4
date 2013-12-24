@@ -97,7 +97,7 @@
   <customwidget>
    <class>FeedbackButton</class>
    <extends>QPushButton</extends>
-   <header>pyqtgraph.widgets.FeedbackButton</header>
+   <header>acq4.pyqtgraph.widgets.FeedbackButton</header>
   </customwidget>
  </customwidgets>
  <resources/>

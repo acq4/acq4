@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 import Canvas, FileLoader, DatabaseGui
-#import pyqtgraph.widgets.DataTreeWidget as DataTreeWidget
+#import acq4.pyqtgraph.widgets.DataTreeWidget as DataTreeWidget
 from collections import OrderedDict
 
 class AnalysisModule(QtCore.QObject):

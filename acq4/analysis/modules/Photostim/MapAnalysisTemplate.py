@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'MapAnalysisTemplate.ui'
+# Form implementation generated from reading ui file './acq4/analysis/modules/Photostim/MapAnalysisTemplate.ui'
 #
-# Created: Sun Aug 12 13:47:50 2012
-#      by: PyQt4 UI code generator 4.9.1
+# Created: Mon Dec 23 22:47:00 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -79,17 +88,17 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Rate Average Window", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Detection Methods", None, QtGui.QApplication.UnicodeUTF8))
-        self.poisMaxCheck.setText(QtGui.QApplication.translate("Form", "Poisson max probability", None, QtGui.QApplication.UnicodeUTF8))
-        self.poisMaxAmpCheck.setText(QtGui.QApplication.translate("Form", "Poisson max + amplitude", None, QtGui.QApplication.UnicodeUTF8))
-        self.chargeTransferCheck.setText(QtGui.QApplication.translate("Form", "Charge transfer z-score", None, QtGui.QApplication.UnicodeUTF8))
-        self.eventCountCheck.setText(QtGui.QApplication.translate("Form", "Event Count", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Event Selection", None, QtGui.QApplication.UnicodeUTF8))
-        self.excitatoryRadio.setText(QtGui.QApplication.translate("Form", "Excitatory", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Fit Error Limit", None, QtGui.QApplication.UnicodeUTF8))
-        self.inhibitoryRadio.setText(QtGui.QApplication.translate("Form", "Inhibitory", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("Form", "Detection Threshold", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.label.setText(_translate("Form", "Rate Average Window", None))
+        self.groupBox_2.setTitle(_translate("Form", "Detection Methods", None))
+        self.poisMaxCheck.setText(_translate("Form", "Poisson max probability", None))
+        self.poisMaxAmpCheck.setText(_translate("Form", "Poisson max + amplitude", None))
+        self.chargeTransferCheck.setText(_translate("Form", "Charge transfer z-score", None))
+        self.eventCountCheck.setText(_translate("Form", "Event Count", None))
+        self.groupBox.setTitle(_translate("Form", "Event Selection", None))
+        self.excitatoryRadio.setText(_translate("Form", "Excitatory", None))
+        self.label_2.setText(_translate("Form", "Fit Error Limit", None))
+        self.inhibitoryRadio.setText(_translate("Form", "Inhibitory", None))
+        self.label_3.setText(_translate("Form", "Detection Threshold", None))
 
-from pyqtgraph import SpinBox, PlotWidget
+from acq4.pyqtgraph import SpinBox, PlotWidget

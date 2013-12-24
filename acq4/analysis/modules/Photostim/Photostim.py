@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
-from lib.analysis.AnalysisModule import AnalysisModule
-import lib.analysis.modules.EventDetector as EventDetector
-from pyqtgraph.flowchart import *
+from acq4.analysis.AnalysisModule import AnalysisModule
+import acq4.analysis.modules.EventDetector as EventDetector
+from acq4.pyqtgraph.flowchart import *
 import os
 from collections import OrderedDict
 import debug
 import ColorMapper
-import pyqtgraph as pg
-#import pyqtgraph.ProgressDialog as ProgressDialog
+import acq4.pyqtgraph as pg
+#import acq4.pyqtgraph.ProgressDialog as ProgressDialog
 from HelpfulException import HelpfulException
 from Scan import Scan, loadScanSequence
 from DBCtrl import DBCtrl

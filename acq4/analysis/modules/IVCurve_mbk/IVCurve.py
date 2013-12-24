@@ -3,8 +3,8 @@
 ##    load IV directory, plot raw data, sends data to a function(flowchart) which returns a list of parameters. 
 
 from PyQt4 import QtGui, QtCore
-from lib.analysis.AnalysisModule import AnalysisModule
-from lib.util.pyqtgraph.functions import mkPen
+from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.util.pyqtgraph.functions import mkPen
 from flowchart import *
 import os
 from collections import OrderedDict

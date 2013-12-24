@@ -1,9 +1,9 @@
 from PyQt4 import QtGui, QtCore
-from lib.Manager import getManager, logExc, logMsg
+from acq4.Manager import getManager, logExc, logMsg
 from devTemplate import Ui_Form
 import numpy as np
 from scipy import stats
-from pyqtgraph.functions import siFormat
+from acq4.pyqtgraph.functions import siFormat
 import time
 
 

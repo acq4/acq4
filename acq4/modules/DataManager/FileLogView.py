@@ -1,9 +1,9 @@
 
 
-import lib.LogWidgetTemplate
+import acq4.LogWidgetTemplate
 from PyQt4 import QtGui, QtCore
-import lib.Manager
-from lib.LogWindow import LogWidget
+import acq4.Manager
+from acq4.LogWindow import LogWidget
 import configfile as cf
 import debug
 

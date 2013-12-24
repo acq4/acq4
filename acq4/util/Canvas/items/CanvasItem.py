@@ -1,4 +1,4 @@
-from pyqtgraph.canvas.CanvasItem import CanvasItem as OrigCanvasItem
+from acq4.pyqtgraph.canvas.CanvasItem import CanvasItem as OrigCanvasItem
 
 class CanvasItem(OrigCanvasItem):
     ## extent canvasitem to have support for filehandles

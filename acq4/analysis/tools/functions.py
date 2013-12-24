@@ -1,7 +1,7 @@
 import numpy as np
 import math
-from pyqtgraph.debug import Profiler
-import lib.util.functions as utilFn
+from acq4.pyqtgraph.debug import Profiler
+import acq4.util.functions as utilFn
 
 
 

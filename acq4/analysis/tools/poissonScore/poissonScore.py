@@ -102,10 +102,10 @@ import scipy
 import scipy.stats as stats
 import scipy.misc
 import scipy.interpolate
-import pyqtgraph as pg
-import pyqtgraph.console
+import acq4.pyqtgraph as pg
+import acq4.pyqtgraph.console
 import user
-import pyqtgraph.multiprocess as mp
+import acq4.pyqtgraph.multiprocess as mp
 import os
 
 def poissonProcess(rate, tmax=None, n=None):

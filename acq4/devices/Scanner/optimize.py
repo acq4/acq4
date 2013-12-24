@@ -91,7 +91,7 @@ if __name__ == '__main__':
     
     import user, time, collections
     from PyQt4 import QtGui, QtCore
-    import pyqtgraph as pg
+    import acq4.pyqtgraph as pg
     app = QtGui.QApplication([])
     
     minTime = 10.

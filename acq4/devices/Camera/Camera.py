@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask
-from lib.devices.OptomechDevice import OptomechDevice
+from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
+from acq4.devices.OptomechDevice import OptomechDevice
 from Mutex import Mutex
-#from lib.devices.Device import *
-from lib.devices.Microscope import Microscope
+#from acq4.devices.Device import *
+from acq4.devices.Microscope import Microscope
 from PyQt4 import QtCore
 import time
 from numpy import *
@@ -14,7 +14,7 @@ from deviceGUI import *
 import ptime as ptime
 from Mutex import Mutex
 from debug import *
-from pyqtgraph import Vector, SRTTransform3D
+from acq4.pyqtgraph import Vector, SRTTransform3D
 
 from CameraInterface import CameraInterface
 

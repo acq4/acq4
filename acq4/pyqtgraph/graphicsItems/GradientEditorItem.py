@@ -6,7 +6,7 @@ from .GraphicsWidget import GraphicsWidget
 import weakref
 from ..pgcollections import OrderedDict
 from ..colormap import ColorMap
-from .. import SpinBox
+from ..widgets.SpinBox import SpinBox
 
 import numpy as np
 

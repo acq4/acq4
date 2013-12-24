@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from lib.modules.Module import *
+from acq4.modules.Module import *
 from ManagerTemplate import Ui_MainWindow
 from PyQt4 import QtCore, QtGui
 import sys, os

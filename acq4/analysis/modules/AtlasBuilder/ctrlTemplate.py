@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/analysis/modules/AtlasBuilder/ctrlTemplate.ui'
+# Form implementation generated from reading ui file './acq4/analysis/modules/AtlasBuilder/ctrlTemplate.ui'
 #
-# Created: Wed May 18 20:44:12 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Mon Dec 23 22:47:00 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -54,7 +63,7 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.label_4, 1, 0, 1, 1)
         self.penSizeSpin = QtGui.QSpinBox(Form)
         self.penSizeSpin.setMinimum(1)
-        self.penSizeSpin.setProperty(_fromUtf8("value"), 1)
+        self.penSizeSpin.setProperty("value", 1)
         self.penSizeSpin.setObjectName(_fromUtf8("penSizeSpin"))
         self.gridLayout.addWidget(self.penSizeSpin, 1, 1, 1, 1)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
@@ -64,11 +73,11 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Labels", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Value", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Label", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("Form", "Color", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("Form", "Pen Size", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.groupBox.setTitle(_translate("Form", "Labels", None))
+        self.label.setText(_translate("Form", "Value", None))
+        self.label_2.setText(_translate("Form", "Label", None))
+        self.label_3.setText(_translate("Form", "Color", None))
+        self.label_4.setText(_translate("Form", "Pen Size", None))
 
-from pyqtgraph.ColorButton import ColorButton
+from acq4.pyqtgraph.ColorButton import ColorButton

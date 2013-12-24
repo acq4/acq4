@@ -1,6 +1,6 @@
 from PyQt4 import QtGui, QtCore
-from lib.analysis.AnalysisModule import AnalysisModule
-#import lib.analysis.modules.EventDetector as EventDetector
+from acq4.analysis.AnalysisModule import AnalysisModule
+#import acq4.analysis.modules.EventDetector as EventDetector
 #import MapCtrlTemplate
 import DatabaseGui
 #from flowchart import *
@@ -9,8 +9,8 @@ import os
 from collections import OrderedDict
 import debug
 import ColorMapper
-import pyqtgraph as pg
-#import pyqtgraph.TreeWidget as TreeWidget
+import acq4.pyqtgraph as pg
+#import acq4.pyqtgraph.TreeWidget as TreeWidget
 
 
 class DatabaseExplorer(AnalysisModule):

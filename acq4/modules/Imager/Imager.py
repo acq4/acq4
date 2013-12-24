@@ -22,14 +22,14 @@
 # Distributed under MIT/X11 license. See license.txt for more infomation.
 #
 
-from lib.modules.Module import Module
+from acq4.modules.Module import Module
 from PyQt4 import QtGui, QtCore
-from pyqtgraph import ImageView
-import pyqtgraph as PG
-from lib.Manager import getManager
-import lib.Manager
+from acq4.pyqtgraph import ImageView
+import acq4.pyqtgraph as PG
+from acq4.Manager import getManager
+import acq4.Manager
 import InterfaceCombo
-import pyqtgraph.parametertree as PT
+import acq4.pyqtgraph.parametertree as PT
 import numpy as NP
 import metaarray as MA
 import time

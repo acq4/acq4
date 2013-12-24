@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'PatchTemplate.ui'
+# Form implementation generated from reading ui file './acq4/modules/Patch/PatchTemplate.ui'
 #
-# Created: Sun Dec 18 17:57:25 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Mon Dec 23 22:46:59 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -116,7 +125,7 @@ class Ui_Form(object):
         self.cycleTimeSpin = SpinBox(self.groupBox_2)
         self.cycleTimeSpin.setMaximumSize(QtCore.QSize(70, 16777215))
         self.cycleTimeSpin.setSingleStep(1.0)
-        self.cycleTimeSpin.setProperty(_fromUtf8("value"), 0.2)
+        self.cycleTimeSpin.setProperty("value", 0.2)
         self.cycleTimeSpin.setObjectName(_fromUtf8("cycleTimeSpin"))
         self.gridLayout_2.addWidget(self.cycleTimeSpin, 10, 2, 1, 1)
         self.vcHoldSpin = SpinBox(self.groupBox_2)
@@ -148,7 +157,7 @@ class Ui_Form(object):
         self.averageSpin = QtGui.QSpinBox(self.groupBox_2)
         self.averageSpin.setMinimum(1)
         self.averageSpin.setMaximum(100)
-        self.averageSpin.setProperty(_fromUtf8("value"), 1)
+        self.averageSpin.setProperty("value", 1)
         self.averageSpin.setObjectName(_fromUtf8("averageSpin"))
         self.gridLayout_2.addWidget(self.averageSpin, 11, 2, 1, 1)
         self.verticalLayout.addWidget(self.groupBox_2)
@@ -177,8 +186,8 @@ class Ui_Form(object):
         self.inputResistanceLabel = QtGui.QLabel(self.groupBox)
         font = QtGui.QFont()
         font.setPointSize(11)
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.inputResistanceLabel.setFont(font)
         self.inputResistanceLabel.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.inputResistanceLabel.setObjectName(_fromUtf8("inputResistanceLabel"))
@@ -192,8 +201,8 @@ class Ui_Form(object):
         self.accessResistanceLabel = QtGui.QLabel(self.groupBox)
         font = QtGui.QFont()
         font.setPointSize(11)
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.accessResistanceLabel.setFont(font)
         self.accessResistanceLabel.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.accessResistanceLabel.setObjectName(_fromUtf8("accessResistanceLabel"))
@@ -208,8 +217,8 @@ class Ui_Form(object):
         self.restingPotentialLabel.setMinimumSize(QtCore.QSize(140, 0))
         font = QtGui.QFont()
         font.setPointSize(11)
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.restingPotentialLabel.setFont(font)
         self.restingPotentialLabel.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.restingPotentialLabel.setObjectName(_fromUtf8("restingPotentialLabel"))
@@ -220,8 +229,8 @@ class Ui_Form(object):
         self.restingCurrentLabel = QtGui.QLabel(self.groupBox)
         self.restingCurrentLabel.setMinimumSize(QtCore.QSize(120, 0))
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.restingCurrentLabel.setFont(font)
         self.restingCurrentLabel.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.restingCurrentLabel.setObjectName(_fromUtf8("restingCurrentLabel"))
@@ -231,8 +240,8 @@ class Ui_Form(object):
         self.formLayout.setWidget(5, QtGui.QFormLayout.LabelRole, self.capacitanceCheck)
         self.capacitanceLabel = QtGui.QLabel(self.groupBox)
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.capacitanceLabel.setFont(font)
         self.capacitanceLabel.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.capacitanceLabel.setObjectName(_fromUtf8("capacitanceLabel"))
@@ -242,8 +251,8 @@ class Ui_Form(object):
         self.formLayout.setWidget(6, QtGui.QFormLayout.LabelRole, self.fitErrorCheck)
         self.fitErrorLabel = QtGui.QLabel(self.groupBox)
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.fitErrorLabel.setFont(font)
         self.fitErrorLabel.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.fitErrorLabel.setObjectName(_fromUtf8("fitErrorLabel"))
@@ -282,43 +291,43 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Patch", None, QtGui.QApplication.UnicodeUTF8))
-        self.vcPulseCheck.setText(QtGui.QApplication.translate("Form", "Pulse", None, QtGui.QApplication.UnicodeUTF8))
-        self.vcHoldCheck.setText(QtGui.QApplication.translate("Form", "Hold", None, QtGui.QApplication.UnicodeUTF8))
-        self.icPulseCheck.setText(QtGui.QApplication.translate("Form", "Pulse", None, QtGui.QApplication.UnicodeUTF8))
-        self.icHoldCheck.setText(QtGui.QApplication.translate("Form", "Hold", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Cycle Time", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("Form", "Pulse Length", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("Form", "Delay Length", None, QtGui.QApplication.UnicodeUTF8))
-        self.icModeRadio.setText(QtGui.QApplication.translate("Form", "IC", None, QtGui.QApplication.UnicodeUTF8))
-        self.vcModeRadio.setText(QtGui.QApplication.translate("Form", "VC", None, QtGui.QApplication.UnicodeUTF8))
-        self.startBtn.setText(QtGui.QApplication.translate("Form", "Start", None, QtGui.QApplication.UnicodeUTF8))
-        self.recordBtn.setText(QtGui.QApplication.translate("Form", "Record", None, QtGui.QApplication.UnicodeUTF8))
-        self.icPulseSpin.setSuffix(QtGui.QApplication.translate("Form", "A", None, QtGui.QApplication.UnicodeUTF8))
-        self.pulseTimeSpin.setSuffix(QtGui.QApplication.translate("Form", "s", None, QtGui.QApplication.UnicodeUTF8))
-        self.delayTimeSpin.setSuffix(QtGui.QApplication.translate("Form", "s", None, QtGui.QApplication.UnicodeUTF8))
-        self.vcPulseSpin.setSuffix(QtGui.QApplication.translate("Form", "V", None, QtGui.QApplication.UnicodeUTF8))
-        self.icHoldSpin.setSuffix(QtGui.QApplication.translate("Form", "A", None, QtGui.QApplication.UnicodeUTF8))
-        self.cycleTimeSpin.setSuffix(QtGui.QApplication.translate("Form", "s", None, QtGui.QApplication.UnicodeUTF8))
-        self.vcHoldSpin.setSuffix(QtGui.QApplication.translate("Form", "V", None, QtGui.QApplication.UnicodeUTF8))
-        self.bathModeBtn.setText(QtGui.QApplication.translate("Form", "Bath", None, QtGui.QApplication.UnicodeUTF8))
-        self.patchModeBtn.setText(QtGui.QApplication.translate("Form", "Patch", None, QtGui.QApplication.UnicodeUTF8))
-        self.cellModeBtn.setText(QtGui.QApplication.translate("Form", "Cell", None, QtGui.QApplication.UnicodeUTF8))
-        self.monitorModeBtn.setText(QtGui.QApplication.translate("Form", "Monitor", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Average", None, QtGui.QApplication.UnicodeUTF8))
-        self.resetBtn.setText(QtGui.QApplication.translate("Form", "Reset History", None, QtGui.QApplication.UnicodeUTF8))
-        self.inputResistanceCheck.setText(QtGui.QApplication.translate("Form", "Input Res.", None, QtGui.QApplication.UnicodeUTF8))
-        self.inputResistanceLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
-        self.accessResistanceCheck.setText(QtGui.QApplication.translate("Form", "Access Res.", None, QtGui.QApplication.UnicodeUTF8))
-        self.accessResistanceLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
-        self.restingPotentialCheck.setText(QtGui.QApplication.translate("Form", "Rest Potential", None, QtGui.QApplication.UnicodeUTF8))
-        self.restingPotentialLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
-        self.restingCurrentCheck.setText(QtGui.QApplication.translate("Form", "Rest Current", None, QtGui.QApplication.UnicodeUTF8))
-        self.restingCurrentLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
-        self.capacitanceCheck.setText(QtGui.QApplication.translate("Form", "Capacitance", None, QtGui.QApplication.UnicodeUTF8))
-        self.capacitanceLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
-        self.fitErrorCheck.setText(QtGui.QApplication.translate("Form", "Fit Error", None, QtGui.QApplication.UnicodeUTF8))
-        self.fitErrorLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
-        self.drawFitCheck.setText(QtGui.QApplication.translate("Form", "Draw Fit", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Patch", None))
+        self.vcPulseCheck.setText(_translate("Form", "Pulse", None))
+        self.vcHoldCheck.setText(_translate("Form", "Hold", None))
+        self.icPulseCheck.setText(_translate("Form", "Pulse", None))
+        self.icHoldCheck.setText(_translate("Form", "Hold", None))
+        self.label.setText(_translate("Form", "Cycle Time", None))
+        self.label_3.setText(_translate("Form", "Pulse Length", None))
+        self.label_4.setText(_translate("Form", "Delay Length", None))
+        self.icModeRadio.setText(_translate("Form", "IC", None))
+        self.vcModeRadio.setText(_translate("Form", "VC", None))
+        self.startBtn.setText(_translate("Form", "Start", None))
+        self.recordBtn.setText(_translate("Form", "Record", None))
+        self.icPulseSpin.setSuffix(_translate("Form", "A", None))
+        self.pulseTimeSpin.setSuffix(_translate("Form", "s", None))
+        self.delayTimeSpin.setSuffix(_translate("Form", "s", None))
+        self.vcPulseSpin.setSuffix(_translate("Form", "V", None))
+        self.icHoldSpin.setSuffix(_translate("Form", "A", None))
+        self.cycleTimeSpin.setSuffix(_translate("Form", "s", None))
+        self.vcHoldSpin.setSuffix(_translate("Form", "V", None))
+        self.bathModeBtn.setText(_translate("Form", "Bath", None))
+        self.patchModeBtn.setText(_translate("Form", "Patch", None))
+        self.cellModeBtn.setText(_translate("Form", "Cell", None))
+        self.monitorModeBtn.setText(_translate("Form", "Monitor", None))
+        self.label_2.setText(_translate("Form", "Average", None))
+        self.resetBtn.setText(_translate("Form", "Reset History", None))
+        self.inputResistanceCheck.setText(_translate("Form", "Input Res.", None))
+        self.inputResistanceLabel.setText(_translate("Form", "0", None))
+        self.accessResistanceCheck.setText(_translate("Form", "Access Res.", None))
+        self.accessResistanceLabel.setText(_translate("Form", "0", None))
+        self.restingPotentialCheck.setText(_translate("Form", "Rest Potential", None))
+        self.restingPotentialLabel.setText(_translate("Form", "0", None))
+        self.restingCurrentCheck.setText(_translate("Form", "Rest Current", None))
+        self.restingCurrentLabel.setText(_translate("Form", "0", None))
+        self.capacitanceCheck.setText(_translate("Form", "Capacitance", None))
+        self.capacitanceLabel.setText(_translate("Form", "0", None))
+        self.fitErrorCheck.setText(_translate("Form", "Fit Error", None))
+        self.fitErrorLabel.setText(_translate("Form", "0", None))
+        self.drawFitCheck.setText(_translate("Form", "Draw Fit", None))
 
-from pyqtgraph import SpinBox, PlotWidget
+from acq4.pyqtgraph import SpinBox, PlotWidget

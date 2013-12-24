@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.drivers.MultiClamp.MultiClamp import MultiClamp as MultiClampDriver
-from lib.devices.Device import *
+from acq4.drivers.MultiClamp.MultiClamp import MultiClamp as MultiClampDriver
+from acq4.devices.Device import *
 from metaarray import MetaArray, axis
 from Mutex import Mutex, MutexLocker
 from PyQt4 import QtCore

@@ -5,10 +5,10 @@ I keep data about each cell in cell_overview.ods.
 This script reads cell values fomr that file and inserts them into the sqlite DB.
 """
 
-import lib.Manager
+import acq4.Manager
 import ooolib
 import re
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 
 ## Read data from this ODS file:
 odsFile = "/home/luke/data/analysis/cell_overview.ods"

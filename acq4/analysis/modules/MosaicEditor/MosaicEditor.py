@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
-from lib.analysis.AnalysisModule import AnalysisModule
+from acq4.analysis.AnalysisModule import AnalysisModule
 #from flowchart import *
 import os
 from collections import OrderedDict
@@ -12,7 +12,7 @@ import weakref
 #import FeedbackButton
 from MosaicEditorTemplate import *
 import DataManager
-import lib.analysis.atlas as atlas
+import acq4.analysis.atlas as atlas
 
 class MosaicEditor(AnalysisModule):
     def __init__(self, host):

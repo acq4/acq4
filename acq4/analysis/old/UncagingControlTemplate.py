@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/analysis/old/UncagingControlTemplate.ui'
+# Form implementation generated from reading ui file './acq4/analysis/old/UncagingControlTemplate.ui'
 #
-# Created: Wed May 18 20:44:09 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Mon Dec 23 22:47:01 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_UncagingControlWidget(object):
     def setupUi(self, UncagingControlWidget):
@@ -137,24 +146,24 @@ class Ui_UncagingControlWidget(object):
         QtCore.QMetaObject.connectSlotsByName(UncagingControlWidget)
 
     def retranslateUi(self, UncagingControlWidget):
-        UncagingControlWidget.setWindowTitle(QtGui.QApplication.translate("UncagingControlWidget", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("UncagingControlWidget", "Noise Threshold", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("UncagingControlWidget", "Direct Time", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("UncagingControlWidget", "Post-Stim. Time", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_4.setTitle(QtGui.QApplication.translate("UncagingControlWidget", "Coloring Scheme:", None, QtGui.QApplication.UnicodeUTF8))
-        self.gradientRadio.setText(QtGui.QApplication.translate("UncagingControlWidget", "Gradient", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("UncagingControlWidget", "Low % Cutoff", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("UncagingControlWidget", "High % Cutoff", None, QtGui.QApplication.UnicodeUTF8))
-        self.rgbRadio.setText(QtGui.QApplication.translate("UncagingControlWidget", "RGB", None, QtGui.QApplication.UnicodeUTF8))
-        self.colorTracesCheck.setText(QtGui.QApplication.translate("UncagingControlWidget", "Color Traces by Laser Power", None, QtGui.QApplication.UnicodeUTF8))
-        self.svgCheck.setText(QtGui.QApplication.translate("UncagingControlWidget", "Prepare for SVG", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_6.setText(QtGui.QApplication.translate("UncagingControlWidget", "Clip:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_7.setText(QtGui.QApplication.translate("UncagingControlWidget", "Downsample:", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("UncagingControlWidget", "Analysis Method:", None, QtGui.QApplication.UnicodeUTF8))
-        self.eventFindRadio.setText(QtGui.QApplication.translate("UncagingControlWidget", "Event Finding", None, QtGui.QApplication.UnicodeUTF8))
-        self.chargeTransferRadio.setText(QtGui.QApplication.translate("UncagingControlWidget", "Total Charge Transfer", None, QtGui.QApplication.UnicodeUTF8))
-        self.useSpontActCheck.setText(QtGui.QApplication.translate("UncagingControlWidget", "Use Spont. Activity", None, QtGui.QApplication.UnicodeUTF8))
-        self.medianCheck.setText(QtGui.QApplication.translate("UncagingControlWidget", "Use Median", None, QtGui.QApplication.UnicodeUTF8))
-        self.recolorBtn.setText(QtGui.QApplication.translate("UncagingControlWidget", "Re-Color", None, QtGui.QApplication.UnicodeUTF8))
+        UncagingControlWidget.setWindowTitle(_translate("UncagingControlWidget", "Form", None))
+        self.label.setText(_translate("UncagingControlWidget", "Noise Threshold", None))
+        self.label_3.setText(_translate("UncagingControlWidget", "Direct Time", None))
+        self.label_2.setText(_translate("UncagingControlWidget", "Post-Stim. Time", None))
+        self.groupBox_4.setTitle(_translate("UncagingControlWidget", "Coloring Scheme:", None))
+        self.gradientRadio.setText(_translate("UncagingControlWidget", "Gradient", None))
+        self.label_4.setText(_translate("UncagingControlWidget", "Low % Cutoff", None))
+        self.label_5.setText(_translate("UncagingControlWidget", "High % Cutoff", None))
+        self.rgbRadio.setText(_translate("UncagingControlWidget", "RGB", None))
+        self.colorTracesCheck.setText(_translate("UncagingControlWidget", "Color Traces by Laser Power", None))
+        self.svgCheck.setText(_translate("UncagingControlWidget", "Prepare for SVG", None))
+        self.label_6.setText(_translate("UncagingControlWidget", "Clip:", None))
+        self.label_7.setText(_translate("UncagingControlWidget", "Downsample:", None))
+        self.groupBox.setTitle(_translate("UncagingControlWidget", "Analysis Method:", None))
+        self.eventFindRadio.setText(_translate("UncagingControlWidget", "Event Finding", None))
+        self.chargeTransferRadio.setText(_translate("UncagingControlWidget", "Total Charge Transfer", None))
+        self.useSpontActCheck.setText(_translate("UncagingControlWidget", "Use Spont. Activity", None))
+        self.medianCheck.setText(_translate("UncagingControlWidget", "Use Median", None))
+        self.recolorBtn.setText(_translate("UncagingControlWidget", "Re-Color", None))
 
-from pyqtgraph.GradientWidget import GradientWidget
+from acq4.pyqtgraph.GradientWidget import GradientWidget

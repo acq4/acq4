@@ -6,9 +6,9 @@ dataFile = "../../atlas/CochlearNucleus/images/cochlear_nucleus.ma"
 labelFile = "../../atlas/CochlearNucleus/images/cochlear_nucleus_label.ma"
 
 from PyQt4 import QtCore, QtGui
-import pyqtgraph as pg
-#import pyqtgraph.ColorButton as ColorButton
-#import pyqtgraph.ProgressDialog as ProgressDialog
+import acq4.pyqtgraph as pg
+#import acq4.pyqtgraph.ColorButton as ColorButton
+#import acq4.pyqtgraph.ProgressDialog as ProgressDialog
 import numpy as np
 import builderTemplate
 import metaarray

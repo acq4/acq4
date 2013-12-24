@@ -75,5 +75,5 @@ class Ui_AnalysisPlotWindowTemplate(object):
         self.loadDataBtn.setText(QtGui.QApplication.translate("AnalysisPlotWindowTemplate", "Load Data", None, QtGui.QApplication.UnicodeUTF8))
         self.addPlotBtn.setText(QtGui.QApplication.translate("AnalysisPlotWindowTemplate", "Add Plot", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.PlotWidget import PlotWidget
+from acq4.pyqtgraph.PlotWidget import PlotWidget
 from AnalysisPlotWidget import AnalysisPlotWidget

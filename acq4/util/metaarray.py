@@ -1,1 +1,1 @@
-from pyqtgraph.metaarray import *
+from acq4.pyqtgraph.metaarray import *

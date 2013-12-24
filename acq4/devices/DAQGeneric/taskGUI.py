@@ -3,11 +3,11 @@ from PyQt4 import QtCore, QtGui
 import sys
 from TaskTemplate import *
 from DaqChannelGui import *
-from lib.devices.Device import TaskGui
+from acq4.devices.Device import TaskGui
 from SequenceRunner import *
-from pyqtgraph.WidgetGroup import WidgetGroup
+from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 #from PyQt4 import Qwt5 as Qwt
-from pyqtgraph import PlotWidget
+from acq4.pyqtgraph import PlotWidget
 import numpy
 import weakref
 from debug import *

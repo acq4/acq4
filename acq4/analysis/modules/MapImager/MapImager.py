@@ -1,15 +1,15 @@
 from PyQt4 import QtGui, QtCore
 import os
-from lib.analysis.AnalysisModule import AnalysisModule
+from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 from metaarray import MetaArray
 import numpy as np
 import scipy
 import functions as fn
 #import CellHealthCtrlTemplate
 from HelpfulException import HelpfulException
-from pyqtgraph.widgets.FileDialog import FileDialog
+from acq4.pyqtgraph.widgets.FileDialog import FileDialog
 import sys
 from DatabaseGui.DatabaseQueryWidget import DatabaseQueryWidget
 from SpatialCorrelator import SpatialCorrelator

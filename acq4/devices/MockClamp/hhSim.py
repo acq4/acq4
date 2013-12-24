@@ -112,7 +112,7 @@ def hh(y, t, mode, cmd, dt):
 
     
 
-#import pyqtgraph as pg
+#import acq4.pyqtgraph as pg
 #win = pg.GraphicsWindow()
 #plt1 = win.addPlot(labels={'left': ('Vm', 'V'), 'bottom': ('Time', 's')})
 #win.nextRow()

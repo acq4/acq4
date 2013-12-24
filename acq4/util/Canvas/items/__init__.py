@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import os, inspect
 from CanvasItem import CanvasItem
-#import pyqtgraph.canvas.items as items
+#import acq4.pyqtgraph.canvas.items as items
 
 def listMods():
     d = os.path.split(__file__)[0]
@@ -13,7 +13,7 @@ def listMods():
             files.append(f[:-3])
     return files
 
-#_ITEMLIST_ = items.listItems()  ## get original list of items from pyqtgraph.canvas
+#_ITEMLIST_ = items.listItems()  ## get original list of items from acq4.pyqtgraph.canvas
 _ITEMLIST_ = []
 
 ## add our custom items to the list

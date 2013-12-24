@@ -1,5 +1,5 @@
-from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
-import pyqtgraph as pg
+from acq4.pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
+import acq4.pyqtgraph as pg
 import collections
 
 class StimParamSet(GroupParameter):

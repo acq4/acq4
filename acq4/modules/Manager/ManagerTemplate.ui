@@ -130,7 +130,7 @@
   <customwidget>
    <class>LogButton</class>
    <extends>QPushButton</extends>
-   <header>lib.LogWindow</header>
+   <header>acq4.LogWindow</header>
   </customwidget>
  </customwidgets>
  <resources/>

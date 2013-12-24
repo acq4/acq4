@@ -284,13 +284,13 @@
   <customwidget>
    <class>PlotWidget</class>
    <extends>QWidget</extends>
-   <header>pyqtgraph</header>
+   <header>acq4.pyqtgraph</header>
    <container>1</container>
   </customwidget>
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header>pyqtgraph</header>
+   <header>acq4.pyqtgraph</header>
   </customwidget>
  </customwidgets>
  <resources/>

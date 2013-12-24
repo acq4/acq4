@@ -1,1 +1,1 @@
-from pyqtgraph.units import *
+from acq4.pyqtgraph.units import *

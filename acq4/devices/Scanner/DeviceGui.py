@@ -2,14 +2,14 @@
 from DeviceTemplate import Ui_Form
 import time, os, sys, gc
 from PyQt4 import QtCore, QtGui
-#from pyqtgraph.graphicsItems import ImageItem
-import lib.Manager
+#from acq4.pyqtgraph.graphicsItems import ImageItem
+import acq4.Manager
 from imageAnalysis import *
 from debug import *
 import numpy as np
-import pyqtgraph as pg
-#import pyqtgraph.WidgetGroup as WidgetGroup
-#from pyqtgraph.ProgressDialog import ProgressDialog
+import acq4.pyqtgraph as pg
+#import acq4.pyqtgraph.WidgetGroup as WidgetGroup
+#from acq4.pyqtgraph.ProgressDialog import ProgressDialog
 from HelpfulException import HelpfulException
 
 class ScannerDeviceGui(QtGui.QWidget):

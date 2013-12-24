@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'CtrlTemplate.ui'
+# Form implementation generated from reading ui file './acq4/analysis/modules/RoiEventDetector/CtrlTemplate.ui'
 #
-# Created: Tue Oct 23 11:31:34 2012
-#      by: PyQt4 UI code generator 4.9.1
+# Created: Mon Dec 23 22:47:01 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -72,15 +81,15 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Current storage file:", None, QtGui.QApplication.UnicodeUTF8))
-        self.fileLabel.setText(QtGui.QApplication.translate("Form", "None", None, QtGui.QApplication.UnicodeUTF8))
-        self.newFileBtn.setText(QtGui.QApplication.translate("Form", "New", None, QtGui.QApplication.UnicodeUTF8))
-        self.openFileBtn.setText(QtGui.QApplication.translate("Form", "Open...", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Store:", None, QtGui.QApplication.UnicodeUTF8))
-        self.roiRadio.setText(QtGui.QApplication.translate("Form", "only selected ROI", None, QtGui.QApplication.UnicodeUTF8))
-        self.videoRadio.setText(QtGui.QApplication.translate("Form", "only selected video", None, QtGui.QApplication.UnicodeUTF8))
-        self.everythingRadio.setText(QtGui.QApplication.translate("Form", "everything that\'s loaded", None, QtGui.QApplication.UnicodeUTF8))
-        self.storeBtn.setText(QtGui.QApplication.translate("Form", "Store events", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.label.setText(_translate("Form", "Current storage file:", None))
+        self.fileLabel.setText(_translate("Form", "None", None))
+        self.newFileBtn.setText(_translate("Form", "New", None))
+        self.openFileBtn.setText(_translate("Form", "Open...", None))
+        self.groupBox.setTitle(_translate("Form", "Store:", None))
+        self.roiRadio.setText(_translate("Form", "only selected ROI", None))
+        self.videoRadio.setText(_translate("Form", "only selected video", None))
+        self.everythingRadio.setText(_translate("Form", "everything that\'s loaded", None))
+        self.storeBtn.setText(_translate("Form", "Store events", None))
 
-from pyqtgraph.widgets.FeedbackButton import FeedbackButton
+from acq4.pyqtgraph.widgets.FeedbackButton import FeedbackButton

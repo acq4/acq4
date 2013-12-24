@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'LogWidgetTemplate.ui'
+# Form implementation generated from reading ui file './acq4/LogWidgetTemplate.ui'
 #
-# Created: Tue Jan 17 16:45:29 2012
-#      by: PyQt4 UI code generator 4.9
+# Created: Mon Dec 23 22:46:55 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -140,20 +149,20 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.exportHtmlBtn.setText(QtGui.QApplication.translate("Form", "Export HTML", None, QtGui.QApplication.UnicodeUTF8))
-        self.filterTree.headerItem().setText(0, QtGui.QApplication.translate("Form", "Display:", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.exportHtmlBtn.setText(_translate("Form", "Export HTML", None))
+        self.filterTree.headerItem().setText(0, _translate("Form", "Display:", None))
         __sortingEnabled = self.filterTree.isSortingEnabled()
         self.filterTree.setSortingEnabled(False)
-        self.filterTree.topLevelItem(0).setText(0, QtGui.QApplication.translate("Form", "Current directory only", None, QtGui.QApplication.UnicodeUTF8))
-        self.filterTree.topLevelItem(1).setText(0, QtGui.QApplication.translate("Form", "All message types:", None, QtGui.QApplication.UnicodeUTF8))
-        self.filterTree.topLevelItem(1).child(0).setText(0, QtGui.QApplication.translate("Form", "user", None, QtGui.QApplication.UnicodeUTF8))
-        self.filterTree.topLevelItem(1).child(1).setText(0, QtGui.QApplication.translate("Form", "status", None, QtGui.QApplication.UnicodeUTF8))
-        self.filterTree.topLevelItem(1).child(2).setText(0, QtGui.QApplication.translate("Form", "warning", None, QtGui.QApplication.UnicodeUTF8))
-        self.filterTree.topLevelItem(1).child(3).setText(0, QtGui.QApplication.translate("Form", "error", None, QtGui.QApplication.UnicodeUTF8))
+        self.filterTree.topLevelItem(0).setText(0, _translate("Form", "Current directory only", None))
+        self.filterTree.topLevelItem(1).setText(0, _translate("Form", "All message types:", None))
+        self.filterTree.topLevelItem(1).child(0).setText(0, _translate("Form", "user", None))
+        self.filterTree.topLevelItem(1).child(1).setText(0, _translate("Form", "status", None))
+        self.filterTree.topLevelItem(1).child(2).setText(0, _translate("Form", "warning", None))
+        self.filterTree.topLevelItem(1).child(3).setText(0, _translate("Form", "error", None))
         self.filterTree.setSortingEnabled(__sortingEnabled)
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Low", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Importance Filter:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("Form", "High", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_2.setText(_translate("Form", "Low", None))
+        self.label.setText(_translate("Form", "Importance Filter:", None))
+        self.label_3.setText(_translate("Form", "High", None))
 
-from pyqtgraph import TreeWidget
+from acq4.pyqtgraph import TreeWidget

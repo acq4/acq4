@@ -2,7 +2,7 @@
 from FileInfoViewTemplate import *
 from PyQt4 import QtCore, QtGui
 from DataManager import DirHandle
-import lib.Manager as Manager
+import acq4.Manager as Manager
 #import sip
 import time
 import configfile

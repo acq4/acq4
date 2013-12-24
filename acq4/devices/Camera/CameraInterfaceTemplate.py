@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'lib/devices/Camera/CameraInterfaceTemplate.ui'
+# Form implementation generated from reading ui file './acq4/devices/Camera/CameraInterfaceTemplate.ui'
 #
-# Created: Thu Aug 29 12:38:50 2013
-#      by: PyQt4 UI code generator 4.9.1
+# Created: Mon Dec 23 22:46:57 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -203,64 +212,64 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.acquireVideoBtn.setToolTip(QtGui.QApplication.translate("Form", "Start/stop camera acquisition.\n"
-"In general, this can just stay on always.", None, QtGui.QApplication.UnicodeUTF8))
-        self.acquireVideoBtn.setText(QtGui.QApplication.translate("Form", "Acquire Video", None, QtGui.QApplication.UnicodeUTF8))
-        self.acquireFrameBtn.setText(QtGui.QApplication.translate("Form", "Acquire Frame", None, QtGui.QApplication.UnicodeUTF8))
-        self.recordStackBtn.setToolTip(QtGui.QApplication.translate("Form", "Start/stop recording frames as they are acquired. \n"
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.acquireVideoBtn.setToolTip(_translate("Form", "Start/stop camera acquisition.\n"
+"In general, this can just stay on always.", None))
+        self.acquireVideoBtn.setText(_translate("Form", "Acquire Video", None))
+        self.acquireFrameBtn.setText(_translate("Form", "Acquire Frame", None))
+        self.recordStackBtn.setToolTip(_translate("Form", "Start/stop recording frames as they are acquired. \n"
 "Frames are written to the current storage directory set in \n"
-"the data manager window.", None, QtGui.QApplication.UnicodeUTF8))
-        self.recordStackBtn.setText(QtGui.QApplication.translate("Form", "Record Stack", None, QtGui.QApplication.UnicodeUTF8))
-        self.recordXframesCheck.setText(QtGui.QApplication.translate("Form", "Stack Limit", None, QtGui.QApplication.UnicodeUTF8))
-        self.recordXframesSpin.setSuffix(QtGui.QApplication.translate("Form", " frames", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_9.setText(QtGui.QApplication.translate("Form", "Stack Size:", None, QtGui.QApplication.UnicodeUTF8))
-        self.stackSizeLabel.setText(QtGui.QApplication.translate("Form", "0 frames", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Acquiring:", None, QtGui.QApplication.UnicodeUTF8))
-        self.fpsLabel.setText(QtGui.QApplication.translate("Form", "0 fps", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_7.setText(QtGui.QApplication.translate("Form", "Displaying:", None, QtGui.QApplication.UnicodeUTF8))
-        self.displayFpsLabel.setText(QtGui.QApplication.translate("Form", "0 fps", None, QtGui.QApplication.UnicodeUTF8))
-        self.displayPercentLabel.setText(QtGui.QApplication.translate("Form", "(0%)", None, QtGui.QApplication.UnicodeUTF8))
-        self.saveFrameBtn.setText(QtGui.QApplication.translate("Form", "Save Frame", None, QtGui.QApplication.UnicodeUTF8))
-        self.frameToBgBtn.setText(QtGui.QApplication.translate("Form", "Last Frame → Background", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnFullFrame.setToolTip(QtGui.QApplication.translate("Form", "Set the region of interest to the maximum possible area.", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnFullFrame.setText(QtGui.QApplication.translate("Form", "Full Frame", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("Form", "Exposure", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Binning", None, QtGui.QApplication.UnicodeUTF8))
-        self.spinExposure.setToolTip(QtGui.QApplication.translate("Form", "Sets the exposure time for each frame.", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_8.setText(QtGui.QApplication.translate("Form", "Frame Center Weight", None, QtGui.QApplication.UnicodeUTF8))
-        self.zoomLiveBtn.setText(QtGui.QApplication.translate("Form", "Zoom to Live Image", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnAutoGain.setToolTip(QtGui.QApplication.translate("Form", "Determines the behavior of the white/black level sliders.\n"
+"the data manager window.", None))
+        self.recordStackBtn.setText(_translate("Form", "Record Stack", None))
+        self.recordXframesCheck.setText(_translate("Form", "Stack Limit", None))
+        self.recordXframesSpin.setSuffix(_translate("Form", " frames", None))
+        self.label_9.setText(_translate("Form", "Stack Size:", None))
+        self.stackSizeLabel.setText(_translate("Form", "0 frames", None))
+        self.label.setText(_translate("Form", "Acquiring:", None))
+        self.fpsLabel.setText(_translate("Form", "0 fps", None))
+        self.label_7.setText(_translate("Form", "Displaying:", None))
+        self.displayFpsLabel.setText(_translate("Form", "0 fps", None))
+        self.displayPercentLabel.setText(_translate("Form", "(0%)", None))
+        self.saveFrameBtn.setText(_translate("Form", "Save Frame", None))
+        self.frameToBgBtn.setText(_translate("Form", "Last Frame → Background", None))
+        self.btnFullFrame.setToolTip(_translate("Form", "Set the region of interest to the maximum possible area.", None))
+        self.btnFullFrame.setText(_translate("Form", "Full Frame", None))
+        self.label_3.setText(_translate("Form", "Exposure", None))
+        self.label_2.setText(_translate("Form", "Binning", None))
+        self.spinExposure.setToolTip(_translate("Form", "Sets the exposure time for each frame.", None))
+        self.label_8.setText(_translate("Form", "Frame Center Weight", None))
+        self.zoomLiveBtn.setText(_translate("Form", "Zoom to Live Image", None))
+        self.btnAutoGain.setToolTip(_translate("Form", "Determines the behavior of the white/black level sliders.\n"
 "When enabled, the sliders maximum and minimum values are set\n"
 "to the maximum and minimum intensity values in the image.\n"
 "When disabled, the minimum is 0 and the maximum is the largest \n"
-"possible intensity given the bit depth of the camera.", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnAutoGain.setText(QtGui.QApplication.translate("Form", "Auto Gain", None, QtGui.QApplication.UnicodeUTF8))
-        self.spinAutoGainCenterWeight.setToolTip(QtGui.QApplication.translate("Form", "Weights the auto gain measurement to the center 1/3 of\n"
+"possible intensity given the bit depth of the camera.", None))
+        self.btnAutoGain.setText(_translate("Form", "Auto Gain", None))
+        self.spinAutoGainCenterWeight.setToolTip(_translate("Form", "Weights the auto gain measurement to the center 1/3 of\n"
 "the frame when set to 1.0. A value of 0.0 meters from \n"
-"the entire frame.", None, QtGui.QApplication.UnicodeUTF8))
-        self.spinAutoGainSpeed.setToolTip(QtGui.QApplication.translate("Form", "Smooths out the auto gain control, prevents very\n"
+"the entire frame.", None))
+        self.spinAutoGainSpeed.setToolTip(_translate("Form", "Smooths out the auto gain control, prevents very\n"
 "brief flashes from affecting the gain. Larger values\n"
 "indicate more smoothing.\n"
-"", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_6.setText(QtGui.QApplication.translate("Form", "Auto Gain Delay", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("Form", "Transparency", None, QtGui.QApplication.UnicodeUTF8))
-        self.bgBlurSpin.setToolTip(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"", None))
+        self.label_6.setText(_translate("Form", "Auto Gain Delay", None))
+        self.label_4.setText(_translate("Form", "Transparency", None))
+        self.bgBlurSpin.setToolTip(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Blurs the background frame before dividing it from the current frame.</span></p>\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Large blur values may cause performance to degrade.</span></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.divideBgBtn.setToolTip(QtGui.QApplication.translate("Form", "Enables background division. \n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Large blur values may cause performance to degrade.</span></p></body></html>", None))
+        self.divideBgBtn.setToolTip(_translate("Form", "Enables background division. \n"
 "Either a set of static background frames need to have already by collected\n"
-"(by pressing \'Static\' above) or \'Continuous\' needs to be pressed.", None, QtGui.QApplication.UnicodeUTF8))
-        self.divideBgBtn.setText(QtGui.QApplication.translate("Form", "Divide Background", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("Form", "Blur Background.", None, QtGui.QApplication.UnicodeUTF8))
-        self.contAvgBgCheck.setText(QtGui.QApplication.translate("Form", "Continuous Average", None, QtGui.QApplication.UnicodeUTF8))
-        self.subtractBgBtn.setText(QtGui.QApplication.translate("Form", "Subtract Background", None, QtGui.QApplication.UnicodeUTF8))
-        self.collectBgBtn.setText(QtGui.QApplication.translate("Form", "Collect Background", None, QtGui.QApplication.UnicodeUTF8))
-        self.bgTimeSpin.setToolTip(QtGui.QApplication.translate("Form", "Sets the approximate number of frames to be averaged for\n"
-"background division.", None, QtGui.QApplication.UnicodeUTF8))
-        self.bgTimeSpin.setSuffix(QtGui.QApplication.translate("Form", " s", None, QtGui.QApplication.UnicodeUTF8))
+"(by pressing \'Static\' above) or \'Continuous\' needs to be pressed.", None))
+        self.divideBgBtn.setText(_translate("Form", "Divide Background", None))
+        self.label_5.setText(_translate("Form", "Blur Background.", None))
+        self.contAvgBgCheck.setText(_translate("Form", "Continuous Average", None))
+        self.subtractBgBtn.setText(_translate("Form", "Subtract Background", None))
+        self.collectBgBtn.setText(_translate("Form", "Collect Background", None))
+        self.bgTimeSpin.setToolTip(_translate("Form", "Sets the approximate number of frames to be averaged for\n"
+"background division.", None))
+        self.bgTimeSpin.setSuffix(_translate("Form", " s", None))
 
-from pyqtgraph import HistogramLUTWidget, ValueLabel, FeedbackButton, SpinBox
+from acq4.pyqtgraph import HistogramLUTWidget, ValueLabel, FeedbackButton, SpinBox

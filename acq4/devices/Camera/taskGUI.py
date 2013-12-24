@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 from TaskTemplate import *
-from lib.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
-from lib.devices.Device import TaskGui
-#from pyqtgraph.WidgetGroup import WidgetGroup
+from acq4.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
+from acq4.devices.Device import TaskGui
+#from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 import numpy as np
-import pyqtgraph as pg
-#from pyqtgraph.graphicsItems import InfiniteLine, VTickGroup
+import acq4.pyqtgraph as pg
+#from acq4.pyqtgraph.graphicsItems import InfiniteLine, VTickGroup
 #from PyQt4 import Qwt5 as Qwt
 
 class CameraTaskGui(DAQGenericTaskGui):

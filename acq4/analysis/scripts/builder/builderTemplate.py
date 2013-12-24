@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'builderTemplate.ui'
+# Form implementation generated from reading ui file './acq4/analysis/scripts/builder/builderTemplate.ui'
 #
-# Created: Sun Dec 18 17:43:50 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Mon Dec 23 22:47:01 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -81,7 +90,7 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.greyCheck, 4, 1, 1, 1)
         self.labelSlider = QtGui.QSlider(self.groupBox)
         self.labelSlider.setMaximum(255)
-        self.labelSlider.setProperty(_fromUtf8("value"), 50)
+        self.labelSlider.setProperty("value", 50)
         self.labelSlider.setOrientation(QtCore.Qt.Horizontal)
         self.labelSlider.setObjectName(_fromUtf8("labelSlider"))
         self.gridLayout.addWidget(self.labelSlider, 6, 1, 1, 1)
@@ -111,7 +120,7 @@ class Ui_Form(object):
         self.labelSpin = QtGui.QSpinBox(self.groupBox_3)
         self.labelSpin.setMinimum(0)
         self.labelSpin.setMaximum(15)
-        self.labelSpin.setProperty(_fromUtf8("value"), 0)
+        self.labelSpin.setProperty("value", 0)
         self.labelSpin.setObjectName(_fromUtf8("labelSpin"))
         self.gridLayout_3.addWidget(self.labelSpin, 1, 1, 1, 1)
         self.gridLayout_4.addWidget(self.groupBox_3, 1, 0, 1, 1)
@@ -134,18 +143,18 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "View", None, QtGui.QApplication.UnicodeUTF8))
-        self.dorsalRadio.setText(QtGui.QApplication.translate("Form", "Dorsal", None, QtGui.QApplication.UnicodeUTF8))
-        self.rostralRadio.setText(QtGui.QApplication.translate("Form", "Rostral", None, QtGui.QApplication.UnicodeUTF8))
-        self.rightRadio.setText(QtGui.QApplication.translate("Form", "Right", None, QtGui.QApplication.UnicodeUTF8))
-        self.greyCheck.setText(QtGui.QApplication.translate("Form", "Greyscale", None, QtGui.QApplication.UnicodeUTF8))
-        self.overlayCheck.setText(QtGui.QApplication.translate("Form", "Overlay", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_3.setTitle(QtGui.QApplication.translate("Form", "Drawing", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Radius", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Label", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Labels", None, QtGui.QApplication.UnicodeUTF8))
-        self.labelTree.headerItem().setText(0, QtGui.QApplication.translate("Form", "color", None, QtGui.QApplication.UnicodeUTF8))
-        self.labelTree.headerItem().setText(2, QtGui.QApplication.translate("Form", "id", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.groupBox.setTitle(_translate("Form", "View", None))
+        self.dorsalRadio.setText(_translate("Form", "Dorsal", None))
+        self.rostralRadio.setText(_translate("Form", "Rostral", None))
+        self.rightRadio.setText(_translate("Form", "Right", None))
+        self.greyCheck.setText(_translate("Form", "Greyscale", None))
+        self.overlayCheck.setText(_translate("Form", "Overlay", None))
+        self.groupBox_3.setTitle(_translate("Form", "Drawing", None))
+        self.label.setText(_translate("Form", "Radius", None))
+        self.label_2.setText(_translate("Form", "Label", None))
+        self.groupBox_2.setTitle(_translate("Form", "Labels", None))
+        self.labelTree.headerItem().setText(0, _translate("Form", "color", None))
+        self.labelTree.headerItem().setText(2, _translate("Form", "id", None))
 
-from pyqtgraph import GraphicsView, TreeWidget
+from acq4.pyqtgraph import GraphicsView, TreeWidget

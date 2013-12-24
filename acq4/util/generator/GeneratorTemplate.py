@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'GeneratorTemplate.ui'
+# Form implementation generated from reading ui file './acq4/util/generator/GeneratorTemplate.ui'
 #
-# Created: Wed Oct 26 11:52:11 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Mon Dec 23 22:47:04 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -28,6 +37,7 @@ class Ui_Form(object):
         self.frame.setFrameShadow(QtGui.QFrame.Raised)
         self.frame.setObjectName(_fromUtf8("frame"))
         self.verticalLayout_4 = QtGui.QVBoxLayout(self.frame)
+        self.verticalLayout_4.setSpacing(0)
         self.verticalLayout_4.setMargin(0)
         self.verticalLayout_4.setObjectName(_fromUtf8("verticalLayout_4"))
         self.splitter = QtGui.QSplitter(self.frame)
@@ -120,8 +130,8 @@ class Ui_Form(object):
         sizePolicy.setHeightForWidth(self.errorBtn.sizePolicy().hasHeightForWidth())
         self.errorBtn.setSizePolicy(sizePolicy)
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.errorBtn.setFont(font)
         self.errorBtn.setCheckable(True)
         self.errorBtn.setObjectName(_fromUtf8("errorBtn"))
@@ -133,8 +143,8 @@ class Ui_Form(object):
         sizePolicy.setHeightForWidth(self.helpBtn.sizePolicy().hasHeightForWidth())
         self.helpBtn.setSizePolicy(sizePolicy)
         font = QtGui.QFont()
-        font.setWeight(75)
         font.setBold(True)
+        font.setWeight(75)
         self.helpBtn.setFont(font)
         self.helpBtn.setCheckable(True)
         self.helpBtn.setObjectName(_fromUtf8("helpBtn"))
@@ -155,18 +165,18 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Warning: Changes have been made to the function in advanced mode. These changes will be overwritten if you exit advanced mode. ", None, QtGui.QApplication.UnicodeUTF8))
-        self.forceAdvancedBtn.setText(QtGui.QApplication.translate("Form", "Back to\n"
-"Advanced Mode", None, QtGui.QApplication.UnicodeUTF8))
-        self.forceSimpleBtn.setText(QtGui.QApplication.translate("Form", "Change to\n"
-"Simple Mode", None, QtGui.QApplication.UnicodeUTF8))
-        self.functionText.setHtml(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.label.setText(_translate("Form", "Warning: Changes have been made to the function in advanced mode. These changes will be overwritten if you exit advanced mode. ", None))
+        self.forceAdvancedBtn.setText(_translate("Form", "Back to\n"
+"Advanced Mode", None))
+        self.forceSimpleBtn.setText(_translate("Form", "Change to\n"
+"Simple Mode", None))
+        self.functionText.setHtml(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:\'Sans Serif\'; font-size:7pt;\"></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.textBrowser.setHtml(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:\'Sans Serif\'; font-size:7pt;\"></p></body></html>", None))
+        self.textBrowser.setHtml(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
@@ -222,16 +232,16 @@ class Ui_Form(object):
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-family:\'Sans Serif\'; font-size:8pt;\">    values - the list of values that are iterated over for each cycle of the wave. </span></p>\n"
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:\'Sans Serif\'; font-size:8pt;\"></p>\n"
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:\'Ubuntu\'; font-size:8pt;\"></p>\n"
-"<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:\'Ubuntu\'; font-size:8pt;\"></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.errorText.setHtml(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:\'Ubuntu\'; font-size:8pt;\"></p></body></html>", None))
+        self.errorText.setHtml(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-family:\'Ubuntu\'; font-size:9pt;\">No Error.</span></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.advancedBtn.setText(QtGui.QApplication.translate("Form", "Advanced", None, QtGui.QApplication.UnicodeUTF8))
-        self.errorBtn.setText(QtGui.QApplication.translate("Form", "!", None, QtGui.QApplication.UnicodeUTF8))
-        self.helpBtn.setText(QtGui.QApplication.translate("Form", "?", None, QtGui.QApplication.UnicodeUTF8))
-        self.updateBtn.setText(QtGui.QApplication.translate("Form", "Update", None, QtGui.QApplication.UnicodeUTF8))
-        self.autoUpdateCheck.setText(QtGui.QApplication.translate("Form", "Auto", None, QtGui.QApplication.UnicodeUTF8))
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-family:\'Ubuntu\'; font-size:9pt;\">No Error.</span></p></body></html>", None))
+        self.advancedBtn.setText(_translate("Form", "Advanced", None))
+        self.errorBtn.setText(_translate("Form", "!", None))
+        self.helpBtn.setText(_translate("Form", "?", None))
+        self.updateBtn.setText(_translate("Form", "Update", None))
+        self.autoUpdateCheck.setText(_translate("Form", "Auto", None))
 
-from pyqtgraph.parametertree import ParameterTree
+from acq4.pyqtgraph.parametertree import ParameterTree

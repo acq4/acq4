@@ -1,7 +1,7 @@
 from PyQt4 import QtCore, QtGui
-import lib.Manager
-import pyqtgraph as pg
-import pyqtgraph.opengl as gl
+import acq4.Manager
+import acq4.pyqtgraph as pg
+import acq4.pyqtgraph.opengl as gl
 
 import numpy as np
 import functions as fn
@@ -90,7 +90,7 @@ if 'events' not in locals():
     tab.addTab(gv, 'Morphology')
 
     ## 3D atlas
-    import lib.analysis.atlas.CochlearNucleus as CN
+    import acq4.analysis.atlas.CochlearNucleus as CN
     atlas = CN.CNAtlasDisplayWidget()
     atlas.showLabel('DCN')
     atlas.showLabel('AVCN')

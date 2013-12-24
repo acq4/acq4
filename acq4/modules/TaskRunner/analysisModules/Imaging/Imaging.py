@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-from lib.modules.TaskRunner.analysisModules import AnalysisModule
-from lib.Manager import getManager
+from acq4.modules.TaskRunner.analysisModules import AnalysisModule
+from acq4.Manager import getManager
 from PyQt4 import QtCore, QtGui
 from imagingTemplate import Ui_Form
 import numpy as np
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 import functions as fn
 import metaarray
 

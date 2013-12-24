@@ -2,7 +2,7 @@ import os, sys, user
 md = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(md, '..'))
 
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 import SequenceRunner
 from PyQt4 import QtCore, QtGui
 if not hasattr(QtCore, 'Signal'):

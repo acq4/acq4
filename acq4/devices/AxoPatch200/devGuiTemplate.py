@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'devGuiTemplate.ui'
+# Form implementation generated from reading ui file './acq4/devices/AxoPatch200/devGuiTemplate.ui'
 #
-# Created: Sun Dec 18 19:23:01 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Mon Dec 23 22:46:56 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_devGui(object):
     def setupUi(self, devGui):
@@ -49,13 +58,13 @@ class Ui_devGui(object):
         QtCore.QMetaObject.connectSlotsByName(devGui)
 
     def retranslateUi(self, devGui):
-        devGui.setWindowTitle(QtGui.QApplication.translate("devGui", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.modeCombo.setItemText(0, QtGui.QApplication.translate("devGui", "V-Clamp", None, QtGui.QApplication.UnicodeUTF8))
-        self.modeCombo.setItemText(1, QtGui.QApplication.translate("devGui", "I=0", None, QtGui.QApplication.UnicodeUTF8))
-        self.modeCombo.setItemText(2, QtGui.QApplication.translate("devGui", "I-Clamp Normal", None, QtGui.QApplication.UnicodeUTF8))
-        self.modeCombo.setItemText(3, QtGui.QApplication.translate("devGui", "I-Clamp Fast", None, QtGui.QApplication.UnicodeUTF8))
-        self.modeCombo.setItemText(4, QtGui.QApplication.translate("devGui", "Track", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("devGui", "VC Holding", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("devGui", "IC Holding", None, QtGui.QApplication.UnicodeUTF8))
+        devGui.setWindowTitle(_translate("devGui", "Form", None))
+        self.modeCombo.setItemText(0, _translate("devGui", "V-Clamp", None))
+        self.modeCombo.setItemText(1, _translate("devGui", "I=0", None))
+        self.modeCombo.setItemText(2, _translate("devGui", "I-Clamp Normal", None))
+        self.modeCombo.setItemText(3, _translate("devGui", "I-Clamp Fast", None))
+        self.modeCombo.setItemText(4, _translate("devGui", "Track", None))
+        self.label.setText(_translate("devGui", "VC Holding", None))
+        self.label_2.setText(_translate("devGui", "IC Holding", None))
 
-from pyqtgraph import SpinBox
+from acq4.pyqtgraph import SpinBox

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 import numpy as np
-import pyqtgraph.opengl as gl 
-import lib.Manager
-import lib.analysis.atlas.CochlearNucleus as cn
+import acq4.pyqtgraph.opengl as gl 
+import acq4.Manager
+import acq4.analysis.atlas.CochlearNucleus as cn
 
 man = lib.Manager.getManager()
 initialized = False

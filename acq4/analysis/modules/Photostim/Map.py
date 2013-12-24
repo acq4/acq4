@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 from collections import OrderedDict
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 import numpy as np
-#import pyqtgraph.ProgressDialog as ProgressDialog
+#import acq4.pyqtgraph.ProgressDialog as ProgressDialog
 
 class Map:
     ### A map is a group of (possibly overlapping) scans and associated meta-data. 

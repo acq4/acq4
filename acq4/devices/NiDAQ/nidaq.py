@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from debug import *
     
-from lib.devices.Device import *
+from acq4.devices.Device import *
 import time, traceback, sys
 from taskGUI import *
 #from numpy import byte
@@ -22,10 +22,10 @@ class NiDAQ(Device):
         self.config = config
         ## make local copy of device handle
         if config is not None and config.get('mock', False):
-            from lib.drivers.nidaq.mock import NIDAQ
+            from acq4.drivers.nidaq.mock import NIDAQ
             self.n = NIDAQ
         else:
-            from lib.drivers.nidaq.nidaq import NIDAQ
+            from acq4.drivers.nidaq.nidaq import NIDAQ
             self.n = NIDAQ
         print "Created NiDAQ handle, devices are %s" % repr(self.n.listDevices())
         self.delayedSet = Mutex.threadsafe({})

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'ManagerTemplate.ui'
+# Form implementation generated from reading ui file './acq4/modules/Manager/ManagerTemplate.ui'
 #
-# Created: Thu Aug 18 16:32:40 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Mon Dec 23 22:46:58 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -53,10 +62,13 @@ class Ui_MainWindow(object):
         self.loadModuleBtn = QtGui.QPushButton(self.groupBox_2)
         self.loadModuleBtn.setObjectName(_fromUtf8("loadModuleBtn"))
         self.verticalLayout_4.addWidget(self.loadModuleBtn)
-        self.verticalLayout.addWidget(self.groupBox_2)
-        self.logBtn = LogButton(self.centralwidget)
+        self.logBtn = QtGui.QPushButton(self.groupBox_2)
         self.logBtn.setObjectName(_fromUtf8("logBtn"))
-        self.verticalLayout.addWidget(self.logBtn)
+        self.verticalLayout_4.addWidget(self.logBtn)
+        self.verticalLayout.addWidget(self.groupBox_2)
+        self.logBtn1 = LogButton(self.centralwidget)
+        self.logBtn1.setObjectName(_fromUtf8("logBtn1"))
+        self.verticalLayout.addWidget(self.logBtn1)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem)
         self.reloadModuleBtn = QtGui.QPushButton(self.centralwidget)
@@ -75,13 +87,14 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
-        MainWindow.setWindowTitle(QtGui.QApplication.translate("MainWindow", "ACQ4 Manager", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("MainWindow", "Configuration", None, QtGui.QApplication.UnicodeUTF8))
-        self.loadConfigBtn.setText(QtGui.QApplication.translate("MainWindow", "Load Configuration", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_2.setTitle(QtGui.QApplication.translate("MainWindow", "Modules", None, QtGui.QApplication.UnicodeUTF8))
-        self.loadModuleBtn.setText(QtGui.QApplication.translate("MainWindow", "Load Module", None, QtGui.QApplication.UnicodeUTF8))
-        self.logBtn.setText(QtGui.QApplication.translate("MainWindow", "Log", None, QtGui.QApplication.UnicodeUTF8))
-        self.reloadModuleBtn.setText(QtGui.QApplication.translate("MainWindow", "Reload Libraries", None, QtGui.QApplication.UnicodeUTF8))
-        self.quitBtn.setText(QtGui.QApplication.translate("MainWindow", "Quit ACQ4", None, QtGui.QApplication.UnicodeUTF8))
+        MainWindow.setWindowTitle(_translate("MainWindow", "ACQ4 Manager", None))
+        self.groupBox.setTitle(_translate("MainWindow", "Configuration", None))
+        self.loadConfigBtn.setText(_translate("MainWindow", "Load Configuration", None))
+        self.groupBox_2.setTitle(_translate("MainWindow", "Modules", None))
+        self.loadModuleBtn.setText(_translate("MainWindow", "Load Module", None))
+        self.logBtn.setText(_translate("MainWindow", "Log", None))
+        self.logBtn1.setText(_translate("MainWindow", "Log", None))
+        self.reloadModuleBtn.setText(_translate("MainWindow", "Reload Libraries", None))
+        self.quitBtn.setText(_translate("MainWindow", "Quit ACQ4", None))
 
-from lib.LogWindow import LogButton
+from acq4.LogWindow import LogButton

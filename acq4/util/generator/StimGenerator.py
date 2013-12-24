@@ -19,7 +19,7 @@ from GeneratorTemplate import *
 import waveforms
 from debug import *
 
-#from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
+#from acq4.pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
 from StimParamSet import StimParamSet
 from SeqParamSet import SequenceParamSet
 

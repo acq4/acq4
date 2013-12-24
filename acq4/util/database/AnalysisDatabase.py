@@ -1,7 +1,7 @@
 from database import *
-from pyqtgraph.widgets.ProgressDialog import ProgressDialog
+from acq4.pyqtgraph.widgets.ProgressDialog import ProgressDialog
 import debug
-from lib.Manager import logExc, logMsg
+from acq4.Manager import logExc, logMsg
 
 
 class AnalysisDatabase(SqliteDatabase):

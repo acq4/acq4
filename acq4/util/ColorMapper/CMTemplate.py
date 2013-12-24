@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'CMTemplate.ui'
+# Form implementation generated from reading ui file './acq4/util/ColorMapper/CMTemplate.ui'
 #
-# Created: Sun Dec 18 18:56:19 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Mon Dec 23 22:47:03 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -53,17 +62,16 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Color Scheme:", None, QtGui.QApplication.UnicodeUTF8))
-        self.saveBtn.setText(QtGui.QApplication.translate("Form", "Save", None, QtGui.QApplication.UnicodeUTF8))
-        self.saveAsBtn.setText(QtGui.QApplication.translate("Form", "Save As..", None, QtGui.QApplication.UnicodeUTF8))
-        self.deleteBtn.setText(QtGui.QApplication.translate("Form", "Delete", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(0, QtGui.QApplication.translate("Form", "arg", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(1, QtGui.QApplication.translate("Form", "op", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(2, QtGui.QApplication.translate("Form", "min", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(3, QtGui.QApplication.translate("Form", "max", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(4, QtGui.QApplication.translate("Form", "colors", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(5, QtGui.QApplication.translate("Form", "remove", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.label.setText(_translate("Form", "Color Scheme:", None))
+        self.saveBtn.setText(_translate("Form", "Save", None))
+        self.saveAsBtn.setText(_translate("Form", "Save As..", None))
+        self.deleteBtn.setText(_translate("Form", "Delete", None))
+        self.tree.headerItem().setText(0, _translate("Form", "arg", None))
+        self.tree.headerItem().setText(1, _translate("Form", "op", None))
+        self.tree.headerItem().setText(2, _translate("Form", "min", None))
+        self.tree.headerItem().setText(3, _translate("Form", "max", None))
+        self.tree.headerItem().setText(4, _translate("Form", "colors", None))
+        self.tree.headerItem().setText(5, _translate("Form", "remove", None))
 
-from pyqtgraph import TreeWidget
-from pyqtgraph import FeedbackButton
+from acq4.pyqtgraph import FeedbackButton, TreeWidget

@@ -1,4 +1,4 @@
-from lib.devices.Device import *
+from acq4.devices.Device import *
 from PyQt4 import QtGui, QtCore
 
 class Screen(Device):

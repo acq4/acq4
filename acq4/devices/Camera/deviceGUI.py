@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 #from DevTemplate import Ui_Form
 from PyQt4 import QtCore, QtGui
-from pyqtgraph.WidgetGroup import WidgetGroup
-from pyqtgraph.parametertree import * 
+from acq4.pyqtgraph.WidgetGroup import WidgetGroup
+from acq4.pyqtgraph.parametertree import * 
 import collections
 
 class CameraDeviceGui(QtGui.QWidget):

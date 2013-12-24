@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-from pyqtgraph.flowchart.Node import Node
+from acq4.pyqtgraph.flowchart.Node import Node
 from PyQt4 import QtGui, QtCore
 from DirTreeWidget import *
 import numpy as np
 import metaarray
-from pyqtgraph.flowchart.library.common import *
-from pyqtgraph import SRTTransform, Point
-#from pyqtgraph import TreeWidget
+from acq4.pyqtgraph.flowchart.library.common import *
+from acq4.pyqtgraph import SRTTransform, Point
+#from acq4.pyqtgraph import TreeWidget
 import functions
 
 class SubtreeNode(Node):

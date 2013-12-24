@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/devices/Scanner/ProtocolTemplate.ui'
+# Form implementation generated from reading ui file './acq4/devices/Scanner/TaskTemplate.ui'
 #
-# Created: Fri Nov  9 12:54:11 2012
-#      by: PyQt4 UI code generator 4.9.1
+# Created: Mon Dec 23 22:46:57 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -174,41 +183,41 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.simulateShutterCheck.setText(QtGui.QApplication.translate("Form", "Simulate Shutter", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Spot Sequence", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("Form", "Minimum time", None, QtGui.QApplication.UnicodeUTF8))
-        self.minTimeSpin.setToolTip(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.simulateShutterCheck.setText(_translate("Form", "Simulate Shutter", None))
+        self.groupBox.setTitle(_translate("Form", "Spot Sequence", None))
+        self.label_3.setText(_translate("Form", "Minimum time", None))
+        self.minTimeSpin.setToolTip(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">When stimulating a sequence of points, this is the minimum amount of time that must pass before stimulating the same spot a second time. Points farther away will require smaller delays. Points farther than the minimum distance (specified below) will require no delay.</span></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("Form", "Minimum distance", None, QtGui.QApplication.UnicodeUTF8))
-        self.minDistSpin.setToolTip(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">When stimulating a sequence of points, this is the minimum amount of time that must pass before stimulating the same spot a second time. Points farther away will require smaller delays. Points farther than the minimum distance (specified below) will require no delay.</span></p></body></html>", None))
+        self.label_4.setText(_translate("Form", "Minimum distance", None))
+        self.minDistSpin.setToolTip(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">When stimulating a sequence of points, this is the minimum distance between two spots such that no time delay is required between stimulating them. Points closer than this distance will require some delay, which is determined in part by the minimum time specified above.</span></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.recomputeBtn.setText(QtGui.QApplication.translate("Form", "Recompute Order", None, QtGui.QApplication.UnicodeUTF8))
-        self.timeLabel.setText(QtGui.QApplication.translate("Form", "Total Time:", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Spot Display Size", None, QtGui.QApplication.UnicodeUTF8))
-        self.sizeFromCalibrationRadio.setToolTip(QtGui.QApplication.translate("Form", "Causes target spots to be displayed at the size determined by the calibration file. Does not affect how data is collected.", None, QtGui.QApplication.UnicodeUTF8))
-        self.sizeFromCalibrationRadio.setText(QtGui.QApplication.translate("Form", "Use size from calibration", None, QtGui.QApplication.UnicodeUTF8))
-        self.sizeCustomRadio.setToolTip(QtGui.QApplication.translate("Form", "Lets the user change the display size of target spots. Does not change the way data is collected.", None, QtGui.QApplication.UnicodeUTF8))
-        self.sizeCustomRadio.setText(QtGui.QApplication.translate("Form", "Use custom size:", None, QtGui.QApplication.UnicodeUTF8))
-        self.sizeSpin.setToolTip(QtGui.QApplication.translate("Form", "Specifies the display size of the target spots. Does not change the way data is collected.", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Camera Module:", None, QtGui.QApplication.UnicodeUTF8))
-        self.laserCombo.setToolTip(QtGui.QApplication.translate("Form", "Selects the laser to be used.", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Laser Device:", None, QtGui.QApplication.UnicodeUTF8))
-        self.cameraCombo.setToolTip(QtGui.QApplication.translate("Form", "Selects the camera module to use with the scanner. This, along with the laser device, determines which calibration files will be used.", None, QtGui.QApplication.UnicodeUTF8))
-        self.loadConfigBtn.setText(QtGui.QApplication.translate("Form", "Load Last Config", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_3.setTitle(QtGui.QApplication.translate("Form", "Position Control Items", None, QtGui.QApplication.UnicodeUTF8))
-        self.hideCheck.setToolTip(QtGui.QApplication.translate("Form", "Hide all items from view.", None, QtGui.QApplication.UnicodeUTF8))
-        self.hideCheck.setText(QtGui.QApplication.translate("Form", "Hide items", None, QtGui.QApplication.UnicodeUTF8))
-        self.hideMarkerBtn.setText(QtGui.QApplication.translate("Form", "Hide Spot Marker", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_4.setTitle(QtGui.QApplication.translate("Form", "Program Controls", None, QtGui.QApplication.UnicodeUTF8))
-        self.previewBtn.setText(QtGui.QApplication.translate("Form", "Preview", None, QtGui.QApplication.UnicodeUTF8))
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">When stimulating a sequence of points, this is the minimum distance between two spots such that no time delay is required between stimulating them. Points closer than this distance will require some delay, which is determined in part by the minimum time specified above.</span></p></body></html>", None))
+        self.recomputeBtn.setText(_translate("Form", "Recompute Order", None))
+        self.timeLabel.setText(_translate("Form", "Total Time:", None))
+        self.groupBox_2.setTitle(_translate("Form", "Spot Display Size", None))
+        self.sizeFromCalibrationRadio.setToolTip(_translate("Form", "Causes target spots to be displayed at the size determined by the calibration file. Does not affect how data is collected.", None))
+        self.sizeFromCalibrationRadio.setText(_translate("Form", "Use size from calibration", None))
+        self.sizeCustomRadio.setToolTip(_translate("Form", "Lets the user change the display size of target spots. Does not change the way data is collected.", None))
+        self.sizeCustomRadio.setText(_translate("Form", "Use custom size:", None))
+        self.sizeSpin.setToolTip(_translate("Form", "Specifies the display size of the target spots. Does not change the way data is collected.", None))
+        self.label.setText(_translate("Form", "Camera Module:", None))
+        self.laserCombo.setToolTip(_translate("Form", "Selects the laser to be used.", None))
+        self.label_2.setText(_translate("Form", "Laser Device:", None))
+        self.cameraCombo.setToolTip(_translate("Form", "Selects the camera module to use with the scanner. This, along with the laser device, determines which calibration files will be used.", None))
+        self.loadConfigBtn.setText(_translate("Form", "Load Last Config", None))
+        self.groupBox_3.setTitle(_translate("Form", "Position Control Items", None))
+        self.hideCheck.setToolTip(_translate("Form", "Hide all items from view.", None))
+        self.hideCheck.setText(_translate("Form", "Hide items", None))
+        self.hideMarkerBtn.setText(_translate("Form", "Hide Spot Marker", None))
+        self.groupBox_4.setTitle(_translate("Form", "Program Controls", None))
+        self.previewBtn.setText(_translate("Form", "Preview", None))
 
-from pyqtgraph import SpinBox, PlotWidget
-from pyqtgraph.parametertree import ParameterTree
+from acq4.pyqtgraph.parametertree import ParameterTree
+from acq4.pyqtgraph import SpinBox, PlotWidget
 from InterfaceCombo import InterfaceCombo

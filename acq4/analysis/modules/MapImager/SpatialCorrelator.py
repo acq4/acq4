@@ -3,8 +3,8 @@ import SpatialCorrelatorCtrlTemplate
 import math
 from HelpfulException import HelpfulException
 import numpy as np
-import pyqtgraph as pg
-import lib.analysis.tools.functions as fn
+import acq4.pyqtgraph as pg
+import acq4.analysis.tools.functions as fn
 import scipy
 
 

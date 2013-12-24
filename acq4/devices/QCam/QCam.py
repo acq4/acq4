@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.devices.Camera import Camera
-from lib.drivers.QImaging.QImagingDriver import *
+from acq4.devices.Camera import Camera
+from acq4.drivers.QImaging.QImagingDriver import *
 from PyQt4 import QtCore
 import time, sys, traceback
 from numpy import *

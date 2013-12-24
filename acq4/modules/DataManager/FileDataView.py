@@ -2,10 +2,10 @@
 
 from PyQt4 import QtCore, QtGui
 from DataManager import *
-#import lib.Manager as Manager
-import pyqtgraph as pg
-#from pyqtgraph.MultiPlotWidget import MultiPlotWidget
-#from pyqtgraph.ImageView import ImageView
+#import acq4.Manager as Manager
+import acq4.pyqtgraph as pg
+#from acq4.pyqtgraph.MultiPlotWidget import MultiPlotWidget
+#from acq4.pyqtgraph.ImageView import ImageView
 from DictView import *
 import metaarray
 import weakref

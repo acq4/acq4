@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.devices.Device import *
-from lib.devices.OptomechDevice import *
+from acq4.devices.Device import *
+from acq4.devices.OptomechDevice import *
 #import serial, struct
-from lib.drivers.SutterMP285 import *
-from lib.drivers.SutterMP285 import SutterMP285 as SutterMP285Driver  ## name collision with device class
+from acq4.drivers.SutterMP285 import *
+from acq4.drivers.SutterMP285 import SutterMP285 as SutterMP285Driver  ## name collision with device class
 from Mutex import Mutex
 import debug
 import os, time
 #import pdb
 import devTemplate
 #import functions as fn
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 import numpy as np
 from copy import deepcopy
 

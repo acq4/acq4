@@ -24,12 +24,12 @@ sip.setapi('QVariant', 2)
 ## rename any orphaned .pyc files -- these are probably leftover from 
 ## a module being moved and may interfere with expected operation.
 import os, sys
-from pyqtgraph import renamePyc
+from acq4.pyqtgraph import renamePyc
 modDir = os.path.abspath(os.path.split(__file__)[0])
 renamePyc(modDir)
 
 
-#import lib.util.PySideImporter  ## Use PySide instead of PyQt
+#import acq4.util.PySideImporter  ## Use PySide instead of PyQt
 from PyQt4 import QtGui, QtCore
 
 ## Needed to keep compatibility between pyside and pyqt
@@ -39,7 +39,7 @@ if not hasattr(QtCore, 'Signal'):
     QtCore.Slot = QtCore.pyqtSlot
 
     
-from lib.Manager import *
+from acq4.Manager import *
 from numpy import *
 
 ## Initialize Qt
@@ -130,7 +130,7 @@ if interactive:
     
     ## import some things useful on the command line
     from debug import *
-    import pyqtgraph as pg
+    import acq4.pyqtgraph as pg
     import functions as fn
     import numpy as np
 

@@ -1,1 +1,1 @@
-from pyqtgraph.configfile import *
+from acq4.pyqtgraph.configfile import *

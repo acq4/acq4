@@ -1,6 +1,6 @@
 from PyQt4 import QtCore, QtGui
 from FileTreeWidget import *
-from lib.DataManager import *
+from acq4.DataManager import *
 
 
 app = QtGui.QApplication([])

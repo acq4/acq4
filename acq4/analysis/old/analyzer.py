@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
-from lib.Manager import getManager
+from acq4.Manager import getManager
 from AnalyzerTemplate import *
 from flowchart import *
 from PyQt4 import QtGui, QtCore
 from DirTreeWidget import DirTreeLoader
-from pyqtgraph.PlotWidget import *
+from acq4.pyqtgraph.PlotWidget import *
 from Canvas import *
 import configfile
 import pickle

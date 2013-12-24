@@ -1,6 +1,6 @@
-from lib.modules.Module import Module
+from acq4.modules.Module import Module
 from PyQt4 import QtGui, QtCore
-from pyqtgraph import DataTreeWidget
+from acq4.pyqtgraph import DataTreeWidget
 
 class Debugger(Module):
     def __init__(self, manager, name, config):

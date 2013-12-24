@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 import numpy as np
-import pyqtgraph as pg
-import pyqtgraph.multiprocess as mp
+import acq4.pyqtgraph as pg
+import acq4.pyqtgraph.multiprocess as mp
 import time, os
 import Canvas
 import collections

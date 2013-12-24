@@ -1,20 +1,20 @@
 from PyQt4 import QtGui, QtCore
 #import configfile
-from lib.Manager import getManager, logExc, logMsg
+from acq4.Manager import getManager, logExc, logMsg
 from Mutex import Mutex
-from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask
-from lib.devices.OptomechDevice import OptomechDevice
+from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
+from acq4.devices.OptomechDevice import OptomechDevice
 from LaserDevGui import LaserDevGui
 from LaserTaskGui import LaserTaskGui
 import os
 import time
 import numpy as np
 from scipy import stats
-from pyqtgraph.functions import siFormat
+from acq4.pyqtgraph.functions import siFormat
 from HelpfulException import HelpfulException
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 import metaarray
-from lib.devices.NiDAQ.nidaq import NiDAQ
+from acq4.devices.NiDAQ.nidaq import NiDAQ
 
 
 class Laser(DAQGeneric, OptomechDevice):

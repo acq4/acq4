@@ -7,7 +7,7 @@ import ptime
 from ctypes import *
 from clibrary import *
 from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis
-from pyqtgraph import graphicsWindows as gw
+from acq4.pyqtgraph import graphicsWindows as gw
 from PyQt4 import QtGui
 from Mutex import Mutex, MutexLocker
 from collections import OrderedDict

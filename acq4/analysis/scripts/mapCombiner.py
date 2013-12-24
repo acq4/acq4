@@ -1,9 +1,9 @@
-import lib.Manager
+import acq4.Manager
 import numpy as np
-import lib.analysis.tools.functions as afn
+import acq4.analysis.tools.functions as afn
 import scipy
-#from lib.util.pyqtgraph.multiprocess import Parallelize
-from pyqtgraph.debug import Profiler
+#from acq4.util.pyqtgraph.multiprocess import Parallelize
+from acq4.pyqtgraph.debug import Profiler
 import os, sys
 try:
     import cv2

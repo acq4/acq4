@@ -1,5 +1,5 @@
-from pyqtgraph.flowchart import *
-from pyqtgraph.flowchart.library import registerNodeType, isNodeClass
+from acq4.pyqtgraph.flowchart import *
+from acq4.pyqtgraph.flowchart.library import registerNodeType, isNodeClass
 import os
 
 ## Extend pyqtgraph.flowchart by adding several specialized nodes

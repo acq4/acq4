@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
 from TaskTemplate import Ui_Form
-from lib.devices.Device import TaskGui
+from acq4.devices.Device import TaskGui
 #from ScanProgramGenerator import *
 from PyQt4 import QtCore, QtGui
-from lib.Manager import getManager, logMsg, logExc
+from acq4.Manager import getManager, logMsg, logExc
 import random
 import numpy as np
 from debug import Profiler
 import optimize ## for determining random scan patterns
 #import ForkedIterator
 import os, sys
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 from HelpfulException import HelpfulException
-import pyqtgraph.parametertree.parameterTypes as pTypes
-from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
+import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
+from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 
 
 ### Error IDs:

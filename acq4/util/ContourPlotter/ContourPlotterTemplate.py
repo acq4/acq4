@@ -42,4 +42,4 @@ class Ui_Form(object):
         self.tree.headerItem().setText(3, QtGui.QApplication.translate("Form", "Color", None, QtGui.QApplication.UnicodeUTF8))
         self.tree.headerItem().setText(4, QtGui.QApplication.translate("Form", "Remove", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph import TreeWidget
+from acq4.pyqtgraph import TreeWidget

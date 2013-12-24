@@ -614,12 +614,12 @@
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header>pyqtgraph</header>
+   <header>acq4.pyqtgraph</header>
   </customwidget>
   <customwidget>
    <class>JoystickButton</class>
    <extends>QPushButton</extends>
-   <header>pyqtgraph</header>
+   <header>acq4.pyqtgraph</header>
   </customwidget>
  </customwidgets>
  <resources/>

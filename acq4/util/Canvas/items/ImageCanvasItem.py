@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-from pyqtgraph.Qt import QtCore, QtGui
+from acq4.pyqtgraph.Qt import QtCore, QtGui
 from CanvasItem import CanvasItem
 import numpy as np
 import scipy.ndimage as ndimage
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 import DataManager
 import debug
 

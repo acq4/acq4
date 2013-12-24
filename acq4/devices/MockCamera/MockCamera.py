@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.devices.Camera import Camera
+from acq4.devices.Camera import Camera
 from PyQt4 import QtCore
 import time, sys, traceback
 #from metaarray import *
@@ -12,7 +12,7 @@ import functions as fn
 import numpy as np
 import scipy
 from collections import OrderedDict
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 
 class MockCamera(Camera):
     

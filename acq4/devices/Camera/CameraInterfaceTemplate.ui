@@ -453,22 +453,22 @@ background division.</string>
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header>pyqtgraph</header>
+   <header>acq4.pyqtgraph</header>
   </customwidget>
   <customwidget>
    <class>FeedbackButton</class>
    <extends>QPushButton</extends>
-   <header>pyqtgraph</header>
+   <header>acq4.pyqtgraph</header>
   </customwidget>
   <customwidget>
    <class>HistogramLUTWidget</class>
    <extends>QGraphicsView</extends>
-   <header>pyqtgraph</header>
+   <header>acq4.pyqtgraph</header>
   </customwidget>
   <customwidget>
    <class>ValueLabel</class>
    <extends>QLabel</extends>
-   <header>pyqtgraph</header>
+   <header>acq4.pyqtgraph</header>
   </customwidget>
  </customwidgets>
  <resources/>

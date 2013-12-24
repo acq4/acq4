@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 from TaskTemplate import *
-from lib.devices.Device import TaskGui
+from acq4.devices.Device import TaskGui
 from debug import *
-from pyqtgraph.WidgetGroup import WidgetGroup
+from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 import sys
 
 class NiDAQTask(TaskGui):

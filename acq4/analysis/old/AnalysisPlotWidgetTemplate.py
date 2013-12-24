@@ -62,4 +62,4 @@ class Ui_AnalysisPlotWidgetTemplate(object):
         self.label_2.setText(QtGui.QApplication.translate("AnalysisPlotWidgetTemplate", "y axis:", None, QtGui.QApplication.UnicodeUTF8))
         self.removeBtn.setText(QtGui.QApplication.translate("AnalysisPlotWidgetTemplate", "Remove", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.PlotWidget import PlotWidget
+from acq4.pyqtgraph.PlotWidget import PlotWidget

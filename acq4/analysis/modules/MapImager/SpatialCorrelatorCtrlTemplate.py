@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'SpatialCorrelatorCtrlTemplate.ui'
+# Form implementation generated from reading ui file './acq4/analysis/modules/MapImager/SpatialCorrelatorCtrlTemplate.ui'
 #
-# Created: Wed Sep 19 16:08:42 2012
-#      by: PyQt4 UI code generator 4.9
+# Created: Mon Dec 23 22:47:01 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -92,17 +101,17 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Spontaneous Event Rate:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Post-stimulus time window:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("Form", "Correlation Radius:", None, QtGui.QApplication.UnicodeUTF8))
-        self.disableChk.setText(QtGui.QApplication.translate("Form", "Disable", None, QtGui.QApplication.UnicodeUTF8))
-        self.processBtn.setText(QtGui.QApplication.translate("Form", "re-Process", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Output data:", None, QtGui.QApplication.UnicodeUTF8))
-        self.probabilityRadio.setText(QtGui.QApplication.translate("Form", "Probability values (float)", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("Form", "Threshold:", None, QtGui.QApplication.UnicodeUTF8))
-        self.thresholdRadio.setText(QtGui.QApplication.translate("Form", "Spots that cross threshold (boolean)", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("Form", "Event Parameter to use:", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.label.setText(_translate("Form", "Spontaneous Event Rate:", None))
+        self.label_2.setText(_translate("Form", "Post-stimulus time window:", None))
+        self.label_3.setText(_translate("Form", "Correlation Radius:", None))
+        self.disableChk.setText(_translate("Form", "Disable", None))
+        self.processBtn.setText(_translate("Form", "re-Process", None))
+        self.groupBox.setTitle(_translate("Form", "Output data:", None))
+        self.probabilityRadio.setText(_translate("Form", "Probability values (float)", None))
+        self.label_4.setText(_translate("Form", "Threshold:", None))
+        self.thresholdRadio.setText(_translate("Form", "Spots that cross threshold (boolean)", None))
+        self.label_5.setText(_translate("Form", "Event Parameter to use:", None))
 
-from pyqtgraph.widgets.ComboBox import ComboBox
-from pyqtgraph.widgets.SpinBox import SpinBox
+from acq4.pyqtgraph.widgets.SpinBox import SpinBox
+from acq4.pyqtgraph.widgets.ComboBox import ComboBox

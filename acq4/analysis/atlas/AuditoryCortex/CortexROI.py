@@ -1,6 +1,6 @@
-import pyqtgraph as pg
-from pyqtgraph.graphicsItems import ROI
-from pyqtgraph.Point import Point
+import acq4.pyqtgraph as pg
+from acq4.pyqtgraph.graphicsItems import ROI
+from acq4.pyqtgraph.Point import Point
 from PyQt4 import QtGui, QtCore
 import math
 

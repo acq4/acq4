@@ -4,13 +4,13 @@ from PyQt4 import QtGui, QtCore
 #from PyQt4 import Qwt5 as Qwt
 import AOChannelTemplate, DOChannelTemplate, InputChannelTemplate
 from SequenceRunner import *
-#from pyqtgraph.WidgetGroup import WidgetGroup
-#from pyqtgraph.PlotWidget import PlotCurveItem
+#from acq4.pyqtgraph.WidgetGroup import WidgetGroup
+#from acq4.pyqtgraph.PlotWidget import PlotCurveItem
 import numpy
 #import sip
 import weakref
-from pyqtgraph import siFormat, SpinBox, WidgetGroup
-#from pyqtgraph.SpinBox import SpinBox
+from acq4.pyqtgraph import siFormat, SpinBox, WidgetGroup
+#from acq4.pyqtgraph.SpinBox import SpinBox
 
 ###### For task GUIs
 

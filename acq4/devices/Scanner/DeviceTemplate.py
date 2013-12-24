@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'DeviceTemplate.ui'
+# Form implementation generated from reading ui file './acq4/devices/Scanner/DeviceTemplate.ui'
 #
-# Created: Mon May 28 19:40:02 2012
-#      by: PyQt4 UI code generator 4.9
+# Created: Mon Dec 23 22:46:57 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -172,32 +181,32 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(0, QtGui.QApplication.translate("Form", "Optics", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(1, QtGui.QApplication.translate("Form", "Laser", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(2, QtGui.QApplication.translate("Form", "Spot", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(3, QtGui.QApplication.translate("Form", "Date", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrateBtn.setText(QtGui.QApplication.translate("Form", "Calibrate", None, QtGui.QApplication.UnicodeUTF8))
-        self.deleteBtn.setText(QtGui.QApplication.translate("Form", "Delete", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Calibration Parameters", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "X min", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("Form", "X max", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("Form", "Y min", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_6.setText(QtGui.QApplication.translate("Form", "Y max", None, QtGui.QApplication.UnicodeUTF8))
-        self.yMaxSpin.setSuffix(QtGui.QApplication.translate("Form", " V", None, QtGui.QApplication.UnicodeUTF8))
-        self.scanDurationSpin.setSuffix(QtGui.QApplication.translate("Form", " s", None, QtGui.QApplication.UnicodeUTF8))
-        self.xMinSpin.setSuffix(QtGui.QApplication.translate("Form", " V", None, QtGui.QApplication.UnicodeUTF8))
-        self.scanLabel.setText(QtGui.QApplication.translate("Form", "Scan duration:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Camera:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("Form", "Laser:", None, QtGui.QApplication.UnicodeUTF8))
-        self.storeCamConfBtn.setToolTip(QtGui.QApplication.translate("Form", "Remember the current camera configuration (including exposure time, ROI, etc) to use whenever calibrating against this camera.", None, QtGui.QApplication.UnicodeUTF8))
-        self.storeCamConfBtn.setText(QtGui.QApplication.translate("Form", "Store Camera Config", None, QtGui.QApplication.UnicodeUTF8))
-        self.yMinSpin.setSuffix(QtGui.QApplication.translate("Form", " V", None, QtGui.QApplication.UnicodeUTF8))
-        self.xMaxSpin.setSuffix(QtGui.QApplication.translate("Form", " V", None, QtGui.QApplication.UnicodeUTF8))
-        self.shutterGroup.setTitle(QtGui.QApplication.translate("Form", "Virtual Shutter", None, QtGui.QApplication.UnicodeUTF8))
-        self.shutterBtn.setText(QtGui.QApplication.translate("Form", "Close Shutter", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_7.setText(QtGui.QApplication.translate("Form", "X", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_8.setText(QtGui.QApplication.translate("Form", "Y", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.calibrationList.headerItem().setText(0, _translate("Form", "Optics", None))
+        self.calibrationList.headerItem().setText(1, _translate("Form", "Laser", None))
+        self.calibrationList.headerItem().setText(2, _translate("Form", "Spot", None))
+        self.calibrationList.headerItem().setText(3, _translate("Form", "Date", None))
+        self.calibrateBtn.setText(_translate("Form", "Calibrate", None))
+        self.deleteBtn.setText(_translate("Form", "Delete", None))
+        self.groupBox.setTitle(_translate("Form", "Calibration Parameters", None))
+        self.label.setText(_translate("Form", "X min", None))
+        self.label_4.setText(_translate("Form", "X max", None))
+        self.label_5.setText(_translate("Form", "Y min", None))
+        self.label_6.setText(_translate("Form", "Y max", None))
+        self.yMaxSpin.setSuffix(_translate("Form", " V", None))
+        self.scanDurationSpin.setSuffix(_translate("Form", " s", None))
+        self.xMinSpin.setSuffix(_translate("Form", " V", None))
+        self.scanLabel.setText(_translate("Form", "Scan duration:", None))
+        self.label_2.setText(_translate("Form", "Camera:", None))
+        self.label_3.setText(_translate("Form", "Laser:", None))
+        self.storeCamConfBtn.setToolTip(_translate("Form", "Remember the current camera configuration (including exposure time, ROI, etc) to use whenever calibrating against this camera.", None))
+        self.storeCamConfBtn.setText(_translate("Form", "Store Camera Config", None))
+        self.yMinSpin.setSuffix(_translate("Form", " V", None))
+        self.xMaxSpin.setSuffix(_translate("Form", " V", None))
+        self.shutterGroup.setTitle(_translate("Form", "Virtual Shutter", None))
+        self.shutterBtn.setText(_translate("Form", "Close Shutter", None))
+        self.label_7.setText(_translate("Form", "X", None))
+        self.label_8.setText(_translate("Form", "Y", None))
 
-from pyqtgraph import ImageView
+from acq4.pyqtgraph import ImageView
 from InterfaceCombo import InterfaceCombo

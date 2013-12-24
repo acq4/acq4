@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'CellHealthCtrlTemplate.ui'
+# Form implementation generated from reading ui file './acq4/analysis/modules/CellHealthTracker/CellHealthCtrlTemplate.ui'
 #
-# Created: Sat Feb 25 22:53:47 2012
-#      by: PyQt4 UI code generator 4.9
+# Created: Mon Dec 23 22:47:01 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_widget(object):
     def setupUi(self, widget):
@@ -88,21 +97,21 @@ class Ui_widget(object):
         QtCore.QMetaObject.connectSlotsByName(widget)
 
     def retranslateUi(self, widget):
-        widget.setWindowTitle(QtGui.QApplication.translate("widget", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("widget", "Method:", None, QtGui.QApplication.UnicodeUTF8))
-        self.methodCombo.setItemText(0, QtGui.QApplication.translate("widget", "Simple Ohm\'s law", None, QtGui.QApplication.UnicodeUTF8))
-        self.methodCombo.setItemText(1, QtGui.QApplication.translate("widget", "Santos-Sacchi raw", None, QtGui.QApplication.UnicodeUTF8))
-        self.methodCombo.setItemText(2, QtGui.QApplication.translate("widget", "Santos-Sacchi fit", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_2.setTitle(QtGui.QApplication.translate("widget", "Measurement region:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("widget", "Start:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("widget", "Stop: ", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("widget", "Parameters to measure:", None, QtGui.QApplication.UnicodeUTF8))
-        self.RsCheck.setText(QtGui.QApplication.translate("widget", "Series Resistance", None, QtGui.QApplication.UnicodeUTF8))
-        self.IhCheck.setText(QtGui.QApplication.translate("widget", "Holding Current", None, QtGui.QApplication.UnicodeUTF8))
-        self.RmCheck.setText(QtGui.QApplication.translate("widget", "Membrane Resistance", None, QtGui.QApplication.UnicodeUTF8))
-        self.processBtn.setToolTip(QtGui.QApplication.translate("widget", "Measure parameters for the currently selected file.", None, QtGui.QApplication.UnicodeUTF8))
-        self.processBtn.setText(QtGui.QApplication.translate("widget", "Process", None, QtGui.QApplication.UnicodeUTF8))
-        self.saveBtn.setToolTip(QtGui.QApplication.translate("widget", "Save the data currently displayed in the Ih, Rs, and Rm plots.", None, QtGui.QApplication.UnicodeUTF8))
-        self.saveBtn.setText(QtGui.QApplication.translate("widget", "Save plots", None, QtGui.QApplication.UnicodeUTF8))
+        widget.setWindowTitle(_translate("widget", "Form", None))
+        self.label_4.setText(_translate("widget", "Method:", None))
+        self.methodCombo.setItemText(0, _translate("widget", "Simple Ohm\'s law", None))
+        self.methodCombo.setItemText(1, _translate("widget", "Santos-Sacchi raw", None))
+        self.methodCombo.setItemText(2, _translate("widget", "Santos-Sacchi fit", None))
+        self.groupBox_2.setTitle(_translate("widget", "Measurement region:", None))
+        self.label_2.setText(_translate("widget", "Start:", None))
+        self.label_3.setText(_translate("widget", "Stop: ", None))
+        self.groupBox.setTitle(_translate("widget", "Parameters to measure:", None))
+        self.RsCheck.setText(_translate("widget", "Series Resistance", None))
+        self.IhCheck.setText(_translate("widget", "Holding Current", None))
+        self.RmCheck.setText(_translate("widget", "Membrane Resistance", None))
+        self.processBtn.setToolTip(_translate("widget", "Measure parameters for the currently selected file.", None))
+        self.processBtn.setText(_translate("widget", "Process", None))
+        self.saveBtn.setToolTip(_translate("widget", "Save the data currently displayed in the Ih, Rs, and Rm plots.", None))
+        self.saveBtn.setText(_translate("widget", "Save plots", None))
 
-from pyqtgraph.widgets.SpinBox import SpinBox
+from acq4.pyqtgraph.widgets.SpinBox import SpinBox

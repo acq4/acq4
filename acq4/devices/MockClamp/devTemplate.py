@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'devTemplate.ui'
+# Form implementation generated from reading ui file './acq4/devices/MockClamp/devTemplate.ui'
 #
-# Created: Sun Dec 18 19:22:53 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Mon Dec 23 22:46:56 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_MockClampDevGui(object):
     def setupUi(self, MockClampDevGui):
@@ -102,21 +111,21 @@ class Ui_MockClampDevGui(object):
         QtCore.QMetaObject.connectSlotsByName(MockClampDevGui)
 
     def retranslateUi(self, MockClampDevGui):
-        MockClampDevGui.setWindowTitle(QtGui.QApplication.translate("MockClampDevGui", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_2.setTitle(QtGui.QApplication.translate("MockClampDevGui", "Clamp", None, QtGui.QApplication.UnicodeUTF8))
-        self.vcModeRadio.setText(QtGui.QApplication.translate("MockClampDevGui", "VC", None, QtGui.QApplication.UnicodeUTF8))
-        self.i0ModeRadio.setText(QtGui.QApplication.translate("MockClampDevGui", "I=0", None, QtGui.QApplication.UnicodeUTF8))
-        self.icModeRadio.setText(QtGui.QApplication.translate("MockClampDevGui", "IC", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("MockClampDevGui", "VC Holding", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("MockClampDevGui", "IC Holding", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_6.setText(QtGui.QApplication.translate("MockClampDevGui", "Pipette Offset", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("MockClampDevGui", "Pipette", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("MockClampDevGui", "Capacitance", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("MockClampDevGui", "Resistance", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("MockClampDevGui", "Junct. Pot.", None, QtGui.QApplication.UnicodeUTF8))
-        self.pipBathRadio.setText(QtGui.QApplication.translate("MockClampDevGui", "Bath", None, QtGui.QApplication.UnicodeUTF8))
-        self.pipAttachRadio.setText(QtGui.QApplication.translate("MockClampDevGui", "On Cell", None, QtGui.QApplication.UnicodeUTF8))
-        self.pipWholeRadio.setText(QtGui.QApplication.translate("MockClampDevGui", "Whole Cell", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_7.setText(QtGui.QApplication.translate("MockClampDevGui", "Cell", None, QtGui.QApplication.UnicodeUTF8))
+        MockClampDevGui.setWindowTitle(_translate("MockClampDevGui", "Form", None))
+        self.groupBox_2.setTitle(_translate("MockClampDevGui", "Clamp", None))
+        self.vcModeRadio.setText(_translate("MockClampDevGui", "VC", None))
+        self.i0ModeRadio.setText(_translate("MockClampDevGui", "I=0", None))
+        self.icModeRadio.setText(_translate("MockClampDevGui", "IC", None))
+        self.label_3.setText(_translate("MockClampDevGui", "VC Holding", None))
+        self.label_4.setText(_translate("MockClampDevGui", "IC Holding", None))
+        self.label_6.setText(_translate("MockClampDevGui", "Pipette Offset", None))
+        self.groupBox.setTitle(_translate("MockClampDevGui", "Pipette", None))
+        self.label.setText(_translate("MockClampDevGui", "Capacitance", None))
+        self.label_2.setText(_translate("MockClampDevGui", "Resistance", None))
+        self.label_5.setText(_translate("MockClampDevGui", "Junct. Pot.", None))
+        self.pipBathRadio.setText(_translate("MockClampDevGui", "Bath", None))
+        self.pipAttachRadio.setText(_translate("MockClampDevGui", "On Cell", None))
+        self.pipWholeRadio.setText(_translate("MockClampDevGui", "Whole Cell", None))
+        self.label_7.setText(_translate("MockClampDevGui", "Cell", None))
 
-from pyqtgraph import SpinBox
+from acq4.pyqtgraph import SpinBox

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'TaskRunnerTemplate.ui'
+# Form implementation generated from reading ui file './acq4/modules/TaskRunner/TaskRunnerTemplate.ui'
 #
-# Created: Sun Dec 18 19:23:34 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Mon Dec 23 22:46:59 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -93,11 +102,11 @@ class Ui_MainWindow(object):
         self.gridLayout.addLayout(self.horizontalLayout_2, 6, 0, 1, 4)
         self.protoDurationSpin = SpinBox(self.dockWidgetContents_5)
         self.protoDurationSpin.setMinimumSize(QtCore.QSize(60, 0))
-        self.protoDurationSpin.setProperty(_fromUtf8("value"), 0.1)
+        self.protoDurationSpin.setProperty("value", 0.1)
         self.protoDurationSpin.setObjectName(_fromUtf8("protoDurationSpin"))
         self.gridLayout.addWidget(self.protoDurationSpin, 1, 2, 1, 2)
         self.protoLeadTimeSpin = SpinBox(self.dockWidgetContents_5)
-        self.protoLeadTimeSpin.setProperty(_fromUtf8("value"), 0.01)
+        self.protoLeadTimeSpin.setProperty("value", 0.01)
         self.protoLeadTimeSpin.setObjectName(_fromUtf8("protoLeadTimeSpin"))
         self.gridLayout.addWidget(self.protoLeadTimeSpin, 2, 2, 1, 2)
         self.protoCycleTimeSpin = SpinBox(self.dockWidgetContents_5)
@@ -127,7 +136,7 @@ class Ui_MainWindow(object):
         self.label_9.setObjectName(_fromUtf8("label_9"))
         self.verticalLayout.addWidget(self.label_9)
         self.seqCycleTimeSpin = SpinBox(self.dockWidgetContents_7)
-        self.seqCycleTimeSpin.setProperty(_fromUtf8("value"), 1.0)
+        self.seqCycleTimeSpin.setProperty("value", 1.0)
         self.seqCycleTimeSpin.setObjectName(_fromUtf8("seqCycleTimeSpin"))
         self.verticalLayout.addWidget(self.seqCycleTimeSpin)
         self.label_11 = QtGui.QLabel(self.dockWidgetContents_7)
@@ -216,46 +225,46 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
-        MainWindow.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Task Runner", None, QtGui.QApplication.UnicodeUTF8))
-        self.LoaderDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Loader", None, QtGui.QApplication.UnicodeUTF8))
-        self.TaskDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Task", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("MainWindow", "Devices", None, QtGui.QApplication.UnicodeUTF8))
-        self.protoContinuousCheck.setToolTip(QtGui.QApplication.translate("MainWindow", "Task runs continuously without \n"
-"gaps until stopped (not yet implemented).", None, QtGui.QApplication.UnicodeUTF8))
-        self.protoContinuousCheck.setText(QtGui.QApplication.translate("MainWindow", "Continuous", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_8.setText(QtGui.QApplication.translate("MainWindow", "Duration", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_6.setText(QtGui.QApplication.translate("MainWindow", "Lead Time", None, QtGui.QApplication.UnicodeUTF8))
-        self.protoLoopCheck.setToolTip(QtGui.QApplication.translate("MainWindow", "Task will run repeatedly until stopped and \n"
+        MainWindow.setWindowTitle(_translate("MainWindow", "Task Runner", None))
+        self.LoaderDock.setWindowTitle(_translate("MainWindow", "Loader", None))
+        self.TaskDock.setWindowTitle(_translate("MainWindow", "Task", None))
+        self.label.setText(_translate("MainWindow", "Devices", None))
+        self.protoContinuousCheck.setToolTip(_translate("MainWindow", "Task runs continuously without \n"
+"gaps until stopped (not yet implemented).", None))
+        self.protoContinuousCheck.setText(_translate("MainWindow", "Continuous", None))
+        self.label_8.setText(_translate("MainWindow", "Duration", None))
+        self.label_6.setText(_translate("MainWindow", "Lead Time", None))
+        self.protoLoopCheck.setToolTip(_translate("MainWindow", "Task will run repeatedly until stopped and \n"
 "waits a minimum of Cycle Time between episodes.\n"
 "Not the same as continuous acquisition (there \n"
-"will be a time gap between each recording).", None, QtGui.QApplication.UnicodeUTF8))
-        self.protoLoopCheck.setText(QtGui.QApplication.translate("MainWindow", "Loop", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_7.setText(QtGui.QApplication.translate("MainWindow", "Cycle Time", None, QtGui.QApplication.UnicodeUTF8))
-        self.testSingleBtn.setText(QtGui.QApplication.translate("MainWindow", "Test", None, QtGui.QApplication.UnicodeUTF8))
-        self.runTaskBtn.setText(QtGui.QApplication.translate("MainWindow", "Record Single", None, QtGui.QApplication.UnicodeUTF8))
-        self.stopSingleBtn.setText(QtGui.QApplication.translate("MainWindow", "Stop Single", None, QtGui.QApplication.UnicodeUTF8))
-        self.protoDurationSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "Duration of stimulus/acquisition in the task.", None, QtGui.QApplication.UnicodeUTF8))
-        self.protoLeadTimeSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "Duration of time to wait before acquisition starts \n"
+"will be a time gap between each recording).", None))
+        self.protoLoopCheck.setText(_translate("MainWindow", "Loop", None))
+        self.label_7.setText(_translate("MainWindow", "Cycle Time", None))
+        self.testSingleBtn.setText(_translate("MainWindow", "Test", None))
+        self.runTaskBtn.setText(_translate("MainWindow", "Record Single", None))
+        self.stopSingleBtn.setText(_translate("MainWindow", "Stop Single", None))
+        self.protoDurationSpin.setToolTip(_translate("MainWindow", "Duration of stimulus/acquisition in the task.", None))
+        self.protoLeadTimeSpin.setToolTip(_translate("MainWindow", "Duration of time to wait before acquisition starts \n"
 "(the hardware is reserved so nothing else can \n"
-"run during this time).", None, QtGui.QApplication.UnicodeUTF8))
-        self.protoCycleTimeSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "The minimum time to wait between recordings \n"
-"in loop mode.", None, QtGui.QApplication.UnicodeUTF8))
-        self.SequenceDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Sequence", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_10.setText(QtGui.QApplication.translate("MainWindow", "Sequence Parameters", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_9.setText(QtGui.QApplication.translate("MainWindow", "Cycle Time", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_11.setText(QtGui.QApplication.translate("MainWindow", "Repetitions", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("MainWindow", "Parameter Space: ", None, QtGui.QApplication.UnicodeUTF8))
-        self.paramSpaceLabel.setText(QtGui.QApplication.translate("MainWindow", "0", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("MainWindow", "Total time:", None, QtGui.QApplication.UnicodeUTF8))
-        self.seqTimeLabel.setText(QtGui.QApplication.translate("MainWindow", "0", None, QtGui.QApplication.UnicodeUTF8))
-        self.sequenceParamList.headerItem().setText(0, QtGui.QApplication.translate("MainWindow", "dev", None, QtGui.QApplication.UnicodeUTF8))
-        self.sequenceParamList.headerItem().setText(1, QtGui.QApplication.translate("MainWindow", "param", None, QtGui.QApplication.UnicodeUTF8))
-        self.sequenceParamList.headerItem().setText(2, QtGui.QApplication.translate("MainWindow", "len", None, QtGui.QApplication.UnicodeUTF8))
-        self.testSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Test", None, QtGui.QApplication.UnicodeUTF8))
-        self.runSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Record Sequence", None, QtGui.QApplication.UnicodeUTF8))
-        self.pauseSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Pause", None, QtGui.QApplication.UnicodeUTF8))
-        self.stopSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Stop Sequence", None, QtGui.QApplication.UnicodeUTF8))
-        self.dockWidget.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Analysis", None, QtGui.QApplication.UnicodeUTF8))
+"run during this time).", None))
+        self.protoCycleTimeSpin.setToolTip(_translate("MainWindow", "The minimum time to wait between recordings \n"
+"in loop mode.", None))
+        self.SequenceDock.setWindowTitle(_translate("MainWindow", "Sequence", None))
+        self.label_10.setText(_translate("MainWindow", "Sequence Parameters", None))
+        self.label_9.setText(_translate("MainWindow", "Cycle Time", None))
+        self.label_11.setText(_translate("MainWindow", "Repetitions", None))
+        self.label_2.setText(_translate("MainWindow", "Parameter Space: ", None))
+        self.paramSpaceLabel.setText(_translate("MainWindow", "0", None))
+        self.label_4.setText(_translate("MainWindow", "Total time:", None))
+        self.seqTimeLabel.setText(_translate("MainWindow", "0", None))
+        self.sequenceParamList.headerItem().setText(0, _translate("MainWindow", "dev", None))
+        self.sequenceParamList.headerItem().setText(1, _translate("MainWindow", "param", None))
+        self.sequenceParamList.headerItem().setText(2, _translate("MainWindow", "len", None))
+        self.testSequenceBtn.setText(_translate("MainWindow", "Test", None))
+        self.runSequenceBtn.setText(_translate("MainWindow", "Record Sequence", None))
+        self.pauseSequenceBtn.setText(_translate("MainWindow", "Pause", None))
+        self.stopSequenceBtn.setText(_translate("MainWindow", "Stop Sequence", None))
+        self.dockWidget.setWindowTitle(_translate("MainWindow", "Analysis", None))
 
-from pyqtgraph import SpinBox
+from acq4.pyqtgraph import SpinBox
 from ParamList import ParamList

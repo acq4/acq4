@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file '.\lib\devices\Laser\devTemplate.ui'
+# Form implementation generated from reading ui file './acq4/devices/Laser/devTemplate.ui'
 #
-# Created: Tue Aug 13 14:46:53 2013
-#      by: PyQt4 UI code generator 4.9.1
+# Created: Mon Dec 23 22:46:57 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -251,43 +260,43 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("Form", "Expected Output Power:", None, QtGui.QApplication.UnicodeUTF8))
-        self.energyCalcGroup.setTitle(QtGui.QApplication.translate("Form", "For energy calculations use:", None, QtGui.QApplication.UnicodeUTF8))
-        self.currentPowerRadio.setText(QtGui.QApplication.translate("Form", "Current Power", None, QtGui.QApplication.UnicodeUTF8))
-        self.expectedPowerRadio.setText(QtGui.QApplication.translate("Form", "Expected Power", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("Form", "Current Output Power:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_8.setText(QtGui.QApplication.translate("Form", "Power at sample (calc.):", None, QtGui.QApplication.UnicodeUTF8))
-        self.powerAlertCheck.setText(QtGui.QApplication.translate("Form", "Alert me to power changes larger than:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_7.setText(QtGui.QApplication.translate("Form", "Current Wavelength: ", None, QtGui.QApplication.UnicodeUTF8))
-        self.wavelengthCombo.setItemText(0, QtGui.QApplication.translate("Form", "Set wavelength for:", None, QtGui.QApplication.UnicodeUTF8))
-        self.GDDEnableCheck.setText(QtGui.QApplication.translate("Form", "GDD Enable", None, QtGui.QApplication.UnicodeUTF8))
-        self.GDDLimits.setText(QtGui.QApplication.translate("Form", "GDD Limits", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Power Calibration", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(0, QtGui.QApplication.translate("Form", "Optics", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(1, QtGui.QApplication.translate("Form", "Wavelength", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(2, QtGui.QApplication.translate("Form", "Transmission", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(3, QtGui.QApplication.translate("Form", "Power at Sample", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(4, QtGui.QApplication.translate("Form", "Date", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Calibration Parameters", None, QtGui.QApplication.UnicodeUTF8))
-        self.scanLabel.setText(QtGui.QApplication.translate("Form", "Measurement Duration", None, QtGui.QApplication.UnicodeUTF8))
-        self.measurementSpin.setSuffix(QtGui.QApplication.translate("Form", " s", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Settling Duration:", None, QtGui.QApplication.UnicodeUTF8))
-        self.settlingSpin.setToolTip(QtGui.QApplication.translate("Form", "Specify the time it takes for the selected power meter to settle on a value.", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("Form", "Power Meter:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_12.setText(QtGui.QApplication.translate("Form", "Channel:", None, QtGui.QApplication.UnicodeUTF8))
-        self.pCellGroup.setTitle(QtGui.QApplication.translate("Form", "Pockel Cell Parameters", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_9.setText(QtGui.QApplication.translate("Form", "Minimum Voltage:", None, QtGui.QApplication.UnicodeUTF8))
-        self.minVSpin.setSuffix(QtGui.QApplication.translate("Form", "V", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_11.setText(QtGui.QApplication.translate("Form", "Number of Steps: ", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_10.setText(QtGui.QApplication.translate("Form", "Maximum Voltage:", None, QtGui.QApplication.UnicodeUTF8))
-        self.maxVSpin.setSuffix(QtGui.QApplication.translate("Form", "V", None, QtGui.QApplication.UnicodeUTF8))
-        self.recalibratePCellCheck.setText(QtGui.QApplication.translate("Form", "Re-Calibrate Pockel Cell", None, QtGui.QApplication.UnicodeUTF8))
-        self.deleteBtn.setText(QtGui.QApplication.translate("Form", "Delete", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrateBtn.setText(QtGui.QApplication.translate("Form", "Calibrate", None, QtGui.QApplication.UnicodeUTF8))
-        self.checkPowerBtn.setText(QtGui.QApplication.translate("Form", "Check Power", None, QtGui.QApplication.UnicodeUTF8))
-        self.shutterBtn.setText(QtGui.QApplication.translate("Form", "Open Shutter", None, QtGui.QApplication.UnicodeUTF8))
-        self.qSwitchBtn.setText(QtGui.QApplication.translate("Form", "Turn On QSwitch", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.label_5.setText(_translate("Form", "Expected Output Power:", None))
+        self.energyCalcGroup.setTitle(_translate("Form", "For energy calculations use:", None))
+        self.currentPowerRadio.setText(_translate("Form", "Current Power", None))
+        self.expectedPowerRadio.setText(_translate("Form", "Expected Power", None))
+        self.label_4.setText(_translate("Form", "Current Output Power:", None))
+        self.label_8.setText(_translate("Form", "Power at sample (calc.):", None))
+        self.powerAlertCheck.setText(_translate("Form", "Alert me to power changes larger than:", None))
+        self.label_7.setText(_translate("Form", "Current Wavelength: ", None))
+        self.wavelengthCombo.setItemText(0, _translate("Form", "Set wavelength for:", None))
+        self.GDDEnableCheck.setText(_translate("Form", "GDD Enable", None))
+        self.GDDLimits.setText(_translate("Form", "GDD Limits", None))
+        self.groupBox_2.setTitle(_translate("Form", "Power Calibration", None))
+        self.calibrationList.headerItem().setText(0, _translate("Form", "Optics", None))
+        self.calibrationList.headerItem().setText(1, _translate("Form", "Wavelength", None))
+        self.calibrationList.headerItem().setText(2, _translate("Form", "Transmission", None))
+        self.calibrationList.headerItem().setText(3, _translate("Form", "Power at Sample", None))
+        self.calibrationList.headerItem().setText(4, _translate("Form", "Date", None))
+        self.groupBox.setTitle(_translate("Form", "Calibration Parameters", None))
+        self.scanLabel.setText(_translate("Form", "Measurement Duration", None))
+        self.measurementSpin.setSuffix(_translate("Form", " s", None))
+        self.label.setText(_translate("Form", "Settling Duration:", None))
+        self.settlingSpin.setToolTip(_translate("Form", "Specify the time it takes for the selected power meter to settle on a value.", None))
+        self.label_3.setText(_translate("Form", "Power Meter:", None))
+        self.label_12.setText(_translate("Form", "Channel:", None))
+        self.pCellGroup.setTitle(_translate("Form", "Pockel Cell Parameters", None))
+        self.label_9.setText(_translate("Form", "Minimum Voltage:", None))
+        self.minVSpin.setSuffix(_translate("Form", "V", None))
+        self.label_11.setText(_translate("Form", "Number of Steps: ", None))
+        self.label_10.setText(_translate("Form", "Maximum Voltage:", None))
+        self.maxVSpin.setSuffix(_translate("Form", "V", None))
+        self.recalibratePCellCheck.setText(_translate("Form", "Re-Calibrate Pockel Cell", None))
+        self.deleteBtn.setText(_translate("Form", "Delete", None))
+        self.calibrateBtn.setText(_translate("Form", "Calibrate", None))
+        self.checkPowerBtn.setText(_translate("Form", "Check Power", None))
+        self.shutterBtn.setText(_translate("Form", "Open Shutter", None))
+        self.qSwitchBtn.setText(_translate("Form", "Turn On QSwitch", None))
 
-from pyqtgraph import SpinBox
+from acq4.pyqtgraph import SpinBox
 from InterfaceCombo import InterfaceCombo

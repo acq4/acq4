@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-from lib.Manager import getManager
+from acq4.Manager import getManager
 from metaarray import *
-from pyqtgraph.ImageView import *
-from pyqtgraph.GraphicsView import *
-from pyqtgraph.graphicsItems import *
-from pyqtgraph.graphicsWindows import *
-from pyqtgraph.PlotWidget import *
-from pyqtgraph.functions import *
-from pyqtgraph.widgets import *
+from acq4.pyqtgraph.ImageView import *
+from acq4.pyqtgraph.GraphicsView import *
+from acq4.pyqtgraph.graphicsItems import *
+from acq4.pyqtgraph.graphicsWindows import *
+from acq4.pyqtgraph.PlotWidget import *
+from acq4.pyqtgraph.functions import *
+from acq4.pyqtgraph.widgets import *
 from Canvas import Canvas
 from UncagingControlTemplate import *
 from StdpCtrlTemplate import *
@@ -22,7 +22,7 @@ from WidgetGroup import *
 from collections import OrderedDict
 import time
 import pickle
-from pyqtgraph.Point import *
+from acq4.pyqtgraph.Point import *
 #import matplotlib as mpl
 #import matplotlib.pyplot as plt
 #import matplotlib.image as mpimg

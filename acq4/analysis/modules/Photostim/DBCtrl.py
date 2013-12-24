@@ -4,8 +4,8 @@ from collections import OrderedDict
 from Map import Map
 import DatabaseGui
 import MapCtrlTemplate
-from lib.Manager import logMsg, logExc
-import pyqtgraph as pg
+from acq4.Manager import logMsg, logExc
+import acq4.pyqtgraph as pg
 import os
 
 class DBCtrl(QtGui.QWidget):

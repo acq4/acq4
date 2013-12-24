@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-from lib.devices.Device import *
-from lib.devices.OptomechDevice import OptomechDevice
-from lib.Manager import logMsg, logExc
+from acq4.devices.Device import *
+from acq4.devices.OptomechDevice import OptomechDevice
+from acq4.Manager import logMsg, logExc
 from Mutex import Mutex, MutexLocker
 from DeviceGui import ScannerDeviceGui
 from TaskGui import ScannerTaskGui
@@ -10,7 +10,7 @@ import os, pickle
 import ptime
 from debug import *
 import numpy as np
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 from HelpfulException import HelpfulException
 
 class Scanner(Device, OptomechDevice):

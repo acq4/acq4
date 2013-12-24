@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from CanvasItem import CanvasItem
 from PyQt4 import QtCore, QtGui
-import pyqtgraph as pg
-import lib.Manager
+import acq4.pyqtgraph as pg
+import acq4.Manager
 
 class CellCanvasItem(CanvasItem):
     """

@@ -12,9 +12,9 @@ Pep8 compliant (via pep8.py) 10/25/2013
 """
 
 from PyQt4 import QtGui, QtCore
-from lib.analysis.AnalysisModule import AnalysisModule
+from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 from metaarray import MetaArray
 import numpy
 import scipy.signal
@@ -46,8 +46,8 @@ pylab.rcParams['pdf.fonttype'] = 42
 pylab.rcParams['text.dvipnghack'] = True
 # to here (matplotlib stuff - touchy!)
 
-import lib.analysis.tools.Utility as Utility   # pbm's utilities...
-import lib.analysis.tools.Fitting as Fitting   # pbm's fitting stuff...
+import acq4.analysis.tools.Utility as Utility   # pbm's utilities...
+import acq4.analysis.tools.Fitting as Fitting   # pbm's fitting stuff...
 import ctrlTemplate
 import debug
 

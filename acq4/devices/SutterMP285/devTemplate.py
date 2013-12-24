@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file '.\lib\devices\SutterMP285\devTemplate.ui'
+# Form implementation generated from reading ui file './acq4/devices/SutterMP285/devTemplate.ui'
 #
-# Created: Wed Aug 07 14:46:40 2013
-#      by: PyQt4 UI code generator 4.9.1
+# Created: Mon Dec 23 22:46:58 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -32,7 +41,6 @@ class Ui_Form(object):
         self.widget.setMinimumSize(QtCore.QSize(100, 0))
         self.widget.setObjectName(_fromUtf8("widget"))
         self.gridLayout = QtGui.QGridLayout(self.widget)
-        self.gridLayout.setMargin(0)
         self.gridLayout.setMargin(0)
         self.gridLayout.setHorizontalSpacing(10)
         self.gridLayout.setVerticalSpacing(0)
@@ -283,39 +291,39 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Position", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("Form", "X", None, QtGui.QApplication.UnicodeUTF8))
-        self.xPosLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_7.setText(QtGui.QApplication.translate("Form", "Y", None, QtGui.QApplication.UnicodeUTF8))
-        self.yPosLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_8.setText(QtGui.QApplication.translate("Form", "Z", None, QtGui.QApplication.UnicodeUTF8))
-        self.zPosLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
-        self.updatePosBtn.setText(QtGui.QApplication.translate("Form", "Update", None, QtGui.QApplication.UnicodeUTF8))
-        self.fineStepRadio.setText(QtGui.QApplication.translate("Form", "Fine step", None, QtGui.QApplication.UnicodeUTF8))
-        self.coarseStepRadio.setText(QtGui.QApplication.translate("Form", "Coarse step", None, QtGui.QApplication.UnicodeUTF8))
-        self.limitsGroup.setTitle(QtGui.QApplication.translate("Form", "Limits", None, QtGui.QApplication.UnicodeUTF8))
-        self.xMinBtn.setText(QtGui.QApplication.translate("Form", "get Current", None, QtGui.QApplication.UnicodeUTF8))
-        self.xMinLabel.setText(QtGui.QApplication.translate("Form", "<--", None, QtGui.QApplication.UnicodeUTF8))
-        self.xMaxLabel.setText(QtGui.QApplication.translate("Form", "-->", None, QtGui.QApplication.UnicodeUTF8))
-        self.xMaxBtn.setText(QtGui.QApplication.translate("Form", "get Current", None, QtGui.QApplication.UnicodeUTF8))
-        self.yMinBtn.setText(QtGui.QApplication.translate("Form", "get Current", None, QtGui.QApplication.UnicodeUTF8))
-        self.yMinLabel.setText(QtGui.QApplication.translate("Form", "<--", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("Form", "Y", None, QtGui.QApplication.UnicodeUTF8))
-        self.yMaxLabel.setText(QtGui.QApplication.translate("Form", "-->", None, QtGui.QApplication.UnicodeUTF8))
-        self.yMaxBtn.setText(QtGui.QApplication.translate("Form", "get Current", None, QtGui.QApplication.UnicodeUTF8))
-        self.zMinBtn.setText(QtGui.QApplication.translate("Form", "get Current", None, QtGui.QApplication.UnicodeUTF8))
-        self.zMinLabel.setText(QtGui.QApplication.translate("Form", "<--", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Z", None, QtGui.QApplication.UnicodeUTF8))
-        self.zMaxLabel.setText(QtGui.QApplication.translate("Form", "-->", None, QtGui.QApplication.UnicodeUTF8))
-        self.zMaxBtn.setText(QtGui.QApplication.translate("Form", "get Current", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("Form", "Max Speed", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "X", None, QtGui.QApplication.UnicodeUTF8))
-        self.xMinSpin.setSuffix(QtGui.QApplication.translate("Form", " mm", None, QtGui.QApplication.UnicodeUTF8))
-        self.yMinSpin.setSuffix(QtGui.QApplication.translate("Form", " mm", None, QtGui.QApplication.UnicodeUTF8))
-        self.zMinSpin.setSuffix(QtGui.QApplication.translate("Form", " mm", None, QtGui.QApplication.UnicodeUTF8))
-        self.xMaxSpin.setSuffix(QtGui.QApplication.translate("Form", " mm", None, QtGui.QApplication.UnicodeUTF8))
-        self.yMaxSpin.setSuffix(QtGui.QApplication.translate("Form", " mm", None, QtGui.QApplication.UnicodeUTF8))
-        self.zMaxSpin.setSuffix(QtGui.QApplication.translate("Form", " mm", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.groupBox_2.setTitle(_translate("Form", "Position", None))
+        self.label_5.setText(_translate("Form", "X", None))
+        self.xPosLabel.setText(_translate("Form", "0", None))
+        self.label_7.setText(_translate("Form", "Y", None))
+        self.yPosLabel.setText(_translate("Form", "0", None))
+        self.label_8.setText(_translate("Form", "Z", None))
+        self.zPosLabel.setText(_translate("Form", "0", None))
+        self.updatePosBtn.setText(_translate("Form", "Update", None))
+        self.fineStepRadio.setText(_translate("Form", "Fine step", None))
+        self.coarseStepRadio.setText(_translate("Form", "Coarse step", None))
+        self.limitsGroup.setTitle(_translate("Form", "Limits", None))
+        self.xMinBtn.setText(_translate("Form", "get Current", None))
+        self.xMinLabel.setText(_translate("Form", "<--", None))
+        self.xMaxLabel.setText(_translate("Form", "-->", None))
+        self.xMaxBtn.setText(_translate("Form", "get Current", None))
+        self.yMinBtn.setText(_translate("Form", "get Current", None))
+        self.yMinLabel.setText(_translate("Form", "<--", None))
+        self.label_3.setText(_translate("Form", "Y", None))
+        self.yMaxLabel.setText(_translate("Form", "-->", None))
+        self.yMaxBtn.setText(_translate("Form", "get Current", None))
+        self.zMinBtn.setText(_translate("Form", "get Current", None))
+        self.zMinLabel.setText(_translate("Form", "<--", None))
+        self.label.setText(_translate("Form", "Z", None))
+        self.zMaxLabel.setText(_translate("Form", "-->", None))
+        self.zMaxBtn.setText(_translate("Form", "get Current", None))
+        self.label_4.setText(_translate("Form", "Max Speed", None))
+        self.label_2.setText(_translate("Form", "X", None))
+        self.xMinSpin.setSuffix(_translate("Form", " mm", None))
+        self.yMinSpin.setSuffix(_translate("Form", " mm", None))
+        self.zMinSpin.setSuffix(_translate("Form", " mm", None))
+        self.xMaxSpin.setSuffix(_translate("Form", " mm", None))
+        self.yMaxSpin.setSuffix(_translate("Form", " mm", None))
+        self.zMaxSpin.setSuffix(_translate("Form", " mm", None))
 
-from pyqtgraph import SpinBox, JoystickButton
+from acq4.pyqtgraph import SpinBox, JoystickButton

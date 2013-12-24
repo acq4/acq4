@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 from DataManagerTemplate import *
-from lib.modules.Module import *
+from acq4.modules.Module import *
 from DataManager import *
 import os, re, sys, time
 from debug import *
 import FileAnalysisView
-from lib.LogWindow import LogButton, LogWindow
+from acq4.LogWindow import LogButton, LogWindow
 import FileLogView
-from pyqtgraph import FileDialog
-from lib.Manager import logMsg, logExc
+from acq4.pyqtgraph import FileDialog
+from acq4.Manager import logMsg, logExc
 from StatusBar import StatusBar
 
 

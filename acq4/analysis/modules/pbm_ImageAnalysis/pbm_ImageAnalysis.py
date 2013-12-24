@@ -25,11 +25,11 @@ This module provides:
 """
 
 from PyQt4 import QtGui, QtCore
-from lib.analysis.AnalysisModule import AnalysisModule
+from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import os, shutil, os.path
 import operator
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 import DatabaseGui
 import PIL as Image
 from metaarray import MetaArray
@@ -38,10 +38,10 @@ import scipy
 import ctrlTemplate
 import ctrlTemplateAnalysis
 import ctrlTemplatePhysiology
-from lib.analysis.tools import Utility
-from lib.analysis.tools import Fitting
-from lib.analysis.tools import PlotHelpers as PH # matlab plotting helpers
-from lib.util import functions as FN
+from acq4.analysis.tools import Utility
+from acq4.analysis.tools import Fitting
+from acq4.analysis.tools import PlotHelpers as PH # matlab plotting helpers
+from acq4.util import functions as FN
 from HelpfulException import HelpfulException
 
 try:
@@ -2788,7 +2788,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             Return:
             a list of the aligned images
         """
-        from lib.analysis.tools import ImageP # avaialable as part of the STXMPy package
+        from acq4.analysis.tools import ImageP # avaialable as part of the STXMPy package
 
         imgstack = self.imageData
         cut = False

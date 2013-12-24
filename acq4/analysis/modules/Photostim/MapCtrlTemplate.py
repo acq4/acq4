@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'MapCtrlTemplate.ui'
+# Form implementation generated from reading ui file './acq4/analysis/modules/Photostim/MapCtrlTemplate.ui'
 #
-# Created: Sun Aug 12 13:47:51 2012
-#      by: PyQt4 UI code generator 4.9.1
+# Created: Mon Dec 23 22:47:00 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -87,25 +96,25 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Maps", None, QtGui.QApplication.UnicodeUTF8))
-        self.mapTable.headerItem().setText(0, QtGui.QApplication.translate("Form", "Map/Scan", None, QtGui.QApplication.UnicodeUTF8))
-        self.newMapBtn.setText(QtGui.QApplication.translate("Form", "New Map", None, QtGui.QApplication.UnicodeUTF8))
-        self.loadMapBtn.setText(QtGui.QApplication.translate("Form", "Load Selected", None, QtGui.QApplication.UnicodeUTF8))
-        self.delMapBtn.setText(QtGui.QApplication.translate("Form", "Delete", None, QtGui.QApplication.UnicodeUTF8))
-        self.addScanBtn.setText(QtGui.QApplication.translate("Form", "Add Scan", None, QtGui.QApplication.UnicodeUTF8))
-        self.removeScanBtn.setText(QtGui.QApplication.translate("Form", "Remove Scan", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Scans Loaded", None, QtGui.QApplication.UnicodeUTF8))
-        self.storeDBSpotBtn.setText(QtGui.QApplication.translate("Form", "Store to DB", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Selected Scan:", None, QtGui.QApplication.UnicodeUTF8))
-        self.rewriteSpotPosBtn.setText(QtGui.QApplication.translate("Form", "Re-write spot locations", None, QtGui.QApplication.UnicodeUTF8))
-        self.clearDBScanBtn.setText(QtGui.QApplication.translate("Form", "Clear DB Entry", None, QtGui.QApplication.UnicodeUTF8))
-        self.clearDBSpotBtn.setText(QtGui.QApplication.translate("Form", "Clear DB Entry", None, QtGui.QApplication.UnicodeUTF8))
-        self.storeDBScanBtn.setText(QtGui.QApplication.translate("Form", "Store to DB", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Selected Spot:", None, QtGui.QApplication.UnicodeUTF8))
-        self.scanTree.headerItem().setText(0, QtGui.QApplication.translate("Form", "Scan", None, QtGui.QApplication.UnicodeUTF8))
-        self.scanTree.headerItem().setText(1, QtGui.QApplication.translate("Form", "Display", None, QtGui.QApplication.UnicodeUTF8))
-        self.scanTree.headerItem().setText(2, QtGui.QApplication.translate("Form", "Events", None, QtGui.QApplication.UnicodeUTF8))
-        self.scanTree.headerItem().setText(3, QtGui.QApplication.translate("Form", "Stats", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.groupBox_2.setTitle(_translate("Form", "Maps", None))
+        self.mapTable.headerItem().setText(0, _translate("Form", "Map/Scan", None))
+        self.newMapBtn.setText(_translate("Form", "New Map", None))
+        self.loadMapBtn.setText(_translate("Form", "Load Selected", None))
+        self.delMapBtn.setText(_translate("Form", "Delete", None))
+        self.addScanBtn.setText(_translate("Form", "Add Scan", None))
+        self.removeScanBtn.setText(_translate("Form", "Remove Scan", None))
+        self.groupBox.setTitle(_translate("Form", "Scans Loaded", None))
+        self.storeDBSpotBtn.setText(_translate("Form", "Store to DB", None))
+        self.label_2.setText(_translate("Form", "Selected Scan:", None))
+        self.rewriteSpotPosBtn.setText(_translate("Form", "Re-write spot locations", None))
+        self.clearDBScanBtn.setText(_translate("Form", "Clear DB Entry", None))
+        self.clearDBSpotBtn.setText(_translate("Form", "Clear DB Entry", None))
+        self.storeDBScanBtn.setText(_translate("Form", "Store to DB", None))
+        self.label.setText(_translate("Form", "Selected Spot:", None))
+        self.scanTree.headerItem().setText(0, _translate("Form", "Scan", None))
+        self.scanTree.headerItem().setText(1, _translate("Form", "Display", None))
+        self.scanTree.headerItem().setText(2, _translate("Form", "Events", None))
+        self.scanTree.headerItem().setText(3, _translate("Form", "Stats", None))
 
-from pyqtgraph import FeedbackButton, TreeWidget
+from acq4.pyqtgraph import FeedbackButton, TreeWidget

@@ -5,20 +5,20 @@ For combining photostimulation maps across cells and displaying against 3D atlas
 
 """
 from PyQt4 import QtGui, QtCore
-from lib.analysis.AnalysisModule import AnalysisModule
+from acq4.analysis.AnalysisModule import AnalysisModule
 import os
 from collections import OrderedDict
 #import DatabaseGui
 from ColorMapper import ColorMapper
-import pyqtgraph as pg
-import pyqtgraph.parametertree as ptree
-import pyqtgraph.opengl as gl
+import acq4.pyqtgraph as pg
+import acq4.pyqtgraph.parametertree as ptree
+import acq4.pyqtgraph.opengl as gl
 import numpy as np
-#import lib.analysis.modules.Photostim.Scan as Scan
-#from lib.analysis.modules.Photostim.Map import Map
-#import lib.analysis.tools.poissonScore as poissonScore
+#import acq4.analysis.modules.Photostim.Scan as Scan
+#from acq4.analysis.modules.Photostim.Map import Map
+#import acq4.analysis.tools.poissonScore as poissonScore
 #import flowchart.EventDetection as FCEventDetection
-import lib.analysis.atlas.CochlearNucleus as CN
+import acq4.analysis.atlas.CochlearNucleus as CN
 from DatabaseGui.DatabaseQueryWidget import DatabaseQueryWidget
 
 class MapCombiner(AnalysisModule):

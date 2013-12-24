@@ -3,18 +3,18 @@ from __future__ import with_statement
 from PatchTemplate import *
 from PyQt4 import QtGui, QtCore
 #from PyQt4 import Qwt5 as Qwt
-from pyqtgraph import WidgetGroup
-from pyqtgraph import PlotWidget
+from acq4.pyqtgraph import WidgetGroup
+from acq4.pyqtgraph import PlotWidget
 from metaarray import *
 from Mutex import Mutex, MutexLocker
 import traceback, sys, time
 from numpy import *
 import scipy.optimize
 from debug import *
-from pyqtgraph import siFormat
-import lib.Manager as Manager
+from acq4.pyqtgraph import siFormat
+import acq4.Manager as Manager
 import ptime
-#from lib.LogWindow import LogButton
+#from acq4.LogWindow import LogButton
 from StatusBar import StatusBar
 
 

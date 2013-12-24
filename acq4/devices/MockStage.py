@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-from lib.devices.OptomechDevice import *
-import pyqtgraph as pg
+from acq4.devices.OptomechDevice import *
+import acq4.pyqtgraph as pg
 
 class MockStage(Device, OptomechDevice):
 

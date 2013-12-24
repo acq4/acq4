@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'MapConvolverTemplate.ui'
+# Form implementation generated from reading ui file './acq4/analysis/modules/MapImager/MapConvolverTemplate.ui'
 #
-# Created: Wed Mar 21 12:21:40 2012
-#      by: PyQt4 UI code generator 4.9
+# Created: Mon Dec 23 22:47:00 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -48,15 +57,15 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Spacing:", None, QtGui.QApplication.UnicodeUTF8))
-        self.spacingSpin.setToolTip(QtGui.QApplication.translate("Form", "Spacing of the grid that the map will be projected onto.", None, QtGui.QApplication.UnicodeUTF8))
-        self.processBtn.setText(QtGui.QApplication.translate("Form", "Process", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(0, QtGui.QApplication.translate("Form", "Parameter", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(1, QtGui.QApplication.translate("Form", "Method", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(2, QtGui.QApplication.translate("Form", "Sigma", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(3, QtGui.QApplication.translate("Form", "Interpolation type", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(4, QtGui.QApplication.translate("Form", "Remove", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.label.setText(_translate("Form", "Spacing:", None))
+        self.spacingSpin.setToolTip(_translate("Form", "Spacing of the grid that the map will be projected onto.", None))
+        self.processBtn.setText(_translate("Form", "Process", None))
+        self.tree.headerItem().setText(0, _translate("Form", "Parameter", None))
+        self.tree.headerItem().setText(1, _translate("Form", "Method", None))
+        self.tree.headerItem().setText(2, _translate("Form", "Sigma", None))
+        self.tree.headerItem().setText(3, _translate("Form", "Interpolation type", None))
+        self.tree.headerItem().setText(4, _translate("Form", "Remove", None))
 
+from acq4.pyqtgraph.widgets.SpinBox import SpinBox
 from pyqtgraph import TreeWidget
-from pyqtgraph.widgets.SpinBox import SpinBox

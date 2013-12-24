@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 from MosaicTemplate import *
-from lib.Manager import getManager
+from acq4.Manager import getManager
 
 class MosaicEditor(QtGui.QMainWindow):
     def __init__(self):

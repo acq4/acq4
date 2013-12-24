@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui
+from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui
 from Mutex import Mutex, MutexLocker
-#from lib.devices.Device import *
+#from acq4.devices.Device import *
 from PyQt4 import QtCore, QtGui
 import time
 import numpy as np
-from pyqtgraph.WidgetGroup import WidgetGroup
+from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 from collections import OrderedDict
 from debug import printExc
 from devTemplate import *
 import subprocess, pickle, os
-import pyqtgraph.multiprocess as mp
+import acq4.pyqtgraph.multiprocess as mp
 
 ivModes = {'i=0':'ic', 'vc':'vc', 'ic':'ic'}
 modeNames = ['vc', 'i=0', 'ic']

@@ -3,15 +3,15 @@
 """
 
 from PyQt4 import QtGui, QtCore
-from lib.analysis.AnalysisModule import AnalysisModule
+from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 from metaarray import MetaArray
 import numpy as np
 from DirTreeWidget import DirTreeLoader
 from FileLoader import FileLoader
-import pyqtgraph.flowchart as fc
-import pyqtgraph.debug as debug
+import acq4.pyqtgraph.flowchart as fc
+import acq4.pyqtgraph.debug as debug
 import os
 
 class TraceAnalyzer(AnalysisModule):

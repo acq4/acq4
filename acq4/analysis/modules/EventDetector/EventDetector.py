@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
-from lib.analysis.AnalysisModule import AnalysisModule
+from acq4.analysis.AnalysisModule import AnalysisModule
 from flowchart import *
 import os
 from collections import OrderedDict
 import debug
 import FileLoader
 import DatabaseGui
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 
 class EventDetector(AnalysisModule):
     """

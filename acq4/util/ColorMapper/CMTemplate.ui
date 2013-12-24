@@ -111,12 +111,12 @@
   <customwidget>
    <class>FeedbackButton</class>
    <extends>QPushButton</extends>
-   <header>pyqtgraph</header>
+   <header>acq4.pyqtgraph</header>
   </customwidget>
   <customwidget>
    <class>TreeWidget</class>
    <extends>QTreeWidget</extends>
-   <header>pyqtgraph</header>
+   <header>acq4.pyqtgraph</header>
   </customwidget>
  </customwidgets>
  <resources/>

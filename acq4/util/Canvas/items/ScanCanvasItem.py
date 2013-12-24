@@ -3,10 +3,10 @@ from PyQt4 import QtCore, QtGui
 from CanvasItem import CanvasItem
 from ImageCanvasItem import ImageCanvasItem
 import ScanCanvasItemTemplate
-import lib.Manager
-import pyqtgraph as pg
+import acq4.Manager
+import acq4.pyqtgraph as pg
 import numpy as np
-#import pyqtgraph.ProgressDialog as ProgressDialog
+#import acq4.pyqtgraph.ProgressDialog as ProgressDialog
 
 class ScanCanvasItem(CanvasItem):
     def __init__(self, **opts):

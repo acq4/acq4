@@ -4,9 +4,9 @@ if __name__ == '__main__':
     sys.path.append('..')
     
 from PyQt4 import QtCore, QtGui
-import pyqtgraph as pg
-from pyqtgraph import SpinBox
-from pyqtgraph import GradientWidget
+import acq4.pyqtgraph as pg
+from acq4.pyqtgraph import SpinBox
+from acq4.pyqtgraph import GradientWidget
 import numpy as np
 import CMTemplate
 import os

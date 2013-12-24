@@ -10,8 +10,8 @@ sys.path.append(os.path.join(localDir, '../util'))
 
 #from helpers import *
 from PyQt4 import QtGui, QtCore
-from pyqtgraph.widgets import *
-from pyqtgraph.graphicsWindows import *
+from acq4.pyqtgraph.widgets import *
+from acq4.pyqtgraph.graphicsWindows import *
 import Image
 from functions import *
 from scipy.ndimage import *

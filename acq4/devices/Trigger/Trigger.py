@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from lib.devices.Device import *
+from acq4.devices.Device import *
 class Trigger(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)

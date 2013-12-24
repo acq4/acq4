@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
-import pyqtgraph as pg
-#import pyqtgraph.TreeWidget as TreeWidget
+import acq4.pyqtgraph as pg
+#import acq4.pyqtgraph.TreeWidget as TreeWidget
 import flowchart.EventDetection as FCEventDetection
 import debug
 

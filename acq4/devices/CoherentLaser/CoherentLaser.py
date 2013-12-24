@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-from lib.devices.Laser import *
+from acq4.devices.Laser import *
 #import serial, struct
-from lib.drivers.Coherent import *
+from acq4.drivers.Coherent import *
 from Mutex import Mutex
 import debug
 import time

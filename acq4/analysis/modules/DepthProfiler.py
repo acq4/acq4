@@ -3,13 +3,13 @@
 Used for measuring illumination depth profiles from photobleached tissue.
 """
 from PyQt4 import QtGui, QtCore
-from lib.analysis.AnalysisModule import AnalysisModule
+from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 from metaarray import MetaArray
 import numpy as np
 import functions as fn
-#import pyqtgraph.ProgressDialog as ProgressDialog
+#import acq4.pyqtgraph.ProgressDialog as ProgressDialog
 import scipy.optimize
 
 class DepthProfiler(AnalysisModule):

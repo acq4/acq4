@@ -1,8 +1,8 @@
 from PyQt4 import QtGui, QtCore
-from pyqtgraph import PlotWidget
-from lib.devices.DAQGeneric import DAQGenericTaskGui
+from acq4.pyqtgraph import PlotWidget
+from acq4.devices.DAQGeneric import DAQGenericTaskGui
 from SequenceRunner import runSequence
-from pyqtgraph.functions import siFormat
+from acq4.pyqtgraph.functions import siFormat
 import taskTemplate
 from HelpfulException import HelpfulException
 

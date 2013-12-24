@@ -22,14 +22,14 @@ from configfile import *
 #from metaarray import MetaArray
 import time
 from Mutex import Mutex, MutexLocker
-from pyqtgraph import SignalProxy, ProgressDialog
-#from pyqtgraph.ProgressDialog import ProgressDialog
+from acq4.pyqtgraph import SignalProxy, ProgressDialog
+#from acq4.pyqtgraph.ProgressDialog import ProgressDialog
 from PyQt4 import QtCore, QtGui
 if not hasattr(QtCore, 'Signal'):
     QtCore.Signal = QtCore.pyqtSignal
     QtCore.Slot = QtCore.pyqtSlot
-#from lib.filetypes.FileType import *
-import lib.filetypes as filetypes
+#from acq4.filetypes.FileType import *
+import acq4.filetypes as filetypes
 from debug import *
 import copy
 import advancedTypes

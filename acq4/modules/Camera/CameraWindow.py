@@ -3,11 +3,11 @@
 import time, types, os.path, re, sys
 from PyQt4 import QtGui, QtCore
 #from CameraTemplate import Ui_Form
-from lib.LogWindow import LogButton
+from acq4.LogWindow import LogButton
 from StatusBar import StatusBar
-import pyqtgraph as pg
-import pyqtgraph.dockarea as dockarea
-import lib.Manager as Manager
+import acq4.pyqtgraph as pg
+import acq4.pyqtgraph.dockarea as dockarea
+import acq4.Manager as Manager
 from debug import Profiler
 import numpy as np
 

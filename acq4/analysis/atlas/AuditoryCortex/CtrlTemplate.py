@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'CtrlTemplate.ui'
+# Form implementation generated from reading ui file './acq4/analysis/atlas/AuditoryCortex/CtrlTemplate.ui'
 #
-# Created: Sun Dec 18 19:21:40 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Mon Dec 23 22:47:00 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -71,18 +80,18 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Slice Plane", None, QtGui.QApplication.UnicodeUTF8))
-        self.slicePlaneCombo.setItemText(0, QtGui.QApplication.translate("Form", "Parasaggital", None, QtGui.QApplication.UnicodeUTF8))
-        self.slicePlaneCombo.setItemText(1, QtGui.QApplication.translate("Form", "Coronal (AVCN-DCN)", None, QtGui.QApplication.UnicodeUTF8))
-        self.slicePlaneCombo.setItemText(2, QtGui.QApplication.translate("Form", "Coronal (PVCN-DCN)", None, QtGui.QApplication.UnicodeUTF8))
-        self.slicePlaneCombo.setItemText(3, QtGui.QApplication.translate("Form", "Horizontal (VCN)", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Hemisphere", None, QtGui.QApplication.UnicodeUTF8))
-        self.hemisphereCombo.setItemText(0, QtGui.QApplication.translate("Form", "Left", None, QtGui.QApplication.UnicodeUTF8))
-        self.hemisphereCombo.setItemText(1, QtGui.QApplication.translate("Form", "Right", None, QtGui.QApplication.UnicodeUTF8))
-        self.photoCheck.setText(QtGui.QApplication.translate("Form", "Photo", None, QtGui.QApplication.UnicodeUTF8))
-        self.drawingCheck.setText(QtGui.QApplication.translate("Form", "Drawing", None, QtGui.QApplication.UnicodeUTF8))
-        self.flipCheck.setText(QtGui.QApplication.translate("Form", "Flip", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("Form", "Thickness", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.label.setText(_translate("Form", "Slice Plane", None))
+        self.slicePlaneCombo.setItemText(0, _translate("Form", "Parasaggital", None))
+        self.slicePlaneCombo.setItemText(1, _translate("Form", "Coronal (AVCN-DCN)", None))
+        self.slicePlaneCombo.setItemText(2, _translate("Form", "Coronal (PVCN-DCN)", None))
+        self.slicePlaneCombo.setItemText(3, _translate("Form", "Horizontal (VCN)", None))
+        self.label_2.setText(_translate("Form", "Hemisphere", None))
+        self.hemisphereCombo.setItemText(0, _translate("Form", "Left", None))
+        self.hemisphereCombo.setItemText(1, _translate("Form", "Right", None))
+        self.photoCheck.setText(_translate("Form", "Photo", None))
+        self.drawingCheck.setText(_translate("Form", "Drawing", None))
+        self.flipCheck.setText(_translate("Form", "Flip", None))
+        self.label_3.setText(_translate("Form", "Thickness", None))
 
-from pyqtgraph import SpinBox
+from acq4.pyqtgraph import SpinBox

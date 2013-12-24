@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/modules/DataManager/AnalysisTemplate.ui'
+# Form implementation generated from reading ui file './acq4/modules/DataManager/AnalysisTemplate.ui'
 #
-# Created: Mon Apr 29 12:04:35 2013
-#      by: PyQt4 UI code generator 4.9.4
+# Created: Mon Dec 23 22:46:58 2013
+#      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -77,14 +86,14 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Database", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Database:", None, QtGui.QApplication.UnicodeUTF8))
-        self.openDbBtn.setText(QtGui.QApplication.translate("Form", "Open", None, QtGui.QApplication.UnicodeUTF8))
-        self.createDbBtn.setText(QtGui.QApplication.translate("Form", "Create", None, QtGui.QApplication.UnicodeUTF8))
-        self.refreshDbBtn.setText(QtGui.QApplication.translate("Form", "Refresh", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_3.setTitle(QtGui.QApplication.translate("Form", "Data Model", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Analysis Modules", None, QtGui.QApplication.UnicodeUTF8))
-        self.loadModuleBtn.setText(QtGui.QApplication.translate("Form", "Load Module", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.groupBox.setTitle(_translate("Form", "Database", None))
+        self.label.setText(_translate("Form", "Database:", None))
+        self.openDbBtn.setText(_translate("Form", "Open", None))
+        self.createDbBtn.setText(_translate("Form", "Create", None))
+        self.refreshDbBtn.setText(_translate("Form", "Refresh", None))
+        self.groupBox_3.setTitle(_translate("Form", "Data Model", None))
+        self.groupBox_2.setTitle(_translate("Form", "Analysis Modules", None))
+        self.loadModuleBtn.setText(_translate("Form", "Load Module", None))
 
-from pyqtgraph.widgets.ComboBox import ComboBox
+from acq4.pyqtgraph.widgets.ComboBox import ComboBox

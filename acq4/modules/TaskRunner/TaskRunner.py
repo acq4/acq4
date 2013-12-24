@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #from __future__ import with_statement
-from lib.modules.Module import *
+from acq4.modules.Module import *
 from TaskRunnerTemplate import *
 from PyQt4 import QtGui, QtCore
 #from DirTreeModel import *
@@ -8,9 +8,9 @@ import DirTreeWidget
 import configfile
 from collections import OrderedDict
 from SequenceRunner import *
-#from pyqtgraph.WidgetGroup import WidgetGroup
+#from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 from Mutex import Mutex, MutexLocker
-from lib.Manager import getManager, logMsg, logExc
+from acq4.Manager import getManager, logMsg, logExc
 from debug import *
 import ptime
 import analysisModules
@@ -18,8 +18,8 @@ import time, gc
 #import sip
 import sys, os
 from HelpfulException import HelpfulException
-#from lib.LogWindow import LogButton
-import pyqtgraph as pg
+#from acq4.LogWindow import LogButton
+import acq4.pyqtgraph as pg
 from StatusBar import StatusBar
 
 

@@ -10,7 +10,7 @@ import ptime
 from numpy import ndarray
 from PyQt4 import QtCore, QtGui
 try:
-    import lib.Manager
+    import acq4.Manager
     HAVE_MANAGER = True
 except:
     HAVE_MANAGER = False

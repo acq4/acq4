@@ -15,7 +15,7 @@ The class is responsible for:
 import sys, gc
 
 ## install global exception handler for others to hook into.
-import pyqtgraph.exceptionHandling as exceptionHandling   
+import acq4.pyqtgraph.exceptionHandling as exceptionHandling   
 exceptionHandling.setTracebackClearing(True)
 
 import time, atexit, weakref, reload
@@ -33,8 +33,8 @@ from debug import *
 import getopt, glob
 import ptime
 from collections import OrderedDict
-import pyqtgraph as pg
-from pyqtgraph import ProgressDialog
+import acq4.pyqtgraph as pg
+from acq4.pyqtgraph import ProgressDialog
 from LogWindow import LogWindow
 from HelpfulException import HelpfulException
 

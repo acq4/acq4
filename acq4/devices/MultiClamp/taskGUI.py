@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import sys
-from lib.devices.Device import TaskGui
+from acq4.devices.Device import TaskGui
 from SequenceRunner import *
-from pyqtgraph.WidgetGroup import WidgetGroup
+from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 import numpy
 from TaskTemplate import *
 from debug import *
