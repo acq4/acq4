@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
-from pyqtgraph.Qt import QtCore, QtGui
+from ...Qt import QtCore, QtGui
 from ..Node import Node
 from scipy.signal import detrend
 from scipy.ndimage import median_filter, gaussian_filter
-#from pyqtgraph.SignalProxy import SignalProxy
+#from ...SignalProxy import SignalProxy
 from . import functions
 from .common import *
 import numpy as np
 
-import pyqtgraph.metaarray as metaarray
-from pyqtgraph import PolyLineROI
-from pyqtgraph import Point
+from ... import PolyLineROI
+from ... import Point
+from ... import metaarray as metaarray
 
 
 class Downsample(CtrlNode):

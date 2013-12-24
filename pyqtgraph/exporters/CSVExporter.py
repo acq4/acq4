@@ -1,8 +1,7 @@
-import pyqtgraph as pg
-from pyqtgraph.Qt import QtGui, QtCore
+from ..Qt import QtGui, QtCore
 from .Exporter import Exporter
-from pyqtgraph.parametertree import Parameter
-
+from ..parametertree import Parameter
+from .. import PlotItem
 
 __all__ = ['CSVExporter']
     
@@ -22,7 +21,7 @@ class CSVExporter(Exporter):
     
     def export(self, fileName=None):
         
-        if not isinstance(self.item, pg.PlotItem):
+        if not isinstance(self.item, PlotItem):
             raise Exception("Must have a PlotItem selected for CSV export.")
         
         if fileName is None:
@@ -32,15 +31,29 @@ class CSVExporter(Exporter):
         fd = open(fileName, 'w')
         data = []
         header = []
-        
-        for n, c in enumerate(self.item.curves):
-            data.append(c.getData())
-            header.extend(['x%04d' % n, 'y%0d' % n])  # headers should be unique for every column for import
+
+        for i,c in enumerate(self.item.curves):
+            cd = c.getData()
+            if cd[0] is None:
+                continue
+            data.append(cd)
+            if hasattr(c, 'implements') and c.implements('plotData') and c.name() is not None:
+                name = c.name().replace('"', '""') + '_'
+                xName, yName = '"'+name+'x"', '"'+name+'y"'
+            else:
+                xName = 'x%04d' % i
+                yName = 'y%04d' % i
+            header.extend([xName, yName])
 
         if self.params['separator'] == 'comma':
             sep = ','
-
-        numRows = reduce(max, [len(d[0]) for d in data])
+        else:
+            sep = '\t'
+            
+        fd.write(sep.join(header) + '\n')
+        i = 0
+        numFormat = '%%0.%dg' % self.params['precision']
+        numRows = max([len(d[0]) for d in data])
         for i in range(numRows):
             for d in data:
                 if d is not None and i < len(d[0]):
@@ -50,6 +63,6 @@ class CSVExporter(Exporter):
             fd.write('\n')
         fd.close()
 
-        
+CSVExporter.register()        
                 
         
