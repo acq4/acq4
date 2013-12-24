@@ -12,7 +12,7 @@ class ScaleBar(GraphicsObject, GraphicsWidgetAnchor):
     """
     Displays a rectangular bar to indicate the relative scale of objects on the view.
     """
-    def __init__(self, size, width=5, brush=None, pen=None, suffix='m'):
+    def __init__(self, size, width=5, brush=None, pen=None, suffix='m', offset=None):
         GraphicsObject.__init__(self)
         GraphicsWidgetAnchor.__init__(self)
         self.setFlag(self.ItemHasNoContents)
@@ -24,6 +24,9 @@ class ScaleBar(GraphicsObject, GraphicsWidgetAnchor):
         self.pen = fn.mkPen(pen)
         self._width = width
         self.size = size
+        if offset == None:
+            offset = (0,0)
+        self.offset = offset
         
         self.bar = QtGui.QGraphicsRectItem()
         self.bar.setPen(self.pen)
@@ -54,6 +57,15 @@ class ScaleBar(GraphicsObject, GraphicsWidgetAnchor):
     def boundingRect(self):
         return QtCore.QRectF()
 
+    def setParentItem(self, p):
+        ret = GraphicsObject.setParentItem(self, p)
+        if self.offset is not None:
+            offset = pg.Point(self.offset)
+            anchorx = 1 if offset[0] <= 0 else 0
+            anchory = 1 if offset[1] <= 0 else 0
+            anchor = (anchorx, anchory)
+            self.anchor(itemPos=anchor, parentPos=anchor, offset=offset)
+        return ret
 
 
 

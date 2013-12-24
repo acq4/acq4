@@ -285,6 +285,10 @@ class ImageView(QtGui.QWidget):
 
         profiler()
 
+    def clear(self):
+        self.image = None
+        self.imageItem.clear()
+        
     def play(self, rate):
         """Begin automatically stepping frames forward at the given rate (in fps).
         This can also be accessed by pressing the spacebar."""

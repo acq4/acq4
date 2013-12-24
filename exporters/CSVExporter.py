@@ -31,15 +31,19 @@ class CSVExporter(Exporter):
         fd = open(fileName, 'w')
         data = []
         header = []
-        for c in self.item.curves:
+
+        for i,c in enumerate(self.item.curves):
             cd = c.getData()
             if cd[0] is None:
                 continue
             data.append(cd)
-            name = ''
             if hasattr(c, 'implements') and c.implements('plotData') and c.name() is not None:
                 name = c.name().replace('"', '""') + '_'
-            header.extend(['"'+name+'x"', '"'+name+'y"'])
+                xName, yName = '"'+name+'x"', '"'+name+'y"'
+            else:
+                xName = 'x%04d' % i
+                yName = 'y%04d' % i
+            header.extend([xName, yName])
 
         if self.params['separator'] == 'comma':
             sep = ','
@@ -52,8 +56,8 @@ class CSVExporter(Exporter):
         numRows = max([len(d[0]) for d in data])
         for i in range(numRows):
             for d in data:
-                if i < len(d[0]):
-                    fd.write(numFormat % d[0][i] + sep + numFormat % d[1][i] + sep)
+                if d is not None and i < len(d[0]):
+                    fd.write('%g%s%g%s'%(d[0][i], sep, d[1][i], sep))
                 else:
                     fd.write(' %s %s' % (sep, sep))
             fd.write('\n')

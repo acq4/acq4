@@ -634,7 +634,8 @@ class ViewBox(GraphicsWidget):
                 x = vr.left()+x, vr.right()+x
             if y is not None:
                 y = vr.top()+y, vr.bottom()+y
-            self.setRange(xRange=x, yRange=y, padding=0)
+            if x is not None or y is not None:
+                self.setRange(xRange=x, yRange=y, padding=0)
             
         
         
@@ -776,6 +777,14 @@ class ViewBox(GraphicsWidget):
                 return
             args['padding'] = 0
             args['disableAutoRange'] = False
+            
+             # check for and ignore bad ranges
+            for k in ['xRange', 'yRange']:
+                if k in args:
+                    if not np.all(np.isfinite(args[k])):
+                        r = args.pop(k)
+                        print "Warning: %s is invalid: %s" % (k, str(r))
+                        
             self.setRange(**args)
         finally:
             self._autoRangeNeedsUpdate = False
@@ -937,7 +946,7 @@ class ViewBox(GraphicsWidget):
             return
         
         self.state['yInverted'] = b
-        #self.updateMatrix(changed=(False, True))
+        self._matrixNeedsUpdate = True # updateViewRange won't detect this for us
         self.updateViewRange()
         self.sigStateChanged.emit(self)
 

@@ -1993,3 +1993,122 @@ def pseudoScatter(data, spacing=None, shuffle=True, bidir=False):
         yvals[i] = y
     
     return yvals[np.argsort(inds)]  ## un-shuffle values before returning
+
+
+def toposort(deps, nodes=None, cost=None, key=None, startNodes=None, endNodes=None, _seen=None, _stack=None):
+    """Topological sort. Arguments are:
+      deps       Dictionary describing dependencies where a:[b,c] means "a 
+                 depends on b and c"
+      nodes      Deprecated. Use *endNodes* instead.
+      cost       Optional dictionary of per-node cost values. This will be used
+                 to sort independent graph branches by total cost. 
+      key        Optional key function used for sorting independent graph 
+                 branches. Using the *cost* argument will override the *key*
+                 argument.
+      startNodes Optional list of starting nodes (those which have no 
+                 dependencies). This option can be used to cull other potential
+                 starting nodes from the graph.
+      endNodes   Optional list of ending nodes (those which are not depended 
+                 upon). This option can be used to cull other potential
+                 ending nodes from the graph.
+              
+    Examples::
+
+        # Sort the following graph:
+        # 
+        #   B ──┬─────> C <── D
+        #       │       │       
+        #   E <─┴─> A <─┘
+        #     
+        deps = {'a': ['b', 'c'], 'c': ['b', 'd'], 'e': ['b']}
+        toposort(deps)
+         => ['b', 'd', 'c', 'a', 'e']
+         
+        # This example is underspecified; there are several orders
+        # that correctly satisfy the graph. However, we may use the 'key'
+        # or 'cost' arguments to impose more constraints on the sort order.
+        
+        # Let each node have the following cost:
+        cost = {'a': 0, 'b': 0, 'c': 1, 'd': 1, 'e': 3}
+        
+        # Then the total cost of following any branch is:
+        #    a=0, e=3, c=1+a=1, b=c+a+e=4, d=1+c=2
+        # If we sort independent branches such that the highest cost comes 
+        # first, the output is:
+        toposort(deps, cost=cost)
+         => ['b', 'e', 'd', 'c', 'a']
+         
+        # This result is both a valid topographical sort order and fully 
+        # specified by the combined dependencies and costs.
+    """
+    if cost is not None:
+        order = toposort(deps)
+        totalCost = cost.copy()
+        for n in order[::-1]:
+            for n2 in deps.get(n, []):
+                if n2 not in totalCost:
+                    totalCost[n2] = 0
+                #print n2, n, totalCost.get(n, 0)
+                totalCost[n2] += totalCost.get(n, 0)
+        key = lambda x: totalCost.get(x, 0)
+        print totalCost
+
+    # If both startNodes and endNodes are given, we need to sort once from 
+    # either direction and find the intersection of the two results.
+    # Likewise, endNodes+key requires special treatment
+    if endNodes is not None and (startNodes is not None or key is not None):
+        startOrder = toposort(deps, startNodes=startNodes, key=key)
+        endOrder = toposort(deps, endNodes=endNodes)
+        order = []
+        for n in startOrder:
+            if n in endOrder:
+                order.append(n)
+        return order
+
+    # kept for backward compatibility:
+    if nodes is not None:
+        print("Warning: pyqtgraph.toposort(..., nodes=) is deprecated; use the endNodes argument instead.")
+        endNodes = nodes
+
+    # Determine list of ending nodes unless it has already been specified.
+    if endNodes is None:
+        ## run through deps to find nodes that are not depended upon
+        rem = set()
+        for dep in deps.values():
+            rem |= set(dep)
+        nodes = set(deps.keys()) - rem
+    else:
+        nodes = endNodes
+        
+    # Determine list of starting nodes unless it has already been specified.
+    if startNodes is not None:
+        raise NotImplementedError()
+        #rem = set(seen)
+        #for dep in deps.values():
+            #rem |= set(dep)
+        #nodes = set(deps.keys()) - rem
+    
+    # If key is specified, sort the starting nodes now
+    if key is not None:
+        nodes = list(nodes)
+        nodes.sort(key=key, reverse=True)
+    
+    # Initialize recursive variables
+    if _seen is None:
+        _seen = set()
+        _stack = []
+        
+    # Sort!
+    sorted = []
+    for n in nodes:
+        if n in stack:
+            raise Exception("Cyclic dependency detected", stack + [n])
+        if n in seen:
+            continue
+        seen.add(n)
+        if n in deps:
+            sorted.extend(toposort(deps, deps[n], seen, stack+[n], depth=depth+1, key=key))
+        sorted.append(n)
+    return sorted
+    
+    

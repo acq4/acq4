@@ -95,7 +95,9 @@ class Canvas(QtGui.QWidget):
             
 
     def storeSvg(self):
-        self.ui.view.writeSvg()
+        from pyqtgraph.GraphicsScene.exportDialog import ExportDialog
+        ex = ExportDialog(self.ui.view)
+        ex.show()
 
     def storePng(self):
         self.ui.view.writeImage()
@@ -571,7 +573,9 @@ class Canvas(QtGui.QWidget):
         self.menu.popup(ev.globalPos())
         
     def removeClicked(self):
-        self.removeItem(self.menuItem)
+        #self.removeItem(self.menuItem)
+        for item in self.selectedItems():
+            self.removeItem(item)
         self.menuItem = None
         import gc
         gc.collect()
