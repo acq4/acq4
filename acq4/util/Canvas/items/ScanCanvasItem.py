@@ -31,7 +31,7 @@ class ScanCanvasItem(CanvasItem):
         if 'subDirs' in opts:
             dirs = opts['subDirs']
         else:
-            model = lib.Manager.getManager().dataModel
+            model = acq4.Manager.getManager().dataModel
             typ = model.dirType(dirHandle)
             if typ == 'ProtocolSequence':
                 dirs = [dirHandle[d] for d in dirHandle.subDirs()]
@@ -166,7 +166,7 @@ class ScanCanvasItem(CanvasItem):
         if fh.isFile():
             return 0
         try:
-            model = lib.Manager.getManager().dataModel
+            model = acq4.Manager.getManager().dataModel
             typ = model.dirType(fh)
             if typ == 'ProtocolSequence':  ## should do some deeper inspection here..
                 return 10
@@ -274,7 +274,7 @@ class ScanCanvasItem(CanvasItem):
 
         # some of this from command line...
  
-        man = lib.Manager.getManager()
+        man = acq4.Manager.getManager()
         pm = man.getInterface('analysisMod', 'Photostim')
         gradnum = self.gradientNumber.value()
         # get the current color gradient. If you have multiple lines in the color mapper, you may need to 

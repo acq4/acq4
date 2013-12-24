@@ -13,7 +13,7 @@ def listAtlases():
     return files
     
 def getAtlasClass(modName):
-    mod = __import__('lib.analysis.atlas.'+modName, fromlist=['*'])
+    mod = __import__('acq4.analysis.atlas.'+modName, fromlist=['*'])
     cls = getattr(mod, modName)
     #print id(cls)
     return cls

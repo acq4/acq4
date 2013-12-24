@@ -413,7 +413,7 @@ class ScannerDeviceGui(QtGui.QWidget):
             #laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
         #print "\n\n====> Record background\n"
-        task = lib.Manager.getManager().createTask(cmd)
+        task = acq4.Manager.getManager().createTask(cmd)
         task.execute()
         result = task.getResult()
         ## pull result, convert to ndarray float, take average over all frames
@@ -433,7 +433,7 @@ class ScannerDeviceGui(QtGui.QWidget):
             daqName: {'numPts': nPts, 'rate': rate, 'triggerDevice': camera}
         }
         #print "\n\n====> Scan\n"
-        task = lib.Manager.getManager().createTask(cmd)
+        task = acq4.Manager.getManager().createTask(cmd)
         task.execute(block=False)
         with pg.ProgressDialog("Calibrating scanner: Running scan protocol..", 0, 100) as dlg:
             while not task.isDone():

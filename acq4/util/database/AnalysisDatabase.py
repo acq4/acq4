@@ -383,7 +383,7 @@ class AnalysisDatabase(SqliteDatabase):
         
         with self.transaction():
             ## Ask manager what columns we think should go with this directory
-            columns = lib.Manager.getManager().suggestedDirFields(dirHandle).keys()
+            columns = acq4.Manager.getManager().suggestedDirFields(dirHandle).keys()
             
             ## Add in any other columns present
             #for k in dirHandle.info():   ## Let's leave it to the user to add these if they want

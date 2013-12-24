@@ -6,7 +6,7 @@ import acq4.pyqtgraph.opengl as gl
 import numpy as np
 import acq4.util.functions as fn
 import re
-man = lib.Manager.getManager() 
+man = acq4.Manager.getManager() 
 
 ## update DB field to reflect dir meta info
 #for i in db.select('Cell', ['rowid']):                                                                                                          

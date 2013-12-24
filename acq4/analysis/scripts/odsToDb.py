@@ -204,7 +204,7 @@ def readOds():
 
 def sync():
     global DBTable
-    man = lib.Manager.getManager()
+    man = acq4.Manager.getManager()
     data = readOds()
     db = man.getModule('Data Manager').currentDatabase() 
     table = DBTable

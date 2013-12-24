@@ -14,7 +14,7 @@ else:
 
 import numpy as np
 import pickle, re, os
-import lib.Manager
+import acq4.Manager
 import acq4.util.DataManager as DataManager
 import collections
 import acq4.util.functions as functions

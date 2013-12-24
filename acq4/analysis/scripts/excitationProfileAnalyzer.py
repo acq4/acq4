@@ -4,7 +4,7 @@ import acq4.pyqtgraph as pg
 import numpy as np
 import acq4.util.functions as fn
 
-#man = lib.Manager.getManager() 
+#man = acq4.Manager.getManager() 
 #dm = man.getModule('Data Manager')
 #db = dm.currentDatabase()
 #mod = man.dataModel

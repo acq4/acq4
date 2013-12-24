@@ -13,7 +13,7 @@ def listModules():
     return files
     
 def getModuleClass(modName):
-    mod = __import__('lib.analysis.modules.'+modName, fromlist=['*'])
+    mod = __import__('acq4.analysis.modules.'+modName, fromlist=['*'])
     cls = getattr(mod, modName)
     #print id(cls)
     return cls

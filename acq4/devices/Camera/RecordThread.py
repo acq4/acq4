@@ -19,7 +19,7 @@ class RecordThread(QtCore.QThread):
     def __init__(self, ui):
         QtCore.QThread.__init__(self)
         self.ui = ui
-        self.m = lib.Manager.getManager()
+        self.m = acq4.Manager.getManager()
         self.ui.cam.sigNewFrame.connect(self.newCamFrame)
         
         ui.ui.recordStackBtn.toggled.connect(self.toggleRecord)

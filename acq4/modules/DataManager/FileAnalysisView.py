@@ -23,7 +23,7 @@ class FileAnalysisView(QtGui.QWidget):
         QtGui.QWidget.__init__(self, parent)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        self.man = lib.Manager.getManager()
+        self.man = acq4.Manager.getManager()
         self.mod = mod
         self.dbFile = None
         self.db = None
@@ -164,7 +164,7 @@ class FileAnalysisView(QtGui.QWidget):
             return
         modName = str(self.ui.dataModelCombo.currentText())
         self.currentModel = models.loadModel(modName)
-        lib.Manager.getManager().dataModel = self.currentModel  ## make model globally available
+        acq4.Manager.getManager().dataModel = self.currentModel  ## make model globally available
         if self.db is not None:
             self.db.setDataModel(self.currentModel)
     

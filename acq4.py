@@ -96,7 +96,7 @@ if config == configs[-1]:
 #QtCore.pyqtRemoveInputHook()
 
 ## Start Qt event loop unless running in interactive mode.
-interactive = (sys.flags.interactive == 1) and ('lib.util.PySideImporter' not in sys.modules)
+interactive = (sys.flags.interactive == 1) and ('acq4.util.PySideImporter' not in sys.modules)
 
 ## Run python code periodically to allow interactive debuggers to interrupt the qt event loop
 timer = QtCore.QTimer()

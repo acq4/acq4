@@ -2,7 +2,7 @@
 from PyQt4 import QtSql, QtCore
 import numpy as np
 import pickle, re, os
-import lib.Manager
+import acq4.Manager
 import acq4.util.DataManager as DataManager
 import collections
 import acq4.util.functions as functions
@@ -404,7 +404,7 @@ class AnalysisDatabase(SqliteDatabase):
             table = self.dirTypeName(handle)
             
         if not self.hasTable(table):
-            fields = lib.Manager.getManager().suggestedDirFields(handle).keys()
+            fields = acq4.Manager.getManager().suggestedDirFields(handle).keys()
             for k in info:
                 if k not in fields:
                     fields.append(k)

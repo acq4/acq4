@@ -68,7 +68,7 @@ def getFileType(typName):
     (this is generally only for internal use)"""
     global KNOWN_FILE_TYPES
     if typName not in KNOWN_FILE_TYPES:
-        mod = __import__('lib.filetypes.' + typName, fromlist=['*'])
+        mod = __import__('acq4.filetypes.' + typName, fromlist=['*'])
         cls = getattr(mod, typName)
         KNOWN_FILE_TYPES[typName] = cls
         

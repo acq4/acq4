@@ -5,7 +5,7 @@ import acq4.pyqtgraph.opengl as gl
 import acq4.Manager
 import acq4.analysis.atlas.CochlearNucleus as cn
 
-man = lib.Manager.getManager()
+man = acq4.Manager.getManager()
 initialized = False
 
 def __reload__(old):  ## re-use existing objects if module is reloaded

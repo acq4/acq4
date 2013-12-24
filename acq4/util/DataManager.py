@@ -372,7 +372,7 @@ class FileHandle(QtCore.QObject):
             else:
                 cls = filetypes.getFileType(typ)
                 data = cls.read(self, *args, **kargs)
-                #mod = __import__('lib.filetypes.%s' % typ, fromlist=['*'])
+                #mod = __import__('acq4.filetypes.%s' % typ, fromlist=['*'])
                 #func = getattr(mod, 'fromFile')
                 #data = func(fileName=self.name())
             

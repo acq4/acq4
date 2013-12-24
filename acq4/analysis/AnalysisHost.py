@@ -57,7 +57,7 @@ class AnalysisHost(QtGui.QMainWindow):
         
         self.setWindowTitle(modName)
         
-        lib.Manager.getManager().declareInterface(modName, 'analysisMod', self.mod)
+        acq4.Manager.getManager().declareInterface(modName, 'analysisMod', self.mod)
         
     def closeEvent(self, ev):
         if self.quit():

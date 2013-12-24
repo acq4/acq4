@@ -11,12 +11,12 @@ import acq4.util.functions as fn
 from acq4.util.HelpfulException import HelpfulException
 from acq4.pyqtgraph.widgets.FileDialog import FileDialog
 import sys
-from DatabaseGui.DatabaseQueryWidget import DatabaseQueryWidget
+from acq4.util.DatabaseGui.DatabaseQueryWidget import DatabaseQueryWidget
 from SpatialCorrelator import SpatialCorrelator
 from MapConvolver import MapConvolver
 from acq4.util.ColorMapper import ColorMapper
-from Canvas.items.ImageCanvasItem import ImageCanvasItem
-from ContourPlotter.ContourPlotter import ContourPlotter
+from acq4.util.Canvas.items.ImageCanvasItem import ImageCanvasItem
+from acq4.util.ContourPlotter.ContourPlotter import ContourPlotter
 import acq4.util.debug as debug
 
 

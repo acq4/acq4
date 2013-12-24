@@ -19,7 +19,7 @@ import numpy as np
 #import acq4.analysis.tools.poissonScore as poissonScore
 #import flowchart.EventDetection as FCEventDetection
 import acq4.analysis.atlas.CochlearNucleus as CN
-from DatabaseGui.DatabaseQueryWidget import DatabaseQueryWidget
+from acq4.util.DatabaseGui.DatabaseQueryWidget import DatabaseQueryWidget
 
 class MapCombiner(AnalysisModule):
     def __init__(self, host):

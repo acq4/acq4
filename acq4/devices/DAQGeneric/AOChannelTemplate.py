@@ -130,5 +130,5 @@ class Ui_Form(object):
         self.functionCheck.setText(_translate("Form", "Enable Function", None))
         self.displayCheck.setText(_translate("Form", "Display", None))
 
-from generator.StimGenerator import StimGenerator
+from acq4.util.generator.StimGenerator import StimGenerator
 from acq4.pyqtgraph import SpinBox

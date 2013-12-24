@@ -3,7 +3,7 @@ import acq4.Manager
 import acq4.util.imageAnalysis as imageAnalysis
 
 run = True
-man = lib.Manager.getManager()
+man = acq4.Manager.getManager()
 cam = man.getDevice('Camera')
 
 frames = []

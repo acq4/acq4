@@ -28,7 +28,7 @@ class CellCanvasItem(CanvasItem):
         if fh.isFile():
             return 0
         try:
-            model = lib.Manager.getManager().dataModel
+            model = acq4.Manager.getManager().dataModel
             if model.dirType(fh) == 'Cell':
                 return 100
             return 0

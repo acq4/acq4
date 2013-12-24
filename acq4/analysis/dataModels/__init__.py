@@ -12,11 +12,11 @@ def listModels():
     return files
     
 #def getModelClass(modName):
-    #mod = __import__('lib.analysis.dataModels.'+modName, fromlist=['*'])
+    #mod = __import__('acq4.analysis.dataModels.'+modName, fromlist=['*'])
     #cls = getattr(mod, 'DataModel')
     #return cls
 
 def loadModel(modName):
     #cls = getModelClass(modName)
     #return cls()
-    return __import__('lib.analysis.dataModels.'+modName, fromlist=['*'])
+    return __import__('acq4.analysis.dataModels.'+modName, fromlist=['*'])

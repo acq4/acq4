@@ -179,5 +179,5 @@ class Ui_Form(object):
         self.primaryGainCheck.setText(_translate("Form", "Set Gain", None))
         self.waveGeneratorLabel.setText(_translate("Form", "Command Function (A)", None))
 
-from generator.StimGenerator import StimGenerator
+from acq4.util.generator.StimGenerator import StimGenerator
 from acq4.pyqtgraph import SpinBox, PlotWidget

@@ -405,8 +405,8 @@ class Manager(QtCore.QObject):
     
     def loadDevice(self, driverName, conf, name):
         """Load the code for a device. For this to work properly, there must be 
-        a python module called lib.devices.driverName which contains a class called driverName."""
-        mod = __import__('lib.devices.%s' % driverName, fromlist=['*'])
+        a python module called acq4.devices.driverName which contains a class called driverName."""
+        mod = __import__('acq4.devices.%s' % driverName, fromlist=['*'])
         devclass = getattr(mod, driverName)
         dev = devclass(self, conf, name)
         with self.lock:
@@ -427,7 +427,7 @@ class Manager(QtCore.QObject):
 
     def loadModule(self, module, name, config=None, forceReload=False):
         """Create a new instance of an acq4 module. For this to work properly, there must be 
-        a python module called lib.modules.moduleName which contains a class called moduleName.
+        a python module called acq4.modules.moduleName which contains a class called moduleName.
         Ugh. Sorry about the "python module" vs "acq4 module" name collision which I
         should have anticipated."""
         
@@ -439,7 +439,7 @@ class Manager(QtCore.QObject):
                 config = {}
         
         #print "  import"
-        mod = __import__('lib.modules.%s' % module, fromlist=['*'])
+        mod = __import__('acq4.modules.%s' % module, fromlist=['*'])
         #if forceReload:
             ### Reload all .py files in module's directory
             #modDir = os.path.join('lib', 'modules', module)
@@ -449,13 +449,13 @@ class Manager(QtCore.QObject):
                 #if f in files:  ## try to rearrange so we load in correct order
                     #files.remove('__init__')
                     #files.append('__init__')
-            #modName = 'lib.modules.' + module
+            #modName = 'acq4.modules.' + module
             #modNames = [modName + '.' + m for m in files] + [modName]
             #print "RELOAD", modNames
             #for m in modNames:
                 #if m in sys.modules:
                     #reload(sys.modules[m])
-            #mod = __import__('lib.modules.%s' % module, fromlist=['*'])
+            #mod = __import__('acq4.modules.%s' % module, fromlist=['*'])
             
         modclass = getattr(mod, module)
         #print "  create"

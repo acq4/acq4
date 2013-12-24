@@ -11,9 +11,9 @@ class FileLogView(LogWidget):
     
     def __init__(self, parent, mod):
         #QtGui.QWidget.__init__(self, parent)
-        #self.manager = lib.Manager.getManager()
+        #self.manager = acq4.Manager.getManager()
         #self.wid = LogWidget(self, self.manager)
-        LogWidget.__init__(self, parent, lib.Manager.getManager())
+        LogWidget.__init__(self, parent, acq4.Manager.getManager())
         
         #self.ui = lib.LogWidgetTemplate.Ui_Form()
         #self.ui.setupUi(self)
