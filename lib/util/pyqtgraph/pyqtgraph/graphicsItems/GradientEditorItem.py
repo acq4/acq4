@@ -1,12 +1,12 @@
-from pyqtgraph.Qt import QtGui, QtCore
-from pyqtgraph.python2_3 import sortList
-import pyqtgraph.functions as fn
+from ..Qt import QtGui, QtCore
+from ..python2_3 import sortList
+from .. import functions as fn
 from .GraphicsObject import GraphicsObject
 from .GraphicsWidget import GraphicsWidget
 import weakref
-from pyqtgraph.pgcollections import OrderedDict
-from pyqtgraph.colormap import ColorMap
-import pyqtgraph as pg
+from ..pgcollections import OrderedDict
+from ..colormap import ColorMap
+from .. import SpinBox
 
 import numpy as np
 
@@ -944,9 +944,9 @@ class TickMenu(QtGui.QMenu):
         dataVal = value=sliderItem.tickDataValue(tick)
         if dataVal == None:
             dataVal = 0
-        self.fracPosSpin = pg.SpinBox()
+        self.fracPosSpin = SpinBox()
         self.fracPosSpin.setOpts(value=sliderItem.tickValue(tick), bounds=(0.0, 1.0), step=0.01, decimals=2)
-        self.dataPosSpin = pg.SpinBox(value=dataVal)
+        self.dataPosSpin = SpinBox(value=dataVal)
         self.dataPosSpin.setOpts(decimals=3, siPrefix=True)
                 
         l.addWidget(QtGui.QLabel("Position (fractional):"), 0,0)
