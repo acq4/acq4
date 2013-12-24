@@ -20,6 +20,7 @@ from ..debug import printExc
 from .. import configfile as configfile
 from .. import dockarea as dockarea
 from . import FlowchartGraphicsView
+from .. import functions as fn
 
 def strDict(d):
     return dict([(str(k), v) for k, v in d.items()])
@@ -325,7 +326,7 @@ class Flowchart(Node):
         #print "DEPS:", deps
         ## determine correct node-processing order
         #deps[self] = []
-        order = pg.toposort(deps)
+        order = fn.toposort(deps)
         #print "ORDER1:", order
         
         ## construct list of operations
@@ -374,7 +375,7 @@ class Flowchart(Node):
                     deps[node].extend(t.dependentNodes())
             
             ## determine order of updates 
-            order = pg.toposort(deps, nodes=[startNode])
+            order = fn.toposort(deps, nodes=[startNode])
             order.reverse()
             
             ## keep track of terminals that have been updated

@@ -2,7 +2,7 @@
 from PyQt4 import QtGui, QtCore
 import acq4.pyqtgraph as pg
 #import acq4.pyqtgraph.TreeWidget as TreeWidget
-import flowchart.EventDetection as FCEventDetection
+import acq4.util.flowchart.EventDetection as FCEventDetection
 import acq4.util.debug as debug
 
 class ScatterPlotter(QtGui.QSplitter):

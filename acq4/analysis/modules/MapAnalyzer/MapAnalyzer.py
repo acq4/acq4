@@ -64,7 +64,7 @@ import numpy as np
 import acq4.analysis.modules.Photostim.Scan as Scan
 from acq4.analysis.modules.Photostim.Map import Map
 import acq4.analysis.tools.poissonScore as poissonScore
-import flowchart.EventDetection as FCEventDetection
+import acq4.util.flowchart.EventDetection as FCEventDetection
 
 
 class MapAnalyzer(AnalysisModule):
