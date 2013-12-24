@@ -11,7 +11,7 @@ from numpy import *
 from metaarray import *
 from taskGUI import *
 from deviceGUI import *
-import ptime as ptime
+import acq4.util.ptime as ptime
 from Mutex import Mutex
 from debug import *
 from acq4.pyqtgraph import Vector, SRTTransform3D

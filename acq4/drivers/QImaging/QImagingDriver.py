@@ -3,7 +3,7 @@ if __name__ == '__main__':
     d = os.path.dirname(__file__)
     sys.path.append(os.path.join(d, '../../util'))
     
-import ptime
+import acq4.util.ptime as ptime
 from ctypes import *
 from clibrary import *
 from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis

@@ -5,7 +5,7 @@ from PyQt4 import QtGui, QtCore
 import debug
 from metaarray import MetaArray
 import numpy as np
-import ptime
+import acq4.util.ptime as ptime
 import acq4.Manager
 
 class RecordThread(QtCore.QThread):

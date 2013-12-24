@@ -18,25 +18,19 @@ import sys, gc
 import acq4.pyqtgraph.exceptionHandling as exceptionHandling   
 exceptionHandling.setTracebackClearing(True)
 
-import time, atexit, weakref, reload
-from PyQt4 import QtCore, QtGui
-if not hasattr(QtCore, 'Signal'):
-    QtCore.Signal = QtCore.pyqtSignal
-    QtCore.Slot = QtCore.pyqtSlot
+import time, atexit, weakref
+from acq4.pyqtgraph.Qt import QtCore, QtGui
+import acq4.util.reload as reload
 
-import DataManager
-from Interfaces import *
-import ptime
-import configfile
-from Mutex import Mutex
-from debug import *
+from .util import DataManager, ptime, configfile
+from .Interfaces import *
+from .util.Mutex import Mutex
+from .util.debug import *
 import getopt, glob
-import ptime
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
-from acq4.pyqtgraph import ProgressDialog
-from LogWindow import LogWindow
-from HelpfulException import HelpfulException
+from .LogWindow import LogWindow
+from .util.HelpfulException import HelpfulException
 
 
 
@@ -800,7 +794,7 @@ class Manager(QtCore.QObject):
             self.alreadyQuit = True
             lm = len(self.modules)
             ld = len(self.devices)
-            with ProgressDialog("Shutting down..", 0, lm+ld, cancelText=None, wait=0) as dlg:
+            with pg.ProgressDialog("Shutting down..", 0, lm+ld, cancelText=None, wait=0) as dlg:
                 self.documentation.quit()
                 print "Requesting all modules shut down.."
                 logMsg("Shutting Down.", importance=9)

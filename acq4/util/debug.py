@@ -6,7 +6,7 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 import sys, traceback, time, gc, re, types, weakref, inspect, os, cProfile
-import ptime
+import acq4.util.ptime as ptime
 from numpy import ndarray
 from PyQt4 import QtCore, QtGui
 try:

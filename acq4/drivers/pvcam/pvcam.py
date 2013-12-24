@@ -4,7 +4,7 @@ import sys, numpy, time, re, os
 from clibrary import *
 from collections import OrderedDict
 from debug import backtrace
-import ptime
+import acq4.util.ptime as ptime
 
 __all__ = ['PVCam']
 

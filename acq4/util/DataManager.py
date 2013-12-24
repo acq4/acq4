@@ -32,7 +32,7 @@ if not hasattr(QtCore, 'Signal'):
 import acq4.filetypes as filetypes
 from debug import *
 import copy
-import advancedTypes
+import acq4.util.advancedTypes as advancedTypes
 
 
 def abspath(fileName):

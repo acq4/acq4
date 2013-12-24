@@ -12,7 +12,7 @@ from SequenceRunner import *
 from Mutex import Mutex, MutexLocker
 from acq4.Manager import getManager, logMsg, logExc
 from debug import *
-import ptime
+import acq4.util.ptime as ptime
 import analysisModules
 import time, gc
 #import sip

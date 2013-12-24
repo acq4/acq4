@@ -5,7 +5,7 @@ import pickle, re, os
 import DataManager, lib.Manager
 import collections
 import functions
-import advancedTypes
+import acq4.util.advancedTypes as advancedTypes
 
 def quoteList(strns):
     """Given a list of strings, return a single string like '"string1", "string2",...'

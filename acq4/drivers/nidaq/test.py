@@ -14,7 +14,7 @@ acq4Path = os.path.abspath(os.path.join(modPath, '..', '..', '..'))
 utilPath = os.path.join(acq4Path, 'lib', 'util')
 sys.path = [acq4Path, utilPath] + sys.path
 from nidaq import LIB as lib
-import ptime
+import acq4.util.ptime as ptime
 
 
 if sys.argv[-1] == 'mock':

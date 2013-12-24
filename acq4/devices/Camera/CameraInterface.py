@@ -3,7 +3,7 @@ from PyQt4 import QtGui, QtCore
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph import SignalProxy, Point
 import acq4.pyqtgraph.dockarea as dockarea
-import ptime
+import acq4.util.ptime as ptime
 from Mutex import Mutex
 import numpy as np
 import scipy.ndimage

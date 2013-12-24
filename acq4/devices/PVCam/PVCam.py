@@ -6,7 +6,7 @@ from PyQt4 import QtCore
 import time, sys, traceback
 from numpy import *
 from metaarray import *
-import ptime as ptime
+import acq4.util.ptime as ptime
 from Mutex import Mutex, MutexLocker
 from debug import *
 

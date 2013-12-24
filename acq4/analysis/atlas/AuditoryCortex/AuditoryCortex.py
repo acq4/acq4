@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #import CtrlTemplate
 #import acq4.pyqtgraph.WidgetGroup
-#import advancedTypes
+#import acq4.util.advancedTypes as advancedTypes
 import collections
 import acq4.analysis.atlas.Atlas as Atlas
 import os

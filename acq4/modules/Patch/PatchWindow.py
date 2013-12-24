@@ -13,7 +13,7 @@ import scipy.optimize
 from debug import *
 from acq4.pyqtgraph import siFormat
 import acq4.Manager as Manager
-import ptime
+import acq4.util.ptime as ptime
 #from acq4.LogWindow import LogButton
 from StatusBar import StatusBar
 

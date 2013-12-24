@@ -8,7 +8,7 @@ from taskGUI import *
 import numpy
 #from scipy.signal import resample, bessel, lfilter
 import scipy.signal, scipy.ndimage
-import advancedTypes
+import acq4.util.advancedTypes as advancedTypes
 from debug import *
 import Mutex
 

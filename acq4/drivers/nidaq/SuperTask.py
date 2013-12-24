@@ -3,7 +3,7 @@
 import time #sys, re, types, ctypes, os, time
 from numpy import *
 #import cheader
-import ptime  ## platform-independent precision timing
+import acq4.util.ptime as ptime  ## platform-independent precision timing
 #import debug
 
 class SuperTask:

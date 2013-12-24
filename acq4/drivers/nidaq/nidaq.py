@@ -4,7 +4,7 @@ import sys, re, types, ctypes, os, time
 from numpy import *
 import numpy as np
 #import cheader
-import ptime  ## platform-independent precision timing
+import acq4.util.ptime as ptime  ## platform-independent precision timing
 import debug
 import clibrary
 import ctypes

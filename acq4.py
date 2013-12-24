@@ -7,16 +7,6 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 
 print "Loading ACQ4..."
 
-## Path adjustments:
-##   - make sure 'lib' path is available for module search
-##   - add util to front of search path. This allows us to override some libs 
-##     that may be installed globally with local versions.
-import sys
-import os.path as osp
-path = osp.dirname(osp.abspath(__file__))
-sys.path = [osp.join(path, 'lib', 'util'), osp.join(path, 'lib', 'util', 'pyqtgraph')] + sys.path + [path]
-
-
 import sip
 sip.setapi('QString', 2)
 sip.setapi('QVariant', 2)
@@ -28,17 +18,8 @@ from acq4.pyqtgraph import renamePyc
 modDir = os.path.abspath(os.path.split(__file__)[0])
 renamePyc(modDir)
 
+from acq4.pyqtgraph.Qt import QtGui, QtCore
 
-#import acq4.util.PySideImporter  ## Use PySide instead of PyQt
-from PyQt4 import QtGui, QtCore
-
-## Needed to keep compatibility between pyside and pyqt
-## (this can go away once the transition to PySide is complete)
-if not hasattr(QtCore, 'Signal'):
-    QtCore.Signal = QtCore.pyqtSignal
-    QtCore.Slot = QtCore.pyqtSlot
-
-    
 from acq4.Manager import *
 from numpy import *
 
@@ -81,6 +62,8 @@ QtCore.qInstallMsgHandler(messageHandler)
 #tr.start()
 
 ## Try a few default config file locations
+import os.path as osp
+path = osp.dirname(osp.abspath(__file__))
 configs = [
     osp.join(path, 'config', 'default.cfg'),
     osp.join(path, 'config', 'example', 'default.cfg'), # last, load the example config

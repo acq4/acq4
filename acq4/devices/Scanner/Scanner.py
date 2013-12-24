@@ -7,7 +7,7 @@ from DeviceGui import ScannerDeviceGui
 from TaskGui import ScannerTaskGui
 from ScanProgramGenerator import *
 import os, pickle 
-import ptime
+import acq4.util.ptime as ptime
 from debug import *
 import numpy as np
 import acq4.pyqtgraph as pg

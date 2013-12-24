@@ -17,7 +17,7 @@ import pickle, re, os
 import DataManager, lib.Manager
 import collections
 import functions
-import advancedTypes
+import acq4.util.advancedTypes as advancedTypes
 import debug
 
 def quoteList(strns):
