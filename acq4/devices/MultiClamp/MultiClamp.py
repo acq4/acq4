@@ -2,14 +2,14 @@
 from __future__ import with_statement
 from acq4.drivers.MultiClamp.MultiClamp import MultiClamp as MultiClampDriver
 from acq4.devices.Device import *
-from metaarray import MetaArray, axis
-from Mutex import Mutex, MutexLocker
+from acq4.util.metaarray import MetaArray, axis
+from acq4.util.Mutex import Mutex, MutexLocker
 from PyQt4 import QtCore
 from numpy import *
 import sys, traceback
 from DeviceGui import *
 from taskGUI import *
-from debug import *
+from acq4.util.debug import *
 
 class MultiClamp(Device):
     

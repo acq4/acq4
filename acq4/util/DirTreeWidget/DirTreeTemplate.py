@@ -96,4 +96,4 @@ class Ui_Form(object):
         self.currentTitleLabel.setText(QtGui.QApplication.translate("Form", "Current Protocol:", None, QtGui.QApplication.UnicodeUTF8))
         self.newDirBtn.setText(QtGui.QApplication.translate("Form", "New Dir", None, QtGui.QApplication.UnicodeUTF8))
 
-from DirTreeWidget import DirTreeWidget
+from acq4.util.DirTreeWidget import DirTreeWidget

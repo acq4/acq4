@@ -1,3 +1,3 @@
 # -*- coding: utf-8 -*-
-from DirTreeWidget import *
+from acq4.util.DirTreeWidget import *
 from DirTreeLoader import *

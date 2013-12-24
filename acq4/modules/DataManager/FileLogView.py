@@ -4,8 +4,8 @@ import acq4.LogWidgetTemplate
 from PyQt4 import QtGui, QtCore
 import acq4.Manager
 from acq4.LogWindow import LogWidget
-import configfile as cf
-import debug
+import acq4.util.configfile as cf
+import acq4.util.debug as debug
 
 class FileLogView(LogWidget):
     

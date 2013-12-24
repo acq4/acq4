@@ -62,7 +62,7 @@ if Image.VERSION == '1.1.6':
 #import png ## better png support than PIL
 
 from numpy import array, ndarray
-from metaarray import MetaArray as MA
+from acq4.util.metaarray import MetaArray as MA
 from FileType import *
 
 #import libtiff

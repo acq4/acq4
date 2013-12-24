@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from acq4.Manager import getManager
-from metaarray import *
+from acq4.util.metaarray import *
 from acq4.pyqtgraph.ImageView import *
 from acq4.pyqtgraph.GraphicsView import *
 from acq4.pyqtgraph.graphicsItems import *
@@ -8,13 +8,13 @@ from acq4.pyqtgraph.graphicsWindows import *
 from acq4.pyqtgraph.PlotWidget import *
 from acq4.pyqtgraph.functions import *
 from acq4.pyqtgraph.widgets import *
-from Canvas import Canvas
+from acq4.util.Canvas import Canvas
 from UncagingControlTemplate import *
 from StdpCtrlTemplate import *
 from PyQt4 import QtCore, QtGui
-from functions import *
+from acq4.util.functions import *
 from SpinBox import *
-from debug import *
+from acq4.util.debug import *
 #from DictView import DictView
 from scipy import stats, signal, ndimage
 from numpy import log

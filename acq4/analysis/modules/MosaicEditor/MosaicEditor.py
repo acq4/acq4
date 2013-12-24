@@ -4,14 +4,14 @@ from acq4.analysis.AnalysisModule import AnalysisModule
 #from flowchart import *
 import os
 from collections import OrderedDict
-import debug
+import acq4.util.debug as debug
 import numpy as np
 import weakref
 #import FileLoader
 #import DatabaseGui
 #import FeedbackButton
 from MosaicEditorTemplate import *
-import DataManager
+import acq4.util.DataManager as DataManager
 import acq4.analysis.atlas as atlas
 
 class MosaicEditor(AnalysisModule):

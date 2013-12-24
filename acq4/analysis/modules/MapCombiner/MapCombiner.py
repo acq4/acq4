@@ -9,7 +9,7 @@ from acq4.analysis.AnalysisModule import AnalysisModule
 import os
 from collections import OrderedDict
 #import DatabaseGui
-from ColorMapper import ColorMapper
+from acq4.util.ColorMapper import ColorMapper
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.parametertree as ptree
 import acq4.pyqtgraph.opengl as gl

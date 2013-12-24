@@ -14,11 +14,12 @@ else:
 
 import numpy as np
 import pickle, re, os
-import DataManager, lib.Manager
+import lib.Manager
+import acq4.util.DataManager as DataManager
 import collections
-import functions
+import acq4.util.functions as functions
 import acq4.util.advancedTypes as advancedTypes
-import debug
+import acq4.util.debug as debug
 
 def quoteList(strns):
     """Given a list of strings, return a single string like '"string1", "string2",...'

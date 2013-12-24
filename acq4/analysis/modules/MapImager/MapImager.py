@@ -3,21 +3,21 @@ import os
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
-from metaarray import MetaArray
+from acq4.util.metaarray import MetaArray
 import numpy as np
 import scipy
-import functions as fn
+import acq4.util.functions as fn
 #import CellHealthCtrlTemplate
-from HelpfulException import HelpfulException
+from acq4.util.HelpfulException import HelpfulException
 from acq4.pyqtgraph.widgets.FileDialog import FileDialog
 import sys
 from DatabaseGui.DatabaseQueryWidget import DatabaseQueryWidget
 from SpatialCorrelator import SpatialCorrelator
 from MapConvolver import MapConvolver
-from ColorMapper import ColorMapper
+from acq4.util.ColorMapper import ColorMapper
 from Canvas.items.ImageCanvasItem import ImageCanvasItem
 from ContourPlotter.ContourPlotter import ContourPlotter
-import debug
+import acq4.util.debug as debug
 
 
 

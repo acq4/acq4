@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from debug import *
+from acq4.util.debug import *
     
 from acq4.devices.Device import *
 import time, traceback, sys
@@ -9,8 +9,8 @@ import numpy
 #from scipy.signal import resample, bessel, lfilter
 import scipy.signal, scipy.ndimage
 import acq4.util.advancedTypes as advancedTypes
-from debug import *
-import Mutex
+from acq4.util.debug import *
+import acq4.util.Mutex as Mutex
 
 class NiDAQ(Device):
     """

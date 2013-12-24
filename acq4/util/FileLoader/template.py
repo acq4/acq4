@@ -71,4 +71,4 @@ class Ui_Form(object):
         self.loadBtn.setText(QtGui.QApplication.translate("Form", "Load File ->", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("Form", "Notes:", None, QtGui.QApplication.UnicodeUTF8))
 
-from DirTreeWidget import DirTreeWidget
+from acq4.util.DirTreeWidget import DirTreeWidget

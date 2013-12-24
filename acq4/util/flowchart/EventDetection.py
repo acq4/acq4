@@ -3,7 +3,7 @@
 from acq4.pyqtgraph.flowchart.library.common import *
 from acq4.pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine
 import numpy as np
-import functions
+import acq4.util.functions as functions
 
 class Threshold(CtrlNode):
     """Absolute threshold detection filter. Returns indexes where data crosses threshold."""

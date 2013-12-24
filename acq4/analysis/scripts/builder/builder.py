@@ -11,8 +11,8 @@ import acq4.pyqtgraph as pg
 #import acq4.pyqtgraph.ProgressDialog as ProgressDialog
 import numpy as np
 import builderTemplate
-import metaarray
-import debug
+import acq4.util.metaarray as metaarray
+import acq4.util.debug as debug
 import user
 
 QtGui.QApplication.setGraphicsSystem('raster')

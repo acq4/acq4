@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 
 from acq4.pyqtgraph.flowchart.library.common import *
-import functions
+import acq4.util.functions as functions
 import numpy as np
 import scipy
 #from acq4.pyqtgraph import graphicsItems
 import acq4.pyqtgraph as pg
-import metaarray
+import acq4.util.metaarray as metaarray
 #import acq4.pyqtgraph.CheckTable as CheckTable
 from collections import OrderedDict
 from acq4.analysis.tools.Fitting import Fitting

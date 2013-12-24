@@ -1,7 +1,7 @@
 from PyQt4 import QtCore, QtGui
 from acq4.modules.Module import *
 import sys, re, os, time, traceback
-import debug
+import acq4.util.debug as debug
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.console as console
 import numpy as np

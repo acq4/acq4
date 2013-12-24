@@ -163,5 +163,5 @@ class Ui_MainWindow(object):
         self.exportSvgBtn.setText(QtGui.QApplication.translate("MainWindow", "SVG", None, QtGui.QApplication.UnicodeUTF8))
         self.exportPngBtn.setText(QtGui.QApplication.translate("MainWindow", "PNG", None, QtGui.QApplication.UnicodeUTF8))
 
-from Canvas import Canvas
-from DirTreeWidget import DirTreeWidget
+from acq4.util.Canvas import Canvas
+from acq4.util.DirTreeWidget import DirTreeWidget

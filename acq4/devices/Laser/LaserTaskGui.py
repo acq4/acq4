@@ -1,10 +1,10 @@
 from PyQt4 import QtGui, QtCore
 from acq4.pyqtgraph import PlotWidget
 from acq4.devices.DAQGeneric import DAQGenericTaskGui
-from SequenceRunner import runSequence
+from acq4.util.SequenceRunner import runSequence
 from acq4.pyqtgraph.functions import siFormat
 import taskTemplate
-from HelpfulException import HelpfulException
+from acq4.util.HelpfulException import HelpfulException
 
 #from FeedbackButton import FeedbackButton
 

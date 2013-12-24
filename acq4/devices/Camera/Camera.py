@@ -2,18 +2,18 @@
 from __future__ import with_statement
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.OptomechDevice import OptomechDevice
-from Mutex import Mutex
+from acq4.util.Mutex import Mutex
 #from acq4.devices.Device import *
 from acq4.devices.Microscope import Microscope
 from PyQt4 import QtCore
 import time
 from numpy import *
-from metaarray import *
+from acq4.util.metaarray import *
 from taskGUI import *
 from deviceGUI import *
 import acq4.util.ptime as ptime
-from Mutex import Mutex
-from debug import *
+from acq4.util.Mutex import Mutex
+from acq4.util.debug import *
 from acq4.pyqtgraph import Vector, SRTTransform3D
 
 from CameraInterface import CameraInterface

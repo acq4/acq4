@@ -1,6 +1,6 @@
 from PyQt4 import QtCore
 import acq4.Manager
-import imageAnalysis
+import acq4.util.imageAnalysis as imageAnalysis
 
 run = True
 man = lib.Manager.getManager()

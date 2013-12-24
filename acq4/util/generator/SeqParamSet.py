@@ -1,8 +1,8 @@
-import units
+import acq4.util.units as units
 from acq4.pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
 import acq4.pyqtgraph as pg
 import numpy as np
-import functions as fn
+import acq4.util.functions as fn
 import sys, collections
 
 

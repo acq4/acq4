@@ -2,11 +2,11 @@
 from PyQt4 import QtCore, QtGui
 import sys
 from acq4.devices.Device import TaskGui
-from SequenceRunner import *
+from acq4.util.SequenceRunner import *
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 import numpy
 from TaskTemplate import *
-from debug import *
+from acq4.util.debug import *
 import sip
 
 class MultiClampTaskGui(TaskGui):

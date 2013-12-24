@@ -1,7 +1,7 @@
 from PyQt4 import QtGui, QtCore
 #import configfile
 from acq4.Manager import getManager, logExc, logMsg
-from Mutex import Mutex
+from acq4.util.Mutex import Mutex
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.OptomechDevice import OptomechDevice
 from LaserDevGui import LaserDevGui
@@ -11,9 +11,9 @@ import time
 import numpy as np
 from scipy import stats
 from acq4.pyqtgraph.functions import siFormat
-from HelpfulException import HelpfulException
+from acq4.util.HelpfulException import HelpfulException
 import acq4.pyqtgraph as pg
-import metaarray
+import acq4.util.metaarray as metaarray
 from acq4.devices.NiDAQ.nidaq import NiDAQ
 
 

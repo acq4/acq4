@@ -56,8 +56,8 @@ from PyQt4 import QtGui, QtCore
 from acq4.analysis.AnalysisModule import AnalysisModule
 import os
 from collections import OrderedDict
-import DatabaseGui
-from ColorMapper import ColorMapper
+import acq4.util.DatabaseGui as DatabaseGui
+from acq4.util.ColorMapper import ColorMapper
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.parametertree as ptree
 import numpy as np

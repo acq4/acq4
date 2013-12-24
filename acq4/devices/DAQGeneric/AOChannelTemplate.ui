@@ -191,7 +191,7 @@
   <customwidget>
    <class>StimGenerator</class>
    <extends>QWidget</extends>
-   <header>generator.StimGenerator</header>
+   <header>acq4.util.generator.StimGenerator</header>
    <container>1</container>
   </customwidget>
   <customwidget>

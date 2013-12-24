@@ -2,9 +2,10 @@
 from PyQt4 import QtSql, QtCore
 import numpy as np
 import pickle, re, os
-import DataManager, lib.Manager
+import lib.Manager
+import acq4.util.DataManager as DataManager
 import collections
-import functions
+import acq4.util.functions as functions
 import acq4.util.advancedTypes as advancedTypes
 
 def quoteList(strns):

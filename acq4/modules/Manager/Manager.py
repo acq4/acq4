@@ -3,8 +3,8 @@ from acq4.modules.Module import *
 from ManagerTemplate import Ui_MainWindow
 from PyQt4 import QtCore, QtGui
 import sys, os
-import configfile
-from debug import *
+import acq4.util.configfile as configfile
+from acq4.util.debug import *
 
 class Manager(Module):
     def __init__(self, manager, name, config):

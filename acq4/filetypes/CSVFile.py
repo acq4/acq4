@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from metaarray import MetaArray as MA
+from acq4.util.metaarray import MetaArray as MA
 from numpy import ndarray, loadtxt
 from FileType import *
 

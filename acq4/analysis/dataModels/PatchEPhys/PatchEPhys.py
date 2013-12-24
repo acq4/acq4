@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-import DataManager
-import SequenceRunner
+import acq4.util.DataManager as DataManager
+import acq4.util.SequenceRunner as SequenceRunner
 from collections import OrderedDict
 import functools
-from metaarray import *
+from acq4.util.metaarray import *
 import numpy as np
 
 protocolNames = {

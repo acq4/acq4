@@ -5,8 +5,8 @@ from numpy import *
 import numpy as np
 #import cheader
 import acq4.util.ptime as ptime  ## platform-independent precision timing
-import debug
-import clibrary
+import acq4.util.debug as debug
+import acq4.util.clibrary as clibrary
 import ctypes
 import SuperTask
 

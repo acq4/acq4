@@ -71,5 +71,5 @@ class Ui_Form(object):
         self.groupBox.setTitle(_translate("Form", "Database Tables", None))
         self.storeBtn.setText(_translate("Form", "Store item positions to DB", None))
 
-from DatabaseGui import DatabaseGui
+from acq4.util.DatabaseGui import DatabaseGui
 from acq4.pyqtgraph.widgets.FeedbackButton import FeedbackButton

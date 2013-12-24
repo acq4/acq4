@@ -30,9 +30,9 @@ from collections import OrderedDict
 import os, shutil, os.path
 import operator
 import acq4.pyqtgraph as pg
-import DatabaseGui
+import acq4.util.DatabaseGui as DatabaseGui
 import PIL as Image
-from metaarray import MetaArray
+from acq4.util.metaarray import MetaArray
 import numpy as np
 import scipy
 import ctrlTemplate
@@ -42,7 +42,7 @@ from acq4.analysis.tools import Utility
 from acq4.analysis.tools import Fitting
 from acq4.analysis.tools import PlotHelpers as PH # matlab plotting helpers
 from acq4.util import functions as FN
-from HelpfulException import HelpfulException
+from acq4.util.HelpfulException import HelpfulException
 
 try:
     import cv2

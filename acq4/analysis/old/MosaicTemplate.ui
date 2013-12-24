@@ -245,13 +245,13 @@
   <customwidget>
    <class>Canvas</class>
    <extends>QWidget</extends>
-   <header>Canvas</header>
+   <header>acq4.util.Canvas</header>
    <container>1</container>
   </customwidget>
   <customwidget>
    <class>DirTreeWidget</class>
    <extends>QTreeWidget</extends>
-   <header>DirTreeWidget</header>
+   <header>acq4.util.DirTreeWidget</header>
   </customwidget>
  </customwidgets>
  <resources/>

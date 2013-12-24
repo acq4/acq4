@@ -14,14 +14,14 @@ makeDispMap / matchDistortImg - for measuring and correcting motion/distortion b
 """
 import sys
 import os, re, math, time, threading, decimal
-from metaarray import *
+from acq4.util.metaarray import *
 #from scipy import *
 #from scipy.optimize import leastsq
 #from scipy.ndimage import gaussian_filter, generic_filter, median_filter
 from scipy import stats
 import scipy.signal, scipy.ndimage, scipy.optimize
 import numpy.ma
-from debug import *
+from acq4.util.debug import *
 import numpy as np
 
 try:

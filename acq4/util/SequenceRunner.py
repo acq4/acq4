@@ -5,7 +5,7 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-from metaarray import *
+from acq4.util.metaarray import *
 import numpy as np
 
 def runSequence(func, params, order, dtype=None, passArgs=False, linkedParams=None):

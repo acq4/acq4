@@ -3,7 +3,7 @@ from __future__ import with_statement
 from acq4.devices.Device import *
 from acq4.pyqtgraph.SignalProxy import SignalProxy
 import serial, os, time
-from Mutex import Mutex, MutexLocker
+from acq4.util.Mutex import Mutex, MutexLocker
 #import pdb
 
 class SerialMouse(Device):

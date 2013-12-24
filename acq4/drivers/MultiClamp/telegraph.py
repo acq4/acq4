@@ -4,7 +4,7 @@ sys.path.append('C:\\cygwin\\home\\Experimenters\\luke\\acq4\\lib\\util')
 from ctypes import *
 import ctypes
 import struct, os
-from clibrary import *
+from acq4.util.clibrary import *
 import time
 import weakref
 

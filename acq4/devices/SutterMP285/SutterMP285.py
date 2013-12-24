@@ -5,8 +5,8 @@ from acq4.devices.OptomechDevice import *
 #import serial, struct
 from acq4.drivers.SutterMP285 import *
 from acq4.drivers.SutterMP285 import SutterMP285 as SutterMP285Driver  ## name collision with device class
-from Mutex import Mutex
-import debug
+from acq4.util.Mutex import Mutex
+import acq4.util.debug as debug
 import os, time
 #import pdb
 import devTemplate

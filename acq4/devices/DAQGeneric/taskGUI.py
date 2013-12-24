@@ -4,13 +4,13 @@ import sys
 from TaskTemplate import *
 from DaqChannelGui import *
 from acq4.devices.Device import TaskGui
-from SequenceRunner import *
+from acq4.util.SequenceRunner import *
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 #from PyQt4 import Qwt5 as Qwt
 from acq4.pyqtgraph import PlotWidget
 import numpy
 import weakref
-from debug import *
+from acq4.util.debug import *
 
 class DAQGenericTaskGui(TaskGui):
     

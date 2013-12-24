@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from acq4.devices.Device import *
 from PyQt4 import QtCore, QtGui
-import Mutex
+import acq4.util.Mutex as Mutex
 
 
 class DIOSwitch(Device):

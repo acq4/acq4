@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import acq4.pyqtgraph as pg
-from HelpfulException import HelpfulException
+from acq4.util.HelpfulException import HelpfulException
 
 class ScanProgramGenerator:
     def __init__(self, dev, command):

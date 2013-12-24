@@ -28,10 +28,10 @@ from acq4.pyqtgraph import ImageView
 import acq4.pyqtgraph as PG
 from acq4.Manager import getManager
 import acq4.Manager
-import InterfaceCombo
+import acq4.util.InterfaceCombo as InterfaceCombo
 import acq4.pyqtgraph.parametertree as PT
 import numpy as NP
-import metaarray as MA
+import acq4.util.metaarray as MA
 import time
 import pprint
 from .imagerTemplate import Ui_Form

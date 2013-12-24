@@ -6,12 +6,12 @@ from PyQt4 import QtCore, QtGui
 from acq4.Manager import getManager, logMsg, logExc
 import random
 import numpy as np
-from debug import Profiler
+from acq4.util.debug import Profiler
 import optimize ## for determining random scan patterns
 #import ForkedIterator
 import os, sys
 import acq4.pyqtgraph as pg
-from HelpfulException import HelpfulException
+from acq4.util.HelpfulException import HelpfulException
 import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 

@@ -2,7 +2,7 @@
 from PyQt4 import QtCore, QtGui
 import atlasCtrlTemplate
 import acq4.pyqtgraph as pg
-from debug import Profiler
+from acq4.util.debug import Profiler
 
 class Atlas(QtCore.QObject):
     

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from ctypes import *
 import sys, numpy, time, re, os
-from clibrary import *
+from acq4.util.clibrary import *
 from collections import OrderedDict
-from debug import backtrace
+from acq4.util.debug import backtrace
 import acq4.util.ptime as ptime
 
 __all__ = ['PVCam']

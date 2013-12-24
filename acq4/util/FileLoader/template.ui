@@ -98,7 +98,7 @@
   <customwidget>
    <class>DirTreeWidget</class>
    <extends>QTreeWidget</extends>
-   <header>DirTreeWidget</header>
+   <header>acq4.util.DirTreeWidget</header>
   </customwidget>
  </customwidgets>
  <resources/>

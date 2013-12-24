@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from DirTreeTemplate import Ui_Form
 from PyQt4 import QtGui,QtCore
-from debug import *
-import DataManager
+from acq4.util.debug import *
+import acq4.util.DataManager as DataManager
 
 class DirTreeLoader(QtGui.QWidget):
     

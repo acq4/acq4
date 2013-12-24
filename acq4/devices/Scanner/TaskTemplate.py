@@ -220,4 +220,4 @@ class Ui_Form(object):
 
 from acq4.pyqtgraph.parametertree import ParameterTree
 from acq4.pyqtgraph import SpinBox, PlotWidget
-from InterfaceCombo import InterfaceCombo
+from acq4.util.InterfaceCombo import InterfaceCombo

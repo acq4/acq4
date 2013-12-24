@@ -6,12 +6,12 @@ import collections
 import acq4.analysis.atlas.Atlas as Atlas
 import os
 from PyQt4 import QtCore, QtGui
-import DataManager
+import acq4.util.DataManager as DataManager
 from acq4.analysis.atlas.AuditoryCortex.CortexROI import CortexROI
 import numpy as np
 import acq4.pyqtgraph as pg
 import scipy
-from debug import Profiler
+from acq4.util.debug import Profiler
 
 
 

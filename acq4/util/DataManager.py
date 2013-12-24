@@ -17,11 +17,11 @@ if __name__ == '__main__':
 #from __future__ import with_statement
 import threading, os, re, sys, shutil
 ##  import fcntl  ## linux only?
-from functions import strncmp
-from configfile import *
+from acq4.util.functions import strncmp
+from acq4.util.configfile import *
 #from metaarray import MetaArray
 import time
-from Mutex import Mutex, MutexLocker
+from acq4.util.Mutex import Mutex, MutexLocker
 from acq4.pyqtgraph import SignalProxy, ProgressDialog
 #from acq4.pyqtgraph.ProgressDialog import ProgressDialog
 from PyQt4 import QtCore, QtGui
@@ -30,7 +30,7 @@ if not hasattr(QtCore, 'Signal'):
     QtCore.Slot = QtCore.pyqtSlot
 #from acq4.filetypes.FileType import *
 import acq4.filetypes as filetypes
-from debug import *
+from acq4.util.debug import *
 import copy
 import acq4.util.advancedTypes as advancedTypes
 

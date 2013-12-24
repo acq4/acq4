@@ -2,12 +2,12 @@ from PyQt4 import QtGui, QtCore
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
-from metaarray import MetaArray
+from acq4.util.metaarray import MetaArray
 import numpy as np
 import scipy
-import functions as fn
+import acq4.util.functions as fn
 import CellHealthCtrlTemplate
-from HelpfulException import HelpfulException
+from acq4.util.HelpfulException import HelpfulException
 from acq4.pyqtgraph.widgets.FileDialog import FileDialog
 import sys
 

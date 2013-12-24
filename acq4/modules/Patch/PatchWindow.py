@@ -5,17 +5,17 @@ from PyQt4 import QtGui, QtCore
 #from PyQt4 import Qwt5 as Qwt
 from acq4.pyqtgraph import WidgetGroup
 from acq4.pyqtgraph import PlotWidget
-from metaarray import *
-from Mutex import Mutex, MutexLocker
+from acq4.util.metaarray import *
+from acq4.util.Mutex import Mutex, MutexLocker
 import traceback, sys, time
 from numpy import *
 import scipy.optimize
-from debug import *
+from acq4.util.debug import *
 from acq4.pyqtgraph import siFormat
 import acq4.Manager as Manager
 import acq4.util.ptime as ptime
 #from acq4.LogWindow import LogButton
-from StatusBar import StatusBar
+from acq4.util.StatusBar import StatusBar
 
 
 class PatchWindow(QtGui.QMainWindow):

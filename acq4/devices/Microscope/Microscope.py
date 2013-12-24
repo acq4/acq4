@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from acq4.devices.OptomechDevice import *
 from deviceTemplate import Ui_Form
-from Mutex import Mutex
+from acq4.util.Mutex import Mutex
 import acq4.pyqtgraph as pg
 import collections
 

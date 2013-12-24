@@ -1,7 +1,7 @@
 from PyQt4 import QtGui, QtCore
 import SpatialCorrelatorCtrlTemplate
 import math
-from HelpfulException import HelpfulException
+from acq4.util.HelpfulException import HelpfulException
 import numpy as np
 import acq4.pyqtgraph as pg
 import acq4.analysis.tools.functions as fn

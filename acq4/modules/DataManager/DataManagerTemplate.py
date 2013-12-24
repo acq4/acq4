@@ -184,5 +184,5 @@ class Ui_MainWindow(object):
         self.logDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Current Log", None, QtGui.QApplication.UnicodeUTF8))
 
 from FileInfoView import FileInfoView
-from DirTreeWidget import DirTreeWidget
+from acq4.util.DirTreeWidget import DirTreeWidget
 from FileDataView import FileDataView

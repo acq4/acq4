@@ -4,8 +4,8 @@ from CanvasItem import CanvasItem
 import numpy as np
 import scipy.ndimage as ndimage
 import acq4.pyqtgraph as pg
-import DataManager
-import debug
+import acq4.util.DataManager as DataManager
+import acq4.util.debug as debug
 
 class ImageCanvasItem(CanvasItem):
     def __init__(self, image=None, **opts):

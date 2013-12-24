@@ -8,7 +8,7 @@ Functions for accessing available fileTypes. Generally these are used by DataMan
 and should not be accessed directly.
 """
 import os
-import debug
+import acq4.util.debug as debug
 
 KNOWN_FILE_TYPES = None
     

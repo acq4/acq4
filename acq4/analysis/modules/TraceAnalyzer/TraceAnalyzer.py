@@ -6,10 +6,10 @@ from PyQt4 import QtGui, QtCore
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
-from metaarray import MetaArray
+from acq4.util.metaarray import MetaArray
 import numpy as np
-from DirTreeWidget import DirTreeLoader
-from FileLoader import FileLoader
+from acq4.util.DirTreeWidget import DirTreeLoader
+from acq4.util.FileLoader import FileLoader
 import acq4.pyqtgraph.flowchart as fc
 import acq4.pyqtgraph.debug as debug
 import os

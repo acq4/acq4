@@ -6,9 +6,9 @@ from PyQt4 import QtGui, QtCore
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
-from metaarray import MetaArray
+from acq4.util.metaarray import MetaArray
 import numpy as np
-import functions as fn
+import acq4.util.functions as fn
 #import acq4.pyqtgraph.ProgressDialog as ProgressDialog
 import scipy.optimize
 

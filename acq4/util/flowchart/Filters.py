@@ -2,9 +2,9 @@
 from acq4.pyqtgraph.flowchart.Node import Node
 from PyQt4 import QtGui, QtCore
 import numpy as np
-import metaarray
+import acq4.util.metaarray as metaarray
 from acq4.pyqtgraph.flowchart.library.common import *
-import functions
+import acq4.util.functions as functions
 
 
 class ExpDeconvolve(CtrlNode):

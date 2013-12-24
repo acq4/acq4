@@ -209,4 +209,4 @@ class Ui_Form(object):
         self.label_8.setText(_translate("Form", "Y", None))
 
 from acq4.pyqtgraph import ImageView
-from InterfaceCombo import InterfaceCombo
+from acq4.util.InterfaceCombo import InterfaceCombo

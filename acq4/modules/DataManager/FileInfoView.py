@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 from FileInfoViewTemplate import *
 from PyQt4 import QtCore, QtGui
-from DataManager import DirHandle
+from acq4.util.DataManager import DirHandle
 import acq4.Manager as Manager
 #import sip
 import time
-import configfile
-from DictView import *
+import acq4.util.configfile as configfile
+from acq4.util.DictView import *
 
 class FocusEventCatcher(QtCore.QObject):
     

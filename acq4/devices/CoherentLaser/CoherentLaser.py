@@ -2,8 +2,8 @@
 from acq4.devices.Laser import *
 #import serial, struct
 from acq4.drivers.Coherent import *
-from Mutex import Mutex
-import debug
+from acq4.util.Mutex import Mutex
+import acq4.util.debug as debug
 import time
 
 class CoherentLaser(Laser):

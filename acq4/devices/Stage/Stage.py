@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from acq4.devices.Device import *
 from acq4.devices.OptomechDevice import *
-from Mutex import Mutex
+from acq4.util.Mutex import Mutex
 import acq4.pyqtgraph as pg
 
 class Stage(Device, OptomechDevice):

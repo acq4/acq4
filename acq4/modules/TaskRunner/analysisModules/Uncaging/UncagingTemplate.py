@@ -116,4 +116,4 @@ class Ui_Form(object):
     def retranslateUi(self, Form):
         pass
 
-from InterfaceCombo import InterfaceCombo
+from acq4.util.InterfaceCombo import InterfaceCombo

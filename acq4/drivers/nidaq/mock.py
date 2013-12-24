@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import sys, time, os
 import numpy as np
-import clibrary
+import acq4.util.clibrary as clibrary
 
 modDir = os.path.dirname(__file__)
 headerFiles = [os.path.join(modDir, "NIDAQmx.h")]

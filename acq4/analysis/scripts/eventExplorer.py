@@ -4,7 +4,7 @@ import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.opengl as gl
 
 import numpy as np
-import functions as fn
+import acq4.util.functions as fn
 import re
 man = lib.Manager.getManager() 
 

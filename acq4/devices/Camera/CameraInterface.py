@@ -4,12 +4,12 @@ import acq4.pyqtgraph as pg
 from acq4.pyqtgraph import SignalProxy, Point
 import acq4.pyqtgraph.dockarea as dockarea
 import acq4.util.ptime as ptime
-from Mutex import Mutex
+from acq4.util.Mutex import Mutex
 import numpy as np
 import scipy.ndimage
-from debug import *
-import debug
-from metaarray import *
+from acq4.util.debug import *
+import acq4.util.debug as debug
+from acq4.util.metaarray import *
 import acq4.Manager as Manager
 from RecordThread import RecordThread
 from CameraInterfaceTemplate import Ui_Form as CameraInterfaceTemplate

@@ -139,4 +139,4 @@ class Ui_MainWindow(object):
         self.addTableBtn.setText(QtGui.QApplication.translate("MainWindow", "Table", None, QtGui.QApplication.UnicodeUTF8))
         self.removeDockBtn.setText(QtGui.QApplication.translate("MainWindow", "Remove", None, QtGui.QApplication.UnicodeUTF8))
 
-from InterfaceCombo import InterfaceCombo
+from acq4.util.InterfaceCombo import InterfaceCombo

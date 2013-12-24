@@ -2,7 +2,7 @@
 from PyQt4 import QtGui, QtCore
 from collections import OrderedDict
 from Map import Map
-import DatabaseGui
+import acq4.util.DatabaseGui as DatabaseGui
 import MapCtrlTemplate
 from acq4.Manager import logMsg, logExc
 import acq4.pyqtgraph as pg

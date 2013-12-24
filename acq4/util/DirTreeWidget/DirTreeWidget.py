@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
-from DataManager import *
-from debug import *
+from acq4.util.DataManager import *
+from acq4.util.debug import *
 import os
 
 

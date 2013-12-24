@@ -5,12 +5,12 @@
 from PyQt4 import QtGui, QtCore
 from acq4.analysis.AnalysisModule import AnalysisModule
 from acq4.util.pyqtgraph.functions import mkPen
-from flowchart import *
+from acq4.util.flowchart import *
 import os
 from collections import OrderedDict
-import debug
-import FileLoader
-import DatabaseGui
+import acq4.util.debug as debug
+import acq4.util.FileLoader as FileLoader
+import acq4.util.DatabaseGui as DatabaseGui
 import FeedbackButton
 
 class IVCurve(AnalysisModule):

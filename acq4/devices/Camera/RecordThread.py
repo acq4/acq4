@@ -1,9 +1,9 @@
 import time
 from acq4.filetypes.ImageFile import *
-from Mutex import Mutex
+from acq4.util.Mutex import Mutex
 from PyQt4 import QtGui, QtCore
-import debug
-from metaarray import MetaArray
+import acq4.util.debug as debug
+from acq4.util.metaarray import MetaArray
 import numpy as np
 import acq4.util.ptime as ptime
 import acq4.Manager

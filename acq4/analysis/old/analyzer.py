@@ -2,14 +2,14 @@
 
 from acq4.Manager import getManager
 from AnalyzerTemplate import *
-from flowchart import *
+from acq4.util.flowchart import *
 from PyQt4 import QtGui, QtCore
-from DirTreeWidget import DirTreeLoader
+from acq4.util.DirTreeWidget import DirTreeLoader
 from acq4.pyqtgraph.PlotWidget import *
-from Canvas import *
-import configfile
+from acq4.util.Canvas import *
+import acq4.util.configfile as configfile
 import pickle
-from DataManager import getHandle
+from acq4.util.DataManager import getHandle
 
 class Analyzer(QtGui.QMainWindow):
     def __init__(self, protoDir, parent=None):

@@ -2,13 +2,13 @@ from PyQt4 import QtGui, QtCore
 from acq4.analysis.AnalysisModule import AnalysisModule
 #import acq4.analysis.modules.EventDetector as EventDetector
 #import MapCtrlTemplate
-import DatabaseGui
+import acq4.util.DatabaseGui as DatabaseGui
 #from flowchart import *
 #import flowchart.library.EventDetection as FCEventDetection
 import os
 from collections import OrderedDict
-import debug
-import ColorMapper
+import acq4.util.debug as debug
+import acq4.util.ColorMapper as ColorMapper
 import acq4.pyqtgraph as pg
 #import acq4.pyqtgraph.TreeWidget as TreeWidget
 

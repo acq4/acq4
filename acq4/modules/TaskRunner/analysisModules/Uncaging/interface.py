@@ -6,8 +6,8 @@ from UncagingTemplate import Ui_Form
 #from acq4.pyqtgraph import ImageItem
 from numpy import *
 from scipy.ndimage.filters import gaussian_filter
-from metaarray import MetaArray
-from debug import *
+from acq4.util.metaarray import MetaArray
+from acq4.util.debug import *
 
 class UncagingModule(AnalysisModule):
     def __init__(self, *args):

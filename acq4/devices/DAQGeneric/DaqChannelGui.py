@@ -3,7 +3,7 @@
 from PyQt4 import QtGui, QtCore
 #from PyQt4 import Qwt5 as Qwt
 import AOChannelTemplate, DOChannelTemplate, InputChannelTemplate
-from SequenceRunner import *
+from acq4.util.SequenceRunner import *
 #from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 #from acq4.pyqtgraph.PlotWidget import PlotCurveItem
 import numpy

@@ -1,6 +1,6 @@
-from database import *
+from acq4.util.database import *
 from acq4.pyqtgraph.widgets.ProgressDialog import ProgressDialog
-import debug
+import acq4.util.debug as debug
 from acq4.Manager import logExc, logMsg
 
 

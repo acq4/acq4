@@ -91,7 +91,7 @@
   <customwidget>
    <class>DatabaseGui</class>
    <extends>QWidget</extends>
-   <header>DatabaseGui</header>
+   <header>acq4.util.DatabaseGui</header>
    <container>1</container>
   </customwidget>
   <customwidget>

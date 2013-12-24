@@ -5,9 +5,9 @@ from PyQt4 import QtCore
 import time, sys, traceback
 #from metaarray import *
 import acq4.util.ptime as ptime
-from Mutex import Mutex, MutexLocker
-from debug import *
-import functions as fn
+from acq4.util.Mutex import Mutex, MutexLocker
+from acq4.util.debug import *
+import acq4.util.functions as fn
 #from collections import OrderedDict
 import numpy as np
 import scipy

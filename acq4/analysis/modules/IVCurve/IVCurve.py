@@ -15,7 +15,7 @@ from PyQt4 import QtGui, QtCore
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
-from metaarray import MetaArray
+from acq4.util.metaarray import MetaArray
 import numpy
 import scipy.signal
 import os
@@ -49,7 +49,7 @@ pylab.rcParams['text.dvipnghack'] = True
 import acq4.analysis.tools.Utility as Utility   # pbm's utilities...
 import acq4.analysis.tools.Fitting as Fitting   # pbm's fitting stuff...
 import ctrlTemplate
-import debug
+import acq4.util.debug as debug
 
 
 class IVCurve(AnalysisModule):

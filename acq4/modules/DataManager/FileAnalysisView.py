@@ -3,7 +3,7 @@
 
 from PyQt4 import QtCore, QtGui
 import os
-import database
+import acq4.util.database as database
 from AnalysisTemplate import *
 import acq4.Manager
 import acq4.analysis.modules as analysis

@@ -3,7 +3,7 @@ import sys
 sys.path.append('C:\\cygwin\\home\\Experimenters\\luke\\acq4\\lib\\util')
 import ctypes
 import struct, os, threading, time, weakref
-from clibrary import *
+from acq4.util.clibrary import *
 #from Mutex import *
 
 __all__ = ['MultiClampTelegraph', 'wmlib']

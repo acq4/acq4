@@ -83,4 +83,4 @@ class Ui_Form(object):
         self.label_4.setText(_translate("Form", "ROI alpha", None))
 
 from acq4.pyqtgraph import ImageView
-from InterfaceCombo import InterfaceCombo
+from acq4.util.InterfaceCombo import InterfaceCombo

@@ -11,7 +11,7 @@ Includes:
 """
 
 import threading, sys, copy, collections
-from debug import *
+from acq4.util.debug import *
 
 from collections import OrderedDict
 ## Deprecated; this class is now present in Python 2.7 as collections.OrderedDict

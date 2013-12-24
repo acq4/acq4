@@ -3,7 +3,7 @@ from PyQt4 import QtGui, QtCore
 import acq4.pyqtgraph as pg
 #import acq4.pyqtgraph.TreeWidget as TreeWidget
 import flowchart.EventDetection as FCEventDetection
-import debug
+import acq4.util.debug as debug
 
 class ScatterPlotter(QtGui.QSplitter):
     ### Draws scatter plots, allows the user to pick which data is used for x and y axes.

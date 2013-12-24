@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import template
 from PyQt4 import QtCore, QtGui
-from HelpfulException import HelpfulException
+from acq4.util.HelpfulException import HelpfulException
 from acq4.Manager import logMsg, logExc, getManager
 
 

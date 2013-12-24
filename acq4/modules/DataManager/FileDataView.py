@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 
 from PyQt4 import QtCore, QtGui
-from DataManager import *
+from acq4.util.DataManager import *
 #import acq4.Manager as Manager
 import acq4.pyqtgraph as pg
 #from acq4.pyqtgraph.MultiPlotWidget import MultiPlotWidget
 #from acq4.pyqtgraph.ImageView import ImageView
-from DictView import *
-import metaarray
+from acq4.util.DictView import *
+import acq4.util.metaarray as metaarray
 import weakref
 
 class FileDataView(QtGui.QSplitter):

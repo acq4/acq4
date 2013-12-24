@@ -2,14 +2,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui, DataMapping
-from Mutex import Mutex, MutexLocker
+from acq4.util.Mutex import Mutex, MutexLocker
 #from acq4.devices.Device import *
 from PyQt4 import QtCore, QtGui
 import time
 import numpy as np
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 from collections import OrderedDict
-from debug import printExc
+from acq4.util.debug import printExc
 from devGuiTemplate import *
 
 # telegraph voltage/output translation from the Axopatch 200 amplifier

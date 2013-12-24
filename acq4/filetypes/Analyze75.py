@@ -2,7 +2,7 @@
 
 from FileType import *
 import numpy as np
-from metaarray import MetaArray
+from acq4.util.metaarray import MetaArray
 
 class Analyze75(FileType):
     extensions = ['.nii', '.hdr']   ## list of extensions handled by this class

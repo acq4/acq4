@@ -10,7 +10,7 @@ from acq4.pyqtgraph import GradientWidget
 import numpy as np
 import CMTemplate
 import os
-import configfile
+import acq4.util.configfile as configfile
 
 class ColorMapper(QtGui.QWidget):
     

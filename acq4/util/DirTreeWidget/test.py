@@ -6,9 +6,9 @@ d1 = os.path.split(d)[0]
 d2 = os.path.split(d1)[0]
 sys.path.extend([d1, d2])
 
-from DirTreeWidget import *
+from acq4.util.DirTreeWidget import *
 from DirTreeLoader import *
-from DataManager import *
+from acq4.util.DataManager import *
 from PyQt4 import QtCore,QtGui
 
 app = QtGui.QApplication([])

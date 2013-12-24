@@ -2,16 +2,16 @@
 from acq4.devices.Device import *
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.Manager import logMsg, logExc
-from Mutex import Mutex, MutexLocker
+from acq4.util.Mutex import Mutex, MutexLocker
 from DeviceGui import ScannerDeviceGui
 from TaskGui import ScannerTaskGui
 from ScanProgramGenerator import *
 import os, pickle 
 import acq4.util.ptime as ptime
-from debug import *
+from acq4.util.debug import *
 import numpy as np
 import acq4.pyqtgraph as pg
-from HelpfulException import HelpfulException
+from acq4.util.HelpfulException import HelpfulException
 
 class Scanner(Device, OptomechDevice):
     

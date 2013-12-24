@@ -2,9 +2,9 @@
 from ctypes import *
 import ctypes
 import struct, os, threading
-from clibrary import *
+from acq4.util.clibrary import *
 from MultiClampTelegraph import *
-from debug import *
+from acq4.util.debug import *
 
 
 #import atexit

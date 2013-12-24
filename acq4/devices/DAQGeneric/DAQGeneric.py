@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 from acq4.devices.Device import *
-from metaarray import MetaArray, axis
-from Mutex import Mutex
+from acq4.util.metaarray import MetaArray, axis
+from acq4.util.Mutex import Mutex
 import numpy as np
 from taskGUI import *
-from debug import *
+from acq4.util.debug import *
 from acq4.pyqtgraph import siFormat
 import DeviceTemplate
 

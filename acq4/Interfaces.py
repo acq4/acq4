@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import weakref
-from Mutex import *
+from acq4.util.Mutex import *
 
 
 class InterfaceDirectory(QtCore.QObject):

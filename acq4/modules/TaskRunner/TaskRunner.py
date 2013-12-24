@@ -4,23 +4,23 @@ from acq4.modules.Module import *
 from TaskRunnerTemplate import *
 from PyQt4 import QtGui, QtCore
 #from DirTreeModel import *
-import DirTreeWidget
-import configfile
+import acq4.util.DirTreeWidget as DirTreeWidget
+import acq4.util.configfile as configfile
 from collections import OrderedDict
-from SequenceRunner import *
+from acq4.util.SequenceRunner import *
 #from acq4.pyqtgraph.WidgetGroup import WidgetGroup
-from Mutex import Mutex, MutexLocker
+from acq4.util.Mutex import Mutex, MutexLocker
 from acq4.Manager import getManager, logMsg, logExc
-from debug import *
+from acq4.util.debug import *
 import acq4.util.ptime as ptime
 import analysisModules
 import time, gc
 #import sip
 import sys, os
-from HelpfulException import HelpfulException
+from acq4.util.HelpfulException import HelpfulException
 #from acq4.LogWindow import LogButton
 import acq4.pyqtgraph as pg
-from StatusBar import StatusBar
+from acq4.util.StatusBar import StatusBar
 
 
 #import pdb

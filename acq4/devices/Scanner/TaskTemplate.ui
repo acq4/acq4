@@ -399,7 +399,7 @@ p, li { white-space: pre-wrap; }
   <customwidget>
    <class>InterfaceCombo</class>
    <extends>QComboBox</extends>
-   <header>InterfaceCombo</header>
+   <header>acq4.util.InterfaceCombo</header>
   </customwidget>
   <customwidget>
    <class>SpinBox</class>

@@ -976,7 +976,7 @@ class Task:
         #print "======================="
         
         ## We need to make sure devices are stopped and unlocked properly if anything goes wrong..
-        from debug import Profiler
+        from acq4.util.debug import Profiler
         prof = Profiler('Manager.Task.execute', disabled=True)
         try:
         

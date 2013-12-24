@@ -4,7 +4,7 @@ import modules
 import acq4.pyqtgraph.dockarea as dockarea
 import acq4.Manager
 #from acq4.LogWindow import LogButton
-from StatusBar import StatusBar
+from acq4.util.StatusBar import StatusBar
 
 class AnalysisHost(QtGui.QMainWindow):
     """Window for hosting analysis widgets.

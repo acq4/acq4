@@ -5,10 +5,10 @@ from acq4.drivers.pvcam import PVCam as PVCDriver
 from PyQt4 import QtCore
 import time, sys, traceback
 from numpy import *
-from metaarray import *
+from acq4.util.metaarray import *
 import acq4.util.ptime as ptime
-from Mutex import Mutex, MutexLocker
-from debug import *
+from acq4.util.Mutex import Mutex, MutexLocker
+from acq4.util.debug import *
 
 class PVCam(Camera):
     def __init__(self, *args, **kargs):

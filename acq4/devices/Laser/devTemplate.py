@@ -299,4 +299,4 @@ class Ui_Form(object):
         self.qSwitchBtn.setText(_translate("Form", "Turn On QSwitch", None))
 
 from acq4.pyqtgraph import SpinBox
-from InterfaceCombo import InterfaceCombo
+from acq4.util.InterfaceCombo import InterfaceCombo

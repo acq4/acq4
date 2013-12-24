@@ -14,16 +14,16 @@ import sys, types, re
 import numpy as np
 from PyQt4 import QtCore, QtGui
 from collections import OrderedDict
-import functions as fn
+import acq4.util.functions as fn
 from GeneratorTemplate import *
 import waveforms
-from debug import *
+from acq4.util.debug import *
 
 #from acq4.pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
 from StimParamSet import StimParamSet
 from SeqParamSet import SequenceParamSet
 
-import units
+import acq4.util.units as units
 
 class StimGenerator(QtGui.QWidget):
     

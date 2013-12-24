@@ -5,17 +5,17 @@ import acq4.analysis.modules.EventDetector as EventDetector
 from acq4.pyqtgraph.flowchart import *
 import os
 from collections import OrderedDict
-import debug
-import ColorMapper
+import acq4.util.debug as debug
+import acq4.util.ColorMapper as ColorMapper
 import acq4.pyqtgraph as pg
 #import acq4.pyqtgraph.ProgressDialog as ProgressDialog
-from HelpfulException import HelpfulException
+from acq4.util.HelpfulException import HelpfulException
 from Scan import Scan, loadScanSequence
 from DBCtrl import DBCtrl
 from ScatterPlotter import ScatterPlotter
-from Canvas import items
-import Canvas
-import functions as fn
+from acq4.util.Canvas import items
+import acq4.util.Canvas as Canvas
+import acq4.util.functions as fn
 
 class Photostim(AnalysisModule):
     """

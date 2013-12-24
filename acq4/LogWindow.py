@@ -10,13 +10,13 @@ if __name__ == "__main__":
 from PyQt4 import QtGui, QtCore
 import LogWidgetTemplate
 from acq4.pyqtgraph import FeedbackButton
-import configfile
-from DataManager import DirHandle
-from HelpfulException import HelpfulException
-from Mutex import Mutex
+import acq4.util.configfile as configfile
+from acq4.util.DataManager import DirHandle
+from acq4.util.HelpfulException import HelpfulException
+from acq4.util.Mutex import Mutex
 import numpy as np
 from acq4.pyqtgraph import FileDialog
-from debug import printExc
+from acq4.util.debug import printExc
 import weakref
 import re
 

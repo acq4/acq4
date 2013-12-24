@@ -4,9 +4,9 @@ import numpy as np
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.multiprocess as mp
 import time, os
-import Canvas
+import acq4.util.Canvas as Canvas
 import collections
-import functions as fn
+import acq4.util.functions as fn
 
 def loadScanSequence(fh, host):
     ## Load a scan (or sequence of scans) from fh,
