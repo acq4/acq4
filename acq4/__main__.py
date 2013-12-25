@@ -14,13 +14,13 @@ sip.setapi('QVariant', 2)
 ## rename any orphaned .pyc files -- these are probably leftover from 
 ## a module being moved and may interfere with expected operation.
 import os, sys
-from acq4.pyqtgraph import renamePyc
+from .pyqtgraph import renamePyc
 modDir = os.path.abspath(os.path.split(__file__)[0])
 renamePyc(modDir)
 
-from acq4.pyqtgraph.Qt import QtGui, QtCore
+from .pyqtgraph.Qt import QtGui, QtCore
 
-from acq4.Manager import *
+from .Manager import *
 from numpy import *
 
 ## Initialize Qt
@@ -96,7 +96,7 @@ if config == configs[-1]:
 #QtCore.pyqtRemoveInputHook()
 
 ## Start Qt event loop unless running in interactive mode.
-interactive = (sys.flags.interactive == 1) and ('acq4.util.PySideImporter' not in sys.modules)
+interactive = (sys.flags.interactive == 1) and not pyqtgraph.Qt.USE_PYSIDE
 
 ## Run python code periodically to allow interactive debuggers to interrupt the qt event loop
 timer = QtCore.QTimer()
@@ -112,9 +112,9 @@ if interactive:
     print "Interactive mode; not starting event loop."
     
     ## import some things useful on the command line
-    from acq4.util.debug import *
-    import acq4.pyqtgraph as pg
-    import acq4.util.functions as fn
+    from .util.debug import *
+    from . import pyqtgraph as pg
+    from .util import functions as fn
     import numpy as np
 
     ### Use CLI history and tab completion
