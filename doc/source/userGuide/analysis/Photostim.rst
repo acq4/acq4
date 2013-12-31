@@ -1,2 +1,0 @@
-Photostimulation Mapping
-========================
