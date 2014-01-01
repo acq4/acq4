@@ -48,7 +48,7 @@ class PatchWindow(QtGui.QMainWindow):
             'icPulse': -30e-12,
             'vcPulse': -10e-3,
             'icHolding': 0,
-            'vcHolding': -50e-3,
+            'vcHolding': -65e-3,
             'icHoldingEnabled': False,
             'icPulseEnabled': True,
             'vcHoldingEnabled': False,

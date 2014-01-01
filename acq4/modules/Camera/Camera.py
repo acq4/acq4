@@ -7,8 +7,8 @@ from PyQt4 import QtGui
 class Camera(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
-        camDev = self.config['camDev']
-        self.cam = self.manager.getDevice(camDev)
+        #camDev = self.config['camDev']
+        #self.cam = self.manager.getDevice(camDev)
         self.ui = CameraWindow(self)
         mp = os.path.dirname(__file__)
         self.ui.setWindowIcon(QtGui.QIcon(os.path.join(mp, 'icon.png')))
