@@ -10,39 +10,36 @@ class CortexROI(ROI.PolyLineROI):
     def __init__(self, pos, state=None):
         ROI.PolyLineROI.__init__(self, [[0,0], [2,0], [2,1], [0,1]], pos=pos, closed=True, pen=pg.mkPen(50,50, 255, 200))
         
-        #self.scale(1e-3, 1e-3)
-        
         ## don't let the user add handles to the sides, only to the top and bottom
-        #self.segments[1].setAcceptsHandles(False)
-        self.segments[1].setAcceptedMouseButtons(QtCore.Qt.NoButton)
-        #self.segments[3].setAcceptsHandles(False)
-        self.segments[3].setAcceptedMouseButtons(QtCore.Qt.NoButton)
-        
-        
-         
-        
+        self.segments[0].setAcceptedMouseButtons(QtCore.Qt.NoButton)
+        #self.segments[1].setAcceptedMouseButtons(QtCore.Qt.NoButton) ## there was a change in PolylineROI that affected the order of segments, so now 0 and 2 are the sides instead of 1 and 3 (2013.12.12)
+        self.segments[2].setAcceptedMouseButtons(QtCore.Qt.NoButton)
+        #self.segments[3].setAcceptedMouseButtons(QtCore.Qt.NoButton)
+
         if state is not None:
             self.setState(state)
-        #self.layerLines = []
-        #for i in range(4):
-        #    self.layerLines.append(ROI.LineSegmentROI([[0, 0.2*(i+1)], [2, 0.2*(i+1)]], parent=self))
+        
+    
     def setState(self, state):
-        ROI.PolyLineROI.setState(self, state)
-        handles = state['handles']
-        n = len(handles)
-        
-        ## set positions of 4 corners
-        self.handles[0]['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[0])))
-        self.handles[1]['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[n/2-1])))
-        self.handles[2]['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[n/2])))
-        self.handles[3]['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[-1])))
-        
-        for i in range(1, n/2-1):
-            self.segmentClicked(self.segments[i-1], pos=self.mapFromParent(QtCore.QPointF(*handles[i])))
-        
-        for i, h in enumerate(self.handles):
-            h['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[i])))
+        self.blockSignals(True)
+        try:
+            ROI.PolyLineROI.setState(self, state)
+            handles = state['handles']
+            n = len(handles)
             
+            ## set positions of 4 corners
+            self.handles[0]['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[0])))
+            self.handles[1]['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[n/2-1])))
+            self.handles[2]['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[n/2])))
+            self.handles[3]['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[-1])))
+            
+            for i in range(1, n/2-1):
+                #self.segmentClicked(self.segments[i-1], pos=self.mapFromParent(QtCore.QPointF(*handles[i])))
+                self.segmentClicked(self.segments[i], pos=self.mapFromParent(QtCore.QPointF(*handles[i])))
+            for i, h in enumerate(self.handles):
+                h['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[i])))
+        finally:
+            self.blockSignals(False)
         
     def segmentClicked(self, segment, ev=None, pos=None): ## ev/pos should be in this item's coordinate system
         if ev != None:
@@ -55,17 +52,8 @@ class CortexROI(ROI.PolyLineROI):
         ## figure out which segment to add corresponding handle to
         n = len(self.segments)
         ind = self.segments.index(segment)
-        mirrorInd = (n - ind) - 2 ## works just as well as code below, and is much simpler
-        
-        #if ind >= n/2:
-            #mirrorInd = n/2-(2+ind-n/2)
-            ##mirrorInd = (n - ind) + 2
-        #elif ind < n/2:
-            #mirrorInd = n/2-1+(n/2-1-ind)
-            ##mirrorInd = (n-ind)
-        #else:
-            #raise Exception("Handles cannot be added to segment %i" %ind)    
-        
+        #mirrorInd = (n - ind) - 2 
+        mirrorInd= n-ind 
         
         ## figure out position at which to add second handle:
         h1 = pg.Point(self.mapFromItem(segment, segment.handles[0]['item'].pos()))
@@ -80,19 +68,15 @@ class CortexROI(ROI.PolyLineROI):
         
         ## add handles:
         if mirrorInd > ind:
-            #ROI.PolyLineROI.newHandleRequested(self, self.segments[mirrorInd], pos=mirrorPos)
             ROI.PolyLineROI.segmentClicked(self, self.segments[mirrorInd], pos=mirrorPos)
-            #ROI.PolyLineROI.newHandleRequested(self, segment, pos=pos)
             ROI.PolyLineROI.segmentClicked(self, segment, pos=pos)
             
-            ROI.LineSegmentROI([pos, mirrorPos], [0,0], handles=(self.segments[ind].handles[1]['item'], self.segments[mirrorInd+1].handles[1]['item']), pen=self.pen(), movable=False, parent=self)
+            ROI.LineSegmentROI([pos, mirrorPos], [0,0], handles=(self.segments[ind].handles[1]['item'], self.segments[mirrorInd+1].handles[1]['item']), pen=self.pen, movable=False, parent=self)
             
         else:
-            #ROI.PolyLineROI.newHandleRequested(self, segment, pos=pos) 
             ROI.PolyLineROI.segmentClicked(self, segment, pos=pos)
-            #ROI.PolyLineROI.newHandleRequested(self, self.segments[mirrorInd], pos=mirrorPos)
             ROI.PolyLineROI.segmentClicked(self, self.segments[mirrorInd], pos=mirrorPos)
-            ROI.LineSegmentROI([mirrorPos, pos], [0,0], handles=(self.segments[mirrorInd].handles[1]['item'], self.segments[ind+1].handles[1]['item']), pen=self.pen(), movable=False, parent=self)
+            ROI.LineSegmentROI([mirrorPos, pos], [0,0], handles=(self.segments[mirrorInd].handles[1]['item'], self.segments[ind+1].handles[1]['item']), pen=self.pen, movable=False, parent=self)
         
         
     def getQuadrilaterals(self):
@@ -134,10 +118,7 @@ class CortexROI(ROI.PolyLineROI):
             rect.append([rect[0][0] + widths[i], 0.001])
             rect.append([rect[0][0], 0.001])
             rects.append(rect)
-        return rects
-    
-                            
-        
+        return rects     
         
     def getHandlePositions(self):
         """Return a list handle positions in self.parentItem's coordinates. These are the coordinates that are marked by the grid."""
