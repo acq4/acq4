@@ -1,1 +1,0 @@
-from pyqtgraph.configfile import *

@@ -7,16 +7,6 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 
 print "Loading ACQ4..."
 
-## Path adjustments:
-##   - make sure 'lib' path is available for module search
-##   - add util to front of search path. This allows us to override some libs 
-##     that may be installed globally with local versions.
-import sys
-import os.path as osp
-d = osp.dirname(osp.abspath(__file__))
-sys.path = [osp.join(d, 'lib', 'util'), osp.join(d, 'lib', 'util', 'pyqtgraph')] + sys.path + [d]
-
-
 import sip
 sip.setapi('QString', 2)
 sip.setapi('QVariant', 2)
@@ -24,35 +14,13 @@ sip.setapi('QVariant', 2)
 ## rename any orphaned .pyc files -- these are probably leftover from 
 ## a module being moved and may interfere with expected operation.
 import os, sys
-from pyqtgraph import renamePyc
+from acq4.pyqtgraph import renamePyc
 modDir = os.path.abspath(os.path.split(__file__)[0])
 renamePyc(modDir)
 
-## PyQt bug: make sure qt.conf was installed correctly
-#pyDir = os.path.split(sys.executable)[0]
-#qtConf = os.path.join(pyDir, 'qt.conf')
-#if not os.path.exists(qtConf):
-    #import shutil
-    #pyqtConf = os.path.join(pyDir, 'Lib', 'site-packages', 'PyQt4', 'qt.conf')
-    #if os.path.exists(pyqtConf):
-        #print "PyQt fix: installing qt.conf where it should be.."
-        #shutil.copy(pyqtConf, qtConf)
+from acq4.pyqtgraph.Qt import QtGui, QtCore
 
-#import lib.util.PySideImporter  ## Use PySide instead of PyQt
-from PyQt4 import QtGui, QtCore
-#QtCore.QString = str
-#def noop(x):
-#    return x
-#QtCore.QVariant = noop
-
-## Needed to keep compatibility between pyside and pyqt
-## (this can go away once the transition to PySide is complete)
-if not hasattr(QtCore, 'Signal'):
-    QtCore.Signal = QtCore.pyqtSignal
-    QtCore.Slot = QtCore.pyqtSlot
-
-    
-from lib.Manager import *
+from acq4.Manager import *
 from numpy import *
 
 ## Initialize Qt
@@ -93,19 +61,42 @@ QtCore.qInstallMsgHandler(messageHandler)
 #tr = pyconquer.Logger(fileregex="(Manager|DataManager|modules|devices|drivers)")
 #tr.start()
 
-## Configuration file to load
-config = 'config/default.cfg'
+## Try a few default config file locations
+import os.path as osp
+path = osp.dirname(osp.abspath(__file__))
+configs = [
+    osp.join(path, 'config', 'default.cfg'),
+    osp.join(path, 'config', 'example', 'default.cfg'), # last, load the example config
+    ]
 
+for config in configs:
+    if osp.isfile(config):
+        break
 
 ## Create Manager. This configures devices and creates the main manager window.
 man = Manager(config, sys.argv[1:])
 
+# If example config was loaded, offer more help to the user.
+message = "No configuration file found. ACQ4 is running from an example configuration file at %s. This configuration defines several simulated devices that allow you to test the capabilities of ACQ4." % config
+if config == configs[-1]:
+    mbox = QtGui.QMessageBox()
+    mbox.setText(message)
+    mbox.setStandardButtons(mbox.Ok)
+    mbox.exec_()
+#message = "No configuration file found. ACQ4 is running from an example configuration file at %s. This configuration defines several simulated devices that allow you to test the capabilities of ACQ4. Would you like to load the tutorial now?" % config
+#if config == configs[-1]:
+    #mbox = QtGui.QMessageBox()
+    #mbox.setText(message)
+    #mbox.setStandardButtons(mbox.No | mbox.Yes)
+    #if mbox.exec_():
+        #man.showDocumentation('tutorial')
+    
 
 ## for debugging with pdb
 #QtCore.pyqtRemoveInputHook()
 
 ## Start Qt event loop unless running in interactive mode.
-interactive = (sys.flags.interactive == 1) and ('lib.util.PySideImporter' not in sys.modules)
+interactive = (sys.flags.interactive == 1) and ('acq4.util.PySideImporter' not in sys.modules)
 
 ## Run python code periodically to allow interactive debuggers to interrupt the qt event loop
 timer = QtCore.QTimer()
@@ -121,9 +112,9 @@ if interactive:
     print "Interactive mode; not starting event loop."
     
     ## import some things useful on the command line
-    from debug import *
-    import pyqtgraph as pg
-    import functions as fn
+    from acq4.util.debug import *
+    import acq4.pyqtgraph as pg
+    import acq4.util.functions as fn
     import numpy as np
 
     ### Use CLI history and tab completion
