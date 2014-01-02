@@ -8,7 +8,6 @@ path = os.path.abspath(os.path.dirname(__file__))
 n = len(path.split(os.path.sep))
 subdirs = [i[0].split(os.path.sep)[n:] for i in os.walk(os.path.join(path, 'acq4')) if '__init__.py' in i[2]]
 all_packages = ['.'.join(p) for p in subdirs]
-print "Packages:", all_packages
 
 ## Make sure build directory is clean before installing
 buildPath = os.path.join(path, 'build')

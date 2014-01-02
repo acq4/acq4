@@ -12,7 +12,7 @@ The class is responsible for:
 """
 
 
-import sys, gc
+import os, sys, gc
 
 ## install global exception handler for others to hook into.
 import acq4.pyqtgraph.exceptionHandling as exceptionHandling   
@@ -208,7 +208,8 @@ class Manager(QtCore.QObject):
             
             ## Read in configuration file
             if configFile is None:
-                raise Exception("No configuration file specified!")
+                configFile = self._getConfigFile()
+            
             self.configDir = os.path.dirname(configFile)
             self.readConfig(configFile)
             
@@ -265,17 +266,38 @@ class Manager(QtCore.QObject):
         
         #QtCore.QObject.connect(QtGui.QApplication.instance(), QtCore.SIGNAL('lastWindowClosed()'), self.lastWindowClosed)
             
-            
+    def _getConfigFile(self):
+        ## search all the default locations to find a configuration file.
+        from acq4 import CONFIGPATH
+        for path in CONFIGPATH:
+            cf = os.path.join(path, 'default.cfg')
+            if os.path.isfile(cf):
+                return cf
+    
+    def _appDataDir(self):
+        # return the user application data directory
+        if sys.platform == 'win32':
+            # resolves to "C:/Documents and Settings/User/Application Data/acq4" on XP
+            # and "C:\User\Username\AppData\Roaming" on win7
+            return os.path.join(os.environ['APPDATA'], 'acq4')
+        elif sys.platform == 'darwin':
+            return os.path.expanduser('~/Library/Preferences/acq4')
+        else:
+            return os.path.expanduser('~/.local/acq4')
+
             
     def readConfig(self, configFile):
         """Read configuration file, create device objects, add devices to list"""
         print "============= Starting Manager configuration from %s =================" % configFile
+        logMsg("Starting Manager configuration from %s" % configFile)
         cfg = configfile.readConfigFile(configFile)
             
         ## read modules, devices, and stylesheet out of config
         self.configure(cfg)
-        
+
+        self.configFile = configFile
         print "\n============= Manager configuration complete =================\n"
+        logMsg('Manager configuration complete.')
         
     def configure(self, cfg):
         """Load the devices, modules, stylesheet, and storageDir defined in cfg"""
@@ -287,8 +309,10 @@ class Manager(QtCore.QObject):
                     for k in cfg['devices']:
                         if self.disableAllDevs or k in self.disableDevs:
                             print "    --> Ignoring device '%s' -- disabled by request" % k
+                            logMsg("    --> Ignoring device '%s' -- disabled by request" % k)
                             continue
                         print "  === Configuring device '%s' ===" % k
+                        logMsg("  === Configuring device '%s' ===" % k)
                         try:
                             conf = None
                             if cfg['devices'][k].has_key('config'):
@@ -298,6 +322,7 @@ class Manager(QtCore.QObject):
                         except:
                             printExc("Error configuring device %s:" % k)
                     print "=== Device configuration complete ==="
+                    logMsg("=== Device configuration complete ===")
                             
                 ## Copy in new module definitions
                 elif key == 'modules':
@@ -307,6 +332,7 @@ class Manager(QtCore.QObject):
                 ## set new storage directory
                 elif key == 'storageDir':
                     print "=== Setting base directory: %s ===" % cfg['storageDir']
+                    logMsg("=== Setting base directory: %s ===" % cfg['storageDir'])
                     self.setBaseDir(cfg['storageDir'])
                 
                 ## load stylesheet

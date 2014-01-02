@@ -1,22 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-acq4.py -  Main ACQ4 invocation script
+Main ACQ4 invocation script
 Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-print "Loading ACQ4..."
-
-import sip
-sip.setapi('QString', 2)
-sip.setapi('QVariant', 2)
-    
-## rename any orphaned .pyc files -- these are probably leftover from 
-## a module being moved and may interfere with expected operation.
-import os, sys
-from .pyqtgraph import renamePyc
-modDir = os.path.abspath(os.path.split(__file__)[0])
-renamePyc(modDir)
+print("Loading ACQ4...")
 
 from .pyqtgraph.Qt import QtGui, QtCore
 
@@ -24,73 +13,24 @@ from .Manager import *
 from numpy import *
 
 ## Initialize Qt
-#QtGui.QApplication.setGraphicsSystem('raster')  ## needed for specific composition modes
-app = QtGui.QApplication(sys.argv)
+app = pg.mkQApp()
 
-## Install a simple message handler for Qt errors:
-def messageHandler(msgType, msg):
-    import traceback
-    print "Qt Error: (traceback follows)"
-    print msg
-    traceback.print_stack()
-    try:
-        logf = "crash.log"
-            
-        fh = open(logf, 'a')
-        fh.write(msg+'\n')
-        fh.write('\n'.join(traceback.format_stack()))
-        fh.close()
-    except:
-        print "Failed to write crash log:"
-        traceback.print_exc()
-        
-    
-    if msgType == QtCore.QtFatalMsg:
-        try:
-            print "Fatal error occurred; asking manager to quit."
-            global man, app
-            man.quit()
-            app.processEvents()
-        except:
-            pass
-    
-QtCore.qInstallMsgHandler(messageHandler)
-
-## For logging ALL python activity
-#import pyconquer
-#tr = pyconquer.Logger(fileregex="(Manager|DataManager|modules|devices|drivers)")
-#tr.start()
-
-## Try a few default config file locations
-import os.path as osp
-path = osp.dirname(osp.abspath(__file__))
-configs = [
-    osp.join(path, 'config', 'default.cfg'),
-    osp.join(path, 'config', 'example', 'default.cfg'), # last, load the example config
-    ]
-
-for config in configs:
-    if osp.isfile(config):
-        break
 
 ## Create Manager. This configures devices and creates the main manager window.
-man = Manager(config, sys.argv[1:])
+man = Manager(argv=sys.argv[1:])
 
 # If example config was loaded, offer more help to the user.
-message = "No configuration file found. ACQ4 is running from an example configuration file at %s. This configuration defines several simulated devices that allow you to test the capabilities of ACQ4." % config
-if config == configs[-1]:
+from acq4 import EXAMPLE_PATH
+message = "No configuration file found. ACQ4 is running from an example configuration file at %s. This configuration defines several simulated devices that allow you to test the capabilities of ACQ4." % man.configFile
+if man.configFile == os.path.join(EXAMPLE_PATH, 'default.cfg'):
     mbox = QtGui.QMessageBox()
     mbox.setText(message)
     mbox.setStandardButtons(mbox.Ok)
     mbox.exec_()
-#message = "No configuration file found. ACQ4 is running from an example configuration file at %s. This configuration defines several simulated devices that allow you to test the capabilities of ACQ4. Would you like to load the tutorial now?" % config
-#if config == configs[-1]:
-    #mbox = QtGui.QMessageBox()
-    #mbox.setText(message)
-    #mbox.setStandardButtons(mbox.No | mbox.Yes)
-    #if mbox.exec_():
-        #man.showDocumentation('tutorial')
     
+
+
+
 
 ## for debugging with pdb
 #QtCore.pyqtRemoveInputHook()
@@ -143,6 +83,3 @@ else:
     pg.exit() ## force exit without garbage collection
     
     
-    
-    
-#tr.stop()

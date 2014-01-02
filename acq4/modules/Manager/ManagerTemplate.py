@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './acq4/modules/Manager/ManagerTemplate.ui'
+# Form implementation generated from reading ui file 'acq4/modules/Manager/ManagerTemplate.ui'
 #
-# Created: Tue Dec 24 01:49:10 2013
+# Created: Thu Jan  2 16:39:23 2014
 #      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
@@ -62,13 +62,10 @@ class Ui_MainWindow(object):
         self.loadModuleBtn = QtGui.QPushButton(self.groupBox_2)
         self.loadModuleBtn.setObjectName(_fromUtf8("loadModuleBtn"))
         self.verticalLayout_4.addWidget(self.loadModuleBtn)
-        self.logBtn = QtGui.QPushButton(self.groupBox_2)
-        self.logBtn.setObjectName(_fromUtf8("logBtn"))
-        self.verticalLayout_4.addWidget(self.logBtn)
         self.verticalLayout.addWidget(self.groupBox_2)
-        self.logBtn1 = LogButton(self.centralwidget)
-        self.logBtn1.setObjectName(_fromUtf8("logBtn1"))
-        self.verticalLayout.addWidget(self.logBtn1)
+        self.logBtn = LogButton(self.centralwidget)
+        self.logBtn.setObjectName(_fromUtf8("logBtn"))
+        self.verticalLayout.addWidget(self.logBtn)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem)
         self.reloadModuleBtn = QtGui.QPushButton(self.centralwidget)
@@ -93,7 +90,6 @@ class Ui_MainWindow(object):
         self.groupBox_2.setTitle(_translate("MainWindow", "Modules", None))
         self.loadModuleBtn.setText(_translate("MainWindow", "Load Module", None))
         self.logBtn.setText(_translate("MainWindow", "Log", None))
-        self.logBtn1.setText(_translate("MainWindow", "Log", None))
         self.reloadModuleBtn.setText(_translate("MainWindow", "Reload Libraries", None))
         self.quitBtn.setText(_translate("MainWindow", "Quit ACQ4", None))
 
