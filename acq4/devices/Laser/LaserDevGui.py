@@ -24,7 +24,7 @@ class LaserDevGui(QtGui.QWidget):
         self.ui.wavelengthSpin.setOpts(suffix='m', siPrefix=True, dec=False, step=5e-9)
         self.ui.wavelengthSpin.setValue(self.dev.getWavelength())
         if not self.dev.hasTunableWavelength:
-            self.ui.wavelengthGroup.setDisabled(True)
+            self.ui.wavelengthGroup.setVisible(False)
         else:
             for x in self.dev.config.get('namedWavelengths', {}).keys():
                 self.ui.wavelengthCombo.addItem(x)

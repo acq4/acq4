@@ -91,7 +91,7 @@ class ScreenTask(DeviceTask):
         DeviceTask.__init__(self, dev, cmd, parentTask)
         self.cmd = cmd
 
-    def configure(self, tasks, startOrder):
+    def configure(self):
         pass
         
     def start(self):

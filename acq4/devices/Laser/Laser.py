@@ -724,6 +724,7 @@ class LaserTask(DAQGenericTask):
         daqName, ch = self.dev.getDAQName()
         if daqName is None:
             return
+        tasks = self.parentTask().tasks
         daqTask = tasks[daqName]
         rate = daqTask.getChanSampleRate(self.dev.config[ch]['channel'][1])
         
