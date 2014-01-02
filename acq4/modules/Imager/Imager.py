@@ -32,6 +32,7 @@ import acq4.util.InterfaceCombo as InterfaceCombo
 import acq4.pyqtgraph.parametertree as PT
 import numpy as NP
 import acq4.util.metaarray as MA
+from acq4.devices.Microscope import Microscope
 import time
 import pprint
 from .imagerTemplate import Ui_Form
@@ -283,17 +284,28 @@ class Imager(Module):
         # ... not just yet anyway.
         # if this is to be allowed on a system, the change must be signaled to this class,
         # and we need to pick up the device in a routine that handles the change.
-        cameraDevice = 'Camera'
-        self.camdev = self.manager.getDevice(cameraDevice)
-        self.cameraModule = self.manager.getModule('Camera')
-        self.scopeDev = self.camdev.scopeDev
-        self.laserDev = None
-        self.laserDev = self.manager.getDevice('Laser-2P')
-        #self.shutterDev = self.manager.getDevice('Shutter')
-        self.scopeDev.sigObjectiveChanged.connect(self.objectiveUpdate)
-        self.scopeDev.sigGlobalTransformChanged.connect(self.transformChanged)
-        self.scannerDev = self.manager.getDevice('Scanner')
-        self.stageDev = self.manager.getDevice('SutterStage')
+        self.cameraModule = self.manager.getModule(config['cameraModule'])
+        #self.scopeDev = self.camdev.scopeDev
+        self.laserDev = self.manager.getDevice(config['laser'])
+        
+        self.scannerDev = self.manager.getDevice(config['scanner'])
+        #self.scannerDev.sigGlobalSubdeviceChanged.connect(self.objectiveUpdate)
+        #self.scannerDev.sigGlobalTransformChanged.connect(self.transformUpdate)
+        
+        # find first scope device that is parent of scanner
+        dev = self.scannerDev
+        while dev is not None and not isinstance(dev, Microscope):
+            dev = dev.parentDevice()
+        self.scopeDev = dev
+        if dev is not None:
+            self.scopeDev.sigObjectiveChanged.connect(self.objectiveUpdate)
+            self.scopeDev.sigGlobalTransformChanged.connect(self.transformChanged)
+        
+        self.detectorDev = self.manager.getDevice(config['detector'][0])
+        self.detectorChannel = config['detector'][1]
+        
+        self.attenuatorDev = self.manager.getDevice(config['attenuator'][0])
+        self.attenuatorChannel = config['attenuator'][1]
         
         self.objectiveROImap = {} # this is a dict that we will populate with the name
         # of the objective and the associated ROI object .
@@ -468,14 +480,19 @@ class Imager(Module):
             
     def createROI(self, roiColor='r'):
        # the initial ROI will be nearly as big as the field, and centered.
-        brect = self.camdev.getBoundary().boundingRect()
-        width = brect.width()
-        height = brect.height()
-        x = brect.x()+width*0.05
-        y = brect.y()+height*0.05
+        #brect = self.camdev.getBoundary().boundingRect()
+        
+        #width = brect.width()
+        #height = brect.height()
+        #x = brect.x()+width*0.05
+        #y = brect.y()+height*0.05
+        cpos = self.cameraModule.ui.view.viewRect().center()
+        #print 'camerawindow.py: addROI:: ', self.view.viewPixelSize()
+        csize = [x*50 for x in self.cameraModule.ui.view.viewPixelSize()]
+        
         #print self.param['xSpan']
-        csize= [width*self.param['xSpan'],  height*self.param['ySpan']]
-        cpos = [x, y]
+        #csize= [width*self.param['xSpan'],  height*self.param['ySpan']]
+        #cpos = [x, y]
         roiColor = self.getObjectiveColor(self.scopeDev.currentObjective) # pick up an objective color...
         roi = RegionCtrl(cpos, csize, roiColor) # Note that the position actually gets over ridden by the camera additem below..
         roi.setZValue(10000)
@@ -545,7 +562,7 @@ class Imager(Module):
         self.loadPreset(preset)
         if self.laserDev is not None:
             self.param['Wavelength'] = (self.laserDev.getWavelength()*1e9)
-            self.param['Power'] = (self.laserDev.coherentPower)
+            self.param['Power'] = (self.laserDev.outputPower()[0])
         else:
             self.param['Wavelength'] = 0.0
             self.param['Power'] = 0.0
@@ -793,8 +810,8 @@ class Imager(Module):
         """
         # first make sure laser information is updated on the module interface
         if self.laserDev is not None:
-            self.param['Wavelength'] = (self.laserDev.coherentWavelength*1e9)
-            self.param['Power'] = (self.laserDev.coherentPower)
+            self.param['Wavelength'] = (self.laserDev.getWavelength()*1e9)
+            self.param['Power'] = (self.laserDev.outputPower()[0])
         else:
             self.param['Wavelength'] = 0.0
             self.param['Power'] = 0.0
@@ -1109,9 +1126,9 @@ class Imager(Module):
                   'xPosition' : xScan,
                   'yPosition' : yScan
                   },
-              'PockelCell': {'Switch' : {'preset': self.param['Pockels']}},
-              'PMT' : {
-                  'Input': {'record': True},
+              self.attenuatorDev.name(): {self.attenuatorChannel : {'preset': self.param['Pockels']}},
+              self.detectorDev.name() : {
+                  self.detectorChannel: {'record': True},
                   }
             }
         # take some data
@@ -1129,7 +1146,7 @@ class Imager(Module):
                 time.sleep(0.1)
 
         data = task.getResult()
-        imgData = data['PMT']['Input'].view(NP.ndarray)
+        imgData = data[self.detectorDev.name()]['Input'].view(NP.ndarray)
         imgData.shape = (height, pixelsPerRow)
         imgData = imgData.transpose()
         

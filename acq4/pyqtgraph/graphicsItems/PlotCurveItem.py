@@ -393,8 +393,9 @@ class PlotCurveItem(GraphicsObject):
         if self.path is None:
             x,y = self.getData()
             if x is None or len(x) == 0 or y is None or len(y) == 0:
-                return QtGui.QPainterPath()
-            self.path = self.generatePath(*self.getData())
+                self.path = QtGui.QPainterPath()
+            else:
+                self.path = self.generatePath(*self.getData())
             self.fillPath = None
             self._mouseShape = None
         return self.path
@@ -402,7 +403,7 @@ class PlotCurveItem(GraphicsObject):
     @debug.warnOnException  ## raising an exception here causes crash
     def paint(self, p, opt, widget):
         profiler = debug.Profiler()
-        if self.xData is None:
+        if self.xData is None or len(self.xData) == 0:
             return
         
         if HAVE_OPENGL and getConfigOption('enableExperimental') and isinstance(widget, QtOpenGL.QGLWidget):
@@ -412,7 +413,6 @@ class PlotCurveItem(GraphicsObject):
         x = None
         y = None
         path = self.getPath()
-        
         profiler('generate path')
         
         if self._exportOpts is not False:
