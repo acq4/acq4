@@ -50,9 +50,7 @@ class MosaicEditor(AnalysisModule):
         for a in atlas.listAtlases():
             self.ui.atlasCombo.addItem(a)
 
-        #self.connect(self.ui.canvas, QtCore.SIGNAL('itemTransformChangeFinished'), self.itemMoved)
         self.ui.canvas.sigItemTransformChangeFinished.connect(self.itemMoved)
-        #self.connect(addScanImagesBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
         #self.ui.exportSvgBtn.clicked.connect(self.exportSvg)
         self.ui.atlasCombo.currentIndexChanged.connect(self.atlasComboChanged)
         #self.ui.normalizeBtn.clicked.connect(self.normalizeImages)
