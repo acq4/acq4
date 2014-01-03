@@ -75,7 +75,7 @@ try:
         modified = False
         status = check_output(['git', 'status', '-s'], universal_newlines=True).strip().split('\n')
         for line in status:
-            if line[:2] != '??':
+            if line.strip() != '' and line[:2] != '??':
                 modified = True
                 break        
                     
