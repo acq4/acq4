@@ -15,6 +15,9 @@ path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 
 for filename, search, sub in replace:
     filename = os.path.join(path, filename)
+    if not os.path.isfile(filename):
+        print "skipping: %s; does not exist" % filename
+        continue
     data = open(filename, 'r').read()
     if re.search(search, data) is None:
         print('Error: Search expression "%s" not found in file %s.' % (search, filename))
