@@ -654,7 +654,7 @@ class Manager(QtCore.QObject):
         """
         with self.lock:
             if self.currentDir is None:
-                raise Exception("Storage directory has not been set.")
+                raise HelpfulException("Storage directory has not been set.", docs=["userGuide/modules/DataManager.html#acquired-data-storage"])
             return self.currentDir
     
     def setLogDir(self, d):

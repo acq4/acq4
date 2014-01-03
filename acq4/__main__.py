@@ -20,15 +20,18 @@ app = pg.mkQApp()
 man = Manager(argv=sys.argv[1:])
 
 # If example config was loaded, offer more help to the user.
-message = "No configuration file found. ACQ4 is running from an example configuration file at %s. This configuration defines several simulated devices that allow you to test the capabilities of ACQ4." % man.configFile
+message = """\
+<center><b>Demo mode:</b><br>\
+ACQ4 is running from an example configuration file at:<br><pre>%s</pre><br>\
+This configuration defines several simulated devices that allow you to test the capabilities of ACQ4.<br>\
+See the <a href="http://acq4.org/documentation/userGuide/configuration.html">ACQ4 documentation</a> \
+for more information.</center>
+""" % man.configFile
 if man.configFile.endswith(os.path.join('example', 'default.cfg')):
     mbox = QtGui.QMessageBox()
     mbox.setText(message)
     mbox.setStandardButtons(mbox.Ok)
     mbox.exec_()
-    
-
-
 
 
 ## for debugging with pdb
