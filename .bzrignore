@@ -1,9 +1,0 @@
-*.pyc
-.DS*
-.DS_Store
-lib/util/pyqtgraph/documentation/build
-documentation/build
-
-*.mod
-*.o
-*.c
