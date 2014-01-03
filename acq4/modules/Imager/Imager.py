@@ -284,7 +284,11 @@ class Imager(Module):
         # ... not just yet anyway.
         # if this is to be allowed on a system, the change must be signaled to this class,
         # and we need to pick up the device in a routine that handles the change.
-        self.cameraModule = self.manager.getModule(config['cameraModule'])
+        try:
+            self.cameraModule = self.manager.getModule(config['cameraModule'])
+        except:
+            self.manager.loadDefinedModule(config['cameraModule'])
+            self.cameraModule = self.manager.getModule(config['cameraModule'])
         #self.scopeDev = self.camdev.scopeDev
         self.laserDev = self.manager.getDevice(config['laser'])
         
