@@ -64,17 +64,21 @@ class CParser():
     
     cacheVersion = 22    ## increment every time cache structure or parsing changes to invalidate old cache files.
     
-    def __init__(self, files=None, replace=None, copyFrom=None, processAll=True, cache=None, verbose=False, **args):
+    def __init__(self, files=None, replace=None, copyFrom=None, processAll=True, cache=None, checkCache=False, verbose=False, **args):
         """Create a C parser object fiven a file or list of files. Files are read to memory and operated
         on from there.
-            'copyFrom' may be another CParser object from which definitions should be copied.
-            'replace' may be specified to perform string replacements before parsing.
+        
+            *copyFrom* may be another CParser object from which definitions should be copied.
+            *replace* may be specified to perform string replacements before parsing.
                format is {'searchStr': 'replaceStr', ...}
+            *cache* specifies a cache file where parsed definitions should be stored.
+            *checkCache* specifies whether to attempt to reparse if it appears the header file is newer.
             Extra parameters may be used to specify the starting state of the parser. For example,
             one could provide a set of missing type declarations by
                 types={'UINT': ('unsigned int'), 'STRING': ('char', 1)}
             Similarly, preprocessor macros can be specified:
                 macros={'WINAPI': ''}
+            
         """
         
         
@@ -129,9 +133,9 @@ class CParser():
                 self.importDict(p.fileDefs, p.fileOrder)
                 
         if processAll:
-            self.processAll(cache=cache, verbose=verbose)
+            self.processAll(cache=cache, verbose=verbose, checkCache=checkCache)
     
-    def processAll(self, cache=None, returnUnparsed=False, printAfterPreprocess=False, noCacheWarning=True, verbose=False):
+    def processAll(self, cache=None, returnUnparsed=False, printAfterPreprocess=False, noCacheWarning=True, verbose=False, checkCache=False):
         """Remove comments, preprocess, and parse declarations from all files. (operates in memory; does not alter the original files)
         Returns a list of the results from parseDefs.
            'cache' may specify a file where cached results are be stored or retrieved. The cache
@@ -140,7 +144,7 @@ class CParser():
            'returnUnparsed' is passed directly to parseDefs.
            'printAfterPreprocess' is for debugging; prints the result of preprocessing each file."""
         self.verbose = verbose
-        if cache is not None and self.loadCache(cache, checkValidity=True):
+        if cache is not None and self.loadCache(cache, checkValidity=checkCache):
             if verbose:
                 print "Loaded cached definitions; will skip parsing."
             return  ## cached values loaded successfully, nothing left to do here

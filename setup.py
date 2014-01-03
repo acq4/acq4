@@ -137,23 +137,15 @@ for subpath, _, files in os.walk(configRoot):
     dataFiles.append((os.path.join(dataRoot, endPath), files))
     # print dataFiles[-1]
 
-icons = []
-headers = []
+packageData = []
 pkgRoot = os.path.join(path, 'acq4')
 for subpath, _, files in os.walk(pkgRoot):
     for f in files:
         addTo = None
-        if f.endswith('.png'):
-            addTo = icons
-        elif f.endswith('.cache') or f.endswith('.h'):
-            addTo = headers
+        for ext in ['.png', '.cache', '.h', '.hpp', '.dll']:
+            if f.endswith(ext):
+                packageData.append(os.path.join(subpath, f)[len(pkgRoot):].lstrip(os.path.sep))
 
-        if addTo is not None:
-            addTo.append(os.path.join(subpath, f)[len(pkgRoot):].lstrip(os.path.sep))
-
-packageData = icons + headers
-print headers
-print icons
 
 # Handle py2exe build config
 # if len(sys.argv) > 1 and sys.argv[1] == 'py2exe':
