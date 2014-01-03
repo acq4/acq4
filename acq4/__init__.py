@@ -5,18 +5,22 @@ import os, sys
 # Set up a list of paths to search for configuration files 
 # (used if no config is explicitly specified)
 
-# First we check the parent directory of the current module
+# First we check the parent directory of the current module.
+# This path is used when running directly from a source checkout
 modpath = os.path.dirname(os.path.abspath(__file__))
 CONFIGPATH = [
-    os.path.normpath(os.path.join(modpath, '..', 'config')) ]
+    os.path.normpath(os.path.join(modpath, '..', 'config')),
+    ]
 
-# Next check for other system install locations
+# Next check for standard system install locations
 if 'linux' in sys.platform or sys.platform == 'darwin':
     CONFIGPATH.append('/etc/acq4')
 
-## Finally, use example config..
-EXAMPLE_PATH = os.path.normpath(os.path.join(modpath, '..', 'config', 'example'))
-CONFIGPATH.append(EXAMPLE_PATH)
+# Finally, look for an example config..
+CONFIGPATH.extend([
+    os.path.normpath(os.path.join(modpath, '..', 'config', 'example')),
+    os.path.normpath(os.path.join(modpath, 'config', 'example')),
+    ])
 
 
 # If we are using PyQt, ACQ4 requires API version 2 for QString and QVariant. 
@@ -47,6 +51,7 @@ if set_api:
 
 # Import pyqtgraph, get QApplication instance
 from . import pyqtgraph as pg
+pg.setConfigOptions(useWeave=False)
 app = pg.mkQApp()
 
 

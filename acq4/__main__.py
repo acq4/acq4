@@ -20,9 +20,8 @@ app = pg.mkQApp()
 man = Manager(argv=sys.argv[1:])
 
 # If example config was loaded, offer more help to the user.
-from acq4 import EXAMPLE_PATH
 message = "No configuration file found. ACQ4 is running from an example configuration file at %s. This configuration defines several simulated devices that allow you to test the capabilities of ACQ4." % man.configFile
-if man.configFile == os.path.join(EXAMPLE_PATH, 'default.cfg'):
+if man.configFile.endswith(os.path.join('example', 'default.cfg')):
     mbox = QtGui.QMessageBox()
     mbox.setText(message)
     mbox.setStandardButtons(mbox.Ok)
@@ -41,6 +40,7 @@ interactive = (sys.flags.interactive == 1) and not pyqtgraph.Qt.USE_PYSIDE
 ## Run python code periodically to allow interactive debuggers to interrupt the qt event loop
 timer = QtCore.QTimer()
 def donothing(*args):
+    print "-- beat --"
     x = 0
     for i in range(0, 100):
         x += i

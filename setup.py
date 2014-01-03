@@ -123,12 +123,19 @@ class Build(distutils.command.build.build):
 # else:
 #     dataRoot = '/etc/acq4'
 
-# configRoot = os.path.join(path, 'config')
+# instead, just install config example to same path as package.
+if sys.platform == 'win32':
+    dataRoot = 'Lib/site-packages/acq4'
+else:
+    dataRoot = 'python%d.%d/site-packages/acq4' % (sys.version_info.major, sys.version_info.minor)
+
 dataFiles = []
-# for subpath, _, files in os.walk(configRoot):
-#     endPath = subpath[len(path):].lstrip(os.path.sep) 
-#     files = [os.path.join(endPath, f) for f in files]
-#     dataFiles.append((os.path.join(dataRoot, endPath), files))
+configRoot = os.path.join(path, 'config')
+for subpath, _, files in os.walk(configRoot):
+    endPath = subpath[len(path):].lstrip(os.path.sep) 
+    files = [os.path.join(endPath, f) for f in files]
+    dataFiles.append((os.path.join(dataRoot, endPath), files))
+    print dataFiles[-1]
 
 icons = []
 pkgRoot = os.path.join(path, 'acq4')
@@ -141,21 +148,21 @@ packageData = icons
 
 
 # Handle py2exe build config
-if len(sys.argv) > 1 and sys.argv[1] == 'py2exe':
-    from glob import glob
-    import py2exe
+# if len(sys.argv) > 1 and sys.argv[1] == 'py2exe':
+#     from glob import glob
+#     import py2exe
 
-    ## This path must contain msvcm90.dll, msvcp90.dll, msvcr90.dll, and Microsoft.VC90.CRT.manifest
-    ## (see http://www.py2exe.org/index.cgi/Tutorial)
-    dllpath = os.path.join(path, 'Microsoft.VC90.CRT')
+#     ## This path must contain msvcm90.dll, msvcp90.dll, msvcr90.dll, and Microsoft.VC90.CRT.manifest
+#     ## (see http://www.py2exe.org/index.cgi/Tutorial)
+#     dllpath = os.path.join(path, 'Microsoft.VC90.CRT')
 
-    sys.path.append(dllpath)
-    dataFiles.append(
-        ## Instruct setup to copy the needed DLL files into the build directory
-        ("Microsoft.VC90.CRT", glob(dllpath + r'\*.*')))
+#     sys.path.append(dllpath)
+#     dataFiles.append(
+#         ## Instruct setup to copy the needed DLL files into the build directory
+#         ("Microsoft.VC90.CRT", glob(dllpath + r'\*.*')))
 
-    setupOpts['windows'] = ['acq4/__main__.py'],
-    setupOpts['options'] = {"py2exe": {"excludes":["Tkconstants", "Tkinter", "tcl"]}}
+#     setupOpts['windows'] = ['acq4/__main__.py'],
+#     setupOpts['options'] = {"py2exe": {"excludes":["Tkconstants", "Tkinter", "tcl"]}}
 
 
 setup(
