@@ -67,8 +67,8 @@ class Canvas(QtGui.QWidget):
         self.ui.itemList.sigItemMoved.connect(self.treeItemMoved)
         self.ui.itemList.itemSelectionChanged.connect(self.treeItemSelected)
         self.ui.autoRangeBtn.clicked.connect(self.autoRange)
-        self.ui.storeSvgBtn.clicked.connect(self.storeSvg)
-        self.ui.storePngBtn.clicked.connect(self.storePng)
+        #self.ui.storeSvgBtn.clicked.connect(self.storeSvg)
+        #self.ui.storePngBtn.clicked.connect(self.storePng)
         self.ui.redirectCheck.toggled.connect(self.updateRedirect)
         self.ui.redirectCombo.currentIndexChanged.connect(self.updateRedirect)
         self.multiSelectBox.sigRegionChanged.connect(self.multiSelectBoxChanged)
@@ -94,13 +94,13 @@ class Canvas(QtGui.QWidget):
         self.ui.itemList.contextMenuEvent = self.itemListContextMenuEvent
             
 
-    def storeSvg(self):
-        from pyqtgraph.GraphicsScene.exportDialog import ExportDialog
-        ex = ExportDialog(self.ui.view)
-        ex.show()
+    #def storeSvg(self):
+        #from pyqtgraph.GraphicsScene.exportDialog import ExportDialog
+        #ex = ExportDialog(self.ui.view)
+        #ex.show()
 
-    def storePng(self):
-        self.ui.view.writeImage()
+    #def storePng(self):
+        #self.ui.view.writeImage()
 
     def splitterMoved(self):
         self.resizeEvent()
