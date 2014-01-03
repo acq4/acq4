@@ -855,15 +855,9 @@ class Manager(QtCore.QObject):
                 QtGui.QApplication.instance().processEvents()
             #print "  done."
             print "\n    ciao."
-        #app= QtGui.QApplication.instance()
-        #print app.topLevelWidgets()
-        #for w in app.topLevelWidgets():
-        #    print w, w.isVisible()
-        #print "Manager quits when last window closes:", QtGui.QApplication.instance().quitOnLastWindowClosed()
         QtGui.QApplication.quit()
-
-    #def lastWindowClosed(self):
-        #print "QApplication reports last window has closed."
+        pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
+                   # this avoids otherwise irritating exit crashes.
 
 class Task:
     id = 0
