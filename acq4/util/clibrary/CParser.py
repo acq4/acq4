@@ -196,35 +196,48 @@ class CParser():
                 return False
         
         ## make sure cache is newer than all input files
+        canParse = hasPyParsing
         if checkValidity:
             mtime = os.stat(cacheFile).st_mtime
             for f in self.fileOrder:
                 ## if file does not exist, then it does not count against the validity of the cache.
-                if os.path.isfile(f) and os.stat(f).st_mtime > mtime:
+                if os.path.isfile(f):
+                    if os.stat(f).st_mtime > mtime:
+                        if self.verbose:
+                            print "Cache file is out of date."
+                        return False
+                else:
                     if self.verbose:
-                        print "Cache file is out of date."
-                    return False
+                        print "Header file is missing: %s" % f
+                    canParse = False
         
         try:
             ## read cache file
             import pickle
             cache = pickle.load(open(cacheFile, 'rb'))
             
-            ## make sure __init__ options match
+            ## make sure __init__ options match (unless we can't parse the headers anyway)
             if checkValidity:
                 if cache['opts'] != self.initOpts:
                     if self.verbose:
                         print "Cache file is not valid--created using different initialization options."
                         print cache['opts']
                         print self.initOpts
-                    return False
+                    if canParse:
+                        return False
+                    elif self.verbose:
+                        print "However, can't parse header files; will attempt to use the cache anyway."
                 elif self.verbose:
                     print "Cache init opts are OK:"
                     print cache['opts']
                 if cache['version'] < self.cacheVersion:
                     if self.verbose:
                         print "Cache file is not valid--cache format has changed."
-                    return False
+                    if canParse:
+                        return False
+                    elif self.verbose:
+                        print "However, can't parse header files; will attempt to use the cache anyway."
+
                 
             ## import all parse results
             self.importDict(cache['fileDefs'], cache['fileOrder'])
