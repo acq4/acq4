@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './acq4/LogWidgetTemplate.ui'
+# Form implementation generated from reading ui file 'acq4\LogWidgetTemplate.ui'
 #
-# Created: Tue Dec 24 01:49:05 2013
-#      by: PyQt4 UI code generator 4.10
+# Created: Fri Jan 03 01:38:54 2014
+#      by: PyQt4 UI code generator 4.9.6
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -60,6 +60,7 @@ class Ui_Form(object):
         spacerItem = QtGui.QSpacerItem(148, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.gridLayout.addItem(spacerItem, 0, 1, 1, 1)
         self.output = QtGui.QTextBrowser(self.widget)
+        self.output.setOpenLinks(False)
         self.output.setObjectName(_fromUtf8("output"))
         self.gridLayout.addWidget(self.output, 1, 0, 1, 3)
         self.widget1 = QtGui.QWidget(self.splitter)

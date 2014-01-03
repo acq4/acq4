@@ -99,10 +99,11 @@ class OptomechDevice(object):
         self.sigSubdeviceTransformChanged.connect(self.__emitGlobalSubdeviceTransformChanged)
         self.sigSubdeviceChanged.connect(self.__emitGlobalSubdeviceChanged)
         self.sigSubdeviceListChanged.connect(self.__emitGlobalSubdeviceListChanged)
-        if 'parentDevice' in config:
-            self.setParentDevice(config['parentDevice'])
-        if 'transform' in config:
-            self.setDeviceTransform(config['transform'])
+        if config is not None:
+            if 'parentDevice' in config:
+                self.setParentDevice(config['parentDevice'])
+            if 'transform' in config:
+                self.setDeviceTransform(config['transform'])
             
     def implements(self, interface=None):
         ints = ['OptomechDevice']

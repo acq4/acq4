@@ -204,6 +204,9 @@ class DataManager(Module):
         self.ui.newFolderList.setCurrentIndex(0)
         
         cdir = self.manager.getCurrentDir()
+        if not cdir.isManaged():
+            cdir.createIndex()
+        
         if ftype == 'Folder':
             nd = cdir.mkdir('NewFolder', autoIncrement=True)
             #item = self.model.handleIndex(nd)

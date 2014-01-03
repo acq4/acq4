@@ -725,8 +725,9 @@ class Manager(QtCore.QObject):
                 self.baseDir = d
             else:
                 raise Exception("Invalid argument type: ", type(d), d)
-            if not self.baseDir.isManaged():
-                self.baseDir.createIndex()
+            # Nah--only create the index if we really need it. Otherwise we get .index files left everywhere.
+            # if not self.baseDir.isManaged():
+            #     self.baseDir.createIndex()
 
         #self.emit(QtCore.SIGNAL('baseDirChanged'))
         self.sigBaseDirChanged.emit()
@@ -1313,9 +1314,7 @@ class Task:
         return order
         
 
-DOC_ROOT = 'http://acq4.org/documentation'
-DOC_LABELS = {
-    }
+DOC_ROOT = 'http://acq4.org/documentation/'
 
 class Documentation(QtCore.QObject):
     def __init__(self):
@@ -1325,7 +1324,7 @@ class Documentation(QtCore.QObject):
         if label is None:
             url = DOC_ROOT
         else:
-            url = DOC_ROOT + DOC_LABELS[label]
+            url = DOC_ROOT + label
         QtGui.QDesktopServices.openUrl(QtCore.QUrl(url))
 
 

@@ -21,7 +21,7 @@ for root in paths:
                     uifiles.append(os.path.join(path, f))
     elif os.path.isfile(root):
         if root.endswith('.ui'):
-            files.append(root)
+            uifiles.append(root)
         else:
             raise Exception('Not a .ui file: %s' % root)
     else:

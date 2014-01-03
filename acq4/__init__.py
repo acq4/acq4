@@ -79,7 +79,7 @@ def messageHandler(msgType, msg):
         traceback.print_exc()
         
     
-    if msgType == QtCore.QtFatalMsg:
+    if msgType == pg.Qt.QtCore.QtFatalMsg:
         try:
             print("Fatal error occurred; asking manager to quit.")
             global man, app
