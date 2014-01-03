@@ -143,14 +143,18 @@ class DirTreeWidget(QtGui.QTreeWidget):
         if self.baseDir is not None:
             self.unwatch(self.baseDir)
         self.baseDir = d
-        self.watch(self.baseDir)
+
+        if d is not None:
+            self.watch(self.baseDir)
 
         for h in self.items:
             self.unwatch(h)
         #self.handles = {}
-        self.items = {self.baseDir: self.invisibleRootItem()}
+        if d is not None:
+            self.items = {self.baseDir: self.invisibleRootItem()}
         self.clear()
-        self.rebuildChildren(self.invisibleRootItem())
+        if d is not None:
+            self.rebuildChildren(self.invisibleRootItem())
         #self.rebuildTree()
 
     def baseDirHandle(self):

@@ -707,11 +707,11 @@ class Manager(QtCore.QObject):
     def getBaseDir(self):
         """
         Return a directory handle to the base directory for data storage. 
-        This is the highest-level directory where acquired data may be stored.
+
+        This is the highest-level directory where acquired data may be stored. If 
+        the base directory has not been set, return None.
         """
         with self.lock:
-            if self.baseDir is None:
-                raise Exception("Base storage directory has not been set!")
             return self.baseDir
 
     def setBaseDir(self, d):
