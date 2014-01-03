@@ -1,5 +1,4 @@
 import time
-from acq4.filetypes.ImageFile import *
 from acq4.util.Mutex import Mutex
 from PyQt4 import QtGui, QtCore
 import acq4.util.debug as debug
@@ -7,6 +6,12 @@ from acq4.util.metaarray import MetaArray
 import numpy as np
 import acq4.util.ptime as ptime
 import acq4.Manager
+try:
+    from acq4.filetypes.ImageFile import *
+    HAVE_IMAGEFILE = True
+except ImportError:
+    HAVE_IMAGEFILE = False
+
 
 class RecordThread(QtCore.QThread):
     """
@@ -125,9 +130,13 @@ class RecordThread(QtCore.QThread):
             
             if frame['snap']:
                 try:
-                    fileName = 'image.tif'
-                    
-                    fh = self.m.getCurrentDir().writeFile(data, fileName, info, fileType="ImageFile", autoIncrement=True)
+                    if HAVE_IMAGEFILE:
+                        fileName = 'image.tif'
+                        fh = self.m.getCurrentDir().writeFile(data, fileName, info, fileType="ImageFile", autoIncrement=True)
+                    else:
+                        fileName = 'image.ma'
+                        fh = self.m.getCurrentDir().writeFile(data, fileName, info, fileType="MetaArray", autoIncrement=True)
+
                     fn = fh.name()
                     self.showMessage("Saved image %s" % fn)
                     with self.lock:
