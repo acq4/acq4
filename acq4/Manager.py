@@ -273,6 +273,7 @@ class Manager(QtCore.QObject):
             cf = os.path.join(path, 'default.cfg')
             if os.path.isfile(cf):
                 return cf
+        raise Exception("Could not find config file in: %s" % CONFIGPATH)
     
     def _appDataDir(self):
         # return the user application data directory

@@ -21,6 +21,7 @@ setupOpts = dict(
 
 from distutils.core import setup
 import distutils.dir_util
+import distutils.sysconfig
 import os, sys, re
 from subprocess import check_output
 
@@ -125,9 +126,11 @@ class Build(distutils.command.build.build):
 
 # instead, just install config example to same path as package.
 if sys.platform == 'win32':
+    #dataRoot = distutils.sysconfig.get_python_lib().replace(sys.prefix, '')
     dataRoot = 'Lib/site-packages/acq4'
 else:
-    dataRoot = 'python%d.%d/site-packages/acq4' % (sys.version_info.major, sys.version_info.minor)
+    #dataRoot = 'python%d.%d/site-packages/acq4' % (sys.version_info.major, sys.version_info.minor)
+    dataRoot = distutils.sysconfig.get_python_lib().replace(sys.prefix+'/', '') + '/acq4'
 
 dataFiles = []
 configRoot = os.path.join(path, 'config')
