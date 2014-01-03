@@ -690,7 +690,7 @@ class Manager(QtCore.QObject):
             self.setLogDir(p)
         else:
             if logDir is None:
-                logMsg("No log directory set. Log messages will not be stored.", msgType='warning', importance=8, docs=["UserGuide/DataManagement/Logging"])
+                logMsg("No log directory set. Log messages will not be stored.", msgType='warning', importance=8, docs=["userGuide/dataManagement.html#notes-and-logs"])
         #self.currentDir.sigChanged.connect(self.currentDirChanged)
         #self.sigCurrentDirChanged.emit()
         self.currentDir.sigChanged.connect(self.currentDirChanged)
@@ -1319,9 +1319,32 @@ class Task:
         return order
         
 
-    
+DOC_ROOT = 'http://acq4.org/documentation'
+DOC_LABELS = {
+    }
+
 class Documentation(QtCore.QObject):
-    """Encapsulates documentation functionality."""
+    def __init__(self):
+        QtCore.QObject.__init__(self)
+
+    def show(self, label=None):
+        if label is None:
+            url = DOC_ROOT
+        else:
+            url = DOC_ROOT + DOC_LABELS[label]
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl(url))
+
+
+    def quit(self):
+        pass
+
+
+class QtDocumentation(QtCore.QObject):
+    """Encapsulates documentation functionality.
+
+    Note: this class is currently out of service in favor of 
+    referencing online documentation instead.
+    """
     def __init__(self):
         QtCore.QObject.__init__(self)
         path = os.path.abspath(os.path.dirname(__file__))

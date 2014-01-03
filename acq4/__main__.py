@@ -40,7 +40,7 @@ interactive = (sys.flags.interactive == 1) and not pyqtgraph.Qt.USE_PYSIDE
 ## Run python code periodically to allow interactive debuggers to interrupt the qt event loop
 timer = QtCore.QTimer()
 def donothing(*args):
-    print "-- beat --"
+    #print "-- beat --"
     x = 0
     for i in range(0, 100):
         x += i

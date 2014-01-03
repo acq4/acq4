@@ -177,7 +177,7 @@ class CameraInterface(QtCore.QObject):
         ## 60fps.
         self.frameTimer = QtCore.QTimer()
         self.frameTimer.timeout.connect(self.drawFrame)
-        self.frameTimer.start(16) ## draw frames no faster than 60Hz
+        self.frameTimer.start(32) ## draw frames no faster than 60Hz
         #QtCore.QTimer.singleShot(1, self.drawFrame)
         ## avoiding possible singleShot-induced crashes
 
@@ -657,23 +657,9 @@ class CameraInterface(QtCore.QObject):
             ## Update viewport to correct for scope movement/scaling
             tr = pg.SRTTransform(self.currentFrame.cameraTransform())
             self.updateTransform(tr)
-            #newPos = tr.getTranslation()
-            #diff = newPos - self.lastCameraPosition
-            #self.view.translateBy(diff)
-            #self.lastCameraPosition = newPos
-            
-            #newScale = tr.getScale()
-            #if newScale != self.lastCameraScale:
-                #self.module.centerView()
-            #self.lastCameraScale = newScale
-            
-            #self.cameraItemGroup.setTransform(tr)
+
             self.imageItemGroup.setTransform(tr)
             prof.mark()
-            
-            ## update info for pixel under mouse pointer
-            #self.updateMouse()
-            #self.updateRgnLabel()
             
             prof.mark()
             prof.finish()
