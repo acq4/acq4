@@ -278,7 +278,7 @@ class ScannerDeviceGui(QtGui.QWidget):
                 ## convert pixel location to coordinate system of scanner's parent
                 globalPos = frameTransform.map(pg.Point(x, y))  ## Map from frame pixel location to global coordinates
                 localPos = self.dev.mapGlobalToParent(globalPos)  ## map from global to parent coordinate system. This is the position we calibrate to.
-                print (x, y), (globalPos.x(), globalPos.y()), (localPos.x(), localPos.y())
+                #print (x, y), (globalPos.x(), globalPos.y()), (localPos.x(), localPos.y())
                 
                 spotLocations.append([localPos.x(), localPos.y()])
                 globalSpotLocations.append([globalPos.x(), globalPos.y()])

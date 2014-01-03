@@ -92,10 +92,11 @@ class DataManager(Module):
     def baseDirChanged(self):
         dh = self.manager.getBaseDir()
         self.baseDir = dh
-        #self.ui.baseDirText.setText(QtCore.QString(dh.name()))
-        self.ui.baseDirText.setText(dh.name())
+        if dh is None:
+            self.ui.baseDirText.setText('')
+        else:
+            self.ui.baseDirText.setText(dh.name())
         self.ui.fileTreeWidget.setBaseDirHandle(dh)
-        #self.currentDirChanged()
         
     def loadLog(self, *args, **kwargs):
         pass
@@ -122,18 +123,24 @@ class DataManager(Module):
 
     def currentDirChanged(self, name=None, change=None, args=()):
         if change in [None, 'moved', 'renamed', 'parent']:
-            newDir = self.manager.getCurrentDir()
-            dirName = newDir.name(relativeTo=self.baseDir)
+            try:
+                newDir = self.manager.getCurrentDir()
+            except:
+                newDir = None
+                dirName = ""
+            else:
+                dirName = newDir.name(relativeTo=self.baseDir)
             self.ui.currentDirText.setText(str(dirName))
-            #self.ui.logDock.setWindowTitle(QtCore.QString('Current Log - ' + dirName))
             self.ui.fileTreeWidget.setCurrentDir(newDir)
-            #dirIndex = self.ui.fileTreeWidget.handleIndex(newDir)
-            #self.ui.fileTreeWidget.setExpanded(dirIndex, True)
-            #self.ui.fileTreeWidget.scrollTo(dirIndex)
         elif change == 'log':
             self.updateLogView(*args)
         if change == None:
-            self.loadLog(self.manager.getCurrentDir(), self.ui.logView)
+            try:
+                newDir = self.manager.getCurrentDir()
+            except:
+                newDir = None
+            else:
+                self.loadLog(newDir, self.ui.logView)
 
     #def loadLog(self, dirHandle, widget, recursive=0):
         #widget.clear()
@@ -143,7 +150,9 @@ class DataManager(Module):
             
 
     def showFileDialog(self):
-        self.dialog.setDirectory(self.manager.getBaseDir().name())
+        bd = self.manager.getBaseDir()
+        if bd is not None:
+            self.dialog.setDirectory(bd.name())
         self.dialog.show()
 
     def setBaseDir(self, dirName):
@@ -195,6 +204,9 @@ class DataManager(Module):
         self.ui.newFolderList.setCurrentIndex(0)
         
         cdir = self.manager.getCurrentDir()
+        if not cdir.isManaged():
+            cdir.createIndex()
+        
         if ftype == 'Folder':
             nd = cdir.mkdir('NewFolder', autoIncrement=True)
             #item = self.model.handleIndex(nd)

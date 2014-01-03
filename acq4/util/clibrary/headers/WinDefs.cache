@@ -5,17 +5,17 @@ I22
 sS'fileOrder'
 p2
 (lp3
-S'C:\\Documents and Settings\\Experimenters\\luke\\acq4\\lib\\util\\clibrary\\headers\\WinNt.h'
+S'acq4\\util\\clibrary\\headers\\WinNt.h'
 p4
-aS'C:\\Documents and Settings\\Experimenters\\luke\\acq4\\lib\\util\\clibrary\\headers\\WinDef.h'
+aS'acq4\\util\\clibrary\\headers\\WinDef.h'
 p5
-aS'C:\\Documents and Settings\\Experimenters\\luke\\acq4\\lib\\util\\clibrary\\headers\\WinBase.h'
+aS'acq4\\util\\clibrary\\headers\\WinBase.h'
 p6
-aS'C:\\Documents and Settings\\Experimenters\\luke\\acq4\\lib\\util\\clibrary\\headers\\BaseTsd.h'
+aS'acq4\\util\\clibrary\\headers\\BaseTsd.h'
 p7
-aS'C:\\Documents and Settings\\Experimenters\\luke\\acq4\\lib\\util\\clibrary\\headers\\WTypes.h'
+aS'acq4\\util\\clibrary\\headers\\WTypes.h'
 p8
-aS'C:\\Documents and Settings\\Experimenters\\luke\\acq4\\lib\\util\\clibrary\\headers\\WinUser.h'
+aS'acq4\\util\\clibrary\\headers\\WinUser.h'
 p9
 asS'fileDefs'
 p10

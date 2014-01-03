@@ -27,7 +27,7 @@ class PositionCtrlGroup(pTypes.GroupParameter):
             'name': 'Position Controls',
             'type': 'group',
             'addText': "Add Control..",
-            'addList': ['Point', 'Grid'],
+            'addList': ['Point', 'Grid', 'Occlusion', 'Grid (beta)'],
 
         }
         pTypes.GroupParameter.__init__(self, **opts)
@@ -365,7 +365,7 @@ class ScannerTaskGui(TaskGui):
         item.scene().removeItem(item)
         item.parameters().sigValueChanged.disconnect(self.itemActivationChanged)
         del self.items[item.name]
-        self.updateGridLinkCombos()
+        #self.updateGridLinkCombos()
         self.itemChanged()
         
     def addProgramCtrl(self, param, itemType):
@@ -519,7 +519,7 @@ class ScannerTaskGui(TaskGui):
             
         state['ptSize'] = dispSize
         
-        cls = {'Grid': Grid, 'Point': TargetPoint, 'Occlusion': TargetOcclusion}[itemType]
+        cls = {'Grid (beta)': Grid, 'Point': TargetPoint, 'Occlusion': TargetOcclusion, 'Grid':TargetGrid}[itemType]
         item = cls(**state)
         
         camMod = self.cameraModule()
@@ -549,15 +549,15 @@ class ScannerTaskGui(TaskGui):
         self.storeConfiguration()
         #self.updateGridLinkCombos()
         
-    def updateGridLinkCombos(self):
-        grids = [g for g in self.items.keys() if g[:4] == 'Grid']
-        for k,v in self.items.iteritems():
-            l = []
-            for g in grids:
-                if g != v.name:
-                    l.append(g)
-            l.sort()
-            v.updateLinkCombo(l)
+    #def updateGridLinkCombos(self):
+        #grids = [g for g in self.items.keys() if g[:4] == 'Grid']
+        #for k,v in self.items.iteritems():
+            #l = []
+            #for g in grids:
+                #if g != v.name:
+                    #l.append(g)
+            #l.sort()
+            #v.updateLinkCombo(l)
 
     #def addTarget(self, t, name):
         #self.sequenceChanged()
@@ -1017,6 +1017,8 @@ class Grid(pg.CrosshairROI):
         
         pg.CrosshairROI.__init__(self, pos=(0,0), size=args.get('size', [ptSize*4]*2), angle=args.get('angle', 0), **args)
         self.sigRegionChanged.connect(self.regeneratePoints)
+        self.params.sigValueChanged.connect(self.toggled)
+        self.params.sigRemoved.connect(self.removed)
         
     def isActive(self):
         return self.params.value()
@@ -1026,6 +1028,22 @@ class Grid(pg.CrosshairROI):
     
     def setTargetPen(self, *args):
         pass
+    
+    def toggled(self, b):
+        if b:
+            self.show()
+            for r in self.rgns:
+                r.item.show()
+        else:
+            self.hide()
+            for r in self.rgns:
+                r.item.hide()
+                
+    def removed(self, child):
+        #print "Grid.removed called.", self, child
+        if child is self.params:
+            for r in self.rgns:
+                self.rgnRemoved(r)
     
     def addActiveRegion(self, rgnType):
         rgn = self.params.param('Active Regions').addChild(pTypes.SimpleParameter(name=self.getNextRgnName(rgnType), type='bool', value=True, removable=True, renamable=True))
@@ -1164,6 +1182,7 @@ class Grid(pg.CrosshairROI):
         rect= pg.CrosshairROI.boundingRect(self)
         for r in self.rgns:
             rect |= self.mapRectFromItem(r.item, r.item.boundingRect())
+        rect.adjust(-self.pointSize, -self.pointSize, self.pointSize, self.pointSize)
         return rect
                                            
     def paint(self, p, *opts):
@@ -1196,7 +1215,6 @@ class TargetGrid(pg.ROI):
         self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
             dict(name='layout', type='list', value=args.get('layout', 'Hexagonal'), values=['Square', 'Hexagonal']),
             dict(name='spacing', type='float', value=args.get('spacing', ptSize), suffix='m', siPrefix=True, bounds=[1e-9, None], step=10e-6),
-            dict(name='snap-to grid', type='list', value=args.get('snapToGrid', None), values=[])
         ])
         self.params.item = self
         self.params.param('layout').sigStateChanged.connect(self.regeneratePoints)
@@ -1210,7 +1228,7 @@ class TargetGrid(pg.ROI):
         #self.connect(QtCore.SIGNAL('regionChanged'), self.rgnChanged)
         self.sigRegionChanged.connect(self.rgnChanging)
         self.sigRegionChangeFinished.connect(self.rgnChanged)
-        self.params.param('snap-to grid').sigValueChanged.connect(self.linkGridChanged)
+        #self.params.param('snap-to grid').sigValueChanged.connect(self.linkGridChanged)
         self.points = []
         self.pens = []
         self.pointSize = ptSize
@@ -1231,12 +1249,12 @@ class TargetGrid(pg.ROI):
     def parameters(self):
         return self.params
     
-    def updateLinkCombo(self, grids):
-        print 'updating Combo:', self, grids
-        self.params.param('snap-to grid').setLimits(['']+grids)
+    #def updateLinkCombo(self, grids):
+    #    print 'updating Combo:', self, grids
+    #    self.params.param('snap-to grid').setLimits(['']+grids)
         
-    def linkGridChanged(self, val):
-        print "linkGridChanged called.", self.name, val
+    #def linkGridChanged(self, val):
+    #    print "linkGridChanged called.", self.name, val
     
     #def updateInit(self, host):
         #self.treeItem.graphicsItem = self ## make grid accessible from tree

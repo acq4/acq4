@@ -42,6 +42,8 @@ class FileLoader(QtGui.QWidget):
         dh = self.dataManager.selectedFile()
         if dh is None:
             dh = getManager().getBaseDir()
+        if dh is None:
+            return
             #logMsg("Cannot set base directory because no directory is selected in Data Manager.", msgType='error')
             #return
         if not dh.isDir():

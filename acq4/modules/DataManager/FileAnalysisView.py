@@ -51,7 +51,12 @@ class FileAnalysisView(QtGui.QWidget):
         
 
     def openDbClicked(self):
-        self.fileDialog = FileDialog(self, "Select Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite *.sql);;All Files (*.*)")
+        bd = self.man.getBaseDir()
+        if bd is None:
+            bd = ""
+        else:
+            bd = bd.name()
+        self.fileDialog = FileDialog(self, "Select Database File", bd, "SQLite Database (*.sqlite *.sql);;All Files (*.*)")
         #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
         self.fileDialog.show()
         self.fileDialog.fileSelected.connect(self.openDb)
@@ -100,7 +105,10 @@ class FileAnalysisView(QtGui.QWidget):
             self.db.close()
         
     def createDbClicked(self):
-        self.fileDialog = FileDialog(self, "Create Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite *.sql);;All Files (*.*)")
+        bd = self.man.getBaseDir()
+        if bd is None:
+            raise Exception("Must select a base directory before creating database.")
+        self.fileDialog = FileDialog(self, "Create Database File", bd.name(), "SQLite Database (*.sqlite *.sql);;All Files (*.*)")
         #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
         self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
         self.fileDialog.setOption(QtGui.QFileDialog.DontConfirmOverwrite)

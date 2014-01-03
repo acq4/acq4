@@ -12,7 +12,7 @@ The class is responsible for:
 """
 
 
-import sys, gc
+import os, sys, gc
 
 ## install global exception handler for others to hook into.
 import acq4.pyqtgraph.exceptionHandling as exceptionHandling   
@@ -208,7 +208,8 @@ class Manager(QtCore.QObject):
             
             ## Read in configuration file
             if configFile is None:
-                raise Exception("No configuration file specified!")
+                configFile = self._getConfigFile()
+            
             self.configDir = os.path.dirname(configFile)
             self.readConfig(configFile)
             
@@ -265,17 +266,38 @@ class Manager(QtCore.QObject):
         
         #QtCore.QObject.connect(QtGui.QApplication.instance(), QtCore.SIGNAL('lastWindowClosed()'), self.lastWindowClosed)
             
-            
+    def _getConfigFile(self):
+        ## search all the default locations to find a configuration file.
+        from acq4 import CONFIGPATH
+        for path in CONFIGPATH:
+            cf = os.path.join(path, 'default.cfg')
+            if os.path.isfile(cf):
+                return cf
+    
+    def _appDataDir(self):
+        # return the user application data directory
+        if sys.platform == 'win32':
+            # resolves to "C:/Documents and Settings/User/Application Data/acq4" on XP
+            # and "C:\User\Username\AppData\Roaming" on win7
+            return os.path.join(os.environ['APPDATA'], 'acq4')
+        elif sys.platform == 'darwin':
+            return os.path.expanduser('~/Library/Preferences/acq4')
+        else:
+            return os.path.expanduser('~/.local/acq4')
+
             
     def readConfig(self, configFile):
         """Read configuration file, create device objects, add devices to list"""
         print "============= Starting Manager configuration from %s =================" % configFile
+        logMsg("Starting Manager configuration from %s" % configFile)
         cfg = configfile.readConfigFile(configFile)
             
         ## read modules, devices, and stylesheet out of config
         self.configure(cfg)
-        
+
+        self.configFile = configFile
         print "\n============= Manager configuration complete =================\n"
+        logMsg('Manager configuration complete.')
         
     def configure(self, cfg):
         """Load the devices, modules, stylesheet, and storageDir defined in cfg"""
@@ -287,8 +309,10 @@ class Manager(QtCore.QObject):
                     for k in cfg['devices']:
                         if self.disableAllDevs or k in self.disableDevs:
                             print "    --> Ignoring device '%s' -- disabled by request" % k
+                            logMsg("    --> Ignoring device '%s' -- disabled by request" % k)
                             continue
                         print "  === Configuring device '%s' ===" % k
+                        logMsg("  === Configuring device '%s' ===" % k)
                         try:
                             conf = None
                             if cfg['devices'][k].has_key('config'):
@@ -298,6 +322,7 @@ class Manager(QtCore.QObject):
                         except:
                             printExc("Error configuring device %s:" % k)
                     print "=== Device configuration complete ==="
+                    logMsg("=== Device configuration complete ===")
                             
                 ## Copy in new module definitions
                 elif key == 'modules':
@@ -307,6 +332,7 @@ class Manager(QtCore.QObject):
                 ## set new storage directory
                 elif key == 'storageDir':
                     print "=== Setting base directory: %s ===" % cfg['storageDir']
+                    logMsg("=== Setting base directory: %s ===" % cfg['storageDir'])
                     self.setBaseDir(cfg['storageDir'])
                 
                 ## load stylesheet
@@ -628,7 +654,7 @@ class Manager(QtCore.QObject):
         """
         with self.lock:
             if self.currentDir is None:
-                raise Exception("Storage directory has not been set.")
+                raise HelpfulException("Storage directory has not been set.", docs=["userGuide/modules/DataManager.html#acquired-data-storage"])
             return self.currentDir
     
     def setLogDir(self, d):
@@ -664,7 +690,7 @@ class Manager(QtCore.QObject):
             self.setLogDir(p)
         else:
             if logDir is None:
-                logMsg("No log directory set. Log messages will not be stored.", msgType='warning', importance=8, docs=["UserGuide/DataManagement/Logging"])
+                logMsg("No log directory set. Log messages will not be stored.", msgType='warning', importance=8, docs=["userGuide/dataManagement.html#notes-and-logs"])
         #self.currentDir.sigChanged.connect(self.currentDirChanged)
         #self.sigCurrentDirChanged.emit()
         self.currentDir.sigChanged.connect(self.currentDirChanged)
@@ -681,11 +707,11 @@ class Manager(QtCore.QObject):
     def getBaseDir(self):
         """
         Return a directory handle to the base directory for data storage. 
-        This is the highest-level directory where acquired data may be stored.
+
+        This is the highest-level directory where acquired data may be stored. If 
+        the base directory has not been set, return None.
         """
         with self.lock:
-            if self.baseDir is None:
-                raise Exception("Base storage directory has not been set!")
             return self.baseDir
 
     def setBaseDir(self, d):
@@ -699,8 +725,9 @@ class Manager(QtCore.QObject):
                 self.baseDir = d
             else:
                 raise Exception("Invalid argument type: ", type(d), d)
-            if not self.baseDir.isManaged():
-                self.baseDir.createIndex()
+            # Nah--only create the index if we really need it. Otherwise we get .index files left everywhere.
+            # if not self.baseDir.isManaged():
+            #     self.baseDir.createIndex()
 
         #self.emit(QtCore.SIGNAL('baseDirChanged'))
         self.sigBaseDirChanged.emit()
@@ -829,15 +856,9 @@ class Manager(QtCore.QObject):
                 QtGui.QApplication.instance().processEvents()
             #print "  done."
             print "\n    ciao."
-        #app= QtGui.QApplication.instance()
-        #print app.topLevelWidgets()
-        #for w in app.topLevelWidgets():
-        #    print w, w.isVisible()
-        #print "Manager quits when last window closes:", QtGui.QApplication.instance().quitOnLastWindowClosed()
         QtGui.QApplication.quit()
-
-    #def lastWindowClosed(self):
-        #print "QApplication reports last window has closed."
+        pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
+                   # this avoids otherwise irritating exit crashes.
 
 class Task:
     id = 0
@@ -1293,9 +1314,30 @@ class Task:
         return order
         
 
-    
+DOC_ROOT = 'http://acq4.org/documentation/'
+
 class Documentation(QtCore.QObject):
-    """Encapsulates documentation functionality."""
+    def __init__(self):
+        QtCore.QObject.__init__(self)
+
+    def show(self, label=None):
+        if label is None:
+            url = DOC_ROOT
+        else:
+            url = DOC_ROOT + label
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl(url))
+
+
+    def quit(self):
+        pass
+
+
+class QtDocumentation(QtCore.QObject):
+    """Encapsulates documentation functionality.
+
+    Note: this class is currently out of service in favor of 
+    referencing online documentation instead.
+    """
     def __init__(self):
         QtCore.QObject.__init__(self)
         path = os.path.abspath(os.path.dirname(__file__))

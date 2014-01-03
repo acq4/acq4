@@ -1,6 +1,4 @@
-recursive-include acq4 *.py *.ui *.m README *.txt
-recursive-include doc *.rst *.py *.svg *.png *.jpg
-recursive-include doc/build/html *
-recursive-include tools *
-include doc/Makefile doc/make.bat README.txt LICENSE.txt
+recursive-include acq4 *.py *.ui *.m README *.txt *.h *.cache
+recursive-include config *
+include README.md LICENSE.txt 
 

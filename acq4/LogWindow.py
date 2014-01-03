@@ -815,7 +815,7 @@ class LogWidget(QtGui.QWidget):
     def linkClicked(self, url):
         url = url.toString()
         if url[:4] == 'doc:':
-            self.manager.showDocumentation(url[4:].lower())
+            self.manager.showDocumentation(url[4:])
         elif url[:4] == 'exc:':
             cursor = self.ui.output.document().find('Show traceback %s' % url[4:])
             try:

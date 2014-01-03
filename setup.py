@@ -1,3 +1,24 @@
+DESCRIPTION = """\
+ACQ4 is a python-based platform for experimental neurophysiology. 
+
+It includes support for standard electrophysiology, multiphoton imaging, 
+scanning laser photostimulation, and many other experimental techniques. ACQ4 is
+highly modular and extensible, allowing support to be added for new types of
+devices, techniques, user-interface modules, and analyses.
+"""
+
+setupOpts = dict(
+    name='acq4',
+    description='Neurophysiology acquisition and analysis platform',
+    long_description=DESCRIPTION,
+    license='MIT',
+    url='http://www.acq4.org',
+    author='Luke Campagnola',
+    author_email='luke.campagnola@gmail.com',
+)
+
+
+
 from distutils.core import setup
 import distutils.dir_util
 import os, sys, re
@@ -7,8 +28,7 @@ from subprocess import check_output
 path = os.path.abspath(os.path.dirname(__file__))
 n = len(path.split(os.path.sep))
 subdirs = [i[0].split(os.path.sep)[n:] for i in os.walk(os.path.join(path, 'acq4')) if '__init__.py' in i[2]]
-all_packages = ['.'.join(p) for p in subdirs]
-print "Packages:", all_packages
+allPackages = ['.'.join(p) for p in subdirs]
 
 ## Make sure build directory is clean before installing
 buildPath = os.path.join(path, 'build')
@@ -94,27 +114,64 @@ class Build(distutils.command.build.build):
             data = open(initfile, 'r').read()
             open(initfile, 'w').write(re.sub(r"__version__ = .*", "__version__ = '%s'" % version, data))
         return ret
-        
 
-setup(name='acq4',
+# copy config tree to system location
+# if sys.platform == 'win32':
+#     dataRoot = os.path.join(os.environ['ProgramFiles'], 'acq4')
+# elif sys.platform == 'darwin':
+#     dataRoot = 'Library/Application Support/acq4'
+# else:
+#     dataRoot = '/etc/acq4'
+
+# instead, just install config example to same path as package.
+if sys.platform == 'win32':
+    dataRoot = 'Lib/site-packages/acq4'
+else:
+    dataRoot = 'python%d.%d/site-packages/acq4' % (sys.version_info.major, sys.version_info.minor)
+
+dataFiles = []
+configRoot = os.path.join(path, 'config')
+for subpath, _, files in os.walk(configRoot):
+    endPath = subpath[len(path):].lstrip(os.path.sep) 
+    files = [os.path.join(endPath, f) for f in files]
+    dataFiles.append((os.path.join(dataRoot, endPath), files))
+    # print dataFiles[-1]
+
+packageData = []
+pkgRoot = os.path.join(path, 'acq4')
+for subpath, _, files in os.walk(pkgRoot):
+    for f in files:
+        addTo = None
+        for ext in ['.png', '.cache', '.h', '.hpp', '.dll']:
+            if f.endswith(ext):
+                packageData.append(os.path.join(subpath, f)[len(pkgRoot):].lstrip(os.path.sep))
+
+
+# Handle py2exe build config
+# if len(sys.argv) > 1 and sys.argv[1] == 'py2exe':
+#     from glob import glob
+#     import py2exe
+
+#     ## This path must contain msvcm90.dll, msvcp90.dll, msvcr90.dll, and Microsoft.VC90.CRT.manifest
+#     ## (see http://www.py2exe.org/index.cgi/Tutorial)
+#     dllpath = os.path.join(path, 'Microsoft.VC90.CRT')
+
+#     sys.path.append(dllpath)
+#     dataFiles.append(
+#         ## Instruct setup to copy the needed DLL files into the build directory
+#         ("Microsoft.VC90.CRT", glob(dllpath + r'\*.*')))
+
+#     setupOpts['windows'] = ['acq4/__main__.py'],
+#     setupOpts['options'] = {"py2exe": {"excludes":["Tkconstants", "Tkinter", "tcl"]}}
+
+
+setup(
     version=version,
     cmdclass={'build': Build},
-    description='Neurophysiology acquisition and analysis platform',
-    long_description="""\
-ACQ4 is a python-based platform for experimental neurophysiology. 
-
-It includes support for standard electrophysiology, multiphoton imaging, 
-scanning laser photostimulation, and many other experimental techniques. ACQ4 is
-highly modular and extensible, allowing support to be added for new types of
-devices, techniques, user-interface modules, and analyses.
-""",
-    license='MIT',
-    url='http://www.acq4.org',
-    author='Luke Campagnola',
-    author_email='luke.campagnola@gmail.com',
-    packages=all_packages,
+    packages=allPackages,
     package_dir={},
-    #package_data={'pyqtgraph': ['graphicsItems/PlotItem/*.png']},
+    package_data={'acq4': packageData},
+    data_files=dataFiles,
     classifiers = [
         "Programming Language :: Python",
         "Programming Language :: Python :: 2",
@@ -131,5 +188,7 @@ devices, techniques, user-interface modules, and analyses.
         'numpy',
         'scipy',
         ],
+    **setupOpts
 )
+
 

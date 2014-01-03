@@ -70,7 +70,11 @@
         </spacer>
        </item>
        <item row="1" column="0" colspan="3">
-        <widget class="QTextBrowser" name="output"/>
+        <widget class="QTextBrowser" name="output">
+         <property name="openLinks">
+          <bool>false</bool>
+         </property>
+        </widget>
        </item>
       </layout>
      </widget>
