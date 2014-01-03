@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>242</width>
+    <height>159</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <property name="margin">
+    <number>0</number>
+   </property>
+   <property name="spacing">
+    <number>0</number>
+   </property>
+   <item row="0" column="0">
+    <widget class="QLabel" name="spotSizeLabel">
+     <property name="text">
+      <string>Spot Display Size:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0" colspan="3">
+    <widget class="QRadioButton" name="sizeFromCalibrationRadio">
+     <property name="text">
+      <string>Use size from calibration</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QRadioButton" name="sizeCustomRadio">
+     <property name="text">
+      <string>Use custom size:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1" colspan="2">
+    <widget class="SpinBox" name="sizeSpin">
+     <property name="suffix">
+      <string/>
+     </property>
+     <property name="minimum">
+      <double>0.000000000000000</double>
+     </property>
+     <property name="maximum">
+      <double>100000.000000000000000</double>
+     </property>
+     <property name="singleStep">
+      <double>0.000001000000000</double>
+     </property>
+     <property name="value">
+      <double>0.000000000000000</double>
+     </property>
+    </widget>
+   </item>
+   <item row="6" column="0" colspan="3">
+    <widget class="QPushButton" name="loadSpotImagesBtn">
+     <property name="toolTip">
+      <string>Generates a single frame which combines the photostimulation spot images from each scan point. </string>
+     </property>
+     <property name="text">
+      <string>Load Spot Images</string>
+     </property>
+    </widget>
+   </item>
+   <item row="7" column="0">
+    <widget class="QLabel" name="label">
+     <property name="text">
+      <string>Spot Frame Number</string>
+     </property>
+    </widget>
+   </item>
+   <item row="7" column="1" colspan="2">
+    <widget class="QSpinBox" name="spotFrameSpin">
+     <property name="value">
+      <number>1</number>
+     </property>
+    </widget>
+   </item>
+   <item row="8" column="0">
+    <widget class="QCheckBox" name="bgFrameCheck">
+     <property name="text">
+      <string>Background Frame</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="8" column="1" colspan="2">
+    <widget class="QSpinBox" name="bgFrameSpin"/>
+   </item>
+   <item row="5" column="0" colspan="3">
+    <widget class="Line" name="line">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="0" colspan="3">
+    <widget class="Line" name="line_2">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="0">
+    <widget class="QLabel" name="label_2">
+     <property name="text">
+      <string>Outline Color</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="1" colspan="2">
+    <widget class="ColorButton" name="outlineColorBtn">
+     <property name="text">
+      <string/>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>SpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>acq4.pyqtgraph</header>
+  </customwidget>
+  <customwidget>
+   <class>ColorButton</class>
+   <extends>QPushButton</extends>
+   <header>acq4.pyqtgraph</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

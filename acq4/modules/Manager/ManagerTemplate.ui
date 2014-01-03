@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>800</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>ACQ4 Manager</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true"/>
+  </property>
+  <property name="dockOptions">
+   <set>QMainWindow::AllowNestedDocks|QMainWindow::AllowTabbedDocks|QMainWindow::AnimatedDocks</set>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout_2">
+    <property name="spacing">
+     <number>0</number>
+    </property>
+    <property name="margin">
+     <number>0</number>
+    </property>
+    <item>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <item>
+       <widget class="QGroupBox" name="groupBox">
+        <property name="title">
+         <string>Configuration</string>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout_3">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="margin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QListWidget" name="configList"/>
+         </item>
+         <item>
+          <widget class="QPushButton" name="loadConfigBtn">
+           <property name="text">
+            <string>Load Configuration</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="groupBox_2">
+        <property name="title">
+         <string>Modules</string>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout_4">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="margin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QListWidget" name="moduleList"/>
+         </item>
+         <item>
+          <widget class="QPushButton" name="loadModuleBtn">
+           <property name="text">
+            <string>Load Module</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="LogButton" name="logBtn">
+        <property name="text">
+         <string>Log</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="verticalSpacer">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>20</width>
+          <height>40</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="reloadModuleBtn">
+        <property name="text">
+         <string>Reload Libraries</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="quitBtn">
+        <property name="text">
+         <string>Quit ACQ4</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QStatusBar" name="statusBar"/>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>LogButton</class>
+   <extends>QPushButton</extends>
+   <header>acq4.LogWindow</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

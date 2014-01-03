@@ -1,0 +1,476 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>198</width>
+    <height>791</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="spacing">
+    <number>15</number>
+   </property>
+   <property name="margin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="QWidget" name="recordCtrlWidget" native="true">
+     <layout class="QGridLayout" name="gridLayout_3">
+      <property name="spacing">
+       <number>0</number>
+      </property>
+      <item row="0" column="1">
+       <widget class="QPushButton" name="acquireVideoBtn">
+        <property name="toolTip">
+         <string>Start/stop camera acquisition.
+In general, this can just stay on always.</string>
+        </property>
+        <property name="text">
+         <string>Acquire Video</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QPushButton" name="acquireFrameBtn">
+        <property name="text">
+         <string>Acquire Frame</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0" colspan="2">
+       <widget class="Line" name="line">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="1">
+       <widget class="QPushButton" name="recordStackBtn">
+        <property name="toolTip">
+         <string>Start/stop recording frames as they are acquired. 
+Frames are written to the current storage directory set in 
+the data manager window.</string>
+        </property>
+        <property name="text">
+         <string>Record Stack</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+        <property name="flat">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="0" colspan="2">
+       <layout class="QGridLayout" name="gridLayout">
+        <item row="0" column="0">
+         <widget class="QCheckBox" name="recordXframesCheck">
+          <property name="text">
+           <string>Stack Limit</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1" colspan="2">
+         <widget class="QSpinBox" name="recordXframesSpin">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="suffix">
+           <string> frames</string>
+          </property>
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>1000000</number>
+          </property>
+          <property name="value">
+           <number>100</number>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="label_9">
+          <property name="text">
+           <string>Stack Size:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="ValueLabel" name="stackSizeLabel">
+          <property name="text">
+           <string>0 frames</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="label">
+          <property name="text">
+           <string>Acquiring:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="ValueLabel" name="fpsLabel">
+          <property name="text">
+           <string>0 fps</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="label_7">
+          <property name="text">
+           <string>Displaying:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="ValueLabel" name="displayFpsLabel">
+          <property name="text">
+           <string>0 fps</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="2">
+         <widget class="ValueLabel" name="displayPercentLabel">
+          <property name="text">
+           <string>(0%)</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item row="6" column="0">
+       <widget class="FeedbackButton" name="saveFrameBtn">
+        <property name="text">
+         <string>Save Frame</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0" colspan="2">
+       <widget class="QPushButton" name="frameToBgBtn">
+        <property name="text">
+         <string>Last Frame → Background</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="devCtrlWidget" native="true">
+     <layout class="QGridLayout" name="gridLayout_4">
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="spacing">
+       <number>0</number>
+      </property>
+      <item row="2" column="0" colspan="2">
+       <widget class="QPushButton" name="btnFullFrame">
+        <property name="toolTip">
+         <string>Set the region of interest to the maximum possible area.</string>
+        </property>
+        <property name="text">
+         <string>Full Frame</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_3">
+        <property name="text">
+         <string>Exposure</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_2">
+        <property name="text">
+         <string>Binning</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="SpinBox" name="spinExposure">
+        <property name="minimumSize">
+         <size>
+          <width>80</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>Sets the exposure time for each frame.</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="binningCombo"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="displayCtrlWidget" native="true">
+     <layout class="QGridLayout" name="gridLayout_2">
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="spacing">
+       <number>0</number>
+      </property>
+      <item row="3" column="0">
+       <widget class="QLabel" name="label_8">
+        <property name="text">
+         <string>Frame Center Weight</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="0" colspan="2">
+       <widget class="QPushButton" name="zoomLiveBtn">
+        <property name="text">
+         <string>Zoom to Live Image</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0" colspan="2">
+       <widget class="QPushButton" name="btnAutoGain">
+        <property name="toolTip">
+         <string>Determines the behavior of the white/black level sliders.
+When enabled, the sliders maximum and minimum values are set
+to the maximum and minimum intensity values in the image.
+When disabled, the minimum is 0 and the maximum is the largest 
+possible intensity given the bit depth of the camera.</string>
+        </property>
+        <property name="text">
+         <string>Auto Gain</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QDoubleSpinBox" name="spinAutoGainCenterWeight">
+        <property name="toolTip">
+         <string>Weights the auto gain measurement to the center 1/3 of
+the frame when set to 1.0. A value of 0.0 meters from 
+the entire frame.</string>
+        </property>
+        <property name="maximum">
+         <double>1.000000000000000</double>
+        </property>
+        <property name="singleStep">
+         <double>0.100000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QDoubleSpinBox" name="spinAutoGainSpeed">
+        <property name="toolTip">
+         <string>Smooths out the auto gain control, prevents very
+brief flashes from affecting the gain. Larger values
+indicate more smoothing.
+</string>
+        </property>
+        <property name="value">
+         <double>2.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0" colspan="2">
+       <widget class="HistogramLUTWidget" name="histogram"/>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="label_6">
+        <property name="text">
+         <string>Auto Gain Delay</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0" colspan="2">
+       <widget class="QLabel" name="label_4">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="text">
+         <string>Transparency</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="0" colspan="2">
+       <widget class="QSlider" name="alphaSlider">
+        <property name="maximum">
+         <number>100</number>
+        </property>
+        <property name="singleStep">
+         <number>1</number>
+        </property>
+        <property name="value">
+         <number>100</number>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="bgSubtractWidget" native="true">
+     <layout class="QGridLayout" name="gridLayout_5">
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="spacing">
+       <number>0</number>
+      </property>
+      <item row="2" column="1">
+       <widget class="QDoubleSpinBox" name="bgBlurSpin">
+        <property name="toolTip">
+         <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'MS Shell Dlg 2'; font-size:8.25pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:8pt;&quot;&gt;Blurs the background frame before dividing it from the current frame.&lt;/span&gt;&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:8pt;&quot;&gt;Large blur values may cause performance to degrade.&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="value">
+         <double>0.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0" colspan="2">
+       <widget class="QPushButton" name="divideBgBtn">
+        <property name="toolTip">
+         <string>Enables background division. 
+Either a set of static background frames need to have already by collected
+(by pressing 'Static' above) or 'Continuous' needs to be pressed.</string>
+        </property>
+        <property name="text">
+         <string>Divide Background</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+        <property name="autoExclusive">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="label_5">
+        <property name="text">
+         <string>Blur Background.</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0" colspan="2">
+       <widget class="QCheckBox" name="contAvgBgCheck">
+        <property name="text">
+         <string>Continuous Average</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0" colspan="2">
+       <widget class="QPushButton" name="subtractBgBtn">
+        <property name="text">
+         <string>Subtract Background</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+        <property name="autoExclusive">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QPushButton" name="collectBgBtn">
+        <property name="text">
+         <string>Collect Background</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QDoubleSpinBox" name="bgTimeSpin">
+        <property name="toolTip">
+         <string>Sets the approximate number of frames to be averaged for
+background division.</string>
+        </property>
+        <property name="suffix">
+         <string> s</string>
+        </property>
+        <property name="decimals">
+         <number>1</number>
+        </property>
+        <property name="singleStep">
+         <double>1.000000000000000</double>
+        </property>
+        <property name="value">
+         <double>3.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>SpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>acq4.pyqtgraph</header>
+  </customwidget>
+  <customwidget>
+   <class>FeedbackButton</class>
+   <extends>QPushButton</extends>
+   <header>acq4.pyqtgraph</header>
+  </customwidget>
+  <customwidget>
+   <class>HistogramLUTWidget</class>
+   <extends>QGraphicsView</extends>
+   <header>acq4.pyqtgraph</header>
+  </customwidget>
+  <customwidget>
+   <class>ValueLabel</class>
+   <extends>QLabel</extends>
+   <header>acq4.pyqtgraph</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

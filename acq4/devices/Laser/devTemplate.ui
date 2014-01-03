@@ -1,0 +1,538 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>695</width>
+    <height>563</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <property name="margin">
+    <number>6</number>
+   </property>
+   <item row="0" column="0" colspan="3">
+    <widget class="QGroupBox" name="powerGroup">
+     <property name="title">
+      <string/>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_4">
+      <property name="margin">
+       <number>6</number>
+      </property>
+      <item row="0" column="2">
+       <widget class="QLabel" name="label_5">
+        <property name="text">
+         <string>Expected Output Power:</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="3">
+       <widget class="SpinBox" name="expectedPowerSpin">
+        <property name="minimumSize">
+         <size>
+          <width>75</width>
+          <height>0</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="3">
+       <widget class="SpinBox" name="toleranceSpin">
+        <property name="minimumSize">
+         <size>
+          <width>75</width>
+          <height>0</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="4" rowspan="2">
+       <widget class="QGroupBox" name="energyCalcGroup">
+        <property name="title">
+         <string>For energy calculations use:</string>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QRadioButton" name="currentPowerRadio">
+           <property name="text">
+            <string>Current Power</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QRadioButton" name="expectedPowerRadio">
+           <property name="text">
+            <string>Expected Power</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_4">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="text">
+         <string>Current Output Power:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QLabel" name="outputPowerLabel">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QLabel" name="samplePowerLabel">
+        <property name="font">
+         <font>
+          <pointsize>11</pointsize>
+          <weight>50</weight>
+          <bold>false</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_8">
+        <property name="text">
+         <string>Power at sample (calc.):</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QCheckBox" name="powerAlertCheck">
+        <property name="text">
+         <string>Alert me to power changes larger than:</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="3" column="0" colspan="3">
+    <widget class="QGroupBox" name="wavelengthGroup">
+     <property name="title">
+      <string/>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_5" columnstretch="0,0,0">
+      <property name="margin">
+       <number>6</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_7">
+        <property name="text">
+         <string>Current Wavelength: </string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="SpinBox" name="wavelengthSpin">
+        <property name="suffix">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="2">
+       <widget class="QComboBox" name="wavelengthCombo">
+        <item>
+         <property name="text">
+          <string>Set wavelength for:</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QCheckBox" name="GDDEnableCheck">
+        <property name="text">
+         <string>GDD Enable</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QSpinBox" name="GDDSpin">
+        <property name="maximum">
+         <number>32000</number>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QLabel" name="GDDLimits">
+        <property name="text">
+         <string>GDD Limits</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="4" column="0" colspan="3">
+    <widget class="QGroupBox" name="groupBox_2">
+     <property name="title">
+      <string>Power Calibration</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_6">
+      <item row="0" column="0" colspan="5">
+       <widget class="QTreeWidget" name="calibrationList">
+        <property name="font">
+         <font>
+          <pointsize>8</pointsize>
+          <weight>50</weight>
+          <bold>false</bold>
+         </font>
+        </property>
+        <property name="rootIsDecorated">
+         <bool>false</bool>
+        </property>
+        <property name="itemsExpandable">
+         <bool>false</bool>
+        </property>
+        <attribute name="headerStretchLastSection">
+         <bool>true</bool>
+        </attribute>
+        <column>
+         <property name="text">
+          <string>Optics</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Wavelength</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Transmission</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Power at Sample</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Date</string>
+         </property>
+        </column>
+       </widget>
+      </item>
+      <item row="2" column="0" colspan="5">
+       <widget class="QGroupBox" name="groupBox">
+        <property name="title">
+         <string>Calibration Parameters</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+        <layout class="QGridLayout" name="gridLayout_3">
+         <property name="margin">
+          <number>6</number>
+         </property>
+         <item row="0" column="0">
+          <layout class="QGridLayout" name="gridLayout_2">
+           <property name="horizontalSpacing">
+            <number>6</number>
+           </property>
+           <property name="verticalSpacing">
+            <number>0</number>
+           </property>
+           <item row="1" column="3">
+            <widget class="QLabel" name="scanLabel">
+             <property name="text">
+              <string>Measurement Duration</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="4">
+            <widget class="SpinBox" name="measurementSpin">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+               <horstretch>1</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="suffix">
+              <string> s</string>
+             </property>
+             <property name="minimum">
+              <double>0.000000000000000</double>
+             </property>
+             <property name="maximum">
+              <double>100.000000000000000</double>
+             </property>
+             <property name="value">
+              <double>1.000000000000000</double>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="3">
+            <widget class="QLabel" name="label">
+             <property name="text">
+              <string>Settling Duration:</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="4">
+            <widget class="SpinBox" name="settlingSpin">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+               <horstretch>2</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="toolTip">
+              <string>Specify the time it takes for the selected power meter to settle on a value.</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QLabel" name="label_3">
+             <property name="text">
+              <string>Power Meter:</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="1">
+            <widget class="InterfaceCombo" name="meterCombo"/>
+           </item>
+           <item row="2" column="0">
+            <widget class="QLabel" name="label_12">
+             <property name="text">
+              <string>Channel:</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="1">
+            <widget class="QComboBox" name="channelCombo"/>
+           </item>
+          </layout>
+         </item>
+         <item row="1" column="0">
+          <widget class="QGroupBox" name="pCellGroup">
+           <property name="title">
+            <string>Pockel Cell Parameters</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+           <layout class="QGridLayout" name="gridLayout_8">
+            <property name="margin">
+             <number>6</number>
+            </property>
+            <item row="0" column="0">
+             <layout class="QGridLayout" name="gridLayout_7">
+              <property name="verticalSpacing">
+               <number>0</number>
+              </property>
+              <item row="0" column="0">
+               <widget class="QLabel" name="label_9">
+                <property name="text">
+                 <string>Minimum Voltage:</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="SpinBox" name="minVSpin">
+                <property name="suffix">
+                 <string>V</string>
+                </property>
+                <property name="minimum">
+                 <double>-99.000000000000000</double>
+                </property>
+                <property name="singleStep">
+                 <double>0.010000000000000</double>
+                </property>
+                <property name="value">
+                 <double>-0.200000000000000</double>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="2">
+               <widget class="QLabel" name="label_11">
+                <property name="text">
+                 <string>Number of Steps: </string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="3">
+               <widget class="SpinBox" name="stepsSpin">
+                <property name="decimals">
+                 <number>0</number>
+                </property>
+                <property name="minimum">
+                 <double>10.000000000000000</double>
+                </property>
+                <property name="maximum">
+                 <double>1000.000000000000000</double>
+                </property>
+                <property name="value">
+                 <double>20.000000000000000</double>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="label_10">
+                <property name="text">
+                 <string>Maximum Voltage:</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="SpinBox" name="maxVSpin">
+                <property name="suffix">
+                 <string>V</string>
+                </property>
+                <property name="singleStep">
+                 <double>0.010000000000000</double>
+                </property>
+                <property name="value">
+                 <double>1.200000000000000</double>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="3">
+               <widget class="QCheckBox" name="recalibratePCellCheck">
+                <property name="text">
+                 <string>Re-Calibrate Pockel Cell</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="1" column="4">
+       <widget class="QPushButton" name="deleteBtn">
+        <property name="text">
+         <string>Delete</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QPushButton" name="calibrateBtn">
+        <property name="text">
+         <string>Calibrate</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QPushButton" name="checkPowerBtn">
+     <property name="text">
+      <string>Check Power</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QPushButton" name="shutterBtn">
+     <property name="text">
+      <string>Open Shutter</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="2">
+    <widget class="QPushButton" name="qSwitchBtn">
+     <property name="text">
+      <string>Turn On QSwitch</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>SpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>acq4.pyqtgraph</header>
+  </customwidget>
+  <customwidget>
+   <class>InterfaceCombo</class>
+   <extends>QComboBox</extends>
+   <header>acq4.util.InterfaceCombo</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

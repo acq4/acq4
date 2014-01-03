@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>218</width>
+    <height>190</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout_2">
+   <item row="0" column="0">
+    <widget class="QLabel" name="label_2">
+     <property name="text">
+      <string>Output Power:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="1">
+    <widget class="QLabel" name="outputPowerLabel">
+     <property name="text">
+      <string>0mW</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="2">
+    <widget class="QPushButton" name="checkPowerBtn">
+     <property name="text">
+      <string>Check Power</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QLabel" name="label_3">
+     <property name="font">
+      <font>
+       <weight>50</weight>
+       <bold>false</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Power at Sample:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="1">
+    <widget class="QLabel" name="samplePowerLabel">
+     <property name="font">
+      <font>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>0mW</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="0" colspan="3">
+    <widget class="QWidget" name="wavelengthWidget" native="true">
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <property name="spacing">
+       <number>0</number>
+      </property>
+      <property name="margin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QCheckBox" name="setWavelengthCheck">
+        <property name="text">
+         <string>Set wavelength</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QSpinBox" name="wavelengthSpin">
+        <property name="suffix">
+         <string> nm</string>
+        </property>
+        <property name="maximum">
+         <number>4000</number>
+        </property>
+        <property name="singleStep">
+         <number>10</number>
+        </property>
+        <property name="value">
+         <number>1080</number>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="5" column="0" colspan="3">
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string>Control Mode:</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout">
+      <property name="leftMargin">
+       <number>3</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>3</number>
+      </property>
+      <property name="bottomMargin">
+       <number>3</number>
+      </property>
+      <property name="spacing">
+       <number>0</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QRadioButton" name="powerWaveRadio">
+        <property name="text">
+         <string>Power waveform (W)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QRadioButton" name="switchWaveRadio">
+        <property name="text">
+         <string>Switch waveform (%)</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="3" column="0" colspan="3">
+    <widget class="QCheckBox" name="adjustLengthCheck">
+     <property name="toolTip">
+      <string>If the output power of the laser changes, adjust the length of laser pulses to maintain constant pulse energy.</string>
+     </property>
+     <property name="text">
+      <string>Adjust pulse length if power changes</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+     <property name="tristate">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0" colspan="3">
+    <widget class="QCheckBox" name="checkPowerCheck">
+     <property name="text">
+      <string>Check power before task start</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
