@@ -191,6 +191,7 @@ setup(
         'numpy',
         'scipy',
         ],
+    scripts = ['bin/acq4'],
     **setupOpts
 )
 
