@@ -1,7 +1,8 @@
 #define AppName "ACQ4"
-#define MyAppVersion "0.9.0"
-#define MyAppURL "http://www.acq4.org/"
-#define MyAppExeName "MyProg.exe"
+#define AppVersion "0.9.0"
+#define AppURL "http://www.acq4.org/"
+#define AppExeName "MyProg.exe"
+#define BitDepth "64"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application.
@@ -9,16 +10,16 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{006B563B-FB8A-41C6-A3DA-AED0FBC6D37A}
 AppName={#AppName}
-AppVersion={#MyAppVersion}
-;AppVerName={#AppName} {#MyAppVersion}
-AppPublisherURL={#MyAppURL}
-AppSupportURL={#MyAppURL}
-AppUpdatesURL={#MyAppURL}
+AppVersion={#AppVersion}
+;AppVerName={#AppName} {#AppVersion}
+AppPublisherURL={#AppURL}
+AppSupportURL={#AppURL}
+AppUpdatesURL={#AppURL}
 DefaultDirName={pf}\{#AppName}
 DefaultGroupName={#AppName}
 AllowNoIcons=yes
 OutputDir=C:\Users\Luke\acq4
-OutputBaseFilename=acq4-setup
+OutputBaseFilename=acq4-setup-{#AppVersion}-{#BitDepth}
 Compression=lzma
 SolidCompression=yes
 
@@ -26,14 +27,16 @@ SolidCompression=yes
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-DestDir: "{app}"; Source: "C:\Python27\*"; Excludes: "*.pyc,*.pyo"; Flags: recursesubdirs
-DestDir: "{app}"; Source: "C:\Luke\acq4\acq4"; Excludes: "*.pyc,*.pyo"; Flags: recursesubdirs
-DestDir: "{app}"; Source: "C:\Luke\acq4\config"
-DestDir: "{app}"; Source: "C:\Luke\acq4\tools\acq4.bat"
+DestDir: "{app}\Python27"; Source: "C:\Python27-{#BitDepth}\*"; Excludes: "*.pyc,*.pyo"; Flags: recursesubdirs
+DestDir: "{app}\acq4"; Source: "C:\Users\Luke\acq4\acq4\*"; Excludes: "*.pyc,*.pyo"; Flags: recursesubdirs
+DestDir: "{app}\config"; Source: "C:\Users\Luke\acq4\config\*"; Flags: recursesubdirs
+DestDir: "{app}"; Source: "C:\Users\Luke\acq4\tools\acq4.bat"
 
-;[Icons]
-;Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+[Icons]
+Name: "{group}\{#AppName}"; Filename: "{app}\acq4.bat"; IconFilename: "{app}\acq4\icons\acq4.ico"; Flags: dontcloseonexit
+Name: "{group}\Documentation"; Filename: "http://acq4.org/documentation"
+Name: "{group}\configuration"; Filename: "{app}\config"; Flags: foldershortcut
 
 [Run]
-Filename: "{app}\acq4.bat"; Description: "{cm:LaunchProgram,{AppName}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\acq4.bat"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
