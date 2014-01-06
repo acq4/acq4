@@ -243,28 +243,6 @@ class LaserDevGui(QtGui.QWidget):
             self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #B00}")
         else:
             self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #000}")
-    
-    #def updatePowerLabels(self, power, valid=None):
-        ### updates samplePower label and recolors output power label
-        ##if power is None:
-            ##self.ui.outputPowerLabel.setText("")
-            ##self.ui.samplePowerLabel.setText("")
-        ##else:
-        #if valid is None:
-            #valid = self.dev.checkPowerValidity(power)
-        
-        #self.ui.outputPowerLabel.setText(siFormat(power, suffix='W'))
-        #samplePower = self.dev.samplePower(power)
-        #if samplePower is None:
-            #self.ui.samplePowerLabel.setText("?")
-        #else:
-            #self.ui.samplePowerLabel.setText(siFormat(samplePower, suffix='W'))
-            
-        #if not valid:
-            #self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #B00}")
-        #else:
-            #self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #000}")
-
 
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()

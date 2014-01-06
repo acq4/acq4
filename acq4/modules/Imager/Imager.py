@@ -25,7 +25,7 @@
 from acq4.modules.Module import Module
 from PyQt4 import QtGui, QtCore
 from acq4.pyqtgraph import ImageView
-import acq4.pyqtgraph as PG
+import acq4.pyqtgraph as pg
 from acq4.Manager import getManager
 import acq4.Manager
 import acq4.util.InterfaceCombo as InterfaceCombo
@@ -137,7 +137,7 @@ class ImagerWindow(QtGui.QMainWindow):
     def closeEvent(self, ev):
         self.module.quit()
 
-class ImagerView(PG.ImageView):
+class ImagerView(pg.ImageView):
     """
     Subclass ImageView so that we can display the ROI differently.
     This one just catches the Roi data.
@@ -145,7 +145,7 @@ class ImagerView(PG.ImageView):
     10/2/2013 pbm
     """
     def __init__(self):
-        PG.ImageView.__init__(self)
+        pg.ImageView.__init__(self)
         self.resetFrameCount()
         
     def resetFrameCount(self):
@@ -154,7 +154,7 @@ class ImagerView(PG.ImageView):
         self.ImagerFrameData = NP.zeros(0)
 
     def setImage(self, *args, **kargs):
-        PG.ImageView.setImage(self, *args, **kargs)
+        pg.ImageView.setImage(self, *args, **kargs)
         self.newFrameROI()
 
     def roiChanged(self):
@@ -200,7 +200,7 @@ class Black(QtGui.QWidget):
     """ make a black rectangle to fill screen when "blanking" """
     def paintEvent(self, event):
         p = QtGui.QPainter(self)
-        brush = PG.mkBrush(0.0)
+        brush = pg.mkBrush(0.0)
         p.fillRect(self.rect(), brush)
         p.end()
      
@@ -228,7 +228,7 @@ class ScreenBlanker:
         self.widgets = []
 
         
-class RegionCtrl(PG.ROI):
+class RegionCtrl(pg.ROI):
     """
     Create an ROI "Region Control" with handles, with specified size
     and color. 
@@ -238,7 +238,7 @@ class RegionCtrl(PG.ROI):
     reset in the ROI.
     """
     def __init__(self, pos, size, roiColor = 'r'):
-        PG.ROI.__init__(self, pos, size=size, pen=roiColor)
+        pg.ROI.__init__(self, pos, size=size, pen=roiColor)
         self.addScaleHandle([0,0], [1,1])
         self.addScaleHandle([1,1], [0,0])
         self.setZValue(1200)
@@ -288,6 +288,7 @@ class Imager(Module):
             self.cameraModule = self.manager.getModule(config['cameraModule'])
         except:
             self.manager.loadDefinedModule(config['cameraModule'])
+            pg.QtGui.QApplication.processEvents()
             self.cameraModule = self.manager.getModule(config['cameraModule'])
         #self.scopeDev = self.camdev.scopeDev
         self.laserDev = self.manager.getDevice(config['laser'])
@@ -318,7 +319,6 @@ class Imager(Module):
         self.ui.hide_check.stateChanged.connect(self.hideOverlayImage)
         self.ui.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
 
-        #self.ui.run_Button.clicked.connect(self.PMT_Run)
         self.ui.snap_Button.clicked.connect(self.PMT_Snap)
         self.ui.snap_Standard_Button.clicked.connect(self.PMT_Snap_std)
         self.ui.snap_High_Button.clicked.connect(self.PMT_Snap_high)
@@ -331,7 +331,6 @@ class Imager(Module):
         self.ui.run_button.clicked.connect(self.PMT_Run)
         self.ui.stop_button.clicked.connect(self.PMT_Stop)
         
-        #self.ui.cameraSnapBtn.clicked.connect(self.cameraSnap)
         self.ui.restoreROI.clicked.connect(self.restoreROI)
         self.ui.saveROI.clicked.connect(self.saveROI)
         self.ui.Align_to_Camera.clicked.connect(self.reAlign)
@@ -353,17 +352,8 @@ class Imager(Module):
             dict(name='Follow Stage', type='bool', value=True),
             dict(name='Image Width', type='int', value=500, readonly=False),
             dict(name='Image Height', type='int', value=500, readonly=False),
-            #dict(name='Y = X', type='bool', value=True),
-            #dict(name='Pixel Size', type='float', value=0.2e-7, readonly=True), #suffix='m', limits=[1.e-8, 1e-4], step=1e-7, siPrefix=True, readonly=True),
-            dict(name='xSpan', type='float', value = 0.9, limits=[0.01, 2.5]), #limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
-            dict(name='ySpan', type = 'float', value = 0.9, limits=[0.01, 2.5]), # limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True),
-            #dict(name='Xpos', type='float', value = 0.0e-6, suffix = 'm'), #, limits=[-50e-3, 50e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
-            #dict(name='Ypos', type = 'float', value = 0.0e-6, suffix='m'), #, limits=[-50e-3, 50e-3], step=10e-6, siPrefix=True, readonly=True),
-
-            #dict(name='XCenter', type='float', value=-0.3, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True, readonly=True),
-            #dict(name='XSweep', type='float', value=1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True, readonly=True),
-            #dict(name='YCenter', type='float', value=-0.75, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True, readonly=True),
-            #dict(name='YSweep', type='float', value=1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True, readonly=True),
+            dict(name='xSpan', type='float', value = 0.9, limits=[0.01, 2.5]),
+            dict(name='ySpan', type = 'float', value = 0.9, limits=[0.01, 2.5]),
             dict(name='Bidirectional', type='bool', value=True),
             dict(name='Decomb', type='bool', value=True, children=[
                 dict(name='Auto', type='bool', value=True),
@@ -544,8 +534,8 @@ class Imager(Module):
         # record position of ROI in Scanner's local coordinate system
         # we can use this later to allow the ROI to track stage movement
         tr = self.getScannerDevice().inverseGlobalTransform() # maps from global to device local
-        pt1 = PG.Point(self.xPos, self.yPos)
-        pt2 = PG.Point(self.xPos+self.width, self.yPos+self.height)
+        pt1 = pg.Point(self.xPos, self.yPos)
+        pt2 = pg.Point(self.xPos+self.width, self.yPos+self.height)
         self.currentRoi.scannerCoords = [
             tr.map(pt1),
             tr.map(pt2),
@@ -566,7 +556,7 @@ class Imager(Module):
         self.loadPreset(preset)
         if self.laserDev is not None:
             self.param['Wavelength'] = (self.laserDev.getWavelength()*1e9)
-            self.param['Power'] = (self.laserDev.outputPower()[0])
+            self.param['Power'] = (self.laserDev.outputPower())
         else:
             self.param['Wavelength'] = 0.0
             self.param['Power'] = 0.0
@@ -815,7 +805,7 @@ class Imager(Module):
         # first make sure laser information is updated on the module interface
         if self.laserDev is not None:
             self.param['Wavelength'] = (self.laserDev.getWavelength()*1e9)
-            self.param['Power'] = (self.laserDev.outputPower()[0])
+            self.param['Power'] = (self.laserDev.outputPower())
         else:
             self.param['Wavelength'] = 0.0
             self.param['Power'] = 0.0
@@ -824,18 +814,18 @@ class Imager(Module):
         #
         state = self.currentRoi.getState()
         w, h = state['size']
-        p0 = PG.Point(0,0)
-        p1 = PG.Point(w,0)
-        p2 = PG.Point(0, h)
+        p0 = pg.Point(0,0)
+        p1 = pg.Point(w,0)
+        p2 = pg.Point(0, h)
         points = [p0, p1, p2]
-        points = [PG.Point(self.currentRoi.mapToView(p)) for p in points] # convert to view points (as needed for scanner)
+        points = [pg.Point(self.currentRoi.mapToView(p)) for p in points] # convert to view points (as needed for scanner)
 
-        Xpos = self.xPos #self.param['Xpos']
-        Ypos = self.yPos # self.param['Ypos']
-        xCenter = Xpos # self.param['Xpos']#-width/2.0
-        yCenter = Ypos # self.param['Ypos']#-height/2.0
-        nPointsX = int(self.width/self.pixelSize) # self.param['Pixel Size'])
-        nPointsY = int(self.height/self.pixelSize) # self.param['Pixel Size'])
+        Xpos = self.xPos
+        Ypos = self.yPos
+        xCenter = Xpos
+        yCenter = Ypos
+        nPointsX = int(self.width/self.pixelSize)
+        nPointsY = int(self.height/self.pixelSize)
         xScan = NP.linspace(0., self.width, nPointsX)
         xScan += xCenter
         sampleRate = self.param['Sample Rate']
@@ -921,17 +911,17 @@ class Imager(Module):
             self.img = None
         
         # code to display the image on the camera image
-        self.img = PG.ImageItem(imgData) # make data into a pyqtgraph image
+        self.img = pg.ImageItem(imgData) # make data into a pyqtgraph image
         self.cameraModule.window().addItem(self.img)
         self.currentRoi.setZValue(10)
         self.hideOverlayImage()
         
         w = imgData.shape[0]
         h = imgData.shape[1]
-        localPts = map(PG.Vector, [[0,0], [w,0], [0, h], [0,0,1]]) # w and h of data of image in pixels.
-        globalPts = map(PG.Vector, [[Xpos, Ypos], [Xpos+self.width, Ypos], [Xpos, Ypos+self.height], [0, 0, 1]]) # actual values in global coordinates
+        localPts = map(pg.Vector, [[0,0], [w,0], [0, h], [0,0,1]]) # w and h of data of image in pixels.
+        globalPts = map(pg.Vector, [[Xpos, Ypos], [Xpos+self.width, Ypos], [Xpos, Ypos+self.height], [0, 0, 1]]) # actual values in global coordinates
         ##imgData.shape[0]*imgData.shape[1] # prog['points'] # sort of. - 
-        m = PG.solve3DTransform(localPts, globalPts)
+        m = pg.solve3DTransform(localPts, globalPts)
         m[:,2] = m[:,3]
         m[2] = m[3]
         m[2,2] = 1
@@ -944,7 +934,7 @@ class Imager(Module):
             self.img = None
         
         # code to display the image on the camera image
-            self.img = PG.ImageItem(imgData) # make data into a pyqtgraph image
+            self.img = pg.ImageItem(imgData) # make data into a pyqtgraph image
             self.cameraModule.window().addItem(self.img)
             self.hideOverlayImage()
             self.img.setTransform(tr)
@@ -956,13 +946,13 @@ class Imager(Module):
         
         if self.param['Show PMT V']:
             x=NP.linspace(0, samples/sampleRate, imgData.size)
-            PG.plot(y=imgData.reshape(imgData.shape[0]*imgData.shape[1]), x=x)
+            pg.plot(y=imgData.reshape(imgData.shape[0]*imgData.shape[1]), x=x)
         if self.param['Show Mirror V']:
-            PG.plot(y=xScan, x=NP.linspace(0, samples/self.param['Sample Rate'], xScan.size))
+            pg.plot(y=xScan, x=NP.linspace(0, samples/self.param['Sample Rate'], xScan.size))
         
         # generate all meta-data for this frame
         info = self.saveParams()
-        info['transform'] = PG.SRTTransform3D(tr)
+        info['transform'] = pg.SRTTransform3D(tr)
         #print 'info: ', info                            
         return (imgData, info)
     
@@ -986,7 +976,7 @@ class Imager(Module):
                 if totErr < bestError or bestError is None:
                     bestError = totErr
                     bestShift = shift
-            #PG.plot(errs)
+            #pg.plot(errs)
         else:
             bestShift = shift
         
@@ -1069,28 +1059,15 @@ class Imager(Module):
         pp = pprint.PrettyPrinter(indent=4)
         #pp.pprint(dir(mod))
         scope = self.getScopeDevice()
-        #pp.pprint(dir(scope))
         pos = self.currentRoi.mapToParent(self.currentRoi.pos())
         si = self.currentRoi.mapToParent(self.currentRoi.size())
-        print 'setup: pos, size: ', pos, si#pp.pprint((scope.config))
-        #self.regionCtrl = RegionCtrl(self.currentRoi.pos(), self.currentRoi.size())
-        #mod.addItem(self.currentRoi, z=1000)
+        #print 'setup: pos, size: ', pos, si
+        #pp.pprint((scope.config))
         
     def cameraSnap(self):
         width = self.param['Image Width']
-        #if self.param['Y = X']:
-        #    height = width
-        #else:
         height = self.param['Image Height']
         
-        #xscan = self.param['XSweep']/2.0
-        #xcenter = self.param['XCenter']
-        #ycenter = self.param['YCenter']
-        #if self.param['Y = X']:
-            #yscan = xscan
-        #else:
-            #yscan = self.param['YSweep']/2.0
-            
         xscan = self.regionCtrl.width()
         yscan = self.regionCtrl.height()
         xcenter = self.regionCtrl.center().x()
@@ -1169,9 +1146,9 @@ class Imager(Module):
             imgData = imgData[overscanPixels:-overscanPixels]  ## remove overscan
 
         if self.param['Show PMT V']:
-            PG.plot(y=imgData, x=NP.linspace(0, samples/sampleRate, imgData.size))
+            pg.plot(y=imgData, x=NP.linspace(0, samples/sampleRate, imgData.size))
         if self.param['Show Mirror V']:
-            PG.plot(y=xScan, x=NP.linspace(0, samples/self.param['Sample Rate'], xScan.size))
+            pg.plot(y=xScan, x=NP.linspace(0, samples/self.param['Sample Rate'], xScan.size))
 
         self.view.setImage(imgData)
 

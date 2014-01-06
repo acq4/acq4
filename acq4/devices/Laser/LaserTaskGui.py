@@ -149,7 +149,8 @@ class LaserTaskGui(DAQGenericTaskGui):
     def prepareTaskStart(self):
         ## check power before starting task.
         if self.ui.checkPowerCheck.isChecked():
-            power, valid = self.dev.outputPower()  ## request current power from laser
+            power = self.dev.outputPower()  ## request current power from laser
+            valid = self.dev.checkPowerValidity(power)
             if power is None:
                 raise HelpfulException("The current laser power for '%s' is unknown." % self.dev.name)
             if not valid:
