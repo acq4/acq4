@@ -1386,6 +1386,7 @@ class ViewBox(GraphicsWidget):
         if any(changed):
             self.sigRangeChanged.emit(self, self.state['viewRange'])
             self.update()
+            self._matrixNeedsUpdate = True
         
         # Inform linked views that the range has changed
         for ax in [0, 1]:
@@ -1395,7 +1396,6 @@ class ViewBox(GraphicsWidget):
             if link is not None:
                 link.linkedViewChanged(self, ax)
         
-        self._matrixNeedsUpdate = True
 
     def updateMatrix(self, changed=None):
         ## Make the childGroup's transform match the requested viewRange.
