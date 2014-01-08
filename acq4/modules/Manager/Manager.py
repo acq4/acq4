@@ -15,7 +15,8 @@ class Manager(Module):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
         self.stateFile = os.path.join('modules', self.name + '_ui.cfg')
-
+        firstDock = None
+        
         self.devRackDocks = {}
         for d in self.manager.listDevices():
             try:
@@ -29,6 +30,12 @@ class Manager(Module):
                 
                 self.devRackDocks[d] = dock
                 self.win.addDockWidget(QtCore.Qt.RightDockWidgetArea, dock)
+                
+                # By default, we stack all docks
+                if firstDock is None:
+                    firstDock = dock
+                else:
+                    self.win.tabifyDockWidget(firstDock, dock)
             except:
                 self.showMessage("Error creating dock for device '%s', see console for details." % d, 10000)
                 printExc("Error while creating dock for device '%s':" % d)
@@ -36,25 +43,19 @@ class Manager(Module):
         self.updateModList()
         self.updateConfList()
 
-        #QtCore.QObject.connect(self.ui.loadConfigBtn, QtCore.SIGNAL('clicked()'), self.loadConfig)
         self.ui.loadConfigBtn.clicked.connect(self.loadConfig)
-        #QtCore.QObject.connect(self.ui.loadModuleBtn, QtCore.SIGNAL('clicked()'), self.loadModule)
         self.ui.loadModuleBtn.clicked.connect(self.loadModule)
-        #QtCore.QObject.connect(self.ui.reloadModuleBtn, QtCore.SIGNAL('clicked()'), self.reloadAll)
         self.ui.reloadModuleBtn.clicked.connect(self.reloadAll)
-        #QtCore.QObject.connect(self.ui.configList, QtCore.SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.loadConfig)
         self.ui.configList.itemDoubleClicked.connect(self.loadConfig)
-        #QtCore.QObject.connect(self.ui.moduleList, QtCore.SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.loadModule)
         self.ui.moduleList.itemDoubleClicked.connect(self.loadModule)
-        #self.logBtn = self.ui.logBtn ## to be able to access logBtns uniformly in all modules
-        #self.logBtn.clicked.connect(manager.logWindow.show)
-        #QtCore.QObject.connect(self.ui.quitBtn, QtCore.SIGNAL('clicked()'), self.requestQuit)
         self.ui.quitBtn.clicked.connect(self.requestQuit)
 
         state = self.manager.readConfigFile(self.stateFile)
+        # restore window position
         if 'geometry' in state:
             geom = QtCore.QRect(*state['geometry'])
             self.win.setGeometry(geom)
+        # restore dock configuration
         if 'window' in state:
             ws = QtCore.QByteArray.fromPercentEncoding(state['window'])
             self.win.restoreState(ws)

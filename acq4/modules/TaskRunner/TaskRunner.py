@@ -1,29 +1,22 @@
 # -*- coding: utf-8 -*-
-#from __future__ import with_statement
 from acq4.modules.Module import *
 from TaskRunnerTemplate import *
 from PyQt4 import QtGui, QtCore
-#from DirTreeModel import *
 import acq4.util.DirTreeWidget as DirTreeWidget
 import acq4.util.configfile as configfile
 from collections import OrderedDict
 from acq4.util.SequenceRunner import *
-#from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 from acq4.util.Mutex import Mutex, MutexLocker
 from acq4.Manager import getManager, logMsg, logExc
 from acq4.util.debug import *
 import acq4.util.ptime as ptime
 import analysisModules
 import time, gc
-#import sip
 import sys, os
 from acq4.util.HelpfulException import HelpfulException
-#from acq4.LogWindow import LogButton
 import acq4.pyqtgraph as pg
 from acq4.util.StatusBar import StatusBar
 
-
-#import pdb
 
 class Window(QtGui.QMainWindow):
     def __init__(self, pr):
@@ -84,6 +77,7 @@ class TaskRunner(Module):
         self.devListItems = {}
         
         self.docks = {}
+        self.firstDock = None  # all new docks should stack here
         self.analysisDocks = {}
         self.deleteState = 0
         self.ui = Ui_MainWindow()
@@ -163,15 +157,14 @@ class TaskRunner(Module):
         
     def getDevice(self, dev):
         """Return the taskGui for dev. Used by some devices to detect changes in others."""
-        if dev not in self.docks:
-            ## Create the device if needed
-            try:
-                item = self.ui.deviceList.findItems(dev, QtCore.Qt.MatchExactly)[0]
-            except:
-                raise Exception('Requested device %s does not exist!' % dev)
-            item.setCheckState(QtCore.Qt.Checked)
-            self.deviceItemClicked(item)
-            #self.docks[dev].show()
+        ## Create or re-enable the device if needed
+        try:
+            item = self.ui.deviceList.findItems(dev, QtCore.Qt.MatchExactly)[0]
+        except:
+            raise Exception('Requested device %s does not exist!' % dev)
+        item.setCheckState(QtCore.Qt.Checked)
+        self.deviceItemClicked(item)
+        
         return self.docks[dev].widget()
         
     def getParam(self, param):
@@ -275,7 +268,7 @@ class TaskRunner(Module):
     def analysisItemClicked(self, item):
         name = str(item.text())
         if item.checkState() == QtCore.Qt.Checked:
-            if not self.createAnalysisDock(name):
+            if self.createAnalysisDock(name) is False:
                 item.setCheckState(QtCore.Qt.Unchecked)
         else:
             self.removeAnalysisDock(name)
@@ -292,6 +285,13 @@ class TaskRunner(Module):
             
             self.analysisDocks[mod] = dock
             self.win.addDockWidget(QtCore.Qt.BottomDockWidgetArea, dock)
+            if self.firstDock is None:
+                self.firstDock = dock
+            else:
+                # by default, docks are tabbed. 
+                # if dock state is stored, this will be corrected later.
+                self.win.tabifyDockWidget(self.firstDock, dock)
+                
             
             items = self.ui.analysisList.findItems(mod, QtCore.Qt.MatchExactly)
             items[0].setCheckState(QtCore.Qt.Checked)
@@ -308,27 +308,18 @@ class TaskRunner(Module):
             self.analysisDocks[mod].widget().quit()
         except:
             printExc("Error closing analysis dock:")
-        self.win.removeDockWidget(self.analysisDocks[mod])
-        #sip.delete(self.analysisDocks[mod])
+        dock = self.analysisDocks[mod]
+        if self.firstDock is dock:
+            self.firstDock = None
+        self.win.removeDockWidget(dock)
         del self.analysisDocks[mod]
         items = self.ui.analysisList.findItems(mod, QtCore.Qt.MatchExactly)
         items[0].setCheckState(QtCore.Qt.Unchecked)
         
-        
-    #def protoListClicked(self, ind):
-        #sel = list(self.ui.taskList.selectedIndexes())
-        #if len(sel) == 1:
-            #self.ui.deleteTaskBtn.setEnabled(True)
-        #else:
-            #self.ui.deleteTaskBtn.setEnabled(False)
-        #self.resetDeleteState()
-            
     def fileChanged(self, handle, change, args):
         if change == 'renamed' or change == 'moved':
             self.currentTask.fileName = handle.name()
             
-        
-        
     #def fileRenamed(self, fn1, fn2):
         #"""Update the current task state to follow a file that has been moved or renamed"""
         #if fn1 == self.currentTask.fileName:
@@ -445,11 +436,13 @@ class TaskRunner(Module):
                     dw.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
                     self.docks[d] = dock
                     self.win.addDockWidget(QtCore.Qt.BottomDockWidgetArea, dock)
-                    #QtCore.QObject.connect(dock.widget(), QtCore.SIGNAL('sequenceChanged'), self.updateSeqParams)
+                    if self.firstDock is None:
+                        self.firstDock = dock
+                    else:
+                        QtGui.QApplication.processEvents() # required to ensure new tab is visible
+                        self.win.tabifyDockWidget(self.firstDock, dock)
                     dock.widget().sigSequenceChanged.connect(self.updateSeqParams)
                     self.updateSeqParams(d)
-                    #dock.setMinimumWidth(3000)
-                    #dock.setMinimumWidth(0)
         
         
     def clearDocks(self):
@@ -460,6 +453,8 @@ class TaskRunner(Module):
             except:
                 printExc("Error while requesting dock '%s' quit:"% d)
             try:
+                if self.firstDock is self.docks[d]:
+                    self.firstDock = None
                 self.win.removeDockWidget(self.docks[d])
                 self.docks[d].close()
                 #sip.delete(self.docks[d])
