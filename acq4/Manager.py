@@ -594,8 +594,9 @@ class Manager(QtCore.QObject):
 
     def reloadAll(self):
         """Reload all python code"""
-        path = os.path.split(os.path.abspath(__file__))[0]
-        path = os.path.abspath(os.path.join(path, '..'))
+        #path = os.path.split(os.path.abspath(__file__))[0]
+        #path = os.path.abspath(os.path.join(path, '..'))
+        path = 'acq4'
         print "\n---- Reloading all libraries under %s ----" % path
         reload.reloadAll(prefix=path, debug=True)
         print "Done reloading.\n"
