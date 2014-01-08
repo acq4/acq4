@@ -9,8 +9,8 @@ from acq4.util.HelpfulException import HelpfulException
 #from FeedbackButton import FeedbackButton
 
 class LaserTaskGui(DAQGenericTaskGui):
-    def __init__(self, dev, task):
-        DAQGenericTaskGui.__init__(self, dev, task, ownUi=False)
+    def __init__(self, dev, taskRunner):
+        DAQGenericTaskGui.__init__(self, dev, taskRunner, ownUi=False)
         
         self.ui = taskTemplate.Ui_Form()
         

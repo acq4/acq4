@@ -197,9 +197,9 @@ class DAQGeneric(Device):
         """Return a widget with a UI to put in the device rack"""
         return DAQDevGui(self)
         
-    def taskInterface(self, prot):
+    def taskInterface(self, taskRunner):
         """Return a widget with a UI to put in the task rack"""
-        return DAQGenericTaskGui(self, prot)
+        return DAQGenericTaskGui(self, taskRunner)
 
     def getDAQName(self, channel):
         #return self._DGConfig[channel]['channel'][0]

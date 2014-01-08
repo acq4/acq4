@@ -108,8 +108,8 @@ class NiDAQ(Device):
             self.release()
         return val
         
-    def taskInterface(self, task):
-        return NiDAQTask(self, task)
+    def taskInterface(self, taskRunner):
+        return NiDAQTask(self, taskRunner)
         
     #def listTriggerPorts(self):
         #p = self.n.listDILines()

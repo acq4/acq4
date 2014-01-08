@@ -13,10 +13,10 @@ class MultiClampTaskGui(TaskGui):
     
     #sigSequenceChanged = QtCore.Signal(object)  ## defined upstream
     
-    def __init__(self, dev, task):
-        TaskGui.__init__(self, dev, task)
+    def __init__(self, dev, taskRunner):
+        TaskGui.__init__(self, dev, taskRunner)
         daqDev = self.dev.getDAQName()
-        self.daqUI = self.task.getDevice(daqDev)
+        self.daqUI = self.taskRunner.getDevice(daqDev)
         
         self.traces = {}  ## Stores traces from a sequence to allow average plotting
         self.resetInpPlots = False  ## Signals result handler to clear plots before adding a new one

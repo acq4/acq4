@@ -61,11 +61,11 @@ class DAQGenericTaskGui(TaskGui):
         p.registerPlot(self.dev.name() + '.' + ch)
         
         if conf['type'] in ['ao', 'do']:
-            w = OutputChannelGui(self, ch, conf, p, self.dev, self.task, daqName)
+            w = OutputChannelGui(self, ch, conf, p, self.dev, self.taskRunner, daqName)
             #QtCore.QObject.connect(w, QtCore.SIGNAL('sequenceChanged'), self.sequenceChanged)
             w.sigSequenceChanged.connect(self.sequenceChanged)
         elif conf['type'] in ['ai', 'di']:
-            w = InputChannelGui(self, ch, conf, p, self.dev, self.task, daqName)
+            w = InputChannelGui(self, ch, conf, p, self.dev, self.taskRunner, daqName)
         else:
             raise Exception("Unrecognized device type '%s'" % conf['type'])
         # w.setUnits(units)

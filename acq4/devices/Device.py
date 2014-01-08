@@ -239,38 +239,32 @@ class TaskGui(QtGui.QWidget):
     
     sigSequenceChanged = QtCore.Signal(object)
     
-    def __init__(self, dev, task):
+    def __init__(self, dev, taskRunner):
         QtGui.QWidget.__init__(self)
         self.dev = dev
-        self.task = task
+        self.taskRunner = taskRunner
         self._PGConnected = False
         self.enable()
         
     def enable(self):
         if not self._PGConnected:
-            #QtCore.QObject.connect(self.task, QtCore.SIGNAL('taskStarted'), self.taskStarted)        
-            #QtCore.QObject.connect(self.task, QtCore.SIGNAL('taskStarted'), self.taskStarted)     
-            #QtCore.QObject.connect(self.task, QtCore.SIGNAL('taskFinished'), self.taskFinished) 
-            self.task.sigTaskSequenceStarted.connect(self.taskSequenceStarted) ## called at the beginning of a task/sequence
-            self.task.sigTaskStarted.connect(self.taskStarted)## called at the beginning of all task runs
-            self.task.sigTaskFinished.connect(self.taskFinished) ## called at the end of a task/sequence
+            self.taskRunner.sigTaskSequenceStarted.connect(self.taskSequenceStarted) ## called at the beginning of a task/sequence
+            self.taskRunner.sigTaskStarted.connect(self.taskStarted)## called at the beginning of all task runs
+            self.taskRunner.sigTaskFinished.connect(self.taskFinished) ## called at the end of a task/sequence
             self._PGConnected = True
         
     def disable(self):
         if self._PGConnected:
-            #QtCore.QObject.disconnect(self.task, QtCore.SIGNAL('taskStarted'), self.taskStarted)
-            #QtCore.QObject.disconnect(self.task, QtCore.SIGNAL('taskStarted'), self.taskStarted)
-            #QtCore.QObject.disconnect(self.task, QtCore.SIGNAL('taskFinished'), self.taskFinished)
             try:
-                self.task.sigTaskSequenceStarted.disconnect(self.taskSequenceStarted)
+                self.taskRunner.sigTaskSequenceStarted.disconnect(self.taskSequenceStarted)
             except TypeError:
                 pass
             try:
-                self.task.sigTaskStarted.disconnect(self.taskStarted)
+                self.taskRunner.sigTaskStarted.disconnect(self.taskStarted)
             except TypeError:
                 pass
             try:
-                self.task.sigTaskFinished.disconnect(self.taskFinished)
+                self.taskRunner.sigTaskFinished.disconnect(self.taskFinished)
             except TypeError:
                 pass
             self._PGConnected = False

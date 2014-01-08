@@ -141,9 +141,9 @@ class MultiClamp(Device):
                 self.devRackGui = MCDeviceGui(self, win)
             return self.devRackGui
 
-    def taskInterface(self, task):
+    def taskInterface(self, taskRunner):
         with MutexLocker(self.lock):
-            return MultiClampTaskGui(self, task)
+            return MultiClampTaskGui(self, taskRunner)
 
     #def setParams(self, params):
         #with MutexLocker(self.lock):

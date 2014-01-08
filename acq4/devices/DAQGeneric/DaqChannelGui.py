@@ -15,7 +15,7 @@ from acq4.pyqtgraph import siFormat, SpinBox, WidgetGroup
 ###### For task GUIs
 
 class DaqChannelGui(QtGui.QWidget):
-    def __init__(self, parent, name, config, plot, dev, prot, daqName=None):
+    def __init__(self, parent, name, config, plot, dev, taskRunner, daqName=None):
         QtGui.QWidget.__init__(self, parent)
         
         ## Name of this channel
@@ -34,14 +34,14 @@ class DaqChannelGui(QtGui.QWidget):
         self.dev = dev
         
         ## The task GUI window which contains this object
-        self.prot = weakref.ref(prot)
+        self.taskRunner = weakref.ref(taskRunner)
         
         ## Make sure task interface includes our DAQ device
         if daqName is None:
             self.daqDev = self.dev.getDAQName(self.name)
         else:
             self.daqDev = daqName
-        self.daqUI = self.prot().getDevice(self.daqDev)
+        self.daqUI = self.taskRunner().getDevice(self.daqDev)
         
         ## plot widget
         self.plot = plot
@@ -350,7 +350,6 @@ class InputChannelGui(DaqChannelGui):
         DaqChannelGui.__init__(self, *args)
         self.ui = InputChannelTemplate.Ui_Form()
         self.ui.setupUi(self)
-        #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('taskStarted'), self.clearPlots)
         self.postUiInit()
         self.clearBeforeNextPlot = False
          

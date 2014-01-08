@@ -10,8 +10,8 @@ class NiDAQTask(TaskGui):
     
     sigChanged = QtCore.Signal(object)
     
-    def __init__(self, dev, task):
-        TaskGui.__init__(self, dev, task)
+    def __init__(self, dev, taskRunner):
+        TaskGui.__init__(self, dev, taskRunner)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.nPts = 0
@@ -49,7 +49,7 @@ class NiDAQTask(TaskGui):
         self.ui.rateSpin.valueChanged.connect(self.rateChanged)
         self.ui.periodSpin.sigValueChanging.connect(self.updateRateSpin)
         self.ui.rateSpin.sigValueChanging.connect(self.updatePeriodSpin)
-        self.task.sigTaskChanged.connect(self.taskChanged)
+        self.taskRunner.sigTaskChanged.connect(self.taskChanged)
         self.ui.denoiseCombo.currentIndexChanged.connect(self.ui.denoiseStack.setCurrentIndex)
         self.ui.filterCombo.currentIndexChanged.connect(self.ui.filterStack.setCurrentIndex)
         self.ui.rateSpin.setValue(self.rate)
@@ -57,7 +57,7 @@ class NiDAQTask(TaskGui):
         
     def quit(self):
         TaskGui.quit(self)
-        QtCore.QObject.disconnect(self.task, QtCore.SIGNAL('taskChanged'), self.taskChanged)
+        QtCore.QObject.disconnect(self.taskRunner, QtCore.SIGNAL('taskChanged'), self.taskChanged)
         
     def saveState(self):
         return self.stateGroup.state()
@@ -145,7 +145,7 @@ class NiDAQTask(TaskGui):
             self.sigChanged.emit(self.currentState())
         
     def updateNPts(self):
-        dur = self.task.getParam('duration')
+        dur = self.taskRunner.getParam('duration')
         nPts = int(dur * self.rate)
         if nPts != self.nPts:
             self.nPts = nPts

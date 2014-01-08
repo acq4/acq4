@@ -289,8 +289,8 @@ class Camera(DAQGeneric, OptomechDevice):
         
 
 
-    def taskInterface(self, task):
-        return CameraTaskGui(self, task)
+    def taskInterface(self, taskRunner):
+        return CameraTaskGui(self, taskRunner)
 
     def deviceInterface(self, win):
         return CameraDeviceGui(self, win)

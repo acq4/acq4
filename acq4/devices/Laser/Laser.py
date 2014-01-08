@@ -274,8 +274,8 @@ class Laser(DAQGeneric, OptomechDevice):
     def createTask(self, cmd, parentTask):
         return LaserTask(self, cmd, parentTask)
         
-    def taskInterface(self, prot):
-        return LaserTaskGui(self, prot)
+    def taskInterface(self, taskRunner):
+        return LaserTaskGui(self, taskRunner)
         
     def deviceInterface(self, win):
         return LaserDevGui(self)
