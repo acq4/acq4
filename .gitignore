@@ -1,3 +1,7 @@
 *.pyc
 *~
 *.renamed*
+MANIFEST
+dist
+build
+tempLog.txt
