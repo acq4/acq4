@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './acq4/modules/TaskRunner/TaskRunnerTemplate.ui'
+# Form implementation generated from reading ui file 'acq4/modules/TaskRunner/TaskRunnerTemplate.ui'
 #
-# Created: Tue Dec 24 01:49:10 2013
+# Created: Wed Jan  8 00:49:37 2014
 #      by: PyQt4 UI code generator 4.10
 #
 # WARNING! All changes made in this file will be lost!
@@ -176,6 +176,9 @@ class Ui_MainWindow(object):
         self.sequenceParamList.setAnimated(True)
         self.sequenceParamList.setAllColumnsShowFocus(True)
         self.sequenceParamList.setObjectName(_fromUtf8("sequenceParamList"))
+        self.sequenceParamList.header().setDefaultSectionSize(30)
+        self.sequenceParamList.header().setMinimumSectionSize(30)
+        self.sequenceParamList.header().setStretchLastSection(False)
         self.gridLayout_2.addWidget(self.sequenceParamList, 1, 0, 1, 1)
         self.horizontalLayout_3 = QtGui.QHBoxLayout()
         self.horizontalLayout_3.setObjectName(_fromUtf8("horizontalLayout_3"))
@@ -200,6 +203,8 @@ class Ui_MainWindow(object):
         self.stopSequenceBtn.setObjectName(_fromUtf8("stopSequenceBtn"))
         self.horizontalLayout_3.addWidget(self.stopSequenceBtn)
         self.gridLayout_2.addLayout(self.horizontalLayout_3, 2, 0, 1, 2)
+        self.gridLayout_2.setColumnStretch(0, 5)
+        self.gridLayout_2.setColumnStretch(1, 1)
         self.SequenceDock.setWidget(self.dockWidgetContents_7)
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.SequenceDock)
         self.dockWidget = QtGui.QDockWidget(MainWindow)
