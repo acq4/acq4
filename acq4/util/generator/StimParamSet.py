@@ -285,7 +285,7 @@ class PulseTrainParameter(PulseParameter):
         PulseParameter.__init__(self, **kargs)
         
         params = [
-            SeqParameter(**{'name': 'interpulse_length', 'type': 'float', 'value': 0.01, 'axis': 'x'}),
+            SeqParameter(**{'name': 'period', 'type': 'float', 'value': 0.01, 'axis': 'x'}),
             SeqParameter(**{'name': 'pulse_number', 'type': 'int', 'value': 10}),
         ]
         for p in params:
@@ -294,7 +294,7 @@ class PulseTrainParameter(PulseParameter):
     def preCompile(self):
         start, length, amp, seq = PulseParameter.preCompile(self)
         
-        seqParams = [self.param('interpulse_length').compile(), self.param('pulse_number').compile()] 
+        seqParams = [self.param('period').compile(), self.param('pulse_number').compile()] 
         (interval, intSeq) = seqParams[0]
         (number, numSeq) = seqParams[1]
         seq.update({name:seq for name, seq in seqParams if seq is not None})
