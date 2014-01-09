@@ -122,9 +122,9 @@ class QCamDriverClass:
         L = lib.CamListItem * 10
         l = L()
         self.call(lib.ListCameras, l, number)
-        cams = []
+        cams = {}
         for x in list(l)[:number.value]:
-            cams.append(x.cameraId)
+            cams[x.uniqueId] = x.cameraId
         return cams
     
     def getCamera(self, cam):

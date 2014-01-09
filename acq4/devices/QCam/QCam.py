@@ -19,41 +19,15 @@ class QCam(Camera):
     def setupCamera(self):
         self.qcd = QCamDriverClass()
         cams = self.qcd.listCameras()
-        #print "Cameras:", cams
         if len(cams) < 1:
             raise Exception('No cameras found by QCam driver')
         
-        #if self.camConfig['serial'] is None:  ## Just pick first camera
-        #    ind = 0
-        #else:
-        #    if self.camConfig['serial'] in cams:
-        #        ind = cams.index(self.camConfig['serial'])
-        #    else:
-        #        raise Exception('Can not find pvcam camera "%s"' % str(self.camConfig['serial']))
-        #print "Selected camera:", cams[ind]
-        #self.cam = self.pvc.getCamera(cams[ind])
-        #print "QCam: Opening camera ...."
-        self.cam = self.qcd.getCamera(cams[0]) #open first camera
-       # print "QCam: Camera opened."
+        # If no camera is specified, choose the first
+        serial = self.config.get('serial', cams.keys()[0])
         
-    #def start(self, block=True):
-        #if not self.isRunning():
-            ##print "  not running already; start camera"
-            #Camera.start(self, block)
-            #self.startTime = ptime.time()
-            
-        #if block:
-            #tm = self.getParam('triggerMode')
-            #if tm != 'Normal':
-                ##print "  waiting for trigger to arm"
-                #waitTime = 0.3  ## trigger needs about 300ms to prepare (?)
-            #else:
-                #waitTime = 0
-            
-            #sleepTime = (self.startTime + waitTime) - ptime.time()
-            #if sleepTime > 0:
-                ##print "  sleep for", sleepTime
-                #time.sleep(sleepTime)
+        if serial not in cams:
+            raise Exception('QCam camera "%s" not found. Options are: %s' % (serial, list(cams.keys())))
+        self.cam = self.qcd.getCamera(cams[serial]) #open first camera
             
     def listParams(self, params=None):
         """List properties of specified parameters, or of all parameters if None"""
