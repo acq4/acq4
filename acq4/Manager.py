@@ -315,10 +315,8 @@ class Manager(QtCore.QObject):
                         print "  === Configuring device '%s' ===" % k
                         logMsg("  === Configuring device '%s' ===" % k)
                         try:
-                            conf = None
-                            if cfg['devices'][k].has_key('config'):
-                                conf = cfg['devices'][k]['config']
-                            driverName = cfg['devices'][k]['driver']
+                            conf = cfg['devices'][k]
+                            driverName = conf['driver']
                             self.loadDevice(driverName, conf, k)
                         except:
                             printExc("Error configuring device %s:" % k)
