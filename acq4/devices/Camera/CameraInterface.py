@@ -135,6 +135,9 @@ class CameraInterface(QtCore.QObject):
         self.globalTransformChanged()
         #self.rebuildBoundaryItems()
 
+        # initially set binning and exposure from camera state
+        self.exposure = self.cam.getParam('exposure')
+        self.binning = self.cam.getParam('binning')[0]
         ## Initialize values/connections in Camera Dock
         self.setUiBinning(self.binning)
         self.ui.spinExposure.setValue(self.exposure)

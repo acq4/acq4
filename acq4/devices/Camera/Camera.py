@@ -124,10 +124,12 @@ class Camera(DAQGeneric, OptomechDevice):
         
         self.sigGlobalTransformChanged.connect(self.transformChanged)
         
-        if config != None and 'params' in config:
+        if config != None:
+            # look for 'defaults', then 'params' to preserve backward compatibility.
+            defaults = config.get('defaults', config.get('params', {}))
             #print "Camera: setting configuration params."
             try:
-                self.setParams(config['params'])
+                self.setParams(defaults)
             except:
                 printExc("Error default setting camera parameters:")
         #print "Camera: no config params to set."
