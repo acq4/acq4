@@ -2,7 +2,7 @@
 import sys, time, os
 import numpy as np
 import acq4.util.clibrary as clibrary
-
+import ctypes
 modDir = os.path.dirname(__file__)
 headerFiles = [os.path.join(modDir, "NIDAQmx.h")]
 cacheFile = os.path.join(modDir, 'NIDAQmx_headers_%s.cache' % sys.platform)   
@@ -111,8 +111,7 @@ class MockNIDAQ:
         """Set the value of an AO or DO port"""
         t = self.createTask()
         t.CreateAOVoltageChan(chan, "", vRange[0], vRange[1], self.lib.Val_Volts, None)
-        t.WriteAnalogScalarF64(True, timeout, value, None)
-        return
+        #t.WriteAnalogScalarF64(True, timeout, value, None)
         
     def readAnalogSample(self, chan, mode=None, vRange=[-10., 10.], timeout=10.0):
         """Get the value of an AI port"""
@@ -122,22 +121,22 @@ class MockNIDAQ:
             mode = self.interpretMode(mode)
         t = self.createTask()
         t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], self.lib.Val_Volts, None)
-        val = c_double(0.)
-        t.ReadAnalogScalarF64(timeout, byref(val), None)
-        return val.value
+        #val = ctypes.c_double(0.)
+        #t.ReadAnalogScalarF64(timeout, byref(val), None)
+        #return val.value
+        return 0.0
 
     def writeDigitalSample(self, chan, value, timeout=10.):
         """Set the value of an AO or DO port"""
         t = self.createTask()
         t.CreateDOChan(chan, "", self.lib.Val_ChanForAllLines)
-        t.WriteDigitalScalarU32(True, timeout, value, None)
-        return
+        #t.WriteDigitalScalarU32(True, timeout, value, None)
         
     def readDigitalSample(self, chan, timeout=10.0):
         """Get the value of an AI port"""
         t = self.createTask()
         t.CreateDIChan(chan, "", self.lib.Val_ChanForAllLines)
-        val = c_ulong(0)
+        val = ctypes.c_ulong(0)
         t.ReadDigitalScalarU32(timeout, byref(val), None)
         return val.value
 

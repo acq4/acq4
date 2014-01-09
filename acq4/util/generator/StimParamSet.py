@@ -299,7 +299,7 @@ class PulseTrainParameter(PulseParameter):
         (number, numSeq) = seqParams[1]
         seq.update({name:seq for name, seq in seqParams if seq is not None})
         
-        start = "%s + linspace(0, %s * (%s-1), %s)" % (start, interval, number, number)
+        start = "%s + np.linspace(0, %s * (%s-1), %s)" % (start, interval, number, number)
         return start, length, amp, seq
         
     def compile(self):

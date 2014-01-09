@@ -9,7 +9,7 @@ from numpy import ndarray
 from . import GraphicsLayout
 
 try:
-    from metaarray import *
+    from ..metaarray import *
     HAVE_METAARRAY = True
 except:
     #raise
