@@ -1,16 +1,11 @@
 # -*- coding: utf-8 -*-
 
 from PyQt4 import QtGui, QtCore
-#from PyQt4 import Qwt5 as Qwt
 import AOChannelTemplate, DOChannelTemplate, InputChannelTemplate
 from acq4.util.SequenceRunner import *
-#from acq4.pyqtgraph.WidgetGroup import WidgetGroup
-#from acq4.pyqtgraph.PlotWidget import PlotCurveItem
 import numpy
-#import sip
 import weakref
 from acq4.pyqtgraph import siFormat, SpinBox, WidgetGroup
-#from acq4.pyqtgraph.SpinBox import SpinBox
 
 ###### For task GUIs
 
@@ -45,6 +40,8 @@ class DaqChannelGui(QtGui.QWidget):
         
         ## plot widget
         self.plot = plot
+        self.plot.setDownsampling(ds=True, auto=True, mode='peak')
+        self.plot.setClipToView(True)
         #plot.setCanvasBackground(QtGui.QColor(0,0,0))
         #plot.replot()
         

@@ -40,7 +40,11 @@ class MultiClampTaskGui(TaskGui):
         self.setMode('I=0')
 
         self.ui.topPlotWidget.registerPlot(self.dev.name() + '.Input')
+        self.ui.topPlotWidget.setDownsampling(ds=True, auto=True, mode='peak')
+        self.ui.topPlotWidget.setClipToView(True)
         self.ui.bottomPlotWidget.registerPlot(self.dev.name() + '.Command')
+        self.ui.bottomPlotWidget.setDownsampling(ds=True, auto=True, mode='peak')
+        self.ui.bottomPlotWidget.setClipToView(True)
 
         self.daqChanged(self.daqUI.currentState())
         self.daqUI.sigChanged.connect(self.daqChanged)
