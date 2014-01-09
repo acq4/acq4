@@ -483,6 +483,7 @@ class AxoPatchTaskGui(DAQGenericTaskGui):
         self.splitter2.addWidget(w2)
         self.splitter3.addWidget(p1)
         self.splitter3.addWidget(p2)
+        self.splitter1.setSizes([100, 500])
         
         self.stateGroup = WidgetGroup([
             (self.splitter1, 'splitter1'),
