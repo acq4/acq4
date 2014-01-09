@@ -7,6 +7,7 @@ from taskGUI import *
 from acq4.util.debug import *
 from acq4.pyqtgraph import siFormat
 import DeviceTemplate
+from collections import OrderedDict
 
 
 class DataMapping:
@@ -407,31 +408,16 @@ class DAQGenericTask(DeviceTask):
     def getResult(self):
         ## Access data recorded from DAQ task
         ## create MetaArray and fill with MC state info
-        #self.state['startTime'] = self.daqTasks[self.daqTasks.keys()[0]].getStartTime()
         
         ## Collect data and info for each channel in the command
-        #prof = Profiler("  DAQGeneric.getResult")
         result = {}
-        #print "buffered channels:", self.bufferedChannels
         for ch in self.bufferedChannels:
-            #result[ch] = _DAQCmd[ch]['task'].getData(self.dev.config[ch]['channel'][1])
             result[ch] = self.daqTasks[ch].getData(self.dev._DGConfig[ch]['channel'])
-            #prof.mark("get data for channel "+str(ch))
-            #print "get data", ch, self.getChanScale(ch), result[ch]['data'].max()
-            #scale = self.getChanScale(ch)
-            #result[ch]['data'] = result[ch]['data'] / scale
             result[ch]['data'] = self.mapping.mapFromDaq(ch, result[ch]['data']) ## scale/offset/invert
             result[ch]['units'] = self.getChanUnits(ch)
-            #print "channel", ch, "returned:\n  ", result[ch]
-            #prof.mark("scale data for channel "+str(ch))
-            #del _DAQCmd[ch]['task']
-        #print "RESULT:", result    
-        ## Todo: Add meta-info about channels that were used but unbuffered
-        
         
         if len(result) > 0:
             meta = result[result.keys()[0]]['info']
-            #print meta
             rate = meta['rate']
             nPts = meta['numPts']
             ## Create an array of time values
@@ -448,7 +434,7 @@ class DAQGenericTask(DeviceTask):
                 print [a.shape for a in chanList]
                 raise
             
-            daqState = {}
+            daqState = OrderedDict()
             for ch in self.dev._DGConfig:
                 if ch in result:
                     daqState[ch] = result[ch]['info']
@@ -470,8 +456,6 @@ class DAQGenericTask(DeviceTask):
             info[-1]['Protocol'] = protInfo
                 
             marr = MetaArray(arr, info=info)
-            #print marr
-            #prof.mark("post-process data")
             return marr
             
         else:

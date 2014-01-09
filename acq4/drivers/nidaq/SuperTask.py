@@ -4,6 +4,7 @@ import time #sys, re, types, ctypes, os, time
 from numpy import *
 #import cheader
 import acq4.util.ptime as ptime  ## platform-independent precision timing
+from collections import OrderedDict
 #import debug
 
 class SuperTask:
@@ -314,7 +315,12 @@ class SuperTask:
             res = self.result[self.channelInfo[channel]['task']]
             ret = {
                 'data': res['data'][self.channelInfo[channel]['index']],
-                'info': {'startTime': res['start'], 'numPts': self.numPts, 'rate': self.rate, 'type': self.channelInfo[channel]['task'][1]}
+                'info': OrderedDict([
+                    ('startTime', res['start']), 
+                    ('numPts', self.numPts), 
+                    ('rate', self.rate), 
+                    ('type', self.channelInfo[channel]['task'][1])
+                    ])
             }
             if 'clipped' in res:
                 ret['info']['clipped'] = res['clipped']
