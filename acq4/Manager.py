@@ -317,6 +317,8 @@ class Manager(QtCore.QObject):
                         try:
                             conf = cfg['devices'][k]
                             driverName = conf['driver']
+                            if 'config' in conf:  # for backward compatibility
+                                conf = conf['config']
                             self.loadDevice(driverName, conf, k)
                         except:
                             printExc("Error configuring device %s:" % k)

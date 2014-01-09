@@ -54,13 +54,15 @@ class MultiClamp(Device):
                 self.holding['IC'] = self.config['icHolding']
 
             ## Set up default MC settings for each mode, then leave MC in I=0 mode
-            if 'settings' in self.config:
+            # look for 'defaults', followed by 'settings' (for backward compatibility)
+            defaults = self.config.get('defaults', self.config.get('settings', None))
+            if defaults is not None:
                 for mode in ['IC', 'VC']:
-                    if mode in self.config['settings']:
+                    if mode in defaults:
                         #print "set mode", mode
                         self.setMode(mode)
                         #print "set params"
-                        self.mc.setParams(self.config['settings'][mode])
+                        self.mc.setParams(defaults[mode])
             self.setMode('I=0')  ## safest mode to leave clamp in
 
         except:

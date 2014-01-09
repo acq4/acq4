@@ -53,25 +53,25 @@ class ChannelHandle(object):
 class DAQGeneric(Device):
     """
     Config format:
-    
-        ChannelName1:
-            device: 'DaqDeviceName'
-            channel: '/Dev1/ao0'
-            type: 'ao'
-            units: 'A'
-            scale: 200 * mV / nA
-        ChannelName2:
-            device: 'DaqDeviceName'
-            channel: '/Dev1/ai3'
-            type: 'ai'
-            mode: 'nrse'
-            units: 'A'
-            scale: 200 * nA / mV
-        ChannelName3:
-            device: 'DaqDeviceName'
-            channel: '/Dev1/line7'
-            type: 'di'
-            invert: True
+        channels:
+            ChannelName1:
+                device: 'DaqDeviceName'
+                channel: '/Dev1/ao0'
+                type: 'ao'
+                units: 'A'
+                scale: 200 * mV / nA
+            ChannelName2:
+                device: 'DaqDeviceName'
+                channel: '/Dev1/ai3'
+                type: 'ai'
+                mode: 'nrse'
+                units: 'A'
+                scale: 200 * nA / mV
+            ChannelName3:
+                device: 'DaqDeviceName'
+                channel: '/Dev1/line7'
+                type: 'di'
+                invert: True
         
     """
     sigHoldingChanged = QtCore.Signal(object, object)
@@ -80,6 +80,9 @@ class DAQGeneric(Device):
         Device.__init__(self, dm, config, name)
         self._DGLock = Mutex(QtCore.QMutex.Recursive)  ## protects access to _DGHolding, _DGConfig
         ## Do some sanity checks here on the configuration
+        
+        # 'channels' key is expected; for backward compatibility we just use the top-level config.
+        config = config.get('channels', config)
         self._DGConfig = config
         self._DGHolding = {}
         for ch in config:
