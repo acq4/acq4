@@ -821,6 +821,15 @@ class AcquireThread(QtCore.QThread):
     #    
     
     def run(self):
+        #import cProfile
+        ##cProfile.runctx('self._run()', globals(), locals(), sort='cumulative')
+        #pr = cProfile.Profile()
+        #pr.enable()
+        #self._run()
+        #pr.disable()
+        #pr.print_stats(sort='cumulative')
+        
+    #def _run(self):
         size = self.dev.getParam('sensorSize')
         lastFrame = None
         lastFrameTime = None
@@ -910,7 +919,7 @@ class AcquireThread(QtCore.QThread):
                     lastFrameId = frames[-1]['id']
                     loopCount = 0
                         
-                time.sleep(100e-6)
+                time.sleep(1e-3)
                 
                 ## check for stop request every 10ms
                 if now - lastStopCheck > 10e-3: 
