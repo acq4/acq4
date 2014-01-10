@@ -859,8 +859,8 @@ class Manager(QtCore.QObject):
             #print "  done."
             print "\n    ciao."
         QtGui.QApplication.quit()
-        pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
-                   # this avoids otherwise irritating exit crashes.
+        #pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
+                    # this avoids otherwise irritating exit crashes.
 
 class Task:
     id = 0

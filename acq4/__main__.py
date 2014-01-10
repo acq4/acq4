@@ -6,7 +6,9 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 print("Loading ACQ4...")
-
+if __package__ is None:
+    import acq4
+    __package__ = 'acq4'
 from .pyqtgraph.Qt import QtGui, QtCore
 
 from .Manager import *
