@@ -45,7 +45,6 @@ if m is None or len(m.groups()) != 1:
     raise Exception("Cannot determine __version__ from init file: '%s'!" % initfile)
 version = m.group(1).strip('\'\"')
 initVersion = version
-print "Current base version:", version
 
 # If this is a git checkout, try to generate a more decriptive version string
 try:
@@ -90,6 +89,10 @@ except:
                      "instead: '%s'\n" % version)
     sys.excepthook(*sys.exc_info())
 
+print("__init__ version: %s  current version: %s" % (initVersion, version))
+if 'upload' in sys.argv and version != initVersion:
+    print("Base version does not match current; stubbornly refusing to upload.")
+    exit()
 
 import distutils.command.build
 

@@ -1,3 +1,87 @@
+acq4-0.9.2 2014-01-10
+
+    API / behavior changes:
+        Performance improvements for Camera module, MP285
+        generator pulse train parameter "interpulse_length" renamed to "period"
+        Renamed "task" -> "taskRunner" for clarity in all TaskGui classes
+        Simplified device config format by removing extra config: key from each device 
+            (old format is still accepted)
+        MultiClamp, Camera configs use 'defaults' instead of 'settings' 
+        Slowed down Camera acquisition loop; it was eating too much CPU
+    New Features:
+        rudimentary "runner" bin/acq4, acq4.bat to start acq4
+        Added --profile flag
+        function generator now supports execution of multiple python statements rather than just eval()
+        TaskRunner interface plots use downsampling and clip-to-view by default.
+        Add ability to specify QCam device by unique ID
+    Bugfixes:
+        Fixed Camera module re-center on camera sensor area after objective switch
+        fixed setup.py detection of git status
+        Fixed inconsistencies in Laser.oputputPower()
+            now returns _only_ the power value
+        Fixed improper reload prefix
+        Fixed bug when adding task runner analysis modules
+        TaskRunner and Manager now stack new docks in tabs to avoid generating excessively large windows
+        pg.MultiPlotItem imports correct metaarray module
+        Removed calls to non-existent DAQ methods in mock DAQ
+        Fix divide by zero in ViewBox
+        InfiniteLine cache bounding rect for speedup
+    Maintenance:
+        Added .mailmap to correct the last 7 years of negligence.
+        Removed duplicate entries from util.debug that also exist in pg.debug
+        corrected column stretch in taskrunner sequence dock template, axopatch
+        
+        
+acq4-0.9.1 2014-01-03
+
+    API / behavior changes:
+        Patch module defaults to -65 mV holding.
+        Imager now uses config parameters to determine names of devices to use.
+        Moved acq4.py script to acq4/__main__.py; now we start with python -m acq4
+        Updated config search path
+        setup.py install now copies config inside package install location
+        Invert mock camera in example config--this makes stored images appear in
+            the same orientation as they were recorded 
+            (just to avoid unnecessary confusion)
+        Slow down camera module until interactivity bug is handled
+        CParser now requires explicit instruction to trigger a header re-parese.
+        
+    New Features:
+        Added innosetup script for building Windows setup.exe
+        Nicer demo message
+        Added sigRemoved signal to Parameter class
+        New grid system for scanner tasks
+    Bugfixes:
+        Minor fixes in pyqtgraph.
+        Removed extra Log button from Manager gui
+        Avoid unnecessary rebuild of Ni header cache
+        Fixed behavior when no base dir is set
+        Imager requests camera module load if it does not exist yet
+        Add header cache files, .dll files to dist
+        Fixed logging bugs:
+            - documentation links work
+            - fixed import error in util.debug that prevented errors being logged
+            - log window no longer tries to follow its own links (these
+              are handled externally)
+        Doc link for no-storage-dir error
+        Manager no longer creates index in baseDir; this is deferred until a file is added.
+        Fixed setup.py config install path on linux
+    Maintenance:
+        Split documentation into its own repository.
+        Many cleanups and additions to example config.
+        Reorganized:
+            - __init__ now handles most of what was previously in __main__
+            - Manager now handles searching for config files
+            - added CONFIGPATH global variable listing candidate search paths
+        rebuildUi script now accepts path arguments
+        cleaned up Manifest.in
+        removed the 'storeSVG' and 'storePNG' buttons from the Canvas gui since 
+          they were both broken and redundant with ViewBox's export system
+        disabled ImageCorrection buttons in MosaicEditor
+        fixes/cleanup of mosaic editor and cortexROI code, mosaic editor documentation
+
+
+
 acq4-0.9  2013-12-20
 
   * Initial release with standard python package structure.

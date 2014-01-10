@@ -1,5 +1,5 @@
 #define AppName "ACQ4"
-#define AppVersion "0.9.1"
+#define AppVersion "0.9.2"
 #define AppURL "http://www.acq4.org/"
 #define AppExeName "MyProg.exe"
 #define BitDepth "64"
