@@ -45,7 +45,6 @@ if m is None or len(m.groups()) != 1:
     raise Exception("Cannot determine __version__ from init file: '%s'!" % initfile)
 version = m.group(1).strip('\'\"')
 initVersion = version
-print "Current base version:", version
 
 # If this is a git checkout, try to generate a more decriptive version string
 try:
@@ -75,7 +74,7 @@ try:
         modified = False
         status = check_output(['git', 'status', '-s'], universal_newlines=True).strip().split('\n')
         for line in status:
-            if line[:2] != '??':
+            if line.strip() != '' and line[:2] != '??':
                 modified = True
                 break        
                     
@@ -90,6 +89,10 @@ except:
                      "instead: '%s'\n" % version)
     sys.excepthook(*sys.exc_info())
 
+print("__init__ version: %s  current version: %s" % (initVersion, version))
+if 'upload' in sys.argv and version != initVersion:
+    print("Base version does not match current; stubbornly refusing to upload.")
+    exit()
 
 import distutils.command.build
 
@@ -114,6 +117,14 @@ class Build(distutils.command.build.build):
         else:
             data = open(initfile, 'r').read()
             open(initfile, 'w').write(re.sub(r"__version__ = .*", "__version__ = '%s'" % version, data))
+
+
+        # If this is windows, we need to update acq4.bat to reference the correct python executable.
+        if sys.platform == 'win32':
+            runner = os.path.join(path, self.build_scripts, 'acq4.bat')
+            runcmd = "%s -m acq4" % sys.executable
+            data = open(runner, 'r').read()
+            open(runner, 'w').write(re.sub(r'python -m acq4', runcmd, data))
         return ret
 
 # copy config tree to system location
@@ -150,23 +161,10 @@ for subpath, _, files in os.walk(pkgRoot):
                 packageData.append(os.path.join(subpath, f)[len(pkgRoot):].lstrip(os.path.sep))
 
 
-# Handle py2exe build config
-# if len(sys.argv) > 1 and sys.argv[1] == 'py2exe':
-#     from glob import glob
-#     import py2exe
-
-#     ## This path must contain msvcm90.dll, msvcp90.dll, msvcr90.dll, and Microsoft.VC90.CRT.manifest
-#     ## (see http://www.py2exe.org/index.cgi/Tutorial)
-#     dllpath = os.path.join(path, 'Microsoft.VC90.CRT')
-
-#     sys.path.append(dllpath)
-#     dataFiles.append(
-#         ## Instruct setup to copy the needed DLL files into the build directory
-#         ("Microsoft.VC90.CRT", glob(dllpath + r'\*.*')))
-
-#     setupOpts['windows'] = ['acq4/__main__.py'],
-#     setupOpts['options'] = {"py2exe": {"excludes":["Tkconstants", "Tkinter", "tcl"]}}
-
+if sys.platform == 'win32':
+    scripts = ['bin/acq4.bat']
+else:
+    scripts = ['bin/acq4']
 
 setup(
     version=version,
@@ -190,7 +188,10 @@ setup(
     install_requires = [
         'numpy',
         'scipy',
+        'h5py',
+        'pillow',
         ],
+    scripts = scripts,
     **setupOpts
 )
 

@@ -11,6 +11,6 @@ del mdir
 def createAnalysisModule(name, runner):
     if name not in MODULES:
         raise Exception('No analysis module named %s' % name)
-    mod = __import__('acq4.modules.ProtocolRunner.analysisModules.' + name, fromlist=['*'])
+    mod = __import__('acq4.modules.TaskRunner.analysisModules.' + name, fromlist=['*'])
     cls = getattr(mod, name + 'Module')
     return cls(runner)

@@ -7,6 +7,7 @@ from taskGUI import *
 from acq4.util.debug import *
 from acq4.pyqtgraph import siFormat
 import DeviceTemplate
+from collections import OrderedDict
 
 
 class DataMapping:
@@ -52,25 +53,25 @@ class ChannelHandle(object):
 class DAQGeneric(Device):
     """
     Config format:
-    
-        ChannelName1:
-            device: 'DaqDeviceName'
-            channel: '/Dev1/ao0'
-            type: 'ao'
-            units: 'A'
-            scale: 200 * mV / nA
-        ChannelName2:
-            device: 'DaqDeviceName'
-            channel: '/Dev1/ai3'
-            type: 'ai'
-            mode: 'nrse'
-            units: 'A'
-            scale: 200 * nA / mV
-        ChannelName3:
-            device: 'DaqDeviceName'
-            channel: '/Dev1/line7'
-            type: 'di'
-            invert: True
+        channels:
+            ChannelName1:
+                device: 'DaqDeviceName'
+                channel: '/Dev1/ao0'
+                type: 'ao'
+                units: 'A'
+                scale: 200 * mV / nA
+            ChannelName2:
+                device: 'DaqDeviceName'
+                channel: '/Dev1/ai3'
+                type: 'ai'
+                mode: 'nrse'
+                units: 'A'
+                scale: 200 * nA / mV
+            ChannelName3:
+                device: 'DaqDeviceName'
+                channel: '/Dev1/line7'
+                type: 'di'
+                invert: True
         
     """
     sigHoldingChanged = QtCore.Signal(object, object)
@@ -79,6 +80,9 @@ class DAQGeneric(Device):
         Device.__init__(self, dm, config, name)
         self._DGLock = Mutex(QtCore.QMutex.Recursive)  ## protects access to _DGHolding, _DGConfig
         ## Do some sanity checks here on the configuration
+        
+        # 'channels' key is expected; for backward compatibility we just use the top-level config.
+        config = config.get('channels', config)
         self._DGConfig = config
         self._DGHolding = {}
         for ch in config:
@@ -197,9 +201,9 @@ class DAQGeneric(Device):
         """Return a widget with a UI to put in the device rack"""
         return DAQDevGui(self)
         
-    def taskInterface(self, prot):
+    def taskInterface(self, taskRunner):
         """Return a widget with a UI to put in the task rack"""
-        return DAQGenericTaskGui(self, prot)
+        return DAQGenericTaskGui(self, taskRunner)
 
     def getDAQName(self, channel):
         #return self._DGConfig[channel]['channel'][0]
@@ -407,31 +411,16 @@ class DAQGenericTask(DeviceTask):
     def getResult(self):
         ## Access data recorded from DAQ task
         ## create MetaArray and fill with MC state info
-        #self.state['startTime'] = self.daqTasks[self.daqTasks.keys()[0]].getStartTime()
         
         ## Collect data and info for each channel in the command
-        #prof = Profiler("  DAQGeneric.getResult")
         result = {}
-        #print "buffered channels:", self.bufferedChannels
         for ch in self.bufferedChannels:
-            #result[ch] = _DAQCmd[ch]['task'].getData(self.dev.config[ch]['channel'][1])
             result[ch] = self.daqTasks[ch].getData(self.dev._DGConfig[ch]['channel'])
-            #prof.mark("get data for channel "+str(ch))
-            #print "get data", ch, self.getChanScale(ch), result[ch]['data'].max()
-            #scale = self.getChanScale(ch)
-            #result[ch]['data'] = result[ch]['data'] / scale
             result[ch]['data'] = self.mapping.mapFromDaq(ch, result[ch]['data']) ## scale/offset/invert
             result[ch]['units'] = self.getChanUnits(ch)
-            #print "channel", ch, "returned:\n  ", result[ch]
-            #prof.mark("scale data for channel "+str(ch))
-            #del _DAQCmd[ch]['task']
-        #print "RESULT:", result    
-        ## Todo: Add meta-info about channels that were used but unbuffered
-        
         
         if len(result) > 0:
             meta = result[result.keys()[0]]['info']
-            #print meta
             rate = meta['rate']
             nPts = meta['numPts']
             ## Create an array of time values
@@ -448,7 +437,7 @@ class DAQGenericTask(DeviceTask):
                 print [a.shape for a in chanList]
                 raise
             
-            daqState = {}
+            daqState = OrderedDict()
             for ch in self.dev._DGConfig:
                 if ch in result:
                     daqState[ch] = result[ch]['info']
@@ -470,8 +459,6 @@ class DAQGenericTask(DeviceTask):
             info[-1]['Protocol'] = protInfo
                 
             marr = MetaArray(arr, info=info)
-            #print marr
-            #prof.mark("post-process data")
             return marr
             
         else:

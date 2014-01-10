@@ -313,9 +313,9 @@ class Scanner(Device, OptomechDevice):
         with self.lock:
             return ScannerTask(self, cmd, parentTask)
     
-    def taskInterface(self, task):
+    def taskInterface(self, taskRunner):
         with self.lock:
-            return ScannerTaskGui(self, task)
+            return ScannerTaskGui(self, taskRunner)
     
     def deviceInterface(self, win):
         with self.lock:

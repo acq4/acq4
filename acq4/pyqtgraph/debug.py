@@ -39,17 +39,22 @@ def warnOnException(func):
             printExc('Ignored exception:')
     return w
 
-def getExc(indent=4, prefix='|  '):
-    tb = traceback.format_exc()
-    lines = []
-    for l in tb.split('\n'):        
-        lines.append(" "*indent + prefix + l)
-    return '\n'.join(lines)
+def getExc(indent=4, prefix='|  ', skip=1):
+    lines = (traceback.format_stack()[:-skip] 
+            + ["  ---- exception caught ---->\n"] 
+            + traceback.format_tb(sys.exc_info()[2])
+            + traceback.format_exception_only(*sys.exc_info()[:2]))
+    lines2 = []
+    for l in lines:
+        lines2.extend(l.strip('\n').split('\n'))
+    lines3 = [" "*indent + prefix + l for l in lines2]
+    return '\n'.join(lines3)
+
 
 def printExc(msg='', indent=4, prefix='|'):
     """Print an error message followed by an indented exception backtrace
     (This function is intended to be called within except: blocks)"""
-    exc = getExc(indent, prefix + '  ')
+    exc = getExc(indent, prefix + '  ', skip=2)
     print("[%s]  %s\n" % (time.strftime("%H:%M:%S"), msg))
     print(" "*indent + prefix + '='*30 + '>>')
     print(exc)
@@ -400,8 +405,11 @@ class Profiler(object):
     """
 
     _profilers = os.environ.get("PYQTGRAPHPROFILE", "")
+    if _profilers:
+        _profilers = _profilers.split(",")
     _depth = 0
     _msgs = []
+    disable = False  # set this flag to disable all or individual profilers at runtime
     
     class DisabledProfiler(object):
         def __init__(self, *args, **kwds):
@@ -413,44 +421,40 @@ class Profiler(object):
         def mark(self, msg=None):
             pass
     _disabledProfiler = DisabledProfiler()
-    
-
-    if _profilers:
-        _profilers = _profilers.split(",")
-        def __new__(cls, msg=None, disabled='env', delayed=True):
-            """Optionally create a new profiler based on caller's qualname.
-            """
-            if disabled is True:
-                return cls._disabledProfiler
-                            
-            # determine the qualified name of the caller function
-            caller_frame = sys._getframe(1)
-            try:
-                caller_object_type = type(caller_frame.f_locals["self"])
-            except KeyError: # we are in a regular function
-                qualifier = caller_frame.f_globals["__name__"].split(".", 1)[1]
-            else: # we are in a method
-                qualifier = caller_object_type.__name__
-            func_qualname = qualifier + "." + caller_frame.f_code.co_name
-            if func_qualname not in cls._profilers: # don't do anything
-                return cls._disabledProfiler
-            # create an actual profiling object
-            cls._depth += 1
-            obj = super(Profiler, cls).__new__(cls)
-            obj._name = msg or func_qualname
-            obj._delayed = delayed
-            obj._markCount = 0
-            obj._finished = False
-            obj._firstTime = obj._lastTime = ptime.time()
-            obj._newMsg("> Entering " + obj._name)
-            return obj
-    else:
-        def __new__(cls, delayed=True):
-            return lambda msg=None: None
+        
+    def __new__(cls, msg=None, disabled='env', delayed=True):
+        """Optionally create a new profiler based on caller's qualname.
+        """
+        if disabled is True or (disabled == 'env' and len(cls._profilers) == 0):
+            return cls._disabledProfiler
+                        
+        # determine the qualified name of the caller function
+        caller_frame = sys._getframe(1)
+        try:
+            caller_object_type = type(caller_frame.f_locals["self"])
+        except KeyError: # we are in a regular function
+            qualifier = caller_frame.f_globals["__name__"].split(".", 1)[1]
+        else: # we are in a method
+            qualifier = caller_object_type.__name__
+        func_qualname = qualifier + "." + caller_frame.f_code.co_name
+        if disabled == 'env' and func_qualname not in cls._profilers: # don't do anything
+            return cls._disabledProfiler
+        # create an actual profiling object
+        cls._depth += 1
+        obj = super(Profiler, cls).__new__(cls)
+        obj._name = msg or func_qualname
+        obj._delayed = delayed
+        obj._markCount = 0
+        obj._finished = False
+        obj._firstTime = obj._lastTime = ptime.time()
+        obj._newMsg("> Entering " + obj._name)
+        return obj
 
     def __call__(self, msg=None):
         """Register or print a new message with timing information.
         """
+        if self.disable:
+            return
         if msg is None:
             msg = str(self._markCount)
         self._markCount += 1
@@ -475,7 +479,7 @@ class Profiler(object):
     def finish(self, msg=None):
         """Add a final message; flush the message list if no parent profiler.
         """
-        if self._finished:
+        if self._finished or self.disable:
             return        
         self._finished = True
         if msg is not None:
@@ -973,6 +977,7 @@ def qObjectReport(verbose=False):
         
 
 class PrintDetector(object):
+    """Find code locations that print to stdout."""
     def __init__(self):
         self.stdout = sys.stdout
         sys.stdout = self
@@ -989,3 +994,42 @@ class PrintDetector(object):
         
     def flush(self):
         self.stdout.flush()
+
+
+def listQThreads():
+    """Prints Thread IDs (Qt's, not OS's) for all QThreads."""
+    thr = findObj('[Tt]hread')
+    thr = [t for t in thr if isinstance(t, QtCore.QThread)]
+    import sip
+    for t in thr:
+        print("--> ", t)
+        print("     Qt ID: 0x%x" % sip.unwrapinstance(t))
+
+
+def pretty(data, indent=''):
+    """Format nested dict/list/tuple structures into a more human-readable string
+    This function is a bit better than pprint for displaying OrderedDicts.
+    """
+    ret = ""
+    ind2 = indent + "    "
+    if isinstance(data, dict):
+        ret = indent+"{\n"
+        for k, v in data.iteritems():
+            ret += ind2 + repr(k) + ":  " + pretty(v, ind2).strip() + "\n"
+        ret += indent+"}\n"
+    elif isinstance(data, list) or isinstance(data, tuple):
+        s = repr(data)
+        if len(s) < 40:
+            ret += indent + s
+        else:
+            if isinstance(data, list):
+                d = '[]'
+            else:
+                d = '()'
+            ret = indent+d[0]+"\n"
+            for i, v in enumerate(data):
+                ret += ind2 + str(i) + ":  " + pretty(v, ind2).strip() + "\n"
+            ret += indent+d[1]+"\n"
+    else:
+        ret += indent + repr(data)
+    return ret

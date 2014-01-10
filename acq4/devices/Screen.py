@@ -2,6 +2,13 @@ from acq4.devices.Device import *
 from PyQt4 import QtGui, QtCore
 
 class Screen(Device):
+    """
+    Device used for screen output. 
+    
+    Currently, this is only used to blank the screen temporarily to avoid 
+    contaminating sensitive imaging operations. In the future, this device may
+    be extended to provide visual stimulation (perhaps via psychopy)    
+    """
     sigBlankScreen = QtCore.Signal(object, object)  # bool blank/unblank, QWaitCondition
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -9,8 +16,8 @@ class Screen(Device):
         self.blanker = ScreenBlanker()
         self.sigBlankScreen.connect(self.blankRequested, QtCore.Qt.QueuedConnection)
 
-    def taskInterface(self, task):
-        return ScreenTaskGui(self, task)
+    def taskInterface(self, taskRunner):
+        return ScreenTaskGui(self, taskRunner)
 
     def createTask(self, cmd, parentTask):
         return ScreenTask(self, cmd, parentTask)
@@ -105,8 +112,8 @@ class ScreenTask(DeviceTask):
         
 class ScreenTaskGui(TaskGui):
     
-    def __init__(self, dev, task):
-        TaskGui.__init__(self, dev, task)
+    def __init__(self, dev, taskRunner):
+        TaskGui.__init__(self, dev, taskRunner)
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
         self.blankCheck = QtGui.QCheckBox("Blank Screen")

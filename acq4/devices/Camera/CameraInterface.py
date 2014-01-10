@@ -7,8 +7,7 @@ import acq4.util.ptime as ptime
 from acq4.util.Mutex import Mutex
 import numpy as np
 import scipy.ndimage
-from acq4.util.debug import *
-import acq4.util.debug as debug
+from acq4.util.debug import printExc, Profiler
 from acq4.util.metaarray import *
 import acq4.Manager as Manager
 from RecordThread import RecordThread
@@ -136,6 +135,9 @@ class CameraInterface(QtCore.QObject):
         self.globalTransformChanged()
         #self.rebuildBoundaryItems()
 
+        # initially set binning and exposure from camera state
+        self.exposure = self.cam.getParam('exposure')
+        self.binning = self.cam.getParam('binning')[0]
         ## Initialize values/connections in Camera Dock
         self.setUiBinning(self.binning)
         self.ui.spinExposure.setValue(self.exposure)
@@ -230,6 +232,7 @@ class CameraInterface(QtCore.QObject):
         if scale != self.lastCameraScale:
             anchor = self.view.mapViewToDevice(self.lastCameraPosition)
             self.view.scaleBy(scale / self.lastCameraScale)
+            pg.QtGui.QApplication.processEvents()
             anchor2 = self.view.mapDeviceToView(anchor)
             diff = pos - anchor2
             self.lastCameraScale = scale
@@ -579,14 +582,13 @@ class CameraInterface(QtCore.QObject):
                 #sys.stdout.write('-')
                 return
             
-            prof = debug.Profiler('CameraWindow.drawFrame', disabled=True)
-            prof.mark()
+            prof = Profiler()
             ## We will now draw a new frame (even if the frame is unchanged)
             if self.lastDrawTime is not None:
                 fps = 1.0 / (t - self.lastDrawTime)
                 self.ui.displayFpsLabel.setValue(fps)
             self.lastDrawTime = t
-            prof.mark()
+            prof()
             
             ## Handle the next available frame, if there is one.
             if self.nextFrame is not None:
@@ -595,7 +597,7 @@ class CameraInterface(QtCore.QObject):
             
             data = self.currentFrame.data()
             info = self.currentFrame.info()
-            prof.mark()
+            prof()
             
             
             ## divide the background out of the current frame if needed
@@ -607,7 +609,7 @@ class CameraInterface(QtCore.QObject):
                 bg = self.getBackgroundFrame()
                 if bg is not None and bg.shape == data.shape:
                     data = data - bg
-            prof.mark()
+            prof()
             
             ## Set new levels if auto gain is enabled
             if self.ui.btnAutoGain.isChecked():
@@ -646,22 +648,22 @@ class CameraInterface(QtCore.QObject):
                     self.ui.histogram.setHistogramRange(minVal, maxVal, padding=0.05)
                 finally:
                     self.ignoreLevelChange = False
-            prof.mark()
+            prof()
             
             ## update image in viewport
             self.imageItem.updateImage(data)#, levels=[bl, wl])
             self.imageItem.setOpacity(self.alpha)
             self.imageItem.setTransform(self.currentFrame.frameTransform().as2D())
-            prof.mark()
+            prof()
             
             ## Update viewport to correct for scope movement/scaling
             tr = pg.SRTTransform(self.currentFrame.cameraTransform())
             self.updateTransform(tr)
 
             self.imageItemGroup.setTransform(tr)
-            prof.mark()
+            prof()
             
-            prof.mark()
+            prof()
             prof.finish()
         
         

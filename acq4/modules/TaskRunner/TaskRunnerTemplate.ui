@@ -256,7 +256,7 @@ in loop mode.</string>
     <number>4</number>
    </attribute>
    <widget class="QWidget" name="dockWidgetContents_7">
-    <layout class="QGridLayout" name="gridLayout_2">
+    <layout class="QGridLayout" name="gridLayout_2" columnstretch="5,1">
      <property name="horizontalSpacing">
       <number>5</number>
      </property>
@@ -392,6 +392,15 @@ in loop mode.</string>
        <property name="allColumnsShowFocus">
         <bool>true</bool>
        </property>
+       <attribute name="headerDefaultSectionSize">
+        <number>30</number>
+       </attribute>
+       <attribute name="headerMinimumSectionSize">
+        <number>30</number>
+       </attribute>
+       <attribute name="headerStretchLastSection">
+        <bool>false</bool>
+       </attribute>
        <column>
         <property name="text">
          <string>dev</string>

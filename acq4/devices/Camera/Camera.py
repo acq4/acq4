@@ -124,10 +124,12 @@ class Camera(DAQGeneric, OptomechDevice):
         
         self.sigGlobalTransformChanged.connect(self.transformChanged)
         
-        if config != None and 'params' in config:
+        if config != None:
+            # look for 'defaults', then 'params' to preserve backward compatibility.
+            defaults = config.get('defaults', config.get('params', {}))
             #print "Camera: setting configuration params."
             try:
-                self.setParams(config['params'])
+                self.setParams(defaults)
             except:
                 printExc("Error default setting camera parameters:")
         #print "Camera: no config params to set."
@@ -289,8 +291,8 @@ class Camera(DAQGeneric, OptomechDevice):
         
 
 
-    def taskInterface(self, task):
-        return CameraTaskGui(self, task)
+    def taskInterface(self, taskRunner):
+        return CameraTaskGui(self, taskRunner)
 
     def deviceInterface(self, win):
         return CameraDeviceGui(self, win)
@@ -819,6 +821,15 @@ class AcquireThread(QtCore.QThread):
     #    
     
     def run(self):
+        #import cProfile
+        ##cProfile.runctx('self._run()', globals(), locals(), sort='cumulative')
+        #pr = cProfile.Profile()
+        #pr.enable()
+        #self._run()
+        #pr.disable()
+        #pr.print_stats(sort='cumulative')
+        
+    #def _run(self):
         size = self.dev.getParam('sensorSize')
         lastFrame = None
         lastFrameTime = None
@@ -908,7 +919,7 @@ class AcquireThread(QtCore.QThread):
                     lastFrameId = frames[-1]['id']
                     loopCount = 0
                         
-                time.sleep(100e-6)
+                time.sleep(1e-3)
                 
                 ## check for stop request every 10ms
                 if now - lastStopCheck > 10e-3: 

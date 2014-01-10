@@ -160,8 +160,8 @@ class AxoPatch200(DAQGeneric):
     def createTask(self, cmd, parentTask):
         return AxoPatch200Task(self, cmd, parentTask)
         
-    def taskInterface(self, task):
-        return AxoPatchTaskGui(self, task)
+    def taskInterface(self, taskRunner):
+        return AxoPatchTaskGui(self, taskRunner)
         
     def deviceInterface(self, win):
         return AxoPatchDevGui(self)
@@ -444,8 +444,8 @@ class AxoPatch200Task(DAQGenericTask):
 
     
 class AxoPatchTaskGui(DAQGenericTaskGui):
-    def __init__(self, dev, task):
-        DAQGenericTaskGui.__init__(self, dev, task, ownUi=False)
+    def __init__(self, dev, taskRunner):
+        DAQGenericTaskGui.__init__(self, dev, taskRunner, ownUi=False)
         
         self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0,0,0,0)
@@ -483,6 +483,7 @@ class AxoPatchTaskGui(DAQGenericTaskGui):
         self.splitter2.addWidget(w2)
         self.splitter3.addWidget(p1)
         self.splitter3.addWidget(p2)
+        self.splitter1.setSizes([100, 500])
         
         self.stateGroup = WidgetGroup([
             (self.splitter1, 'splitter1'),

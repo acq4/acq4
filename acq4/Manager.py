@@ -315,10 +315,10 @@ class Manager(QtCore.QObject):
                         print "  === Configuring device '%s' ===" % k
                         logMsg("  === Configuring device '%s' ===" % k)
                         try:
-                            conf = None
-                            if cfg['devices'][k].has_key('config'):
-                                conf = cfg['devices'][k]['config']
-                            driverName = cfg['devices'][k]['driver']
+                            conf = cfg['devices'][k]
+                            driverName = conf['driver']
+                            if 'config' in conf:  # for backward compatibility
+                                conf = conf['config']
                             self.loadDevice(driverName, conf, k)
                         except:
                             printExc("Error configuring device %s:" % k)
@@ -594,8 +594,9 @@ class Manager(QtCore.QObject):
 
     def reloadAll(self):
         """Reload all python code"""
-        path = os.path.split(os.path.abspath(__file__))[0]
-        path = os.path.abspath(os.path.join(path, '..'))
+        #path = os.path.split(os.path.abspath(__file__))[0]
+        #path = os.path.abspath(os.path.join(path, '..'))
+        path = 'acq4'
         print "\n---- Reloading all libraries under %s ----" % path
         reload.reloadAll(prefix=path, debug=True)
         print "Done reloading.\n"
@@ -858,8 +859,8 @@ class Manager(QtCore.QObject):
             #print "  done."
             print "\n    ciao."
         QtGui.QApplication.quit()
-        pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
-                   # this avoids otherwise irritating exit crashes.
+        #pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
+                    # this avoids otherwise irritating exit crashes.
 
 class Task:
     id = 0

@@ -418,22 +418,40 @@ class StimGenerator(QtGui.QWidget):
         ns.update(self.extraParams)
 
         ## evaluate and return
-        fn = self.functionString().replace('\n', '')
+        fn = self.functionString()
         
         ## build global namespace with numpy imported
-        gns = {}
-        exec('from numpy import *', gns)
+        #gns = {}
+        ns['np'] = np
         
         #print "function: '%s'" % fn
         if fn.strip() == '':
             ret = np.zeros(nPts)
         else:
-            ret = eval(fn, gns, ns)
+            try:  # first try eval() without line breaks for backward compatibility
+                ret = eval(fn.replace('\n', ''), ns, {})
+            except SyntaxError:  # next try exec() as contents of a function
+                try:
+                    run = "\noutput=fn()\n"
+                    code = "def fn():\n" + "\n".join(["    "+l for l in fn.split('\n')]) + run
+                    #print "--- Code: ---"
+                    #print code
+                    #print "-------------"
+                    lns = {}
+                    exec(code, ns, lns)
+                    ret = lns['output']
+                except SyntaxError as err:
+                    err.lineno -= 1
+                    raise err
+                
             
         if isinstance(ret, ndarray):
             #ret *= self.scale
             ret += self.offset
             #print "===eval===", ret.min(), ret.max(), self.scale
+        elif ret is not None:
+            raise TypeError("Function must return ndarray or None.")
+        
         if 'message' in arg:
             self.setError(arg['message'])
         else:

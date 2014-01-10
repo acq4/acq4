@@ -90,6 +90,6 @@ Linux, OSX
        $ git clone https://github.com/acq4/acq4.git`
 ```
 
-3. Run `python -m acq4` from the source directory, or install with `python setup.py install`
+3. Run `python -m acq4` from the source directory, or install with `python setup.py install` and run using `acq4`.
 
 

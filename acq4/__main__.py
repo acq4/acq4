@@ -6,15 +6,25 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 print("Loading ACQ4...")
-
+if __package__ is None:
+    import acq4
+    __package__ = 'acq4'
 from .pyqtgraph.Qt import QtGui, QtCore
 
 from .Manager import *
 from numpy import *
 
+# Pull some args out
+try:
+    ind = sys.argv.index('--profile')
+except ValueError:
+    profile = False
+else:
+    profile = True
+    sys.argv.pop(ind)    
+
 ## Initialize Qt
 app = pg.mkQApp()
-
 
 ## Create Manager. This configures devices and creates the main manager window.
 man = Manager(argv=sys.argv[1:])
@@ -82,7 +92,12 @@ if interactive:
             readline.write_history_file(historyPath)
     atexit.register(save_history)
 else:
-    app.exec_()
-    pg.exit() ## force exit without garbage collection
+    if profile:
+        import cProfile
+        cProfile.run('app.exec_()', sort='cumulative')    
+    else:
+        app.exec_()
+    pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
+               # this avoids otherwise irritating exit crashes.
     
     

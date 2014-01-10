@@ -274,8 +274,8 @@ class Laser(DAQGeneric, OptomechDevice):
     def createTask(self, cmd, parentTask):
         return LaserTask(self, cmd, parentTask)
         
-    def taskInterface(self, prot):
-        return LaserTaskGui(self, prot)
+    def taskInterface(self, taskRunner):
+        return LaserTaskGui(self, taskRunner)
         
     def deviceInterface(self, win):
         return LaserDevGui(self)
@@ -394,7 +394,7 @@ class Laser(DAQGeneric, OptomechDevice):
         if self.hasPowerIndicator:
             powerOutOn = resultOn[powerInd[0]][0][measurementStart:].mean()
         else:
-            powerOutOn, ok = self.outputPower()
+            powerOutOn = self.outputPower()
             
         laserOff = resultOff[powerMeter][0][measurementStart:]
         laserOn = resultOn[powerMeter][0][measurementStart:]
@@ -425,12 +425,15 @@ class Laser(DAQGeneric, OptomechDevice):
         
     def outputPower(self):
         """
-        Return a tuple: (current output power, bool power within expected range)
-        The output power returned excludes the effect of pockel cell, shutter, etc.
+        Return the output power of the laser in Watts.
+        
+        The power returned does not account for the effects of pockels cell, shutter, etc.
         This information is determined in one of a few ways:
            1. The laser directly reports its power output (function needs to be reimplemented in subclass)
            2. A photodiode receves a small fraction of the beam and reports an estimated power
            3. The output power is specified in the config file
+           
+        Use checkPowerValidity(power) to determine whether this level is within the expected range.
         """
         
         if self.hasPowerIndicator:
@@ -489,21 +492,21 @@ class Laser(DAQGeneric, OptomechDevice):
                 powerOk = self.checkPowerValidity(powerOn)
                 self.sigOutputPowerChanged.emit(powerOn, powerOk)
                 self.updateSamplePower()
-                return powerOn, powerOk
+                return powerOn
             else:
                 logMsg("No laser pulse detected by power indicator '%s' while measuring Laser.outputPower()" % powerInd[0], msgType='warning')
                 self.setParam(currentPower=0.0)
                 self.updateSamplePower()
-                return 0.0, self.checkPowerValidity(0.0)
+                return 0.0
 
             
         ## return the power specified in the config file if there's no powerIndicator
         else:
             power = self.config.get('power', None)
             if power is None:
-                return None, None
+                return None
             else:
-                return power, self.checkPowerValidity(power)
+                return power
 
     def updateSamplePower(self):
         ## Report new sample power given the current state of the laser

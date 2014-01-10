@@ -1,4 +1,5 @@
 import serial, struct, time, collections, threading
+from ..SerialDevice import SerialDevice
 
 ErrorVals = {
     0: ('SP Over-run', 'The previous character was not unloaded before the latest was received.'),
@@ -18,7 +19,7 @@ class TimeoutError(Exception):
 class MP285Error(Exception):
     pass
 
-class SutterMP285(object):
+class SutterMP285(SerialDevice):
     """
     Class for communicating with Sutter MP-285 via serial port.
     
@@ -27,9 +28,10 @@ class SutterMP285(object):
     def __init__(self, port, baud=9600):
         """
         port: serial COM port (0 => com1)"""
-        self.port = port
-        self.baud = baud
-        self.sp = serial.Serial(int(self.port), baudrate=self.baud, bytesize=serial.EIGHTBITS, timeout=0)
+        #self.port = port
+        #self.baud = baud
+        #self.sp = serial.Serial(int(self.port), baudrate=self.baud, bytesize=serial.EIGHTBITS, timeout=0)
+        SerialDevice.__init__(self, port=port, baudrate=baud)
         self._scale = None
         self.moving = False
         
@@ -60,11 +62,9 @@ class SutterMP285(object):
         It returns an estimated position even while the ROE is in use. 
         (if getPos() is called while the ROE is in use, the MP285 will very likely crash.)
         """
-
        # self.readPacket(block=False)
         self.write('p')  # talks to Arduino only.
         packet = self.read(length=13, timeout=5.0, term='\r')
-
         if len(packet) != 12:
             raise Exception("Sutter MP285: getImmediatePos: bad position packet: <%s> (%d)" % (repr(packet),len(packet)))
      
@@ -277,28 +277,31 @@ class SutterMP285(object):
         self.write('n\r')
         self.readPacket()
 
-    def clearBuffer(self):
-        d = self.readAll()
-        time.sleep(0.1)
-        d += self.readAll()
-        if len(d) > 0:
-            print "Sutter MP285: Warning: tossed data ", repr(d)
-        return d
+    def readPacket(self):
+        return self.readUntil('\r')
+
+    #def clearBuffer(self):
+        #d = self.readAll()
+        #time.sleep(0.1)
+        #d += self.readAll()
+        #if len(d) > 0:
+            #print "Sutter MP285: Warning: tossed data ", repr(d)
+        #return d
     
-    def readAll(self):
-        ## read all bytes waiting in buffer; non-blocking.
-        n = self.sp.inWaiting()
-        if n > 0:
-            return self.sp.read(n)
-        return ''
+    #def readAll(self):
+        ### read all bytes waiting in buffer; non-blocking.
+        #n = self.sp.inWaiting()
+        #if n > 0:
+            #return self.sp.read(n)
+        #return ''
     
-    def write(self, data, timeout=10.0):
-        self.blockWhileMoving(timeout=timeout) # If the stage is still moving, wait until it is done before sending another packet.
-        #self.readAll()  ## always empty buffer before sending command
-        self.sp.write(data)
+    #def write(self, data, timeout=10.0):
+        #self.blockWhileMoving(timeout=timeout) # If the stage is still moving, wait until it is done before sending another packet.
+        ##self.readAll()  ## always empty buffer before sending command
+        #self.sp.write(data)
         
-    def close(self):
-        self.sp.close()
+    #def close(self):
+        #self.sp.close()
 
     def raiseError(self, errVals):
         ## errVals should be list of error codes
@@ -313,78 +316,78 @@ class SutterMP285(object):
                 errors.append((ord(err), "Unknown error code", ""))
         raise MP285Error(errors)
 
-    def read(self, length, timeout=5, term=None):
-        ## Read *length* bytes or raise exception on timeout.
-        ## if *term* is given, check that the last byte is *term* and remove it
-        ## from the returned packet.
-        #self.sp.setTimeout(timeout) #broken!
-        packet = self.readWithTimeout(length, timeout)
-        if len(packet) < length:
-            raise Exception("MP285: Timed out waiting for serial data (received so far: %s)" % repr(packet))
-        if term is not None:
-            if packet[-len(term):] != term:
-                self.clearBuffer()
-                raise Exception("MP285: Packet corrupt: %s (len=%d)" % (repr(packet), len(packet)))
-            return packet[:-len(term)]
-        return packet
+    #def read(self, length, timeout=5, term=None):
+        ### Read *length* bytes or raise exception on timeout.
+        ### if *term* is given, check that the last byte is *term* and remove it
+        ### from the returned packet.
+        ##self.sp.setTimeout(timeout) #broken!
+        #packet = self.readWithTimeout(length, timeout)
+        #if len(packet) < length:
+            #raise Exception("MP285: Timed out waiting for serial data (received so far: %s)" % repr(packet))
+        #if term is not None:
+            #if packet[-len(term):] != term:
+                #self.clearBuffer()
+                #raise Exception("MP285: Packet corrupt: %s (len=%d)" % (repr(packet), len(packet)))
+            #return packet[:-len(term)]
+        #return packet
         
-    def readWithTimeout(self, nBytes, timeout):
-        start = time.time()
-        packet = ''
-        while len(packet) < nBytes and time.time()-start < timeout:
-            packet += self.sp.read(1)
-        return packet
+    #def readWithTimeout(self, nBytes, timeout):
+        #start = time.time()
+        #packet = ''
+        #while len(packet) < nBytes and time.time()-start < timeout:
+            #packet += self.sp.read(1)
+        #return packet
                     
-    def readPacket(self, expect=0, timeout=5, block=True):
-        ## Read until a carriage return is encountered (or timeout).
-        ## If expect is >0, then try to get a packet of that length, ignoring \r within that data
-        ## if block is False, then return immediately if no data is available.
-        start = time.time()
-        res = ''
-        errors = []
-        packets = []
+    #def readPacket(self, expect=0, timeout=5, block=True):
+        ### Read until a carriage return is encountered (or timeout).
+        ### If expect is >0, then try to get a packet of that length, ignoring \r within that data
+        ### if block is False, then return immediately if no data is available.
+        #start = time.time()
+        #res = ''
+        #errors = []
+        #packets = []
         
-        while True:
-            s = self.readAll()
-            if not block and len(s) == 0:
-                return
+        #while True:
+            #s = self.readAll()
+            #if not block and len(s) == 0:
+                #return
             
-            if expect > 0:  ## move bytes into result without checking for \r
-                nb = expect-len(res)
-                res += s[:nb]
-                s = s[nb:]
+            #if expect > 0:  ## move bytes into result without checking for \r
+                #nb = expect-len(res)
+                #res += s[:nb]
+                #s = s[nb:]
             
-            try:
-                while len(s) > 0:  ## pull packets out of s one at a time
-                    res += s[:s.index('\r')]
-                    s = s[s.index('\r')+1:]
-                    if len(res) == 1:  ## error packet was sent
-                        errors.append(res)
-                    else:
-                        packets.append(res)
-                    res = ''
-            except ValueError:   ## partial packet; append and wait for more data
-                res += s  
+            #try:
+                #while len(s) > 0:  ## pull packets out of s one at a time
+                    #res += s[:s.index('\r')]
+                    #s = s[s.index('\r')+1:]
+                    #if len(res) == 1:  ## error packet was sent
+                        #errors.append(res)
+                    #else:
+                        #packets.append(res)
+                    #res = ''
+            #except ValueError:   ## partial packet; append and wait for more data
+                #res += s  
                 
-            if len(res) > 32:  ## no valid packets are longer than 32 bytes; give up
-                raise Exception("Got junk data while reading for packet: '%s'" % str(res))
+            #if len(res) > 32:  ## no valid packets are longer than 32 bytes; give up
+                #raise Exception("Got junk data while reading for packet: '%s'" % str(res))
             
-            if len(res) == 0:
-                if len(errors) > 0:
-                    self.raiseError(errors)
-                if len(packets) == 1:  ## success
-                    return packets[0]
-                if len(packets) > 1:
-                    raise Exception("Too many packets read.", packets)
+            #if len(res) == 0:
+                #if len(errors) > 0:
+                    #self.raiseError(errors)
+                #if len(packets) == 1:  ## success
+                    #return packets[0]
+                #if len(packets) > 1:
+                    #raise Exception("Too many packets read.", packets)
             
-            #if len(s) > 0:
-                #if s != '\r' and s[0] != '=':
-                    #print "SutterMP285 Error: '%s'" % s
-                ##print "return:", repr(s)
-                #break
-            time.sleep(0.01)
-            if time.time() - start > timeout:
-                raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % repr(res))
+            ##if len(s) > 0:
+                ##if s != '\r' and s[0] != '=':
+                    ##print "SutterMP285 Error: '%s'" % s
+                ###print "return:", repr(s)
+                ##break
+            #time.sleep(0.01)
+            #if time.time() - start > timeout:
+                #raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % repr(res))
         
 
         

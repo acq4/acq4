@@ -10,8 +10,8 @@ import acq4.pyqtgraph as pg
 #from PyQt4 import Qwt5 as Qwt
 
 class CameraTaskGui(DAQGenericTaskGui):
-    def __init__(self, dev, task):
-        DAQGenericTaskGui.__init__(self, dev, task, ownUi=False)  ## When initializing superclass, make sure it knows this class is creating the ui.
+    def __init__(self, dev, taskRunner):
+        DAQGenericTaskGui.__init__(self, dev, taskRunner, ownUi=False)  ## When initializing superclass, make sure it knows this class is creating the ui.
         
         self.ui = Ui_Form()
         self.ui.setupUi(self)
@@ -67,27 +67,9 @@ class CameraTaskGui(DAQGenericTaskGui):
         self.frameTicks = pg.VTickGroup()
         self.frameTicks.setYRange([0.8, 1.0])
         
-        #self.roiRect = QtGui.QGraphicsRectItem()
-        #self.cameraModule = None
-        
-        #self.ui.exposePlot.registerPlot(self.dev.name + '.Expose')
-        #self.ui.triggerPlot.registerPlot(self.dev.name + '.Trigger')
-        #self.ui.imageView.ui.roiPlot.registerPlot(self.dev.name + '.ROI')
-        
-        #QtCore.QObject.connect(self.ui.recordExposeCheck, QtCore.SIGNAL('clicked()'), self.recordExposeClicked)
-        #QtCore.QObject.connect(self.ui.imageView, QtCore.SIGNAL('timeChanged'), self.timeChanged)
         self.ui.imageView.sigTimeChanged.connect(self.timeChanged)
         
-        #QtCore.QObject.connect(self.task, QtCore.SIGNAL('taskPaused'), self.taskPaused)
-        self.task.sigTaskPaused.connect(self.taskPaused)
-        #QtCore.QObject.connect(self.ui.imageView.ui.roiBtn, QtCore.SIGNAL('clicked'), self.connectROI)
-        
-        
-    #def connectROI(self):
-        #"""Display (or hide) the ImageView's ROI in the camera's module, if there is one"""
-        
-    #def updateROI(self):
-        
+        self.taskRunner.sigTaskPaused.connect(self.taskPaused)
         
             
     def timeChanged(self, i, t):

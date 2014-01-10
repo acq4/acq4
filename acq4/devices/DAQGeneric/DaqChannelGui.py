@@ -1,21 +1,16 @@
 # -*- coding: utf-8 -*-
 
 from PyQt4 import QtGui, QtCore
-#from PyQt4 import Qwt5 as Qwt
 import AOChannelTemplate, DOChannelTemplate, InputChannelTemplate
 from acq4.util.SequenceRunner import *
-#from acq4.pyqtgraph.WidgetGroup import WidgetGroup
-#from acq4.pyqtgraph.PlotWidget import PlotCurveItem
 import numpy
-#import sip
 import weakref
 from acq4.pyqtgraph import siFormat, SpinBox, WidgetGroup
-#from acq4.pyqtgraph.SpinBox import SpinBox
 
 ###### For task GUIs
 
 class DaqChannelGui(QtGui.QWidget):
-    def __init__(self, parent, name, config, plot, dev, prot, daqName=None):
+    def __init__(self, parent, name, config, plot, dev, taskRunner, daqName=None):
         QtGui.QWidget.__init__(self, parent)
         
         ## Name of this channel
@@ -34,17 +29,19 @@ class DaqChannelGui(QtGui.QWidget):
         self.dev = dev
         
         ## The task GUI window which contains this object
-        self.prot = weakref.ref(prot)
+        self.taskRunner = weakref.ref(taskRunner)
         
         ## Make sure task interface includes our DAQ device
         if daqName is None:
             self.daqDev = self.dev.getDAQName(self.name)
         else:
             self.daqDev = daqName
-        self.daqUI = self.prot().getDevice(self.daqDev)
+        self.daqUI = self.taskRunner().getDevice(self.daqDev)
         
         ## plot widget
         self.plot = plot
+        self.plot.setDownsampling(ds=True, auto=True, mode='peak')
+        self.plot.setClipToView(True)
         #plot.setCanvasBackground(QtGui.QColor(0,0,0))
         #plot.replot()
         
@@ -350,7 +347,6 @@ class InputChannelGui(DaqChannelGui):
         DaqChannelGui.__init__(self, *args)
         self.ui = InputChannelTemplate.Ui_Form()
         self.ui.setupUi(self)
-        #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('taskStarted'), self.clearPlots)
         self.postUiInit()
         self.clearBeforeNextPlot = False
          

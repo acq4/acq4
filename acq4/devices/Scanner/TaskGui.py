@@ -55,8 +55,8 @@ class ScannerTaskGui(TaskGui):
     
     #sigSequenceChanged = QtCore.Signal(object)  ## inherited from Device
     
-    def __init__(self, dev, task):
-        TaskGui.__init__(self, dev, task)
+    def __init__(self, dev, taskRunner):
+        TaskGui.__init__(self, dev, taskRunner)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         dm = getManager()
@@ -318,7 +318,7 @@ class ScannerTaskGui(TaskGui):
                 #'camera': self.cameraModule().config['camDev'], 
                 'laser': self.ui.laserCombo.currentText(),
               #  'simulateShutter': self.ui.simulateShutterCheck.isChecked(), ## was commented out... 
-                'duration': self.task.getParam('duration')
+                'duration': self.taskRunner.getParam('duration')
             }
         else: # doing programmed scans
             daqName = self.dev.getDaqName()
@@ -328,8 +328,8 @@ class ScannerTaskGui(TaskGui):
                 #'camera': self.cameraModule().config['camDev'], 
                 'laser': self.ui.laserCombo.currentText(),
                 'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
-                'duration': self.task.getParam('duration'),
-                'numPts': self.task.getDevice(daqName).currentState()['numPts'],
+                'duration': self.taskRunner.getParam('duration'),
+                'numPts': self.taskRunner.getDevice(daqName).currentState()['numPts'],
                 'program': [],
                    #('step', 0.0, None),           ## start with step to "off" position 
                    #('step', 0.2, (1.3e-6, 4e-6)), ## step to the given location after 200ms
@@ -797,7 +797,7 @@ class ScannerTaskGui(TaskGui):
         #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
         #progressDlg.setMinimumDuration(500)
         #prof.mark('progressDlg')
-        deadTime = self.task.getParam('duration')
+        deadTime = self.taskRunner.getParam('duration')
 
         state = self.stateGroup.state()
         minTime = state['minTime']
