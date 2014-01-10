@@ -803,7 +803,7 @@ class AxisItem(GraphicsWidget):
                     rects.append(br)
                     textRects.append(rects[-1])
             
-            if i > 0:  ## always draw top level
+            if i > 0 and len(textRects) > 0:  ## always draw top level
                 ## measure all text, make sure there's enough room
                 if axis == 0:
                     textSize = np.sum([r.height() for r in textRects])
