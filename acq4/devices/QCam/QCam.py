@@ -23,7 +23,7 @@ class QCam(Camera):
             raise Exception('No cameras found by QCam driver')
         
         # If no camera is specified, choose the first
-        serial = self.config.get('serial', cams.keys()[0])
+        serial = self.camConfig.get('serial', cams.keys()[0])
         
         if serial not in cams:
             raise Exception('QCam camera "%s" not found. Options are: %s' % (serial, list(cams.keys())))
