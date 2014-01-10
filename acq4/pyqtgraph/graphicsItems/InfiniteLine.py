@@ -61,6 +61,7 @@ class InfiniteLine(GraphicsObject):
             pen = (200, 200, 100)
         self.setPen(pen)
         self.currentPen = self.pen
+        self._bounds = None
         #self.setFlag(self.ItemSendsScenePositionChanges)
       
     def setMovable(self, m):
@@ -161,16 +162,22 @@ class InfiniteLine(GraphicsObject):
         #return GraphicsObject.itemChange(self, change, val)
                 
     def boundingRect(self):
-        #br = UIGraphicsItem.boundingRect(self)
-        br = self.viewRect()
-        ## add a 4-pixel radius around the line for mouse interaction.
-        
-        px = self.pixelLength(direction=Point(1,0), ortho=True)  ## get pixel length orthogonal to the line
-        if px is None:
-            px = 0
-        br.setBottom(-px*4)
-        br.setTop(px*4)
-        return br.normalized()
+        if self._bounds is None:
+            #br = UIGraphicsItem.boundingRect(self)
+            br = self.viewRect()
+            ## add a 4-pixel radius around the line for mouse interaction.
+            
+            px = self.pixelLength(direction=Point(1,0), ortho=True)  ## get pixel length orthogonal to the line
+            if px is None:
+                px = 0
+            br.setBottom(-px*4)
+            br.setTop(px*4)
+            self._bounds = br.normalized()
+        return self._bounds
+    
+    def viewTransformChanged(self):
+        self._bounds = None
+        self.update()
     
     def paint(self, p, *args):
         br = self.boundingRect()
