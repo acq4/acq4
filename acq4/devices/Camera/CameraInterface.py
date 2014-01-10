@@ -232,6 +232,7 @@ class CameraInterface(QtCore.QObject):
         if scale != self.lastCameraScale:
             anchor = self.view.mapViewToDevice(self.lastCameraPosition)
             self.view.scaleBy(scale / self.lastCameraScale)
+            pg.QtGui.QApplication.processEvents()
             anchor2 = self.view.mapDeviceToView(anchor)
             diff = pos - anchor2
             self.lastCameraScale = scale
