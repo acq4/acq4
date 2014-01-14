@@ -307,5 +307,11 @@ class PulseTrainParameter(PulseParameter):
         fnStr = "pulse(\n  times=%s,\n  widths=%s,\n  values=%s\n)" % (start, length, amp)
         return fnStr, seq
         
-        
+    def setState(self, state):
+        # for backward compatibility
+    	if 'interpulse_length' in state:
+            state['period'] = state['interpulse_length']
+            del state['interpulse_length']
+        return PulseParameter.setState(self, state)
+    
         
