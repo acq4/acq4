@@ -449,25 +449,28 @@ class pbm_ImageAnalysis(AnalysisModule):
             # reduce image size if it is too big:
             self.imageData = self.imageData[fi:]
             self.baseImage = self.imageData[0] # just to show after processing...
-            print self.imageInfo
-            print self.imageInfo[3]
-            if 'Frame Time' in self.imageInfo[3].keys():
+           # print self.imageInfo
+           # print self.imageInfo[3]
+            print len(self.imageInfo)
+            for i in range(len(self.imageInfo)):
+                print self.imageInfo
+            if len(self.imageInfo) > 3 and 'Frame Time' in self.imageInfo[3].keys():
                 self.imageTimes = np.append(self.imageTimes, self.imageInfo[3]['Frame Time'])
-                print self.imageTimes
+            #    print self.imageTimes
             else:
                 self.imageTimes = self.imageInfo[0].values()[1]
             self.imageTimes = self.imageTimes[fi:]
-            print 'original: ', self.imageTimes.shape
+           # print 'original: ', self.imageTimes.shape
             if self.downSample > 1:
                 self.imageTimes = self.imageTimes[0:-1:self.downSample]
             self.imagedT = np.mean(np.diff(self.imageTimes))
-            print 'new: ', self.imageTimes.shape
-            print 'dt: ', self.imagedT
-            print self.imageData.shape
+           # print 'new: ', self.imageTimes.shape
+           # print 'dt: ', self.imagedT
+           # print self.imageData.shape
             self.imageView.setImage(self.imageData)
             self.dataState['Loaded'] = True
             self.dataState['Structure'] = 'Flat'
-            print 'rawdata shape: ', self.rawData.shape
+          #  print 'rawdata shape: ', self.rawData.shape
             self.background = self.rawData.mean(axis=2).mean(axis=1)
             self.backgroundmean = self.background.mean(axis=0)
 

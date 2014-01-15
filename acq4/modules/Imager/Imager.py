@@ -47,8 +47,8 @@ Presets = {
         'Downsample': 1,
         'Image Width': 256,
         'Image Height': 256,
-        'xSpan': 0.9,
-        'ySpan': 0.9,
+        'xSpan': 1.0,
+        'ySpan': 1.0,
         'Overscan': 70,
         'Store': False,
         'Blank Screen': False,
@@ -62,8 +62,8 @@ Presets = {
         'Downsample': 2,
         'Image Width': 128 ,
         'Image Height': 128,
-        'xSpan': 0.9,
-        'ySpan': 0.9,
+        'xSpan': 1.0,
+        'ySpan': 1.0,
         'Overscan': 68,
         'Store': False,
         'Blank Screen': False,
@@ -93,8 +93,8 @@ Presets = {
         'Downsample': 10,
         'Image Width': 512,
         'Image Height': 512,
-        'xSpan': 0.9,
-        'ySpan': 0.9,
+        'xSpan': 1.0,
+        'ySpan': 1.0,
         'Overscan': 25,
        # 'Store': False,
         'Blank Screen': True,
@@ -108,8 +108,8 @@ Presets = {
         'Downsample': 2,
         'Image Width': 1024,
         'Image Height': 1024,
-        'xSpan': 0.9,
-        'ySpan': 0.9,
+        'xSpan': 1.0,
+        'ySpan': 1.0,
         'Overscan': 25,
        # 'Store': False,
         'Blank Screen': True,
@@ -245,6 +245,18 @@ class RegionCtrl(pg.ROI):
         #self.addRotateHandle([1,0], [0,1])
         #self.addRotateHandle([0,1], [1,0])
 
+class TileControl(PG.ROI):
+    """
+    Create an ROI for the Tile Regions. Note that the color is RED, 
+    """    
+    def __init__(self, pos, size, roiColor = 'r'):
+        PG.ROI.__init__(self, pos, size=size, pen=roiColor)
+        self.addScaleHandle([0,0], [1,1])
+        self.addScaleHandle([1,1], [0,0])
+        self.setZValue(1400)
+        #self.addRotateHandle([1,0], [0,1])
+        #self.addRotateHandle([0,1], [1,0])
+    
 
 class Imager(Module):
     def __init__(self, manager, name, config):
@@ -270,13 +282,18 @@ class Imager(Module):
         self.w2s.setSizes([1,1,900]) # Ui top widget has multiple splitters itself - force small space..
         self.view = ImagerView()
         self.w1.addWidget(self.view)   # add the view to the right of w1     
-        
         self.originalROI = None
         self.currentStack = None
         self.currentStackLength = 0
         self.roi = None # no current ROI
         self.regionCtrl = None
         self.currentRoi = None
+        self.tileRoi = None
+        self.tileRoiVisible = False
+        self.tilexPos = 0.
+        self.tileyPos = 0.
+        self.tileWidth = 2e-4
+        self.tileHeight = 2e-4
         self.img = None # overlay image in the camera Window... 
         self.dwellTime = 0. # "pixel dwell time" computed from scan time and points.
         
@@ -366,10 +383,10 @@ class Imager(Module):
             dict(name='Camera Module', type='interface', interfaceTypes=['cameraModule']),
             dict(name="Tiles", type="bool", value=False, children=[
                 dict(name='Stage', type='interface', interfaceTypes='stage'),
-                dict(name="X0", type="float", value=-100., suffix='um', dec=True, minStep=1, step=1, limits=[-1e3,1e3], siPrefix=True),
-                dict(name="X1", type="float", value=100., suffix='um', dec=True, minStep=1, step=1, limits=[-1e3,1e3], siPrefix=True),
-                dict(name="Y0", type="float", value=-100., suffix='um', dec=True, minStep=1, step=1, limits=[-1e3,1e3], siPrefix=True),
-                dict(name="Y1", type="float", value=100., suffix='um', dec=True, minStep=1, step=1, limits=[-1e3,1e3], siPrefix=True),
+                dict(name="X0", type="float", value=-100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
+                dict(name="X1", type="float", value=100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
+                dict(name="Y0", type="float", value=-100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
+                dict(name="Y1", type="float", value=100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
                 dict(name="StepSize", type="float", value=100, suffix='um', dec=True, minStep=1e-5, step=0.5, limits=[1e-5,1e3], siPrefix=True),
                 
             ]),
@@ -407,6 +424,9 @@ class Imager(Module):
                 self.cameraModule.window().removeItem(self.objectiveROImap[obj])
             except:
                 pass
+        if self.tileRoi is not None:
+            self.cameraModule.window().removeItem(self.tileRoi)
+            self.tileRoi = None
         Module.quit(self)
 
     def objectiveUpdate(self, reset=False):
@@ -456,7 +476,7 @@ class Imager(Module):
         """
         for the current objective, parse a color or use a default. This is a kludge. 
         """
-        color = 'r'
+        color = QtGui.QColor("red")
         id = objective.key()[1]
         if id == u'63x0.9':
             color = QtGui.QColor("darkBlue")
@@ -502,6 +522,7 @@ class Imager(Module):
         although we probalby also want to hide the associated image if it is present...
         """
         roi.hide()
+        self.hideOverlayImage()
     
     def restoreROI(self):
         if self.originalROI is not None:
@@ -522,6 +543,7 @@ class Imager(Module):
         """ read the ROI rectangle width and height and repost
         in the parameter tree """
         state = self.currentRoi.getState()
+        #print 'roiChanged state: ', state
         self.width, self.height = state['size']
         self.ui.width.setText('%8.1f' % (self.width*1e6)) # express in microns
         self.ui.height.setText('%8.1f' % (self.height*1e6))
@@ -544,7 +566,59 @@ class Imager(Module):
     def reAlign(self):
         self.objectiveUpdate(reset=True) # try this... 
         self.roiChanged()
-    
+
+    def setTilesROI(self, roiColor = 'r'):
+       # the initial ROI will be larger than the current field and centered.
+        if self.tileRoi is not None and self.tileRoiVisible:
+            self.hideROI(self.tileRoi)
+            self.tileRoiVisible = False
+            if self.tileRoi is not None:
+                return
+           
+            
+        state = self.currentRoi.getState()
+        width, height = state['size']
+        x, y = state['pos']
+        #self.camdev.getBoundary().boundingRect()
+        #width = brect.width()
+        #height = brect.height()
+        #x = brect.x()
+        #y = brect.y()
+        
+        csize= [width*3.0,  height*3.0]
+        cpos = [x, y]
+        self.tileRoi = RegionCtrl(cpos, csize, [255., 0., 0.]) # Note that the position actually gets overridden by the camera additem below..
+        self.tileRoi.setZValue(11000)
+        self.cameraModule.window().addItem(self.tileRoi)
+        self.tileRoi.setPos(cpos) # now is the time to do this. aaaaargh. Several hours later!!!
+        self.tileRoi.sigRegionChangeFinished.connect(self.tileROIChanged)
+        self.tileRoiVisible = True
+        return self.tileRoi
+        
+    def tileROIChanged(self):
+        """ read the TILE ROI rectangle width and height and repost
+        in the parameter tree """
+        state = self.tileRoi.getState()
+        self.tileWidth, self.tileHeight = state['size']
+        self.tilexPos, self.tileyPos = state['pos']
+        x0, y0 =  self.tileRoi.pos()
+        x0 = x0 - self.xPos # align against currrent 2p Image lower left corner
+        y0 = y0 - self.yPos
+        self.param['Tiles', 'X0'] = x0 * 1e6
+        self.param['Tiles', 'Y0'] = y0 * 1e6
+        self.param['Tiles', 'X1'] = self.tileWidth * 1e6
+        self.param['Tiles', 'Y1'] = self.tileHeight * 1e6
+        # record position of ROI in Scanner's local coordinate system
+        # we can use this later to allow the ROI to track stage movement
+        tr = self.getScannerDevice().inverseGlobalTransform() # maps from global to device local
+        pt1 = PG.Point(self.tilexPos, self.tileyPos)
+        pt2 = PG.Point(self.tilexPos+self.tileWidth, self.tileyPos+self.tileHeight)
+        self.tileRoi.scannerCoords = [
+            tr.map(pt1),
+            tr.map(pt2),
+            ]
+
+        
     def update(self):
         """
         Update the presets, and read some relevant and critical laser device info into the param block
@@ -646,31 +720,40 @@ class Imager(Module):
             imageFilename = '2pImage'
             
             stage = self.manager.getDevice(self.param['Tiles', 'Stage'])
-            self.param['Timed', 'Current Frame'] = 0
+            #print dir(stage.mp285)
+            #print stage.mp285.stat()
+            #return
+            self.param['Timed', 'Current Frame'] = 0 # get frame times ...
             images = []
             originalPos = stage.pos
             state = self.currentRoi.getState()
             self.width, self.height = state['size']
+            originalSpeed = 200
             mp285speed = 1000
-            
-            #print 'Current stage position: ', currentPos
-            x0 = self.param['Tiles', 'X0']*1e-6 # convert back to meters
-            x1 = self.param['Tiles', 'X1']*1e-6
-            y0 = self.param['Tiles', 'Y0']*1e-6
-            y1 = self.param['Tiles', 'Y1']*1e-6
+
+            x0 = self.param['Tiles', 'X0'] *1e-6 # convert back to meters
+            x1 = x0 + self.param['Tiles', 'X1'] *1e-6
+            y0 = self.param['Tiles', 'Y0'] *1e-6
+            y1 = y0 + self.param['Tiles', 'Y1'] *1e-6
             tileXY = self.param['Tiles', 'StepSize']*1e-6
             nXTiles = NP.ceil((x1-x0)/tileXY)
             nYTiles = NP.ceil((y1-y0)/tileXY)
            
-            xpos = NP.arange(x0, x0+nXTiles*tileXY, tileXY)+originalPos[0]
-            ypos = NP.arange(y0, y0+nYTiles*tileXY, tileXY)+originalPos[1]
+            # positions are relative......
+            xpos = NP.arange(x0, x0+nXTiles*tileXY, tileXY) +originalPos[0]
+            ypos = NP.arange(y0, y0+nYTiles*tileXY, tileXY) +originalPos[1]
             stage.moveTo([xpos[0], ypos[0]],
                          speed=mp285speed, fine = True, block=True) # move and wait until complete.  
+            print 'xy pos: '
+            print xpos
+            print ypos
+
             ypath = 0
             xdir = 1 # positive movement direction (serpentine tracking)
             xpos1 = xpos
             for yp in ypos:
                 if self.stopFlag:
+                    print 'Stop Flag was set - '
                     break
                 for xp in xpos1:
                     if self.stopFlag:
@@ -683,8 +766,10 @@ class Imager(Module):
                     xpos1 = xpos[::-1] # reverse order of array, serpentine movement.
                 else:
                     xpos1 = xpos
-            stage.moveTo([originalPos[0], originalPos[1]],
-                         speed=mp285speed, fine = True, block=True, timeout = 30.) # move and wait until complete.  
+            stage.moveTo([xpos[0], ypos[0]],
+                         speed=originalSpeed, fine = True, block=True, timeout = 30.) # move and wait until complete.  
+
+            print 'Finished and returned to original Position: ', originalPos
             
         elif self.param['Timed']: # 
             imageFilename = '2pTimed'
@@ -736,12 +821,12 @@ class Imager(Module):
         """
         Take one image as a snap, regardless of whether a Z stack or a Timed acquisition is selected
         """            
-
-        if self.laserDev is not None and self.laserDev.hasShutter:
-            self.laserDev.openShutter()
+        ## moved shutter operations to takeImage itself.
+        #if doShutter and self.laserDev is not None and self.laserDev.hasShutter:
+            #self.laserDev.openShutter()
         (imgData, info) = self.takeImage()
-        if self.laserDev is not None and self.laserDev.hasShutter:
-            self.laserDev.closeShutter()
+        #if doShutter and self.laserDev is not None and self.laserDev.hasShutter:
+            ##self.laserDev.closeShutter()
         if self.testMode or imgData is None:
             return
         if dirhandle is None:
@@ -798,9 +883,11 @@ class Imager(Module):
         return params
     
          
-    def takeImage(self):
+    def takeImage(self, doShutter = True):
         """
         Take an image using the scanning system and PMT, and return with the data.
+        doShutter True means that we normally trigger the shutter from here
+        but there may be times when that is not appropriate
         """
         # first make sure laser information is updated on the module interface
         if self.laserDev is not None:
@@ -1022,7 +1109,7 @@ class Imager(Module):
         self.view.resetFrameCount() # always reset the ROI in the imager display if it is being used
 
         while True:
-            (img, info) = self.takeImage()
+            (img, info) = self.takeImage(doShutter = False)
             if img is None:
                 if self.laserDev.hasShutter:
                     self.laserDev.closeShutter()

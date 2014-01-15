@@ -370,7 +370,9 @@ class ScannerTaskGui(TaskGui):
         
     def addProgramCtrl(self, param, itemType):
         ## called when "Add Control.." combo is changed
-        cls = {'lineScan': ProgramLineScan, 'multipleLineScan': ProgramMultipleLineScan, 'rectangleScan': ProgramRectScan}[itemType]
+        cls = {'lineScan': ProgramLineScan, 
+               'multipleLineScan': ProgramMultipleLineScan, 
+               'rectangleScan': ProgramRectScan}[itemType]
         state = {}
         ctrl = cls(**state)
         #ctrl.parameters().sigValueChanged.connect(self.itemActivationChanged)
