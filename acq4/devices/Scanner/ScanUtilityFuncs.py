@@ -9,8 +9,8 @@ Scanner Utility Class.
 adding an overscan region.
 3. Create an image with overscan removed.
 """
-import numpy as NP
-import pyqtgraph as PG
+import numpy as np
+import acq4.pyqtgraph as pg
 
 
 
@@ -18,7 +18,7 @@ class ScannerUtilities():
     def __init__(self):
         self.scannerDev = None
         self.laserDev = None
-        self.rectRoi = [PG.Point(0., 0.), PG.Point(0., 1e-4), PG.Point(1e-4, 0.)]
+        self.rectRoi = [pg.Point(0., 0.), pg.Point(0., 1e-4), pg.Point(1e-4, 0.)]
         self.pixelSize = 1e-6
         self.sampleRate = 1e-5
         self.downSample = 5
@@ -141,7 +141,7 @@ class ScannerUtilities():
         height = (pts[2]- pts[0]).length() # heigh in M
         self.nPointsX = int(width/self.pixelSize)
         self.nPointsY = int(height/self.pixelSize)
-        xScan = NP.linspace(0., width, self.nPointsX)
+        xScan = np.linspace(0., width, self.nPointsX)
         xScan += xPos
         
         overScanWidth = width*self.overScan/100.
@@ -160,20 +160,20 @@ class ScannerUtilities():
             print 'samplesperrow: ', samplesPerRow
             print 'xPos, yPos: ', xPos, yPos
         if not self.bidirectional:
-            saw1 = NP.linspace(0., width+overScanWidth, num=samplesPerRow)
+            saw1 = np.linspace(0., width+overScanWidth, num=samplesPerRow)
             saw1 += xPos-overScanWidth/2.0
-            xSaw = NP.tile(saw1, (1, self.nPointsY))[0,:]
+            xSaw = np.tile(saw1, (1, self.nPointsY))[0,:]
         else:
-            saw1 = NP.linspace(0., width+overScanWidth, num=samplesPerRow)
+            saw1 = np.linspace(0., width+overScanWidth, num=samplesPerRow)
             saw1 += xPos-overScanWidth/2.0
             rows = [saw1, saw1[::-1]] * int(self.nPointsY/2)
             if len(rows) < self.nPointsY:
                 rows.append(saw1)
-            xSaw = NP.concatenate(rows, axis=0)
+            xSaw = np.concatenate(rows, axis=0)
         
-        yvals = NP.linspace(0., width, num=self.nPointsY)
+        yvals = np.linspace(0., width, num=self.nPointsY)
         yvals += yPos
-        yScan = NP.empty(self.samples)
+        yScan = np.empty(self.samples)
         for y in range(self.nPointsY):
             yScan[y*samplesPerRow:(y+1)*samplesPerRow] = yvals[y]
         # now translate this scan into scanner voltage coordinates...
@@ -190,7 +190,7 @@ class ScannerUtilities():
         #n = self.nPointsY # get number of rows
         #m = samplesPerRow # get number of points per row        
         
-        #r = NP.mgrid[0:m, 0:n].reshape(1,2,m,n) 
+        #r = np.mgrid[0:m, 0:n].reshape(1,2,m,n) 
         #if self.bidirectional: # reverse directions of alternate rows
             #order = range(n-1, -1, -1)
             #for yrow in range(1,m,2):
@@ -198,9 +198,9 @@ class ScannerUtilities():
         ## convert image coordinates to physical coordinates to pass to scanner.
         #dx = (pts[1] - pts[0])/m # step size per "pixel" in x
         #dy = (pts[2] - pts[0])/n # step size per "pixel" in y
-        #v = NP.array([[dx[0], dy[0]], [dx[1], dy[1]]]).reshape(2,2,1,1) 
+        #v = np.array([[dx[0], dy[0]], [dx[1], dy[1]]]).reshape(2,2,1,1) 
         #q = (v*r).sum(axis=1)
-        #q += NP.array(pts[0]).reshape(2,1,1)
+        #q += np.array(pts[0]).reshape(2,1,1)
         #q = q.transpose(0,2,1).reshape(2,m*n)
         #x, y = self.scannerDev.mapToScanner(q[0], q[1], self.laserDev)                
         #----------------------------------------------------
@@ -255,7 +255,7 @@ class ScannerUtilities():
         the data is 0 in the overscan space, and 1 in the 
         image space
         """
-        blankData = NP.zeros(imgData.shape)
+        blankData = np.zeros(imgData.shape)
         osp = self.getOverScanPixels()
         if osp > 0:
             blankData[osp:-osp] = 1
@@ -285,14 +285,14 @@ class ScannerUtilities():
             #errs = []
             for shift in range(int(minShift), int(maxShift)):
                 f2s = f2[:-shift] if shift > 0 else f2
-                err1 = NP.abs((f1[shift:, 1:]-f2s[:, 1:])**2).sum()
-                err2 = NP.abs((f1[shift:, 1:]-f2s[:, :-1])**2).sum()
+                err1 = np.abs((f1[shift:, 1:]-f2s[:, 1:])**2).sum()
+                err2 = np.abs((f1[shift:, 1:]-f2s[:, :-1])**2).sum()
                 totErr = (err1+err2) / float(f1.shape[0]-shift)
                 #errs.append(totErr)
                 if totErr < bestError or bestError is None:
                     bestError = totErr
                     bestShift = shift
-            #PG.plot(errs)
+            #pg.plot(errs)
         else:
             bestShift = shift
         
@@ -301,7 +301,7 @@ class ScannerUtilities():
         rightShift = leftShift + (bestShift % 2)
         if rightShift == 0:
             return img, 0
-        decombed = NP.zeros(img.shape, img.dtype)
+        decombed = np.zeros(img.shape, img.dtype)
         if leftShift > 0:
             decombed[:-leftShift, ::2] = img[leftShift:, ::2]
         else:

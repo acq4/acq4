@@ -36,7 +36,7 @@ from acq4.devices.Microscope import Microscope
 import time
 import pprint
 from .imagerTemplate import Ui_Form
-import lib.devices.Scanner.ScanUtilityFuncs as SUFA
+import acq4.devices.Scanner.ScanUtilityFuncs as SUFA
 
 SUF = SUFA.ScannerUtilities()
 
@@ -338,7 +338,7 @@ class Imager(Module):
         self.ui.hide_check.stateChanged.connect(self.hideOverlayImage)
         self.ui.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
 
-        self.ui.snap_Button.clicked.connect(self.PMT_Snap)
+        self.ui.snap_Button.clicked.connect(self.PMT_SnapClicked)
         self.ui.snap_Standard_Button.clicked.connect(self.PMT_Snap_std)
         self.ui.snap_High_Button.clicked.connect(self.PMT_Snap_high)
         
@@ -816,6 +816,12 @@ class Imager(Module):
     def PMT_Snap_high(self):
         self.loadPreset('HighDef')
         self.PMT_Snap()
+    
+    def PMT_SnapClicked(self):
+        """
+        Prevent passing button state junk from Qt to the snap routine instead of dirhandle.
+        """
+        self.PMT_Snap()
         
     def PMT_Snap(self, dirhandle=None):
         """
@@ -952,9 +958,9 @@ class Imager(Module):
                       'XAxis' : {'command': x},
                       'YAxis' : {'command': y}
                       },
-                  'PockelCell': {'Switch' : {'preset': self.param['Pockels']}},
-                  'PMT' : {
-                      'Input': {'record': True},
+                  self.attenuatorDev.name(): {self.attenuatorChannel: {'preset': self.param['Pockels']}},
+                  self.detectorDev.name(): {
+                      self.detectorChannel: {'record': True},
                     #  'PlateVoltage': {'record' : False, 'recordInit': True}
                       }
                 }
@@ -971,7 +977,7 @@ class Imager(Module):
                     QtGui.QApplication.processEvents()
                     time.sleep(0.01)     
             data = task.getResult() # obvious, but here is where we get the data
-            imgData1 = data['PMT']['Input'].view(NP.ndarray) # wich is a PMT voltage array
+            imgData1 = data[self.detectorDev.name()][self.detectorChannel].view(NP.ndarray) # wich is a PMT voltage array
             xys = SUF.getScanXYSize()
             imgData1.shape = (xys[1], xys[0]) # (nPointsY, pixelsPerRow) # make 2d image
             imgData += imgData1.transpose() # sum if we are averaging.
@@ -1087,7 +1093,7 @@ class Imager(Module):
         if b:
             self.startVideo()
             
-    def toggleVideo_ultra(self):
+    def toggleVideo_ultra(self, b):
         self.loadPreset('video-ultra')
         self.vbutton = self.ui.video_ultra_button
         if b:
