@@ -143,6 +143,10 @@ class ScannerUtilities():
         self.nPointsY = int(height/self.pixelSize)
         xScan = np.linspace(0., width, self.nPointsX)
         xScan += xPos
+        print 'design: width: ', width
+        print 'design: height: ', height
+        print 'overscan: ', self.overScan
+        
         
         overScanWidth = width*self.overScan/100.
         self.overScanPixels = int(self.nPointsX / 2. * (self.overScan/100.))
@@ -159,27 +163,32 @@ class ScannerUtilities():
             print 'overscanWidth: ', overScanWidth
             print 'samplesperrow: ', samplesPerRow
             print 'xPos, yPos: ', xPos, yPos
-        if not self.bidirectional:
-            saw1 = np.linspace(0., width+overScanWidth, num=samplesPerRow)
-            saw1 += xPos-overScanWidth/2.0
-            xSaw = np.tile(saw1, (1, self.nPointsY))[0,:]
-        else:
-            saw1 = np.linspace(0., width+overScanWidth, num=samplesPerRow)
-            saw1 += xPos-overScanWidth/2.0
-            rows = [saw1, saw1[::-1]] * int(self.nPointsY/2)
+        useOldCode = False
+        if useOldCode:
+            if not self.bidirectional:
+                saw1 = np.linspace(0., width+overScanWidth, num=samplesPerRow)
+                saw1 += xPos-overScanWidth/2.0
+                xSaw = np.tile(saw1, (1, self.nPointsY))[0,:]
+            else:
+                saw1 = np.linspace(0., width+overScanWidth, num=samplesPerRow)
+                saw1 += xPos-overScanWidth/2.0
+                rows = [saw1, saw1[::-1]] * int(self.nPointsY/2)
             if len(rows) < self.nPointsY:
                 rows.append(saw1)
             xSaw = np.concatenate(rows, axis=0)
-        
-        yvals = np.linspace(0., width, num=self.nPointsY)
-        yvals += yPos
-        yScan = np.empty(self.samples)
-        for y in range(self.nPointsY):
-            yScan[y*samplesPerRow:(y+1)*samplesPerRow] = yvals[y]
-        # now translate this scan into scanner voltage coordinates...
-        x, y = self.scannerDev.mapToScanner(xSaw, yScan, self.laserDev)
-        xSaw = []
-        yScan = []
+
+            yvals = np.linspace(0., width, num=self.nPointsY)
+            yvals += yPos
+            yScan = np.empty(self.samples)
+            for y in range(self.nPointsY):
+                yScan[y*samplesPerRow:(y+1)*samplesPerRow] = yvals[y]
+                # now translate this scan into scanner voltage coordinates...
+            x, y = self.scannerDev.mapToScanner(xSaw, yScan, self.laserDev)
+            xSaw = []
+            yScan = []
+            print 'Old code: x,y min max: ', np.min(x), np.min(y), ' max: ', np.max(x), np.max(y)
+            print 'x, y shape: ', x.shape, y.shape
+
         
         
         ###----------------------------------------------------------------
@@ -187,22 +196,31 @@ class ScannerUtilities():
         ## generate scan array using potentially rotated rectangular ROI
         ## with extended overscan regions.
         
-        #n = self.nPointsY # get number of rows
-        #m = samplesPerRow # get number of points per row        
-        
-        #r = np.mgrid[0:m, 0:n].reshape(1,2,m,n) 
-        #if self.bidirectional: # reverse directions of alternate rows
-            #order = range(n-1, -1, -1)
-            #for yrow in range(1,m,2):
-                #r[0,1,yrow,:] = [r[0,1,yrow,i] for i in order]     
-        ## convert image coordinates to physical coordinates to pass to scanner.
-        #dx = (pts[1] - pts[0])/m # step size per "pixel" in x
-        #dy = (pts[2] - pts[0])/n # step size per "pixel" in y
-        #v = np.array([[dx[0], dy[0]], [dx[1], dy[1]]]).reshape(2,2,1,1) 
-        #q = (v*r).sum(axis=1)
-        #q += np.array(pts[0]).reshape(2,1,1)
-        #q = q.transpose(0,2,1).reshape(2,m*n)
-        #x, y = self.scannerDev.mapToScanner(q[0], q[1], self.laserDev)                
+        else:
+            n = self.nPointsY # get number of rows
+            m = samplesPerRow # get number of points per row, including overscan        
+            
+            r = np.mgrid[0:m, 0:n].reshape(1, 2,m, n) 
+
+            if self.bidirectional: # reverse directions of alternate rows
+                order = range(n-1, -1, -1)
+                for yrow in range(1,m,2):
+                    r[0,1,yrow,:] = [r[0,1,yrow,i] for i in order]     
+            # convert image coordinates to physical coordinates to pass to scanner.
+            dx = (pts[1] - pts[0])/self.nPointsX # step size per "pixel" in x, caluclated on the base image not including the the overscan
+            dy = (pts[2] - pts[0])/n # step size per "pixel" in y
+
+            v = np.array([[dx[0], dy[0]], [dx[1], dy[1]]]).reshape(2,2,1,1) 
+            q = (v*r).sum(axis=1)
+            print 'q: ', q.shape
+            q += np.array(pts[0]).reshape(2,1,1)
+            q = q.transpose(0,2,1).reshape(2,m*n)
+            print 'new code: shape of q: ', q.shape
+            x, y = self.scannerDev.mapToScanner(q[0], q[1], self.laserDev)
+            print 'q min max: ', np.min(q[0]), np.min(q[1]), ' max: ', np.max(q[0]), np.max(q[1])
+            print 'x,y min max: ', np.min(x), np.min(y), ' max: ', np.max(x), np.max(y)
+            print 'x, y shape: ', x.shape, y.shape
+        pg.plot(x[:1000],y[:1000])
         #----------------------------------------------------
         return (x, y)
     

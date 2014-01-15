@@ -499,8 +499,13 @@ class Imager(Module):
             
     def createROI(self, roiColor='r'):
        # the initial ROI will be nearly as big as the field, and centered.
-        cpos = self.cameraModule.ui.view.viewRect().center()
-        csize = [x*50 for x in self.cameraModule.ui.view.viewPixelSize()]
+        cpos = self.cameraModule.ui.view.viewRect().center() # center position, stage coordinates
+        csize = pg.Point([x*400 for x in self.cameraModule.ui.view.viewPixelSize()])
+        width  = csize[0]*2 # width is x in M
+        height = csize[1]*2
+        csize = pg.Point(width, height)
+        cpos = cpos - csize/2.
+ 
         #brect = self.camdev.getBoundary().boundingRect()
         #width = brect.width()
         #height = brect.height()
@@ -525,6 +530,7 @@ class Imager(Module):
         self.hideOverlayImage()
     
     def restoreROI(self):
+        
         if self.originalROI is not None:
             (width, height, x, y) = self.originalROI
             #print self.originalROI
@@ -532,7 +538,16 @@ class Imager(Module):
             self.currentRoi.setPos([x, y])
 #            print'Roi shyould be reset'
             self.roiChanged()
-
+        else:
+            cpos = self.cameraModule.ui.view.viewRect().center() # center position, stage coordinates
+            csize = pg.Point([x*400 for x in self.cameraModule.ui.view.viewPixelSize()])
+            width  = csize[0]*2 # width is x in M
+            height = csize[1]*2
+            csize = pg.Point(width, height)
+            cpos = cpos - csize/2.
+            self.currentRoi.setSize([width, height])
+            self.currentRoi.setPos(cpos)
+            
     def saveROI(self):
         state = self.currentRoi.getState()
         (width, height) = state['size']

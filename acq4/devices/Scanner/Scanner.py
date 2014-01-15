@@ -377,10 +377,14 @@ class ScannerTask(DeviceTask):
         self.abortLock = Mutex(recursive=True)
         
     def getConfigOrder(self):
+        deps = []
+        if self.cmd.get('simulateShutter', False):
+            deps.append(self.cmd['laser'])
+
         if self.cmd.get('simulateShutter', False) or 'program' in self.cmd:
-            return ([], [self.cmd['laser'], self.dev.getDaqName()]) ### need to do this so we can get the waveform from the laser later
-        else:
-            return ([],[])
+            deps.append(self.dev.getDaqName())
+            
+        return ([],deps)
 
     def configure(self):
         prof = Profiler('ScannerTask.configure', disabled=True)
