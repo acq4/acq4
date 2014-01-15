@@ -2,11 +2,15 @@
 import numpy as np
 import acq4.pyqtgraph as pg
 from acq4.util.HelpfulException import HelpfulException
+import ScanUtilityFuncs as SUFA
+
 
 class ScanProgramGenerator:
     def __init__(self, dev, command):
         self.dev = dev
         self.cmd = command 
+        self.SUF = SUFA.ScannerUtilities()
+        self.SUF.setScannerDev(self.dev)
     
     def generate(self):
         """LASER LOGO
