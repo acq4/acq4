@@ -160,7 +160,7 @@ class ImagerView(pg.ImageView):
         self.newFrameROI()
 
     def roiChanged(self):
-        pass
+        self.newFrameROI()
     
     def newFrameROI(self):
         """
@@ -298,6 +298,7 @@ class Imager(Module):
         self.tileHeight = 2e-4
         self.img = None # overlay image in the camera Window... 
         self.dwellTime = 0. # "pixel dwell time" computed from scan time and points.
+        self.fieldSize = 63.0*120e-6 # field size for 63x, will be scaled for others
         
         # we assume that you are not going to change the current camera or scope while running
         # ... not just yet anyway.
@@ -499,10 +500,15 @@ class Imager(Module):
             
     def createROI(self, roiColor='r'):
        # the initial ROI will be nearly as big as the field, and centered.
-        cpos = self.cameraModule.ui.view.viewRect().center() # center position, stage coordinates
-        csize = pg.Point([x*400 for x in self.cameraModule.ui.view.viewPixelSize()])
-        width  = csize[0]*2 # width is x in M
-        height = csize[1]*2
+        #cpos = self.cameraModule.ui.view.viewRect().center() # center position, stage coordinates
+        cpos = self.scannerDev.mapToGlobal((0,0)) # get center position in scanner coordinates
+        #csize = pg.Point([x*400 for x in self.cameraModule.ui.view.viewPixelSize()])
+        csize = self.scannerDev.mapToGlobal((self.fieldSize, self.fieldSize))
+        objScale = self.scannerDev.parentDevice().getObjective().scale().x()
+        height = width = self.fieldSize*objScale
+        
+        #width  = csize.x() # width is x in M
+        #height = csize.y()
         csize = pg.Point(width, height)
         cpos = cpos - csize/2.
  
@@ -904,7 +910,7 @@ class Imager(Module):
         return params
     
          
-    def takeImage(self, doShutter = True):
+    def takeImage(self, doShutter = True, reCompute = True):
         """
         Take an image using the scanning system and PMT, and return with the data.
         doShutter True means that we normally trigger the shutter from here
@@ -917,29 +923,7 @@ class Imager(Module):
         else:
             self.param['Wavelength'] = 0.0
             self.param['Power'] = 0.0
-#<<<<<<< HEAD:acq4/modules/Imager/Imager.py
-        ##
-        ## get image parameters from the ROI:
-        ##
-        #state = self.currentRoi.getState()
-        #w, h = state['size']
-        #p0 = pg.Point(0,0)
-        #p1 = pg.Point(w,0)
-        #p2 = pg.Point(0, h)
-        #points = [p0, p1, p2]
-        #points = [pg.Point(self.currentRoi.mapToView(p)) for p in points] # convert to view points (as needed for scanner)
-
-        #Xpos = self.xPos
-        #Ypos = self.yPos
-        #xCenter = Xpos
-        #yCenter = Ypos
-        #nPointsX = int(self.width/self.pixelSize)
-        #nPointsY = int(self.height/self.pixelSize)
-        #xScan = NP.linspace(0., self.width, nPointsX)
-        #xScan += xCenter
-#=======
-
-#>>>>>>> copied all changes from BZR:lib/modules/Imager.py
+        
         sampleRate = self.param['Sample Rate']
         if doShutter and self.laserDev is not None and self.laserDev.hasShutter:
             self.laserDev.openShutter()
@@ -947,12 +931,11 @@ class Imager(Module):
         p1 = pg.Point(self.xPos+self.width,self.yPos)
         p2 = pg.Point(self.xPos, self.height+self.yPos)
         points = [p0, p1, p2]
-        print 'points: ', points
 #        points = [pg.Point(p) for p in points]
 #        [pg.Point(self.currentRoi.mapToView(p)) for p in points]        
-        print 'points in PG: ', points
         # compute the scan voltages and return some computed values
-        (x, y) = SUF.designRectScan(scannerDev = self.scannerDev,
+        if reCompute: # only update if asked - otherwise use old ones.
+            (self.xScanner, self.yScanner) = SUF.designRectScan(scannerDev = self.scannerDev,
                                     laserDev = self.laserDev.name(), 
                                     rectRoi = points,
                                     pixelSize = self.pixelSize,
@@ -970,8 +953,8 @@ class Imager(Module):
                   'DAQ' : {'rate': self.param['Sample Rate'], 'numPts': samples,
                            'downsample': self.param['Downsample']}, 
                   'Scanner-Raw': {
-                      'XAxis' : {'command': x},
-                      'YAxis' : {'command': y}
+                      'XAxis' : {'command': self.xScanner},
+                      'YAxis' : {'command': self.yScanner}
                       },
                   self.attenuatorDev.name(): {self.attenuatorChannel: {'preset': self.param['Pockels']}},
                   self.detectorDev.name(): {
@@ -992,7 +975,7 @@ class Imager(Module):
                     QtGui.QApplication.processEvents()
                     time.sleep(0.01)     
             data = task.getResult() # obvious, but here is where we get the data
-            imgData1 = data[self.detectorDev.name()][self.detectorChannel].view(NP.ndarray) # wich is a PMT voltage array
+            imgData1 = data[self.detectorDev.name()][self.detectorChannel].view(NP.ndarray) # which is a PMT voltage array
             xys = SUF.getScanXYSize()
             imgData1.shape = (xys[1], xys[0]) # (nPointsY, pixelsPerRow) # make 2d image
             imgData += imgData1.transpose() # sum if we are averaging.
@@ -1003,9 +986,11 @@ class Imager(Module):
             imgData = imgData/self.param['Average']            
         
         if self.param['Bidirectional']:
-            imgData, self.param['Decomb', 'Shift'] = SUF.adjustBidirectional(imgData, 
-                                                                             self.param['Decomb', 'Auto'],
-                                                                             self.param['Decomb', 'Shift'])
+            imgData, shift = SUF.adjustBidirectional(imgData, 
+                                                            self.param['Decomb', 'Auto'],
+                                                            self.param['Decomb', 'Shift'])
+            if self.param['Decomb', 'Auto']:
+                self.param['Decomb', 'Shift'] = shift
             #for y in range(1, SUF.getnPointsY(), 2): # reverse direction for alternate rows
                 #imgData[:,y] = imgData[::-1,y]
             #if self.param['Decomb', 'Auto']:
@@ -1019,22 +1004,6 @@ class Imager(Module):
         #if overScanPixels > 0: # remove the overscan for one image.
             #imgData = imgData[overScanPixels:-overScanPixels]  ## remove overscan
 
-#<<<<<<< HEAD:acq4/modules/Imager/Imager.py
-        #if self.img is not None:
-            #self.cameraModule.window().removeItem(self.img)
-            #self.img = None
-        
-        ## code to display the image on the camera image
-        #self.img = pg.ImageItem(imgData) # make data into a pyqtgraph image
-        #self.cameraModule.window().addItem(self.img)
-        #self.currentRoi.setZValue(10)
-        #self.hideOverlayImage()
-        
-        #w = imgData.shape[0]
-        #h = imgData.shape[1]
-        #localPts = map(pg.Vector, [[0,0], [w,0], [0, h], [0,0,1]]) # w and h of data of image in pixels.
-        #globalPts = map(pg.Vector, [[Xpos, Ypos], [Xpos+self.width, Ypos], [Xpos, Ypos+self.height], [0, 0, 1]]) # actual values in global coordinates
-#=======
         w = imgData.shape[0]
         h = imgData.shape[1]
         localPts = map(pg.Vector, [[0,0], [w,0], [0, h], [0,0,1]]) # w and h of data of image in pixels.
@@ -1044,7 +1013,6 @@ class Imager(Module):
         globalPts = map(pg.Vector, [points[0], 
                                     points[1], 
                                     points[2], [0, 0, 1]]) # actual values in global coordinates
-#>>>>>>> copied all changes from BZR:lib/modules/Imager.py
         ##imgData.shape[0]*imgData.shape[1] # prog['points'] # sort of. - 
         m = pg.solve3DTransform(localPts, globalPts)
         m[:,2] = m[:,3]
@@ -1052,19 +1020,6 @@ class Imager(Module):
         m[2,2] = 1
         tr = QtGui.QTransform(*m[:3,:3].transpose().reshape(9))
 
-#<<<<<<< HEAD:acq4/modules/Imager/Imager.py
-        #if self.ui.hide_check.isChecked() is False:
-            #if self.img is not None:
-                #self.cameraModule.window().removeItem(self.img)
-            #self.img = None
-        
-        ## code to display the image on the camera image
-            #self.img = pg.ImageItem(imgData) # make data into a pyqtgraph image
-            #self.cameraModule.window().addItem(self.img)
-            #self.hideOverlayImage()
-            #self.img.setTransform(tr)
-        
-#=======
         if self.img is not None and self.ui.hide_check.isChecked() is False:
             self.cameraModule.window().removeItem(self.img)
     
@@ -1073,22 +1028,14 @@ class Imager(Module):
         self.img.setTransform(tr)
         self.cameraModule.window().addItem(self.img)
         self.hideOverlayImage() # hide if the box is checked    
-#>>>>>>> copied all changes from BZR:lib/modules/Imager.py
-# flip the PMT image LR, since that is how it is... there is a mirror in the path
-# (should this be a settable parameter? )
+        # flip the PMT image LR, since that is how it is... there is a mirror in the path
+        # (should this be a settable parameter? )
         imgData = NP.fliplr(imgData)        
         if self.param['Show PMT V']:
-#<<<<<<< HEAD:acq4/modules/Imager/Imager.py
-            #x=NP.linspace(0, samples/sampleRate, imgData.size)
-            #pg.plot(y=imgData.reshape(imgData.shape[0]*imgData.shape[1]), x=x)
-        #if self.param['Show Mirror V']:
-            #pg.plot(y=xScan, x=NP.linspace(0, samples/self.param['Sample Rate'], xScan.size))
-#=======
             xv=NP.linspace(0, samples/sampleRate, imgData.size)
             pg.plot(y=imgData.reshape(imgData.shape[0]*imgData.shape[1]), x=xv)
         if self.param['Show Mirror V']:
             pg.plot(y=y, x=NP.linspace(0, samples/self.param['Sample Rate'], len(x)))
-#>>>>>>> copied all changes from BZR:lib/modules/Imager.py
         
         # generate all meta-data for this frame
         info = self.saveParams()
@@ -1124,8 +1071,10 @@ class Imager(Module):
             self.laserDev.openShutter()
         self.view.resetFrameCount() # always reset the ROI in the imager display if it is being used
 
+        reCompute = True
         while True:
-            (img, info) = self.takeImage(doShutter = False)
+            (img, info) = self.takeImage(doShutter = False, reCompute=reCompute)
+            reCompute = False
             if img is None:
                 if self.laserDev.hasShutter:
                     self.laserDev.closeShutter()

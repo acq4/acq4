@@ -20,7 +20,7 @@ class ScannerUtilities():
         self.laserDev = None
         self.rectRoi = [pg.Point(0., 0.), pg.Point(0., 1e-4), pg.Point(1e-4, 0.)]
         self.pixelSize = 1e-6
-        self.sampleRate = 1e-5
+        self.sampleRate = 100000. 
         self.downSample = 5
         self.overScan = 0.
         self.bidirectional = True
@@ -70,18 +70,18 @@ class ScannerUtilities():
         return(self.downSample)
 
     def setOverScan(self, overscan):
-        if overscan < 0 or overscan > 100:
-            raise Exception("ScannerUtility: setOverScan requires number >0 and < 100")
+        if overscan < 0 or overscan > 200:
+            raise Exception("ScannerUtility: setOverScan requires number >0 and < 200")
         self.overScan = overscan
         
     def getOverScan(self):
         return self.overScan
     
     def setBidirectional(self, bidirection):
-        self.biDirectional = bidirection
+        self.bidirectional = bidirection
         
     def getBidirectional(self):
-        return(self.biDirectional)
+        return(self.bidirectional)
 
     def packScannerParams(self):
         """
@@ -93,7 +93,46 @@ class ScannerUtilities():
                          'sampleRate': self.sampleRate, 'downSample': self.downSample,
                          'overScan': self.overScan, 'bidirectional': self.bidirectional}
         return scannerParams
+
+    def setScannerParameters(self, sp):
+        """
+        set the paramereters from the dictionary retrieved by packScannerParameters
+        """
+        self.scannerDev = sp['scannerDev']
+        self.laserDev = sp['laserDev']
+        self.rectRoi = sp['rectRoi']
+        self.pixelSize = sp['pixelSize']
+        self.sampleRate = sp['sampleRate']
+        self.downSample = sp['downSample']
+        self.overScan = sp['overScan']
+        self.bidirectional = sp['bidirectional']     
+        return # just in case we want it as well...
+
+    def getScanInfo(self):
+        """
+        convenience function - get several scan parameters after the scan
+        as a dictionary
+        This routine is used, for example in the Imaging (task) module to retrieve
+        the scan parameters to reconstruct the image.
+        """
+        return {'pixelsPerRow': self.pixelsPerRow, 'overScanPixels': self.overScanPixels,
+                'nPointsY': self.nPointsY, 'nPointsX': self.nPointsX,
+                'samples': self.samples}
     
+    def setScanInfo(self, sp):
+        """
+        convenience function - gst several scan parameters after the scan
+        as a dictionary, if the form returned by getScanInfo
+        This routine is used, for example in the Imaging (task) module to retrieve
+        the scan parameters to reconstruct the image.
+        """
+        self.pixelsPerRow = sp['pixelsPerRow']
+        self.overScanPixels  = sp['overScanPixels']
+        self.nPointsY = sp['nPointsY']
+        self.nPointsX = sp['nPointsX']       
+        self.samples = sp['samples']
+        
+        
     def checkScannerParams(self):
         sp = self.packScannerParams()
         for p in sp.keys():
@@ -116,6 +155,7 @@ class ScannerUtilities():
         self.bidirectional = sp['bidirectional']     
         return sp # just in case we want it as well...
     
+
         
     def designRectScan(self, **kwargs):
         """
@@ -124,32 +164,32 @@ class ScannerUtilities():
         downsample, overscan and bidirectional flags as set. 
         Pulled from Imager.py, 11/21/2013.
         """
+        prof = pg.debug.Profiler(disabled=False)
         self.packArgs(**kwargs) # update any specified arguments
         self.checkScannerParams() # verify all are loaded in in range.
-        printPars = False
+        printPars = True
         if 'printPars' in kwargs.keys():
             printPars = kwargs['printPars']
         
+        prof()
         pts = self.rectRoi
-      #  print 'Points in sfu/design: ', pts
         xPos = pts[0][0]
         yPos = pts[0][1]
-      #  print 'xypos: ', xPos, yPos
-        #width = self.rect[2]
-        #height = self.rect[3]
+
         width  = (pts[1] -pts[0]).length() # width is x in M
         height = (pts[2]- pts[0]).length() # heigh in M
         self.nPointsX = int(width/self.pixelSize)
         self.nPointsY = int(height/self.pixelSize)
         xScan = np.linspace(0., width, self.nPointsX)
         xScan += xPos
-        print 'design: width: ', width
-        print 'design: height: ', height
-        print 'overscan: ', self.overScan
+        #print 'design: width: ', width
+        #print 'design: height: ', height
+        #print 'overscan: ', self.overScan
         
         
         overScanWidth = width*self.overScan/100.
-        self.overScanPixels = int(self.nPointsX / 2. * (self.overScan/100.))
+        self.overScanPixels = int((self.nPointsX / 2.) * (self.overScan/100.))
+        
         self.pixelsPerRow = self.nPointsX + 2 * self.overScanPixels  ## make sure width is increased by an even number.
         samplesPerRow = self.pixelsPerRow * self.downSample
         self.samples = samplesPerRow * self.nPointsY
@@ -159,11 +199,13 @@ class ScannerUtilities():
             print 'nPointsX: ', self.nPointsX
             print 'nPointsY: ', self.nPointsY
             print 'overScan: ', self.overScan
+            print 'overScanPixels: ', self.overScanPixels
             print 'downSample: ', self.downSample
             print 'overscanWidth: ', overScanWidth
             print 'samplesperrow: ', samplesPerRow
             print 'xPos, yPos: ', xPos, yPos
         useOldCode = False
+        prof()
         if useOldCode:
             if not self.bidirectional:
                 saw1 = np.linspace(0., width+overScanWidth, num=samplesPerRow)
@@ -192,36 +234,35 @@ class ScannerUtilities():
         
         
         ###----------------------------------------------------------------
-        ## note: code not working right yet. 
         ## generate scan array using potentially rotated rectangular ROI
         ## with extended overscan regions.
         
         else:
-            n = self.nPointsY # get number of rows
-            m = samplesPerRow # get number of points per row, including overscan        
-            
-            r = np.mgrid[0:m, 0:n].reshape(1, 2,m, n) 
-
-            if self.bidirectional: # reverse directions of alternate rows
-                order = range(n-1, -1, -1)
-                for yrow in range(1,m,2):
-                    r[0,1,yrow,:] = [r[0,1,yrow,i] for i in order]     
+            ny = self.nPointsY # get number of rows
+            nx = samplesPerRow # get number of points per row, including overscan        
+            dx = (pts[1]-pts[0])/(self.nPointsX*self.downSample) # (nx-1)
+            dy = (pts[2]-pts[0])/self.nPointsY # (ny-1)            
+            prof()
+            r = np.mgrid[0:ny, 0:nx]
+            r = np.roll(r, nx*ny) # swapping order of first axis , also could be r = r[::-1]
+            prof()
+            if self.bidirectional:
+                r[0, 1::2] = r[0, 1::2, ::-1]
+            prof()
             # convert image coordinates to physical coordinates to pass to scanner.
-            dx = (pts[1] - pts[0])/self.nPointsX # step size per "pixel" in x, caluclated on the base image not including the the overscan
-            dy = (pts[2] - pts[0])/n # step size per "pixel" in y
-
             v = np.array([[dx[0], dy[0]], [dx[1], dy[1]]]).reshape(2,2,1,1) 
+            prof()
             q = (v*r).sum(axis=1)
-            print 'q: ', q.shape
-            q += np.array(pts[0]).reshape(2,1,1)
-            q = q.transpose(0,2,1).reshape(2,m*n)
-            print 'new code: shape of q: ', q.shape
-            x, y = self.scannerDev.mapToScanner(q[0], q[1], self.laserDev)
-            print 'q min max: ', np.min(q[0]), np.min(q[1]), ' max: ', np.max(q[0]), np.max(q[1])
-            print 'x,y min max: ', np.min(x), np.min(y), ' max: ', np.max(x), np.max(y)
-            print 'x, y shape: ', x.shape, y.shape
-        pg.plot(x[:1000],y[:1000])
+            prof()
+            trueOrigin = pts[0]-dx*self.overScanPixels*self.downSample
+            #print 'trueOrigin: ', trueOrigin
+            #print 'pts[0]: ', pts[0]
+            q += np.array(trueOrigin).reshape(2,1,1)
+            prof()
+            x, y = self.scannerDev.mapToScanner(q[0].flatten(), q[1].flatten(), self.laserDev)
+            prof()
         #----------------------------------------------------
+        prof()
         return (x, y)
     
     def getPixelsPerRow(self):
@@ -231,19 +272,11 @@ class ScannerUtilities():
         return self.nPointsY
 
     def getOverScanPixels(self):
+        print 'getOverScan Pixels has: ', self.overScanPixels
         return self.overScanPixels
 
     def getSamples(self):
         return self.samples
-    
-    def getScanInfo(self):
-        """
-        convenience function - get several scan parameters after the scan
-        as a dictionary
-        """
-        return {'pixelsPerRow': self.pixelsPerRow, 'overScanPixels': self.overScanPixels,
-                'nPointsY': self.nPointsY, 'nPointsX': self.nPointsX,
-                'samples': self.samples}
     
     def getScanXYSize(self):
         # return the size of the data array that the scan will fill
@@ -255,16 +288,22 @@ class ScannerUtilities():
         If the data is from a bidirectional scan, do the decombing with the 
         fixed shift value.
         Optionally, compute the auto decomb value needed to optimize the image.
+        Units of the shift coming in here are in seconds (not pixels)
         """
+        print 'bidirectional: ', self.bidirectional
         if self.bidirectional:
             for y in range(1, self.nPointsY, 2): # reverse direction for alternate rows
                 imgData[:,y] = imgData[::-1,y]
+            print 'decomb auto: ', decombAutoFlag
+            print 'self samplerate: ', self.sampleRate
             if decombAutoFlag:
-                imgData, shift = self.decomb(imgData, minShift=0*self.sampleRate, maxShift=200e-6*self.sampleRate)  ## correct for mirror lag up to 200us
-                decombShift = shift / self.sampleRate
+                imgData, shift = self.decomb(imgData, minShift=0., maxShift=400e-6*self.sampleRate)  ## correct for mirror lag up to 200us
+                decombShift = shift * self.sampleRate
             else:
+                print 'shift, samplerate: ', decombShift, self.sampleRate
                 imgData, shift = self.decomb(imgData, auto=False, shift=decombShift*self.sampleRate)
-        return imgData, decombShift
+            print 'decombshift (microseconds): ', shift / self.sampleRate
+        return imgData, shift / self.sampleRate
         
 
     def makeOverscanBlanking(self, imgData):
@@ -276,22 +315,28 @@ class ScannerUtilities():
         blankData = np.zeros(imgData.shape)
         osp = self.getOverScanPixels()
         if osp > 0:
-            blankData[osp:-osp] = 1
+            blankData[:,osp:-osp] = 1
         else:
             blankData[:] = 1
         return blankData
     
-    def removeOverscan(self, imgData):
+    def removeOverscan(self, imgData, overscan = None):
         """
         Trim the overscan from the image array
         """
-        osp = self.getOverScanPixels()
+        print 'removeOverscan: '
+        if overscan is not None:
+            osp = overscan
+        else:
+            osp = self.getOverScanPixels()
         if osp > 0:
             imgData = imgData[osp:-osp]
         return imgData
     
-    def decomb(self, img, minShift=0, maxShift=100, auto=True, shift=0.):
+    def decomb(self, img, minShift=0., maxShift=100., auto=True, shift=0):
         ## split image into fields
+        # units of the shift coming in here are in pixels (integer)
+
         nr = 2 * (img.shape[1] // 2)
         f1 = img[:,0:nr:2]
         f2 = img[:,1:nr+1:2]
@@ -311,18 +356,22 @@ class ScannerUtilities():
                     bestError = totErr
                     bestShift = shift
             #pg.plot(errs)
+            print 'decomb: auto is true, bestshift = ', bestShift
         else:
             bestShift = shift
-        
-        ## reconstrict from shifted fields
+        if bestShift is None: # nothing...
+            return img, 0.
+        ## reconstruct from shifted fields
         leftShift = bestShift // 2
-        rightShift = leftShift + (bestShift % 2)
-        if rightShift == 0:
+        rightShift = int(leftShift + (bestShift % 2))
+        print '360: left, right: ', leftShift, rightShift
+        if rightShift < 1:
             return img, 0
         decombed = np.zeros(img.shape, img.dtype)
         if leftShift > 0:
             decombed[:-leftShift, ::2] = img[leftShift:, ::2]
         else:
             decombed[:, ::2] = img[:, ::2]
+        print '368: left, right: ', leftShift, rightShift
         decombed[rightShift:, 1::2] = img[:-rightShift, 1::2]
         return decombed, bestShift

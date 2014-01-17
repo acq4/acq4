@@ -7,8 +7,8 @@ import numpy as np
 import acq4.pyqtgraph as pg
 import acq4.util.functions as fn
 import acq4.util.metaarray as metaarray
-
-
+from acq4.util.HelpfulException import HelpfulException
+import acq4.devices.Scanner.ScanUtilityFuncs as SUFA
 
 
 class ImagingModule(AnalysisModule):
@@ -18,6 +18,7 @@ class ImagingModule(AnalysisModule):
         self.ui.setupUi(self)
         self.postGuiInit()
         self.man = getManager()
+        self.SUF = SUFA.ScannerUtilities()
         #self.image=pg.ImageView()
         #self.ui.histogram.setImageItem(self.image)
         #self.ui.histogram.autoHistogramRange()
@@ -140,7 +141,27 @@ class ImagingModule(AnalysisModule):
             imageData = pmtdata[prog['startStopIndices'][0]:prog['startStopIndices'][0] + nscans*samplesPerScan]
             imageData=imageData.reshape(nscans, prog['imageSize'][1], prog['imageSize'][0])
             imageData = imageData.transpose(0,2,1)
+            imageAve = np.mean(imageData, axis=0)
+            print prog['scanParameters']
+            self.SUF.setScannerParameters(prog['scanParameters']) # load up information for Scanner calculations
+            self.SUF.setScanInfo(prog['scanInfo'])
+            imageAve, bestShift = self.SUF.adjustBidirectional(imageAve, True, 0.)
+            print 'bestShift: ', bestShift, ' microseconds'
+            #bestShift = 200e-6
+            for i in range(nscans):
+                (decombedImage, shift) = self.SUF.adjustBidirectional(imageData[i], False, bestShift)
+                roImage = self.SUF.removeOverscan(decombedImage)
+                if i == 0:
+                    newImage = np.zeros((nscans, roImage.shape[0], roImage.shape[1]))
+                newImage[i] = roImage
+            print imageAve.shape
+            print newImage.shape
+            imageData = newImage
+            
+
             # imageData = fn.downsample(imageData, imageDownSample, axis=0)
+            if imageData.size == 0:
+                raise Exception('image Data has zero size')
             self.ui.plotWidget.setImage(imageData)
             pts = prog['points']
             floatpoints =[ (float(x[0]), float(x[1])) for x in pts]

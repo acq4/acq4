@@ -355,6 +355,7 @@ class ScannerTaskGui(TaskGui):
             ss = result['spotSize']
             self.spotMarker.setPos((pos[0]-ss*0.5, pos[1]-ss*0.5))
         #print 'handleResult'
+        getManager().scanResult=result
     
     def addPositionCtrl(self, param, typ):
         ## called when "Add Control.." combo is changed
