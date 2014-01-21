@@ -70,7 +70,7 @@ class ImagingModule(AnalysisModule):
         limits = prog['points']
         dist = (pg.Point(limits[0])-pg.Point(limits[1])).length()
         startT = prog['startTime']
-        endT = prog['endTime']
+        endT = prog['endTime'] # note that this value is shared by all types, so rectscan computes in program generator...
         
         ## Linescan is superseded by MultipleLineScan. 
         #if prog['type'] == 'lineScan':
@@ -142,20 +142,20 @@ class ImagingModule(AnalysisModule):
             imageData=imageData.reshape(nscans, prog['imageSize'][1], prog['imageSize'][0])
             imageData = imageData.transpose(0,2,1)
             imageAve = np.mean(imageData, axis=0)
-            print prog['scanParameters']
+            #print prog['scanParameters']
             self.SUF.setScannerParameters(prog['scanParameters']) # load up information for Scanner calculations
             self.SUF.setScanInfo(prog['scanInfo'])
             imageAve, bestShift = self.SUF.adjustBidirectional(imageAve, True, 0.)
-            print 'bestShift: ', bestShift, ' microseconds'
-            #bestShift = 200e-6
+            #print 'bestShift: ', bestShift, ' microseconds'
+            bestShift = 200e-6
             for i in range(nscans):
                 (decombedImage, shift) = self.SUF.adjustBidirectional(imageData[i], False, bestShift)
                 roImage = self.SUF.removeOverscan(decombedImage)
                 if i == 0:
                     newImage = np.zeros((nscans, roImage.shape[0], roImage.shape[1]))
                 newImage[i] = roImage
-            print imageAve.shape
-            print newImage.shape
+            #print imageAve.shape
+            #print newImage.shape
             imageData = newImage
             
 

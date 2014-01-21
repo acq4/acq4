@@ -171,19 +171,19 @@ class ScanProgramGenerator:
                 width  = (pts[1] -pts[0]).length() # width is x in M
                 height = (pts[2]- pts[0]).length() # heigh in M
                 rect = [pts[0][0], pts[0][1], width, height]
-                overScanPct = 50.
+                overScanPct = cmd['overScan']
                 self.SUF.setRectRoi(pts)
                 self.SUF.setOverScan(overScanPct)
                 self.SUF.setDownSample(1)
                 self.SUF.setBidirectional(True)
-                pixelSize = cmd['lineSpacing']
+                pixelSize = cmd['pixelSize']
                 # recalulate pixelSize based on:
                 # number of scans (reps) and total duration
                 nscans = cmd['nScans']
-                dur = cmd['endTime'] - cmd['startTime'] # time for nscans
+                dur = cmd['duration']#  - cmd['startTime'] # time for nscans
                 durPerScan = dur/nscans # time for one scan
                 printParameters = False
-                self.SUF.setPixelSize(cmd['lineSpacing']) # pixelSize/np.sqrt(pixsf)) # adjust the pixel size
+                self.SUF.setPixelSize(cmd['pixelSize']) # pixelSize/np.sqrt(pixsf)) # adjust the pixel size
                 self.SUF.setSampleRate(1./dt) # actually this is not used... 
                 (x,y) = self.SUF.designRectScan() # makes one rectangle
                 effScanTime = (self.SUF.getPixelsPerRow()/pixelSize)*(height/pixelSize)*dt # time it actually takes for one scan 

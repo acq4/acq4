@@ -30,7 +30,7 @@ import acq4.util.debug as debug
 import numpy as np
 import scipy
 import scipy.stats
-import pyqtgraph as PG
+import acq4.pyqtgraph as PG
 
 import weakref
 #import FileLoader
