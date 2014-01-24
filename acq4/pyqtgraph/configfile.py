@@ -100,12 +100,7 @@ def parseString(lines, start=0):
         
     indent = measureIndent(lines[start])
     ln = start - 1
-
-    ## Strip out some stuff that we don't need in some intermediate info files...
-    ## these are the possible "Point" and "PyQt4...QPoint" formats for numbers that are
-    ## otherwise chocking processing.
-    ptsstr = re.compile('Point\(')
-    qptsstr = re.compile('PyQt4.QtCore.QPointF\(')
+    
     try:
         while True:
             ln += 1
@@ -135,9 +130,6 @@ def parseString(lines, start=0):
             (k, p, v) = l.partition(':')
             k = k.strip()
             v = v.strip()
-            # now remove the junk...
-            v = re.sub(ptsstr, '(', v)
-            v = re.sub(qptsstr, '(', v)
             
             ## set up local variables to use for eval
             local = units.allUnits.copy()

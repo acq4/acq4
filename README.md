@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 ACQ4
 ====
 
@@ -93,14 +92,4 @@ Linux, OSX
 
 3. Run `python -m acq4` from the source directory, or install with `python setup.py install` and run using `acq4`.
 
-=======
-acq4
-====
-
-Manis' Main repository for ACQ4 development
-
-Acq4 is a neurophysiology data acquisition and analysis platform written in Python. 
-
-For more information on acq4, see http://www.acq4.org
->>>>>>> Create README.md
 

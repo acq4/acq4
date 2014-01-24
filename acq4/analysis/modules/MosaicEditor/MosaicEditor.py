@@ -1,24 +1,4 @@
 # -*- coding: utf-8 -*-
-#
-# Mosaic Editor
-# part of Acq4
-#
-# The Mosiac Editor allows the user to bring in multiple images onto
-# a canvas, and manipulate the images, including adjusting contrast,
-# position, and alpha.
-# Images created in Acq4 that have position information will be
-# represented according to their x,y positions (but not the z).
-
-# Groups of images can be scaled together.
-# An image stack can be "flattened" with different denoising methods
-# #- useful for a quick reconstruction of filled cells.
-# Images can be compared against an atlas for reference, if the atlas
-# data is loaded.
-# This tool is useful for combining images taken at different positions
-# with a camera or 2P imaging system.
-# The resulting images may be saved as SVG or PNG files.
-# Mosaic Editor makes extensive use of pyqtgraph Canvas methods.
-#
 
 from PyQt4 import QtGui, QtCore
 from acq4.analysis.AnalysisModule import AnalysisModule
@@ -30,7 +10,7 @@ import acq4.util.debug as debug
 import numpy as np
 import scipy
 import scipy.stats
-import acq4.pyqtgraph as PG
+import acq4.pyqtgraph as pg
 
 import weakref
 #import FileLoader
@@ -42,6 +22,23 @@ import acq4.analysis.atlas as atlas
 
 
 class MosaicEditor(AnalysisModule):
+    """
+    The Mosiac Editor allows the user to bring in multiple images onto
+    a canvas, and manipulate the images, including adjusting contrast,
+    position, and alpha.
+    Images created in Acq4 that have position information will be
+    represented according to their x,y positions (but not the z).
+
+    Groups of images can be scaled together.
+    An image stack can be "flattened" with different denoising methods
+    - useful for a quick reconstruction of filled cells.
+    Images can be compared against an atlas for reference, if the atlas
+    data is loaded.
+    This tool is useful for combining images taken at different positions
+    with a camera or 2P imaging system.
+    The resulting images may be saved as SVG or PNG files.
+    Mosaic Editor makes extensive use of pyqtgraph Canvas methods.
+    """
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         
@@ -224,9 +221,8 @@ class MosaicEditor(AnalysisModule):
         meanImage = meanImage/n # np.mean(meanImage[0:n], axis=0)
         filtwidth = np.floor(nxm[0]/10+1)
         blimg = scipy.ndimage.filters.gaussian_filter(meanImage, filtwidth, order = 0, mode='reflect')
-        PG.image(blimg)
-        #PG.show()
-
+        #pg.image(blimg)
+        
         m = np.argmax(hm[0]) # returns the index of the max count
         print 'm = ', m
         # now rescale each individually
