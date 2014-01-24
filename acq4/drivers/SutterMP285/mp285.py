@@ -188,7 +188,7 @@ class SutterMP285(SerialDevice):
         
     def stat(self, ):
         self.write('s\r')
-        packet = self.read(33, term='\r')
+        packet = self.read(33, timeout=5.0, term='\r')
         if len(packet) != 32:
             raise Exception("Sutter MP285: bad stat packet: '%s'" % repr(packet))
             

@@ -355,6 +355,7 @@ class ScannerTaskGui(TaskGui):
             ss = result['spotSize']
             self.spotMarker.setPos((pos[0]-ss*0.5, pos[1]-ss*0.5))
         #print 'handleResult'
+        getManager().scanResult=result
     
     def addPositionCtrl(self, param, typ):
         ## called when "Add Control.." combo is changed
@@ -370,7 +371,9 @@ class ScannerTaskGui(TaskGui):
         
     def addProgramCtrl(self, param, itemType):
         ## called when "Add Control.." combo is changed
-        cls = {'lineScan': ProgramLineScan, 'multipleLineScan': ProgramMultipleLineScan, 'rectangleScan': ProgramRectScan}[itemType]
+        cls = {'lineScan': ProgramLineScan, 
+               'multipleLineScan': ProgramMultipleLineScan, 
+               'rectangleScan': ProgramRectScan}[itemType]
         state = {}
         ctrl = cls(**state)
         #ctrl.parameters().sigValueChanged.connect(self.itemActivationChanged)
@@ -1690,9 +1693,10 @@ class ProgramRectScan(QtCore.QObject):
         self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
             dict(name='width', type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='height', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
-            dict(name='linespacing', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[2e-7, None], step=2e-7),
+            dict(name='overScan', type='float', value=70., suffix='%', siPrefix=False, bounds=[0, 200.], step = 1),
+            dict(name='pixelSize', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[2e-7, None], step=2e-7),
             dict(name='startTime', type='float', value=1e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
-            dict(name='endTime', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='duration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='nScans', type='int', value=10, bounds=[1, None]),
         ])
         self.params.ctrl = self
@@ -1760,8 +1764,10 @@ class ProgramRectScan(QtCore.QObject):
         points = [p0, p1, p2]
         points = [pg.Point(self.roi.mapToView(p)) for p in points] # convert to view points (as needed for scanner)
         return {'type': self.name, 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 
-                'endTime': self.params['endTime'], 'nScans': self.params['nScans'],
-                'lineSpacing': self.params['linespacing']}
+                'endTime': self.params['duration']+self.params['startTime'], 'duration': self.params['duration'],
+                'nScans': self.params['nScans'],
+                'pixelSize': self.params['pixelSize'], 'overScan': self.params['overScan'],
+                }
         
 
 

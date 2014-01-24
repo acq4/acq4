@@ -2,11 +2,15 @@
 import numpy as np
 import acq4.pyqtgraph as pg
 from acq4.util.HelpfulException import HelpfulException
+import ScanUtilityFuncs as SUFA
+
 
 class ScanProgramGenerator:
     def __init__(self, dev, command):
         self.dev = dev
         self.cmd = command 
+        self.SUF = SUFA.ScannerUtilities()
+        self.SUF.setScannerDev(self.dev)
     
     def generate(self):
         """LASER LOGO
@@ -29,7 +33,7 @@ class ScanProgramGenerator:
         """
         command = self.cmd
         dt = command['duration'] / command['numPts']
-        arr = np.empty((2, command['numPts']))        
+        arr = np.zeros((2, command['numPts']))        
         cmds = command['program']
         lastPos = None     
         lastValue = np.array(self.dev.getVoltage())
@@ -42,7 +46,10 @@ class ScanProgramGenerator:
             stopInd = int(cmd['endTime'] / dt)
             #print 'scanproggenerator;;;'
             #print startInd, stopInd
-            #print dt
+            #print cmd['startTime'], cmd['endTime']
+            #print 'dt: ', dt
+            #print 'dur, pts: ', command['duration'], command['numPts']
+            #print 'total time: ', dt*command['numPts']
             #print arr.shape
             if stopInd >= arr.shape[1]:
                 raise HelpfulException('Scan Program duration is longer than protocol duration') 
@@ -159,25 +166,46 @@ class ScanProgramGenerator:
                 
             elif cmd['type'] == 'rectScan':
                 pts = cmd['points']
+               # print 'cmd: ', cmd
+                self.SUF.setLaserDev(self.cmd['laser'])
                 width  = (pts[1] -pts[0]).length() # width is x in M
                 height = (pts[2]- pts[0]).length() # heigh in M
-                n = int(height /cmd['lineSpacing']) # number of rows scanned
-                assert n > 0
-                m = int((stopInd - startInd)/(n * cmd['nScans'])) # number of points per row
-                assert m > 0
-                r = np.mgrid[0:m, 0:n].reshape(1,2,m,n) 
-                # convert image coordinates to physical coordinates to pass to scanner.
-                dx = (pts[1] - pts[0])/m # step size per "pixel" in x
-                dy = (pts[2] - pts[0])/n # step size per "pixel" in y
-                v = np.array([[dx[0], dy[0]], [dx[1], dy[1]]]).reshape(2,2,1,1) 
-                q = (v*r).sum(axis=1)
-                q += np.array(pts[0]).reshape(2,1,1)
-                q = q.transpose(0,2,1).reshape(2,m*n)
-                # convert physical coordinates to scanner voltages
-                x, y = self.dev.mapToScanner(q[0], q[1], self.cmd['laser'])
-                #cmd['xy'] = (x,y)
-                cmd['imageSize'] = (m,n)                    
-                # repeat scanner voltages once per scan
+                rect = [pts[0][0], pts[0][1], width, height]
+                overScanPct = cmd['overScan']
+                self.SUF.setRectRoi(pts)
+                self.SUF.setOverScan(overScanPct)
+                self.SUF.setDownSample(1)
+                self.SUF.setBidirectional(True)
+                pixelSize = cmd['pixelSize']
+                # recalulate pixelSize based on:
+                # number of scans (reps) and total duration
+                nscans = cmd['nScans']
+                dur = cmd['duration']#  - cmd['startTime'] # time for nscans
+                durPerScan = dur/nscans # time for one scan
+                printParameters = False
+                self.SUF.setPixelSize(cmd['pixelSize']) # pixelSize/np.sqrt(pixsf)) # adjust the pixel size
+                self.SUF.setSampleRate(1./dt) # actually this is not used... 
+                (x,y) = self.SUF.designRectScan() # makes one rectangle
+                effScanTime = (self.SUF.getPixelsPerRow()/pixelSize)*(height/pixelSize)*dt # time it actually takes for one scan 
+                pixsf = durPerScan/effScanTime # correction for pixel size based pm to,e
+
+                cmd['imageSize'] = (self.SUF.getPixelsPerRow(), self.SUF.getnPointsY())
+
+                if printParameters:
+                    print 'scans: ', nscans
+                    print 'width: ', width
+                    print 'points in width: ', width/pixelSize
+                    print 'dt: ', dt
+                    print 'points in a scan: ', (width/pixelSize)*(height/pixelSize)
+                    print 'effective scan time: ', effScanTime
+                    print 'pixsf: ', pixsf
+                    print 'original: ', pixelSize
+                    print 'new pix size: ', pixelSize*pixsf
+               
+                n = self.SUF.getnPointsY() # get number of rows
+                m = self.SUF.getPixelsPerRow() # get nnumber of points per row
+
+                ## Build array with scanner voltages for rect repeated once per scan
                 for i in range(cmd['nScans']):
                     thisStart = startInd+i*n*m
                     arr[0, thisStart:thisStart + len(x)] = x
@@ -185,11 +213,17 @@ class ScanProgramGenerator:
                 arr[0, startInd+n*m*cmd['nScans']:stopInd] = arr[0, startInd+n*m*cmd['nScans'] -1] # fill in any unused sample on this scan section
                 arr[1, startInd+n*m*cmd['nScans']:stopInd] = arr[1, startInd+n*m*cmd['nScans'] -1]
                 lastPos = (x[-1], y[-1])
-
+            
+            
             # A side-effect modification of the 'command' dict so that analysis can access
             # this information later
             cmd['startStopIndices'] = (startInd, stopInd)
+            cmd['scanParameters'] = self.SUF.packScannerParams()
+            cmd['scanInfo'] = self.SUF.getScanInfo()
             lastValue = arr[:,stopInd-1]
             lastStopInd = stopInd
+            
+            
         arr[:,lastStopInd:] = lastValue[:,np.newaxis]
+        
         return arr

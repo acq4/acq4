@@ -128,7 +128,7 @@ class Fitting():
             return yd
         else:
             if sumsq is True:
-                return numpy.sum((y - yd)**2)
+                return numpy.sum((y - yd)**2.0)
             else:
                 return y - yd
     
@@ -145,7 +145,7 @@ class Fitting():
             if weights is not None:
                 yerr = yerr * weights
             if sumsq is True:
-                return numpy.sum(yerr**2)
+                return numpy.sum(yerr**2.0)
             else:
                 return yerr
 
@@ -159,7 +159,7 @@ class Fitting():
             return yd
         else:
             if sumsq is True:
-                return numpy.sum((y - yd)**2)
+                return numpy.sum((y - yd)**2.0)
             else:
                 return y - yd
 
@@ -175,7 +175,7 @@ class Fitting():
             return yd
         else:
             if sumsq is True:
-                return numpy.sum((y - yd)**2)
+                return numpy.sum((y - yd)**2.0)
             else:
                 return y - yd
 
@@ -190,7 +190,7 @@ class Fitting():
             return (yd, ydp)
         else:
             if sumsq is True:
-                return numpy.sum((y - yd)**2)
+                return numpy.sum((y - yd)**2.0)
             else:
                 return y - yd
 
@@ -269,7 +269,7 @@ class Fitting():
             return yd
         else:
             if sumsq is True:
-                return numpy.sum((y - yd)**2)
+                return numpy.sum((y - yd)**2.0)
             else:
                 return y - yd
 
@@ -279,7 +279,7 @@ class Fitting():
             return yd
         else:
             if sumsq is True:
-                return numpy.sum((y - yd)**2)
+                return numpy.sum((y - yd)**2.0)
             else:
                 return y - yd
 
@@ -289,7 +289,7 @@ class Fitting():
             return yd
         else:
             if sumsq is True:
-                return numpy.sum((y - yd)**2)
+                return numpy.sum((y - yd)**2.0)
             else:
                 return y - yd
 
@@ -299,7 +299,7 @@ class Fitting():
             return yd
         else:
             if sumsq is True:
-                return numpy.sum((y - yd)**2)
+                return numpy.sum((y - yd)**2.0)
             else:
                 return y - yd
 
@@ -309,7 +309,7 @@ class Fitting():
             return yd
         else:
             if sumsq is True:
-                return numpy.sum((y - yd)**2)
+                return numpy.sum((y - yd)**2.0)
             else:
                 return y - yd
 
@@ -319,7 +319,7 @@ class Fitting():
             return yd
         else:
             if sumsq is True:
-                return numpy.sum((y - yd)**2)
+                return numpy.sum((y - yd)**2.0)
             else:
                 return y - yd
 
@@ -329,7 +329,7 @@ class Fitting():
             return yd
         else:
             if sumsq is True:
-                return numpy.sum((y - yd)**2)
+                return numpy.sum((y - yd)**2.0)
             else:
                 return y - yd
 
@@ -343,7 +343,7 @@ class Fitting():
             return yd
         else:
             if sumsq is True:
-                return numpy.sqrt(numpy.sum((y - yd)**2))
+                return numpy.sqrt(numpy.sum((y - yd)**2.0))
             else:
                 return y - yd
             
@@ -434,7 +434,7 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
         # print 'datatype: ', dataType
         # print 'nblock: ', nblock
         # print 'whichdata: ', whichdata
-        # for block in range(nblock):
+        for block in range(nblock):
             for record in whichdata:
                 if dataType == 'blocks':
                     (tx, dy) = self.getClipData(tdat[block], ydat[block][record, thisaxis, :], t0, t1)
@@ -443,6 +443,8 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                 # print 'Fitting.py: block, type, Fit data: ', block, dataType
                 # print tx.shape
                 # print dy.shape
+                tx = numpy.array(tx)
+                dy = numpy.array(dy)
                 yn.append(names)
                 if not any(tx):
                     continue # no data in the window...
@@ -453,7 +455,7 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                 #
                 if method is None or method == 'leastsq': # use standard leastsq, no bounds
                         plsq, cov, infodict, mesg, ier = scipy.optimize.leastsq(func[0], fpars,
-                                                args=(tx.astype('float64'), dy.astype('float64'), fixedPars),
+                                                args=(tx, dy, fixedPars),
                                                 full_output = 1, maxfev = func[2])
                         if ier > 4:
                             print "optimize.leastsq error flag is: %d" % (ier)
@@ -461,10 +463,10 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                 elif method == 'curve_fit':
                     print fpars
                     print fixedPars
-                    plsq, cov = scipy.optimize.curve_fit(func[0], tx.astype('float64'), dy.astype('float64'), p0=fpars)
+                    plsq, cov = scipy.optimize.curve_fit(func[0], tx, dy, p0=fpars)
                     ier = 0
                 elif method in ['fmin', 'simplex', 'Nelder-Mead', 'bfgs', 'TNC', 'SLSQP', 'COBYLA', 'L-BFGS-B']: # use standard wrapper from scipy for those routintes
-                    res = scipy.optimize.minimize(func[0], fpars, args=(tx.astype('float64'), dy.astype('float64'), fixedPars, True),
+                    res = scipy.optimize.minimize(func[0], fpars, args=(tx, dy, fixedPars, True),
                      method=method, jac=None, hess=None, hessp=None, bounds=bounds, constraints=constraints, tol=None, callback=None, 
                      options={'maxiter': func[2], 'disp': False })
                     plsq = res.x
