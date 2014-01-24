@@ -398,6 +398,7 @@ class PlotCurveItem(GraphicsObject):
                 self.path = self.generatePath(*self.getData())
             self.fillPath = None
             self._mouseShape = None
+            
         return self.path
 
     @debug.warnOnException  ## raising an exception here causes crash
