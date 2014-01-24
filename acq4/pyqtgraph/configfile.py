@@ -14,6 +14,8 @@ from .pgcollections import OrderedDict
 GLOBAL_PATH = None # so not thread safe.
 from . import units
 from .python2_3 import asUnicode
+from .Qt import QtCore
+from .Point import Point
 
 class ParseError(Exception):
     def __init__(self, message, lineNum, line, fileName=None):
@@ -135,6 +137,8 @@ def parseString(lines, start=0):
             local = units.allUnits.copy()
             local['OrderedDict'] = OrderedDict
             local['readConfigFile'] = readConfigFile
+            local['Point'] = Point
+            local['QtCore'] = QtCore
             if len(k) < 1:
                 raise ParseError('Missing name preceding colon', ln+1, l)
             if k[0] == '(' and k[-1] == ')':  ## If the key looks like a tuple, try evaluating it.
