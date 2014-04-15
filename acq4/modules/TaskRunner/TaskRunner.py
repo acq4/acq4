@@ -1261,7 +1261,8 @@ class TaskThread(QtCore.QThread):
                     if self.abortThread:
                         l.unlock()
                         # should be taken care of in TaskThread.abort()
-                        #task.stop(abort=True)
+                        # NO -- task.stop() is not thread-safe.
+                        task.stop(abort=True)
                         return
                     l.unlock()
                     time.sleep(1e-3)
@@ -1310,7 +1311,8 @@ class TaskThread(QtCore.QThread):
     def abort(self):
         with self.lock:
             if self._currentTask is not None:
-                self._currentTask.stop(abort=True)
+                # bad idea -- task.stop() is not thread-safe; must ask the task thread to stop.
+                #self._currentTask.stop(abort=True)
                 self.abortThread = True
 
 

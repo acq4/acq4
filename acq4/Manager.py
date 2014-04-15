@@ -1149,7 +1149,10 @@ class Task:
         return self.stopTime - self.startTime
         
     def stop(self, abort=False):
-        """Stop all tasks and read data. If abort is True, does not attempt to collect data from the run."""
+        """Stop all tasks and read data. If abort is True, does not attempt to collect data from the run.
+        
+        Note: this method is NOT thread-safe; the thread that started the task should
+        be the one to stop it."""
         prof = Profiler("Manager.Task.stop", disabled=True)
         self.abortRequested = abort
         try:
