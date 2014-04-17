@@ -1182,7 +1182,10 @@ class Grid(pg.CrosshairROI):
         rect= pg.CrosshairROI.boundingRect(self)
         for r in self.rgns:
             rect |= self.mapRectFromItem(r.item, r.item.boundingRect())
+        print(rect)        
         rect.adjust(-self.pointSize, -self.pointSize, self.pointSize, self.pointSize)
+        print self.pointSize
+        print(rect)
         return rect
                                            
     def paint(self, p, *opts):
