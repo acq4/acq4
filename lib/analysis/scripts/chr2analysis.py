@@ -89,22 +89,27 @@ class ChR2():
             x = np.where((t > t0) & (t <= t1))
             slopes[n] = np.max(derivative[x])
 
-
         res = OrderedDict([('Experiment: ', expname), ('File: ', fn), ('startTime', startTime),
                            ('NPulses', npulses), ('IPI', ipi), ('PulseDur', pulseDur), ('Reps', reps), ('thisRep', rep),
                            ('NSpikes', nspikes), ('SpikeTimes', spikeTimes), ('Slopes', slopes)])
         self.summary.append(res)
         return res
 
+
     def getSummary(self):
         #global summary
         return self.summary
+
+
     def getStats(self):
         return self.getStats()
+
+
     def clearSummary(self):
         #global summary
         self.summary = []
         self.tats = {}
+
 
     def printSummary(self, printDetails = False):
         #global summary
@@ -187,6 +192,7 @@ class ChR2():
             textbuf.append( "Pulse\tDur\tslope\tspikes\tlatency\tstdlatency\n")
             print uniqDurs
             for j, d in enumerate(uniqDurs):
+                textbuf.append( "Pulse\tDur\tslope\tspikes\tlatency\tstdlatency\n")
                 for i in range(npul):
                 #print meanslope.shape
                 #print meanslope
@@ -209,6 +215,7 @@ class ChR2():
         #print meannspk[0]
         #print meanslope[0]
         #print durs[:,:,0]
+
 
     def plotSummary(self, plotWidget = None):
         xmax = 0.

@@ -102,6 +102,7 @@ class TraceAnalyzer(AnalysisModule):
         self.fileLoader.sigFileLoaded.connect(self.fileLoaded)
         self.fileLoader.sigSelectedFileChanged.connect(self.fileSelected)
 
+
     def processSliceClicked(self):
         """
         The slice directory is selected. For every Cell in the slice,
@@ -114,6 +115,7 @@ class TraceAnalyzer(AnalysisModule):
         for d in dircontents:
                 self.processCellClicked(sel = d)
         print '\nAnalysis of Slice completed'
+
 
     def processCellClicked(self, sel = None):
         """
@@ -135,15 +137,18 @@ class TraceAnalyzer(AnalysisModule):
             self.processProtocolClicked()
         print "\nAnalysis of cell completed"
 
+
     def fileLoaded(self, dh):
         files = self.fileLoader.loadedFiles()
         self.flowchart.setInput(Input=files[0])
         table = self.getElement('Results')
         table.setData(None)
         self.ChR2.clearSummary()
-        
+
+
     def fileSelected(self, dh):
         self.flowchart.setInput(Input=dh)
+
 
     def connectPlots(self):
         plots = ['Data Plot', 'PSP Plot']
@@ -151,6 +156,7 @@ class TraceAnalyzer(AnalysisModule):
             dp = self.getElement(plotName, create=False)
             if dp is not None and plotName in self.flowchart.nodes().keys():
                 self.flowchart.nodes()[plotName].setPlot(dp)
+
 
     def addPlotClicked(self):
         plot = pg.PlotWidget()
@@ -164,6 +170,7 @@ class TraceAnalyzer(AnalysisModule):
         dock.addWidget(plot)
         #dock.setTitle(name)
         
+
     def processProtocolClicked(self):
        # print ChR2.getSummary()
         self.ChR2.clearSummary()
@@ -185,6 +192,7 @@ class TraceAnalyzer(AnalysisModule):
             self.ChR2.plotSummary(plotWidget = pl)
         print '\nAnalysis of protocol finished'
 
+
     def outputChanged(self):
         if self.processCheck.isChecked():
             self.processClicked()
@@ -195,23 +203,29 @@ class ConfLoader(DirTreeLoader):
         self.host = host
         DirTreeLoader.__init__(self, path)
         
+
     def new(self):
         print("new")
         return True
+
         
     def load(self, handle):
         print('load %s' % str(handle))
+
         
     def save(self, handle):
         print('save %s' % str(handle))
+
         
 class DataLoader(FileLoader):
     def __init__(self, host, dm):
         self.host = host
         FileLoader.__init__(self, dm)
 
+
     def getHost(self):
         return self.host
+
 
     def loadFile(self, files):
         if len(files) != 1:
@@ -229,6 +243,7 @@ class DataLoader(FileLoader):
             item.file = handle
             self.ui.fileTree.addTopLevelItem(item)
         self.sigFileLoaded.emit(dh)
+
             
     def selectedFileChanged(self):
         sel = self.ui.fileTree.currentItem()
