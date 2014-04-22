@@ -58,13 +58,18 @@ class ExceptionHandler(object):
         
             ## call original exception handler first (prints exception)
             global original_excepthook, callbacks, clear_tracebacks
-            print("===== %s =====" % str(time.strftime("%Y.%m.%d %H:%m:%S", time.localtime(time.time()))))
+            try:
+                print("===== %s =====" % str(time.strftime("%Y.%m.%d %H:%m:%S", time.localtime(time.time()))))
+            except Exception:
+                sys.stderr.write("Warning: stdout is broken! Falling back to stderr.\n")
+                sys.stdout = sys.stderr
+
             ret = original_excepthook(*args)
-            
+                
             for cb in callbacks:
                 try:
                     cb(*args)
-                except:
+                except Exception:
                     print("   --------------------------------------------------------------")
                     print("      Error occurred during exception callback %s" % str(cb))
                     print("   --------------------------------------------------------------")
