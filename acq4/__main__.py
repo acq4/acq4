@@ -48,7 +48,8 @@ if man.configFile.endswith(os.path.join('example', 'default.cfg')):
 #QtCore.pyqtRemoveInputHook()
 
 ## Start Qt event loop unless running in interactive mode.
-interactive = (sys.flags.interactive == 1) and not pyqtgraph.Qt.USE_PYSIDE
+from . import pyqtgraph as pg
+interactive = (sys.flags.interactive == 1) and not pg.Qt.USE_PYSIDE
 
 ## Run python code periodically to allow interactive debuggers to interrupt the qt event loop
 timer = QtCore.QTimer()
@@ -66,7 +67,6 @@ if interactive:
     
     ## import some things useful on the command line
     from .util.debug import *
-    from . import pyqtgraph as pg
     from .util import functions as fn
     import numpy as np
 
