@@ -938,7 +938,8 @@ class Task:
             before, after = task.getConfigOrder()
             deps[devName] |= set(map(Task.getDevName, before))
             for t in map(self.getDevName, after):
-                deps[t].add(devName)
+                if t in deps:
+                    deps[t].add(devName)
                 
         # request estimated configure time
         cost = {devName: self.tasks[devName].getPrepTimeEstimate() for devName in self.devNames}
