@@ -29,14 +29,15 @@ def strDict(d):
         
 
 class Flowchart(Node):
-    
     sigFileLoaded = QtCore.Signal(object)
     sigFileSaved = QtCore.Signal(object)
     
     
     #sigOutputChanged = QtCore.Signal() ## inherited from Node
     sigChartLoaded = QtCore.Signal()
-    sigStateChanged = QtCore.Signal()
+    sigStateChanged = QtCore.Signal()  # called when output is expected to have changed
+    sigChartChanged = QtCore.Signal(object, object, object) # called when nodes are added, removed, or renamed.
+                                                            # (self, action, node)
     
     def __init__(self, terminals=None, name=None, filePath=None, library=None):
         self.library = library or LIBRARY
@@ -189,6 +190,7 @@ class Flowchart(Node):
         node.sigClosed.connect(self.nodeClosed)
         node.sigRenamed.connect(self.nodeRenamed)
         node.sigOutputChanged.connect(self.nodeOutputChanged)
+        self.sigChartChanged.emit(self, 'add', node)
         
     def removeNode(self, node):
         node.close()
@@ -196,23 +198,18 @@ class Flowchart(Node):
     def nodeClosed(self, node):
         del self._nodes[node.name()]
         self.widget().removeNode(node)
-        try:
-            node.sigClosed.disconnect(self.nodeClosed)
-        except TypeError:
-            pass
-        try:
-            node.sigRenamed.disconnect(self.nodeRenamed)
-        except TypeError:
-            pass
-        try:
-            node.sigOutputChanged.disconnect(self.nodeOutputChanged)
-        except TypeError:
-            pass
+        for signal in ['sigClosed', 'sigRenamed', 'sigOutputChanged']:
+            try:
+                getattr(node, signal).disconnect(self.nodeClosed)
+            except (TypeError, RuntimeError):
+                pass
+        self.sigChartChanged.emit(self, 'remove', node)
         
     def nodeRenamed(self, node, oldName):
         del self._nodes[oldName]
         self._nodes[node.name()] = node
         self.widget().nodeRenamed(node, oldName)
+        self.sigChartChanged.emit(self, 'rename', node)
         
     def arrangeNodes(self):
         pass
@@ -736,7 +733,7 @@ class FlowchartCtrlWidget(QtGui.QWidget):
             #self.disconnect(item.bypassBtn, QtCore.SIGNAL('clicked()'), self.bypassClicked)
             try:
                 item.bypassBtn.clicked.disconnect(self.bypassClicked)
-            except TypeError:
+            except (TypeError, RuntimeError):
                 pass
             self.ui.ctrlList.removeTopLevelItem(item)
             

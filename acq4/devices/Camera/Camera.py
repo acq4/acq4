@@ -370,7 +370,7 @@ class Camera(DAQGeneric, OptomechDevice):
         o = Vector(self.scopeState['transform'].map(Vector(0,0,0)))
         p = Vector(self.scopeState['transform'].map(Vector(1, 1)) - o)
         self.scopeState['centerPosition'] = o
-        self.scopeState['pixelSize'] = p
+        self.scopeState['pixelSize'] = abs(p)
         self.scopeState['id'] += 1  ## hint to acquisition thread that state has changed
         
     def objectiveChanged(self, obj=None):
