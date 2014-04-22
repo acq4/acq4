@@ -473,6 +473,7 @@ class TaskRunner(Module):
                 
         
     def quit(self):
+        self.stopSequence()
         self.stopSingle()
         self.clearDocks()
         Module.quit(self)
@@ -491,6 +492,7 @@ class TaskRunner(Module):
             #self.ui.saveTaskBtn.setEnabled(v)
         
     def newTask(self):
+        self.stopSequence()
         self.stopSingle()
         
         ## Remove all docks
@@ -553,6 +555,7 @@ class TaskRunner(Module):
         prof = Profiler('TaskRunner.loadTask', disabled=True)
         try:
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+            self.stopSequence()
             self.stopSingle()
             
             prof.mark('stopped')
