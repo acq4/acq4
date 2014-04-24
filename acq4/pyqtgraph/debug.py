@@ -32,6 +32,57 @@ def ftrace(func):
         return rv
     return w
 
+
+class Tracer(object):
+    """
+    Prints every function enter/exit. Useful for debugging crashes / lockups.
+    """
+    def __init__(self):
+        self.count = 0
+        self.stack = []
+
+    def trace(self, frame, event, arg):
+        self.count += 1
+        # If it has been a long time since we saw the top of the stack, 
+        # print a reminder
+        if self.count % 1000 == 0:
+            print("----- current stack: -----")
+            for line in self.stack:
+                print(line)
+        if event == 'call':
+            line = "  " * len(self.stack) + ">> " + self.frameInfo(frame) 
+            print(line)
+            self.stack.append(line)
+        elif event == 'return':
+            self.stack.pop()
+            line = "  " * len(self.stack) + "<< " + self.frameInfo(frame) 
+            print(line)
+            if len(self.stack) == 0:
+                self.count = 0
+
+        return self.trace
+
+    def stop(self):
+        sys.settrace(None)
+
+    def start(self):
+        sys.settrace(self.trace)
+
+    def frameInfo(self, fr):
+        filename = fr.f_code.co_filename
+        funcname = fr.f_code.co_name
+        lineno = fr.f_lineno
+        callfr = sys._getframe(3)
+        callline = "%s %d" % (callfr.f_code.co_name, callfr.f_lineno)
+        args, _, _, value_dict = inspect.getargvalues(fr)
+        if len(args) and args[0] == 'self':
+            instance = value_dict.get('self', None)
+            if instance is not None:
+                cls = getattr(instance, '__class__', None)
+                if cls is not None:
+                    funcname = cls.__name__ + "." + funcname
+        return "%s: %s %s: %s" % (callline, filename, lineno, funcname)
+
 def warnOnException(func):
     """Decorator which catches/ignores exceptions and prints a stack trace."""
     def w(*args, **kwds):

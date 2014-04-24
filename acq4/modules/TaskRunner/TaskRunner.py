@@ -439,7 +439,7 @@ class TaskRunner(Module):
                     if self.firstDock is None:
                         self.firstDock = dock
                     else:
-                        QtGui.QApplication.processEvents() # required to ensure new tab is visible
+                        QtGui.QApplication.sendPostedEvents(dock, 0)  # required to ensure new tab is visible
                         self.win.tabifyDockWidget(self.firstDock, dock)
                     dock.widget().sigSequenceChanged.connect(self.updateSeqParams)
                     self.updateSeqParams(d)
