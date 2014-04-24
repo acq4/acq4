@@ -61,6 +61,8 @@ class CellHealthTracker(AnalysisModule):
             for dh in dhList:
                 #if dh.name is "Patch":
                     #pass
+                if dh is None:
+                    continue
                 if dh.isDir():
                     self.files[dh] = {}
                     #self.files[dh]['traces']=[]

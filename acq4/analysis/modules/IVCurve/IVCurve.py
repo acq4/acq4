@@ -84,6 +84,7 @@ class IVCurve(AnalysisModule):
         self.regionsExist = False
         self.fit_curve = None
         self.fitted_data = None
+        self.tx = None
         self.keepAnalysisCount = 0
         self.colors = ['w', 'g', 'b', 'r', 'y', 'c']
         self.symbols = ['o', 's', 't', 'd', '+']
@@ -169,7 +170,6 @@ class IVCurve(AnalysisModule):
         self.tau = 0.0
         self.AdaptRatio = 0.0
         self.traces = None
-        self.tx = None
         self.nospk = []
         self.spk = []
         self.cmd = []
@@ -390,6 +390,7 @@ class IVCurve(AnalysisModule):
         self.commonPrefix = os.path.join(fn, 'Ruili')
         traces = []
         cmd_wave = []
+        self.tx = None
         self.values = []
         self.Sequence = self.dataModel.listSequenceParams(dh)
         self.traceTimes = numpy.zeros(0)
@@ -484,6 +485,8 @@ class IVCurve(AnalysisModule):
         traces = numpy.vstack(traces)
         cmd_wave = numpy.vstack(cmd_wave)
         self.cmd_wave = cmd_wave
+        self.tx = numpy.array(cmd.xvals('Time'))
+        commands = numpy.array(self.values)
         self.colorScale.setIntColorScale(0, i, maxValue=200)
         # set up the selection region correctly and
         # prepare IV curves and find spikes
@@ -546,9 +549,6 @@ class IVCurve(AnalysisModule):
         if self.ctrl.IVCurve_KeepT.isChecked() is False:
             self.tstart += self.sampInterval
             self.tend += self.sampInterval
-        tmax = cmd.xvals('Time')[-1]
-        self.tx = cmd.xvals('Time').view(numpy.ndarray)
-        commands = numpy.array(self.values)
 
         self.initialize_Regions()  # now create the analysis regions
         if self.ctrl.IVCurve_KeepT.isChecked() is False:
@@ -593,13 +593,14 @@ class IVCurve(AnalysisModule):
         self.spk: the indices of command levels were at least one spike
             was detected
         """
+        #print 'self.tx: ', self.tx
         if self.keepAnalysisCount == 0:
             clearFlag = True
         else:
             clearFlag = False
         if self.dataMode not in self.ICModes or self.tx is None:
             print ('IVCurve::countSpikes: Cannot count spikes, ' +
-                   'and dataMode is ', self.dataMode)
+                   'and dataMode is ', self.dataMode, 'and ICModes are: ', self.ICModes, 'tx is: ', self.tx)
             self.spikecount = []
             self.fiPlot.plot(x=[], y=[], clear=clearFlag, pen='w',
                              symbolSize=6, symbolPen='b',
@@ -709,13 +710,18 @@ class IVCurve(AnalysisModule):
         itaucmd = self.cmd[ineg]
         whichaxis = 0
 
+        print whichdata
+        print whichaxis
         (fpar, xf, yf, names) = Fits.FitRegion(whichdata, whichaxis,
-                                               self.traces.xvals('Time'),
-                                               self.traces.view(numpy.ndarray),
+                                               #self.traces.xvals('Time'),
+                                               #self.traces.view(numpy.ndarray),
+                                               self.tx,
+                                               self.traces,
                                                dataType='xy',
                                                t0=rgnpk[0], t1=rgnpk[1],
                                                fitFunc=Func,
-                                               fitPars=initpars)
+                                               fitPars=initpars,
+                                               method = 'simplex')
         if fpar == []:
             print 'IVCurve::update_Tau: Charging tau fitting failed - see log'
             return
