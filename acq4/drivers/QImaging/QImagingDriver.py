@@ -147,6 +147,12 @@ class QCamDriverClass:
             self.cams[c].quit()
         self.call(lib.ReleaseDriver) ###what if we don't open the camera?
 
+        try:
+            sys.stdout.write('QImaging exit.\n')
+        except:
+            sys.stdout = sys.stderr
+            print("Warning: Setting sys.stdout = sys.stderr as workaround for QImaging bug.")
+
         
 class QCameraClass:
     def __init__(self, name, driver):
