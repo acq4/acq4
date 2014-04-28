@@ -93,7 +93,7 @@ class ScannerTaskGui(TaskGui):
         ## Set up SpinBoxes
         self.ui.minTimeSpin.setOpts(dec=True, step=1, minStep=1e-3, siPrefix=True, suffix='s', bounds=[0, 50])
         self.ui.minDistSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[0, 10e-3])
-        self.ui.sizeSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[0, 1e-3])
+        self.ui.sizeSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[1e-9, 1e-3])
         ## Create state group for saving/restoring state
         self.stateGroup = pg.WidgetGroup([
             (self.ui.cameraCombo,),
@@ -997,12 +997,14 @@ class Grid(pg.CrosshairROI):
     sigStateChanged = QtCore.Signal(object)
     
     def __init__(self, name, ptSize, **args):
+        pg.CrosshairROI.__init__(self, pos=(0,0), size=args.get('size', [ptSize*4]*2), angle=args.get('angle', 0), **args)
+
         self.name = name
 
         self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
             dict(name='layout', type='list', value=args.get('layout', 'Hexagonal'), values=['Square', 'Hexagonal']),
             dict(name='spacing', type='float', value=args.get('spacing', ptSize), suffix='m', siPrefix=True, bounds=[1e-9, None], step=10e-6),
-            dict(name='Active Regions', type='group', addText="Add region...", addList=['Rectangle', 'Region'])
+            dict(name='Active Regions', type='group', addText="Add region...", addList=['Rectangle', 'Polygon'])
         ])
         
         self.params.item = self
@@ -1010,16 +1012,14 @@ class Grid(pg.CrosshairROI):
         self.rgns = []
         self.pointSize = ptSize
         self._points = []
-        self.params.param('layout').sigStateChanged.connect(self.regeneratePoints)
-        self.params.param('spacing').sigStateChanged.connect(self.regeneratePoints)
-        #a = self.params
-        #b = self.params.param('Active Regions')
-        #c = self.params.param('Active Regions').sigChildRemoved
-        #d = self.params.param('Active Regions').sigChildRemoved.connect
+        self._scene = None 
+        self._scatter = pg.ScatterPlotItem(pxMode=False, brush=None)
+        self._scatter.setParentItem(self)
+        self.params.param('layout').sigStateChanged.connect(self.invalidatePoints)
+        self.params.param('spacing').sigStateChanged.connect(self.invalidatePoints)
         self.params.param('Active Regions').sigChildRemoved.connect(self.rgnRemoved)
         
-        pg.CrosshairROI.__init__(self, pos=(0,0), size=args.get('size', [ptSize*4]*2), angle=args.get('angle', 0), **args)
-        self.sigRegionChanged.connect(self.regeneratePoints)
+        self.sigRegionChanged.connect(self.invalidatePoints)
         self.params.sigValueChanged.connect(self.toggled)
         self.params.sigRemoved.connect(self.removed)
         
@@ -1049,8 +1049,11 @@ class Grid(pg.CrosshairROI):
                 self.rgnRemoved(r)
     
     def addActiveRegion(self, rgnType):
-        rgn = self.params.param('Active Regions').addChild(pTypes.SimpleParameter(name=self.getNextRgnName(rgnType), type='bool', value=True, removable=True, renamable=True))
-        pos= self.getViewBox().viewRect().center() 
+        rgn = pTypes.SimpleParameter(name=rgnType, autoIncrementName=True,
+                                     type='bool', value=True, 
+                                     removable=True, renamable=True)
+        self.params.param('Active Regions').addChild(rgn)
+        pos = self.getViewBox().viewRect().center() 
         size = self.params.param('spacing').value()*4
         
         if rgnType == 'Rectangle':
@@ -1059,100 +1062,123 @@ class Grid(pg.CrosshairROI):
             roi.addScaleHandle([1, 1], [0, 0])
             roi.addRotateHandle([0, 1], [0.5, 0.5])
             roi.addRotateHandle([1, 0], [0.5, 0.5])
-        elif rgnType == 'Region':
+        elif rgnType == 'Polygon':
             roi = pg.PolyLineROI((pos, pos+pg.Point(0,1)*size, pos+pg.Point(1,0)*size), closed=True)
         else:
-            raise Exception('Not sure how to add region of type:%s' %rgnType)
+            raise Exception('Not sure how to add region of type:%s' % rgnType)
         
         rgn.item = roi
         self.rgns.append(rgn)
         self.getViewBox().addItem(roi)
-        roi.sigRegionChanged.connect(self.regeneratePoints)
+        roi.sigRegionChanged.connect(self.invalidatePoints)
+        roi.sigRegionChangeFinished.connect(self.stateChangeFinished)
         rgn.sigValueChanged.connect(self.rgnToggled)
-        self.regeneratePoints()
+        self.invalidatePoints()
+        self.stateChangeFinished()
         
     def rgnToggled(self, rgn, b):
         if b:
             rgn.item.setVisible(True)
         else:
             rgn.item.setVisible(False)
+        self.invalidatePoints()
+        self.stateChangeFinished()
             
-    def rgnRemoved(self, rgn):
+    def rgnRemoved(self, grp, rgn):
         roi = rgn.item
         roi.scene().removeItem(roi)
+        self.invalidatePoints()
+        self.stateChangeFinished()
         
                                                      
-    def getNextRgnName(self, base):
-        ## Return the next available item name starting with base
-        names = [rgn.name() for rgn in self.params.param('Active Regions').children()]
-        num = 1
-        while True:
-            name = base + str(num)
-            if name not in names:
-                return name
-            num += 1                  
+    # def getNextRgnName(self, base):
+    #     ## Return the next available item name starting with base
+    #     names = [rgn.name() for rgn in self.params.param('Active Regions').children()]
+    #     num = 1
+    #     while True:
+    #         name = base + str(num)
+    #         if name not in names:
+    #             return name
+    #         num += 1                  
             
     def listPoints(self):
-        points = []
-        activeArea = QtGui.QPainterPath()
-        for rgn in self.rgns:
-            if rgn.value():
-                roi = rgn.item
-                activeArea |= self.mapFromItem(roi, roi.shape())
-            
-        for pt in self._points:
-            point = QtCore.QPointF(pt[0], pt[1])
-            if activeArea.contains(point):
-                points.append(pt)
-        points = list(set(points))
-        return points
+        if self._points is None:
+            self._points = self.generatePoints()
+        return self._points
     
     def setPointSize(self, displaySize, realSize):
         self.pointSize = displaySize
         #self.params.spacing.setDefault(displaySize)
         self.update()
     
-    def regeneratePoints(self, emit=True):
+    def invalidatePoints(self):
+        self._points = None
+        self.update()
+        
+    def stateChangeFinished(self):
+        self.sigStateChanged.emit(self)
+
+    def generatePoints(self):
         layout = self.params['layout']
-        self._points = []
-        #self.pens = []
-        sepx = self.params['spacing']
-        sq3 = 3. ** 0.5
-        sepy = sq3 * sepx
-        ## find 'snap' position of first spot
+
+        # get x/y point spacing
+        sepx = sepy = self.params['spacing']
+        if layout == 'Hexagonal':
+            sepy *= 3 ** 0.5
+
+        # find grid points inside each active region
+        points = []
         for rgn in self.rgns:
             if not rgn.value():
                 continue
             roi = rgn.item
             rect = self.mapFromItem(roi, roi.boundingRect()).boundingRect()
+            ## find 'snap' position of first spot
             newPos = self.getSnapPosition((rect.x(), rect.y()))
-            x = newPos.x()-5*sepx
-            y = newPos.y()-5*sepy
-            w = rect.width()+5*sepx
-            h = rect.height()+5*sepy
+            x = newPos.x() - sepx
+            y = newPos.y() - sepy
+            w = rect.width() + 2*sepx
+            h = rect.height() + 2*sepy
+
             if layout == "Hexagonal":
-                self.generateGrid([x+self.pointSize*0.5, y+self.pointSize*0.5], [x+w, y+h], [sepx, sepy])  ## make every other row of the grid starting from top
-                self.generateGrid([x+self.pointSize*0.5+0.5*sepx, y+0.5*self.pointSize + 0.5*sepy ],[x+w, y+h], [sepx, sepy]) ### make every other row of the grid starting with 2nd row
+                # make every other row of the grid starting from top
+                points.append(self.generateGrid([x, y], [x+w, y+h], [sepx, sepy]))
+                # make every other row of the grid starting with 2nd row
+                points.append(self.generateGrid([x+0.5*sepx, y+0.5*sepy], [x+w, y+h], [sepx, sepy]))
             elif layout == "Square":
-                self.generateGrid([x+self.pointSize*0.5, y+self.pointSize*0.5], [x+w, y+h],[sepx, sepx]) ## points in x and y dimensions have same separation, so use same value.
-          
-        #self._points = list(set(self._points))
-        #print "Grid.regeneratePoints", len(self._points)
-        self.update()
-        if emit:
-            self.sigStateChanged.emit(self)
+                points.append(self.generateGrid([x, y], [x+w, y+h], [sepx, sepx]))
+        
+        if len(points) == 0:
+            return np.empty((0,2), dtype=float)
+        
+        # stack all point arrays together
+        points = np.ascontiguousarray(np.vstack(points))
+        # keep only unique points
+        points = np.unique(points.view(dtype=[('x', float), ('y', float)]))        
+        # convert back to normal array
+        points = points.view(dtype=float).reshape(len(points), 2)
+        
+        # get shape of total active region
+        activeArea = QtGui.QPainterPath()
+        for rgn in self.rgns:
+            if rgn.value():
+                roi = rgn.item
+                activeArea |= self.mapFromItem(roi, roi.shape())
             
-    def generateGrid(self, start, stop, sep):
-        nx = int((stop[0] - (start[0] + self.pointSize*0.5) + sep[0]) / sep[0])
-        ny = int((stop[1] - (start[1] + self.pointSize*0.5) + sep[1]) / sep[1])
-        x = start[0]
-        for i in range(nx):
-            y = start[1]
-            for j in range(ny):
-                self._points.append((x, y))
-                #self.pens.append(None)
-                y += sep[1]
-            x += sep[0]
+        # filter for all points within active region
+        mask = np.array([activeArea.contains(pg.Point(*pt)) for pt in points], dtype=bool)
+
+        return points[mask]
+
+    @staticmethod
+    def generateGrid(start, stop, sep):
+        # 2-dimensional range(); generates point locations filling a rectangular grid
+        nx = int((stop[0] - start[0]) / sep[0]) + 1
+        ny = int((stop[1] - start[1]) / sep[1]) + 1
+        pts = np.mgrid[0:nx,0:ny].reshape(2, nx*ny).transpose()
+        pts = pts * np.array(sep).reshape(1, 2)
+        pts += np.array(start).reshape(1, 2)
+        return pts
             
     def getSnapPosition(self, pos):
         ## Given that pos has been requested, return the nearest snap-to position
@@ -1181,20 +1207,35 @@ class Grid(pg.CrosshairROI):
             else:
                 return pg.Point(w2, h2)
     
-    def boundingRect(self):
-        rect= pg.CrosshairROI.boundingRect(self)
-        for r in self.rgns:
-            rect |= self.mapRectFromItem(r.item, r.item.boundingRect())
-        rect.adjust(-self.pointSize, -self.pointSize, self.pointSize, self.pointSize)
-        return rect
+    def parentChanged(self):
+        # Called when grid gets a new parent or scene. 
+        super(Grid, self).parentChanged()
+        if self._scene is not None:
+            self._scene.sigPrepareForPaint.disconnect(self.prepareForPaint)
+        self._scene = self.scene()
+        if self._scene is not None:
+            self._scene.sigPrepareForPaint.connect(self.prepareForPaint)
 
-    def paint(self, p, *opts):
-        pg.CrosshairROI.paint(self, p, *opts)
-        ## paint spots
-        p.scale(self.pointSize, self.pointSize) ## do scaling here because otherwise we end up with squares instead of circles (GL bug)
-        p.setPen(pg.mkPen('w'))
-        for pt in self.listPoints():
-            p.drawEllipse(QtCore.QPointF(pt[0]/self.pointSize, pt[1]/self.pointSize), 0.5, 0.5)
+    def prepareForPaint(self):
+        # Update points in scatter plot item
+        pts = self.listPoints()
+        self._scatter.setData(x=pts[:,0], y=pts[:,1], size=self.pointSize)
+
+
+    # def boundingRect(self):
+    #     rect= pg.CrosshairROI.boundingRect(self)
+    #     for r in self.rgns:
+    #         rect |= self.mapRectFromItem(r.item, r.item.boundingRect())
+    #     rect.adjust(-self.pointSize, -self.pointSize, self.pointSize, self.pointSize)
+    #     return rect
+
+    # def paint(self, p, *opts):
+    #     pg.CrosshairROI.paint(self, p, *opts)
+    #     ## paint spots
+    #     p.scale(self.pointSize, self.pointSize) ## do scaling here because otherwise we end up with squares instead of circles (GL bug)
+    #     p.setPen(pg.mkPen('w'))
+    #     for pt in self.listPoints():
+    #         p.drawEllipse(QtCore.QPointF(pt[0]/self.pointSize, pt[1]/self.pointSize), 0.5, 0.5)
             
 
 class TargetGrid(pg.ROI):
