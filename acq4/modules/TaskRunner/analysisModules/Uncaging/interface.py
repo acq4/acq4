@@ -194,7 +194,7 @@ class Task:
             
         data = {
             #'cam': camFrame,
-            'clamp': frame['result'][clampDev]['primary'].copy(),
+            'clamp': frame['result'][clampDev]['primary'],
             'scanner': frame['result'][scannerDev],
             #'camInfo': camInfo
         }

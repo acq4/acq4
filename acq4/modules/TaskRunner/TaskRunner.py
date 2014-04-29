@@ -764,7 +764,7 @@ class TaskRunner(Module):
                 prot = runSequence(lambda p: self.generateTask(dh, p, progressDlg), paramInds, paramInds.keys(), linkedParams=linkedParams)
                 #progressDlg.setValue(pLen)
             if dh is not None:
-                dh.flushSignals()  ## do this now rather than later as task is running
+                dh.flushSignals()  ## do this now rather than later when task is running
             
             #print "==========Sequence Task=============="
             #print prot

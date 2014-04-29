@@ -593,9 +593,12 @@ class Parameter(QtCore.QObject):
             names = (names,)
         return self.param(*names).setValue(value)
 
-    def param(self, *names):
+    def child(self, *names):
         """Return a child parameter. 
-        Accepts the name of the child or a tuple (path, to, child)"""
+        Accepts the name of the child or a tuple (path, to, child)
+
+        Added in version 0.9.9. Ealier versions used the 'param' method, which is still
+        implemented for backward compatibility."""
         try:
             param = self.names[names[0]]
         except KeyError:
@@ -606,6 +609,10 @@ class Parameter(QtCore.QObject):
         else:
             return param
         
+    def param(self, *names):
+        # for backward compatibility.
+        return self.child(*names)
+
     def __repr__(self):
         return "<%s '%s' at 0x%x>" % (self.__class__.__name__, self.name(), id(self))
        
