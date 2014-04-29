@@ -658,6 +658,7 @@ class TargetPoint(pg.EllipseROI):
         if self.scene() is not None:
             self.scene().removeItem(self)
 
+
 class Grid(pg.CrosshairROI):
     
     sigStateChanged = QtCore.Signal(object)
@@ -707,6 +708,11 @@ class Grid(pg.CrosshairROI):
             self.hide()
             for r in self.rgns:
                 r.item.hide()
+
+    def setVisible(self, vis):
+        super(Grid, self).setVisible(vis)
+        for rgn in self.rgns:
+            rgn.item.setVisible(vis)
                 
     def removed(self, child):
         #print "Grid.removed called.", self, child
