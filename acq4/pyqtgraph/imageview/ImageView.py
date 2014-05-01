@@ -107,6 +107,8 @@ class ImageView(QtGui.QWidget):
         
         self.ui.histogram.setImageItem(self.imageItem)
         
+        self.menu = None
+        
         self.ui.normGroup.hide()
 
         self.roi = PlotROI(10)
@@ -147,7 +149,8 @@ class ImageView(QtGui.QWidget):
         self.timeLine.sigPositionChanged.connect(self.timeLineChanged)
         self.ui.roiBtn.clicked.connect(self.roiClicked)
         self.roi.sigRegionChanged.connect(self.roiChanged)
-        self.ui.normBtn.toggled.connect(self.normToggled)
+        #self.ui.normBtn.toggled.connect(self.normToggled)
+        self.ui.menuBtn.clicked.connect(self.menuClicked)
         self.ui.normDivideRadio.clicked.connect(self.normRadioChanged)
         self.ui.normSubtractRadio.clicked.connect(self.normRadioChanged)
         self.ui.normOffRadio.clicked.connect(self.normRadioChanged)
@@ -662,6 +665,25 @@ class ImageView(QtGui.QWidget):
             self.updateImage()
         else:
             self.imageItem.save(fileName)
+            
+    def exportClicked(self):
+        fileName = QtGui.QFileDialog.getSaveFileName()
+        if fileName == '':
+            return
+        self.export(fileName)
         
+    def buildMenu(self):
+        self.menu = QtGui.QMenu()
+        self.normAction = QtGui.QAction("Normalization", self.menu)
+        self.normAction.setCheckable(True)
+        self.normAction.toggled.connect(self.normToggled)
+        self.menu.addAction(self.normAction)
+        self.exportAction = QtGui.QAction("Export", self.menu)
+        self.exportAction.triggered.connect(self.exportClicked)
+        self.menu.addAction(self.exportAction)
         
+    def menuClicked(self):
+        if self.menu is None:
+            self.buildMenu()
+        self.menu.popup(QtGui.QCursor.pos())
         
