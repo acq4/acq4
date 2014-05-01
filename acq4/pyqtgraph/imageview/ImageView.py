@@ -25,7 +25,7 @@ from ..graphicsItems.LinearRegionItem import *
 from ..graphicsItems.InfiniteLine import *
 from ..graphicsItems.ViewBox import *
 #from widgets import ROI
-import sys
+import os, sys
 #from numpy import ndarray
 from .. import ptime as ptime
 import numpy as np
@@ -644,3 +644,24 @@ class ImageView(QtGui.QWidget):
     def getHistogramWidget(self):
         """Return the HistogramLUTWidget for this ImageView"""
         return self.ui.histogram
+
+    def export(self, fileName):
+        """
+        Export data from the ImageView to a file, or to a stack of files if
+        the data is 3D. Saving an image stack will result in index numbers
+        being added to the file name. Images are saved as they would appear
+        onscreen, with levels and lookup table applied.
+        """
+        img = self.getProcessedImage()
+        if self.hasTimeAxis():
+            base, ext = os.path.splitext(fileName)
+            fmt = "%%s%%0%dd%%s" % int(np.log10(img.shape[0])+1)
+            for i in range(img.shape[0]):
+                self.imageItem.setImage(img[i], autoLevels=False)
+                self.imageItem.save(fmt % (base, i, ext))
+            self.updateImage()
+        else:
+            self.imageItem.save(fileName)
+        
+        
+        
