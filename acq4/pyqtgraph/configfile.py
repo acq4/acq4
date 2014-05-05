@@ -16,6 +16,7 @@ from . import units
 from .python2_3 import asUnicode
 from .Qt import QtCore
 from .Point import Point
+import numpy
 
 class ParseError(Exception):
     def __init__(self, message, lineNum, line, fileName=None):
@@ -139,6 +140,7 @@ def parseString(lines, start=0):
             local['readConfigFile'] = readConfigFile
             local['Point'] = Point
             local['QtCore'] = QtCore
+            local['array'] = numpy.array
             if len(k) < 1:
                 raise ParseError('Missing name preceding colon', ln+1, l)
             if k[0] == '(' and k[-1] == ')':  ## If the key looks like a tuple, try evaluating it.
