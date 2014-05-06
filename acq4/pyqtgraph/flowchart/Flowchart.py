@@ -249,9 +249,10 @@ class Flowchart(Node):
         
         ## Record inputs given to process()
         for n, t in self.inputNode.outputs().items():
-            if n not in args:
-                raise Exception("Parameter %s required to process this chart." % n)
-            data[t] = args[n]
+            # if n not in args:
+            #     raise Exception("Parameter %s required to process this chart." % n)
+            if n in args:
+                data[t] = args[n]
         
         ret = {}
             
