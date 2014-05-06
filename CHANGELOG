@@ -2,6 +2,7 @@ acq4-0.9.2 (unreleased)
 
     API / behavior changes:
     New Features:
+        Added export option to ImageView
     Bugfixes:
         Fixed issues with Scanner grid controls in TaskRunner
     Maintenance:

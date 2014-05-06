@@ -58,18 +58,24 @@ class CameraWindow(QtGui.QMainWindow):
         camNames = man.listInterfaces('camera')
         self.cameras = []
         self.cameraDocks = []
-        for name in camNames:
-            camera = man.getInterface('camera', name)
-            iface = camera.cameraModuleInterface(self)
-            self.cameras.append(iface)
-            dock = dockarea.Dock(name=name, widget=iface.controlWidget(), size=(10, 500), hideTitle=(len(camNames)==1))
-            if len(self.cameraDocks) == 0:
-                self.cw.addDock(dock, 'left', self.gvDock)
-            else:
-                self.cw.addDock(dock, 'below', self.cameraDocks[0])
-            self.cameraDocks.append(dock)
-            iface.sigNewFrame.connect(self.newFrame)
-            
+        if len(camNames) == 0:
+            label = QtGui.QLabel("No cameras available")
+            label.setAlignment(QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
+            dock = dockarea.Dock(name="nocamera", widget=label, size=(100, 500), hideTitle=True)
+            self.cw.addDock(dock, 'left', self.gvDock)
+        else:
+            for name in camNames:
+                camera = man.getInterface('camera', name)
+                iface = camera.cameraModuleInterface(self)
+                self.cameras.append(iface)
+                dock = dockarea.Dock(name=name, widget=iface.controlWidget(), size=(10, 500), hideTitle=(len(camNames)==1))
+                if len(self.cameraDocks) == 0:
+                    self.cw.addDock(dock, 'left', self.gvDock)
+                else:
+                    self.cw.addDock(dock, 'below', self.cameraDocks[0])
+                self.cameraDocks.append(dock)
+                iface.sigNewFrame.connect(self.newFrame)
+
         ## ROI plot ctrls
         self.roiWidget = QtGui.QWidget()
         self.roiLayout = QtGui.QGridLayout()
@@ -161,6 +167,8 @@ class CameraWindow(QtGui.QMainWindow):
         return self.view
 
     def centerView(self):
+        if len(self.cameras) == 0:
+            return
         bounds = None
         for cam in self.cameras:
             if bounds is None:
