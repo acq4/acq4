@@ -25,7 +25,7 @@ from ..graphicsItems.LinearRegionItem import *
 from ..graphicsItems.InfiniteLine import *
 from ..graphicsItems.ViewBox import *
 #from widgets import ROI
-import sys
+import os, sys
 #from numpy import ndarray
 from .. import ptime as ptime
 import numpy as np
@@ -112,6 +112,8 @@ class ImageView(QtGui.QWidget):
         
         self.ui.histogram.setImageItem(self.imageItem)
         
+        self.menu = None
+        
         self.ui.normGroup.hide()
 
         self.roi = PlotROI(10)
@@ -152,7 +154,8 @@ class ImageView(QtGui.QWidget):
         self.timeLine.sigPositionChanged.connect(self.timeLineChanged)
         self.ui.roiBtn.clicked.connect(self.roiClicked)
         self.roi.sigRegionChanged.connect(self.roiChanged)
-        self.ui.normBtn.toggled.connect(self.normToggled)
+        #self.ui.normBtn.toggled.connect(self.normToggled)
+        self.ui.menuBtn.clicked.connect(self.menuClicked)
         self.ui.normDivideRadio.clicked.connect(self.normRadioChanged)
         self.ui.normSubtractRadio.clicked.connect(self.normRadioChanged)
         self.ui.normOffRadio.clicked.connect(self.normRadioChanged)
@@ -650,3 +653,43 @@ class ImageView(QtGui.QWidget):
     def getHistogramWidget(self):
         """Return the HistogramLUTWidget for this ImageView"""
         return self.ui.histogram
+
+    def export(self, fileName):
+        """
+        Export data from the ImageView to a file, or to a stack of files if
+        the data is 3D. Saving an image stack will result in index numbers
+        being added to the file name. Images are saved as they would appear
+        onscreen, with levels and lookup table applied.
+        """
+        img = self.getProcessedImage()
+        if self.hasTimeAxis():
+            base, ext = os.path.splitext(fileName)
+            fmt = "%%s%%0%dd%%s" % int(np.log10(img.shape[0])+1)
+            for i in range(img.shape[0]):
+                self.imageItem.setImage(img[i], autoLevels=False)
+                self.imageItem.save(fmt % (base, i, ext))
+            self.updateImage()
+        else:
+            self.imageItem.save(fileName)
+            
+    def exportClicked(self):
+        fileName = QtGui.QFileDialog.getSaveFileName()
+        if fileName == '':
+            return
+        self.export(fileName)
+        
+    def buildMenu(self):
+        self.menu = QtGui.QMenu()
+        self.normAction = QtGui.QAction("Normalization", self.menu)
+        self.normAction.setCheckable(True)
+        self.normAction.toggled.connect(self.normToggled)
+        self.menu.addAction(self.normAction)
+        self.exportAction = QtGui.QAction("Export", self.menu)
+        self.exportAction.triggered.connect(self.exportClicked)
+        self.menu.addAction(self.exportAction)
+        
+    def menuClicked(self):
+        if self.menu is None:
+            self.buildMenu()
+        self.menu.popup(QtGui.QCursor.pos())
+        

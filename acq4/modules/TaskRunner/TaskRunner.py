@@ -1105,6 +1105,7 @@ class TaskThread(QtCore.QThread):
         self.abortThread = False
         self.paused = False
         self._currentTask = None
+        self._systrace = None
                 
     def startTask(self, task, paramSpace=None):
         #print "TaskThread:startTask", self.lock.depth(), self.lock
@@ -1112,6 +1113,7 @@ class TaskThread(QtCore.QThread):
             #print "TaskThread:startTask got lock", self.lock.depth(), "    tracebacks follow:\n==========="
             #print "\n\n".join(self.lock.traceback())
             #print "======================"
+            self._systrace = sys.gettrace()
             while self.isRunning():
                 #l.unlock()
                 raise Exception("Already running another task")
@@ -1130,6 +1132,9 @@ class TaskThread(QtCore.QThread):
             self.paused = pause
                 
     def run(self):
+        # If main thread uses a systrace, we probably want it too.
+        sys.settrace(self._systrace)
+
         self.objs = None
         #print "TaskThread:run()"
         try:
