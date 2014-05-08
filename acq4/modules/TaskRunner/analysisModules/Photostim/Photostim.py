@@ -26,6 +26,12 @@ class PhotostimModule(AnalysisModule):
         self.ui.clampTestStartSpin.setOpts(suffix='s', siPrefix=True, bounds=[0, None], step=1e-3)
         self.ui.clampTestStopSpin.setOpts(suffix='s', siPrefix=True, bounds=[0, None], step=1e-3)
         self.ui.spikeThresholdSpin.setOpts(suffix='V', siPrefix=True, bounds=[None, None], dec=True, minStep=0.05)
+        self.ui.colorMapper.setFields([('maxPeak', {'mode': 'range', 'units': 'V'}),
+                                       ('minPeak', {'mode': 'range', 'units': 'V'}),
+                                       ('maxZScore', {'mode': 'range'}),
+                                       ('minZScore', {'mode': 'range'}),
+                                       ('nSpikes', {'mode': 'range'}),
+                                       ])
 
         self.tasks = {}
         self.currentTask = None
@@ -139,7 +145,7 @@ class PhotostimModule(AnalysisModule):
         
 class Task:
     z = 500
-    params = ['clampBaseStartSpin', 'clampBaseStopSpin', 'clampTestStartSpin', 'clampTestStopSpin', 'spikeThresholdSpin']
+    params = ['clampBaseStartSpin', 'clampBaseStopSpin', 'clampTestStartSpin', 'clampTestStopSpin', 'spikeThresholdSpin', 'spikeThresholdAbsRatio']
     
     def __init__(self, name, ui):
         self.scatter = pg.ScatterPlotItem()
@@ -231,24 +237,47 @@ class Task:
         std = base.std()
         testDetrend = test - med
         testBlur = gaussian_filter(testDetrend, (1e-3 / dt))
-        g = 0.0
-        tol = self.state['pspToleranceSpin']
-        r = clip(testBlur.max() / (tol*std), 0.0, 1.0)
-        b = clip(-testBlur.min() / (tol*std), 0.0, 1.0)
+        # g = 0.0
+        # tol = self.state['pspToleranceSpin']
+        # r = clip(testBlur.max() / (tol*std), 0.0, 1.0)
+        # b = clip(-testBlur.min() / (tol*std), 0.0, 1.0)
         
         ## Only check first 10ms after stim
-        testLen = 10e-3
-        sec = abs(testBlur[:int(testLen/dt)])
-        secMax = max(abs(testBlur.max()), abs(testBlur.min()))
-        if sec.max() < secMax:
-            g = 0
-        else:
-            sec = sec * (sec < (secMax * 0.5))
-            halfTime = argwhere(sec==sec.max())[0,0] * dt
-            g = (testLen-halfTime) / testLen
-            g = clip(g, 0.0, 1.0)
-        g = g * max(r, b)
-        return (r, g, b)
+        # testLen = 10e-3
+        # sec = abs(testBlur[:int(testLen/dt)])
+        # secMax = max(abs(testBlur.max()), abs(testBlur.min()))
+        # if sec.max() < secMax:
+        #     g = 0
+        # else:
+        #     sec = sec * (sec < (secMax * 0.5))
+        #     halfTime = argwhere(sec==sec.max())[0,0] * dt
+        #     g = (testLen-halfTime) / testLen
+        #     g = clip(g, 0.0, 1.0)
+        # g = g * max(r, b)
+        # return (r, g, b)
+
+        # Compute size of positive / negative peaks
+        mx = testDetrend.max()
+        mn = testDetrend.min()
+        results = {
+            'maxPeak': mx,
+            'minPeak': mn,
+            'maxZScore': mx / std,
+            'minZScore': mn / std,
+            }
+
+        # do spike detection
+        thresh = self.state['spikeThresholdSpin']
+        if self.state['spikeThresholdAbsRadio'] is False:
+            thresh -= med
+        mask = test > thresh
+        spikes = np.argwhere(np.diff(mask) == 1)
+        results['nSpikes'] = len(spikes)
+
+        # generate spot color from analysis
+        color = self.colorMapper.map(results)
+
+        return color
         
         
     def __del__(self):

@@ -19,8 +19,8 @@ class ColorMapWidget(ptree.ParameterTree):
     """
     sigColorMapChanged = QtCore.Signal(object)
     
-    def __init__(self):
-        ptree.ParameterTree.__init__(self, showHeader=False)
+    def __init__(self, parent=None):
+        ptree.ParameterTree.__init__(self, parent=parent, showHeader=False)
         
         self.params = ColorMapParameter()
         self.setParameters(self.params)
