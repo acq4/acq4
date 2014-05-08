@@ -4,10 +4,11 @@ from acq4.Manager import getManager
 from PyQt4 import QtCore, QtGui
 from PhotostimTemplate import Ui_Form
 #from acq4.pyqtgraph import ImageItem
-from numpy import *
-from scipy.ndimage.filters import gaussian_filter
+import numpy as np
+import scipy.ndimage
 from acq4.util.metaarray import MetaArray
 from acq4.util.debug import *
+import acq4.pyqtgraph as pg
 
 class PhotostimModule(AnalysisModule):
     def __init__(self, *args):
@@ -145,10 +146,10 @@ class PhotostimModule(AnalysisModule):
         
 class Task:
     z = 500
-    params = ['clampBaseStartSpin', 'clampBaseStopSpin', 'clampTestStartSpin', 'clampTestStopSpin', 'spikeThresholdSpin', 'spikeThresholdAbsRatio']
+    params = ['clampBaseStartSpin', 'clampBaseStopSpin', 'clampTestStartSpin', 'clampTestStopSpin', 'spikeThresholdSpin', 'spikeThresholdAbsRadio']
     
     def __init__(self, name, ui):
-        self.scatter = pg.ScatterPlotItem()
+        self.scatter = pg.ScatterPlotItem(pxMode=False)
         self.name = name
         self.ui = weakref.ref(ui)
         self.frames = []
@@ -205,12 +206,17 @@ class Task:
             # spot.setPen(QtGui.QPen(QtCore.Qt.NoPen))
             p = f['scanner']['position']
             s = f['scanner']['spotSize']
-            self.spots.append((color, p, s))
+            self.spots['pos'].append(p)
+            self.spots['size'].append(s)
+            self.spots['color'].append(color)
+
             # self.items.append([spot, p, [s, s]])
             
         # self.hide()  ## Make sure only correct items are displayed
         # self.show()
-        self.scatter.setData(pos=self.spots['pos'], size=self.spots['size'], brush=self.spots['color'])
+        x = [p[0] for p in self.spots['pos']]
+        y = [p[1] for p in self.spots['pos']]
+        self.scatter.setData(x, y, size=self.spots['size'], brush=self.spots['color'])
 
         ## Set correct scene
         camMod = self.ui().ui.cameraModCombo.getSelectedObj()
@@ -233,10 +239,10 @@ class Task:
             raise Exception("Uncaging analysis: No clamp data to evaluate. Check start/stop values?")
         time = data.xvals('Time')
         dt = time[1] - time[0]
-        med = median(base)
+        med = np.median(base)
         std = base.std()
         testDetrend = test - med
-        testBlur = gaussian_filter(testDetrend, (1e-3 / dt))
+        testBlur = scipy.ndimage.gaussian_filter(testDetrend, (1e-3 / dt))
         # g = 0.0
         # tol = self.state['pspToleranceSpin']
         # r = clip(testBlur.max() / (tol*std), 0.0, 1.0)
@@ -273,11 +279,11 @@ class Task:
         mask = test > thresh
         spikes = np.argwhere(np.diff(mask) == 1)
         results['nSpikes'] = len(spikes)
-
+        print results
         # generate spot color from analysis
-        color = self.colorMapper.map(results)
+        color = self.ui().ui.colorMapper.map(results)
 
-        return color
+        return QtGui.QColor(*color[0])
         
         
     def __del__(self):

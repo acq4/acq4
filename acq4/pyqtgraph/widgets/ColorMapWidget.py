@@ -32,6 +32,15 @@ class ColorMapWidget(ptree.ParameterTree):
 
     def mapChanged(self):
         self.sigColorMapChanged.emit(self)
+
+    def widgetGroupInterface(self):
+        return (self.sigColorMapChanged, self.saveState, self.restoreState)
+
+    def saveState(self):
+        return self.params.saveState()
+
+    def restoreState(self, state):
+        self.params.restoreState(state)
         
 
 class ColorMapParameter(ptree.types.GroupParameter):
@@ -95,6 +104,9 @@ class ColorMapParameter(ptree.types.GroupParameter):
                         returned as 0.0-1.0 float values.
         ==============  =================================================================
         """
+        if isinstance(data, dict):
+            data = np.array([tuple(data.values())], dtype=[(k, float) for k in data.keys()])
+
         colors = np.zeros((len(data),4))
         for item in self.children():
             if not item['Enabled']:
@@ -150,8 +162,6 @@ class RangeColorMapItem(ptree.types.SimpleParameter):
     
     def map(self, data):
         data = data[self.fieldName]
-        
-        
         
         scaled = np.clip((data-self['Min']) / (self['Max']-self['Min']), 0, 1)
         cmap = self.value()
