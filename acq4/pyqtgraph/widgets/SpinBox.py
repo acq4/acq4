@@ -76,8 +76,8 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.lastValEmitted = None
         self.lastText = ''
         self.textValid = True  ## If false, we draw a red border
-        self.setMinimumWidth(0)
-        self.setMaximumHeight(20)
+        #self.setMinimumWidth(0)
+        #self.setMaximumHeight(20)
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Preferred)
         self.opts = {
             'bounds': [None, None],
