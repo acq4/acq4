@@ -70,8 +70,8 @@ class Patch(Module):
         
         # Read mode configurations from config file
         modes = config.get('modes', self.defaultModes)
-        if 'default' not in modes:
-            modes['default'] = self.defaults
+        self.defaults.update(modes.get('default', {}))
+        modes['default'] = self.defaults
         
         for modeName, mode in modes.items():
             for param, val in mode.items():

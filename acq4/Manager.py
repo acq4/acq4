@@ -541,10 +541,8 @@ class Manager(QtCore.QObject):
             conf = self.definedModules[name]
         
         mod = conf['module']
-        if 'config' in conf:
-            config = conf['config']
-        else:
-            config = {}
+        # For backward compatibility, we allow 'config' option
+        config = conf.get('config', conf)
             
         ## Find an unused name for this module
         mName = name
