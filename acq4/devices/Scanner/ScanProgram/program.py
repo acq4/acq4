@@ -2,8 +2,8 @@
 import numpy as np
 import acq4.pyqtgraph as pg
 from acq4.util.HelpfulException import HelpfulException
-from collections import OreredDict
-
+from collections import OrderedDict
+import importlib
 
 # Keep track of all available scan program components
 COMPONENTS = OrderedDict()
@@ -12,9 +12,9 @@ def registerScanComponent(component):
     COMPONENTS[component.name] = component
 
 for cType in ['step', 'line', 'rect', 'loop', 'ellipse', 'spiral']:
-    mod = __import__(cType)
+    mod = importlib.import_module('.' + cType, 'acq4.devices.Scanner.ScanProgram')
     clsName = cType.capitalize() + "ScanComponent"
-    registerScanComponent(mod[clsName])
+    registerScanComponent(getattr(mod, clsName))
 
 
 
