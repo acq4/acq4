@@ -1,20 +1,85 @@
-"""
-ScanUtilityFuncs.py
-
-Scanner Utility Class.
-
-
-1. Decombing routine for scanned images. 
-2. Compute scan voltages for a recangular region
-adding an overscan region.
-3. Create an image with overscan removed.
-"""
 import numpy as np
 import acq4.pyqtgraph as pg
+from .component import ScanProgramComponent
+
+
+class RectScanComponent(ScanProgramComponent):
+    """
+    Does a raster scan of a rectangular area.
+    """
+    name = 'rect'
+    
+    def __init__(self):
+        self.SUF = SUFA.ScannerUtilities()
+        self.SUF.setScannerDev(self.dev)
+
+    def generateVoltageArray(self, array, startInd, stopInd):
+        pts = cmd['points']
+        # print 'cmd: ', cmd
+        self.SUF.setLaserDev(self.cmd['laser'])
+        width  = (pts[1] -pts[0]).length() # width is x in M
+        height = (pts[2]- pts[0]).length() # heigh in M
+        rect = [pts[0][0], pts[0][1], width, height]
+        overScanPct = cmd['overScan']
+        self.SUF.setRectRoi(pts)
+        self.SUF.setOverScan(overScanPct)
+        self.SUF.setDownSample(1)
+        self.SUF.setBidirectional(True)
+        pixelSize = cmd['pixelSize']
+        # recalulate pixelSize based on:
+        # number of scans (reps) and total duration
+        nscans = cmd['nScans']
+        dur = cmd['duration']#  - cmd['startTime'] # time for nscans
+        durPerScan = dur/nscans # time for one scan
+        printParameters = False
+        self.SUF.setPixelSize(cmd['pixelSize']) # pixelSize/np.sqrt(pixsf)) # adjust the pixel size
+        self.SUF.setSampleRate(1./dt) # actually this is not used... 
+        (x,y) = self.SUF.designRectScan() # makes one rectangle
+        effScanTime = (self.SUF.getPixelsPerRow()/pixelSize)*(height/pixelSize)*dt # time it actually takes for one scan 
+        pixsf = durPerScan/effScanTime # correction for pixel size based pm to,e
+
+        cmd['imageSize'] = (self.SUF.getPixelsPerRow(), self.SUF.getnPointsY())
+
+        if printParameters:
+            print 'scans: ', nscans
+            print 'width: ', width
+            print 'points in width: ', width/pixelSize
+            print 'dt: ', dt
+            print 'points in a scan: ', (width/pixelSize)*(height/pixelSize)
+            print 'effective scan time: ', effScanTime
+            print 'pixsf: ', pixsf
+            print 'original: ', pixelSize
+            print 'new pix size: ', pixelSize*pixsf
+        
+        n = self.SUF.getnPointsY() # get number of rows
+        m = self.SUF.getPixelsPerRow() # get nnumber of points per row
+
+        ## Build array with scanner voltages for rect repeated once per scan
+        for i in range(cmd['nScans']):
+            thisStart = startInd+i*n*m
+            arr[0, thisStart:thisStart + len(x)] = x
+            arr[1, thisStart:thisStart + len(y)] = y
+        arr[0, startInd+n*m*cmd['nScans']:stopInd] = arr[0, startInd+n*m*cmd['nScans'] -1] # fill in any unused sample on this scan section
+        arr[1, startInd+n*m*cmd['nScans']:stopInd] = arr[1, startInd+n*m*cmd['nScans'] -1]
+        lastPos = (x[-1], y[-1])
+            
+            
+        # A side-effect modification of the 'command' dict so that analysis can access
+        # this information later
+        cmd['scanParameters'] = self.SUF.packScannerParams()
+        cmd['scanInfo'] = self.SUF.getScanInfo()
 
 
 
-class ScannerUtilities():
+class ScanUtilityFuncs:    
+    """
+
+
+    1. Decombing routine for scanned images. 
+    2. Compute scan voltages for a recangular region
+    adding an overscan region.
+    3. Create an image with overscan removed.
+    """
     def __init__(self):
         self.scannerDev = None
         self.laserDev = None
@@ -375,3 +440,5 @@ class ScannerUtilities():
         print '368: left, right: ', leftShift, rightShift
         decombed[rightShift:, 1::2] = img[:-rightShift, 1::2]
         return decombed, bestShift
+    
+

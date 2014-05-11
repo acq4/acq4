@@ -11,6 +11,9 @@ class ScanProgramGenerator:
         self.cmd = command 
         self.SUF = SUFA.ScannerUtilities()
         self.SUF.setScannerDev(self.dev)
+
+    def mapToScanner(self, x, y):
+        return self.dev.mapToScanner(x, y, self.cmd['laser'])
     
     def generate(self):
         """LASER LOGO
@@ -59,7 +62,7 @@ class ScanProgramGenerator:
                 if pos == None:
                     pos = self.dev.getOffVoltage()
                 else:
-                    pos = self.dev.mapToScanner(pos[0], pos[1], self.cmd['laser'])
+                    pos = self.mapToScanner(pos[0], pos[1])
                 lastPos = pos
                 
                 arr[0, startInd] = pos[0]
@@ -72,7 +75,7 @@ class ScanProgramGenerator:
                 
                 xPos = linspace(lastPos[0], pos[0], stopInd-startInd)
                 yPos = linspace(lastPos[1], pos[1], stopInd-startInd)
-                x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['laser'])
+                x, y = self.mapToScanner(xPos, yPos)
                 arr[0, startInd:stopInd] = x
                 arr[1, startInd:stopInd] = y
                 lastPos = pos
@@ -93,7 +96,7 @@ class ScanProgramGenerator:
                 cmd['scanPointList'] = scanPointList
                 yPos = np.linspace(startPos.y(), stopPos.y(), scanLength)
                 yPos = np.append(yPos, startPos.x()*scanPause)
-                x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['laser'])
+                x, y = self.mapToScanner(xPos, yPos)
                 x = np.tile(x, cmd['nScans'])
                 y = np.tile(y, cmd['nScans'])
                 arr[0, startInd:startInd + len(x)] = x
@@ -148,7 +151,7 @@ class ScanProgramGenerator:
                         pockels = np.append(pockels, np.zeros(interSweepPoints))
                         nIntersegmentScans += 1
                         scanPointList.append(interSweepPoints)
-                    x, y = self.dev.mapToScanner(xPos, yPos, self.cmd['laser'])
+                    x, y = self.mapToScanner(xPos, yPos)
                     xp = np.append(xp, x)
                     yp = np.append(yp, y)
                     interScanFlag = not interScanFlag
