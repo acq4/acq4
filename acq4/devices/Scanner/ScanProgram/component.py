@@ -29,8 +29,8 @@ class ScanProgramComponent:
     def generateVoltageArray(self, array, startInd, stopInd):
         """
         Generate mirror voltages for this scan component and store inside
-        *array*. Returns the *last* index actually used (this must be less
-        than *stopInd*).
+        *array*. Returns the actual index where this component stopped writing
+        values to *array* (must be <= *stopInd*).
         """
         raise NotImplementedError()
         
