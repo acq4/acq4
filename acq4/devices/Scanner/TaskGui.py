@@ -1127,6 +1127,7 @@ class ProgramRectScan(QtCore.QObject):
         self.name = 'rectScan'
         self.sampleRate = 10000
         self.downsampling = 1
+        self.blockUpdate = False
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         
         self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
@@ -1136,10 +1137,11 @@ class ProgramRectScan(QtCore.QObject):
             dict(name='pixelSize', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[2e-7, None], step=2e-7),
             dict(name='startTime', type='float', value=1e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='nScans', type='int', value=10, bounds=[1, None]),
-            dict(name='duration', type='float', readonly=True, value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='duration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='imageSize', type='str', readonly=True),
+            dict(name='scanSpeed', type='float', readonly=True, suffix='m/ms', siPrefix=True), 
             dict(name='frameExp', title=u'frame exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True), 
-            dict(name='totalExp', title=u'total exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True), 
+            dict(name='totalExp', title=u'total exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True),
         ])
         self.params.ctrl = self
         self.roi = pg.ROI(size=[self.params['width'], self.params['height']], pos=[0.0, 0.0])
@@ -1172,24 +1174,58 @@ class ProgramRectScan(QtCore.QObject):
     def parameters(self):
         return self.params
 
-    def update(self):
-        self.setVisible(self.params.value())
-        
-        # TODO: this should be calculated by the same code that is used to generate the voltage array
-        w = self.params['width'] * (1.0 + self.params['overScan']/100.)
-        h = self.params['height']
-        pxSize = self.params['pixelSize']
-        imgSize = (int(w / pxSize) + 1, int(h / pxSize) + 1) 
-        self.params['imageSize'] = str(imgSize)
-        
-        samples = imgSize[0] * imgSize[1] * self.downsampling
-        duration = samples / self.sampleRate
-        self.params['duration'] = duration
-        
-        samplesPerUm2 = 1e-12 * self.downsampling / pxSize**2
-        frameExp = samplesPerUm2 / self.sampleRate
-        self.params['frameExp'] = frameExp
-        self.params['totalExp'] = frameExp * self.params['nScans']
+    def update(self, *args):
+        if self.blockUpdate:
+            return
+
+        try:
+            self.blockUpdate = True
+            changed = None
+            if len(args) > 1:
+                changed = args[1][0][0].name() # name of parameter that was modified
+
+            self.setVisible(self.params.value())
+            
+            # TODO: this should be calculated by the same code that is used to generate the voltage array
+            # (as currently written, it is unlikely to match the actual output exactly)
+
+            w = self.params['width'] * (1.0 + self.params['overScan']/100.)
+            h = self.params['height']
+            if changed == 'duration':
+                # Set pixelSize to match duration
+                duration = self.params['duration']
+                maxSamples = int(duration * self.sampleRate)
+                maxPixels = maxSamples / self.downsampling
+                ar = w / h
+                pxHeight = int((maxPixels / ar)**0.5)
+                pxWidth = int(ar * pxHeight)
+                imgSize = (pxWidth, pxHeight)
+                pxSize = w / (pxWidth-1)
+                self.params['pixelSize'] = pxSize
+            else:
+                # set duration to match pixelSize
+                pxSize = self.params['pixelSize']
+                imgSize = (int(w / pxSize) + 1, int(h / pxSize) + 1) 
+                samples = imgSize[0] * imgSize[1] * self.downsampling
+                duration = samples / self.sampleRate
+                self.params['duration'] = duration
+
+            # Set read-only parameters:
+
+            self.params['imageSize'] = str(imgSize)
+            
+            speed = w / (imgSize[0] * self.downsampling / self.sampleRate)
+            self.params['scanSpeed'] = speed * 1e-3
+
+            samplesPerUm2 = 1e-12 * self.downsampling / pxSize**2
+            frameExp = samplesPerUm2 / self.sampleRate
+            totalExp = frameExp * self.params['nScans']
+            self.params['frameExp'] = frameExp
+            self.params['totalExp'] = totalExp
+
+        finally:
+            self.blockUpdate = False
+
     
     def updateFromROI(self):
         """ read the ROI rectangle width and height and repost
