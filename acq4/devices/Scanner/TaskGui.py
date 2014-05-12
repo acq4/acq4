@@ -1117,7 +1117,32 @@ class ProgramMultipleLineScan(QtCore.QObject):
         return {'type': 'multipleLineScan', 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 'sweepSpeed': self.params['sweepSpeed'], 
                 'endTime': self.params['endTime'], 'interSweepSpeed': self.params['interSweepSpeed'], 'nScans': self.params['nScans']}
                 
-    
+
+class RectScanROI(pg.ROI):
+    def __init__(self, size, pos):
+        pg.ROI.__init__(self, size=size, pos=pos)
+        self.addScaleHandle([1,1], [0.5, 0.5])
+        self.addRotateHandle([0,0], [0.5, 0.5])
+        self.overScan = 0
+
+    def setOverScan(self, os):
+        self.overScan = os
+        self.prepareGeometryChange()
+        self.update()
+
+    def boundingRect(self):
+        br = pg.ROI.boundingRect(self)
+        os = br.width() * 0.5 * self.overScan/100.
+        return br.adjusted(-os, 0, os, 0)
+
+    def paint(self, p, *args):
+        p.setPen(pg.mkPen(0.3))
+        p.drawRect(self.boundingRect())
+        pg.ROI.paint(self, p, *args)
+
+
+
+
 class ProgramRectScan(QtCore.QObject):
     
     sigStateChanged = QtCore.Signal(object)
@@ -1131,8 +1156,8 @@ class ProgramRectScan(QtCore.QObject):
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         
         self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
-            dict(name='width', type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
-            dict(name='height', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='width', readonly=True, type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='height', readonly=True, type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='overScan', type='float', value=70., suffix='%', siPrefix=False, bounds=[0, 200.], step = 1),
             dict(name='pixelSize', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[2e-7, None], step=2e-7),
             dict(name='startTime', type='float', value=1e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
@@ -1144,9 +1169,9 @@ class ProgramRectScan(QtCore.QObject):
             dict(name='totalExp', title=u'total exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True),
         ])
         self.params.ctrl = self
-        self.roi = pg.ROI(size=[self.params['width'], self.params['height']], pos=[0.0, 0.0])
-        self.roi.addScaleHandle([1,1], [0.5, 0.5])
-        self.roi.addRotateHandle([0,0], [0.5, 0.5])
+        self.roi = RectScanROI(size=[self.params['width'], self.params['height']], pos=[0.0, 0.0])
+        self.roi.setOverScan(self.params['overScan'])
+
         self.params.sigTreeStateChanged.connect(self.update)
         self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
         
@@ -1183,6 +1208,9 @@ class ProgramRectScan(QtCore.QObject):
             changed = None
             if len(args) > 1:
                 changed = args[1][0][0].name() # name of parameter that was modified
+
+            if changed == 'overScan':
+                self.roi.setOverScan(self.params['overScan'])
 
             self.setVisible(self.params.value())
             
