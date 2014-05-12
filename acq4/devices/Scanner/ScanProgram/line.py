@@ -1,17 +1,106 @@
+import weakref
 import numpy as np
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph import QtGui, QtCore
+import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
+from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 from .component import ScanProgramComponent
-
 
 
 class LineScanComponent(ScanProgramComponent):
     """
     Scans the laser over a path composed of multiple line segments.
     """
-    name = 'step'
+    name = 'line'
     
+    def __init__(self, cmd=None, scanProgram=None):
+        ScanProgramComponent.__init__(self, cmd, scanProgram)
+        self.ctrl = LineScanControl(self)
+
+    def ctrlParameter(self):
+        """
+        The Parameter (see acq4.pyqtgraph.parametertree) set used to allow the 
+        user to define this component.        
+        """
+        return self.ctrl.parameters()
     
+    def graphicsItems(self):
+        """
+        A list of GraphicsItems to be displayed in a camera module or image
+        analysis module. These show the location and shape of the scan 
+        component, and optionally offer user interactivity to define the shape.
+        """
+        return self.ctrl.getGraphicsItems()
+
+    def generateTask(self):
+        return self.ctrl.generateTask()
+
+    
+    @classmethod
+    def generateVoltageArray(cls, arr, dt, dev, cmd, startInd, stopInd):
+        """
+        Use a polyline to make a scan that covers multiple regions in an
+        interleaved fashion. Alternate line segments of the polyline
+        are either the "scan" or the "interscan", allowing rapid movement
+        between successive points. 
+        Interscan intervals are green on the line, scan intervals are white
+        """
+        pts = map(pg.Point, cmd['points'])
+        startPos = pts[0]                
+        stopPos = pts[-1]
+        
+        #scanPoints = cmd['sweepDuration']/dt # in point indices, not time.
+        #interTracePoints = cmd['intertraceDuration']/dt
+        #scanPause = np.ones(int(interTracePoints))
+        #cmd['samplesPerScan'] = scanPoints
+        #cmd['samplesPerPause'] = interTracePoints
+        sweepSpeed = 1000 * cmd['sweepSpeed'] # in m/msec
+        interSweepSpeed = 1000 * cmd['interSweepSpeed']
+        ScanFlag = False
+        xp = np.array([])
+        yp = np.array([])
+        pockels = np.array([])
+        nSegmentScans = 0
+        nIntersegmentScans = 0
+        scanPointList = []
+        interScanFlag = False
+        for k in xrange(len(pts)): # loop through the list of points
+            k2 = k + 1
+            if k2 > len(pts)-1:
+                k2 = 0
+            dist = (pg.Point(pts[k]-pts[k2])).length()
+            if interScanFlag is False:
+                scanPoints = int((dist/sweepSpeed)/dt)
+                xPos = np.linspace(pts[k].x(), pts[k2].x(), scanPoints)
+                yPos = np.linspace(pts[k].y(), pts[k2].y(), scanPoints)
+                pockels = np.append(pockels, np.ones(scanPoints))
+                nSegmentScans += 1
+                scanPointList.append(scanPoints)
+            else:
+                interSweepPoints = int((dist/interSweepSpeed)/dt)
+                xPos = np.linspace(pts[k].x(), pts[k2].x(), interSweepPoints)
+                yPos = np.linspace(pts[k].y(), pts[k2].y(), interSweepPoints)
+                pockels = np.append(pockels, np.zeros(interSweepPoints))
+                nIntersegmentScans += 1
+                scanPointList.append(interSweepPoints)
+            x, y = dev.mapToScanner(xPos, yPos, cmd['laser'])
+            xp = np.append(xp, x)
+            yp = np.append(yp, y)
+            interScanFlag = not interScanFlag
+            
+        cmd['nSegmentScans'] = nSegmentScans
+        cmd['nIntersegmentScans'] = nIntersegmentScans
+        cmd['scanPointList'] = scanPointList
+        x = np.tile(xp, cmd['nScans'])
+        y = np.tile(yp, cmd['nScans'])
+        arr[0, startInd:startInd + len(x)] = x
+        arr[1, startInd:startInd + len(y)] = y
+        arr[0, startInd + len(x):stopInd] = arr[0, startInd + len(x)-1] # fill in any unused sample on this scan section
+        arr[1, startInd + len(y):stopInd] = arr[1, startInd + len(y)-1]
+        lastPos = (x[-1], y[-1])
+        
+        return stopInd
+
     #elif cmd['type'] == 'line':
         #if lastPos is None:
             #raise Exception("'line' command with no defined starting position")
@@ -49,69 +138,6 @@ class LineScanComponent(ScanProgramComponent):
         #arr[1, startInd + len(y):stopInd] = arr[1, startInd + len(y)-1]
         #lastPos = (x[-1], y[-1])
 
-    def generateVoltageArray(self, arr, startInd, stopInd):
-        """
-        Use a polyline to make a scan that covers multiple regions in an
-        interleaved fashion. Alternate line segments of the polyline
-        are either the "scan" or the "interscan", allowing rapid movement
-        between successive points. 
-        Interscan intervals are green on the line, scan intervals are white
-        """
-        pts = map(pg.Point, cmd['points'])
-        startPos = pts[0]                
-        stopPos = pts[-1]
-        
-        #scanPoints = cmd['sweepDuration']/dt # in point indices, not time.
-        #interTracePoints = cmd['intertraceDuration']/dt
-        #scanPause = np.ones(int(interTracePoints))
-        #cmd['samplesPerScan'] = scanPoints
-        #cmd['samplesPerPause'] = interTracePoints
-        sweepSpeed = 1000*cmd['sweepSpeed'] # in m/msec
-        interSweepSpeed = 1000*cmd['interSweepSpeed']
-        ScanFlag = False
-        xp = np.array([])
-        yp = np.array([])
-        pockels = np.array([])
-        nSegmentScans = 0
-        nIntersegmentScans = 0
-        scanPointList = []
-        interScanFlag = False
-        for k in xrange(len(pts)): # loop through the list of points
-            k2 = k + 1
-            if k2 > len(pts)-1:
-                k2 = 0
-            dist = (pg.Point(pts[k]-pts[k2])).length()
-            if interScanFlag is False:
-                scanPoints = int((dist/sweepSpeed)/dt)
-                xPos = np.linspace(pts[k].x(), pts[k2].x(), scanPoints)
-                yPos = np.linspace(pts[k].y(), pts[k2].y(), scanPoints)
-                pockels = np.append(pockels, np.ones(scanPoints))
-                nSegmentScans += 1
-                scanPointList.append(scanPoints)
-            else:
-                interSweepPoints = int((dist/interSweepSpeed)/dt)
-                xPos = np.linspace(pts[k].x(), pts[k2].x(), interSweepPoints)
-                yPos = np.linspace(pts[k].y(), pts[k2].y(), interSweepPoints)
-                pockels = np.append(pockels, np.zeros(interSweepPoints))
-                nIntersegmentScans += 1
-                scanPointList.append(interSweepPoints)
-            x, y = self.mapToScanner(xPos, yPos)
-            xp = np.append(xp, x)
-            yp = np.append(yp, y)
-            interScanFlag = not interScanFlag
-            
-        cmd['nSegmentScans'] = nSegmentScans
-        cmd['nIntersegmentScans'] = nIntersegmentScans
-        cmd['scanPointList'] = scanPointList
-        x = np.tile(xp, cmd['nScans'])
-        y = np.tile(yp, cmd['nScans'])
-        arr[0, startInd:startInd + len(x)] = x
-        arr[1, startInd:startInd + len(y)] = y
-        arr[0, startInd + len(x):stopInd] = arr[0, startInd + len(x)-1] # fill in any unused sample on this scan section
-        arr[1, startInd + len(y):stopInd] = arr[1, startInd + len(y)-1]
-        lastPos = (x[-1], y[-1])
-        
-        return stopInd
     
 #class ProgramLineScan(QtCore.QObject):
     
@@ -194,9 +220,9 @@ class LineScanControl(QtCore.QObject):
     
     sigStateChanged = QtCore.Signal(object)
     
-    def __init__(self):
+    def __init__(self, component):
         QtCore.QObject.__init__(self)
-        self.name = 'multipleLineScan'
+        self.name = component.name
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         
         self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
@@ -207,7 +233,7 @@ class LineScanControl(QtCore.QObject):
             dict(name='nScans', type='int', value=100, bounds=[1, None]),
             dict(name='endTime', type='float', value=5.5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2, readonly=True),
         ])
-        self.params.ctrl = self        
+        self.params.component = weakref.ref(component)
         self.roi = MultiLineScanROI([[0.0, 0.0], [self.params['Length'], self.params['Length']]])
         self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
         self.params.sigTreeStateChanged.connect(self.update)
@@ -258,6 +284,6 @@ class LineScanControl(QtCore.QObject):
         points=self.roi.listPoints() # in local coordinates local to roi.
         points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
         points = [(p.x(), p.y()) for p in points]   ## make sure we can write this data to HDF5 eventually..
-        return {'type': 'multipleLineScan', 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 'sweepSpeed': self.params['sweepSpeed'], 
+        return {'type': self.name, 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 'sweepSpeed': self.params['sweepSpeed'], 
                 'endTime': self.params['endTime'], 'interSweepSpeed': self.params['interSweepSpeed'], 'nScans': self.params['nScans']}
                 

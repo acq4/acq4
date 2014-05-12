@@ -60,7 +60,7 @@ class ScanProgramComponent:
         raise NotImplementedError()
         
     @classmethod
-    def generateVoltageArray(cls, array, dev, cmd, startInd, stopInd):
+    def generateVoltageArray(cls, array, dt, dev, cmd, startInd, stopInd):
         """
         Generate mirror voltages for this scan component and store inside
         *array*. Returns the actual index where this component stopped writing

@@ -35,10 +35,10 @@ class RectScanComponent(ScanProgramComponent):
         return self.ctrl.generateTask()
 
     @classmethod
-    def generateVoltageArray(cls, array, dev, cmd, startInd, stopInd):
+    def generateVoltageArray(cls, array, dt, dev, cmd, startInd, stopInd):
         pts = cmd['points']
         # print 'cmd: ', cmd
-        SUF = ScanUtilityFuncs()
+        SUF = ScannerUtility()
         SUF.setScannerDev(dev)
         SUF.setLaserDev(cmd['laser'])
         
@@ -56,7 +56,6 @@ class RectScanComponent(ScanProgramComponent):
         nscans = cmd['nScans']
         dur = cmd['duration']#  - cmd['startTime'] # time for nscans
         durPerScan = dur/nscans # time for one scan
-        printParameters = False
         SUF.setPixelSize(cmd['pixelSize']) # pixelSize/np.sqrt(pixsf)) # adjust the pixel size
         SUF.setSampleRate(1./dt) # actually this is not used... 
         (x,y) = SUF.designRectScan() # makes one rectangle
@@ -65,6 +64,7 @@ class RectScanComponent(ScanProgramComponent):
 
         cmd['imageSize'] = (SUF.getPixelsPerRow(), SUF.getnPointsY())
 
+        printParameters = False
         if printParameters:
             print 'scans: ', nscans
             print 'width: ', width
@@ -94,6 +94,7 @@ class RectScanComponent(ScanProgramComponent):
         cmd['scanParameters'] = SUF.packScannerParams()
         cmd['scanInfo'] = SUF.getScanInfo()
 
+        return stopInd
 
 
 class RectScanControl(QtCore.QObject):
@@ -168,7 +169,7 @@ class RectScanControl(QtCore.QObject):
 
 
 
-class ScanUtilityFuncs:    
+class ScannerUtility:
     """
 
 

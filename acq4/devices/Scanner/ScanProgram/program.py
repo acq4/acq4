@@ -160,7 +160,9 @@ class ScanProgram:
                 raise Exception('No registered scan component class named "%s".' % cmd['type'])
             
             component = COMPONENTS[cmd['type']]
-            compStopInd = component.generateVoltageArray(arr, dev, cmd, startInd, stopInd)
+            cmd['laser'] = command['laser']  # todo: should be handled individually by components
+                                             # (because each component may be used with a different laser)
+            compStopInd = component.generateVoltageArray(arr, dt, dev, cmd, startInd, stopInd)
             
             assert compStopInd <= stopInd
             stopInd = compStopInd
