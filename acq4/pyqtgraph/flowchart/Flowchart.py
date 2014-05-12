@@ -249,9 +249,10 @@ class Flowchart(Node):
         
         ## Record inputs given to process()
         for n, t in self.inputNode.outputs().items():
-            if n not in args:
-                raise Exception("Parameter %s required to process this chart." % n)
-            data[t] = args[n]
+            # if n not in args:
+            #     raise Exception("Parameter %s required to process this chart." % n)
+            if n in args:
+                data[t] = args[n]
         
         ret = {}
             
@@ -276,7 +277,7 @@ class Flowchart(Node):
                     if len(inputs) == 0:
                         continue
                     if inp.isMultiValue():  ## multi-input terminals require a dict of all inputs
-                        args[inp.name()] = dict([(i, data[i]) for i in inputs])
+                        args[inp.name()] = dict([(i, data[i]) for i in inputs if i in data])
                     else:                   ## single-inputs terminals only need the single input value available
                         args[inp.name()] = data[inputs[0]]  
                         
@@ -296,9 +297,8 @@ class Flowchart(Node):
                         #print out.name()
                         try:
                             data[out] = result[out.name()]
-                        except:
-                            print(out, out.name())
-                            raise
+                        except KeyError:
+                            pass
             elif c == 'd':   ## delete a terminal result (no longer needed; may be holding a lot of memory)
                 #print "===> delete", arg
                 if arg in data:

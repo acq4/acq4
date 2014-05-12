@@ -135,7 +135,7 @@ class SqliteDatabase:
             ret = self._queryToDict(q)
         else:
             ret = q
-        p.finish("Generated result")
+        p.finish()
         return ret
             
     def __call__(self, *args, **kargs):
@@ -182,7 +182,7 @@ class SqliteDatabase:
         cmd = "SELECT %s %s FROM %s %s %s %s %s" % (distinct, columns, table, whereStr, sql, limit, offset)
         p.mark("generated command")
         q = self.exe(cmd, toDict=toDict, toArray=toArray)
-        p.finish("Execution finished.")
+        p.finish()
         return q
         
     def iterSelect(self, *args, **kargs):
@@ -281,7 +281,7 @@ class SqliteDatabase:
                 yield (offset, numRecs)
             p.mark("Transaction done")
 
-        p.finish("Executed.")
+        p.finish()
 
     def delete(self, table, where):
         with self.transaction():
