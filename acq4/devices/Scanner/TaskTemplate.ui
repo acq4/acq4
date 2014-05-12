@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>703</width>
-    <height>428</height>
+    <width>840</width>
+    <height>504</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -34,11 +34,125 @@
      <property name="sizeConstraint">
       <enum>QLayout::SetMaximumSize</enum>
      </property>
-     <item row="2" column="0" colspan="2">
-      <widget class="QCheckBox" name="simulateShutterCheck">
-       <property name="text">
-        <string>Simulate Shutter</string>
+     <item row="0" column="1">
+      <widget class="InterfaceCombo" name="cameraCombo">
+       <property name="toolTip">
+        <string>Selects the camera module to use with the scanner. This, along with the laser device, determines which calibration files will be used.</string>
        </property>
+      </widget>
+     </item>
+     <item row="7" column="0" colspan="2">
+      <widget class="QPushButton" name="loadConfigBtn">
+       <property name="text">
+        <string>Load Last Config</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="0">
+      <spacer name="verticalSpacer">
+       <property name="orientation">
+        <enum>Qt::Vertical</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>20</width>
+         <height>40</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item row="0" column="0">
+      <widget class="QLabel" name="label">
+       <property name="text">
+        <string>Camera Module:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="0">
+      <spacer name="verticalSpacer_4">
+       <property name="orientation">
+        <enum>Qt::Vertical</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>20</width>
+         <height>40</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="label_2">
+       <property name="text">
+        <string>Laser Device:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="InterfaceCombo" name="laserCombo">
+       <property name="toolTip">
+        <string>Selects the laser to be used.</string>
+       </property>
+      </widget>
+     </item>
+     <item row="4" column="0" colspan="2">
+      <widget class="QGroupBox" name="groupBox_2">
+       <property name="title">
+        <string>Spot Display Size</string>
+       </property>
+       <layout class="QGridLayout" name="gridLayout_2">
+        <property name="margin">
+         <number>3</number>
+        </property>
+        <property name="spacing">
+         <number>0</number>
+        </property>
+        <item row="0" column="0" colspan="2">
+         <widget class="QRadioButton" name="sizeFromCalibrationRadio">
+          <property name="toolTip">
+           <string>Causes target spots to be displayed at the size determined by the calibration file. Does not affect how data is collected.</string>
+          </property>
+          <property name="text">
+           <string>Use size from calibration</string>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QRadioButton" name="sizeCustomRadio">
+          <property name="toolTip">
+           <string>Lets the user change the display size of target spots. Does not change the way data is collected.</string>
+          </property>
+          <property name="text">
+           <string>Use custom size:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="SpinBox" name="sizeSpin">
+          <property name="toolTip">
+           <string>Specifies the display size of the target spots. Does not change the way data is collected.</string>
+          </property>
+          <property name="suffix">
+           <string/>
+          </property>
+          <property name="minimum">
+           <double>0.000000000000000</double>
+          </property>
+          <property name="maximum">
+           <double>100000.000000000000000</double>
+          </property>
+          <property name="singleStep">
+           <double>0.000001000000000</double>
+          </property>
+          <property name="value">
+           <double>0.000000000000000</double>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </widget>
      </item>
      <item row="5" column="0" colspan="2">
@@ -143,126 +257,12 @@ p, li { white-space: pre-wrap; }
        </layout>
       </widget>
      </item>
-     <item row="4" column="0" colspan="2">
-      <widget class="QGroupBox" name="groupBox_2">
-       <property name="title">
-        <string>Spot Display Size</string>
-       </property>
-       <layout class="QGridLayout" name="gridLayout_2">
-        <property name="margin">
-         <number>3</number>
-        </property>
-        <property name="spacing">
-         <number>0</number>
-        </property>
-        <item row="0" column="0" colspan="2">
-         <widget class="QRadioButton" name="sizeFromCalibrationRadio">
-          <property name="toolTip">
-           <string>Causes target spots to be displayed at the size determined by the calibration file. Does not affect how data is collected.</string>
-          </property>
-          <property name="text">
-           <string>Use size from calibration</string>
-          </property>
-          <property name="checked">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="0">
-         <widget class="QRadioButton" name="sizeCustomRadio">
-          <property name="toolTip">
-           <string>Lets the user change the display size of target spots. Does not change the way data is collected.</string>
-          </property>
-          <property name="text">
-           <string>Use custom size:</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="1">
-         <widget class="SpinBox" name="sizeSpin">
-          <property name="toolTip">
-           <string>Specifies the display size of the target spots. Does not change the way data is collected.</string>
-          </property>
-          <property name="suffix">
-           <string/>
-          </property>
-          <property name="minimum">
-           <double>0.000000000000000</double>
-          </property>
-          <property name="maximum">
-           <double>100000.000000000000000</double>
-          </property>
-          <property name="singleStep">
-           <double>0.000001000000000</double>
-          </property>
-          <property name="value">
-           <double>0.000000000000000</double>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
-     </item>
-     <item row="0" column="0">
-      <widget class="QLabel" name="label">
+     <item row="2" column="0" colspan="2">
+      <widget class="QCheckBox" name="simulateShutterCheck">
        <property name="text">
-        <string>Camera Module:</string>
+        <string>Simulate Shutter</string>
        </property>
       </widget>
-     </item>
-     <item row="6" column="0">
-      <spacer name="verticalSpacer_4">
-       <property name="orientation">
-        <enum>Qt::Vertical</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>20</width>
-         <height>40</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-     <item row="1" column="1">
-      <widget class="InterfaceCombo" name="laserCombo">
-       <property name="toolTip">
-        <string>Selects the laser to be used.</string>
-       </property>
-      </widget>
-     </item>
-     <item row="1" column="0">
-      <widget class="QLabel" name="label_2">
-       <property name="text">
-        <string>Laser Device:</string>
-       </property>
-      </widget>
-     </item>
-     <item row="0" column="1">
-      <widget class="InterfaceCombo" name="cameraCombo">
-       <property name="toolTip">
-        <string>Selects the camera module to use with the scanner. This, along with the laser device, determines which calibration files will be used.</string>
-       </property>
-      </widget>
-     </item>
-     <item row="7" column="0" colspan="2">
-      <widget class="QPushButton" name="loadConfigBtn">
-       <property name="text">
-        <string>Load Last Config</string>
-       </property>
-      </widget>
-     </item>
-     <item row="3" column="0">
-      <spacer name="verticalSpacer">
-       <property name="orientation">
-        <enum>Qt::Vertical</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>20</width>
-         <height>40</height>
-        </size>
-       </property>
-      </spacer>
      </item>
     </layout>
    </item>
@@ -391,6 +391,11 @@ p, li { white-space: pre-wrap; }
  </widget>
  <customwidgets>
   <customwidget>
+   <class>SpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>acq4.pyqtgraph</header>
+  </customwidget>
+  <customwidget>
    <class>PlotWidget</class>
    <extends>QWidget</extends>
    <header>acq4.pyqtgraph</header>
@@ -400,11 +405,6 @@ p, li { white-space: pre-wrap; }
    <class>InterfaceCombo</class>
    <extends>QComboBox</extends>
    <header>acq4.util.InterfaceCombo</header>
-  </customwidget>
-  <customwidget>
-   <class>SpinBox</class>
-   <extends>QDoubleSpinBox</extends>
-   <header>acq4.pyqtgraph</header>
   </customwidget>
   <customwidget>
    <class>ParameterTree</class>

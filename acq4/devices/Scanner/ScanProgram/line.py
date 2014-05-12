@@ -1,5 +1,6 @@
 import numpy as np
 import acq4.pyqtgraph as pg
+from acq4.pyqtgraph import QtGui, QtCore
 from .component import ScanProgramComponent
 
 
@@ -9,7 +10,8 @@ class LineScanComponent(ScanProgramComponent):
     Scans the laser over a path composed of multiple line segments.
     """
     name = 'step'
-
+    
+    
     #elif cmd['type'] == 'line':
         #if lastPos is None:
             #raise Exception("'line' command with no defined starting position")
@@ -111,3 +113,151 @@ class LineScanComponent(ScanProgramComponent):
         
         return stopInd
     
+#class ProgramLineScan(QtCore.QObject):
+    
+    #sigStateChanged = QtCore.Signal(object)
+    
+    #def __init__(self):
+        #QtCore.QObject.__init__(self)
+        #self.name = 'lineScan'
+        #### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
+        
+        #self.params = pTypes.SimpleParameter(name=self.name, autoIncrementName = True, type='bool', value=True, removable=True, renamable=True, children=[
+            #dict(name='length', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            #dict(name='startTime', type='float', value=5e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            #dict(name='sweepDuration', type='float', value=4e-3, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            #dict(name='retraceDuration', type='float', value=1e-3, suffix='s', siPrefix=True, bounds=[0., None], step=1e-3),
+            #dict(name='nScans', type='int', value=100, bounds=[1, None]),
+            #dict(name='endTime', type='float', value=5.5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2, readonly=True),
+        #])
+        #self.params.ctrl = self        
+        #self.roi = pg.LineSegmentROI([[0.0, 0.0], [self.params['length'], self.params['length']]])
+ ##       print dir(self.roi)
+        #self.params.sigTreeStateChanged.connect(self.update)
+        #self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
+        
+    #def getGraphicsItems(self):
+        #return [self.roi]
+
+    #def isActive(self):
+        #return self.params.value()
+
+    #def setVisible(self, vis):
+        #if vis:
+            #self.roi.setOpacity(1.0)  ## have to hide this way since we still want the children to be visible
+            #for h in self.roi.handles:
+                #h['item'].setOpacity(1.0)
+        #else:
+            #self.roi.setOpacity(0.0)
+            #for h in self.roi.handles:
+                #h['item'].setOpacity(0.0)
+        
+    #def parameters(self):
+        #return self.params
+    
+    #def update(self):
+        #self.params['endTime'] = self.params['startTime']+self.params['nScans']*(self.params['sweepDuration'] + self.params['retraceDuration'])
+        #self.setVisible(self.params.value())
+            
+    #def updateFromROI(self):
+        #p =self.roi.listPoints()
+        #dist = (pg.Point(p[0])-pg.Point(p[1])).length()
+        #self.params['length'] = dist
+        
+    #def generateTask(self):
+        #points = self.roi.listPoints() # in local coordinates local to roi.
+        #points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
+        #return {'type': 'lineScan', 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 'sweepDuration': self.params['sweepDuration'], 
+                #'endTime': self.params['endTime'], 'retraceDuration': self.params['retraceDuration'], 'nScans': self.params['nScans']}
+
+
+class MultiLineScanROI(pg.PolyLineROI):
+    """ custom class over ROI polyline to allow alternate coloring of different segments
+    """
+    def addSegment(self, *args, **kwds):
+        pg.PolyLineROI.addSegment(self, *args, **kwds)
+        self.recolor()
+    
+    def removeSegment(self, *args, **kwds):
+        pg.PolyLineROI.removeSegment(self, *args, **kwds)
+        self.recolor()
+    
+    def recolor(self):
+        for i, s in enumerate(self.segments):
+            if i % 2 == 0:
+                s.setPen(self.pen)
+            else:
+                s.setPen(pg.mkPen([75, 200, 75]))
+
+
+class LineScanControl(QtCore.QObject):
+    
+    sigStateChanged = QtCore.Signal(object)
+    
+    def __init__(self):
+        QtCore.QObject.__init__(self)
+        self.name = 'multipleLineScan'
+        ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
+        
+        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
+            dict(name='Length', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='startTime', type='float', value=5e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='sweepSpeed', type='float', value=1e-6, suffix='m/ms', siPrefix=True, bounds=[1e-8, None], minStep=5e-7, step=0.5, dec=True),
+            dict(name='interSweepSpeed', type='float', value=5e-6, suffix='m/ms', siPrefix=True, bounds=[1e-8, None], minStep=5e-7, step=0.5, dec=True),
+            dict(name='nScans', type='int', value=100, bounds=[1, None]),
+            dict(name='endTime', type='float', value=5.5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2, readonly=True),
+        ])
+        self.params.ctrl = self        
+        self.roi = MultiLineScanROI([[0.0, 0.0], [self.params['Length'], self.params['Length']]])
+        self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
+        self.params.sigTreeStateChanged.connect(self.update)
+        
+    def getGraphicsItems(self):
+        return [self.roi]
+
+    def isActive(self):
+        return self.params.value()
+    
+    def setVisible(self, vis):
+        if vis:
+            self.roi.setOpacity(1.0)  ## have to hide this way since we still want the children to be visible
+            for h in self.roi.handles:
+                h['item'].setOpacity(1.0)
+        else:
+            self.roi.setOpacity(0.0)
+            for h in self.roi.handles:
+                h['item'].setOpacity(0.0)
+                
+    def parameters(self):
+        return self.params
+    
+    def update(self):
+        pts = self.roi.listPoints()
+        scanTime = 0.
+        interScanFlag = False
+        for k in xrange(len(pts)): # loop through the list of points
+            k2 = k + 1
+            if k2 > len(pts)-1:
+                k2 = 0
+            dist = (pts[k]-pts[k2]).length()
+            if interScanFlag is False:
+                scanTime += dist/(self.params['sweepSpeed']*1000.)
+            else:
+                scanTime += dist/(self.params['interSweepSpeed']*1000.)
+            interScanFlag = not interScanFlag
+        self.params['endTime'] = self.params['startTime']+(self.params['nScans']*scanTime)
+        self.setVisible(self.params.value())
+    
+    def updateFromROI(self):
+        self.update()
+    #p =self.roi.listPoints()
+        #dist = (pg.Point(p[0])-pg.Point(p[1])).length()
+        #self.params['length'] = dist
+        
+    def generateTask(self):
+        points=self.roi.listPoints() # in local coordinates local to roi.
+        points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
+        points = [(p.x(), p.y()) for p in points]   ## make sure we can write this data to HDF5 eventually..
+        return {'type': 'multipleLineScan', 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 'sweepSpeed': self.params['sweepSpeed'], 
+                'endTime': self.params['endTime'], 'interSweepSpeed': self.params['interSweepSpeed'], 'nScans': self.params['nScans']}
+                

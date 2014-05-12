@@ -1,9 +1,14 @@
 # -*- coding: utf-8 -*-
 import numpy as np
-import acq4.pyqtgraph as pg
-from acq4.util.HelpfulException import HelpfulException
 from collections import OrderedDict
 import importlib
+
+import acq4.pyqtgraph as pg
+from acq4.util.HelpfulException import HelpfulException
+import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
+from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
+from acq4.pyqtgraph import QtGui, QtCore
+
 
 # Keep track of all available scan program components
 COMPONENTS = OrderedDict()
@@ -23,7 +28,7 @@ class ScanProgram:
     ScanProgram encapsulates one or more laser scanning operations that are
     executed in sequence. 
     
-    It provides the foillowing services:
+    It provides the following services:
     
     * GUI for generating task commands and interactive representation of 
       command in camera module
@@ -35,14 +40,86 @@ class ScanProgram:
     Note that most of the functionality of ScanProgram is provided through 
     subclasses of ScanProgramComponent.
     """
-    def __init__(self, dev, command):
+    def __init__(self, dev):
         self.dev = dev
-        self.cmd = command 
+        self.components = []
+        self.canvas = None
+        self.ctrlGroup = ScanProgramCtrlGroup()
+        self.ctrlGroup.sigAddNewRequested.connect(self.paramRequestedNewComponent)
+        self.ctrlGroup.sigChildRemoved.connect(self.paramRequestedRemove)
+        
+    def addComponent(self, component):
+        """
+        Add a new component to this program. May specify either a 
+        ScanProgramComponent instance or a string indicating the type of a new
+        component to create.
+        """
+        ## called when "Add Control.." combo is changed
+        if isinstance(component, basestring):
+            component = COMPONENTS[component](self)
+        
+        self.components.append(component)
+        self.ctrlGroup.addChild(component.ctrlParameter())
+        if self.canvas is not None:
+            for item in component.graphicsItems():
+                self.canvas.addItem(item, None, [1, 1], 1000)
+
+    def removeComponent(self, component):
+        """
+        Remove a component from this program.
+        """
+        self.components.remove(component)
+        self.clearGraphicsItems(component)
+        
+    def ctrlParameter(self):
+        """
+        Return the control Parameter for this scan program. 
+        This object may be displayed on a ParameterTree to provide the user
+        control over the design of the program.
+        """
+        return self.ctrlGroup
+
+
+    def setCanvas(self, canvas):
+        """
+        Set the canvas into which this scan program should add information
+        about the layout of its components. The canvas must be any object
+        with an `addItem(QGraphicsItem)` method, such as pyqtgraph.ViewBox.
+        """
+        self.canvas = canvas
+        if canvas is None:
+            self.clearGraphicsItems()
+        else:
+            for c in self.components:
+                for i in c.graphicsItems():
+                    c.addItem(i)
+
+    def generateTask(self):
+        """
+        Return the list of component task commands. This is intended to be used
+        as the value to the 'program' key in a Scanner task command. 
+        """
+        task = []
+        for component in self.components:
+            if component.isActive():
+                task.append(component.generateTask())
+        return task
+
+    def clearGraphicsItems(self, component=None):
+        if component is None:
+            comps = self.components
+        else:
+            comps = [component]
+        for c in comps:
+            for i in c.graphicsItems():
+                if i.scene() is not None:
+                    i.scene().removeItem(i)
 
     def mapToScanner(self, x, y):
         return self.dev.mapToScanner(x, y, self.cmd['laser'])
     
-    def generate(self):
+    @classmethod
+    def generateVoltageArray(cls, dev, command):
         """LASER LOGO
         Turn a list of movement commands into arrays of x and y values.
         prg looks like:
@@ -61,12 +138,11 @@ class ScanProgram:
           - circle
           - spiral
         """
-        command = self.cmd
         dt = command['duration'] / command['numPts']
         arr = np.zeros((2, command['numPts']))        
         cmds = command['program']
         lastPos = None     
-        lastValue = np.array(self.dev.getVoltage())
+        lastValue = np.array(dev.getVoltage())
         lastStopInd = 0
         for i in range(len(cmds)):
             cmd = cmds[i]
@@ -83,8 +159,8 @@ class ScanProgram:
             if cmd['type'] not in COMPONENTS:
                 raise Exception('No registered scan component class named "%s".' % cmd['type'])
             
-            component = COMPONENTS[cmd['type']](self, cmd)
-            compStopInd = component.generateVoltageArray(arr)
+            component = COMPONENTS[cmd['type']]
+            compStopInd = component.generateVoltageArray(arr, dev, cmd, startInd, stopInd)
             
             assert compStopInd <= stopInd
             stopInd = compStopInd
@@ -96,3 +172,36 @@ class ScanProgram:
         arr[:,lastStopInd:] = lastValue[:,np.newaxis]
         
         return arr
+    
+    def close(self):
+        self.clearGraphicsItems()
+
+    def paramRequestedNewComponent(self, param, itemType):
+        self.addComponent(itemType)
+
+    def paramRequestedRemove(self, parent, param):
+        self.removeComponent(param.component())
+
+
+
+class ScanProgramCtrlGroup(pTypes.GroupParameter):
+    """
+    Parameter tree used for generating ScanProgram
+    
+    """
+    sigAddNewRequested = QtCore.Signal(object, object)
+    
+    def __init__(self):
+        opts = {
+            'name': 'Program Controls',
+            'type': 'group',
+            'addText': "Add Control..",
+            'addList': COMPONENTS.keys(),
+            'autoIncrementName': True,
+        }
+        pTypes.GroupParameter.__init__(self, **opts)
+    
+    def addNew(self, typ):
+        self.sigAddNewRequested.emit(self, typ)
+
+

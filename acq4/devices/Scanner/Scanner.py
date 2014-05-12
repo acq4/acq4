@@ -459,8 +459,7 @@ class ScannerTask(DeviceTask):
         self.cmd['yCommand'][~mask] = offPos[1]
         
     def generateProgramArrays(self, command):
-        generator = ScanProgram(self.dev, command)
-        arr = generator.generate()
+        arr = ScanProgram.generateVoltageArray(self.dev, command)
         self.cmd['xCommand'] = arr[0] ## arrays of voltage values
         self.cmd['yCommand'] = arr[1]
 

@@ -1,7 +1,10 @@
+import weakref
 import numpy as np
 import acq4.pyqtgraph as pg
+from acq4.pyqtgraph import QtGui, QtCore
+import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
+from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 from .component import ScanProgramComponent
-
 
 class RectScanComponent(ScanProgramComponent):
     """
@@ -9,22 +12,44 @@ class RectScanComponent(ScanProgramComponent):
     """
     name = 'rect'
     
-    def __init__(self):
-        self.SUF = SUFA.ScannerUtilities()
-        self.SUF.setScannerDev(self.dev)
+    def __init__(self, cmd=None, scanProgram=None):
+        ScanProgramComponent.__init__(self, cmd, scanProgram)
+        self.ctrl = RectScanControl(self)
 
-    def generateVoltageArray(self, array, startInd, stopInd):
+    def ctrlParameter(self):
+        """
+        The Parameter (see acq4.pyqtgraph.parametertree) set used to allow the 
+        user to define this component.        
+        """
+        return self.ctrl.parameters()
+    
+    def graphicsItems(self):
+        """
+        A list of GraphicsItems to be displayed in a camera module or image
+        analysis module. These show the location and shape of the scan 
+        component, and optionally offer user interactivity to define the shape.
+        """
+        return self.ctrl.getGraphicsItems()
+
+    def generateTask(self):
+        return self.ctrl.generateTask()
+
+    @classmethod
+    def generateVoltageArray(cls, array, dev, cmd, startInd, stopInd):
         pts = cmd['points']
         # print 'cmd: ', cmd
-        self.SUF.setLaserDev(self.cmd['laser'])
+        SUF = ScanUtilityFuncs()
+        SUF.setScannerDev(dev)
+        SUF.setLaserDev(cmd['laser'])
+        
         width  = (pts[1] -pts[0]).length() # width is x in M
         height = (pts[2]- pts[0]).length() # heigh in M
         rect = [pts[0][0], pts[0][1], width, height]
         overScanPct = cmd['overScan']
-        self.SUF.setRectRoi(pts)
-        self.SUF.setOverScan(overScanPct)
-        self.SUF.setDownSample(1)
-        self.SUF.setBidirectional(True)
+        SUF.setRectRoi(pts)
+        SUF.setOverScan(overScanPct)
+        SUF.setDownSample(1)
+        SUF.setBidirectional(True)
         pixelSize = cmd['pixelSize']
         # recalulate pixelSize based on:
         # number of scans (reps) and total duration
@@ -32,13 +57,13 @@ class RectScanComponent(ScanProgramComponent):
         dur = cmd['duration']#  - cmd['startTime'] # time for nscans
         durPerScan = dur/nscans # time for one scan
         printParameters = False
-        self.SUF.setPixelSize(cmd['pixelSize']) # pixelSize/np.sqrt(pixsf)) # adjust the pixel size
-        self.SUF.setSampleRate(1./dt) # actually this is not used... 
-        (x,y) = self.SUF.designRectScan() # makes one rectangle
-        effScanTime = (self.SUF.getPixelsPerRow()/pixelSize)*(height/pixelSize)*dt # time it actually takes for one scan 
+        SUF.setPixelSize(cmd['pixelSize']) # pixelSize/np.sqrt(pixsf)) # adjust the pixel size
+        SUF.setSampleRate(1./dt) # actually this is not used... 
+        (x,y) = SUF.designRectScan() # makes one rectangle
+        effScanTime = (SUF.getPixelsPerRow()/pixelSize)*(height/pixelSize)*dt # time it actually takes for one scan 
         pixsf = durPerScan/effScanTime # correction for pixel size based pm to,e
 
-        cmd['imageSize'] = (self.SUF.getPixelsPerRow(), self.SUF.getnPointsY())
+        cmd['imageSize'] = (SUF.getPixelsPerRow(), SUF.getnPointsY())
 
         if printParameters:
             print 'scans: ', nscans
@@ -51,23 +76,95 @@ class RectScanComponent(ScanProgramComponent):
             print 'original: ', pixelSize
             print 'new pix size: ', pixelSize*pixsf
         
-        n = self.SUF.getnPointsY() # get number of rows
-        m = self.SUF.getPixelsPerRow() # get nnumber of points per row
+        n = SUF.getnPointsY() # get number of rows
+        m = SUF.getPixelsPerRow() # get nnumber of points per row
 
         ## Build array with scanner voltages for rect repeated once per scan
         for i in range(cmd['nScans']):
             thisStart = startInd+i*n*m
-            arr[0, thisStart:thisStart + len(x)] = x
-            arr[1, thisStart:thisStart + len(y)] = y
-        arr[0, startInd+n*m*cmd['nScans']:stopInd] = arr[0, startInd+n*m*cmd['nScans'] -1] # fill in any unused sample on this scan section
-        arr[1, startInd+n*m*cmd['nScans']:stopInd] = arr[1, startInd+n*m*cmd['nScans'] -1]
+            array[0, thisStart:thisStart + len(x)] = x
+            array[1, thisStart:thisStart + len(y)] = y
+        array[0, startInd+n*m*cmd['nScans']:stopInd] = array[0, startInd+n*m*cmd['nScans'] -1] # fill in any unused sample on this scan section
+        array[1, startInd+n*m*cmd['nScans']:stopInd] = array[1, startInd+n*m*cmd['nScans'] -1]
         lastPos = (x[-1], y[-1])
             
             
         # A side-effect modification of the 'command' dict so that analysis can access
         # this information later
-        cmd['scanParameters'] = self.SUF.packScannerParams()
-        cmd['scanInfo'] = self.SUF.getScanInfo()
+        cmd['scanParameters'] = SUF.packScannerParams()
+        cmd['scanInfo'] = SUF.getScanInfo()
+
+
+
+class RectScanControl(QtCore.QObject):
+    
+    sigStateChanged = QtCore.Signal(object)
+    
+    def __init__(self, component):
+        QtCore.QObject.__init__(self)
+        ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
+        self.name = component.name
+        self.params = pTypes.SimpleParameter(name=component.name, type='bool', value=True, removable=True, renamable=True, children=[
+            dict(name='width', type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='height', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='overScan', type='float', value=70., suffix='%', siPrefix=False, bounds=[0, 200.], step = 1),
+            dict(name='pixelSize', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[2e-7, None], step=2e-7),
+            dict(name='startTime', type='float', value=1e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='duration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='nScans', type='int', value=10, bounds=[1, None]),
+        ], autoIncrementName=True)
+        self.params.component = weakref.ref(component)
+        self.roi = pg.ROI(size=[self.params['width'], self.params['height']], pos=[0.0, 0.0])
+        self.roi.addScaleHandle([1,1], [0.5, 0.5])
+        self.roi.addRotateHandle([0,0], [0.5, 0.5])
+        self.params.sigTreeStateChanged.connect(self.update)
+        self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
+        
+    def getGraphicsItems(self):
+        return [self.roi]
+
+    def isActive(self):
+        return self.params.value()
+ 
+    def setVisible(self, vis):
+        if vis:
+            self.roi.setOpacity(1.0)  ## have to hide this way since we still want the children to be visible
+            for h in self.roi.handles:
+                h['item'].setOpacity(1.0)
+        else:
+            self.roi.setOpacity(0.0)
+            for h in self.roi.handles:
+                h['item'].setOpacity(0.0)
+                
+    def parameters(self):
+        return self.params
+
+    def update(self):
+        self.setVisible(self.params.value())
+    
+    def updateFromROI(self):
+        """ read the ROI rectangle width and height and repost
+        in the parameter tree """
+        state = self.roi.getState()
+        w, h = state['size']
+        self.params['width'] = w
+        self.params['height'] = h
+        
+    def generateTask(self):
+        state = self.roi.getState()
+        w, h = state['size']
+        p0 = pg.Point(0,0)
+        p1 = pg.Point(w,0)
+        p2 = pg.Point(0, h)
+        points = [p0, p1, p2]
+        points = [pg.Point(self.roi.mapToView(p)) for p in points] # convert to view points (as needed for scanner)
+        return {'type': self.name, 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 
+                'endTime': self.params['duration']+self.params['startTime'], 'duration': self.params['duration'],
+                'nScans': self.params['nScans'],
+                'pixelSize': self.params['pixelSize'], 'overScan': self.params['overScan'],
+                }
+        
+
 
 
 
