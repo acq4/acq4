@@ -75,7 +75,7 @@ class ScannerTaskGui(TaskGui):
         if 'defaultLaser' in self.dev.config:
             defLaser = self.dev.config['defaultLaser']
             
-        daqDev = dev.getDAQName()
+        daqDev = dev.getDaqName()
         self.daqUI = taskRunner.getDevice(daqDev)
         self.daqChanged(self.daqUI.currentState())
         self.daqUI.sigChanged.connect(self.daqChanged)
@@ -174,8 +174,8 @@ class ScannerTaskGui(TaskGui):
         
     def daqChanged(self, state):
         # Something changed in DAQ; check that we have the correct sample rate
-        for ctrl in self.programControls:
-            ctrl.setSampleRate(state['rate'], state['downsampling'])
+        for ctrl in self.programCtrls:
+            ctrl.setSampleRate(state['rate'], state['downsample'])
         
     def getLaser(self):
         return self.ui.laserCombo.currentText()
@@ -376,7 +376,7 @@ class ScannerTaskGui(TaskGui):
         state = {}
         ctrl = cls(**state)
         daqState = self.daqUI.currentState()
-        ctrl.setSampleRate(daqState['rate'], daqState['downsampling'])
+        ctrl.setSampleRate(daqState['rate'], daqState['downsample'])
         self.programCtrlGroup.addChild(ctrl.parameters())
         self.programCtrls.append(ctrl)
         camMod = self.cameraModule()
@@ -1137,8 +1137,9 @@ class ProgramRectScan(QtCore.QObject):
             dict(name='startTime', type='float', value=1e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='nScans', type='int', value=10, bounds=[1, None]),
             dict(name='duration', type='float', readonly=True, value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
-            dict(name='dwell time/um', type='float', readonly=True, suffix='s', siPrefix=True), 
-            dict(name='exposure time/um', type='float', readonly=True, suffix='s', siPrefix=True), 
+            dict(name='imageSize', type='str', readonly=True),
+            dict(name='frameExp', title=u'frame exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True), 
+            dict(name='totalExp', title=u'total exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True), 
         ])
         self.params.ctrl = self
         self.roi = pg.ROI(size=[self.params['width'], self.params['height']], pos=[0.0, 0.0])
@@ -1175,19 +1176,20 @@ class ProgramRectScan(QtCore.QObject):
         self.setVisible(self.params.value())
         
         # TODO: this should be calculated by the same code that is used to generate the voltage array
-        w = self.params['width'] * self.params['overscan']
+        w = self.params['width'] * (1.0 + self.params['overScan']/100.)
         h = self.params['height']
         pxSize = self.params['pixelSize']
         imgSize = (int(w / pxSize) + 1, int(h / pxSize) + 1) 
-        samples = imgSize[0] * imgSize[1] * self.downsampling
+        self.params['imageSize'] = str(imgSize)
         
+        samples = imgSize[0] * imgSize[1] * self.downsampling
         duration = samples / self.sampleRate
         self.params['duration'] = duration
         
-        samplesPerUm2 = self.downsampling / pxSize**2
+        samplesPerUm2 = 1e-12 * self.downsampling / pxSize**2
         frameExp = samplesPerUm2 / self.sampleRate
-        self.params['frame exposure/um^2'] = frameExp
-        self.params['total exposure/um^2'] = frameExp * self.params['nScans']
+        self.params['frameExp'] = frameExp
+        self.params['totalExp'] = frameExp * self.params['nScans']
     
     def updateFromROI(self):
         """ read the ROI rectangle width and height and repost
