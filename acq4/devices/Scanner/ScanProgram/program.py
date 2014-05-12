@@ -115,6 +115,10 @@ class ScanProgram:
                 if i.scene() is not None:
                     i.scene().removeItem(i)
 
+    def setSampleRate(self, rate, downsample):
+        for c in self.components:
+            c.setSampleRate(rate, downsample)
+
     def mapToScanner(self, x, y):
         return self.dev.mapToScanner(x, y, self.cmd['laser'])
     

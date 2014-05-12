@@ -22,8 +22,13 @@ class ScanProgramComponent:
     def __init__(self, scanProgram=None, cmd=None):
         self.params = None
         self.cmd = cmd
+        self.sampleRate = 1000
+        self.downsample = 1
         self.program = weakref.ref(scanProgram)
-        self.dt = None
+
+    def setSampleRate(self, rate, downsample):
+        self.sampleRate = rate
+        self.downsample = downsample
 
     def isActive(self):
         """

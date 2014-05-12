@@ -69,8 +69,6 @@ class ScannerTaskGui(TaskGui):
             
         daqDev = dev.getDaqName()
         self.daqUI = taskRunner.getDevice(daqDev)
-        self.daqChanged(self.daqUI.currentState())
-        self.daqUI.sigChanged.connect(self.daqChanged)
 
         self.ui.cameraCombo.setTypes(['cameraModule'])
         self.ui.laserCombo.setTypes(['laser'])
@@ -132,6 +130,10 @@ class ScannerTaskGui(TaskGui):
         if 'offVoltage' not in self.dev.config: ## we don't have a voltage for virtual shuttering
             self.ui.simulateShutterCheck.setChecked(False)
             self.ui.simulateShutterCheck.setEnabled(False)
+
+        self.daqChanged(self.daqUI.currentState())
+        self.daqUI.sigChanged.connect(self.daqChanged)
+
             
     def setHaveCalibration(self, have):
         self.haveCalibration = have

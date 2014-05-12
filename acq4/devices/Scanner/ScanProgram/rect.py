@@ -1,3 +1,5 @@
+# -*- coding: utf8 -*-
+
 import weakref
 import numpy as np
 import acq4.pyqtgraph as pg
@@ -15,6 +17,10 @@ class RectScanComponent(ScanProgramComponent):
     def __init__(self, cmd=None, scanProgram=None):
         ScanProgramComponent.__init__(self, cmd, scanProgram)
         self.ctrl = RectScanControl(self)
+        
+    def setSampleRate(self, rate, downsample):
+        ScanProgramComponent.setSampleRate(rate, downsample)
+        self.ctrl.update()
 
     def ctrlParameter(self):
         """
@@ -130,6 +136,7 @@ class RectScanControl(QtCore.QObject):
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         self.name = component.name
         self.blockUpdate = False
+        self.component = weakref.ref(component)
         
         self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
             dict(name='width', readonly=True, type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
@@ -144,13 +151,13 @@ class RectScanControl(QtCore.QObject):
             dict(name='frameExp', title=u'frame exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True), 
             dict(name='totalExp', title=u'total exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True),
         ])
-        self.params.component = weakref.ref(component)
+        self.params.component = self.component
         
         self.roi = RectScanROI(size=[self.params['width'], self.params['height']], pos=[0.0, 0.0])
         self.roi.setOverScan(self.params['overScan'])
 
-        self.params.sigTreeStateChanged.connect(self.update)
-        self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
+        self.params.sigTreeStateChanged.connect(self.paramsChanged)
+        self.roi.sigRegionChangeFinished.connect(self.roiChanged)
         
     def getGraphicsItems(self):
         return [self.roi]
@@ -171,17 +178,21 @@ class RectScanControl(QtCore.QObject):
     def parameters(self):
         return self.params
 
-    def update(self, *args):
+    def paramsChanged(self, param, changes):
+        self.update(changed=[changes[0][0].name()])
+        
+    def update(self, changed=()):
+        # Update all parameters to ensure consistency. 
+        # *changed* may be a list of parameter names that have changed;
+        # these will be kept constant during the update, if possible.
+        
         if self.blockUpdate:
             return
 
         try:
             self.blockUpdate = True
-            changed = None
-            if len(args) > 1:
-                changed = args[1][0][0].name() # name of parameter that was modified
 
-            if changed == 'overScan':
+            if 'overScan' in changed:
                 self.roi.setOverScan(self.params['overScan'])
 
             self.setVisible(self.params.value())
@@ -191,11 +202,14 @@ class RectScanControl(QtCore.QObject):
 
             w = self.params['width'] * (1.0 + self.params['overScan']/100.)
             h = self.params['height']
-            if changed == 'duration':
+            sampleRate = float(self.component().sampleRate)
+            downsample = self.component().downsample
+            
+            if 'duration' in changed:
                 # Set pixelSize to match duration
                 duration = self.params['duration']
-                maxSamples = int(duration * self.sampleRate)
-                maxPixels = maxSamples / self.downsampling
+                maxSamples = int(duration * sampleRate)
+                maxPixels = maxSamples / downsample
                 ar = w / h
                 pxHeight = int((maxPixels / ar)**0.5)
                 pxWidth = int(ar * pxHeight)
@@ -206,19 +220,19 @@ class RectScanControl(QtCore.QObject):
                 # set duration to match pixelSize
                 pxSize = self.params['pixelSize']
                 imgSize = (int(w / pxSize) + 1, int(h / pxSize) + 1) 
-                samples = imgSize[0] * imgSize[1] * self.downsampling
-                duration = samples / self.sampleRate
+                samples = imgSize[0] * imgSize[1] * downsample
+                duration = samples / sampleRate
                 self.params['duration'] = duration
 
             # Set read-only parameters:
 
             self.params['imageSize'] = str(imgSize)
             
-            speed = w / (imgSize[0] * self.downsampling / self.sampleRate)
+            speed = w / (imgSize[0] * downsample / sampleRate)
             self.params['scanSpeed'] = speed * 1e-3
 
-            samplesPerUm2 = 1e-12 * self.downsampling / pxSize**2
-            frameExp = samplesPerUm2 / self.sampleRate
+            samplesPerUm2 = 1e-12 * downsample / pxSize**2
+            frameExp = samplesPerUm2 / sampleRate
             totalExp = frameExp * self.params['nScans']
             self.params['frameExp'] = frameExp
             self.params['totalExp'] = totalExp
@@ -227,7 +241,7 @@ class RectScanControl(QtCore.QObject):
             self.blockUpdate = False
 
     
-    def updateFromROI(self):
+    def roiChanged(self):
         """ read the ROI rectangle width and height and repost
         in the parameter tree """
         state = self.roi.getState()
