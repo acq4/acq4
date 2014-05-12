@@ -74,6 +74,11 @@ class ScannerTaskGui(TaskGui):
         defLaser = None
         if 'defaultLaser' in self.dev.config:
             defLaser = self.dev.config['defaultLaser']
+            
+        daqDev = dev.getDAQName()
+        self.daqUI = taskRunner.getDevice(daqDev)
+        self.daqChanged(self.daqUI.currentState())
+        self.daqUI.sigChanged.connect(self.daqChanged)
 
         self.ui.cameraCombo.setTypes(['cameraModule'])
         self.ui.laserCombo.setTypes(['laser'])
@@ -166,6 +171,11 @@ class ScannerTaskGui(TaskGui):
         camMod.ui.addItem(self.spotMarker, None, [1,1], 1010)
         
         self.opticStateChanged()
+        
+    def daqChanged(self, state):
+        # Something changed in DAQ; check that we have the correct sample rate
+        for ctrl in self.programControls:
+            ctrl.setSampleRate(state['rate'], state['downsampling'])
         
     def getLaser(self):
         return self.ui.laserCombo.currentText()
@@ -365,6 +375,8 @@ class ScannerTaskGui(TaskGui):
                'rectangleScan': ProgramRectScan}[itemType]
         state = {}
         ctrl = cls(**state)
+        daqState = self.daqUI.currentState()
+        ctrl.setSampleRate(daqState['rate'], daqState['downsampling'])
         self.programCtrlGroup.addChild(ctrl.parameters())
         self.programCtrls.append(ctrl)
         camMod = self.cameraModule()
@@ -950,7 +962,8 @@ class ProgramLineScan(QtCore.QObject):
         QtCore.QObject.__init__(self)
         self.name = 'lineScan'
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
-        
+        self.sampleRate = 10000
+        self.downsampling = 1
         self.params = pTypes.SimpleParameter(name=self.name, autoIncrementName = True, type='bool', value=True, removable=True, renamable=True, children=[
             dict(name='length', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='startTime', type='float', value=5e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
@@ -964,6 +977,11 @@ class ProgramLineScan(QtCore.QObject):
  #       print dir(self.roi)
         self.params.sigTreeStateChanged.connect(self.update)
         self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
+        
+    def setSampleRate(self, rate, ds):
+        self.sampleRate = rate
+        self.downsampling = ds
+        self.update()
         
     def getGraphicsItems(self):
         return [self.roi]
@@ -1026,6 +1044,9 @@ class ProgramMultipleLineScan(QtCore.QObject):
     def __init__(self):
         QtCore.QObject.__init__(self)
         self.name = 'multipleLineScan'
+        self.sampleRate = 10000
+        self.downsampling = 1
+        
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         
         self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
@@ -1040,6 +1061,12 @@ class ProgramMultipleLineScan(QtCore.QObject):
         self.roi = MultiLineScanROI([[0.0, 0.0], [self.params['Length'], self.params['Length']]])
         self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
         self.params.sigTreeStateChanged.connect(self.update)
+        
+        
+    def setSampleRate(self, rate, ds):
+        self.sampleRate = rate
+        self.downsampling = ds
+        self.update()
         
     def getGraphicsItems(self):
         return [self.roi]
@@ -1098,6 +1125,8 @@ class ProgramRectScan(QtCore.QObject):
     def __init__(self):
         QtCore.QObject.__init__(self)
         self.name = 'rectScan'
+        self.sampleRate = 10000
+        self.downsampling = 1
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         
         self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
@@ -1106,8 +1135,10 @@ class ProgramRectScan(QtCore.QObject):
             dict(name='overScan', type='float', value=70., suffix='%', siPrefix=False, bounds=[0, 200.], step = 1),
             dict(name='pixelSize', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[2e-7, None], step=2e-7),
             dict(name='startTime', type='float', value=1e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
-            dict(name='duration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='nScans', type='int', value=10, bounds=[1, None]),
+            dict(name='duration', type='float', readonly=True, value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='dwell time/um', type='float', readonly=True, suffix='s', siPrefix=True), 
+            dict(name='exposure time/um', type='float', readonly=True, suffix='s', siPrefix=True), 
         ])
         self.params.ctrl = self
         self.roi = pg.ROI(size=[self.params['width'], self.params['height']], pos=[0.0, 0.0])
@@ -1115,6 +1146,11 @@ class ProgramRectScan(QtCore.QObject):
         self.roi.addRotateHandle([0,0], [0.5, 0.5])
         self.params.sigTreeStateChanged.connect(self.update)
         self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
+        
+    def setSampleRate(self, rate, ds):
+        self.sampleRate = rate
+        self.downsampling = ds
+        self.update()
         
     def getGraphicsItems(self):
         return [self.roi]
@@ -1137,6 +1173,21 @@ class ProgramRectScan(QtCore.QObject):
 
     def update(self):
         self.setVisible(self.params.value())
+        
+        # TODO: this should be calculated by the same code that is used to generate the voltage array
+        w = self.params['width'] * self.params['overscan']
+        h = self.params['height']
+        pxSize = self.params['pixelSize']
+        imgSize = (int(w / pxSize) + 1, int(h / pxSize) + 1) 
+        samples = imgSize[0] * imgSize[1] * self.downsampling
+        
+        duration = samples / self.sampleRate
+        self.params['duration'] = duration
+        
+        samplesPerUm2 = self.downsampling / pxSize**2
+        frameExp = samplesPerUm2 / self.sampleRate
+        self.params['frame exposure/um^2'] = frameExp
+        self.params['total exposure/um^2'] = frameExp * self.params['nScans']
     
     def updateFromROI(self):
         """ read the ROI rectangle width and height and repost
