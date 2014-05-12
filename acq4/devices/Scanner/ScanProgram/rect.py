@@ -96,6 +96,30 @@ class RectScanComponent(ScanProgramComponent):
 
         return stopInd
 
+class RectScanROI(pg.ROI):
+    def __init__(self, size, pos):
+        pg.ROI.__init__(self, size=size, pos=pos)
+        self.addScaleHandle([1,1], [0.5, 0.5])
+        self.addRotateHandle([0,0], [0.5, 0.5])
+        self.overScan = 0
+
+    def setOverScan(self, os):
+        self.overScan = os
+        self.prepareGeometryChange()
+        self.update()
+
+    def boundingRect(self):
+        br = pg.ROI.boundingRect(self)
+        os = br.width() * 0.5 * self.overScan/100.
+        return br.adjusted(-os, 0, os, 0)
+
+    def paint(self, p, *args):
+        p.setPen(pg.mkPen(0.3))
+        p.drawRect(self.boundingRect())
+        pg.ROI.paint(self, p, *args)
+
+
+
 
 class RectScanControl(QtCore.QObject):
     
@@ -105,19 +129,26 @@ class RectScanControl(QtCore.QObject):
         QtCore.QObject.__init__(self)
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         self.name = component.name
-        self.params = pTypes.SimpleParameter(name=component.name, type='bool', value=True, removable=True, renamable=True, children=[
-            dict(name='width', type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
-            dict(name='height', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+        self.blockUpdate = False
+        
+        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
+            dict(name='width', readonly=True, type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='height', readonly=True, type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='overScan', type='float', value=70., suffix='%', siPrefix=False, bounds=[0, 200.], step = 1),
             dict(name='pixelSize', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[2e-7, None], step=2e-7),
             dict(name='startTime', type='float', value=1e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
-            dict(name='duration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='nScans', type='int', value=10, bounds=[1, None]),
-        ], autoIncrementName=True)
+            dict(name='duration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='imageSize', type='str', readonly=True),
+            dict(name='scanSpeed', type='float', readonly=True, suffix='m/ms', siPrefix=True), 
+            dict(name='frameExp', title=u'frame exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True), 
+            dict(name='totalExp', title=u'total exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True),
+        ])
         self.params.component = weakref.ref(component)
-        self.roi = pg.ROI(size=[self.params['width'], self.params['height']], pos=[0.0, 0.0])
-        self.roi.addScaleHandle([1,1], [0.5, 0.5])
-        self.roi.addRotateHandle([0,0], [0.5, 0.5])
+        
+        self.roi = RectScanROI(size=[self.params['width'], self.params['height']], pos=[0.0, 0.0])
+        self.roi.setOverScan(self.params['overScan'])
+
         self.params.sigTreeStateChanged.connect(self.update)
         self.roi.sigRegionChangeFinished.connect(self.updateFromROI)
         
@@ -140,8 +171,61 @@ class RectScanControl(QtCore.QObject):
     def parameters(self):
         return self.params
 
-    def update(self):
-        self.setVisible(self.params.value())
+    def update(self, *args):
+        if self.blockUpdate:
+            return
+
+        try:
+            self.blockUpdate = True
+            changed = None
+            if len(args) > 1:
+                changed = args[1][0][0].name() # name of parameter that was modified
+
+            if changed == 'overScan':
+                self.roi.setOverScan(self.params['overScan'])
+
+            self.setVisible(self.params.value())
+            
+            # TODO: this should be calculated by the same code that is used to generate the voltage array
+            # (as currently written, it is unlikely to match the actual output exactly)
+
+            w = self.params['width'] * (1.0 + self.params['overScan']/100.)
+            h = self.params['height']
+            if changed == 'duration':
+                # Set pixelSize to match duration
+                duration = self.params['duration']
+                maxSamples = int(duration * self.sampleRate)
+                maxPixels = maxSamples / self.downsampling
+                ar = w / h
+                pxHeight = int((maxPixels / ar)**0.5)
+                pxWidth = int(ar * pxHeight)
+                imgSize = (pxWidth, pxHeight)
+                pxSize = w / (pxWidth-1)
+                self.params['pixelSize'] = pxSize
+            else:
+                # set duration to match pixelSize
+                pxSize = self.params['pixelSize']
+                imgSize = (int(w / pxSize) + 1, int(h / pxSize) + 1) 
+                samples = imgSize[0] * imgSize[1] * self.downsampling
+                duration = samples / self.sampleRate
+                self.params['duration'] = duration
+
+            # Set read-only parameters:
+
+            self.params['imageSize'] = str(imgSize)
+            
+            speed = w / (imgSize[0] * self.downsampling / self.sampleRate)
+            self.params['scanSpeed'] = speed * 1e-3
+
+            samplesPerUm2 = 1e-12 * self.downsampling / pxSize**2
+            frameExp = samplesPerUm2 / self.sampleRate
+            totalExp = frameExp * self.params['nScans']
+            self.params['frameExp'] = frameExp
+            self.params['totalExp'] = totalExp
+
+        finally:
+            self.blockUpdate = False
+
     
     def updateFromROI(self):
         """ read the ROI rectangle width and height and repost

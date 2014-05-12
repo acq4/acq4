@@ -135,6 +135,12 @@ class Parameter(QtCore.QObject):
         expanded                     If True, the Parameter will appear expanded when
                                      displayed in a ParameterTree (its children will be
                                      visible). (default=True)
+        title                        (str or None) If specified, then the parameter will be 
+                                     displayed to the user using this string as its name. 
+                                     However, the parameter will still be referred to 
+                                     internally using the *name* specified above. Note that
+                                     this option is not compatible with renamable=True.
+                                     (default=None; added in version 0.9.9)
         =======================      =========================================================
         """
         
@@ -150,6 +156,7 @@ class Parameter(QtCore.QObject):
             'removable': False,
             'strictNaming': False,  # forces name to be usable as a python variable
             'expanded': True,
+            'title': None,
             #'limits': None,  ## This is a bad plan--each parameter type may have a different data type for limits.
         }
         self.opts.update(opts)

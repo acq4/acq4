@@ -66,6 +66,11 @@ class ScannerTaskGui(TaskGui):
         defLaser = None
         if 'defaultLaser' in self.dev.config:
             defLaser = self.dev.config['defaultLaser']
+            
+        daqDev = dev.getDaqName()
+        self.daqUI = taskRunner.getDevice(daqDev)
+        self.daqChanged(self.daqUI.currentState())
+        self.daqUI.sigChanged.connect(self.daqChanged)
 
         self.ui.cameraCombo.setTypes(['cameraModule'])
         self.ui.laserCombo.setTypes(['laser'])
@@ -158,6 +163,10 @@ class ScannerTaskGui(TaskGui):
         self.opticStateChanged()
         
         self.scanProgram.setCanvas(camMod.ui)
+
+    def daqChanged(self, state):
+        # Something changed in DAQ; check that we have the correct sample rate
+        self.scanProgram.setSampleRate(state['rate'], state['downsample'])
         
     def getLaser(self):
         return self.ui.laserCombo.currentText()
@@ -907,4 +916,7 @@ class TargetOcclusion(pg.PolygonROI):
         if self.scene() is not None:
             self.scene().removeItem(self)
     
-    
+                
+
+
+
