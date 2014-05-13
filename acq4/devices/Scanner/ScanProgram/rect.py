@@ -267,10 +267,76 @@ class RectScanControl(QtCore.QObject):
 
 
 
-class ScannerUtility:
+
+class RectScan:
+    """
+    Manages the system of equations necessary to define a rectangular scanning area. 
+
+    * Input parameters may be specified in any combination (as long as all DOF are fixed). 
+    * Parameters may be individually locked 
+    * Able to save and reload state information to disk
+
+    Input parameters:
+
+        * 3 corners of the scan area:
+
+            p0______p1
+            |
+            |
+            p2 
+
+            * height / width
+            * overscan (measured in us)
+
+        * Horizontal / vertical sample density
+        * Sample rate
+        * Downsampling
+        * Pixel size
+        * Bidirectional
+        * Total duration
+
+    Output parameters:
+
+        * scan offset, shape, strides  (includes overscan, ignores downsampling)
+        * start position, delta vectors
+        * bidirectionality
+        * position array, voltage array, laser mask array
+
+        * exposure time per um^2
+        * image offset, shape, strides  (excludes overscan, includes downsampling)
+        * image transform
+
+
+    """
+
+class RectScanVideo:
+    """
+    Manages the system of equations necessary to define a sequence of rectangular scans.
+    (note this appears to be a general-case loop)
+
+    Input parameters:
+
+        * # of frames
+        * Frame exposure duration
+        * Inter-frame duration
+        * Frame rate
+        * Total duration
+
+    Output parameters:
+
+        * total exposure time per um^2
+        * position array, voltage array, laser mask array
+        * scan offset, shape, strides
+        * video offset, shape, strides
+        * image transform
+
+
     """
 
 
+
+class ScannerUtility:
+    """
     1. Decombing routine for scanned images. 
     2. Compute scan voltages for a recangular region
     adding an overscan region.
