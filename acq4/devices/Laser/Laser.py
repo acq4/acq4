@@ -458,9 +458,10 @@ class Laser(DAQGeneric, OptomechDevice):
                 #waveform[(i+1)/10.*rate:((i+1)/10.+sTime+mTime)*rate] = 1 ## divide i+1 by 10 to increment by hundreds of milliseconds
             waveform[0.1*rate:-2] = 1
             
+            measureMode = self.measurementMode()
             cmd = {
                 'protocol': {'duration': dur},
-                self.name(): {'switchWaveform':waveform, 'shutterMode':'closed'},
+                self.name(): {'switchWaveform':waveform, 'shutterMode': measureMode['shutter']},
                 powerInd[0]: {powerInd[1]: {'record':True, 'recordInit':False}},
                 daqName: {'numPts': nPts, 'rate': rate}
             }
@@ -480,7 +481,7 @@ class Laser(DAQGeneric, OptomechDevice):
                 raise Exception("No data returned from power indicator")
             laserOn = powerIndTrace[0][0.1*rate:-2].asarray()
             laserOff = powerIndTrace[0][:0.1*rate].asarray()
-            
+
             t, prob = stats.ttest_ind(laserOn, laserOff)
             if prob < 0.01: ### if powerOn is statistically different from powerOff
                 powerOn = laserOn.mean()
@@ -543,7 +544,7 @@ class Laser(DAQGeneric, OptomechDevice):
         with self.variableLock:
             diff = self.params['expectedPower']*self.params['tolerance']/100.0
             expected = self.params['expectedPower']
-        return  abs(power-expected) <= diff
+        return  (not self.getParam('powerAlert')) or (abs(power-expected) <= diff)
             #if self.getParam('powerAlert'):
                 #logMsg("%s power is outside expected range. Please adjust expected value or adjust the tuning of the laser." %self.name(), msgType='error')
         
@@ -616,7 +617,17 @@ class Laser(DAQGeneric, OptomechDevice):
             
         return daqCmd
 
-            
+    def measurementMode(self):
+        """
+        Return mode hints used to automatically generate the task used to measure laser power.
+
+        """
+        default = {
+            'shutter': 'auto'
+            }
+
+        return self.config.get('powerMeasureMode', default)
+
     def testTask(self):
         daqName = self.getDAQName('shutter')
         powerInd = self.config['powerIndicator']['channel']
@@ -627,7 +638,7 @@ class Laser(DAQGeneric, OptomechDevice):
         dur = 0.1 + reps*0.1+(0.001+0.005)
         nPts = int(dur*rate)
        
-        
+        measureMode = self.measurementMode()
         
         ### create a waveform that flashes the QSwitch(or other way of turning on) the number specified by reps
         waveform = np.zeros(nPts, dtype=np.byte)
@@ -636,7 +647,7 @@ class Laser(DAQGeneric, OptomechDevice):
         
         cmd = {
             'protocol': {'duration': dur},
-            self.name(): {'switchWaveform':waveform, 'shutterMode':'closed'},
+            self.name(): {'switchWaveform':waveform, 'shutterMode': 'off'},
             powerInd[0]: {powerInd[1]: {'record':True, 'recordInit':False}},
             daqName: {'numPts': nPts, 'rate': rate}
         }
@@ -644,8 +655,6 @@ class Laser(DAQGeneric, OptomechDevice):
         task = getManager().createTask(cmd)
         task.execute()
         result = task.getResult()
-        
-        print "Got result: ", result
         
 
 
