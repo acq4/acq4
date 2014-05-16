@@ -1,13 +1,16 @@
 # -*- coding: utf8 -*-
 
+from __future__ import division
 import weakref
 import numpy as np
 from collections import OrderedDict
+
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph import QtGui, QtCore
 import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 from .component import ScanProgramComponent
+from acq4.util.StateSolver import StateSolver
 
 class RectScanComponent(ScanProgramComponent):
     """
@@ -268,8 +271,8 @@ class RectScanControl(QtCore.QObject):
 
 
 
-
-class RectScan(object):
+arr = np.ndarray # just to clean up defaultState below..
+class RectScan(StateSolver):
     """
     Manages the system of equations necessary to define a rectangular scanning area. 
 
@@ -313,7 +316,7 @@ class RectScan(object):
           represents which point: scan shape (w, h), scan strides (x, y),
           bidirectionality, and overscan. With these variables one can 
           reconstruct an image from a PMT signal. 
-        * There are 6 degrees of freedom that determine the placement of the 
+        * There are 5 degrees of freedom that determine the placement of the 
           scan rectangle: p0(x,y), width, height, and angle. With these 
           variables, one can place the image into the global coordinate system.
           (For coding simplicity, it may be easier to consider a 6DOF 
@@ -327,35 +330,19 @@ class RectScan(object):
             * maximum / fixed duration
             * maximum / fixed pixel size
     """
-    def __init__(self):
-        self.reset()
-        
-        #self._dof = {
-            #'p0': 2, 'p1': 2, 'p2': 2, 
-            #'density': 2, 'pixelSize': 2,
-            #'scanOffset': 2, 'scanShape': 2, 'scanStrides': 2,
-            #'sampleVectors': 2,
-            #'imageOffset': 2, 'imageShape': 2, 'imageStrides': 2,
-            #}
-    def reset(self):
-        
-        # name: [value, type, constraint, allowed_constraints]
-        #       *value* may always be None if it has not been specified yet.
-        #       *type* may be float, int, bool, np.ndarray
-        #       *constraint* may be None, single value, or (min, max) 
-        #       *allowed_constraints* is a string composed of (n)one, (f)ixed, and (r)ange. 
-        arr = np.ndarray
-        self._vars = OrderedDict([
+    defaultState = OrderedDict([
             ('p0', [None, arr, None, 'f']),
             ('p1', [None, arr, None, 'f']),
             ('p2', [None, arr, None, 'f']),
-            ('width', [None, float, None, 'n']),
+            ('width', [None, float, None, 'n']),  # width of requested scan area, excluding overscan
             ('height', [None, float, None, 'n']),
             #('angle', [None, float, None, 'n']),
-            ('overscan', [None, float, None, 'f']),
-            ('osp0', [None, arr, None, 'n']),
-            ('osp1', [None, arr, None, 'n']),
-            ('oswidth', [None, float, None, 'n']),
+            ('overscan', [None, float, None, 'f']),  # overscan duration (sec)
+            ('osP0', [None, arr, None, 'n']),
+            ('osP1', [None, arr, None, 'n']),
+            ('osVector', [None, arr, None, 'n']),  # vector from p1 -> osP1
+            ('osLen', [None, int, None, 'n']),     # number of samples in overscan region (single row, one side)
+            ('fullWidth', [None, float, None, 'n']), # full width of the scan area, including overscan
             ('pixelWidth', [None, float, None, 'nfr']),
             ('pixelHeight', [None, float, None, 'nfr']),
             ('pixelAspectRatio', [None, float, None, 'nf']),
@@ -363,243 +350,189 @@ class RectScan(object):
             ('sampleRate', [None, float, None, 'f']),
             ('downsample', [None, int, None, 'f']),
             ('duration', [None, float, None, 'nfr']),
-            ('scanOffset', [None, int, None, 'n']),
-            ('scanShape', [None, arr, None, 'n']),
-            ('scanStrides', [None, arr, None, 'n']),
+            ('scanOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe
+            ('scanShape', [None, arr, None, 'n']),   # the full scan area including overscan
+            ('scanStride', [None, arr, None, 'n']),  # and ignoring downsampling (index in samples)
+            ('numRows', [None, int, None, 'n']),     # Same as scanShape[1] 
             ('sampleVectors', [None, arr, None, 'n']),
             ('exposurePerUm2', [None, float, None, 'nfr']),
             ('scanSpeed', [None, float, None, 'nfr']),
-            ('imageOffset', [None, int, None, 'n']),
-            ('imageShape', [None, arr, None, 'n']),
-            ('imageStrides', [None, arr, None, 'n']),
+            ('activeOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe
+            ('activeShape', [None, arr, None, 'n']),   # the 'active' scan area excluding overscan
+            ('activeStride', [None, arr, None, 'n']),  # and ignoring downsampling (index in samples)
+            ('imageOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe 
+            ('imageShape', [None, arr, None, 'n']),   # the 'active' image area excluding overscan
+            ('imageStride', [None, arr, None, 'n']),  # and accounting for downsampling (index in pixels)
             ])
-        
-    def get(self, name):
-        return self._vars[name][0]
-    
-    def set(self, name, value=None, constraint=True):
-        """
-        Set a variable *name* to *value*.
-        
-        If *value* is None, then the value is left to be determined in the 
-        future. At any time, the value may be re-assigned arbitrarily unless
-        a constraint is given.
-        
-        If *constraint* is True (the default), then supplying a value that 
-        violates a previously specified constraint will raise an exception.
-        
-        If *constraint* is 'fixed', then the value is set (if provided) and
-        the variable will not be updated automatically in the future.
 
-        If *constraint* is a tuple, then the value is constrained to be within the 
-        given (min, max). Either constraint may be None to disable 
-        it. In some cases, a constraint cannot be satisfied automatically,
-        and the user will be forced to resolve the constraint manually.
-        
-        If *constraint* is None, then any constraints are removed for the variable.
-        """
-        var = self._vars[name]
-        if constraint is None:
-            if 'n' not in var[3]:
-                raise TypeError("Empty constraints not allowed for '%s'" % name)
-            var[2] = constraint
-        if constraint == 'fixed':
-            if 'f' not in var[3]:
-                raise TypeError("Fixed constraints not allowed for '%s'" % name)
-            var[2] = constraint
-        elif isinstance(constraint, tuple):
-            if 'r' not in var[3]:
-                raise TypeError("Range constraints not allowed for '%s'" % name)
-            assert len(constraint) == 2
-            var[2] = constraint
-        elif constraint is not True:
-            raise TypeError("constraint must be None, True, 'fixed', or tuple. (got %s)" % constraint)
-        
-        if value is not None:
-            # type checking / massaging
-            if var[1] is np.ndarray:
-                value = np.array(value)
-                
-            # constraint checks
-            if constraint is True and not self.check_constraint(name, value):
-                raise ValueError("Setting %s = %s violates constraint %s" % (name, value, var[2]))
+    
+    ### Functions defining the relationships between variables:
+    
+    def _width(self):
+        return np.linalg.norm(self.p1 - self.p0)
             
-            # invalidate other dependent values
-            if var[0] is not None:
-                # todo: we can make this more clever..(and might need to) 
-                # we just know that a value of None cannot have dependencies
-                # (because if anyone else had asked for this value, it wouldn't be 
-                # None anymore)
-                self.resetUnfixed()
-                
-            var[0] = value
-    
-    def check_constraint(self, name, value):
-        c = self._vars[name][2]
-        if c is None or value is None:
-            return True
-        if isinstance(c, tuple):
-            return ((c[0] is None or c[0] <= value) and
-                    (c[1] is None or c[1] >= value))
-        else:
-            return value == c
-    
-    def saveState(self):
-        state = OrderedDict
-        for name, var in self._values.items():
-            state[name] = (var[0], var[2])
-        return state
-    
-    def restoreState(self, state):
-        for name, var in state.items():
-            self.set(name, var[0], var[2])
-    
-    def resetUnfixed(self):
-        """
-        For any variable that does not have a fixed value, reset
-        its value to None.
-        """
-        for var in self._vars.values():
-            if var[2] != 'fixed':
-                var[0] = None
-    
-    @property
-    def p0(self): return self.get('p0')
-    @p0.setter
-    def p0(self, pt): self.set('p0', pt, 'fixed')
-            
-    @property
-    def p1(self): return self.get('p1')
-    @p1.setter
-    def p1(self, pt): self.set('p1', pt, 'fixed')
-    
-    @property
-    def p2(self): return self.get('p2')
-    @p2.setter
-    def p2(self, pt): self.set('p2', pt, 'fixed')
-            
-    @property
-    def width(self):
-        """
-        Distance from the first point in the scan to the last point, excluding
-        any overscan samples.
-        """
-        w = self.get('width')
-        if w is None:
-            w = np.linalg.norm(self.p1 - self.p0)
-            self.set('width', w)
-        return w
-    #@width.setter
-    #def width(self, w): self.set('width', w, 'fixed')
-            
-    @property
-    def height(self):
-        """
-        Distance from the first scanline to the last scanline.
-        """
-        h = self.get('height')
-        if h is None:
-            h = np.linalg.norm(self.p2 - self.p0)
-            self.set('height', h)
-        return h
-    #@height.setter
-    #def height(self, h): self.set('height', h, 'fixed')
-            
-    #@property
-    #def angle(self): return self.get('angle')
-    #@angle.setter
-    #def angle(self, a): self.set('angle', a, 'fixed')
-            
-    @property
-    def overscan(self): return self.get('overscan')
-    @overscan.setter
-    def overscan(self, o): self.set('overscan', o, 'fixed')
-            
-    @property
-    def osp0(self): 
-        """
-        Origin (top-left corner) of the scan rectangle _including_ overscan.
-        This is the actual starting point for the laser.
-        """
-        pt = self.get('osp0')
-        if pt is None:
-            speed = self.scanSpeed
-            os = self.overscan
-            osDist = speed * os
-            
-        return pt
-    
-    @property
-    def osp1(self):
-        """
-        End of the first raster line (top-right corner) _including_ overscan.
-        """
-        return self.get('osp1')
-    
-    @property
-    def oswidth(self):
-        """
-        Distance from the first point in the scan to the last point, including
-        overscan samples.
-        """
-        w = self.get('oswidth')
-        if w is None:
-            w = np.linalg.norm(self.osp1 - self.osp0)
-            self.set('oswidth', w)
-        return w
-    
-    @property
-    def pixelWidth(self): return self.get('pixelWidth')
-    @pixelWidth.setter
-    def pixelWidth(self, w): # nfr 
-        self.set('pixelWidth', w, 'fixed')
-            
-    @property
-    def pixelHeight(self): return self.get('pixelHeight')
-    @pixelHeight.setter
-    def pixelHeight(self, h): # nfr 
-        self.set('pixelHeight', h, 'fixed')
-    
-    @property
-    def pixelAspectRatio(self): return self.get('pixelAspectRatio')
-    @pixelAspectRatio.setter
-    def pixelAspectRatio(self, ar): # nf
-        self.set('pixelAspectRatio', ar, 'fixed')
-    
-    @property
-    def bidirectional(self): return self.get('bidirectional')
-    @bidirectional.setter
-    def bidirectional(self, bd): self.set('bidirectional', bd, 'fixed')
-    
-    @property
-    def sampleRate(self): return self.get('sampleRate')
-    @sampleRate.setter
-    def sampleRate(self, sr): self.set('sampleRate', sr, 'fixed')
-            
-    @property
-    def downsample(self): return self.get('downsample')
-    @downsample.setter
-    def downsample(self, ds): # nfr
-        self.set('downsample', ds, 'fixed')
+    def _height(self):
+        return np.linalg.norm(self.p2 - self.p0)
 
-    @property
-    def duration(self):
+    def _osVector(self):
+        # This vector is p1 -> osP1
+        # Compute from p0, overscan, and scanSpeed
+        speed = self.scanSpeed
+        os = self.overscan
+        osDist = speed * os
+        
+        p0 = self.p0
+        p1 = self.p1
+        dx = p1 - p0
+        dx *= osDist / np.linalg.norm(dx)
+        
+        return dx
+
+    def _osLen(self):
+        """Length of overscan in px (not samples)"""
+        osv = self.osVector
+        return np.ceil(np.linalg.norm(osv) / self.pixelWidth)
+
+    def _osP0(self):
+        osv = self.osVector
+        p0 = self.p0
+        return p0 - osv
+    
+    def _osP1(self):
+        osv = self.osVector
+        p1 = self.p1
+        return p1 + osv
+    
+    def _fullWidth(self):
+        p0 = self.osP0
+        p1 = self.osP1
+        return np.linalg.norm(p1 - p0)
+    
+    def _pixelWidth(self):
+        try:
+            return self.pixelHeight * self.pixelAspectRatio
+        
+        except RuntimeError:
+            return self.scanSpeed / self.sampleRate
+        
+    def _pixelHeight(self):
+        try:
+            return self.pixelWidth / self.pixelAspectRatio
+        
+        except RuntimeError:
+            return self.height / (self.numRows - 1)
+    
+    def _pixelAspectRatio(self):
+        return self.pixelWidth / self.pixelHeight
+    
+    def _duration(self):
         # Note: duration calculation cannot depend on osp0, osp1, oswidth.
         # must be calculated from scan region excluding overscan.
         # (and then we can directly add 2*overscan*nlines)
-        return self.get('duration')
-    @duration.setter
-    def duration(self, d): self.set('duration', d, 'fixed')
+        imageShape = self.imageShape
+        os = self.overscan
+        ds = self.downsample
+        sr = self.sampleRate
+        
+        osTime = imageShape[1] * 2 * os
+        imageSamples = imageShape[0] * imageShape[1] * ds
+        imageTime = imageSamples / sr
+        return imageTime + osTime
     
-    @property
-    def scanSpeed(self): 
-        # Note: scanSpeed calculation cannot depend on osp0, osp1, oswidth.
-        # must be calculated from scan region excluding overscan.
-        return self.get('scanSpeed')
-    @scanSpeed.setter
-    def scanSpeed(self, d): self.set('scanSpeed', d, 'fixed')
+    def _scanSpeed(self):
+        try:
+            # calculate from pixel size first
+            pw = self.pixelWidth
+            sr = self.sampleRate
+            ds = self.downsample
+            return (pw / ds) * sr
+            
+        except RuntimeError:
+            # then from duration
+            d = self.duration
+            nRows = self.numRows
+            os = self.overscan
+            osDuration = nRows * 2 * os
+            d -= osDuration
+            rowTime = d / nRows
+            w = self.width
+            return w / rowTime
+
+    def _scanOffset(self):
+        return 0
     
+    def _scanShape(self):
+        w, h = self.imageShape
+        w = (w + 2 * self.osLen) * self.downsample
+        return (w, h)
     
+    def _scanStride(self):
+        return (self.scanShape[0], 1)
+
+    def _activeOffset(self):
+        return self.imageOffset * self.downsample
+    
+    def _activeShape(self):
+        ims = self.imageShape
+        return ims * self.downsample
+    
+    def activeStride(self):
+        return self.scanStride
+
+    def _imageShape(self):
+        try:
+            # image size and pixel size
+            w = self.width
+            h = self.height
+            pxw = self.pixelWidth
+            pxh = self.pixelHeight
+            
+            nx = int(w / pxw) + 1
+            ny = int(h / pxh) + 1
+            return (nx, ny)
+        except RuntimeError:
+            # duration, sample rate, size, and pixel aspect ratio
+            w = self.width
+            h = self.height
+            sr = self.sampleRate
+            dur = self.duration
+            pxar = self.pixelAspectRatio
+            ds = self.downsample
+            
+            maxPixels = int(dur * sr / ds)
+            
+            # given we may use maxPixels, what is the best way to fill 
+            # the scan area with pixels of the desired pixel aspect ratio?
+            shapeRatio = (w / h) / pxar  # this is nx / ny
+            
+            # solve:   nx * ny == maxPixels
+            #          nx / ny == shapeRatio
+            #          ==>  ny == (maxPixels / shapeRatio)**0.5
+            ny = np.ceil((maxPixels / shapeRatio)**0.5)
+            nx = int(maxPixels / ny)
+            return (nx, ny)
+        
+    def _imageOffset(self):
+        return self.osLen
+    
+    def _imageStride(self):
+        return (self.scanStride[0] / self.downsample, 1)
+
+    def _numRows(self):
+        try:
+            return self.imageShape[1]
+        except RuntimeError:
+            return self.scanShape[1]
+
+    def _exposurePerUm2(self):
+        pxArea = (self.pixelWidth * self.pixelHeight)
+        samplesPerUm2 = 1e-12 * self.downsample / pxArea
+        return samplesPerUm2 / self.sampleRate
+
+
+
+
+
 
 class RectScanVideo:
     """
