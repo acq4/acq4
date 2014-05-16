@@ -1,3 +1,4 @@
+from __future__ import division
 import numpy as np
 from acq4.devices.Scanner.ScanProgram.rect import RectScan
 
@@ -11,6 +12,9 @@ def assertState(rs, state):
             assert var[0].shape == expect.shape and np.all(var[0] == expect)
         else:
             assert var[0] == expect
+
+def isMultiple(x, y):
+    return (x%y) == 0
 
 def test_RectScan():
     global rs
@@ -122,9 +126,29 @@ def test_RectScan():
     assert np.all(rs.imageShape == (16, 6))
     
     # todo: make sure that all offsets and strides are integer multiples of downsampling
+    rs.overscan = 0.025
+    assert isMultiple(rs.scanShape[0], rs.downsample)
+    assert isMultiple(rs.scanStride[0], rs.downsample)
+    assert isMultiple(rs.activeShape[0], rs.downsample)
+    assert isMultiple(rs.activeStride[0], rs.downsample)
+    assert isMultiple(rs.activeOffset, rs.downsample)
     
     # todo: make sure that the complete state does not depend on the order
     # in which parameters are accessed
+    rs.bidirectional = True
+    np.random.seed(1245)
+    unfixed = [n for n in rs._vars if rs._vars[n][2] is None]
+    for n in unfixed: # initialize all
+        getattr(rs, n)
+    state = dict([(n,v[0]) for n,v in rs.saveState().items()])
+    for i in range(30):
+        print "================== reset ===================="
+        rs.resetUnfixed()
+        np.random.shuffle(unfixed)
+        for n in unfixed:
+            v = getattr(rs, n)
+            print n, v, state[n]
+        assertState(rs, state)
     
     # test save/restore
     

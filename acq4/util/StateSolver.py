@@ -119,7 +119,7 @@ class StateSolver(object):
                     v = cfunc()
                 if v is None:
                     raise RuntimeError("RectScan parameter '%s' is not specified." % name)
-                self.set(name, v)
+                v = self.set(name, v)
         finally:
             self._currentGets.remove(name)
         
@@ -127,7 +127,8 @@ class StateSolver(object):
     
     def set(self, name, value=None, constraint=True):
         """
-        Set a variable *name* to *value*.
+        Set a variable *name* to *value*. The actual set value is returned (in
+        some cases, the value may be cast into another type).
         
         If *value* is None, then the value is left to be determined in the 
         future. At any time, the value may be re-assigned arbitrarily unless
@@ -180,6 +181,7 @@ class StateSolver(object):
             self.resetUnfixed()
             
         var[0] = value
+        return value
     
     def check_constraint(self, name, value):
         c = self._vars[name][2]

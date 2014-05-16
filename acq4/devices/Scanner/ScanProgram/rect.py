@@ -354,7 +354,7 @@ class RectScan(StateSolver):
             ('scanShape', [None, arr, None, 'n']),   # the full scan area including overscan
             ('scanStride', [None, arr, None, 'n']),  # and ignoring downsampling (index in samples)
             ('numRows', [None, int, None, 'n']),     # Same as scanShape[1] 
-            ('sampleVectors', [None, arr, None, 'n']),
+            #('sampleVectors', [None, arr, None, 'n']),
             ('exposurePerUm2', [None, float, None, 'nfr']),
             ('scanSpeed', [None, float, None, 'nfr']),
             ('activeOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe
@@ -476,7 +476,7 @@ class RectScan(StateSolver):
         ims = self.imageShape
         return ims * self.downsample
     
-    def activeStride(self):
+    def _activeStride(self):
         return self.scanStride
 
     def _imageShape(self):
