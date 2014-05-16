@@ -8,10 +8,13 @@ def assertState(rs, state):
     #print state
     for name, var in rs._vars.items():
         expect = state.get(name, None)
-        if isinstance(expect, np.ndarray):
-            assert var[0].shape == expect.shape and np.all(var[0] == expect)
-        else:
-            assert var[0] == expect
+        try:
+            if isinstance(expect, np.ndarray):
+                assert var[0].shape == expect.shape and np.all(var[0] == expect)
+            else:
+                assert var[0] == expect
+        except AssertionError:
+            raise ValueError("State key '%s' does not match expected value: %s != %s" % (name, var[0], expect))
 
 def isMultiple(x, y):
     return (x%y) == 0
@@ -138,19 +141,24 @@ def test_RectScan():
     rs.bidirectional = True
     np.random.seed(1245)
     unfixed = [n for n in rs._vars if rs._vars[n][2] is None]
-    for n in unfixed: # initialize all
-        getattr(rs, n)
+    rs.solve()  # initialize all
     state = dict([(n,v[0]) for n,v in rs.saveState().items()])
     for i in range(30):
-        print "================== reset ===================="
+        #print "================== reset ===================="
         rs.resetUnfixed()
         np.random.shuffle(unfixed)
         for n in unfixed:
             v = getattr(rs, n)
-            print n, v, state[n]
+            #print n, v, state[n]
         assertState(rs, state)
     
     # test save/restore
+    rs.solve()
+    state = rs.saveState()
+    rs.reset()
+    rs.restoreState(state)
+    state = dict([(n,v[0]) for n,v in state.items()])
+    assertState(rs, state)
     
 if __name__ == '__main__':
     import user

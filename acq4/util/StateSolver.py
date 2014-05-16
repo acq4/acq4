@@ -55,6 +55,8 @@ class StateSolver(object):
               automatically generated if the value is requested.
        * *allowed_constraints* is a string composed of (n)one, (f)ixed, and (r)ange. 
        
+       Note: do not put mutable objects inside defaultState!
+       
     2) For each variable that may be automatically determined, a method must 
        be defined with the name `_variableName`. This method may either return
        the 
@@ -72,7 +74,8 @@ class StateSolver(object):
         Reset all variables in the solver to their default state.
         """
         self._currentGets.clear()
-        self._vars.update(self.defaultState)
+        for k in self.defaultState:
+            self._vars[k] = self.defaultState[k][:]
 
     def __getattr__(self, name):
         if name in self._vars:
@@ -107,7 +110,7 @@ class StateSolver(object):
         If no value can be determined, then raise RuntimeError.
         """
         if name in self._currentGets:
-            raise RuntimeError("Cyclic dependency while calculating '%s'." % name)
+                raise RuntimeError("Cyclic dependency while calculating '%s'." % name)
         self._currentGets.add(name)
         try:
             v = self._vars[name][0]
@@ -206,8 +209,9 @@ class StateSolver(object):
         """
         Restore the state of all values and constraints in the solver.
         """
+        self.reset()
         for name, var in state.items():
-            self.set(name, var[0], var[2])
+            self.set(name, var[0], var[1])
     
     def resetUnfixed(self):
         """
@@ -217,6 +221,10 @@ class StateSolver(object):
         for var in self._vars.values():
             if var[2] != 'fixed':
                 var[0] = None
+                
+    def solve(self):
+        for k in self._vars:
+            getattr(self, k)
                 
     def __repr__(self):
         state = OrderedDict()
