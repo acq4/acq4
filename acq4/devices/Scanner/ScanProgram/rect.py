@@ -87,7 +87,7 @@ class RectScanComponent(ScanProgramComponent):
             print 'new pix size: ', pixelSize*pixsf
         
         n = SUF.getnPointsY() # get number of rows
-        m = SUF.getPixelsPerRow() # get nnumber of points per row
+        m = SUF.getPixelsPerRow() # get number of points per row
 
         ## Build array with scanner voltages for rect repeated once per scan
         for i in range(cmd['nScans']):
@@ -331,12 +331,12 @@ class RectScan(StateSolver):
             * maximum / fixed pixel size
     """
     defaultState = OrderedDict([
-            ('p0', [None, arr, None, 'f']),
-            ('p1', [None, arr, None, 'f']),
-            ('p2', [None, arr, None, 'f']),
-            ('width', [None, float, None, 'n']),  # width of requested scan area, excluding overscan
-            ('height', [None, float, None, 'n']),
-            #('angle', [None, float, None, 'n']),
+            ('p0', [None, arr, None, 'f']),  # 3 corners of the rectangle
+            ('p1', [None, arr, None, 'nf']),
+            ('p2', [None, arr, None, 'nf']),
+            ('width', [None, float, None, 'nf']),  # width of requested scan area, excluding overscan
+            ('height', [None, float, None, 'nf']),
+            ('angle', [None, float, None, 'nf']),
             ('overscan', [None, float, None, 'f']),  # overscan duration (sec)
             ('osP0', [None, arr, None, 'n']),
             ('osP1', [None, arr, None, 'n']),
@@ -373,6 +373,21 @@ class RectScan(StateSolver):
             
     def _height(self):
         return np.linalg.norm(self.p2 - self.p0)
+
+    def _angle(self):
+        return angle(self.p1 - self.p0)
+
+    def _p1(self):
+        p0 = self.p0
+        width = self.width
+        angle = self.angle
+        return p0 + width * np.array(np.cos(angle), np.sin(angle))
+
+    def _p2(self):
+        p0 = self.p0
+        height = self.height
+        angle = self.angle
+        return p0 + height * np.array(np.sin(angle), -np.cos(angle))
 
     def _osVector(self):
         # This vector is p1 -> osP1
@@ -876,7 +891,6 @@ class ScannerUtility:
         """
         Trim the overscan from the image array
         """
-        print 'removeOverscan: '
         if overscan is not None:
             osp = overscan
         else:
@@ -908,7 +922,6 @@ class ScannerUtility:
                     bestError = totErr
                     bestShift = shift
             #pg.plot(errs)
-            print 'decomb: auto is true, bestshift = ', bestShift
         else:
             bestShift = shift
         if bestShift is None: # nothing...
@@ -916,7 +929,6 @@ class ScannerUtility:
         ## reconstruct from shifted fields
         leftShift = bestShift // 2
         rightShift = int(leftShift + (bestShift % 2))
-        print '360: left, right: ', leftShift, rightShift
         if rightShift < 1:
             return img, 0
         decombed = np.zeros(img.shape, img.dtype)
@@ -924,7 +936,6 @@ class ScannerUtility:
             decombed[:-leftShift, ::2] = img[leftShift:, ::2]
         else:
             decombed[:, ::2] = img[:, ::2]
-        print '368: left, right: ', leftShift, rightShift
         decombed[rightShift:, 1::2] = img[:-rightShift, 1::2]
         return decombed, bestShift
     

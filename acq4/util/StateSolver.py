@@ -1,14 +1,16 @@
 from collections import OrderedDict
 import numpy as np
 
-class StateSolver(object):
+class SystemSolver(object):
     """
-    This class is used to formalize and manage user interaction with a complex
-    system of equations. It is often the case that devices must be controlled
+    This abstract class is used to formalize and manage user interaction with a 
+    complex system of equations (related to "constraint satisfaction problems").
+    It is often the case that devices must be controlled
     through a large number of free variables, and interactions between these 
     variables make the system difficult to manage and conceptualize as a user
-    interface. This is an abstract class, and must be subclassed to function 
-    properly. 
+    interface. This class does _not_ attempt to numerically solve the system
+    of equations. Rather, it provides a framework for subdividing the system
+    into manageable pieces and specifying solutions to these small pieces.
     
     For an example, see the simple Camera class below.
     
@@ -24,8 +26,9 @@ class StateSolver(object):
     calculate the value (usually because the user has not provided sufficient
     input to fully constrain the system). 
     
-    Each method that calculates a variable value may include multiple methods,
-    so that if one method generates a RuntimeError, it may fall back on others.
+    Each method that calculates a variable value may include multiple 
+    try/except blocks, so that if one method generates a RuntimeError, it may 
+    fall back on others. 
     In this way, the system may be solved by recursively searching the tree of 
     possible relationships between variables. This allows the user flexibility
     in deciding which variables are the most important to specify, while 
@@ -121,7 +124,7 @@ class StateSolver(object):
                 else:
                     v = cfunc()
                 if v is None:
-                    raise RuntimeError("RectScan parameter '%s' is not specified." % name)
+                    raise RuntimeError("Parameter '%s' is not specified." % name)
                 v = self.set(name, v)
         finally:
             self._currentGets.remove(name)
@@ -236,9 +239,11 @@ class StateSolver(object):
 
 
 
+
+
 if __name__ == '__main__':
     
-    class Camera(StateSolver):
+    class Camera(SystemSolver):
         """
         Consider a simple SLR camera. The variables we will consider that 
         affect the camera's behavior while acquiring a photo are aperture, shutter speed,
@@ -325,25 +330,44 @@ if __name__ == '__main__':
             """
             Determine aperture automatically under a variety of conditions.
             """
+            iso = self.iso
+            exp = self.exposure
+            light = self.lightMeter
+            
             try:
                 # shutter-priority mode
-                s = self.shutter   # this raises RuntimeError if shutter has not
-                                # been specified
-                iso = self.iso
-                exp = self.exposure
-                light = self.lightMeter
-                
-                
-                
-                return ap
+                sh = self.shutter   # this raises RuntimeError if shutter has not
+                                   # been specified
+                ap = 4.0 * (sh / (1./60.)) * (iso / 100.) * (2 ** exp) * (2 ** light)
+                ap = np.clip(ap, 2.0, 16.0)
             except RuntimeError:
-                pass
+                # program mode; we can select a suitable shutter
+                # value at the same time.
+                sh = (1./60.)
+                raise
             
-            try:
-                # program mode
-                pass
-            except RuntimeError:
-                pass
             
-        
             
+            return ap
+
+        def _balance(self):
+            iso = self.iso
+            light = self.lightMeter
+            sh = self.shutter
+            ap = self.aperture
+            fl = self.flash
+            
+            bal = (4.0 / ap) * (sh / (1./60.)) * (iso / 100.) * (2 ** light)
+            return np.log2(bal)
+    
+    camera = Camera()
+    
+    camera.iso = 100
+    camera.exposure = 0
+    camera.lightMeter = 2
+    camera.shutter = 1./60.
+    camera.flash = 0
+    
+    camera.solve()
+    print camera.saveState()
+    
