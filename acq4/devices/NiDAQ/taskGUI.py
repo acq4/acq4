@@ -38,10 +38,12 @@ class NiDAQTask(TaskGui):
             (self.ui.filterCombo, 'filterMethod'),
             (self.ui.besselCutoffSpin, 'besselCutoff'),
             (self.ui.besselOrderSpin, 'besselOrder'),
+            (self.ui.besselBidirCheck, 'besselBidirectional'),
             (self.ui.butterworthPassbandSpin, 'butterworthPassband'),
             (self.ui.butterworthStopbandSpin, 'butterworthStopband'),
             (self.ui.butterworthPassDBSpin, 'butterworthPassDB'),
             (self.ui.butterworthStopDBSpin, 'butterworthStopDB'),
+            (self.ui.butterworthBidirCheck, 'butterworthBidirectional'),
         ])
         
         
@@ -50,10 +52,12 @@ class NiDAQTask(TaskGui):
         self.ui.periodSpin.sigValueChanging.connect(self.updateRateSpin)
         self.ui.rateSpin.sigValueChanging.connect(self.updatePeriodSpin)
         self.taskRunner.sigTaskChanged.connect(self.taskChanged)
-        self.ui.denoiseCombo.currentIndexChanged.connect(self.ui.denoiseStack.setCurrentIndex)
-        self.ui.filterCombo.currentIndexChanged.connect(self.ui.filterStack.setCurrentIndex)
+        self.ui.denoiseCombo.currentIndexChanged.connect(self.updateDenoiseCtrl)
+        self.ui.filterCombo.currentIndexChanged.connect(self.updateFilterCtrl)
         self.ui.rateSpin.setValue(self.rate)
-        
+
+        self.updateDenoiseCtrl()
+        self.updateFilterCtrl()
         
     def quit(self):
         TaskGui.quit(self)
@@ -173,3 +177,22 @@ class NiDAQTask(TaskGui):
             #self.ui.triggerDevList.addItem(p)
         ## Add list of triggerable port names here?
             
+    def updateDenoiseCtrl(self):
+        denoise = self.ui.denoiseCombo.currentText()
+        if denoise == 'None':
+            self.ui.denoiseCtrl.hide()
+        else:
+            self.ui.denoiseCtrl.show()
+
+    def updateFilterCtrl(self):
+        filter = self.ui.filterCombo.currentText()
+        if filter == 'None':
+            self.ui.besselCtrl.hide()
+            self.ui.butterworthCtrl.hide()
+        elif filter == 'Bessel':
+            self.ui.besselCtrl.show()
+            self.ui.butterworthCtrl.hide()
+        elif filter == 'Butterworth':
+            self.ui.besselCtrl.hide()
+            self.ui.butterworthCtrl.show()
+
