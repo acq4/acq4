@@ -368,6 +368,28 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.startBtn.setText('Start')
         self.ui.startBtn.setEnabled(True)
         self.ui.startBtn.setChecked(False)
+
+    def changeDisplay(self, param, val):
+        if param == 'traceCurveColor':
+            self.patchCurve.setPen(QtGui.QPen(QtGui.QColor(*val)))
+        elif param == 'commandCurveColor':
+            self.commandCurve.setPen(QtGui.QPen(QtGui.QColor(*val)))
+        elif param == 'fitCurveColor':
+            self.patchFitCurve.setPen(QtGui.QPen(QtGui.QColor(*val)))
+        elif param == 'analysisCurveColor':
+            for curve in self.analysisCurves.values():
+                curve.setPen(QtGui.QPen(QtGui.QColor(*val)))
+        elif param == 'textColor':
+            self.stylesheet['color'] = val
+            stl = ';\n'.join(['%s:rgb%s'%(k,v) for k,v in self.stylesheet.items()])
+            self.cw.setStyleSheet(stl)
+        elif param == 'backgroundColor':
+            self.stylesheet['background-color'] = val
+            stl = ';\n'.join(['%s:rgb%s'%(k,v) for k,v in self.stylesheet.items()])
+            self.cw.setStyleSheet(stl)
+        else:
+            print 'Unknown display param: %s'%param
+            return
         
         
 class PatchThread(QtCore.QThread):

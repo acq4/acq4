@@ -79,11 +79,15 @@ class Patch(Module):
                     print 'Ignoring unknown parameter in config file: "%s".' % param
                     continue
                 typ = type(self.defaults[param])
-                if not isinstance(val, typ):
-                    print "Value for parameter '%s' should have type %s; ignoring." % (param, typ) 
+                if not isinstance(val, typ) and not (typ == float and isinstance(val, int)):
+                    print "Warning: Value for parameter '%s' should have type %s." % (param, typ) 
                     continue
         
         self.ui = PatchWindow(manager, config['clampDev'], modes)
+        display = config.get('display', {})
+        for param, val in display.items():
+            self.ui.changeDisplay(param, val)
+
         self.ui.sigWindowClosed.connect(self.quit)
         mp = os.path.dirname(__file__)
         self.ui.setWindowIcon(QtGui.QIcon(os.path.join(mp, 'icon.png')))
