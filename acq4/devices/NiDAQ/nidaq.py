@@ -350,25 +350,28 @@ class Task(DeviceTask):
             elif method == 'Bessel':
                 cutoff = self.cmd['besselCutoff']
                 order = self.cmd['besselOrder']
-                
-                data = NiDAQ.lowpass(data, filter='bessel', cutoff=cutoff, order=order, samplerate=res['info']['rate'])
+                bidir = self.cmd.get('besselBidirectional', True)
+                data = NiDAQ.lowpass(data, filter='bessel', bidir=bidir, cutoff=cutoff, order=order, samplerate=res['info']['rate'])
                 
                 res['info']['filterMethod'] = method
                 res['info']['filterCutoff'] = cutoff
                 res['info']['filterOrder'] = order
+                res['info']['filterBidirectional'] = bidir
             elif method == 'Butterworth':
                 passF = self.cmd['butterworthPassband']
                 stopF = self.cmd['butterworthStopband']
                 passDB = self.cmd['butterworthPassDB']
                 stopDB = self.cmd['butterworthStopDB']
+                bidir = self.cmd.get('butterworthBidirectional', True)
                 
-                data = NiDAQ.lowpass(data, filter='butterworth', cutoff=passF, stopCutoff=stopF, gpass=passDB, gstop=stopDB, samplerate=res['info']['rate'])
+                data = NiDAQ.lowpass(data, filter='butterworth', bidir=bidir, cutoff=passF, stopCutoff=stopF, gpass=passDB, gstop=stopDB, samplerate=res['info']['rate'])
                 
                 res['info']['filterMethod'] = method
                 res['info']['filterPassband'] = passF
                 res['info']['filterStopband'] = stopF
                 res['info']['filterPassbandDB'] = passDB
                 res['info']['filterStopbandDB'] = stopDB
+                res['info']['filterBidirectional'] = bidir
                 
             else:
                 printExc("Unknown filter method '%s'" % str(method))
