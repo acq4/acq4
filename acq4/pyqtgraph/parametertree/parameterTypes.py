@@ -78,6 +78,7 @@ class WidgetParameterItem(ParameterItem):
             ## no starting value was given; use whatever the widget has
             self.widgetValueChanged()
 
+        self.updateDefaultBtn()
 
     def makeWidget(self):
         """
@@ -189,6 +190,9 @@ class WidgetParameterItem(ParameterItem):
     def updateDefaultBtn(self):
         ## enable/disable default btn 
         self.defaultBtn.setEnabled(not self.param.valueIsDefault() and self.param.writable())        
+        
+        # hide / show
+        self.defaultBtn.setVisible(not self.param.readonly())
 
     def updateDisplayLabel(self, value=None):
         """Update the display label to reflect the value of the parameter."""
