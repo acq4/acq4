@@ -29,7 +29,7 @@ class AnalysisHost(QtGui.QMainWindow):
         
         if module is not None:
             self.loadModule(module)
-            
+
         self.show()
         
     def dataManager(self):
@@ -58,6 +58,10 @@ class AnalysisHost(QtGui.QMainWindow):
         self.setWindowTitle(modName)
         
         acq4.Manager.getManager().declareInterface(modName, 'analysisMod', self.mod)
+
+        # ask module for prefered size
+        self.resize(*self.mod.sizeHint())
+
         
     def closeEvent(self, ev):
         if self.quit():

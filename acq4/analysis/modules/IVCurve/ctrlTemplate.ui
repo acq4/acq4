@@ -35,7 +35,7 @@
       </sizepolicy>
      </property>
      <property name="title">
-      <string>IV Analysis-V1.0</string>
+      <string>IV Analysis-V1.5</string>
      </property>
      <layout class="QGridLayout" name="gridLayout_3">
       <property name="horizontalSpacing">
@@ -565,17 +565,6 @@ Times</string>
         </property>
        </widget>
       </item>
-      <item row="21" column="2">
-       <widget class="QCheckBox" name="IVCurve_KeepAnalysis">
-        <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
-        </property>
-        <property name="text">
-         <string>Keep 
-Analysis</string>
-        </property>
-       </widget>
-      </item>
       <item row="0" column="5">
        <widget class="QDoubleSpinBox" name="IVCurve_IVLimitMax">
         <property name="alignment">
@@ -598,7 +587,7 @@ Analysis</string>
         </property>
        </widget>
       </item>
-      <item row="0" column="3">
+      <item row="0" column="3" colspan="2">
        <widget class="QDoubleSpinBox" name="IVCurve_IVLimitMin">
         <property name="decimals">
          <number>1</number>
@@ -617,50 +606,11 @@ Analysis</string>
         </property>
        </widget>
       </item>
-      <item row="0" column="2">
-       <widget class="QCheckBox" name="IVCurve_IVLimits">
-        <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
-        </property>
-        <property name="text">
-         <string>Limits</string>
-        </property>
-       </widget>
-      </item>
       <item row="0" column="0">
        <widget class="QLabel" name="label_13">
         <property name="text">
-         <string>IV Limits</string>
+         <string>IV Cmd Limits</string>
         </property>
-       </widget>
-      </item>
-      <item row="1" column="2">
-       <widget class="QComboBox" name="IVCurve_Sequence1">
-        <item>
-         <property name="text">
-          <string>None</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>001</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>002</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>003</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>004</string>
-         </property>
-        </item>
        </widget>
       </item>
       <item row="1" column="0">
@@ -771,9 +721,9 @@ Analysis</string>
        </widget>
       </item>
       <item row="3" column="5">
-       <widget class="QCheckBox" name="IVCurve_SubRMP">
+       <widget class="QCheckBox" name="IVCurve_SubBaseline">
         <property name="text">
-         <string>Sub RMP</string>
+         <string>Sub Baseline</string>
         </property>
        </widget>
       </item>
@@ -836,6 +786,80 @@ Analysis</string>
         <property name="text">
          <string>FileInfo</string>
         </property>
+       </widget>
+      </item>
+      <item row="0" column="2">
+       <widget class="QCheckBox" name="IVCurve_IVLimits">
+        <property name="font">
+         <font>
+          <pointsize>11</pointsize>
+         </font>
+        </property>
+        <property name="layoutDirection">
+         <enum>Qt::LeftToRight</enum>
+        </property>
+        <property name="text">
+         <string>Use Limits</string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="5">
+       <widget class="QComboBox" name="IVCurve_PeakMode">
+        <item>
+         <property name="text">
+          <string>Abs</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Min</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Max</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="21" column="2">
+       <widget class="QCheckBox" name="IVCurve_KeepAnalysis">
+        <property name="layoutDirection">
+         <enum>Qt::LeftToRight</enum>
+        </property>
+        <property name="text">
+         <string>Keep 
+Analysis</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QComboBox" name="IVCurve_Sequence1">
+        <item>
+         <property name="text">
+          <string>None</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>001</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>002</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>003</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>004</string>
+         </property>
+        </item>
        </widget>
       </item>
      </layout>
