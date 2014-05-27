@@ -142,7 +142,7 @@ class RectScanControl(QtCore.QObject):
         self.blockUpdate = False
         self.component = weakref.ref(component)
         
-        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
+        params = [
             dict(name='width', readonly=True, type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='height', readonly=True, type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='overScan', type='float', value=70., suffix='%', siPrefix=False, bounds=[0, 200.], step = 1),
@@ -154,7 +154,8 @@ class RectScanControl(QtCore.QObject):
             dict(name='scanSpeed', type='float', readonly=True, suffix='m/ms', siPrefix=True), 
             dict(name='frameExp', title=u'frame exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True), 
             dict(name='totalExp', title=u'total exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True),
-        ])
+        ]
+        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=)
         self.params.component = self.component
         
         self.roi = RectScanROI(size=[self.params['width'], self.params['height']], pos=[0.0, 0.0])

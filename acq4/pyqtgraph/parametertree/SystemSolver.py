@@ -10,13 +10,14 @@ class SystemSolver(object):
     variables make the system difficult to manage and conceptualize as a user
     interface. This class does _not_ attempt to numerically solve the system
     of equations. Rather, it provides a framework for subdividing the system
-    into manageable pieces and specifying solutions to these small pieces.
+    into manageable pieces and specifying closed-form solutions to these small 
+    pieces.
     
     For an example, see the simple Camera class below.
     
     Theory of operation: Conceptualize the system as 1) a set of variables
-    whose values may be user-specified or automatically generated, and 2) a
-    set of functions that define *how* each variable should be generated. 
+    whose values may be either user-specified or automatically generated, and 
+    2) a set of functions that define *how* each variable should be generated. 
     When a variable is accessed (as an instance attribute), the solver first
     checks to see if it already has a value (either user-supplied, or cached
     from a previous calculation). If it does not, then the solver calls a 

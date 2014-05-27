@@ -402,15 +402,22 @@ class Parameter(QtCore.QObject):
         Note that the value of the parameter can *always* be changed by
         calling setValue().
         """
-        return not self.opts.get('readonly', False)
+        return not self.readonly()
 
     def setWritable(self, writable=True):
         """Set whether this Parameter should be editable by the user. (This is 
         exactly the opposite of setReadonly)."""
         self.setOpts(readonly=not writable)
         
+    def readonly(self):
+        """
+        Return True if this parameter is read-only. (this is the opposite of writable())
+        """
+        return self.opts.get('readonly', False)
+        
     def setReadonly(self, readonly=True):
-        """Set whether this Parameter's value may be edited by the user."""
+        """Set whether this Parameter's value may be edited by the user
+        (this is the opposite of setWritable())."""
         self.setOpts(readonly=readonly)
         
     def setOpts(self, **opts):
