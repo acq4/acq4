@@ -11,24 +11,28 @@ Pep8 compliant (via pep8.py) 10/25/2013
 
 """
 
-from PyQt4 import QtGui, QtCore
-from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
-import acq4.pyqtgraph as pg
-from acq4.util.metaarray import MetaArray
-import numpy as np
-import numpy.ma as ma
 import os
 import re
 import os.path
 import itertools
 import functools
 
+from PyQt4 import QtGui, QtCore
+import numpy as np
+import numpy.ma as ma
+
+from acq4.analysis.AnalysisModule import AnalysisModule
+import acq4.pyqtgraph as pg
+from acq4.util.metaarray import MetaArray
+
+
 stdFont = 'Arial'
 
 import acq4.analysis.tools.Utility as Utility  # pbm's utilities...
 import acq4.analysis.tools.Fitting as Fitting  # pbm's fitting stuff...
 import ctrlTemplate
+import resultsTemplate
 
 
 class PSPReversal(AnalysisModule):
@@ -86,6 +90,9 @@ class PSPReversal(AnalysisModule):
         self.ctrlWidget = QtGui.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
+        self.results = resultsTemplate.Ui_Dialog()
+        self.resultsWidget = QtGui.QWidget()
+        self.results.setupUi(self.resultsWidget)
         self.main_layout = pg.GraphicsView()  # instead of GraphicsScene?
         # make fixed widget for the module output
         self.widget = QtGui.QWidget()
@@ -99,6 +106,9 @@ class PSPReversal(AnalysisModule):
              {'type': 'fileInput', 'size': (150, 50), 'host': self}),
             ('Parameters',
              {'type': 'ctrl', 'object': self.ctrlWidget, 'host': self,
+              'size': (150, 700)}),
+            ('Results',
+             {'type': 'ctrl', 'object': self.resultsWidget, 'host': self,
               'size': (150, 700)}),
             ('Plots',
              {'type': 'ctrl', 'object': self.widget, 'pos': ('right',),
@@ -718,7 +728,7 @@ class PSPReversal(AnalysisModule):
     def printAnalysis(self):
         """
         Print the CCIV summary information (Cell, protocol, etc)
-        Printing goes to the terminal, where the data can be copied
+        Printing goes to the results window, where the data can be copied
         to another program like a spreadsheet.
         """
         (date, slice, cell, proto, p2) = self.fileCellProtocol()
@@ -734,31 +744,34 @@ class PSPReversal(AnalysisModule):
             if self.CellSummary[cond] == '':
                 self.CellSummary[cond] = 'unknown'
 
-        print '=' * 80
-        print ("{:^14s}\t{:^14s}\t{:^14s}\t{:^24s}" .format
-               ("Date", "Slice", "Cell", "Protocol",))
-        print ("{:^14s}\t{:^14s}\t{:^14s}\t{:^24s}".format
-               (date, slice, cell, proto))
-        print ('{:^8s}\t{:^8s}\t{:^8s}\t{:^8s}'.format
+        # format output in html
+        rtxt = '<font face="monospace, courier">'  # use a monospaced font.
+        rtxt += '<div style="white-space: pre;">'  # css to force repsect of spaces in text
+        rtxt += ("{:^14s}\t{:^14s}\t{:^14s}<br>" .format
+               ("Date", "Slice", "Cell"))
+        rtxt += ("<b>{:^14s}\t{:^14s}\t{:^14s}</b><br>".format
+               (date, slice, cell))
+        rtxt += ('{:^8s}\t{:^8s}\t{:^8s}\t{:^8s}<br>'.format
                ('Temp', 'Age', 'Weight', 'Sex'))
-        print ('{:^8s}\t{:^8s}\t{:^8s}\t{:^8s}'.format
+        rtxt += ('{:^8s}\t{:^8s}\t{:^8s}\t{:^8s}<br>'.format
                ( self.CellSummary['Temp'], day['age'], day['weight'], day['sex']))
-        print ('{:<16s}: {:<32s}'.format('ACSF', self.CellSummary['ACSF']))
-        print ('{:<16s}: {:<32s}'.format('Internal', self.CellSummary['Internal']))
-
-        print('{:18s}: [{:7.1f}-{:7.1f}{:2s}] mode: {:<12s}'.format(
-                'Reference Window', self.regions['lrwin1']['start'].value(), self.regions['lrwin1']['stop'].value(),
+        rtxt += ('{:<8s}: {:<32s}<br>'.format('ACSF', self.CellSummary['ACSF']))
+        rtxt += ('{:<8s}: {:<32s}<br>'.format('Internal', self.CellSummary['Internal']))
+        rtxt += ('{:<8s}: <b>{:<32s}</b><br>'.format('Protocol', proto))
+        rtxt += ('{:<8s}: [{:5.1f}-{:5.1f}{:2s}] mode: {:<12s}<br>'.format(
+                'Win 1', self.regions['lrwin1']['start'].value(), self.regions['lrwin1']['stop'].value(),
                self.regions['lrwin1']['units'], self.regions['lrwin1']['mode'].currentText()))
-        print('{:18s}: [{:7.1f}-{:7.1f}{:2s}] mode: {:<12s}'.format(
-                'Measurement Window', self.regions['lrwin2']['start'].value(), self.regions['lrwin2']['stop'].value(),
+        rtxt += ('{:<8s}: [{:5.1f}-{:5.1f}{:2s}] mode: {:<12s}<br>'.format(
+                'Win 2', self.regions['lrwin2']['start'].value(), self.regions['lrwin2']['stop'].value(),
                 self.regions['lrwin2']['units'], self.regions['lrwin2']['mode'].currentText(),
                ))
         vc = self.win2IV[0]
         im = self.win2IV[1]
+        imsd = self.win2IV[2]
         p = np.polyfit(vc, im, 2)  # 2nd order polynomial
         jp = self.junction
         ho = float(self.holding) * 1e3
-        print 'Holding: %12.1f mV  Junction Potential: %12.1f mV' % (ho, jp)
+        rtxt += 'HP: {:5.1f} mV  JP: {:5.1f} mV<br>'.format(ho, jp)
         # find the roots
         a = p[0]
         b = p[1]
@@ -767,23 +780,26 @@ class PSPReversal(AnalysisModule):
         reversal = {}
         reversal[0] = {'value': (-b + r) / (2 * a), 'valid': False}
         reversal[1] = {'value': (-b - r) / (2 * a), 'valid': False}
-        print 'Reversal Potential: ',
+        rtxt += '<b>Erev: '
         anyrev = False
         for i in range(0, 2):  # print only the valid reversal values
             if -100. < reversal[i]['value'] < 40.:
                 reversal[i]['valid'] = True
-                print ('%12.1f ' % (reversal[i]['value'] + jp + ho)),
+                rtxt += '{:12.1f} '.format(reversal[i]['value'] + jp + ho)
                 anyrev = True
         if not anyrev:
-            print ('None found (roots, no correction)',  reversal[i]['value'])
+            rtxt += '</b>None found (roots, no correction: {12.1f}<br>'.format(reversal[i]['value'])
         else:
-            print ' mV'
-        print '+' * 80
-        print 'IV'
-        print ('{:>11s} \t{:>9s}'.format('mV', 'nA'))
+            rtxt += ' mV</b><br>'
+        rtxt += ('-' * 40) + '<br>'
+        rtxt += '<b>IV</b><br>'
+        rtxt += '<i>{:>8s} \t{:>9s} \t{:>9s}</i><br>'.format('mV', 'nA', 'SD')
         for i in range(len(vc)):
-            print('{:>12.1f}\t{:>12.3f}'.format((vc[i] + jp + ho), im[i]))
-        print '-' * 80
+            rtxt += ('{:>9.1f} \t{:>9.3f} \t{:>9.3f}<br>'.format((vc[i] + jp + ho), im[i], imsd[i]))
+        rtxt += ('-' * 40) + '<br></div></font>'
+        #print (rtxt)
+        self.results.resultsPSPReversal_text.setText(rtxt)
+
 
     def update_Tau(self, printWindow=True, whichTau=1):
         """
@@ -977,6 +993,7 @@ class PSPReversal(AnalysisModule):
         wincmd = window + 'cmd'
         winoff = window + 'off'
         winon = window + 'on'
+        windowsd = window + 'std'
         winaltcmd = window + 'altcmd'
         winunordered = window + '_unordered'
         winlinfit = window + '_linfit'
@@ -994,6 +1011,8 @@ class PSPReversal(AnalysisModule):
         self.measure[winon] = []
         self.measure[winaltcmd] = []
         self.measure[winunordered] = []
+        self.measure[windowsd] = []
+
 
         mode = self.regions[region]['mode'].currentText()
         rgninfo = self.regions[region]['region'].getRegion()
@@ -1029,14 +1048,18 @@ class PSPReversal(AnalysisModule):
             self.measure[window] = data1.max(axis=1)
         elif mode == 'Mean' or mode is None:
             self.measure[window] = data1.mean(axis=1)
+            self.measure[windowsd] = data1.std(axis=1)
         elif mode == 'Mean-Win1' and len(self.measure['win1_unordered']) == data1.shape[0]:
             self.measure[window] = data1.mean(axis=1) - self.measure[
-                'win1_unordered']  # np.mean(data1 - self.measure['win1'][:, np.newaxis], axis=0)
+                'win1_unordered']
+            self.measure[windowsd] = data1.std(axis=1) - self.measure[
+                'win1_unordered']
         elif mode in ['Mean-Linear', 'Mean-Poly2'] and window == 'win2':  # and self.txm.shape[0] == data1.shape[0]:
             fits = np.zeros(data1.shape)
             for j in range(data1.shape[0]):  # polyval only does 1d
                 fits[j,:] = np.polyval(self.win1fits[:,j], tx1)
             self.measure[window] = np.mean(data1-fits, axis=1)
+            self.measure[windowsd] = np.std(data1-fits, axis=1)
 
         elif mode == 'Sum':
             self.measure[window] = np.sum(data1, axis=1)
@@ -1093,6 +1116,8 @@ class PSPReversal(AnalysisModule):
             # Steady-state IV where there are no spikes
             print 'update_winAnalysis: Removing traces with spikes from analysis'
             self.measure[window] = self.measure[window][self.nospk]
+            if len(self.measure[windowsd]) > 0:
+                self.measure[windowsd] = self.measure[windowsd][self.nsopk]
             self.measure[wincmd] = commands[self.nospk]
             self.cmd = commands[self.nospk]
             # compute Rin from the SS IV:
@@ -1107,14 +1132,6 @@ class PSPReversal(AnalysisModule):
             self.measure[wincmd] = commands
             self.cmd = commands
             self.measure['leak'] = np.zeros(len(self.measure[window]))
-        # (x, y) = Utility.clipdata(self.measure[wincmd], self.measure[window],
-        #                               self.regions['lrleak']['start'].value()*1e-3,
-        #                               self.regions['lrleak']['stop'].value()*1e-3)
-        # if np.max(np.diff(x)) > 0. and np.max(np.diff(y)) > 0.:
-        #     p = np.polyfit(x, y, 1)  # linear fit
-        #     self.measure['leak'] = np.polyval(p, self.measure[wincmd])
-        #     if self.ctrl.PSPReversal_subLeak.isChecked():
-        #         self.measure[window] = self.measure[window] - self.measure['leak']
         self.measure[winunordered] = self.measure[window]
 
         # now separate the data into alternation groups, then sort by command level
@@ -1123,10 +1140,10 @@ class PSPReversal(AnalysisModule):
             nm = len(self.measure[window])  # get the number of measurements
             xoff = range(0, nm, 2)  # really should get this from loadrequestedfile
             xon = range(1, nm, 2)
-            measure_off = self.measure[window][xoff]
-            measure_on = self.measure[window][xon]
             measure_voff = self.measure[wincmd][xoff]  # onset same as the other
             measure_von = self.measure[wincmd][xon]
+            measure_off = self.measure[window][xoff]
+            measure_on = self.measure[window][xon]
             vcs_on = np.argsort(measure_von)
             vcs_off = np.argsort(measure_voff)
             measure_von = measure_von[vcs_on]
@@ -1135,11 +1152,17 @@ class PSPReversal(AnalysisModule):
             self.measure[winon] = np.array(measure_on)
             self.measure[winoff] = np.array(measure_off)
             self.measure[winaltcmd] = np.array(measure_von)
+            # if len(self.measure[windowsd]) > 0:
+            #     measure_on_sd = self.measure[windowsd][xon]
+            #     measure_on_sd = measure_on_sd[vcs_on]
+            #     self.measure[winonsd] = np.array(measure_on_sd)
         else:
             isort = np.argsort(self.measure[wincmd])  # get sort order for commands
             self.measure[wincmd] = self.measure[wincmd][isort]  # sort the command values
             self.measure[window] = self.measure[window][isort]  # sort the data in the window
-        self.update_IVPlot()
+            # if len(self.measure[windowsd]) > 0:
+            #     self.measure[windowsd] = self.measure[windowsd][isort]
+            self.update_IVPlot()
         self.update_cmdTimePlot(wincmd)
 
     def regions_exclusive(self):
@@ -1252,17 +1275,21 @@ class PSPReversal(AnalysisModule):
                                           symbolBrush=filledbrush)
                         # plot mean
                         m = self.measure['win2altcmd']
+                        print 'nrepc: ', self.nrepc
                         calt = m.reshape(m.shape[0] / self.nrepc, self.nrepc)
                         vc = calt.mean(axis=1)
                         m2 = self.measure['win2on']
                         ialt = m2.reshape(m2.shape[0] / self.nrepc, self.nrepc)
                         im = ialt.mean(axis=1)
+                        imsd = ialt.std(axis=1)
                         avPen = pg.mkPen({'color': "F00", 'width': 2})
                         self.IV_plot.plot(vc * 1e3, im * 1e9,
                                           symbol='s', pen=avPen,
                                           symbolSize=6, symbolPen=avPen,
                                           symbolBrush=filledbrush)
-                        self.win2IV = [vc * 1e3, im * 1e9]
+                        self.win2IV = [vc * 1e3, im * 1e9, imsd*1e9]
+
+
 
     def update_RMPPlot(self):
         """
