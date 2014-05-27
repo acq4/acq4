@@ -3,7 +3,7 @@
 PSPReversal: Analysis module that analyzes the current-voltage relationships
 relationships of PSPs from voltage clamp data.
 This is part of Acq4
-Based on PSPReversal (as of 5/2014)
+Based on IVCurve (as of 5/2014)
 Paul B. Manis, Ph.D.
 2014.
 
@@ -43,14 +43,10 @@ class PSPReversal(AnalysisModule):
     electrophysiology experiments. The module is interactive, and is primarily
     designed to allow a preliminary examination of data collected in current clamp and voltage clamp.
     Results analyzed include:
-    Resting potential (average RMP through the episodes in the protocol).
-    Input resistance (maximum slope if IV relationship below Vrest)
-    Cell time constant (single exponential fit)
-    Ih Sag amplitude and tau
-    Spike rate as a function of injected current
-    Interspike interval as a function of time for each current level
-    RMP as a function of time through the protocol
-
+    RMP/Holding current as a function of time through the protocol
+    Reversal potential determined from difference of two windows (or interpolation) with various measurements
+    Prints reversal potential, IV curve (subtracted), and ancillary information
+    
     """
 
     def __init__(self, host):
