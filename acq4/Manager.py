@@ -1114,7 +1114,7 @@ class Task:
         #print "Manager.Task.isDone"
         if not self.abortRequested:
             t = ptime.time()
-            if t - self.startTime < self.cfg['duration']:
+            if self.startTime is None or t - self.startTime < self.cfg['duration']:
                 #print "  not done yet"
                 return False
             #else:

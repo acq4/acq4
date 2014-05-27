@@ -615,7 +615,7 @@ class TaskRunner(Module):
                         self.createAnalysisDock(k)
                         conf = prot.conf['analysis'][k]
                         self.analysisDocks[k].widget().restoreState(conf)
-                        prof.mark('configured dock: ' + d)
+                        prof.mark('configured dock: ' + k)
                     except:
                         printExc("Error while loading analysis dock:")
                         
