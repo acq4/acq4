@@ -57,9 +57,11 @@ class ColorMapParameter(ptree.types.GroupParameter):
     def addNew(self, name):
         mode = self.fields[name].get('mode', 'range')
         if mode == 'range':
-            self.addChild(RangeColorMapItem(name, self.fields[name]))
+            item = RangeColorMapItem(name, self.fields[name])
         elif mode == 'enum':
-            self.addChild(EnumColorMapItem(name, self.fields[name]))
+            item = EnumColorMapItem(name, self.fields[name])
+        self.addChild(item)
+        return item
         
     def fieldNames(self):
         return self.fields.keys()
@@ -138,8 +140,25 @@ class ColorMapParameter(ptree.types.GroupParameter):
         
         return colors
             
+    def saveState(self):
+        items = []
+        for item in self:
+            itemState = item.saveState()
+            #itemState['mapType'] = item.mapType
+            items.append(itemState)
+        state = {'fields': self.fields, 'items': items}
+        return state
+
+    def restoreState(self, state):
+        self.setFields(state['fields'])
+        for itemState in state['items']:
+            item = self.addNew(itemState['name'])
+            item.restoreState(itemState)
+        
     
 class RangeColorMapItem(ptree.types.SimpleParameter):
+    mapType = 'range'
+    
     def __init__(self, name, opts):
         self.fieldName = name
         units = opts.get('units', '')
@@ -176,6 +195,8 @@ class RangeColorMapItem(ptree.types.SimpleParameter):
 
 
 class EnumColorMapItem(ptree.types.GroupParameter):
+    mapType = 'enum'
+    
     def __init__(self, name, opts):
         self.fieldName = name
         vals = opts.get('values', [])
