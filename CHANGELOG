@@ -3,6 +3,8 @@ acq4-0.9.2 (unreleased)
     API / behavior changes:
     New Features:
         Added export option to ImageView
+        Added new online analysis module for photostimulation (replaces old Uncaging module)
+        Added support for controlling bidirectional filtering by NiDAQ device
     Bugfixes:
         Fixed issues with Scanner grid controls in TaskRunner
     Maintenance:
