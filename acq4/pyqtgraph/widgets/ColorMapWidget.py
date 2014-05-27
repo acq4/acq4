@@ -141,18 +141,19 @@ class ColorMapParameter(ptree.types.GroupParameter):
         return colors
             
     def saveState(self):
-        items = []
+        items = OrderedDict()
         for item in self:
-            itemState = item.saveState()
-            #itemState['mapType'] = item.mapType
-            items.append(itemState)
+            itemState = item.saveState(filter='user')
+            itemState['field'] = item.fieldName
+            items[item.name()] = itemState
         state = {'fields': self.fields, 'items': items}
         return state
 
     def restoreState(self, state):
-        self.setFields(state['fields'])
+        if 'fields' in state:
+            self.setFields(state['fields'])
         for itemState in state['items']:
-            item = self.addNew(itemState['name'])
+            item = self.addNew(itemState['field'])
             item.restoreState(itemState)
         
     
@@ -191,8 +192,7 @@ class RangeColorMapItem(ptree.types.SimpleParameter):
         nanColor = (nanColor.red()/255., nanColor.green()/255., nanColor.blue()/255., nanColor.alpha()/255.)
         colors[mask] = nanColor
         
-        return colors
-
+        return colors        
 
 class EnumColorMapItem(ptree.types.GroupParameter):
     mapType = 'enum'

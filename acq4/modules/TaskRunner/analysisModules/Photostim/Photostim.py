@@ -142,6 +142,14 @@ class PhotostimModule(AnalysisModule):
         
     def scannerDevice(self):
         return str(self.ui.scannerDevCombo.currentText())
+
+    def saveState(self):
+        state = AnalysisModule.saveState(self)
+
+        # remove some unnecessary information
+        state['colorMapper'].pop('fields', None)
+
+        return state
         
         
 class Task:
@@ -275,11 +283,16 @@ class Task:
         # do spike detection
         thresh = self.state['spikeThresholdSpin']
         if self.state['spikeThresholdAbsRadio'] is False:
-            thresh -= med
-        mask = test > thresh
-        spikes = np.argwhere(np.diff(mask) == 1)
+            thresh += med
+        if thresh > med:
+            mask = test > thresh
+        else:
+            mask = test < thresh
+
+        spikes = np.argwhere(np.diff(mask.astype(np.int8)) == 1)
         results['nSpikes'] = len(spikes)
         print results
+        print med, test.max(), thresh
         # generate spot color from analysis
         color = self.ui().ui.colorMapper.map(results)
 

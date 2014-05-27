@@ -268,16 +268,27 @@ class Parameter(QtCore.QObject):
             vals[ch.name()] = (ch.value(), ch.getValues())
         return vals
     
-    def saveState(self):
+    def saveState(self, filter=None):
         """
         Return a structure representing the entire state of the parameter tree.
-        The tree state may be restored from this structure using restoreState()
+        The tree state may be restored from this structure using restoreState().
+
+        If *filter* is set to 'user', then only user-settable data will be included in the
+        returned state.
         """
-        state = self.opts.copy()
-        state['children'] = OrderedDict([(ch.name(), ch.saveState()) for ch in self])
-        if state['type'] is None:
-            global PARAM_NAMES
-            state['type'] = PARAM_NAMES.get(type(self), None)
+        if filter is None:
+            state = self.opts.copy()
+            if state['type'] is None:
+                global PARAM_NAMES
+                state['type'] = PARAM_NAMES.get(type(self), None)
+        elif filter == 'user':
+            state = {'value': self.value()}
+        else:
+            raise ValueError("Unrecognized filter argument: '%s'" % filter)
+
+        ch = OrderedDict([(ch.name(), ch.saveState(filter=filter)) for ch in self])
+        if len(ch) > 0:
+            state['children'] = ch
         return state
 
     def restoreState(self, state, recursive=True, addChildren=True, removeChildren=True, blockSignals=True):
@@ -295,8 +306,11 @@ class Parameter(QtCore.QObject):
         
         ## list of children may be stored either as list or dict.
         if isinstance(childState, dict):
-            childState = childState.values()
-            
+            cs = []
+            for k,v in childState.items():
+                cs.append(v.copy())
+                cs[-1].setdefault('name', k)
+            childState = cs
         
         if blockSignals:
             self.blockTreeChangeSignal()
@@ -313,14 +327,14 @@ class Parameter(QtCore.QObject):
             
             for ch in childState:
                 name = ch['name']
-                typ = ch['type']
+                #typ = ch.get('type', None)
                 #print('child: %s, %s' % (self.name()+'.'+name, typ))
                 
-                ## First, see if there is already a child with this name and type
+                ## First, see if there is already a child with this name
                 gotChild = False
                 for i, ch2 in enumerate(self.childs[ptr:]):
                     #print "  ", ch2.name(), ch2.type()
-                    if ch2.name() != name or not ch2.isType(typ):
+                    if ch2.name() != name: # or not ch2.isType(typ):
                         continue
                     gotChild = True
                     #print "    found it"
