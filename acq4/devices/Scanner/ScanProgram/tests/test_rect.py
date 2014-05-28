@@ -1,6 +1,7 @@
 from __future__ import division
 import numpy as np
-from acq4.devices.Scanner.ScanProgram.rect import RectScan
+from acq4.devices.Scanner.ScanProgram.rect import RectScan, RectScanParameter
+from acq4.pyqtgraph.parametertree import ParameterTree
 
 def assertState(rs, state):
     #print "=== assert state:"
@@ -159,7 +160,16 @@ def test_RectScan():
     rs.restoreState(state)
     state = dict([(n,v[0]) for n,v in state.items()])
     assertState(rs, state)
+
+def test_RectScanParameter():
+    p = RectScanParameter()
+    w = ParameterTree()
+    w.setParameters(p)
+    w.show()
+    return p
     
 if __name__ == '__main__':
     import user
-    test_RectScan()
+    test_RectScanParameter()
+
+

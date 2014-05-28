@@ -8,9 +8,8 @@ from collections import OrderedDict
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph import QtGui, QtCore
 import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
-from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
+from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType, ParameterSystem, SystemSolver
 from .component import ScanProgramComponent
-from acq4.util.StateSolver import StateSolver
 
 class RectScanComponent(ScanProgramComponent):
     """
@@ -141,21 +140,9 @@ class RectScanControl(QtCore.QObject):
         self.name = component.name
         self.blockUpdate = False
         self.component = weakref.ref(component)
-        
-        params = [
-            dict(name='width', readonly=True, type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
-            dict(name='height', readonly=True, type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
-            dict(name='overScan', type='float', value=70., suffix='%', siPrefix=False, bounds=[0, 200.], step = 1),
-            dict(name='pixelSize', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[2e-7, None], step=2e-7),
-            dict(name='startTime', type='float', value=1e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
-            dict(name='nScans', type='int', value=10, bounds=[1, None]),
-            dict(name='duration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
-            dict(name='imageSize', type='str', readonly=True),
-            dict(name='scanSpeed', type='float', readonly=True, suffix='m/ms', siPrefix=True), 
-            dict(name='frameExp', title=u'frame exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True), 
-            dict(name='totalExp', title=u'total exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True),
-        ]
-        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=)
+
+        self.params = RectScanParameter()
+
         self.params.component = self.component
         
         self.roi = RectScanROI(size=[self.params['width'], self.params['height']], pos=[0.0, 0.0])
@@ -205,42 +192,42 @@ class RectScanControl(QtCore.QObject):
             # TODO: this should be calculated by the same code that is used to generate the voltage array
             # (as currently written, it is unlikely to match the actual output exactly)
 
-            w = self.params['width'] * (1.0 + self.params['overScan']/100.)
-            h = self.params['height']
-            sampleRate = float(self.component().sampleRate)
-            downsample = self.component().downsample
+            # w = self.params['width'] * (1.0 + self.params['overScan']/100.)
+            # h = self.params['height']
+            # sampleRate = float(self.component().sampleRate)
+            # downsample = self.component().downsample
             
-            if 'duration' in changed:
-                # Set pixelSize to match duration
-                duration = self.params['duration']
-                maxSamples = int(duration * sampleRate)
-                maxPixels = maxSamples / downsample
-                ar = w / h
-                pxHeight = int((maxPixels / ar)**0.5)
-                pxWidth = int(ar * pxHeight)
-                imgSize = (pxWidth, pxHeight)
-                pxSize = w / (pxWidth-1)
-                self.params['pixelSize'] = pxSize
-            else:
-                # set duration to match pixelSize
-                pxSize = self.params['pixelSize']
-                imgSize = (int(w / pxSize) + 1, int(h / pxSize) + 1) 
-                samples = imgSize[0] * imgSize[1] * downsample
-                duration = samples / sampleRate
-                self.params['duration'] = duration
+            # if 'duration' in changed:
+            #     # Set pixelSize to match duration
+            #     duration = self.params['duration']
+            #     maxSamples = int(duration * sampleRate)
+            #     maxPixels = maxSamples / downsample
+            #     ar = w / h
+            #     pxHeight = int((maxPixels / ar)**0.5)
+            #     pxWidth = int(ar * pxHeight)
+            #     imgSize = (pxWidth, pxHeight)
+            #     pxSize = w / (pxWidth-1)
+            #     self.params['pixelSize'] = pxSize
+            # else:
+            #     # set duration to match pixelSize
+            #     pxSize = self.params['pixelSize']
+            #     imgSize = (int(w / pxSize) + 1, int(h / pxSize) + 1) 
+            #     samples = imgSize[0] * imgSize[1] * downsample
+            #     duration = samples / sampleRate
+            #     self.params['duration'] = duration
 
-            # Set read-only parameters:
+            # # Set read-only parameters:
 
-            self.params['imageSize'] = str(imgSize)
+            # self.params['imageSize'] = str(imgSize)
             
-            speed = w / (imgSize[0] * downsample / sampleRate)
-            self.params['scanSpeed'] = speed * 1e-3
+            # speed = w / (imgSize[0] * downsample / sampleRate)
+            # self.params['scanSpeed'] = speed * 1e-3
 
-            samplesPerUm2 = 1e-12 * downsample / pxSize**2
-            frameExp = samplesPerUm2 / sampleRate
-            totalExp = frameExp * self.params['nScans']
-            self.params['frameExp'] = frameExp
-            self.params['totalExp'] = totalExp
+            # samplesPerUm2 = 1e-12 * downsample / pxSize**2
+            # frameExp = samplesPerUm2 / sampleRate
+            # totalExp = frameExp * self.params['nScans']
+            # self.params['frameExp'] = frameExp
+            # self.params['totalExp'] = totalExp
 
         finally:
             self.blockUpdate = False
@@ -273,7 +260,7 @@ class RectScanControl(QtCore.QObject):
 
 
 arr = np.ndarray # just to clean up defaultState below..
-class RectScan(StateSolver):
+class RectScan(SystemSolver):
     """
     Manages the system of equations necessary to define a rectangular scanning area. 
 
@@ -332,6 +319,7 @@ class RectScan(StateSolver):
             * maximum / fixed pixel size
     """
     defaultState = OrderedDict([
+            # Variables needed to completely specify a single frame:
             ('p0', [None, arr, None, 'f']),  # 3 corners of the rectangle
             ('p1', [None, arr, None, 'nf']),
             ('p2', [None, arr, None, 'nf']),
@@ -350,13 +338,14 @@ class RectScan(StateSolver):
             ('bidirectional', [None, bool, None, 'f']),
             ('sampleRate', [None, float, None, 'f']),
             ('downsample', [None, int, None, 'f']),
-            ('duration', [None, float, None, 'nfr']),
+            ('frameDuration', [None, float, None, 'nfr']),
             ('scanOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe
             ('scanShape', [None, arr, None, 'n']),   # the full scan area including overscan
             ('scanStride', [None, arr, None, 'n']),  # and ignoring downsampling (index in samples)
             ('numRows', [None, int, None, 'n']),     # Same as scanShape[1] 
+            ('frameLen', [None, int, None, 'n']),
             #('sampleVectors', [None, arr, None, 'n']),
-            ('exposurePerUm2', [None, float, None, 'nfr']),
+            ('frameExposure', [None, float, None, 'nfr']),
             ('scanSpeed', [None, float, None, 'nfr']),
             ('activeOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe
             ('activeShape', [None, arr, None, 'n']),   # the 'active' scan area excluding overscan
@@ -364,6 +353,15 @@ class RectScan(StateSolver):
             ('imageOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe 
             ('imageShape', [None, arr, None, 'n']),   # the 'active' image area excluding overscan
             ('imageStride', [None, arr, None, 'n']),  # and accounting for downsampling (index in pixels)
+
+            # Variables needed to specify a sequence of frames:
+            ('startTime', [None, float, None, 'f']),
+            ('interFrameDuration', [None, float, None, 'f']),
+            ('interFrameLen', [None, int, None, 'n']),
+            ('numFrames', [None, int, None, 'f']),
+            ('totalTime', [None, float, None, 'n']),
+            ('totalExposure', [None, float, None, 'n']),
+            ('totalDuration', [None, int, None, 'n']),
             ])
 
     
@@ -465,7 +463,7 @@ class RectScan(StateSolver):
             
         except RuntimeError:
             # then from duration
-            d = self.duration
+            d = self.frameDuration
             nRows = self.numRows
             os = self.overscan
             osDuration = nRows * 2 * os
@@ -475,7 +473,7 @@ class RectScan(StateSolver):
             return w / rowTime
 
     def _scanOffset(self):
-        return 0
+        return self.startTime * self.sampleRate
     
     def _scanShape(self):
         w, h = self.imageShape
@@ -511,7 +509,7 @@ class RectScan(StateSolver):
             w = self.width
             h = self.height
             sr = self.sampleRate
-            dur = self.duration
+            dur = self.frameDuration
             pxar = self.pixelAspectRatio
             ds = self.downsample
             
@@ -529,7 +527,7 @@ class RectScan(StateSolver):
             return (nx, ny)
         
     def _imageOffset(self):
-        return self.osLen
+        return self.scanOffset + self.osLen
     
     def _imageStride(self):
         return (self.scanStride[0] / self.downsample, 1)
@@ -540,12 +538,102 @@ class RectScan(StateSolver):
         except RuntimeError:
             return self.scanShape[1]
 
-    def _exposurePerUm2(self):
+    def _frameExposure(self):
         pxArea = (self.pixelWidth * self.pixelHeight)
         samplesPerUm2 = 1e-12 * self.downsample / pxArea
         return samplesPerUm2 / self.sampleRate
 
+    def _totalExposure(self):
+        return self.numFrames * self.frameExposure
 
+    def _interFrameLen(self):
+        """Number of samples (not downsampled) between the end of one frame and the start of the next."""
+        return np.ceil((self.interFrameDuration * self.sampleRate) / self.downsample) * self.downsample
+
+    def _frameLen(self):
+        """Number of samples (not downsampled) from the beggining to end of a single frame."""
+        return self.scanStride[1] * self.numRows
+
+    def _totalDuration(self):
+        return (self.frameLen + self.interFrameLen) * self.numFrames
+
+
+class RectScanParameter(pTypes.SimpleParameter):
+    """
+    Parameter used to control rect scanning settings.
+    """
+    def __init__(self):
+        fixed = [{'name': 'fixed', 'type': 'bool', 'value': True}] # child of parameters that may be determined by the user
+        params = [
+            dict(name='width', readonly=True, type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='height', readonly=True, type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='overscan', type='float', value=30.e-6, suffix='s', siPrefix=True, bounds=[0., 1.], step=0.1, dec=True),
+            dict(name='pixelWidth', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
+            dict(name='pixelHeight', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
+            dict(name='pixelAspectRatio', type='float', value=1, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
+            dict(name='startTime', type='float', value=1e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='numFrames', type='int', value=10, bounds=[1, None]),
+            dict(name='totalDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='imageShape', type='str', readonly=True),
+            dict(name='scanSpeed', type='float', readonly=True, suffix='m/ms', siPrefix=True), 
+            dict(name='frameExposure', title=u'frame exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True), 
+            dict(name='totalExposure', title=u'total exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True),
+        ]
+        self.system = RectScan()
+        pTypes.SimpleParameter.__init__(self, name='rect_scan', type='bool', value=True, removable=True, renamable=True, children=params)
+
+        # add 'fixed' parameters
+        for param in self:
+            if 'f' in self.system._vars[param.name()][3]:
+                param.addChild(dict(name='fixed', type='bool', value=False))
+
+        self.sigTreeStateChanged.connect(self.updateSystem)
+        self.updateSystem()
+        
+    def updateSystem(self, param, changes):
+        """
+        Set all system variables to match the fixed values in the parameter tree.
+        """
+        self.system.reset()
+        for param in self:
+            if 'f' in self.system._vars[param.name()][3]:
+                if param['fixed']:
+                    setattr(self._system, param.name(), param.value())
+                else:
+                    setattr(self._system, param.name(), None)
+        self.updateAllParams()
+    
+    def updateAllParams(self):
+        """
+        Update the parameter tree to show all auto-generated values in the system.
+        """
+        try:
+            self.sigTreeStateChanged.disconnect(self.updateSystem)
+            with self.treeChangeBlocker():
+                for param in self:
+                    constraints = self.system._vars[param.name()][3]
+                    if 'f' in constraints:
+                        fixed = param['fixed']
+                    else:
+                        fixed = None
+
+                    if fixed is not True:
+                        try: # value is auto-generated
+                            val = getattr(self.system, param.name())
+                            param.setValue(val)
+                            param.setReadonly(True)
+                            if fixed is not None: 
+                                param.child('fixed').setValue(False)
+                                param.child('fixed').setEnabled(False)
+
+                        except RuntimeError:  
+                            if fixed is not None:  # no value, fixable
+                                param.setReadonly(False)
+                                param.child('fixed').setEnabled(True)
+
+        finally:
+            self.sigTreeStateChanged.connect(self.updateSystem)
+                
 
 
 
