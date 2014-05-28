@@ -86,60 +86,64 @@ def test_RectScan():
     # can we determine the size of a pixel given the desired scan duration 
     # and pixel aspect ratio?
     # size is now 15x5, so we will shoot for a 16x6 = 96 pixel grid
-    rs.duration = 96e-3
+    rs.frameDuration = 96e-3
     rs.overscan = 0.0
     rs.pixelAspectRatio = 1.0
-    assert np.all(rs.scanShape == (16, 6))
+    assert np.all(rs.scanShape == (6, 16))
     assert rs.pixelWidth == 1.0
     assert rs.pixelHeight == 1.0
     
     # other aspect ratios?
-    rs.duration = 48e-3
+    rs.frameDuration = 48e-3
     rs.overscan = 0.0
     rs.pixelAspectRatio = 2.0
-    assert np.all(rs.scanShape == (8, 6))
+    assert np.all(rs.scanShape == (6, 8))
     assert rs.pixelWidth == 2.0
     assert rs.pixelHeight == 1.0
     
     # Can we determine duration given the desired pixel size?
-    rs.duration = None
+    rs.frameDuration = None
     rs.pixelWidth = 1.0
     rs.pixelHeight = 1.0
     # todo: setting pxw and pxh should be impossible if pxar is already specified.
-    assert np.all(rs.scanShape == (16, 6))
-    assert rs.duration == 96e-3
+    assert np.all(rs.scanShape == (6, 16))
+    assert rs.frameDuration == 96e-3
     
     # overscan has the intended effect?
     pxTime = rs.pixelWidth / rs.scanSpeed
     rs.overscan = pxTime  # should add 1 pixel to either side
-    assert np.all(rs.scanShape == (18, 6))
-    assert np.all(rs.imageShape == (16, 6))
-    assert rs.duration == 108e-3
+    assert np.all(rs.scanShape == (6, 18))
+    assert np.all(rs.imageShape == (6, 16))
+    assert rs.frameDuration == 108e-3
     
     # downsampling?
     rs.overscan = 0
     rs.downsample = 10
-    assert rs.duration == 0.96
-    assert np.all(rs.scanShape == (160, 6))
-    assert np.all(rs.imageShape == (16, 6))
+    assert rs.frameDuration == 0.96
+    assert np.all(rs.scanShape == (6, 160))
+    assert np.all(rs.imageShape == (6, 16))
 
     # downsampling + overscan
     rs.overscan = 0.01
-    assert rs.duration == 1.08
-    assert np.all(rs.scanShape == (180, 6))
-    assert np.all(rs.imageShape == (16, 6))
+    assert rs.frameDuration == 1.08
+    assert np.all(rs.scanShape == (6, 180))
+    assert np.all(rs.imageShape == (6, 16))
     
-    # todo: make sure that all offsets and strides are integer multiples of downsampling
+    # make sure that all offsets and strides are integer multiples of downsampling
     rs.overscan = 0.025
-    assert isMultiple(rs.scanShape[0], rs.downsample)
+    rs.startTime = 0
+    assert isMultiple(rs.scanShape[1], rs.downsample)
     assert isMultiple(rs.scanStride[0], rs.downsample)
-    assert isMultiple(rs.activeShape[0], rs.downsample)
+    assert isMultiple(rs.scanOffset, rs.downsample)
+    assert isMultiple(rs.activeShape[1], rs.downsample)
     assert isMultiple(rs.activeStride[0], rs.downsample)
     assert isMultiple(rs.activeOffset, rs.downsample)
     
-    # todo: make sure that the complete state does not depend on the order
+    # make sure that the complete state does not depend on the order
     # in which parameters are accessed
     rs.bidirectional = True
+    rs.interFrameDuration = 0
+    rs.numFrames = 1
     np.random.seed(1245)
     unfixed = [n for n in rs._vars if rs._vars[n][2] is None]
     rs.solve()  # initialize all
@@ -163,13 +167,26 @@ def test_RectScan():
 
 def test_RectScanParameter():
     p = RectScanParameter()
+    p.system.defaultState['sampleRate'][0] = 1e6
+    p.system.defaultState['sampleRate'][2] = 'fixed'
+    p.system.defaultState['downsample'][0] = 1
+    p.system.defaultState['downsample'][2] = 'fixed'
+    p.system.defaultState['p0'][0] = np.array([0,0])
+    p.system.defaultState['p0'][2] = 'fixed'
+    p.system.defaultState['p1'][0] = np.array([100e-6,0])
+    p.system.defaultState['p1'][2] = 'fixed'
+    p.system.defaultState['p2'][0] = np.array([0,100e-6])
+    p.system.defaultState['p2'][2] = 'fixed'
+    p.updateSystem()
     w = ParameterTree()
     w.setParameters(p)
     w.show()
-    return p
+    return p, w
     
 if __name__ == '__main__':
     import user
-    test_RectScanParameter()
+    test_RectScan()
+    p, w = test_RectScanParameter()
+    w.resize(300, 900)
 
 

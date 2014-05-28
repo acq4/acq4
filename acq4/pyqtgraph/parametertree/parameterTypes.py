@@ -281,7 +281,7 @@ class WidgetParameterItem(ParameterItem):
         if 'readonly' in opts:
             self.updateDefaultBtn()
             if isinstance(self.widget, (QtGui.QCheckBox,ColorButton)):
-                w.setEnabled(not opts['readonly'])
+                self.widget.setEnabled(not opts['readonly'])
         
         ## If widget is a SpinBox, pass options straight through
         if isinstance(self.widget, SpinBox):

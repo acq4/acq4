@@ -359,9 +359,8 @@ class RectScan(SystemSolver):
             ('interFrameDuration', [None, float, None, 'f']),
             ('interFrameLen', [None, int, None, 'n']),
             ('numFrames', [None, int, None, 'f']),
-            ('totalTime', [None, float, None, 'n']),
             ('totalExposure', [None, float, None, 'n']),
-            ('totalDuration', [None, int, None, 'n']),
+            ('totalDuration', [None, float, None, 'n']),
             ])
 
     
@@ -374,7 +373,8 @@ class RectScan(SystemSolver):
         return np.linalg.norm(self.p2 - self.p0)
 
     def _angle(self):
-        return angle(self.p1 - self.p0)
+        dp = self.p1 - self.p0
+        return np.arctan2(*dp)
 
     def _p1(self):
         p0 = self.p0
@@ -439,18 +439,18 @@ class RectScan(SystemSolver):
     def _pixelAspectRatio(self):
         return self.pixelWidth / self.pixelHeight
     
-    def _duration(self):
+    def _frameDuration(self):
         # Note: duration calculation cannot depend on osp0, osp1, oswidth.
         # must be calculated from scan region excluding overscan.
         # (and then we can directly add 2*overscan*nlines)
-        imageShape = self.imageShape
+        activeShape = self.activeShape
         os = self.overscan
-        ds = self.downsample
         sr = self.sampleRate
         
-        osTime = imageShape[1] * 2 * os
-        imageSamples = imageShape[0] * imageShape[1] * ds
+        osTime = activeShape[0] * 2 * os
+        imageSamples = activeShape[1] * activeShape[0]
         imageTime = imageSamples / sr
+        #print osTime, imageSamples, imageTime, sr, self.downsample
         return imageTime + osTime
     
     def _scanSpeed(self):
@@ -476,19 +476,19 @@ class RectScan(SystemSolver):
         return self.startTime * self.sampleRate
     
     def _scanShape(self):
-        w, h = self.imageShape
+        h, w = self.imageShape
         w = (w + 2 * self.osLen) * self.downsample
-        return (w, h)
+        return (h, w)
     
     def _scanStride(self):
-        return (self.scanShape[0], 1)
+        return (self.scanShape[1], 1)
 
     def _activeOffset(self):
         return self.imageOffset * self.downsample
     
     def _activeShape(self):
         ims = self.imageShape
-        return ims * self.downsample
+        return ims * np.array([1, self.downsample])
     
     def _activeStride(self):
         return self.scanStride
@@ -503,7 +503,7 @@ class RectScan(SystemSolver):
             
             nx = int(w / pxw) + 1
             ny = int(h / pxh) + 1
-            return (nx, ny)
+            return (ny, nx)
         except RuntimeError:
             # duration, sample rate, size, and pixel aspect ratio
             w = self.width
@@ -524,19 +524,19 @@ class RectScan(SystemSolver):
             #          ==>  ny == (maxPixels / shapeRatio)**0.5
             ny = np.ceil((maxPixels / shapeRatio)**0.5)
             nx = int(maxPixels / ny)
-            return (nx, ny)
+            return (ny, nx)
         
     def _imageOffset(self):
-        return self.scanOffset + self.osLen
+        return self.scanOffset / self.downsample + self.osLen
     
     def _imageStride(self):
         return (self.scanStride[0] / self.downsample, 1)
 
     def _numRows(self):
         try:
-            return self.imageShape[1]
+            return self.imageShape[0]
         except RuntimeError:
-            return self.scanShape[1]
+            return self.scanShape[0]
 
     def _frameExposure(self):
         pxArea = (self.pixelWidth * self.pixelHeight)
@@ -555,7 +555,8 @@ class RectScan(SystemSolver):
         return self.scanStride[1] * self.numRows
 
     def _totalDuration(self):
-        return (self.frameLen + self.interFrameLen) * self.numFrames
+        print self.frameLen, self.interFrameLen, self.numFrames, self.sampleRate
+        return (self.frameLen + self.interFrameLen) * self.numFrames / self.sampleRate
 
 
 class RectScanParameter(pTypes.SimpleParameter):
@@ -568,12 +569,18 @@ class RectScanParameter(pTypes.SimpleParameter):
             dict(name='width', readonly=True, type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='height', readonly=True, type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='overscan', type='float', value=30.e-6, suffix='s', siPrefix=True, bounds=[0., 1.], step=0.1, dec=True),
+            dict(name='bidirectional', type='bool', value=True),
             dict(name='pixelWidth', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
             dict(name='pixelHeight', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
-            dict(name='pixelAspectRatio', type='float', value=1, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
+            dict(name='pixelAspectRatio', type='float', value=1, bounds=[1e-3, 1e3], step=0.5, dec=True),
             dict(name='startTime', type='float', value=1e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='numFrames', type='int', value=10, bounds=[1, None]),
+            dict(name='frameDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='interFrameDuration', type='float', value=0, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='totalDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='scanOffset', type='int', readonly=True),
+            dict(name='scanShape', type='str', readonly=True),
+            dict(name='scanStride', type='str', readonly=True),
             dict(name='imageShape', type='str', readonly=True),
             dict(name='scanSpeed', type='float', readonly=True, suffix='m/ms', siPrefix=True), 
             dict(name='frameExposure', title=u'frame exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True), 
@@ -584,13 +591,19 @@ class RectScanParameter(pTypes.SimpleParameter):
 
         # add 'fixed' parameters
         for param in self:
-            if 'f' in self.system._vars[param.name()][3]:
-                param.addChild(dict(name='fixed', type='bool', value=False))
+            cons = self.system._vars[param.name()][3]
+            if 'f' in cons:
+                if 'n' in cons:
+                    param.addChild(dict(name='fixed', type='bool', value=False))
+                else:
+                    param.addChild(dict(name='fixed', type='bool', value=True, readonly=True))
+            else:
+                param.setReadonly(True)
 
         self.sigTreeStateChanged.connect(self.updateSystem)
         self.updateSystem()
         
-    def updateSystem(self, param, changes):
+    def updateSystem(self, param=None, changes=None):
         """
         Set all system variables to match the fixed values in the parameter tree.
         """
@@ -598,9 +611,9 @@ class RectScanParameter(pTypes.SimpleParameter):
         for param in self:
             if 'f' in self.system._vars[param.name()][3]:
                 if param['fixed']:
-                    setattr(self._system, param.name(), param.value())
+                    setattr(self.system, param.name(), param.value())
                 else:
-                    setattr(self._system, param.name(), None)
+                    setattr(self.system, param.name(), None)
         self.updateAllParams()
     
     def updateAllParams(self):
@@ -620,16 +633,19 @@ class RectScanParameter(pTypes.SimpleParameter):
                     if fixed is not True:
                         try: # value is auto-generated
                             val = getattr(self.system, param.name())
-                            param.setValue(val)
+                            if param.type() == 'str':
+                                param.setValue(repr(val))
+                            else:
+                                param.setValue(val)
                             param.setReadonly(True)
                             if fixed is not None: 
                                 param.child('fixed').setValue(False)
-                                param.child('fixed').setEnabled(False)
+                                param.child('fixed').setReadonly(True)
 
                         except RuntimeError:  
                             if fixed is not None:  # no value, fixable
                                 param.setReadonly(False)
-                                param.child('fixed').setEnabled(True)
+                                param.child('fixed').setReadonly(False)
 
         finally:
             self.sigTreeStateChanged.connect(self.updateSystem)
