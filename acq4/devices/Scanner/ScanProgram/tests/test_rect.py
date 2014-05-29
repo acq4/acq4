@@ -2,6 +2,7 @@ from __future__ import division
 import numpy as np
 from acq4.devices.Scanner.ScanProgram.rect import RectScan, RectScanParameter
 from acq4.pyqtgraph.parametertree import ParameterTree
+import acq4.pyqtgraph as pg
 
 def assertState(rs, state):
     #print "=== assert state:"
@@ -87,17 +88,19 @@ def test_RectScan():
     # and pixel aspect ratio?
     # size is now 15x5, so we will shoot for a 16x6 = 96 pixel grid
     rs.frameDuration = 96e-3
-    rs.overscan = 0.0
+    rs.minOverscan = 0.0
     rs.pixelAspectRatio = 1.0
-    assert np.all(rs.scanShape == (6, 16))
+    rs.numFrames = 1
+    rs.interFrameDuration = 0.
+    assert np.all(rs.scanShape == (1, 6, 16))
     assert rs.pixelWidth == 1.0
     assert rs.pixelHeight == 1.0
     
     # other aspect ratios?
     rs.frameDuration = 48e-3
-    rs.overscan = 0.0
+    rs.minOverscan = 0.0
     rs.pixelAspectRatio = 2.0
-    assert np.all(rs.scanShape == (6, 8))
+    assert np.all(rs.scanShape == (1, 6, 8))
     assert rs.pixelWidth == 2.0
     assert rs.pixelHeight == 1.0
     
@@ -106,38 +109,43 @@ def test_RectScan():
     rs.pixelWidth = 1.0
     rs.pixelHeight = 1.0
     # todo: setting pxw and pxh should be impossible if pxar is already specified.
-    assert np.all(rs.scanShape == (6, 16))
+    assert np.all(rs.scanShape == (1, 6, 16))
     assert rs.frameDuration == 96e-3
     
     # overscan has the intended effect?
     pxTime = rs.pixelWidth / rs.scanSpeed
-    rs.overscan = pxTime  # should add 1 pixel to either side
-    assert np.all(rs.scanShape == (6, 18))
-    assert np.all(rs.imageShape == (6, 16))
+    rs.minOverscan = pxTime  # should add 1 pixel to either side
+    assert np.all(rs.scanShape == (1, 6, 18))
+    assert np.all(rs.imageShape == (1, 6, 16))
     assert rs.frameDuration == 108e-3
     
     # downsampling?
-    rs.overscan = 0
+    rs.minOverscan = 0
     rs.downsample = 10
     assert rs.frameDuration == 0.96
-    assert np.all(rs.scanShape == (6, 160))
-    assert np.all(rs.imageShape == (6, 16))
+    assert np.all(rs.scanShape == (1, 6, 160))
+    assert np.all(rs.imageShape == (1, 6, 16))
 
     # downsampling + overscan
-    rs.overscan = 0.01
+    rs.minOverscan = 0.01
     assert rs.frameDuration == 1.08
-    assert np.all(rs.scanShape == (6, 180))
-    assert np.all(rs.imageShape == (6, 16))
+    assert np.all(rs.scanShape == (1, 6, 180))
+    assert np.all(rs.imageShape == (1, 6, 16))
     
     # make sure that all offsets and strides are integer multiples of downsampling
-    rs.overscan = 0.025
+    rs.minOverscan = 0.025
     rs.startTime = 0
-    assert isMultiple(rs.scanShape[1], rs.downsample)
-    assert isMultiple(rs.scanStride[0], rs.downsample)
-    assert isMultiple(rs.scanOffset, rs.downsample)
-    assert isMultiple(rs.activeShape[1], rs.downsample)
-    assert isMultiple(rs.activeStride[0], rs.downsample)
-    assert isMultiple(rs.activeOffset, rs.downsample)
+    ds = rs.downsample
+    assert ds > 1
+    assert isMultiple(rs.osLen, ds)
+    assert isMultiple(rs.scanShape[2], ds)
+    assert isMultiple(rs.scanStride[1], ds)
+    assert isMultiple(rs.scanStride[0], ds)
+    assert isMultiple(rs.scanOffset, ds)
+    assert isMultiple(rs.activeShape[2], ds)
+    assert isMultiple(rs.activeStride[1], ds)
+    assert isMultiple(rs.activeStride[0], ds)
+    assert isMultiple(rs.activeOffset, ds)
     
     # make sure that the complete state does not depend on the order
     # in which parameters are accessed
@@ -167,16 +175,17 @@ def test_RectScan():
 
 def test_RectScanParameter():
     p = RectScanParameter()
-    p.system.defaultState['sampleRate'][0] = 1e6
+    p.system.defaultState['sampleRate'][0] = 1e4
     p.system.defaultState['sampleRate'][2] = 'fixed'
     p.system.defaultState['downsample'][0] = 1
     p.system.defaultState['downsample'][2] = 'fixed'
     p.system.defaultState['p0'][0] = np.array([0,0])
     p.system.defaultState['p0'][2] = 'fixed'
-    p.system.defaultState['p1'][0] = np.array([100e-6,0])
+    p.system.defaultState['p1'][0] = np.array([150e-6,0])
     p.system.defaultState['p1'][2] = 'fixed'
-    p.system.defaultState['p2'][0] = np.array([0,100e-6])
+    p.system.defaultState['p2'][0] = np.array([0,-100e-6])
     p.system.defaultState['p2'][2] = 'fixed'
+    p.system.defaultState['numFrames'][0] = 1
     p.updateSystem()
     w = ParameterTree()
     w.setParameters(p)
@@ -188,5 +197,25 @@ if __name__ == '__main__':
     test_RectScan()
     p, w = test_RectScanParameter()
     w.resize(300, 700)
-
+    plt = pg.plot()
+    def update():
+        global p, plt
+        arr = np.zeros((100000,2))
+        plt.clear()
+        try:
+            p.system.writeArray(arr)
+            plt.plot(arr[:,0], arr[:,1])
+            r = p.system.numCols - 1
+            e = p.system.numCols * p.system.numRows - 1
+            x = [arr[0,0], arr[r,0], arr[e,0]]
+            y = [arr[0,1], arr[r,1], arr[e,1]]
+            b = list(map(pg.mkBrush, ['g', 'b', 'r']))
+            plt.plot(x, y, pen=None, symbol='o', symbolBrush=b)
+            plt.plotItem.setAspectLocked()
+            plt.autoRange()
+            plt.plotItem.setAspectLocked(False)
+            
+        except RuntimeError:
+            pass
+    p.sigTreeStateChanged.connect(update)
 

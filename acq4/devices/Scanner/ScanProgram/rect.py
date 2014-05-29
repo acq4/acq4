@@ -326,9 +326,11 @@ class RectScan(SystemSolver):
             ('width', [None, float, None, 'nf']),  # width of requested scan area, excluding overscan
             ('height', [None, float, None, 'nf']),
             ('angle', [None, float, None, 'nf']),
-            ('overscan', [None, float, None, 'f']),  # overscan duration (sec)
+            ('minOverscan', [None, float, None, 'f']),  # minimum overscan duration (sec)
+            ('overscanDuration', [None, float, None, 'n']),  # actual overscan duration (sec)
             ('osP0', [None, arr, None, 'n']),
             ('osP1', [None, arr, None, 'n']),
+            ('osP2', [None, arr, None, 'n']),
             ('osVector', [None, arr, None, 'n']),  # vector from p1 -> osP1
             ('osLen', [None, int, None, 'n']),     # number of samples in overscan region (single row, one side)
             ('fullWidth', [None, float, None, 'n']), # full width of the scan area, including overscan
@@ -340,8 +342,8 @@ class RectScan(SystemSolver):
             ('downsample', [None, int, None, 'f']),
             ('frameDuration', [None, float, None, 'nfr']),
             ('scanOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe
-            ('scanShape', [None, arr, None, 'n']),   # the full scan area including overscan
-            ('scanStride', [None, arr, None, 'n']),  # and ignoring downsampling (index in samples)
+            ('scanShape', [None, tuple, None, 'n']),   # the full scan area including overscan
+            ('scanStride', [None, tuple, None, 'n']),  # and ignoring downsampling (index in samples)
             ('numRows', [None, int, None, 'n']),     # Same as scanShape[0] 
             ('numCols', [None, int, None, 'n']),     # Same as scanShape[1] 
             ('activeCols', [None, int, None, 'n']),  # Same as activeShape[1] 
@@ -350,11 +352,11 @@ class RectScan(SystemSolver):
             ('frameExposure', [None, float, None, 'n']),
             ('scanSpeed', [None, float, None, 'n']),
             ('activeOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe
-            ('activeShape', [None, arr, None, 'n']),   # the 'active' scan area excluding overscan
-            ('activeStride', [None, arr, None, 'n']),  # and ignoring downsampling (index in samples)
+            ('activeShape', [None, tuple, None, 'n']),   # the 'active' scan area excluding overscan
+            ('activeStride', [None, tuple, None, 'n']),  # and ignoring downsampling (index in samples)
             ('imageOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe 
-            ('imageShape', [None, arr, None, 'n']),   # the 'active' image area excluding overscan
-            ('imageStride', [None, arr, None, 'n']),  # and accounting for downsampling (index in pixels)
+            ('imageShape', [None, tuple, None, 'n']),   # the 'active' image area excluding overscan
+            ('imageStride', [None, tuple, None, 'n']),  # and accounting for downsampling (index in pixels)
 
             # Variables needed to specify a sequence of frames:
             ('startTime', [None, float, None, 'f']),
@@ -365,6 +367,60 @@ class RectScan(SystemSolver):
             ('totalDuration', [None, float, None, 'n']),
             ])
 
+
+    ### Array handling functions:
+    
+    def writeArray(self, array, mapping=None):
+        """
+        Given a (N,2) array, write the rectangle scan into the 
+        array regions defined by scanOffset, scanShape, and scanStride.
+        
+        The optional *mapping* argument provides a callable that maps from 
+        global position to another coordinate system (eg. mirror voltage).
+        It must accept an array of the structure (..., 2) where 
+        x == array[...,0] and y == array[...,1] 
+        """
+        offset = self.scanOffset
+        shape = self.scanShape
+        stride = self.scanStride
+        
+        # position difference between adjacent rows / columns
+        #ny = self.nPointsY # get number of rows
+        #nx = samplesPerRow # get number of points per row, including overscan        
+        #dx = (pts[1]-pts[0])/(self.nPointsX*self.downSample) # (nx-1)
+        #dy = (pts[2]-pts[0])/self.nPointsY # (ny-1)
+        pts = self.osP0, self.osP1, self.osP2
+        nf, ny, nx = shape
+        dx = (pts[1]-pts[0]) / (shape[2]-1)
+        dy = (pts[2]-pts[0]) / (shape[1]-1)
+        
+        # Make grid of indexes
+        r = np.mgrid[0:ny, 0:nx]
+        if self.bidirectional:
+            r[:, 1::2] = r[:, 1::2, ::-1]
+            
+        # Convert indexes to global coordinates.
+        v = np.array([dy, dx]).reshape(2,1,1,2) 
+        r = r[...,np.newaxis]
+        q = (v*r).sum(axis=0)  # order is now (row, column, xy)
+        q += pts[0].reshape(1,1,2)
+        
+        # Convert via mapping (usually to mirror voltages)
+        #x, y = self.scannerDev.mapToScanner(q[0].flatten(), q[1].flatten(), self.laserDev)
+        if mapping is not None:
+            q = mapping(q)
+            
+        ### select target array based on offset, shape, and stride. 
+        # first check that this array is long enough
+        if array.shape[0] < offset + shape[0] * stride[0]:
+            raise Exception("Array is too small to contain the specified rectangle scan.")
+        
+        # select the target sub-array
+        target = pg.subArray(array, offset, shape, stride)
+        
+        # copy data into array (one copy per frame)
+        target[:] = q[np.newaxis, ...]
+        
     
     ### Functions defining the relationships between variables:
     
@@ -393,9 +449,13 @@ class RectScan(SystemSolver):
     def _osVector(self):
         # This vector is p1 -> osP1
         # Compute from p0, overscan, and scanSpeed
-        speed = self.scanSpeed
-        os = self.overscan
-        osDist = speed * os
+        try:
+            osDist = self.osLen / self.downsample * self.pixelWidth
+        except RuntimeError:
+            raise
+            #speed = self.scanSpeed
+            #os = self.overscanDuration
+            #osDist = speed * os
         
         p0 = self.p0
         p1 = self.p1
@@ -405,24 +465,28 @@ class RectScan(SystemSolver):
         return dx
 
     def _osLen(self):
-        """Length of overscan in px (not samples)"""
+        """Length of overscan (non-downsampled)"""
         try:
-            return np.ceil(self.overscan * self.sampleRate / self.downsample)
+            return np.ceil(self.minOverscan * self.sampleRate / self.downsample) * self.downsample
         except RuntimeError:
-            osv = self.osVector
-            return np.ceil(np.linalg.norm(osv) / self.pixelWidth)
+            raise
+            #osv = self.osVector
+            #return np.ceil(np.linalg.norm(osv) / self.pixelWidth)
 
-
+    def _overscanDuration(self):
+        """
+        The actual duration of the overscan on a single row, single side.
+        """
+        return self.osLen / self.sampleRate
 
     def _osP0(self):
-        osv = self.osVector
-        p0 = self.p0
-        return p0 - osv
+        return self.p0 - self.osVector
     
     def _osP1(self):
-        osv = self.osVector
-        p1 = self.p1
-        return p1 + osv
+        return self.p1 + self.osVector
+    
+    def _osP2(self):
+        return self.p2 - self.osVector
     
     def _fullWidth(self):
         p0 = self.osP0
@@ -470,11 +534,11 @@ class RectScan(SystemSolver):
         # must be calculated from scan region excluding overscan.
         # (and then we can directly add 2*overscan*nlines)
         activeShape = self.activeShape
-        os = self.overscan
+        os = self.overscanDuration
         sr = self.sampleRate
         
-        osTime = activeShape[0] * 2 * os
-        imageSamples = activeShape[1] * activeShape[0]
+        osTime = activeShape[1] * 2 * os
+        imageSamples = activeShape[2] * activeShape[1]
         imageTime = imageSamples / sr
         #print osTime, imageSamples, imageTime, sr, self.downsample
         return imageTime + osTime
@@ -491,7 +555,7 @@ class RectScan(SystemSolver):
             # then from duration
             d = self.frameDuration
             nRows = self.numRows
-            os = self.overscan
+            os = self.overscanDuration
             osDuration = nRows * 2 * os
             d -= osDuration
             rowTime = d / nRows
@@ -505,15 +569,17 @@ class RectScan(SystemSolver):
         try:
             h = self.numRows
             w = self.numCols
-            return (h, w)
+            f = self.numFrames
+            return (f, h, w)
         except RuntimeError:
             # duration, sample rate, size, and pixel aspect ratio
+            f = self.numFrames
             w = self.width
             h = self.height
             sr = self.sampleRate
             dur = self.frameDuration
             pxar = self.pixelAspectRatio
-            os = self.overscan
+            osLen = self.osLen
             ds = self.downsample
             
             maxSamples = int(dur * sr)
@@ -528,23 +594,23 @@ class RectScan(SystemSolver):
             # shapeRatio * dur == numActiveCols * 2 * os + numActiveCols**2 / sampleRate
             # solve quadratic:
             a = 1. / sr
-            b = 2. * os
+            b = 2. * self.overscanDuration
             c = - shapeRatio * dur
             numActiveCols = int((-b + (b**2 - 4*a*c) ** 0.5) / (2*a))
-            numCols = numActiveCols + self.osLen * 2
+            numCols = numActiveCols + osLen * 2
             numRows = int(maxSamples / numCols)
-            return (numRows, numCols)
+            return (f, numRows, numCols)
 
 
     
     def _scanStride(self):
-        return (self.scanShape[1], 1)
+        return (self.frameLen + self.interFrameLen, self.numCols, 1)
 
     def _activeOffset(self):
         return self.imageOffset * self.downsample
 
     def _activeShape(self):
-        return (self.numRows, self.activeCols)
+        return (self.numFrames, self.numRows, self.activeCols)
     
     def _activeStride(self):
         return self.scanStride
@@ -552,7 +618,7 @@ class RectScan(SystemSolver):
     def _imageShape(self):
 
         try:
-            return self.numRows, self.activeCols / self.downsample
+            return self.numFrames, self.numRows, self.activeCols / self.downsample
             # # image size and pixel size
             # w = self.width
             # h = self.height
@@ -566,10 +632,12 @@ class RectScan(SystemSolver):
             raise
 
     def _imageOffset(self):
-        return self.scanOffset / self.downsample + self.osLen
+        return (self.scanOffset + self.osLen) / self.downsample
     
     def _imageStride(self):
-        return (self.scanStride[0] / self.downsample, 1)
+        ds = self.downsample
+        ss = self.scanStride
+        return (ss[0] / ds, ss[1] / ds, 1)
 
     def _numRows(self):
         try:
@@ -582,12 +650,12 @@ class RectScan(SystemSolver):
             pass
 
         try:
-            return self.imageShape[0]
+            return self.imageShape[1]
         except RuntimeError:
             pass
 
         try:
-            return self.scanShape[0]
+            return self.scanShape[1]
         except RuntimeError:
             raise
 
@@ -602,18 +670,18 @@ class RectScan(SystemSolver):
             nx = int(w / pxw) + 1
             return nx * self.downsample
         except RuntimeError:
-            sw = self.scanShape[1]
+            sw = self.scanShape[2]
             osl = self.osLen
             return sw - osl*2
 
     def _numCols(self):
         try:
-            return self.activeCols + (2 * self.osLen * self.downsample)
+            return self.activeCols + (2 * self.osLen)
         except RuntimeError:
             pass
 
         try:
-            return self.scanShape[1]
+            return self.scanShape[2]
         except RuntimeError:
             raise
 
@@ -646,13 +714,13 @@ class RectScanParameter(pTypes.SimpleParameter):
         params = [
             dict(name='width', readonly=True, type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='height', readonly=True, type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
-            dict(name='overscan', type='float', value=30.e-6, suffix='s', siPrefix=True, bounds=[0., 1.], step=0.1, dec=True),
+            dict(name='minOverscan', type='float', value=30.e-6, suffix='s', siPrefix=True, bounds=[0., 1.], step=0.1, dec=True, minStep=1e-7),
             dict(name='bidirectional', type='bool', value=True),
             dict(name='pixelWidth', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
             dict(name='pixelHeight', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
             dict(name='pixelAspectRatio', type='float', value=1, bounds=[1e-3, 1e3], step=0.5, dec=True),
             dict(name='startTime', type='float', value=0, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
-            dict(name='numFrames', type='int', value=10, bounds=[1, None]),
+            dict(name='numFrames', type='int', value=1, bounds=[1, None]),
             dict(name='frameDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='interFrameDuration', type='float', value=0, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='totalDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),

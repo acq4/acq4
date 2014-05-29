@@ -174,6 +174,8 @@ class SystemSolver(object):
         # type checking / massaging
         if var[1] is np.ndarray:
             value = np.array(value, dtype=float)
+        elif var[1] in (int, float, tuple) and value is not None:
+            value = var[1](value)
             
         # constraint checks
         if constraint is True and not self.check_constraint(name, value):
