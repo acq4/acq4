@@ -318,8 +318,16 @@ def exit():
     atexit._run_exitfuncs()
     
     ## close file handles
-    os.closerange(3, 4096) ## just guessing on the maximum descriptor count..
-    
+#    os.closerange(3, 4096) ## just guessing on the maximum descriptor count..
+    for fd in xrange(3, 4096):
+        try:
+            if fd not in [7]:  # trying to close 7 produces an illegal instruction on the Mac.
+                os.close(fd)
+                #print 'closed fd %d ok' % fd
+        except OSError:
+            pass
+            #print 'error on closing fd = %d' % fd
+
     os._exit(0)
     
 

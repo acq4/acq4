@@ -256,10 +256,11 @@ def getClampMode(data):
     """Given a clamp file handle or MetaArray, return the recording mode."""
     if not (hasattr(data, 'implements') and data.implements('MetaArray')):
         if not isClampFile(data):
-            raise Exception('%s not a clamp file.' %fh.shortName())
+            raise Exception('%s not a clamp file.' % data.shortName())
+        sn = data.shortName()
+#        print 'short name: ', sn
         data = data.read()
     info = data._info[-1]
-    
     if 'ClampState' in info:
         return info['ClampState']['mode']
     else:
@@ -267,7 +268,7 @@ def getClampMode(data):
             mode = info['mode']
             return mode
         except KeyError:
-            return None
+            return 'vc' # None  kludge to handle simulations, which don't seem to fully fill the structures.
 
 def getClampHoldingLevel(fh):
     """Given a clamp file handle, return the holding level (voltage for VC, current for IC).
@@ -275,7 +276,7 @@ def getClampHoldingLevel(fh):
     """
     
     if not isClampFile(fh):
-        raise Exception('%s not a clamp file.' %fh.shortName())
+        raise Exception('%s not a clamp file.' % fh.shortName())
     
     data = fh.read()
     info = data._info[-1]
@@ -301,6 +302,37 @@ def getClampHoldingLevel(fh):
             return holding
         except KeyError:
             return None
+
+def getClampState(data):
+    """
+    Return the full clamp state
+    """
+    info = data._info[-1]
+    if 'ClampState' in info.keys():
+        return info['ClampState']
+    else:
+        return None
+
+def getWCCompSettings(data):
+    """
+    return the compensation settings, if available
+    Settings are returned as a group in a dictionary
+    """
+    info = data._info[-1]
+    d={}
+    if 'ClampState' in info.keys():
+        par = info['ClampState']['ClampParams']
+        d['WCCompValid'] = True
+        d['WCEnabled'] = par['WholeCellCompEnable']
+        d['WCResistance'] = par['WholeCellCompResist']
+        d['WCCellCap'] = par['WholeCellCompCap']
+        d['CompEnabled'] = par['RsCompEnable']
+        d['CompCorrection'] = par['RsCompCorrection']
+        d['CompBW'] = par['RsCompBandwidth']
+        return d
+    else:
+        return {'WCCompValid': False, 'WCEnable': 0, 'WCResistance': 0., 'WholeCellCap': 0.,
+                'CompEnable': 0, 'CompCorrection': 0., 'CompBW': 50000. }
 
 def getSampleRate(data):
     """given clamp data, return the data sampling rate """

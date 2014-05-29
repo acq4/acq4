@@ -2,7 +2,7 @@
 """
 Simple Hodgkin-Huxley simulator for Python. VERY slow.
 Includes Ih from Destexhe 1993 [disabled]
-Also simulates votage clamp and current clamp with access resistance.
+Also simulates voltage clamp and current clamp with access resistance.
 
 Luke Campagnola 2013
 """
@@ -10,13 +10,13 @@ Luke Campagnola 2013
 import numpy as np
 import scipy.integrate
 from PyQt4 import QtGui, QtCore
-import scipy.weave
+#import scipy.weave
 
 um = 1e-6
 cm = 1e-2
 uF = 1e-6
 
-Raccess = 5e6
+Raccess = 1e5
 Cpip = 3e-12
 
 Radius = 20 * um
@@ -32,7 +32,12 @@ EK = -77e-3
 ENa = 50e-3
 EL = -55e-3
 EH = -43e-3
+Ik2 = 24.3
 
+Alpha_t0 = 500.  # msec
+Alpha_tau = 2.0
+gAlpha = 1e-3 * Area/cm**2
+EAlpha = -7e-3  # V
 
 def IK(n, Vm):
     return gK * n**4 * (Vm - EK)
@@ -45,6 +50,18 @@ def IL(Vm):
 
 def IH(Vm, f, s):
     return gH * f * s * (Vm - EH)
+
+def IAlpha(Vm, t):
+    if t < Alpha_t0:
+        return 0.
+    else:
+        # g = gmax * (t - onset)/tau * exp(-(t - onset - tau)/tau)
+        tn = t - Alpha_t0
+        if tn > 10.0 * Alpha_tau:
+            return 0.
+        else:
+            return gAlpha * (Vm - EAlpha)*(tn/Alpha_tau) * np.exp(-(tn-Alpha_tau)/Alpha_tau)
+
 
 def hh(y, t, mode, cmd, dt):
     ## y is a vector [Ve, Vm, m, h, n, f, s], function returns derivatives of each variable
@@ -79,7 +96,7 @@ def hh(y, t, mode, cmd, dt):
     dve = 1e-3 * (cmd - Iaccess) / Cpip    # 1e-3 is because t is expressed in ms
     
     # Compute change in membrane potential
-    Im = (Iaccess - INa(m, h, Vm) - IK(n, Vm) - IL(Vm) - IH(Vm, f, s))
+    Im = (Iaccess - INa(m, h, Vm) - IK(n, Vm) - IL(Vm) - IH(Vm, f, s) - IAlpha(Vm, t))
     dv = 1e-3 * Im / C    # 1e-3 is because t is expressed in ms
     
     ## Compute changes in gating parameters
@@ -124,9 +141,10 @@ def runSim(initState, mode='ic', cmd=None, dt=0.1, dur=100, **args):
     result = np.empty((npts, 9))
     
     # Run the simulation
-    result[:,2:] = scipy.integrate.odeint(hh, initState, t, (mode, cmd, dt), rtol=1e-6, atol=1e-6, hmax=5e-2, **args)
+    (result[:,2:], info) = scipy.integrate.odeint(hh, initState, t, (mode, cmd, dt),
+                                          rtol=1e-6, atol=1e-6, hmax=5e-2,full_output=1, **args)
     result[:,0] = t
-    
+   # print info
     # Compute electrode current sans pipette capacitance current
     t, Im, Ve, Vm, m, h, n, f, s = [result[:,i] for i in range(result.shape[1])]
     result[:,1] = (Ve-Vm) / Raccess
@@ -167,5 +185,34 @@ def run(cmd):
 
 
 
+# provide a visible test to make sure code is working and failures are not ours.
+# call this from the command line to observe the clamp plot results
+#
+if __name__ == '__main__':
+    import pyqtgraph as pg
+    from pyqtgraph.Qt import QtGui
+    app = QtGui.QApplication([])
+    win = pg.GraphicsWindow()
+    win.resize(1000,600)
+    win.setWindowTitle('Testing hhSim.py')
+    p = win.addPlot(title='VC')
+    npts = 10000.
+    x1 = 2000.
+    x2 = 7000.
+    x = np.arange(-100, 41, 50)
+    cmd = np.ones((len(x), npts))*-65.0*1e-3
+    data = np.zeros((len(x), npts))
+    dt = 1e-4
+    tb = np.arange(0, npts*dt, dt)
+    for i, v in enumerate(x):
+        print 'V: ', v
+        cmd[i, x1:x2] = v*1e-3
+        opts = {
+            'mode': 'vc',
+            'dt': dt,
+            'data': cmd[i,:]
+        }
+        data[i,:] = run(opts)
+        p.plot(tb, data[i])
 
-
+    QtGui.QApplication.instance().exec_()

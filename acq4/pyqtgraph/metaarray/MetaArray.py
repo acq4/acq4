@@ -1028,7 +1028,7 @@ class MetaArray(object):
     def writeHDF5(self, fileName, **opts):
         ## default options for writing datasets
         dsOpts = {  
-            'compression': 'lzf',
+            'compression': None, # 'lzf',
             'chunks': True,
         }
         
@@ -1103,6 +1103,8 @@ class MetaArray(object):
             f = h5py.File(fileName, 'w')
             f.attrs['MetaArray'] = MetaArray.version
             #print dsOpts
+            print 'dsOpts: ', dsOpts
+            print 'array: ', self.view(np.ndarray)
             f.create_dataset('data', data=self.view(np.ndarray), **dsOpts)
             
             ## dsOpts is used when storing meta data whenever an array is encountered
