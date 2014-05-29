@@ -570,7 +570,16 @@ class RectScan(SystemSolver):
         tr = QtGui.QTransform(*m[:3,:3].transpose().reshape(9))
         return tr
 
-
+    def frameTimes(self):
+        """
+        Return an array of the start time for each image frame.
+        """
+        sr = self.sampleRate
+        offset = self.activeOffset
+        stride = self.activeStride
+        nf = self.numFrames
+        t = np.arange(nf) * (stride[0] / sr) + (offset / sr)
+        return t
 
     ### Functions defining the relationships between variables:
     

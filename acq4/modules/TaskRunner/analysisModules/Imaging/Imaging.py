@@ -74,7 +74,27 @@ class ImagingModule(AnalysisModule):
         self.lastFrame = frame
         self.update()
 
+        # Store image if requested
+        storeFlag = frame['cmd']['protocol']['storeData'] # get flag 
+        if storeFlag and len(self.lastResult) > 0:
+            result = self.lastResult[0]  # for now we only handle single-component programs
+
+            dirhandle = frame['cmd']['protocol']['storageDir'] # grab storage directory
+            
+                       
+            # to line below, add x, y for the camera (look at camera video output)
+
+            info = [dict(name='Time', units='s', values=result['scanParams'].frameTimes()), 
+                    dict(name='X'), dict(name='Y'), {
+                        'transform': result['transform'],
+                        'imageProcessing': result['params'],
+                    }]
+            ma = metaarray.MetaArray(result['image'], info=info)
+            fh = dirhandle.writeFile(ma, 'Imaging.ma')
+            fh.setInfo(transform=result['transform'])
+
     def update(self):
+        self.lastResult = []
         frame = self.lastFrame
         if frame is None:
             self.clear()
@@ -107,8 +127,13 @@ class ImagingModule(AnalysisModule):
         # endT = prog['endTime'] # note that this value is shared by all types, so rectscan computes in program generator...
         
         if prog['type'] == 'rect':
+            # keep track of some analysis in case it should be stored later
+            result = {'params': self.params.saveState(filter='user')['children']}
+            self.lastResult.append(result)
+
             rs = RectScan()
             rs.restoreState(prog['scanInfo'])
+            result['scanParams'] = rs
 
             # Determine decomb duration
             auto = self.params['decomb', 'auto']
@@ -128,8 +153,18 @@ class ImagingModule(AnalysisModule):
             if ds > 1:
                 imageData = pg.downsample(imageData, ds, axis=2)
 
+            # Collected as (frame, row, col) but pg prefers images like (frame, col, row)
+            imageData = imageData.transpose(0, 2, 1)  
+            result['image'] = imageData
+
+            # compute global transform
+            tr = rs.imageTransform()
+            st = pg.QtGui.QTransform()
+            st.scale(self.params['downsample'], 1)
+            tr = st * tr
+            result['transform'] = pg.SRTTransform3D(tr)
+
             # Display image locally
-            imageData = imageData.transpose(0, 2, 1)  # Collected as (frame, row, col) but pg prefers images like (frame, col, row)
             self.plotWidget.setImage(imageData)
             self.plotWidget.getView().setAspectLocked(True)
             self.plotWidget.imageItem.setRect(QtCore.QRectF(0., 0., rs.width, rs.height))  # TODO: rs.width and rs.height might not be correct!
@@ -142,15 +177,11 @@ class ImagingModule(AnalysisModule):
                 camMod = sd.cameraModule().window()
                 camMod.addItem(self.img)
                 self.img.setImage(imageData.mean(axis=0))
-                tr = rs.imageTransform()
-                st = pg.QtGui.QTransform()
-                st.scale(self.params['downsample'], 1)
-                self.img.setTransform(st * tr)
+                self.img.setTransform(tr)
             else:
                 self.img.setVisible(False)
 
-
-
+           
         if prog['type'] == 'multipleLineScan': 
             totSamps = int(np.sum(prog['scanPointList'])) # samples per scan, before downsampling
             imageData = pmtdata[prog['startStopIndices'][0]:prog['startStopIndices'][0]+int((nscans*totSamps))].copy()           
