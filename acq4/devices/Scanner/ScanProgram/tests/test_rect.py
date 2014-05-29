@@ -89,7 +89,6 @@ def test_RectScan():
     rs.frameDuration = 96e-3
     rs.overscan = 0.0
     rs.pixelAspectRatio = 1.0
-    print rs.scanShape
     assert np.all(rs.scanShape == (6, 16))
     assert rs.pixelWidth == 1.0
     assert rs.pixelHeight == 1.0

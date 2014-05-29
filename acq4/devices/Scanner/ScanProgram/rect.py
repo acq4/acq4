@@ -516,28 +516,24 @@ class RectScan(SystemSolver):
             os = self.overscan
             ds = self.downsample
             
-            # maxPixels = int(dur * sr / ds)
             maxSamples = int(dur * sr)
 
             # given we may use maxPixels, what is the best way to fill 
             # the scan area with pixels of the desired pixel aspect ratio?
-            shapeRatio = ds * (w / h) / pxar  # this is nx / ny
-            
-            # solve:   nx * ny == maxPixels
-            #          nx / ny == shapeRatio
-            #          ==>  ny == (maxPixels / shapeRatio)**0.5
-            # ny = np.ceil((maxPixels / shapeRatio)**0.5)
-            # nx = int(maxPixels / ny)
-            # return (ny, nx * self.downsample)
+            shapeRatio = ds * (w / h) / pxar  # this is numPixelCols / numPixelRows
 
+            # Some maths:
+            # dur == 2 * os * numRows + numRows * numActiveCols / sampleRate
+            # (numActiveCols / ds) / numRows == shapeRatio
+            # shapeRatio * dur == numActiveCols * 2 * os + numActiveCols**2 / sampleRate
             # solve quadratic:
             a = 1. / sr
             b = 2. * os
             c = - shapeRatio * dur
-            nac = int((-b + (b**2 - 4*a*c) ** 0.5) / (2*a))
-            nc = nac + self.osLen * 2
-            nr = int(maxSamples / nc)
-            return (nr, nc)
+            numActiveCols = int((-b + (b**2 - 4*a*c) ** 0.5) / (2*a))
+            numCols = numActiveCols + self.osLen * 2
+            numRows = int(maxSamples / numCols)
+            return (numRows, numCols)
 
 
     
