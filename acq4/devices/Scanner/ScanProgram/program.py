@@ -44,6 +44,7 @@ class ScanProgram:
         self.dev = dev
         self.components = []
         self.canvas = None
+        self.sampleRate = None
         self.ctrlGroup = ScanProgramCtrlGroup()
         self.ctrlGroup.sigAddNewRequested.connect(self.paramRequestedNewComponent)
         self.ctrlGroup.sigChildRemoved.connect(self.paramRequestedRemove)
@@ -59,6 +60,8 @@ class ScanProgram:
             component = COMPONENTS[component](self)
         
         self.components.append(component)
+        if self.sampleRate is not None:
+            component.setSampleRate(*self.sampleRate)
         self.ctrlGroup.addChild(component.ctrlParameter(), autoIncrementName=True)
         if self.canvas is not None:
             for item in component.graphicsItems():
@@ -116,6 +119,7 @@ class ScanProgram:
                     i.scene().removeItem(i)
 
     def setSampleRate(self, rate, downsample):
+        self.sampleRate = (rate, downsample)
         for c in self.components:
             c.setSampleRate(rate, downsample)
 
@@ -141,9 +145,9 @@ class ScanProgram:
         Commands we might add in the future:
           - circle
           - spiral
-        """
-        dt = command['duration'] / command['numPts']
-        arr = np.zeros((2, command['numPts']))        
+        # """
+        # dt = command['duration'] / command['numPts']
+        arr = np.zeros((2, command['numPts']))
         cmds = command['program']
         lastPos = None     
         lastValue = np.array(dev.getVoltage())
@@ -153,12 +157,12 @@ class ScanProgram:
             if cmd['active'] is False:
                 continue
             
-            startInd = int(cmd['startTime'] / dt)
-            stopInd = int(cmd['endTime'] / dt)
-            if stopInd >= arr.shape[1]:
-                raise HelpfulException('Scan Program duration is longer than protocol duration') 
-            arr[:,lastStopInd:startInd] = lastValue[:,np.newaxis]
-            cmd['startStopIndices'] = (startInd, stopInd)
+            # startInd = int(cmd['startTime'] / dt)
+            # stopInd = int(cmd['endTime'] / dt)
+            # if stopInd >= arr.shape[1]:
+            #     raise HelpfulException('Scan Program duration is longer than protocol duration') 
+            # arr[:,lastStopInd:startInd] = lastValue[:,np.newaxis]
+            # cmd['startStopIndices'] = (startInd, stopInd)
             
             if cmd['type'] not in COMPONENTS:
                 raise Exception('No registered scan component class named "%s".' % cmd['type'])
@@ -166,19 +170,27 @@ class ScanProgram:
             component = COMPONENTS[cmd['type']]
             cmd['laser'] = command['laser']  # todo: should be handled individually by components
                                              # (because each component may be used with a different laser)
-            compStopInd = component.generateVoltageArray(arr, dt, dev, cmd, startInd, stopInd)
-            
-            assert compStopInd <= stopInd
-            stopInd = compStopInd
+            startInd, stopInd = component.generateVoltageArray(arr, dev, cmd) #, startInd, stopInd)
+
+            # fill unused space in the array from the last component to this one
+            arr[:,lastStopInd:startInd] = lastValue[:,np.newaxis]
+            # assert compStopInd <= stopInd
+            # stopInd = compStopInd
             
             lastValue = arr[:,stopInd-1]
             lastStopInd = stopInd
             
             
-        arr[:,lastStopInd:] = lastValue[:,np.newaxis]
+        # arr[:,lastStopInd:] = lastValue[:,np.newaxis]
         
         return arr
     
+    def preview(self, task):
+        va = self.generateVoltageArray(self.dev, task)
+        plt = getattr(self, 'previewPlot', pg.plot())
+        plt.clear()
+        plt.plot(va[0], va[1])
+
     def close(self):
         self.clearGraphicsItems()
 

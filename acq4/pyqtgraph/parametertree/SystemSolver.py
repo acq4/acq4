@@ -94,6 +94,7 @@ class SystemSolver(object):
         Otherwise, the constraint is set to 'fixed'.
         
         """
+        # First check this is a valid attribute
         if name in self._vars:
             if value is None:
                 self.set(name, value, None)
@@ -102,7 +103,11 @@ class SystemSolver(object):
             else:
                 self.set(name, value, 'fixed')
         else:
-            raise AttributeError(name)
+            # also allow setting any other pre-existing attribute
+            if hasattr(self, name):
+                object.__setattr__(self, name, value)
+            else:
+                raise AttributeError(name)
         
     def get(self, name):
         """

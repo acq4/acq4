@@ -42,7 +42,7 @@ class ParameterSystem(GroupParameter):
                     ch = param.addChild(dict(name='fixed', type='bool', value=False))
                     self._fixParams.append(ch)
                     param.setReadonly(True)
-                    param.setOpts(expanded=True)
+                    param.setOpts(expanded=False)
                 else:
                     vals[name] = param.value()
                     ch = param.addChild(dict(name='fixed', type='bool', value=True, readonly=True))

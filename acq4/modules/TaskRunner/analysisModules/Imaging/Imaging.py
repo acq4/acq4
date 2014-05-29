@@ -8,33 +8,55 @@ import acq4.pyqtgraph as pg
 import acq4.util.functions as fn
 import acq4.util.metaarray as metaarray
 from acq4.util.HelpfulException import HelpfulException
-import acq4.devices.Scanner.ScanUtilityFuncs as SUFA
-
+# import acq4.devices.Scanner.ScanUtilityFuncs as SUFA
+from acq4.devices.Scanner.ScanProgram.rect import RectScan
+from acq4.pyqtgraph.parametertree import ParameterTree, Parameter
 
 class ImagingModule(AnalysisModule):
     def __init__(self, *args):
         AnalysisModule.__init__(self, *args)
-        self.ui = Ui_Form()
-        self.ui.setupUi(self)
-        self.postGuiInit()
-        self.man = getManager()
-        self.SUF = SUFA.ScannerUtilities()
-        #self.image=pg.ImageView()
-        #self.ui.histogram.setImageItem(self.image)
-        #self.ui.histogram.autoHistogramRange()
-        #self.ui.plotWidget.addItem(self.image)
-        #self.ui.plotWidget.setLabel('bottom', 'Time', 's')
-        #self.ui.plotWidget.setLabel('left', 'Distance', 'm')
-        #self.ui.plotWidget.register('ImagingPlot')
-        self.ui.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
-        self.img = None  ## image shown in camera module
+        # self.ui = Ui_Form()
+        # self.ui.setupUi(self)
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        self.splitter = QtGui.QSplitter()
+        self.layout.addWidget(self.splitter)
+        self.ptree = ParameterTree()
+        self.splitter.addWidget(self.ptree)
+        self.plotWidget = pg.ImageView()
+        self.splitter.addWidget(self.plotWidget)
 
-        self.ui.scannerComboBox.setTypes('scanner')
-        self.ui.detectorComboBox.setTypes('daqChannelGroup')
+        # self.postGuiInit()
+
+        self.params = Parameter(name='imager', children=[
+            dict(name='scanner', type='interface', interfaceTypes=['scanner']),
+            dict(name='detector', type='interface', interfaceTypes=['daqChannelGroup']),
+            dict(name='decomb', type='float', value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=1e-6, children=[
+                dict(name='auto', type='bool', value=True)]),
+            ])
+        self.ptree.setParameters(self.params, showTop=False)
+
+        self.man = getManager()
+        self.lastFrame = None
+        # self.SUF = SUFA.ScannerUtilities()
+        # self.ui.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
+        self.img = None  ## image shown in camera module
+        self.plotWidget.imageItem.setAutoDownsample(True)
+        # self.ui.scannerComboBox.setTypes('scanner')
+        # self.ui.detectorComboBox.setTypes('daqChannelGroup')
                 
     def quit(self):
         AnalysisModule.quit(self)
         
+    def saveState(self):
+        return {'scanner': self.params['scanner'], 'detector': self.params['detector'], 'decomb': self.params['decomb'], 'decomb_auto': self.params['decomb', 'auto']}
+
+    def restoreState(self, state):
+        self.params['scanner'] = state['scanner']
+        self.params['detector'] = state['detector']
+        self.params['decomb'] = state['decomb']
+        self.params['decomb', 'auto'] = state['decomb_auto']
+
     def taskSequenceStarted(self, *args):
         pass
     
@@ -46,67 +68,60 @@ class ImagingModule(AnalysisModule):
         Called when task is finished (truly completes, no errors/abort)
         frame contains all of the data returned from all devices
         """
-        imageDownSample = self.ui.downSampling.value() # this is the "image" downsample,
+        self.lastFrame = frame
+        self.update()
+
+    def update(self):
+        frame = self.lastFrame
+        if frame is None:
+            self.clear()
+            return
+        # imageDownSample = self.ui.downSampling.value() # this is the "image" downsample,
         # get the downsample for the daq. This is far more complicated than it should be...
-        finfo = frame['result'][self.detectorDevice()]["Channel":'Input']
-        info = finfo.infoCopy()
-        #if 'downsampling' in info[1]['DAQ']['Input'].keys():
-            #daqDownSample = info[1]['DAQ']['Input']['downsampling']
-        #else:
-            #daqDownSample = 1
-        daqDownSample = info[1]['DAQ']['Input'].get('downsampling', 1)
-        if daqDownSample != 1:
-            raise HelpfulException("Set downsampling in DAQ to 1!")
+
+        # Get PMT signal
+        pmt = frame['result'][self.params['detector']]["Channel":'Input']
+        # info = finfo.infoCopy()
+        # daqDownSample = info[1]['DAQ']['Input'].get('downsampling', 1)
+        # if daqDownSample != 1:
+            # raise HelpfulException("Set downsampling in DAQ to 1!")
         # get the data and the command used on the scanner
-        pmtdata = frame['result'][self.detectorDevice()]["Channel":'Input'].asarray()
-        t = frame['result'][self.detectorDevice()].xvals('Time')
-        dt = t[1]-t[0]
-        progs = frame['cmd'][self.scannerDevice()]['program']
+        pmtdata = pmt.asarray()
+        t = pmt.xvals('Time')
+        # dt = t[1]-t[0]
+
+        progs = frame['cmd'][self.params['scanner']]['program']
         if len(progs) == 0:
             self.image.setImage(np.zeros((1,1)))
             return
-        prog = progs[0]
-        nscans = prog['nScans']
-        limits = prog['points']
-        dist = (pg.Point(limits[0])-pg.Point(limits[1])).length()
-        startT = prog['startTime']
-        endT = prog['endTime'] # note that this value is shared by all types, so rectscan computes in program generator...
-        
-        ## Linescan is superseded by MultipleLineScan. 
-        #if prog['type'] == 'lineScan':
-            #totSamps = prog['samplesPerScan']+prog['samplesPerPause']
-            #imageData = pmtdata[prog['startStopIndices'][0]:prog['startStopIndices'][0]+nscans*totSamps]
-            #imageData=imageData.reshape(nscans, totSamps)
-            #imageData = imageData[:,0:prog['samplesPerScan']] # trim off the pause data
-            #if imageDownSample > 1:
-                #imageData = fn.downsample(imageData, imageDownSample, axis=1)
-            #self.ui.plotWidget.setImage(imageData)
-            #self.ui.plotWidget.getView().setAspectLocked(False)
-            #self.ui.plotWidget.imageItem.setRect(QtCore.QRectF(startT, 0.0, endT-startT, dist ))
-            #self.ui.plotWidget.autoRange()
-            ##self.ui.histogram.imageChanged(autoLevel=True)
-            #storeFlag = frame['cmd']['protocol']['storeData'] # get flag 
-            #print "before StoreFlag and storeflag is:", storeFlag
-            #if storeFlag:
-                #dirhandle = frame['cmd']['protocol']['storageDir'] # grab directory
-                #self.info={'detector': self.detectorDevice(), 'scanner': self.scannerDevice(), 'indices': prog['startStopIndices'], 
-                           #'samplesPerScan': prog['samplesPerScan'], 'nscans': prog['nScans'], 
-                           #'scanPointList': prog['scanPointList'],
-                           #'positions': prog['points'],
-                           #'downSample': imageDownSample, 'daqDownSample': daqDownSample}
 
-                #info = [dict(name='Time', units='s', values=t[prog['startStopIndices'][0]:prog['startStopIndices'][1]-prog['samplesPerScan']:prog['samplesPerScan']]),
-                        #dict(name='Distance'), self.info]
-                #print 'imageData.shape: ', imageData.shape
-                #print 'prog: ', prog
-                #print 'startstop[0]: ', prog['startStopIndices'][0]
-                #print 'startstop[1]: ', prog['startStopIndices'][1]
-                #print 'samplesperscan: ', prog['samplesPerScan']
-                #print 'info: ', info
-                ## there is an error here that I haven't fixed. Use multilinescan until I do. 
-                #ma = metaarray.MetaArray(imageData, info=info)
-                #print 'I am writing imaging.ma for a simple line scan'
-                #dirhandle.writeFile(ma, 'Imaging.ma')
+        # For now, we only support single-component scan programs.
+        prog = progs[0]
+        # nscans = prog['nScans']
+        # limits = prog['points']
+        # dist = (pg.Point(limits[0])-pg.Point(limits[1])).length()
+        # startT = prog['startTime']
+        # endT = prog['endTime'] # note that this value is shared by all types, so rectscan computes in program generator...
+        
+        if prog['type'] == 'rect':
+            rs = RectScan()
+            rs.restoreState(prog['scanInfo'])
+            imageData = rs.extractImage(pmtdata)
+            imageData = imageData.transpose(0, 2, 1)  # Collected as (frame, row, col) but pg prefers images like (frame, col, row)
+
+            if imageData.size == 0:
+                self.clear()
+                raise Exception('image Data has zero size')
+            self.ui.plotWidget.setImage(imageData)
+            # pts = prog['points']
+            # floatpoints =[ (float(x[0]), float(x[1])) for x in pts]
+            # width  = (pts[1] -pts[0]).length() # width is x in M
+            # height = (pts[2]- pts[0]).length() # heigh in M
+            self.ui.plotWidget.getView().setAspectLocked(True)
+            self.ui.plotWidget.imageItem.setRect(QtCore.QRectF(0., 0., rs.width, rs.height))
+            self.ui.plotWidget.autoRange()
+            raise Exception()
+
 
         if prog['type'] == 'multipleLineScan': 
             totSamps = int(np.sum(prog['scanPointList'])) # samples per scan, before downsampling
@@ -210,6 +225,9 @@ class ImagingModule(AnalysisModule):
                 
                 dirhandle.writeFile(ma, 'Imaging.ma')
         
+    def clear(self):
+        self.ui.plotWidget.clear()
+
         
     def imageAlphaAdjust(self):
         if self.img is None:
