@@ -14,7 +14,9 @@ def registerParameterType(name, cls, override=False):
     PARAM_TYPES[name] = cls
     PARAM_NAMES[cls] = name
 
-
+def __reload__(old):
+    PARAM_TYPES.update(old.get('PARAM_TYPES', {}))
+    PARAM_NAMES.update(old.get('PARAM_NAMES', {}))
 
 class Parameter(QtCore.QObject):
     """
@@ -473,11 +475,20 @@ class Parameter(QtCore.QObject):
             return ParameterItem(self, depth=depth)
 
 
-    def addChild(self, child):
-        """Add another parameter to the end of this parameter's child list."""
-        return self.insertChild(len(self.childs), child)
+    def addChild(self, child, autoIncrementName=None):
+        """
+        Add another parameter to the end of this parameter's child list.
+        
+        See insertChild() for a description of the *autoIncrementName* 
+        argument.
+        """
+        return self.insertChild(len(self.childs), child, autoIncrementName=autoIncrementName)
 
     def addChildren(self, children):
+        """
+        Add a list or dict of children to this parameter. This method calls
+        addChild once for each value in *children*.
+        """
         ## If children was specified as dict, then assume keys are the names.
         if isinstance(children, dict):
             ch2 = []
@@ -493,19 +504,24 @@ class Parameter(QtCore.QObject):
             self.addChild(chOpts)
         
         
-    def insertChild(self, pos, child):
+    def insertChild(self, pos, child, autoIncrementName=None):
         """
         Insert a new child at pos.
         If pos is a Parameter, then insert at the position of that Parameter.
         If child is a dict, then a parameter is constructed using
         :func:`Parameter.create <pyqtgraph.parametertree.Parameter.create>`.
+        
+        By default, the child's 'autoIncrementName' option determines whether
+        the name will be adjusted to avoid prior name collisions. This 
+        behavior may be overridden by specifying the *autoIncrementName* 
+        argument. This argument was added in version 0.9.9.
         """
         if isinstance(child, dict):
             child = Parameter.create(**child)
         
         name = child.name()
         if name in self.names and child is not self.names[name]:
-            if child.opts.get('autoIncrementName', False):
+            if autoIncrementName is True or (autoIncrementName is None and child.opts.get('autoIncrementName', False)):
                 name = self.incrementName(name)
                 child.setName(name)
             else:
@@ -720,7 +736,8 @@ class Parameter(QtCore.QObject):
         if self.blockTreeChangeEmit == 0:
             changes = self.treeStateChanges
             self.treeStateChanges = []
-            self.sigTreeStateChanged.emit(self, changes)
+            if len(changes) > 0:
+                self.sigTreeStateChanged.emit(self, changes)
 
 
 class SignalBlocker(object):

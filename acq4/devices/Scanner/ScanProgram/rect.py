@@ -45,72 +45,80 @@ class RectScanComponent(ScanProgramComponent):
 
     @classmethod
     def generateVoltageArray(cls, array, dt, dev, cmd, startInd, stopInd):
-        pts = cmd['points']
-        # print 'cmd: ', cmd
-        SUF = ScannerUtility()
-        SUF.setScannerDev(dev)
-        SUF.setLaserDev(cmd['laser'])
+        rs = RectScan()
+        rs.restoreState(cmd['scanInfo'])
+        rs.sampleRate = 1.0/dt
         
-        width  = (pts[1] -pts[0]).length() # width is x in M
-        height = (pts[2]- pts[0]).length() # heigh in M
-        rect = [pts[0][0], pts[0][1], width, height]
-        overScanPct = cmd['overScan']
-        SUF.setRectRoi(pts)
-        SUF.setOverScan(overScanPct)
-        SUF.setDownSample(1)
-        SUF.setBidirectional(True)
-        pixelSize = cmd['pixelSize']
-        # recalulate pixelSize based on:
-        # number of scans (reps) and total duration
-        nscans = cmd['nScans']
-        dur = cmd['duration']#  - cmd['startTime'] # time for nscans
-        durPerScan = dur/nscans # time for one scan
-        SUF.setPixelSize(cmd['pixelSize']) # pixelSize/np.sqrt(pixsf)) # adjust the pixel size
-        SUF.setSampleRate(1./dt) # actually this is not used... 
-        (x,y) = SUF.designRectScan() # makes one rectangle
-        effScanTime = (SUF.getPixelsPerRow()/pixelSize)*(height/pixelSize)*dt # time it actually takes for one scan 
-        pixsf = durPerScan/effScanTime # correction for pixel size based pm to,e
-
-        cmd['imageSize'] = (SUF.getPixelsPerRow(), SUF.getnPointsY())
-
-        printParameters = False
-        if printParameters:
-            print 'scans: ', nscans
-            print 'width: ', width
-            print 'points in width: ', width/pixelSize
-            print 'dt: ', dt
-            print 'points in a scan: ', (width/pixelSize)*(height/pixelSize)
-            print 'effective scan time: ', effScanTime
-            print 'pixsf: ', pixsf
-            print 'original: ', pixelSize
-            print 'new pix size: ', pixelSize*pixsf
-        
-        n = SUF.getnPointsY() # get number of rows
-        m = SUF.getPixelsPerRow() # get number of points per row
-
-        ## Build array with scanner voltages for rect repeated once per scan
-        for i in range(cmd['nScans']):
-            thisStart = startInd+i*n*m
-            array[0, thisStart:thisStart + len(x)] = x
-            array[1, thisStart:thisStart + len(y)] = y
-        array[0, startInd+n*m*cmd['nScans']:stopInd] = array[0, startInd+n*m*cmd['nScans'] -1] # fill in any unused sample on this scan section
-        array[1, startInd+n*m*cmd['nScans']:stopInd] = array[1, startInd+n*m*cmd['nScans'] -1]
-        lastPos = (x[-1], y[-1])
-            
-            
-        # A side-effect modification of the 'command' dict so that analysis can access
-        # this information later
-        cmd['scanParameters'] = SUF.packScannerParams()
-        cmd['scanInfo'] = SUF.getScanInfo()
-
+        mapper = lambda arr: np.vstack(dev.mapToScanner(arr[:,0].flatten(), arr[:,1].flatten()), cmd['laser'])
+        rs.writeArray(array, mapper)
         return stopInd
+        
+        #pts = cmd['points']
+        ## print 'cmd: ', cmd
+        #SUF = ScannerUtility()
+        #SUF.setScannerDev(dev)
+        #SUF.setLaserDev(cmd['laser'])
+        
+        #width  = (pts[1] -pts[0]).length() # width is x in M
+        #height = (pts[2]- pts[0]).length() # heigh in M
+        #rect = [pts[0][0], pts[0][1], width, height]
+        #overScanPct = cmd['overScan']
+        #SUF.setRectRoi(pts)
+        #SUF.setOverScan(overScanPct)
+        #SUF.setDownSample(1)
+        #SUF.setBidirectional(True)
+        #pixelSize = cmd['pixelSize']
+        ## recalulate pixelSize based on:
+        ## number of scans (reps) and total duration
+        #nscans = cmd['nScans']
+        #dur = cmd['duration']#  - cmd['startTime'] # time for nscans
+        #durPerScan = dur/nscans # time for one scan
+        #SUF.setPixelSize(cmd['pixelSize']) # pixelSize/np.sqrt(pixsf)) # adjust the pixel size
+        #SUF.setSampleRate(1./dt) # actually this is not used... 
+        #(x,y) = SUF.designRectScan() # makes one rectangle
+        #effScanTime = (SUF.getPixelsPerRow()/pixelSize)*(height/pixelSize)*dt # time it actually takes for one scan 
+        #pixsf = durPerScan/effScanTime # correction for pixel size based pm to,e
+
+        #cmd['imageSize'] = (SUF.getPixelsPerRow(), SUF.getnPointsY())
+
+        #printParameters = False
+        #if printParameters:
+            #print 'scans: ', nscans
+            #print 'width: ', width
+            #print 'points in width: ', width/pixelSize
+            #print 'dt: ', dt
+            #print 'points in a scan: ', (width/pixelSize)*(height/pixelSize)
+            #print 'effective scan time: ', effScanTime
+            #print 'pixsf: ', pixsf
+            #print 'original: ', pixelSize
+            #print 'new pix size: ', pixelSize*pixsf
+        
+        #n = SUF.getnPointsY() # get number of rows
+        #m = SUF.getPixelsPerRow() # get number of points per row
+
+        ### Build array with scanner voltages for rect repeated once per scan
+        #for i in range(cmd['nScans']):
+            #thisStart = startInd+i*n*m
+            #array[0, thisStart:thisStart + len(x)] = x
+            #array[1, thisStart:thisStart + len(y)] = y
+        #array[0, startInd+n*m*cmd['nScans']:stopInd] = array[0, startInd+n*m*cmd['nScans'] -1] # fill in any unused sample on this scan section
+        #array[1, startInd+n*m*cmd['nScans']:stopInd] = array[1, startInd+n*m*cmd['nScans'] -1]
+        #lastPos = (x[-1], y[-1])
+            
+            
+        ## A side-effect modification of the 'command' dict so that analysis can access
+        ## this information later
+        #cmd['scanParameters'] = SUF.packScannerParams()
+        #cmd['scanInfo'] = SUF.getScanInfo()
+
+        #return stopInd
 
 class RectScanROI(pg.ROI):
     def __init__(self, size, pos):
         pg.ROI.__init__(self, size=size, pos=pos)
         self.addScaleHandle([1,1], [0.5, 0.5])
         self.addRotateHandle([0,0], [0.5, 0.5])
-        self.overScan = 0
+        self.overScan = 0.  # distance 
 
     def setOverScan(self, os):
         self.overScan = os
@@ -119,7 +127,7 @@ class RectScanROI(pg.ROI):
 
     def boundingRect(self):
         br = pg.ROI.boundingRect(self)
-        os = br.width() * 0.5 * self.overScan/100.
+        os = self.overScan
         return br.adjusted(-os, 0, os, 0)
 
     def paint(self, p, *args):
@@ -146,10 +154,10 @@ class RectScanControl(QtCore.QObject):
         self.params.component = self.component
         
         self.roi = RectScanROI(size=[self.params['width'], self.params['height']], pos=[0.0, 0.0])
-        self.roi.setOverScan(self.params['overScan'])
 
         self.params.sigTreeStateChanged.connect(self.paramsChanged)
         self.roi.sigRegionChangeFinished.connect(self.roiChanged)
+        self.paramsChanged()
         
     def getGraphicsItems(self):
         return [self.roi]
@@ -170,67 +178,85 @@ class RectScanControl(QtCore.QObject):
     def parameters(self):
         return self.params
 
-    def paramsChanged(self, param, changes):
-        self.update(changed=[changes[0][0].name()])
+    def paramsChanged(self, param=None, changes=None):
+        self.update()
         
-    def update(self, changed=()):
-        # Update all parameters to ensure consistency. 
-        # *changed* may be a list of parameter names that have changed;
-        # these will be kept constant during the update, if possible.
-        
-        if self.blockUpdate:
-            return
-
+    def update(self):
+        self.params.sigTreeStateChanged.disconnect(self.paramsChanged)
         try:
-            self.blockUpdate = True
-
-            if 'overScan' in changed:
-                self.roi.setOverScan(self.params['overScan'])
-
+            self.params.system.sampleRate = self.component().sampleRate
+            self.params.system.downsample = self.component().downsample
+            self.params.updateSystem()
+            try:
+                oswidth = np.linalg.norm(self.params.system.osVector)
+                self.roi.setOverScan(oswidth)
+            except RuntimeError:
+                self.roi.setOverScan(0)
+                
             self.setVisible(self.params.value())
-            
-            # TODO: this should be calculated by the same code that is used to generate the voltage array
-            # (as currently written, it is unlikely to match the actual output exactly)
-
-            # w = self.params['width'] * (1.0 + self.params['overScan']/100.)
-            # h = self.params['height']
-            # sampleRate = float(self.component().sampleRate)
-            # downsample = self.component().downsample
-            
-            # if 'duration' in changed:
-            #     # Set pixelSize to match duration
-            #     duration = self.params['duration']
-            #     maxSamples = int(duration * sampleRate)
-            #     maxPixels = maxSamples / downsample
-            #     ar = w / h
-            #     pxHeight = int((maxPixels / ar)**0.5)
-            #     pxWidth = int(ar * pxHeight)
-            #     imgSize = (pxWidth, pxHeight)
-            #     pxSize = w / (pxWidth-1)
-            #     self.params['pixelSize'] = pxSize
-            # else:
-            #     # set duration to match pixelSize
-            #     pxSize = self.params['pixelSize']
-            #     imgSize = (int(w / pxSize) + 1, int(h / pxSize) + 1) 
-            #     samples = imgSize[0] * imgSize[1] * downsample
-            #     duration = samples / sampleRate
-            #     self.params['duration'] = duration
-
-            # # Set read-only parameters:
-
-            # self.params['imageSize'] = str(imgSize)
-            
-            # speed = w / (imgSize[0] * downsample / sampleRate)
-            # self.params['scanSpeed'] = speed * 1e-3
-
-            # samplesPerUm2 = 1e-12 * downsample / pxSize**2
-            # frameExp = samplesPerUm2 / sampleRate
-            # totalExp = frameExp * self.params['nScans']
-            # self.params['frameExp'] = frameExp
-            # self.params['totalExp'] = totalExp
-
+        
         finally:
-            self.blockUpdate = False
+            self.params.sigTreeStateChanged.connect(self.paramsChanged)
+        #self.update(changed=[changes[0][0].name()])
+        
+    #def update(self, changed=()):
+        ## Update all parameters to ensure consistency. 
+        ## *changed* may be a list of parameter names that have changed;
+        ## these will be kept constant during the update, if possible.
+        
+        #if self.blockUpdate:
+            #return
+
+        #try:
+            #self.blockUpdate = True
+
+            #if 'overScan' in changed:
+                #self.roi.setOverScan(self.params['overScan'])
+
+            #self.setVisible(self.params.value())
+            
+            ## TODO: this should be calculated by the same code that is used to generate the voltage array
+            ## (as currently written, it is unlikely to match the actual output exactly)
+
+            ## w = self.params['width'] * (1.0 + self.params['overScan']/100.)
+            ## h = self.params['height']
+            ## sampleRate = float(self.component().sampleRate)
+            ## downsample = self.component().downsample
+            
+            ## if 'duration' in changed:
+            ##     # Set pixelSize to match duration
+            ##     duration = self.params['duration']
+            ##     maxSamples = int(duration * sampleRate)
+            ##     maxPixels = maxSamples / downsample
+            ##     ar = w / h
+            ##     pxHeight = int((maxPixels / ar)**0.5)
+            ##     pxWidth = int(ar * pxHeight)
+            ##     imgSize = (pxWidth, pxHeight)
+            ##     pxSize = w / (pxWidth-1)
+            ##     self.params['pixelSize'] = pxSize
+            ## else:
+            ##     # set duration to match pixelSize
+            ##     pxSize = self.params['pixelSize']
+            ##     imgSize = (int(w / pxSize) + 1, int(h / pxSize) + 1) 
+            ##     samples = imgSize[0] * imgSize[1] * downsample
+            ##     duration = samples / sampleRate
+            ##     self.params['duration'] = duration
+
+            ## # Set read-only parameters:
+
+            ## self.params['imageSize'] = str(imgSize)
+            
+            ## speed = w / (imgSize[0] * downsample / sampleRate)
+            ## self.params['scanSpeed'] = speed * 1e-3
+
+            ## samplesPerUm2 = 1e-12 * downsample / pxSize**2
+            ## frameExp = samplesPerUm2 / sampleRate
+            ## totalExp = frameExp * self.params['nScans']
+            ## self.params['frameExp'] = frameExp
+            ## self.params['totalExp'] = totalExp
+
+        #finally:
+            #self.blockUpdate = False
 
     
     def roiChanged(self):
@@ -238,22 +264,30 @@ class RectScanControl(QtCore.QObject):
         in the parameter tree """
         state = self.roi.getState()
         w, h = state['size']
-        self.params['width'] = w
-        self.params['height'] = h
+        #self.params['width'] = w
+        #self.params['height'] = h
+        self.params.system.p0 = pg.Point(self.roi.mapToView(pg.Point(0,0)))
+        self.params.system.p1 = pg.Point(self.roi.mapToView(pg.Point(w,0)))
+        self.params.system.p2 = pg.Point(self.roi.mapToView(pg.Point(0,h)))
+        self.params.updateSystem()
         
     def generateTask(self):
-        state = self.roi.getState()
-        w, h = state['size']
-        p0 = pg.Point(0,0)
-        p1 = pg.Point(w,0)
-        p2 = pg.Point(0, h)
-        points = [p0, p1, p2]
-        points = [pg.Point(self.roi.mapToView(p)) for p in points] # convert to view points (as needed for scanner)
-        return {'type': self.name, 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 
-                'endTime': self.params['duration']+self.params['startTime'], 'duration': self.params['duration'],
-                'nScans': self.params['nScans'],
-                'pixelSize': self.params['pixelSize'], 'overScan': self.params['overScan'],
-                }
+        #state = self.roi.getState()
+        #w, h = state['size']
+        #p0 = pg.Point(0,0)
+        #p1 = pg.Point(w,0)
+        #p2 = pg.Point(0, h)
+        #points = [p0, p1, p2]
+        #points = [pg.Point(self.roi.mapToView(p)) for p in points] # convert to view points (as needed for scanner)
+        sys = self.params.system
+        sys.solve()
+        task = {'type': self.name, 'active': self.isActive(), 'scanInfo': sys.saveState()}
+        return task
+        #, 'points': points, 'startTime': self.params['startTime'], 
+                #'endTime': self.params['duration']+self.params['startTime'], 'duration': self.params['duration'],
+                #'nScans': self.params['nScans'],
+                #'pixelSize': self.params['pixelSize'], 'overScan': self.params['overScan'],
+                #}
         
 
 
@@ -421,6 +455,32 @@ class RectScan(SystemSolver):
         # copy data into array (one copy per frame)
         target[:] = q[np.newaxis, ...]
         
+    def writeMask(self, array):
+        """
+        Write 1s into the array in the active region of the scan.
+        This is useful for ensuring that a laser is disabled during the overscan
+        and inter-frame time periods. 
+        """
+        offset = self.activeOffset
+        shape = self.activeShape
+        stride = self.activeStride
+        
+        target = pg.subArray(array, offset, shape, stride)
+        target[:] = 1
+        
+    def extractImage(self, data, offset=0.0):
+        """
+        Extract image data from a photodetector recording.
+        Offset is a time in seconds to offset the data before unpacking
+        the image array. (This allows to correct for mirror lag)
+        """
+        offset = self.imageOffset + offset * self.sampleRate
+        shape = self.imageShape
+        stride = self.imageStride
+        
+        image = pg.subArray(data, offset, shape, stride)
+        
+
     
     ### Functions defining the relationships between variables:
     
@@ -802,24 +862,28 @@ class RectScanParameter(pTypes.SimpleParameter):
             self.sigTreeStateChanged.connect(self.updateSystem)
     
     def updateParam(self, param, mode):
-        if mode == 'fixed':
-            param.setReadonly(False)
-            bg = (200, 200, 255)
-        elif mode == 'autoFixable':
-            param.child('fixed').setValue(False)
-            param.child('fixed').setReadonly(True)
-            bg = (200, 230, 230)
-        elif mode == 'incomplete':
-            param.setReadonly(True)
-            param.child('fixed').setReadonly(False)
-            bg = (255, 255, 200)
-        elif mode == 'unconstrained':
-            bg = (255, 200, 200)
-        elif mode == 'auto':
-            bg = (200, 255, 200)
+        param.blockSignals(True)  # Never trigger callbacks because of color changes
+        try:
+            if mode == 'fixed':
+                param.setReadonly(False)
+                bg = (200, 200, 255)
+            elif mode == 'autoFixable':
+                param.child('fixed').setValue(False)
+                param.child('fixed').setReadonly(True)
+                bg = (200, 230, 230)
+            elif mode == 'incomplete':
+                param.setReadonly(True)
+                param.child('fixed').setReadonly(False)
+                bg = (255, 255, 200)
+            elif mode == 'unconstrained':
+                bg = (255, 200, 200)
+            elif mode == 'auto':
+                bg = (200, 255, 200)
 
-        for item in param.items:
-            item.setBackground(0, pg.mkColor(bg))
+            for item in param.items:
+                item.setBackground(0, pg.mkColor(bg))
+        finally:
+            param.blockSignals(False)
 
 
 class RectScanVideo:
