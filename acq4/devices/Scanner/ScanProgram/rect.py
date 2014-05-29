@@ -813,7 +813,7 @@ class RectScanParameter(pTypes.SimpleParameter):
         """
         Set all system variables to match the fixed values in the parameter tree.
         """
-        self.system.reset()
+        #self.system.reset()
         for param in self:
             if 'f' in self.system._vars[param.name()][3]:
                 if param['fixed']:
@@ -828,6 +828,10 @@ class RectScanParameter(pTypes.SimpleParameter):
         """
         try:
             self.sigTreeStateChanged.disconnect(self.updateSystem)
+            reconnect = True
+        except TypeError:
+            reconnect = False
+        try:
             with self.treeChangeBlocker():
                 for param in self:
                     constraints = self.system._vars[param.name()][3]
@@ -859,7 +863,8 @@ class RectScanParameter(pTypes.SimpleParameter):
                                 self.updateParam(param, 'unconstrained')
 
         finally:
-            self.sigTreeStateChanged.connect(self.updateSystem)
+            if reconnect:
+                self.sigTreeStateChanged.connect(self.updateSystem)
     
     def updateParam(self, param, mode):
         param.blockSignals(True)  # Never trigger callbacks because of color changes
