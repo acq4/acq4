@@ -238,6 +238,8 @@ class WidgetParameterItem(ParameterItem):
         self.widget.show()
         self.displayLabel.hide()
         self.widget.setFocus(QtCore.Qt.OtherFocusReason)
+        if isinstance(self.widget, SpinBox):
+            self.widget.selectNumber()  # select the numerical portion of the text for quick editing
 
     def hideEditor(self):
         self.widget.hide()
@@ -319,8 +321,8 @@ class SimpleParameter(Parameter):
     def colorValue(self):
         return fn.mkColor(Parameter.value(self))
     
-    def saveColorState(self):
-        state = Parameter.saveState(self)
+    def saveColorState(self, *args, **kwds):
+        state = Parameter.saveState(self, *args, **kwds)
         state['value'] = fn.colorTuple(self.value())
         return state
         

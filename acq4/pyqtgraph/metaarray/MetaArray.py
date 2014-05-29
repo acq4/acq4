@@ -103,6 +103,14 @@ class MetaArray(object):
     """
   
     version = '2'
+
+    # Default hdf5 compression to use when writing
+    #   'gzip' is widely available and somewhat slow
+    #   'lzf' is faster, but generally not available outside h5py
+    #   'szip' is also faster, but lacks write support on windows
+    # (so by default, we use no compression)
+    # May also be a tuple (filter, opts), such as ('gzip', 3)
+    defaultCompression = None
     
     ## Types allowed as axis or column names
     nameTypes = [basestring, tuple]
@@ -1027,10 +1035,18 @@ class MetaArray(object):
 
     def writeHDF5(self, fileName, **opts):
         ## default options for writing datasets
+        comp = self.defaultCompression
+        if isinstance(comp, tuple):
+            comp, copts = comp
+        else:
+            copts = None
+
         dsOpts = {  
-            'compression': 'lzf',
+            'compression': comp,
             'chunks': True,
         }
+        if copts is not None:
+            dsOpts['compression_opts'] = copts
         
         ## if there is an appendable axis, then we can guess the desired chunk shape (optimized for appending)
         appAxis = opts.get('appendAxis', None)
