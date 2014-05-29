@@ -381,7 +381,6 @@ class RectScan(SystemSolver):
             ('numCols', [None, int, None, 'n']),     # Same as scanShape[1] 
             ('activeCols', [None, int, None, 'n']),  # Same as activeShape[1] 
             ('frameLen', [None, int, None, 'n']),
-            #('sampleVectors', [None, arr, None, 'n']),
             ('frameExposure', [None, float, None, 'n']),
             ('scanSpeed', [None, float, None, 'n']),
             ('activeOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe
@@ -390,6 +389,12 @@ class RectScan(SystemSolver):
             ('imageOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe 
             ('imageShape', [None, tuple, None, 'n']),   # the 'active' image area excluding overscan
             ('imageStride', [None, tuple, None, 'n']),  # and accounting for downsampling (index in pixels)
+
+            # variables needed to reconstruct exact image location
+            ('rowVector', [None, arr, None, 'n']),    # vector pointing from one row to the next
+            ('colVector', [None, arr, None, 'n']),    # vector pointing from one column (non-downsampled) to the next
+            ('scanOrigin', [None, arr, None, 'n']),   # global coordinate origin of scan area  (note this is not necessarily the same as osP0)
+            ('activeOrigin', [None, arr, None, 'n']), # global coordinate origin of active area  (note this is not necessarily the same as p0)
 
             # Variables needed to specify a sequence of frames:
             ('startTime', [None, float, None, 'f']),
@@ -402,7 +407,7 @@ class RectScan(SystemSolver):
 
 
     ### Array handling functions:
-    
+
     def writeArray(self, array, mapping=None):
         """
         Given a (N,2) array, write the rectangle scan into the 
@@ -414,18 +419,18 @@ class RectScan(SystemSolver):
         """
         offset = self.scanOffset
         shape = self.scanShape
+        nf, ny, nx = shape
         stride = self.scanStride
         
         # position difference between adjacent rows / columns
-        #ny = self.nPointsY # get number of rows
-        #nx = samplesPerRow # get number of points per row, including overscan        
-        #dx = (pts[1]-pts[0])/(self.nPointsX*self.downSample) # (nx-1)
-        #dy = (pts[2]-pts[0])/self.nPointsY # (ny-1)
-        pts = self.osP0, self.osP1, self.osP2
-        nf, ny, nx = shape
-        dx = (pts[1]-pts[0]) / (shape[2]-1)
-        dy = (pts[2]-pts[0]) / (shape[1]-1)
-        
+        # pts = self.osP0, self.osP1, self.osP2
+        # dx = (pts[1]-pts[0]) / (shape[2]-1)
+        # dy = (pts[2]-pts[0]) / (shape[1]-1)
+        # dx, dy = self.sampleVectors
+
+        dx = self.colVector
+        dy = self.rowVector
+
         # Make grid of indexes
         r = np.mgrid[0:ny, 0:nx]
         if self.bidirectional:
@@ -435,7 +440,7 @@ class RectScan(SystemSolver):
         v = np.array([dy, dx]).reshape(2,1,1,2) 
         r = r[...,np.newaxis]
         q = (v*r).sum(axis=0)  # order is now (row, column, xy)
-        q += pts[0].reshape(1,1,2)
+        q += self.scanOrigin.reshape(1,1,2)
         
         # Convert via mapping (usually to mirror voltages)
         #x, y = self.scannerDev.mapToScanner(q[0].flatten(), q[1].flatten(), self.laserDev)
@@ -472,18 +477,29 @@ class RectScan(SystemSolver):
         target = pg.subArray(array, offset, shape, stride)
         target[:] = 1
         
-    def extractImage(self, data, offset=0.0, correctBidir=True):
+    def extractImage(self, data, offset=0.0, correctBidir=True, subpixel=False):
         """
         Extract image data from a photodetector recording.
         Offset is a time in seconds to offset the data before unpacking
         the image array. (This allows to correct for mirror lag)
         """
-        offset = self.imageOffset + offset * self.sampleRate
+        offset = self.imageOffset + offset * self.sampleRate / self.downsample
+        intOffset = int(offset)
+        fracOffset = offset - intOffset
+
         shape = self.imageShape
         stride = self.imageStride
         
-        image = pg.subArray(data, offset, shape, stride)
+        if subpixel and fracOffset != 0:
+            interp = data[:-1] * (1.0 - fracOffset) + data[1:] * fracOffset
+            image = pg.subArray(interp, intOffset, shape, stride)            
+        else:
+            image = pg.subArray(data, intOffset, shape, stride)
+
+
+
         if correctBidir and self.bidirectional:
+            image = image.copy()
             image[:, 1::2] = image[:, 1::2, ::-1]
         return image
 
@@ -532,6 +548,30 @@ class RectScan(SystemSolver):
         decombed[rightShift:, 1::2] = img[:-rightShift, 1::2]
         return decombed, bestShift
     
+    def imageTransform(self):
+        """
+        Return the transform that maps from image pixel coordinates to global coordinates.
+        """
+        ims = self.imageShape
+        acs = self.activeShape
+        dx = self.colVector
+        dy = self.rowVector
+
+        p0 = self.activeOrigin
+        p1 = p0 + acs[2] * dx
+        p2 = p0 + acs[1] * dy
+
+        localPts = map(pg.Vector, [[0,0], [ims[2],0], [0,ims[1]], [0,0,1]]) # w and h of data of image in pixels.
+        globalPts = map(pg.Vector, [p0, p1, p2, [0,0,1]])
+        m = pg.solve3DTransform(localPts, globalPts)
+        m[:,2] = m[:,3]
+        m[2] = m[3]
+        m[2,2] = 1
+        tr = QtGui.QTransform(*m[:3,:3].transpose().reshape(9))
+        return tr
+
+
+
     ### Functions defining the relationships between variables:
     
     def _width(self):
@@ -701,6 +741,8 @@ class RectScan(SystemSolver):
             c = - shapeRatio * dur
             numActiveCols = int((-b + (b**2 - 4*a*c) ** 0.5) / (2*a))
             numCols = numActiveCols + osLen * 2
+            # make sure numCols is a multiple of ds
+            numCols = int(numCols / ds) * ds
             numRows = int(maxSamples / numCols)
             return (f, numRows, numCols)
 
@@ -803,6 +845,22 @@ class RectScan(SystemSolver):
 
     def _totalDuration(self):
         return (self.frameLen + self.interFrameLen) * self.numFrames / self.sampleRate
+
+    def _rowVector(self):
+        nf, ny, nx = self.scanShape
+        return (self.osP2-self.osP0) / (ny-1)
+
+    def _colVector(self):
+        nf, ny, nx = self.scanShape
+        return (self.osP1-self.osP0) / (nx-1)
+
+    def _scanOrigin(self):
+        return self.osP0
+
+    def _activeOrigin(self):
+        return self.osP0 + self.colVector * self.osLen
+
+
 
 
 class RectScanParameter(pTypes.SimpleParameter):

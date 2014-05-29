@@ -80,8 +80,6 @@ class ScannerTaskGui(TaskGui):
         
         self.scanProgram = ScanProgram(dev)
         self.ui.programTree.setParameters(self.scanProgram.ctrlParameter(), showTop=False)
-        daqState = self.daqUI.currentState()
-        self.scanProgram.setSampleRate(daqState['rate'], daqState['downsample'])
 
         ## Set up SpinBoxes
         self.ui.minTimeSpin.setOpts(dec=True, step=1, minStep=1e-3, siPrefix=True, suffix='s', bounds=[0, 50])

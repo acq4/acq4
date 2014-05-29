@@ -55,6 +55,7 @@ class NiDAQTask(TaskGui):
         self.ui.denoiseCombo.currentIndexChanged.connect(self.updateDenoiseCtrl)
         self.ui.filterCombo.currentIndexChanged.connect(self.updateFilterCtrl)
         self.ui.rateSpin.setValue(self.rate)
+        self.stateGroup.sigChanged.connect(self.stateChanged)
 
         self.updateDenoiseCtrl()
         self.updateFilterCtrl()
@@ -141,6 +142,8 @@ class NiDAQTask(TaskGui):
         self.updateNPts()
         self.sigChanged.emit(self.currentState())
         
+    def stateChanged(self):
+        self.sigChanged.emit(self.currentState())
         
     def taskChanged(self, n, v):
         #print "caught task change", n, v

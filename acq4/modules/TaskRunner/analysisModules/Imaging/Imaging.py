@@ -32,30 +32,33 @@ class ImagingModule(AnalysisModule):
             dict(name='scanner', type='interface', interfaceTypes=['scanner']),
             dict(name='detector', type='interface', interfaceTypes=['daqChannelGroup']),
             dict(name='decomb', type='float', value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=1e-6, children=[
-                dict(name='auto', type='bool', value=True)]),
+                dict(name='auto', type='bool', value=True),
+                dict(name='subpixel', type='bool', value=False),
+                ]),
+            dict(name='downsample', type='int', value=1, suffix='x', bounds=[1,None]),
+            dict(name='display', type='bool', value=True),
             ])
         self.ptree.setParameters(self.params, showTop=False)
+        self.params.sigTreeStateChanged.connect(self.update)
 
         self.man = getManager()
         self.lastFrame = None
         # self.SUF = SUFA.ScannerUtilities()
         # self.ui.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
-        self.img = None  ## image shown in camera module
+        self.img = pg.ImageItem()  ## image shown in camera module
         self.plotWidget.imageItem.setAutoDownsample(True)
         # self.ui.scannerComboBox.setTypes('scanner')
         # self.ui.detectorComboBox.setTypes('daqChannelGroup')
                 
     def quit(self):
+        self.clear()
         AnalysisModule.quit(self)
         
     def saveState(self):
-        return {'scanner': self.params['scanner'], 'detector': self.params['detector'], 'decomb': self.params['decomb'], 'decomb_auto': self.params['decomb', 'auto']}
+        return self.params.saveState(filter='user')
 
     def restoreState(self, state):
-        self.params['scanner'] = state['scanner']
-        self.params['detector'] = state['detector']
-        self.params['decomb'] = state['decomb']
-        self.params['decomb', 'auto'] = state['decomb_auto']
+        self.params.restoreState(state, removeChildren=False)
 
     def taskSequenceStarted(self, *args):
         pass
@@ -106,21 +109,46 @@ class ImagingModule(AnalysisModule):
         if prog['type'] == 'rect':
             rs = RectScan()
             rs.restoreState(prog['scanInfo'])
-            imageData = rs.extractImage(pmtdata)
-            imageData = imageData.transpose(0, 2, 1)  # Collected as (frame, row, col) but pg prefers images like (frame, col, row)
 
+            # Determine decomb duration
+            auto = self.params['decomb', 'auto']
+            if auto:
+                lag = rs.measureMirrorLag(pmtdata)
+                self.params['decomb'] = lag
+            decomb = self.params['decomb']
+            
+            # Extract from PMT array
+            imageData = rs.extractImage(pmtdata, offset=decomb, subpixel=self.params['decomb', 'subpixel'])
             if imageData.size == 0:
                 self.clear()
                 raise Exception('image Data has zero size')
-            self.ui.plotWidget.setImage(imageData)
-            # pts = prog['points']
-            # floatpoints =[ (float(x[0]), float(x[1])) for x in pts]
-            # width  = (pts[1] -pts[0]).length() # width is x in M
-            # height = (pts[2]- pts[0]).length() # heigh in M
-            self.ui.plotWidget.getView().setAspectLocked(True)
-            self.ui.plotWidget.imageItem.setRect(QtCore.QRectF(0., 0., rs.width, rs.height))
-            self.ui.plotWidget.autoRange()
-            raise Exception()
+
+            # Downsample
+            ds = self.params['downsample']
+            if ds > 1:
+                imageData = pg.downsample(imageData, ds, axis=2)
+
+            # Display image locally
+            imageData = imageData.transpose(0, 2, 1)  # Collected as (frame, row, col) but pg prefers images like (frame, col, row)
+            self.plotWidget.setImage(imageData)
+            self.plotWidget.getView().setAspectLocked(True)
+            self.plotWidget.imageItem.setRect(QtCore.QRectF(0., 0., rs.width, rs.height))  # TODO: rs.width and rs.height might not be correct!
+            self.plotWidget.autoRange()
+
+            # Display image remotely (in the same camera module as used by the scanner device)
+            if self.params['display']:
+                self.img.setVisible(True)
+                sd = self.pr.getDevice(self.params['scanner'])
+                camMod = sd.cameraModule().window()
+                camMod.addItem(self.img)
+                self.img.setImage(imageData.mean(axis=0))
+                tr = rs.imageTransform()
+                st = pg.QtGui.QTransform()
+                st.scale(self.params['downsample'], 1)
+                self.img.setTransform(st * tr)
+            else:
+                self.img.setVisible(False)
+
 
 
         if prog['type'] == 'multipleLineScan': 
@@ -226,7 +254,10 @@ class ImagingModule(AnalysisModule):
                 dirhandle.writeFile(ma, 'Imaging.ma')
         
     def clear(self):
-        self.ui.plotWidget.clear()
+        self.plotWidget.clear()
+        scene = self.img.scene()
+        if scene is not None:
+            scene.removeItem(self.img)
 
         
     def imageAlphaAdjust(self):
@@ -235,12 +266,6 @@ class ImagingModule(AnalysisModule):
         alpha = self.ui.alphaSlider.value()
         self.img.setImage(opacity=float(alpha/100.))
         
-        
-    def detectorDevice(self):
-        return str(self.ui.detectorComboBox.currentText())
-        
-    def scannerDevice(self):
-        return str(self.ui.scannerComboBox.currentText())
         
         
 
