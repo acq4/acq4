@@ -1,4 +1,5 @@
 from ..Qt import QtGui, QtCore
+from ..python2_3 import asUnicode
 import os, weakref, re
 
 class ParameterItem(QtGui.QTreeWidgetItem):
@@ -111,15 +112,15 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         self.contextMenu.popup(ev.globalPos())
         
     def columnChangedEvent(self, col):
-        """Called when the text in a column has been edited.
+        """Called when the text in a column has been edited (or otherwise changed).
         By default, we only use changes to column 0 to rename the parameter.
         """
-        if col == 0:
+        if col == 0  and (self.param.opts.get('title', None) is None):
             if self.ignoreNameColumnChange:
                 return
             try:
-                newName = self.param.setName(str(self.text(col)))
-            except:
+                newName = self.param.setName(asUnicode(self.text(col)))
+            except Exception:
                 self.setText(0, self.param.name())
                 raise
                 

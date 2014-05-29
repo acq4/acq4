@@ -72,16 +72,16 @@ def test_RectScan():
     rs.sampleRate = sr
     ds = 1
     rs.downsample = ds
-    ss = 1e-6 / 1e-3  # 1 um/ms
-    rs.scanSpeed = ss
-    assert rs.pixelWidth == (ss / sr) * ds
-    
-    rs.scanSpeed = None
-    try:
-        rs.pixelWidth
-        raise Exception("Expected RuntimeError")
-    except RuntimeError:
-        pass
+    ## setting scan speed is currently disabled.
+    # ss = 1e-6 / 1e-3  # 1 um/ms
+    # rs.scanSpeed = ss
+    # assert rs.pixelWidth == (ss / sr) * ds    
+    # rs.scanSpeed = None
+    # try:
+    #     rs.pixelWidth
+    #     raise Exception("Expected RuntimeError")
+    # except RuntimeError:
+    #     pass
     
     # can we determine the size of a pixel given the desired scan duration 
     # and pixel aspect ratio?
@@ -89,6 +89,7 @@ def test_RectScan():
     rs.frameDuration = 96e-3
     rs.overscan = 0.0
     rs.pixelAspectRatio = 1.0
+    print rs.scanShape
     assert np.all(rs.scanShape == (6, 16))
     assert rs.pixelWidth == 1.0
     assert rs.pixelHeight == 1.0
@@ -187,6 +188,6 @@ if __name__ == '__main__':
     import user
     test_RectScan()
     p, w = test_RectScanParameter()
-    w.resize(300, 900)
+    w.resize(300, 700)
 
 

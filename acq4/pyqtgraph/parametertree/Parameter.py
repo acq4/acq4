@@ -1,6 +1,7 @@
 from ..Qt import QtGui, QtCore
 import os, weakref, re
 from ..pgcollections import OrderedDict
+from ..python2_3 import asUnicode
 from .ParameterItem import ParameterItem
 
 PARAM_TYPES = {}
@@ -200,6 +201,9 @@ class Parameter(QtCore.QObject):
     def setName(self, name):
         """Attempt to change the name of this parameter; return the actual name. 
         (The parameter may reject the name change or automatically pick a different name)"""
+        if 'frame exposure' in name:
+            import traceback
+            traceback.print_stack()
         if self.opts['strictNaming']:
             if len(name) < 1 or re.search(r'\W', name) or re.match(r'\d', name[0]):
                 raise Exception("Parameter name '%s' is invalid. (Must contain only alphanumeric and underscore characters and may not start with a number)" % name)
@@ -628,7 +632,7 @@ class Parameter(QtCore.QObject):
         return self.child(*names)
 
     def __repr__(self):
-        return "<%s '%s' at 0x%x>" % (self.__class__.__name__, self.name(), id(self))
+        return asUnicode("<%s '%s' at 0x%x>") % (self.__class__.__name__, self.name(), id(self))
        
     def __getattr__(self, attr):
         ## Leaving this undocumented because I might like to remove it in the future..

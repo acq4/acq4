@@ -342,11 +342,13 @@ class RectScan(SystemSolver):
             ('scanOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe
             ('scanShape', [None, arr, None, 'n']),   # the full scan area including overscan
             ('scanStride', [None, arr, None, 'n']),  # and ignoring downsampling (index in samples)
-            ('numRows', [None, int, None, 'n']),     # Same as scanShape[1] 
+            ('numRows', [None, int, None, 'n']),     # Same as scanShape[0] 
+            ('numCols', [None, int, None, 'n']),     # Same as scanShape[1] 
+            ('activeCols', [None, int, None, 'n']),  # Same as activeShape[1] 
             ('frameLen', [None, int, None, 'n']),
             #('sampleVectors', [None, arr, None, 'n']),
-            ('frameExposure', [None, float, None, 'nfr']),
-            ('scanSpeed', [None, float, None, 'nfr']),
+            ('frameExposure', [None, float, None, 'n']),
+            ('scanSpeed', [None, float, None, 'n']),
             ('activeOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe
             ('activeShape', [None, arr, None, 'n']),   # the 'active' scan area excluding overscan
             ('activeStride', [None, arr, None, 'n']),  # and ignoring downsampling (index in samples)
@@ -404,8 +406,13 @@ class RectScan(SystemSolver):
 
     def _osLen(self):
         """Length of overscan in px (not samples)"""
-        osv = self.osVector
-        return np.ceil(np.linalg.norm(osv) / self.pixelWidth)
+        try:
+            return np.ceil(self.overscan * self.sampleRate / self.downsample)
+        except RuntimeError:
+            osv = self.osVector
+            return np.ceil(np.linalg.norm(osv) / self.pixelWidth)
+
+
 
     def _osP0(self):
         osv = self.osVector
@@ -425,16 +432,35 @@ class RectScan(SystemSolver):
     def _pixelWidth(self):
         try:
             return self.pixelHeight * self.pixelAspectRatio
-        
         except RuntimeError:
+            pass
+
+        try:
             return self.scanSpeed / self.sampleRate
+        except RuntimeError:
+            pass
+
+        return self.width / (self.numCols - 1)
         
     def _pixelHeight(self):
         try:
-            return self.pixelWidth / self.pixelAspectRatio
-        
+            return self.pixelWidth / self.pixelAspectRatio        
         except RuntimeError:
+            pass
+
+        try:
             return self.height / (self.numRows - 1)
+        except RuntimeError:
+            raise
+
+        # need to think this through.. it creates some weird situations.
+        # try:
+        #     samplesPerUm2 = self.frameExposure * self.sampleRate
+        #     pxArea = 1e-12 * self.downsample / samplesPerUm2
+        #     return pxArea / self.pixelWidth
+        # except RuntimeError:
+        #     pass
+
     
     def _pixelAspectRatio(self):
         return self.pixelWidth / self.pixelHeight
@@ -476,34 +502,10 @@ class RectScan(SystemSolver):
         return self.startTime * self.sampleRate
     
     def _scanShape(self):
-        h, w = self.imageShape
-        w = (w + 2 * self.osLen) * self.downsample
-        return (h, w)
-    
-    def _scanStride(self):
-        return (self.scanShape[1], 1)
-
-    def _activeOffset(self):
-        return self.imageOffset * self.downsample
-    
-    def _activeShape(self):
-        ims = self.imageShape
-        return ims * np.array([1, self.downsample])
-    
-    def _activeStride(self):
-        return self.scanStride
-
-    def _imageShape(self):
         try:
-            # image size and pixel size
-            w = self.width
-            h = self.height
-            pxw = self.pixelWidth
-            pxh = self.pixelHeight
-            
-            nx = int(w / pxw) + 1
-            ny = int(h / pxh) + 1
-            return (ny, nx)
+            h = self.numRows
+            w = self.numCols
+            return (h, w)
         except RuntimeError:
             # duration, sample rate, size, and pixel aspect ratio
             w = self.width
@@ -511,21 +513,62 @@ class RectScan(SystemSolver):
             sr = self.sampleRate
             dur = self.frameDuration
             pxar = self.pixelAspectRatio
+            os = self.overscan
             ds = self.downsample
             
-            maxPixels = int(dur * sr / ds)
-            
+            # maxPixels = int(dur * sr / ds)
+            maxSamples = int(dur * sr)
+
             # given we may use maxPixels, what is the best way to fill 
             # the scan area with pixels of the desired pixel aspect ratio?
-            shapeRatio = (w / h) / pxar  # this is nx / ny
+            shapeRatio = ds * (w / h) / pxar  # this is nx / ny
             
             # solve:   nx * ny == maxPixels
             #          nx / ny == shapeRatio
             #          ==>  ny == (maxPixels / shapeRatio)**0.5
-            ny = np.ceil((maxPixels / shapeRatio)**0.5)
-            nx = int(maxPixels / ny)
-            return (ny, nx)
-        
+            # ny = np.ceil((maxPixels / shapeRatio)**0.5)
+            # nx = int(maxPixels / ny)
+            # return (ny, nx * self.downsample)
+
+            # solve quadratic:
+            a = 1. / sr
+            b = 2. * os
+            c = - shapeRatio * dur
+            nac = int((-b + (b**2 - 4*a*c) ** 0.5) / (2*a))
+            nc = nac + self.osLen * 2
+            nr = int(maxSamples / nc)
+            return (nr, nc)
+
+
+    
+    def _scanStride(self):
+        return (self.scanShape[1], 1)
+
+    def _activeOffset(self):
+        return self.imageOffset * self.downsample
+
+    def _activeShape(self):
+        return (self.numRows, self.activeCols)
+    
+    def _activeStride(self):
+        return self.scanStride
+
+    def _imageShape(self):
+
+        try:
+            return self.numRows, self.activeCols / self.downsample
+            # # image size and pixel size
+            # w = self.width
+            # h = self.height
+            # pxw = self.pixelWidth
+            # pxh = self.pixelHeight
+            
+            # nx = int(w / pxw) + 1
+            # ny = int(h / pxh) + 1
+            # return (ny, nx)
+        except RuntimeError:
+            raise
+
     def _imageOffset(self):
         return self.scanOffset / self.downsample + self.osLen
     
@@ -534,9 +577,49 @@ class RectScan(SystemSolver):
 
     def _numRows(self):
         try:
+            h = self.height
+            pxh = self.pixelHeight
+            
+            ny = int(h / pxh) + 1
+            return ny
+        except RuntimeError:
+            pass
+
+        try:
             return self.imageShape[0]
         except RuntimeError:
+            pass
+
+        try:
             return self.scanShape[0]
+        except RuntimeError:
+            raise
+
+        # This can cause some weird comflicts.
+        # distance = self.frameDuration * self.scanSpeed
+        # return np.floor(distance / self.fullWidth)
+
+    def _activeCols(self):
+        try:
+            w = self.width
+            pxw = self.pixelWidth
+            nx = int(w / pxw) + 1
+            return nx * self.downsample
+        except RuntimeError:
+            sw = self.scanShape[1]
+            osl = self.osLen
+            return sw - osl*2
+
+    def _numCols(self):
+        try:
+            return self.activeCols + (2 * self.osLen * self.downsample)
+        except RuntimeError:
+            pass
+
+        try:
+            return self.scanShape[1]
+        except RuntimeError:
+            raise
 
     def _frameExposure(self):
         pxArea = (self.pixelWidth * self.pixelHeight)
@@ -552,10 +635,9 @@ class RectScan(SystemSolver):
 
     def _frameLen(self):
         """Number of samples (not downsampled) from the beggining to end of a single frame."""
-        return self.scanStride[1] * self.numRows
+        return self.numCols * self.numRows
 
     def _totalDuration(self):
-        print self.frameLen, self.interFrameLen, self.numFrames, self.sampleRate
         return (self.frameLen + self.interFrameLen) * self.numFrames / self.sampleRate
 
 
@@ -573,7 +655,7 @@ class RectScanParameter(pTypes.SimpleParameter):
             dict(name='pixelWidth', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
             dict(name='pixelHeight', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
             dict(name='pixelAspectRatio', type='float', value=1, bounds=[1e-3, 1e3], step=0.5, dec=True),
-            dict(name='startTime', type='float', value=1e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='startTime', type='float', value=0, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='numFrames', type='int', value=10, bounds=[1, None]),
             dict(name='frameDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='interFrameDuration', type='float', value=0, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
@@ -582,9 +664,9 @@ class RectScanParameter(pTypes.SimpleParameter):
             dict(name='scanShape', type='str', readonly=True),
             dict(name='scanStride', type='str', readonly=True),
             dict(name='imageShape', type='str', readonly=True),
-            dict(name='scanSpeed', type='float', readonly=True, suffix='m/ms', siPrefix=True), 
-            dict(name='frameExposure', title=u'frame exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True), 
-            dict(name='totalExposure', title=u'total exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True),
+            dict(name='scanSpeed', type='float', readonly=True, suffix='m/ms', siPrefix=True, bounds=[1e-9, None]), 
+            dict(name='frameExposure', title=u'frame exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True, bounds=[1e-9, None]), 
+            dict(name='totalExposure', title=u'total exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True, bounds=[1e-9, None]),
         ]
         self.system = RectScan()
         pTypes.SimpleParameter.__init__(self, name='rect_scan', type='bool', value=True, removable=True, renamable=True, children=params)
@@ -630,7 +712,10 @@ class RectScanParameter(pTypes.SimpleParameter):
                     else:
                         fixed = None
 
-                    if fixed is not True:
+
+                    if fixed is True:
+                        self.updateParam(param, 'fixed')
+                    else:
                         try: # value is auto-generated
                             val = getattr(self.system, param.name())
                             if param.type() == 'str':
@@ -638,20 +723,39 @@ class RectScanParameter(pTypes.SimpleParameter):
                             else:
                                 param.setValue(val)
                             param.setReadonly(True)
-                            if fixed is not None: 
-                                param.child('fixed').setValue(False)
-                                param.child('fixed').setReadonly(True)
+                            if fixed is False:
+                                self.updateParam(param, 'autoFixable')
+                            else:
+                                self.updateParam(param, 'auto')
 
                         except RuntimeError:  
                             if fixed is not None:  # no value, fixable
-                                param.setReadonly(False)
-                                param.child('fixed').setReadonly(False)
+                                self.updateParam(param, 'incomplete')
+                            else:
+                                self.updateParam(param, 'unconstrained')
 
         finally:
             self.sigTreeStateChanged.connect(self.updateSystem)
-                
+    
+    def updateParam(self, param, mode):
+        if mode == 'fixed':
+            param.setReadonly(False)
+            bg = (200, 200, 255)
+        elif mode == 'autoFixable':
+            param.child('fixed').setValue(False)
+            param.child('fixed').setReadonly(True)
+            bg = (200, 230, 230)
+        elif mode == 'incomplete':
+            param.setReadonly(True)
+            param.child('fixed').setReadonly(False)
+            bg = (255, 255, 200)
+        elif mode == 'unconstrained':
+            bg = (255, 200, 200)
+        elif mode == 'auto':
+            bg = (200, 255, 200)
 
-
+        for item in param.items:
+            item.setBackground(0, pg.mkColor(bg))
 
 
 class RectScanVideo:
