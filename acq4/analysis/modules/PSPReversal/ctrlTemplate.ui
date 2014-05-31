@@ -929,9 +929,9 @@ Times</string>
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="PSPReversal_getFileInfo">
+        <widget class="QPushButton" name="PSPReversal_rePlotData">
          <property name="text">
-          <string>FileInfo</string>
+          <string>RePlot</string>
          </property>
         </widget>
        </item>
@@ -953,9 +953,9 @@ Times</string>
      <widget class="QWidget" name="layoutWidget">
       <property name="geometry">
        <rect>
-        <x>5</x>
+        <x>10</x>
         <y>110</y>
-        <width>341</width>
+        <width>331</width>
         <height>171</height>
        </rect>
       </property>
@@ -1617,6 +1617,19 @@ p, li { white-space: pre-wrap; }
          </property>
         </widget>
        </item>
+       <item row="5" column="2">
+        <widget class="QCheckBox" name="PSPReversal_RsCorr">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="text">
+          <string>Ru Corr</string>
+         </property>
+        </widget>
+       </item>
       </layout>
      </widget>
      <widget class="QWidget" name="">
@@ -1668,7 +1681,7 @@ p, li { white-space: pre-wrap; }
        <rect>
         <x>5</x>
         <y>285</y>
-        <width>341</width>
+        <width>369</width>
         <height>29</height>
        </rect>
       </property>
@@ -1875,7 +1888,7 @@ p, li { white-space: pre-wrap; }
   <tabstop>PSPReversal_Tauh</tabstop>
   <tabstop>PSPReversal_Update</tabstop>
   <tabstop>dbStoreBtn</tabstop>
-  <tabstop>PSPReversal_getFileInfo</tabstop>
+  <tabstop>PSPReversal_rePlotData</tabstop>
   <tabstop>PSPReversal_PrintResults</tabstop>
  </tabstops>
  <resources/>

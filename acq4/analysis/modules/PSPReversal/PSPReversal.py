@@ -120,7 +120,8 @@ class PSPReversal(AnalysisModule):
         self.ctrl.PSPReversal_Update.clicked.connect(self.update_allAnalysis)
         self.ctrl.PSPReversal_PrintResults.clicked.connect(self.printAnalysis)
         self.ctrl.PSPReversal_KeepAnalysis.clicked.connect(self.resetKeepAnalysis)
-        self.ctrl.PSPReversal_getFileInfo.clicked.connect(self.getFileInfo)
+        self.ctrl.PSPReversal_rePlotData.clicked.connect(self.plottraces)  # replot traces with new settings...
+        # self.ctrl.getFileInfo.clicked.connect(self.getFileInfo)
         self.ctrl.PSPReversal_Alternation.clicked.connect(self.getAlternation)
         self.ctrl.PSPReversal_SubBaseline.clicked.connect(self.getBaseline)
         [self.ctrl.PSPReversal_RMPMode.currentIndexChanged.connect(x)
@@ -329,7 +330,7 @@ class PSPReversal(AnalysisModule):
         self.ctrl.PSPReversal_Sequence2.clear()
         self.ctrl.PSPReversal_Sequence1.addItems(leftseq)
         self.ctrl.PSPReversal_Sequence2.addItems(rightseq)
-        #        self.dirsSet = dh  # not sure we need this anymore...
+        self.dirsSet = dh  # not sure we need this anymore...
 
     def cell_summary(self, dh):
         # other info into a dictionary
@@ -607,12 +608,16 @@ class PSPReversal(AnalysisModule):
         ntr = self.traces.shape[0]
         self.data_plot.setDownsampling(auto=True, mode='mean')
         self.data_plot.setClipToView(True)
+        self.cmd_plot.setDownsampling(auto=True, mode='mean')
+        self.cmd_plot.setClipToView(True)
+        cmdindxs = np.unique(self.cmd)  # find the unique voltages
+        colindxs = [int(np.where(cmdindxs == self.cmd[i])[0]) for i in range(len(self.cmd))] # make a list to use
         for i in range(ntr):
             self.data_plot.plot(self.tx, self.traces[i],
-                                pen=pg.intColor(i, ntr, maxValue=200),
+                                pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255),
             )
             self.cmd_plot.plot(self.tx, self.cmd_wave[i],
-                               pen=pg.intColor(i, ntr, maxValue=200),
+                               pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255),
                                autoDownsample=True, downsampleMethod='mean')
 
         if self.dataMode in self.ICModes:
@@ -801,7 +806,7 @@ class PSPReversal(AnalysisModule):
             rtxt += ('{:<4s} {:4.1f} {:3s}<br>'.format('BW', self.ampSettings['CompBW']*1e-3, 'kHz'))
             rtxt += (u'{:<4s} {:5.2f} {:2s}<br>'.format('Ru', self.r_uncomp*1e-6, u"M\u2126"))
         else:
-            rtxt += ('No WC or Rs Compensatoin')
+            rtxt += ('No WC or Rs Compensation')
 
         rtxt += ('{:<8s}: [{:5.1f}-{:5.1f}{:2s}] mode: {:<12s}<br>'.format(
                 'Win 1', self.regions['lrwin1']['start'].value(), self.regions['lrwin1']['stop'].value(),
@@ -810,39 +815,47 @@ class PSPReversal(AnalysisModule):
                 'Win 2', self.regions['lrwin2']['start'].value(), self.regions['lrwin2']['stop'].value(),
                 self.regions['lrwin2']['units'], self.regions['lrwin2']['mode'].currentText(),
                ))
-        vc = self.win2IV[0]
-        im = self.win2IV[1]
-        imsd = self.win2IV[2]
-        p = np.polyfit(vc, im, 2)  # 2nd order polynomial
+
         jp = self.junction
         ho = float(self.holding) * 1e3
         rtxt += 'HP: {:5.1f} mV  JP: {:5.1f} mV<br>'.format(ho, jp)
+
+        vc = self.win2IV[0]
+        im = self.win2IV[1]
+        imsd = self.win2IV[2]
+        polyorder = 3
+        p = np.polyfit(vc, im, polyorder)  # 3rd order polynomial
         # find the roots
-        a = p[0]
-        b = p[1]
-        c = p[2]
-        r = np.sqrt(b ** 2 - 4 * a * c)
+        r = np.roots(p)
         reversal = {}
-        reversal[0] = {'value': (-b + r) / (2 * a), 'valid': False}
-        reversal[1] = {'value': (-b - r) / (2 * a), 'valid': False}
+        for i in range(0, polyorder):
+            reversal[i] = {'value': r[i], 'valid': False}
+#        reversal[1] = {'value': (-b - r) / (2 * a), 'valid': False}
+
         rtxt += '<b>Erev: '
         anyrev = False
-        for i in range(0, 2):  # print only the valid reversal values
-            if -100. < (reversal[i]['value']+jp+ho) < 40.:
+        for i in range(0, polyorder):  # print only the valid reversal values, which includes real, not imaginary roots
+            if np.imag(reversal[i]['value']) == 0.0 and (-100. < (reversal[i]['value']+jp+ho) < 40.):
                 reversal[i]['valid'] = True
-                rtxt += '{:7.1f} '.format(reversal[i]['value'] + jp + ho)
+                rtxt += '{:7.1f} '.format(np.real(reversal[i]['value']) + jp + ho)
                 anyrev = True
         if not anyrev:
-            print reversal[0]['value']
-            print reversal[1]['value']
+#            print reversal[0]['value']
+#            print reversal[1]['value']
             rtxt += '</b>No roots found (values, with correction: {:7.1f}, {:7.1f}<br>'.format(
                 (reversal[0]['value']+jp+ho), (reversal[1]['value']+jp+ho))
         else:
             rtxt += ' mV</b><br>'
         rtxt += ('-' * 40) + '<br>'
-        rtxt += '<b>IV</b><br>'
+        rtxt += ('<b>{:2s}</b> Comp: {:<3s} {:>19s}:{:>4d}<br>'.
+                 format('IV',
+                        ('Off', 'On ')[self.ctrl.PSPReversal_RsCorr.isChecked()],
+                        'Repeats', self.nrepc))
         rtxt += '<i>{:>8s} \t{:>9s} \t{:>9s}</i><br>'.format('mV', 'nA', 'SD')
+        #print self.measure.keys()
         for i in range(len(vc)):
+            if self.ctrl.PSPReversal_RsCorr.isChecked():
+                rtxt += ('{:>9.1f} '.format(self.win2IV[3][i]+jp+ho))
             rtxt += ('{:>9.1f} \t{:>9.3f} \t{:>9.3f}<br>'.format((vc[i] + jp + ho), im[i], imsd[i]))
         rtxt += ('-' * 40) + '<br></div></font>'
         #print (rtxt)
@@ -1047,6 +1060,9 @@ class PSPReversal(AnalysisModule):
         winaltcmd = window + 'altcmd'
         winunordered = window + '_unordered'
         winlinfit = window + '_linfit'
+        winraw_i = window + 'rawI'  # save the raw (uncorrected) voltage as well
+        winraw_v = window + 'rawV'
+        winorigcmd = window + 'origcmd'
 
         if region is None:
             return
@@ -1062,24 +1078,24 @@ class PSPReversal(AnalysisModule):
         self.measure[winaltcmd] = []
         self.measure[winunordered] = []
         self.measure[windowsd] = []
-
+        self.measure[winraw_i] = []
+        self.measure[winraw_v] = []
+        self.measure[winorigcmd] = []
 
         mode = self.regions[region]['mode'].currentText()
         rgninfo = self.regions[region]['region'].getRegion()
         self.regions[region]['start'].setValue(rgninfo[0] * 1.0e3)  # report values to screen
         self.regions[region]['stop'].setValue(rgninfo[1] * 1.0e3)
         data1 = self.traces['Time': rgninfo[0]:rgninfo[1]]  # extract analysis region
-        print dir(self.traces)
         tx1 = ma.compressed(ma.masked_outside(self.tx, rgninfo[0], rgninfo[1]))  # time to match data1
         if tx1.shape[0] > data1.shape[1]:
             tx1=tx1[0:-1]  # clip extra point. Rules must be different between traces clipping and masking.
         if window == 'win1': # check if win1 overlaps with win2, and select data
-            r1 = rgninfo
             r2 = self.regions['lrwin2']['region'].getRegion()
             tx = ma.masked_inside(tx1, r2[0], r2[1])  #
             n_unmasked = ma.count(tx)
             if n_unmasked == 0:  # handle case where win1 is entirely inside win2
-                print 'update_winAnalysis: Window 1 is inside Window 2: No analysis possible'
+                print 'update_winAnalysis: Window 1 is entirely inside Window 2: No analysis possible'
                 return
             data1 = ma.array(data1, mask=ma.resize(ma.getmask(tx), data1.shape))
             self.txm = ma.compressed(tx)  # now compress tx as well
@@ -1087,8 +1103,7 @@ class PSPReversal(AnalysisModule):
         if data1.shape[1] == 0 or data1.shape[0] == 1:
             print 'no data to analyze?'
             return  # skip it
-        commands = np.array(self.values)  # get command levels
-        print 'analyzing %s with mode %s' % (region, mode)
+        commands = np.array(self.values)  # get clamp specified command levels
         if self.dataMode in self.ICModes:
             self.count_spikes()
         if mode in ['Mean-Win1', 'Sum-Win1']:
@@ -1102,24 +1117,8 @@ class PSPReversal(AnalysisModule):
         elif mode == 'Mean' or mode is None:
             self.measure[window] = data1.mean(axis=1)
             self.measure[windowsd] = np.std(np.array(data1), axis=1)
-        elif mode == 'Mean-Win1' and len(self.measure['win1_unordered']) == data1.shape[0]:
-            self.measure[window] = data1.mean(axis=1) - self.measure[
-                'win1_unordered']
-            self.measure[windowsd] = np.std(np.array(data1), axis=1) - self.measure[
-                'win1_unordered']
-        elif mode in ['Mean-Linear', 'Mean-Poly2'] and window == 'win2':  # and self.txm.shape[0] == data1.shape[0]:
-            fits = np.zeros((data1.shape[0], tx1.shape[0]))
-            print 'data1/txq:/fits ', data1.shape, tx1.shape, fits.shape
-            for j in range(data1.shape[0]):  # polyval only does 1d
-                fits[j,:] = np.polyval(self.win1fits[:,j], tx1)
-            self.measure[window] = np.mean(data1-fits, axis=1)
-            self.measure[windowsd] = np.std(data1-fits, axis=1)
-
         elif mode == 'Sum':
             self.measure[window] = np.sum(data1, axis=1)
-        elif mode == 'Sum-Win1' and len(self.measure['win1_unordered']) == data1.shape[0]:
-            u = self.measure['win1_unordered']._data
-            self.measure[window] = np.sum(data1 - u[:, np.newaxis], axis=1)
         elif mode == 'Abs':  # find largest regardless of the sign ('minormax')
             x1 = data1.min(axis=1)
             x2 = data1.max(axis=1)
@@ -1135,36 +1134,44 @@ class PSPReversal(AnalysisModule):
             p = np.polyfit(self.txm, d1.T, 1)
             self.win1fits = p
             self.measure[window] = data1.mean(axis=1)
-            # fits = np.zeros((data1.shape[0], tx.shape[0]))
-            # for j in range(data1.shape[0]):
-            #     fits[j,:] = np.polyval(p[:,j], tx)
-            #     if j == 0:
-            #         fpl=pg.plot(tx1, data1[j,:])
-            #     else:
-            #         fpl.plot(tx1, data1[j,:])
-            #     fpl.plot(tx, fits[j,:], pen=pg.mkPen({'color': "F00", 'width': 1}))
 
         elif mode == 'Poly2' and window == 'win1' :
             # fit time course of data
             ntr = data1.shape[0]
             d1 = np.resize(data1.compressed(), (ntr, self.txm.shape[0]))
-            p = np.polyfit(self.txm, d1.T, 2)
+            p = np.polyfit(self.txm, d1.T, 3)
             self.win1fits = p
             self.measure[window] = data1.mean(axis=1)
-            # fits = np.zeros((data1.shape[0], tx.shape[0]))
-            # for j in range(data1.shape[0]):
-            #     fits[j,:] = np.polyval(p[:,j], tx)
-            #     if j == 0:
-            #         fpl=pg.plot(tx1, data1[j,:])
-            #     else:
-            #         fpl.plot(tx1, data1[j,:])
-            #     fpl.plot(tx, fits[j,:], pen=pg.mkPen({'color': "F00", 'width': 1}))
-
-        else:
-            print 'update_winAnalysis: Mode %s is not recognized' % mode
+        if mode in ['Min', 'Max', 'Mean', 'Sum', 'Abs', 'Linear', 'Poly2']:
+            self.measure[winraw_i] = self.measure[window]  # save raw measured current before corrections
+        elif mode not in ['Mean-Win1', 'Mean-Linear', 'Mean-Poly2', 'Sum-Win1']:
+            print 'update_winAnalysis: Mode %s is not recognized (1)' % mode
             return
-            #self.measure['win1'] = np.array([np.max(x1[i], x2[i]) for i in range(data2.shape[0]])
-            #self.measure['win1'] = np.maximum(np.fabs(data2.min(axis=1)), data2.max(axis=1))
+        else:
+            pass
+
+        # continue with difference modes
+        if mode == 'Mean-Win1' and len(self.measure['win1_unordered']) == data1.shape[0]:
+            self.measure[winraw_i] = data1.mean(axis=1)
+            self.measure[window] = self.measure[winraw_i] - self.measure['win1_unordered']
+            self.measure[windowsd] = np.std(np.array(data1), axis=1) - self.measure['win1_unordered']
+        elif mode in ['Mean-Linear', 'Mean-Poly2'] and window == 'win2':  # and self.txm.shape[0] == data1.shape[0]:
+            fits = np.zeros((data1.shape[0], tx1.shape[0]))
+            for j in range(data1.shape[0]):  # polyval only does 1d
+                fits[j,:] = np.polyval(self.win1fits[:,j], tx1)
+            self.measure[winraw_i] = np.mean(data1, axis=1)
+            self.measure[window] = np.mean(data1-fits, axis=1)
+            self.measure[windowsd] = np.std(data1-fits, axis=1)
+        elif mode == 'Sum-Win1' and len(self.measure['win1_unordered']) == data1.shape[0]:
+            u = self.measure['win1_unordered']._data
+            self.measure[winraw_i] = np.sum(data1, axis=1)
+            self.measure[window] = np.sum(data1 - u[:, np.newaxis], axis=1)
+        elif mode not in ['Min', 'Max', 'Mean', 'Sum', 'Abs', 'Linear', 'Poly2']:
+            print 'update_winAnalysis: Mode %s is not recognized (2)' % mode
+            return
+        else:
+            pass
+
         if self.ctrl.PSPReversal_SubBaseline.isChecked():
             self.measure[window] = self.measure[window] - self.measure['rmp']
         if len(self.nospk) >= 1 and self.dataMode in self.ICModes:
@@ -1184,12 +1191,14 @@ class PSPReversal(AnalysisModule):
             else:
                 self.ctrl.PSPReversal_Rin.setText(u'No valid points')
         else:
-            if self.dataMode in self.VCModes and self.r_uncomp > 0.0:
+            if self.dataMode in self.VCModes and self.r_uncomp > 0.0 and self.ctrl.PSPReversal_RsCorr.isChecked():
                 # correct command voltages. This is a bit more complicated than it appears at first
-                # 1. use self.cmd_wave (the actual voltage time course
-                self.measure[wincmd] = commands
+                #
+                self.measure[winorigcmd] = commands
+                self.measure[wincmd] = commands - self.r_uncomp * self.measure[winraw_i]  # IR drop across uncompensated
                 self.cmd = commands
             else:
+                self.measure[winorigcmd] = commands
                 self.measure[wincmd] = commands
                 self.cmd = commands
             self.measure['leak'] = np.zeros(len(self.measure[window]))
@@ -1197,32 +1206,32 @@ class PSPReversal(AnalysisModule):
 
         # now separate the data into alternation groups, then sort by command level
         if self.alternation and window == 'win2':
-            print 'in alternation'
+#            print 'in alternation'
             nm = len(self.measure[window])  # get the number of measurements
             xoff = range(0, nm, 2)  # really should get this from loadrequestedfile
-            xon = range(1, nm, 2)
+            xon = range(1, nm, 2)  # get alternating ranges
             measure_voff = self.measure[wincmd][xoff]  # onset same as the other
             measure_von = self.measure[wincmd][xon]
+            measure_con = self.measure[winorigcmd][xon]
             measure_off = self.measure[window][xoff]
             measure_on = self.measure[window][xon]
             vcs_on = np.argsort(measure_von)
+            ccs_on = np.argsort(measure_con)
             vcs_off = np.argsort(measure_voff)
             measure_von = measure_von[vcs_on]
+            measure_con = measure_con[ccs_on]
             measure_off = measure_off[vcs_off]
             measure_on = measure_on[vcs_on]
             self.measure[winon] = np.array(measure_on)
             self.measure[winoff] = np.array(measure_off)
             self.measure[winaltcmd] = np.array(measure_von)
-            # if len(self.measure[windowsd]) > 0:
-            #     measure_on_sd = self.measure[windowsd][xon]
-            #     measure_on_sd = measure_on_sd[vcs_on]
-            #     self.measure[winonsd] = np.array(measure_on_sd)
+            self.measure[winraw_v] = np.array(measure_con)
+            self.measure[winraw_i] = np.array(self.measure[winraw_i][vcs_on])
         else:
             isort = np.argsort(self.measure[wincmd])  # get sort order for commands
             self.measure[wincmd] = self.measure[wincmd][isort]  # sort the command values
             self.measure[window] = self.measure[window][isort]  # sort the data in the window
-            # if len(self.measure[windowsd]) > 0:
-            #     self.measure[windowsd] = self.measure[windowsd][isort]
+            self.measure[winraw_v] = self.measure[winorigcmd][isort]
             self.update_IVPlot()
         self.update_cmdTimePlot(wincmd)
 
@@ -1239,7 +1248,6 @@ class PSPReversal(AnalysisModule):
                           symbolSize=6,
                           symbol=symbol, pen=pen,
                           symbolPen=pen, symbolBrush=filledbrush)
-
 
     def update_rmpAnalysis(self, region=None, clear=True, pw=False):
         """
@@ -1297,59 +1305,75 @@ class PSPReversal(AnalysisModule):
         """
         if self.ctrl.PSPReversal_KeepAnalysis.isChecked() is False:
             self.IV_plot.clear()
+            self.IV_plot.addLine(x=0, pen=pg.mkPen('888', width=0.5, style=QtCore.Qt.DashLine) )
+            self.IV_plot.addLine(y=0, pen=pg.mkPen('888', width=0.5, style=QtCore.Qt.DashLine) )
+        jp = self.junction  # get offsets for voltage
+        ho = float(self.holding) * 1e3
+        offset = jp + ho  # combine
         (pen, filledbrush, emptybrush, symbol, n, clear_flag) = self.map_symbol()
         if self.dataMode in self.ICModes:
             self.label_up(self.IV_plot, 'I (pA)', 'V (mV)', 'I-V (CC)')
             if (len(self.measure['win1']) > 0 and
                     self.regions['lrwin1']['state'].isChecked()):
-                self.IV_plot.plot(self.measure['win1cmd'] * 1e12, self.measure['win1'] * 1e3,
-                                  symbol=symbol, pen=pen,
-                                  symbolSize=6, symbolPen=pen,
+                self.IV_plot.plot(offset + self.measure['win1cmd'] * 1e12, self.measure['win1'] * 1e3,
+                                  symbol=symbol, pen=None,
+                                  symbolSize=6, symbolPen=pg.mkPen({'color': "0F0", 'width': 1}),
                                   symbolBrush=emptybrush)
             if (len(self.measure['win2']) > 0 and
                     self.regions['lrwin2']['state'].isChecked()):
-                self.IV_plot.plot(self.measure['win2cmd'] * 1e12, self.measure['win2'] * 1e3,
-                                  symbol=symbol, pen=pen,
-                                  symbolSize=6, symbolPen=pen,
+                self.IV_plot.plot(offset + self.measure['win2cmd'] * 1e12, self.measure['win2'] * 1e3,
+                                  symbol=symbol, pen=None,
+                                  symbolSize=6, symbolPen=pg.mkPen({'color': "00F", 'width': 1}),
                                   symbolBrush=filledbrush)
         if self.dataMode in self.VCModes:
             self.label_up(self.IV_plot, 'V (mV)', 'I (nA)', 'I-V (VC)')
             if (len(self.measure['win1']) > 0 and
                     self.regions['lrwin1']['state'].isChecked()):
-                self.IV_plot.plot(self.measure['win1cmd'] * 1e3, self.measure['win1'] * 1e9,
-                                  symbol=symbol, pen=pen,
-                                  symbolSize=6, symbolPen=pen,
+                self.IV_plot.plot(offset + self.measure['win1cmd'] * 1e3, self.measure['win1'] * 1e9,
+                                  symbol=symbol, pen=None,
+                                  symbolSize=6, symbolPen=pg.mkPen({'color': "FF0", 'width': 1}),
                                   symbolBrush=emptybrush)
             if (len(self.measure['win2']) > 0 and
                     self.regions['lrwin2']['state'].isChecked()):
                 if not self.alternation:
-                    self.IV_plot.plot(self.measure['win2cmd'] * 1e3, self.measure['win2'] * 1e9,
-                                      symbol=symbol, pen=pen,
-                                      symbolSize=6, symbolPen=pen,
+                    self.IV_plot.plot(offset + self.measure['win2cmd'] * 1e3, self.measure['win2'] * 1e9,
+                                      symbol=symbol, pen=None,
+                                      symbolSize=6, symbolPen=pg.mkPen({'color': "00F", 'width': 1}),
                                       symbolBrush=filledbrush)
                 else:
                     if len(self.measure['win2altcmd']) > 0:
-                        self.IV_plot.plot(self.measure['win2altcmd'] * 1e3, self.measure['win2on'] * 1e9,
-                                          symbol=symbol, pen=pen,
-                                          symbolSize=6, symbolPen=pen,
+                        self.IV_plot.plot(offset + self.measure['win2altcmd'] * 1e3, self.measure['win2on'] * 1e9,
+                                          symbol=symbol, pen=None,
+                                          symbolSize=6, symbolPen=pg.mkPen({'color': "00F", 'width': 1}),
                                           symbolBrush=filledbrush)
-                        # plot mean
+                        # compute polynomial fit to iv
+                        # this should have it's own method
+                        p = np.polyfit(self.measure['win2altcmd'], self.measure['win2on'], 3)
+                        vpl = np.arange(np.min(self.measure['win2altcmd']), np.max(self.measure['win2altcmd']), 1e-3)
+                        ipl = np.polyval(p, vpl)
+                        # get the corrected voltage command (Vm = Vc - Rs*Im)
                         m = self.measure['win2altcmd']
-                        # print 'nrepc: ', self.nrepc
                         calt = m.reshape(m.shape[0] / self.nrepc, self.nrepc)
                         vc = calt.mean(axis=1)
+                        # get the original commmand voltage (for reference
+                        mvc = self.measure['win2rawV']
+                        cmdalt = mvc.reshape(mvc.shape[0] / self.nrepc, self.nrepc)
+                        mvc = cmdalt.mean(axis=1)
+                        # get the current for the window (after subtractions,etc)
                         m2 = self.measure['win2on']
                         ialt = m2.reshape(m2.shape[0] / self.nrepc, self.nrepc)
                         im = ialt.mean(axis=1)
                         imsd = ialt.std(axis=1)
-                        avPen = pg.mkPen({'color': "F00", 'width': 2})
-                        self.IV_plot.plot(vc * 1e3, im * 1e9,
-                                          symbol='s', pen=avPen,
-                                          symbolSize=6, symbolPen=avPen,
-                                          symbolBrush=filledbrush)
-                        self.win2IV = [vc * 1e3, im * 1e9, imsd*1e9]
-
-
+                        avPen = pg.mkPen({'color': "F00", 'width': 1})
+                        fitPen = pg.mkPen({'color': "F00", 'width': 2})
+                        self.IV_plot.plot(offset + vc * 1e3, im * 1e9,
+                                          pen=None, # no lines
+                                          symbol='s', symbolSize=6,
+                                          symbolPen=avPen, symbolBrush=filledbrush)
+                        self.IV_plot.plot(offset + vpl * 1e3, ipl * 1e9,
+                                          pen=fitPen, #  lines
+                                          )
+                        self.win2IV = [vc * 1e3, im * 1e9, imsd*1e9, mvc *1e3]
 
     def update_RMPPlot(self):
         """
@@ -1448,7 +1472,7 @@ class PSPReversal(AnalysisModule):
         tsf = 1.0e3
         if self.modelmode:
             tsf = 1.0
-        print 'Regions: ', self.regions.keys()
+        #print 'Regions: ', self.regions.keys()
         if self.regions['lrrmp']['state'].isChecked():
             rgnx1 = self.regions['lrrmp']['start'].value() / tsf
             rgnx2 = self.regions['lrrmp']['start'].value() / tsf

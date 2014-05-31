@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './acq4/analysis/modules/PSPReversal/ctrlTemplate.ui'
 #
-# Created: Thu May 29 14:45:28 2014
+# Created: Sat May 31 15:41:12 2014
 #      by: PyQt4 UI code generator 4.9.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -369,9 +369,9 @@ class Ui_Form(object):
         self.dbStoreBtn.setFont(font)
         self.dbStoreBtn.setObjectName(_fromUtf8("dbStoreBtn"))
         self.horizontalLayout.addWidget(self.dbStoreBtn)
-        self.PSPReversal_getFileInfo = QtGui.QPushButton(self.layoutWidget4)
-        self.PSPReversal_getFileInfo.setObjectName(_fromUtf8("PSPReversal_getFileInfo"))
-        self.horizontalLayout.addWidget(self.PSPReversal_getFileInfo)
+        self.PSPReversal_rePlotData = QtGui.QPushButton(self.layoutWidget4)
+        self.PSPReversal_rePlotData.setObjectName(_fromUtf8("PSPReversal_rePlotData"))
+        self.horizontalLayout.addWidget(self.PSPReversal_rePlotData)
         self.PSPReversal_PrintResults = QtGui.QPushButton(self.layoutWidget4)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
@@ -381,7 +381,7 @@ class Ui_Form(object):
         self.PSPReversal_PrintResults.setObjectName(_fromUtf8("PSPReversal_PrintResults"))
         self.horizontalLayout.addWidget(self.PSPReversal_PrintResults)
         self.layoutWidget5 = QtGui.QWidget(self.groupBox)
-        self.layoutWidget5.setGeometry(QtCore.QRect(5, 110, 341, 171))
+        self.layoutWidget5.setGeometry(QtCore.QRect(10, 110, 331, 171))
         self.layoutWidget5.setObjectName(_fromUtf8("layoutWidget5"))
         self.gridLayout_4 = QtGui.QGridLayout(self.layoutWidget5)
         self.gridLayout_4.setSizeConstraint(QtGui.QLayout.SetMaximumSize)
@@ -632,6 +632,14 @@ class Ui_Form(object):
         self.label_4.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.label_4.setObjectName(_fromUtf8("label_4"))
         self.gridLayout_4.addWidget(self.label_4, 5, 0, 1, 1)
+        self.PSPReversal_RsCorr = QtGui.QCheckBox(self.layoutWidget5)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Maximum, QtGui.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.PSPReversal_RsCorr.sizePolicy().hasHeightForWidth())
+        self.PSPReversal_RsCorr.setSizePolicy(sizePolicy)
+        self.PSPReversal_RsCorr.setObjectName(_fromUtf8("PSPReversal_RsCorr"))
+        self.gridLayout_4.addWidget(self.PSPReversal_RsCorr, 5, 2, 1, 1)
         self.widget = QtGui.QWidget(self.groupBox)
         self.widget.setGeometry(QtCore.QRect(5, 80, 341, 25))
         self.widget.setObjectName(_fromUtf8("widget"))
@@ -655,7 +663,7 @@ class Ui_Form(object):
         self.PSPReversal_SubBaseline.setObjectName(_fromUtf8("PSPReversal_SubBaseline"))
         self.horizontalLayout_9.addWidget(self.PSPReversal_SubBaseline)
         self.widget1 = QtGui.QWidget(self.groupBox)
-        self.widget1.setGeometry(QtCore.QRect(5, 285, 341, 29))
+        self.widget1.setGeometry(QtCore.QRect(5, 285, 369, 29))
         self.widget1.setObjectName(_fromUtf8("widget1"))
         self.horizontalLayout_12 = QtGui.QHBoxLayout(self.widget1)
         self.horizontalLayout_12.setSizeConstraint(QtGui.QLayout.SetMaximumSize)
@@ -758,8 +766,8 @@ class Ui_Form(object):
         Form.setTabOrder(self.PSPReversal_Rin, self.PSPReversal_Tauh)
         Form.setTabOrder(self.PSPReversal_Tauh, self.PSPReversal_Update)
         Form.setTabOrder(self.PSPReversal_Update, self.dbStoreBtn)
-        Form.setTabOrder(self.dbStoreBtn, self.PSPReversal_getFileInfo)
-        Form.setTabOrder(self.PSPReversal_getFileInfo, self.PSPReversal_PrintResults)
+        Form.setTabOrder(self.dbStoreBtn, self.PSPReversal_rePlotData)
+        Form.setTabOrder(self.PSPReversal_rePlotData, self.PSPReversal_PrintResults)
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
@@ -795,7 +803,7 @@ class Ui_Form(object):
         self.PSPReversal_tauh_Commands.setItemText(0, QtGui.QApplication.translate("Form", "0.0", None, QtGui.QApplication.UnicodeUTF8))
         self.PSPReversal_Update.setText(QtGui.QApplication.translate("Form", "Update", None, QtGui.QApplication.UnicodeUTF8))
         self.dbStoreBtn.setText(QtGui.QApplication.translate("Form", "-> db", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_getFileInfo.setText(QtGui.QApplication.translate("Form", "FileInfo", None, QtGui.QApplication.UnicodeUTF8))
+        self.PSPReversal_rePlotData.setText(QtGui.QApplication.translate("Form", "RePlot", None, QtGui.QApplication.UnicodeUTF8))
         self.PSPReversal_PrintResults.setText(QtGui.QApplication.translate("Form", "Print", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("Form", "T Start", None, QtGui.QApplication.UnicodeUTF8))
         self.PSPReversal_win1mode.setItemText(0, QtGui.QApplication.translate("Form", "Mean", None, QtGui.QApplication.UnicodeUTF8))
@@ -824,6 +832,7 @@ class Ui_Form(object):
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'Lucida Grande\'; font-size:13pt; font-weight:400; font-style:normal;\">\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">R<span style=\" vertical-align:sub;\">uncomp</span></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
+        self.PSPReversal_RsCorr.setText(QtGui.QApplication.translate("Form", "Ru Corr", None, QtGui.QApplication.UnicodeUTF8))
         self.label_6.setText(QtGui.QApplication.translate("Form", "Mode:", None, QtGui.QApplication.UnicodeUTF8))
         self.PSPReversal_dataMode.setText(QtGui.QApplication.translate("Form", "DataMode", None, QtGui.QApplication.UnicodeUTF8))
         self.PSPReversal_Alternation.setText(QtGui.QApplication.translate("Form", "Alternation", None, QtGui.QApplication.UnicodeUTF8))
