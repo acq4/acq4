@@ -65,7 +65,7 @@ class PSPReversal(AnalysisModule):
                         'leak': [],
                         'win1': [], 'win1cmd': [], 'win1off': [], 'win1on': [], 'winaltcmd': [],
                         'win2': [], 'win2cmd': [], 'win2off': [], 'win2on': [], 'win2altcmd': [],
-                        }
+        }
         self.cmd = None
         self.junction = 0.0  # junction potential (user adjustable)
         self.holding = 0.0  # holding potential (read from commands)
@@ -84,9 +84,36 @@ class PSPReversal(AnalysisModule):
         self.modelmode = False
         self.clamp_state = None
         self.amp_settings = None
+        self.trace_times = None
 
-        #--------------graphical elements-----------------
-        self._sizeHint = (1280, 900)   # try to establish size of window
+        self.cmd_wave = None
+        self.traces = None
+        self.trace_times = None
+        self.tx = None
+
+        # (some) results elements
+        self.filename = ''
+        self.r_in = 0.0
+        self.tau = 0.0
+        self.adapt_ratio = 0.0
+        self.traces = None
+        self.spikes_counted = False
+        self.nospk = []
+        self.spk = []
+        ntr = 0
+        self.spikecount = None
+        self.fsl = None
+        self.fisi = None
+        self.ar = None
+
+        self.cmd = []
+        self.sequence = ''
+        for m in self.measure.keys():
+            self.measure[m] = []
+        self.rmp = []  # resting membrane potential during sequence
+
+        # --------------graphical elements-----------------
+        self._sizeHint = (1280, 900)  # try to establish size of window
         self.ctrl_widget = QtGui.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrl_widget)
@@ -177,9 +204,9 @@ class PSPReversal(AnalysisModule):
         This is typically needed every time a new data set is loaded.
         """
         self.filename = ''
-        self.Rin = 0.0
+        self.r_in = 0.0
         self.tau = 0.0
-        self.AdaptRatio = 0.0
+        self.adapt_ratio = 0.0
         self.traces = None
         self.spikes_counted = False
         self.nospk = []
@@ -269,7 +296,7 @@ class PSPReversal(AnalysisModule):
             for reg in self.regions.keys():
                 self.regions[reg]['plot'].addItem(self.regions[reg]['region'])
                 self.regions[reg]['state'].clicked.connect(functools.partial(self.show_or_hide,
-                                                                             lrregion=reg))  # self.regions[reg]['state'].clicked.connect(self.show_or_hide)   #lambda: self.showHide(region=reg))
+                                                                             lrregion=reg))
                 self.regions[reg]['region'].sigRegionChangeFinished.connect(
                     functools.partial(self.regions[reg]['updater'], region=self.regions[reg]['name']))
                 if self.regions[reg]['mode'] is not None:
@@ -354,6 +381,7 @@ class PSPReversal(AnalysisModule):
         Extracts information about the commands, sometimes using a rather
         simplified set of assumptions.
         modifies: plots, sequence, data arrays, data mode, etc.
+        Returns: True if successful; otherwise raises an exception
         """
         if len(dh) == 0:
             raise Exception("PSPReversal::loadFileRequested: " +
@@ -367,7 +395,7 @@ class PSPReversal(AnalysisModule):
             self.get_file_information()  # No, get info frommost recent file requested
             self.current_dirhandle = dh  # this is critical!
         self.cell_summary(dh)  # get other info as needed
-#        self.current_dirhandle = dh  # save as our current one.
+        #        self.current_dirhandle = dh  # save as our current one.
         self.protocolfile = ''
         self.data_plot.clearPlots()
         self.cmd_plot.clearPlots()
@@ -383,7 +411,9 @@ class PSPReversal(AnalysisModule):
         self.protocolfile = self.protocolfile + '.pdf'
         self.commonPrefix = self.filename
         traces = []
-        cmd_wave = []
+        cmd = []
+        self.cmd_wave = []
+        data = []
         self.tx = None
         self.values = []
         self.sequence = self.data_model.listSequenceParams(dh)  # already done in 'getfileinfo'
@@ -453,7 +483,7 @@ class PSPReversal(AnalysisModule):
             data = self.data_model.getClampPrimary(data_file)
             self.data_mode = self.data_model.getClampMode(data)
             if self.data_mode is None:
-                self.data_mode = self.ic_modes [0]  # set a default mode
+                self.data_mode = self.ic_modes[0]  # set a default mode
             if self.data_mode in ['ic', 'vc']:  # lower case means model was run
                 self.modelmode = True
             self.ctrl.PSPReversal_dataMode.setText(self.dataMode)
@@ -470,14 +500,14 @@ class PSPReversal(AnalysisModule):
             self.holding = self.data_model.getClampHoldingLevel(data_file_handle)
 
             if 'LED-Blue' in self.devicesUsed.keys():
-                LED_pulseTrainCommand = data_dir_handle.parent().info()['devices']['LED-Blue']['channels']['Command']
-                LED_pulseTrainInfo = LED_pulseTrainCommand['waveGeneratorWidget']['stimuli']['PulseTrain']
-                self.LEDInfo = {}
-                for k in LED_pulseTrainInfo.keys():
+                led_pulse_train_command = data_dir_handle.parent().info()['devices']['LED-Blue']['channels']['Command']
+                led_pulse_train_info = led_pulse_train_command['waveGeneratorWidget']['stimuli']['PulseTrain']
+                self.led_info = {}
+                for k in led_pulse_train_info.keys():
                     if k in ['type']:
-                        self.LEDInfo[k] = LED_pulseTrainInfo[k]
+                        self.led_info[k] = led_pulse_train_info[k]
                     else:
-                        self.LEDInfo[k] = LED_pulseTrainInfo[k]['value']
+                        self.led_info[k] = led_pulse_train_info[k]['value']
 
             # only accept data in a particular range
             if self.ctrl.PSPReversal_IVLimits.isChecked():
@@ -488,17 +518,18 @@ class PSPReversal(AnalysisModule):
                     continue  # skip adding the data to the arrays
             # store primary channel data and read command amplitude
             info1 = data.infoCopy()
+            start_time = 0.0
             if 'startTime' in info1[0].keys():
                 start_time = info1[0]['startTime']
             elif 'startTime' in info1[1]['DAQ']['command'].keys():
                 start_ime = info1[1]['DAQ']['command']['startTime']
             else:
-                start_time = 0.
+                pass
 
             self.trace_times = np.append(self.trace_times, start_time)
 
             traces.append(data.view(np.ndarray))
-            cmd_wave.append(cmd.view(np.ndarray))
+            self.cmd_wave.append(cmd.view(np.ndarray))
 
             if len(sequence_values) > 0:
                 self.values.append(sequence_values[i])
@@ -514,17 +545,16 @@ class PSPReversal(AnalysisModule):
             if self.amp_settings['WCEnabled'] and self.amp_settings['CompEnabled']:
                 print 'wc resistance, Ohms: ', self.amp_settings['WCResistance']
                 print 'Correction %: ', self.amp_settings['CompCorrection']
-                self.r_uncomp = self.amp_settings['WCResistance']*(1.0-self.amp_settings['CompCorrection']/100.)
+                self.r_uncomp = self.amp_settings['WCResistance'] * (1.0 - self.amp_settings['CompCorrection'] / 100.)
             else:
                 self.r_uncomp = 0.
-        self.ctrl.PSPReversal_R_unCompensated.setValue(self.r_uncomp*1e-6) # convert to Mohm to display
+        self.ctrl.PSPReversal_R_unCompensated.setValue(self.r_uncomp * 1e-6)  # convert to Mohm to display
         self.ctrl.PSPReversal_R_unCompensated.setSuffix(u" M\u2126")
 
         # put relative to the start
-        self.trace_times = self.trace_times - self.trace_times[0]
+        self.trace_times -= self.trace_times[0]
         traces = np.vstack(traces)
-        cmd_wave = np.vstack(cmd_wave)
-        self.cmd_wave = cmd_wave
+        self.cmd_wave = np.vstack(self.cmd_wave)
         self.tx = np.array(cmd.xvals('Time'))
         commands = np.array(self.values)
         self.color_scale.setIntColorScale(0, i, maxValue=200)
@@ -619,8 +649,7 @@ class PSPReversal(AnalysisModule):
         colindxs = [int(np.where(cmdindxs == self.cmd[i])[0]) for i in range(len(self.cmd))]  # make a list to use
         for i in range(ntr):
             self.data_plot.plot(self.tx, self.traces[i],
-                                pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255),
-            )
+                                pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
             self.cmd_plot.plot(self.tx, self.cmd_wave[i],
                                pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255),
                                autoDownsample=True, downsampleMethod='mean')
@@ -642,9 +671,9 @@ class PSPReversal(AnalysisModule):
         if self.ctrl.PSPReversal_KeepT.isChecked() is False:
             if 'LED-Blue' in self.devicesUsed:
                 tdur1 = 0.1
-                tstart1 = self.LEDInfo['start'] - tdur1
-                tdur2 = self.LEDInfo['length'] * 5.  # go 5 times the duration.
-                tstart2 = self.LEDInfo['start']
+                tstart1 = self.led_info['start'] - tdur1
+                tdur2 = self.led_info['length'] * 5.  # go 5 times the duration.
+                tstart2 = self.led_info['start']
                 if tstart2 + tdur2 > self.tend:
                     tdur2 = self.tend - tstart2  # restrict duration to end of the trace
             else:
@@ -687,7 +716,7 @@ class PSPReversal(AnalysisModule):
         The following variables are set:
         self.spikecount: a 1-D numpy array of spike counts, aligned with the
             current (command)
-        self.AdaptRatio: the adaptation ratio of the spike train
+        self.adapt_ratio: the adaptation ratio of the spike train
         self.fsl: a numpy array of first spike latency for each command level
         self.fisi: a numpy array of first interspike intervals for each
             command level
@@ -746,15 +775,15 @@ class PSPReversal(AnalysisModule):
             if len(spike) > 1:
                 self.fisi[i] = spike[1] - spike[0]
                 # for Adaptation ratio analysis
-            if len(spike) >= minspk and len(spike) <= maxspk:
+            if (len(spike) >= minspk) and (len(spike) <= maxspk):
                 misi = np.mean(np.diff(spike[-3:]))
                 self.ar[i] = misi / self.isi[i]
             (self.rmp[i], r2) = Utility.measure('mean', self.tx, self.traces[i],
                                                 0.0, self.tstart)
         # iAR = np.where(ar > 0)
         # ARmean = np.mean(ar[iAR])  # only where we made the measurement
-        # self.AdaptRatio = ARmean
-        #self.ctrl.PSPReversal_AR.setText(u'%7.3f' % (ARmean))
+        # self.adapt_ratio = ARmean
+        # self.ctrl.PSPReversal_AR.setText(u'%7.3f' % (ARmean))
         self.fisi = self.fisi * 1.0e3
         self.fsl = self.fsl * 1.0e3
         self.nospk = np.where(self.spikecount == 0)
@@ -805,19 +834,19 @@ class PSPReversal(AnalysisModule):
         anyrev = False
         revvals = ''
         for i in range(0, polyorder):  # print only the valid reversal values, which includes real, not imaginary roots
-            if np.imag(reversal[i]['value']) == 0.0 and (-100. < (reversal[i]['value']+jp+ho) < 40.):
+            if np.imag(reversal[i]['value']) == 0.0 and (-100. < (reversal[i]['value'] + jp + ho) < 40.):
                 reversal[i]['valid'] = True
                 if anyrev:
                     revvals += ', '
                 revvals += '{:5.1f}'.format(np.real(reversal[i]['value']) + jp + ho)
                 anyrev = True
         if not anyrev:
-                revvals = 'Not fnd'
+            revvals = 'Not fnd'
 
         # format output in html
         rtxt = '<font face="monospace, courier">'  # use a monospaced font.
         rtxt += '<div style="white-space: pre;">'  # css to force repsect of spaces in text
-        rtxt += ("{:^15s}  {:^5s}  {:^4s}  {:^12s}<br>" .format
+        rtxt += ("{:^15s}  {:^5s}  {:^4s}  {:^12s}<br>".format
                  ("Date", "Slice", "Cell", "E<sub>rev</sub>"))
         rtxt += ("<b>{:^15s}  {:^5s}  {:^4s}  {:^12s}</b><br>".format
                  (date, slice[-3:], cell[-3:], revvals))
@@ -829,13 +858,13 @@ class PSPReversal(AnalysisModule):
         rtxt += ('{:<8s}: {:<32s}<br>'.format('ACSF', self.CellSummary['ACSF']))
         rtxt += ('{:<8s}: {:<32s}<br>'.format('Internal', self.CellSummary['Internal']))
         if self.amp_settings['WCCompValid'] is True:
-            rtxt += (u'{:<4s} {:5.2f} {:2s} '.format('LPF', self.clamp_state['LPFCutoff']*1e-3, 'kHz'))
+            rtxt += (u'{:<4s} {:5.2f} {:2s} '.format('LPF', self.clamp_state['LPFCutoff'] * 1e-3, 'kHz'))
             rtxt += (u'{:<4s} {:5.2f} {:2s}<br>'.format('Gain', self.clamp_state['primaryGain'], ''))
-            rtxt += (u'{:<4s} {:4.1f} {:2s} '.format('Rs', self.amp_settings['WCResistance']*1e-6, u"M\u2126"))
-            rtxt += ('{:<4s} {:4.1f} {:2s}<br>'.format('Cm', self.amp_settings['WCCellCap']*1e12, 'pF'))
+            rtxt += (u'{:<4s} {:4.1f} {:2s} '.format('Rs', self.amp_settings['WCResistance'] * 1e-6, u"M\u2126"))
+            rtxt += ('{:<4s} {:4.1f} {:2s}<br>'.format('Cm', self.amp_settings['WCCellCap'] * 1e12, 'pF'))
             rtxt += ('{:<4s} {:4.0f} {:<2s} '.format('Comp', self.amp_settings['CompCorrection'], '%'))
-            rtxt += ('{:<4s} {:4.1f} {:3s}<br>'.format('BW', self.amp_settings['CompBW']*1e-3, 'kHz'))
-            rtxt += (u'{:<4s} {:5.2f} {:2s}<br>'.format('Ru', self.r_uncomp*1e-6, u"M\u2126"))
+            rtxt += ('{:<4s} {:4.1f} {:3s}<br>'.format('BW', self.amp_settings['CompBW'] * 1e-3, 'kHz'))
+            rtxt += (u'{:<4s} {:5.2f} {:2s}<br>'.format('Ru', self.r_uncomp * 1e-6, u"M\u2126"))
         else:
             rtxt += ('No WC or Rs Compensation')
 
@@ -851,7 +880,7 @@ class PSPReversal(AnalysisModule):
         rtxt += ('<b>{:2s}</b> Comp: {:<3s} <br>'.  # {:>19s}:{:>4d}<br>'.
                  format('IV',
                         ('Off', 'On ')[self.ctrl.PSPReversal_RsCorr.isChecked()]))
-                        #'Repeats', self.nrepc))
+        #'Repeats', self.nrepc))
         if self.ctrl.PSPReversal_RsCorr.isChecked():
             vtitle = 'mV (corr)'
         else:
@@ -863,15 +892,14 @@ class PSPReversal(AnalysisModule):
             if self.ctrl.PSPReversal_RsCorr.isChecked():
                 rtxt += (' {:>9.1f} '.format(vc[i] + jp + ho))
             else:
-                rtxt += (' {:>9.1f} '.format(self.win2IV[3][i]+jp+ho))
+                rtxt += (' {:>9.1f} '.format(self.win2IV[3][i] + jp + ho))
             rtxt += ('\t{:>9.3f} \t{:>9.3f}\t{:>6d}<br>'.format(im[i], imsd[i], self.nrepc))
         rtxt += ('-' * 40) + '<br></div></font>'
         self.results.resultsPSPReversal_text.setText(rtxt)
         # now raise the dock for visibility
         self._host_.dockArea.findAll()[1]['Results'].raiseDock()
 
-
-    def update_tau(self, print_window=True, which_tau=1):
+    def update_tau(self, print_window=True):
         """
         Compute time constant (single exponential) from the
         onset of the response
@@ -1161,8 +1189,8 @@ class PSPReversal(AnalysisModule):
             for j in range(data1.shape[0]):  # polyval only does 1d
                 fits[j, :] = np.polyval(self.win1fits[:, j], tx1)
             self.measure[winraw_i] = np.mean(data1, axis=1)
-            self.measure[window] = np.mean(data1-fits, axis=1)
-            self.measure[windowsd] = np.std(data1-fits, axis=1)
+            self.measure[window] = np.mean(data1 - fits, axis=1)
+            self.measure[windowsd] = np.std(data1 - fits, axis=1)
         elif mode == 'Sum-Win1' and len(self.measure['win1_unordered']) == data1.shape[0]:
             u = self.measure['win1_unordered']._data
             self.measure[winraw_i] = np.sum(data1, axis=1)
@@ -1185,10 +1213,10 @@ class PSPReversal(AnalysisModule):
             self.cmd = commands[self.nospk]
             # compute Rin from the SS IV:
             if len(self.cmd) > 0 and len(self.measure[window]) > 0:
-                self.Rin = np.max(np.diff
-                                  (self.measure[window]) / np.diff(self.cmd))
+                self.r_in = np.max(np.diff
+                                   (self.measure[window]) / np.diff(self.cmd))
                 self.ctrl.PSPReversal_Rin.setText(u'%9.1f M\u03A9'
-                                                  % (self.Rin * 1.0e-6))
+                                                  % (self.r_in * 1.0e-6))
             else:
                 self.ctrl.PSPReversal_Rin.setText(u'No valid points')
         else:
@@ -1207,7 +1235,7 @@ class PSPReversal(AnalysisModule):
 
         # now separate the data into alternation groups, then sort by command level
         if self.alternation and window == 'win2':
-#            print 'in alternation'
+            #            print 'in alternation'
             nm = len(self.measure[window])  # get the number of measurements
             xoff = range(0, nm, 2)  # really should get this from loadrequestedfile
             xon = range(1, nm, 2)  # get alternating ranges
@@ -1295,8 +1323,8 @@ class PSPReversal(AnalysisModule):
         if cd['pen'] == 'w':
             cd['pen'] = pg.mkPen((128, 128, 128))
         self.last_symbol = (cd['pen'], cd['filledbrush'],
-                           cd['emptybrush'], cd['symbol'],
-                           cd['n'], cd['clear_flag'])
+                            cd['emptybrush'], cd['symbol'],
+                            cd['n'], cd['clear_flag'])
         return self.last_symbol
 
     def update_IVPlot(self):
@@ -1306,8 +1334,8 @@ class PSPReversal(AnalysisModule):
         """
         if self.ctrl.PSPReversal_KeepAnalysis.isChecked() is False:
             self.iv_plot.clear()
-            self.iv_plot.addLine(x=0, pen=pg.mkPen('888', width=0.5, style=QtCore.Qt.DashLine) )
-            self.iv_plot.addLine(y=0, pen=pg.mkPen('888', width=0.5, style=QtCore.Qt.DashLine) )
+            self.iv_plot.addLine(x=0, pen=pg.mkPen('888', width=0.5, style=QtCore.Qt.DashLine))
+            self.iv_plot.addLine(y=0, pen=pg.mkPen('888', width=0.5, style=QtCore.Qt.DashLine))
         jp = self.junction  # get offsets for voltage
         ho = float(self.holding) * 1e3
         offset = jp + ho  # combine
@@ -1350,8 +1378,8 @@ class PSPReversal(AnalysisModule):
                         # compute polynomial fit to iv
                         # this should have it's own method
                         p = np.polyfit(self.measure['win2altcmd'], self.measure['win2on'], 3)
-                        vpl = np.arange(np.min(self.measure['win2altcmd']), 
-                                        np.max(self.measure['win2altcmd']), 1e-3)
+                        vpl = np.arange(float(np.min(self.measure['win2altcmd'])),
+                                        float(np.max(self.measure['win2altcmd'])), 1e-3)
                         ipl = np.polyval(p, vpl)
                         # get the corrected voltage command (Vm = Vc - Rs*Im)
                         m = self.measure['win2altcmd']
@@ -1373,9 +1401,8 @@ class PSPReversal(AnalysisModule):
                                           symbol='s', symbolSize=6,
                                           symbolPen=avPen, symbolBrush=filledbrush)
                         self.iv_plot.plot(offset + vpl * 1e3, ipl * 1e9,
-                                          pen=fitPen,  #  lines
-                                          )
-                        self.win2IV = [vc * 1e3, im * 1e9, imsd*1e9, mvc *1e3]
+                                          pen=fitPen)  # lines
+                        self.win2IV = [vc * 1e3, im * 1e9, imsd * 1e9, mvc * 1e3]
 
     def update_rmp_plot(self):
         """
@@ -1529,7 +1556,7 @@ class PSPReversal(AnalysisModule):
 
         rec = {
             'PSPReversal_rmp': self.neg_vrmp / 1000.,
-            'PSPReversal_rinp': self.Rin,
+            'PSPReversal_rinp': self.r_in,
             'PSPReversal_taum': self.tau,
             'PSPReversal_neg_cmd': self.neg_cmd,
             'PSPReversal_neg_pk': self.neg_pk,
