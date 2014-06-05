@@ -466,7 +466,7 @@ class IVCurve(AnalysisModule):
                                         startTime)
             traces.append(data.view(numpy.ndarray))
             cmd_wave.append(cmd.view(numpy.ndarray))
-            self.data_plot.plot(data,
+            self.data_plot(data,
                                 pen=pg.intColor(i, len(dirs), maxValue=200))
             self.cmd_plot.plot(cmd,
                                pen=pg.intColor(i, len(dirs), maxValue=200))

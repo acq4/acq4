@@ -689,7 +689,7 @@ Times</string>
        <rect>
         <x>5</x>
         <y>20</y>
-        <width>341</width>
+        <width>349</width>
         <height>32</height>
        </rect>
       </property>
@@ -953,9 +953,9 @@ Times</string>
      <widget class="QWidget" name="layoutWidget">
       <property name="geometry">
        <rect>
-        <x>10</x>
+        <x>5</x>
         <y>110</y>
-        <width>331</width>
+        <width>341</width>
         <height>171</height>
        </rect>
       </property>
@@ -1207,7 +1207,7 @@ Times</string>
           <enum>Qt::RightToLeft</enum>
          </property>
          <property name="text">
-          <string>ILeak</string>
+          <string>Exclude</string>
          </property>
         </widget>
        </item>
@@ -1225,13 +1225,13 @@ Times</string>
           <number>1</number>
          </property>
          <property name="minimum">
-          <double>-200.000000000000000</double>
+          <double>0.000000000000000</double>
          </property>
          <property name="maximum">
-          <double>200.000000000000000</double>
+          <double>10000.000000000000000</double>
          </property>
          <property name="value">
-          <double>-5.000000000000000</double>
+          <double>0.000000000000000</double>
          </property>
         </widget>
        </item>
@@ -1249,10 +1249,10 @@ Times</string>
           <number>1</number>
          </property>
          <property name="minimum">
-          <double>-200.000000000000000</double>
+          <double>0.000000000000000</double>
          </property>
          <property name="maximum">
-          <double>203.000000000000000</double>
+          <double>10000.000000000000000</double>
          </property>
          <property name="value">
           <double>5.000000000000000</double>
@@ -1632,7 +1632,7 @@ p, li { white-space: pre-wrap; }
        </item>
       </layout>
      </widget>
-     <widget class="QWidget" name="">
+     <widget class="QWidget" name="layoutWidget">
       <property name="geometry">
        <rect>
         <x>5</x>
@@ -1676,12 +1676,12 @@ p, li { white-space: pre-wrap; }
        </item>
       </layout>
      </widget>
-     <widget class="QWidget" name="">
+     <widget class="QWidget" name="layoutWidget">
       <property name="geometry">
        <rect>
         <x>5</x>
         <y>285</y>
-        <width>369</width>
+        <width>336</width>
         <height>29</height>
        </rect>
       </property>

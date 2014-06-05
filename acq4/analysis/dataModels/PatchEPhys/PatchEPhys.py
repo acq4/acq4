@@ -415,7 +415,7 @@ def getTemp(dh):
     if dh.isFile():
         dh = dh.parent()
     temp = dh.info().get(('Temperature','BathTemp'), None)
-    if temp == None:
+    if temp is None:
         temp = getDayInfo(dh).get('temperature', '')
     return temp
 
