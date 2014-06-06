@@ -812,7 +812,7 @@ class PSPReversal(AnalysisModule):
                 if anyrev:
                     revvals += ', '
                 revvals += ('{:5.1f}'.format(float(np.real(reversal[n]['value']))))
-                revno.append(np.real(reversal[n]['value']))
+                revno.append(float(np.real(reversal[n]['value'])))
                 anyrev = True
         if not anyrev:
             revvals = 'Not fnd'
@@ -862,7 +862,7 @@ class PSPReversal(AnalysisModule):
         rtxt += '<div style="white-space: pre;">'  # css to force repsect of spaces in text
         rtxt += ("{:^15s}  {:^5s}  {:^4s}  {:^12s}<br>".format
                  ("Date", "Slice", "Cell", "E<sub>rev</sub>"))
-        rtxt += ("<b>{:^15s}  {:^5s}  {:^4s}  {:^12s}</b><br>".format
+        rtxt += ("<b>{:^15s}  {:^5s}  {:^4s}  {:^8.2f}</b><br>".format
                  (date, slice[-3:], cell[-3:], self.CellSummary['Erev']))
         rtxt += ('{:<8s}: <b>{:<32s}</b><br>'.format('Protocol', proto))
         rtxt += ('{:^8s}\t{:^8s}\t{:^8s}\t{:^8s}<br>'.format
@@ -976,13 +976,18 @@ class PSPReversal(AnalysisModule):
             print 'script is not for PSPReversal (found %s)', self.script['module']
             return False
         all_found = True
+        trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
         for c in self.script['Cells']:
             if self.script['Cells'][c]['include'] is False:
                 continue
             sortedkeys = sorted(self.script['Cells'][c]['manip'].keys())  # sort by order of recording
             for p in sortedkeys:
                 pr = self.script['protocol'] + '_' + p  # add the underscore here
-                fn = os.path.join(c, pr)
+                if c[-1] in trailingchars:
+                    cell = c[:-1]
+                else:
+                    cell = c
+                fn = os.path.join(cell, pr)
                 dm_selected_file = self.dataManager().selectedFile().name()
                 fullpath = os.path.join(dm_selected_file, fn)
                 file_ok = os.path.exists(fullpath)
@@ -1004,6 +1009,7 @@ class PSPReversal(AnalysisModule):
         self.textout = ('Script File: {:<32s}'.format(self.script_name))
         settext(self.textout)
         script_header = True  # reset the table to a print new header for each cell
+        trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
         for cell in self.script['Cells']:
             thiscell = self.script['Cells'][cell]
             if thiscell['include'] is False:
@@ -1016,7 +1022,11 @@ class PSPReversal(AnalysisModule):
                     continue
                 #print 'working on %s' % thiscell['manip'][p]
                 pr = self.script['protocol'] + '_' + p  # add the underscore here
-                fn = os.path.join(cell, pr)
+                if cell[-1] in trailingchars:  # check last letter - if not a number clip it
+                    cell_file = cell[:-1]
+                else:
+                    cell_file = cell
+                fn = os.path.join(cell_file, pr)
                 dm_selected_file = self.dataManager().selectedFile().name()
                 fullpath = os.path.join(dm_selected_file, fn)
                 file_ok = os.path.exists(fullpath)
@@ -1094,25 +1104,28 @@ class PSPReversal(AnalysisModule):
     #    pass  # do nothing for now...
     # actually, stole button for a different purpose...
     #def print_summary_table(self):
-        data_template = (OrderedDict([('ElapsedTime', []), ('Drugs', []), ('HoldV', []), ('JP', []),
-                                                                        ('Rs', []), ('Cm', []), ('Ru', []), ('Erev', []),
-                                                                        ('gsyn_Erev', []), ('gsyn_60', []),
-                                                                        ('p0', []), ('p1', []), ('p2', []), ('p3', []),
-                                                                        ('I_ionic+', []), ('I_ionic-', []), ('ILeak', [])
+        data_template = (OrderedDict([('ElapsedTime', '{:>8.2f}'), ('Drugs','{:<8s}'), ('HoldV', '{:>5.1f}'), ('JP', '{:>5.1f}'),
+                                                                        ('Rs', '{:>6.2f}'), ('Cm', '{:>6.1f}'), ('Ru', '{:>6.2f}'),
+                                                                        ('Erev', '{:>6.2f}'),
+                                                                        ('gsyn_Erev', '{:>6.2f}'), ('gsyn_60', '{:>6.2f}'),
+                                                                        ('p0', '{:6.3e}'), ('p1', '{:6.3e}'), ('p2', '{:6.3e}'), ('p3', '{:6.3e}'),
+                                                                        ('I_ionic+', '{:>7.2f}'), ('I_ionic-', '{:>7.2f}'), ('ILeak', '{:>7.2f}')
                                                                         ]))
         # summary table header is written anew for each cell
         if script_header:
-            print "Cell, Protocol, ",
+            print "Cell\tProtocol\t",
             for k in data_template.keys():
-                print('{:<s}, '.format(k)),
+                print('{:<s}\t'.format(k)),
             print ''
-        print '%s, %s, ' % (self.CellSummary['CellID'], self.CellSummary['Protocol']),
+        ltxt = ''
+        ltxt += ('{:s}\t{:s}\t'.format(self.CellSummary['CellID'], self.CellSummary['Protocol']))
+
         for a in data_template.keys():
             if a in self.CellSummary.keys():
-                print '%s, ' % str(self.CellSummary[a]),
+                ltxt += ((data_template[a] + '\t').format(self.CellSummary[a]))
             else:
-                print '<missing>, ',
-        print ''
+                ltxt += '<missing>\t'
+        print ltxt
 
 
         # fill table with current information
