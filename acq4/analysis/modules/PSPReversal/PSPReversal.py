@@ -13,11 +13,10 @@ Pep8 compliant (via pep8.py) 10/25/2013 and 6/2014
 
 from collections import OrderedDict
 import os
-import re
+import sys
 import os.path
 import itertools
 import functools
-
 from PyQt4 import QtGui, QtCore
 import numpy as np
 import numpy.ma as ma
@@ -27,7 +26,6 @@ import acq4.pyqtgraph as pg
 from acq4.pyqtgraph import configfile
 from acq4.util.metaarray import MetaArray
 
-
 stdFont = 'Arial'
 
 import acq4.analysis.tools.Utility as Utility  # pbm's utilities...
@@ -35,6 +33,57 @@ import acq4.analysis.tools.Fitting as Fitting  # pbm's fitting stuff...
 import ctrlTemplate
 import resultsTemplate
 import scriptTemplate
+
+def trace_calls_and_returns(frame, event, arg, indent=[0]):
+    """
+    http://pymotw.com/2/sys/tracing.html
+    :param frame:
+    :param event:
+    :param arg:
+    :return:
+    """
+    ignore_funcs = ['map_symbol', 'makemap_symbols', 'label_up', 'show_or_hide'
+                    'update_command_timeplot', '<genexpr>', 'write',
+                    'boundingRect', 'shape']
+    co = frame.f_code
+    func_name = co.co_name
+    if func_name in ignore_funcs:
+        # Ignore write() calls from print statements
+        return
+    line_no = frame.f_lineno
+    filename = os.path.basename(co.co_filename)
+    #print 'file: ', filename
+    if filename.find('PSPReversal') == -1:  # ignore calls not in our own code
+        return
+    if event == 'call':
+        indent[0] += 1
+        print '%sCall to %s on line %s of %s' % ("   " * indent[0], func_name, line_no, filename)
+       # print '%s   args: %s ' % ("   " * indent[0], arg)  # only gets return args...
+        return trace_calls_and_returns
+    elif event == 'return':
+        print '%s%s => %s' % ("   " * indent[0], func_name, arg)
+        indent[0] -= 1
+    return
+
+
+class MultiLine(pg.QtGui.QGraphicsPathItem):
+    def __init__(self, x, y, downsample=1):
+        """x and y are 2D arrays of shape (Nplots, Nsamples)"""
+        if x.ndim == 1:
+            x = np.tile(x, y.shape[0]).reshape(y.shape[0], x.shape[0])
+        x=x[:,0::downsample].view(np.ndarray)
+        y=y[:,0::downsample].view(np.ndarray)
+        if x.ndim == 1:
+            x = np.tile(x, y.shape[0]).reshape(y.shape[0], x.shape[0])
+        connect = np.ones(x.shape, dtype=bool)
+        connect[:,-1] = 0 # don't draw the segment between each trace
+        self.path = pg.arrayToQPath(x.flatten(), y.flatten(), connect.flatten())
+        pg.QtGui.QGraphicsPathItem.__init__(self, self.path)
+        self.setPen(pg.mkPen('w'))
+    def shape(self): # override because QGraphicsPathItem.shape is too expensive.
+        return pg.QtGui.QGraphicsItem.shape(self)
+    def boundingRect(self):
+        return self.path.boundingRect()
 
 
 class PSPReversal(AnalysisModule):
@@ -65,13 +114,7 @@ class PSPReversal(AnalysisModule):
         self.lrwin2_flag = True
         self.rmp_flag = True
         self.lrtau_flag = False
-        self.measure = {'rmp': [], 'rmpcmd': [],
-                        'leak': [],
-                        'win1': [], 'win1cmd': [], 'win1off': [], 'win1on': [],
-                        'winaltcmd': [],
-                        'win2': [], 'win2cmd': [], 'win2off': [], 'win2on': [],
-                        'win2altcmd': [],
-                        }
+        self.auto_updater = True  # turn off for script analysis.
         self.cmd = None
         self.junction = 0.0  # junction potential (user adjustable)
         self.holding = 0.0  # holding potential (read from commands)
@@ -82,8 +125,6 @@ class PSPReversal(AnalysisModule):
         self.tx = None
         self.keep_analysis_count = 0
         self.spikes_counted = False
-        self.alternation = False  # data collected with "alternation" protocols
-        self.baseline = False
         self.data_mode = 'IC'  # analysis depends on the type of data we have.
         # list of CC modes; lower case from simulations
         self.ic_modes = ['IC', 'CC', 'IClamp', 'ic']
@@ -113,14 +154,20 @@ class PSPReversal(AnalysisModule):
         self.fsl = None
         self.fisi = None
         self.ar = None
-        self.diffFit = None
         self.IV_background = None
 
         self.cmd = []
         self.sequence = ''
-        for m in self.measure.keys():
-            self.measure[m] = []
+        self.measure = {'rmp': [], 'rmpcmd': [],
+                        'leak': [],
+                        'win1': [], 'win1cmd': [], 'win1off': [], 'win1on': [],
+                        'winaltcmd': [],
+                        'win2': [], 'win2cmd': [], 'win2off': [], 'win2on': [],
+                        'win2altcmd': [],
+                        }
+
         self.rmp = []  # resting membrane potential during sequence
+        self.analysisPars = {}
 
         # -----scripting-------
         self.script = None
@@ -164,24 +211,23 @@ class PSPReversal(AnalysisModule):
         self.initializeElements()  # exists as part of analysishost.
         self.file_loader_instance = self.getElement('File Loader', create=True)
         # grab input form the "Ctrl" window
-        self.ctrl.PSPReversal_Update.clicked.connect(self.update_all_analysis)
+        self.ctrl.PSPReversal_Update.clicked.connect(self.interactive_analysis)
         self.ctrl.PSPReversal_PrintResults.clicked.connect(self.print_analysis)
         self.ctrl.PSPReversal_KeepAnalysis.clicked.connect(self.reset_keep_analysis)
         self.ctrl.PSPReversal_rePlotData.clicked.connect(self.plot_traces)
-        # self.ctrl.get_file_information.clicked.connect(self.get_file_information)
         self.ctrl.PSPReversal_Alternation.setTristate(False)
         self.ctrl.PSPReversal_Alternation.stateChanged.connect(self.get_alternation)
         self.ctrl.PSPReversal_SubBaseline.stateChanged.connect(self.get_baseline)
+        self.ctrl.PSPReversal_Junction.valueChanged.connect(self.get_junction)
         [self.ctrl.PSPReversal_RMPMode.currentIndexChanged.connect(x)
          for x in [self.update_rmp_analysis, self.count_spikes]]
-        self.ctrl.PSPReversal_Junction.valueChanged.connect(self.set_junction)
         self.ctrl.dbStoreBtn.clicked.connect(self.dbstore_clicked)
 
         self.scripts_form.PSPReversal_ScriptFile_Btn.clicked.connect(self.read_script)
         self.scripts_form.PSPReversal_ScriptRerun_Btn.clicked.connect(self.rerun_script)
         self.scripts_form.PSPReversal_ScriptPrint_Btn.clicked.connect(self.print_script_output)
         self.scripts_form.PSPReversal_ScriptCopy_Btn.clicked.connect(self.copy_script_output)
-        self.scripts_form.PSPReversal_ScriptAppend_Btn.clicked.connect(self.append_script_output)
+        self.scripts_form.PSPReversal_ScriptFormatted_Btn.clicked.connect(self.print_formatted_script_output)
 
         self.clear_results()
         self.layout = self.getElement('Plots', create=True)
@@ -241,23 +287,32 @@ class PSPReversal(AnalysisModule):
         self.spk = []
         self.cmd = []
         self.sequence = ''
-        for m in self.measure.keys():
-            self.measure[m] = []
+        self.measure = {'rmp': [], 'rmpcmd': [],
+                        'leak': [],
+                        'win1': [], 'win1cmd': [], 'win1off': [], 'win1on': [],
+                        'winaltcmd': [],
+                        'win2': [], 'win2cmd': [], 'win2off': [], 'win2on': [],
+                        'win2altcmd': [],
+                        }
+        #for m in self.measure.keys():
+        #    self.measure[m] = []
         self.rmp = []  # resting membrane potential during sequence
         self.CellSummary = {}
+        self.win2IV = {}
         self.win1fits = None
+        self.analysisPars = {}
 
     def reset_keep_analysis(self):
         self.keep_analysis_count = 0  # reset counter.
 
     def get_alternation(self):
-        self.alternation = self.ctrl.PSPReversal_Alternation.isChecked()
+        self.analysisPars['alternation'] = self.ctrl.PSPReversal_Alternation.isChecked()
 
     def get_baseline(self):
-        self.baseline = self.ctrl.PSPReversal_SubBaseline.isChecked()
+        self.analysisPars['baseline'] = self.ctrl.PSPReversal_SubBaseline.isChecked()
 
-    def set_junction(self):
-        self.junction = self.ctrl.PSPReversal_Junction.value()
+    def get_junction(self):
+        self.analysisPars['junction'] = self.ctrl.PSPReversal_Junction.value()
 
     def initialize_regions(self):
         """
@@ -322,19 +377,6 @@ class PSPReversal(AnalysisModule):
                                      'updater': self.update_rmp_analysis,
                                      'units': 'ms'}
             self.ctrl.PSPReversal_showHide_lrrmp.region = self.regions['lrrmp']['region']  # save region with checkbox
-            # self.regions['lrleak'] = {'name': 'leak',
-            #                           'region': pg.LinearRegionItem([0, 1],
-            #                                                         brush=pg.mkBrush
-            #                                                         (255, 0, 255, 25.)),
-            #                           'plot': self.iv_plot,
-            #                           'shstate': True,  # keep internal copy of the state
-            #                           'state': self.ctrl.PSPReversal_subLeak,
-            #                           'mode': None,
-            #                           'start': self.ctrl.PSPReversal_leakTStart,
-            #                           'stop': self.ctrl.PSPReversal_leakTStop,
-            #                           'updater': self.update_all_analysis,
-            #                           'units': 'mV'}
-            # self.ctrl.PSPReversal_subLeak.region = self.regions['lrleak']['region']  # save region with checkbox
             # establish that measurement is on top, exclusion is next, and reference is on bottom
             self.regions['lrwin0']['region'].setZValue(500)
             self.regions['lrwin1']['region'].setZValue(100)
@@ -345,17 +387,13 @@ class PSPReversal(AnalysisModule):
                                                                              lrregion=reg))
                 self.regions[reg]['region'].sigRegionChangeFinished.connect(
                     functools.partial(self.regions[reg]['updater'], region=self.regions[reg]['name']))
-                if self.regions[reg]['mode'] is not None:
-                    self.regions[reg]['mode'].currentIndexChanged.connect(self.update_all_analysis)
+                # if self.regions[reg]['mode'] is not None:
+                #     self.regions[reg]['mode'].currentIndexChanged.connect(self.interactive_analysis)
             self.regions_exist = True
         for reg in self.regions.keys():
             for s in ['start', 'stop']:
                 self.regions[reg][s].setSuffix(' ' + self.regions[reg]['units'])
 
-                ######
-                # The next set of short routines control showing and hiding of regions
-                # in the plot of the raw data (traces)
-                ######
 
     def show_or_hide(self, lrregion=None, forcestate=None):
         if lrregion is None:
@@ -395,7 +433,7 @@ class PSPReversal(AnalysisModule):
         currently selected data file
 
         Two-dimensional sequences are supported.
-
+        :return nothing:
         """
         dh = self.file_loader_instance.selectedFiles()
         if len(dh) == 0:  # when using scripts, the fileloader may not know...
@@ -403,9 +441,7 @@ class PSPReversal(AnalysisModule):
                 dh = default_dh
             else:
                 return
-#        print 'getfileinfo dh: ', dh
         dh = dh[0]  # only the first file
-        dirs = dh.subDirs()
         self.sequence = self.dataModel.listSequenceParams(dh)
         keys = self.sequence.keys()
         leftseq = [str(x) for x in self.sequence[keys[0]]]
@@ -422,6 +458,12 @@ class PSPReversal(AnalysisModule):
         self.dirsSet = dh  # not sure we need this anymore...
 
     def cell_summary(self, dh):
+        """
+        cell_summary generates a dictionary of information about the cell
+        for the selected directory handle (usually a protocol; could be a file)
+        :param dh: the directory handle for the data, as passed to loadFileRequested
+        :return nothing:
+        """
         # other info into a dictionary
         self.CellSummary['Day'] = self.dataModel.getDayInfo(dh)
         self.CellSummary['Slice'] = self.dataModel.getSliceInfo(dh)
@@ -430,21 +472,29 @@ class PSPReversal(AnalysisModule):
         self.CellSummary['Internal'] = self.dataModel.getInternalSoln(dh)
         self.CellSummary['Temp'] = self.dataModel.getTemp(dh)
         self.CellSummary['CellType'] = self.dataModel.getCellType(dh)
-        # print self.CellSummary
+        ct = self.CellSummary['Cell']['__timestamp__']
+        pt = dh.info()['__timestamp__']
+        self.CellSummary['ElapsedTime'] = pt-ct  # save elapsed time between cell opening and protocol start
+        (date, slice, cell, proto, p3) = self.file_cell_protocol()
+        self.CellSummary['CellID'] = os.path.join(date, slice, cell)  # use this as the "ID" for the cell later on
 
     def loadFileRequested(self, dh):
         """
-        loadFileRequested is called by file loader when a file is requested.
-        dh is the handle to the currently selected directory (or directories)
+        loadFileRequested is called by "file loader" when a file is requested.
+            FileLoader is provided by the AnalysisModule class
+            dh is the handle to the currently selected directory (or directories)
 
-        Loads all of the successive records from the specified protocol.
-        Stores ancillary information from the protocol in class variables.
+        This function loads all of the successive records from the specified protocol.
+        Ancillary information from the protocol is stored in class variables.
         Extracts information about the commands, sometimes using a rather
         simplified set of assumptions.
-        modifies: plots, sequence, data arrays, data mode, etc.
-        Returns: True if successful; otherwise raises an exception
+        :param dh: the directory handle (or list of handles) representing the selected
+        entitites from the FileLoader in the Analysis Module
+        :modifies: plots, sequence, data arrays, data mode, etc.
+        :return: True if successful; otherwise raises an exception
         """
 #        print 'loadfilerequested dh: ', dh
+
         if len(dh) == 0:
             raise Exception("PSPReversal::loadFileRequested: " +
                             "Select an IV protocol directory.")
@@ -452,34 +502,22 @@ class PSPReversal(AnalysisModule):
             raise Exception("PSPReversal::loadFileRequested: " +
                             "Can only load one file at a time.")
         self.clear_results()
-        if self.current_dirhandle != dh[0]:  # is this the current file/directory?
-            self.get_file_information(default_dh=dh)  # No, get info from most recent file requested
-            self.current_dirhandle = dh[0]  # this is critical!
+#        if self.current_dirhandle != dh[0]:  # is this the current file/directory?
+        self.get_file_information(default_dh=dh)  # No, get info from most recent file requested
+        self.current_dirhandle = dh[0]  # this is critical!
         dh = dh[0]  # just get the first one
-        self.cell_summary(dh)  # get other info as needed for the protocol
-        ct = self.CellSummary['Cell']['__timestamp__']
-        pt = dh.info()['__timestamp__']
-        self.CellSummary['ElapsedTime'] = pt-ct  # save elapsed time between cell opening and protocol start
-        #        self.current_dirhandle = dh  # save as our current one.
-        self.protocolfile = ''
         self.data_plot.clearPlots()
         self.cmd_plot.clearPlots()
         self.filename = dh.name()
+        self.cell_summary(dh)  # get other info as needed for the protocol
         dirs = dh.subDirs()
-        (date, slice, cell, proto, p3) = self.file_cell_protocol()
-        self.CellSummary['CellID'] = os.path.join(date, slice, cell)  # use this as the "ID" for the cell later on
-        self.protocolfile = proto
-        subs = re.compile('[\/]')
-        self.protocolfile = re.sub(subs, '-', self.protocolfile)
-        self.protocolfile = self.protocolfile + '.pdf'
-        self.commonPrefix = self.filename
         traces = []
         cmd = []
         cmd_wave = []
         data = []
         self.tx = None
         self.values = []
-        self.sequence = self.dataModel.listSequenceParams(dh)  # already done in 'getfileinfo'
+#        self.sequence = self.dataModel.listSequenceParams(dh)  # already done in 'getfileinfo'
         self.trace_times = np.zeros(0)
 
         # builidng command voltages - get amplitudes to clamp
@@ -523,10 +561,10 @@ class PSPReversal(AnalysisModule):
                         dirs.append('%03d_%03d' % (i, j))
 
         i = 0  # sometimes, the elements are not right...
-        for i, directory_name in enumerate(dirs):
-            data_dir_handle = dh[directory_name]
+        for i, directory_name in enumerate(dirs):  # dirs has the names of the runs withing the protocol
+            data_dir_handle = dh[directory_name]  # get the directory within the protocol
             try:
-                data_file_handle = self.dataModel.getClampFile(data_dir_handle)
+                data_file_handle = self.dataModel.getClampFile(data_dir_handle)  # get pointer to clamp data
                 # Check if no clamp file for this iteration of the protocol
                 # (probably the protocol was stopped early)
                 if data_file_handle is None:
@@ -539,6 +577,7 @@ class PSPReversal(AnalysisModule):
                 continue  # If something goes wrong here, we just carry on
             data_file = data_file_handle.read()
             self.devicesUsed = self.dataModel.getDevices(data_dir_handle)
+            self.holding = self.dataModel.getClampHoldingLevel(data_file_handle)
             self.amp_settings = self.dataModel.getWCCompSettings(data_file)
             self.clamp_state = self.dataModel.getClampState(data_file)
             # print self.devicesUsed
@@ -560,7 +599,6 @@ class PSPReversal(AnalysisModule):
             else:  # data mode not known; plot as voltage
                 self.cmdUnits = 'V'
                 self.cmdscaleFactor = 1.0
-            self.holding = self.dataModel.getClampHoldingLevel(data_file_handle)
 
             if 'LED-Blue' in self.devicesUsed.keys():
                 led_pulse_train_command = data_dir_handle.parent().info()['devices']['LED-Blue']['channels']['Command']
@@ -588,31 +626,27 @@ class PSPReversal(AnalysisModule):
                 start_time = info1[1]['DAQ']['command']['startTime']
             else:
                 pass
-
             self.trace_times = np.append(self.trace_times, start_time)
-
             traces.append(data.view(np.ndarray))
             cmd_wave.append(cmd.view(np.ndarray))
-
+            # pick up and save the sequence values
             if len(sequence_values) > 0:
                 self.values.append(sequence_values[i])
             else:
                 self.values.append(cmd[len(cmd) / 2])
             i += 1
-        #print 'PSPReversal::loadFileRequested: Done loading files'
-        self.ctrl.PSPReversal_Holding.setText('%.1f mV' % (float(self.holding) * 1e3))
+        #sys.settrace(trace_calls_and_returns)
         if traces is None or len(traces) == 0:
             print "PSPReversal::loadFileRequested: No data found in this run..."
             return False
         if self.amp_settings['WCCompValid']:
             if self.amp_settings['WCEnabled'] and self.amp_settings['CompEnabled']:
-               # print 'wc resistance, Ohms: ', self.amp_settings['WCResistance']
-               # print 'Correction %: ', self.amp_settings['CompCorrection']
                 self.r_uncomp = self.amp_settings['WCResistance'] * (1.0 - self.amp_settings['CompCorrection'] / 100.)
             else:
                 self.r_uncomp = 0.
         self.ctrl.PSPReversal_R_unCompensated.setValue(self.r_uncomp * 1e-6)  # convert to Mohm to display
         self.ctrl.PSPReversal_R_unCompensated.setSuffix(u" M\u2126")
+        self.ctrl.PSPReversal_Holding.setText('%.1f mV' % (float(self.holding) * 1e3))
 
         # put relative to the start
         self.trace_times -= self.trace_times[0]
@@ -662,29 +696,25 @@ class PSPReversal(AnalysisModule):
         if self.ctrl.PSPReversal_KeepT.isChecked() is False:
             self.tstart += self.sample_interval
             self.tend += self.sample_interval
-        if self.data_mode in self.ic_modes:
-            # for adaptation ratio:
-            self.update_all_analysis()
+        # if self.data_mode in self.ic_modes:
+        #     # for adaptation ratio:
+        #     self.update_all_analysis()
         if self.data_mode in self.vc_modes:
             self.cmd = commands
             self.spikecount = np.zeros(len(np.array(self.values)))
 
         # and also plot
         self.plot_traces()
-        self._host_.dockArea.findAll()[1]['Parameters'].raiseDock()  # parameters to the top
-        if self.ctrl.PSPReversal_KeepT.isChecked():  # times already set, so go forward with analysis
-            self.update_all_analysis()  # run all current analyses
-            self.print_analysis()
+        self._host_.dockArea.findAll()[1]['Parameters'].raiseDock()  # parameters window to the top
+        #if self.ctrl.PSPReversal_KeepT.isChecked():  # times already set, so go forward with analysis
+        #    self.update_all_analysis()  # run all current analyses
+        #    self.print_analysis()  # brings output window to the top
         return True
-
-    def file_information(self, dh):
-        pass
 
     def file_cell_protocol(self):
         """
         file_cell_protocol breaks the current filename down and returns a
         tuple: (date, cell, protocol)
-
         last argument returned is the rest of the path...
         """
         (p0, proto) = os.path.split(self.filename)
@@ -693,9 +723,10 @@ class PSPReversal(AnalysisModule):
         (p3, date) = os.path.split(p2)
         return (date, slice, cell, proto, p3)
 
-    def plot_traces(self):
+    def plot_traces(self, multimode=False):
         """
         Plot the current data traces.
+        :param multimode: try using "multiline plot routine" to speed up plots (no color though)
         :return: nothing
         """
         if self.ctrl.PSPReversal_KeepAnalysis.isChecked():
@@ -706,20 +737,29 @@ class PSPReversal(AnalysisModule):
             self.color_list = itertools.cycle(self.colors)
             self.symbol_list = itertools.cycle(self.symbols)
         self.makemap_symbols()
+        self.data_plot.plotItem.clearPlots()
+        self.cmd_plot.plotItem.clearPlots()
 
         ntr = self.traces.shape[0]
-        self.data_plot.setDownsampling(auto=True, mode='mean')
+       # self.data_plot.setDownsampling(auto=True, mode='mean')
         self.data_plot.setClipToView(True)
-        self.cmd_plot.setDownsampling(auto=True, mode='mean')
+       # self.cmd_plot.setDownsampling(auto=True, mode='mean')
         self.cmd_plot.setClipToView(True)
+        self.data_plot.disableAutoRange()
+        self.cmd_plot.disableAutoRange()
         cmdindxs = np.unique(self.cmd)  # find the unique voltages
         colindxs = [int(np.where(cmdindxs == self.cmd[i])[0]) for i in range(len(self.cmd))]  # make a list to use
-        for i in range(ntr):
-            self.data_plot.plot(self.tx, self.traces[i],
-                                pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
-            self.cmd_plot.plot(self.tx, self.cmd_wave[i],
-                               pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255),
-                               autoDownsample=True, downsampleMethod='mean')
+        if multimode:
+            datalines = MultiLine(self.tx, self.traces, downsample=200)
+            self.data_plot.addItem(datalines)
+            cmdlines = MultiLine(self.tx, self.cmd_wave, downsample=200)
+            self.cmd_plot.addItem(cmdlines)
+        else:
+            for i in range(ntr):
+                self.data_plot.plot(x=self.tx, y=self.traces[i], downSample=500, downSampleMethod='mean',
+                                         pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
+                self.cmd_plot.plot(x=self.tx, y=self.cmd_wave[i], downSample=500, downSampleMethod='mean',
+                                   pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
 
         if self.data_mode in self.ic_modes:
             self.label_up(self.data_plot, 'T (s)', 'V (V)', 'Data')
@@ -730,6 +770,8 @@ class PSPReversal(AnalysisModule):
         else:  # mode is not known: plot both as V
             self.label_up(self.data_plot, 'T (s)', 'V (V)', 'Data')
             self.label_up(self.cmd_plot, 'T (s)', 'V (%s)' % self.cmdUnits, 'Data')
+        self.data_plot.autoRange()
+        self.cmd_plot.autoRange()
 
         self.setup_regions()
 
@@ -769,31 +811,49 @@ class PSPReversal(AnalysisModule):
         #      self.regions['lrleak']['stop'].value()])  # self.ctrl.PSPReversal_LeakMax.value()])
         for r in ['lrwin0', 'lrwin1', 'lrwin2', 'lrrmp']:
             self.regions[r]['region'].setBounds([0., np.max(self.tx)])  # limit regions to data
+            self.analysisPars[r] = {}
 
-    def update_all_analysis(self, region=None):
+    def interactive_analysis(self):
         """
         update_all_analysis: re-reads the time parameters, counts the spikes
             and forces an update of all the analysis in the process...
+        This method is meant to be called by a button click
         :param region: nominal analysis window region (not used)
         :return: nothing
         """
-        self.read_parameters(clear_flag=True, pw=True)
+        self.get_window_analysisPars()
+        self.update_all_analysis()
+
+    def update_all_analysis(self):
         self.update_rmp_analysis()  # rmp must be done separately
+        self.read_parameters(clear_flag=True, pw=True)
         self.count_spikes()
 
-    def make_cell_summary(self):
+    def get_window_analysisPars(self):
+        for region in ['lrwin0', 'lrwin1', 'lrwin2', 'lrrmp']:
+            rgninfo = self.regions[region]['region'].getRegion()  # from the display
+            self.regions[region]['start'].setValue(rgninfo[0] * 1.0e3)  # report values to screen
+            self.regions[region]['stop'].setValue(rgninfo[1] * 1.0e3)
+            self.analysisPars[region]['times'] = rgninfo
+        for region in ['lrwin1', 'lrwin2']:
+            self.analysisPars[region]['mode'] = self.regions[region]['mode'].currentText()
+        self.analysisPars['lrwin0']['mode'] = 'Mean'
+        self.get_alternation()  # get values into the analysisPars dictionary
+        self.get_baseline()
+        self.get_junction()
+
+    def finalize_cell_summary(self):
         (date, slice, cell, proto, p2) = self.file_cell_protocol()
         self.cell_summary(self.current_dirhandle)
         self.CellSummary['CellID'] = str(date+'/'+slice+'/'+cell)
         self.CellSummary['Protocol'] = proto
-
-        jp = float(self.junction)
+        jp = float(self.analysisPars['junction'])
         ho = float(self.holding) * 1e3  # convert to mV
         self.CellSummary['JP'] = jp
         self.CellSummary['HoldV'] = ho
-        vc = np.array(self.win2IV[0]+jp+ho)
-        im = np.array(self.win2IV[1])
-        imsd = np.array(self.win2IV[2])
+        vc = np.array(self.win2IV['vc']+jp+ho)
+        im = np.array(self.win2IV['im'])
+        imsd = np.array(self.win2IV['imsd'])
         polyorder = 3
         p = np.polyfit(vc, im, polyorder)  # 3rd order polynomial
         for n in range(polyorder+1):
@@ -806,6 +866,7 @@ class PSPReversal(AnalysisModule):
         anyrev = False
         revvals = ''
         revno = []
+        self.CellSummary['Erev'] = np.isnan
         for n in range(len(reversal)):  # print only the valid reversal values, which includes real, not imaginary roots
             if ((np.abs(np.imag(reversal[n]['value'])) == 0.0) and (-100. < np.real(reversal[n]['value']) < 40.)):
                 reversal[n]['valid'] = True
@@ -817,7 +878,8 @@ class PSPReversal(AnalysisModule):
         if not anyrev:
             revvals = 'Not fnd'
         self.CellSummary['revvals'] = revvals
-        self.CellSummary['Erev'] = revno[0]
+        if anyrev:
+            self.CellSummary['Erev'] = revno[0]
         # computes slopes at Erev[0] and at -60 mV (as a standard)
         p1 = np.polyder(p,1)
         p60 = np.polyval(p1,-60.)
@@ -836,6 +898,12 @@ class PSPReversal(AnalysisModule):
         self.CellSummary['Ru'] = self.r_uncomp * 1e-6  # Mohm
         self.CellSummary['ILeak'] = self.averageRMP*1e9  # express in nA
 
+        for win in ['win1', 'win2', 'win0']:
+            region = 'lr' + win
+            rinfo = self.regions[region]['region'].getRegion()
+            self.CellSummary[win+'Start'] = rinfo[0]
+            self.CellSummary[win+'End'] = rinfo[1]
+
     def print_analysis(self):
         """
         Print the CCIV summary information (Cell, protocol, etc)
@@ -843,7 +911,7 @@ class PSPReversal(AnalysisModule):
         to another program like a spreadsheet.
         :return: html-decorated text
         """
-        self.make_cell_summary()
+        self.finalize_cell_summary()
         (date, slice, cell, proto, p2) = self.file_cell_protocol()
         # The day summary may be missing elements, so we need to create dummies (dict is read-only)
         day = {}
@@ -890,8 +958,8 @@ class PSPReversal(AnalysisModule):
             self.regions['lrwin2']['units'], self.regions['lrwin2']['mode'].currentText()))
 
         rtxt += 'HP: {:5.1f} mV  JP: {:5.1f} mV<br>'.format(self.CellSummary['HoldV'], self.CellSummary['JP'])
-        if self.diffFit is not None:
-            rtxt += ('{0:<5s}: {1}<br>').format('Poly', ''.join('{:5.2e} '.format(a) for a in self.diffFit))
+        if 'diffFit' in self.win2IV.keys() and self.win2IV['diffFit'] is not None:
+            rtxt += ('{0:<5s}: {1}<br>').format('Poly', ''.join('{:5.2e} '.format(a) for a in self.win2IV['diffFit']))
         rtxt += ('-' * 40) + '<br>'
         rtxt += ('<b>{:2s}</b> Comp: {:<3s} <br>'.  # {:>19s}:{:>4d}<br>'.
                  format('IV',
@@ -904,12 +972,12 @@ class PSPReversal(AnalysisModule):
             # rtxt += '<i>{:>9s} </i>'.format('mV (cmd)')
         rtxt += '<i>{:>10s} {:>9s} {:>9s} {:>6s}</i><br>'.format(vtitle, 'nA', 'SD', 'N')
         # print self.measure.keys()
-        for i in range(len(self.win2IV[0])):
+        for i in range(len(self.win2IV['vc'])):
             if self.ctrl.PSPReversal_RsCorr.isChecked():
-                rtxt += (' {:>9.1f} '.format(self.win2IV[0][i] + self.CellSummary['JP'] + self.CellSummary['HoldV']))
+                rtxt += (' {:>9.1f} '.format(self.win2IV['vc'][i] + self.CellSummary['JP'] + self.CellSummary['HoldV']))
             else:
-                rtxt += (' {:>9.1f} '.format(self.win2IV[3][i] + self.CellSummary['JP'] + self.CellSummary['HoldV']))
-            rtxt += ('{:>9.3f} {:>9.3f} {:>6d}<br>'.format(self.win2IV[1][i], self.win2IV[2][i], self.nrepc))
+                rtxt += (' {:>9.1f} '.format(self.win2IV['mvc'][i] + self.CellSummary['JP'] + self.CellSummary['HoldV']))
+            rtxt += ('{:>9.3f} {:>9.3f} {:>6d}<br>'.format(self.win2IV['im'][i], self.win2IV['imsd'][i], self.nrepc))
         rtxt += ('-' * 40) + '<br></div></font>'
         self.results.resultsPSPReversal_text.setText(rtxt)
         # now raise the dock for visibility
@@ -1002,6 +1070,7 @@ class PSPReversal(AnalysisModule):
         return all_found
 
     def run_script(self):
+        self.auto_updater = True
         if self.script['testfiles']:
             return
         settext = self.scripts_form.PSPReversal_ScriptResults_text.setPlainText
@@ -1012,8 +1081,7 @@ class PSPReversal(AnalysisModule):
         trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
         for cell in self.script['Cells']:
             thiscell = self.script['Cells'][cell]
-            if thiscell['include'] is False:
-            #    print 'file not included'
+            if thiscell['include'] is False:  # skip this cell
                 continue
             sortedkeys = sorted(thiscell['manip'].keys())  # sort by order of recording (# on protocol)
             for p in sortedkeys:
@@ -1032,63 +1100,87 @@ class PSPReversal(AnalysisModule):
                 file_ok = os.path.exists(fullpath)
                 if not file_ok:  # get the directory handle and take it from there
                     continue
+                self.ctrl.PSPReversal_KeepT.setChecked(QtCore.Qt.Unchecked)  # make sure this is unchecked
                 dh = self.dataManager().manager.dirHandle(fullpath)
                 if not self.loadFileRequested([dh]):  # note: must pass a list
-                    print 'failed to load requested file: ', fullpath
-                    continue  # skip bad sets of records...
+                   print 'failed to load requested file: ', fullpath
+                   continue  # skip bad sets of records...
                 apptext(('Protocol: {:<s} <br>Manipulation: {:<s}'.format(pr, thiscell['manip'][p])))
                 self.CellSummary['Drugs'] = thiscell['manip'][p]
                 alt_flag = bool(thiscell['alternation'])
+                self.analysisPars['alternation'] = alt_flag
                 self.ctrl.PSPReversal_Alternation.setChecked((QtCore.Qt.Unchecked, QtCore.Qt.Checked)[alt_flag])
                 if 'junctionpotential' in thiscell:
-                   self.ctrl.PSPReversal_Junction.setValue(float(thiscell['junctionpotential']))
+                    self.analysisPars['junction'] = thiscell['junctionpotential']
+                    self.ctrl.PSPReversal_Junction.setValue(float(thiscell['junctionpotential']))
                 else:
+                    self.analysisPars['junction'] = float(self.script['global_jp'])
                     self.ctrl.PSPReversal_Junction.setValue(float(self.script['global_jp']))
-                # set the analysis if it is identified
-                if 'win1_mode' in thiscell:
-                    r = self.ctrl.PSPReversal_win1mode.findText(thiscell['win1_mode'])
-                    if r >= 0:
-                        self.ctrl.PSPReversal_win1mode.setCurrentIndex(r)
-                    else:
-                        print 'win 1 analysis mode not recognized: %s' % thiscell['win1_mode']
-                else:
-                    if 'global_win1_mode' in self.script:
-                        r = self.ctrl.PSPReversal_win1mode.findText(self.script['global_win1_mode'])
-                        if r >= 0:
-                            self.ctrl.PSPReversal_win1mode.setCurrentIndex(r)
-                    else:
-                        print 'win 1 global analysis mode not recognized: %s' % self.script['global_win1_mode']
 
-                if 'win2_mode' in thiscell:
-                    r = self.ctrl.PSPReversal_win1mode.findText(thiscell['win2_mode'])
-                    if r >= 0:
-                        self.ctrl.PSPReversal_win1mode.setCurrentIndex(r)
-                    else:
-                        print 'win 2 analysis mode not recognized: %s' % thiscell['win2_mode']
-                else:
-                    if 'global_win2_mode' in self.script:
-                        r = self.ctrl.PSPReversal_win1mode.findText(self.script['global_win2_mode'])
-                        if r >= 0:
-                            self.ctrl.PSPReversal_win1mode.setCurrentIndex(r)
-                    else:
-                        print 'win 2 global analysis mode not recognized: %s' % self.script['global_win2_mode']
-
-                for n in range(0, 3):
-                    #print 'region to set: ', thiscell['win%d'%n]
-                    self.regions['lrwin%d'%n]['region'].setRegion([x*1e-3 for x in thiscell['win%d'%n]])
-                    self.regions['lrwin%d'%n]['region'].start = thiscell['win%d'%n][0]
-                    self.regions['lrwin%d'%n]['region'].stop = thiscell['win%d'%n][1]
-                    self.show_or_hide('lrwin%d'%n, forcestate=True)
+                self.script_set_times()
+                self.auto_updater = True # restore function
                 m = thiscell['manip'][p]  # get the tag for the manipulation
                 self.update_all_analysis()  # run all current analyses
-                self.make_cell_summary()
+#                self.finalize_cell_summary()
                 ptxt = self.print_analysis()
                 apptext(ptxt)
                 self.textout += ptxt
-                # print protocol result, optionally a cell header.
-                self.append_script_output(script_header)
+               # print protocol result, optionally a cell header.
+                self.print_formatted_script_output(script_header)
                 script_header = False
         print '\nDone'
+
+    def script_set_times(self):
+        """
+        set the analysis times and modes from the script. Also updates the qt windows
+        :return: Nothing.
+        """
+        self.analysisPars['baseline'] = False
+        # set the analysis windows if it is identified
+        self.auto_updater = False  # turn off the updates
+
+        self.analysisPars['lrwin1'] = {}
+        self.analysisPars['lrwin2'] = {}
+        self.analysisPars['lrwin0'] = {}
+        if 'win1_mode' in thiscell:
+            r = self.ctrl.PSPReversal_win1mode.findText(thiscell['win1_mode'])
+            if r >= 0:
+                self.ctrl.PSPReversal_win1mode.setCurrentIndex(r)
+                self.analysisPars['lrwin1']['mode'] = thiscell['win1_mode']
+            else:
+                print 'win 1 analysis mode not recognized: %s' % thiscell['win1_mode']
+        else:
+            if 'global_win1_mode' in self.script:
+                r = self.ctrl.PSPReversal_win1mode.findText(self.script['global_win1_mode'])
+                self.analysisPars['lrwin1']['mode'] = self.script['global_win1_mode']
+                if r >= 0:
+                    self.ctrl.PSPReversal_win1mode.setCurrentIndex(r)
+            else:
+                print 'win 1 global analysis mode not recognized: %s' % self.script['global_win1_mode']
+
+        if 'win2_mode' in thiscell:
+            r = self.ctrl.PSPReversal_win2mode.findText(thiscell['win2_mode'])
+            if r >= 0:
+                self.ctrl.PSPReversal_win2mode.setCurrentIndex(r)
+                self.analysisPars['lrwin2']['mode'] = thiscell['win2_mode']
+            else:
+                print 'win 2 analysis mode not recognized: %s' % thiscell['win2_mode']
+        else:
+            if 'global_win2_mode' in self.script:
+                r = self.ctrl.PSPReversal_win2mode.findText(self.script['global_win2_mode'])
+                if r >= 0:
+                    self.ctrl.PSPReversal_win2mode.setCurrentIndex(r)
+                self.analysisPars['lrwin2']['mode'] = self.script['global_win1_mode']
+            else:
+                print 'win 2 global analysis mode not recognized: %s' % self.script['global_win2_mode']
+
+        for n in range(0, 3):
+            #print 'region to set: ', thiscell['win%d'%n]
+            self.regions['lrwin%d'%n]['region'].setRegion([x*1e-3 for x in thiscell['win%d'%n]])
+            self.regions['lrwin%d'%n]['region'].start = thiscell['win%d'%n][0]
+            self.regions['lrwin%d'%n]['region'].stop = thiscell['win%d'%n][1]
+            self.analysisPars['lrwin%d'%n]['times'] = thiscell['win%d'%n]
+            self.show_or_hide('lrwin%d'%n, forcestate=True)
 
     def print_script_output(self):
         print self.remove_html_markup(self.textout)
@@ -1100,7 +1192,7 @@ class PSPReversal(AnalysisModule):
         """
         self.scripts_form.PSPReversal_ScriptResults_text.copy()
 
-    def append_script_output(self, script_header=True):
+    def print_formatted_script_output(self, script_header=True):
     #    pass  # do nothing for now...
     # actually, stole button for a different purpose...
     #def print_summary_table(self):
@@ -1109,7 +1201,10 @@ class PSPReversal(AnalysisModule):
                                                                         ('Erev', '{:>6.2f}'),
                                                                         ('gsyn_Erev', '{:>6.2f}'), ('gsyn_60', '{:>6.2f}'),
                                                                         ('p0', '{:6.3e}'), ('p1', '{:6.3e}'), ('p2', '{:6.3e}'), ('p3', '{:6.3e}'),
-                                                                        ('I_ionic+', '{:>7.2f}'), ('I_ionic-', '{:>7.2f}'), ('ILeak', '{:>7.2f}')
+                                                                        ('I_ionic+', '{:>7.3f}'), ('I_ionic-', '{:>7.3f}'), ('ILeak', '{:>7.3f}'),
+                                                                        ('win1Start', '{:>7.3f}'), ('win1End', '{:>7.3f}'),
+                                                                        ('win2Start', '{:>7.3f}'), ('win2End', '{:>7.3f}'),
+                                                                        ('win0Start', '{:>7.3f}'), ('win0End', '{:>7.3f}'),
                                                                         ]))
         # summary table header is written anew for each cell
         if script_header:
@@ -1167,18 +1262,17 @@ class PSPReversal(AnalysisModule):
 
         # the first action of this routine is to set the text boxes correctly to represent the status of the
         # current LR region
+        if not self.auto_updater:  # do nothing if auto update is off
+            return 'no auto updater'
         window = region
         region = 'lr' + window
         if window is None:
-            return
+            return 'no window'
         if self.traces is None:
-            return
-        rgninfo = self.regions[region]['region'].getRegion()
-        self.regions[region]['start'].setValue(rgninfo[0] * 1.0e3)  # report values to screen
-        self.regions[region]['stop'].setValue(rgninfo[1] * 1.0e3)
+            return 'no traces'
 
         if window == 'win0':
-            return  # we don't use for calculations, just marking times
+            return 'window 0 called' # we don't use for calculations, just marking times
 
         wincmd = window + 'cmd'
         winoff = window + 'off'
@@ -1206,27 +1300,27 @@ class PSPReversal(AnalysisModule):
         self.measure[winorigcmd] = []
         self.measure[winbkgd] = []
 
-        mode = self.regions[region]['mode'].currentText()
+        mode = self.analysisPars[region]['mode']
+        rgninfo = self.analysisPars[region]['times']
         data1 = self.traces['Time': rgninfo[0]:rgninfo[1]]  # extract analysis region
         tx1 = ma.compressed(ma.masked_outside(self.tx, rgninfo[0], rgninfo[1]))  # time to match data1
         if tx1.shape[0] > data1.shape[1]:
             tx1 = tx1[0:-1]  # clip extra point. Rules must be different between traces clipping and masking.
         if window == 'win1':  # check if win1 overlaps with win0, and select data
-            r0 = self.regions['lrwin0']['region'].getRegion()
+            r0 = self.analysisPars['lrwin0']['times'] #regions['lrwin0']['region'].getRegion()
             tx = ma.masked_inside(tx1, r0[0], r0[1])  #
-            n_unmasked = ma.count(tx)
-            if n_unmasked == 0:  # handle case where win1 is entirely inside win2
+            if tx.mask.all():  # handle case where win1 is entirely inside win2
                 print 'update_win_analysis: Window 1 is entirely inside Window 0: No analysis possible'
                 print 'rgninfo: ', rgninfo
                 print 'r0: ', r0
-                return
+                return 'bad window1/0 relationship'
             data1 = ma.array(data1, mask=ma.resize(ma.getmask(tx), data1.shape))
             self.txm = ma.compressed(tx)  # now compress tx as well
             self.win1fits = None  # reset the fits
 
         if data1.shape[1] == 0 or data1.shape[0] == 1:
             print 'no data to analyze?'
-            return  # skip it
+            return 'no data'  # skip it
         commands = np.array(self.values)  # get clamp specified command levels
         if self.data_mode in self.ic_modes:
             self.count_spikes()
@@ -1280,7 +1374,7 @@ class PSPReversal(AnalysisModule):
             self.measure[winraw_i] = self.measure[window]  # save raw measured current before corrections
         elif mode not in ['Mean-Win1', 'Mean-Linear', 'Mean-Poly2', 'Sum-Win1']:
             print 'update_win_analysis: Mode %s is not recognized (1)' % mode
-            return
+            return 'bad mode'
         else:
             pass
 
@@ -1302,11 +1396,11 @@ class PSPReversal(AnalysisModule):
             self.measure[window] = np.sum(data1 - u[:, np.newaxis], axis=1)
         elif mode not in ['Min', 'Max', 'Mean', 'Sum', 'Abs', 'Linear', 'Poly2']:
             print 'update_win_analysis: Mode %s is not recognized (2)' % mode
-            return
+            return 'bad mode'
         else:
             pass
 
-        if self.ctrl.PSPReversal_SubBaseline.isChecked():
+        if self.analysisPars['baseline']:
             self.measure[window] = self.measure[window] - self.measure['rmp']
         if len(self.nospk) >= 1 and self.data_mode in self.ic_modes:
             # Steady-state IV where there are no spikes
@@ -1327,13 +1421,7 @@ class PSPReversal(AnalysisModule):
         else:
             if self.data_mode in self.vc_modes and self.r_uncomp > 0.0 and self.ctrl.PSPReversal_RsCorr.isChecked():
                 # correct command voltages. This is a bit more complicated than it appears at first
-                #
-                self.measure[winorigcmd] = commands
-                # print 'commands, uncomp, measure'
-                # print np.array(commands).shape
-                # print self.r_uncomp
-                # print np.array(self.measure[winraw_i]).shape
-                # print 'winraw_i: ', winraw_i
+                self.measure[winorigcmd] = commands  # save original
                 self.measure[wincmd] = np.array(commands) - self.r_uncomp * np.array(self.measure[winraw_i])  # IR drop across uncompensated
                 self.cmd = commands
             else:
@@ -1344,7 +1432,7 @@ class PSPReversal(AnalysisModule):
         self.measure[winunordered] = self.measure[window]
 
         # now separate the data into alternation groups, then sort by command level
-        if self.alternation and window == 'win2':
+        if self.analysisPars['alternation'] and window == 'win2':
             #            print 'in alternation'
             nm = len(self.measure[window])  # get the number of measurements
             xoff = range(0, nm, 2)  # really should get this from loadrequestedfile
@@ -1371,8 +1459,40 @@ class PSPReversal(AnalysisModule):
             self.measure[wincmd] = self.measure[wincmd][isort]  # sort the command values
             self.measure[window] = self.measure[window][isort]  # sort the data in the window
             self.measure[winraw_v] = self.measure[winorigcmd][isort]
+        self.fit_IV()
         self.update_IVPlot()
         self.update_command_timeplot(wincmd)
+        return 'OK'
+
+    def fit_IV(self):
+        # compute polynomial fit to iv
+        # this should have it's own method (which it now does
+        if 'win2altcmd' in self.measure.keys() and len(self.measure['win2altcmd']) == 0:
+                self.win2IV = {}
+                return False
+
+        p = np.polyfit(self.measure['win2altcmd'], self.measure['win2on'], 3)
+        vpl = np.arange(float(np.min(self.measure['win2altcmd'])),
+                        float(np.max(self.measure['win2altcmd'])), 1e-3)
+        ipl = np.polyval(p, vpl)
+        # get the corrected voltage command (Vm = Vc - Rs*Im)
+        m = self.measure['win2altcmd']
+        calt = m.reshape(m.shape[0] / self.nrepc, self.nrepc)
+        vc = calt.mean(axis=1)
+        # get the original commmand voltage (for reference
+        mvc = self.measure['win2rawV']
+        cmdalt = mvc.reshape(mvc.shape[0] / self.nrepc, self.nrepc)
+        mvc = cmdalt.mean(axis=1)
+        # get the current for the window (after subtractions,etc)
+        m2 = self.measure['win2on']
+        ialt = m2.reshape(m2.shape[0] / self.nrepc, self.nrepc)
+        im = ialt.mean(axis=1)
+        imsd = ialt.std(axis=1)
+
+        self.win2IV = {'vc': vc * 1e3, 'im': im * 1e9, 'imsd': imsd * 1e9, 'mvc': mvc * 1e3,
+                       'vpl': vpl, 'ipl': ipl, 'diffFit': []}
+        return True
+
 
     def update_command_timeplot(self, wincmd):
         (pen, filledbrush, emptybrush, symbol, n, clear_flag) = self.map_symbol()
@@ -1386,8 +1506,10 @@ class PSPReversal(AnalysisModule):
         """
             Compute the RMP over time/commands from the selected window
         """
+        if not self.auto_updater:
+            return False
         if self.traces is None:
-            return
+            return False
         rgnrmp = self.regions['lrrmp']['region'].getRegion()
         self.regions['lrrmp']['start'].setValue(rgnrmp[0] * 1.0e3)
         self.regions['lrrmp']['stop'].setValue(rgnrmp[1] * 1.0e3)
@@ -1400,6 +1522,7 @@ class PSPReversal(AnalysisModule):
         self.cmd = commands
         self.averageRMP = np.mean(self.measure['rmp'])
         self.update_rmp_plot()
+        return True
 
     def makemap_symbols(self):
         """
@@ -1440,7 +1563,7 @@ class PSPReversal(AnalysisModule):
             self.iv_plot.clear()
             self.iv_plot.addLine(x=0, pen=pg.mkPen('888', width=0.5, style=QtCore.Qt.DashLine))
             self.iv_plot.addLine(y=0, pen=pg.mkPen('888', width=0.5, style=QtCore.Qt.DashLine))
-        jp = self.junction  # get offsets for voltage
+        jp = self.analysisPars['junction']  # get offsets for voltage
         ho = float(self.holding) * 1e3
         offset = jp + ho  # combine
         (pen, filledbrush, emptybrush, symbol, n, clear_flag) = self.map_symbol()
@@ -1468,7 +1591,7 @@ class PSPReversal(AnalysisModule):
                                   symbolBrush=emptybrush)
             if (len(self.measure['win2']) > 0 and
                     self.regions['lrwin2']['state'].isChecked()):
-                if not self.alternation:
+                if not self.analysisPars['alternation']:
                     self.iv_plot.plot(offset + self.measure['win2cmd'] * 1e3, self.measure['win2'] * 1e9,
                                       symbol=symbol, pen=None,
                                       symbolSize=6, symbolPen=pg.mkPen({'color': "00F", 'width': 1}),
@@ -1479,35 +1602,16 @@ class PSPReversal(AnalysisModule):
                                           symbol=symbol, pen=None,
                                           symbolSize=6, symbolPen=pg.mkPen({'color': "00F", 'width': 1}),
                                           symbolBrush=filledbrush)
-                        # compute polynomial fit to iv
-                        # this should have it's own method
-                        p = np.polyfit(self.measure['win2altcmd'], self.measure['win2on'], 3)
-                        vpl = np.arange(float(np.min(self.measure['win2altcmd'])),
-                                        float(np.max(self.measure['win2altcmd'])), 1e-3)
-                        ipl = np.polyval(p, vpl)
-                        # get the corrected voltage command (Vm = Vc - Rs*Im)
-                        m = self.measure['win2altcmd']
-                        calt = m.reshape(m.shape[0] / self.nrepc, self.nrepc)
-                        vc = calt.mean(axis=1)
-                        # get the original commmand voltage (for reference
-                        mvc = self.measure['win2rawV']
-                        cmdalt = mvc.reshape(mvc.shape[0] / self.nrepc, self.nrepc)
-                        mvc = cmdalt.mean(axis=1)
-                        # get the current for the window (after subtractions,etc)
-                        m2 = self.measure['win2on']
-                        ialt = m2.reshape(m2.shape[0] / self.nrepc, self.nrepc)
-                        im = ialt.mean(axis=1)
-                        imsd = ialt.std(axis=1)
+                        if len(self.win2IV) == 0:
+                            return
                         avPen = pg.mkPen({'color': "F00", 'width': 1})
                         fitPen = pg.mkPen({'color': "F00", 'width': 2})
-                        self.iv_plot.plot(offset + vc * 1e3, im * 1e9,
+                        self.iv_plot.plot(offset + self.win2IV['vc'], self.win2IV['im'],
                                           pen=None,  # no lines
                                           symbol='s', symbolSize=6,
                                           symbolPen=avPen, symbolBrush=filledbrush)
-                        self.iv_plot.plot(offset + vpl * 1e3, ipl * 1e9,
+                        self.iv_plot.plot(offset + self.win2IV['vpl'] * 1e3, self.win2IV['ipl'] * 1e9,
                                           pen=fitPen)  # lines
-                        self.win2IV = [vc * 1e3, im * 1e9, imsd * 1e9, mvc * 1e3]
-                        self.diffFit = p  # save the difference fit
 
     def update_rmp_plot(self):
         """
@@ -1605,30 +1709,45 @@ class PSPReversal(AnalysisModule):
         tsf = 1.0e3
         if self.modelmode:
             tsf = 1.0
-        # print 'Regions: ', self.regions.keys()
+        actions = {}
+        for x in self.regions.keys():
+            actions[x] = False
         if self.regions['lrrmp']['state'].isChecked():
-            rgnx1 = self.regions['lrrmp']['start'].value() / tsf
-            rgnx2 = self.regions['lrrmp']['start'].value() / tsf
+            [rgnx1, rgnx2] = self.analysisPars['lrrmp']['times']
+            #self.regions['lrrmp']['start'].value() / tsf
+            #rgnx2 = self.regions['lrrmp']['start'].value() / tsf
             self.regions['lrrmp']['region'].setRegion([rgnx1, rgnx2])
             self.update_rmp_analysis(clear=clear_flag, pw=pw)
+            actions['lrrmp'] = True
+
+        upd_win1 = False
+        if self.regions['lrwin0']['state'].isChecked():
+            [rgnx1, rgnx2] = self.analysisPars['lrwin0']['times']
+            # rgnx1 = self.regions['lrwin0']['start'].value() / 1e3
+            # rgnx2 = self.regions['lrwin0']['stop'].value() / 1e3
+            self.regions['lrwin0']['region'].setRegion([rgnx1, rgnx2])
+            upd_win1 = True
+            actions['lrwin0'] = True
 
         if self.regions['lrwin1']['state'].isChecked():
-            rgnx1 = self.regions['lrwin1']['start'].value() / 1e3
-            rgnx2 = self.regions['lrwin1']['stop'].value() / 1e3
+            [rgnx1, rgnx2] = self.analysisPars['lrwin1']['times']
+            # rgnx1 = self.regions['lrwin1']['start'].value() / 1e3
+            # rgnx2 = self.regions['lrwin1']['stop'].value() / 1e3
             self.regions['lrwin1']['region'].setRegion([rgnx1, rgnx2])
-            self.update_win_analysis(region='win1', clear=clear_flag, pw=pw)
+            upd_win1 = True
+            actions['lrwin1'] = True
 
-        if self.regions['lrwin0']['state'].isChecked():
-            rgnx1 = self.regions['lrwin0']['start'].value() / 1e3
-            rgnx2 = self.regions['lrwin0']['stop'].value() / 1e3
-            self.regions['lrwin0']['region'].setRegion([rgnx1, rgnx2])
+
+        if upd_win1:
             self.update_win_analysis(region='win1', clear=clear_flag, pw=pw)
 
         if self.regions['lrwin2']['state'].isChecked():
-            rgnx1 = self.regions['lrwin2']['start'].value() / 1e3
-            rgnx2 = self.regions['lrwin2']['stop'].value() / 1e3
+            [rgnx1, rgnx2] = self.analysisPars['lrwin2']['times']
+            # rgnx1 = self.regions['lrwin2']['start'].value() / 1e3
+            # rgnx2 = self.regions['lrwin2']['stop'].value() / 1e3
             self.regions['lrwin2']['region'].setRegion([rgnx1, rgnx2])
             self.update_win_analysis(region='win2', clear=clear_flag, pw=pw)
+            actions['lrwin2'] = True
 
         # if self.regions['lrleak']['state'].isChecked():
         #     rgnx1 = self.regions['lrleak']['start'].value() / 1e3
@@ -1646,6 +1765,7 @@ class PSPReversal(AnalysisModule):
 
         if self.regions['lrwin2']['mode'].currentIndexChanged:
             self.update_win_analysis(region='win2')
+        return actions
 
     def count_spikes(self):
         """
@@ -1665,7 +1785,7 @@ class PSPReversal(AnalysisModule):
             was detected
         """
         if self.spikes_counted:  # only do once for each set of traces
-            return
+            return 'spikes already counted'
         if self.keep_analysis_count == 0:
             clear_flag = True
         else:
@@ -1691,7 +1811,7 @@ class PSPReversal(AnalysisModule):
             #                   symbolPen='y',
             #                   symbolBrush=(255, 255, 0, 200), symbol='s')
             # self.ctrl.PSPReversal_AR.setText(u'%7.3f' % (ARmean))
-            return
+            return 'not CC mode'
         minspk = 4
         maxspk = 10  # range of spike counts
         # threshold = self.ctrl.PSPReversal_SpikeThreshold.value() * 1e-3
@@ -1729,188 +1849,190 @@ class PSPReversal(AnalysisModule):
         self.nospk = np.where(self.spikecount == 0)
         self.spk = np.where(self.spikecount > 0)
         self.update_spike_plots()
+        return 'OK'
 
-    def update_tau(self, print_window=True):
-        """
-        Compute time constant (single exponential) from the
-        onset of the response
-        using lrwin2 window, and only the smallest 3 steps...
-        """
-        if not self.cmd:  # probably not ready yet to do the update.
-            return
-        if self.data_mode not in self.ic_modes:  # only permit in IC
-            return
-        rgnpk = self.lrwin2.getRegion()
-        func = 'exp1'  # single exponential fit.
-        fits = Fitting.Fitting()
-        initpars = [-60.0 * 1e-3, -5.0 * 1e-3, 10.0 * 1e-3]
-        icmdneg = np.where(self.cmd < 0)
-        maxcmd = np.min(self.cmd)
-        ineg = np.where(self.cmd[icmdneg] >= maxcmd / 3)
-        whichdata = ineg[0]
-        itaucmd = self.cmd[ineg]
-        whichaxis = 0
-
-        (fpar, xf, yf, names) = fits.FitRegion(whichdata, whichaxis,
-                                               self.tx,
-                                               self.traces,
-                                               dataType='xy',
-                                               t0=rgnpk[0], t1=rgnpk[1],
-                                               fitFunc=func,
-                                               fitPars=initpars,
-                                               method='simplex')
-        if fpar == []:
-            print 'PSPReversal::update_tau: Charging tau fitting failed - see log'
-            return
-        taus = []
-        for j in range(0, fpar.shape[0]):
-            outstr = ""
-            taus.append(fpar[j][2])
-            for i in range(0, len(names[j])):
-                outstr = outstr + ('%s = %f, ' % (names[j][i], fpar[j][i]))
-            if print_window:
-                print("FIT(%d, %.1f pA): %s " %
-                      (whichdata[j], itaucmd[j] * 1e12, outstr))
-        meantau = np.mean(taus)
-        self.ctrl.PSPReversal_Tau.setText(u'%18.1f ms' % (meantau * 1.e3))
-        self.tau = meantau
-        tautext = 'Mean Tau: %8.1f'
-        if print_window:
-            print tautext % (meantau * 1e3)
-
-    def update_tauh(self, printWindow=False):
-        """ compute tau (single exponential) from the onset of the markers
-            using lrtau window, and only for the step closest to the selected
-            current level in the GUI window.
-
-            Also compute the ratio of the sag from the peak (marker1) to the
-            end of the trace (marker 2).
-            Based on analysis in Fujino and Oertel, J. Neuroscience 2001,
-            to type cells based on different Ih kinetics and magnitude.
-        """
-        if self.ctrl.PSPReversal_showHide_lrtau.isChecked() is not True:
-            return
-        rgn = self.lrtau.getRegion()
-        func = 'exp1'  # single exponential fit to the whole region
-        fits = Fitting.Fitting()
-        initpars = [-80.0 * 1e-3, -10.0 * 1e-3, 50.0 * 1e-3]
-
-        # find the current level that is closest to the target current
-        s_target = self.ctrl.PSPReversal_tauh_Commands.currentIndex()
-        itarget = self.values[s_target]  # retrive actual value from commands
-        self.neg_cmd = itarget
-        idiff = np.abs(np.array(self.cmd) - itarget)
-        amin = np.argmin(idiff)  # amin appears to be the same as s_target
-        # target trace (as selected in cmd drop-down list):
-        target = self.traces[amin]
-        # get Vrmp -  # rmp approximation.
-        vrmp = np.median(target['Time': 0.0:self.tstart - 0.005]) * 1000.
-        self.ctrl.PSPReversal_vrmp.setText('%8.2f' % (vrmp))
-        self.neg_vrmp = vrmp
-        # get peak and steady-state voltages
-        peak_region = self.lrwin2.getRegion()
-        steadstate_region = self.lrwin1.getRegion()
-        vpk = target['Time': peak_region[0]:peak_region[1]].min() * 1000
-        self.neg_pk = (vpk - vrmp) / 1000.
-        vss = np.median(target['Time': steadstate_region[0]:steadstate_region[1]]) * 1000
-        self.neg_ss = (vss - vrmp) / 1000.
-        whichdata = [int(amin)]
-        itaucmd = [self.cmd[amin]]
-        self.ctrl.PSPReversal_tau2TStart.setValue(rgn[0] * 1.0e3)
-        self.ctrl.PSPReversal_tau2TStop.setValue(rgn[1] * 1.0e3)
-        fd = self.traces['Time': rgn[0]:rgn[1]][whichdata][0]
-        if self.fitted_data is None:  # first time through..
-            self.fitted_data = self.data_plot.plot(fd, pen=pg.mkPen('w'))
-        else:
-            self.fitted_data.clear()
-            self.fitted_data = self.data_plot.plot(fd, pen=pg.mkPen('w'))
-            self.fitted_data.update()
-        # now do the fit
-        whichaxis = 0
-        (fpar, xf, yf, names) = fits.FitRegion(whichdata, whichaxis,
-                                               self.traces.xvals('Time'),
-                                               self.traces.view(np.ndarray),
-                                               dataType='2d',
-                                               t0=rgn[0], t1=rgn[1],
-                                               fitFunc=func,
-                                               fitPars=initpars)
-        if not fpar:
-            print 'PSPReversal::update_tauh: tau_h fitting failed - see log'
-            return
-        redpen = pg.mkPen('r', width=1.5, style=QtCore.Qt.DashLine)
-        if self.fit_curve is None:
-            self.fit_curve = self.data_plot.plot(xf[0], yf[0],
-                                                 pen=redpen)
-        else:
-            self.fit_curve.clear()
-            self.fit_curve = self.data_plot.plot(xf[0], yf[0],
-                                                 pen=redpen)
-            self.fit_curve.update()
-        s = np.shape(fpar)
-        taus = []
-        for j in range(0, s[0]):
-            outstr = ""
-            taus.append(fpar[j][2])
-            for i in range(0, len(names[j])):
-                outstr += ('%s = %f, ' %
-                           (names[j][i], fpar[j][i] * 1000.))
-            if printWindow:
-                print("Ih FIT(%d, %.1f pA): %s " %
-                      (whichdata[j], itaucmd[j] * 1e12, outstr))
-        meantau = np.mean(taus)
-        self.ctrl.PSPReversal_Tauh.setText(u'%8.1f ms' % (meantau * 1.e3))
-        self.tau2 = meantau
-        bovera = (vss - vrmp) / (vpk - vrmp)
-        self.ctrl.PSPReversal_Ih_ba.setText('%8.1f' % (bovera * 100.))
-        self.ctrl.PSPReversal_win2Amp.setText('%8.2f' % (vss - vrmp))
-        self.ctrl.PSPReversal_win1Amp.setText('%8.2f' % (vpk - vrmp))
-        if bovera < 0.55 and self.tau2 < 0.015:  #
-            self.ctrl.PSPReversal_FOType.setText('D Stellate')
-        else:
-            self.ctrl.PSPReversal_FOType.setText('T Stellate')
-            # estimate of Gh:
-        Gpk = itarget / self.neg_pk
-        Gss = itarget / self.neg_ss
-        self.Gh = Gss - Gpk
-        self.ctrl.PSPReversal_Gh.setText('%8.2f nS' % (self.Gh * 1e9))
+    # def update_tau(self, print_window=True):
+    #     """
+    #     Compute time constant (single exponential) from the
+    #     onset of the response
+    #     using lrwin2 window, and only the smallest 3 steps...
+    #     """
+    #     if not self.cmd:  # probably not ready yet to do the update.
+    #         return
+    #     if self.data_mode not in self.ic_modes:  # only permit in IC
+    #         return
+    #     rgnpk = self.lrwin2.getRegion()
+    #     func = 'exp1'  # single exponential fit.
+    #     fits = Fitting.Fitting()
+    #     initpars = [-60.0 * 1e-3, -5.0 * 1e-3, 10.0 * 1e-3]
+    #     icmdneg = np.where(self.cmd < 0)
+    #     maxcmd = np.min(self.cmd)
+    #     ineg = np.where(self.cmd[icmdneg] >= maxcmd / 3)
+    #     whichdata = ineg[0]
+    #     itaucmd = self.cmd[ineg]
+    #     whichaxis = 0
+    #
+    #     (fpar, xf, yf, names) = fits.FitRegion(whichdata, whichaxis,
+    #                                            self.tx,
+    #                                            self.traces,
+    #                                            dataType='xy',
+    #                                            t0=rgnpk[0], t1=rgnpk[1],
+    #                                            fitFunc=func,
+    #                                            fitPars=initpars,
+    #                                            method='simplex')
+    #     if fpar == []:
+    #         print 'PSPReversal::update_tau: Charging tau fitting failed - see log'
+    #         return
+    #     taus = []
+    #     for j in range(0, fpar.shape[0]):
+    #         outstr = ""
+    #         taus.append(fpar[j][2])
+    #         for i in range(0, len(names[j])):
+    #             outstr = outstr + ('%s = %f, ' % (names[j][i], fpar[j][i]))
+    #         if print_window:
+    #             print("FIT(%d, %.1f pA): %s " %
+    #                   (whichdata[j], itaucmd[j] * 1e12, outstr))
+    #     meantau = np.mean(taus)
+    #     self.ctrl.PSPReversal_Tau.setText(u'%18.1f ms' % (meantau * 1.e3))
+    #     self.tau = meantau
+    #     tautext = 'Mean Tau: %8.1f'
+    #     if print_window:
+    #         print tautext % (meantau * 1e3)
+    #
+    # def update_tauh(self, printWindow=False):
+    #     """ compute tau (single exponential) from the onset of the markers
+    #         using lrtau window, and only for the step closest to the selected
+    #         current level in the GUI window.
+    #
+    #         Also compute the ratio of the sag from the peak (marker1) to the
+    #         end of the trace (marker 2).
+    #         Based on analysis in Fujino and Oertel, J. Neuroscience 2001,
+    #         to type cells based on different Ih kinetics and magnitude.
+    #     """
+    #     if self.ctrl.PSPReversal_showHide_lrtau.isChecked() is not True:
+    #         return
+    #     rgn = self.lrtau.getRegion()
+    #     func = 'exp1'  # single exponential fit to the whole region
+    #     fits = Fitting.Fitting()
+    #     initpars = [-80.0 * 1e-3, -10.0 * 1e-3, 50.0 * 1e-3]
+    #
+    #     # find the current level that is closest to the target current
+    #     s_target = self.ctrl.PSPReversal_tauh_Commands.currentIndex()
+    #     itarget = self.values[s_target]  # retrive actual value from commands
+    #     self.neg_cmd = itarget
+    #     idiff = np.abs(np.array(self.cmd) - itarget)
+    #     amin = np.argmin(idiff)  # amin appears to be the same as s_target
+    #     # target trace (as selected in cmd drop-down list):
+    #     target = self.traces[amin]
+    #     # get Vrmp -  # rmp approximation.
+    #     vrmp = np.median(target['Time': 0.0:self.tstart - 0.005]) * 1000.
+    #     self.ctrl.PSPReversal_vrmp.setText('%8.2f' % (vrmp))
+    #     self.neg_vrmp = vrmp
+    #     # get peak and steady-state voltages
+    #     peak_region = self.lrwin2.getRegion()
+    #     steadstate_region = self.lrwin1.getRegion()
+    #     vpk = target['Time': peak_region[0]:peak_region[1]].min() * 1000
+    #     self.neg_pk = (vpk - vrmp) / 1000.
+    #     vss = np.median(target['Time': steadstate_region[0]:steadstate_region[1]]) * 1000
+    #     self.neg_ss = (vss - vrmp) / 1000.
+    #     whichdata = [int(amin)]
+    #     itaucmd = [self.cmd[amin]]
+    #     self.ctrl.PSPReversal_tau2TStart.setValue(rgn[0] * 1.0e3)
+    #     self.ctrl.PSPReversal_tau2TStop.setValue(rgn[1] * 1.0e3)
+    #     fd = self.traces['Time': rgn[0]:rgn[1]][whichdata][0]
+    #     if self.fitted_data is None:  # first time through..
+    #         self.fitted_data = self.data_plot.plot(fd, pen=pg.mkPen('w'))
+    #     else:
+    #         self.fitted_data.clear()
+    #         self.fitted_data = self.data_plot.plot(fd, pen=pg.mkPen('w'))
+    #         self.fitted_data.update()
+    #     # now do the fit
+    #     whichaxis = 0
+    #     (fpar, xf, yf, names) = fits.FitRegion(whichdata, whichaxis,
+    #                                            self.traces.xvals('Time'),
+    #                                            self.traces.view(np.ndarray),
+    #                                            dataType='2d',
+    #                                            t0=rgn[0], t1=rgn[1],
+    #                                            fitFunc=func,
+    #                                            fitPars=initpars)
+    #     if not fpar:
+    #         print 'PSPReversal::update_tauh: tau_h fitting failed - see log'
+    #         return
+    #     redpen = pg.mkPen('r', width=1.5, style=QtCore.Qt.DashLine)
+    #     if self.fit_curve is None:
+    #         self.fit_curve = self.data_plot.plot(xf[0], yf[0],
+    #                                              pen=redpen)
+    #     else:
+    #         self.fit_curve.clear()
+    #         self.fit_curve = self.data_plot.plot(xf[0], yf[0],
+    #                                              pen=redpen)
+    #         self.fit_curve.update()
+    #     s = np.shape(fpar)
+    #     taus = []
+    #     for j in range(0, s[0]):
+    #         outstr = ""
+    #         taus.append(fpar[j][2])
+    #         for i in range(0, len(names[j])):
+    #             outstr += ('%s = %f, ' %
+    #                        (names[j][i], fpar[j][i] * 1000.))
+    #         if printWindow:
+    #             print("Ih FIT(%d, %.1f pA): %s " %
+    #                   (whichdata[j], itaucmd[j] * 1e12, outstr))
+    #     meantau = np.mean(taus)
+    #     self.ctrl.PSPReversal_Tauh.setText(u'%8.1f ms' % (meantau * 1.e3))
+    #     self.tau2 = meantau
+    #     bovera = (vss - vrmp) / (vpk - vrmp)
+    #     self.ctrl.PSPReversal_Ih_ba.setText('%8.1f' % (bovera * 100.))
+    #     self.ctrl.PSPReversal_win2Amp.setText('%8.2f' % (vss - vrmp))
+    #     self.ctrl.PSPReversal_win1Amp.setText('%8.2f' % (vpk - vrmp))
+    #     if bovera < 0.55 and self.tau2 < 0.015:  #
+    #         self.ctrl.PSPReversal_FOType.setText('D Stellate')
+    #     else:
+    #         self.ctrl.PSPReversal_FOType.setText('T Stellate')
+    #         # estimate of Gh:
+    #     Gpk = itarget / self.neg_pk
+    #     Gss = itarget / self.neg_ss
+    #     self.Gh = Gss - Gpk
+    #     self.ctrl.PSPReversal_Gh.setText('%8.2f nS' % (self.Gh * 1e9))
 
     def dbstore_clicked(self):
         """
         Store data into the current database for further analysis
         """
-        self.update_all_analysis()
-        db = self._host_.dm.currentDatabase()
-        table = 'DirTable_Cell'
-        columns = OrderedDict([
-            ('PSPReversal_rmp', 'real'),
-            ('PSPReversal_rinp', 'real'),
-            ('PSPReversal_taum', 'real'),
-            ('PSPReversal_neg_cmd', 'real'),
-            ('PSPReversal_neg_pk', 'real'),
-            ('PSPReversal_neg_ss', 'real'),
-            ('PSPReversal_h_tau', 'real'),
-            ('PSPReversal_h_g', 'real'),
-        ])
-
-        rec = {
-            'PSPReversal_rmp': self.neg_vrmp / 1000.,
-            'PSPReversal_rinp': self.r_in,
-            'PSPReversal_taum': self.tau,
-            'PSPReversal_neg_cmd': self.neg_cmd,
-            'PSPReversal_neg_pk': self.neg_pk,
-            'PSPReversal_neg_ss': self.neg_ss,
-            'PSPReversal_h_tau': self.tau2,
-            'PSPReversal_h_g': self.Gh,
-        }
-
-        with db.transaction():
-            # Add columns if needed
-            if 'PSPReversal_rmp' not in db.tableSchema(table):
-                for col, typ in columns.items():
-                    db.addColumn(table, col, typ)
-
-            db.update(table, rec, where={'Dir': self.current_dirhandle.parent()})
-        print "updated record for ", self.current_dirhandle.name()
+        return
+        # self.update_all_analysis()
+        # db = self._host_.dm.currentDatabase()
+        # table = 'DirTable_Cell'
+        # columns = OrderedDict([
+        #     ('PSPReversal_rmp', 'real'),
+        #     ('PSPReversal_rinp', 'real'),
+        #     ('PSPReversal_taum', 'real'),
+        #     ('PSPReversal_neg_cmd', 'real'),
+        #     ('PSPReversal_neg_pk', 'real'),
+        #     ('PSPReversal_neg_ss', 'real'),
+        #     ('PSPReversal_h_tau', 'real'),
+        #     ('PSPReversal_h_g', 'real'),
+        # ])
+        #
+        # rec = {
+        #     'PSPReversal_rmp': self.neg_vrmp / 1000.,
+        #     'PSPReversal_rinp': self.r_in,
+        #     'PSPReversal_taum': self.tau,
+        #     'PSPReversal_neg_cmd': self.neg_cmd,
+        #     'PSPReversal_neg_pk': self.neg_pk,
+        #     'PSPReversal_neg_ss': self.neg_ss,
+        #     'PSPReversal_h_tau': self.tau2,
+        #     'PSPReversal_h_g': self.Gh,
+        # }
+        #
+        # with db.transaction():
+        #     # Add columns if needed
+        #     if 'PSPReversal_rmp' not in db.tableSchema(table):
+        #         for col, typ in columns.items():
+        #             db.addColumn(table, col, typ)
+        #
+        #     db.update(table, rec, where={'Dir': self.current_dirhandle.parent()})
+        # print "updated record for ", self.current_dirhandle.name()
 
     # ---- Helpers ----
     # Some of these would normally live in a pyqtgraph-related module, but are
