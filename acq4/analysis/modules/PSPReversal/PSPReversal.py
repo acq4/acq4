@@ -42,7 +42,7 @@ def trace_calls_and_returns(frame, event, arg, indent=[0]):
     :param arg:
     :return:
     """
-    ignore_funcs = ['map_symbol', 'makemap_symbols', 'label_up', 'show_or_hide'
+    ignore_funcs = ['map_symbol', 'makemap_symbols', 'label_up', 'show_or_hide',
                     'update_command_timeplot', '<genexpr>', 'write',
                     'boundingRect', 'shape']
     co = frame.f_code
@@ -337,7 +337,7 @@ class PSPReversal(AnalysisModule):
                                       'mode': self.ctrl.PSPReversal_win1mode,
                                       'start': self.ctrl.PSPReversal_win1TStart,
                                       'stop': self.ctrl.PSPReversal_win1TStop,
-                                      'updater': self.update_win_analysis,
+                                      'updater': self.update_windows,
                                       'units': 'ms'}
             self.regions['lrwin0'] = {'name': 'win0',
                                       'region': pg.LinearRegionItem([0, 1],
@@ -348,7 +348,7 @@ class PSPReversal(AnalysisModule):
                                       'mode': self.ctrl.PSPReversal_win1mode,
                                       'start': self.ctrl.PSPReversal_leakTStart,
                                       'stop': self.ctrl.PSPReversal_leakTStop,
-                                      'updater': self.update_win_analysis,
+                                      'updater': self.update_windows,
                                       'units': 'ms'}
             self.ctrl.PSPReversal_showHide_lrwin1.region = self.regions['lrwin1']['region']  # save region with checkbox
             self.regions['lrwin2'] = {'name': 'win2',
@@ -360,7 +360,7 @@ class PSPReversal(AnalysisModule):
                                       'mode': self.ctrl.PSPReversal_win2mode,
                                       'start': self.ctrl.PSPReversal_win2TStart,
                                       'stop': self.ctrl.PSPReversal_win2TStop,
-                                      'updater': self.update_win_analysis,
+                                      'updater': self.update_windows,
                                       'units': 'ms'}
             self.ctrl.PSPReversal_showHide_lrwin2.region = self.regions['lrwin2']['region']  # save region with checkbox
             # self.lrtau = pg.LinearRegionItem([0, 1],
@@ -375,7 +375,7 @@ class PSPReversal(AnalysisModule):
                                      'mode': None,
                                      'start': self.ctrl.PSPReversal_rmpTStart,
                                      'stop': self.ctrl.PSPReversal_rmpTStop,
-                                     'updater': self.update_rmp_analysis,
+                                     'updater': self.update_rmp_window,
                                      'units': 'ms'}
             self.ctrl.PSPReversal_showHide_lrrmp.region = self.regions['lrrmp']['region']  # save region with checkbox
             # establish that measurement is on top, exclusion is next, and reference is on bottom
@@ -395,6 +395,13 @@ class PSPReversal(AnalysisModule):
             for s in ['start', 'stop']:
                 self.regions[reg][s].setSuffix(' ' + self.regions[reg]['units'])
 
+    def update_windows(self, **kwargs):
+        if self.auto_updater:
+            self.update_win_analysis(**kwargs)
+
+    def update_rmp_window(self, **kwargs):
+        if self.auto_updater:
+            self.update_rmp_analysis(**kwargs)
 
     def show_or_hide(self, lrregion=None, forcestate=None):
         if lrregion is None:
@@ -710,6 +717,7 @@ class PSPReversal(AnalysisModule):
         #if self.ctrl.PSPReversal_KeepT.isChecked():  # times already set, so go forward with analysis
         #    self.update_all_analysis()  # run all current analyses
         #    self.print_analysis()  # brings output window to the top
+        self.get_window_analysisPars()  # prepare the analysis parameters
         return True
 
     def file_cell_protocol(self):
@@ -778,70 +786,75 @@ class PSPReversal(AnalysisModule):
 
     def setup_regions(self):
         self.initialize_regions()  # now create the analysis regions
-        if self.ctrl.PSPReversal_KeepT.isChecked() is False:
+        if self.ctrl.PSPReversal_KeepT.isChecked() is False:  # change regions; otherwise keep...
             if 'LED-Blue' in self.devicesUsed:
-                tdur1 = 0.1
-                tstart1 = self.led_info['start'] - tdur1
-                tdur2 = self.led_info['length'] * 5.  # go 5 times the duration.
-                tstart2 = self.led_info['start']
+                tdur1 = 0.2
+                tstart1 = self.led_info['start'] - 0.2
+                tdur1 = self.tend-tstart1-(2e-3)
+                tdur2 = self.led_info['length']  # go 5 times the duration.
+                if tdur2 > 16e-3:
+                    tdur2 = 16e-3
+                tstart2 = self.led_info['start']+4*1e-3  # 4 msec auto delay
                 if tstart2 + tdur2 > self.tend:
                     tdur2 = self.tend - tstart2  # restrict duration to end of the trace
+                tstart0 = self.led_info['start']
+                tdur0 = self.tend-tstart0-60.0e-3 # at least 50 msec before the end
             else:
-                tstart1 = self.tstart
+                tstart1 = self.tstart+0.4
                 tdur1 = self.tstart / 5.0
                 tdur2 = self.tdur / 2.0
                 tstart2 = self.tend - tdur2
+                tstart0 = tstart2
+                tdur0 = 0.1
 
             tend = self.tend - 0.001
+
+            self.regions['lrwin0']['region'].setRegion([tstart0,
+                                                        tstart0 + tdur0])
             # reference window
             self.regions['lrwin1']['region'].setRegion([tstart1,
                                                         tstart1 + tdur1])
-            # exclusion, same as data:
-            self.regions['lrwin0']['region'].setRegion([tstart2,
-                                                        tstart2 + tdur2])
             # meausurement:
             self.regions['lrwin2']['region'].setRegion([tstart2,
                                                         tstart2 + tdur2])
-            # self.lrtau.setRegion([self.tstart+(self.tdur/5.0)+0.005,
-            #                      self.tend])
             self.regions['lrrmp']['region'].setRegion([1.e-4, self.tstart * 0.9])  # rmp window
 
-        # leak is on voltage (or current), not times
-        # self.regions['lrleak']['region'].setRegion(
-        #     [self.regions['lrleak']['start'].value(),  # self.ctrl.PSPReversal_LeakMin.value(),
-        #      self.regions['lrleak']['stop'].value()])  # self.ctrl.PSPReversal_LeakMax.value()])
         for r in ['lrwin0', 'lrwin1', 'lrwin2', 'lrrmp']:
             self.regions[r]['region'].setBounds([0., np.max(self.tx)])  # limit regions to data
-            self.analysisPars[r] = {}
 
     def interactive_analysis(self):
         """
-        update_all_analysis: re-reads the time parameters, counts the spikes
+        Interactive_analysis: reads the analysis parameters, counts the spikes
             and forces an update of all the analysis in the process...
         This method is meant to be called by a button click
-        :param region: nominal analysis window region (not used)
+        :param : None
         :return: nothing
         """
+        self.auto_updater = True  # allow dynamic updating
         self.get_window_analysisPars()
         self.update_all_analysis()
 
     def update_all_analysis(self):
         self.update_rmp_analysis()  # rmp must be done separately
-        self.read_parameters(clear_flag=True, pw=True)
         self.count_spikes()
+        for win in ['win0', 'win1', 'win2']:
+            self.update_win_analysis(win)
 
-    def get_window_analysisPars(self):
-        for region in ['lrwin0', 'lrwin1', 'lrwin2', 'lrrmp']:
-            rgninfo = self.regions[region]['region'].getRegion()  # from the display
-            self.regions[region]['start'].setValue(rgninfo[0] * 1.0e3)  # report values to screen
-            self.regions[region]['stop'].setValue(rgninfo[1] * 1.0e3)
-            self.analysisPars[region]['times'] = rgninfo
-        for region in ['lrwin1', 'lrwin2']:
-            self.analysisPars[region]['mode'] = self.regions[region]['mode'].currentText()
-        self.analysisPars['lrwin0']['mode'] = 'Mean'
-        self.get_alternation()  # get values into the analysisPars dictionary
-        self.get_baseline()
-        self.get_junction()
+#     def get_window_analysisPars(self):
+# #        print '\ngetwindow: analysis pars: ', self.analysisPars
+#         for region in ['lrwin0', 'lrwin1', 'lrwin2', 'lrrmp']:
+#             rgninfo = self.regions[region]['region'].getRegion()  # from the display
+#             self.regions[region]['start'].setValue(rgninfo[0] * 1.0e3)  # report values to screen
+#             self.regions[region]['stop'].setValue(rgninfo[1] * 1.0e3)
+#             self.analysisPars[region] = {'times': rgninfo}
+# #        print '\nafter loop: ', self.analysisPars
+#         for region in ['lrwin1', 'lrwin2']:
+#             self.analysisPars[region]['mode'] = self.regions[region]['mode'].currentText()
+#         self.analysisPars['lrwin0']['mode'] = 'Mean'
+# #        print '\nand finally: ', self.analysisPars
+#         self.get_alternation()  # get values into the analysisPars dictionary
+#         self.get_baseline()
+#         self.get_junction()
 
     def finalize_cell_summary(self):
         (date, slice, cell, proto, p2) = self.file_cell_protocol()
@@ -854,7 +867,7 @@ class PSPReversal(AnalysisModule):
         self.CellSummary['HoldV'] = ho
         vc = np.array(self.win2IV['vc']+jp+ho)
         im = np.array(self.win2IV['im'])
-        imsd = np.array(self.win2IV['imsd'])
+       # imsd = np.array(self.win2IV['imsd'])
         polyorder = 3
         p = np.polyfit(vc, im, polyorder)  # 3rd order polynomial
         for n in range(polyorder+1):
@@ -881,10 +894,15 @@ class PSPReversal(AnalysisModule):
         self.CellSummary['revvals'] = revvals
         if anyrev:
             self.CellSummary['Erev'] = revno[0]
+        else:
+            self.CellSummary['Erev'] = np.nan
         # computes slopes at Erev[0] and at -60 mV (as a standard)
         p1 = np.polyder(p,1)
         p60 = np.polyval(p1,-60.)
-        perev = np.polyval(p1, revno[0])
+        if len(revno) > 0:
+            perev = np.polyval(p1, revno[0])
+        else:
+            perev = 0.
         self.CellSummary['gsyn_60'] = p60 * 1e3  # im in nA, vm in mV, g converted to nS
         self.CellSummary['gsyn_Erev'] = perev * 1e3  # nS
         self.CellSummary['I_ionic-'] = np.min(self.measure['win1'])*1e9  # nA
@@ -1071,7 +1089,6 @@ class PSPReversal(AnalysisModule):
         return all_found
 
     def run_script(self):
-        self.auto_updater = True
         if self.script['testfiles']:
             return
         settext = self.scripts_form.PSPReversal_ScriptResults_text.setPlainText
@@ -1108,80 +1125,100 @@ class PSPReversal(AnalysisModule):
                    continue  # skip bad sets of records...
                 apptext(('Protocol: {:<s} <br>Manipulation: {:<s}'.format(pr, thiscell['manip'][p])))
                 self.CellSummary['Drugs'] = thiscell['manip'][p]
-                alt_flag = bool(thiscell['alternation'])
-                self.analysisPars['alternation'] = alt_flag
-                self.ctrl.PSPReversal_Alternation.setChecked((QtCore.Qt.Unchecked, QtCore.Qt.Checked)[alt_flag])
-                if 'junctionpotential' in thiscell:
-                    self.analysisPars['junction'] = thiscell['junctionpotential']
-                    self.ctrl.PSPReversal_Junction.setValue(float(thiscell['junctionpotential']))
-                else:
-                    self.analysisPars['junction'] = float(self.script['global_jp'])
-                    self.ctrl.PSPReversal_Junction.setValue(float(self.script['global_jp']))
+                # alt_flag = bool(thiscell['alternation'])
+                # self.analysisPars['alternation'] = alt_flag
+                # self.ctrl.PSPReversal_Alternation.setChecked((QtCore.Qt.Unchecked, QtCore.Qt.Checked)[alt_flag])
+                # if 'junctionpotential' in thiscell:
+                #     self.analysisPars['junction'] = thiscell['junctionpotential']
+                #     self.ctrl.PSPReversal_Junction.setValue(float(thiscell['junctionpotential']))
+                # else:
+                #     self.analysisPars['junction'] = float(self.script['global_jp'])
+                #     self.ctrl.PSPReversal_Junction.setValue(float(self.script['global_jp']))
 
-                self.script_set_times(thiscell)
-                self.auto_updater = True # restore function
+                self.auto_updater = False
+                self.get_script_analysisPars(self.script, thiscell)
                 m = thiscell['manip'][p]  # get the tag for the manipulation
-                self.update_all_analysis()  # run all current analyses
-#                self.finalize_cell_summary()
+                self.update_all_analysis()
+                # self.update_rmp_analysis()
+                # for win in ['win0', 'win1', 'win2']:
+                #     self.update_win_analysis(win)
                 ptxt = self.print_analysis()
                 apptext(ptxt)
                 self.textout += ptxt
                # print protocol result, optionally a cell header.
                 self.print_formatted_script_output(script_header)
                 script_header = False
+        self.auto_updater = True # restore function
         print '\nDone'
 
-    def script_set_times(self, thiscell):
+    def get_window_analysisPars(self):
+        self.analysisPars = {}  # start out empty so we are not fooled by priors
+#        print '\ngetwindow: analysis pars: ', self.analysisPars
+        for region in ['lrwin0', 'lrwin1', 'lrwin2', 'lrrmp']:
+            rgninfo = self.regions[region]['region'].getRegion()  # from the display
+            self.regions[region]['start'].setValue(rgninfo[0] * 1.0e3)  # report values to screen
+            self.regions[region]['stop'].setValue(rgninfo[1] * 1.0e3)
+            self.analysisPars[region] = {'times': rgninfo}
+#        print '\nafter loop: ', self.analysisPars
+        for region in ['lrwin1', 'lrwin2']:
+            self.analysisPars[region]['mode'] = self.regions[region]['mode'].currentText()
+        self.analysisPars['lrwin0']['mode'] = 'Mean'
+#        print '\nand finally: ', self.analysisPars
+        self.get_alternation()  # get values into the analysisPars dictionary
+        self.get_baseline()
+        self.get_junction()
+
+    def get_script_analysisPars(self, script_globals, thiscell):
         """
         set the analysis times and modes from the script. Also updates the qt windows
         :return: Nothing.
         """
+        self.analysisPars = {}
         self.analysisPars['baseline'] = False
-        # set the analysis windows if it is identified
-        self.auto_updater = False  # turn off the updates
 
         self.analysisPars['lrwin1'] = {}
         self.analysisPars['lrwin2'] = {}
         self.analysisPars['lrwin0'] = {}
-        if 'win1_mode' in thiscell:
-            r = self.ctrl.PSPReversal_win1mode.findText(thiscell['win1_mode'])
-            if r >= 0:
-                self.ctrl.PSPReversal_win1mode.setCurrentIndex(r)
-                self.analysisPars['lrwin1']['mode'] = thiscell['win1_mode']
+        self.analysisPars['lrrmp'] = {}
+        self.auto_updater = False  # turn off the updates
+        scriptg = {'global_jp': ['junction'], 'global_win1_mode': ['lrwin1', 'mode'],
+                   'global_win2_mode': ['lrwin2', 'mode']}
+        for k in scriptg.keys():  # set globals first
+            if len(scriptg[k]) == 1:
+                self.analysisPars[scriptg[k][0]] = script_globals[k]
             else:
-                print 'win 1 analysis mode not recognized: %s' % thiscell['win1_mode']
+                self.analysisPars[scriptg[k][0]] = {scriptg[k][1]: script_globals[k]}
+        if 'junctionpotential' in thiscell:
+            self.analysisPars['junction'] = thiscell['junctionpotential']
+        if 'alternation' in thiscell:
+            self.analysisPars['alternation'] = thiscell['alternation']
         else:
-            if 'global_win1_mode' in self.script:
-                r = self.ctrl.PSPReversal_win1mode.findText(self.script['global_win1_mode'])
-                self.analysisPars['lrwin1']['mode'] = self.script['global_win1_mode']
-                if r >= 0:
-                    self.ctrl.PSPReversal_win1mode.setCurrentIndex(r)
-            else:
-                print 'win 1 global analysis mode not recognized: %s' % self.script['global_win1_mode']
+            self.analysisPars['alternation'] = True
 
-        if 'win2_mode' in thiscell:
-            r = self.ctrl.PSPReversal_win2mode.findText(thiscell['win2_mode'])
-            if r >= 0:
-                self.ctrl.PSPReversal_win2mode.setCurrentIndex(r)
-                self.analysisPars['lrwin2']['mode'] = thiscell['win2_mode']
-            else:
-                print 'win 2 analysis mode not recognized: %s' % thiscell['win2_mode']
-        else:
-            if 'global_win2_mode' in self.script:
-                r = self.ctrl.PSPReversal_win2mode.findText(self.script['global_win2_mode'])
-                if r >= 0:
-                    self.ctrl.PSPReversal_win2mode.setCurrentIndex(r)
-                self.analysisPars['lrwin2']['mode'] = self.script['global_win1_mode']
-            else:
-                print 'win 2 global analysis mode not recognized: %s' % self.script['global_win2_mode']
-
-        for n in range(0, 3):
-            #print 'region to set: ', thiscell['win%d'%n]
+        for n in range(0, 3):  # get the current region definitions
             self.regions['lrwin%d'%n]['region'].setRegion([x*1e-3 for x in thiscell['win%d'%n]])
-            self.regions['lrwin%d'%n]['region'].start = thiscell['win%d'%n][0]
-            self.regions['lrwin%d'%n]['region'].stop = thiscell['win%d'%n][1]
-            self.analysisPars['lrwin%d'%n]['times'] = thiscell['win%d'%n]
+            self.regions['lrwin%d'%n]['start'].setValue(thiscell['win%d'%n][0])
+            self.regions['lrwin%d'%n]['stop'].setValue(thiscell['win%d'%n][1])
+            self.analysisPars['lrwin%d'%n]['times'] = [t*1e-3 for t in thiscell['win%d'%n]]  # convert to sec
             self.show_or_hide('lrwin%d'%n, forcestate=True)
+
+        for win in ['win1', 'win2']:  # set the modes for the 2 windows
+            winmode = win+'_mode'
+            lrwinx = 'lr'+win
+            if winmode in thiscell:
+                thiswin = thiscell[winmode]
+                r = self.regions[lrwinx]['mode'].findText(thiswin)
+                if r >= 0:
+                    print 'setting %s mode to %s ' % (win, thiswin)
+                    self.regions[lrwinx]['mode'].setCurrentIndex(r)
+                    self.analysisPars[lrwinx]['mode'] = thiswin
+                else:
+                    print '%s analysis mode not recognized: %s' % (win, thiswin)
+            else:
+                r = self.regions[lrwinx]['mode'].findText(self.analysisPars[lrwinx]['mode'])
+                if r >= 0:
+                    self.regions[lrwinx]['mode'].setCurrentIndex(r)
+        return
 
     def print_script_output(self):
         print self.remove_html_markup(self.textout)
@@ -1263,8 +1300,8 @@ class PSPReversal(AnalysisModule):
 
         # the first action of this routine is to set the text boxes correctly to represent the status of the
         # current LR region
-        if not self.auto_updater:  # do nothing if auto update is off
-            return 'no auto updater'
+#        if not self.auto_updater:  # do nothing if auto update is off
+#            return 'no auto updater'
         window = region
         region = 'lr' + window
         if window is None:
@@ -1274,6 +1311,7 @@ class PSPReversal(AnalysisModule):
 
         if window == 'win0':
             return 'window 0 called' # we don't use for calculations, just marking times
+
 
         wincmd = window + 'cmd'
         winoff = window + 'off'
@@ -1301,6 +1339,10 @@ class PSPReversal(AnalysisModule):
         self.measure[winorigcmd] = []
         self.measure[winbkgd] = []
 
+       # import pprint
+       # pp = pprint.PrettyPrinter(indent=4)
+       # pp.pprint(self.analysisPars)
+
         mode = self.analysisPars[region]['mode']
         rgninfo = self.analysisPars[region]['times']
         data1 = self.traces['Time': rgninfo[0]:rgninfo[1]]  # extract analysis region
@@ -1308,6 +1350,7 @@ class PSPReversal(AnalysisModule):
         if tx1.shape[0] > data1.shape[1]:
             tx1 = tx1[0:-1]  # clip extra point. Rules must be different between traces clipping and masking.
         if window == 'win1':  # check if win1 overlaps with win0, and select data
+#            print '***** WINDOW 1 SETUP *****'
             r0 = self.analysisPars['lrwin0']['times'] #regions['lrwin0']['region'].getRegion()
             tx = ma.masked_inside(tx1, r0[0], r0[1])  #
             if tx.mask.all():  # handle case where win1 is entirely inside win2
@@ -1699,74 +1742,6 @@ class PSPReversal(AnalysisModule):
             #     self.fslPlot.setXRange(0.0, np.max(xfsl))
             # # self.fiPlot.setLabel('bottom', xlabel)
             # self.fslPlot.setLabel('bottom', xlabel)
-
-    def read_parameters(self, clear_flag=False, pw=False):
-        """
-        Read the parameter window entries, set the lr regions, and do an
-        update on the analysis
-        """
-        (pen, filledbrush, emptybrush, symbol, n, clear_flag) = self.map_symbol()
-        # update RMP first as we might use it for the others.
-        tsf = 1.0e3
-        if self.modelmode:
-            tsf = 1.0
-        actions = {}
-        for x in self.regions.keys():
-            actions[x] = False
-        if self.regions['lrrmp']['state'].isChecked():
-            [rgnx1, rgnx2] = self.analysisPars['lrrmp']['times']
-            #self.regions['lrrmp']['start'].value() / tsf
-            #rgnx2 = self.regions['lrrmp']['start'].value() / tsf
-            self.regions['lrrmp']['region'].setRegion([rgnx1, rgnx2])
-            self.update_rmp_analysis(clear=clear_flag, pw=pw)
-            actions['lrrmp'] = True
-
-        upd_win1 = False
-        if self.regions['lrwin0']['state'].isChecked():
-            [rgnx1, rgnx2] = self.analysisPars['lrwin0']['times']
-            # rgnx1 = self.regions['lrwin0']['start'].value() / 1e3
-            # rgnx2 = self.regions['lrwin0']['stop'].value() / 1e3
-            self.regions['lrwin0']['region'].setRegion([rgnx1, rgnx2])
-            upd_win1 = True
-            actions['lrwin0'] = True
-
-        if self.regions['lrwin1']['state'].isChecked():
-            [rgnx1, rgnx2] = self.analysisPars['lrwin1']['times']
-            # rgnx1 = self.regions['lrwin1']['start'].value() / 1e3
-            # rgnx2 = self.regions['lrwin1']['stop'].value() / 1e3
-            self.regions['lrwin1']['region'].setRegion([rgnx1, rgnx2])
-            upd_win1 = True
-            actions['lrwin1'] = True
-
-
-        if upd_win1:
-            self.update_win_analysis(region='win1', clear=clear_flag, pw=pw)
-
-        if self.regions['lrwin2']['state'].isChecked():
-            [rgnx1, rgnx2] = self.analysisPars['lrwin2']['times']
-            # rgnx1 = self.regions['lrwin2']['start'].value() / 1e3
-            # rgnx2 = self.regions['lrwin2']['stop'].value() / 1e3
-            self.regions['lrwin2']['region'].setRegion([rgnx1, rgnx2])
-            self.update_win_analysis(region='win2', clear=clear_flag, pw=pw)
-            actions['lrwin2'] = True
-
-        # if self.regions['lrleak']['state'].isChecked():
-        #     rgnx1 = self.regions['lrleak']['start'].value() / 1e3
-        #     rgnx2 = self.regions['lrleak']['stop'].value() / 1e3
-        #     self.regions['lrleak']['region'].setRegion([rgnx1, rgnx2])
-        #     self.update_win_analysis(region='win1')
-        #     self.update_win_analysis(region='win2')
-
-        # if self.ctrl.PSPReversal_showHide_lrtau.isChecked():
-        #     # include tau in the list... if the tool is selected
-        #     self.update_tauh()
-
-        if self.regions['lrwin1']['mode'].currentIndexChanged:
-            self.update_win_analysis(region='win1')
-
-        if self.regions['lrwin2']['mode'].currentIndexChanged:
-            self.update_win_analysis(region='win2')
-        return actions
 
     def count_spikes(self):
         """
