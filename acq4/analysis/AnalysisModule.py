@@ -208,6 +208,3 @@ class Element(QtCore.QObject):
             raise Exception("Cannot automatically create element '%s' (type=%s)" % (self.name, typ))
         #self.setObject(obj)  ## handled indirectly..
         return obj
-        
-        
-        
