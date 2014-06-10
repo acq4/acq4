@@ -131,9 +131,9 @@
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="PSPReversal_ScriptAppend_Btn">
+       <widget class="QPushButton" name="PSPReversal_ScriptFormatted_Btn">
         <property name="text">
-         <string>Append</string>
+         <string>Print Formtted</string>
         </property>
        </widget>
       </item>
