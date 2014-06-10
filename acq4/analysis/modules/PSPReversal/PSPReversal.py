@@ -140,7 +140,8 @@ class PSPReversal(AnalysisModule):
         self.trace_times = None
         self.tx = None
 
-        # (some) results elements
+        # -----------------(some) results elements----------------------
+
         self.filename = ''
         self.r_in = 0.0
         self.tau = 0.0
@@ -157,7 +158,7 @@ class PSPReversal(AnalysisModule):
         self.IV_background = None
 
         self.cmd = []
-        self.sequence = ''
+        self.sequence = {}
         self.measure = {'rmp': [], 'rmpcmd': [],
                         'leak': [],
                         'win1': [], 'win1cmd': [], 'win1off': [], 'win1on': [],
@@ -169,7 +170,7 @@ class PSPReversal(AnalysisModule):
         self.rmp = []  # resting membrane potential during sequence
         self.analysisPars = {}
 
-        # -----scripting-------
+        # -----------------scripting-----------------------
         self.script = None
         self.script_name = None
 
@@ -286,7 +287,7 @@ class PSPReversal(AnalysisModule):
         self.nospk = []
         self.spk = []
         self.cmd = []
-        self.sequence = ''
+        self.sequence = {}
         self.measure = {'rmp': [], 'rmpcmd': [],
                         'leak': [],
                         'win1': [], 'win1cmd': [], 'win1off': [], 'win1on': [],
@@ -1117,7 +1118,7 @@ class PSPReversal(AnalysisModule):
                     self.analysisPars['junction'] = float(self.script['global_jp'])
                     self.ctrl.PSPReversal_Junction.setValue(float(self.script['global_jp']))
 
-                self.script_set_times()
+                self.script_set_times(thiscell)
                 self.auto_updater = True # restore function
                 m = thiscell['manip'][p]  # get the tag for the manipulation
                 self.update_all_analysis()  # run all current analyses
@@ -1130,7 +1131,7 @@ class PSPReversal(AnalysisModule):
                 script_header = False
         print '\nDone'
 
-    def script_set_times(self):
+    def script_set_times(self, thiscell):
         """
         set the analysis times and modes from the script. Also updates the qt windows
         :return: Nothing.
