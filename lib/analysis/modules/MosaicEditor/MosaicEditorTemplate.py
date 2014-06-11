@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/MosaicEditor/MosaicEditorTemplate.ui'
 #
-# Created: Wed Nov 27 17:26:06 2013
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Wed Jun 11 13:53:02 2014
+#      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -48,7 +57,7 @@ class Ui_Form(object):
         self.mosaicDisplayMax.setGeometry(QtCore.QRect(70, 50, 65, 25))
         self.mosaicDisplayMax.setMaximum(65536.0)
         self.mosaicDisplayMax.setSingleStep(0.25)
-        self.mosaicDisplayMax.setProperty(_fromUtf8("value"), 2.0)
+        self.mosaicDisplayMax.setProperty("value", 2.0)
         self.mosaicDisplayMax.setObjectName(_fromUtf8("mosaicDisplayMax"))
         self.mosaicFlipLRBtn = QtGui.QPushButton(self.groupBox)
         self.mosaicFlipLRBtn.setGeometry(QtCore.QRect(0, 110, 71, 32))
@@ -96,17 +105,17 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Tile Operations", None, QtGui.QApplication.UnicodeUTF8))
-        self.mosaicFlipUDBtn.setText(QtGui.QApplication.translate("Form", "FlipUD", None, QtGui.QApplication.UnicodeUTF8))
-        self.mosaicApplyScaleBtn.setText(QtGui.QApplication.translate("Form", "Apply Tile Scale", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "Min", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Max", None, QtGui.QApplication.UnicodeUTF8))
-        self.mosaicFlipLRBtn.setText(QtGui.QApplication.translate("Form", "FlipLR", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Image Correction", None, QtGui.QApplication.UnicodeUTF8))
-        self.normalizeBtn.setText(QtGui.QApplication.translate("Form", "Normalize", None, QtGui.QApplication.UnicodeUTF8))
-        self.blendBtn.setText(QtGui.QApplication.translate("Form", "Blend", None, QtGui.QApplication.UnicodeUTF8))
-        self.autoRangeBtn.setText(QtGui.QApplication.translate("Form", "Auto Range", None, QtGui.QApplication.UnicodeUTF8))
-        self.tileShadingBtn.setText(QtGui.QApplication.translate("Form", "Tile Shading", None, QtGui.QApplication.UnicodeUTF8))
-        self.atlasCombo.setItemText(0, QtGui.QApplication.translate("Form", "Select Atlas...", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.groupBox.setTitle(_translate("Form", "Tile Operations", None))
+        self.mosaicFlipUDBtn.setText(_translate("Form", "FlipUD", None))
+        self.mosaicApplyScaleBtn.setText(_translate("Form", "Apply Tile Scale", None))
+        self.label_2.setText(_translate("Form", "Min", None))
+        self.label.setText(_translate("Form", "Max", None))
+        self.mosaicFlipLRBtn.setText(_translate("Form", "FlipLR", None))
+        self.groupBox_2.setTitle(_translate("Form", "Image Correction", None))
+        self.normalizeBtn.setText(_translate("Form", "Normalize", None))
+        self.blendBtn.setText(_translate("Form", "Blend", None))
+        self.autoRangeBtn.setText(_translate("Form", "Auto Range", None))
+        self.tileShadingBtn.setText(_translate("Form", "Tile Shading", None))
+        self.atlasCombo.setItemText(0, _translate("Form", "Select Atlas...", None))
 

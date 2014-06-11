@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './acq4/analysis/modules/PSPReversal/ctrlTemplate.ui'
 #
-# Created: Tue Jun  3 14:43:36 2014
-#      by: PyQt4 UI code generator 4.9.4
+# Created: Wed Jun 11 13:53:02 2014
+#      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,16 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -161,8 +170,8 @@ class Ui_Form(object):
         palette.setBrush(QtGui.QPalette.Disabled, QtGui.QPalette.ToolTipText, brush)
         Form.setPalette(palette)
         self.gridLayout = QtGui.QGridLayout(Form)
-        self.gridLayout.setMargin(0)
         self.gridLayout.setSpacing(0)
+        self.gridLayout.setMargin(0)
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
         self.groupBox = QtGui.QGroupBox(Form)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Ignored, QtGui.QSizePolicy.Ignored)
@@ -266,7 +275,7 @@ class Ui_Form(object):
         self.PSPReversal_KeepT.setObjectName(_fromUtf8("PSPReversal_KeepT"))
         self.verticalLayout_4.addWidget(self.PSPReversal_KeepT)
         self.layoutWidget2 = QtGui.QWidget(self.groupBox)
-        self.layoutWidget2.setGeometry(QtCore.QRect(5, 20, 349, 32))
+        self.layoutWidget2.setGeometry(QtCore.QRect(5, 20, 357, 32))
         self.layoutWidget2.setObjectName(_fromUtf8("layoutWidget2"))
         self.horizontalLayout_6 = QtGui.QHBoxLayout(self.layoutWidget2)
         self.horizontalLayout_6.setMargin(0)
@@ -381,7 +390,7 @@ class Ui_Form(object):
         self.PSPReversal_PrintResults.setObjectName(_fromUtf8("PSPReversal_PrintResults"))
         self.horizontalLayout.addWidget(self.PSPReversal_PrintResults)
         self.layoutWidget5 = QtGui.QWidget(self.groupBox)
-        self.layoutWidget5.setGeometry(QtCore.QRect(5, 110, 341, 171))
+        self.layoutWidget5.setGeometry(QtCore.QRect(5, 110, 417, 171))
         self.layoutWidget5.setObjectName(_fromUtf8("layoutWidget5"))
         self.gridLayout_4 = QtGui.QGridLayout(self.layoutWidget5)
         self.gridLayout_4.setSizeConstraint(QtGui.QLayout.SetMaximumSize)
@@ -640,6 +649,10 @@ class Ui_Form(object):
         self.PSPReversal_RsCorr.setSizePolicy(sizePolicy)
         self.PSPReversal_RsCorr.setObjectName(_fromUtf8("PSPReversal_RsCorr"))
         self.gridLayout_4.addWidget(self.PSPReversal_RsCorr, 5, 2, 1, 1)
+        self.PSPReversal_SubBaseline = QtGui.QCheckBox(self.layoutWidget5)
+        self.PSPReversal_SubBaseline.setText(_fromUtf8("Sub Baseline"))
+        self.PSPReversal_SubBaseline.setObjectName(_fromUtf8("PSPReversal_SubBaseline"))
+        self.gridLayout_4.addWidget(self.PSPReversal_SubBaseline, 1, 3, 1, 1)
         self.layoutWidget6 = QtGui.QWidget(self.groupBox)
         self.layoutWidget6.setGeometry(QtCore.QRect(5, 80, 341, 25))
         self.layoutWidget6.setObjectName(_fromUtf8("layoutWidget6"))
@@ -658,12 +671,11 @@ class Ui_Form(object):
         self.PSPReversal_Alternation = QtGui.QCheckBox(self.layoutWidget6)
         self.PSPReversal_Alternation.setObjectName(_fromUtf8("PSPReversal_Alternation"))
         self.horizontalLayout_9.addWidget(self.PSPReversal_Alternation)
-        self.PSPReversal_SubBaseline = QtGui.QCheckBox(self.layoutWidget6)
-        self.PSPReversal_SubBaseline.setText(_fromUtf8("Sub Baseline"))
-        self.PSPReversal_SubBaseline.setObjectName(_fromUtf8("PSPReversal_SubBaseline"))
-        self.horizontalLayout_9.addWidget(self.PSPReversal_SubBaseline)
+        self.PSPReversal_EvenOdd = QtGui.QCheckBox(self.layoutWidget6)
+        self.PSPReversal_EvenOdd.setObjectName(_fromUtf8("PSPReversal_EvenOdd"))
+        self.horizontalLayout_9.addWidget(self.PSPReversal_EvenOdd)
         self.layoutWidget7 = QtGui.QWidget(self.groupBox)
-        self.layoutWidget7.setGeometry(QtCore.QRect(5, 285, 336, 29))
+        self.layoutWidget7.setGeometry(QtCore.QRect(5, 285, 373, 29))
         self.layoutWidget7.setObjectName(_fromUtf8("layoutWidget7"))
         self.horizontalLayout_12 = QtGui.QHBoxLayout(self.layoutWidget7)
         self.horizontalLayout_12.setSizeConstraint(QtGui.QLayout.SetMaximumSize)
@@ -740,8 +752,7 @@ class Ui_Form(object):
         Form.setTabOrder(self.PSPReversal_Sequence1, self.PSPReversal_Sequence2)
         Form.setTabOrder(self.PSPReversal_Sequence2, self.PSPReversal_tauh_Commands)
         Form.setTabOrder(self.PSPReversal_tauh_Commands, self.PSPReversal_Alternation)
-        Form.setTabOrder(self.PSPReversal_Alternation, self.PSPReversal_SubBaseline)
-        Form.setTabOrder(self.PSPReversal_SubBaseline, self.PSPReversal_showHide_lrrmp)
+        Form.setTabOrder(self.PSPReversal_Alternation, self.PSPReversal_showHide_lrrmp)
         Form.setTabOrder(self.PSPReversal_showHide_lrrmp, self.PSPReversal_rmpTStart)
         Form.setTabOrder(self.PSPReversal_rmpTStart, self.PSPReversal_rmpTStop)
         Form.setTabOrder(self.PSPReversal_rmpTStop, self.PSPReversal_showHide_lrwin1)
@@ -770,78 +781,79 @@ class Ui_Form(object):
         Form.setTabOrder(self.PSPReversal_rePlotData, self.PSPReversal_PrintResults)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "PSP Reversal V1.1", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_10.setText(QtGui.QApplication.translate("Form", "Results", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_7.setText(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+        Form.setWindowTitle(_translate("Form", "Form", None))
+        self.groupBox.setTitle(_translate("Form", "PSP Reversal V1.1", None))
+        self.label_10.setText(_translate("Form", "Results", None))
+        self.label_7.setText(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'Lucida Grande\'; font-size:13pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">I<span style=\" vertical-align:sub;\">0</span>/Vr</p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_9.setText(QtGui.QApplication.translate("Form", "&tau;<sub>m</sub> (ms)", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("Form", "R<sub>in</sub>", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_15.setText(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">I<span style=\" vertical-align:sub;\">0</span>/Vr</p></body></html>", None))
+        self.label_9.setText(_translate("Form", "&tau;<sub>m</sub> (ms)", None))
+        self.label_2.setText(_translate("Form", "R<sub>in</sub>", None))
+        self.label_15.setText(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'Lucida Grande\'; font-size:12pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">&tau;<span style=\" vertical-align:sub;\">h</span> (ms)</p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_KeepAnalysis.setText(QtGui.QApplication.translate("Form", "Keep \n"
-"Analysis", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_KeepT.setText(QtGui.QApplication.translate("Form", "Keep\n"
-"Times", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_13.setText(QtGui.QApplication.translate("Form", "IV Cmd Limits", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_IVLimits.setText(QtGui.QApplication.translate("Form", "Use Limits", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_14.setText(QtGui.QApplication.translate("Form", "Seq1", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_Sequence1.setItemText(0, QtGui.QApplication.translate("Form", "None", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_Sequence1.setItemText(1, QtGui.QApplication.translate("Form", "001", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_Sequence1.setItemText(2, QtGui.QApplication.translate("Form", "002", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_Sequence1.setItemText(3, QtGui.QApplication.translate("Form", "003", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_Sequence1.setItemText(4, QtGui.QApplication.translate("Form", "004", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_19.setText(QtGui.QApplication.translate("Form", "Seq2", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_Sequence2.setItemText(0, QtGui.QApplication.translate("Form", "None", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_16.setText(QtGui.QApplication.translate("Form", "Cmd", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_tauh_Commands.setItemText(0, QtGui.QApplication.translate("Form", "0.0", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_Update.setText(QtGui.QApplication.translate("Form", "Update", None, QtGui.QApplication.UnicodeUTF8))
-        self.dbStoreBtn.setText(QtGui.QApplication.translate("Form", "-> db", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_rePlotData.setText(QtGui.QApplication.translate("Form", "RePlot", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_PrintResults.setText(QtGui.QApplication.translate("Form", "Print", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "T Start", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_win1mode.setItemText(0, QtGui.QApplication.translate("Form", "Mean", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_win1mode.setItemText(1, QtGui.QApplication.translate("Form", "Linear", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_win1mode.setItemText(2, QtGui.QApplication.translate("Form", "Poly2", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_win1mode.setItemText(3, QtGui.QApplication.translate("Form", "Min", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_win1mode.setItemText(4, QtGui.QApplication.translate("Form", "Max", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_win1mode.setItemText(5, QtGui.QApplication.translate("Form", "Abs", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_win1mode.setItemText(6, QtGui.QApplication.translate("Form", "Sum", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_win2mode.setItemText(0, QtGui.QApplication.translate("Form", "Mean", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_win2mode.setItemText(1, QtGui.QApplication.translate("Form", "Mean-Win1", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_win2mode.setItemText(2, QtGui.QApplication.translate("Form", "Mean-Linear", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_win2mode.setItemText(3, QtGui.QApplication.translate("Form", "Mean-Poly2", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_win2mode.setItemText(4, QtGui.QApplication.translate("Form", "Sum", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_win2mode.setItemText(5, QtGui.QApplication.translate("Form", "Sum-Win1", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_win2mode.setItemText(6, QtGui.QApplication.translate("Form", "Min", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_win2mode.setItemText(7, QtGui.QApplication.translate("Form", "Max", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_win2mode.setItemText(8, QtGui.QApplication.translate("Form", "Abs", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_subLeak.setText(QtGui.QApplication.translate("Form", "Exclude", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("Form", "T Stop", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_showHide_lrrmp.setText(QtGui.QApplication.translate("Form", "I0/Vr", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_showHide_lrwin1.setText(QtGui.QApplication.translate("Form", "Win1 (ms)", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_showHide_lrwin2.setText(QtGui.QApplication.translate("Form", "Win2 (ms)", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">&tau;<span style=\" vertical-align:sub;\">h</span> (ms)</p></body></html>", None))
+        self.PSPReversal_KeepAnalysis.setText(_translate("Form", "Keep \n"
+"Analysis", None))
+        self.PSPReversal_KeepT.setText(_translate("Form", "Keep\n"
+"Times", None))
+        self.label_13.setText(_translate("Form", "IV Cmd Limits", None))
+        self.PSPReversal_IVLimits.setText(_translate("Form", "Use Limits", None))
+        self.label_14.setText(_translate("Form", "Seq1", None))
+        self.PSPReversal_Sequence1.setItemText(0, _translate("Form", "None", None))
+        self.PSPReversal_Sequence1.setItemText(1, _translate("Form", "001", None))
+        self.PSPReversal_Sequence1.setItemText(2, _translate("Form", "002", None))
+        self.PSPReversal_Sequence1.setItemText(3, _translate("Form", "003", None))
+        self.PSPReversal_Sequence1.setItemText(4, _translate("Form", "004", None))
+        self.label_19.setText(_translate("Form", "Seq2", None))
+        self.PSPReversal_Sequence2.setItemText(0, _translate("Form", "None", None))
+        self.label_16.setText(_translate("Form", "Cmd", None))
+        self.PSPReversal_tauh_Commands.setItemText(0, _translate("Form", "0.0", None))
+        self.PSPReversal_Update.setText(_translate("Form", "Update", None))
+        self.dbStoreBtn.setText(_translate("Form", "-> db", None))
+        self.PSPReversal_rePlotData.setText(_translate("Form", "RePlot", None))
+        self.PSPReversal_PrintResults.setText(_translate("Form", "Print", None))
+        self.label.setText(_translate("Form", "T Start", None))
+        self.PSPReversal_win1mode.setItemText(0, _translate("Form", "Mean", None))
+        self.PSPReversal_win1mode.setItemText(1, _translate("Form", "Linear", None))
+        self.PSPReversal_win1mode.setItemText(2, _translate("Form", "Poly2", None))
+        self.PSPReversal_win1mode.setItemText(3, _translate("Form", "Min", None))
+        self.PSPReversal_win1mode.setItemText(4, _translate("Form", "Max", None))
+        self.PSPReversal_win1mode.setItemText(5, _translate("Form", "Abs", None))
+        self.PSPReversal_win1mode.setItemText(6, _translate("Form", "Sum", None))
+        self.PSPReversal_win2mode.setItemText(0, _translate("Form", "Mean", None))
+        self.PSPReversal_win2mode.setItemText(1, _translate("Form", "Mean-Win1", None))
+        self.PSPReversal_win2mode.setItemText(2, _translate("Form", "Mean-Linear", None))
+        self.PSPReversal_win2mode.setItemText(3, _translate("Form", "Mean-Poly2", None))
+        self.PSPReversal_win2mode.setItemText(4, _translate("Form", "Sum", None))
+        self.PSPReversal_win2mode.setItemText(5, _translate("Form", "Sum-Win1", None))
+        self.PSPReversal_win2mode.setItemText(6, _translate("Form", "Min", None))
+        self.PSPReversal_win2mode.setItemText(7, _translate("Form", "Max", None))
+        self.PSPReversal_win2mode.setItemText(8, _translate("Form", "Abs", None))
+        self.PSPReversal_subLeak.setText(_translate("Form", "Exclude", None))
+        self.label_3.setText(_translate("Form", "T Stop", None))
+        self.PSPReversal_showHide_lrrmp.setText(_translate("Form", "I0/Vr", None))
+        self.PSPReversal_showHide_lrwin1.setText(_translate("Form", "Win1 (ms)", None))
+        self.PSPReversal_showHide_lrwin2.setText(_translate("Form", "Win2 (ms)", None))
+        self.label_4.setText(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'Lucida Grande\'; font-size:13pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">R<span style=\" vertical-align:sub;\">uncomp</span></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_RsCorr.setText(QtGui.QApplication.translate("Form", "Ru Corr", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_6.setText(QtGui.QApplication.translate("Form", "Mode:", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_dataMode.setText(QtGui.QApplication.translate("Form", "DataMode", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_Alternation.setText(QtGui.QApplication.translate("Form", "Alternation", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_18.setText(QtGui.QApplication.translate("Form", "Abcissa", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_RMPMode.setItemText(0, QtGui.QApplication.translate("Form", "T (s)", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_RMPMode.setItemText(1, QtGui.QApplication.translate("Form", "I (pA)", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_RMPMode.setItemText(2, QtGui.QApplication.translate("Form", "Sp (#/s)", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("Form", "Hold", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_Holding.setText(QtGui.QApplication.translate("Form", "     mV", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_11.setText(QtGui.QApplication.translate("Form", "JP", None, QtGui.QApplication.UnicodeUTF8))
-        self.PSPReversal_Junction.setSuffix(QtGui.QApplication.translate("Form", " mV", None, QtGui.QApplication.UnicodeUTF8))
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">R<span style=\" vertical-align:sub;\">uncomp</span></p></body></html>", None))
+        self.PSPReversal_RsCorr.setText(_translate("Form", "Ru Corr", None))
+        self.label_6.setText(_translate("Form", "Mode:", None))
+        self.PSPReversal_dataMode.setText(_translate("Form", "DataMode", None))
+        self.PSPReversal_Alternation.setText(_translate("Form", "Alternation", None))
+        self.PSPReversal_EvenOdd.setText(_translate("Form", "Even [odd]", None))
+        self.label_18.setText(_translate("Form", "Abcissa", None))
+        self.PSPReversal_RMPMode.setItemText(0, _translate("Form", "T (s)", None))
+        self.PSPReversal_RMPMode.setItemText(1, _translate("Form", "I (pA)", None))
+        self.PSPReversal_RMPMode.setItemText(2, _translate("Form", "Sp (#/s)", None))
+        self.label_5.setText(_translate("Form", "Hold", None))
+        self.PSPReversal_Holding.setText(_translate("Form", "     mV", None))
+        self.label_11.setText(_translate("Form", "JP", None))
+        self.PSPReversal_Junction.setSuffix(_translate("Form", " mV", None))
 

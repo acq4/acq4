@@ -713,10 +713,8 @@ class PSPReversal(AnalysisModule):
 
         # and also plot
         self.plot_traces()
+        self.setup_regions()
         self._host_.dockArea.findAll()[1]['Parameters'].raiseDock()  # parameters window to the top
-        #if self.ctrl.PSPReversal_KeepT.isChecked():  # times already set, so go forward with analysis
-        #    self.update_all_analysis()  # run all current analyses
-        #    self.print_analysis()  # brings output window to the top
         self.get_window_analysisPars()  # prepare the analysis parameters
         return True
 
@@ -750,9 +748,9 @@ class PSPReversal(AnalysisModule):
         self.cmd_plot.plotItem.clearPlots()
 
         ntr = self.traces.shape[0]
-       # self.data_plot.setDownsampling(auto=True, mode='mean')
+        self.data_plot.setDownsampling(auto=True, mode='mean')
         self.data_plot.setClipToView(True)
-       # self.cmd_plot.setDownsampling(auto=True, mode='mean')
+        self.cmd_plot.setDownsampling(auto=True, mode='mean')
         self.cmd_plot.setClipToView(True)
         self.data_plot.disableAutoRange()
         self.cmd_plot.disableAutoRange()
@@ -765,9 +763,17 @@ class PSPReversal(AnalysisModule):
             self.cmd_plot.addItem(cmdlines)
         else:
             for i in range(ntr):
-                self.data_plot.plot(x=self.tx, y=self.traces[i], downSample=500, downSampleMethod='mean',
+                plotthistrace = True
+                if self.ctrl.PSPReversal_Alternation.isChecked():  # only plot the alternate traces
+                    if ((self.ctrl.PSPReversal_EvenOdd.isChecked() and (i % 2 == 0))  # plot the evens
+                            or (not self.ctrl.PSPReversal_EvenOdd.isChecked() and (i % 2 != 0) )):  # plot the evens
+                        plotthistrace = True
+                    else:
+                        plotthistrace = False
+                if plotthistrace:
+                    self.data_plot.plot(x=self.tx, y=self.traces[i], downSample=500, downSampleMethod='mean',
                                          pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
-                self.cmd_plot.plot(x=self.tx, y=self.cmd_wave[i], downSample=500, downSampleMethod='mean',
+                    self.cmd_plot.plot(x=self.tx, y=self.cmd_wave[i], downSample=500, downSampleMethod='mean',
                                    pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
 
         if self.data_mode in self.ic_modes:
@@ -781,8 +787,6 @@ class PSPReversal(AnalysisModule):
             self.label_up(self.cmd_plot, 'T (s)', 'V (%s)' % self.cmdUnits, 'Data')
         self.data_plot.autoRange()
         self.cmd_plot.autoRange()
-
-        self.setup_regions()
 
     def setup_regions(self):
         self.initialize_regions()  # now create the analysis regions

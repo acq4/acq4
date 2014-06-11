@@ -1,7 +1,8 @@
-import pyqtgraph as pg
-from pyqtgraph.Qt import QtGui, QtCore
+from ..Qt import QtGui, QtCore
 from .Exporter import Exporter
-from pyqtgraph.parametertree import Parameter
+from ..parametertree import Parameter
+from .. import PlotItem
+
 import numpy 
 import h5py
 
@@ -9,7 +10,7 @@ __all__ = ['HDF5Exporter']
     
     
 class HDF5Exporter(Exporter):
-    Name = "HDF5 Export from plot data"
+    Name = "HDF5 Export: plot (x,y)"
     windows = []
     allowCopy = False
 
@@ -24,7 +25,7 @@ class HDF5Exporter(Exporter):
     
     def export(self, fileName=None):
         
-        if not isinstance(self.item, pg.PlotItem):
+        if not isinstance(self.item, PlotItem):
             raise Exception("Must have a PlotItem selected for HDF5 export.")
         
         if fileName is None:
@@ -40,3 +41,5 @@ class HDF5Exporter(Exporter):
         fdata = numpy.array(data).astype('double')
         dset = fd.create_dataset(dsname, data=fdata)
         fd.close()
+
+HDF5Exporter.register()

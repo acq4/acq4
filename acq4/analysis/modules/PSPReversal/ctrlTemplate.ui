@@ -435,7 +435,16 @@
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <property name="margin">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
     <number>0</number>
    </property>
    <property name="spacing">
@@ -689,7 +698,7 @@ Times</string>
        <rect>
         <x>5</x>
         <y>20</y>
-        <width>349</width>
+        <width>357</width>
         <height>32</height>
        </rect>
       </property>
@@ -955,7 +964,7 @@ Times</string>
        <rect>
         <x>5</x>
         <y>110</y>
-        <width>341</width>
+        <width>417</width>
         <height>171</height>
        </rect>
       </property>
@@ -1630,6 +1639,13 @@ p, li { white-space: pre-wrap; }
          </property>
         </widget>
        </item>
+       <item row="1" column="3">
+        <widget class="QCheckBox" name="PSPReversal_SubBaseline">
+         <property name="text">
+          <string notr="true">Sub Baseline</string>
+         </property>
+        </widget>
+       </item>
       </layout>
      </widget>
      <widget class="QWidget" name="layoutWidget">
@@ -1668,9 +1684,9 @@ p, li { white-space: pre-wrap; }
         </widget>
        </item>
        <item>
-        <widget class="QCheckBox" name="PSPReversal_SubBaseline">
+        <widget class="QCheckBox" name="PSPReversal_EvenOdd">
          <property name="text">
-          <string notr="true">Sub Baseline</string>
+          <string>Even [odd]</string>
          </property>
         </widget>
        </item>
@@ -1681,7 +1697,7 @@ p, li { white-space: pre-wrap; }
        <rect>
         <x>5</x>
         <y>285</y>
-        <width>336</width>
+        <width>373</width>
         <height>29</height>
        </rect>
       </property>
@@ -1862,7 +1878,6 @@ p, li { white-space: pre-wrap; }
   <tabstop>PSPReversal_Sequence2</tabstop>
   <tabstop>PSPReversal_tauh_Commands</tabstop>
   <tabstop>PSPReversal_Alternation</tabstop>
-  <tabstop>PSPReversal_SubBaseline</tabstop>
   <tabstop>PSPReversal_showHide_lrrmp</tabstop>
   <tabstop>PSPReversal_rmpTStart</tabstop>
   <tabstop>PSPReversal_rmpTStop</tabstop>
