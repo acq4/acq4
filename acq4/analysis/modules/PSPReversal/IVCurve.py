@@ -46,7 +46,6 @@ try:
     # next setting allows pdf font to be readable in Adobe Illustrator
     pylab.rcParams['pdf.fonttype'] = 42
     pylab.rcParams['text.dvipnghack'] = True
-    have_matplotlib = True
     # to here (matplotlib stuff - touchy!)
 except:
     pass # no matplotlib
@@ -76,8 +75,11 @@ class IVCurve(AnalysisModule):
 
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
-
+        self.ctrlWidget = QtGui.QWidget()
+        self.ctrl = ctrlTemplate.Ui_Form()
+        self.ctrl.setupUi(self.ctrlWidget)
         self.loaded = None
+        self.main_layout = pg.GraphicsView()   # instead of GraphicsScene?
         self.dirsSet = None
         self.lrss_flag = True   # show is default
         self.lrpk_flag = True
@@ -95,13 +97,6 @@ class IVCurve(AnalysisModule):
         self.dataMode = 'IC'  # analysis depends on the type of data we have.
         self.ICModes = ['IC', 'CC', 'IClamp']  # list of CC modes
         self.VCModes = ['VC', 'VClamp']  # list of VC modes
-
-        #--------------graphical elements-----------------
-        self._sizeHint = (1280, 900)   # try to establish size of window
-        self.ctrlWidget = QtGui.QWidget()
-        self.ctrl = ctrlTemplate.Ui_Form()
-        self.ctrl.setupUi(self.ctrlWidget)
-        self.main_layout = pg.GraphicsView()   # instead of GraphicsScene?
          # make fixed widget for the module output
         self.widget = QtGui.QWidget()
         self.gridLayout = QtGui.QGridLayout()
@@ -111,13 +106,13 @@ class IVCurve(AnalysisModule):
          # Setup basic GUI
         self._elements_ = OrderedDict([
             ('File Loader',
-             {'type': 'fileInput', 'size': (170, 50), 'host': self}),
+             {'type': 'fileInput', 'size': (130, 200), 'host': self}),
             ('Parameters',
              {'type': 'ctrl', 'object': self.ctrlWidget, 'host': self,
-              'size': (160, 700)}),
+              'size': (130, 400)}),
             ('Plots',
              {'type': 'ctrl', 'object': self.widget, 'pos': ('right',),
-              'size': (400, 700)}),
+              'size': (1000, 800)}),
         ])
         self.initializeElements()
         self.fileLoaderInstance = self.getElement('File Loader', create=True)
@@ -125,8 +120,6 @@ class IVCurve(AnalysisModule):
         self.ctrl.IVCurve_Update.clicked.connect(self.updateAnalysis)
         self.ctrl.IVCurve_PrintResults.clicked.connect(self.printAnalysis)
         self.ctrl.IVCurve_MPLExport.clicked.connect(self.matplotlibExport)
-        if not have_matplotlib:
-            self.ctrl.IVCurve_MPLExport.setEnabled=False  # make button inactive
         self.ctrl.IVCurve_KeepAnalysis.clicked.connect(self.resetKeepAnalysis)
         self.ctrl.IVCurve_getFileInfo.clicked.connect(self.getFileInfo)
         [self.ctrl.IVCurve_RMPMode.currentIndexChanged.connect(x)
@@ -458,15 +451,8 @@ class IVCurve(AnalysisModule):
                 pass
              # store primary channel data and read command amplitude
             info1 = data.infoCopy()
-            if 'startTime' in info1[0].keys():
-                startTime = info1[0]['startTime']
-            elif 'startTime' in info1[1]['DAQ']['command'].keys():
-                startTime = info1[1]['DAQ']['command']['startTime']
-            else:
-                startTime = 0.
-
             self.traceTimes = numpy.append(self.traceTimes,
-                                        startTime)
+                                        info1[1]['startTime'])
             traces.append(data.view(numpy.ndarray))
             cmd_wave.append(cmd.view(numpy.ndarray))
             self.data_plot.plot(data,

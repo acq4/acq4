@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+#  -*- coding: utf-8 -*-
 """
 PSPReversal: Analysis module that analyzes the current-voltage relationships
 relationships of PSPs from voltage clamp data.
@@ -7,13 +7,12 @@ Based on IVCurve (as of 5/2014)
 Paul B. Manis, Ph.D.
 2014.
 
-Pep8 compliant (via pep8.py) 10/25/2013 and 6/2014
 
 """
 
+
 from collections import OrderedDict
 import os
-import sys
 import os.path
 import itertools
 import functools
@@ -26,13 +25,12 @@ import acq4.pyqtgraph as pg
 from acq4.pyqtgraph import configfile
 from acq4.util.metaarray import MetaArray
 
-stdFont = 'Arial'
+standard_font = 'Arial'
 
 import acq4.analysis.tools.Utility as Utility  # pbm's utilities...
-import acq4.analysis.tools.Fitting as Fitting  # pbm's fitting stuff...
-import ctrlTemplate
-import resultsTemplate
-import scriptTemplate
+import acq4.analysis.modules.PSPReversal.ctrlTemplate as ctrlTemplate
+import acq4.analysis.modules.PSPReversal.resultsTemplate as resultsTemplate
+import acq4.analysis.modules.PSPReversal.scriptTemplate as scriptTemplate
 
 def trace_calls_and_returns(frame, event, arg, indent=[0]):
     """
@@ -45,13 +43,13 @@ def trace_calls_and_returns(frame, event, arg, indent=[0]):
     ignore_funcs = ['map_symbol', 'makemap_symbols', 'label_up', 'show_or_hide',
                     'update_command_timeplot', '<genexpr>', 'write',
                     'boundingRect', 'shape']
-    co = frame.f_code
-    func_name = co.co_name
+    frame_code = frame.f_code
+    func_name = frame_code.co_name
     if func_name in ignore_funcs:
         # Ignore write() calls from print statements
         return
     line_no = frame.f_lineno
-    filename = os.path.basename(co.co_filename)
+    filename = os.path.basename(frame_code.co_filename)
     #print 'file: ', filename
     if filename.find('PSPReversal') == -1:  # ignore calls not in our own code
         return
@@ -71,17 +69,19 @@ class MultiLine(pg.QtGui.QGraphicsPathItem):
         """x and y are 2D arrays of shape (Nplots, Nsamples)"""
         if x.ndim == 1:
             x = np.tile(x, y.shape[0]).reshape(y.shape[0], x.shape[0])
-        x=x[:,0::downsample].view(np.ndarray)
-        y=y[:,0::downsample].view(np.ndarray)
+        x = x[:, 0::downsample].view(np.ndarray)
+        y = y[:, 0::downsample].view(np.ndarray)
         if x.ndim == 1:
             x = np.tile(x, y.shape[0]).reshape(y.shape[0], x.shape[0])
         connect = np.ones(x.shape, dtype=bool)
-        connect[:,-1] = 0 # don't draw the segment between each trace
+        connect[:, -1] = 0  # don't draw the segment between each trace
         self.path = pg.arrayToQPath(x.flatten(), y.flatten(), connect.flatten())
         pg.QtGui.QGraphicsPathItem.__init__(self, self.path)
         self.setPen(pg.mkPen('w'))
+
     def shape(self): # override because QGraphicsPathItem.shape is too expensive.
         return pg.QtGui.QGraphicsItem.shape(self)
+
     def boundingRect(self):
         return self.path.boundingRect()
 
@@ -122,7 +122,7 @@ class PSPReversal(AnalysisModule):
         self.regions = {}
         self.fit_curve = None
         self.fitted_data = None
-        self.tx = None
+        self.time_base = None
         self.keep_analysis_count = 0
         self.spikes_counted = False
         self.data_mode = 'IC'  # analysis depends on the type of data we have.
@@ -138,7 +138,7 @@ class PSPReversal(AnalysisModule):
         self.cmd_wave = None
         self.traces = None
         self.trace_times = None
-        self.tx = None
+        self.time_base = None
 
         # -----------------(some) results elements----------------------
 
@@ -154,8 +154,7 @@ class PSPReversal(AnalysisModule):
         self.spikecount = None
         self.fsl = None
         self.fisi = None
-        self.ar = None
-        self.IV_background = None
+        self.adaptation_ratio= None
 
         self.cmd = []
         self.sequence = {}
@@ -168,7 +167,7 @@ class PSPReversal(AnalysisModule):
                         }
 
         self.rmp = []  # resting membrane potential during sequence
-        self.analysisPars = {}
+        self.analysis_parameters = {}
 
         # -----------------scripting-----------------------
         self.script = None
@@ -298,22 +297,38 @@ class PSPReversal(AnalysisModule):
         #for m in self.measure.keys():
         #    self.measure[m] = []
         self.rmp = []  # resting membrane potential during sequence
-        self.CellSummary = {}
+        self.analysis_summary = {}
         self.win2IV = {}
         self.win1fits = None
-        self.analysisPars = {}
+        self.analysis_parameters = {}
 
     def reset_keep_analysis(self):
-        self.keep_analysis_count = 0  # reset counter.
+        """
+        Reset the "keep analysis" counter
+        :return:
+        """
+        self.keep_analysis_count = 0
 
     def get_alternation(self):
-        self.analysisPars['alternation'] = self.ctrl.PSPReversal_Alternation.isChecked()
+        """
+        retrieve the state of the alternation checkbox
+        :return:
+        """
+        self.analysis_parameters['alternation'] = self.ctrl.PSPReversal_Alternation.isChecked()
 
     def get_baseline(self):
-        self.analysisPars['baseline'] = self.ctrl.PSPReversal_SubBaseline.isChecked()
+        """
+        retreive the state of the subtract baseline checkbox
+        :return:
+        """
+        self.analysis_parameters['baseline'] = self.ctrl.PSPReversal_SubBaseline.isChecked()
 
     def get_junction(self):
-        self.analysisPars['junction'] = self.ctrl.PSPReversal_Junction.value()
+        """
+        retrieve the junction potential value
+        :return:
+        """
+        self.analysis_parameters['junction'] = self.ctrl.PSPReversal_Junction.value()
 
     def initialize_regions(self):
         """
@@ -396,16 +411,32 @@ class PSPReversal(AnalysisModule):
                 self.regions[reg][s].setSuffix(' ' + self.regions[reg]['units'])
 
     def update_windows(self, **kwargs):
+        """
+        automatically update all the lr region windows in the display
+        :param kwargs:
+        :return:
+        """
         if self.auto_updater:
             self.update_win_analysis(**kwargs)
 
     def update_rmp_window(self, **kwargs):
+        """
+        update the position of the lr region used to measure the resting membrane potential
+        :param kwargs:
+        :return:
+        """
         if self.auto_updater:
             self.update_rmp_analysis(**kwargs)
 
     def show_or_hide(self, lrregion=None, forcestate=None):
+        """
+        Show or hide specific regions in the display
+        :param lrregion: name of the region ('lrwin0', etc)
+        :param forcestate: set True to force the show status
+        :return:
+        """
         if lrregion is None:
-            print('PSPReversal:show_or_hide:: lrregion is None')
+            print('PSPReversal:show_or_hide:: lrregion is {:<s}').format(lrregion)
             return
         region = self.regions[lrregion]
         if forcestate is not None:
@@ -428,7 +459,11 @@ class PSPReversal(AnalysisModule):
                 region['shstate'] = False
 
     def uniq(self, inlist):
-        # order preserving detection of unique values in a list
+        """
+         order preserving detection of unique values in a list
+        :param inlist:
+        :return:
+        """
         uniques = []
         for item in inlist:
             if item not in uniques:
@@ -463,7 +498,6 @@ class PSPReversal(AnalysisModule):
         self.ctrl.PSPReversal_Sequence2.clear()
         self.ctrl.PSPReversal_Sequence1.addItems(leftseq)
         self.ctrl.PSPReversal_Sequence2.addItems(rightseq)
-        self.dirsSet = dh  # not sure we need this anymore...
 
     def cell_summary(self, dh):
         """
@@ -473,18 +507,18 @@ class PSPReversal(AnalysisModule):
         :return nothing:
         """
         # other info into a dictionary
-        self.CellSummary['Day'] = self.dataModel.getDayInfo(dh)
-        self.CellSummary['Slice'] = self.dataModel.getSliceInfo(dh)
-        self.CellSummary['Cell'] = self.dataModel.getCellInfo(dh)
-        self.CellSummary['ACSF'] = self.dataModel.getACSF(dh)
-        self.CellSummary['Internal'] = self.dataModel.getInternalSoln(dh)
-        self.CellSummary['Temp'] = self.dataModel.getTemp(dh)
-        self.CellSummary['CellType'] = self.dataModel.getCellType(dh)
-        ct = self.CellSummary['Cell']['__timestamp__']
+        self.analysis_summary['Day'] = self.dataModel.getDayInfo(dh)
+        self.analysis_summary['Slice'] = self.dataModel.getSliceInfo(dh)
+        self.analysis_summary['Cell'] = self.dataModel.getCellInfo(dh)
+        self.analysis_summary['ACSF'] = self.dataModel.getACSF(dh)
+        self.analysis_summary['Internal'] = self.dataModel.getInternalSoln(dh)
+        self.analysis_summary['Temp'] = self.dataModel.getTemp(dh)
+        self.analysis_summary['CellType'] = self.dataModel.getCellType(dh)
+        ct = self.analysis_summary['Cell']['__timestamp__']
         pt = dh.info()['__timestamp__']
-        self.CellSummary['ElapsedTime'] = pt-ct  # save elapsed time between cell opening and protocol start
-        (date, slice, cell, proto, p3) = self.file_cell_protocol()
-        self.CellSummary['CellID'] = os.path.join(date, slice, cell)  # use this as the "ID" for the cell later on
+        self.analysis_summary['ElapsedTime'] = pt-ct  # save elapsed time between cell opening and protocol start
+        (date, sliceid, cell, proto, p3) = self.file_cell_protocol()
+        self.analysis_summary['CellID'] = os.path.join(date, sliceid, cell)  # use this as the "ID" for the cell later on
 
     def loadFileRequested(self, dh):
         """
@@ -523,7 +557,7 @@ class PSPReversal(AnalysisModule):
         cmd = []
         cmd_wave = []
         data = []
-        self.tx = None
+        self.time_base = None
         self.values = []
 #        self.sequence = self.dataModel.listSequenceParams(dh)  # already done in 'getfileinfo'
         self.trace_times = np.zeros(0)
@@ -568,7 +602,7 @@ class PSPReversal(AnalysisModule):
                     for j in rd:
                         dirs.append('%03d_%03d' % (i, j))
 
-        i = 0  # sometimes, the elements are not right...
+        # i = 0  # sometimes, the elements are not right...
         for i, directory_name in enumerate(dirs):  # dirs has the names of the runs withing the protocol
             data_dir_handle = dh[directory_name]  # get the directory within the protocol
             try:
@@ -599,14 +633,14 @@ class PSPReversal(AnalysisModule):
             self.ctrl.PSPReversal_dataMode.setText(self.data_mode)
             # Assign scale factors for the different modes to display data rationally
             if self.data_mode in self.ic_modes:
-                self.cmdscaleFactor = 1e12
-                self.cmdUnits = 'pA'
+                self.command_scale_factor = 1e12
+                self.command_units = 'pA'
             elif self.data_mode in self.vc_modes:
-                self.cmdUnits = 'mV'
-                self.cmdscaleFactor = 1e3
+                self.command_units = 'mV'
+                self.command_scale_factor = 1e3
             else:  # data mode not known; plot as voltage
-                self.cmdUnits = 'V'
-                self.cmdscaleFactor = 1.0
+                self.command_units = 'V'
+                self.command_scale_factor = 1.0
 
             if 'LED-Blue' in self.devicesUsed.keys():
                 led_pulse_train_command = data_dir_handle.parent().info()['devices']['LED-Blue']['channels']['Command']
@@ -620,7 +654,7 @@ class PSPReversal(AnalysisModule):
 
             # only accept data in a particular range
             if self.ctrl.PSPReversal_IVLimits.isChecked():
-                cval = self.cmdscaleFactor * sequence_values[i]
+                cval = self.command_scale_factor * sequence_values[i]
                 cmin = self.ctrl.PSPReversal_IVLimitMin.value()
                 cmax = self.ctrl.PSPReversal_IVLimitMax.value()
                 if cval < cmin or cval > cmax:
@@ -642,7 +676,7 @@ class PSPReversal(AnalysisModule):
                 self.values.append(sequence_values[i])
             else:
                 self.values.append(cmd[len(cmd) / 2])
-            i += 1
+        #    i += 1
         #sys.settrace(trace_calls_and_returns)
         if traces is None or len(traces) == 0:
             print "PSPReversal::loadFileRequested: No data found in this run..."
@@ -660,9 +694,9 @@ class PSPReversal(AnalysisModule):
         self.trace_times -= self.trace_times[0]
         traces = np.vstack(traces)
         self.cmd_wave = np.vstack(cmd_wave)
-        self.tx = np.array(cmd.xvals('Time'))
+        self.time_base = np.array(cmd.xvals('Time'))
         commands = np.array(self.values)
-        self.color_scale.setIntColorScale(0, i, maxValue=200)
+        self.color_scale.setIntColorScale(0, len(dirs), maxValue=200)
         # set up the selection region correctly and
         # prepare IV curves and find spikes
         info = [
@@ -696,7 +730,7 @@ class PSPReversal(AnalysisModule):
         cmdList = []
         for i in range(len(self.values)):
             cmdList.append('%8.3f %s' %
-                           (self.cmdscaleFactor * self.values[i], self.cmdUnits))
+                           (self.command_scale_factor * self.values[i], self.command_units))
         self.ctrl.PSPReversal_tauh_Commands.clear()
         self.ctrl.PSPReversal_tauh_Commands.addItems(cmdList)
         self.sample_interval = 1.0 / sfreq
@@ -726,9 +760,9 @@ class PSPReversal(AnalysisModule):
         """
         (p0, proto) = os.path.split(self.filename)
         (p1, cell) = os.path.split(p0)
-        (p2, slice) = os.path.split(p1)
+        (p2, sliceid) = os.path.split(p1)
         (p3, date) = os.path.split(p2)
-        return (date, slice, cell, proto, p3)
+        return (date, sliceid, cell, proto, p3)
 
     def plot_traces(self, multimode=False):
         """
@@ -766,7 +800,7 @@ class PSPReversal(AnalysisModule):
                 plotthistrace = True
                 if self.ctrl.PSPReversal_Alternation.isChecked():  # only plot the alternate traces
                     if ((self.ctrl.PSPReversal_EvenOdd.isChecked() and (i % 2 == 0))  # plot the evens
-                            or (not self.ctrl.PSPReversal_EvenOdd.isChecked() and (i % 2 != 0) )):  # plot the evens
+                            or (not self.ctrl.PSPReversal_EvenOdd.isChecked() and (i % 2 != 0))):  # plot the evens
                         plotthistrace = True
                     else:
                         plotthistrace = False
@@ -778,17 +812,23 @@ class PSPReversal(AnalysisModule):
 
         if self.data_mode in self.ic_modes:
             self.label_up(self.data_plot, 'T (s)', 'V (V)', 'Data')
-            self.label_up(self.cmd_plot, 'T (s)', 'I (%s)' % self.cmdUnits, 'Data')
+            self.label_up(self.cmd_plot, 'T (s)', 'I (%s)' % self.command_units, 'Data')
         elif self.data_mode in self.vc_modes:  # voltage clamp
             self.label_up(self.data_plot, 'T (s)', 'I (A)', 'Data')
-            self.label_up(self.cmd_plot, 'T (s)', 'V (%s)' % self.cmdUnits, 'Data')
+            self.label_up(self.cmd_plot, 'T (s)', 'V (%s)' % self.command_units, 'Data')
         else:  # mode is not known: plot both as V
             self.label_up(self.data_plot, 'T (s)', 'V (V)', 'Data')
-            self.label_up(self.cmd_plot, 'T (s)', 'V (%s)' % self.cmdUnits, 'Data')
+            self.label_up(self.cmd_plot, 'T (s)', 'V (%s)' % self.command_units, 'Data')
         self.data_plot.autoRange()
         self.cmd_plot.autoRange()
 
     def setup_regions(self):
+        """
+        Initialize the postions of the lr regions on the display.
+        We attempt to use a logical set of values based on the timing of command steps
+        and stimulus events (e.g., the blue LED time)
+        :return:
+        """
         self.initialize_regions()  # now create the analysis regions
         if self.ctrl.PSPReversal_KeepT.isChecked() is False:  # change regions; otherwise keep...
             if 'LED-Blue' in self.devicesUsed:
@@ -839,54 +879,65 @@ class PSPReversal(AnalysisModule):
         self.update_all_analysis()
 
     def update_all_analysis(self):
+        """
+        do an update of the analysis of all the windows with the current parameters
+        Draws new plots to the IV curve window
+        :return:
+        """
         self.update_rmp_analysis()  # rmp must be done separately
         self.count_spikes()
         for win in ['win0', 'win1', 'win2']:
             self.update_win_analysis(win)
 
 #     def get_window_analysisPars(self):
-# #        print '\ngetwindow: analysis pars: ', self.analysisPars
+# #        print '\ngetwindow: analysis pars: ', self.analysis_parameters
 #         for region in ['lrwin0', 'lrwin1', 'lrwin2', 'lrrmp']:
 #             rgninfo = self.regions[region]['region'].getRegion()  # from the display
 #             self.regions[region]['start'].setValue(rgninfo[0] * 1.0e3)  # report values to screen
 #             self.regions[region]['stop'].setValue(rgninfo[1] * 1.0e3)
-#             self.analysisPars[region] = {'times': rgninfo}
-# #        print '\nafter loop: ', self.analysisPars
+#             self.analysis_parameters[region] = {'times': rgninfo}
+# #        print '\nafter loop: ', self.analysis_parameters
 #         for region in ['lrwin1', 'lrwin2']:
-#             self.analysisPars[region]['mode'] = self.regions[region]['mode'].currentText()
-#         self.analysisPars['lrwin0']['mode'] = 'Mean'
-# #        print '\nand finally: ', self.analysisPars
+#             self.analysis_parameters[region]['mode'] = self.regions[region]['mode'].currentText()
+#         self.analysis_parameters['lrwin0']['mode'] = 'Mean'
+# #        print '\nand finally: ', self.analysis_parameters
 #         self.get_alternation()  # get values into the analysisPars dictionary
 #         self.get_baseline()
 #         self.get_junction()
 
-    def finalize_cell_summary(self):
-        (date, slice, cell, proto, p2) = self.file_cell_protocol()
+    def finalize_analysis_summary(self):
+        """
+        finish filling out the analysis_summary dictionary with general information
+        about the cell, in preparation for print out.
+        Computes the best fit polynomial to the IV curve in window 2.
+        :return:
+        """
+        (date, sliceid, cell, proto, p2) = self.file_cell_protocol()
         self.cell_summary(self.current_dirhandle)
-        self.CellSummary['CellID'] = str(date+'/'+slice+'/'+cell)
-        self.CellSummary['Protocol'] = proto
-        jp = float(self.analysisPars['junction'])
+        self.analysis_summary['CellID'] = str(date+'/'+sliceid+'/'+cell)
+        self.analysis_summary['Protocol'] = proto
+        jp = float(self.analysis_parameters['junction'])
         ho = float(self.holding) * 1e3  # convert to mV
-        self.CellSummary['JP'] = jp
-        self.CellSummary['HoldV'] = ho
+        self.analysis_summary['JP'] = jp
+        self.analysis_summary['HoldV'] = ho
         vc = np.array(self.win2IV['vc']+jp+ho)
         im = np.array(self.win2IV['im'])
        # imsd = np.array(self.win2IV['imsd'])
         polyorder = 3
-        p = np.polyfit(vc, im, polyorder)  # 3rd order polynomial
+        fit_coeffs = np.polyfit(vc, im, polyorder)  # 3rd order polynomial
         for n in range(polyorder+1):
-            self.CellSummary['p'+str(n)] = p[n]
+            self.analysis_summary['p'+str(n)] = fit_coeffs[n]
         # find the roots
-        r = np.roots(p)
+        r = np.roots(fit_coeffs)
         reversal = [None]*polyorder
         for i in range(0, polyorder):
             reversal[i] = {'value': r[i], 'valid': False}
         anyrev = False
         revvals = ''
         revno = []
-        self.CellSummary['Erev'] = np.isnan
+        self.analysis_summary['Erev'] = np.isnan
         for n in range(len(reversal)):  # print only the valid reversal values, which includes real, not imaginary roots
-            if ((np.abs(np.imag(reversal[n]['value'])) == 0.0) and (-100. < np.real(reversal[n]['value']) < 40.)):
+            if (np.abs(np.imag(reversal[n]['value'])) == 0.0) and (-100. < np.real(reversal[n]['value']) < 40.):
                 reversal[n]['valid'] = True
                 if anyrev:
                     revvals += ', '
@@ -895,37 +946,37 @@ class PSPReversal(AnalysisModule):
                 anyrev = True
         if not anyrev:
             revvals = 'Not fnd'
-        self.CellSummary['revvals'] = revvals
+        self.analysis_summary['revvals'] = revvals
         if anyrev:
-            self.CellSummary['Erev'] = revno[0]
+            self.analysis_summary['Erev'] = revno[0]
         else:
-            self.CellSummary['Erev'] = np.nan
+            self.analysis_summary['Erev'] = np.nan
         # computes slopes at Erev[0] and at -60 mV (as a standard)
-        p1 = np.polyder(p,1)
-        p60 = np.polyval(p1,-60.)
+        p1 = np.polyder(fit_coeffs, 1)
+        p60 = np.polyval(p1, -60.)
         if len(revno) > 0:
             perev = np.polyval(p1, revno[0])
         else:
             perev = 0.
-        self.CellSummary['gsyn_60'] = p60 * 1e3  # im in nA, vm in mV, g converted to nS
-        self.CellSummary['gsyn_Erev'] = perev * 1e3  # nS
-        self.CellSummary['I_ionic-'] = np.min(self.measure['win1'])*1e9  # nA
-        self.CellSummary['I_ionic+'] = np.max(self.measure['win1'])*1e9  # nA
+        self.analysis_summary['gsyn_60'] = p60 * 1e3  # im in nA, vm in mV, g converted to nS
+        self.analysis_summary['gsyn_Erev'] = perev * 1e3  # nS
+        self.analysis_summary['I_ionic-'] = np.min(self.measure['win1'])*1e9  # nA
+        self.analysis_summary['I_ionic+'] = np.max(self.measure['win1'])*1e9  # nA
 
-        self.CellSummary['LPF'] = self.clamp_state['LPFCutoff'] * 1e-3  # kHz
-        self.CellSummary['Gain'] = self.clamp_state['primaryGain']
-        self.CellSummary['Rs'] = self.amp_settings['WCResistance'] * 1e-6  # Mohm
-        self.CellSummary['Cm'] = self.amp_settings['WCCellCap'] * 1e12  # pF
-        self.CellSummary['Comp'] = self.amp_settings['CompCorrection']
-        self.CellSummary['BW'] = self.amp_settings['CompBW'] * 1e-3  # kHz
-        self.CellSummary['Ru'] = self.r_uncomp * 1e-6  # Mohm
-        self.CellSummary['ILeak'] = self.averageRMP*1e9  # express in nA
+        self.analysis_summary['LPF'] = self.clamp_state['LPFCutoff'] * 1e-3  # kHz
+        self.analysis_summary['Gain'] = self.clamp_state['primaryGain']
+        self.analysis_summary['Rs'] = self.amp_settings['WCResistance'] * 1e-6  # Mohm
+        self.analysis_summary['Cm'] = self.amp_settings['WCCellCap'] * 1e12  # pF
+        self.analysis_summary['Comp'] = self.amp_settings['CompCorrection']
+        self.analysis_summary['BW'] = self.amp_settings['CompBW'] * 1e-3  # kHz
+        self.analysis_summary['Ru'] = self.r_uncomp * 1e-6  # Mohm
+        self.analysis_summary['ILeak'] = self.averageRMP*1e9  # express in nA
 
         for win in ['win1', 'win2', 'win0']:
             region = 'lr' + win
             rinfo = self.regions[region]['region'].getRegion()
-            self.CellSummary[win+'Start'] = rinfo[0]
-            self.CellSummary[win+'End'] = rinfo[1]
+            self.analysis_summary[win+'Start'] = rinfo[0]
+            self.analysis_summary[win+'End'] = rinfo[1]
 
     def print_analysis(self):
         """
@@ -934,19 +985,19 @@ class PSPReversal(AnalysisModule):
         to another program like a spreadsheet.
         :return: html-decorated text
         """
-        self.finalize_cell_summary()
-        (date, slice, cell, proto, p2) = self.file_cell_protocol()
+        self.finalize_analysis_summary()
+        (date, sliceid, cell, proto, p2) = self.file_cell_protocol()
         # The day summary may be missing elements, so we need to create dummies (dict is read-only)
         day = {}
         for x in ['age', 'weight', 'sex']:  # check to see if these are filled out
-            if x not in self.CellSummary.keys():
+            if x not in self.analysis_summary.keys():
                 day[x] = 'unknown'
-               # self.CellSummary['Day'][x] = day[x]
+               # self.analysis_summary['Day'][x] = day[x]
             else:
-                day[x] = self.CellSummary['Day'][x]
+                day[x] = self.analysis_summary['Day'][x]
         for cond in ['ACSF', 'Internal', 'Temp']:
-            if self.CellSummary[cond] == '':
-                self.CellSummary[cond] = 'unknown'
+            if self.analysis_summary[cond] == '':
+                self.analysis_summary[cond] = 'unknown'
 
         # format output in html
         rtxt = '<font face="monospace, courier">'  # use a monospaced font.
@@ -954,14 +1005,14 @@ class PSPReversal(AnalysisModule):
         rtxt += ("{:^15s}  {:^5s}  {:^4s}  {:^12s}<br>".format
                  ("Date", "Slice", "Cell", "E<sub>rev</sub>"))
         rtxt += ("<b>{:^15s}  {:^5s}  {:^4s}  {:^8.2f}</b><br>".format
-                 (date, slice[-3:], cell[-3:], self.CellSummary['Erev']))
+                 (date, sliceid[-3:], cell[-3:], self.analysis_summary['Erev']))
         rtxt += ('{:<8s}: <b>{:<32s}</b><br>'.format('Protocol', proto))
         rtxt += ('{:^8s}\t{:^8s}\t{:^8s}\t{:^8s}<br>'.format
                  ('Temp', 'Age', 'Weight', 'Sex'))
         rtxt += ('{:^8s}\t{:^8s}\t{:^8s}\t{:^8s}<br>'.format
-                 (self.CellSummary['Temp'], day['age'], day['weight'], day['sex']))
-        rtxt += ('{:<8s}: {:<32s}<br>'.format('ACSF', self.CellSummary['ACSF']))
-        rtxt += ('{:<8s}: {:<32s}<br>'.format('Internal', self.CellSummary['Internal']))
+                 (self.analysis_summary['Temp'], day['age'], day['weight'], day['sex']))
+        rtxt += ('{:<8s}: {:<32s}<br>'.format('ACSF', self.analysis_summary['ACSF']))
+        rtxt += ('{:<8s}: {:<32s}<br>'.format('Internal', self.analysis_summary['Internal']))
         if self.amp_settings['WCCompValid'] is True:
             rtxt += (u'{:<4s} {:5.2f} {:2s} '.format('LPF', self.clamp_state['LPFCutoff'] * 1e-3, 'kHz'))
             rtxt += (u'{:<4s} {:5.2f} {:2s}<br>'.format('Gain', self.clamp_state['primaryGain'], ''))
@@ -980,7 +1031,7 @@ class PSPReversal(AnalysisModule):
             'Win 2', self.regions['lrwin2']['start'].value(), self.regions['lrwin2']['stop'].value(),
             self.regions['lrwin2']['units'], self.regions['lrwin2']['mode'].currentText()))
 
-        rtxt += 'HP: {:5.1f} mV  JP: {:5.1f} mV<br>'.format(self.CellSummary['HoldV'], self.CellSummary['JP'])
+        rtxt += 'HP: {:5.1f} mV  JP: {:5.1f} mV<br>'.format(self.analysis_summary['HoldV'], self.analysis_summary['JP'])
         if 'diffFit' in self.win2IV.keys() and self.win2IV['diffFit'] is not None:
             rtxt += ('{0:<5s}: {1}<br>').format('Poly', ''.join('{:5.2e} '.format(a) for a in self.win2IV['diffFit']))
         rtxt += ('-' * 40) + '<br>'
@@ -997,9 +1048,9 @@ class PSPReversal(AnalysisModule):
         # print self.measure.keys()
         for i in range(len(self.win2IV['vc'])):
             if self.ctrl.PSPReversal_RsCorr.isChecked():
-                rtxt += (' {:>9.1f} '.format(self.win2IV['vc'][i] + self.CellSummary['JP'] + self.CellSummary['HoldV']))
+                rtxt += (' {:>9.1f} '.format(self.win2IV['vc'][i] + self.analysis_summary['JP'] + self.analysis_summary['HoldV']))
             else:
-                rtxt += (' {:>9.1f} '.format(self.win2IV['mvc'][i] + self.CellSummary['JP'] + self.CellSummary['HoldV']))
+                rtxt += (' {:>9.1f} '.format(self.win2IV['mvc'][i] + self.analysis_summary['JP'] + self.analysis_summary['HoldV']))
             rtxt += ('{:>9.3f} {:>9.3f} {:>6d}<br>'.format(self.win2IV['im'][i], self.win2IV['imsd'][i], self.nrepc))
         rtxt += ('-' * 40) + '<br></div></font>'
         self.results.resultsPSPReversal_text.setText(rtxt)
@@ -1007,7 +1058,7 @@ class PSPReversal(AnalysisModule):
         self._host_.dockArea.findAll()[1]['Results'].raiseDock()
         return rtxt
 
-    def remove_html_markup(self, s):
+    def remove_html_markup(self, html_string):
         """
         simple html stripper for our own generated text (output of analysis, above).
         This is not generally useful but is better than requiring yet another library
@@ -1019,20 +1070,24 @@ class PSPReversal(AnalysisModule):
         tag = False
         quote = False
         out = ""
-        s = s.replace('<br>', '\n') # first just take of line breaks
-        for c in s:
-                if c == '<' and not quote:
-                    tag = True
-                elif c == '>' and not quote:
-                    tag = False
-                elif (c == '"' or c == "'") and tag:
-                    quote = not quote
-                elif not tag:
-                    out = out + c
-
+        html_string = html_string.replace('<br>', '\n') # first just take of line breaks
+        for char in html_string:
+            if char == '<' and not quote:
+                tag = True
+            elif char == '>' and not quote:
+                tag = False
+            elif (char == '"' or char == "'") and tag:
+                quote = not quote
+            elif not tag:
+                out = out + char
         return out
 
     def read_script(self, name=''):
+        """
+        read a script file from disk, and use that information to drive the analysis
+        :param name:
+        :return:
+        """
         if not name:
             self.script_name = '/Users/pbmanis/Desktop/acq4_scripts/PSPReversal.cfg'
 
@@ -1052,6 +1107,10 @@ class PSPReversal(AnalysisModule):
             raise Exception("Script failed validation - see terminal output")
 
     def rerun_script(self):
+        """
+        revalidate and run the current script
+        :return:
+        """
         if self.validate_script():
             self.run_script()
         else:
@@ -1093,6 +1152,10 @@ class PSPReversal(AnalysisModule):
         return all_found
 
     def run_script(self):
+        """
+        Run a script, doing all of the requested analysis
+        :return:
+        """
         if self.script['testfiles']:
             return
         settext = self.scripts_form.PSPReversal_ScriptResults_text.setPlainText
@@ -1125,18 +1188,18 @@ class PSPReversal(AnalysisModule):
                 self.ctrl.PSPReversal_KeepT.setChecked(QtCore.Qt.Unchecked)  # make sure this is unchecked
                 dh = self.dataManager().manager.dirHandle(fullpath)
                 if not self.loadFileRequested([dh]):  # note: must pass a list
-                   print 'failed to load requested file: ', fullpath
-                   continue  # skip bad sets of records...
+                    print 'failed to load requested file: ', fullpath
+                    continue  # skip bad sets of records...
                 apptext(('Protocol: {:<s} <br>Manipulation: {:<s}'.format(pr, thiscell['manip'][p])))
-                self.CellSummary['Drugs'] = thiscell['manip'][p]
+                self.analysis_summary['Drugs'] = thiscell['manip'][p]
                 # alt_flag = bool(thiscell['alternation'])
-                # self.analysisPars['alternation'] = alt_flag
+                # self.analysis_parameters['alternation'] = alt_flag
                 # self.ctrl.PSPReversal_Alternation.setChecked((QtCore.Qt.Unchecked, QtCore.Qt.Checked)[alt_flag])
                 # if 'junctionpotential' in thiscell:
-                #     self.analysisPars['junction'] = thiscell['junctionpotential']
+                #     self.analysis_parameters['junction'] = thiscell['junctionpotential']
                 #     self.ctrl.PSPReversal_Junction.setValue(float(thiscell['junctionpotential']))
                 # else:
-                #     self.analysisPars['junction'] = float(self.script['global_jp'])
+                #     self.analysis_parameters['junction'] = float(self.script['global_jp'])
                 #     self.ctrl.PSPReversal_Junction.setValue(float(self.script['global_jp']))
 
                 self.auto_updater = False
@@ -1156,18 +1219,23 @@ class PSPReversal(AnalysisModule):
         print '\nDone'
 
     def get_window_analysisPars(self):
-        self.analysisPars = {}  # start out empty so we are not fooled by priors
-#        print '\ngetwindow: analysis pars: ', self.analysisPars
+        """
+        Retrieve the settings of the lr region windows, and some other general values
+        in preparation for analysis
+        :return:
+        """
+        self.analysis_parameters = {}  # start out empty so we are not fooled by priors
+#        print '\ngetwindow: analysis pars: ', self.analysis_parameters
         for region in ['lrwin0', 'lrwin1', 'lrwin2', 'lrrmp']:
             rgninfo = self.regions[region]['region'].getRegion()  # from the display
             self.regions[region]['start'].setValue(rgninfo[0] * 1.0e3)  # report values to screen
             self.regions[region]['stop'].setValue(rgninfo[1] * 1.0e3)
-            self.analysisPars[region] = {'times': rgninfo}
-#        print '\nafter loop: ', self.analysisPars
+            self.analysis_parameters[region] = {'times': rgninfo}
+#        print '\nafter loop: ', self.analysis_parameters
         for region in ['lrwin1', 'lrwin2']:
-            self.analysisPars[region]['mode'] = self.regions[region]['mode'].currentText()
-        self.analysisPars['lrwin0']['mode'] = 'Mean'
-#        print '\nand finally: ', self.analysisPars
+            self.analysis_parameters[region]['mode'] = self.regions[region]['mode'].currentText()
+        self.analysis_parameters['lrwin0']['mode'] = 'Mean'
+#        print '\nand finally: ', self.analysis_parameters
         self.get_alternation()  # get values into the analysisPars dictionary
         self.get_baseline()
         self.get_junction()
@@ -1177,33 +1245,33 @@ class PSPReversal(AnalysisModule):
         set the analysis times and modes from the script. Also updates the qt windows
         :return: Nothing.
         """
-        self.analysisPars = {}
-        self.analysisPars['baseline'] = False
+        self.analysis_parameters = {}
+        self.analysis_parameters['baseline'] = False
 
-        self.analysisPars['lrwin1'] = {}
-        self.analysisPars['lrwin2'] = {}
-        self.analysisPars['lrwin0'] = {}
-        self.analysisPars['lrrmp'] = {}
+        self.analysis_parameters['lrwin1'] = {}
+        self.analysis_parameters['lrwin2'] = {}
+        self.analysis_parameters['lrwin0'] = {}
+        self.analysis_parameters['lrrmp'] = {}
         self.auto_updater = False  # turn off the updates
         scriptg = {'global_jp': ['junction'], 'global_win1_mode': ['lrwin1', 'mode'],
                    'global_win2_mode': ['lrwin2', 'mode']}
         for k in scriptg.keys():  # set globals first
             if len(scriptg[k]) == 1:
-                self.analysisPars[scriptg[k][0]] = script_globals[k]
+                self.analysis_parameters[scriptg[k][0]] = script_globals[k]
             else:
-                self.analysisPars[scriptg[k][0]] = {scriptg[k][1]: script_globals[k]}
+                self.analysis_parameters[scriptg[k][0]] = {scriptg[k][1]: script_globals[k]}
         if 'junctionpotential' in thiscell:
-            self.analysisPars['junction'] = thiscell['junctionpotential']
+            self.analysis_parameters['junction'] = thiscell['junctionpotential']
         if 'alternation' in thiscell:
-            self.analysisPars['alternation'] = thiscell['alternation']
+            self.analysis_parameters['alternation'] = thiscell['alternation']
         else:
-            self.analysisPars['alternation'] = True
+            self.analysis_parameters['alternation'] = True
 
         for n in range(0, 3):  # get the current region definitions
             self.regions['lrwin%d'%n]['region'].setRegion([x*1e-3 for x in thiscell['win%d'%n]])
             self.regions['lrwin%d'%n]['start'].setValue(thiscell['win%d'%n][0])
             self.regions['lrwin%d'%n]['stop'].setValue(thiscell['win%d'%n][1])
-            self.analysisPars['lrwin%d'%n]['times'] = [t*1e-3 for t in thiscell['win%d'%n]]  # convert to sec
+            self.analysis_parameters['lrwin%d'%n]['times'] = [t*1e-3 for t in thiscell['win%d'%n]]  # convert to sec
             self.show_or_hide('lrwin%d'%n, forcestate=True)
 
         for win in ['win1', 'win2']:  # set the modes for the 2 windows
@@ -1215,16 +1283,20 @@ class PSPReversal(AnalysisModule):
                 if r >= 0:
                     print 'setting %s mode to %s ' % (win, thiswin)
                     self.regions[lrwinx]['mode'].setCurrentIndex(r)
-                    self.analysisPars[lrwinx]['mode'] = thiswin
+                    self.analysis_parameters[lrwinx]['mode'] = thiswin
                 else:
                     print '%s analysis mode not recognized: %s' % (win, thiswin)
             else:
-                r = self.regions[lrwinx]['mode'].findText(self.analysisPars[lrwinx]['mode'])
+                r = self.regions[lrwinx]['mode'].findText(self.analysis_parameters[lrwinx]['mode'])
                 if r >= 0:
                     self.regions[lrwinx]['mode'].setCurrentIndex(r)
         return
 
     def print_script_output(self):
+        """
+        print a clean version of the results to the terminal
+        :return:
+        """
         print self.remove_html_markup(self.textout)
 
     def copy_script_output(self):
@@ -1235,10 +1307,13 @@ class PSPReversal(AnalysisModule):
         self.scripts_form.PSPReversal_ScriptResults_text.copy()
 
     def print_formatted_script_output(self, script_header=True):
-    #    pass  # do nothing for now...
-    # actually, stole button for a different purpose...
-    #def print_summary_table(self):
-        data_template = (OrderedDict([('ElapsedTime', '{:>8.2f}'), ('Drugs','{:<8s}'), ('HoldV', '{:>5.1f}'), ('JP', '{:>5.1f}'),
+        """
+        Print a nice formatted version of the analysis output to the terminal.
+        The output can be copied to another program (excel, prism) for further analysis
+        :param script_header:
+        :return:
+        """
+        data_template = (OrderedDict([('ElapsedTime', '{:>8.2f}'), ('Drugs', '{:<8s}'), ('HoldV', '{:>5.1f}'), ('JP', '{:>5.1f}'),
                                                                         ('Rs', '{:>6.2f}'), ('Cm', '{:>6.1f}'), ('Ru', '{:>6.2f}'),
                                                                         ('Erev', '{:>6.2f}'),
                                                                         ('gsyn_Erev', '{:>6.2f}'), ('gsyn_60', '{:>6.2f}'),
@@ -1255,11 +1330,11 @@ class PSPReversal(AnalysisModule):
                 print('{:<s}\t'.format(k)),
             print ''
         ltxt = ''
-        ltxt += ('{:s}\t{:s}\t'.format(self.CellSummary['CellID'], self.CellSummary['Protocol']))
+        ltxt += ('{:s}\t{:s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Protocol']))
 
         for a in data_template.keys():
-            if a in self.CellSummary.keys():
-                ltxt += ((data_template[a] + '\t').format(self.CellSummary[a]))
+            if a in self.analysis_summary.keys():
+                ltxt += ((data_template[a] + '\t').format(self.analysis_summary[a]))
             else:
                 ltxt += '<missing>\t'
         print ltxt
@@ -1345,17 +1420,17 @@ class PSPReversal(AnalysisModule):
 
        # import pprint
        # pp = pprint.PrettyPrinter(indent=4)
-       # pp.pprint(self.analysisPars)
+       # pp.pprint(self.analysis_parameters)
 
-        mode = self.analysisPars[region]['mode']
-        rgninfo = self.analysisPars[region]['times']
+        mode = self.analysis_parameters[region]['mode']
+        rgninfo = self.analysis_parameters[region]['times']
         data1 = self.traces['Time': rgninfo[0]:rgninfo[1]]  # extract analysis region
         tx1 = ma.compressed(ma.masked_outside(self.tx, rgninfo[0], rgninfo[1]))  # time to match data1
         if tx1.shape[0] > data1.shape[1]:
             tx1 = tx1[0:-1]  # clip extra point. Rules must be different between traces clipping and masking.
         if window == 'win1':  # check if win1 overlaps with win0, and select data
 #            print '***** WINDOW 1 SETUP *****'
-            r0 = self.analysisPars['lrwin0']['times'] #regions['lrwin0']['region'].getRegion()
+            r0 = self.analysis_parameters['lrwin0']['times'] #regions['lrwin0']['region'].getRegion()
             tx = ma.masked_inside(tx1, r0[0], r0[1])  #
             if tx.mask.all():  # handle case where win1 is entirely inside win2
                 print 'update_win_analysis: Window 1 is entirely inside Window 0: No analysis possible'
@@ -1448,7 +1523,7 @@ class PSPReversal(AnalysisModule):
         else:
             pass
 
-        if self.analysisPars['baseline']:
+        if self.analysis_parameters['baseline']:
             self.measure[window] = self.measure[window] - self.measure['rmp']
         if len(self.nospk) >= 1 and self.data_mode in self.ic_modes:
             # Steady-state IV where there are no spikes
@@ -1480,7 +1555,7 @@ class PSPReversal(AnalysisModule):
         self.measure[winunordered] = self.measure[window]
 
         # now separate the data into alternation groups, then sort by command level
-        if self.analysisPars['alternation'] and window == 'win2':
+        if self.analysis_parameters['alternation'] and window == 'win2':
             #            print 'in alternation'
             nm = len(self.measure[window])  # get the number of measurements
             xoff = range(0, nm, 2)  # really should get this from loadrequestedfile
@@ -1513,11 +1588,13 @@ class PSPReversal(AnalysisModule):
         return 'OK'
 
     def fit_IV(self):
-        # compute polynomial fit to iv
-        # this should have it's own method (which it now does
+        """
+        compute polynomial fit to iv
+        :return: True if successful; False if the analysis hasn't been done
+        """
         if 'win2altcmd' in self.measure.keys() and len(self.measure['win2altcmd']) == 0:
-                self.win2IV = {}
-                return False
+            self.win2IV = {}
+            return False
 
         p = np.polyfit(self.measure['win2altcmd'], self.measure['win2on'], 3)
         vpl = np.arange(float(np.min(self.measure['win2altcmd'])),
@@ -1543,6 +1620,11 @@ class PSPReversal(AnalysisModule):
 
 
     def update_command_timeplot(self, wincmd):
+        """
+        replot the command voltage versus time
+        :param wincmd:
+        :return:
+        """
         (pen, filledbrush, emptybrush, symbol, n, clear_flag) = self.map_symbol()
 
         self.command_plot.plot(x=self.trace_times, y=self.cmd, clear=clear_flag,
@@ -1592,6 +1674,10 @@ class PSPReversal(AnalysisModule):
                                     'n': n, 'clear_flag': clear_flag}
 
     def map_symbol(self):
+        """
+        return a new map symbol
+        :return:
+        """
         cd = self.current_symbol_dict
         if cd['filledbrush'] == 'w':
             cd['filledbrush'] = pg.mkBrush((128, 128, 128))
@@ -1611,7 +1697,7 @@ class PSPReversal(AnalysisModule):
             self.iv_plot.clear()
             self.iv_plot.addLine(x=0, pen=pg.mkPen('888', width=0.5, style=QtCore.Qt.DashLine))
             self.iv_plot.addLine(y=0, pen=pg.mkPen('888', width=0.5, style=QtCore.Qt.DashLine))
-        jp = self.analysisPars['junction']  # get offsets for voltage
+        jp = self.analysis_parameters['junction']  # get offsets for voltage
         ho = float(self.holding) * 1e3
         offset = jp + ho  # combine
         (pen, filledbrush, emptybrush, symbol, n, clear_flag) = self.map_symbol()
@@ -1639,7 +1725,7 @@ class PSPReversal(AnalysisModule):
                                   symbolBrush=emptybrush)
             if (len(self.measure['win2']) > 0 and
                     self.regions['lrwin2']['state'].isChecked()):
-                if not self.analysisPars['alternation']:
+                if not self.analysis_parameters['alternation']:
                     self.iv_plot.plot(offset + self.measure['win2cmd'] * 1e3, self.measure['win2'] * 1e9,
                                       symbol=symbol, pen=None,
                                       symbolSize=6, symbolPen=pg.mkPen({'color': "00F", 'width': 1}),
@@ -1774,10 +1860,10 @@ class PSPReversal(AnalysisModule):
         self.spikecount = np.zeros(ntr)
         self.fsl = np.zeros(ntr)
         self.fisi = np.zeros(ntr)
-        self.ar = np.zeros(ntr)
+        self.adaptation_ratio = np.zeros(ntr)
         self.nospk = range(0, len(self.traces))
         self.spk = np.zeros(ntr)
-        if self.data_mode not in self.ic_modes or self.tx is None:
+        if self.data_mode not in self.ic_modes or self.time_base is None:
             # print ('PSPReversal::count_spikes: Cannot count spikes, ' +
             #       'and dataMode is ', self.dataMode, 'and ICModes are: ', self.ic_modes , 'tx is: ', self.tx)
             self.spikecount = []
@@ -1791,7 +1877,7 @@ class PSPReversal(AnalysisModule):
             #                   symbolPen='y',
             #                   symbolBrush=(255, 255, 0, 200), symbol='s')
             # self.ctrl.PSPReversal_AR.setText(u'%7.3f' % (ARmean))
-            return 'not CC mode'
+            return 'not in a current-clamp mode'
         minspk = 4
         maxspk = 10  # range of spike counts
         # threshold = self.ctrl.PSPReversal_SpikeThreshold.value() * 1e-3
