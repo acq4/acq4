@@ -1167,7 +1167,7 @@ Times</string>
         </widget>
        </item>
        <item row="4" column="0">
-        <widget class="QCheckBox" name="PSPReversal_subLeak">
+        <widget class="QCheckBox" name="PSPReversal_showHide_lrwin0">
          <property name="palette">
           <palette>
            <active>
@@ -1221,7 +1221,7 @@ Times</string>
         </widget>
        </item>
        <item row="4" column="1">
-        <widget class="QDoubleSpinBox" name="PSPReversal_leakTStart">
+        <widget class="QDoubleSpinBox" name="PSPReversal_win0TStart">
          <property name="font">
           <font>
            <pointsize>12</pointsize>
@@ -1245,7 +1245,7 @@ Times</string>
         </widget>
        </item>
        <item row="4" column="2">
-        <widget class="QDoubleSpinBox" name="PSPReversal_leakTStop">
+        <widget class="QDoubleSpinBox" name="PSPReversal_win0TStop">
          <property name="font">
           <font>
            <pointsize>12</pointsize>
@@ -1889,9 +1889,9 @@ p, li { white-space: pre-wrap; }
   <tabstop>PSPReversal_win2TStart</tabstop>
   <tabstop>PSPReversal_win2TStop</tabstop>
   <tabstop>PSPReversal_win2mode</tabstop>
-  <tabstop>PSPReversal_subLeak</tabstop>
-  <tabstop>PSPReversal_leakTStart</tabstop>
-  <tabstop>PSPReversal_leakTStop</tabstop>
+  <tabstop>PSPReversal_showHide_lrwin0</tabstop>
+  <tabstop>PSPReversal_win0TStart</tabstop>
+  <tabstop>PSPReversal_win0TStop</tabstop>
   <tabstop>PSPReversal_R_unCompensated</tabstop>
   <tabstop>PSPReversal_RMPMode</tabstop>
   <tabstop>PSPReversal_Junction</tabstop>
