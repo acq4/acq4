@@ -1877,7 +1877,7 @@ class PSPReversal(AnalysisModule):
             #                   symbolPen='y',
             #                   symbolBrush=(255, 255, 0, 200), symbol='s')
             # self.ctrl.PSPReversal_AR.setText(u'%7.3f' % (ARmean))
-            return 'not CC mode'
+            return 'not in a current-clamp mode'
         minspk = 4
         maxspk = 10  # range of spike counts
         # threshold = self.ctrl.PSPReversal_SpikeThreshold.value() * 1e-3
