@@ -19,6 +19,7 @@ import functools
 from PyQt4 import QtGui, QtCore
 import numpy as np
 import numpy.ma as ma
+import scipy
 
 from acq4.analysis.AnalysisModule import AnalysisModule
 import acq4.pyqtgraph as pg
@@ -28,9 +29,13 @@ from acq4.util.metaarray import MetaArray
 standard_font = 'Arial'
 
 import acq4.analysis.tools.Utility as Utility  # pbm's utilities...
-import acq4.analysis.modules.PSPReversal.ctrlTemplate as ctrlTemplate
-import acq4.analysis.modules.PSPReversal.resultsTemplate as resultsTemplate
-import acq4.analysis.modules.PSPReversal.scriptTemplate as scriptTemplate
+#from acq4.analysis.modules.PSPReversal.ctrlTemplate import ctrlTemplate
+import ctrlTemplate
+import resultsTemplate
+import scriptTemplate
+#import acq4.analysis.modules.PSPReversal.ctrlTemplate as ctrlTemplate
+#import acq4.analysis.modules.PSPReversal.resultsTemplate as resultsTemplate
+#import acq4.analysis.modules.PSPReversal.scriptTemplate as scriptTemplate
 
 def trace_calls_and_returns(frame, event, arg, indent=[0]):
     """
@@ -343,6 +348,18 @@ class PSPReversal(AnalysisModule):
         """
         # hold all the linear regions in a dictionary
         if not self.regions_exist:
+            self.regions['lrwin0'] = {'name': 'win0',
+                                      'region': pg.LinearRegionItem([0, 1],
+                                                                    brush=pg.mkBrush(255, 255, 0, 50.)),
+                                      'plot': self.data_plot,
+                                      'state': self.ctrl.PSPReversal_showHide_lrwin1,
+                                      'shstate': True,  # keep internal copy of the state
+                                      'mode': self.ctrl.PSPReversal_win1mode,
+                                      'start': self.ctrl.PSPReversal_win0TStart,
+                                      'stop': self.ctrl.PSPReversal_win0TStop,
+                                      'updater': self.update_windows,
+                                      'units': 'ms'}
+            self.ctrl.PSPReversal_showHide_lrwin0.region = self.regions['lrwin0']['region']  # save region with checkbox
             self.regions['lrwin1'] = {'name': 'win1',
                                       'region': pg.LinearRegionItem([0, 1],
                                                                     brush=pg.mkBrush(0, 255, 0, 50.)),
@@ -352,17 +369,6 @@ class PSPReversal(AnalysisModule):
                                       'mode': self.ctrl.PSPReversal_win1mode,
                                       'start': self.ctrl.PSPReversal_win1TStart,
                                       'stop': self.ctrl.PSPReversal_win1TStop,
-                                      'updater': self.update_windows,
-                                      'units': 'ms'}
-            self.regions['lrwin0'] = {'name': 'win0',
-                                      'region': pg.LinearRegionItem([0, 1],
-                                                                    brush=pg.mkBrush(255, 255, 0, 50.)),
-                                      'plot': self.data_plot,
-                                      'state': self.ctrl.PSPReversal_showHide_lrwin1,
-                                      'shstate': True,  # keep internal copy of the state
-                                      'mode': self.ctrl.PSPReversal_win1mode,
-                                      'start': self.ctrl.PSPReversal_leakTStart,
-                                      'stop': self.ctrl.PSPReversal_leakTStop,
                                       'updater': self.update_windows,
                                       'units': 'ms'}
             self.ctrl.PSPReversal_showHide_lrwin1.region = self.regions['lrwin1']['region']  # save region with checkbox
@@ -791,9 +797,9 @@ class PSPReversal(AnalysisModule):
         cmdindxs = np.unique(self.cmd)  # find the unique voltages
         colindxs = [int(np.where(cmdindxs == self.cmd[i])[0]) for i in range(len(self.cmd))]  # make a list to use
         if multimode:
-            datalines = MultiLine(self.tx, self.traces, downsample=200)
+            datalines = MultiLine(self.time_base, self.traces, downsample=200)
             self.data_plot.addItem(datalines)
-            cmdlines = MultiLine(self.tx, self.cmd_wave, downsample=200)
+            cmdlines = MultiLine(self.time_base, self.cmd_wave, downsample=200)
             self.cmd_plot.addItem(cmdlines)
         else:
             for i in range(ntr):
@@ -805,9 +811,9 @@ class PSPReversal(AnalysisModule):
                     else:
                         plotthistrace = False
                 if plotthistrace:
-                    self.data_plot.plot(x=self.tx, y=self.traces[i], downSample=500, downSampleMethod='mean',
+                    self.data_plot.plot(x=self.time_base, y=self.traces[i], downSample=500, downSampleMethod='mean',
                                          pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
-                    self.cmd_plot.plot(x=self.tx, y=self.cmd_wave[i], downSample=500, downSampleMethod='mean',
+                    self.cmd_plot.plot(x=self.time_base, y=self.cmd_wave[i], downSample=500, downSampleMethod='mean',
                                    pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
 
         if self.data_mode in self.ic_modes:
@@ -824,11 +830,13 @@ class PSPReversal(AnalysisModule):
 
     def setup_regions(self):
         """
-        Initialize the postions of the lr regions on the display.
+        Initialize the positions of the lr regions on the display.
         We attempt to use a logical set of values based on the timing of command steps
         and stimulus events (e.g., the blue LED time)
         :return:
         """
+        prior_updater=self.auto_updater
+        self.auto_updater=False
         self.initialize_regions()  # now create the analysis regions
         if self.ctrl.PSPReversal_KeepT.isChecked() is False:  # change regions; otherwise keep...
             if 'LED-Blue' in self.devicesUsed:
@@ -864,7 +872,8 @@ class PSPReversal(AnalysisModule):
             self.regions['lrrmp']['region'].setRegion([1.e-4, self.tstart * 0.9])  # rmp window
 
         for r in ['lrwin0', 'lrwin1', 'lrwin2', 'lrrmp']:
-            self.regions[r]['region'].setBounds([0., np.max(self.tx)])  # limit regions to data
+            self.regions[r]['region'].setBounds([0., np.max(self.time_base)])  # limit regions to data
+        self.auto_updater = prior_updater
 
     def interactive_analysis(self):
         """
@@ -920,17 +929,25 @@ class PSPReversal(AnalysisModule):
         ho = float(self.holding) * 1e3  # convert to mV
         self.analysis_summary['JP'] = jp
         self.analysis_summary['HoldV'] = ho
-        vc = np.array(self.win2IV['vc']+jp+ho)
-        im = np.array(self.win2IV['im'])
-       # imsd = np.array(self.win2IV['imsd'])
-        polyorder = 3
-        fit_coeffs = np.polyfit(vc, im, polyorder)  # 3rd order polynomial
-        for n in range(polyorder+1):
+       #  vc = np.array(self.win2IV['vc']+jp+ho)
+       #  im = np.array(self.win2IV['im'])
+       # # imsd = np.array(self.win2IV['imsd'])
+       #  fit_order = 3
+       #  #fit_coeffs = np.polyfit(vc, im, fit_order)  # 3rd order polynomial
+       #  tck = scipy.interpolate.splrep(vc, im, s=0, k=fit_order)
+        tck = self.win2IV['spline']  # get spline data fit
+        fit_order = tck[2]
+        fit_coeffs = tck[1]
+        for n in range(fit_order+1):
             self.analysis_summary['p'+str(n)] = fit_coeffs[n]
         # find the roots
-        r = np.roots(fit_coeffs)
-        reversal = [None]*polyorder
-        for i in range(0, polyorder):
+        #r = np.roots(fit_coeffs)
+        r = scipy.interpolate.sproot(tck)
+        #reversal = [None]*fit_order
+        r = [x*1e3+jp+ho for x in r]  # add jp and holding here
+        reversal = [None]*len(r)
+        #for i in range(0, fit_order):
+        for i in range(0, len(r)):
             reversal[i] = {'value': r[i], 'valid': False}
         anyrev = False
         revvals = ''
@@ -952,14 +969,24 @@ class PSPReversal(AnalysisModule):
         else:
             self.analysis_summary['Erev'] = np.nan
         # computes slopes at Erev[0] and at -60 mV (as a standard)
-        p1 = np.polyder(fit_coeffs, 1)
-        p60 = np.polyval(p1, -60.)
+        ## using polynomials
+        # #p1 = np.polyder(fit_coeffs, 1)
+        #p60 = np.polyval(p1, -60.)
+        # using spline fit
+        v60 = (-60 - (jp + ho))/1e3
+        print 'v60: ', v60
+        p60 = scipy.interpolate.splev([v60], tck, der=1)
+        #p60 = scipy.interpolate.splev(p1, tck, der=0)
         if len(revno) > 0:
-            perev = np.polyval(p1, revno[0])
+            #perev = np.polyval(p1, revno[0])
+            v0 = (revno[0] -(jp + ho))/1e3
+            print 'v0: ', v0
+            perev = scipy.interpolate.splev([v0], tck, der=1)
         else:
             perev = 0.
-        self.analysis_summary['gsyn_60'] = p60 * 1e3  # im in nA, vm in mV, g converted to nS
-        self.analysis_summary['gsyn_Erev'] = perev * 1e3  # nS
+        self.analysis_summary['spline'] = tck  # save the spline fit information
+        self.analysis_summary['gsyn_60'] = p60[0] * 1e9  #  original im in A, vm in V, g converted to nS
+        self.analysis_summary['gsyn_Erev'] = perev[0] * 1e9  # nS
         self.analysis_summary['I_ionic-'] = np.min(self.measure['win1'])*1e9  # nA
         self.analysis_summary['I_ionic+'] = np.max(self.measure['win1'])*1e9  # nA
 
@@ -1317,7 +1344,7 @@ class PSPReversal(AnalysisModule):
                                                                         ('Rs', '{:>6.2f}'), ('Cm', '{:>6.1f}'), ('Ru', '{:>6.2f}'),
                                                                         ('Erev', '{:>6.2f}'),
                                                                         ('gsyn_Erev', '{:>6.2f}'), ('gsyn_60', '{:>6.2f}'),
-                                                                        ('p0', '{:6.3e}'), ('p1', '{:6.3e}'), ('p2', '{:6.3e}'), ('p3', '{:6.3e}'),
+                                                                        #('p0', '{:6.3e}'), ('p1', '{:6.3e}'), ('p2', '{:6.3e}'), ('p3', '{:6.3e}'),
                                                                         ('I_ionic+', '{:>7.3f}'), ('I_ionic-', '{:>7.3f}'), ('ILeak', '{:>7.3f}'),
                                                                         ('win1Start', '{:>7.3f}'), ('win1End', '{:>7.3f}'),
                                                                         ('win2Start', '{:>7.3f}'), ('win2End', '{:>7.3f}'),
@@ -1425,7 +1452,7 @@ class PSPReversal(AnalysisModule):
         mode = self.analysis_parameters[region]['mode']
         rgninfo = self.analysis_parameters[region]['times']
         data1 = self.traces['Time': rgninfo[0]:rgninfo[1]]  # extract analysis region
-        tx1 = ma.compressed(ma.masked_outside(self.tx, rgninfo[0], rgninfo[1]))  # time to match data1
+        tx1 = ma.compressed(ma.masked_outside(self.time_base, rgninfo[0], rgninfo[1]))  # time to match data1
         if tx1.shape[0] > data1.shape[1]:
             tx1 = tx1[0:-1]  # clip extra point. Rules must be different between traces clipping and masking.
         if window == 'win1':  # check if win1 overlaps with win0, and select data
@@ -1474,7 +1501,7 @@ class PSPReversal(AnalysisModule):
             d1 = np.resize(data1.compressed(), (ntr, self.txm.shape[0]))
             p = np.polyfit(self.txm, d1.T, 1)
             self.win1fits = p
-            txw1 = ma.compressed(ma.masked_inside(self.tx, rgninfo[0], rgninfo[1]))
+            txw1 = ma.compressed(ma.masked_inside(self.time_base, rgninfo[0], rgninfo[1]))
             fits = np.zeros((data1.shape[0], txw1.shape[0]))
             for j in range(data1.shape[0]):  # polyval only does 1d
                 fits[j, :] = np.polyval(self.win1fits[:, j], txw1)
@@ -1487,7 +1514,7 @@ class PSPReversal(AnalysisModule):
             d1 = np.resize(data1.compressed(), (ntr, self.txm.shape[0]))
             p = np.polyfit(self.txm, d1.T, 3)
             self.win1fits = p
-            txw1 = ma.compressed(ma.masked_inside(self.tx, rgninfo[0], rgninfo[1]))
+            txw1 = ma.compressed(ma.masked_inside(self.time_base, rgninfo[0], rgninfo[1]))
             fits = np.zeros((data1.shape[0], txw1.shape[0]))
             for j in range(data1.shape[0]):  # polyval only does 1d
                 fits[j, :] = np.polyval(self.win1fits[:, j], txw1)
@@ -1590,16 +1617,13 @@ class PSPReversal(AnalysisModule):
     def fit_IV(self):
         """
         compute polynomial fit to iv
+        No corrections for holding or jp are done here.
         :return: True if successful; False if the analysis hasn't been done
         """
         if 'win2altcmd' in self.measure.keys() and len(self.measure['win2altcmd']) == 0:
             self.win2IV = {}
             return False
 
-        p = np.polyfit(self.measure['win2altcmd'], self.measure['win2on'], 3)
-        vpl = np.arange(float(np.min(self.measure['win2altcmd'])),
-                        float(np.max(self.measure['win2altcmd'])), 1e-3)
-        ipl = np.polyval(p, vpl)
         # get the corrected voltage command (Vm = Vc - Rs*Im)
         m = self.measure['win2altcmd']
         calt = m.reshape(m.shape[0] / self.nrepc, self.nrepc)
@@ -1614,8 +1638,16 @@ class PSPReversal(AnalysisModule):
         im = ialt.mean(axis=1)
         imsd = ialt.std(axis=1)
 
+        fit_order = 3  # minimum to use root finder in splines
+        tck = scipy.interpolate.splrep(self.measure['win2altcmd'], self.measure['win2on'],
+                                       s=1, k=fit_order)
+        vpl = np.arange(float(np.min(self.measure['win2altcmd'])),
+                        float(np.max(self.measure['win2altcmd'])), 1e-3)
+        #p = np.polyfit(self.measure['win2altcmd'], self.measure['win2on'], 3)
+        #ipl = np.polyval(p, vpl)
+        ipl = scipy.interpolate.splev(vpl, tck)
         self.win2IV = {'vc': vc * 1e3, 'im': im * 1e9, 'imsd': imsd * 1e9, 'mvc': mvc * 1e3,
-                       'vpl': vpl, 'ipl': ipl, 'diffFit': []}
+                       'vpl': vpl, 'ipl': ipl, 'diffFit': [], 'spline': tck, 'poly': []}
         return True
 
 
@@ -1865,7 +1897,7 @@ class PSPReversal(AnalysisModule):
         self.spk = np.zeros(ntr)
         if self.data_mode not in self.ic_modes or self.time_base is None:
             # print ('PSPReversal::count_spikes: Cannot count spikes, ' +
-            #       'and dataMode is ', self.dataMode, 'and ICModes are: ', self.ic_modes , 'tx is: ', self.tx)
+            #       'and dataMode is ', self.dataMode, 'and ICModes are: ', self.ic_modes , 'tx is: ', self.time_base)
             self.spikecount = []
             # self.fiPlot.plot(x=[], y=[], clear=clear_flag, pen='w',
             #                  symbolSize=6, symbolPen='b',
@@ -1887,7 +1919,7 @@ class PSPReversal(AnalysisModule):
         # self.Rmp = np.mean(rmp)
 
         for i in range(ntr):
-            (spike, spk) = Utility.findspikes(self.tx, self.traces[i],
+            (spike, spk) = Utility.findspikes(self.time_base, self.traces[i],
                                               threshold, t0=self.tstart,
                                               t1=self.tend,
                                               dt=self.sample_interval,
@@ -1904,7 +1936,7 @@ class PSPReversal(AnalysisModule):
             if (len(spike) >= minspk) and (len(spike) <= maxspk):
                 misi = np.mean(np.diff(spike[-3:]))
                 self.ar[i] = misi / self.isi[i]
-            (self.rmp[i], r2) = Utility.measure('mean', self.tx, self.traces[i],
+            (self.rmp[i], r2) = Utility.measure('mean', self.time_base, self.traces[i],
                                                 0.0, self.tstart)
         # iAR = np.where(ar > 0)
         # ARmean = np.mean(ar[iAR])  # only where we made the measurement
@@ -1939,7 +1971,7 @@ class PSPReversal(AnalysisModule):
     #     whichaxis = 0
     #
     #     (fpar, xf, yf, names) = fits.FitRegion(whichdata, whichaxis,
-    #                                            self.tx,
+    #                                            self.time_base,
     #                                            self.traces,
     #                                            dataType='xy',
     #                                            t0=rgnpk[0], t1=rgnpk[1],
