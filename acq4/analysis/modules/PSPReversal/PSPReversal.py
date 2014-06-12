@@ -71,17 +71,19 @@ class MultiLine(pg.QtGui.QGraphicsPathItem):
         """x and y are 2D arrays of shape (Nplots, Nsamples)"""
         if x.ndim == 1:
             x = np.tile(x, y.shape[0]).reshape(y.shape[0], x.shape[0])
-        x=x[:,0::downsample].view(np.ndarray)
-        y=y[:,0::downsample].view(np.ndarray)
+        x = x[:, 0::downsample].view(np.ndarray)
+        y = y[:, 0::downsample].view(np.ndarray)
         if x.ndim == 1:
             x = np.tile(x, y.shape[0]).reshape(y.shape[0], x.shape[0])
         connect = np.ones(x.shape, dtype=bool)
-        connect[:,-1] = 0 # don't draw the segment between each trace
+        connect[:, -1] = 0  # don't draw the segment between each trace
         self.path = pg.arrayToQPath(x.flatten(), y.flatten(), connect.flatten())
         pg.QtGui.QGraphicsPathItem.__init__(self, self.path)
         self.setPen(pg.mkPen('w'))
+
     def shape(self): # override because QGraphicsPathItem.shape is too expensive.
         return pg.QtGui.QGraphicsItem.shape(self)
+
     def boundingRect(self):
         return self.path.boundingRect()
 
@@ -568,7 +570,7 @@ class PSPReversal(AnalysisModule):
                     for j in rd:
                         dirs.append('%03d_%03d' % (i, j))
 
-        i = 0  # sometimes, the elements are not right...
+        # i = 0  # sometimes, the elements are not right...
         for i, directory_name in enumerate(dirs):  # dirs has the names of the runs withing the protocol
             data_dir_handle = dh[directory_name]  # get the directory within the protocol
             try:
@@ -642,7 +644,7 @@ class PSPReversal(AnalysisModule):
                 self.values.append(sequence_values[i])
             else:
                 self.values.append(cmd[len(cmd) / 2])
-            i += 1
+        #    i += 1
         #sys.settrace(trace_calls_and_returns)
         if traces is None or len(traces) == 0:
             print "PSPReversal::loadFileRequested: No data found in this run..."

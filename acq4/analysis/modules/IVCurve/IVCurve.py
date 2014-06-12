@@ -46,6 +46,7 @@ try:
     # next setting allows pdf font to be readable in Adobe Illustrator
     pylab.rcParams['pdf.fonttype'] = 42
     pylab.rcParams['text.dvipnghack'] = True
+    have_matplotlib = True
     # to here (matplotlib stuff - touchy!)
 except:
     pass # no matplotlib
@@ -124,6 +125,8 @@ class IVCurve(AnalysisModule):
         self.ctrl.IVCurve_Update.clicked.connect(self.updateAnalysis)
         self.ctrl.IVCurve_PrintResults.clicked.connect(self.printAnalysis)
         self.ctrl.IVCurve_MPLExport.clicked.connect(self.matplotlibExport)
+        if not have_matplotlib:
+            self.ctrl.IVCurve_MPLExport.setEnabled=False  # make button inactive
         self.ctrl.IVCurve_KeepAnalysis.clicked.connect(self.resetKeepAnalysis)
         self.ctrl.IVCurve_getFileInfo.clicked.connect(self.getFileInfo)
         [self.ctrl.IVCurve_RMPMode.currentIndexChanged.connect(x)
