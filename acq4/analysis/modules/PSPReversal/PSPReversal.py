@@ -714,23 +714,32 @@ class PSPReversal(AnalysisModule):
         self.traces = MetaArray(traces, info=info)
         sfreq = self.dataModel.getSampleRate(data)
 
-        cmddata = cmd.view(np.ndarray)
-        cmddiff = np.abs(cmddata[1:] - cmddata[:-1])
-        if self.data_mode in self.ic_modes:
-            mindiff = 1e-12
-        else:
-            mindiff = 1e-4
-        cmdtimes1 = np.argwhere(cmddiff >= mindiff)[:, 0]
-        cmddiff2 = cmdtimes1[1:] - cmdtimes1[:-1]
-        cmdtimes2 = np.argwhere(cmddiff2 > 1)[:, 0]
-        if len(cmdtimes1) > 0 and len(cmdtimes2) > 0:
-            cmdtimes = np.append(cmdtimes1[0], cmddiff2[cmdtimes2])
-        else:  # just fake it
-            cmdtimes = np.array([0.01, 0.1])
+        vc_command = data_dir_handle.parent().info()['devices']['Clamp1']  # ['channels']['Command']
+        vc_info = vc_command['waveGeneratorWidget']['stimuli']['Pulse']
+
+        # cmddata = cmd.view(np.ndarray)
+        # cmddiff = np.abs(cmddata[1:] - cmddata[:-1])
+        # if self.data_mode in self.ic_modes:
+        #     mindiff = 1e-12
+        # else:
+        #     mindiff = 1e-4
+        # cmdtimes1 = np.argwhere(cmddiff >= mindiff)[:, 0]
+        # cmddiff2 = cmdtimes1[1:] - cmdtimes1[:-1]
+        # cmdtimes2 = np.argwhere(cmddiff2 > 1)[:, 0]
+        # if len(cmdtimes1) > 0 and len(cmdtimes2) > 0:
+        #     cmdtimes = np.append(cmdtimes1[0], cmddiff2[cmdtimes2])
+        # else:  # just fake it
+        #     cmdtimes = np.array([0.01, 0.1])
+        pulsestart = vc_info['start']['value']
+        pulsedur = vc_info['length']['value']
+        cmdtimes = np.array([pulsestart, pulsedur])
         if self.ctrl.PSPReversal_KeepT.isChecked() is False:
-            self.tstart = cmd.xvals('Time')[cmdtimes[0]]
-            self.tend = cmd.xvals('Time')[cmdtimes[1]] + self.tstart
+            self.tstart = cmdtimes[0] # cmd.xvals('Time')[cmdtimes[0]]
+            self.tend = np.sum(cmdtimes)  #cmd.xvals('Time')[cmdtimes[1]] + self.tstart
             self.tdur = self.tend - self.tstart
+#            print cmd.xvals('Time')
+#            print cmdtimes
+#            print 'checked false: ', self.tstart, self.tend, self.tdur
 
         # build the list of command values that are used for the fitting
         cmdList = []
@@ -837,6 +846,7 @@ class PSPReversal(AnalysisModule):
         """
         prior_updater=self.auto_updater
         self.auto_updater=False
+#        print 'setup regions: auto updater: ', self.auto_updater
         self.initialize_regions()  # now create the analysis regions
         if self.ctrl.PSPReversal_KeepT.isChecked() is False:  # change regions; otherwise keep...
             if 'LED-Blue' in self.devicesUsed:
@@ -895,7 +905,8 @@ class PSPReversal(AnalysisModule):
         """
         self.update_rmp_analysis()  # rmp must be done separately
         self.count_spikes()
-        for win in ['win0', 'win1', 'win2']:
+        for i in range(0,3):
+            win = 'win%d' % i #  in ['win0', 'win1', 'win2']:
             self.update_win_analysis(win)
 
 #     def get_window_analysisPars(self):
@@ -974,16 +985,16 @@ class PSPReversal(AnalysisModule):
         #p60 = np.polyval(p1, -60.)
         # using spline fit
         v60 = (-60 - (jp + ho))/1e3
-        print 'v60: ', v60
         p60 = scipy.interpolate.splev([v60], tck, der=1)
         #p60 = scipy.interpolate.splev(p1, tck, der=0)
         if len(revno) > 0:
             #perev = np.polyval(p1, revno[0])
             v0 = (revno[0] -(jp + ho))/1e3
-            print 'v0: ', v0
+           # print 'v0: ', v0
             perev = scipy.interpolate.splev([v0], tck, der=1)
         else:
             perev = 0.
+       # print 'p60: ', p60
         self.analysis_summary['spline'] = tck  # save the spline fit information
         self.analysis_summary['gsyn_60'] = p60[0] * 1e9  #  original im in A, vm in V, g converted to nS
         self.analysis_summary['gsyn_Erev'] = perev[0] * 1e9  # nS
