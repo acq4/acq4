@@ -290,8 +290,8 @@ class TaskRunner(Module):
             else:
                 # by default, docks are tabbed. 
                 # if dock state is stored, this will be corrected later.
+                QtGui.QApplication.sendPostedEvents(dock, 0)  # required to ensure new tab is visible
                 self.win.tabifyDockWidget(self.firstDock, dock)
-                
             
             items = self.ui.analysisList.findItems(mod, QtCore.Qt.MatchExactly)
             items[0].setCheckState(QtCore.Qt.Checked)
@@ -439,7 +439,7 @@ class TaskRunner(Module):
                     if self.firstDock is None:
                         self.firstDock = dock
                     else:
-                        QtGui.QApplication.processEvents() # required to ensure new tab is visible
+                        QtGui.QApplication.sendPostedEvents(dock, 0)  # required to ensure new tab is visible
                         self.win.tabifyDockWidget(self.firstDock, dock)
                     dock.widget().sigSequenceChanged.connect(self.updateSeqParams)
                     self.updateSeqParams(d)
@@ -473,6 +473,7 @@ class TaskRunner(Module):
                 
         
     def quit(self):
+        self.stopSequence()
         self.stopSingle()
         self.clearDocks()
         Module.quit(self)
@@ -491,6 +492,7 @@ class TaskRunner(Module):
             #self.ui.saveTaskBtn.setEnabled(v)
         
     def newTask(self):
+        self.stopSequence()
         self.stopSingle()
         
         ## Remove all docks
@@ -553,6 +555,7 @@ class TaskRunner(Module):
         prof = Profiler('TaskRunner.loadTask', disabled=True)
         try:
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+            self.stopSequence()
             self.stopSingle()
             
             prof.mark('stopped')
@@ -612,7 +615,7 @@ class TaskRunner(Module):
                         self.createAnalysisDock(k)
                         conf = prot.conf['analysis'][k]
                         self.analysisDocks[k].widget().restoreState(conf)
-                        prof.mark('configured dock: ' + d)
+                        prof.mark('configured dock: ' + k)
                     except:
                         printExc("Error while loading analysis dock:")
                         
@@ -761,7 +764,7 @@ class TaskRunner(Module):
                 prot = runSequence(lambda p: self.generateTask(dh, p, progressDlg), paramInds, paramInds.keys(), linkedParams=linkedParams)
                 #progressDlg.setValue(pLen)
             if dh is not None:
-                dh.flushSignals()  ## do this now rather than later as task is running
+                dh.flushSignals()  ## do this now rather than later when task is running
             
             #print "==========Sequence Task=============="
             #print prot
@@ -1102,6 +1105,7 @@ class TaskThread(QtCore.QThread):
         self.abortThread = False
         self.paused = False
         self._currentTask = None
+        self._systrace = None
                 
     def startTask(self, task, paramSpace=None):
         #print "TaskThread:startTask", self.lock.depth(), self.lock
@@ -1109,6 +1113,7 @@ class TaskThread(QtCore.QThread):
             #print "TaskThread:startTask got lock", self.lock.depth(), "    tracebacks follow:\n==========="
             #print "\n\n".join(self.lock.traceback())
             #print "======================"
+            self._systrace = sys.gettrace()
             while self.isRunning():
                 #l.unlock()
                 raise Exception("Already running another task")
@@ -1127,6 +1132,9 @@ class TaskThread(QtCore.QThread):
             self.paused = pause
                 
     def run(self):
+        # If main thread uses a systrace, we probably want it too.
+        sys.settrace(self._systrace)
+
         self.objs = None
         #print "TaskThread:run()"
         try:
@@ -1261,7 +1269,8 @@ class TaskThread(QtCore.QThread):
                     if self.abortThread:
                         l.unlock()
                         # should be taken care of in TaskThread.abort()
-                        #task.stop(abort=True)
+                        # NO -- task.stop() is not thread-safe.
+                        task.stop(abort=True)
                         return
                     l.unlock()
                     time.sleep(1e-3)
@@ -1310,7 +1319,8 @@ class TaskThread(QtCore.QThread):
     def abort(self):
         with self.lock:
             if self._currentTask is not None:
-                self._currentTask.stop(abort=True)
+                # bad idea -- task.stop() is not thread-safe; must ask the task thread to stop.
+                #self._currentTask.stop(abort=True)
                 self.abortThread = True
 
 

@@ -7,6 +7,11 @@ import acq4.pyqtgraph.parametertree.parameterTypes as ptypes
 ### TODO: inherit from util/ComboBox instead.
 
 class InterfaceCombo(QtGui.QComboBox):
+    """
+    ComboBox that displays a list of objects registered with the ACQ4 interface directory. 
+
+    This is used, for example, to allow the user to select from an up-to-date list of devices, modules, etc.
+    """
     def __init__(self, parent=None, types=None):
         self.dir = getManager().interfaceDir
         self.interfaceMap = []
@@ -24,13 +29,17 @@ class InterfaceCombo(QtGui.QComboBox):
         self.types = types
         self.updateList()
         
-    def updateList(self):
+    def updateList(self):        
         ints = self.dir.listInterfaces(self.types)
         self.interfaceMap = []
         objects = set()
         
-        preferred = self.preferredValue()
-        current = self.currentText()
+        try:
+            preferred = self.preferredValue()
+            current = self.currentText()
+        except RuntimeError:
+            return # This happens when the combo has been deleted, but we are still receiving signals.
+
         try:
             self.blockSignals(True)
             self.clear()

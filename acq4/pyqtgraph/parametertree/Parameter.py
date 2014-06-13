@@ -109,33 +109,33 @@ class Parameter(QtCore.QObject):
         Parameter instance, the options available to this method are also allowed
         by most Parameter subclasses.
         
-        ================= =========================================================
-        Keyword Arguments
-        name              The name to give this Parameter. This is the name that 
-                          will appear in the left-most column of a ParameterTree
-                          for this Parameter.
-        value             The value to initially assign to this Parameter.
-        default           The default value for this Parameter (most Parameters
-                          provide an option to 'reset to default').
-        children          A list of children for this Parameter. Children
-                          may be given either as a Parameter instance or as a
-                          dictionary to pass to Parameter.create(). In this way,
-                          it is possible to specify complex hierarchies of
-                          Parameters from a single nested data structure.
-        readonly          If True, the user will not be allowed to edit this 
-                          Parameter. (default=False)
-        enabled           If False, any widget(s) for this parameter will appear
-                          disabled. (default=True)
-        visible           If False, the Parameter will not appear when displayed
-                          in a ParameterTree. (default=True)
-        renamable         If True, the user may rename this Parameter.
-                          (default=False)
-        removable         If True, the user may remove this Parameter.
-                          (default=False)
-        expanded          If True, the Parameter will appear expanded when 
-                          displayed in a ParameterTree (its children will be 
-                          visible). (default=True)
-        ================= =========================================================
+        =======================      =========================================================
+        **Keyword Arguments:**
+        name                         The name to give this Parameter. This is the name that
+                                     will appear in the left-most column of a ParameterTree
+                                     for this Parameter.
+        value                        The value to initially assign to this Parameter.
+        default                      The default value for this Parameter (most Parameters
+                                     provide an option to 'reset to default').
+        children                     A list of children for this Parameter. Children
+                                     may be given either as a Parameter instance or as a
+                                     dictionary to pass to Parameter.create(). In this way,
+                                     it is possible to specify complex hierarchies of
+                                     Parameters from a single nested data structure.
+        readonly                     If True, the user will not be allowed to edit this
+                                     Parameter. (default=False)
+        enabled                      If False, any widget(s) for this parameter will appear
+                                     disabled. (default=True)
+        visible                      If False, the Parameter will not appear when displayed
+                                     in a ParameterTree. (default=True)
+        renamable                    If True, the user may rename this Parameter.
+                                     (default=False)
+        removable                    If True, the user may remove this Parameter.
+                                     (default=False)
+        expanded                     If True, the Parameter will appear expanded when
+                                     displayed in a ParameterTree (its children will be
+                                     visible). (default=True)
+        =======================      =========================================================
         """
         
         
@@ -268,16 +268,27 @@ class Parameter(QtCore.QObject):
             vals[ch.name()] = (ch.value(), ch.getValues())
         return vals
     
-    def saveState(self):
+    def saveState(self, filter=None):
         """
         Return a structure representing the entire state of the parameter tree.
-        The tree state may be restored from this structure using restoreState()
+        The tree state may be restored from this structure using restoreState().
+
+        If *filter* is set to 'user', then only user-settable data will be included in the
+        returned state.
         """
-        state = self.opts.copy()
-        state['children'] = OrderedDict([(ch.name(), ch.saveState()) for ch in self])
-        if state['type'] is None:
-            global PARAM_NAMES
-            state['type'] = PARAM_NAMES.get(type(self), None)
+        if filter is None:
+            state = self.opts.copy()
+            if state['type'] is None:
+                global PARAM_NAMES
+                state['type'] = PARAM_NAMES.get(type(self), None)
+        elif filter == 'user':
+            state = {'value': self.value()}
+        else:
+            raise ValueError("Unrecognized filter argument: '%s'" % filter)
+
+        ch = OrderedDict([(ch.name(), ch.saveState(filter=filter)) for ch in self])
+        if len(ch) > 0:
+            state['children'] = ch
         return state
 
     def restoreState(self, state, recursive=True, addChildren=True, removeChildren=True, blockSignals=True):
@@ -295,8 +306,11 @@ class Parameter(QtCore.QObject):
         
         ## list of children may be stored either as list or dict.
         if isinstance(childState, dict):
-            childState = childState.values()
-            
+            cs = []
+            for k,v in childState.items():
+                cs.append(v.copy())
+                cs[-1].setdefault('name', k)
+            childState = cs
         
         if blockSignals:
             self.blockTreeChangeSignal()
@@ -313,14 +327,14 @@ class Parameter(QtCore.QObject):
             
             for ch in childState:
                 name = ch['name']
-                typ = ch['type']
+                #typ = ch.get('type', None)
                 #print('child: %s, %s' % (self.name()+'.'+name, typ))
                 
-                ## First, see if there is already a child with this name and type
+                ## First, see if there is already a child with this name
                 gotChild = False
                 for i, ch2 in enumerate(self.childs[ptr:]):
                     #print "  ", ch2.name(), ch2.type()
-                    if ch2.name() != name or not ch2.isType(typ):
+                    if ch2.name() != name: # or not ch2.isType(typ):
                         continue
                     gotChild = True
                     #print "    found it"
@@ -518,7 +532,7 @@ class Parameter(QtCore.QObject):
         self.sigChildRemoved.emit(self, child)
         try:
             child.sigTreeStateChanged.disconnect(self.treeStateChanged)
-        except TypeError:  ## already disconnected
+        except (TypeError, RuntimeError):  ## already disconnected
             pass
 
     def clearChildren(self):
@@ -593,9 +607,12 @@ class Parameter(QtCore.QObject):
             names = (names,)
         return self.param(*names).setValue(value)
 
-    def param(self, *names):
+    def child(self, *names):
         """Return a child parameter. 
-        Accepts the name of the child or a tuple (path, to, child)"""
+        Accepts the name of the child or a tuple (path, to, child)
+
+        Added in version 0.9.9. Ealier versions used the 'param' method, which is still
+        implemented for backward compatibility."""
         try:
             param = self.names[names[0]]
         except KeyError:
@@ -606,6 +623,10 @@ class Parameter(QtCore.QObject):
         else:
             return param
         
+    def param(self, *names):
+        # for backward compatibility.
+        return self.child(*names)
+
     def __repr__(self):
         return "<%s '%s' at 0x%x>" % (self.__class__.__name__, self.name(), id(self))
        
@@ -678,13 +699,13 @@ class Parameter(QtCore.QObject):
         """
         Called when the state of any sub-parameter has changed. 
         
-        ==========  ================================================================
-        Arguments:
-        param       The immediate child whose tree state has changed.
-                    note that the change may have originated from a grandchild.
-        changes     List of tuples describing all changes that have been made
-                    in this event: (param, changeDescr, data)
-        ==========  ================================================================
+        ==============  ================================================================
+        **Arguments:**
+        param           The immediate child whose tree state has changed.
+                        note that the change may have originated from a grandchild.
+        changes         List of tuples describing all changes that have been made
+                        in this event: (param, changeDescr, data)
+        ==============  ================================================================
                      
         This function can be extended to react to tree state changes.
         """

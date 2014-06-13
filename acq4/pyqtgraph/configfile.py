@@ -14,6 +14,10 @@ from .pgcollections import OrderedDict
 GLOBAL_PATH = None # so not thread safe.
 from . import units
 from .python2_3 import asUnicode
+from .Qt import QtCore
+from .Point import Point
+from .colormap import ColorMap
+import numpy
 
 class ParseError(Exception):
     def __init__(self, message, lineNum, line, fileName=None):
@@ -100,12 +104,7 @@ def parseString(lines, start=0):
         
     indent = measureIndent(lines[start])
     ln = start - 1
-
-    ## Strip out some stuff that we don't need in some intermediate info files...
-    ## these are the possible "Point" and "PyQt4...QPoint" formats for numbers that are
-    ## otherwise chocking processing.
-    ptsstr = re.compile('Point\(')
-    qptsstr = re.compile('PyQt4.QtCore.QPointF\(')
+    
     try:
         while True:
             ln += 1
@@ -135,14 +134,22 @@ def parseString(lines, start=0):
             (k, p, v) = l.partition(':')
             k = k.strip()
             v = v.strip()
-            # now remove the junk...
-            v = re.sub(ptsstr, '(', v)
-            v = re.sub(qptsstr, '(', v)
             
             ## set up local variables to use for eval
             local = units.allUnits.copy()
             local['OrderedDict'] = OrderedDict
             local['readConfigFile'] = readConfigFile
+            local['Point'] = Point
+            local['QtCore'] = QtCore
+            local['ColorMap'] = ColorMap
+            # Needed for reconstructing numpy arrays
+            local['array'] = numpy.array
+            for dtype in ['int8', 'uint8', 
+                          'int16', 'uint16', 'float16',
+                          'int32', 'uint32', 'float32',
+                          'int64', 'uint64', 'float64']:
+                local[dtype] = getattr(numpy, dtype)
+                
             if len(k) < 1:
                 raise ParseError('Missing name preceding colon', ln+1, l)
             if k[0] == '(' and k[-1] == ')':  ## If the key looks like a tuple, try evaluating it.

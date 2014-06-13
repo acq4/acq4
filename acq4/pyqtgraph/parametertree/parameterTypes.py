@@ -18,16 +18,16 @@ class WidgetParameterItem(ParameterItem):
     * simple widget for editing value (displayed instead of label when item is selected)
     * button that resets value to default
     
-    ================= =============================================================
-    Registered Types:
-    int               Displays a :class:`SpinBox <pyqtgraph.SpinBox>` in integer
-                      mode.
-    float             Displays a :class:`SpinBox <pyqtgraph.SpinBox>`.
-    bool              Displays a QCheckBox
-    str               Displays a QLineEdit
-    color             Displays a :class:`ColorButton <pyqtgraph.ColorButton>`
-    colormap          Displays a :class:`GradientWidget <pyqtgraph.GradientWidget>`
-    ================= =============================================================
+    ==========================  =============================================================
+    **Registered Types:**
+    int                         Displays a :class:`SpinBox <pyqtgraph.SpinBox>` in integer
+                                mode.
+    float                       Displays a :class:`SpinBox <pyqtgraph.SpinBox>`.
+    bool                        Displays a QCheckBox
+    str                         Displays a QLineEdit
+    color                       Displays a :class:`ColorButton <pyqtgraph.ColorButton>`
+    colormap                    Displays a :class:`GradientWidget <pyqtgraph.GradientWidget>`
+    ==========================  =============================================================
     
     This class can be subclassed by overriding makeWidget() to provide a custom widget.
     """
@@ -208,12 +208,14 @@ class WidgetParameterItem(ParameterItem):
         val = self.widget.value()
         newVal = self.param.setValue(val)
 
-    def widgetValueChanging(self):
+    def widgetValueChanging(self, *args):
         """
         Called when the widget's value is changing, but not finalized.
         For example: editing text before pressing enter or changing focus.
         """
-        pass
+        # This is a bit sketchy: assume the last argument of each signal is
+        # the value..
+        self.param.sigValueChanging.emit(self.param, args[-1])
         
     def selected(self, sel):
         """Called when this item has been selected (sel=True) OR deselected (sel=False)"""
@@ -230,6 +232,8 @@ class WidgetParameterItem(ParameterItem):
         self.widget.show()
         self.displayLabel.hide()
         self.widget.setFocus(QtCore.Qt.OtherFocusReason)
+        if isinstance(self.widget, SpinBox):
+            self.widget.selectNumber()  # select the numerical portion of the text for quick editing
 
     def hideEditor(self):
         self.widget.hide()
@@ -306,8 +310,8 @@ class SimpleParameter(Parameter):
     def colorValue(self):
         return fn.mkColor(Parameter.value(self))
     
-    def saveColorState(self):
-        state = Parameter.saveState(self)
+    def saveColorState(self, *args, **kwds):
+        state = Parameter.saveState(self, *args, **kwds)
         state['value'] = fn.colorTuple(self.value())
         return state
         

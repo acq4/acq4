@@ -15,7 +15,7 @@ class PlotDataItem(GraphicsObject):
     GraphicsItem for displaying plot curves, scatter plots, or both. 
     While it is possible to use :class:`PlotCurveItem <pyqtgraph.PlotCurveItem>` or
     :class:`ScatterPlotItem <pyqtgraph.ScatterPlotItem>` individually, this class
-    provides a unified interface to both. Inspances of :class:`PlotDataItem` are 
+    provides a unified interface to both. Instances of :class:`PlotDataItem` are 
     usually created by plot() methods such as :func:`pyqtgraph.plot` and
     :func:`PlotItem.plot() <pyqtgraph.PlotItem.plot>`.
     
@@ -56,10 +56,11 @@ class PlotDataItem(GraphicsObject):
             ===========================   =========================================
         
         **Line style keyword arguments:**
-            ==========   ================================================
-            connect      Specifies how / whether vertexes should be connected. 
-                         See :func:`arrayToQPath() <pyqtgraph.arrayToQPath>`
-            pen          Pen to use for drawing line between points. 
+
+            ==========   ==============================================================================
+            connect      Specifies how / whether vertexes should be connected. See
+                         :func:`arrayToQPath() <pyqtgraph.arrayToQPath>`
+            pen          Pen to use for drawing line between points.
                          Default is solid grey, 1px width. Use None to disable line drawing.
                          May be any single argument accepted by :func:`mkPen() <pyqtgraph.mkPen>`
             shadowPen    Pen for secondary line to draw behind the primary line. disabled by default.
@@ -67,21 +68,29 @@ class PlotDataItem(GraphicsObject):
             fillLevel    Fill the area between the curve and fillLevel
             fillBrush    Fill to use when fillLevel is specified. 
                          May be any single argument accepted by :func:`mkBrush() <pyqtgraph.mkBrush>`
-            ==========   ================================================
+            stepMode     If True, two orthogonal lines are drawn for each sample
+                         as steps. This is commonly used when drawing histograms.
+                         Note that in this case, `len(x) == len(y) + 1`
+                         (added in version 0.9.9)
+            ==========   ==============================================================================
         
         **Point style keyword arguments:**  (see :func:`ScatterPlotItem.setData() <pyqtgraph.ScatterPlotItem.setData>` for more information)
         
-            ============   ================================================
-            symbol         Symbol to use for drawing points OR list of symbols, one per point. Default is no symbol.
+            ============   =====================================================
+            symbol         Symbol to use for drawing points OR list of symbols, 
+                           one per point. Default is no symbol.
                            Options are o, s, t, d, +, or any QPainterPath
-            symbolPen      Outline pen for drawing points OR list of pens, one per point.
-                           May be any single argument accepted by :func:`mkPen() <pyqtgraph.mkPen>`
-            symbolBrush    Brush for filling points OR list of brushes, one per point.
-                           May be any single argument accepted by :func:`mkBrush() <pyqtgraph.mkBrush>`
+            symbolPen      Outline pen for drawing points OR list of pens, one 
+                           per point. May be any single argument accepted by 
+                           :func:`mkPen() <pyqtgraph.mkPen>`
+            symbolBrush    Brush for filling points OR list of brushes, one per 
+                           point. May be any single argument accepted by 
+                           :func:`mkBrush() <pyqtgraph.mkBrush>`
             symbolSize     Diameter of symbols OR list of diameters.
-            pxMode         (bool) If True, then symbolSize is specified in pixels. If False, then symbolSize is 
+            pxMode         (bool) If True, then symbolSize is specified in 
+                           pixels. If False, then symbolSize is 
                            specified in data coordinates.
-            ============   ================================================
+            ============   =====================================================
         
         **Optimization keyword arguments:**
         
@@ -92,11 +101,11 @@ class PlotDataItem(GraphicsObject):
             decimate         deprecated.
             downsample       (int) Reduce the number of samples displayed by this value
             downsampleMethod 'subsample': Downsample by taking the first of N samples. 
-                                This method is fastest and least accurate.
+                             This method is fastest and least accurate.
                              'mean': Downsample by taking the mean of N samples.
                              'peak': Downsample by drawing a saw wave that follows the min 
-                                and max of the original data. This method produces the best 
-                                visual representation of the data but is slower.
+                             and max of the original data. This method produces the best 
+                             visual representation of the data but is slower.
             autoDownsample   (bool) If True, resample the data before plotting to avoid plotting
                              multiple line segments per pixel. This can improve performance when
                              viewing very high-density data, but increases the initial overhead 
@@ -145,6 +154,7 @@ class PlotDataItem(GraphicsObject):
             'shadowPen': None,
             'fillLevel': None,
             'fillBrush': None,
+            'stepMode': None, 
             
             'symbol': None,
             'symbolSize': 10,
@@ -291,18 +301,18 @@ class PlotDataItem(GraphicsObject):
         Set the downsampling mode of this item. Downsampling reduces the number
         of samples drawn to increase performance. 
         
-        ===========  =================================================================
-        Arguments
-        ds           (int) Reduce visible plot samples by this factor. To disable,
-                     set ds=1.
-        auto         (bool) If True, automatically pick *ds* based on visible range
-        mode         'subsample': Downsample by taking the first of N samples. 
-                         This method is fastest and least accurate.
-                     'mean': Downsample by taking the mean of N samples.
-                     'peak': Downsample by drawing a saw wave that follows the min 
-                         and max of the original data. This method produces the best 
-                         visual representation of the data but is slower.
-        ===========  =================================================================
+        ==============  =================================================================
+        **Arguments:**
+        ds              (int) Reduce visible plot samples by this factor. To disable,
+                        set ds=1.
+        auto            (bool) If True, automatically pick *ds* based on visible range
+        mode            'subsample': Downsample by taking the first of N samples.
+                        This method is fastest and least accurate.
+                        'mean': Downsample by taking the mean of N samples.
+                        'peak': Downsample by drawing a saw wave that follows the min
+                        and max of the original data. This method produces the best
+                        visual representation of the data but is slower.
+        ==============  =================================================================
         """
         changed = False
         if ds is not None:
@@ -461,7 +471,7 @@ class PlotDataItem(GraphicsObject):
     def updateItems(self):
         
         curveArgs = {}
-        for k,v in [('pen','pen'), ('shadowPen','shadowPen'), ('fillLevel','fillLevel'), ('fillBrush', 'brush'), ('antialias', 'antialias'), ('connect', 'connect')]:
+        for k,v in [('pen','pen'), ('shadowPen','shadowPen'), ('fillLevel','fillLevel'), ('fillBrush', 'brush'), ('antialias', 'antialias'), ('connect', 'connect'), ('stepMode', 'stepMode')]:
             curveArgs[v] = self.opts[k]
         
         scatterArgs = {}
@@ -537,19 +547,22 @@ class PlotDataItem(GraphicsObject):
                     x0 = (range.left()-x[0]) / dx
                     x1 = (range.right()-x[0]) / dx
                     width = self.getViewBox().width()
-                    ds = int(max(1, int((x1-x0) / (width*self.opts['autoDownsampleFactor']))))
+                    if width != 0.0:
+                        ds = int(max(1, int((x1-x0) / (width*self.opts['autoDownsampleFactor']))))
                     ## downsampling is expensive; delay until after clipping.
             
             if self.opts['clipToView']:
-                # this option presumes that x-values have uniform spacing
-                range = self.viewRect()
-                if range is not None:
-                    dx = float(x[-1]-x[0]) / (len(x)-1)
-                    # clip to visible region extended by downsampling value
-                    x0 = np.clip(int((range.left()-x[0])/dx)-1*ds , 0, len(x)-1)
-                    x1 = np.clip(int((range.right()-x[0])/dx)+2*ds , 0, len(x)-1)
-                    x = x[x0:x1]
-                    y = y[x0:x1]
+                view = self.getViewBox()
+                if view is None or not view.autoRangeEnabled()[0]:
+                    # this option presumes that x-values have uniform spacing
+                    range = self.viewRect()
+                    if range is not None:
+                        dx = float(x[-1]-x[0]) / (len(x)-1)
+                        # clip to visible region extended by downsampling value
+                        x0 = np.clip(int((range.left()-x[0])/dx)-1*ds , 0, len(x)-1)
+                        x1 = np.clip(int((range.right()-x[0])/dx)+2*ds , 0, len(x)-1)
+                        x = x[x0:x1]
+                        y = y[x0:x1]
                     
             if ds > 1:
                 if self.opts['downsampleMethod'] == 'subsample':
@@ -654,13 +667,12 @@ class PlotDataItem(GraphicsObject):
             
     def _fourierTransform(self, x, y):
         ## Perform fourier transform. If x values are not sampled uniformly,
-        ## then use interpolate.griddata to resample before taking fft.
+        ## then use np.interp to resample before taking fft.
         dx = np.diff(x)
         uniform = not np.any(np.abs(dx-dx[0]) > (abs(dx[0]) / 1000.))
         if not uniform:
-            import scipy.interpolate as interp
             x2 = np.linspace(x[0], x[-1], len(x))
-            y = interp.griddata(x, y, x2, method='linear')
+            y = np.interp(x2, x, y)
             x = x2
         f = np.fft.fft(y) / len(y)
         y = abs(f[1:len(f)/2])

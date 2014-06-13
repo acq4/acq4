@@ -336,6 +336,22 @@ class Manager(QtCore.QObject):
                     logMsg("=== Setting base directory: %s ===" % cfg['storageDir'])
                     self.setBaseDir(cfg['storageDir'])
                 
+		elif key == 'defaultCompression':
+                    comp = cfg['defaultCompression']
+                    try:
+                        if isinstance(comp, tuple):
+                            cstr = comp[0]
+                            assert isinstance(comp[1], int)
+                        else:
+                            cstr = comp
+                        assert cstr in [None, 'gzip', 'szip', 'lzf']
+                    except Exception:
+                        raise Exception("'defaultCompression' option must be one of: None, 'gzip', 'szip', 'lzf', ('gzip', 0-9), or ('szip', opts). Got: '%s'" % comp)
+                        
+                    print "=== Setting default HDF5 compression: %s ===" % comp
+                    import acq4.pyqtgraph.metaarray as ma
+                    ma.MetaArray.defaultCompression = comp
+
                 ## load stylesheet
                 elif key == 'stylesheet':
                     try:
@@ -938,7 +954,8 @@ class Task:
             before, after = task.getConfigOrder()
             deps[devName] |= set(map(Task.getDevName, before))
             for t in map(self.getDevName, after):
-                deps[t].add(devName)
+                if t in deps:
+                    deps[t].add(devName)
                 
         # request estimated configure time
         cost = {devName: self.tasks[devName].getPrepTimeEstimate() for devName in self.devNames}
@@ -1113,7 +1130,7 @@ class Task:
         #print "Manager.Task.isDone"
         if not self.abortRequested:
             t = ptime.time()
-            if t - self.startTime < self.cfg['duration']:
+            if self.startTime is None or t - self.startTime < self.cfg['duration']:
                 #print "  not done yet"
                 return False
             #else:
@@ -1149,7 +1166,10 @@ class Task:
         return self.stopTime - self.startTime
         
     def stop(self, abort=False):
-        """Stop all tasks and read data. If abort is True, does not attempt to collect data from the run."""
+        """Stop all tasks and read data. If abort is True, does not attempt to collect data from the run.
+        
+        Note: this method is NOT thread-safe; the thread that started the task should
+        be the one to stop it."""
         prof = Profiler("Manager.Task.stop", disabled=True)
         self.abortRequested = abort
         try:

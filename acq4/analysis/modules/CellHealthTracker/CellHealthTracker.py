@@ -58,14 +58,11 @@ class CellHealthTracker(AnalysisModule):
         ## return True if file loads successfully, else return False
         
         try:
-            print 'dhlist: ', dhList
             for dh in dhList:
                 #if dh.name is "Patch":
                     #pass
                 if dh is None:
                     continue
-                print dh
-                print dir(dh)
                 if dh.isDir():
                     self.files[dh] = {}
                     #self.files[dh]['traces']=[]
@@ -90,8 +87,6 @@ class CellHealthTracker(AnalysisModule):
     def processClicked(self):
         ## read all the traces from the selected file
         dh = self.getElement("File Loader").selectedFile()
-        print dh
-        print dir(dh)
         if dh.isDir():
             traces = []
             for f in dh.subDirs():

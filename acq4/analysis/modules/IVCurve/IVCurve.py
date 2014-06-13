@@ -22,20 +22,24 @@ import os
 import re
 import os.path
 import itertools
-have_matplotlib = False
-
-stdFont = 'Arial'
 
 try:
     import matplotlib as MP
     from matplotlib.ticker import FormatStrFormatter
+    import matplotlib.pyplot as pylab
+    import matplotlib.gridspec as gridspec
+    import matplotlib.gridspec as GS
+    HAVE_MPL = True
+except ImportError:
+    HAVE_MPL = False
 
+
+if HAVE_MPL:
     MP.use('TKAgg')
     # Do not modify the following code
     # sets up matplotlib with sans-serif plotting...
-    import matplotlib.gridspec as GS
-    import matplotlib.pyplot as pylab
-    import matplotlib.gridspec as gridspec
+
+
 
     pylab.rcParams['text.usetex'] = True
     pylab.rcParams['interactive'] = False
@@ -46,10 +50,9 @@ try:
     # next setting allows pdf font to be readable in Adobe Illustrator
     pylab.rcParams['pdf.fonttype'] = 42
     pylab.rcParams['text.dvipnghack'] = True
-    have_matplotlib = True
     # to here (matplotlib stuff - touchy!)
-except:
-    pass # no matplotlib
+
+stdFont = 'Arial'
 
 import acq4.analysis.tools.Utility as Utility   # pbm's utilities...
 import acq4.analysis.tools.Fitting as Fitting   # pbm's fitting stuff...
@@ -1381,9 +1384,9 @@ class IVCurve(AnalysisModule):
         format as the pyqtgraph window
         Probably you would use this for publication purposes.
         """
-        if not have_matplotlib:
-            print 'Matplotlib not loaded, cannot export'
-        return
+
+        if not HAVE_MPL:
+            raise Exception("Method requires matplotlib; not importable.")
         fig = pylab.figure(1)
          # escape filename information so it can be rendered by removing
          # common characters that trip up latex...:

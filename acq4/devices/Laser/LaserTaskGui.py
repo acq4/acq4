@@ -155,7 +155,7 @@ class LaserTaskGui(DAQGenericTaskGui):
                 raise HelpfulException("The current laser power for '%s' is unknown." % self.dev.name)
             if not valid:
                 powerStr = siFormat(power, suffix='W')
-                raise HelpfulException("The current laser power for '%s' (%s) is outside the expected range." % (self.dev.name, powerStr))
+                raise HelpfulException("The current laser power for '%s' (%s) is outside the expected range." % (self.dev.name(), powerStr))
     
     def generateTask(self, params=None):
         """Return a cmd dictionary suitable for passing to LaserTask."""

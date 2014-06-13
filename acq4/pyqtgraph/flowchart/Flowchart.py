@@ -29,14 +29,15 @@ def strDict(d):
         
 
 class Flowchart(Node):
-    
     sigFileLoaded = QtCore.Signal(object)
     sigFileSaved = QtCore.Signal(object)
     
     
     #sigOutputChanged = QtCore.Signal() ## inherited from Node
     sigChartLoaded = QtCore.Signal()
-    sigStateChanged = QtCore.Signal()
+    sigStateChanged = QtCore.Signal()  # called when output is expected to have changed
+    sigChartChanged = QtCore.Signal(object, object, object) # called when nodes are added, removed, or renamed.
+                                                            # (self, action, node)
     
     def __init__(self, terminals=None, name=None, filePath=None, library=None):
         self.library = library or LIBRARY
@@ -189,6 +190,7 @@ class Flowchart(Node):
         node.sigClosed.connect(self.nodeClosed)
         node.sigRenamed.connect(self.nodeRenamed)
         node.sigOutputChanged.connect(self.nodeOutputChanged)
+        self.sigChartChanged.emit(self, 'add', node)
         
     def removeNode(self, node):
         node.close()
@@ -196,23 +198,18 @@ class Flowchart(Node):
     def nodeClosed(self, node):
         del self._nodes[node.name()]
         self.widget().removeNode(node)
-        try:
-            node.sigClosed.disconnect(self.nodeClosed)
-        except TypeError:
-            pass
-        try:
-            node.sigRenamed.disconnect(self.nodeRenamed)
-        except TypeError:
-            pass
-        try:
-            node.sigOutputChanged.disconnect(self.nodeOutputChanged)
-        except TypeError:
-            pass
+        for signal in ['sigClosed', 'sigRenamed', 'sigOutputChanged']:
+            try:
+                getattr(node, signal).disconnect(self.nodeClosed)
+            except (TypeError, RuntimeError):
+                pass
+        self.sigChartChanged.emit(self, 'remove', node)
         
     def nodeRenamed(self, node, oldName):
         del self._nodes[oldName]
         self._nodes[node.name()] = node
         self.widget().nodeRenamed(node, oldName)
+        self.sigChartChanged.emit(self, 'rename', node)
         
     def arrangeNodes(self):
         pass
@@ -252,9 +249,10 @@ class Flowchart(Node):
         
         ## Record inputs given to process()
         for n, t in self.inputNode.outputs().items():
-            if n not in args:
-                raise Exception("Parameter %s required to process this chart." % n)
-            data[t] = args[n]
+            # if n not in args:
+            #     raise Exception("Parameter %s required to process this chart." % n)
+            if n in args:
+                data[t] = args[n]
         
         ret = {}
             
@@ -279,7 +277,7 @@ class Flowchart(Node):
                     if len(inputs) == 0:
                         continue
                     if inp.isMultiValue():  ## multi-input terminals require a dict of all inputs
-                        args[inp.name()] = dict([(i, data[i]) for i in inputs])
+                        args[inp.name()] = dict([(i, data[i]) for i in inputs if i in data])
                     else:                   ## single-inputs terminals only need the single input value available
                         args[inp.name()] = data[inputs[0]]  
                         
@@ -299,9 +297,8 @@ class Flowchart(Node):
                         #print out.name()
                         try:
                             data[out] = result[out.name()]
-                        except:
-                            print(out, out.name())
-                            raise
+                        except KeyError:
+                            pass
             elif c == 'd':   ## delete a terminal result (no longer needed; may be holding a lot of memory)
                 #print "===> delete", arg
                 if arg in data:
@@ -736,7 +733,7 @@ class FlowchartCtrlWidget(QtGui.QWidget):
             #self.disconnect(item.bypassBtn, QtCore.SIGNAL('clicked()'), self.bypassClicked)
             try:
                 item.bypassBtn.clicked.disconnect(self.bypassClicked)
-            except TypeError:
+            except (TypeError, RuntimeError):
                 pass
             self.ui.ctrlList.removeTopLevelItem(item)
             

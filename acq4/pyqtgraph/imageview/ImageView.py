@@ -25,13 +25,18 @@ from ..graphicsItems.LinearRegionItem import *
 from ..graphicsItems.InfiniteLine import *
 from ..graphicsItems.ViewBox import *
 #from widgets import ROI
-import sys
+import os, sys
 #from numpy import ndarray
 from .. import ptime as ptime
 import numpy as np
 from .. import debug as debug
 
 from ..SignalProxy import SignalProxy
+
+try:
+    from bottleneck import nanmin, nanmax
+except ImportError:
+    from numpy import nanmin, nanmax
 
 #try:
     #from .. import metaarray as metaarray
@@ -107,6 +112,8 @@ class ImageView(QtGui.QWidget):
         
         self.ui.histogram.setImageItem(self.imageItem)
         
+        self.menu = None
+        
         self.ui.normGroup.hide()
 
         self.roi = PlotROI(10)
@@ -147,7 +154,8 @@ class ImageView(QtGui.QWidget):
         self.timeLine.sigPositionChanged.connect(self.timeLineChanged)
         self.ui.roiBtn.clicked.connect(self.roiClicked)
         self.roi.sigRegionChanged.connect(self.roiChanged)
-        self.ui.normBtn.toggled.connect(self.normToggled)
+        #self.ui.normBtn.toggled.connect(self.normToggled)
+        self.ui.menuBtn.clicked.connect(self.menuClicked)
         self.ui.normDivideRadio.clicked.connect(self.normRadioChanged)
         self.ui.normSubtractRadio.clicked.connect(self.normRadioChanged)
         self.ui.normOffRadio.clicked.connect(self.normRadioChanged)
@@ -196,7 +204,12 @@ class ImageView(QtGui.QWidget):
             img = img.asarray()
         
         if not isinstance(img, np.ndarray):
-            raise Exception("Image must be specified as ndarray.")
+            required = ['dtype', 'max', 'min', 'ndim', 'shape', 'size']
+            if not all([hasattr(img, attr) for attr in required]):
+                raise TypeError("Image must be NumPy array or any object "
+                                "that provides compatible attributes/methods:\n"
+                                "  %s" % str(required))
+        
         self.image = img
         self.imageDisp = None
         
@@ -323,10 +336,9 @@ class ImageView(QtGui.QWidget):
         if self.imageDisp is None:
             image = self.normalize(self.image)
             self.imageDisp = image
-            self.levelMin, self.levelMax = list(map(float, ImageView.quickMinMax(self.imageDisp)))
+            self.levelMin, self.levelMax = list(map(float, self.quickMinMax(self.imageDisp)))
             
         return self.imageDisp
-        
         
     def close(self):
         """Closes the widget nicely, making sure to clear the graphics scene and release memory."""
@@ -379,7 +391,6 @@ class ImageView(QtGui.QWidget):
         else:
             QtGui.QWidget.keyReleaseEvent(self, ev)
         
-        
     def evalKeyState(self):
         if len(self.keysPressed) == 1:
             key = list(self.keysPressed.keys())[0]
@@ -403,16 +414,13 @@ class ImageView(QtGui.QWidget):
         else:
             self.play(0)
         
-        
     def timeout(self):
         now = ptime.time()
         dt = now - self.lastPlayTime
         if dt < 0:
             return
         n = int(self.playRate * dt)
-        #print n, dt
         if n != 0:
-            #print n, dt, self.lastPlayTime
             self.lastPlayTime += (float(n)/self.playRate)
             if self.currentIndex+n > self.image.shape[0]:
                 self.play(0)
@@ -437,17 +445,14 @@ class ImageView(QtGui.QWidget):
         self.autoLevels()
         self.roiChanged()
         self.sigProcessingChanged.emit(self)
-        
     
     def updateNorm(self):
         if self.ui.normTimeRangeCheck.isChecked():
-            #print "show!"
             self.normRgn.show()
         else:
             self.normRgn.hide()
         
         if self.ui.normROICheck.isChecked():
-            #print "show!"
             self.normRoi.show()
         else:
             self.normRoi.hide()
@@ -523,21 +528,25 @@ class ImageView(QtGui.QWidget):
                 coords = coords - coords[:,0,np.newaxis]
                 xvals = (coords**2).sum(axis=0) ** 0.5
                 self.roiCurve.setData(y=data, x=xvals)
-                
-            #self.ui.roiPlot.replot()
 
-
-    @staticmethod
-    def quickMinMax(data):
+    def quickMinMax(self, data):
+        """
+        Estimate the min/max values of *data* by subsampling.
+        """
         while data.size > 1e6:
             ax = np.argmax(data.shape)
             sl = [slice(None)] * data.ndim
             sl[ax] = slice(None, None, 2)
             data = data[sl]
-        return data.min(), data.max()
+        return nanmin(data), nanmax(data)
 
     def normalize(self, image):
+        """
+        Process *image* using the normalization options configured in the
+        control panel.
         
+        This can be repurposed to process any data through the same filter.
+        """
         if self.ui.normOffRadio.isChecked():
             return image
             
@@ -644,3 +653,43 @@ class ImageView(QtGui.QWidget):
     def getHistogramWidget(self):
         """Return the HistogramLUTWidget for this ImageView"""
         return self.ui.histogram
+
+    def export(self, fileName):
+        """
+        Export data from the ImageView to a file, or to a stack of files if
+        the data is 3D. Saving an image stack will result in index numbers
+        being added to the file name. Images are saved as they would appear
+        onscreen, with levels and lookup table applied.
+        """
+        img = self.getProcessedImage()
+        if self.hasTimeAxis():
+            base, ext = os.path.splitext(fileName)
+            fmt = "%%s%%0%dd%%s" % int(np.log10(img.shape[0])+1)
+            for i in range(img.shape[0]):
+                self.imageItem.setImage(img[i], autoLevels=False)
+                self.imageItem.save(fmt % (base, i, ext))
+            self.updateImage()
+        else:
+            self.imageItem.save(fileName)
+            
+    def exportClicked(self):
+        fileName = QtGui.QFileDialog.getSaveFileName()
+        if fileName == '':
+            return
+        self.export(fileName)
+        
+    def buildMenu(self):
+        self.menu = QtGui.QMenu()
+        self.normAction = QtGui.QAction("Normalization", self.menu)
+        self.normAction.setCheckable(True)
+        self.normAction.toggled.connect(self.normToggled)
+        self.menu.addAction(self.normAction)
+        self.exportAction = QtGui.QAction("Export", self.menu)
+        self.exportAction.triggered.connect(self.exportClicked)
+        self.menu.addAction(self.exportAction)
+        
+    def menuClicked(self):
+        if self.menu is None:
+            self.buildMenu()
+        self.menu.popup(QtGui.QCursor.pos())
+        

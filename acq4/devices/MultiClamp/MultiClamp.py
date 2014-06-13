@@ -56,13 +56,11 @@ class MultiClamp(Device):
             ## Set up default MC settings for each mode, then leave MC in I=0 mode
             # look for 'defaults', followed by 'settings' (for backward compatibility)
             defaults = self.config.get('defaults', self.config.get('settings', None))
-            if defaults is not None:
-                for mode in ['IC', 'VC']:
-                    if mode in defaults:
-                        #print "set mode", mode
-                        self.setMode(mode)
-                        #print "set params"
-                        self.mc.setParams(defaults[mode])
+            for mode in ['IC', 'VC']:
+                self.setMode(mode) # Set mode even if we have no parameters to set;
+                                   # this ensures that self.lastState is filled.
+                if defaults is not None and mode in defaults:
+                    self.mc.setParams(defaults[mode])
             self.setMode('I=0')  ## safest mode to leave clamp in
 
         except:
