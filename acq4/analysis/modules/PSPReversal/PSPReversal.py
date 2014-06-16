@@ -795,7 +795,8 @@ class PSPReversal(AnalysisModule):
         self.makemap_symbols()
         self.data_plot.plotItem.clearPlots()
         self.cmd_plot.plotItem.clearPlots()
-
+        average_flag = self.ctrl.PSPReversal_AveragePlot.isChecked()
+        alternation_flag = self.ctrl.PSPReversal_Alternation.isChecked()
         ntr = self.traces.shape[0]
         self.data_plot.setDownsampling(auto=True, mode='mean')
         self.data_plot.setClipToView(True)
@@ -805,25 +806,22 @@ class PSPReversal(AnalysisModule):
         self.cmd_plot.disableAutoRange()
         cmdindxs = np.unique(self.cmd)  # find the unique voltages
         colindxs = [int(np.where(cmdindxs == self.cmd[i])[0]) for i in range(len(self.cmd))]  # make a list to use
-        self.meanflag = self.ctrl.PSPReversal_AverageTrials.isChecked()
-        altflag = self.ctrl.PSPReversal_Alternation.isChecked()
-        nskip = self.nclamp
-        if altflag:
-            nskip *= 2
+        nskip = 1
+        if average_flag:
+            ntr = len(self.cmd)/len(self.repc)
+            nskip = len(self.cmd)/len(self.repc)
+        if alternation_flag:
+            ntr *= 2
+        # print 'ntr, skip: ', ntr, nskip
         if multimode:
             datalines = MultiLine(self.time_base, self.traces, downsample=200)
             self.data_plot.addItem(datalines)
             cmdlines = MultiLine(self.time_base, self.cmd_wave, downsample=200)
             self.cmd_plot.addItem(cmdlines)
         else:
-            if self.meanflag:
-                ntr = self.nclamp
-                if altflag:
-                    ntr *= 2
             for i in range(ntr):
-                print 'i: ', i
                 plotthistrace = True
-                if altflag:  # only plot the alternate traces
+                if alternation_flag:  # only plot the alternate traces
                     if ((self.ctrl.PSPReversal_EvenOdd.isChecked() and (i % 2 == 0))  # plot the evens
                             or (not self.ctrl.PSPReversal_EvenOdd.isChecked() and (i % 2 != 0))):  # plot the evens
                         plotthistrace = True
@@ -831,14 +829,13 @@ class PSPReversal(AnalysisModule):
                         plotthistrace = False
                 if plotthistrace:
                     atrace = self.traces[i]
-                    acmd = self.cmd_wave[i]
-                    if self.meanflag and self.nrepc > 1:  # average across trials
+                    acmdwave = self.cmd_wave[i]
+                    if average_flag:
                         atrace = np.mean(self.traces[i::nskip], axis=0)
-                        acmd = np.mean(self.cmd_wave[i::nskip], axis=0)
-                    print i, atrace.shape, acmd.shape
+                        acmdwave = np.mean(self.cmd_wave[i::nskip], axis=0)
                     self.data_plot.plot(x=self.time_base, y=atrace, downSample=500, downSampleMethod='mean',
                                          pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
-                    self.cmd_plot.plot(x=self.time_base, y=acmd, downSample=500, downSampleMethod='mean',
+                    self.cmd_plot.plot(x=self.time_base, y=acmdwave, downSample=500, downSampleMethod='mean',
                                    pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
 
         if self.data_mode in self.ic_modes:
@@ -1110,7 +1107,7 @@ class PSPReversal(AnalysisModule):
         self.results.resultsPSPReversal_text.setText(rtxt)
         # now raise the dock for visibility
         self._host_.dockArea.findAll()[1]['Results'].raiseDock()
-        self.print_formatted_script_output()
+        self.print_formatted_script_output(script_header=False, copytoclipboard=True)
         return rtxt
 
     def remove_html_markup(self, html_string):
@@ -1361,7 +1358,7 @@ class PSPReversal(AnalysisModule):
         """
         self.scripts_form.PSPReversal_ScriptResults_text.copy()
 
-    def print_formatted_script_output(self, script_header=True):
+    def print_formatted_script_output(self, script_header=True, copytoclipboard=False):
         """
         Print a nice formatted version of the analysis output to the terminal.
         The output can be copied to another program (excel, prism) for further analysis
@@ -1393,6 +1390,10 @@ class PSPReversal(AnalysisModule):
             else:
                 ltxt += '<missing>\t'
         print ltxt
+        if copytoclipboard:
+            clipb = QtGui.QApplication.clipboard()
+            clipb.clear(mode=clipb.Clipboard )
+            clipb.setText(ltxt, mode=clipb.Clipboard)
 
 
         # fill table with current information
