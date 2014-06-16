@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './acq4/analysis/modules/PSPReversal/resultsTemplate.ui'
 #
-# Created: Tue Jun  3 14:44:21 2014
+# Created: Fri Jun 13 08:15:06 2014
 #      by: PyQt4 UI code generator 4.9.4
 #
 # WARNING! All changes made in this file will be lost!

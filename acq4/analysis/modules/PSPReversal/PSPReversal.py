@@ -805,24 +805,40 @@ class PSPReversal(AnalysisModule):
         self.cmd_plot.disableAutoRange()
         cmdindxs = np.unique(self.cmd)  # find the unique voltages
         colindxs = [int(np.where(cmdindxs == self.cmd[i])[0]) for i in range(len(self.cmd))]  # make a list to use
+        self.meanflag = self.ctrl.PSPReversal_AverageTrials.isChecked()
+        altflag = self.ctrl.PSPReversal_Alternation.isChecked()
+        nskip = self.nclamp
+        if altflag:
+            nskip *= 2
         if multimode:
             datalines = MultiLine(self.time_base, self.traces, downsample=200)
             self.data_plot.addItem(datalines)
             cmdlines = MultiLine(self.time_base, self.cmd_wave, downsample=200)
             self.cmd_plot.addItem(cmdlines)
         else:
+            if self.meanflag:
+                ntr = self.nclamp
+                if altflag:
+                    ntr *= 2
             for i in range(ntr):
+                print 'i: ', i
                 plotthistrace = True
-                if self.ctrl.PSPReversal_Alternation.isChecked():  # only plot the alternate traces
+                if altflag:  # only plot the alternate traces
                     if ((self.ctrl.PSPReversal_EvenOdd.isChecked() and (i % 2 == 0))  # plot the evens
                             or (not self.ctrl.PSPReversal_EvenOdd.isChecked() and (i % 2 != 0))):  # plot the evens
                         plotthistrace = True
                     else:
                         plotthistrace = False
                 if plotthistrace:
-                    self.data_plot.plot(x=self.time_base, y=self.traces[i], downSample=500, downSampleMethod='mean',
+                    atrace = self.traces[i]
+                    acmd = self.cmd_wave[i]
+                    if self.meanflag and self.nrepc > 1:  # average across trials
+                        atrace = np.mean(self.traces[i::nskip], axis=0)
+                        acmd = np.mean(self.cmd_wave[i::nskip], axis=0)
+                    print i, atrace.shape, acmd.shape
+                    self.data_plot.plot(x=self.time_base, y=atrace, downSample=500, downSampleMethod='mean',
                                          pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
-                    self.cmd_plot.plot(x=self.time_base, y=self.cmd_wave[i], downSample=500, downSampleMethod='mean',
+                    self.cmd_plot.plot(x=self.time_base, y=acmd, downSample=500, downSampleMethod='mean',
                                    pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
 
         if self.data_mode in self.ic_modes:
@@ -1094,6 +1110,7 @@ class PSPReversal(AnalysisModule):
         self.results.resultsPSPReversal_text.setText(rtxt)
         # now raise the dock for visibility
         self._host_.dockArea.findAll()[1]['Results'].raiseDock()
+        self.print_formatted_script_output()
         return rtxt
 
     def remove_html_markup(self, html_string):

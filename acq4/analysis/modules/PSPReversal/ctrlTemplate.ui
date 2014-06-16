@@ -435,16 +435,7 @@
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <property name="leftMargin">
-    <number>0</number>
-   </property>
-   <property name="topMargin">
-    <number>0</number>
-   </property>
-   <property name="rightMargin">
-    <number>0</number>
-   </property>
-   <property name="bottomMargin">
+   <property name="margin">
     <number>0</number>
    </property>
    <property name="spacing">
@@ -964,8 +955,8 @@ Times</string>
        <rect>
         <x>5</x>
         <y>110</y>
-        <width>417</width>
-        <height>171</height>
+        <width>451</width>
+        <height>173</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout_4">
@@ -1646,19 +1637,7 @@ p, li { white-space: pre-wrap; }
          </property>
         </widget>
        </item>
-      </layout>
-     </widget>
-     <widget class="QWidget" name="layoutWidget">
-      <property name="geometry">
-       <rect>
-        <x>5</x>
-        <y>80</y>
-        <width>341</width>
-        <height>25</height>
-       </rect>
-      </property>
-      <layout class="QHBoxLayout" name="horizontalLayout_9">
-       <item>
+       <item row="0" column="0">
         <layout class="QHBoxLayout" name="horizontalLayout_8">
          <item>
           <widget class="QLabel" name="label_6">
@@ -1675,6 +1654,25 @@ p, li { white-space: pre-wrap; }
           </widget>
          </item>
         </layout>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="layoutWidget">
+      <property name="geometry">
+       <rect>
+        <x>5</x>
+        <y>80</y>
+        <width>341</width>
+        <height>25</height>
+       </rect>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout_9">
+       <item>
+        <widget class="QCheckBox" name="PSPReversal_AverageTrials">
+         <property name="text">
+          <string>Average Trials</string>
+         </property>
+        </widget>
        </item>
        <item>
         <widget class="QCheckBox" name="PSPReversal_Alternation">
