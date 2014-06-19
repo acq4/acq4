@@ -435,7 +435,16 @@
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <property name="margin">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
     <number>0</number>
    </property>
    <property name="spacing">
@@ -955,8 +964,8 @@ Times</string>
        <rect>
         <x>5</x>
         <y>110</y>
-        <width>451</width>
-        <height>173</height>
+        <width>341</width>
+        <height>171</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout_4">
@@ -1649,7 +1658,7 @@ p, li { white-space: pre-wrap; }
          <item>
           <widget class="QLabel" name="PSPReversal_dataMode">
            <property name="text">
-            <string>DataMode</string>
+            <string>IC</string>
            </property>
           </widget>
          </item>
@@ -1667,13 +1676,6 @@ p, li { white-space: pre-wrap; }
        </rect>
       </property>
       <layout class="QHBoxLayout" name="horizontalLayout_9">
-       <item>
-        <widget class="QCheckBox" name="PSPReversal_AverageTrials">
-         <property name="text">
-          <string>Average Trials</string>
-         </property>
-        </widget>
-       </item>
        <item>
         <widget class="QCheckBox" name="PSPReversal_Alternation">
          <property name="text">
@@ -1863,6 +1865,19 @@ p, li { white-space: pre-wrap; }
         </layout>
        </item>
       </layout>
+     </widget>
+     <widget class="QCheckBox" name="PSPReversal_AveragePlot">
+      <property name="geometry">
+       <rect>
+        <x>100</x>
+        <y>400</y>
+        <width>87</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>PlotAverages</string>
+      </property>
      </widget>
     </widget>
    </item>

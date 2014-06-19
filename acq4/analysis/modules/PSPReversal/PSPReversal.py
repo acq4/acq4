@@ -269,7 +269,7 @@ class PSPReversal(AnalysisModule):
             #    self.label_up(self.tailPlot, 'V (V)', 'I (A)', 'Tail Current')
 
         # Add color scales and some definitions
-        self.colors = ['w', 'g', 'b', 'r', 'y', 'c']
+        self.colors = ['r', 'g', 'b', 'r', 'y', 'c']
         self.symbols = ['o', 's', 't', 'd', '+']
         self.color_list = itertools.cycle(self.colors)
         self.symbol_list = itertools.cycle(self.symbols)
@@ -737,9 +737,6 @@ class PSPReversal(AnalysisModule):
             self.tstart = cmdtimes[0] # cmd.xvals('Time')[cmdtimes[0]]
             self.tend = np.sum(cmdtimes)  #cmd.xvals('Time')[cmdtimes[1]] + self.tstart
             self.tdur = self.tend - self.tstart
-#            print cmd.xvals('Time')
-#            print cmdtimes
-#            print 'checked false: ', self.tstart, self.tend, self.tdur
 
         # build the list of command values that are used for the fitting
         cmdList = []
@@ -798,9 +795,9 @@ class PSPReversal(AnalysisModule):
         average_flag = self.ctrl.PSPReversal_AveragePlot.isChecked()
         alternation_flag = self.ctrl.PSPReversal_Alternation.isChecked()
         ntr = self.traces.shape[0]
-        self.data_plot.setDownsampling(auto=True, mode='mean')
+        self.data_plot.setDownsampling(auto=False, mode='mean')
         self.data_plot.setClipToView(True)
-        self.cmd_plot.setDownsampling(auto=True, mode='mean')
+        self.cmd_plot.setDownsampling(auto=False, mode='mean')
         self.cmd_plot.setClipToView(True)
         self.data_plot.disableAutoRange()
         self.cmd_plot.disableAutoRange()
@@ -811,12 +808,12 @@ class PSPReversal(AnalysisModule):
             ntr = len(self.cmd)/len(self.repc)
             nskip = len(self.cmd)/len(self.repc)
         if alternation_flag:
-            ntr *= 2
-        # print 'ntr, skip: ', ntr, nskip
+            pass
+            #ntr /= 2
         if multimode:
-            datalines = MultiLine(self.time_base, self.traces, downsample=200)
+            datalines = MultiLine(self.time_base, self.traces, downsample=20)
             self.data_plot.addItem(datalines)
-            cmdlines = MultiLine(self.time_base, self.cmd_wave, downsample=200)
+            cmdlines = MultiLine(self.time_base, self.cmd_wave, downsample=20)
             self.cmd_plot.addItem(cmdlines)
         else:
             for i in range(ntr):
@@ -828,14 +825,15 @@ class PSPReversal(AnalysisModule):
                     else:
                         plotthistrace = False
                 if plotthistrace:
-                    atrace = self.traces[i]
-                    acmdwave = self.cmd_wave[i]
                     if average_flag:
                         atrace = np.mean(self.traces[i::nskip], axis=0)
                         acmdwave = np.mean(self.cmd_wave[i::nskip], axis=0)
-                    self.data_plot.plot(x=self.time_base, y=atrace, downSample=500, downSampleMethod='mean',
+                    else:
+                        atrace = self.traces[i]
+                        acmdwave = self.cmd_wave[i]
+                    self.data_plot.plot(x=self.time_base, y=atrace, downSample=10, downSampleMethod='mean',
                                          pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
-                    self.cmd_plot.plot(x=self.time_base, y=acmdwave, downSample=500, downSampleMethod='mean',
+                    self.cmd_plot.plot(x=self.time_base, y=acmdwave, downSample=10, downSampleMethod='mean',
                                    pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
 
         if self.data_mode in self.ic_modes:
@@ -997,8 +995,15 @@ class PSPReversal(AnalysisModule):
         # #p1 = np.polyder(fit_coeffs, 1)
         #p60 = np.polyval(p1, -60.)
         # using spline fit
+        # The spline fit was done with data not corrected for the jp or ho, so 
+        # we make that adjustment here for the relative voltages
+        # e.g., -60 - (-7+-50) is -60+57 = -3 mV relative to holding (-50-7)
         v60 = (-60 - (jp + ho))/1e3
         p60 = scipy.interpolate.splev([v60], tck, der=1)
+        # same correction for +13 mV, which is the top command voltage used
+        # e.g., 13 + 57 = 70 mV
+        v13 = (13 - (jp + ho))/1e3
+        p13 = scipy.interpolate.splev([v13], tck, der=1)
         #p60 = scipy.interpolate.splev(p1, tck, der=0)
         if len(revno) > 0:
             #perev = np.polyval(p1, revno[0])
@@ -1010,6 +1015,7 @@ class PSPReversal(AnalysisModule):
        # print 'p60: ', p60
         self.analysis_summary['spline'] = tck  # save the spline fit information
         self.analysis_summary['gsyn_60'] = p60[0] * 1e9  #  original im in A, vm in V, g converted to nS
+        self.analysis_summary['gsyn_13'] = p13[0] * 1e9
         self.analysis_summary['gsyn_Erev'] = perev[0] * 1e9  # nS
         self.analysis_summary['I_ionic-'] = np.min(self.measure['win1'])*1e9  # nA
         self.analysis_summary['I_ionic+'] = np.max(self.measure['win1'])*1e9  # nA
@@ -1107,7 +1113,7 @@ class PSPReversal(AnalysisModule):
         self.results.resultsPSPReversal_text.setText(rtxt)
         # now raise the dock for visibility
         self._host_.dockArea.findAll()[1]['Results'].raiseDock()
-        self.print_formatted_script_output(script_header=False, copytoclipboard=True)
+        self.print_formatted_script_output(script_header=True, copytoclipboard=True)
         return rtxt
 
     def remove_html_markup(self, html_string):
@@ -1368,27 +1374,27 @@ class PSPReversal(AnalysisModule):
         data_template = (OrderedDict([('ElapsedTime', '{:>8.2f}'), ('Drugs', '{:<8s}'), ('HoldV', '{:>5.1f}'), ('JP', '{:>5.1f}'),
                                                                         ('Rs', '{:>6.2f}'), ('Cm', '{:>6.1f}'), ('Ru', '{:>6.2f}'),
                                                                         ('Erev', '{:>6.2f}'),
-                                                                        ('gsyn_Erev', '{:>6.2f}'), ('gsyn_60', '{:>6.2f}'),
+                                                                        ('gsyn_Erev', '{:>9.2f}'), ('gsyn_60', '{:>7.2f}'), ('gsyn_13', '{:>7.2f}'), 
                                                                         #('p0', '{:6.3e}'), ('p1', '{:6.3e}'), ('p2', '{:6.3e}'), ('p3', '{:6.3e}'),
-                                                                        ('I_ionic+', '{:>7.3f}'), ('I_ionic-', '{:>7.3f}'), ('ILeak', '{:>7.3f}'),
-                                                                        ('win1Start', '{:>7.3f}'), ('win1End', '{:>7.3f}'),
-                                                                        ('win2Start', '{:>7.3f}'), ('win2End', '{:>7.3f}'),
-                                                                        ('win0Start', '{:>7.3f}'), ('win0End', '{:>7.3f}'),
+                                                                        ('I_ionic+', '{:>8.3f}'), ('I_ionic-', '{:>8.3f}'), ('ILeak', '{:>7.3f}'),
+                                                                        ('win1Start', '{:>9.3f}'), ('win1End', '{:>7.3f}'),
+                                                                        ('win2Start', '{:>9.3f}'), ('win2End', '{:>7.3f}'),
+                                                                        ('win0Start', '{:>9.3f}'), ('win0End', '{:>7.3f}'),
                                                                         ]))
         # summary table header is written anew for each cell
         if script_header:
-            print "Cell\tProtocol\t",
+            print('{:34s}\t{:24s}\t'.format("Cell", "Protocol")),
             for k in data_template.keys():
                 print('{:<s}\t'.format(k)),
             print ''
         ltxt = ''
-        ltxt += ('{:s}\t{:s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Protocol']))
+        ltxt += ('{:34s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Protocol']))
 
         for a in data_template.keys():
             if a in self.analysis_summary.keys():
                 ltxt += ((data_template[a] + '\t').format(self.analysis_summary[a]))
             else:
-                ltxt += '<missing>\t'
+                ltxt += '<   >\t'
         print ltxt
         if copytoclipboard:
             clipb = QtGui.QApplication.clipboard()
@@ -1789,22 +1795,22 @@ class PSPReversal(AnalysisModule):
                 if not self.analysis_parameters['alternation']:
                     self.iv_plot.plot(offset + self.measure['win2cmd'] * 1e3, self.measure['win2'] * 1e9,
                                       symbol=symbol, pen=None,
-                                      symbolSize=6, symbolPen=pg.mkPen({'color': "00F", 'width': 1}),
+                                      symbolSize=6, symbolPen=pen, # pg.mkPen({'color': "00F", 'width': 1}),
                                       symbolBrush=filledbrush)
                 else:
                     if len(self.measure['win2altcmd']) > 0:
                         self.iv_plot.plot(offset + self.measure['win2altcmd'] * 1e3, self.measure['win2on'] * 1e9,
                                           symbol=symbol, pen=None,
-                                          symbolSize=6, symbolPen=pg.mkPen({'color': "00F", 'width': 1}),
+                                          symbolSize=4, symbolPen=pen, # pg.mkPen({'color': "00F", 'width': 1}),
                                           symbolBrush=filledbrush)
                         if len(self.win2IV) == 0:
                             return
                         avPen = pg.mkPen({'color': "F00", 'width': 1})
-                        fitPen = pg.mkPen({'color': "F00", 'width': 2})
+                        fitPen = pg.mkPen({'color': "F00", 'width': 1})
                         self.iv_plot.plot(offset + self.win2IV['vc'], self.win2IV['im'],
                                           pen=None,  # no lines
-                                          symbol='s', symbolSize=6,
-                                          symbolPen=avPen, symbolBrush=filledbrush)
+                                          symbol=symbol, symbolSize=8, # 'o', symbolSize=6,
+                                          symbolPen=pen, symbolBrush=filledbrush)
                         self.iv_plot.plot(offset + self.win2IV['vpl'] * 1e3, self.win2IV['ipl'] * 1e9,
                                           pen=fitPen)  # lines
 
