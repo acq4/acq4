@@ -964,7 +964,7 @@ Times</string>
        <rect>
         <x>5</x>
         <y>110</y>
-        <width>417</width>
+        <width>341</width>
         <height>171</height>
        </rect>
       </property>
@@ -1646,6 +1646,24 @@ p, li { white-space: pre-wrap; }
          </property>
         </widget>
        </item>
+       <item row="0" column="0">
+        <layout class="QHBoxLayout" name="horizontalLayout_8">
+         <item>
+          <widget class="QLabel" name="label_6">
+           <property name="text">
+            <string>Mode:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="PSPReversal_dataMode">
+           <property name="text">
+            <string>IC</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
       </layout>
      </widget>
      <widget class="QWidget" name="layoutWidget">
@@ -1658,24 +1676,6 @@ p, li { white-space: pre-wrap; }
        </rect>
       </property>
       <layout class="QHBoxLayout" name="horizontalLayout_9">
-       <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_8">
-         <item>
-          <widget class="QLabel" name="label_6">
-           <property name="text">
-            <string>Mode:</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLabel" name="PSPReversal_dataMode">
-           <property name="text">
-            <string>DataMode</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </item>
        <item>
         <widget class="QCheckBox" name="PSPReversal_Alternation">
          <property name="text">
@@ -1865,6 +1865,19 @@ p, li { white-space: pre-wrap; }
         </layout>
        </item>
       </layout>
+     </widget>
+     <widget class="QCheckBox" name="PSPReversal_AveragePlot">
+      <property name="geometry">
+       <rect>
+        <x>100</x>
+        <y>400</y>
+        <width>87</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>PlotAverages</string>
+      </property>
      </widget>
     </widget>
    </item>
