@@ -168,6 +168,9 @@ class IVCurve(AnalysisModule):
         for row, s in enumerate([20, 10, 10, 10]):
             self.gridLayout.setRowStretch(row, s)
 
+        self.window_plots={'data': self.data_plot, 'cmd': self.cmd_plot, 'rmp': self.RMP_plot,
+                           'fi': self.fiPlot, 'fsl': self.fslPlot, 'iv': self.IV_plot}
+
      #    self.tailPlot = pg.PlotWidget()
      #    self.gridLayout.addWidget(self.fslPlot, 3, 1, 1, 1)
      #    self.label_up(self.tailPlot, 'V (V)', 'I (A)', 'Tail Current')
@@ -894,26 +897,60 @@ class IVCurve(AnalysisModule):
         (p2, date) = os.path.split(p1)
         return(date, cell, proto, p2)
 
-    def printAnalysis(self):
+    def printAnalysis(self, script_header=True, copytoclipboard=False):
         """
         Print the CCIV summary information (Cell, protocol, etc)
-        Printing goes to the terminal, where the data can be copied
-        to another program like a spreadsheet.
+        Print a nice formatted version of the analysis output to the terminal.
+        The output can be copied to another program (excel, prism) for further analysis
+        :param script_header:
+        :return:
         """
-        (date, cell, proto, p2) = self.fileCellProtocol()
-        smin = np.amin(self.Sequence.values())
-        smax = np.amax(self.Sequence.values())
-        sstep = np.mean(np.diff(self.Sequence.values()))
-        seq = '%g;%g/%g' % (smin, smax, sstep)
-        print '='*80
-        print ("%14s,%14s,%16s,%20s,%9s,%9s,%10s,%9s,%10s" %
-               ("Date", "Cell", "Protocol",
-                "Sequence", "RMP(mV)", " Rin(Mohm)",  "tau(ms)",
-                "ARatio", "tau2(ms)"))
-        print ("%14s,%14s,%16s,%20s,%8.1f,%8.1f,%8.2f,%8.3f,%8.2f" %
-               (date, cell, proto, seq, self.Rmp*1000., self.Rin*1e-6,
-                self.tau*1000., self.AdaptRatio, self.tau2*1000))
-        print '-'*80
+        data_template = (OrderedDict([('ElapsedTime', '{:>8.2f}'), ('Drugs', '{:<8s}'), ('HoldV', '{:>5.1f}'), ('JP', '{:>5.1f}'),
+                                                                        ('Rs', '{:>6.2f}'), ('Cm', '{:>6.1f}'), ('Ru', '{:>6.2f}'),
+                                                                        ('Erev', '{:>6.2f}'),
+                                                                        ('gsyn_Erev', '{:>9.2f}'), ('gsyn_60', '{:>7.2f}'), ('gsyn_13', '{:>7.2f}'),
+                                                                        #('p0', '{:6.3e}'), ('p1', '{:6.3e}'), ('p2', '{:6.3e}'), ('p3', '{:6.3e}'),
+                                                                        ('I_ionic+', '{:>8.3f}'), ('I_ionic-', '{:>8.3f}'), ('ILeak', '{:>7.3f}'),
+                                                                        ('win1Start', '{:>9.3f}'), ('win1End', '{:>7.3f}'),
+                                                                        ('win2Start', '{:>9.3f}'), ('win2End', '{:>7.3f}'),
+                                                                        ('win0Start', '{:>9.3f}'), ('win0End', '{:>7.3f}'),
+                                                                        ]))
+        # summary table header is written anew for each cell
+        if script_header:
+            print('{:34s}\t{:24s}\t'.format("Cell", "Protocol")),
+            for k in data_template.keys():
+                print('{:<s}\t'.format(k)),
+            print ''
+        ltxt = ''
+        ltxt += ('{:34s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Protocol']))
+
+        for a in data_template.keys():
+            if a in self.analysis_summary.keys():
+                ltxt += ((data_template[a] + '\t').format(self.analysis_summary[a]))
+            else:
+                ltxt += '<   >\t'
+        print ltxt
+        if copytoclipboard:
+            clipb = QtGui.QApplication.clipboard()
+            clipb.clear(mode=clipb.Clipboard )
+            clipb.setText(ltxt, mode=clipb.Clipboard)
+
+        #
+        # (date, cell, proto, p2) = self.fileCellProtocol()
+        # print 'sequence: ', self.values
+        # smin = np.amin(self.values)*1e12
+        # smax = np.amax(self.values)*1e12
+        # sstep = np.mean(np.diff(self.values))*1e12
+        # seq = '%g;%g/%g' % (smin, smax, sstep)
+        # print '='*80
+        # print ("%14s,%14s,%16s,%20s,%9s,%9s,%10s,%9s,%10s" %
+        #        ("Date", "Cell", "Protocol",
+        #         "Sequence", "RMP(mV)", " Rin(Mohm)",  "tau(ms)",
+        #         "ARatio", "tau2(ms)"))
+        # print ("%14s,%14s,%16s,%20s,%8.1f,%8.1f,%8.2f,%8.3f,%8.2f" %
+        #        (date, cell, proto, seq, self.Rmp*1000., self.Rin*1e-6,
+        #         self.tau*1000., self.AdaptRatio, self.tau2*1000))
+        # print '-'*80
 
     def update_Tau_membrane(self, peak_time=None, printWindow=True, whichTau=1):
         """
@@ -1436,125 +1473,6 @@ class IVCurve(AnalysisModule):
             self.peakmode = self.ctrl.IVCurve_PeakMode.currentText()
             self.update_pkAnalysis()
 
-    def update_RMPPlot_MP(self):
-        """
-            Draw the RMP to the I-V window using matplotlib
-            Note: x axis can be I, T, or  # spikes
-        """
-        if not HAVE_MPL:
-            return
-        if self.ctrl.IVCurve_KeepAnalysis.isChecked() is False:
-            self.mplax['RMP'].clear()
-        if len(self.ivbaseline) > 0:
-            mode = self.ctrl.IVCurve_RMPMode.currentIndex()
-            ax = self.mplax['RMP']
-            ax.set_title('RMP', verticalalignment='top', size=11)
-            if self.data_mode in self.ic_modes:
-                sf = 1e12
-                isf = 1e3
-                ax.set_ylabel('V (mV)', size=9)
-            else:
-                sf = 1e3
-                isf = 1e12
-                ax.set_ylabel('I (pA)', size=9)
-            if mode == 0:
-                ax.plot(self.trace_times, isf*np.array(self.ivbaseline),
-                        'k-s', markersize=2)
-                ax.set_xlabel('T (s)', size=9)
-            elif mode == 1:
-                ax.plot(np.array
-                        (self.values)*sf, isf*np.array(self.ivbaseline),
-                        'k-s', markersize=2)
-                if self.data_mode in self.ic_modes:
-                    ax.set_xlabel('I (pA)', size=9)
-                else:
-                    ax.set_xlabel('V (mV)', size=9)
-            elif mode == 2:
-                ax.plot(self.spikecount, isf*np.array(self.ivbaseline),
-                        'k-s', markersize=2)
-                ax.set_xlabel('Spikes', size=9)
-            else:
-                pass
-
-    def update_IVPlot_MP(self):
-        """
-            Draw the IV o the I-V window using matplotlib
-            Note: x axis can be I, T, or  # spikes
-        """
-        if not HAVE_MPL:
-            return
-        if self.ctrl.IVCurve_KeepAnalysis.isChecked() is False:
-            self.mplax['IV'].clear()
-        ax = self.mplax['IV']
-        n = self.keep_analysis_count
-        if self.data_mode in self.ic_modes:
-            if (len(self.ivss) > 0 and
-                    self.ctrl.IVCurve_showHide_lrss.isChecked()):
-                ax.plot(self.ivss_cmd*1e12, self.ivss*1e3, 'k-s', markersize=3)
-            if (len(self.ivpk) > 0 and
-                    self.ctrl.IVCurve_showHide_lrpk.isChecked()):
-                ax.plot(self.ivpk_cmd*1e12, self.ivpk*1e3, 'r-o', markersize=3)
-            ax.set_xlabel('I (pA)', size=9)
-            ax.set_ylabel('V (mV)', size=9)
-            ax.set_title('I-V (CC)', verticalalignment='top', size=11)
-        if self.data_mode in self.vc_modes:
-            if (len(self.ivss) > 0 and
-                    self.ctrl.IVCurve_showHide_lrss.isChecked()):
-                ax.plot(self.ivss_cmd*1e3, self.ivss*1e9, 'k-s', markersize=3)
-            if (len(self.ivpk) > 0 and
-                    self.ctrl.IVCurve_showHide_lrpk.isChecked()):
-                ax.plot(self.ivpk_cmd*1e3, self.ivpk*1e9, 'r-o', markersize=3)
-            ax.set_xlabel('V (mV)', size=9)
-            ax.set_ylabel('I (nA)', size=9)
-            ax.set_title('I-V (VC)', verticalalignment='top', size=11)
-
-    def update_SpikePlots_MP(self):
-        """
-            Draw the spike count data the I-V window using matplotlib
-            Note: x axis can be I, T, or  # spikes
-        """
-        if self.ctrl.IVCurve_KeepAnalysis.isChecked() is False:
-            axfi = self.mplax['FI']
-            axfi.clear()
-            axfsl = self.mplax['FSL']
-            axfsl.clear()
-        if self.data_mode in self.vc_modes:
-            return
-        mode = self.ctrl.IVCurve_RMPMode.currentIndex()  # get x axis mode
-        commands = np.array(self.values)
-        self.cmd = commands[self.nospk]
-        self.spcmd = commands[self.spk]
-        iscale = 1.0e12  # convert to pA
-        yfslsc = 1.0  # convert to msec
-        if mode == 0:  # plot with time as x axis
-            xfi = self.trace_times
-            xfsl = self.trace_times
-            select = range(len(self.trace_times))
-            xlabel = 'T (s)'
-        elif mode == 1:  # plot with current as x
-            select = self.spk
-            xfi = commands*iscale
-            xfsl = self.spcmd*iscale
-            xlabel = 'I (pA)'
-        elif mode == 2:  # plot with spike counts as x
-            xfi = self.spikecount
-            xfsl = self.spikecount
-            select = range(len(self.spikecount))
-            xlabel = 'Spikes (N)'
-        else:
-            return  # mode not in available list
-        axfi.plot(xfi, self.spikecount, 'b-s', markersize=3)
-        axfsl.plot(xfsl, self.fsl[select]*yfslsc, 'g-^', markersize=3)
-        axfsl.plot(xfsl, self.fisi[select]*yfslsc, 'y-s', markersize=3)
-        if len(self.spcmd) > 0:
-            axfsl.set_xlim([0.0, np.max(xfsl)])
-        axfi.set_xlabel(xlabel, size=9)
-        axfi.set_ylabel('\# spikes', size=9)
-        axfi.set_title('F-I', verticalalignment='top', size=11)
-        axfsl.set_xlabel(xlabel, size=9)
-        axfsl.set_ylabel('FSL/FISI', size=9)
-        axfsl.set_title('FSL/FISI', verticalalignment='top', size=11)
-
     def cleanRepl(self, matchobj):
         """
             Clean up a directory name so that it can be written to a
@@ -1580,7 +1498,11 @@ class IVCurve(AnalysisModule):
 
         if not HAVE_MPL:
             raise Exception("Method requires matplotlib; not importable.")
-        fig = pylab.figure(1)
+
+        self.window_plots = {'data': self.data_plot, 'cmd': self.cmd_plot, 'RMP': self.RMP_plot,
+                           'FI': self.fiPlot, 'FSL': self.fslPlot, 'IV': self.IV_plot}
+        fig = pylab.figure()
+        pylab.rcParams['text.usetex'] = False
          # escape filename information so it can be rendered by removing
          # common characters that trip up latex...:
         escs = re.compile('[\\\/_]')
@@ -1588,7 +1510,7 @@ class IVCurve(AnalysisModule):
         tiname = re.sub(escs, self.cleanRepl, tiname)
         fig.suptitle(r''+tiname[1:-1])
         pylab.autoscale(enable=True, axis='both', tight=None)
-        if self.data_mode not in self.ic_modes or self.timebase is None:
+        if self.data_mode not in self.ic_modes or self.time_base is None:
             iscale = 1e3
         else:
             iscale = 1e12
@@ -1603,26 +1525,62 @@ class IVCurve(AnalysisModule):
         gs.update(wspace=0.25, hspace=0.5)
         self.mplax['data'].set_title('Data', verticalalignment='top', size=11)
 
-        for i in range(len(self.traces)):
-            self.mplax['data'].plot(self.time_base, self.traces[i]*1e3, 'k')
-            self.mplax['cmd'].plot(self.time_base, self.cmd_wave[i]*iscale, 'k')
-        self.mplax['data'].set_ylabel('mV', size=9)
-        self.mplax['data'].set_xlabel('T (s)', size=9)
-        self.mplax['cmd'].set_ylabel('pA', size=9)
-        self.mplax['cmd'].set_xlabel('T (s)', size=9)
-        self.update_IVPlot_MP()
-        self.update_RMPPlot_MP()
-        self.update_SpikePlots_MP()
-
-        for ax in self.mplax:
-            self.cleanAxes(self.mplax[ax])
-        for a in ['data', 'IV', 'FI', 'FSL', 'RMP', 'cmd']:
-            self.formatTicks(self.mplax[a], 'y', '%d')
-        for a in ['FI', 'IV', 'RMP', 'FSL']:
-            self.formatTicks(self.mplax[a], 'x', '%d')
+        for w in self.window_plots.keys():
+            self.export_panel(self.window_plots[w], self.mplax[w])
         pylab.draw()
-        pylab.savefig(os.path.join(self.commonPrefix,self.protocolfile))
+ #       pylab.savefig(os.path.join(self.commonPrefix, self.protocolfile))
         pylab.show()
+
+
+    def export_panel(self, pgitem, ax):
+        """
+        export_panel writes the contents of one pyqtgraph window into a specified
+        matplotlib axis item
+        :param fileName:
+        :return:
+        """
+        # get labels from the pyqtgraph graphic item
+        plitem = pgitem.getPlotItem()
+        xlabel = plitem.axes['bottom']['item'].label.toPlainText()
+        ylabel = plitem.axes['left']['item'].label.toPlainText()
+        title = plitem.titleLabel.text
+        fn = pg.functions
+        ax.clear()
+        self.cleanAxes(ax)
+        #ax.grid(True)
+
+        for item in plitem.curves:
+            x, y = item.getData()
+            opts = item.opts
+            pen = fn.mkPen(opts['pen'])
+            if pen.style() == QtCore.Qt.NoPen:
+                linestyle = ''
+            else:
+                linestyle = '-'
+            color = tuple([c/255. for c in fn.colorTuple(pen.color())])
+            symbol = opts['symbol']
+            if symbol == 't':
+                symbol = '^'
+            symbolPen = fn.mkPen(opts['symbolPen'])
+            symbolBrush = fn.mkBrush(opts['symbolBrush'])
+            markeredgecolor = tuple([c/255. for c in fn.colorTuple(symbolPen.color())])
+            markerfacecolor = tuple([c/255. for c in fn.colorTuple(symbolBrush.color())])
+            markersize = opts['symbolSize']
+
+            if opts['fillLevel'] is not None and opts['fillBrush'] is not None:
+                fillBrush = fn.mkBrush(opts['fillBrush'])
+                fillcolor = tuple([c/255. for c in fn.colorTuple(fillBrush.color())])
+                ax.fill_between(x=x, y1=y, y2=opts['fillLevel'], facecolor=fillcolor)
+
+            pl = ax.plot(x, y, marker=symbol, color=color, linewidth=pen.width(),
+                    linestyle=linestyle, markeredgecolor=markeredgecolor, markerfacecolor=markerfacecolor,
+                    markersize=markersize)
+            xr, yr = plitem.viewRange()
+            ax.set_xbound(*xr)
+            ax.set_ybound(*yr)
+        ax.set_xlabel(xlabel)  # place the labels.
+        ax.set_ylabel(ylabel)
+
 
     def dbStoreClicked(self):
         """
@@ -1696,7 +1654,7 @@ class IVCurve(AnalysisModule):
         if type(axl) is not list:
             axl = [axl]
         fontProperties = {'family': 'sans-serif', 'sans-serif': [font],
-                          'weight': 'normal', 'size': size}
+                          'weight': 'normal', 'font-size': size}
         for ax in axl:
             for tick in ax.xaxis.get_major_ticks():
                 tick.label1.set_family('sans-serif')
@@ -1707,8 +1665,16 @@ class IVCurve(AnalysisModule):
                 tick.label1.set_family('sans-serif')
                 tick.label1.set_fontname(stdFont)
                 tick.label1.set_size(size)
-            ax.set_xticklabels(ax.get_xticks(), fontProperties)
-            ax.set_yticklabels(ax.get_yticks(), fontProperties)
+            # xlab = ax.axes.get_xticklabels()
+            # print xlab
+            # print dir(xlab)
+            # for x in xlab:
+            #     x.set_fontproperties(fontProperties)
+            # ylab = ax.axes.get_yticklabels()
+            # for y in ylab:
+            #     y.set_fontproperties(fontProperties)
+            #ax.set_xticklabels(ax.get_xticks(), fontProperties)
+            #ax.set_yticklabels(ax.get_yticks(), fontProperties)
             ax.xaxis.set_smart_bounds(True)
             ax.yaxis.set_smart_bounds(True)
             ax.tick_params(axis='both', labelsize=9)
@@ -1727,3 +1693,4 @@ class IVCurve(AnalysisModule):
                 ax.xaxis.set_major_formatter(majorFormatter)
             if 'y' in axis:
                 ax.yaxis.set_major_formatter(majorFormatter)
+
