@@ -130,9 +130,12 @@ class IVCurve(AnalysisModule):
          # grab input form the "Ctrl" window
         self.ctrl.IVCurve_Update.clicked.connect(self.updateAnalysis)
         self.ctrl.IVCurve_PrintResults.clicked.connect(self.printAnalysis)
-        self.ctrl.IVCurve_MPLExport.clicked.connect(self.matplotlibExport)
         if not HAVE_MPL:
             self.ctrl.IVCurve_MPLExport.setEnabled = False  # make button inactive
+#        self.ctrl.IVCurve_MPLExport.clicked.connect(self.matplotlibExport)
+        else:
+            self.ctrl.IVCurve_MPLExport.clicked.connect(
+                    functools.partial(self.matplotlibExport, gridlayout=self.gridLayout))
         self.ctrl.IVCurve_KeepAnalysis.clicked.connect(self.resetKeepAnalysis)
         self.ctrl.IVCurve_getFileInfo.clicked.connect(self.get_file_information)
         [self.ctrl.IVCurve_RMPMode.currentIndexChanged.connect(x)
@@ -141,7 +144,8 @@ class IVCurve(AnalysisModule):
         self.clearResults()
         self.layout = self.getElement('Plots', create=True)
 
-         # instantiate the graphs using a gridLayout
+
+        # instantiate the graphs using a gridLayout (also facilitates matplotlib export; see export routine below)
         self.data_plot = pg.PlotWidget()
         self.gridLayout.addWidget(self.data_plot, 0, 0, 3, 1)
         self.label_up(self.data_plot, 'T (s)', 'V (V)', 'Data')
@@ -168,8 +172,6 @@ class IVCurve(AnalysisModule):
         for row, s in enumerate([20, 10, 10, 10]):
             self.gridLayout.setRowStretch(row, s)
 
-        self.window_plots={'data': self.data_plot, 'cmd': self.cmd_plot, 'rmp': self.RMP_plot,
-                           'fi': self.fiPlot, 'fsl': self.fslPlot, 'iv': self.IV_plot}
 
      #    self.tailPlot = pg.PlotWidget()
      #    self.gridLayout.addWidget(self.fslPlot, 3, 1, 1, 1)
@@ -179,6 +181,10 @@ class IVCurve(AnalysisModule):
         self.color_scale = pg.GradientLegend((20, 150), (-10, -10))
         self.data_plot.scene().addItem(self.color_scale)
 
+
+    def addtoLayout(self, pgitem, a, b, c, d):
+        self.gridLayout.addWidget(pgitem, a, b, c, d)
+        return({'plot': pgitem, 'position': (a, b, c, d)})
 
     def clearResults(self):
         """
@@ -1489,52 +1495,49 @@ class IVCurve(AnalysisModule):
         else:
             return ''
 
-    def matplotlibExport(self):
+    def matplotlibExport(self, gridlayout=None):
         """
-        Make a matplotlib window that shows the current data in the same
+        Constructs a matplotlib window that shows the current plots laid out in the same
         format as the pyqtgraph window
-        Probably you would use this for publication purposes.
+        You might use this for publication purposes, since matplotlib allows export
+        of the window to a variety of formats, and will contain proper fonts (not "outlined").
+        Also can be used for automatic generation of PDF files with savefig.
+
+        :param: QtGridLayout object that specifies how the grid was built
+                The layout will contain pyqtgraph widgets added with .addLayout
+        :return: nothing
+
         """
 
         if not HAVE_MPL:
-            raise Exception("Method requires matplotlib; not importable.")
+            raise Exception("Method matplotlibExport requires matplotlib; not importable.")
+        if gridlayout is None or gridlayout.__class__ != QtGui.QGridLayout().__class__:
+            raise Exception("Method matplotlibExport requires a QGridLayout")
 
-        self.window_plots = {'data': self.data_plot, 'cmd': self.cmd_plot, 'RMP': self.RMP_plot,
-                           'FI': self.fiPlot, 'FSL': self.fslPlot, 'IV': self.IV_plot}
         fig = pylab.figure()
         pylab.rcParams['text.usetex'] = False
-         # escape filename information so it can be rendered by removing
-         # common characters that trip up latex...:
+        # escape filename information so it can be rendered by removing
+        # common characters that trip up latex...:
         escs = re.compile('[\\\/_]')
         tiname = '%r' % self.filename
-        tiname = re.sub(escs, self.cleanRepl, tiname)
-        fig.suptitle(r''+tiname[1:-1])
+        tiname = re.sub(escs, self.cleanRepl, tiname)[1:-1]
+        fig.suptitle(r''+tiname)
         pylab.autoscale(enable=True, axis='both', tight=None)
-        if self.data_mode not in self.ic_modes or self.time_base is None:
-            iscale = 1e3
-        else:
-            iscale = 1e12
-        self.mplax = {}
-        gs = gridspec.GridSpec(4, 2)
-        self.mplax['data'] = pylab.subplot(gs[0:3, 0])
-        self.mplax['cmd'] = pylab.subplot(gs[3, 0])
-        self.mplax['IV'] = pylab.subplot(gs[0, 1])
-        self.mplax['RMP'] = pylab.subplot(gs[1, 1])
-        self.mplax['FI'] = pylab.subplot(gs[2, 1])
-        self.mplax['FSL'] = pylab.subplot(gs[3, 1])
-        gs.update(wspace=0.25, hspace=0.5)
-        self.mplax['data'].set_title('Data', verticalalignment='top', size=11)
-
-        for w in self.window_plots.keys():
-            self.export_panel(self.window_plots[w], self.mplax[w])
+        # build the plot based on the grid layout
+        gs = gridspec.GridSpec(gridlayout.rowCount(), gridlayout.columnCount())  # build matplotlib gridspec
+        for i in range(gridlayout.count()):
+            w = gridlayout.itemAt(i).widget()  # retrieve the plot widget...
+            (x, y, c, r) = gridlayout.getItemPosition(i)  # and gridspecs paramters
+            mplax = pylab.subplot(gs[x:(c+x), y:(r+y)])  # map to mpl subplot geometry
+            self.export_panel(w, mplax)
+        gs.update(wspace=0.25, hspace=0.5)  # adjust spacing
         pylab.draw()
  #       pylab.savefig(os.path.join(self.commonPrefix, self.protocolfile))
         pylab.show()
 
-
     def export_panel(self, pgitem, ax):
         """
-        export_panel writes the contents of one pyqtgraph window into a specified
+        export_panel recreates the contents of one pyqtgraph plot item into a specified
         matplotlib axis item
         :param fileName:
         :return:
@@ -1546,8 +1549,7 @@ class IVCurve(AnalysisModule):
         title = plitem.titleLabel.text
         fn = pg.functions
         ax.clear()
-        self.cleanAxes(ax)
-        #ax.grid(True)
+        self.cleanAxes(ax)  # make a "nice" plot
 
         for item in plitem.curves:
             x, y = item.getData()
@@ -1573,14 +1575,13 @@ class IVCurve(AnalysisModule):
                 ax.fill_between(x=x, y1=y, y2=opts['fillLevel'], facecolor=fillcolor)
 
             pl = ax.plot(x, y, marker=symbol, color=color, linewidth=pen.width(),
-                    linestyle=linestyle, markeredgecolor=markeredgecolor, markerfacecolor=markerfacecolor,
-                    markersize=markersize)
+                         linestyle=linestyle, markeredgecolor=markeredgecolor, markerfacecolor=markerfacecolor,
+                         markersize=markersize)
             xr, yr = plitem.viewRange()
             ax.set_xbound(*xr)
             ax.set_ybound(*yr)
         ax.set_xlabel(xlabel)  # place the labels.
         ax.set_ylabel(ylabel)
-
 
     def dbStoreClicked(self):
         """
