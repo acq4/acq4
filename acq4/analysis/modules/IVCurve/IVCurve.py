@@ -52,6 +52,7 @@ class IVCurve(AnalysisModule):
         AnalysisModule.__init__(self, host)
 
         self.loaded = None
+        self.filename = None
         self.dirsSet = None
         self.lrss_flag = True   # show is default
         self.lrpk_flag = True
@@ -105,13 +106,14 @@ class IVCurve(AnalysisModule):
 #        self.ctrl.IVCurve_MPLExport.clicked.connect(self.matplotlibExport)
         else:
             self.ctrl.IVCurve_MPLExport.clicked.connect(
-                    functools.partial(matplotlibExporter.matplotlibExport, gridlayout=self.gridLayout))
+                    functools.partial(matplotlibExporter.matplotlibExport, gridlayout=self.gridLayout,
+                                      title=self.filename))
         self.ctrl.IVCurve_KeepAnalysis.clicked.connect(self.resetKeepAnalysis)
         self.ctrl.IVCurve_getFileInfo.clicked.connect(self.get_file_information)
         [self.ctrl.IVCurve_RMPMode.currentIndexChanged.connect(x)
          for x in [self.update_rmpAnalysis, self.countSpikes]]
         self.ctrl.dbStoreBtn.clicked.connect(self.dbStoreClicked)
-        self.clearResults()
+        self.clear_results()
         self.layout = self.getElement('Plots', create=True)
 
 
@@ -150,23 +152,21 @@ class IVCurve(AnalysisModule):
          # Add a color scale
         self.color_scale = pg.GradientLegend((20, 150), (-10, -10))
         self.data_plot.scene().addItem(self.color_scale)
+        self.ctrl.pushButton.clicked.connect(functools.partial(self.initialize_regions,
+                                                                             reset=True))
 
-
-    def addtoLayout(self, pgitem, a, b, c, d):
-        self.gridLayout.addWidget(pgitem, a, b, c, d)
-        return({'plot': pgitem, 'position': (a, b, c, d)})
-
-    def clearResults(self):
+    def clear_results(self):
         """
-        clearResults resets variables.
+        clear results resets variables.
 
-        This is typically needed everytime a new data set is loaded.
+        This is typically needed every time a new data set is loaded.
         """
         self.filename = ''
-        self.Rin = 0.0
+        self.r_in = 0.0
         self.tau = 0.0
-        self.AdaptRatio = 0.0
+        self.adapt_ratio = 0.0
         self.traces = None
+        self.spikes_counted = False
         self.nospk = []
         self.spk = []
         self.cmd = []
@@ -178,56 +178,10 @@ class IVCurve(AnalysisModule):
         self.fisi = []  # first isi
         self.ar = []  # adaptation ratio
         self.rmp = []  # resting membrane potential during sequence
+        self.analysis_summary={}
 
     def resetKeepAnalysis(self):
         self.keep_analysis_count = 0  # reset counter.
-
-
-     ######
-     # The next set of short routines control showing and hiding of regions
-     # in the plot of the raw data (traces)
-     ######
-    def showhide_lrss(self, flagvalue):
-        if flagvalue:
-            self.lrss.show()
-            self.ctrl.IVCurve_showHide_lrss.setCheckState(QtCore.Qt.Checked)
-        else:
-            self.lrss.hide()
-            self.ctrl.IVCurve_showHide_lrss.setCheckState(QtCore.Qt.Unchecked)
-
-    def showhide_lrpk(self, flagvalue):
-        if flagvalue:
-            self.lrpk.show()
-            self.ctrl.IVCurve_showHide_lrpk.setCheckState(QtCore.Qt.Checked)
-        else:
-            self.lrpk.hide()
-            self.ctrl.IVCurve_showHide_lrpk.setCheckState(QtCore.Qt.Unchecked)
-
-    def showhide_lrtau(self, flagvalue):
-        if flagvalue:
-            self.lrtau.show()
-            self.ctrl.IVCurve_showHide_lrtau.setCheckState(QtCore.Qt.Checked)
-        else:
-            self.lrtau.hide()
-            self.ctrl.IVCurve_showHide_lrtau.\
-                setCheckState(QtCore.Qt.Unchecked)
-
-    def showhide_lrrmp(self, flagvalue):
-        if flagvalue:
-            self.lrrmp.show()
-            self.ctrl.IVCurve_showHide_lrrmp.setCheckState(QtCore.Qt.Checked)
-        else:
-            self.lrrmp.hide()
-            self.ctrl.IVCurve_showHide_lrrmp.\
-                setCheckState(QtCore.Qt.Unchecked)
-
-    def showhide_leak(self, flagvalue):
-        if flagvalue:
-            self.lrleak.show()
-            self.ctrl.IVCurve_subLeak.setCheckState(QtCore.Qt.Checked)
-        else:
-            self.lrleak.hide()
-            self.ctrl.IVCurve_subLeak.setCheckState(QtCore.Qt.Unchecked)
 
     def show_or_hide(self, lrregion=None, forcestate=None):
         """
@@ -259,15 +213,7 @@ class IVCurve(AnalysisModule):
                 region['state'].setChecked(QtCore.Qt.Unchecked)
                 region['shstate'] = False
 
-    def uniq(self, inlist):
-         # order preserving detection of unique values in a list
-        uniques = []
-        for item in inlist:
-            if item not in uniques:
-                uniques.append(item)
-        return uniques
-
-    def initialize_regions(self):
+    def initialize_regions(self, reset=False):
         """
         initialize_regions sets the linear regions on the displayed data
 
@@ -291,7 +237,7 @@ class IVCurve(AnalysisModule):
                                       'start': self.ctrl.IVCurve_LeakMin,
                                       'stop': self.ctrl.IVCurve_LeakMax,
                                       'updater': self.updateAnalysis,
-                                      'units': 'ms'}
+                                      'units': 'pA'}
             self.ctrl.IVCurve_subLeak.region = self.regions['lrleak']['region']  # save region with checkbox
             self.regions['lrwin0'] = {'name': 'win0',  # peak window
                                       'region': pg.LinearRegionItem([0, 1],
@@ -351,51 +297,27 @@ class IVCurve(AnalysisModule):
             self.regions['lrwin1']['region'].setZValue(100)
             self.regions['lrtau']['region'].setZValue(1000)
             self.regions['lrrmp']['region'].setZValue(1000)
+            self.regions['lrleak']['region'].setZValue(1000)
+
+            for regkey, reg in self.regions.items():  # initialize region states
+                self.show_or_hide(lrregion=regkey, forcestate=reg['shstate'])
+
             for regkey, reg in self.regions.items():
-                print reg
                 reg['plot'].addItem(reg['region'])
                 reg['state'].clicked.connect(functools.partial(self.show_or_hide,
                                                                              lrregion=regkey))
                 if reg['updater'] is not None:
                     reg['region'].sigRegionChangeFinished.connect(
                     functools.partial(reg['updater'], region=reg['name']))
-                # if self.regions[reg]['mode'] is not None:
-                #     self.regions[reg]['mode'].currentIndexChanged.connect(self.interactive_analysis)
-            self.regions_exist = True
+            # if self.regions[reg]['mode'] is not None:
+            #     self.regions[reg]['mode'].currentIndexChanged.connect(self.interactive_analysis)
+        if reset:
+            for regkey, reg in self.regions.items():  # initialize region states
+                self.show_or_hide(lrregion=regkey, forcestate=reg['shstate'])
         for reg in self.regions.itervalues():
             for s in ['start', 'stop']:
                 reg[s].setSuffix(' ' + reg['units'])
-
-    def clear_results(self):
-        """
-        clearResults resets variables.
-
-        This is typically needed every time a new data set is loaded.
-        """
-        self.filename = ''
-        self.r_in = 0.0
-        self.tau = 0.0
-        self.adapt_ratio = 0.0
-        self.traces = None
-        self.spikes_counted = False
-        self.nospk = []
-        self.spk = []
-        self.cmd = []
-        self.sequence = {}
-        self.measure = {'rmp': [], 'rmpcmd': [],
-                        'leak': [],
-                        'win1': [], 'win1cmd': [], 'win1off': [], 'win1on': [],
-                        'winaltcmd': [],
-                        'win2': [], 'win2cmd': [], 'win2off': [], 'win2on': [],
-                        'win2altcmd': [],
-                        }
-        #for m in self.measure.keys():
-        #    self.measure[m] = []
-        self.rmp = []  # resting membrane potential during sequence
-        self.analysis_summary = {}
-        self.win2IV = {}
-        self.win1fits = None
-        self.analysis_parameters = {}
+        self.regions_exist = True
 
     def get_file_information(self, default_dh=None):
         """
@@ -690,8 +612,6 @@ class IVCurve(AnalysisModule):
         self.data_plot.disableAutoRange()
         self.cmd_plot.disableAutoRange()
         cmdindxs = np.unique(self.cmd)  # find the unique voltages
-        print cmdindxs
-        print len(self.cmd)
         colindxs = [int(np.where(cmdindxs == self.cmd[i])[0]) for i in range(len(self.cmd))]  # make a list to use
         nskip = 1
         # print 'ntr, skip: ', ntr, nskip
@@ -790,7 +710,7 @@ class IVCurve(AnalysisModule):
         The following variables are set:
         self.spikecount: a 1-D numpy array of spike counts, aligned with the
             current (command)
-        self.AdaptRatio: the adaptation ratio of the spike train
+        self.adapt_ratio: the adaptation ratio of the spike train
         self.fsl: a numpy array of first spike latency for each command level
         self.fisi: a numpy array of first interspike intervals for each
             command level
@@ -850,7 +770,7 @@ class IVCurve(AnalysisModule):
                                            0.0, self.tstart)
         iAR = np.where(ar > 0)
         ARmean = np.mean(ar[iAR])  # only where we made the measurement
-        self.AdaptRatio = ARmean
+        self.adapt_ratio = ARmean
         self.ctrl.IVCurve_AR.setText(u'%7.3f' % (ARmean))
         fisi = fisi*1.0e3
         fsl = fsl*1.0e3
@@ -924,8 +844,8 @@ class IVCurve(AnalysisModule):
         #         "Sequence", "RMP(mV)", " Rin(Mohm)",  "tau(ms)",
         #         "ARatio", "tau2(ms)"))
         # print ("%14s,%14s,%16s,%20s,%8.1f,%8.1f,%8.2f,%8.3f,%8.2f" %
-        #        (date, cell, proto, seq, self.Rmp*1000., self.Rin*1e-6,
-        #         self.tau*1000., self.AdaptRatio, self.tau2*1000))
+        #        (date, cell, proto, seq, self.Rmp*1000., self.r_in*1e-6,
+        #         self.tau*1000., self.adapt_ratio, self.tau2*1000))
         # print '-'*80
 
     def update_Tau_membrane(self, peak_time=None, printWindow=True, whichTau=1):
@@ -989,7 +909,7 @@ class IVCurve(AnalysisModule):
             Based on analysis in Fujino and Oertel, J. Neuroscience 2001,
             to type cells based on different Ih kinetics and magnitude.
         """
-        if self.ctrl.IVCurve_showHide_lrtau.isChecked() is not True:
+        if not self.ctrl.IVCurve_showHide_lrtau.isChecked():
             return
         bovera = 0.0
         rgn = self.regions['lrtau']['region'].getRegion()
@@ -1009,7 +929,6 @@ class IVCurve(AnalysisModule):
         target = self.traces[amin]
          # get Vrmp -  # rmp approximation.
         vrmp = np.median(target['Time': 0.0:self.tstart-0.005])*1000.
-        self.ctrl.IVCurve_vrmp.setText('%8.2f' % (vrmp))
         self.neg_vrmp = vrmp
          # get peak and steady-state voltages
         pkRgn = self.regions['lrwin0']['region'].getRegion()
@@ -1137,10 +1056,10 @@ class IVCurve(AnalysisModule):
             self.cmd = commands[nospk]
              # compute Rin from the SS IV:
             if len(self.cmd) > 0 and len(self.ivss) > 0:
-                self.Rin = np.max(np.diff
+                self.r_in = np.max(np.diff
                                      (self.ivss)/np.diff(self.cmd))
                 self.ctrl.IVCurve_Rin.setText(u'%9.1f M\u03A9'
-                                              % (self.Rin*1.0e-6))
+                                              % (self.r_in*1.0e-6))
             else:
                 self.ctrl.IVCurve_Rin.setText(u'No valid points')
         self.yleak = np.zeros(len(self.ivss))
@@ -1248,7 +1167,9 @@ class IVCurve(AnalysisModule):
         self.ivbaseline = data1.mean(axis=1)  # all traces
         self.ivbaseline_cmd = commands
         self.cmd = commands
-        self.averageRMP = np.mean(self.ivbaseline)
+        self.averageRMP = np.mean(self.ivbaseline)*1e3  # convert to mV
+        self.ctrl.IVCurve_vrmp.setText('%8.2f' % (self.averageRMP))
+
         self.update_RMPPlot()
 
     def make_map_symbols(self):
@@ -1469,7 +1390,7 @@ class IVCurve(AnalysisModule):
 
         rec = {
             'IVCurve_rmp': self.neg_vrmp/1000.,
-            'IVCurve_rinp': self.Rin,
+            'IVCurve_rinp': self.r_in,
             'IVCurve_taum': self.tau,
             'IVCurve_neg_cmd': self.neg_cmd,
             'IVCurve_neg_pk': self.neg_pk,

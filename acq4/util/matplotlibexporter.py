@@ -75,6 +75,7 @@ def matplotlibExport(gridlayout=None, title=None):
     # escape filename information so it can be rendered by removing
     # common characters that trip up latex...:
     escs = re.compile('[\\\/_]')
+    print title
     if title is not None:
         tiname = '%r' % title
         tiname = re.sub(escs, cleanRepl, tiname)[1:-1]
@@ -88,7 +89,7 @@ def matplotlibExport(gridlayout=None, title=None):
         mplax = pylab.subplot(gs[x:(c+x), y:(r+y)])  # map to mpl subplot geometry
         export_panel(w, mplax)  # now fill the plot
     gs.update(wspace=0.25, hspace=0.5)  # adjust spacing
-    pylab.draw()
+#    pylab.draw()
 # hook to save figure - not used here
 #       pylab.savefig(os.path.join(self.commonPrefix, self.protocolfile))
     pylab.show()
