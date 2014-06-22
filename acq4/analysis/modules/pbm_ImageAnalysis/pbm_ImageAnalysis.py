@@ -1377,11 +1377,11 @@ class pbm_ImageAnalysis(AnalysisModule):
         for roi in self.AllRois:
             roi.hide()
             del roi
-        self.AllRois=[]
+        self.AllRois = []
         self.nROI = 0
-        self.FData=[] # FData is the raw ROI data before any corrections
-        self.BFData =[] # ROI data after all corrections
-        rois=[]
+        self.FData = []  # FData is the raw ROI data before any corrections
+        self.BFData = []  # ROI data after all corrections
+        rois = []
         self.lastROITouched = []
         self.ROI_Plot.clear()
         #self.clearPlots()
@@ -1418,7 +1418,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.plotdata(yMinorTicks = 0, yMajorTicks=3,
                       yLabel=u'F0<sub>ROI %d</sub>')
 
-    def addOneROI(self, pos=(0,0), hw=None):
+    def addOneROI(self, pos=(0, 0), hw=None):
         """ append one roi to the self.AllRois list, put it on the screen (scene), and
         make sure it is actively connected to code. The return value lets us
         handle the rois when we restore them """
@@ -1426,7 +1426,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             dr = self.ctrl.ImagePhys_ROISize.value()
             hw = [dr, dr]
         roi = pg.RectROI(pos, hw, scaleSnap=True, translateSnap=True)
-        roi.addRotateHandle(pos=(0,0), center=(0.5, 0.5))
+        roi.addRotateHandle(pos=(0, 0), center=(0.5, 0.5))  # handle at left top, rotation about center
 #       roi = qtgraph.widgets.EllipseROI(pos, hw, scaleSnap=True, translateSnap=True)
 #       roi = qtgraph.widgets.MultiLineROI([[0,0], [5,5], [10,10]], 3, scaleSnap=True, translateSnap=True)
         roi.ID = self.nROI # give each ROI a unique identification number
@@ -1436,9 +1436,9 @@ class pbm_ImageAnalysis(AnalysisModule):
         roi.color = rgb
         self.AllRois.append(roi)
         self.imageView.addItem(roi)
-        self.updateThisROI(self.AllRois[-1]) # compute the new ROI data
-        roi.sigRegionChanged.connect(self.updateThisROI) # if data region changes, update the information
-        roi.sigHoverEvent.connect(self.showThisROI) # a hover just causes the display below to show what is hre already.
+        self.updateThisROI(self.AllRois[-1])  # compute the new ROI data
+        roi.sigRegionChanged.connect(self.updateThisROI)  # if data region changes, update the information
+        roi.sigHoverEvent.connect(self.showThisROI)  # a hover just causes the display below to show what is hre already.
         return (roi)
 
     # def plotImageROIs(self, ourWidget):
@@ -1484,19 +1484,20 @@ class pbm_ImageAnalysis(AnalysisModule):
     #     self.currentRoi = roi
         
     def updateThisROI(self, roi, livePlot=True):
-        """ called when we need to update the ROI result plot for a particular ROI widget 
+        """
+        called when we need to update the ROI result plot for a particular ROI widget
         """
         if roi in self.AllRois:
-            tr = roi.getArrayRegion(self.imageData, self.imageView.imageItem, axes=(1,2))
-            tr = tr.mean(axis=2).mean(axis=1) # compute average over the ROI against time
+            tr = roi.getArrayRegion(self.imageData, self.imageView.imageItem, axes=(1, 2))
+            tr = tr.mean(axis=2).mean(axis=1)  # compute average over the ROI against time
             trx = tr.copy()
             if self.dataState['Normalized'] is False:
-                trm = tr.mean() # mean value across all time
-                tr = tr/tr.mean() # (self.background[0:tr.shape[0]]*trm/self.backgroundmean)
+                trm = tr.mean()  # mean value across all time
+                tr = tr/tr.mean()  # (self.background[0:tr.shape[0]]*trm/self.backgroundmean)
 
             self.FData = self.insertFData(self.FData, tr.copy(), roi)
             self.applyROIFilters(roi)
-            self.showThisROI(roi,livePlot)
+            self.showThisROI(roi, livePlot)
             return(tr)
 
     def showThisROI(self, roi, livePlot=True, extra=None):
@@ -1505,13 +1506,24 @@ class pbm_ImageAnalysis(AnalysisModule):
         if roi in self.AllRois:
             if livePlot is True:
                 try:
-                    self.ROI_Plot.plot(self.imageTimes[0:len(self.BFData[roi.ID])], self.BFData[roi.ID], pen=pg.mkPen('r'), clear=True)
-                    if extra is not None:
-                        self.ROI_Plot.plot(self.imageTimes[0:len(self.BFData[roi.ID])], extra, pen=pg.mkPen('b'), clear=False)
-                    self.markROITouched(roi)
+                    roi.plot.setData(self.imageTimes[0:len(self.BFData[roi.ID])], self.BFData[roi.ID]) #, pen=pg.mkPen(roi.color), clear=True)
                 except:
-                    pass
-            return
+                    roi.plot = self.ROI_Plot.plot(self.imageTimes[0:len(self.BFData[roi.ID])], self.BFData[roi.ID],
+                                                  pen=pg.mkPen(np.append(roi.color[0:3], 255), width=1.0), clear=False)  # pg.mkPen('r'), clear=True)
+             #   c = roi.color[0:3]
+                c = np.append(roi.color[0:3], 255)
+                roi.plot.setPen(pg.mkPen(color=c, width=2.0))
+                roi.plot.setZValue(1000)
+
+                if extra is not None:
+                    self.ROI_Plot.plot(self.imageTimes[0:len(self.BFData[roi.ID])], extra, pen=pg.mkPen('b'), clear=False)
+                self.markROITouched(roi)
+        for otherroi in self.AllRois:
+            if otherroi != roi:
+                #c = otherroi.color[0:3]
+                c = np.append(otherroi.color[0:3], 128)
+                otherroi.plot.setPen(pg.mkPen(color=c, width=1.0))
+                otherroi.plot.setZValue(500)
 
     def markROITouched(self, roi):
         """
@@ -1519,10 +1531,10 @@ class pbm_ImageAnalysis(AnalysisModule):
         """
         if self.lastROITouched == []:
             self.lastROITouched = roi
-            roi.pen.setWidth(0.12) # just bump up the width
+            roi.pen.setWidth(0.18) # just bump up the width
         if roi != self.lastROITouched:
-            self.lastROITouched.pen.setWidth(0.12)
-            roi.pen.setWidthF(0.25)
+            self.lastROITouched.pen.setWidth(0.18)
+            roi.pen.setWidthF(0.12)
             self.lastROITouched = roi # save the most recent one
 
     def calculateAllROIs(self):
