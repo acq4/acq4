@@ -278,7 +278,7 @@
         <string>Save ROI File</string>
        </property>
       </widget>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>5</x>
@@ -315,7 +315,7 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>5</x>
@@ -395,7 +395,7 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>5</x>
@@ -511,7 +511,7 @@
         <string>Auto ROI Detect</string>
        </property>
       </widget>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>5</x>
@@ -581,6 +581,11 @@
        <item>
         <property name="text">
          <string>Movie</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Average Image</string>
         </property>
        </item>
        <item>
@@ -952,7 +957,7 @@ rectangle  box</string>
         <rect>
          <x>5</x>
          <y>115</y>
-         <width>136</width>
+         <width>137</width>
          <height>27</height>
         </rect>
        </property>
@@ -1139,6 +1144,9 @@ rectangle  box</string>
           <property name="text">
            <string>Bl Corr</string>
           </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
          </widget>
         </item>
         <item>
@@ -1278,13 +1286,6 @@ rectangle  box</string>
         </item>
        </layout>
       </widget>
-      <zorder>ImagePhys_RegisterStack</zorder>
-      <zorder>layoutWidget</zorder>
-      <zorder>ImagePhys_SpecCalc</zorder>
-      <zorder>layoutWidget</zorder>
-      <zorder>layoutWidget</zorder>
-      <zorder>layoutWidget</zorder>
-      <zorder>groupBox_4</zorder>
      </widget>
      <widget class="QGroupBox" name="groupBox_6">
       <property name="geometry">
@@ -1298,7 +1299,7 @@ rectangle  box</string>
       <property name="title">
        <string>Filtering</string>
       </property>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>5</x>
@@ -1342,7 +1343,7 @@ rectangle  box</string>
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>5</x>
@@ -1386,12 +1387,12 @@ rectangle  box</string>
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>5</x>
          <y>85</y>
-         <width>136</width>
+         <width>139</width>
          <height>32</height>
         </rect>
        </property>
@@ -1445,7 +1446,7 @@ rectangle  box</string>
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>5</x>

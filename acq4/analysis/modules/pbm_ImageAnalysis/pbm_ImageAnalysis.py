@@ -97,7 +97,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.nROI = 0  # count of ROI's in the window
         self.rois = []
         self.currentRoi = None
-        self.imageData = np.array()  # Image Data array, information about the data is in the dataState dictionary
+        self.imageData = np.array(None)  # Image Data array, information about the data is in the dataState dictionary
         self.lastROITouched=[]
         self.spikesFound = None
         self.burstsFound = None
@@ -118,7 +118,10 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.MPLFig = None  # We keep one instance of a matplotlib figure, create and destroy as needed
         self.floatingWindow = None  # one instance of a pyqtgraph window that floats.
         self.pgwin = None
-        
+
+        # ------ Graphical Elements ------
+        self._sizeHint = (1280, 900)   # try to establish size of window
+
         self.ctrlWidget = QtGui.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
@@ -254,6 +257,8 @@ class pbm_ImageAnalysis(AnalysisModule):
         if view == 'Reference Image': 
             self.imageView.setImage(self.baseImage)
             self.viewFlag = True
+        if view == 'Average Image':
+            self.imageView.setImage(self.aveImage)
         if view == 'Std Image':
             self.imageView.setImage(self.stdImage)
         if view == 'Spectrum Image':
@@ -430,6 +435,11 @@ class pbm_ImageAnalysis(AnalysisModule):
                     fhandle = dh['Camera/frames.ma']
                 elif os.path.isfile(os.path.join(dh.name(), 'imaging.ma')):
                     fhandle = dh['imaging.ma']
+                    # more scanner info from:
+                    # man.currentFile.info()['Scanner']['program']  regarding the scan program
+                    # pixel sizes, dwell time, overall size, etc
+                    # analysis/imaging/children/decomb/children/value has the decombing time (sec).
+                    # man.currentFile.info()['protocol']['analysis']['Imaging']['children']['decomb']['value']
                 else:
                     raise Exception("No valid imaging data found")
                 self.clearPhysiologyInfo()  # clear the physiology data currently in memory to avoid confusion
@@ -584,6 +594,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.roilist = []
             firstline = csvfile.next()
         
+
 
     def updateAvgStdImage(self):
         """ update the reference image types and then make sure display agrees.
@@ -763,7 +774,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         #print 'Number of points in original data set: ', shdat
         tdat = data.infoCopy()[1]['values']
         tdat = tdat[::decimate_factor]
-        self.tdat = data.infoCopy()[1]['values']/1000.
+        self.tdat = data.infoCopy()[1]['values']  # / 1000. NOT
         self.physPlot.plot(tdat, self.physData[::decimate_factor], pen=pg.mkPen('w')) # , decimate=decimate_factor)
         self.showPhysTrigger()
         try:
@@ -1415,6 +1426,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             dr = self.ctrl.ImagePhys_ROISize.value()
             hw = [dr, dr]
         roi = pg.RectROI(pos, hw, scaleSnap=True, translateSnap=True)
+        roi.addRotateHandle(pos=(0,0), center=(0.5, 0.5))
 #       roi = qtgraph.widgets.EllipseROI(pos, hw, scaleSnap=True, translateSnap=True)
 #       roi = qtgraph.widgets.MultiLineROI([[0,0], [5,5], [10,10]], 3, scaleSnap=True, translateSnap=True)
         roi.ID = self.nROI # give each ROI a unique identification number
@@ -1805,7 +1817,7 @@ class pbm_ImageAnalysis(AnalysisModule):
 
     def stackOp_restore(self):
         """Redraw the original image stack."""
-        self.paintImage(updateTools = True, focus=True) # return to the original imagedata
+        self.paintImage(updateTools=True, focus=True)  # return to the original imagedata
 
 #----------------------Image Processing methods ----------------
 # Includes bleach correction, filtering (median and gaussian), and deltaF/F calculation
@@ -1820,7 +1832,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         b_corr = np.zeros(imshape[0])
         Fits = Fitting.Fitting()
         for k in range(0, imshape[0]):
-            tc_bleach[k] = np.mean(self.imageData[k,:,:])
+            tc_bleach[k] = np.mean(self.imageData[k, :, :])
         dt  = np.mean(np.diff(self.imageTimes)) # sampling rate, seconds
         endT = np.amax(self.imageTimes)
         mFluor = tc_bleach[0]
@@ -1829,7 +1841,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         if bleachmode == 'exp2':
             # use a double exponential fit
             (fpar, xf, yf, names) = Fits.FitRegion([0], 0, fitx, tc_bleach, 0.0, np.amax(fitx),
-                                               fitFunc = 'exp2', fitPars = [0.9, 0.5, endT/5.0, 0.5, endT/2.0],
+                                               fitFunc = 'exp2', fitPars=[0.9, 0.5, endT/5.0, 0.5, endT/2.0],
                                                plotInstance = None)
     #        (a0, a1, tau) = Fits.expfit(fitx, tc_bleach)
     #        print("fit result = a0: %f   a1: %f   tau: %f\n", (a0, a1, tau))
@@ -2754,7 +2766,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             timage = (255*self.imageData[i,:,:]/maximg).astype('uint8')
             affineMat = cv2.estimateRigidTransform(refimg, timage, False)
             print timage.shape, self.imageData[i].shape
-            self.imageData[i,:,:] = cv2.warpAffine(timage, affineMat, dsize=timage.shape, borderMode = cv2.BORDER_REPLICATE).astype('float32')*maximg/255.
+            self.imageData[i,:,:] = cv2.warpAffine(timage, affineMat, dsize=timage.shape, borderMode = cv2.BORDER_REPLICATE).astype(float32)*maximg/255.
             #x = scipy.ndimage.interpolation.affine_transform(self.imageData[i,:,:], affineMat[0:2,0:2] )
         self.updateAvgStdImage()        
         
