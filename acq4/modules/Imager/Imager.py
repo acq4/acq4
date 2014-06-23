@@ -761,7 +761,7 @@ class Imager(Module):
                 #print 'info: ', info    
                 data = MA.MetaArray(imgData[NP.newaxis, ...], info=mainfo, appendAxis='Frame')
                 if self.currentStack is None:
-                    fh = dirhandle.writeFile(data, '2pStack.ma', info=info, autoIncrement=True)
+                    fh = dirhandle.writeFile(data, '2pStack.ma', info=info, autoIncrement=True,  appendAxis='Frame')
                     self.currentStack = fh
                 else:
                     data.write(self.currentStack.name(), appendAxis='Frame')

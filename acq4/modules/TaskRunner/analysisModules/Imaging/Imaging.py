@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import division
 from acq4.modules.TaskRunner.analysisModules import AnalysisModule
 from acq4.Manager import getManager
 from PyQt4 import QtCore, QtGui
@@ -138,7 +139,7 @@ class ImagingModule(AnalysisModule):
             # Determine decomb duration
             auto = self.params['decomb', 'auto']
             if auto:
-                lag = rs.measureMirrorLag(pmtdata)
+                (decombed, lag) = rs.measureMirrorLag(pmtdata)
                 self.params['decomb'] = lag
             decomb = self.params['decomb']
             
@@ -167,7 +168,9 @@ class ImagingModule(AnalysisModule):
             # Display image locally
             self.plotWidget.setImage(imageData)
             self.plotWidget.getView().setAspectLocked(True)
-            self.plotWidget.imageItem.setRect(QtCore.QRectF(0., 0., rs.width, rs.height))  # TODO: rs.width and rs.height might not be correct!
+#            self.plotWidget.imageItem.setRect(QtCore.QRectF(0., 0., rs.width, rs.height))  # TODO: rs.width and rs.height might not be correct!
+            self.plotWidget.imageItem.resetTransform()
+            self.plotWidget.imageItem.scale((rs.width/rs.height)/(imageData.shape[1]/imageData.shape[2]), 1.0)
             self.plotWidget.autoRange()
 
             # Display image remotely (in the same camera module as used by the scanner device)
@@ -290,7 +293,6 @@ class ImagingModule(AnalysisModule):
         if scene is not None:
             scene.removeItem(self.img)
 
-        
     def imageAlphaAdjust(self):
         if self.img is None:
             return
