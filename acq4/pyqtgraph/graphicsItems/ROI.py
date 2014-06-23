@@ -976,14 +976,16 @@ class ROI(GraphicsObject):
         return QtCore.QRectF(0, 0, self.state['size'][0], self.state['size'][1]).normalized()
 
     def paint(self, p, opt, widget):
-        p.save()
-        r = self.boundingRect()
+        # p.save()
+        # Note: don't use self.boundingRect here, because subclasses may need to redefine it.
+        r = QtCore.QRectF(0, 0, self.state['size'][0], self.state['size'][1]).normalized()
+        
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         p.setPen(self.currentPen)
         p.translate(r.left(), r.top())
         p.scale(r.width(), r.height())
         p.drawRect(0, 0, 1, 1)
-        p.restore()
+        # p.restore()
 
     def getArraySlice(self, data, img, axes=(0,1), returnSlice=True):
         """Return a tuple of slice objects that can be used to slice the region from data covered by this ROI.

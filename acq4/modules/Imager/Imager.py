@@ -36,9 +36,9 @@ from acq4.devices.Microscope import Microscope
 import time
 import pprint
 from .imagerTemplate import Ui_Form
-import acq4.devices.Scanner.ScanUtilityFuncs as SUFA
+from acq4.devices.Scanner.ScanProgram.rect import ScannerUtility
 
-SUF = SUFA.ScannerUtilities()
+SUF = ScannerUtility()
 
 """
 Create some useful configurations for the user.
