@@ -181,7 +181,11 @@ class RectScanControl(QtCore.QObject):
         self.update()
         
     def update(self):
-        self.params.sigTreeStateChanged.disconnect(self.paramsChanged)
+        try:
+            self.params.sigTreeStateChanged.disconnect(self.paramsChanged)
+            reconnect = True
+        except TypeError:
+            reconnect = False
         try:
             self.params.system.sampleRate = self.component().sampleRate
             self.params.system.downsample = self.component().downsample
@@ -195,7 +199,8 @@ class RectScanControl(QtCore.QObject):
             self.setVisible(self.params.value())
         
         finally:
-            self.params.sigTreeStateChanged.connect(self.paramsChanged)
+            if reconnect:
+                self.params.sigTreeStateChanged.connect(self.paramsChanged)
         #self.update(changed=[changes[0][0].name()])
         
     #def update(self, changed=()):
@@ -496,14 +501,12 @@ class RectScan(SystemSolver):
         else:
             image = pg.subArray(data, intOffset, shape, stride)
 
-
-
         if correctBidir and self.bidirectional:
             image = image.copy()
             image[:, 1::2] = image[:, 1::2, ::-1]
         return image
 
-    def measureMirrorLag(self, data, minShift=0., maxShift=100.e-6):
+    def measureMirrorLag(self, data, auto=True, shift=0., minShift=0., maxShift=100.e-6):
         """
         Estimate the mirror lag in a bidirectional raster scan.
         The *data* argument is a photodetector recording array.
@@ -511,6 +514,7 @@ class RectScan(SystemSolver):
         """
         ## split image into fields
         # units of the shift coming in here are in pixels (integer)
+        img = self.extractImage(data)
 
         nr = 2 * (img.shape[1] // 2)
         f1 = img[:,0:nr:2]
@@ -540,7 +544,7 @@ class RectScan(SystemSolver):
         rightShift = int(leftShift + (bestShift % 2))
         if rightShift < 1:
             return img, 0
-        decombed = np.zeros(img.shape, img.dtype)
+        decombed = np.zeros(img.shape, dtype=data.dtype)
         if leftShift > 0:
             decombed[:-leftShift, ::2] = img[leftShift:, ::2]
         else:
