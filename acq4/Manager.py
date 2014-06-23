@@ -336,6 +336,22 @@ class Manager(QtCore.QObject):
                     logMsg("=== Setting base directory: %s ===" % cfg['storageDir'])
                     self.setBaseDir(cfg['storageDir'])
                 
+		elif key == 'defaultCompression':
+                    comp = cfg['defaultCompression']
+                    try:
+                        if isinstance(comp, tuple):
+                            cstr = comp[0]
+                            assert isinstance(comp[1], int)
+                        else:
+                            cstr = comp
+                        assert cstr in [None, 'gzip', 'szip', 'lzf']
+                    except Exception:
+                        raise Exception("'defaultCompression' option must be one of: None, 'gzip', 'szip', 'lzf', ('gzip', 0-9), or ('szip', opts). Got: '%s'" % comp)
+                        
+                    print "=== Setting default HDF5 compression: %s ===" % comp
+                    import acq4.pyqtgraph.metaarray as ma
+                    ma.MetaArray.defaultCompression = comp
+
                 ## load stylesheet
                 elif key == 'stylesheet':
                     try:
@@ -1114,7 +1130,7 @@ class Task:
         #print "Manager.Task.isDone"
         if not self.abortRequested:
             t = ptime.time()
-            if t - self.startTime < self.cfg['duration']:
+            if self.startTime is None or t - self.startTime < self.cfg['duration']:
                 #print "  not done yet"
                 return False
             #else:

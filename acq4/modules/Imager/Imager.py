@@ -36,9 +36,9 @@ from acq4.devices.Microscope import Microscope
 import time
 import pprint
 from .imagerTemplate import Ui_Form
-import acq4.devices.Scanner.ScanUtilityFuncs as SUFA
+from acq4.devices.Scanner.ScanProgram.rect import ScannerUtility
 
-SUF = SUFA.ScannerUtilities()
+SUF = ScannerUtility()
 
 """
 Create some useful configurations for the user.
@@ -879,7 +879,7 @@ class Imager(Module):
                 #print 'info: ', info    
                 data = MA.MetaArray(imgData[NP.newaxis, ...], info=mainfo, appendAxis='Frame')
                 if self.currentStack is None:
-                    fh = dirhandle.writeFile(data, '2pStack.ma', info=info, autoIncrement=True)
+                    fh = dirhandle.writeFile(data, '2pStack.ma', info=info, autoIncrement=True,  appendAxis='Frame')
                     self.currentStack = fh
                 else:
                     data.write(self.currentStack.name(), appendAxis='Frame')

@@ -14,7 +14,7 @@ protocolNames = {
     
      
 deviceNames = {
-    'Clamp': ('Clamp1', 'Clamp2', 'AxoPatch200', 'AxoProbe'),
+    'Clamp': ('Clamp1', 'Clamp2', 'AxoPatch200', 'AxoProbe', 'MultiClamp1', 'MultiClamp2'),
     'Camera': ('Camera'),
     'Laser': ('Laser-UV', 'Laser-Blue', 'Laser-2P')
 }

@@ -290,8 +290,8 @@ class TaskRunner(Module):
             else:
                 # by default, docks are tabbed. 
                 # if dock state is stored, this will be corrected later.
+                QtGui.QApplication.sendPostedEvents(dock, 0)  # required to ensure new tab is visible
                 self.win.tabifyDockWidget(self.firstDock, dock)
-                
             
             items = self.ui.analysisList.findItems(mod, QtCore.Qt.MatchExactly)
             items[0].setCheckState(QtCore.Qt.Checked)
@@ -615,7 +615,7 @@ class TaskRunner(Module):
                         self.createAnalysisDock(k)
                         conf = prot.conf['analysis'][k]
                         self.analysisDocks[k].widget().restoreState(conf)
-                        prof.mark('configured dock: ' + d)
+                        prof.mark('configured dock: ' + k)
                     except:
                         printExc("Error while loading analysis dock:")
                         

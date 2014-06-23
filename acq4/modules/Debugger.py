@@ -7,15 +7,29 @@ class Debugger(Module):
         Module.__init__(self, manager, name, config) 
         self.man = manager
         self.win = QtGui.QMainWindow()
-        self.cw = DataTreeWidget()
+        self.cw = QtGui.QSplitter()
+        self.taskTree = DataTreeWidget()
+        self.resultTree = DataTreeWidget()
         self.win.setCentralWidget(self.cw)
+        self.cw.addWidget(self.taskTree)
+        self.cw.addWidget(self.resultTree)
         self.win.show()
         self.man.sigTaskCreated.connect(self.showTask)
+        self.taskTimer = QtCore.QTimer()
+        self.taskTimer.timeout.connect(self.checkResult)
         
     def showTask(self, cmd, task):
-        self.cw.setData(cmd)
-        
-        
+        self._lastTask = task
+        self.taskTree.setData(cmd)
+        self.resultTree.clear()
+        self.taskTimer.start(100)
+
+    def checkResult(self):
+        if self._lastTask.isDone():
+            result = self._lastTask.getResult()
+            self.resultTree.setData(result)
+            self.taskTimer.stop()
+
     
 
 
