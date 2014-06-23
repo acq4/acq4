@@ -50,7 +50,7 @@ def readConfigFile(fname):
         fname2 = os.path.join(GLOBAL_PATH, fname)
         if os.path.exists(fname2):
             fname = fname2
-            
+
     GLOBAL_PATH = os.path.dirname(os.path.abspath(fname))
         
     try:

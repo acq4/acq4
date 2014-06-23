@@ -16,48 +16,18 @@ from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
 from acq4.util.metaarray import MetaArray
-import numpy
+import numpy as np
 import scipy.signal
 import os
 import re
 import os.path
 import itertools
-try:
-    import matplotlib as MP
-    from matplotlib.ticker import FormatStrFormatter
-    import matplotlib.pyplot as pylab
-    import matplotlib.gridspec as gridspec
-    import matplotlib.gridspec as GS
-    HAVE_MPL = True
-except ImportError:
-    HAVE_MPL = False
-
-
-if HAVE_MPL:
-    MP.use('TKAgg')
-    # Do not modify the following code
-    # sets up matplotlib with sans-serif plotting...
-
-
-
-    pylab.rcParams['text.usetex'] = True
-    pylab.rcParams['interactive'] = False
-    pylab.rcParams['font.family'] = 'sans-serif'
-    pylab.rcParams['font.sans-serif'] = 'Arial'
-    pylab.rcParams['mathtext.default'] = 'sf'
-    pylab.rcParams['figure.facecolor'] = 'white'
-    # next setting allows pdf font to be readable in Adobe Illustrator
-    pylab.rcParams['pdf.fonttype'] = 42
-    pylab.rcParams['text.dvipnghack'] = True
-    # to here (matplotlib stuff - touchy!)
-
-stdFont = 'Arial'
-
+import functools
+import acq4.util.matplotlibexporter as matplotlibExporter
 
 import acq4.analysis.tools.Utility as Utility   # pbm's utilities...
 import acq4.analysis.tools.Fitting as Fitting   # pbm's fitting stuff...
 import ctrlTemplate
-import acq4.util.debug as debug
 
 
 class IVCurve(AnalysisModule):
@@ -66,8 +36,8 @@ class IVCurve(AnalysisModule):
 
     IVCurve performs analyses of current-voltage relationships in
     electrophysiology experiments. The module is interactive, and is primarily
-    designed to examine data collected in current clamp. Results analyzed
-    include:
+    designed to allow a preliminary examination of data collected in current clamp and voltage clamp.
+    Results analyzed include:
     Resting potential (average RMP through the episodes in the protocol).
     Input resistance (maximum slope if IV relationship below Vrest)
     Cell time constant (single exponential fit)
@@ -77,30 +47,38 @@ class IVCurve(AnalysisModule):
     RMP as a function of time through the protocol
 
     """
+
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
-        self.ctrlWidget = QtGui.QWidget()
-        self.ctrl = ctrlTemplate.Ui_Form()
-        self.ctrl.setupUi(self.ctrlWidget)
+
         self.loaded = None
-        self.main_layout = pg.GraphicsView()   # instead of GraphicsScene?
+        self.filename = None
         self.dirsSet = None
         self.lrss_flag = True   # show is default
         self.lrpk_flag = True
         self.rmp_flag = True
         self.lrtau_flag = False
-        self.regionsExist = False
+        self.regions_exist = False
         self.fit_curve = None
         self.fitted_data = None
+        self.regions_exist = False
+        self.regions = {}
         self.tx = None
-        self.keepAnalysisCount = 0
+        self.keep_analysis_count = 0
         self.colors = ['w', 'g', 'b', 'r', 'y', 'c']
         self.symbols = ['o', 's', 't', 'd', '+']
-        self.colorList = itertools.cycle(self.colors)
-        self.symbolList = itertools.cycle(self.symbols)
-        self.dataMode = 'IC'  # analysis depends on the type of data we have.
-        self.ICModes = ['IC', 'CC', 'IClamp']  # list of CC modes
-        self.VCModes = ['VC', 'VClamp']  # list of VC modes
+        self.color_list = itertools.cycle(self.colors)
+        self.symbol_list = itertools.cycle(self.symbols)
+        self.data_mode = 'IC'  # analysis depends on the type of data we have.
+        self.ic_modes = ['IC', 'CC', 'IClamp', 'ic']
+        self.vc_modes = ['VC', 'VClamp', 'vc']  # list of VC modes
+
+        #--------------graphical elements-----------------
+        self._sizeHint = (1280, 900)   # try to establish size of window
+        self.ctrlWidget = QtGui.QWidget()
+        self.ctrl = ctrlTemplate.Ui_Form()
+        self.ctrl.setupUi(self.ctrlWidget)
+        self.main_layout = pg.GraphicsView()   # instead of GraphicsScene?
          # make fixed widget for the module output
         self.widget = QtGui.QWidget()
         self.gridLayout = QtGui.QGridLayout()
@@ -110,74 +88,85 @@ class IVCurve(AnalysisModule):
          # Setup basic GUI
         self._elements_ = OrderedDict([
             ('File Loader',
-             {'type': 'fileInput', 'size': (100, 300), 'host': self}),
+             {'type': 'fileInput', 'size': (170, 50), 'host': self}),
             ('Parameters',
              {'type': 'ctrl', 'object': self.ctrlWidget, 'host': self,
-              'size': (100, 300)}),
+              'size': (160, 700)}),
             ('Plots',
              {'type': 'ctrl', 'object': self.widget, 'pos': ('right',),
-              'size': (800, 600)}),
+              'size': (400, 700)}),
         ])
         self.initializeElements()
-        self.fileLoaderInstance = self.getElement('File Loader', create=True)
+        self.file_loader_instance = self.getElement('File Loader', create=True)
          # grab input form the "Ctrl" window
         self.ctrl.IVCurve_Update.clicked.connect(self.updateAnalysis)
         self.ctrl.IVCurve_PrintResults.clicked.connect(self.printAnalysis)
-        self.ctrl.IVCurve_MPLExport.clicked.connect(self.matplotlibExport)
+        if not matplotlibExporter.HAVE_MPL:
+            self.ctrl.IVCurve_MPLExport.setEnabled = False  # make button inactive
+#        self.ctrl.IVCurve_MPLExport.clicked.connect(self.matplotlibExport)
+        else:
+            self.ctrl.IVCurve_MPLExport.clicked.connect(
+                    functools.partial(matplotlibExporter.matplotlibExport, gridlayout=self.gridLayout,
+                                      title=self.filename))
         self.ctrl.IVCurve_KeepAnalysis.clicked.connect(self.resetKeepAnalysis)
-        self.ctrl.IVCurve_getFileInfo.clicked.connect(self.getFileInfo)
+        self.ctrl.IVCurve_getFileInfo.clicked.connect(self.get_file_information)
         [self.ctrl.IVCurve_RMPMode.currentIndexChanged.connect(x)
          for x in [self.update_rmpAnalysis, self.countSpikes]]
         self.ctrl.dbStoreBtn.clicked.connect(self.dbStoreClicked)
-        self.clearResults()
+        self.clear_results()
         self.layout = self.getElement('Plots', create=True)
 
-         # instantiate the graphs using a gridLayout
+
+        # instantiate the graphs using a gridLayout (also facilitates matplotlib export; see export routine below)
         self.data_plot = pg.PlotWidget()
         self.gridLayout.addWidget(self.data_plot, 0, 0, 3, 1)
-        self.labelUp(self.data_plot, 'T (s)', 'V (V)', 'Data')
+        self.label_up(self.data_plot, 'T (s)', 'V (V)', 'Data')
 
         self.cmd_plot = pg.PlotWidget()
         self.gridLayout.addWidget(self.cmd_plot, 3, 0, 1, 1)
-        self.labelUp(self.cmd_plot, 'T (s)', 'I (A)', 'Command')
+        self.label_up(self.cmd_plot, 'T (s)', 'I (A)', 'Command')
 
         self.RMP_plot = pg.PlotWidget()
         self.gridLayout.addWidget(self.RMP_plot, 1, 1, 1, 1)
-        self.labelUp(self.RMP_plot, 'T (s)', 'V (mV)', 'RMP')
+        self.label_up(self.RMP_plot, 'T (s)', 'V (mV)', 'RMP')
 
         self.fiPlot = pg.PlotWidget()
         self.gridLayout.addWidget(self.fiPlot, 2, 1, 1, 1)
-        self.labelUp(self.fiPlot, 'I (pA)', 'Spikes (#)', 'F-I')
+        self.label_up(self.fiPlot, 'I (pA)', 'Spikes (#)', 'F-I')
 
         self.fslPlot = pg.PlotWidget()
         self.gridLayout.addWidget(self.fslPlot, 3, 1, 1, 1)
-        self.labelUp(self.fslPlot, 'I (pA)', 'Fsl/Fisi (ms)', 'FSL/FISI')
+        self.label_up(self.fslPlot, 'I (pA)', 'Fsl/Fisi (ms)', 'FSL/FISI')
 
         self.IV_plot = pg.PlotWidget()
         self.gridLayout.addWidget(self.IV_plot, 0, 1, 1, 1)
-        self.labelUp(self.IV_plot, 'I (pA)', 'V (V)', 'I-V')
+        self.label_up(self.IV_plot, 'I (pA)', 'V (V)', 'I-V')
         for row, s in enumerate([20, 10, 10, 10]):
             self.gridLayout.setRowStretch(row, s)
 
+
      #    self.tailPlot = pg.PlotWidget()
      #    self.gridLayout.addWidget(self.fslPlot, 3, 1, 1, 1)
-     #    self.labelUp(self.tailPlot, 'V (V)', 'I (A)', 'Tail Current')
+     #    self.label_up(self.tailPlot, 'V (V)', 'I (A)', 'Tail Current')
 
          # Add a color scale
-        self.colorScale = pg.GradientLegend((20, 150), (-10, -10))
-        self.data_plot.scene().addItem(self.colorScale)
+        self.color_scale = pg.GradientLegend((20, 150), (-10, -10))
+        self.data_plot.scene().addItem(self.color_scale)
+        self.ctrl.pushButton.clicked.connect(functools.partial(self.initialize_regions,
+                                                                             reset=True))
 
-    def clearResults(self):
+    def clear_results(self):
         """
-        clearResults resets variables.
+        clear results resets variables.
 
-        This is typically needed for each new file that is loaded.
+        This is typically needed every time a new data set is loaded.
         """
         self.filename = ''
-        self.Rin = 0.0
+        self.r_in = 0.0
         self.tau = 0.0
-        self.AdaptRatio = 0.0
+        self.adapt_ratio = 0.0
         self.traces = None
+        self.spikes_counted = False
         self.nospk = []
         self.spk = []
         self.cmd = []
@@ -189,150 +178,167 @@ class IVCurve(AnalysisModule):
         self.fisi = []  # first isi
         self.ar = []  # adaptation ratio
         self.rmp = []  # resting membrane potential during sequence
+        self.analysis_summary={}
 
     def resetKeepAnalysis(self):
-        self.keepAnalysisCount = 0  # reset counter.
+        self.keep_analysis_count = 0  # reset counter.
 
-    def initialize_Regions(self):
+    def show_or_hide(self, lrregion=None, forcestate=None):
         """
-        initialize_Regions sets the linear regions on the displayed data
+        Show or hide specific regions in the display
+        :param lrregion: name of the region ('lrwin0', etc)
+        :param forcestate: set True to force the show status
+        :return:
+        """
+        if lrregion is None:
+            print('PSPReversal:show_or_hide:: lrregion is {:<s}').format(lrregion)
+            return
+        region = self.regions[lrregion]
+        if forcestate is not None:
+            if forcestate:
+                region['region'].show()
+                region['state'].setChecked(QtCore.Qt.Checked)
+                region['shstate'] = True
+            else:
+                region['region'].hide()
+                region['state'].setChecked(QtCore.Qt.Unchecked)
+                region['shstate'] = False
+        else:
+            if not region['shstate']:
+                region['region'].show()
+                region['state'].setChecked(QtCore.Qt.Checked)
+                region['shstate'] = True
+            else:
+                region['region'].hide()
+                region['state'].setChecked(QtCore.Qt.Unchecked)
+                region['shstate'] = False
+
+    def initialize_regions(self, reset=False):
+        """
+        initialize_regions sets the linear regions on the displayed data
 
         Here we create the analysis regions in the plot. However, this should
         NOT happen until the plot has been created
+        Note the the information about each region is held in a dictionary,
+        which for each region has a dictionary that accesses the UI and class
+        methods for that region. This later simplifies the code and reduces
+        repetitive sections.
         """
-        if not self.regionsExist:
-            self.lrss = pg.LinearRegionItem([0, 1],
-                                            brush=pg.mkBrush(0, 255, 0, 50.))
-            self.lrpk = pg.LinearRegionItem([0, 1],
-                                            brush=pg.mkBrush(0, 0, 255, 50.))
-            self.lrtau = pg.LinearRegionItem([0, 1],
-                                             brush=pg.mkBrush(255, 0, 0, 50.))
-            self.lrrmp = pg.LinearRegionItem([0, 1],
-                                             brush=pg.mkBrush
-                                             (255, 255, 0, 25.))
-            self.lrleak = pg.LinearRegionItem([0, 1],
-                                              brush=pg.mkBrush
-                                              (255, 0, 255, 25.))
-            self.data_plot.addItem(self.lrss)
-            self.data_plot.addItem(self.lrpk)
-            self.data_plot.addItem(self.lrtau)
-            self.data_plot.addItem(self.lrrmp)
-            self.IV_plot.addItem(self.lrleak)
-            self.ctrl.IVCurve_showHide_lrss.\
-                clicked.connect(self.showhide_lrss)
-            self.ctrl.IVCurve_showHide_lrpk.\
-                clicked.connect(self.showhide_lrpk)
-            self.ctrl.IVCurve_showHide_lrtau.\
-                clicked.connect(self.showhide_lrtau)
-            self.ctrl.IVCurve_showHide_lrrmp.\
-                clicked.connect(self.showhide_lrrmp)
-            self.ctrl.IVCurve_subLeak.clicked.connect(self.showhide_leak)
-             # Plots are updated when the selected region changes
-            self.lrrmp.sigRegionChangeFinished.connect(self.update_rmpAnalysis)
-            self.lrss.sigRegionChangeFinished.connect(self.update_ssAnalysis)
-            self.lrpk.sigRegionChangeFinished.connect(self.update_pkAnalysis)
-            self.lrleak.sigRegionChangeFinished.connect(self.updateAnalysis)
-            self.lrtau.sigRegionChangeFinished.connect(self.update_Tauh)
-            self.regionsExist = True
-            self.ctrl.IVCurve_tauh_Commands.\
-                currentIndexChanged.connect(self.updateAnalysis)
-        self.showhide_lrrmp(True)  # always...
-        self.showhide_lrtau(False)
-        self.ctrl.IVCurve_ssTStart.setSuffix(' ms')
-        self.ctrl.IVCurve_ssTStop.setSuffix(' ms')
-        self.ctrl.IVCurve_pkTStart.setSuffix(' ms')
-        self.ctrl.IVCurve_pkTStop.setSuffix(' ms')
-        self.ctrl.IVCurve_tau2TStart.setSuffix(' ms')
-        self.ctrl.IVCurve_tau2TStop.setSuffix(' ms')
-        self.ctrl.IVCurve_LeakMin.setSuffix(' mV')
-        self.ctrl.IVCurve_LeakMax.setSuffix(' mV')
+        # hold all the linear regions in a dictionary
+        if not self.regions_exist:
+            print 'initializing regions'
+            self.regions['lrleak'] = {'name': 'leak',  # use a "leak" window
+                                      'region': pg.LinearRegionItem([0, 1],
+                                                                    brush=pg.mkBrush(255, 255, 0, 50.)),
+                                      'plot': self.IV_plot,
+                                      'state': self.ctrl.IVCurve_subLeak,
+                                      'shstate': False,  # keep internal copy of the state
+                                      'mode': self.ctrl.IVCurve_subLeak,
+                                      'start': self.ctrl.IVCurve_LeakMin,
+                                      'stop': self.ctrl.IVCurve_LeakMax,
+                                      'updater': self.updateAnalysis,
+                                      'units': 'pA'}
+            self.ctrl.IVCurve_subLeak.region = self.regions['lrleak']['region']  # save region with checkbox
+            self.regions['lrwin0'] = {'name': 'win0',  # peak window
+                                      'region': pg.LinearRegionItem([0, 1],
+                                                                    brush=pg.mkBrush(0, 255, 0, 50.)),
+                                      'plot': self.data_plot,
+                                      'state': self.ctrl.IVCurve_showHide_lrpk,
+                                      'shstate': True,  # keep internal copy of the state
+                                      'mode': None,
+                                      'start': self.ctrl.IVCurve_pkTStart,
+                                      'stop': self.ctrl.IVCurve_pkTStop,
+                                      'updater': self.updateAnalysis,
+                                      'units': 'ms'}
+            self.ctrl.IVCurve_showHide_lrpk.region = self.regions['lrwin0']['region']  # save region with checkbox
+            self.regions['lrwin1'] = {'name': 'win2',  ## ss window
+                                      'region': pg.LinearRegionItem([0, 1],
+                                                                    brush=pg.mkBrush(0, 0, 255, 50.)),
+                                      'plot': self.data_plot,
+                                      'state': self.ctrl.IVCurve_showHide_lrss,
+                                      'shstate': True,  # keep internal copy of the state
+                                      'mode': None,
+                                      'start': self.ctrl.IVCurve_ssTStart,
+                                      'stop': self.ctrl.IVCurve_ssTStop,
+                                      'updater': self.updateAnalysis,
+                                      'units': 'ms'}
+            self.ctrl.IVCurve_showHide_lrss.region = self.regions['lrwin1']['region']  # save region with checkbox
+            # self.lrtau = pg.LinearRegionItem([0, 1],
+            #                                  brush=pg.mkBrush(255, 0, 0, 50.))
+            self.regions['lrrmp'] = {'name': 'rmp',
+                                     'region': pg.LinearRegionItem([0, 1],
+                                                                   brush=pg.mkBrush
+                                                                   (255, 255, 0, 25.)),
+                                     'plot': self.data_plot,
+                                     'state': self.ctrl.IVCurve_showHide_lrrmp,
+                                     'shstate': True,  # keep internal copy of the state
+                                     'mode': None,
+                                     'start': self.ctrl.IVCurve_rmpTStart,
+                                     'stop': self.ctrl.IVCurve_rmpTStop,
+                                     'updater': self.update_rmpAnalysis,
+                                     'units': 'ms'}
+            self.ctrl.IVCurve_showHide_lrrmp.region = self.regions['lrrmp']['region']  # save region with checkbox
+            # establish that measurement is on top, exclusion is next, and reference is on bottom
+            self.regions['lrtau'] = {'name': 'tau',
+                                     'region': pg.LinearRegionItem([0, 1],
+                                                                   brush=pg.mkBrush
+                                                                   (255, 255, 0, 25.)),
+                                     'plot': self.data_plot,
+                                     'state': self.ctrl.IVCurve_showHide_lrtau,
+                                     'shstate': False,  # keep internal copy of the state
+                                     'mode': None,
+                                     'start': self.ctrl.IVCurve_tau2TStart,
+                                     'stop': self.ctrl.IVCurve_tau2TStop,
+                                     'updater': self.update_Tauh(),
+                                     'units': 'ms'}
+            self.ctrl.IVCurve_showHide_lrtau.region = self.regions['lrtau']['region']  # save region with checkbox
 
-     ######
-     # The next set of short routines control showing and hiding of regions
-     # in the plot of the raw data (traces)
-     ######
-    def showhide_lrss(self, flagvalue):
-        if flagvalue:
-            self.lrss.show()
-            self.ctrl.IVCurve_showHide_lrss.setCheckState(QtCore.Qt.Checked)
-        else:
-            self.lrss.hide()
-            self.ctrl.IVCurve_showHide_lrss.setCheckState(QtCore.Qt.Unchecked)
+            self.regions['lrwin0']['region'].setZValue(500)
+            self.regions['lrwin1']['region'].setZValue(100)
+            self.regions['lrtau']['region'].setZValue(1000)
+            self.regions['lrrmp']['region'].setZValue(1000)
+            self.regions['lrleak']['region'].setZValue(1000)
 
-    def showhide_lrpk(self, flagvalue):
-        if flagvalue:
-            self.lrpk.show()
-            self.ctrl.IVCurve_showHide_lrpk.setCheckState(QtCore.Qt.Checked)
-        else:
-            self.lrpk.hide()
-            self.ctrl.IVCurve_showHide_lrpk.setCheckState(QtCore.Qt.Unchecked)
+            for regkey, reg in self.regions.items():  # initialize region states
+                self.show_or_hide(lrregion=regkey, forcestate=reg['shstate'])
 
-    def showhide_lrtau(self, flagvalue):
-        if flagvalue:
-            self.lrtau.show()
-            self.ctrl.IVCurve_showHide_lrtau.setCheckState(QtCore.Qt.Checked)
-        else:
-            self.lrtau.hide()
-            self.ctrl.IVCurve_showHide_lrtau.\
-                setCheckState(QtCore.Qt.Unchecked)
+            for regkey, reg in self.regions.items():
+                reg['plot'].addItem(reg['region'])
+                reg['state'].clicked.connect(functools.partial(self.show_or_hide,
+                                                                             lrregion=regkey))
+                if reg['updater'] is not None:
+                    reg['region'].sigRegionChangeFinished.connect(
+                    functools.partial(reg['updater'], region=reg['name']))
+            # if self.regions[reg]['mode'] is not None:
+            #     self.regions[reg]['mode'].currentIndexChanged.connect(self.interactive_analysis)
+        if reset:
+            for regkey, reg in self.regions.items():  # initialize region states
+                self.show_or_hide(lrregion=regkey, forcestate=reg['shstate'])
+        for reg in self.regions.itervalues():
+            for s in ['start', 'stop']:
+                reg[s].setSuffix(' ' + reg['units'])
+        self.regions_exist = True
 
-    def showhide_lrrmp(self, flagvalue):
-        if flagvalue:
-            self.lrrmp.show()
-            self.ctrl.IVCurve_showHide_lrrmp.setCheckState(QtCore.Qt.Checked)
-        else:
-            self.lrrmp.hide()
-            self.ctrl.IVCurve_showHide_lrrmp.\
-                setCheckState(QtCore.Qt.Unchecked)
-
-    def showhide_leak(self, flagvalue):
-        if flagvalue:
-            self.lrleak.show()
-            self.ctrl.IVCurve_subLeak.setCheckState(QtCore.Qt.Checked)
-        else:
-            self.lrleak.hide()
-            self.ctrl.IVCurve_subLeak.setCheckState(QtCore.Qt.Unchecked)
-
-    def uniq(self, inlist):
-         # order preserving detection of unique values in a list
-        uniques = []
-        for item in inlist:
-            if item not in uniques:
-                uniques.append(item)
-        return uniques
-
-    def getFileInfo(self):
+    def get_file_information(self, default_dh=None):
         """
-        getFileInfo reads the sequence information from the data file
+        get_file_information reads the sequence information from the
+        currently selected data file
 
         Two-dimensional sequences are supported.
-
+        :return nothing:
         """
-        dh = self.fileLoaderInstance.selectedFiles()
-        dh = dh[0]
-        dirs = dh.subDirs()
-         # w=None
-         # ndir  = len(dirs)
-         # for j, d in enumerate(dirs):
-         #     z = d.split('_')
-         #     if w is None:
-         #         nseq = len(z)
-         #         w = [[0 for x in range(ndir)] for y in range(nseq)]
-         #     for i, p in enumerate(z):
-         #         w[i][j]=p
-         #  # w now contains the pairings, but split up
-         # print 'w: ', w
-         # leftseq = self.uniq(w[0])
-         # leftseq.insert(0, 'None')
-         # if nseq > 1:
-         #     rightseq = self.uniq(w[1])
-         #     rightseq.insert(0, 'None')
-
-        self.Sequence = self.dataModel.listSequenceParams(dh)
-        keys = self.Sequence.keys()
-        leftseq = [str(x) for x in self.Sequence[keys[0]]]
+        dh = self.file_loader_instance.selectedFiles()
+        if len(dh) == 0:  # when using scripts, the fileloader may not know...
+            if default_dh is not None:
+                dh = default_dh
+            else:
+                return
+        dh = dh[0]  # only the first file
+        self.sequence = self.dataModel.listSequenceParams(dh)
+        keys = self.sequence.keys()
+        leftseq = [str(x) for x in self.sequence[keys[0]]]
         if len(keys) > 1:
-            rightseq = [str(x) for x in self.Sequence[keys[1]]]
+            rightseq = [str(x) for x in self.sequence[keys[1]]]
         else:
             rightseq = []
         leftseq.insert(0, 'All')
@@ -341,246 +347,357 @@ class IVCurve(AnalysisModule):
         self.ctrl.IVCurve_Sequence2.clear()
         self.ctrl.IVCurve_Sequence1.addItems(leftseq)
         self.ctrl.IVCurve_Sequence2.addItems(rightseq)
-        self.dirsSet = dh  # not sure we need this anymore...
-        self.loaded = dh  # this is critical!
+
+    def cell_summary(self, dh):
+        """
+        cell_summary generates a dictionary of information about the cell
+        for the selected directory handle (usually a protocol; could be a file)
+        :param dh: the directory handle for the data, as passed to loadFileRequested
+        :return nothing:
+        """
+        # other info into a dictionary
+        self.analysis_summary['Day'] = self.dataModel.getDayInfo(dh)
+        self.analysis_summary['Slice'] = self.dataModel.getSliceInfo(dh)
+        self.analysis_summary['Cell'] = self.dataModel.getCellInfo(dh)
+        self.analysis_summary['ACSF'] = self.dataModel.getACSF(dh)
+        self.analysis_summary['Internal'] = self.dataModel.getInternalSoln(dh)
+        self.analysis_summary['Temp'] = self.dataModel.getTemp(dh)
+        self.analysis_summary['CellType'] = self.dataModel.getCellType(dh)
+        ct = self.analysis_summary['Cell']['__timestamp__']
+        pt = dh.info()['__timestamp__']
+        self.analysis_summary['ElapsedTime'] = pt-ct  # save elapsed time between cell opening and protocol start
+        (date, sliceid, cell, proto, p3) = self.file_cell_protocol()
+        self.analysis_summary['CellID'] = os.path.join(date, sliceid, cell)  # use this as the "ID" for the cell later on
 
     def loadFileRequested(self, dh):
         """
-        loadFileRequested is called by file loader when a file is requested.
+        loadFileRequested is called by "file loader" when a file is requested.
+            FileLoader is provided by the AnalysisModule class
+            dh is the handle to the currently selected directory (or directories)
 
-        Loads all of the successive records from the specified protocol.
-        Stores ancillary information from the protocol in class variables.
+        This function loads all of the successive records from the specified protocol.
+        Ancillary information from the protocol is stored in class variables.
         Extracts information about the commands, sometimes using a rather
         simplified set of assumptions.
-        input: dh, the file handle
-        modifies: plots, sequence, data arrays, data mode,
+        :param dh: the directory handle (or list of handles) representing the selected
+        entitites from the FileLoader in the Analysis Module
+        :modifies: plots, sequence, data arrays, data mode, etc.
+        :return: True if successful; otherwise raises an exception
         """
+#        print 'loadfilerequested dh: ', dh
+
         if len(dh) == 0:
             raise Exception("IVCurve::loadFileRequested: " +
                             "Select an IV protocol directory.")
         if len(dh) != 1:
-            raise Exception("IVCurve::loadFileRequested: " +
+            raise Exception("IVCURVE::loadFileRequested: " +
                             "Can only load one file at a time.")
-        self.clearResults()
-        dh = dh[0]
-        if self.loaded != dh:
-            self.getFileInfo()  # get info frommost recent file requested
-        self.loaded = dh
-        self.protocol = ''
+        self.clear_results()
+#        if self.current_dirhandle != dh[0]:  # is this the current file/directory?
+        self.get_file_information(default_dh=dh)  # No, get info from most recent file requested
+        self.current_dirhandle = dh[0]  # this is critical!
+        dh = dh[0]  # just get the first one
         self.data_plot.clearPlots()
         self.cmd_plot.clearPlots()
         self.filename = dh.name()
+        self.cell_summary(dh)  # get other info as needed for the protocol
         dirs = dh.subDirs()
-        tail = ''
-        fn = self.filename
-        self.protocol = ''
-         # this is WAY too specific, but needed it to get the overall name...
-         # maybe count levels back up from protocol instead?
-         # make a new list of directories... subsetted if need be
-        if dh != self.dirsSet:
-            self.ctrl.IVCurve_Sequence1.clear()
-            self.ctrl.IVCurve_Sequence2.clear()
-
-        # day directory format, like '2013.01.01'
-        # mre = re.compile('(\d{4})\.(\d{2}).(\d{2})')
-        # print 'fn: ', fn
-        # while fn is not '/' and re.match(mre, tail) is None:
-        #     (head, tail) = os.path.split(fn)
-        #     fn = head
-        #     #print 'fn, tail: ', fn, tail
-        #     if re.match(mre, tail) is not None:
-        #         self.protocol = os.path.join(tail, self.protocol)
-        (head, tail) = os.path.split(fn)
-        self.protocol = tail
-        subs = re.compile('[\/]')
-        self.protocol = re.sub(subs, '-', self.protocol)
-        self.protocol = self.protocol[:-1] + '.pdf'
-        self.commonPrefix = os.path.join(fn, 'Ruili')
         traces = []
+        cmd = []
         cmd_wave = []
-        self.tx = None
+        data = []
+        self.time_base = None
         self.values = []
-        self.Sequence = self.dataModel.listSequenceParams(dh)
-        self.traceTimes = numpy.zeros(0)
-        maxplotpts = 1024
-         # Iterate over sequence
-        if ('Clamp1', 'Pulse_amplitude') in self.Sequence.keys():
-            sequenceValues = self.Sequence[('Clamp1', 'Pulse_amplitude')]
-        else:
-            sequenceValues = []  # print self.Sequence.keys()
-        # if sequence has repeats, build pattern
+#        self.sequence = self.dataModel.listSequenceParams(dh)  # already done in 'getfileinfo'
+        self.trace_times = np.zeros(0)
+        sequence_values = []
+        # builidng command voltages - get amplitudes to clamp
+        clamp = ('Clamp1', 'Pulse_amplitude')
+        reps = ('protocol', 'repetitions')
 
-        if 'repetitions' in self.Sequence:
-            reps = self.Sequence[('protocol', 'repetitions')]
-            sequenceValues = [x for y in range(len(dirs))
-                              for x in sequenceValues]
-         # select subset of data by overriding the directory sequence...
-        if self.dirsSet is not None:
-            ld = [self.ctrl.IVCurve_Sequence1.currentIndex()-1]
-            rd = [self.ctrl.IVCurve_Sequence2.currentIndex()-1]
+        # the sequence was retrieved from the data file by get_file_information
+        if clamp in self.sequence:
+            self.clampValues = self.sequence[clamp]
+            self.nclamp = len(self.clampValues)
+            if sequence_values is not None:
+                sequence_values = [x for x in self.clampValues for y in sequence_values]
+            else:
+                sequence_values = [x for x in range(self.clampValues)]
+        else:
+            sequence_values = []
+            nclamp = 0
+
+        # if sequence has repeats, build pattern
+        if reps in self.sequence:
+            self.repc = self.sequence[reps]
+            self.nrepc = len(self.repc)
+            sequence_values = [x for y in range(self.nrepc) for x in sequence_values]
+
+        # select subset of data by overriding the directory sequence...
+        if self.current_dirhandle is not None:
+            ld = [self.ctrl.IVCurve_Sequence1.currentIndex() - 1]
+            rd = [self.ctrl.IVCurve_Sequence2.currentIndex() - 1]
             if ld[0] == -1 and rd[0] == -1:
                 pass
             else:
                 if ld[0] == -1:  # 'All'
-                    ld = range(self.ctrl.IVCurve_Sequence1.count()-1)
+                    ld = range(self.ctrl.IVCurve_Sequence1.count() - 1)
                 if rd[0] == -1:  # 'All'
-                    rd = range(self.ctrl.IVCurve_Sequence2.count()-1)
+                    rd = range(self.ctrl.IVCurve_Sequence2.count() - 1)
                 dirs = []
                 for i in ld:
                     for j in rd:
                         dirs.append('%03d_%03d' % (i, j))
 
-        i = 0  # sometimes, the elements are not right...
-        for i, dirName in enumerate(dirs):
-            d = dh[dirName]
+        for i, directory_name in enumerate(dirs):  # dirs has the names of the runs withing the protocol
+            data_dir_handle = dh[directory_name]  # get the directory within the protocol
             try:
-                dataF = self.dataModel.getClampFile(d)
-                # Check if no clamp file for this iteration of the protocol
-                # (probably the protocol was stopped early)
-                if dataF is None:
-                    print ('IVCurve::loadFileRequested: ',
-                           'Missing data in %s, element: %d' % (dirName, i))
+                data_file_handle = self.dataModel.getClampFile(data_dir_handle)  # get pointer to clamp data
+                # Check if there is no clamp file for this iteration of the protocol
+                # Usually this indicates that the protocol was stopped early.
+                if data_file_handle is None:
+                    raise Exception('IVCurve.loadFileRequested: Missing data in %s, element: %d' % (directory_name, i))
                     continue
             except:
-                debug.printExc("Error loading data for protocol %s:"
-                               % d.name())
-                continue   # If something goes wrong here, we just carry on
-            dataF = dataF.read()
-            cmd = self.dataModel.getClampCommand(dataF)
-            data = self.dataModel.getClampPrimary(dataF)
-            self.dataMode = self.dataModel.getClampMode(data)
-            if self.dataMode == 'IC' or self.dataMode == 'CC':
-                sf = 1.0
-            else:
-                sf = 1e3
-            # only accept data in a particular range
+                raise Exception("Error loading data for protocol %s:"
+                      % directory_name)
+                continue  # If something goes wrong here, we just carry on
+            data_file = data_file_handle.read()
+            # only consider data in a particular range
+            data = self.dataModel.getClampPrimary(data_file)
+            self.data_mode = self.dataModel.getClampMode(data)
+            if self.data_mode is None:
+                self.data_mode = self.ic_modes[0]  # set a default mode
+            if self.data_mode in ['model_ic', 'model_vc']:  # lower case means model was run
+                self.modelmode = True
+            self.ctrl.IVCurve_dataMode.setText(self.data_mode)
+            # Assign scale factors for the different modes to display data rationally
+            if self.data_mode in self.ic_modes:
+                self.command_scale_factor = 1e12
+                self.command_units = 'pA'
+            elif self.data_mode in self.vc_modes:
+                self.command_units = 'mV'
+                self.command_scale_factor = 1e3
+            else:  # data mode not known; plot as voltage
+                self.command_units = 'V'
+                self.command_scale_factor = 1.0
             if self.ctrl.IVCurve_IVLimits.isChecked():
-                cval = sf*sequenceValues[i]
+                cval = self.command_scale_factor * sequence_values[i]
                 cmin = self.ctrl.IVCurve_IVLimitMin.value()
                 cmax = self.ctrl.IVCurve_IVLimitMax.value()
                 if cval < cmin or cval > cmax:
                     continue  # skip adding the data to the arrays
-            shdat = data.shape
-            if shdat[0] > 2*maxplotpts:
-                decimate_factor = int(numpy.floor(shdat[0]/maxplotpts))
-                if decimate_factor < 2:
-                    decimate_factor = 2
-            else:
-                pass
-             # store primary channel data and read command amplitude
+
+            self.devicesUsed = self.dataModel.getDevices(data_dir_handle)
+            self.holding = self.dataModel.getClampHoldingLevel(data_file_handle)
+            self.amp_settings = self.dataModel.getWCCompSettings(data_file)
+            self.clamp_state = self.dataModel.getClampState(data_file)
+            # print self.devicesUsed
+            cmd = self.dataModel.getClampCommand(data_file)
+
+            # store primary channel data and read command amplitude
             info1 = data.infoCopy()
-            self.traceTimes = numpy.append(self.traceTimes,
-                                        info1[1]['startTime'])
-            traces.append(data.view(numpy.ndarray))
-            cmd_wave.append(cmd.view(numpy.ndarray))
-            self.data_plot.plot(data,
-                                pen=pg.intColor(i, len(dirs), maxValue=200))
-            if self.dataMode in ['IC', 'CC']:
-                self.data_plot.plotItem.setLabel('left', None, None, 'mV')
-            self.cmd_plot.plot(cmd,
-                               pen=pg.intColor(i, len(dirs), maxValue=200))
-            if len(sequenceValues) > 0:
-                    self.values.append(sequenceValues[i])
+            if 'startTime' in info1[0].keys():
+                start_time = info1[0]['startTime']
+            elif 'startTime' in info1[1]['DAQ']['command'].keys():
+                start_time = info1[1]['DAQ']['command']['startTime']
             else:
-                self.values.append(cmd[len(cmd)/2])
-            i += 1
-        print 'IVCurve::loadFileRequested: Done loading files'
+                start_time = 0.0
+            self.trace_times = np.append(self.trace_times, start_time)
+            traces.append(data.view(np.ndarray))
+            cmd_wave.append(cmd.view(np.ndarray))
+            # pick up and save the sequence values
+            if len(sequence_values) > 0:
+                self.values.append(sequence_values[i])
+            else:
+                self.values.append(cmd[len(cmd) / 2])
         if traces is None or len(traces) == 0:
             print "IVCurve::loadFileRequested: No data found in this run..."
             return False
+        self.r_uncomp = 0.
+        if self.amp_settings['WCCompValid']:
+            if self.amp_settings['WCEnabled'] and self.amp_settings['CompEnabled']:
+                self.r_uncomp = self.amp_settings['WCResistance'] * (1.0 - self.amp_settings['CompCorrection'] / 100.)
+            else:
+                self.r_uncomp = 0.
+        # self.ctrl.IVCurve_R_unCompensated.setValue(self.r_uncomp * 1e-6)  # convert to Mohm to display
+        # self.ctrl.IVCurve_R_unCompensated.setSuffix(u" M\u2126")
+        # self.ctrl.IVCurve_Holding.setText('%.1f mV' % (float(self.holding) * 1e3))
+
         # put relative to the start
-        self.traceTimes = self.traceTimes - self.traceTimes[0]
-        traces = numpy.vstack(traces)
-        cmd_wave = numpy.vstack(cmd_wave)
-        self.cmd_wave = cmd_wave
-        self.tx = numpy.array(cmd.xvals('Time'))
-        commands = numpy.array(self.values)
-        self.colorScale.setIntColorScale(0, i, maxValue=200)
+        self.trace_times -= self.trace_times[0]
+        traces = np.vstack(traces)
+        self.cmd_wave = np.vstack(cmd_wave)
+        self.time_base = np.array(cmd.xvals('Time'))
+        self.cmd = np.array(self.values)
         # set up the selection region correctly and
         # prepare IV curves and find spikes
         info = [
             {'name': 'Command', 'units': cmd.axisUnits(-1),
-             'values': numpy.array(self.values)},
+             'values': np.array(self.values)},
             data.infoCopy('Time'),
             data.infoCopy(-1)]
         traces = traces[:len(self.values)]
         self.traces = MetaArray(traces, info=info)
         sfreq = self.dataModel.getSampleRate(data)
-        self.dataMode = self.dataModel.getClampMode(data)
-        if self.dataMode is None:
-            self.dataMode = 'CC' # set a default mode
-        self.ctrl.IVCurve_dataMode.setText(self.dataMode)
-
-        if self.ctrl.IVCurve_KeepAnalysis.isChecked():
-            self.keepAnalysisCount += 1
-        else:
-            self.keepAnalysisCount = 0  # always make sure is reset
-             # this is the only way to reset iterators.
-            self.colorList = itertools.cycle(self.colors)
-            self.symbolList = itertools.cycle(self.symbols)
-        self.makeMapSymbols()
-
-        if self.dataMode == 'IC':
-            cmdUnits = 'pA'
-            scaleFactor = 1e12
-            self.labelUp(self.data_plot, 'T (s)', 'V (V)', 'Data')
-        else:
-            cmdUnits = 'mV'
-            scaleFactor = 1e3
-            self.labelUp(self.data_plot, 'T (s)', 'I (A)', 'Data')
-        cmddata = cmd.view(numpy.ndarray)
-        cmddiff = numpy.abs(cmddata[1:] - cmddata[:-1])
-        if self.dataMode in self.ICModes:
-            mindiff = 1e-12
-        else:
-            mindiff = 1e-4
-        cmdtimes1 = numpy.argwhere(cmddiff >= mindiff)[:, 0]
-        cmddiff2 = cmdtimes1[1:] - cmdtimes1[:-1]
-        cmdtimes2 = numpy.argwhere(cmddiff2 > 1)[:, 0]
-        if len(cmdtimes1) > 0 and len(cmdtimes2) > 0:
-            cmdtimes = numpy.append(cmdtimes1[0], cmddiff2[cmdtimes2])
-        else:  # just fake it
-            cmdtimes = numpy.array([0.01, 0.1])
+        self.sample_interval = 1./sfreq
+        vc_command = data_dir_handle.parent().info()['devices']['Clamp1']
+        vc_info = vc_command['waveGeneratorWidget']['stimuli']['Pulse']
+        pulsestart = vc_info['start']['value']
+        pulsedur = vc_info['length']['value']
+        cmdtimes = np.array([pulsestart, pulsedur])
         if self.ctrl.IVCurve_KeepT.isChecked() is False:
-            self.tstart = cmd.xvals('Time')[cmdtimes[0]]
-            self.tend = cmd.xvals('Time')[cmdtimes[1]] + self.tstart
+            self.tstart = cmdtimes[0] # cmd.xvals('Time')[cmdtimes[0]]
+            self.tend = np.sum(cmdtimes)  #cmd.xvals('Time')[cmdtimes[1]] + self.tstart
             self.tdur = self.tend - self.tstart
+        # if self.ctrl.IVCurve_KeepT.isChecked() is False:
+        #     self.tstart += self.sample_interval
+        #     self.tend += self.sample_interval
 
-         # build the list of command values that are used for the fitting
+        # build the list of command values that are used for the fitting
         cmdList = []
         for i in range(len(self.values)):
             cmdList.append('%8.3f %s' %
-                           (scaleFactor*self.values[i], cmdUnits))
+                           (self.command_scale_factor * self.values[i], self.command_units))
         self.ctrl.IVCurve_tauh_Commands.clear()
         self.ctrl.IVCurve_tauh_Commands.addItems(cmdList)
-        self.sampInterval = 1.0/sfreq
-        if self.ctrl.IVCurve_KeepT.isChecked() is False:
-            self.tstart += self.sampInterval
-            self.tend += self.sampInterval
+        self.color_scale.setIntColorScale(0, len(dirs), maxValue=200)
+        self.make_map_symbols()
+        # if self.data_mode in self.ic_modes:
+        #     # for adaptation ratio:
+        #     self.update_all_analysis()
+        if self.data_mode in self.vc_modes:
+            self.spikecount = np.zeros(len(np.array(self.values)))
 
-        self.initialize_Regions()  # now create the analysis regions
-        if self.ctrl.IVCurve_KeepT.isChecked() is False:
-            self.lrss.setRegion([(self.tend-(self.tdur/5.0)),
-                                self.tend-0.001])  # steady-state
-            # "peak" during hyperpolarization
-            self.lrpk.setRegion([self.tstart,
-                                self.tstart+(self.tdur/5.0)])
-            self.lrtau.setRegion([self.tstart+(self.tdur/5.0)+0.005,
-                                 self.tend])
-            self.lrrmp.setRegion([1.e-4, self.tstart*0.9])  # rmp window
-        self.lrleak.setRegion([self.ctrl.IVCurve_LeakMin.value(),
-                              self.ctrl.IVCurve_LeakMax.value()])
-
-        if self.dataMode in self.ICModes:
-            # for adaptation ratio:
-            self.updateAnalysis()
-        if self.dataMode in self.VCModes:
-            self.cmd = commands
-            self.spikecount = numpy.zeros(len(numpy.array(self.values)))
+        # and also plot
+        self.plot_traces()
+        self.setup_regions()
+        #self._host_.dockArea.findAll()[1]['Parameters'].raiseDock()  # parameters window to the top
+        self.get_window_analysisPars()  # prepare the analysis parameters
         return True
 
-    def updateAnalysis(self):
+    def file_cell_protocol(self):
+        """
+        file_cell_protocol breaks the current filename down and returns a
+        tuple: (date, cell, protocol)
+        last argument returned is the rest of the path...
+        """
+        (p0, proto) = os.path.split(self.filename)
+        (p1, cell) = os.path.split(p0)
+        (p2, sliceid) = os.path.split(p1)
+        (p3, date) = os.path.split(p2)
+        return (date, sliceid, cell, proto, p3)
+
+    def plot_traces(self, multimode=False):
+        """
+        Plot the current data traces.
+        :param multimode: try using "multiline plot routine" to speed up plots (no color though)
+        :return: nothing
+        """
+        if self.ctrl.IVCurve_KeepAnalysis.isChecked():
+            self.keep_analysis_count += 1
+        else:
+            self.keep_analysis_count = 0  # always make sure is reset
+            # this is the only way to reset iterators.
+            self.color_list = itertools.cycle(self.colors)
+            self.symbol_list = itertools.cycle(self.symbols)
+        self.make_map_symbols()
+        self.data_plot.plotItem.clearPlots()
+        self.cmd_plot.plotItem.clearPlots()
+        ntr = self.traces.shape[0]
+        self.data_plot.setDownsampling(auto=False, mode='mean')
+        self.data_plot.setClipToView(True)
+        self.cmd_plot.setDownsampling(auto=False, mode='mean')
+        self.cmd_plot.setClipToView(True)
+        self.data_plot.disableAutoRange()
+        self.cmd_plot.disableAutoRange()
+        cmdindxs = np.unique(self.cmd)  # find the unique voltages
+        colindxs = [int(np.where(cmdindxs == self.cmd[i])[0]) for i in range(len(self.cmd))]  # make a list to use
+        nskip = 1
+        # print 'ntr, skip: ', ntr, nskip
+        if multimode:
+            pass
+            # datalines = MultiLine(self.time_base, self.traces, downsample=10)
+            # self.data_plot.addItem(datalines)
+            # cmdlines = MultiLine(self.time_base, self.cmd_wave, downsample=10)
+            # self.cmd_plot.addItem(cmdlines)
+        else:
+            for i in range(ntr):
+                atrace = self.traces[i]
+                acmdwave = self.cmd_wave[i]
+                self.data_plot.plot(x=self.time_base, y=atrace, downSample=10, downSampleMethod='mean',
+                                     pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
+                self.cmd_plot.plot(x=self.time_base, y=acmdwave, downSample=10, downSampleMethod='mean',
+                               pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
+
+        if self.data_mode in self.ic_modes:
+            self.label_up(self.data_plot, 'T (s)', 'V (V)', 'Data')
+            self.label_up(self.cmd_plot, 'T (s)', 'I (%s)' % self.command_units, 'Data')
+        elif self.data_mode in self.vc_modes:  # voltage clamp
+            self.label_up(self.data_plot, 'T (s)', 'I (A)', 'Data')
+            self.label_up(self.cmd_plot, 'T (s)', 'V (%s)' % self.command_units, 'Data')
+        else:  # mode is not known: plot both as V
+            self.label_up(self.data_plot, 'T (s)', 'V (V)', 'Data')
+            self.label_up(self.cmd_plot, 'T (s)', 'V (%s)' % self.command_units, 'Data')
+        self.data_plot.autoRange()
+        self.cmd_plot.autoRange()
+
+    def setup_regions(self):
+        """
+        Initialize the positions of the lr regions on the display.
+        We attempt to use a logical set of values based on the timing of command steps
+        and stimulus events
+        :return:
+        """
+#        prior_updater=self.auto_updater
+#        self.auto_updater=False
+#        print 'setup regions: auto updater: ', self.auto_updater
+        self.initialize_regions()  # now create the analysis regions, if not already existing
+        if self.ctrl.IVCurve_KeepT.isChecked() is False:  # change regions; otherwise keep...
+            tstart_pk = self.tstart
+            tdur_pk = self.tdur * 0.4  # use first 40% of trace for peak
+            tstart_ss = self.tstart + 0.75 * self.tdur
+            tdur_ss = self.tdur * 0.25
+            tstart_tau = self.tstart + 0.1*self.tdur
+            tdur_tau = 0.9*self.tdur
+            # tauh window
+            self.regions['lrtau']['region'].setRegion([tstart_tau,
+                                                        tstart_tau + tdur_tau])
+            # peak voltage window
+            self.regions['lrwin0']['region'].setRegion([tstart_pk,
+                                                        tstart_pk + tdur_pk])
+            # steady-state meausurement:
+            self.regions['lrwin1']['region'].setRegion([tstart_ss,
+                                                        tstart_ss + tdur_ss])
+            # rmp measurement
+            self.regions['lrrmp']['region'].setRegion([0., self.tstart * 0.9])  # rmp window
+            print 'rmp window region: ', self.tstart*0.9
+        for r in ['lrtau', 'lrwin0', 'lrwin1', 'lrrmp']:
+            self.regions[r]['region'].setBounds([0., np.max(self.time_base)])  # limit regions to data
+ #       self.auto_updater = prior_updater
+
+    def get_window_analysisPars(self):
+        """
+        Retrieve the settings of the lr region windows, and some other general values
+        in preparation for analysis
+        :return:
+        """
+        self.analysis_parameters = {}  # start out empty so we are not fooled by priors
+        for region in ['lrleak', 'lrwin0', 'lrwin1', 'lrrmp', 'lrtau']:
+            rgninfo = self.regions[region]['region'].getRegion()  # from the display
+            self.regions[region]['start'].setValue(rgninfo[0] * 1.0e3)  # report values to screen
+            self.regions[region]['stop'].setValue(rgninfo[1] * 1.0e3)
+            self.analysis_parameters[region] = {'times': rgninfo}
+#        for region in ['lrwin0', 'lrwin1', 'lrwin2']:
+#            if self.regions[region]['mode'] is not None:
+#                self.analysis_parameters[region]['mode'] = self.regions[region]['mode'].currentText()
+#         self.get_alternation()  # get values into the analysisPars dictionary
+#         self.get_baseline()
+#         self.get_junction()
+
+    def updateAnalysis(self, **kwargs):
         """updateAnalysis re-reads the time parameters and counts the spikes"""
+        self.get_window_analysisPars()
         self.readParameters(clearFlag=True, pw=True)
         self.countSpikes()
 
@@ -593,7 +710,7 @@ class IVCurve(AnalysisModule):
         The following variables are set:
         self.spikecount: a 1-D numpy array of spike counts, aligned with the
             current (command)
-        self.AdaptRatio: the adaptation ratio of the spike train
+        self.adapt_ratio: the adaptation ratio of the spike train
         self.fsl: a numpy array of first spike latency for each command level
         self.fisi: a numpy array of first interspike intervals for each
             command level
@@ -601,14 +718,13 @@ class IVCurve(AnalysisModule):
         self.spk: the indices of command levels were at least one spike
             was detected
         """
-        #print 'self.tx: ', self.tx
-        if self.keepAnalysisCount == 0:
+        if self.keep_analysis_count == 0:
             clearFlag = True
         else:
             clearFlag = False
-        if self.dataMode not in self.ICModes or self.tx is None:
-            print ('IVCurve::countSpikes: Cannot count spikes, ' +
-                   'and dataMode is ', self.dataMode, 'and ICModes are: ', self.ICModes, 'tx is: ', self.tx)
+        if self.data_mode not in self.ic_modes or self.time_base is None:
+            #print ('IVCurve::countSpikes: Cannot count spikes, ' +
+            #       'and dataMode is ', self.data_mode, 'and ICModes are: ', self.ic_modes, 'tx is: ', self.tx)
             self.spikecount = []
             self.fiPlot.plot(x=[], y=[], clear=clearFlag, pen='w',
                              symbolSize=6, symbolPen='b',
@@ -624,19 +740,19 @@ class IVCurve(AnalysisModule):
         maxspk = 10  # range of spike counts
         threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 1e-3
         ntr = len(self.traces)
-        self.spikecount = numpy.zeros(ntr)
-        fsl = numpy.zeros(ntr)
-        fisi = numpy.zeros(ntr)
-        ar = numpy.zeros(ntr)
-        rmp = numpy.zeros(ntr)
+        self.spikecount = np.zeros(ntr)
+        fsl = np.zeros(ntr)
+        fisi = np.zeros(ntr)
+        ar = np.zeros(ntr)
+        rmp = np.zeros(ntr)
         # rmp is taken from the mean of all the baselines in the traces
-        self.Rmp = numpy.mean(rmp)
+        self.Rmp = np.mean(rmp)
 
         for i in range(ntr):
-            (spike, spk) = Utility.findspikes(self.tx, self.traces[i],
+            (spike, spk) = Utility.findspikes(self.time_base, self.traces[i],
                                               threshold, t0=self.tstart,
                                               t1=self.tend,
-                                              dt=self.sampInterval,
+                                              dt=self.sample_interval,
                                               mode='schmitt',
                                               interpolate=False,
                                               debug=False)
@@ -648,21 +764,22 @@ class IVCurve(AnalysisModule):
                 fisi[i] = spike[1]-spike[0]
              # for Adaptation ratio analysis
             if len(spike) >= minspk and len(spike) <= maxspk:
-                misi = numpy.mean(numpy.diff(spike[-3:]))
+                misi = np.mean(np.diff(spike[-3:]))
                 ar[i] = misi/fisi[i]
-            (rmp[i], r2) = Utility.measure('mean', self.tx, self.traces[i],
+            (rmp[i], r2) = Utility.measure('mean', self.time_base, self.traces[i],
                                            0.0, self.tstart)
-        iAR = numpy.where(ar > 0)
-        ARmean = numpy.mean(ar[iAR])  # only where we made the measurement
-        self.AdaptRatio = ARmean
+        iAR = np.where(ar > 0)
+        ARmean = np.mean(ar[iAR])  # only where we made the measurement
+        self.adapt_ratio = ARmean
         self.ctrl.IVCurve_AR.setText(u'%7.3f' % (ARmean))
         fisi = fisi*1.0e3
         fsl = fsl*1.0e3
         self.fsl = fsl
         self.fisi = fisi
-        self.nospk = numpy.where(self.spikecount == 0)
-        self.spk = numpy.where(self.spikecount > 0)
+        self.nospk = np.where(self.spikecount == 0)
+        self.spk = np.where(self.spikecount > 0)
         self.update_SpikePlots()
+
 
     def fileCellProtocol(self):
         """
@@ -676,28 +793,62 @@ class IVCurve(AnalysisModule):
         (p2, date) = os.path.split(p1)
         return(date, cell, proto, p2)
 
-    def printAnalysis(self):
+    def printAnalysis(self, script_header=True, copytoclipboard=False):
         """
         Print the CCIV summary information (Cell, protocol, etc)
-        Printing goes to the terminal, where the data can be copied
-        to another program like a spreadsheet.
+        Print a nice formatted version of the analysis output to the terminal.
+        The output can be copied to another program (excel, prism) for further analysis
+        :param script_header:
+        :return:
         """
-        (date, cell, proto, p2) = self.fileCellProtocol()
-        smin = numpy.amin(self.Sequence.values())
-        smax = numpy.amax(self.Sequence.values())
-        sstep = numpy.mean(numpy.diff(self.Sequence.values()))
-        seq = '%g;%g/%g' % (smin, smax, sstep)
-        print '='*80
-        print ("%14s,%14s,%16s,%20s,%9s,%9s,%10s,%9s,%10s" %
-               ("Date", "Cell", "Protocol",
-                "Sequence", "RMP(mV)", " Rin(Mohm)",  "tau(ms)",
-                "ARatio", "tau2(ms)"))
-        print ("%14s,%14s,%16s,%20s,%8.1f,%8.1f,%8.2f,%8.3f,%8.2f" %
-               (date, cell, proto, seq, self.Rmp*1000., self.Rin*1e-6,
-                self.tau*1000., self.AdaptRatio, self.tau2*1000))
-        print '-'*80
+        data_template = (OrderedDict([('ElapsedTime', '{:>8.2f}'), ('Drugs', '{:<8s}'), ('HoldV', '{:>5.1f}'), ('JP', '{:>5.1f}'),
+                                                                        ('Rs', '{:>6.2f}'), ('Cm', '{:>6.1f}'), ('Ru', '{:>6.2f}'),
+                                                                        ('Erev', '{:>6.2f}'),
+                                                                        ('gsyn_Erev', '{:>9.2f}'), ('gsyn_60', '{:>7.2f}'), ('gsyn_13', '{:>7.2f}'),
+                                                                        #('p0', '{:6.3e}'), ('p1', '{:6.3e}'), ('p2', '{:6.3e}'), ('p3', '{:6.3e}'),
+                                                                        ('I_ionic+', '{:>8.3f}'), ('I_ionic-', '{:>8.3f}'), ('ILeak', '{:>7.3f}'),
+                                                                        ('win1Start', '{:>9.3f}'), ('win1End', '{:>7.3f}'),
+                                                                        ('win2Start', '{:>9.3f}'), ('win2End', '{:>7.3f}'),
+                                                                        ('win0Start', '{:>9.3f}'), ('win0End', '{:>7.3f}'),
+                                                                        ]))
+        # summary table header is written anew for each cell
+        if script_header:
+            print('{:34s}\t{:24s}\t'.format("Cell", "Protocol")),
+            for k in data_template.keys():
+                print('{:<s}\t'.format(k)),
+            print ''
+        ltxt = ''
+        ltxt += ('{:34s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Protocol']))
 
-    def update_Tau(self, printWindow=True, whichTau=1):
+        for a in data_template.keys():
+            if a in self.analysis_summary.keys():
+                ltxt += ((data_template[a] + '\t').format(self.analysis_summary[a]))
+            else:
+                ltxt += '<   >\t'
+        print ltxt
+        if copytoclipboard:
+            clipb = QtGui.QApplication.clipboard()
+            clipb.clear(mode=clipb.Clipboard )
+            clipb.setText(ltxt, mode=clipb.Clipboard)
+
+        #
+        # (date, cell, proto, p2) = self.fileCellProtocol()
+        # print 'sequence: ', self.values
+        # smin = np.amin(self.values)*1e12
+        # smax = np.amax(self.values)*1e12
+        # sstep = np.mean(np.diff(self.values))*1e12
+        # seq = '%g;%g/%g' % (smin, smax, sstep)
+        # print '='*80
+        # print ("%14s,%14s,%16s,%20s,%9s,%9s,%10s,%9s,%10s" %
+        #        ("Date", "Cell", "Protocol",
+        #         "Sequence", "RMP(mV)", " Rin(Mohm)",  "tau(ms)",
+        #         "ARatio", "tau2(ms)"))
+        # print ("%14s,%14s,%16s,%20s,%8.1f,%8.1f,%8.2f,%8.3f,%8.2f" %
+        #        (date, cell, proto, seq, self.Rmp*1000., self.r_in*1e-6,
+        #         self.tau*1000., self.adapt_ratio, self.tau2*1000))
+        # print '-'*80
+
+    def update_Tau_membrane(self, peak_time=None, printWindow=True, whichTau=1):
         """
         Compute time constant (single exponential) from the
         onset of the response
@@ -705,38 +856,35 @@ class IVCurve(AnalysisModule):
         """
         if self.cmd == []:  # probably not ready yet to do the update.
             return
-        if self.dataMode == 'VC':  # don't try this in voltage clamp mode
+        if self.data_mode not in self.ic_modes:  # only permit in IC
             return
-        rgnpk = self.lrpk.getRegion()
+        rgnpk = list(self.regions['lrwin0']['region'].getRegion())
         Func = 'exp1'  # single exponential fit.
         Fits = Fitting.Fitting()
         initpars = [-60.0*1e-3, -5.0*1e-3, 10.0*1e-3]
-        icmdneg = numpy.where(self.cmd < 0)
-        maxcmd = numpy.min(self.cmd)
-        ineg = numpy.where(self.cmd[icmdneg] >= maxcmd/3)
+        icmdneg = np.where(self.cmd < 0)
+        maxcmd = np.min(self.cmd)
+        ineg = np.where(self.cmd[icmdneg] >= maxcmd/3)
+        if peak_time is not None:
+            rgnpk[1] = np.max(peak_time[ineg[0]])
         whichdata = ineg[0]
         itaucmd = self.cmd[ineg]
         whichaxis = 0
-
-        print whichdata
-        print whichaxis
         (fpar, xf, yf, names) = Fits.FitRegion(whichdata, whichaxis,
                                                #self.traces.xvals('Time'),
-                                               #self.traces.view(numpy.ndarray),
-                                               self.tx,
+                                               #self.traces.view(np.ndarray),
+                                               self.time_base,
                                                self.traces,
                                                dataType='xy',
                                                t0=rgnpk[0], t1=rgnpk[1],
                                                fitFunc=Func,
                                                fitPars=initpars,
-                                               method = 'simplex')
+                                               method='simplex')
         if fpar == []:
-            print 'IVCurve::update_Tau: Charging tau fitting failed - see log'
+            raise Exception('IVCurve::update_Tau_membrane: Charging tau fitting failed - see log')
             return
-        # outstr = ""
-        s = numpy.shape(fpar)
         taus = []
-        for j in range(0, s[0]):
+        for j in range(len(fpar)):
             outstr = ""
             taus.append(fpar[j][2])
             for i in range(0, len(names[j])):
@@ -744,7 +892,7 @@ class IVCurve(AnalysisModule):
             if printWindow:
                 print("FIT(%d, %.1f pA): %s " %
                       (whichdata[j], itaucmd[j]*1e12, outstr))
-        meantau = numpy.mean(taus)
+        meantau = np.mean(taus)
         self.ctrl.IVCurve_Tau.setText(u'%18.1f ms' % (meantau*1.e3))
         self.tau = meantau
         tautext = 'Mean Tau: %8.1f'
@@ -761,10 +909,10 @@ class IVCurve(AnalysisModule):
             Based on analysis in Fujino and Oertel, J. Neuroscience 2001,
             to type cells based on different Ih kinetics and magnitude.
         """
-        if self.ctrl.IVCurve_showHide_lrtau.isChecked() is not True:
+        if not self.ctrl.IVCurve_showHide_lrtau.isChecked():
             return
         bovera = 0.0
-        rgn = self.lrtau.getRegion()
+        rgn = self.regions['lrtau']['region'].getRegion()
         Func = 'exp1'  # single exponential fit to the whole region
         Fits = Fitting.Fitting()
         fitx = []
@@ -775,27 +923,22 @@ class IVCurve(AnalysisModule):
         s_target = self.ctrl.IVCurve_tauh_Commands.currentIndex()
         itarget = self.values[s_target]  # retrive actual value from commands
         self.neg_cmd = itarget
-        idiff = numpy.abs(numpy.array(self.cmd) - itarget)
-        amin = numpy.argmin(idiff)   # amin appears to be the same as s_target
+        idiff = np.abs(np.array(self.cmd) - itarget)
+        amin = np.argmin(idiff)   # amin appears to be the same as s_target
          # target trace (as selected in cmd drop-down list):
         target = self.traces[amin]
          # get Vrmp -  # rmp approximation.
-        vrmp = numpy.median(target['Time': 0.0:self.tstart-0.005])*1000.
-        self.ctrl.IVCurve_vrmp.setText('%8.2f' % (vrmp))
+        vrmp = np.median(target['Time': 0.0:self.tstart-0.005])*1000.
         self.neg_vrmp = vrmp
          # get peak and steady-state voltages
-        pkRgn = self.lrpk.getRegion()
-        ssRgn = self.lrss.getRegion()
+        pkRgn = self.regions['lrwin0']['region'].getRegion()
+        ssRgn = self.regions['lrwin1']['region'].getRegion()
         vpk = target['Time': pkRgn[0]:pkRgn[1]].min() * 1000
-         #vpk = numpy.mean(dpk[amin])*1000.
         self.neg_pk = (vpk-vrmp) / 1000.
-         #dss = self.traces['Time' : rgn[1]-0.010:rgn[1]]
-         #vss = numpy.mean(dss[amin])*1000.
-        vss = numpy.median(target['Time': ssRgn[0]:ssRgn[1]]) * 1000
+        vss = np.median(target['Time': ssRgn[0]:ssRgn[1]]) * 1000
         self.neg_ss = (vss-vrmp) / 1000.
         whichdata = [int(amin)]
         itaucmd = [self.cmd[amin]]
-        rgnss = self.lrss.getRegion()
         self.ctrl.IVCurve_tau2TStart.setValue(rgn[0]*1.0e3)
         self.ctrl.IVCurve_tau2TStop.setValue(rgn[1]*1.0e3)
         fd = self.traces['Time': rgn[0]:rgn[1]][whichdata][0]
@@ -805,18 +948,17 @@ class IVCurve(AnalysisModule):
             self.fitted_data.clear()
             self.fitted_data = self.data_plot.plot(fd, pen=pg.mkPen('w'))
             self.fitted_data.update()
-
          # now do the fit
         whichaxis = 0
         (fpar, xf, yf, names) = Fits.FitRegion(whichdata, whichaxis,
                                                self.traces.xvals('Time'),
-                                               self.traces.view(numpy.ndarray),
+                                               self.traces.view(np.ndarray),
                                                dataType='2d',
                                                t0=rgn[0], t1=rgn[1],
                                                fitFunc=Func,
                                                fitPars=initpars)
         if fpar == []:
-            print 'IVCurve::update_Tauh: tau_h fitting failed - see log'
+            raise Exception('IVCurve::update_Tauh: tau_h fitting failed - see log')
             return
         redpen = pg.mkPen('r', width=1.5, style=QtCore.Qt.DashLine)
         if self.fit_curve is None:
@@ -827,9 +969,8 @@ class IVCurve(AnalysisModule):
             self.fit_curve = self.data_plot.plot(xf[0], yf[0],
                                                  pen=redpen)
             self.fit_curve.update()
-
         outstr = ""
-        s = numpy.shape(fpar)
+        s = np.shape(fpar)
         taus = []
         for j in range(0, s[0]):
             outstr = ""
@@ -840,7 +981,7 @@ class IVCurve(AnalysisModule):
             if printWindow:
                 print("Ih FIT(%d, %.1f pA): %s " %
                       (whichdata[j], itaucmd[j]*1e12, outstr))
-        meantau = numpy.mean(taus)
+        meantau = np.mean(taus)
         self.ctrl.IVCurve_Tauh.setText(u'%8.1f ms' % (meantau*1.e3))
         self.tau2 = meantau
         tautext = 'Mean Tauh: %8.1f'
@@ -852,7 +993,6 @@ class IVCurve(AnalysisModule):
             self.ctrl.IVCurve_FOType.setText('D Stellate')
         else:
             self.ctrl.IVCurve_FOType.setText('T Stellate')
-
          # estimate of Gh:
         Gpk = itarget / self.neg_pk
         Gss = itarget / self.neg_ss
@@ -880,35 +1020,34 @@ class IVCurve(AnalysisModule):
         """
         if self.traces is None:
             return
-        rgnss = self.lrss.getRegion()
+        rgnss = self.regions['lrwin1']['region'].getRegion()
         self.ctrl.IVCurve_ssTStart.setValue(rgnss[0]*1.0e3)
         self.ctrl.IVCurve_ssTStop.setValue(rgnss[1]*1.0e3)
         data1 = self.traces['Time': rgnss[0]:rgnss[1]]
         self.ivss = []
-        commands = numpy.array(self.values)
+        commands = np.array(self.values)
 
          # check out whether there are spikes in the window that is selected
         threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 1e-3
         ntr = len(self.traces)
-        spikecount = numpy.zeros(ntr)
+        spikecount = np.zeros(ntr)
         for i in range(ntr):
-            (spike, spk) = Utility.findspikes(self.tx, self.traces[i],
+            (spike, spk) = Utility.findspikes(self.time_base, self.traces[i],
                                               threshold,
                                               t0=rgnss[0], t1=rgnss[1],
-                                              dt=self.sampInterval,
+                                              dt=self.sample_interval,
                                               mode='schmitt',
                                               interpolate=False,
                                               debug=False)
-            if len(spike) == 0:
-                continue
-            spikecount[i] = len(spike)
-        nospk = numpy.where(spikecount == 0)
+            if len(spike) > 0:
+                spikecount[i] = len(spike)
+        nospk = np.where(spikecount == 0)
         if data1.shape[1] == 0 or data1.shape[0] == 1:
             return  # skip it
 
         self.ivss = data1.mean(axis=1)  # all traces
-        if self.ctrl.IVCurve_SubRMP.isChecked():
-            self.ivss = self.ivss - self.ivrmp
+        if self.ctrl.IVCurve_SubBaseline.isChecked():
+            self.ivss = self.ivss - self.ivbaseline
 
         if len(nospk) >= 1:
              # Steady-state IV where there are no spikes
@@ -917,96 +1056,133 @@ class IVCurve(AnalysisModule):
             self.cmd = commands[nospk]
              # compute Rin from the SS IV:
             if len(self.cmd) > 0 and len(self.ivss) > 0:
-                self.Rin = numpy.max(numpy.diff
-                                     (self.ivss)/numpy.diff(self.cmd))
+                self.r_in = np.max(np.diff
+                                     (self.ivss)/np.diff(self.cmd))
                 self.ctrl.IVCurve_Rin.setText(u'%9.1f M\u03A9'
-                                              % (self.Rin*1.0e-6))
+                                              % (self.r_in*1.0e-6))
             else:
                 self.ctrl.IVCurve_Rin.setText(u'No valid points')
-        # self.ivss = self.ivss.view(numpy.ndarray)
-        self.yleak = numpy.zeros(len(self.ivss))
+        self.yleak = np.zeros(len(self.ivss))
         if self.ctrl.IVCurve_subLeak.isChecked():
             (x, y) = Utility.clipdata(self.ivss, self.ivss_cmd,
                                       self.ctrl.IVCurve_LeakMin.value()*1e-3,
                                       self.ctrl.IVCurve_LeakMax.value()*1e-3)
-            p = numpy.polyfit(x, y, 1)  # linear fit
-            self.yleak = numpy.polyval(p, self.ivss_cmd)
+            p = np.polyfit(x, y, 1)  # linear fit
+            self.yleak = np.polyval(p, self.ivss_cmd)
             self.ivss = self.ivss - self.yleak
+        isort = np.argsort(self.ivss_cmd)
+        self.ivss_cmd = self.ivss_cmd[isort]
+        self.ivss = self.ivss[isort]
         self.update_IVPlot()
 
     def update_pkAnalysis(self, clear=False, pw=False):
         """
             Compute the peak IV (minimum) from the selected window
+            mode can be 'min', 'max', or 'abs'
         """
         if self.traces is None:
             return
-        rgnpk = self.lrpk.getRegion()
+        mode = self.ctrl.IVCurve_PeakMode.currentText()
+        rgnpk = self.regions['lrwin0']['region'].getRegion()
         self.ctrl.IVCurve_pkTStart.setValue(rgnpk[0]*1.0e3)
         self.ctrl.IVCurve_pkTStop.setValue(rgnpk[1]*1.0e3)
         data2 = self.traces['Time': rgnpk[0]:rgnpk[1]]
-        commands = numpy.array(self.values)
-         # check out whether there are spikes in the window that is selected
-        threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 1e-3
-        ntr = len(self.traces)
-        spikecount = numpy.zeros(ntr)
-        for i in range(ntr):
-            (spike, spk) = Utility.findspikes(self.tx, self.traces[i],
-                                              threshold,
-                                              t0=rgnpk[0], t1=rgnpk[1],
-                                              dt=self.sampInterval,
-                                              mode='schmitt',
-                                              interpolate=False, debug=False)
-            if len(spike) == 0:
-                continue
-            spikecount[i] = len(spike)
-        nospk = numpy.where(spikecount == 0)
         if data2.shape[1] == 0:
-            return  # skip it
-        self.ivpk = data2.min(axis=1)
-        if self.ctrl.IVCurve_SubRMP.isChecked():
-            self.ivpk = self.ivpk - self.ivrmp
-
+            return  # skip it - window missed the data
+        commands = np.array(self.values)
+        # check out whether there are spikes in the window that is selected
+        # but only in current clamp
+        nospk = []
+        if self.data_mode in self.ic_modes:
+            threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 1e-3
+            ntr = len(self.traces)
+            spikecount = np.zeros(ntr)
+            for i in range(ntr):
+                (spike, spk) = Utility.findspikes(self.time_base, self.traces[i],
+                                                  threshold,
+                                                  t0=rgnpk[0], t1=rgnpk[1],
+                                                  dt=self.sample_interval,
+                                                  mode='schmitt',
+                                                  interpolate=False, debug=False)
+                if len(spike) == 0:
+                    continue
+                spikecount[i] = len(spike)
+            nospk = np.where(spikecount == 0)
+            nospk = np.array(nospk)[0]
+        if mode == 'Min':
+            self.ivpk = data2.min(axis=1)
+            peak_pos = np.argmin(data2,axis=1)
+        elif mode == 'Max':
+            self.ivpk = data2.max(axis=1)
+            peak_pos = np.argmax(data2,axis=1)
+        elif mode == 'Abs':  # find largest regardless of the sign ('minormax')
+            x1 = data2.min(axis=1)
+            peak_pos1 = np.argmin(data2, axis=1)
+            x2 = data2.max(axis=1)
+            peak_pos2 = np.argmax(data2, axis=1)
+            self.ivpk = np.zeros(data2.shape[0])
+            for i in range(data2.shape[0]):
+                if -x1[i] > x2[i]:
+                    self.ivpk[i] = x1[i]
+                    peak_pos = peak_pos1
+                else:
+                    self.ivpk[i] = x2[i]
+                    peak_pos = peak_pos2
+            #self.ivpk = np.array([np.max(x1[i], x2[i]) for i in range(data2.shape[0]])
+            #self.ivpk = np.maximum(np.fabs(data2.min(axis=1)), data2.max(axis=1))
+        if self.ctrl.IVCurve_SubBaseline.isChecked():
+            self.ivpk = self.ivpk - self.ivbaseline
         if len(nospk) >= 1:
-             # Peak (minimum voltage) IV where there are no spikes
+             # Peak (min, max or absmax voltage) IV where there are no spikes
             self.ivpk = self.ivpk[nospk]
             self.ivpk_cmd = commands[nospk]
             self.cmd = commands[nospk]
-        self.ivpk = self.ivpk.view(numpy.ndarray)
-        self.update_Tau(printWindow=pw)
+        else:
+            self.ivpk_cmd = commands
+            self.cmd = commands
+        self.ivpk = self.ivpk.view(np.ndarray)
         if self.ctrl.IVCurve_subLeak.isChecked():
             self.ivpk = self.ivpk - self.yleak
+        # now sort data in ascending command levels
+        isort = np.argsort(self.ivpk_cmd)
+        self.ivpk_cmd = self.ivpk_cmd[isort]
+        self.ivpk = self.ivpk[isort]
         self.update_IVPlot()
+        peak_time = self.time_base[peak_pos]
+        self.update_Tau_membrane(peak_time=peak_time, printWindow=pw)
 
-    def update_rmpAnalysis(self, clear=True, pw=False):
+    def update_rmpAnalysis(self, **kwargs):
         """
             Compute the RMP over time/commands from the selected window
         """
         if self.traces is None:
             return
-        rgnrmp = self.lrrmp.getRegion()
+        rgnrmp = self.regions['lrrmp']['region'].getRegion()
         self.ctrl.IVCurve_rmpTStart.setValue(rgnrmp[0]*1.0e3)
         self.ctrl.IVCurve_rmpTStop.setValue(rgnrmp[1]*1.0e3)
         data1 = self.traces['Time': rgnrmp[0]:rgnrmp[1]]
-        data1 = data1.view(numpy.ndarray)
-        self.ivrmp = []
-        commands = numpy.array(self.values)
-        self.ivrmp = data1.mean(axis=1)  # all traces
-        self.ivrmp_cmd = commands
+        data1 = data1.view(np.ndarray)
+        self.ivbaseline = []
+        commands = np.array(self.values)
+        self.ivbaseline = data1.mean(axis=1)  # all traces
+        self.ivbaseline_cmd = commands
         self.cmd = commands
-        self.averageRMP = numpy.mean(self.ivrmp)
+        self.averageRMP = np.mean(self.ivbaseline)*1e3  # convert to mV
+        self.ctrl.IVCurve_vrmp.setText('%8.2f' % (self.averageRMP))
+
         self.update_RMPPlot()
 
-    def makeMapSymbols(self):
+    def make_map_symbols(self):
         """
         Given the current state of things, (keep analysis count, for example),
         return a tuple of pen, fill color, empty color, a symbol from
         our lists, and a clearflag. Used to overplot different data.
         """
-        n = self.keepAnalysisCount
-        pen = self.colorList.next()
+        n = self.keep_analysis_count
+        pen = self.color_list.next()
         filledbrush = pen
         emptybrush = None
-        symbol = self.symbolList.next()
+        symbol = self.symbol_list.next()
         if n == 0:
             clearFlag = True
         else:
@@ -1015,7 +1191,7 @@ class IVCurve(AnalysisModule):
                                'emptybrush': emptybrush, 'symbol': symbol,
                                'n': n, 'clearFlag': clearFlag}
 
-    def mapSymbol(self):
+    def map_symbol(self):
         cd = self.currentSymDict
         if cd['filledbrush'] == 'w':
             cd['filledbrush'] = pg.mkBrush((128, 128, 128))
@@ -1034,8 +1210,8 @@ class IVCurve(AnalysisModule):
         if self.ctrl.IVCurve_KeepAnalysis.isChecked() is False:
             self.IV_plot.clear()
         (pen, filledbrush, emptybrush, symbol, n, clearFlag) =\
-            self.mapSymbol()
-        if self.dataMode in self.ICModes:
+            self.map_symbol()
+        if self.data_mode in self.ic_modes:
             if (len(self.ivss) > 0 and
                     self.ctrl.IVCurve_showHide_lrss.isChecked()):
                 self.IV_plot.plot(self.ivss_cmd*1e12, self.ivss*1e3,
@@ -1048,8 +1224,8 @@ class IVCurve(AnalysisModule):
                                   symbol=symbol, pen=pen,
                                   symbolSize=6, symbolPen=pen,
                                   symbolBrush=emptybrush)
-            self.labelUp(self.IV_plot, 'I (pA)', 'V (mV)', 'I-V (CC)')
-        if self.dataMode in self.VCModes:
+            self.label_up(self.IV_plot, 'I (pA)', 'V (mV)', 'I-V (CC)')
+        if self.data_mode in self.vc_modes:
             if (len(self.ivss) > 0 and
                     self.ctrl.IVCurve_showHide_lrss.isChecked()):
                 self.IV_plot.plot(self.ivss_cmd*1e3, self.ivss*1e9,
@@ -1062,7 +1238,7 @@ class IVCurve(AnalysisModule):
                                   symbol=symbol, pen=pen,
                                   symbolSize=6, symbolPen=pen,
                                   symbolBrush=emptybrush)
-            self.labelUp(self.IV_plot, 'V (mV)', 'I (nA)', 'I-V (VC)')
+            self.label_up(self.IV_plot, 'V (mV)', 'I (nA)', 'I-V (VC)')
 
     def update_RMPPlot(self):
         """
@@ -1071,31 +1247,31 @@ class IVCurve(AnalysisModule):
         """
         if self.ctrl.IVCurve_KeepAnalysis.isChecked() is False:
             self.RMP_plot.clear()
-        if len(self.ivrmp) > 0:
+        if len(self.ivbaseline) > 0:
             (pen, filledbrush, emptybrush, symbol, n, clearFlag) =\
-                self.mapSymbol()
+                self.map_symbol()
             mode = self.ctrl.IVCurve_RMPMode.currentIndex()
-            if self.dataMode in self.ICModes:
+            if self.data_mode in self.ic_modes:
                 sf = 1e3
                 self.RMP_plot.setLabel('left', 'V mV')
             else:
                 sf = 1e12
                 self.RMP_plot.setLabel('left', 'I (pA)')
             if mode == 0:
-                self.RMP_plot.plot(self.traceTimes, sf*numpy.array(self.ivrmp),
+                self.RMP_plot.plot(self.trace_times, sf*np.array(self.ivbaseline),
                                    symbol=symbol, pen=pen,
                                    symbolSize=6, symbolPen=pen,
                                    symbolBrush=filledbrush)
                 self.RMP_plot.setLabel('bottom', 'T (s)')
             elif mode == 1:
                 self.RMP_plot.plot(self.cmd,
-                                   1.e3*numpy.array(self.ivrmp), symbolSize=6,
+                                   1.e3*np.array(self.ivbaseline), symbolSize=6,
                                    symbol=symbol, pen=pen,
                                    symbolPen=pen, symbolBrush=filledbrush)
                 self.RMP_plot.setLabel('bottom', 'I (pA)')
             elif mode == 2:
                 self.RMP_plot.plot(self.spikecount,
-                                   1.e3*numpy.array(self.ivrmp), symbolSize=6,
+                                   1.e3*np.array(self.ivbaseline), symbolSize=6,
                                    symbol=symbol, pen=pen,
                                    symbolPen=pen, symbolBrush=emptybrush)
                 self.RMP_plot.setLabel('bottom', 'Spikes')
@@ -1107,21 +1283,21 @@ class IVCurve(AnalysisModule):
             Draw the spike counts to the FI and FSL windows
             Note: x axis can be I, T, or  # spikes
         """
-        if self.dataMode in self.VCModes:
+        if self.data_mode in self.vc_modes:
             self.fiPlot.clear()  # no plots of spikes in VC
             self.fslPlot.clear()
             return
-        (pen, filledbrush, emptybrush, symbol, n, clearFlag) = self.mapSymbol()
+        (pen, filledbrush, emptybrush, symbol, n, clearFlag) = self.map_symbol()
         mode = self.ctrl.IVCurve_RMPMode.currentIndex()  # get x axis mode
-        commands = numpy.array(self.values)
+        commands = np.array(self.values)
         self.cmd = commands[self.nospk]
         self.spcmd = commands[self.spk]
         iscale = 1.0e12  # convert to pA
         yfslsc = 1.0  # convert to msec
         if mode == 0:  # plot with time as x axis
-            xfi = self.traceTimes
-            xfsl = self.traceTimes
-            select = range(len(self.traceTimes))
+            xfi = self.trace_times
+            xfsl = self.trace_times
+            select = range(len(self.trace_times))
             xlabel = 'T (s)'
         elif mode == 1:  # plot with current as x
             select = self.spk
@@ -1147,230 +1323,52 @@ class IVCurve(AnalysisModule):
                           symbol=symbol, pen=pen,
                           symbolPen=pen, symbolBrush=emptybrush)
         if len(xfsl) > 0:
-            self.fslPlot.setXRange(0.0, numpy.max(xfsl))
+            self.fslPlot.setXRange(0.0, np.max(xfsl))
         self.fiPlot.setLabel('bottom', xlabel)
         self.fslPlot.setLabel('bottom', xlabel)
 
     def readParameters(self, clearFlag=False, pw=False):
         """
-        Read the parameter window entries, set the lr regions, and do an
-        update on the analysis
+        Read the parameter window entries, set the lr regions to the values
+        in the window, and do an update on the analysis
         """
-        (pen, filledbrush, emptybrush, symbol, n, clearFlag) = self.mapSymbol()
-        # update RMP first as we might use it for the others.
+        (pen, filledbrush, emptybrush, symbol, n, clearFlag) = self.map_symbol()
+        # update RMP first as we might need it for the others.
         if self.ctrl.IVCurve_showHide_lrrmp.isChecked():
             rgnx1 = self.ctrl.IVCurve_rmpTStart.value()/1.0e3
             rgnx2 = self.ctrl.IVCurve_rmpTStop.value()/1.0e3
-            self.lrrmp.setRegion([rgnx1, rgnx2])
+            self.regions['lrrmp']['region'].setRegion([rgnx1, rgnx2])
             self.update_rmpAnalysis(clear=clearFlag, pw=pw)
 
         if self.ctrl.IVCurve_showHide_lrss.isChecked():
             rgnx1 = self.ctrl.IVCurve_ssTStart.value()/1.0e3
             rgnx2 = self.ctrl.IVCurve_ssTStop.value()/1.0e3
-            self.lrss.setRegion([rgnx1, rgnx2])
+            self.regions['lrwin1']['region'].setRegion([rgnx1, rgnx2])
             self.update_ssAnalysis(clear=clearFlag)
 
         if self.ctrl.IVCurve_showHide_lrpk.isChecked():
             rgnx1 = self.ctrl.IVCurve_pkTStart.value()/1.0e3
             rgnx2 = self.ctrl.IVCurve_pkTStop.value()/1.0e3
-            self.lrpk.setRegion([rgnx1, rgnx2])
+            self.regions['lrwin0']['region'].setRegion([rgnx1, rgnx2])
             self.update_pkAnalysis(clear=clearFlag, pw=pw)
 
         if self.ctrl.IVCurve_subLeak.isChecked():
             rgnx1 = self.ctrl.IVCurve_LeakMin.value()/1e3
             rgnx2 = self.ctrl.IVCurve_LeakMax.value()/1e3
-            self.lrleak.setRegion([rgnx1, rgnx2])
+            self.regions['lrleak']['region'].setRegion([rgnx1, rgnx2])
             self.update_ssAnalysis()
             self.update_pkAnalysis()
 
         if self.ctrl.IVCurve_showHide_lrtau.isChecked():
             # include tau in the list... if the tool is selected
+            rgnx1 = self.ctrl.IVCurve_tau2TStart.value()/1e3
+            rgnx2 = self.ctrl.IVCurve_tau2TStop.value()/1e3
+            self.regions['lrtau']['region'].setRegion([rgnx1, rgnx2])
             self.update_Tauh()
 
-    def update_RMPPlot_MP(self):
-        """
-            Draw the RMP to the I-V window using matplotlib
-            Note: x axis can be I, T, or  # spikes
-        """
-        if self.ctrl.IVCurve_KeepAnalysis.isChecked() is False:
-            self.mplax['RMP'].clear()
-        if len(self.ivrmp) > 0:
-            mode = self.ctrl.IVCurve_RMPMode.currentIndex()
-            ax = self.mplax['RMP']
-            ax.set_title('RMP', verticalalignment='top', size=11)
-            if self.dataMode in self.ICModes:
-                sf = 1e12
-                isf = 1e3
-                ax.set_ylabel('V (mV)', size=9)
-            else:
-                sf = 1e3
-                isf = 1e12
-                ax.set_ylabel('I (pA)', size=9)
-            if mode == 0:
-                ax.plot(self.traceTimes, isf*numpy.array(self.ivrmp),
-                        'k-s', markersize=2)
-                ax.set_xlabel('T (s)', size=9)
-            elif mode == 1:
-                ax.plot(numpy.array
-                        (self.values)*sf, isf*numpy.array(self.ivrmp),
-                        'k-s', markersize=2)
-                if self.dataMode in self.ICModes:
-                    ax.set_xlabel('I (pA)', size=9)
-                else:
-                    ax.set_xlabel('V (mV)', size=9)
-            elif mode == 2:
-                ax.plot(self.spikecount, isf*numpy.array(self.ivrmp),
-                        'k-s', markersize=2)
-                ax.set_xlabel('Spikes', size=9)
-            else:
-                pass
-
-    def update_IVPlot_MP(self):
-        """
-            Draw the IV o the I-V window using matplotlib
-            Note: x axis can be I, T, or  # spikes
-        """
-        if self.ctrl.IVCurve_KeepAnalysis.isChecked() is False:
-            self.mplax['IV'].clear()
-        ax = self.mplax['IV']
-        n = self.keepAnalysisCount
-        if self.dataMode in self.ICModes:
-            if (len(self.ivss) > 0 and
-                    self.ctrl.IVCurve_showHide_lrss.isChecked()):
-                ax.plot(self.ivss_cmd*1e12, self.ivss*1e3, 'k-s', markersize=3)
-            if (len(self.ivpk) > 0 and
-                    self.ctrl.IVCurve_showHide_lrpk.isChecked()):
-                ax.plot(self.ivpk_cmd*1e12, self.ivpk*1e3, 'r-o', markersize=3)
-            ax.set_xlabel('I (pA)', size=9)
-            ax.set_ylabel('V (mV)', size=9)
-            ax.set_title('I-V (CC)', verticalalignment='top', size=11)
-        if self.dataMode in self.VCModes:
-            if (len(self.ivss) > 0 and
-                    self.ctrl.IVCurve_showHide_lrss.isChecked()):
-                ax.plot(self.ivss_cmd*1e3, self.ivss*1e9, 'k-s', markersize=3)
-            if (len(self.ivpk) > 0 and
-                    self.ctrl.IVCurve_showHide_lrpk.isChecked()):
-                ax.plot(self.ivpk_cmd*1e3, self.ivpk*1e9, 'r-o', markersize=3)
-            ax.set_xlabel('V (mV)', size=9)
-            ax.set_ylabel('I (nA)', size=9)
-            ax.set_title('I-V (VC)', verticalalignment='top', size=11)
-
-    def update_SpikePlots_MP(self):
-        """
-            Draw the spike count data the I-V window using matplotlib
-            Note: x axis can be I, T, or  # spikes
-        """
-        if self.ctrl.IVCurve_KeepAnalysis.isChecked() is False:
-            axfi = self.mplax['FI']
-            axfi.clear()
-            axfsl = self.mplax['FSL']
-            axfsl.clear()
-        if self.dataMode in self.VCModes:
-            return
-        mode = self.ctrl.IVCurve_RMPMode.currentIndex()  # get x axis mode
-        commands = numpy.array(self.values)
-        self.cmd = commands[self.nospk]
-        self.spcmd = commands[self.spk]
-        iscale = 1.0e12  # convert to pA
-        yfslsc = 1.0  # convert to msec
-        if mode == 0:  # plot with time as x axis
-            xfi = self.traceTimes
-            xfsl = self.traceTimes
-            select = range(len(self.traceTimes))
-            xlabel = 'T (s)'
-        elif mode == 1:  # plot with current as x
-            select = self.spk
-            xfi = commands*iscale
-            xfsl = self.spcmd*iscale
-            xlabel = 'I (pA)'
-        elif mode == 2:  # plot with spike counts as x
-            xfi = self.spikecount
-            xfsl = self.spikecount
-            select = range(len(self.spikecount))
-            xlabel = 'Spikes (N)'
-        else:
-            return  # mode not in available list
-        axfi.plot(xfi, self.spikecount, 'b-s', markersize=3)
-        axfsl.plot(xfsl, self.fsl[select]*yfslsc, 'g-^', markersize=3)
-        axfsl.plot(xfsl, self.fisi[select]*yfslsc, 'y-s', markersize=3)
-        if len(self.spcmd) > 0:
-            axfsl.set_xlim([0.0, numpy.max(xfsl)])
-        axfi.set_xlabel(xlabel, size=9)
-        axfi.set_ylabel('\# spikes', size=9)
-        axfi.set_title('F-I', verticalalignment='top', size=11)
-        axfsl.set_xlabel(xlabel, size=9)
-        axfsl.set_ylabel('FSL/FISI', size=9)
-        axfsl.set_title('FSL/FISI', verticalalignment='top', size=11)
-
-    def cleanRepl(self, matchobj):
-        """
-            Clean up a directory name so that it can be written to a
-            matplotlib title without encountering LaTeX escape sequences
-            Replace backslashes with forward slashes
-            replace underscores (subscript) with escaped underscores
-        """
-        if matchobj.group(0) == '\\':
-            return '/'
-        if matchobj.group(0) == '_':
-            return '\_'
-        if matchobj.group(0) == '/':
-            return '/'
-        else:
-            return ''
-
-    def matplotlibExport(self):
-        """
-        Make a matplotlib window that shows the current data in the same
-        format as the pyqtgraph window
-        Probably you would use this for publication purposes.
-        """
-        if not HAVE_MPL:
-            raise Exception("Method requires matplotlib; not importable.")
-        fig = pylab.figure(1)
-         # escape filename information so it can be rendered by removing
-         # common characters that trip up latex...:
-        escs = re.compile('[\\\/_]')
-        tiname = '%r' % self.filename
-        tiname = re.sub(escs, self.cleanRepl, tiname)
-         #print tiname
-        fig.suptitle(r''+tiname[1:-1])
-        pylab.autoscale(enable=True, axis='both', tight=None)
-        if self.dataMode not in self.ICModes or self.tx is None:
-            iscale = 1e3
-        else:
-            iscale = 1e12
-        self.mplax = {}
-        gs = gridspec.GridSpec(4, 2)
-        self.mplax['data'] = pylab.subplot(gs[0:3, 0])
-        self.mplax['cmd'] = pylab.subplot(gs[3, 0])
-        self.mplax['IV'] = pylab.subplot(gs[0, 1])
-        self.mplax['RMP'] = pylab.subplot(gs[1, 1])
-        self.mplax['FI'] = pylab.subplot(gs[2, 1])
-        self.mplax['FSL'] = pylab.subplot(gs[3, 1])
-        gs.update(wspace=0.25, hspace=0.5)
-        self.mplax['data'].set_title('Data', verticalalignment='top', size=11)
-
-        for i in range(len(self.traces)):
-            self.mplax['data'].plot(self.tx, self.traces[i]*1e3, 'k')
-            self.mplax['cmd'].plot(self.tx, self.cmd_wave[i]*iscale, 'k')
-        self.mplax['data'].set_ylabel('mV', size=9)
-        self.mplax['data'].set_xlabel('T (s)', size=9)
-        self.mplax['cmd'].set_ylabel('pA', size=9)
-        self.mplax['cmd'].set_xlabel('T (s)', size=9)
-        self.update_IVPlot_MP()
-        self.update_RMPPlot_MP()
-        self.update_SpikePlots_MP()
-
-        for ax in self.mplax:
-            self.cleanAxes(self.mplax[ax])
-        for a in ['data', 'IV', 'FI', 'FSL', 'RMP', 'cmd']:
-            self.formatTicks(self.mplax[a], 'y', '%d')
-        for a in ['FI', 'IV', 'RMP', 'FSL']:
-            self.formatTicks(self.mplax[a], 'x', '%d')
-        pylab.draw()
-        pylab.savefig(os.path.join(self.commonPrefix,
-                      'PlotPDFs', self.protocol))
-        pylab.show()
+        if self.ctrl.IVCurve_PeakMode.currentIndexChanged:
+            self.peakmode = self.ctrl.IVCurve_PeakMode.currentText()
+            self.update_pkAnalysis()
 
     def dbStoreClicked(self):
         """
@@ -1392,7 +1390,7 @@ class IVCurve(AnalysisModule):
 
         rec = {
             'IVCurve_rmp': self.neg_vrmp/1000.,
-            'IVCurve_rinp': self.Rin,
+            'IVCurve_rinp': self.r_in,
             'IVCurve_taum': self.tau,
             'IVCurve_neg_cmd': self.neg_cmd,
             'IVCurve_neg_pk': self.neg_pk,
@@ -1414,64 +1412,9 @@ class IVCurve(AnalysisModule):
 # Some of these would normally live in a pyqtgraph-related module, but are
 # just stuck here to get the job done.
 #
-    def labelUp(self, plot, xtext, ytext, title):
+    def label_up(self, plot, xtext, ytext, title):
         """helper to label up the plot"""
         plot.setLabel('bottom', xtext)
         plot.setLabel('left', ytext)
         plot.setTitle(title)
 
-# for matplotlib cleanup:
-# These were borrowed from Manis' "PlotHelpers.py"
-#
-    def cleanAxes(self, axl):
-        if type(axl) is not list:
-            axl = [axl]
-        for ax in axl:
-            for loc, spine in ax.spines.iteritems():
-                if loc in ['left', 'bottom']:
-                    pass
-                elif loc in ['right', 'top']:
-                    spine.set_color('none')  # do not draw the spine
-                else:
-                    raise ValueError('Unknown spine location: %s' % loc)
-                 # turn off ticks when there is no spine
-                ax.xaxis.set_ticks_position('bottom')
-                # stopped working in matplotlib 1.10
-                ax.yaxis.set_ticks_position('left')
-            self.update_font(ax)
-
-    def update_font(self, axl, size=6, font=stdFont):
-        if type(axl) is not list:
-            axl = [axl]
-        fontProperties = {'family': 'sans-serif', 'sans-serif': [font],
-                          'weight': 'normal', 'size': size}
-        for ax in axl:
-            for tick in ax.xaxis.get_major_ticks():
-                tick.label1.set_family('sans-serif')
-                tick.label1.set_fontname(stdFont)
-                tick.label1.set_size(size)
-
-            for tick in ax.yaxis.get_major_ticks():
-                tick.label1.set_family('sans-serif')
-                tick.label1.set_fontname(stdFont)
-                tick.label1.set_size(size)
-            ax.set_xticklabels(ax.get_xticks(), fontProperties)
-            ax.set_yticklabels(ax.get_yticks(), fontProperties)
-            ax.xaxis.set_smart_bounds(True)
-            ax.yaxis.set_smart_bounds(True)
-            ax.tick_params(axis='both', labelsize=9)
-
-    def formatTicks(self, axl, axis='xy', fmt='%d', font='Arial'):
-        """
-        Convert tick labels to intergers
-        to do just one axis, set axis = 'x' or 'y'
-        control the format with the formatting string
-        """
-        if type(axl) is not list:
-            axl = [axl]
-        majorFormatter = FormatStrFormatter(fmt)
-        for ax in axl:
-            if 'x' in axis:
-                ax.xaxis.set_major_formatter(majorFormatter)
-            if 'y' in axis:
-                ax.yaxis.set_major_formatter(majorFormatter)

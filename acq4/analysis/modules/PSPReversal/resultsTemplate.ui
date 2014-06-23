@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ResultsDialogBox</class>
+ <widget class="QDialog" name="ResultsDialogBox">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>350</width>
+    <height>468</height>
+   </rect>
+  </property>
+  <property name="font">
+   <font>
+    <pointsize>11</pointsize>
+   </font>
+  </property>
+  <property name="windowTitle">
+   <string>Dialog</string>
+  </property>
+  <widget class="QLabel" name="label">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>10</y>
+     <width>141</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>PSP Reversal Results</string>
+   </property>
+  </widget>
+  <widget class="QTextEdit" name="resultsPSPReversal_text">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>30</y>
+     <width>331</width>
+     <height>431</height>
+    </rect>
+   </property>
+   <property name="lineWrapMode">
+    <enum>QTextEdit::NoWrap</enum>
+   </property>
+   <property name="readOnly">
+    <bool>true</bool>
+   </property>
+   <property name="textInteractionFlags">
+    <set>Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

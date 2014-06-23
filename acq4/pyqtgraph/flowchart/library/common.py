@@ -162,6 +162,11 @@ class PlottingCtrlNode(CtrlNode):
         """Define what happens when the node is disconnected from a plot"""
         raise Exception("Must be re-implemented in subclass")
 
+    def process(self, In, display=True):
+        out = CtrlNode.process(self, In, display)
+        out['plot'] = None
+        return out
+
 
 def metaArrayWrapper(fn):
     def newFn(self, data, *args, **kargs):

@@ -11,12 +11,13 @@ protocolNames = {
     'Photostim Scan': (),
     'Photostim Power Series': (),
 }
-    
-     
+
+# note: make sure the names, if single, are followed by ',', so as to enforce elements of tuple
 deviceNames = {
     'Clamp': ('Clamp1', 'Clamp2', 'AxoPatch200', 'AxoProbe', 'MultiClamp1', 'MultiClamp2'),
-    'Camera': ('Camera'),
-    'Laser': ('Laser-UV', 'Laser-Blue', 'Laser-2P')
+    'Camera': ('Camera',),
+    'Laser': ('Laser-UV', 'Laser-Blue', 'Laser-2P'),
+    'LED-Blue': ('LED-Blue',),
 }
 
 
@@ -160,8 +161,7 @@ def buildSequenceArrayIter(dh, func=None, join=True, truncate=False, fill=None):
         shape = seqShape
         info = info + []
         data = MetaArray(np.empty(shape, object), info=info)
-    
-    
+
     ## fill data
     i = 0
     if join and truncate:
@@ -193,8 +193,7 @@ def buildSequenceArrayIter(dh, func=None, join=True, truncate=False, fill=None):
             data[tuple(ind)] = d
             i += 1
             yield i, len(subDirs)
-        
-    
+
     yield data, None
 
 def getParent(child, parentType):
@@ -205,8 +204,6 @@ def getParent(child, parentType):
     if parent is child:
         return None
     return getParent(parent, parentType)
-    
-
 
 def getClampFile(protoDH):
     """Given a protocol directory handle, return the clamp file handle within. 
@@ -254,16 +251,14 @@ def getClampPrimary(data):
         return data['Channel': 'primary']
     else:
         return data['Channel': 'scaled']
-    
-    
+
 def getClampMode(data):
     """Given a clamp file handle or MetaArray, return the recording mode."""
     if not (hasattr(data, 'implements') and data.implements('MetaArray')):
         if not isClampFile(data):
-            raise Exception('%s not a clamp file.' %fh.shortName())
+            raise Exception('%s not a clamp file.' % data.shortName())
         data = data.read()
     info = data._info[-1]
-    
     if 'ClampState' in info:
         return info['ClampState']['mode']
     else:
@@ -271,7 +266,7 @@ def getClampMode(data):
             mode = info['mode']
             return mode
         except KeyError:
-            return None
+            return 'vc' # None  kludge to handle simulations, which don't seem to fully fill the structures.
 
 def getClampHoldingLevel(fh):
     """Given a clamp file handle, return the holding level (voltage for VC, current for IC).
@@ -279,7 +274,7 @@ def getClampHoldingLevel(fh):
     """
     
     if not isClampFile(fh):
-        raise Exception('%s not a clamp file.' %fh.shortName())
+        raise Exception('%s not a clamp file.' % fh.shortName())
     
     data = fh.read()
     info = data._info[-1]
@@ -305,7 +300,37 @@ def getClampHoldingLevel(fh):
             return holding
         except KeyError:
             return None
-        
+
+def getClampState(data):
+    """
+    Return the full clamp state
+    """
+    info = data._info[-1]
+    if 'ClampState' in info.keys():
+        return info['ClampState']
+    else:
+        return None
+
+def getWCCompSettings(data):
+    """
+    return the compensation settings, if available
+    Settings are returned as a group in a dictionary
+    """
+    info = data._info[-1]
+    d={}
+    if 'ClampState' in info.keys():
+        par = info['ClampState']['ClampParams']
+        d['WCCompValid'] = True
+        d['WCEnabled'] = par['WholeCellCompEnable']
+        d['WCResistance'] = par['WholeCellCompResist']
+        d['WCCellCap'] = par['WholeCellCompCap']
+        d['CompEnabled'] = par['RsCompEnable']
+        d['CompCorrection'] = par['RsCompCorrection']
+        d['CompBW'] = par['RsCompBandwidth']
+        return d
+    else:
+        return {'WCCompValid': False, 'WCEnable': 0, 'WCResistance': 0., 'WholeCellCap': 0.,
+                'CompEnable': 0, 'CompCorrection': 0., 'CompBW': 50000. }
 
 def getSampleRate(data):
     """given clamp data, return the data sampling rate """
@@ -315,7 +340,51 @@ def getSampleRate(data):
         return(info['DAQ']['primary']['rate'])
     else:
         return(info['rate'])
-    
+
+def getDevices(protoDH):
+    """
+    return a dictionary of all the (recognized) devices and thier file handles in the protocol directory
+    This can be handy to check which devices were recorded during a protocol (the keys of the dictionary)
+    and for accessing the data (from the file handles)
+    pbm 5/2014
+    """
+    if protoDH.name()[-8:] == 'DS_Store': ## OS X filesystem puts .DS_Store files in all directories
+        return None
+    files = protoDH.ls()
+    devList = {}
+    for devname in deviceNames.keys():
+        names = deviceNames[devname]
+        for n in names:
+            if n in files:
+                devList[n] = protoDH[n]
+            elif n+'.ma' in files:
+                devList[n] = protoDH[n+'.ma']
+            else:
+                pass
+    if len(devList) == 0:
+        return None
+    return devList
+
+
+def getNamedDeviceFile(protoDH, deviceName):
+    """Given a protocol directory handle, return the requested device file handle within.
+    If there are multiple devices, only the first is returned.
+    Return None if no matching devices are found.
+    """
+    if protoDH.name()[-8:] == 'DS_Store': ## OS X filesystem puts .DS_Store files in all directories
+        return None
+    if deviceName in deviceNames.keys():
+        names = deviceNames[deviceName]
+    else:
+        return None
+    files = protoDH.ls()
+    for n in names:
+        if n in files:
+            return protoDH[n]
+        if n+'.ma' in files:
+            return protoDH[n+'.ma']
+    return None
+
 def getParentInfo(dh, parentType):
     dh = getParent(dh, parentType)
     if dh is None:
@@ -344,7 +413,7 @@ def getTemp(dh):
     if dh.isFile():
         dh = dh.parent()
     temp = dh.info().get(('Temperature','BathTemp'), None)
-    if temp == None:
+    if temp is None:
         temp = getDayInfo(dh).get('temperature', '')
     return temp
 
@@ -354,5 +423,3 @@ def getCellType(dh):
         return cellInfo.get('type', '')
     else:
         return('Unknown')
-    
-

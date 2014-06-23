@@ -54,6 +54,7 @@ class AnalysisModule(QtCore.QObject):
         QtCore.QObject.__init__(self)
         self._host_ = host
         self.dataModel = host.dataModel
+        self._sizeHint = (800, 600)
 
     def initializeElements(self):
         """Must be called sometime during the construction of the module.
@@ -133,6 +134,9 @@ class AnalysisModule(QtCore.QObject):
     def dataManager(self):
         return self._host_.dataManager()
 
+    def sizeHint(self):
+        return self._sizeHint
+
 class Element(QtCore.QObject):
     """Simple class for holding options and attributes for elements"""
     sigObjectChanged = QtCore.Signal(object, object, object)  ## Element, old obj, new obj
@@ -204,6 +208,3 @@ class Element(QtCore.QObject):
             raise Exception("Cannot automatically create element '%s' (type=%s)" % (self.name, typ))
         #self.setObject(obj)  ## handled indirectly..
         return obj
-        
-        
-        

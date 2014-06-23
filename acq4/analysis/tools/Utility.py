@@ -314,7 +314,7 @@ def long_Eval(line):
 
     # long_Eval()
 
-    #
+#
 # routine to flatten an array/list.
 #
 def flatten(l, ltypes=(list, tuple)):
@@ -396,9 +396,9 @@ def clementsBekkers(data, template, threshold=1.0, minpeakdist=15):
 def RichardsonSilberberg(data, tau, time = None):
     D = data.view(numpy.ndarray)
     rn = tau*numpy.diff(D) + D[:-2,:]
-    rn = SavitzyGolay(rn, kernel = 11, order = 4)
+    rn = savitzky_golay(rn, kernel = 11, order = 4)
     if time is not None:
-        vn = rn - tau*SavitzyGolay(numpy.diff(D), kernel = 11, order = 4)
+        vn = rn - tau * savitzky_golay(numpy.diff(D), kernel = 11, order = 4)
         return(rn, vn);
     else:
         return rn
@@ -641,7 +641,7 @@ def mask(x, xm, x0, x1):
         print "utility.mask(): array to used to derive mask must be 1D"
         return(numpy.array([]))
     xmask = ma.masked_outside(xm, x0, x1)
-    tmask =ma.getmask(xmask)
+    tmask = ma.getmask(xmask)
     if numpy.ndim(x) == 1:
         xnew = ma.array(x, mask=tmask)
         return(xnew.compressed())
@@ -753,7 +753,7 @@ def ffind(path, shellglobs=None, namefs=None, relative=True):
     - relative: a boolean flag that determines whether absolute or
       relative paths should be returned
 
-    Please not that the shell wildcards work in a cumulative fashion
+    Please note that the shell wildcards work in a cumulative fashion
     i.e. each of them is applied to the full set of file *names* found.
 
     Conversely, all the functions in 'namefs'
@@ -763,7 +763,7 @@ def ffind(path, shellglobs=None, namefs=None, relative=True):
         * are applied to the full file *path* (whereas the shell-style
           wildcards are only applied to the file *names*)
 
-    Returns a sequence of paths for files found.
+    Returns a list of paths for files found.
     """
     if not os.access(path, os.R_OK):
         raise ScriptError("cannot access path: '%s'" % path)
@@ -784,7 +784,6 @@ def ffind(path, shellglobs=None, namefs=None, relative=True):
             for ff in namefs: fileList = filter(ff, fileList)
     except Exception, e: raise ScriptError(str(e))
     return(fileList)
-
 
 
 def seqparse(sequence):
@@ -916,7 +915,7 @@ def makeRGB(ncol = 16, minc = 32, maxc = 216):
 # main entry
 #
 
-# If this file is called direclty, then provide tests of some of the routines.
+# If this file is called direcl.y, then provide tests of some of the routines.
 if __name__ == "__main__":
     from optparse import OptionParser
     import matplotlib.pylab as MP

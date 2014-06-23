@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './acq4/analysis/modules/IVCurve/ctrlTemplate.ui'
 #
-# Created: Tue Dec 24 01:49:13 2013
-#      by: PyQt4 UI code generator 4.10
+# Created: Tue May 20 20:39:33 2014
+#      by: PyQt4 UI code generator 4.9.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,16 +12,7 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    def _fromUtf8(s):
-        return s
-
-try:
-    _encoding = QtGui.QApplication.UnicodeUTF8
-    def _translate(context, text, disambig):
-        return QtGui.QApplication.translate(context, text, disambig, _encoding)
-except AttributeError:
-    def _translate(context, text, disambig):
-        return QtGui.QApplication.translate(context, text, disambig)
+    _fromUtf8 = lambda s: s
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -302,10 +293,6 @@ class Ui_Form(object):
         self.IVCurve_KeepT.setLayoutDirection(QtCore.Qt.LeftToRight)
         self.IVCurve_KeepT.setObjectName(_fromUtf8("IVCurve_KeepT"))
         self.gridLayout_3.addWidget(self.IVCurve_KeepT, 21, 0, 1, 1)
-        self.IVCurve_KeepAnalysis = QtGui.QCheckBox(self.groupBox)
-        self.IVCurve_KeepAnalysis.setLayoutDirection(QtCore.Qt.LeftToRight)
-        self.IVCurve_KeepAnalysis.setObjectName(_fromUtf8("IVCurve_KeepAnalysis"))
-        self.gridLayout_3.addWidget(self.IVCurve_KeepAnalysis, 21, 2, 1, 1)
         self.IVCurve_IVLimitMax = QtGui.QDoubleSpinBox(self.groupBox)
         self.IVCurve_IVLimitMax.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.IVCurve_IVLimitMax.setDecimals(1)
@@ -322,22 +309,10 @@ class Ui_Form(object):
         self.IVCurve_IVLimitMin.setSingleStep(5.0)
         self.IVCurve_IVLimitMin.setProperty("value", -160.0)
         self.IVCurve_IVLimitMin.setObjectName(_fromUtf8("IVCurve_IVLimitMin"))
-        self.gridLayout_3.addWidget(self.IVCurve_IVLimitMin, 0, 3, 1, 1)
-        self.IVCurve_IVLimits = QtGui.QCheckBox(self.groupBox)
-        self.IVCurve_IVLimits.setLayoutDirection(QtCore.Qt.LeftToRight)
-        self.IVCurve_IVLimits.setObjectName(_fromUtf8("IVCurve_IVLimits"))
-        self.gridLayout_3.addWidget(self.IVCurve_IVLimits, 0, 2, 1, 1)
+        self.gridLayout_3.addWidget(self.IVCurve_IVLimitMin, 0, 3, 1, 2)
         self.label_13 = QtGui.QLabel(self.groupBox)
         self.label_13.setObjectName(_fromUtf8("label_13"))
         self.gridLayout_3.addWidget(self.label_13, 0, 0, 1, 1)
-        self.IVCurve_Sequence1 = QtGui.QComboBox(self.groupBox)
-        self.IVCurve_Sequence1.setObjectName(_fromUtf8("IVCurve_Sequence1"))
-        self.IVCurve_Sequence1.addItem(_fromUtf8(""))
-        self.IVCurve_Sequence1.addItem(_fromUtf8(""))
-        self.IVCurve_Sequence1.addItem(_fromUtf8(""))
-        self.IVCurve_Sequence1.addItem(_fromUtf8(""))
-        self.IVCurve_Sequence1.addItem(_fromUtf8(""))
-        self.gridLayout_3.addWidget(self.IVCurve_Sequence1, 1, 2, 1, 1)
         self.label_14 = QtGui.QLabel(self.groupBox)
         self.label_14.setObjectName(_fromUtf8("label_14"))
         self.gridLayout_3.addWidget(self.label_14, 1, 0, 1, 1)
@@ -390,9 +365,9 @@ class Ui_Form(object):
         self.label_3.setAlignment(QtCore.Qt.AlignCenter)
         self.label_3.setObjectName(_fromUtf8("label_3"))
         self.gridLayout_3.addWidget(self.label_3, 2, 3, 1, 1)
-        self.IVCurve_SubRMP = QtGui.QCheckBox(self.groupBox)
-        self.IVCurve_SubRMP.setObjectName(_fromUtf8("IVCurve_SubRMP"))
-        self.gridLayout_3.addWidget(self.IVCurve_SubRMP, 3, 5, 1, 1)
+        self.IVCurve_SubBaseline = QtGui.QCheckBox(self.groupBox)
+        self.IVCurve_SubBaseline.setObjectName(_fromUtf8("IVCurve_SubBaseline"))
+        self.gridLayout_3.addWidget(self.IVCurve_SubBaseline, 3, 5, 1, 1)
         self.label_18 = QtGui.QLabel(self.groupBox)
         self.label_18.setObjectName(_fromUtf8("label_18"))
         self.gridLayout_3.addWidget(self.label_18, 4, 5, 1, 1)
@@ -418,65 +393,93 @@ class Ui_Form(object):
         self.IVCurve_getFileInfo = QtGui.QPushButton(self.groupBox)
         self.IVCurve_getFileInfo.setObjectName(_fromUtf8("IVCurve_getFileInfo"))
         self.gridLayout_3.addWidget(self.IVCurve_getFileInfo, 2, 5, 1, 1)
+        self.IVCurve_IVLimits = QtGui.QCheckBox(self.groupBox)
+        font = QtGui.QFont()
+        font.setPointSize(11)
+        self.IVCurve_IVLimits.setFont(font)
+        self.IVCurve_IVLimits.setLayoutDirection(QtCore.Qt.LeftToRight)
+        self.IVCurve_IVLimits.setObjectName(_fromUtf8("IVCurve_IVLimits"))
+        self.gridLayout_3.addWidget(self.IVCurve_IVLimits, 0, 2, 1, 1)
+        self.IVCurve_PeakMode = QtGui.QComboBox(self.groupBox)
+        self.IVCurve_PeakMode.setObjectName(_fromUtf8("IVCurve_PeakMode"))
+        self.IVCurve_PeakMode.addItem(_fromUtf8(""))
+        self.IVCurve_PeakMode.addItem(_fromUtf8(""))
+        self.IVCurve_PeakMode.addItem(_fromUtf8(""))
+        self.gridLayout_3.addWidget(self.IVCurve_PeakMode, 7, 5, 1, 1)
+        self.IVCurve_KeepAnalysis = QtGui.QCheckBox(self.groupBox)
+        self.IVCurve_KeepAnalysis.setLayoutDirection(QtCore.Qt.LeftToRight)
+        self.IVCurve_KeepAnalysis.setObjectName(_fromUtf8("IVCurve_KeepAnalysis"))
+        self.gridLayout_3.addWidget(self.IVCurve_KeepAnalysis, 21, 2, 1, 1)
+        self.IVCurve_Sequence1 = QtGui.QComboBox(self.groupBox)
+        self.IVCurve_Sequence1.setObjectName(_fromUtf8("IVCurve_Sequence1"))
+        self.IVCurve_Sequence1.addItem(_fromUtf8(""))
+        self.IVCurve_Sequence1.addItem(_fromUtf8(""))
+        self.IVCurve_Sequence1.addItem(_fromUtf8(""))
+        self.IVCurve_Sequence1.addItem(_fromUtf8(""))
+        self.IVCurve_Sequence1.addItem(_fromUtf8(""))
+        self.gridLayout_3.addWidget(self.IVCurve_Sequence1, 1, 2, 1, 1)
         self.gridLayout.addWidget(self.groupBox, 0, 0, 1, 1)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(_translate("Form", "Form", None))
-        self.groupBox.setTitle(_translate("Form", "IV Analysis-V1.0", None))
-        self.label_10.setText(_translate("Form", "Results", None))
-        self.IVCurve_PrintResults.setText(_translate("Form", "Print", None))
-        self.IVCurve_Update.setText(_translate("Form", "Update", None))
-        self.IVCurve_SpikeThreshold.setSuffix(_translate("Form", " mV", None))
-        self.label_4.setText(_translate("Form", "Spike Thr", None))
-        self.IVCurve_tauh_Commands.setItemText(0, _translate("Form", "-0.6", None))
-        self.label_16.setText(_translate("Form", "Command", None))
-        self.IVCurve_showHide_lrss.setText(_translate("Form", "IV:SS", None))
-        self.IVCurve_showHide_lrpk.setText(_translate("Form", "IV:Peak", None))
-        self.IVCurve_showHide_lrtau.setText(_translate("Form", "Ih tool", None))
-        self.label.setText(_translate("Form", "T Start", None))
-        self.IVCurve_showHide_lrrmp.setText(_translate("Form", "IV:RMP", None))
-        self.dbStoreBtn.setText(_translate("Form", "-> db", None))
-        self.label_11.setText(_translate("Form", "Adapt \n"
-"Ratio", None))
-        self.label_8.setText(_translate("Form", "gH", None))
-        self.label_7.setText(_translate("Form", "RMP/I<sub>0</sub>", None))
-        self.label_15.setText(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
+        self.groupBox.setTitle(QtGui.QApplication.translate("Form", "IV Analysis-V1.5", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_10.setText(QtGui.QApplication.translate("Form", "Results", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_PrintResults.setText(QtGui.QApplication.translate("Form", "Print", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_Update.setText(QtGui.QApplication.translate("Form", "Update", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_SpikeThreshold.setSuffix(QtGui.QApplication.translate("Form", " mV", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_4.setText(QtGui.QApplication.translate("Form", "Spike Thr", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_tauh_Commands.setItemText(0, QtGui.QApplication.translate("Form", "-0.6", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_16.setText(QtGui.QApplication.translate("Form", "Command", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_showHide_lrss.setText(QtGui.QApplication.translate("Form", "IV:SS", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_showHide_lrpk.setText(QtGui.QApplication.translate("Form", "IV:Peak", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_showHide_lrtau.setText(QtGui.QApplication.translate("Form", "Ih tool", None, QtGui.QApplication.UnicodeUTF8))
+        self.label.setText(QtGui.QApplication.translate("Form", "T Start", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_showHide_lrrmp.setText(QtGui.QApplication.translate("Form", "IV:RMP", None, QtGui.QApplication.UnicodeUTF8))
+        self.dbStoreBtn.setText(QtGui.QApplication.translate("Form", "-> db", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_11.setText(QtGui.QApplication.translate("Form", "Adapt \n"
+"Ratio", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_8.setText(QtGui.QApplication.translate("Form", "gH", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_7.setText(QtGui.QApplication.translate("Form", "RMP/I<sub>0</sub>", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_15.setText(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'Lucida Grande\'; font-size:12pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">&tau;<span style=\" vertical-align:sub;\">h</span> (ms)</p></body></html>", None))
-        self.label_2.setText(_translate("Form", "R<sub>in</sub>", None))
-        self.label_9.setText(_translate("Form", "&tau;<sub>m</sub> (ms)", None))
-        self.label_17.setText(_translate("Form", "Pk Amp", None))
-        self.label_12.setText(_translate("Form", "SS Amp", None))
-        self.label_6.setText(_translate("Form", "F&O Type", None))
-        self.label_5.setText(_translate("Form", "b/a (%)", None))
-        self.IVCurve_MPLExport.setText(_translate("Form", "MPL Export", None))
-        self.IVCurve_subLeak.setText(_translate("Form", "IV:Leak", None))
-        self.pushButton.setText(_translate("Form", "Reset", None))
-        self.IVCurve_KeepT.setText(_translate("Form", "Keep\n"
-"Times", None))
-        self.IVCurve_KeepAnalysis.setText(_translate("Form", "Keep \n"
-"Analysis", None))
-        self.IVCurve_IVLimits.setText(_translate("Form", "Limits", None))
-        self.label_13.setText(_translate("Form", "IV Limits", None))
-        self.IVCurve_Sequence1.setItemText(0, _translate("Form", "None", None))
-        self.IVCurve_Sequence1.setItemText(1, _translate("Form", "001", None))
-        self.IVCurve_Sequence1.setItemText(2, _translate("Form", "002", None))
-        self.IVCurve_Sequence1.setItemText(3, _translate("Form", "003", None))
-        self.IVCurve_Sequence1.setItemText(4, _translate("Form", "004", None))
-        self.label_14.setText(_translate("Form", "Seq #1", None))
-        self.label_3.setText(_translate("Form", "T Stop", None))
-        self.IVCurve_SubRMP.setText(_translate("Form", "Sub RMP", None))
-        self.label_18.setText(_translate("Form", "Abcissa", None))
-        self.IVCurve_RMPMode.setItemText(0, _translate("Form", "T (s)", None))
-        self.IVCurve_RMPMode.setItemText(1, _translate("Form", "I (pA)", None))
-        self.IVCurve_RMPMode.setItemText(2, _translate("Form", "Sp (#/s)", None))
-        self.label_19.setText(_translate("Form", "Seq #2", None))
-        self.IVCurve_Sequence2.setItemText(0, _translate("Form", "None", None))
-        self.IVCurve_dataMode.setText(_translate("Form", "DataMode", None))
-        self.IVCurve_getFileInfo.setText(_translate("Form", "FileInfo", None))
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">&tau;<span style=\" vertical-align:sub;\">h</span> (ms)</p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_2.setText(QtGui.QApplication.translate("Form", "R<sub>in</sub>", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_9.setText(QtGui.QApplication.translate("Form", "&tau;<sub>m</sub> (ms)", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_17.setText(QtGui.QApplication.translate("Form", "Pk Amp", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_12.setText(QtGui.QApplication.translate("Form", "SS Amp", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_6.setText(QtGui.QApplication.translate("Form", "F&O Type", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_5.setText(QtGui.QApplication.translate("Form", "b/a (%)", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_MPLExport.setText(QtGui.QApplication.translate("Form", "MPL Export", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_subLeak.setText(QtGui.QApplication.translate("Form", "IV:Leak", None, QtGui.QApplication.UnicodeUTF8))
+        self.pushButton.setText(QtGui.QApplication.translate("Form", "Reset", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_KeepT.setText(QtGui.QApplication.translate("Form", "Keep\n"
+"Times", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_13.setText(QtGui.QApplication.translate("Form", "IV Cmd Limits", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_14.setText(QtGui.QApplication.translate("Form", "Seq #1", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_3.setText(QtGui.QApplication.translate("Form", "T Stop", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_SubBaseline.setText(QtGui.QApplication.translate("Form", "Sub Baseline", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_18.setText(QtGui.QApplication.translate("Form", "Abcissa", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_RMPMode.setItemText(0, QtGui.QApplication.translate("Form", "T (s)", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_RMPMode.setItemText(1, QtGui.QApplication.translate("Form", "I (pA)", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_RMPMode.setItemText(2, QtGui.QApplication.translate("Form", "Sp (#/s)", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_19.setText(QtGui.QApplication.translate("Form", "Seq #2", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_Sequence2.setItemText(0, QtGui.QApplication.translate("Form", "None", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_dataMode.setText(QtGui.QApplication.translate("Form", "DataMode", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_getFileInfo.setText(QtGui.QApplication.translate("Form", "FileInfo", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_IVLimits.setText(QtGui.QApplication.translate("Form", "Use Limits", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_PeakMode.setItemText(0, QtGui.QApplication.translate("Form", "Abs", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_PeakMode.setItemText(1, QtGui.QApplication.translate("Form", "Min", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_PeakMode.setItemText(2, QtGui.QApplication.translate("Form", "Max", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_KeepAnalysis.setText(QtGui.QApplication.translate("Form", "Keep \n"
+"Analysis", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_Sequence1.setItemText(0, QtGui.QApplication.translate("Form", "None", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_Sequence1.setItemText(1, QtGui.QApplication.translate("Form", "001", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_Sequence1.setItemText(2, QtGui.QApplication.translate("Form", "002", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_Sequence1.setItemText(3, QtGui.QApplication.translate("Form", "003", None, QtGui.QApplication.UnicodeUTF8))
+        self.IVCurve_Sequence1.setItemText(4, QtGui.QApplication.translate("Form", "004", None, QtGui.QApplication.UnicodeUTF8))
 

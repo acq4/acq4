@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>459</width>
-    <height>229</height>
+    <height>243</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -162,7 +162,23 @@
        </spacer>
       </item>
       <item row="4" column="1" colspan="2">
-       <widget class="QComboBox" name="comboBox"/>
+       <widget class="QComboBox" name="comboBox">
+        <item>
+         <property name="text">
+          <string>HH</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Type II</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Type I</string>
+         </property>
+        </item>
+       </widget>
       </item>
       <item row="4" column="0">
        <widget class="QLabel" name="label_7">

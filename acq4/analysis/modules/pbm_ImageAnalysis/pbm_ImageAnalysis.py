@@ -23,12 +23,13 @@ This module provides:
     Has potential dependency on openCV for some functions.
 """
 
-from PyQt4 import QtGui, QtCore
+from PyQt4 import QtGui, QtCore, Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import os, shutil, os.path
 import operator
 import acq4.pyqtgraph as pg
+import acq4.pyqtgraph.debug as debug
 import acq4.util.DatabaseGui as DatabaseGui
 import PIL as Image
 from acq4.util.metaarray import MetaArray
@@ -61,7 +62,7 @@ print "Imports in pbm_imagealaysis done"
 We use matplotlib/pylab for *some* figure generation.
 """
 class pbm_ImageAnalysis(AnalysisModule):
-    def __init__(self, host, flowchartDir = None, dbIdentity = "ImageAnalysis"):
+    def __init__(self, host, flowchartDir=None, dbIdentity="ImageAnalysis"):
         AnalysisModule.__init__(self, host)
         
         self.dbIdentity = dbIdentity
@@ -69,34 +70,34 @@ class pbm_ImageAnalysis(AnalysisModule):
         #self.dbCtrl.storeBtn.clicked.connect(self.storeClicked)
         
         # per-instance parameters:
-        self.currentDataDirectory = None # currently selected data directory (if valid)
-        self.refImage = None # Reference image data used for ratio calculations
+        self.currentDataDirectory = None  # currently selected data directory (if valid)
+        self.refImage = None  # Reference image data used for ratio calculations
                                 # This image may come from a separate file or a calculation on the present file
-        self.physData = None # physiology data associated with the current image
-        self.dataStruct = 'flat' # 'flat' or 'interleaved' are valid at present.
+        self.physData = None  # physiology data associated with the current image
+        self.dataStruct = 'flat'  # 'flat' or 'interleaved' are valid at present.
         self.imageInfo = []
-        self.ignoreFirst = 1 # ImagePhys_ignoreFirst # note this is a number of images, not T/F
-        self.rectSelect = True #
-        self.tStart = 0.0 # baseline time start = applies to the image: ImagePhys_BaseStart
-        self.tEnd = 50.0 # baseline time end (msec) : ImagePhys_BaseEnd
-        self.imageLPF = 0.0 # low pass filter of the image data, Hz: ImagePhys_ImgLPF
-        self.physLPF = 0.0 # low pass filter of the physiology data, Hz (0 = no filtering): ImagePhys_PhysLPF
-        self.physLPFChanged = False # flag in case the physiology LPF changes (avoid recalculation)
-        self.physSign = 0.0 # ImagePhys_PhysSign (detection sign for events)
-        self.physThresh = -50.0 # ImagePhys_PhysThresh (threshold in pA to detect events)
+        self.ignoreFirst = 1  # ImagePhys_ignoreFirst # note this is a number of images, not T/F
+        self.rectSelect = True  #
+        self.tStart = 0.0  # baseline time start = applies to the image: ImagePhys_BaseStart
+        self.tEnd = 50.0  # baseline time end (msec) : ImagePhys_BaseEnd
+        self.imageLPF = 0.0  # low pass filter of the image data, Hz: ImagePhys_ImgLPF
+        self.physLPF = 0.0  # low pass filter of the physiology data, Hz (0 = no filtering): ImagePhys_PhysLPF
+        self.physLPFChanged = False  # flag in case the physiology LPF changes (avoid recalculation)
+        self.physSign = 0.0  # ImagePhys_PhysSign (detection sign for events)
+        self.physThresh = -50.0  # ImagePhys_PhysThresh (threshold in pA to detect events)
         self.physThreshLine = None
-        self.ratioImages = False # only set true once a ratio (reference) image is loaded 
+        self.ratioImages = False  # only set true once a ratio (reference) image is loaded
         self.ROIfig = None
         self.baseImage=[]
-        self.viewFlag = False # false if viewing movie, true if viewing fixed image
+        self.viewFlag = False  # false if viewing movie, true if viewing fixed image
         self.referenceImage = []
         self.ratioImage = None
         self.useRatio = False
         self.AllRois = []
-        self.nROI = 0 # count of ROI's in the window
+        self.nROI = 0  # count of ROI's in the window
         self.rois = []
         self.currentRoi = None
-        self.imageData = [] # Image Data array, information about the data is in the dataState dictionary
+        self.imageData = np.array(None)  # Image Data array, information about the data is in the dataState dictionary
         self.lastROITouched=[]
         self.spikesFound = None
         self.burstsFound = None
@@ -107,17 +108,20 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.stdImage = []
         self.avgImage = []
         
-        self.analogMode = True # if false, we are using digital mode.
+        self.analogMode = True  # if false, we are using digital mode.
         self.csvFileName = None
         self.csvData = None
                 
         self.spikesFoundpk = None
         self.withinBurstsFound = None
         self.FData = []
-        self.MPLFig = None # We keep one instance of a matplotlib figure, create and destroy as needed
+        self.MPLFig = None  # We keep one instance of a matplotlib figure, create and destroy as needed
         self.floatingWindow = None  # one instance of a pyqtgraph window that floats.
         self.pgwin = None
-        
+
+        # ------ Graphical Elements ------
+        self._sizeHint = (1280, 900)   # try to establish size of window
+
         self.ctrlWidget = QtGui.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
@@ -235,11 +239,11 @@ class pbm_ImageAnalysis(AnalysisModule):
     def updateRectSelect(self):
         self.rectSelect = self.ctrl.ImagePhys_RectSelect.isChecked()
         if self.rectSelect:
-            self.ROI_Plot.plotItem.vb.setLeftButtonAction(mode='rect') # use the rubber band box instead
-            self.physPlot.plotItem.vb.setLeftButtonAction(mode='rect') # use the rubber band box instead
+            self.ROI_Plot.plotItem.vb.setLeftButtonAction(mode='rect')  # use the rubber band box instead
+            self.physPlot.plotItem.vb.setLeftButtonAction(mode='rect')  # use the rubber band box instead
         else:
-            self.ROI_Plot.plotItem.vb.setLeftButtonAction(mode='pan') # use the standard pan mode instead
-            self.physPlot.plotItem.vb.setLeftButtonAction(mode='pan') # use the standard pan modeinstead
+            self.ROI_Plot.plotItem.vb.setLeftButtonAction(mode='pan')  # use the standard pan mode instead
+            self.physPlot.plotItem.vb.setLeftButtonAction(mode='pan')  # use the standard pan modeinstead
         
     def changeView(self):
         view = self.ctrl.ImagePhys_View.currentText()
@@ -253,6 +257,8 @@ class pbm_ImageAnalysis(AnalysisModule):
         if view == 'Reference Image': 
             self.imageView.setImage(self.baseImage)
             self.viewFlag = True
+        if view == 'Average Image':
+            self.imageView.setImage(self.aveImage)
         if view == 'Std Image':
             self.imageView.setImage(self.stdImage)
         if view == 'Spectrum Image':
@@ -281,14 +287,14 @@ class pbm_ImageAnalysis(AnalysisModule):
         roi = self.currentRoi
         plot = self.getElement('Background Plot')
         plot.clearPlots()
-        print 'LPF Changed?: ', self.physLPFChanged
-        if self.physLPFChanged: # only update if the LPF filter has changed
-            self.readPhysiology(self.currentDataDirectory) # re-read in case LPF has changed
+#        print 'LPF Changed?: ', self.physLPFChanged
+        if self.physLPFChanged:  # only update if the LPF filter has changed
+            self.readPhysiology(self.currentDataDirectory)  # re-read in case LPF has changed
         c = 0
-        print 'Roi in update: ', roi
+#        print 'Roi in update: ', roi
         if self.currentRoi is None:
             return
-        for img in self.normData: # pull from all the normalized data arrays (in a list)
+        for img in self.normData:  # pull from all the normalized data arrays (in a list)
             #img = img.mean(axis=1)
             rgn = self.lr.getRegion()
             img = img[:, rgn[0]:rgn[1]].mean(axis=1)
@@ -337,7 +343,7 @@ class pbm_ImageAnalysis(AnalysisModule):
     def setupPhysROIPlot(self):
         if self.ctrl.ImagePhys_PhysROIPlot.isChecked():
             self.checkMPL()
-            self.firstPlot=False
+            self.firstPlot = False
             self.plotCount = 0
 
     def makePhysROIPlot(self, dh, dlh):
@@ -351,7 +357,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.MPRnrows += 2
         if self.firstPlot is False:
             (self.MPLFig, self.MPPhysPlots) = PL.subplots(num="Physiology-Fluor comparison", 
-            nrows = self.MPRnrows, ncols=self.MPRncolumns, sharex = True, sharey = False)
+                    nrows=self.MPRnrows, ncols=self.MPRncolumns, sharex=True, sharey=False)
             self.MPLFig.suptitle('Dataset: %s' % (head) , fontsize=10)
 
             self.nPhysPlots = len(dlh)
@@ -387,32 +393,31 @@ class pbm_ImageAnalysis(AnalysisModule):
         if r >= self.MPRnrows-1:
             c += 1
             r = self.plotCount*2 % self.MPRnrows
-        self.MPPhysPlots[r+1, c].plot(self.tdat, self.physData, 'k-', linewidth =0.5)
+        self.MPPhysPlots[r+1, c].plot(self.tdat, self.physData, 'k-', linewidth=0.5)
         self.MPPhysPlots[r+1, c].set_title(tail)
 
         for i in range(self.nROI):
             ndpt = len(self.FData[i,:])
-            self.MPPhysPlots[r,c].plot(self.imageTimes[0:ndpt], (self.FData[i,:]-1.0)*100.)
+            self.MPPhysPlots[r,c].plot(self.imageTimes[0:ndpt], (self.FData[i, :]-1.0)*100.)
         self.plotCount += 1
         PL.draw()
         if self.plotCount >= self.nPhysPlots:
             PL.show()
-            self.ctrl.ImagePhys_PhysROIPlot.setCheckState(False) # turn off now - to properly sequence reload
+            self.ctrl.ImagePhys_PhysROIPlot.setCheckState(False)  # turn off now - to properly sequence reload
             (d1, s1) = os.path.split(self.currentFileName)
             (d2, s2) = os.path.split(d1)
             (d3, s3) = os.path.split(s2)
             sfn = s3+'-'+s2+'-'+s1
             PL.savefig('/Users/Experimenters/Desktop/ePhysPlots/%s.png' % (sfn), dpi=600, format='png')
 
-
     def loadSingleFile(self, dh):
         self.imageView.setFocus()
         self.downSample = int(self.ctrl.ImagePhys_Downsample.currentText())
         if self.downSample <= 0:
-            self.downSample = 1 # same as "none"
+            self.downSample = 1  # same as "none"
         self.initDataState()
         
-        self.shiftFlag = False # eventually, but at the moment it does NOT work
+        self.shiftFlag = False  # eventually, but at the moment it does NOT work
         self.getDataStruct()
         
         if type(dh) is list:
@@ -425,8 +430,19 @@ class pbm_ImageAnalysis(AnalysisModule):
             if dh.isFile():
                 fhandle = dh
             else:
-                fhandle = dh['Camera/frames.ma']
-                self.clearPhysiologyInfo() # clear the physiology data currently in memory to avoid confusion
+                # test data type for the imaging
+                if os.path.isfile(os.path.join(dh.name(), 'Camera/frames.ma')):
+                    fhandle = dh['Camera/frames.ma']
+                elif os.path.isfile(os.path.join(dh.name(), 'imaging.ma')):
+                    fhandle = dh['imaging.ma']
+                    # more scanner info from:
+                    # man.currentFile.info()['Scanner']['program']  regarding the scan program
+                    # pixel sizes, dwell time, overall size, etc
+                    # analysis/imaging/children/decomb/children/value has the decombing time (sec).
+                    # man.currentFile.info()['protocol']['analysis']['Imaging']['children']['decomb']['value']
+                else:
+                    raise Exception("No valid imaging data found")
+                self.clearPhysiologyInfo()  # clear the physiology data currently in memory to avoid confusion
             # print dh
             # print fhandle
             self.rawData = []
@@ -451,9 +467,9 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.baseImage = self.imageData[0] # just to show after processing...
            # print self.imageInfo
            # print self.imageInfo[3]
-            print len(self.imageInfo)
-            for i in range(len(self.imageInfo)):
-                print self.imageInfo
+#            print len(self.imageInfo)
+#            for i in range(len(self.imageInfo)):
+#                print self.imageInfo
             if len(self.imageInfo) > 3 and 'Frame Time' in self.imageInfo[3].keys():
                 self.imageTimes = np.append(self.imageTimes, self.imageInfo[3]['Frame Time'])
             #    print self.imageTimes
@@ -477,8 +493,8 @@ class pbm_ImageAnalysis(AnalysisModule):
             #self.processData()
 
         else: # interleaved data structure (Deepti Rao's calcium imaging data)
-            dirs = dh.subDirs() # find out what kind of data we 
-            images = [[],[],[],[]]
+            dirs = dh.subDirs()  # find out what kind of data we
+            images = [[], [], [], []]
             ## Iterate over sequence
             minFrames = None
             for d in dirs: # each of the directories contains a data set
@@ -486,7 +502,7 @@ class pbm_ImageAnalysis(AnalysisModule):
                 try:
                     ind = d.info()[('Clamp1', 'amp')]
                 except:
-                    print d
+                    print 'unable to read clamp data from : ', d
                     print d.info()
                     raise
                 img = d['Camera/frames.ma'].read()
@@ -497,17 +513,17 @@ class pbm_ImageAnalysis(AnalysisModule):
                 
             self.rawData = []
             self.imageData = []
-            print "len images: %d " % (len(images))
+#            print "len images: %d " % (len(images))
             while len(images) > 0:
                 imgs = images.pop(0)
-                img = np.concatenate([i[np.newaxis,:minFrames,...] for i in imgs], axis=0)
+                img = np.concatenate([i[np.newaxis, :minFrames, ...] for i in imgs], axis=0)
                 self.rawData.append(img.astype(np.float32))
                 #img /= self.background
             
             ## remove bleaching curve from first two axes
             ctrlMean = self.rawData[0].mean(axis=2).mean(axis=2)
-            trialCurve = ctrlMean.mean(axis=1)[:,np.newaxis,np.newaxis,np.newaxis]
-            timeCurve = ctrlMean.mean(axis=0)[np.newaxis,:,np.newaxis,np.newaxis]
+            trialCurve = ctrlMean.mean(axis=1)[:, np.newaxis, np.newaxis, np.newaxis]
+            timeCurve = ctrlMean.mean(axis=0)[np.newaxis,:, np.newaxis, np.newaxis]
             del ctrlMean
             for img in self.rawData:
                 img /= trialCurve
@@ -543,8 +559,8 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ROI_Plot.clearPlots()
         self.getDataStruct()
         self.currentDataDirectory = dh
-        self.ctrl.ImagePhys_View.setCurrentIndex(0)# always set to show the movie
-        self.specImageCalcFlag = False # we need to recalculate the spectrum
+        self.ctrl.ImagePhys_View.setCurrentIndex(0)  # always set to show the movie
+        self.specImageCalcFlag = False  # we need to recalculate the spectrum
         npts = self.imageData.shape[0]/2
         freq = np.fft.fftfreq(npts, d=self.imagedT)
         freq = freq[0:npts/2 + 1]
@@ -555,9 +571,9 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrl.ImagePhys_SpecLPF.setMaximum(np.max(freq))
         self.ctrl.ImagePhys_SpecLPF.setValue(np.max(freq))
         
-        self.updateAvgStdImage() # make sure mean and std are properly updated
-        self.calculateAllROIs() # recompute the ROIS
-        self.updateThisROI(self.lastROITouched)  #  and make sure plot reflects current ROI (not old data)  
+        self.updateAvgStdImage()  # make sure mean and std are properly updated
+        self.calculateAllROIs()  # recompute the ROIS
+        self.updateThisROI(self.lastROITouched)  # and make sure plot reflects current ROI (not old data)
         return True
         
         
@@ -570,7 +586,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.statusBar().showMessage( "Loading: %s..." % (self.fileName) )
             self.show()
             csvfile = csv.reader(open(self.fileName), delimiter=",")
-            self.times = [];
+            self.times = []
             self.nROI = 0
             self.bkgd=[]
             self.bkgdpos = None
@@ -578,6 +594,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.roilist = []
             firstline = csvfile.next()
         
+
 
     def updateAvgStdImage(self):
         """ update the reference image types and then make sure display agrees.
@@ -593,12 +610,12 @@ class pbm_ImageAnalysis(AnalysisModule):
         intensity at each point. Useful for finding areas of activity
         """
         sh = self.imageData.shape
-        if self.specImageCalcFlag is False: # calculate spectrum info
+        if self.specImageCalcFlag is False:  # calculate spectrum info
             self.freim = np.abs(np.fft.fft(self.imageData, axis=0)/self.imageData.shape[0])
             self.specImageCalcFlag = True
             
         npts = self.imageData.shape[0]/2
-        freq = np.fft.fftfreq(npts, d=self.imagedT) # get frequency list
+        freq = np.fft.fftfreq(npts, d=self.imagedT)  # get frequency list
         freq = freq[0:npts/2 + 1]
         hpf = self.ctrl.ImagePhys_SpecHPF.value()
         lpf = self.ctrl.ImagePhys_SpecLPF.value()
@@ -619,7 +636,6 @@ class pbm_ImageAnalysis(AnalysisModule):
             In the case where the information is missing, we just set pixels.
         """
         if 'pixelSize' in self.imageInfo[3]:
-            print self.imageInfo[3]
             pixelsize = self.imageInfo[3]['pixelSize']
             region = self.imageInfo[3]['region']
             binning = self.imageInfo[3]['binning']
@@ -647,7 +663,6 @@ class pbm_ImageAnalysis(AnalysisModule):
         
         dh = self.fileLoaderInstance.selectedFiles()
         dh = dh[0]
-        print dh
         imt = MetaArray(file=dh.name()) # , subset=(slice(block_pos,block_pos+block_size),slice(None), slice(None)))
         sh = imt.shape
         info = imt.infoCopy()
@@ -660,7 +675,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         print '\n'
         print '*'*80
         print 'File %s\n   Contains %d frames of %d x %d' % (dh.name(), sh[0], sh[1], sh[2])
-        print    '   (would downsample to %d frames atdownsample = %d ' % (totframes, self.downSample)
+        print '   (would downsample to %d frames atdownsample = %d ' % (totframes, self.downSample)
         print 'Frame rate is: %12.5f s per frame or %8.2f Hz' % (dt, 1.0/dt)
         
     def tryDownSample(self, dh):
@@ -688,7 +703,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             dlg.setMaximum(outframes)
             bbcount = 0
             for bb in range(nbigblocks):
-                img = imt[bb*bigblock:(bb+1)*bigblock,:,:]
+                img = imt[bb*bigblock:(bb+1)*bigblock, :, :]
                 try:
                     img=img.asarray()
                 except:
@@ -724,7 +739,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.spikeFoundpk = None
         self.burstsFound = None
         self.withinBurstsFound = None
-        self.makeSpikePointers() # prepare the graph
+        self.makeSpikePointers()  # prepare the graph
         
     def readPhysiology(self, dh=None):
         """ call to read the physiology from the primary data channel
@@ -733,13 +748,13 @@ class pbm_ImageAnalysis(AnalysisModule):
         if dh is None:
             return
         self.clearPhysiologyInfo()
-        data = self.dataModel.getClampFile(dh).read() # retrieve the physiology traces
+        data = self.dataModel.getClampFile(dh).read()  # retrieve the physiology traces
         self.physData = self.dataModel.getClampPrimary(data).asarray()
         if self.dataModel.getClampMode(data) == 'IC':
-            self.physData = self.physData * 1e3 # convert to mV
+            self.physData = self.physData * 1e3  # convert to mV
             
         else:
-            self.physData = self.physData * 1e12 # convert to pA
+            self.physData = self.physData * 1e12  # convert to pA
         info1 = data.infoCopy()
         self.samplefreq = info1[2]['DAQ']['primary']['rate']
         if self.physLPF >= 250.0 and self.physLPF < 0.5*self.samplefreq: # respect Nyquist, just minimally
@@ -759,7 +774,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         #print 'Number of points in original data set: ', shdat
         tdat = data.infoCopy()[1]['values']
         tdat = tdat[::decimate_factor]
-        self.tdat = data.infoCopy()[1]['values']/1000.
+        self.tdat = data.infoCopy()[1]['values']  # / 1000. NOT
         self.physPlot.plot(tdat, self.physData[::decimate_factor], pen=pg.mkPen('w')) # , decimate=decimate_factor)
         self.showPhysTrigger()
         try:
@@ -770,7 +785,7 @@ class pbm_ImageAnalysis(AnalysisModule):
     def loadRatioImage(self):
         print 'loading ratio image'
         dh = self.fileLoaderInstance.selectedFiles()
-        self.ratioImage = dh[0].read()[np.newaxis,...].astype(float)
+        self.ratioImage = dh[0].read()[np.newaxis,...].astype('float')
         print self.ratioImage
         #self.background /= self.background.max()
         if self.ratioImage is None:
@@ -810,22 +825,22 @@ class pbm_ImageAnalysis(AnalysisModule):
         #print "lpf: %8.1f" % self.physLPF
 
     def physLPF_valueChanged(self):
-        self.physLPFChanged = True # just note that it has changed
+        self.physLPFChanged = True  # just note that it has changed
     
     def doNormalize(self):
         method = self.ctrl.ImagePhys_ImgMethod.currentIndex()
-        if method == 0: # (F-Fo)/Fo # referenced to a baseline
+        if method == 0:  # (F-Fo)/Fo # referenced to a baseline
             self.StandarddFFImage()
         if method == 1:
-            self.MediandFFImage() # Referenced to median of each image
+            self.MediandFFImage()  # Referenced to median of each image
         if method == 2:
-            self.normalizeImage() # another normalization
+            self.normalizeImage()  # another normalization
         if method == 3:
-            self.slowFilterImage() # slow filtering normalization: (F-Fslow)/Fslow on pixel basis over time
+            self.slowFilterImage()  # slow filtering normalization: (F-Fslow)/Fslow on pixel basis over time
         print 'normalize method: ', method
         print self.dataState['ratioLoaded']
         print self.useRatio
-        if method == 4: # g/r ratio  - future: requires image to be loaded (hooks in place, no code yet)
+        if method == 4:  # g/r ratio  - future: requires image to be loaded (hooks in place, no code yet)
             if self.dataState['ratioLoaded'] and self.useRatio:
                 self.GRFFImage() # convert using the ratio
                 
@@ -856,7 +871,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         print 'Writing tiff images to %s\n' % (tiffpath)
         #print dir(Image.Image)
         for i in range(0, nframes):
-            ai = Image.Image.fromarray(self.imageData[i,:,:]*8192.0)
+            ai = Image.Image.fromarray(self.imageData[i, :, :]*8192.0)
             fn = tiffpath + 'acq4_ImageAnalysis_%05d.tiff' % (i)
             ai.save(fn)
 #
@@ -875,7 +890,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             lrois = [roi]
         for roi in lrois:
             d = self.BFData[roi.ID].copy().T
-            ds = Utility.savitzky_golay(d, kernel = 31, order = 5) # smooth data
+            ds = Utility.savitzky_golay(d, kernel=31, order=5) # smooth data
             dds[roi.ID] = np.diff(ds) # take derivative of smoothed data
             stdev = np.std(dds[roi.ID])
             pts = np.where(np.abs(dds[roi.ID]) < thr*stdev) # get subset of points to fit
@@ -893,8 +908,8 @@ class pbm_ImageAnalysis(AnalysisModule):
             p = np.polyfit(tf, df, 5)
             bd = np.polyval(p, self.imageTimes)
             dm = np.mean(d[0:10])
-            bl = Utility.savitzky_golay(d/bd, kernel = self.FilterKernel,
-                                                      order = self.FilterOrder)
+            bl = Utility.savitzky_golay(d/bd, kernel=self.FilterKernel,
+                                                      order=self.FilterOrder)
             return(bl)
             #self.FData[roi, :] = self.BFData[roi,:]
             #self.plotdata(self.times, 100*(self.BFData-1.0), datacolor = 'blue', erase = True,
@@ -953,13 +968,13 @@ class pbm_ImageAnalysis(AnalysisModule):
             ysign = -1.0
         if self.physThreshLine is None:
             self.physThreshLine = self.physPlot.plot(x=np.array([self.tdat[0], self.tdat[-1]]),
-                y=np.array([ysign*thr, ysign*thr]), pen=pg.mkPen('r'), clear=False)
+                y = np.array([ysign*thr, ysign*thr]), pen=pg.mkPen('r'), clear=False)
         else:
             self.physThreshLine.setData(x=np.array([self.tdat[0], self.tdat[-1]]), 
-                y=np.array([ysign*thr, ysign*thr]))
+                y = np.array([ysign*thr, ysign*thr]))
 
-    def detectSpikes(self, burstMark = None):
-        spikescale = 1.0 # or 1e-12...
+    def detectSpikes(self, burstMark=None):
+        spikescale = 1.0  # or 1e-12...
         thr = spikescale*self.ctrlPhysFunc.ImagePhys_PhysThresh.value()
         sign = self.ctrlPhysFunc.ImagePhys_PhysSign.currentIndex()
         if sign == 0:
@@ -980,7 +995,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             bursts = (bList, yburstMarks, ywithinBurstMarks))
         print 'spikes detected: %d' % (len(sptimes))
 
-    def makeSpikePointers(self, spikes = None, spikespk = None, bursts=None):
+    def makeSpikePointers(self, spikes=None, spikespk=None, bursts=None):
         # add scatterplot items to physiology trace  - these start out empty, but we can replace
         # the points in the arrays later.
         if spikes is not None and len(spikes[0]) > 0:
@@ -1039,7 +1054,7 @@ class pbm_ImageAnalysis(AnalysisModule):
     def computeBTA(self, singleSpike=False):
         """
         Compute the spike-triggered average of the ROI signals, given the spike train. 
-        The following criteria are avaiable to select from within the spike train:
+        The following criteria are available to select from within the spike train:
         1. minimum time before a spike
         2. minimum rate AFTER the spike (for the next N spikes)
         3. minimum # of spikes (N) for minimum rate determination (define burst)
@@ -1072,8 +1087,8 @@ class pbm_ImageAnalysis(AnalysisModule):
                 avCaT[roi][i] = (x.tolist()-onSp)
                 i = i + 1
         self.checkMPL()
-        (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Image Analysis", nrows = self.nROI+1, ncols=2, 
-                    sharex = False, sharey = False)
+        (self.MPLFig, self.MPL_plots) = PL.subplots(num="Image Analysis", nrows=self.nROI+1, ncols=2,
+                    sharex=False, sharey=False)
         self.MPLFig.suptitle('%s:\n %s' % (plotTitle, self.currentFileName), fontsize=11)
         dt = np.mean(np.diff(self.imageTimes))/2.
         tbase = np.arange(-0.1, 0.5, dt)
@@ -1088,8 +1103,8 @@ class pbm_ImageAnalysis(AnalysisModule):
             interCaF = np.zeros((N, len(tbase)))
             for i in range(0, len(onsetSpikes)):
             #sp = self.MPL_plots.scatter(avCaT, avCaF, s=15, color='tomato')
-                self.MPL_plots[roi][0].plot(avCaT[roi][i], avCaF[roi][i]*100., color = 'k', linestyle = '-')
-                f_int = scipy.interpolate.interp1d(avCaT[roi][i], avCaF[roi][i]*100., bounds_error = False)
+                self.MPL_plots[roi][0].plot(avCaT[roi][i], avCaF[roi][i]*100., color='k', linestyle='-')
+                f_int = scipy.interpolate.interp1d(avCaT[roi][i], avCaF[roi][i]*100., bounds_error=False)
                 interCaF[i, :] = f_int(tbase)
                 CaAmin = np.nanmin([np.nanmin(avCaF[roi][i]), CaAmin])
                 CaAmax = np.nanmax([np.nanmax(avCaF[roi][i]), CaAmax])
@@ -1134,13 +1149,13 @@ class pbm_ImageAnalysis(AnalysisModule):
         allBurstList = []
         burstOnsetList = []
         for i in burstOnsetCandidates:
-            tempWithinBurst = [i] # list of spike times that follow this one
-            for j in range(i,len(self.SpikeTimes)-1):
-                if isis[j] <= maxInterval: # if interspike interval is long, we terminate
-                    tempWithinBurst.append(j+1) # keep track of spikes that are "within" a burst
-                else: # if isi is too long, terminate burst
+            tempWithinBurst = [i]  # list of spike times that follow this one
+            for j in range(i, len(self.SpikeTimes)-1):
+                if isis[j] <= maxInterval:  # if interspike interval is long, we terminate
+                    tempWithinBurst.append(j+1)  # keep track of spikes that are "within" a burst
+                else:  # if isi is too long, terminate burst
                     break
-            if len(tempWithinBurst) >= (minNspikes-1) and i not in burstOnsetList: # note, tempWithinBurst does not include the first spike.
+            if len(tempWithinBurst) >= (minNspikes-1) and i not in burstOnsetList:  # note, tempWithinBurst does not include the first spike.
                 burstOnsetList.append(i)
                 allBurstList.append(tempWithinBurst)
         burstTList = []
@@ -1156,10 +1171,10 @@ class pbm_ImageAnalysis(AnalysisModule):
         between the (center) of all pairs of ROIs
         """
         if self.ROIDistanceMap == []:
-            self.ROIDistances() # make sure we ahve valid distance information
+            self.ROIDistances()  # make sure we ahve valid distance information
 
         if self.IXC_Strength == []:
-            self.Analog_Xcorr_Individual(plottype = None)
+            self.Analog_Xcorr_Individual(plottype=None)
         threshold = self.ctrlImageFunc.IAFuncs_XCorrThreshold.value()
         x0 = np.nanmin(np.nanmin(self.ROIDistanceMap))
         x1 = np.nanmax(np.nanmax(self.ROIDistanceMap))
@@ -1167,12 +1182,12 @@ class pbm_ImageAnalysis(AnalysisModule):
         nthrliney = [-threshold, -threshold]
         thrlinex = [x0, x1]
         self.use_MPL = self.ctrlImageFunc.IAFuncs_MatplotlibCheckBox.checkState()
-        mean  = scipy.stats.nanmean(self.IXC_Strength.flatten())
-        std  = scipy.stats.nanstd(self.IXC_Strength.flatten())
+        mean = scipy.stats.nanmean(self.IXC_Strength.flatten())
+        std = scipy.stats.nanstd(self.IXC_Strength.flatten())
         print 'Mean XC: %f   std: %f' % (mean, std)
         if self.use_MPL:
             self.checkMPL()
-            (self.MPLFig, self.MPL_plots) = PL.subplots(num = "Image Analysis", nrows = 1, ncols=1, 
+            (self.MPLFig, self.MPL_plots) = PL.subplots(num="Image Analysis", nrows=1, ncols=1,
                     sharex = True, sharey = True)
             self.MPLFig.suptitle('Analog XCorr: %s' % self.currentFileName, fontsize=11)
             sp = self.MPL_plots.scatter(self.ROIDistanceMap, self.IXC_Strength, s=15, color='tomato')
@@ -1202,7 +1217,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             (xm, xn) = self._calcMinMax(X) 
             p.setXRange(0., xn);
 
-    def _calcMinMax(self, x, p = 0.05):
+    def _calcMinMax(self, x, p=0.05):
         '''
         Compute initial min and max axis scaling points.
         Approach: 
@@ -1232,14 +1247,14 @@ class pbm_ImageAnalysis(AnalysisModule):
                 elif x_max+buffer < 0:  # both (x_min-buffer),(x_max+buffer) < 0
                     x_min = round(x_min - buffer, -int((np.ceil(np.log10(buffer) - 1))))
                     x_max = round(x_max + buffer, -int((np.floor(np.log10(buffer) - 1))))
-                else: # (x_min-buffer </= 0)and(x_max+buffer >/= 0) 
+                else:  # (x_min-buffer </= 0)and(x_max+buffer >/= 0)
                     try:
                         x_min = round(x_min - buffer, -int((np.ceil(np.log10(buffer) - 1))))
-                    except OverflowError: # buffer == 0
+                    except OverflowError:  # buffer == 0
                         x_min = 0
                     try:
                         x_max = round(x_max + buffer, -int((np.ceil(np.log10(buffer) - 1))))
-                    except OverflowError: # buffer == 0
+                    except OverflowError:  # buffer == 0
                         x_max = 0
             else:
                 if x_min <> 0:
@@ -1271,7 +1286,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         if self.ROIDistanceMap == []:
             self.ROIDistances() # make sure we ahve valid distance information
         if self.IXC_Strength == []:
-            self.Analog_Xcorr_Individual(plottype = None)
+            self.Analog_Xcorr_Individual(plottype=None)
 
         self.use_MPL = self.ctrlImageFunc.IAFuncs_MatplotlibCheckBox.checkState()
         
@@ -1362,11 +1377,11 @@ class pbm_ImageAnalysis(AnalysisModule):
         for roi in self.AllRois:
             roi.hide()
             del roi
-        self.AllRois=[]
+        self.AllRois = []
         self.nROI = 0
-        self.FData=[] # FData is the raw ROI data before any corrections
-        self.BFData =[] # ROI data after all corrections
-        rois=[]
+        self.FData = []  # FData is the raw ROI data before any corrections
+        self.BFData = []  # ROI data after all corrections
+        rois = []
         self.lastROITouched = []
         self.ROI_Plot.clear()
         #self.clearPlots()
@@ -1382,14 +1397,14 @@ class pbm_ImageAnalysis(AnalysisModule):
             del ourWidget
         else:
             QtGui.QMessageBox.warning(self,
-                                      Qt.QString("Delete ROI - Error"),
+                                      Qt.Qt.QString("Delete ROI - Error"),
                                       "Last ROI was not in ROI list?")
-        self.nROI = len(rois)
+        self.nROI = len(self.AllRois)
         for roi in self.AllRois:
             roi.ID = rois.index(roi) # renumber the roi list.
         #print '# Rois after delete: %d' % len(rois)
         if id < 0:
-            id = rois[0].ID # pick first
+            id = self.AllRois[0].ID # pick first
         if id > self.nROI:
             id = self.AllRois[-1].ID # pick last
         #self.clearPlots() # need to redraw the plot list
@@ -1400,10 +1415,10 @@ class pbm_ImageAnalysis(AnalysisModule):
             if id == roi.ID:
                 self.updateThisROI(roi) # display the next chosen ROI in the box below the image
         # now update the overall ROI plot
-        self.plotdata(yMinorTicks = 0, yMajorTicks = 3,
-                      yLabel = u'F0<sub>ROI %d</sub>')
+        self.plotdata(yMinorTicks = 0, yMajorTicks=3,
+                      yLabel=u'F0<sub>ROI %d</sub>')
 
-    def addOneROI(self, pos=[0 ,0], hw=None):
+    def addOneROI(self, pos=(0, 0), hw=None):
         """ append one roi to the self.AllRois list, put it on the screen (scene), and
         make sure it is actively connected to code. The return value lets us
         handle the rois when we restore them """
@@ -1411,6 +1426,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             dr = self.ctrl.ImagePhys_ROISize.value()
             hw = [dr, dr]
         roi = pg.RectROI(pos, hw, scaleSnap=True, translateSnap=True)
+        roi.addRotateHandle(pos=(0, 0), center=(0.5, 0.5))  # handle at left top, rotation about center
 #       roi = qtgraph.widgets.EllipseROI(pos, hw, scaleSnap=True, translateSnap=True)
 #       roi = qtgraph.widgets.MultiLineROI([[0,0], [5,5], [10,10]], 3, scaleSnap=True, translateSnap=True)
         roi.ID = self.nROI # give each ROI a unique identification number
@@ -1420,9 +1436,9 @@ class pbm_ImageAnalysis(AnalysisModule):
         roi.color = rgb
         self.AllRois.append(roi)
         self.imageView.addItem(roi)
-        self.updateThisROI(self.AllRois[-1]) # compute the new ROI data
-        roi.sigRegionChanged.connect(self.updateThisROI) # if data region changes, update the information
-        roi.sigHoverEvent.connect(self.showThisROI) # a hover just causes the display below to show what is hre already.
+        self.updateThisROI(self.AllRois[-1])  # compute the new ROI data
+        roi.sigRegionChanged.connect(self.updateThisROI)  # if data region changes, update the information
+        roi.sigHoverEvent.connect(self.showThisROI)  # a hover just causes the display below to show what is hre already.
         return (roi)
 
     # def plotImageROIs(self, ourWidget):
@@ -1468,19 +1484,20 @@ class pbm_ImageAnalysis(AnalysisModule):
     #     self.currentRoi = roi
         
     def updateThisROI(self, roi, livePlot=True):
-        """ called when we need to update the ROI result plot for a particular ROI widget 
+        """
+        called when we need to update the ROI result plot for a particular ROI widget
         """
         if roi in self.AllRois:
-            tr = roi.getArrayRegion(self.imageData, self.imageView.imageItem, axes=(1,2))
-            tr = tr.mean(axis=2).mean(axis=1) # compute average over the ROI against time
+            tr = roi.getArrayRegion(self.imageData, self.imageView.imageItem, axes=(1, 2))
+            tr = tr.mean(axis=2).mean(axis=1)  # compute average over the ROI against time
             trx = tr.copy()
             if self.dataState['Normalized'] is False:
-                trm = tr.mean() # mean value across all time
-                tr = tr/tr.mean() # (self.background[0:tr.shape[0]]*trm/self.backgroundmean)
+                trm = tr.mean()  # mean value across all time
+                tr = tr/tr.mean()  # (self.background[0:tr.shape[0]]*trm/self.backgroundmean)
 
             self.FData = self.insertFData(self.FData, tr.copy(), roi)
             self.applyROIFilters(roi)
-            self.showThisROI(roi,livePlot)
+            self.showThisROI(roi, livePlot)
             return(tr)
 
     def showThisROI(self, roi, livePlot=True, extra=None):
@@ -1489,13 +1506,24 @@ class pbm_ImageAnalysis(AnalysisModule):
         if roi in self.AllRois:
             if livePlot is True:
                 try:
-                    self.ROI_Plot.plot(self.imageTimes[0:len(self.BFData[roi.ID])], self.BFData[roi.ID], pen=pg.mkPen('r'), clear=True)
-                    if extra is not None:
-                        self.ROI_Plot.plot(self.imageTimes[0:len(self.BFData[roi.ID])], extra, pen=pg.mkPen('b'), clear=False)
-                    self.markROITouched(roi)
+                    roi.plot.setData(self.imageTimes[0:len(self.BFData[roi.ID])], self.BFData[roi.ID]) #, pen=pg.mkPen(roi.color), clear=True)
                 except:
-                    pass
-            return
+                    roi.plot = self.ROI_Plot.plot(self.imageTimes[0:len(self.BFData[roi.ID])], self.BFData[roi.ID],
+                                                  pen=pg.mkPen(np.append(roi.color[0:3], 255), width=1.0), clear=False)  # pg.mkPen('r'), clear=True)
+             #   c = roi.color[0:3]
+                c = np.append(roi.color[0:3], 255)
+                roi.plot.setPen(pg.mkPen(color=c, width=2.0))
+                roi.plot.setZValue(1000)
+
+                if extra is not None:
+                    self.ROI_Plot.plot(self.imageTimes[0:len(self.BFData[roi.ID])], extra, pen=pg.mkPen('b'), clear=False)
+                self.markROITouched(roi)
+        for otherroi in self.AllRois:
+            if otherroi != roi:
+                #c = otherroi.color[0:3]
+                c = np.append(otherroi.color[0:3], 128)
+                otherroi.plot.setPen(pg.mkPen(color=c, width=1.0))
+                otherroi.plot.setZValue(500)
 
     def markROITouched(self, roi):
         """
@@ -1503,10 +1531,10 @@ class pbm_ImageAnalysis(AnalysisModule):
         """
         if self.lastROITouched == []:
             self.lastROITouched = roi
-            roi.pen.setWidth(0.12) # just bump up the width
+            roi.pen.setWidth(0.18) # just bump up the width
         if roi != self.lastROITouched:
-            self.lastROITouched.pen.setWidth(0.12)
-            roi.pen.setWidthF(0.25)
+            self.lastROITouched.pen.setWidth(0.18)
+            roi.pen.setWidthF(0.12)
             self.lastROITouched = roi # save the most recent one
 
     def calculateAllROIs(self):
@@ -1618,13 +1646,15 @@ class pbm_ImageAnalysis(AnalysisModule):
     def __measDither(self, ditherMode, ourWidget):
         """Compute the value that we are optimizing for the dithering."""
         trDither = ourWidget.getArrayRegion(self.normData[0], self.imageItem, axes=(1,2))
-        trDither = trDither.mean(axis=2).mean(axis=1) # compute average over the ROI against time
-        if ditherMode is 0: # peak to peak
+        trDither = trDither.mean(axis=2).mean(axis=1)  # compute average over the ROI against time
+        if ditherMode is 0:  # peak to peak
             tr_test = np.amax(trDither) - np.amin(trDither)
-        if ditherMode is 1: # baseline to peak
+        elif ditherMode is 1:  # baseline to peak
             tr_test = np.amax(trDither)
-        if ditherMode is 2: # standard deviation
+        elif ditherMode is 2:  # standard deviation
             tr_test = np.std(trDither)
+        else:
+            tr_test = 0.
         return(tr_test, trDither)
 
     def ROIDistances(self):
@@ -1634,7 +1664,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         """
         print 'Calculating ROI to ROI distances'
         nd = len(self.AllRois)
-        self.ROIDistanceMap = np.empty((nd, nd)) # could go sparse, but this is simple...
+        self.ROIDistanceMap = np.empty((nd, nd))  # could go sparse, but this is simple...
         self.ROIDistanceMap.fill(np.nan)
         (sx, sy, px) = self.getImageScaling()
         for i in range(0, nd):
@@ -1659,8 +1689,8 @@ class pbm_ImageAnalysis(AnalysisModule):
 
 
 
-    def newpgImageWindow(self, title = '', border = 'w'):
-        newWin = pyqtgrwindow(title = title)
+    def newpgImageWindow(self, title='', border='w'):
+        newWin = pyqtgrwindow(title=title)
         view = pg.GraphicsView()
         newWin.setCentralWidget(view)
         newWin.show()
@@ -1678,7 +1708,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             print 'self.FData is empty!'
             return
         sh = np.shape(self.FData)
-        data = np.empty([sh[0]+2, sh[1]])
+        data = np.empty((sh[0]+2, sh[1]))
         data[0] = np.arange(0,sh[1])
         data[1] = self.imageTimes.copy()
         
@@ -1707,19 +1737,19 @@ class pbm_ImageAnalysis(AnalysisModule):
         for row in range(0, data.shape[0]):
             stringVals = ["%f" % x for x in data[row]]
             fd.write(",".join(stringVals) + "\n")
-        print 'Wrote: %s\n' % (fName)
+#        print 'Wrote: %s\n' % (fName)
         fd.close()
         (fnc, extc) = os.path.splitext(fileName)
         fName = fnc + '.roi'
         fd = open(fName, 'w')
         for rd in roiData:
             fd.write(' '.join(map(str, rd)) + '\n')
-        print 'Wrote: %s\n' % fName
+#        print 'Wrote: %s\n' % fName
         fd.close()
     
-    def restoreROI(self, fileName = None):
+    def restoreROI(self, fileName=None):
         """Retrieve the ROI locations from a file, plot them on the image, and compute the traces."""
-        self.clearAllROI() # always start with a clean slate.
+        self.clearAllROI()  # always start with a clean slate.
         if fileName is False or fileName is None:
             fileName = QtGui.QFileDialog.getOpenFileName(None, u'Retrieve ROI data', u'', u'ROIs (*.roi)')
         if fileName:
@@ -1748,11 +1778,11 @@ class pbm_ImageAnalysis(AnalysisModule):
     def stackOp_absmax(self): # absolute maximum
         """Make an image that is the maximum of each pixel across the image stack."""
         self.clearAllROI()
-        sh = np.shape(self.imageData);
+        sh = np.shape(self.imageData)
         if len(sh) == 4:
-            self.image = np.amax(self.imageData[:,1,:,:], axis = 0).astype(float32)
+            self.image = np.amax(self.imageData[:,1,:,:], axis=0).astype('float32')
         elif len(sh) == 3:
-            self.image = np.amax(self.imageData[:,:,:], axis = 0).astype(float32)
+            self.image = np.amax(self.imageData[:, :, :], axis=0).astype('float32')
         self.paintImage(image=self.image, focus=False)
 
     def stackOp_normmax(self): # normalized maximum
@@ -1765,13 +1795,13 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.imageLevels = levels[-1]
         if len(id_shape) == 4:
             plane = 1
-            amaxd = np.amax(self.imageData[:,plane,:,:], axis=0).astype(float32)
-            amind = np.amin(self.imageData[:,plane,:,:], axis=0).astype(float32)
-            id = np.floor((levels[levindex]/amaxd)*(self.imageData[:,plane,:,:].astype(float32)-amind))
+            amaxd = np.amax(self.imageData[:, plane, :, :], axis=0).astype('float32')
+            amind = np.amin(self.imageData[:, plane, :, :], axis=0).astype('float32')
+            id = np.floor((levels[levindex]/amaxd)*(self.imageData[:, plane, :, :].astype('float32')-amind))
         elif len(id_shape) == 3:
-            amaxd = np.amax(self.imageData[:,:,:], axis=0).astype(float32)
-            amind = np.amin(self.imageData[:,:,:], axis=0).astype(float32)
-            id = np.floor((levels[levindex]/amaxd)*(self.imageData[:,:,:].astype(float32)-amind))
+            amaxd = np.amax(self.imageData[:, :, :], axis=0).astype('float32')
+            amind = np.amin(self.imageData[:, :, :], axis=0).astype('float32')
+            id = np.floor((levels[levindex]/amaxd)*(self.imageData[:, :, :].astype('float32')-amind))
         self.image = np.amax(id, axis = 0)
         id=[]
         self.paintImage(image=self.image, focus=False)
@@ -1799,7 +1829,7 @@ class pbm_ImageAnalysis(AnalysisModule):
 
     def stackOp_restore(self):
         """Redraw the original image stack."""
-        self.paintImage(updateTools = True, focus=True) # return to the original imagedata
+        self.paintImage(updateTools=True, focus=True)  # return to the original imagedata
 
 #----------------------Image Processing methods ----------------
 # Includes bleach correction, filtering (median and gaussian), and deltaF/F calculation
@@ -1814,7 +1844,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         b_corr = np.zeros(imshape[0])
         Fits = Fitting.Fitting()
         for k in range(0, imshape[0]):
-            tc_bleach[k] = np.mean(self.imageData[k,:,:])
+            tc_bleach[k] = np.mean(self.imageData[k, :, :])
         dt  = np.mean(np.diff(self.imageTimes)) # sampling rate, seconds
         endT = np.amax(self.imageTimes)
         mFluor = tc_bleach[0]
@@ -1823,7 +1853,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         if bleachmode == 'exp2':
             # use a double exponential fit
             (fpar, xf, yf, names) = Fits.FitRegion([0], 0, fitx, tc_bleach, 0.0, np.amax(fitx),
-                                               fitFunc = 'exp2', fitPars = [0.9, 0.5, endT/5.0, 0.5, endT/2.0],
+                                               fitFunc = 'exp2', fitPars=[0.9, 0.5, endT/5.0, 0.5, endT/2.0],
                                                plotInstance = None)
     #        (a0, a1, tau) = Fits.expfit(fitx, tc_bleach)
     #        print("fit result = a0: %f   a1: %f   tau: %f\n", (a0, a1, tau))
@@ -2718,8 +2748,8 @@ class pbm_ImageAnalysis(AnalysisModule):
             print cbar
             print "ROI: %dnbar: " % (roi)
             print nbar
-            MPlots.PlotLine(self.plots[roi], self.imageTimes, cbar, color = 'black',
-                            dataID = ('%s%d' % (dataIDString, roi)))
+#            MPlots.PlotLine(self.plots[roi], self.imageTimes, cbar, color = 'black',
+#                            dataID = ('%s%d' % (dataIDString, roi)))
         print "finis"
 
 # Use matlab to do the analysis with J. Vogelstein's code, store result on disk
@@ -2748,7 +2778,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             timage = (255*self.imageData[i,:,:]/maximg).astype('uint8')
             affineMat = cv2.estimateRigidTransform(refimg, timage, False)
             print timage.shape, self.imageData[i].shape
-            self.imageData[i,:,:] = cv2.warpAffine(timage, affineMat, dsize=timage.shape, borderMode = cv2.BORDER_REPLICATE).astype('float32')*maximg/255.
+            self.imageData[i,:,:] = cv2.warpAffine(timage, affineMat, dsize=timage.shape, borderMode = cv2.BORDER_REPLICATE).astype(float32)*maximg/255.
             #x = scipy.ndimage.interpolation.affine_transform(self.imageData[i,:,:], affineMat[0:2,0:2] )
         self.updateAvgStdImage()        
         
@@ -2794,7 +2824,7 @@ class pbm_ImageAnalysis(AnalysisModule):
     
         #initialize result stack:
         outstack = []
-        indx = np.zeros( imgstack[0].shape, dtype='bool') + True
+        indx = np.zeros(imgstack[0].shape, dtype='bool') + True
     
         imgN = 0
         #  print imgstack.shape
