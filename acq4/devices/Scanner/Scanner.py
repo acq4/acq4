@@ -5,7 +5,7 @@ from acq4.Manager import logMsg, logExc
 from acq4.util.Mutex import Mutex, MutexLocker
 from DeviceGui import ScannerDeviceGui
 from TaskGui import ScannerTaskGui
-from ScanProgramGenerator import *
+from .ScanProgram import ScanProgram 
 import os, pickle 
 import acq4.util.ptime as ptime
 from acq4.util.debug import *
@@ -459,8 +459,7 @@ class ScannerTask(DeviceTask):
         self.cmd['yCommand'][~mask] = offPos[1]
         
     def generateProgramArrays(self, command):
-        generator = ScanProgramGenerator(self.dev, command)
-        arr = generator.generate()
+        arr = ScanProgram.generateVoltageArray(self.dev, command)
         self.cmd['xCommand'] = arr[0] ## arrays of voltage values
         self.cmd['yCommand'] = arr[1]
 

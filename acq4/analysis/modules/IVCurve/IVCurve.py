@@ -23,37 +23,7 @@ import re
 import os.path
 import itertools
 import functools
-
-try:
-    import matplotlib as MP
-    from matplotlib.ticker import FormatStrFormatter
-    import matplotlib.pyplot as pylab
-    import matplotlib.gridspec as gridspec
-    import matplotlib.gridspec as GS
-    HAVE_MPL = True
-except ImportError:
-    HAVE_MPL = False
-
-
-if HAVE_MPL:
-    MP.use('TKAgg')
-    # Do not modify the following code
-    # sets up matplotlib with sans-serif plotting...
-
-
-
-    pylab.rcParams['text.usetex'] = True
-    pylab.rcParams['interactive'] = False
-    pylab.rcParams['font.family'] = 'sans-serif'
-    pylab.rcParams['font.sans-serif'] = 'Arial'
-    pylab.rcParams['mathtext.default'] = 'sf'
-    pylab.rcParams['figure.facecolor'] = 'white'
-    # next setting allows pdf font to be readable in Adobe Illustrator
-    pylab.rcParams['pdf.fonttype'] = 42
-    pylab.rcParams['text.dvipnghack'] = True
-    # to here (matplotlib stuff - touchy!)
-
-stdFont = 'Arial'
+import acq4.util.matplotlibexporter as matplotlibExporter
 
 import acq4.analysis.tools.Utility as Utility   # pbm's utilities...
 import acq4.analysis.tools.Fitting as Fitting   # pbm's fitting stuff...
@@ -82,6 +52,7 @@ class IVCurve(AnalysisModule):
         AnalysisModule.__init__(self, host)
 
         self.loaded = None
+        self.filename = None
         self.dirsSet = None
         self.lrss_flag = True   # show is default
         self.lrpk_flag = True
@@ -130,18 +101,23 @@ class IVCurve(AnalysisModule):
          # grab input form the "Ctrl" window
         self.ctrl.IVCurve_Update.clicked.connect(self.updateAnalysis)
         self.ctrl.IVCurve_PrintResults.clicked.connect(self.printAnalysis)
-        self.ctrl.IVCurve_MPLExport.clicked.connect(self.matplotlibExport)
-        if not HAVE_MPL:
+        if not matplotlibExporter.HAVE_MPL:
             self.ctrl.IVCurve_MPLExport.setEnabled = False  # make button inactive
+#        self.ctrl.IVCurve_MPLExport.clicked.connect(self.matplotlibExport)
+        else:
+            self.ctrl.IVCurve_MPLExport.clicked.connect(
+                    functools.partial(matplotlibExporter.matplotlibExport, gridlayout=self.gridLayout,
+                                      title=self.filename))
         self.ctrl.IVCurve_KeepAnalysis.clicked.connect(self.resetKeepAnalysis)
         self.ctrl.IVCurve_getFileInfo.clicked.connect(self.get_file_information)
         [self.ctrl.IVCurve_RMPMode.currentIndexChanged.connect(x)
          for x in [self.update_rmpAnalysis, self.countSpikes]]
         self.ctrl.dbStoreBtn.clicked.connect(self.dbStoreClicked)
-        self.clearResults()
+        self.clear_results()
         self.layout = self.getElement('Plots', create=True)
 
-         # instantiate the graphs using a gridLayout
+
+        # instantiate the graphs using a gridLayout (also facilitates matplotlib export; see export routine below)
         self.data_plot = pg.PlotWidget()
         self.gridLayout.addWidget(self.data_plot, 0, 0, 3, 1)
         self.label_up(self.data_plot, 'T (s)', 'V (V)', 'Data')
@@ -168,8 +144,6 @@ class IVCurve(AnalysisModule):
         for row, s in enumerate([20, 10, 10, 10]):
             self.gridLayout.setRowStretch(row, s)
 
-        self.window_plots={'data': self.data_plot, 'cmd': self.cmd_plot, 'rmp': self.RMP_plot,
-                           'fi': self.fiPlot, 'fsl': self.fslPlot, 'iv': self.IV_plot}
 
      #    self.tailPlot = pg.PlotWidget()
      #    self.gridLayout.addWidget(self.fslPlot, 3, 1, 1, 1)
@@ -178,19 +152,21 @@ class IVCurve(AnalysisModule):
          # Add a color scale
         self.color_scale = pg.GradientLegend((20, 150), (-10, -10))
         self.data_plot.scene().addItem(self.color_scale)
+        self.ctrl.pushButton.clicked.connect(functools.partial(self.initialize_regions,
+                                                                             reset=True))
 
-
-    def clearResults(self):
+    def clear_results(self):
         """
-        clearResults resets variables.
+        clear results resets variables.
 
-        This is typically needed everytime a new data set is loaded.
+        This is typically needed every time a new data set is loaded.
         """
         self.filename = ''
-        self.Rin = 0.0
+        self.r_in = 0.0
         self.tau = 0.0
-        self.AdaptRatio = 0.0
+        self.adapt_ratio = 0.0
         self.traces = None
+        self.spikes_counted = False
         self.nospk = []
         self.spk = []
         self.cmd = []
@@ -202,56 +178,10 @@ class IVCurve(AnalysisModule):
         self.fisi = []  # first isi
         self.ar = []  # adaptation ratio
         self.rmp = []  # resting membrane potential during sequence
+        self.analysis_summary={}
 
     def resetKeepAnalysis(self):
         self.keep_analysis_count = 0  # reset counter.
-
-
-     ######
-     # The next set of short routines control showing and hiding of regions
-     # in the plot of the raw data (traces)
-     ######
-    def showhide_lrss(self, flagvalue):
-        if flagvalue:
-            self.lrss.show()
-            self.ctrl.IVCurve_showHide_lrss.setCheckState(QtCore.Qt.Checked)
-        else:
-            self.lrss.hide()
-            self.ctrl.IVCurve_showHide_lrss.setCheckState(QtCore.Qt.Unchecked)
-
-    def showhide_lrpk(self, flagvalue):
-        if flagvalue:
-            self.lrpk.show()
-            self.ctrl.IVCurve_showHide_lrpk.setCheckState(QtCore.Qt.Checked)
-        else:
-            self.lrpk.hide()
-            self.ctrl.IVCurve_showHide_lrpk.setCheckState(QtCore.Qt.Unchecked)
-
-    def showhide_lrtau(self, flagvalue):
-        if flagvalue:
-            self.lrtau.show()
-            self.ctrl.IVCurve_showHide_lrtau.setCheckState(QtCore.Qt.Checked)
-        else:
-            self.lrtau.hide()
-            self.ctrl.IVCurve_showHide_lrtau.\
-                setCheckState(QtCore.Qt.Unchecked)
-
-    def showhide_lrrmp(self, flagvalue):
-        if flagvalue:
-            self.lrrmp.show()
-            self.ctrl.IVCurve_showHide_lrrmp.setCheckState(QtCore.Qt.Checked)
-        else:
-            self.lrrmp.hide()
-            self.ctrl.IVCurve_showHide_lrrmp.\
-                setCheckState(QtCore.Qt.Unchecked)
-
-    def showhide_leak(self, flagvalue):
-        if flagvalue:
-            self.lrleak.show()
-            self.ctrl.IVCurve_subLeak.setCheckState(QtCore.Qt.Checked)
-        else:
-            self.lrleak.hide()
-            self.ctrl.IVCurve_subLeak.setCheckState(QtCore.Qt.Unchecked)
 
     def show_or_hide(self, lrregion=None, forcestate=None):
         """
@@ -283,15 +213,7 @@ class IVCurve(AnalysisModule):
                 region['state'].setChecked(QtCore.Qt.Unchecked)
                 region['shstate'] = False
 
-    def uniq(self, inlist):
-         # order preserving detection of unique values in a list
-        uniques = []
-        for item in inlist:
-            if item not in uniques:
-                uniques.append(item)
-        return uniques
-
-    def initialize_regions(self):
+    def initialize_regions(self, reset=False):
         """
         initialize_regions sets the linear regions on the displayed data
 
@@ -315,7 +237,7 @@ class IVCurve(AnalysisModule):
                                       'start': self.ctrl.IVCurve_LeakMin,
                                       'stop': self.ctrl.IVCurve_LeakMax,
                                       'updater': self.updateAnalysis,
-                                      'units': 'ms'}
+                                      'units': 'pA'}
             self.ctrl.IVCurve_subLeak.region = self.regions['lrleak']['region']  # save region with checkbox
             self.regions['lrwin0'] = {'name': 'win0',  # peak window
                                       'region': pg.LinearRegionItem([0, 1],
@@ -375,51 +297,27 @@ class IVCurve(AnalysisModule):
             self.regions['lrwin1']['region'].setZValue(100)
             self.regions['lrtau']['region'].setZValue(1000)
             self.regions['lrrmp']['region'].setZValue(1000)
+            self.regions['lrleak']['region'].setZValue(1000)
+
+            for regkey, reg in self.regions.items():  # initialize region states
+                self.show_or_hide(lrregion=regkey, forcestate=reg['shstate'])
+
             for regkey, reg in self.regions.items():
-                print reg
                 reg['plot'].addItem(reg['region'])
                 reg['state'].clicked.connect(functools.partial(self.show_or_hide,
                                                                              lrregion=regkey))
                 if reg['updater'] is not None:
                     reg['region'].sigRegionChangeFinished.connect(
                     functools.partial(reg['updater'], region=reg['name']))
-                # if self.regions[reg]['mode'] is not None:
-                #     self.regions[reg]['mode'].currentIndexChanged.connect(self.interactive_analysis)
-            self.regions_exist = True
+            # if self.regions[reg]['mode'] is not None:
+            #     self.regions[reg]['mode'].currentIndexChanged.connect(self.interactive_analysis)
+        if reset:
+            for regkey, reg in self.regions.items():  # initialize region states
+                self.show_or_hide(lrregion=regkey, forcestate=reg['shstate'])
         for reg in self.regions.itervalues():
             for s in ['start', 'stop']:
                 reg[s].setSuffix(' ' + reg['units'])
-
-    def clear_results(self):
-        """
-        clearResults resets variables.
-
-        This is typically needed every time a new data set is loaded.
-        """
-        self.filename = ''
-        self.r_in = 0.0
-        self.tau = 0.0
-        self.adapt_ratio = 0.0
-        self.traces = None
-        self.spikes_counted = False
-        self.nospk = []
-        self.spk = []
-        self.cmd = []
-        self.sequence = {}
-        self.measure = {'rmp': [], 'rmpcmd': [],
-                        'leak': [],
-                        'win1': [], 'win1cmd': [], 'win1off': [], 'win1on': [],
-                        'winaltcmd': [],
-                        'win2': [], 'win2cmd': [], 'win2off': [], 'win2on': [],
-                        'win2altcmd': [],
-                        }
-        #for m in self.measure.keys():
-        #    self.measure[m] = []
-        self.rmp = []  # resting membrane potential during sequence
-        self.analysis_summary = {}
-        self.win2IV = {}
-        self.win1fits = None
-        self.analysis_parameters = {}
+        self.regions_exist = True
 
     def get_file_information(self, default_dh=None):
         """
@@ -718,8 +616,6 @@ class IVCurve(AnalysisModule):
         self.data_plot.disableAutoRange()
         self.cmd_plot.disableAutoRange()
         cmdindxs = np.unique(self.cmd)  # find the unique voltages
-        print cmdindxs
-        print len(self.cmd)
         colindxs = [int(np.where(cmdindxs == self.cmd[i])[0]) for i in range(len(self.cmd))]  # make a list to use
         nskip = 1
         # print 'ntr, skip: ', ntr, nskip
@@ -818,7 +714,7 @@ class IVCurve(AnalysisModule):
         The following variables are set:
         self.spikecount: a 1-D numpy array of spike counts, aligned with the
             current (command)
-        self.AdaptRatio: the adaptation ratio of the spike train
+        self.adapt_ratio: the adaptation ratio of the spike train
         self.fsl: a numpy array of first spike latency for each command level
         self.fisi: a numpy array of first interspike intervals for each
             command level
@@ -878,7 +774,7 @@ class IVCurve(AnalysisModule):
                                            0.0, self.tstart)
         iAR = np.where(ar > 0)
         ARmean = np.mean(ar[iAR])  # only where we made the measurement
-        self.AdaptRatio = ARmean
+        self.adapt_ratio = ARmean
         self.ctrl.IVCurve_AR.setText(u'%7.3f' % (ARmean))
         fisi = fisi*1.0e3
         fsl = fsl*1.0e3
@@ -952,8 +848,8 @@ class IVCurve(AnalysisModule):
         #         "Sequence", "RMP(mV)", " Rin(Mohm)",  "tau(ms)",
         #         "ARatio", "tau2(ms)"))
         # print ("%14s,%14s,%16s,%20s,%8.1f,%8.1f,%8.2f,%8.3f,%8.2f" %
-        #        (date, cell, proto, seq, self.Rmp*1000., self.Rin*1e-6,
-        #         self.tau*1000., self.AdaptRatio, self.tau2*1000))
+        #        (date, cell, proto, seq, self.Rmp*1000., self.r_in*1e-6,
+        #         self.tau*1000., self.adapt_ratio, self.tau2*1000))
         # print '-'*80
 
     def update_Tau_membrane(self, peak_time=None, printWindow=True, whichTau=1):
@@ -1017,7 +913,7 @@ class IVCurve(AnalysisModule):
             Based on analysis in Fujino and Oertel, J. Neuroscience 2001,
             to type cells based on different Ih kinetics and magnitude.
         """
-        if self.ctrl.IVCurve_showHide_lrtau.isChecked() is not True:
+        if not self.ctrl.IVCurve_showHide_lrtau.isChecked():
             return
         bovera = 0.0
         rgn = self.regions['lrtau']['region'].getRegion()
@@ -1037,7 +933,6 @@ class IVCurve(AnalysisModule):
         target = self.traces[amin]
          # get Vrmp -  # rmp approximation.
         vrmp = np.median(target['Time': 0.0:self.tstart-0.005])*1000.
-        self.ctrl.IVCurve_vrmp.setText('%8.2f' % (vrmp))
         self.neg_vrmp = vrmp
          # get peak and steady-state voltages
         pkRgn = self.regions['lrwin0']['region'].getRegion()
@@ -1165,10 +1060,10 @@ class IVCurve(AnalysisModule):
             self.cmd = commands[nospk]
              # compute Rin from the SS IV:
             if len(self.cmd) > 0 and len(self.ivss) > 0:
-                self.Rin = np.max(np.diff
+                self.r_in = np.max(np.diff
                                      (self.ivss)/np.diff(self.cmd))
                 self.ctrl.IVCurve_Rin.setText(u'%9.1f M\u03A9'
-                                              % (self.Rin*1.0e-6))
+                                              % (self.r_in*1.0e-6))
             else:
                 self.ctrl.IVCurve_Rin.setText(u'No valid points')
         self.yleak = np.zeros(len(self.ivss))
@@ -1276,7 +1171,9 @@ class IVCurve(AnalysisModule):
         self.ivbaseline = data1.mean(axis=1)  # all traces
         self.ivbaseline_cmd = commands
         self.cmd = commands
-        self.averageRMP = np.mean(self.ivbaseline)
+        self.averageRMP = np.mean(self.ivbaseline)*1e3  # convert to mV
+        self.ctrl.IVCurve_vrmp.setText('%8.2f' % (self.averageRMP))
+
         self.update_RMPPlot()
 
     def make_map_symbols(self):
@@ -1477,115 +1374,6 @@ class IVCurve(AnalysisModule):
             self.peakmode = self.ctrl.IVCurve_PeakMode.currentText()
             self.update_pkAnalysis()
 
-    def cleanRepl(self, matchobj):
-        """
-            Clean up a directory name so that it can be written to a
-            matplotlib title without encountering LaTeX escape sequences
-            Replace backslashes with forward slashes
-            replace underscores (subscript) with escaped underscores
-        """
-        if matchobj.group(0) == '\\':
-            return '/'
-        if matchobj.group(0) == '_':
-            return '\_'
-        if matchobj.group(0) == '/':
-            return '/'
-        else:
-            return ''
-
-    def matplotlibExport(self):
-        """
-        Make a matplotlib window that shows the current data in the same
-        format as the pyqtgraph window
-        Probably you would use this for publication purposes.
-        """
-
-        if not HAVE_MPL:
-            raise Exception("Method requires matplotlib; not importable.")
-
-        self.window_plots = {'data': self.data_plot, 'cmd': self.cmd_plot, 'RMP': self.RMP_plot,
-                           'FI': self.fiPlot, 'FSL': self.fslPlot, 'IV': self.IV_plot}
-        fig = pylab.figure()
-        pylab.rcParams['text.usetex'] = False
-         # escape filename information so it can be rendered by removing
-         # common characters that trip up latex...:
-        escs = re.compile('[\\\/_]')
-        tiname = '%r' % self.filename
-        tiname = re.sub(escs, self.cleanRepl, tiname)
-        fig.suptitle(r''+tiname[1:-1])
-        pylab.autoscale(enable=True, axis='both', tight=None)
-        if self.data_mode not in self.ic_modes or self.time_base is None:
-            iscale = 1e3
-        else:
-            iscale = 1e12
-        self.mplax = {}
-        gs = gridspec.GridSpec(4, 2)
-        self.mplax['data'] = pylab.subplot(gs[0:3, 0])
-        self.mplax['cmd'] = pylab.subplot(gs[3, 0])
-        self.mplax['IV'] = pylab.subplot(gs[0, 1])
-        self.mplax['RMP'] = pylab.subplot(gs[1, 1])
-        self.mplax['FI'] = pylab.subplot(gs[2, 1])
-        self.mplax['FSL'] = pylab.subplot(gs[3, 1])
-        gs.update(wspace=0.25, hspace=0.5)
-        self.mplax['data'].set_title('Data', verticalalignment='top', size=11)
-
-        for w in self.window_plots.keys():
-            self.export_panel(self.window_plots[w], self.mplax[w])
-        pylab.draw()
- #       pylab.savefig(os.path.join(self.commonPrefix, self.protocolfile))
-        pylab.show()
-
-
-    def export_panel(self, pgitem, ax):
-        """
-        export_panel writes the contents of one pyqtgraph window into a specified
-        matplotlib axis item
-        :param fileName:
-        :return:
-        """
-        # get labels from the pyqtgraph graphic item
-        plitem = pgitem.getPlotItem()
-        xlabel = plitem.axes['bottom']['item'].label.toPlainText()
-        ylabel = plitem.axes['left']['item'].label.toPlainText()
-        title = plitem.titleLabel.text
-        fn = pg.functions
-        ax.clear()
-        self.cleanAxes(ax)
-        #ax.grid(True)
-
-        for item in plitem.curves:
-            x, y = item.getData()
-            opts = item.opts
-            pen = fn.mkPen(opts['pen'])
-            if pen.style() == QtCore.Qt.NoPen:
-                linestyle = ''
-            else:
-                linestyle = '-'
-            color = tuple([c/255. for c in fn.colorTuple(pen.color())])
-            symbol = opts['symbol']
-            if symbol == 't':
-                symbol = '^'
-            symbolPen = fn.mkPen(opts['symbolPen'])
-            symbolBrush = fn.mkBrush(opts['symbolBrush'])
-            markeredgecolor = tuple([c/255. for c in fn.colorTuple(symbolPen.color())])
-            markerfacecolor = tuple([c/255. for c in fn.colorTuple(symbolBrush.color())])
-            markersize = opts['symbolSize']
-
-            if opts['fillLevel'] is not None and opts['fillBrush'] is not None:
-                fillBrush = fn.mkBrush(opts['fillBrush'])
-                fillcolor = tuple([c/255. for c in fn.colorTuple(fillBrush.color())])
-                ax.fill_between(x=x, y1=y, y2=opts['fillLevel'], facecolor=fillcolor)
-
-            pl = ax.plot(x, y, marker=symbol, color=color, linewidth=pen.width(),
-                    linestyle=linestyle, markeredgecolor=markeredgecolor, markerfacecolor=markerfacecolor,
-                    markersize=markersize)
-            xr, yr = plitem.viewRange()
-            ax.set_xbound(*xr)
-            ax.set_ybound(*yr)
-        ax.set_xlabel(xlabel)  # place the labels.
-        ax.set_ylabel(ylabel)
-
-
     def dbStoreClicked(self):
         """
         Store data into the current database for further analysis
@@ -1606,7 +1394,7 @@ class IVCurve(AnalysisModule):
 
         rec = {
             'IVCurve_rmp': self.neg_vrmp/1000.,
-            'IVCurve_rinp': self.Rin,
+            'IVCurve_rinp': self.r_in,
             'IVCurve_taum': self.tau,
             'IVCurve_neg_cmd': self.neg_cmd,
             'IVCurve_neg_pk': self.neg_pk,
@@ -1633,68 +1421,4 @@ class IVCurve(AnalysisModule):
         plot.setLabel('bottom', xtext)
         plot.setLabel('left', ytext)
         plot.setTitle(title)
-
-# for matplotlib cleanup:
-# These were borrowed from Manis' "PlotHelpers.py"
-#
-    def cleanAxes(self, axl):
-        if type(axl) is not list:
-            axl = [axl]
-        for ax in axl:
-            for loc, spine in ax.spines.iteritems():
-                if loc in ['left', 'bottom']:
-                    pass
-                elif loc in ['right', 'top']:
-                    spine.set_color('none')  # do not draw the spine
-                else:
-                    raise ValueError('Unknown spine location: %s' % loc)
-                 # turn off ticks when there is no spine
-                ax.xaxis.set_ticks_position('bottom')
-                # stopped working in matplotlib 1.10
-                ax.yaxis.set_ticks_position('left')
-            self.update_font(ax)
-
-    def update_font(self, axl, size=6, font=stdFont):
-        if type(axl) is not list:
-            axl = [axl]
-        fontProperties = {'family': 'sans-serif', 'sans-serif': [font],
-                          'weight': 'normal', 'font-size': size}
-        for ax in axl:
-            for tick in ax.xaxis.get_major_ticks():
-                tick.label1.set_family('sans-serif')
-                tick.label1.set_fontname(stdFont)
-                tick.label1.set_size(size)
-
-            for tick in ax.yaxis.get_major_ticks():
-                tick.label1.set_family('sans-serif')
-                tick.label1.set_fontname(stdFont)
-                tick.label1.set_size(size)
-            # xlab = ax.axes.get_xticklabels()
-            # print xlab
-            # print dir(xlab)
-            # for x in xlab:
-            #     x.set_fontproperties(fontProperties)
-            # ylab = ax.axes.get_yticklabels()
-            # for y in ylab:
-            #     y.set_fontproperties(fontProperties)
-            #ax.set_xticklabels(ax.get_xticks(), fontProperties)
-            #ax.set_yticklabels(ax.get_yticks(), fontProperties)
-            ax.xaxis.set_smart_bounds(True)
-            ax.yaxis.set_smart_bounds(True)
-            ax.tick_params(axis='both', labelsize=9)
-
-    def formatTicks(self, axl, axis='xy', fmt='%d', font='Arial'):
-        """
-        Convert tick labels to intergers
-        to do just one axis, set axis = 'x' or 'y'
-        control the format with the formatting string
-        """
-        if type(axl) is not list:
-            axl = [axl]
-        majorFormatter = FormatStrFormatter(fmt)
-        for ax in axl:
-            if 'x' in axis:
-                ax.xaxis.set_major_formatter(majorFormatter)
-            if 'y' in axis:
-                ax.yaxis.set_major_formatter(majorFormatter)
 

@@ -592,6 +592,50 @@ def interpolateArray(data, x, default=0.0):
     return result
 
 
+def subArray(data, offset, shape, stride):
+    """
+    Unpack a sub-array from *data* using the specified offset, shape, and stride.
+    
+    Note that *stride* is specified in array elements, not bytes.
+    For example, we have a 2x3 array packed in a 1D array as follows::
+    
+        data = [_, _, 00, 01, 02, _, 10, 11, 12, _]
+        
+    Then we can unpack the sub-array with this call::
+    
+        subArray(data, offset=2, shape=(2, 3), stride=(4, 1))
+        
+    ..which returns::
+    
+        [[00, 01, 02],
+         [10, 11, 12]]
+         
+    This function operates only on the first axis of *data*. So changing 
+    the input in the example above to have shape (10, 7) would cause the
+    output to have shape (2, 3, 7).
+    """
+    #data = data.flatten()
+    data = data[offset:]
+    shape = tuple(shape)
+    stride = tuple(stride)
+    extraShape = data.shape[1:]
+    #print data.shape, offset, shape, stride
+    for i in range(len(shape)):
+        mask = (slice(None),) * i + (slice(None, shape[i] * stride[i]),)
+        newShape = shape[:i+1]
+        if i < len(shape)-1:
+            newShape += (stride[i],)
+        newShape += extraShape 
+        #print i, mask, newShape
+        #print "start:\n", data.shape, data
+        data = data[mask]
+        #print "mask:\n", data.shape, data
+        data = data.reshape(newShape)
+        #print "reshape:\n", data.shape, data
+    
+    return data
+
+
 def transformToArray(tr):
     """
     Given a QTransform, return a 3x3 numpy array.

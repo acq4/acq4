@@ -34,8 +34,11 @@ import numpy as NP
 import metaarray as MA
 import time
 import pprint
-from lib.modules.imagerTemplate import Ui_Form
 
+from .imagerTemplate import Ui_Form
+from acq4.devices.Scanner.ScanProgram.rect import ScannerUtility
+
+SUF = ScannerUtility()
 
 """
 Create some useful configurations for the user.

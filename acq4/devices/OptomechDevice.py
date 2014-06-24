@@ -219,17 +219,18 @@ class OptomechDevice(object):
             if np.isscalar(obj[0]):
                 obj = QtCore.QPointF(*obj)
             elif isinstance(obj[0], np.ndarray):
-                obj = np.vstack(obj)
+                obj = np.concatenate([x[np.newaxis, ...] for x in obj])
             else:
                 raise Exception ('Cannot map--object of type %s ' % str(type(obj[0])))
         if isinstance(obj, QtCore.QPointF):
             return tr.map(obj)
         elif isinstance(obj, np.ndarray):
-            m = np.array(tr.copyDataTo()).reshape(4,4)
-            m1 = m[:2,:2, np.newaxis]
-            obj = obj[np.newaxis,...]
-            m2 = (m1*obj).sum(axis=0)
-            m2 += m[:2,3,np.newaxis]
+            # m = np.array(tr.copyDataTo()).reshape(4,4)
+            # m1 = m[:2,:2, np.newaxis]
+            # obj = obj[np.newaxis,...]
+            # m2 = (m1*obj).sum(axis=0)
+            # m2 += m[:2,3,np.newaxis]
+            m2 = pg.transformCoordinates(tr, obj)
             return m2
         else:
             raise Exception('Cannot map--object of type %s ' % str(type(obj))) 
