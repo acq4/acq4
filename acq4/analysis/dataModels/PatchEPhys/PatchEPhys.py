@@ -405,18 +405,24 @@ def getCellInfo(dh):
 
 def getACSF(dh):
     dayInfo = getDayInfo(dh)
-    return dayInfo.get('solution', '')
+    if dayInfo is not None:
+        return dayInfo.get('solution', '')
+    return None
     
 def getInternalSoln(dh):
     dayInfo = getDayInfo(dh)
-    return dayInfo.get('internal', '')
+    if dayInfo is not None:
+        return dayInfo.get('internal', '')
+    return None
 
 def getTemp(dh):
     if dh.isFile():
         dh = dh.parent()
     temp = dh.info().get(('Temperature','BathTemp'), None)
     if temp is None:
-        temp = getDayInfo(dh).get('temperature', '')
+        dayinfo = getDayInfo(dh)
+        if dayinfo is not None:
+            temp = getDayInfo(dh).get('temperature', '')
     return temp
 
 def getCellType(dh):

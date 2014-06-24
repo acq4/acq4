@@ -465,7 +465,10 @@ class IVCurve(AnalysisModule):
         self.analysis_summary['Internal'] = self.dataModel.getInternalSoln(dh)
         self.analysis_summary['Temp'] = self.dataModel.getTemp(dh)
         self.analysis_summary['CellType'] = self.dataModel.getCellType(dh)
-        ct = self.analysis_summary['Cell']['__timestamp__']
+        if self.analysis_summary['Cell'] is not None:
+            ct = self.analysis_summary['Cell']['__timestamp__']
+        else:
+            ct = 0.
         pt = dh.info()['__timestamp__']
         self.analysis_summary['ElapsedTime'] = pt-ct  # save elapsed time between cell opening and protocol start
         (date, sliceid, cell, proto, p3) = self.file_cell_protocol()
@@ -558,7 +561,8 @@ class IVCurve(AnalysisModule):
                 # Check if there is no clamp file for this iteration of the protocol
                 # Usually this indicates that the protocol was stopped early.
                 if data_file_handle is None:
-                    raise Exception('IVCurve.loadFileRequested: Missing data in %s, element: %d' % (directory_name, i))
+                    print 'IVCurve.loadFileRequested: Missing data in %s, element: %d' % (directory_name, i)
+                    #raise Exception('IVCurve.loadFileRequested: Missing data in %s, element: %d' % (directory_name, i))
                     continue
             except:
                 raise Exception("Error loading data for protocol %s:"
