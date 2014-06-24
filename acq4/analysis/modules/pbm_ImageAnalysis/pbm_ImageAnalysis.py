@@ -26,8 +26,10 @@ This module provides:
 from PyQt4 import QtGui, QtCore, Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
-import os, shutil, os.path
-import operator
+import os
+import shutil
+import csv
+import os.path
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.debug as debug
 import acq4.util.DatabaseGui as DatabaseGui
@@ -40,7 +42,7 @@ import ctrlTemplateAnalysis
 import ctrlTemplatePhysiology
 from acq4.analysis.tools import Utility
 from acq4.analysis.tools import Fitting
-from acq4.analysis.tools import PlotHelpers as PH # matlab plotting helpers
+from acq4.analysis.tools import PlotHelpers as PH  # matlab plotting helpers
 from acq4.util import functions as FN
 from acq4.util.HelpfulException import HelpfulException
 
@@ -49,7 +51,7 @@ try:
     import cv2.cv as cv
     openCVInstalled = True
 except:
-    openCVInstalled=False
+    openCVInstalled = False
     
 #import smc as SMC # Vogelstein's OOPSI analysis for calcium transients
 
@@ -58,17 +60,16 @@ from mpl_toolkits.axes_grid1 import AxesGrid
 
 print "Imports in pbm_imagealaysis done"
 
-""" 
-We use matplotlib/pylab for *some* figure generation.
-"""
+#
+# We use matplotlib/pylab for *some* figure generation.
+#
+
 class pbm_ImageAnalysis(AnalysisModule):
     def __init__(self, host, flowchartDir=None, dbIdentity="ImageAnalysis"):
         AnalysisModule.__init__(self, host)
         
         self.dbIdentity = dbIdentity
-        #self.dbCtrl = DBCtrl(self, identity=self.dbIdentity)
-        #self.dbCtrl.storeBtn.clicked.connect(self.storeClicked)
-        
+
         # per-instance parameters:
         self.currentDataDirectory = None  # currently selected data directory (if valid)
         self.refImage = None  # Reference image data used for ratio calculations
@@ -88,7 +89,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.physThreshLine = None
         self.ratioImages = False  # only set true once a ratio (reference) image is loaded
         self.ROIfig = None
-        self.baseImage=[]
+        self.baseImages = []
         self.viewFlag = False  # false if viewing movie, true if viewing fixed image
         self.referenceImage = []
         self.ratioImage = None
@@ -218,6 +219,10 @@ class pbm_ImageAnalysis(AnalysisModule):
         
 
     def initDataState(self):
+        """
+        Create clean data State (self.dataState) for new files
+        :return nothing:
+        """
         self.dataState = {'Loaded': False, 'bleachCorrection': False, 'Normalized': False,
                         'NType' : None, 'Structure': 'Flat', 'NTrials': 0, 'ratioLoaded': False}
         self.ctrl.ImagePhys_BleachInfo.setText('None')
@@ -227,6 +232,10 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.tc_bleach = []
 
     def setAnalogMode(self):
+        """
+        
+        :return:
+        """
         self.analogMode = True
         self.ctrlImageFunc.IA_Funcs.AnalogRadioBtn.checked(True)
         self.ctrlImageFUnc.IA_Funcs.DigitalRadioBtn.checked(False)
@@ -253,9 +262,9 @@ class pbm_ImageAnalysis(AnalysisModule):
                 self.viewFlag = True
 
         if self.dataState['Loaded'] is False:
-            return # no data - so skip this.
-        if view == 'Reference Image': 
-            self.imageView.setImage(self.baseImage)
+            return  # no data - so skip this.
+        if view == 'Reference Image':
+            self.imageView.setImage(np.mean(self.imageData[self.baseImages, :, :], axis=0))
             self.viewFlag = True
         if view == 'Average Image':
             self.imageView.setImage(self.aveImage)
@@ -291,7 +300,6 @@ class pbm_ImageAnalysis(AnalysisModule):
         if self.physLPFChanged:  # only update if the LPF filter has changed
             self.readPhysiology(self.currentDataDirectory)  # re-read in case LPF has changed
         c = 0
-#        print 'Roi in update: ', roi
         if self.currentRoi is None:
             return
         for img in self.normData:  # pull from all the normalized data arrays (in a list)
@@ -335,8 +343,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.makePhysROIPlot(dh, dlh)
         else:
             if len(dlh) > 1:
-                raise  HelpfulException("pbm_ImageAnalysis: loadFileRequested Error\nCan only load from single file", msgType='status')
-                return False
+                raise HelpfulException("pbm_ImageAnalysis: loadFileRequested Error\nCan only load from single file", msgType='status')
             else:
                 self.loadSingleFile(dh[0])
     
@@ -363,16 +370,8 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.nPhysPlots = len(dlh)
             c = 0
             r = 0
-            for i in range(0,self.MPRnrows*self.MPRncolumns,2):
-                self.MPPhysPlots[r,c].sharey = True
-                r = r + 2
-                if r >= self.MPRnrows:
-                    r = 0
-                    c += 1
-            c = 0
-            r = 0
-            for i in range(1,self.MPRnrows*self.MPRncolumns,2):
-                self.MPPhysPlots[r,c].sharey = True
+            for i in range(0, self.MPRnrows*self.MPRncolumns, 2):
+                self.MPPhysPlots[r, c].sharey = True
                 r = r + 2
                 if r >= self.MPRnrows:
                     r = 0
@@ -424,7 +423,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             dh = dh[0]
         self.currentFileName = dh.name()
         self.imageScaleUnit = 'pixels'
-        self.imageTimes = np.array([])
+        self.imageTimes = np.array(None)
         if self.dataStruct is 'flat':
             #print 'getting Flat data structure!'
             if dh.isFile():
@@ -443,9 +442,6 @@ class pbm_ImageAnalysis(AnalysisModule):
                 else:
                     raise Exception("No valid imaging data found")
                 self.clearPhysiologyInfo()  # clear the physiology data currently in memory to avoid confusion
-            # print dh
-            # print fhandle
-            self.rawData = []
             if not dh.isFile():
                 self.readPhysiology(dh)
             if self.downSample == 1:
@@ -460,44 +456,32 @@ class pbm_ImageAnalysis(AnalysisModule):
                 return False
             fi = self.ignoreFirst
 
-            self.imageData = img.view(np.ndarray) # load into rawData, clipping the first image if needed
-            self.rawData = self.imageData.copy()[fi:] # save the raw data.
-            # reduce image size if it is too big:
+            self.imageData = img.view(np.ndarray)  # load into rawData, clipping the first image if needed
+            self.rawData = self.imageData.copy()[fi:]  # save the raw data.
             self.imageData = self.imageData[fi:]
-            self.baseImage = self.imageData[0] # just to show after processing...
-           # print self.imageInfo
-           # print self.imageInfo[3]
-#            print len(self.imageInfo)
-#            for i in range(len(self.imageInfo)):
-#                print self.imageInfo
+            self.baseImages = range(1)  # identify which images to show as the "base image"
             if len(self.imageInfo) > 3 and 'Frame Time' in self.imageInfo[3].keys():
                 self.imageTimes = np.append(self.imageTimes, self.imageInfo[3]['Frame Time'])
-            #    print self.imageTimes
             else:
                 self.imageTimes = self.imageInfo[0].values()[1]
             self.imageTimes = self.imageTimes[fi:]
-           # print 'original: ', self.imageTimes.shape
             if self.downSample > 1:
                 self.imageTimes = self.imageTimes[0:-1:self.downSample]
             self.imagedT = np.mean(np.diff(self.imageTimes))
-           # print 'new: ', self.imageTimes.shape
-           # print 'dt: ', self.imagedT
-           # print self.imageData.shape
             self.imageView.setImage(self.imageData)
             self.dataState['Loaded'] = True
             self.dataState['Structure'] = 'Flat'
-          #  print 'rawdata shape: ', self.rawData.shape
             self.background = self.rawData.mean(axis=2).mean(axis=1)
             self.backgroundmean = self.background.mean(axis=0)
 
             #self.processData()
 
-        else: # interleaved data structure (Deepti Rao's calcium imaging data)
+        else:  # interleaved data structure (Deepti Rao's calcium imaging data)
             dirs = dh.subDirs()  # find out what kind of data we
             images = [[], [], [], []]
             ## Iterate over sequence
             minFrames = None
-            for d in dirs: # each of the directories contains a data set
+            for d in dirs:  # each of the directories contains a data set
                 d = dh[d]
                 try:
                     ind = d.info()[('Clamp1', 'amp')]
@@ -511,8 +495,8 @@ class pbm_ImageAnalysis(AnalysisModule):
                 if minFrames is None or img.shape[0] < minFrames:
                     minFrames = img.shape[0]
                 
-            self.rawData = []
-            self.imageData = []
+            self.rawData = np.array(None)
+            self.imageData = np.array(None)
 #            print "len images: %d " % (len(images))
             while len(images) > 0:
                 imgs = images.pop(0)
@@ -575,8 +559,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.calculateAllROIs()  # recompute the ROIS
         self.updateThisROI(self.lastROITouched)  # and make sure plot reflects current ROI (not old data)
         return True
-        
-        
+
     def getCSVFile(self):
         """ read the CSV file for the ROI timing data """
         fd = QtGui.QFileDialog(self)
@@ -593,14 +576,11 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.timepos = 0
             self.roilist = []
             firstline = csvfile.next()
-        
-
 
     def updateAvgStdImage(self):
         """ update the reference image types and then make sure display agrees.
         """
         self.aveImage = np.mean(self.imageData, axis=0)
-        #self.stdImage = scipy.stats.skew(self.imageData, axis=0)
         self.stdImage = np.std(self.imageData, axis=0)
         self.changeView()
 
@@ -692,7 +672,6 @@ class pbm_ImageAnalysis(AnalysisModule):
             nbigblocks += 1
         nframesperblock = bigblock/self.downSample
         print 'Reducing from %d frames to %d frames, downsample = %d ' % (sh[0], outframes, self.downSample)
-#        print "bigblock: %d  nbigblocks: %d  lastblock: %d   Frames Per Block: %d" % (bigblock, nbigblocks, nlastblock, nframesperblock)
         imt_out = np.empty((outframes, sh[1], sh[2]), dtype=np.float32)
         tfr = 0
         nfr = 0
@@ -1305,16 +1284,14 @@ class pbm_ImageAnalysis(AnalysisModule):
             yFlip_flag = True
             
         (sx, sy, px) = self.getImageScaling()
-        print sy
-        print px
         maxStr = np.abs(np.nanmax(self.IXC_Strength))
         minStr = np.nanmin(self.IXC_Strength)
         maxline = 4.0
         minline = 0.20
         threshold = self.ctrlImageFunc.IAFuncs_XCorrThreshold.value()
         nd = len(self.AllRois)
-        X=np.zeros(nd)
-        Y=np.zeros(nd)
+        X = np.zeros(nd)
+        Y = np.zeros(nd)
         for i in range(0, nd):
             wpos1 = [self.AllRois[i].pos().x(), self.AllRois[i].pos().y(),
                             self.AllRois[i].boundingRect().width(), self.AllRois[i].boundingRect().height()]
@@ -1344,15 +1321,15 @@ class pbm_ImageAnalysis(AnalysisModule):
                     if self.IXC_Strength[i,j] >= threshold:
                         pn = pg.mkPen(width=lw, color=[255, 128, 128, 255])
                         mcolor = 'tomato'
-                    elif self.IXC_Strength[i,j] <= threshold:
+                    else:  # self.IXC_Strength[i,j] <= threshold:
                         pn = pg.mkPen(width=lw, color=[128, 128, 255, 255])
                         mcolor = 'blue'
                     
                     if self.use_MPL:
                         self.MPL_plots.plot([x1, x2], [y1, y2], linewidth=lw, 
-                            linestyle = '-', color=mcolor, marker='o')
+                            linestyle='-', color=mcolor, marker='o')
                     else:
-                        plt.plot([x1, x2], [y1, y2], pen = pn)
+                        plt.plot([x1, x2], [y1, y2], pen=pn)
         
         if self.use_MPL:
             self.MPL_plots.set_xlim((0, sx))
@@ -1374,14 +1351,13 @@ class pbm_ImageAnalysis(AnalysisModule):
 
     def clearAllROI(self):
         """ remove all rois and all references to the rois """
-        for roi in self.AllRois:
+        for i, roi in enumerate(self.AllRois):
             roi.hide()
-            del roi
+
         self.AllRois = []
         self.nROI = 0
         self.FData = []  # FData is the raw ROI data before any corrections
         self.BFData = []  # ROI data after all corrections
-        rois = []
         self.lastROITouched = []
         self.ROI_Plot.clear()
         #self.clearPlots()
@@ -1390,38 +1366,36 @@ class pbm_ImageAnalysis(AnalysisModule):
         """ remove the currently (last) selected roi and all references to it,
         then select and display a new ROI """
         ourWidget = self.lastROITouched
-        if ourWidget in self.AllRois:
-            id = ourWidget.ID # get the id of the roi
-            self.AllRois.remove(ourWidget)  # remove it from our list
-            ourWidget.hide()
-            del ourWidget
-        else:
-            QtGui.QMessageBox.warning(self,
-                                      Qt.Qt.QString("Delete ROI - Error"),
-                                      "Last ROI was not in ROI list?")
+        if ourWidget not in self.AllRois:
+            raise Exception ("Delete ROI - Error: Last ROI was not in ROI list?")
+        id = ourWidget.ID # get the id of the roi
+        self.AllRois.remove(ourWidget)  # remove it from our list
+        ourWidget.hide()
+        del ourWidget
         self.nROI = len(self.AllRois)
         for roi in self.AllRois:
-            roi.ID = rois.index(roi) # renumber the roi list.
-        #print '# Rois after delete: %d' % len(rois)
+            roi.ID = rois.index(roi)  # renumber the roi list.
         if id < 0:
-            id = self.AllRois[0].ID # pick first
+            id = self.AllRois[0].ID  # pick first
         if id > self.nROI:
-            id = self.AllRois[-1].ID # pick last
-        #self.clearPlots() # need to redraw the plot list
-        self.FData=[]
-        self.BFData =[]
-        for roi in self.AllRois: # navigate the list one more time
-#            self.plotImageROIs(roi)
+            id = self.AllRois[-1].ID  # pick last
+        self.FData = []
+        self.BFData = []
+        for roi in self.AllRois:  # navigate the list one more time
             if id == roi.ID:
-                self.updateThisROI(roi) # display the next chosen ROI in the box below the image
+                self.updateThisROI(roi)  # display the next chosen ROI in the box below the image
         # now update the overall ROI plot
-        self.plotdata(yMinorTicks = 0, yMajorTicks=3,
+        self.plotdata(yMinorTicks=0, yMajorTicks=3,
                       yLabel=u'F0<sub>ROI %d</sub>')
 
     def addOneROI(self, pos=(0, 0), hw=None):
-        """ append one roi to the self.AllRois list, put it on the screen (scene), and
-        make sure it is actively connected to code. The return value lets us
-        handle the rois when we restore them """
+        """
+        append one roi to the self.AllRois list, put it on the screen (scene), and
+        make sure it is actively connected to code.
+        :param pos:  Initial roi posistion (tuple, (x, y))
+        :param hw:  Initial ROI height and position (tuple (h,w)). If not defined, will get from current roi default
+        :return: The roi handle is returned.
+        """
         if hw is None:
             dr = self.ctrl.ImagePhys_ROISize.value()
             hw = [dr, dr]
@@ -1486,6 +1460,8 @@ class pbm_ImageAnalysis(AnalysisModule):
     def updateThisROI(self, roi, livePlot=True):
         """
         called when we need to update the ROI result plot for a particular ROI widget
+        :param roi: handle to the ROI
+        :param livePlot: flag for live plotting, passed to showThisROI
         """
         if roi in self.AllRois:
             tr = roi.getArrayRegion(self.imageData, self.imageView.imageItem, axes=(1, 2))
@@ -1500,27 +1476,31 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.showThisROI(roi, livePlot)
             return(tr)
 
-    def showThisROI(self, roi, livePlot=True, extra=None):
-        """ called when we need to just show the ROI result plot for a particular ROI widget 
+    def showThisROI(self, roi, livePlot=True):
+        """
+        Show one ROI, highlighting it and brining it to the top of the traces
+        other rois are dimmed and thinned
+        If the plot of the roi does not exist, the plot is
+        :param roi: the handle to the selected ROI
+        :param livePlot: flag to allow update of plot in real time (if livePlot is not set, the roi
+            may not be created at this time.  (is this ever used?)
+        :return: Nothing
         """
         if roi in self.AllRois:
             if livePlot is True:
                 try:
-                    roi.plot.setData(self.imageTimes[0:len(self.BFData[roi.ID])], self.BFData[roi.ID]) #, pen=pg.mkPen(roi.color), clear=True)
+                    roi.plot.setData(self.imageTimes[0:len(self.BFData[roi.ID])], self.BFData[roi.ID],
+                                     pen=pg.mkPen(np.append(roi.color[0:3], 255), width=1.0)) #, pen=pg.mkPen(roi.color), clear=True)
                 except:
                     roi.plot = self.ROI_Plot.plot(self.imageTimes[0:len(self.BFData[roi.ID])], self.BFData[roi.ID],
                                                   pen=pg.mkPen(np.append(roi.color[0:3], 255), width=1.0), clear=False)  # pg.mkPen('r'), clear=True)
-             #   c = roi.color[0:3]
                 c = np.append(roi.color[0:3], 255)
                 roi.plot.setPen(pg.mkPen(color=c, width=2.0))
                 roi.plot.setZValue(1000)
+                roi.show()  # make sure the roi is visible
 
-                if extra is not None:
-                    self.ROI_Plot.plot(self.imageTimes[0:len(self.BFData[roi.ID])], extra, pen=pg.mkPen('b'), clear=False)
-                self.markROITouched(roi)
         for otherroi in self.AllRois:
             if otherroi != roi:
-                #c = otherroi.color[0:3]
                 c = np.append(otherroi.color[0:3], 128)
                 otherroi.plot.setPen(pg.mkPen(color=c, width=1.0))
                 otherroi.plot.setZValue(500)
@@ -1785,8 +1765,10 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.image = np.amax(self.imageData[:, :, :], axis=0).astype('float32')
         self.paintImage(image=self.image, focus=False)
 
-    def stackOp_normmax(self): # normalized maximum
-        """Make an image that is the maximum of each pixel, normalized within each image, across the image stack."""
+    def stackOp_normmax(self):  # normalized maximum
+        """
+        Make an image that is the maximum of each pixel, normalized within each image, across the image stack.
+        """
         self.clearAllROI()
         levindex = self.ui.stackOp_levels.currentIndex()
         levels = [8., 16., 256., 4096., 65536.]
@@ -1803,7 +1785,6 @@ class pbm_ImageAnalysis(AnalysisModule):
             amind = np.amin(self.imageData[:, :, :], axis=0).astype('float32')
             id = np.floor((levels[levindex]/amaxd)*(self.imageData[:, :, :].astype('float32')-amind))
         self.image = np.amax(id, axis = 0)
-        id=[]
         self.paintImage(image=self.image, focus=False)
 
     def stackOp_std(self):
@@ -1835,8 +1816,8 @@ class pbm_ImageAnalysis(AnalysisModule):
 # Includes bleach correction, filtering (median and gaussian), and deltaF/F calculation
 
     def unbleachImage(self):
-        self.dataState['bleachCorrection'] = False # reset flag...
-        self.imageData = self.rawData.copy() # starts over, no matter what.
+        self.dataState['bleachCorrection'] = False  # reset flag...
+        self.imageData = self.rawData.copy()  # starts over, no matter what.
         self.dataState['Normalized'] = False
         bleachmode = '2DPoly'
         imshape = np.shape(self.imageData)
@@ -1919,18 +1900,18 @@ class pbm_ImageAnalysis(AnalysisModule):
         mean_orig = np.mean(tc_bleach)
         for k in range(0, len(self.imageData)):
             avgint = np.mean(np.mean(self.imageData[k], axis=1), axis=0) # get the corrected value here
-            if bleachmode == '2DPoly': # whole field correction, not just linear with time
+            if bleachmode == '2DPoly':  # whole field correction, not just linear with time
                # print np.amax(np.amax(scaled_blimg, 0), 0)*tc_bleach[k], self.tc_offset[k]
-                self.imageData[k,:,:] = (self.imageData[k,:,:] - self.tc_offset[k]) / (scaled_blimg*self.tc_bleach[k])
+                self.imageData[k, :, :] = (self.imageData[k, :, :] - self.tc_offset[k]) / (scaled_blimg*self.tc_bleach[k])
             else:
-                self.imageData[k,:,:] = self.imageData[k,:,:] / (self.tc_bleach[k]/mFluor)
+                self.imageData[k, :, :] = self.imageData[k ,:, :] / (self.tc_bleach[k]/mFluor)
             b_corr[k] = np.mean(self.imageData[k,:,:]) # get the corrected value here
             #    self.rawData[k,:,:] = self.rawData[k,:,:] / self.tc_bleach[k]
         mean_final = np.mean(np.mean(np.mean(self.imageData[k], axis=1), axis=0)) 
 
         for k in range(0, len(self.imageData)):
-            self.imageData[k,:,:] = self.imageData[k,:,:] * mean_orig/mean_final
-            b_corr[k] = np.mean(self.imageData[k,:,:]) # get the corrected value here
+            self.imageData[k, :, :] = self.imageData[k, :, :] * mean_orig/mean_final
+            b_corr[k] = np.mean(self.imageData[k, :, :])  # get the corrected value here
         self.ctrl.ImagePhys_BleachInfo.setText('B=%6.2f%%' % BleachPct)
         ndl = len(tc_bleach)
         self.backgroundPlot.plot(y=tc_bleach, x=self.imageTimes[0:ndl], pen=pg.mkPen('r'), clear=True)
@@ -1946,7 +1927,7 @@ class pbm_ImageAnalysis(AnalysisModule):
 
     def angle_cos(self, p0, p1, p2):
         d1, d2 = p0-p1, p2-p1
-        return abs( np.dot(d1, d2) / np.sqrt( np.dot(d1, d1)*np.dot(d2, d2) ) )
+        return abs(np.dot(d1, d2) / np.sqrt(np.dot(d1, d1)*np.dot(d2, d2)))
 
     def pOpen(self, img, block_size):
         """ consists of Dilation followed by erosion """
@@ -2666,16 +2647,16 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.imageData = np.squeeze(self.imageData)
             sh = np.shape(self.imageData)
         print '**********************************\nImage shape: ', sh
-        self.imagePeriod = 6.0 # image period in seconds.
+        self.imagePeriod = 6.0  # image period in seconds.
         w = 2.0 * np.pi * self.imagePeriod
         # identify an interpolation for the image for one cycle of time
-        dt = np.mean(np.diff(self.imageTimes)) # get the mean dt
-        maxt = np.amax(self.imageTimes) # find last image time
-        n_period = int(np.floor(maxt/self.imagePeriod)) # how many full periods in the image set?
-        n_cycle = int(np.floor(self.imagePeriod/dt)); # estimate image points in a stimulus cycle
+        dt = np.mean(np.diff(self.imageTimes))  # get the mean dt
+        maxt = np.amax(self.imageTimes)  # find last image time
+        n_period = int(np.floor(maxt/self.imagePeriod))  # how many full periods in the image set?
+        n_cycle = int(np.floor(self.imagePeriod/dt))  # estimate image points in a stimulus cycle
         ndt = self.imagePeriod/n_cycle
         i_times = np.arange(0, n_period*n_cycle*ndt, ndt) # interpolation times
-        n_times = np.arange(0, n_cycle*ndt, ndt) # just one cycle
+        n_times = np.arange(0, n_cycle*ndt, ndt)  # just one cycle
         print "dt: %f maxt: %f # images %d" % (dt, maxt, len(self.imageTimes))
         print "# full per: %d  pts/cycle: %d  ndt: %f #i_times: %d" % (n_period, n_cycle, ndt, len(i_times))
         B = np.zeros([sh[1], sh[2], n_period, n_cycle])
@@ -2692,8 +2673,8 @@ class pbm_ImageAnalysis(AnalysisModule):
         sh = np.shape(D)
         A = np.zeros((sh[0], 2), float)
         print "A: ", np.shape(A)
-        A[:,0] = np.sin(w*n_times)
-        A[:,1] = np.cos(w*n_times)
+        A[:, 0] = np.sin(w*n_times)
+        A[:, 1] = np.cos(w*n_times)
         sparse = 1
 
         self.phaseImage = np.zeros((sh[1], sh[2]))
@@ -2754,14 +2735,13 @@ class pbm_ImageAnalysis(AnalysisModule):
 
 # Use matlab to do the analysis with J. Vogelstein's code, store result on disk
     def smc_AnalyzeMatlab(self):
-        subprocess.call(['/Applications/MATLAB_R2010b.app/bin/matlab', '-r', 'FigSimNoisy.m'], bufsize = 1)
+        import subprocess
+        subprocess.call(['/Applications/MATLAB_R2010b.app/bin/matlab', '-r', 'FigSimNoisy.m'], bufsize=1)
 
     def Analysis_SpikeXCorr(self):
         pass        
 
 
-
-    
     def RegisterStack(self):
         """
         Align a stack of images using openCV. We calculate a rigid transform
