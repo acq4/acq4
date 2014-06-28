@@ -233,7 +233,7 @@ class pbm_ImageAnalysis(AnalysisModule):
 
     def setAnalogMode(self):
         """
-        
+
         :return:
         """
         self.analogMode = True
@@ -410,15 +410,20 @@ class pbm_ImageAnalysis(AnalysisModule):
             PL.savefig('/Users/Experimenters/Desktop/ePhysPlots/%s.png' % (sfn), dpi=600, format='png')
 
     def loadSingleFile(self, dh):
+        """
+
+        :param dh:
+        :return:
+        """
         self.imageView.setFocus()
         self.downSample = int(self.ctrl.ImagePhys_Downsample.currentText())
         if self.downSample <= 0:
             self.downSample = 1  # same as "none"
         self.initDataState()
-        
+
         self.shiftFlag = False  # eventually, but at the moment it does NOT work
         self.getDataStruct()
-        
+
         if type(dh) is list:
             dh = dh[0]
         self.currentFileName = dh.name()
