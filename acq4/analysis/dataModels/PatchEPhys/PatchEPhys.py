@@ -14,7 +14,7 @@ protocolNames = {
 
 # note: make sure the names, if single, are followed by ',', so as to enforce elements of tuple
 deviceNames = {
-    'Clamp': ('Clamp1', 'Clamp2', 'AxoPatch200', 'AxoProbe'),
+    'Clamp': ('Clamp1', 'Clamp2', 'AxoPatch200', 'AxoProbe', 'MultiClamp1', 'MultiClamp2'),
     'Camera': ('Camera',),
     'Laser': ('Laser-UV', 'Laser-Blue', 'Laser-2P'),
     'LED-Blue': ('LED-Blue',),
@@ -257,8 +257,6 @@ def getClampMode(data):
     if not (hasattr(data, 'implements') and data.implements('MetaArray')):
         if not isClampFile(data):
             raise Exception('%s not a clamp file.' % data.shortName())
-        sn = data.shortName()
-#        print 'short name: ', sn
         data = data.read()
     info = data._info[-1]
     if 'ClampState' in info:

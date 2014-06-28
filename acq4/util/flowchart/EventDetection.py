@@ -188,7 +188,6 @@ class ThresholdEvents(PlottingCtrlNode):
         events = events[:s['eventLimit']]
         return events
 
-
         
             
             

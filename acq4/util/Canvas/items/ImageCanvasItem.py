@@ -3,7 +3,6 @@ from acq4.pyqtgraph.Qt import QtCore, QtGui
 from CanvasItem import CanvasItem
 import numpy as np
 import scipy.ndimage as ndimage
-import scipy.misc as spmi
 import acq4.pyqtgraph as pg
 import acq4.util.DataManager as DataManager
 import acq4.util.debug as debug
@@ -22,16 +21,15 @@ class ImageCanvasItem(CanvasItem):
         ## If no image was specified, check for a file handle..
         if image is None:
             image = opts.get('handle', None)
+
         item = None
         self.data = None
         self.currentT = None
-        self.maximage = (1600, 1200) # reduce image size if it is too big...
+        
         if isinstance(image, QtGui.QGraphicsItem):
             item = image
-            self.data = image
         elif isinstance(image, np.ndarray):
             self.data = image
-            
         elif isinstance(image, DataManager.FileHandle):
             opts['handle'] = image
             self.handle = image
@@ -76,8 +74,6 @@ class ImageCanvasItem(CanvasItem):
         if item is None:
             item = pg.ImageItem()
         CanvasItem.__init__(self, item, **opts)
-
-        self.make_image_smaller()
 
         self.histogram = pg.PlotWidget()
         self.blockHistogram = False
@@ -147,7 +143,6 @@ class ImageCanvasItem(CanvasItem):
         self.graphicsItem().sigImageChanged.connect(self.updateHistogram)
         self.levelRgn.sigRegionChanged.connect(self.levelsChanged)
         self.levelRgn.sigRegionChangeFinished.connect(self.levelsChangeFinished)
-        
 
     @classmethod
     def checkFile(cls, fh):
@@ -159,18 +154,6 @@ class ImageCanvasItem(CanvasItem):
         elif ext in ['.ma', '.png', '.jpg', '.tif']:
             return 100
         return 0
-
-    def make_image_smaller(self):
-        return
-        print 'image data shape: ', self.data.shape
-        if self.data.shape[1] > self.maximage[0] and self.data.shape[2] > self.maximage[1]:
-            tempdata = np.zeros((self.data.shape[0], self.maximage[0], self.maximage[1]))
-            for k in range(self.data.shape[0]):
-                 t = spmi.imresize(self.data[k],  (self.maximage[0], self.maximage[1]))
-                 tempdata[k] = t
-            self.data = tempdata
-            print 'new shape: ', self.data.shape
-
 
     def timeChanged(self, t):
         self.graphicsItem().updateImage(self.data[t])
@@ -201,28 +184,10 @@ class ImageCanvasItem(CanvasItem):
 
     def timeSliderPressed(self):
         self.blockHistogram = True
-        
-    def bksub(self, data, mode='median'):
-        if mode == 'median':
-            tsel = self.tRange()
-            try:
-                fd = data[tsel,:,:].asarray().astype(float)
-            except:
-                fd = data[tsel,:,:]
-            bkgd = data.min(axis=0)
-            #bkgd = ndimage.median_filter(fd, size=4).min(axis=0)
-        print bkgd.shape
-        print data.shape
-        for k in range(data.shape[0]):
-            data[k] -= bkgd
-        return data
 
     def edgeClicked(self):
         ## unsharp mask to enhance fine details
-        try:
-            fd = self.data.asarray().astype(float)
-        except:
-            fd = self.data
+        fd = self.data.asarray().astype(float)
         blur = ndimage.gaussian_filter(fd, (0, 1, 1))
         blur2 = ndimage.gaussian_filter(fd, (0, 2, 2))
         dif = blur - blur2
@@ -233,11 +198,7 @@ class ImageCanvasItem(CanvasItem):
     def maxClicked(self):
         ## just the max of a stack
         tsel = self.tRange()
-        try:
-            fd = self.data[tsel,:,:].asarray().astype(float)
-        except:
-            fd = self.data[tsel,:,:]
-        fd = self.bksub(fd)
+        fd = self.data[tsel,:,:].asarray().astype(float)
         self.graphicsItem().updateImage(fd.max(axis=0))
         print 'max stack image udpate done'
         self.updateHistogram(autoLevels=True)
@@ -246,10 +207,7 @@ class ImageCanvasItem(CanvasItem):
     def max2Clicked(self):
         ## just the max of a stack, after a little 3d bluring
         tsel = self.tRange()
-        try:
-            fd = self.data[tsel,:,:].asarray().astype(float)
-        except:
-            fd = self.data[tsel,:,:]
+        fd = self.data[tsel,:,:].asarray().astype(float)
         filt = self.filterOrder.currentText()
         n = int(filt)
         blur = ndimage.gaussian_filter(fd, (n,n,n))
@@ -262,10 +220,7 @@ class ImageCanvasItem(CanvasItem):
     def maxMedianClicked(self):
         ## just the max of a stack, after a little 3d bluring
         tsel = self.tRange()
-        try:
-            fd = self.data[tsel,:,:].asarray().astype(float)
-        except:
-            fd = self.data[tsel,:,:]
+        fd = self.data[tsel,:,:].asarray().astype(float)
         filt = self.filterOrder.currentText()
         n = int(filt) + 1 # value of 1 is no filter so start with 2
         blur = ndimage.median_filter(fd, size=n)
@@ -275,19 +230,13 @@ class ImageCanvasItem(CanvasItem):
     def meanClicked(self):
         ## just the max of a stack
         tsel = self.tRange()
-        try:
-            fd = self.data[tsel,:,:].asarray().astype(float)
-        except:
-            fd = self.data[tsel,:,:]
+        fd = self.data[tsel,:,:].asarray().astype(float)
         self.graphicsItem().updateImage(fd.mean(axis=0))
         self.updateHistogram(autoLevels=True)
 
     def tvClicked(self):
         tsel = self.tRange()
-        try:
-            fd = self.data[tsel,:,:].asarray().astype(float)
-        except:
-            fd = self.data[tsel,:,:]
+        fd = self.data[tsel,:,:].asarray().astype(float)
         filt = self.filterOrder.currentText()
         n = (int(filt) + 1) # value of 1 is no filter so start with 2
         blur = self.tv_denoise(fd, weight=n, n_iter_max=5)

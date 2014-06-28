@@ -18,6 +18,7 @@ class HDF5Exporter(Exporter):
         Exporter.__init__(self, item)
         self.params = Parameter(name='params', type='group', children=[
             {'name': 'Name', 'type': 'str', 'value': 'Export',},
+            {'name': 'columnMode', 'type': 'list', 'values': ['(x,y) per plot', '(x,y,y,y) for all plots']},
         ])
         
     def parameters(self):
@@ -34,12 +35,17 @@ class HDF5Exporter(Exporter):
         dsname = self.params['Name']
         fd = h5py.File(fileName, 'a') # forces append to file... 'w' doesn't seem to "delete/overwrite"
         data = []
-        for c in self.item.curves:
+        
+        appendAllX = self.params['columnMode'] == '(x,y) per plot'
+        for i,c in enumerate(self.item.curves):
             d = c.getData()
-            data.append(d[0])
+            if appendAllX or i == 0:
+                data.append(d[0])
             data.append(d[1])
+                
         fdata = numpy.array(data).astype('double')
         dset = fd.create_dataset(dsname, data=fdata)
         fd.close()
+
 
 HDF5Exporter.register()
