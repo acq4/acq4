@@ -70,7 +70,7 @@ class IVCurve(AnalysisModule):
         self.color_list = itertools.cycle(self.colors)
         self.symbol_list = itertools.cycle(self.symbols)
         self.data_mode = 'IC'  # analysis depends on the type of data we have.
-        self.ic_modes = ['IC', 'CC', 'IClamp', 'ic']
+        self.ic_modes = ['IC', 'CC', 'IClamp', 'ic', 'I-Clamp Fast', 'I-Clamp Slow']
         self.vc_modes = ['VC', 'VClamp', 'vc']  # list of VC modes
 
         #--------------graphical elements-----------------
@@ -470,12 +470,15 @@ class IVCurve(AnalysisModule):
             # only consider data in a particular range
             data = self.dataModel.getClampPrimary(data_file)
             self.data_mode = self.dataModel.getClampMode(data)
+            self.ic_modes = ['IC', 'CC', 'IClamp', 'ic', 'I-Clamp Fast', 'I-Clamp Slow']
+            self.vc_modes = ['VC', 'VClamp', 'vc']  # list of VC modes
             if self.data_mode is None:
                 self.data_mode = self.ic_modes[0]  # set a default mode
             if self.data_mode in ['model_ic', 'model_vc']:  # lower case means model was run
                 self.modelmode = True
             self.ctrl.IVCurve_dataMode.setText(self.data_mode)
             # Assign scale factors for the different modes to display data rationally
+            print 'data mode: ', self.data_mode
             if self.data_mode in self.ic_modes:
                 self.command_scale_factor = 1e12
                 self.command_units = 'pA'
@@ -493,6 +496,7 @@ class IVCurve(AnalysisModule):
                     continue  # skip adding the data to the arrays
 
             self.devicesUsed = self.dataModel.getDevices(data_dir_handle)
+            self.clampDevices = self.dataModel.getClampDeviceNames(data_dir_handle)
             self.holding = self.dataModel.getClampHoldingLevel(data_file_handle)
             self.amp_settings = self.dataModel.getWCCompSettings(data_file)
             self.clamp_state = self.dataModel.getClampState(data_file)
@@ -545,10 +549,24 @@ class IVCurve(AnalysisModule):
         self.traces = MetaArray(traces, info=info)
         sfreq = self.dataModel.getSampleRate(data)
         self.sample_interval = 1./sfreq
-        vc_command = data_dir_handle.parent().info()['devices']['Clamp1']
-        vc_info = vc_command['waveGeneratorWidget']['stimuli']['Pulse']
-        pulsestart = vc_info['start']['value']
-        pulsedur = vc_info['length']['value']
+        vc_command = data_dir_handle.parent().info()['devices'][self.clampDevices[0]]
+        if 'waveGeneratorWidget' in vc_command:
+            vc_info = vc_command['waveGeneratorWidget']['stimuli']['Pulse']
+            pulsestart = vc_info['start']['value']
+            pulsedur = vc_info['length']['value']
+        elif 'daqState' in vc_command:
+            vc_state = vc_command['daqState']['channels']['command']['waveGeneratorWidget']
+            func = vc_state['function']
+            # regex parse the function string: pulse(100, 1000, amp)
+            pulsereg = re.compile("(^pulse)\((\d*),\s*(\d*),\s*(\w*)\)")
+            match = pulsereg.match(func)
+            g = match.groups()
+            if g is None:
+                raise Exception('loadFileRequested (IVCurve) cannot parse waveGenerator function: %s' % func)
+            pulsestart = float(g[1])/1000. # values coming in are in ms, but need s
+            pulsedur = float(g[2])/1000.
+        else:
+            raise Exception("loadFileRequested (IVCurve): cannot find pulse information")
         cmdtimes = np.array([pulsestart, pulsedur])
         if self.ctrl.IVCurve_KeepT.isChecked() is False:
             self.tstart = cmdtimes[0] # cmd.xvals('Time')[cmdtimes[0]]

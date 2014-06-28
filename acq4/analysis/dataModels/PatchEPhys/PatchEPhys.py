@@ -225,7 +225,7 @@ def isClampFile(fh):
         return False
     else:
         return True
-        
+
 def getClampCommand(data, generateEmpty=True):    
     """Returns the command data from a clamp MetaArray.
     If there was no command specified, the function will return all zeros if generateEmpty=True (default)."""
@@ -317,8 +317,8 @@ def getWCCompSettings(data):
     Settings are returned as a group in a dictionary
     """
     info = data._info[-1]
-    d={}
-    if 'ClampState' in info.keys():
+    d = {}
+    if 'ClampState' in info.keys() and 'ClampParams' in info['ClampState'].keys():
         par = info['ClampState']['ClampParams']
         d['WCCompValid'] = True
         d['WCEnabled'] = par['WholeCellCompEnable']
@@ -364,6 +364,28 @@ def getDevices(protoDH):
     if len(devList) == 0:
         return None
     return devList
+
+
+def getClampDeviceNames(protoDH):
+    """
+    get the Clamp devices used in the current protocol
+    :param data:
+    :return:
+    """
+    if protoDH.name()[-8:] == 'DS_Store': ## OS X filesystem puts .DS_Store files in all directories
+        return None
+    files = protoDH.ls()
+    clampDeviceNames = []
+    for knownDevName in deviceNames['Clamp']:  # go through known devices
+        if knownDevName in files:
+            clampDeviceNames.append(knownDevName)
+        elif knownDevName+'.ma' in files:
+            clampDeviceNames.append(knownDevName)
+        else:
+                pass
+    if len(clampDeviceNames) == 0:
+        return None
+    return clampDeviceNames
 
 
 def getNamedDeviceFile(protoDH, deviceName):
