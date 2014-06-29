@@ -24,8 +24,8 @@ class DataSummary():
         allfiles = os.listdir(basedir)
         # look for names that match the acq4 "day" template:
         # example: 2013.03.28_000
-#        daytype = re.compile("(\d{4,4}).(\d{2,2}).(\d{2,2})_(\d{3,3})")
-        daytype = re.compile("(2011).(06).(08)_(\d{3,3})")  # specify a day
+        daytype = re.compile("(\d{4,4}).(\d{2,2}).(\d{2,2})_(\d{3,3})")
+#        daytype = re.compile("(2011).(06).(08)_(\d{3,3})")  # specify a day
         days = []
         for thisfile in allfiles:
             m = daytype.match(thisfile)
