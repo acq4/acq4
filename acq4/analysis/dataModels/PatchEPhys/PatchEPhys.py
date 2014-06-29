@@ -42,6 +42,9 @@ Notes:
     
 """
 
+def knownClamps():
+    return deviceNames['Clamp']
+
 def isSequence(dh):
     """Return true if dh is a directory handle for a protocol sequence."""
     return dirType(dh) == 'ProtocolSequence'
@@ -266,7 +269,7 @@ def getClampMode(data):
             mode = info['mode']
             return mode
         except KeyError:
-            return 'vc' # None  kludge to handle simulations, which don't seem to fully fill the structures.
+            return 'vc'  # None  kludge to handle simulations, which don't seem to fully fill the structures.
 
 def getClampHoldingLevel(fh):
     """Given a clamp file handle, return the holding level (voltage for VC, current for IC).
