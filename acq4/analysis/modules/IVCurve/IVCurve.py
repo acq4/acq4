@@ -470,15 +470,12 @@ class IVCurve(AnalysisModule):
             # only consider data in a particular range
             data = self.dataModel.getClampPrimary(data_file)
             self.data_mode = self.dataModel.getClampMode(data)
-            self.ic_modes = ['IC', 'CC', 'IClamp', 'ic', 'I-Clamp Fast', 'I-Clamp Slow']
-            self.vc_modes = ['VC', 'VClamp', 'vc']  # list of VC modes
             if self.data_mode is None:
                 self.data_mode = self.ic_modes[0]  # set a default mode
             if self.data_mode in ['model_ic', 'model_vc']:  # lower case means model was run
                 self.modelmode = True
             self.ctrl.IVCurve_dataMode.setText(self.data_mode)
             # Assign scale factors for the different modes to display data rationally
-            print 'data mode: ', self.data_mode
             if self.data_mode in self.ic_modes:
                 self.command_scale_factor = 1e12
                 self.command_units = 'pA'

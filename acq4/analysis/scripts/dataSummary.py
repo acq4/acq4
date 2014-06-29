@@ -42,9 +42,9 @@ class DataSummary():
                 l = self.tw['day'].wrap(dx['notes'])
                 for i in l:
                     self.daystring += i
-                i += '\t'
             else:
-                self.daystring += ' [no notes]\t'
+                self.daystring += ' [no notes]'
+            self.daystring += '\t'
             self.doSlices(os.path.join(self.basedir, day))
 
     def doSlices(self, day):
@@ -66,7 +66,7 @@ class DataSummary():
                 for i in l:
                     self.slicestring += i
             else:
-                self.slicestring += ' No notes for slice'
+                self.slicestring += ' No slice notes'
             self.slicestring += '\t'
             self.doCells(os.path.join(day, slice))
 
@@ -89,12 +89,12 @@ class DataSummary():
                 for i in l:
                     self.cellstring += i
             else:
-                self.cellstring += ' No notes for cell'
+                self.cellstring += ' No cell notes'
             self.cellstring += '\t'
             self.doProtocols(os.path.join(slice, cell))
 
-        if len(cells) == 0:
-            print '      No cells in this slice'
+#        if len(cells) == 0:
+#            print '      No cells in this slice'
 
     def doProtocols(self, cell):
         allfiles = os.listdir(cell)
