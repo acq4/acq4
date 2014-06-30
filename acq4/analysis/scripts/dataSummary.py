@@ -18,7 +18,7 @@ class DataSummary():
         self.dataModel = PatchEPhys
         self.basedir = basedir
         self.tw = {}
-        self.tw['day'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent= " "*4)
+        self.tw['day'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
         self.tw['slice'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
         self.tw['cell'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
         allfiles = os.listdir(basedir)
@@ -34,7 +34,10 @@ class DataSummary():
             if m is None:
                 continue  # no match
             if len(m.groups()) == 4:  # perfect match
+                print m.groups()
                 id = [int(d) for d in m.groups()]
+                print id
+                print minday
                 if id[0] >= minday[0] and id[1] >= minday[1] and id[2] >= minday[2]:
                     if id[0] < maxday[0] and id[1] < maxday[1] and id[2] < maxday[2]:
                         days.append(thisfile)
