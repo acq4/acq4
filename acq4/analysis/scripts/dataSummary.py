@@ -41,7 +41,7 @@ class DataSummary():
                 id = idl[0]*1e4+idl[1]*1e2+idl[0]
                 print 'id: ', id
                 print 'minday: ', minday
-                if id > minday and id < maxday:
+                if id >= minday and id <= maxday:
                     days.append(thisfile)
         print 'days: ', days
         exit()
