@@ -34,7 +34,7 @@ class DataSummary():
             if m is None:
                 continue  # no match
             if len(m.groups()) == 4:  # perfect match
-                id = [int(d) for d in m]
+                id = [int(d) for d in m.groups()]
                 if id[0] >= minday[0] and id[1] >= minday[1] and id[2] >= minday[2]:
                     if id[0] < maxday[0] and id[1] < maxday[1] and id[2] < maxday[2]:
                         days.append(thisfile)
