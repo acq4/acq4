@@ -27,7 +27,9 @@ class DataSummary():
         daytype = re.compile("(\d{4,4}).(\d{2,2}).(\d{2,2})_(\d{3,3})")
 #        daytype = re.compile("(2011).(06).(08)_(\d{3,3})")  # specify a day
         minday = (2012, 3, 8)
+        minday = minday[0]*1e4+minday[1]*1e2+minday[0]
         maxday = (2014, 1, 1)
+        maxday = maxday[0]*1e4+maxday[1]*1e2+maxday[0]
         days = []
         for thisfile in allfiles:
             m = daytype.match(thisfile)
@@ -35,12 +37,12 @@ class DataSummary():
                 continue  # no match
             if len(m.groups()) == 4:  # perfect match
                 #print m.groups()
-                id = [int(d) for d in m.groups()]
+                idl = [int(d) for d in m.groups()]
+                id = idl[0]*1e4+idl[1]*1e2+idl[0]
                 print 'id: ', id
                 print 'minday: ', minday
-                if id[0] >= minday[0] and id[1] >= minday[1] and id[2] >= minday[2]:
-                    if id[0] < maxday[0] and id[1] < maxday[1] and id[2] < maxday[2]:
-                        days.append(thisfile)
+                if id > minday and id < maxday:
+                    days.append(thisfile)
         print 'days: ', days
         exit()
         for day in days:
