@@ -26,13 +26,18 @@ class DataSummary():
         # example: 2013.03.28_000
         daytype = re.compile("(\d{4,4}).(\d{2,2}).(\d{2,2})_(\d{3,3})")
 #        daytype = re.compile("(2011).(06).(08)_(\d{3,3})")  # specify a day
+        minday = (2012, 3, 8)
+        maxday = (2014, 1, 1)
         days = []
         for thisfile in allfiles:
             m = daytype.match(thisfile)
             if m is None:
                 continue  # no match
             if len(m.groups()) == 4:  # perfect match
-                days.append(thisfile)
+                id = [int(d) for d in m]
+                if id[0] >= minday[0] and id[1] >= minday[1] and id[2] >= minday[2]:
+                    if id[0] < maxday[0] and id[1] < maxday[1] and id[2] < maxday[2]:
+                        days.append(thisfile)
         for day in days:
             #print 'processing day: %s' % day
             self.daystring = '%s\t' % (day)
