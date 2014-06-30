@@ -36,15 +36,14 @@ class DataSummary():
             if m is None:
                 continue  # no match
             if len(m.groups()) == 4:  # perfect match
-                print m.groups()
+                # print m.groups()
                 idl = [int(d) for d in m.groups()]
                 id = idl[0]*1e4+idl[1]*1e2+idl[2]
-                print 'id: ', id
-                print 'minday: ', minday
+                # print 'id: ', id
+                # print 'minday: ', minday
                 if id >= minday and id <= maxday:
                     days.append(thisfile)
-        print 'days: ', days
-        exit()
+        print 'Days reported: ', days
         for day in days:
             #print 'processing day: %s' % day
             self.daystring = '%s\t' % (day)
