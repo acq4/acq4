@@ -1,5 +1,12 @@
 __author__ = 'pbmanis'
+"""
+dataSummary: This script reads all of the data files in a given directory, and prints out top level information
+including notes, protocols run (and whether or not they are complete), and image files associated with a cell.
+Currently, this routine makes assumptions about the layout as a heirichal structure [days, slices, cells, protocols]
+and does not print out information if there are no successful protocols run.
+June, 2014, Paul B. Manis.
 
+"""
 import sys
 from acq4.util.metaarray import MetaArray
 from acq4.analysis.dataModels import PatchEPhys
@@ -9,6 +16,7 @@ import os
 import re
 import os.path
 import textwrap
+import gc
 
 
 class DataSummary():
@@ -21,12 +29,16 @@ class DataSummary():
         self.tw['day'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
         self.tw['slice'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
         self.tw['cell'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
+        self.img_re = re.compile('(.tif)')
+        self.s2p_re = re.compile('(2pStack)')
+        self.i2p_re = re.compile('(2pImage)')
         allfiles = os.listdir(basedir)
         # look for names that match the acq4 "day" template:
         # example: 2013.03.28_000
         daytype = re.compile("(\d{4,4}).(\d{2,2}).(\d{2,2})_(\d{3,3})")
 #        daytype = re.compile("(2011).(06).(08)_(\d{3,3})")  # specify a day
-        minday = (2012, 3, 8)
+        #2011.10.17_000
+        minday = (2011, 10, 17)
         minday = minday[0]*1e4+minday[1]*1e2+minday[2]
         maxday = (2014, 1, 1)
         maxday = maxday[0]*1e4+maxday[1]*1e2+maxday[2]
@@ -59,6 +71,11 @@ class DataSummary():
             self.doSlices(os.path.join(self.basedir, day))
 
     def doSlices(self, day):
+        """
+        process all of the slices for a given day
+        :param day:
+        :return nothing:
+        """
         allfiles = os.listdir(day)
         slicetype = re.compile("(slice\_)(\d{3,3})")
         slices = []
@@ -82,6 +99,11 @@ class DataSummary():
             self.doCells(os.path.join(day, slice))
 
     def doCells(self, slice):
+        """
+        process all of the cells from a slice
+        :param slice:
+        :return nothing:
+        """
         allfiles = os.listdir(slice)
         celltype = re.compile("(cell_)(\d{3,3})")
         cells = []
@@ -103,20 +125,25 @@ class DataSummary():
                 self.cellstring += ' No cell notes'
             self.cellstring += '\t'
             self.doProtocols(os.path.join(slice, cell))
+            DataManager.cleanup()
+            gc.collect()
 
 #        if len(cells) == 0:
 #            print '      No cells in this slice'
 
     def doProtocols(self, cell):
+        """
+        process all of the protocols for a given cell
+        :param cell:
+        :return nothing:
+        """
         allfiles = os.listdir(cell)
         #celltype = re.compile("(Cell_)(\d{3,3})")
         protocols = []
         images = []  # tiff
         stacks2p = []
         images2p = []
-        img = re.compile('(.tif)')
-        s2p = re.compile('(2pStack)')
-        i2p = re.compile('(2pImage)')
+
         for thisfile in allfiles:
             if os.path.isdir(os.path.join(cell, thisfile)):
                 protocols.append(thisfile)
@@ -157,23 +184,22 @@ class DataSummary():
                 modes.append(data_mode)
             for i, directory_name in enumerate(dirs):  # dirs has the names of the runs within the protocol
                 data_dir_handle = dh[directory_name]  # get the directory within the protocol
+#                try:
+                data_file_handle = self.dataModel.getClampFile(data_dir_handle)  # get pointer to clamp data
                 ntotal += 1
-                try:
-                    data_file_handle = self.dataModel.getClampFile(data_dir_handle)  # get pointer to clamp data
+                if data_file_handle is not None:  # no clamp file found - skip
                     # Check if there is no clamp file for this iteration of the protocol
                     # Usually this indicates that the protocol was stopped early.
-                    data_file = data_file_handle.read()
+                    # data_file = data_file_handle.read()
                     self.holding = self.dataModel.getClampHoldingLevel(data_file_handle)
-                    self.amp_settings = self.dataModel.getWCCompSettings(data_file)
-
-                    if data_file_handle is not None:
-                        ncomplete += 1
-                except:
-                    pass
+                    self.amp_settings = self.dataModel.getWCCompSettings(data_file_handle)
+                    ncomplete += 1
+                DataManager.cleanup()  # close all opened files
+                gc.collect()  # and force garbage collection of freed objects inside the loop
             if ncomplete == ntotal:
                 complete = True
             if modes == []:
-                modes = ['uUknown mode']
+                modes = ['Unknown mode']
             if complete and protocolok:  # accumulate protocols
                 self.protocolstring += '{:<s} ({:s}, {:d}), '.format(protocol, modes[0][0], ncomplete)
                 ngoodprotocols += 1
@@ -188,15 +214,15 @@ class DataSummary():
         self.protocolstring += '\t'
 
         for thisfile in allfiles:
-            if os.path.isdir(os.path.join(cell, thisfile)):
+            if os.path.isdir(os.path.join(cell, thisfile)):  # skip protocols
                 continue
-            x = img.match(thisfile)
+            x = self.img_re.match(thisfile)  # look for image files
             if x is not None:
                 images.append(thisfile)
-            x = s2p.match(thisfile)
+            x = self.s2p_re.match(thisfile)  # two photon stacks
             if x is not None:
                 stacks2p.append(thisfile)
-            x = i2p.match(thisfile)
+            x = self.i2p_re.match(thisfile)  # simple two photon images
             if x is not None:
                 images2p.append(thisfile)
         self.imagestring = ''
