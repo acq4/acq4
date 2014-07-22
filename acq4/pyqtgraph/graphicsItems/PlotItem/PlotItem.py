@@ -468,7 +468,8 @@ class PlotItem(GraphicsWidget):
         
         ### Average data together
         (x, y) = curve.getData()
-        if plot.yData is not None:
+        if plot.yData is not None and y.shape == plot.yData.shape:
+            # note that if shapes do not match, then the average resets.
             newData = plot.yData * (n-1) / float(n) + y * 1.0 / float(n)
             plot.setData(plot.xData, newData)
         else:

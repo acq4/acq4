@@ -116,6 +116,7 @@ class DaqChannelGui(QtGui.QWidget):
         return self.stateGroup.state()
     
     def restoreState(self, state):
+        
         self.stateGroup.setState(state)
         if hasattr(self.ui, 'waveGeneratorWidget'):
             self.ui.waveGeneratorWidget.update()
@@ -150,6 +151,7 @@ class OutputChannelGui(DaqChannelGui):
     sigDataChanged = QtCore.Signal(object)
     
     def __init__(self, *args):
+        self._block_update = False  # blocks plotting during state changes
         DaqChannelGui.__init__(self, *args)
         self.units = ''
         self.currentPlot = None
@@ -249,6 +251,9 @@ class OutputChannelGui(DaqChannelGui):
         pass
     
     def updateWaves(self):
+        if self._block_update:
+            return
+
         self.clearPlots()
         
         ## display sequence waves
@@ -258,18 +263,23 @@ class OutputChannelGui(DaqChannelGui):
             params[k] = range(len(ps[k]))
         waves = []
         runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys()) ## appends waveforms for the entire parameter space to waves
-        for w in waves:
-            if w is not None:
+
+        autoRange = self.plot.getViewBox().autoRangeEnabled()
+        self.plot.enableAutoRange(x=False, y=False)
+        try:
+            for w in waves:
+                if w is not None:
+                    self.ui.functionCheck.setChecked(True)
+                    self.plotCurve(w, color=QtGui.QColor(100, 100, 100))
+            
+            ## display single-mode wave in red
+            single = self.getSingleWave()
+            if single is not None:
                 self.ui.functionCheck.setChecked(True)
-                self.plotCurve(w, color=QtGui.QColor(100, 100, 100))
-        
-        ## display single-mode wave in red
-        single = self.getSingleWave()
-        if single is not None:
-            self.ui.functionCheck.setChecked(True)
-            self.plotCurve(single, color=QtGui.QColor(200, 100, 100))
-            #print "===single==", single.min(), single.max()
-        #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+                self.plotCurve(single, color=QtGui.QColor(200, 100, 100))
+        finally:
+            self.plot.enableAutoRange(x=autoRange[0], y=autoRange[1])
+
         self.sigDataChanged.emit(self)
         
     def taskStarted(self, params):
@@ -341,6 +351,16 @@ class OutputChannelGui(DaqChannelGui):
             self.ui.functionCheck.setChecked(True)
         else:
             self.ui.functionCheck.setChecked(False)
+            
+    def restoreState(self, state):
+        block = self._block_update
+        self._block_update = True
+        try:
+            DaqChannelGui.restoreState(self, state)
+        finally:
+            self._block_update = False
+            
+        self.updateWaves()
         
 class InputChannelGui(DaqChannelGui):
     def __init__(self, *args):
