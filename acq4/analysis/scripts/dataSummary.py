@@ -97,6 +97,9 @@ class DataSummary():
                 self.slicestring += ' No slice notes'
             self.slicestring += '\t'
             self.doCells(os.path.join(day, slice))
+            DataManager.cleanup()
+            gc.collect()
+
 
     def doCells(self, slice):
         """
@@ -125,7 +128,7 @@ class DataSummary():
                 self.cellstring += ' No cell notes'
             self.cellstring += '\t'
             self.doProtocols(os.path.join(slice, cell))
-            DataManager.cleanup()
+            DataManager.cleanup() # clean up after each cell
             gc.collect()
 
 #        if len(cells) == 0:
@@ -211,6 +214,8 @@ class DataSummary():
 #                    print 'No data in protocol'
 #        if len(protocols) == 0:
 #            print '         No protocols this cell'
+        DataManager.cleanup()
+        gc.collect()
         self.protocolstring += '\t'
 
         for thisfile in allfiles:

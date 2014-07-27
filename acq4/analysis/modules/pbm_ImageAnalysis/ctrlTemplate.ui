@@ -32,22 +32,13 @@
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <property name="leftMargin">
-    <number>0</number>
-   </property>
-   <property name="topMargin">
-    <number>0</number>
-   </property>
-   <property name="rightMargin">
-    <number>0</number>
-   </property>
-   <property name="bottomMargin">
-    <number>0</number>
-   </property>
    <property name="horizontalSpacing">
     <number>10</number>
    </property>
    <property name="verticalSpacing">
+    <number>0</number>
+   </property>
+   <property name="margin">
     <number>0</number>
    </property>
    <item row="0" column="0">
@@ -81,7 +72,7 @@
        <rect>
         <x>0</x>
         <y>220</y>
-        <width>101</width>
+        <width>91</width>
         <height>32</height>
        </rect>
       </property>
@@ -101,9 +92,9 @@
       </property>
       <property name="geometry">
        <rect>
-        <x>95</x>
+        <x>90</x>
         <y>225</y>
-        <width>54</width>
+        <width>56</width>
         <height>16</height>
        </rect>
       </property>
@@ -120,8 +111,8 @@
      <widget class="QPushButton" name="ImagePhys_Update">
       <property name="geometry">
        <rect>
-        <x>170</x>
-        <y>150</y>
+        <x>150</x>
+        <y>185</y>
         <width>78</width>
         <height>32</height>
        </rect>
@@ -215,40 +206,8 @@
        <property name="geometry">
         <rect>
          <x>5</x>
-         <y>130</y>
+         <y>110</y>
          <width>101</width>
-         <height>27</height>
-        </rect>
-       </property>
-       <layout class="QHBoxLayout" name="horizontalLayout_15">
-        <item>
-         <widget class="QLabel" name="label_13">
-          <property name="text">
-           <string>ROI Size</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QSpinBox" name="ImagePhys_ROISize">
-          <property name="minimum">
-           <number>1</number>
-          </property>
-          <property name="maximum">
-           <number>25</number>
-          </property>
-          <property name="value">
-           <number>1</number>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="layoutWidget">
-       <property name="geometry">
-        <rect>
-         <x>5</x>
-         <y>80</y>
-         <width>183</width>
          <height>48</height>
         </rect>
        </property>
@@ -403,7 +362,7 @@
        <property name="geometry">
         <rect>
          <x>0</x>
-         <y>55</y>
+         <y>80</y>
          <width>106</width>
          <height>32</height>
         </rect>
@@ -441,13 +400,13 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
-         <x>0</x>
+         <x>5</x>
          <y>210</y>
-         <width>106</width>
-         <height>76</height>
+         <width>101</width>
+         <height>86</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -474,26 +433,58 @@
         </item>
        </layout>
       </widget>
+      <widget class="QWidget" name="layoutWidget">
+       <property name="geometry">
+        <rect>
+         <x>5</x>
+         <y>55</y>
+         <width>96</width>
+         <height>27</height>
+        </rect>
+       </property>
+       <layout class="QHBoxLayout" name="horizontalLayout_15">
+        <item>
+         <widget class="QLabel" name="label_13">
+          <property name="text">
+           <string>ROI Size</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="ImagePhys_ROISize">
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>25</number>
+          </property>
+          <property name="value">
+           <number>2</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
      </widget>
      <widget class="QGroupBox" name="groupBox_4">
       <property name="geometry">
        <rect>
         <x>150</x>
         <y>20</y>
-        <width>121</width>
-        <height>126</height>
+        <width>126</width>
+        <height>151</height>
        </rect>
       </property>
       <property name="title">
        <string>View</string>
       </property>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>5</x>
          <y>20</y>
-         <width>111</width>
-         <height>101</height>
+         <width>121</width>
+         <height>120</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_3">
@@ -564,6 +555,11 @@
           </item>
           <item>
            <property name="text">
+            <string>dF/Base</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
             <string>median</string>
            </property>
           </item>
@@ -585,6 +581,19 @@
          </widget>
         </item>
         <item>
+         <widget class="QPushButton" name="ImagePhys_DisplayTraces">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>dF/F -&gt; MPL</string>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QPushButton" name="ImagePhys_ExportTiff">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
@@ -594,19 +603,6 @@
           </property>
           <property name="text">
            <string>Export TIFF</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="ImagePhys_DisplayTraces">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="text">
-           <string>Display dF/F</string>
           </property>
          </widget>
         </item>
@@ -625,7 +621,7 @@
       <property name="title">
        <string>Preferences</string>
       </property>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>5</x>
@@ -777,7 +773,7 @@
         <rect>
          <x>5</x>
          <y>65</y>
-         <width>131</width>
+         <width>158</width>
          <height>26</height>
         </rect>
        </property>
@@ -860,7 +856,7 @@
         <rect>
          <x>5</x>
          <y>90</y>
-         <width>131</width>
+         <width>164</width>
          <height>28</height>
         </rect>
        </property>
@@ -1085,7 +1081,7 @@
         <rect>
          <x>1</x>
          <y>155</y>
-         <width>116</width>
+         <width>149</width>
          <height>27</height>
         </rect>
        </property>
@@ -1123,8 +1119,8 @@
        <property name="geometry">
         <rect>
          <x>5</x>
-         <y>25</y>
-         <width>152</width>
+         <y>55</y>
+         <width>136</width>
          <height>27</height>
         </rect>
        </property>
@@ -1132,7 +1128,7 @@
         <item>
          <widget class="QLabel" name="label_3">
           <property name="text">
-           <string>Base (s)</string>
+           <string>Base1(s)</string>
           </property>
          </widget>
         </item>
@@ -1155,8 +1151,8 @@
        <property name="geometry">
         <rect>
          <x>5</x>
-         <y>55</y>
-         <width>152</width>
+         <y>20</y>
+         <width>136</width>
          <height>27</height>
         </rect>
        </property>
@@ -1164,7 +1160,7 @@
         <item>
          <widget class="QLabel" name="label">
           <property name="text">
-           <string>Base (s)</string>
+           <string>Base0(s)</string>
           </property>
          </widget>
         </item>
@@ -1188,7 +1184,7 @@
         <rect>
          <x>5</x>
          <y>85</y>
-         <width>131</width>
+         <width>136</width>
          <height>32</height>
         </rect>
        </property>
@@ -1235,7 +1231,7 @@
         <rect>
          <x>5</x>
          <y>120</y>
-         <width>131</width>
+         <width>136</width>
          <height>32</height>
         </rect>
        </property>

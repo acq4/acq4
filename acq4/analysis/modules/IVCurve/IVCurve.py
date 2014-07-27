@@ -469,7 +469,7 @@ class IVCurve(AnalysisModule):
             data_file = data_file_handle.read()
             # only consider data in a particular range
             data = self.dataModel.getClampPrimary(data_file)
-            self.data_mode = self.dataModel.getClampMode(data)
+            self.data_mode = self.dataModel.getClampMode(data_file)
             if self.data_mode is None:
                 self.data_mode = self.ic_modes[0]  # set a default mode
             if self.data_mode in ['model_ic', 'model_vc']:  # lower case means model was run
@@ -495,8 +495,8 @@ class IVCurve(AnalysisModule):
             self.devicesUsed = self.dataModel.getDevices(data_dir_handle)
             self.clampDevices = self.dataModel.getClampDeviceNames(data_dir_handle)
             self.holding = self.dataModel.getClampHoldingLevel(data_file_handle)
-            self.amp_settings = self.dataModel.getWCCompSettings(data_file)
-            self.clamp_state = self.dataModel.getClampState(data_file)
+            self.amp_settings = self.dataModel.getWCCompSettings(data_file_handle)
+            self.clamp_state = self.dataModel.getClampState(data_file_handle)
             # print self.devicesUsed
             cmd = self.dataModel.getClampCommand(data_file)
 
@@ -544,7 +544,7 @@ class IVCurve(AnalysisModule):
             data.infoCopy(-1)]
         traces = traces[:len(self.values)]
         self.traces = MetaArray(traces, info=info)
-        sfreq = self.dataModel.getSampleRate(data)
+        sfreq = self.dataModel.getSampleRate(data_file_handle)
         self.sample_interval = 1./sfreq
         vc_command = data_dir_handle.parent().info()['devices'][self.clampDevices[0]]
         if 'waveGeneratorWidget' in vc_command:
