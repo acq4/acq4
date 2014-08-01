@@ -339,7 +339,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             dsp = self.dataModel.listSequenceParams(dh[0])
         dlh = self.fileLoaderInstance.selectedFiles()
         if self.ctrl.ImagePhys_PhysROIPlot.isChecked():
-            print 'multiple file load, lendh: ', len(dlh)
+            print 'multiple file load, for # of files: ', len(dlh)
             self.makePhysROIPlot(dh, dlh)
         else:
             if len(dlh) > 1:
@@ -396,8 +396,8 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.MPPhysPlots[r+1, c].set_title(tail)
 
         for i in range(self.nROI):
-            ndpt = len(self.FData[i,:])
-            self.MPPhysPlots[r,c].plot(self.imageTimes[0:ndpt], (self.FData[i, :]-1.0)*100.)
+            ndpt = len(self.FData[i, :])
+            self.MPPhysPlots[r, c].plot(self.imageTimes[0:ndpt], (self.FData[i, :]-1.0)*100.)
         self.plotCount += 1
         PL.draw()
         if self.plotCount >= self.nPhysPlots:
