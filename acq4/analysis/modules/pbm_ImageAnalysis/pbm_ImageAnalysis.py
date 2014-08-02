@@ -46,6 +46,7 @@ from acq4.analysis.tools import Fitting
 from acq4.analysis.tools import PlotHelpers as PH  # matlab plotting helpers
 from acq4.util import functions as FN
 from acq4.util.HelpfulException import HelpfulException
+from acq4.devices.Scanner.ScanProgram import rect
 
 try:
     import cv2
@@ -430,60 +431,95 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.imageScaleUnit = 'pixels'
         self.imageTimes = np.array(None)
         self.imageType = 'frames'  # frames for camera (all pixels simultaneous); scanner for scanner (need scan timing)
+        img = None
         if self.dataStruct is 'flat':
             #print 'getting Flat data structure!'
             if dh.isFile():
                 fhandle = dh
             else:
                 # test data type for the imaging
-                if os.path.isfile(os.path.join(dh.name(), 'Camera/frames.ma')):
-                    fhandle = dh['Camera/frames.ma']
-                elif os.path.isfile(os.path.join(dh.name(), 'imaging.ma')):
-                    fhandle = dh['imaging.ma']
-                    print dir(fhandle)# more scanner info from:
-                    self.imageType= 'scans'
-                    print fhandle.info()
-                    # man.currentFile.info()['Scanner']['program']  regarding the scan program
-                    # pixel sizes, dwell time, overall size, etc
-                    # analysis/imaging/children/decomb/children/value has the decombing time (sec).
-                    # man.currentFile.info()['protocol']['analysis']['Imaging']['children']['decomb']['value']
+                requestType = ['frames', 'PMT', 'imaging']  # selection of image types for analysis - can exclude imaging for example.
+                if os.path.isfile(os.path.join(dh.name(), 'Camera/frames.ma')) and 'frames' in requestType:
+                    fhandle = dh['Camera/frames.ma']  # get data from ccd camera
+                    self.imageType = 'frames'
+                    if self.downSample == 1:
+                        imt = MetaArray(file=fhandle.name())
+                        self.imageInfo = imt.infoCopy()
+                        img = imt.asarray()
+                        #img = fhandle.read() # read the image stack directly
+                    else:
+                        (img, info) = self.tryDownSample(fhandle)
+                        self.imageInfo = info
+                    self.imageTimes = self.imageInfo[0]['values']
+                    self.imageData = img.view(np.ndarray)
+                    sh = self.imageData.shape
+                    self.scanTimes = np.zeros(sh[1]*sh[2]).reshape((sh[1], sh[2]))
+
+                elif os.path.isfile(os.path.join(dh.name(), 'PMT.ma')) and 'PMT' in requestType:
+                    fhandle = dh['PMT.ma']  # get data from PMT, as raw trace information
+                    self.imageType = 'PMT'
+                    rs = rect.RectScan()
+                    scanInfo = dh.info()['Scanner']['program'][0]['scanInfo']
+                    decombInfo = dh.info()['protocol']['analysis']['Imaging']['children']['decomb']
+                    auto = decombInfo['children']['auto']['value']
+                    subpixel = decombInfo['children']['subpixel']['value']
+                    rs.restoreState(scanInfo)
+                    pmtData = MetaArray(file=fhandle.name())
+                    self.imageInfo = pmtData.infoCopy()
+                    if auto:
+                        (decombed, lag) = rs.measureMirrorLag(pmtData.asarray()[0])
+                    else:
+                        lag = decombInfo['value']
+                    img = rs.extractImage(pmtData.asarray()[0], offset=lag, subpixel=subpixel)
+                    self.imageData = img.view(np.ndarray)
+                    itx = rs.extractImage(pmtData.xvals('Time'), offset=lag, subpixel=subpixel)
+                    self.imageTimes = itx[:,0,0]
+                    # print 'info values shape: ', self.imageInfo[1]['values'].shape
+                    # print 'rs image shape: ', rs.imageShape
+                    # print 'rs image stride: ', rs.imageStride
+                    # print 'pmt image times 2: ', self.imageTimes.shape
+                    self.scanTimes = itx[0,:,:]  # use times from first scan; will adjust offset later
+                    # TODO: put lag, auto and subpixel info on display; allow user adjustment of all
+
+                elif os.path.isfile(os.path.join(dh.name(), 'imaging.ma')) and 'imaging' in requestType:
+                    fhandle = dh['imaging.ma']  # get data from a pre-processed imaging file of PMT data
+                    self.imageType = 'scans'
+                    if self.downSample == 1:
+                        imt = MetaArray(file=fhandle.name())
+                        self.imageInfo = imt.infoCopy()
+                        img = imt.asarray()
+                    else:
+                        (img, info) = self.tryDownSample(fhandle)
+                        self.imageInfo = info
+                    self.imageData = img.view(np.ndarray)
+                    self.imageTimes = self.imageInfo[0]['values']
+                    itdt = (np.max(self.imageTimes)/len(self.imageTimes))  # time between scans (duration)
+                    sh = self.imageData.shape
+                    self.scanTimes = np.linspace(0., itdt, sh[1]*sh[2]).reshape((sh[1], sh[2]))  # estimated times for each point in the image.
+                        # man.currentFile.info()['Scanner']['program']  regarding the scan program
+                        # pixel sizes, dwell time, overall size, etc
+                        # analysis/imaging/children/decomb/children/value has the decombing time (sec).
+                        # man.currentFile.info()['protocol']['analysis']['Imaging']['children']['decomb']['value']
                 else:
                     raise Exception("No valid imaging data found")
+                # TODO: inform user of loaded in gui
+                print 'Loaded image type: ', self.imageType
                 self.clearPhysiologyInfo()  # clear the physiology data currently in memory to avoid confusion
             if not dh.isFile():
                 self.readPhysiology(dh)
-            if self.downSample == 1:
-                imt = MetaArray(file=fhandle.name())
-                self.imageInfo = imt.infoCopy()
-                img = imt.asarray()
-                #img = fhandle.read() # read the image stack directly
-            else:
-                (img, info) = self.tryDownSample(fhandle)
-                self.imageInfo = info
-            if img == []:
+            if img is None:
                 return False
             fi = self.ignoreFirst
-            print self.imageInfo
-            self.imageData = img.view(np.ndarray)  # load into rawData, clipping the first image if needed
             self.rawData = self.imageData.copy()[fi:]  # save the raw data.
             self.imageData = self.imageData[fi:]
-            self.baseImages = range(1)  # identify which images to show as the "base image"
-            if len(self.imageInfo) > 3 and 'Frame Time' in self.imageInfo[3].keys():
-                self.imageTimes = np.append(self.imageTimes, self.imageInfo[3]['Frame Time'])
-            else:
-                self.imageTimes = self.imageInfo[0].values()[1]
-            sh = self.imageData.shape
-            if self.imageType == 'scans':
-#                print len(self.imageTimes)
-                itdt = (np.max(self.imageTimes)/len(self.imageTimes))  # time between scans (duration)
-                self.scanTimes = np.linspace(0., itdt, sh[1]*sh[2])  # estimated times for each point in the image.
-#                print itdt
-#                print sh[1], sh[2]
-                self.scanTimes = self.scanTimes.reshape((sh[1], sh[2]))  # make same shape as image. Times referenced to frame time start in self.imageTimes
-#                print np.mean(np.diff(self.scanTimes)), self.scanTimes.shape
-            else:
-                self.scanTimes = None
             self.imageTimes = self.imageTimes[fi:]
+            self.baseImages = range(1)  # identify which images to show as the "base image"
+            # print 'image type: ', self.imageType
+            # print 'image Info: ', self.imageInfo
+            # print 'image time shape: ', self.imageTimes.shape
+            # print 'data shape: ', sh
+            # print 'scan time shape: ', self.scanTimes.shape
+            # print 'scan start time: ', self.scanTimes[0]
             if self.downSample > 1:
                 self.imageTimes = self.imageTimes[0:-1:self.downSample]
             self.imagedT = np.mean(np.diff(self.imageTimes))
@@ -1541,12 +1577,12 @@ class pbm_ImageAnalysis(AnalysisModule):
         """
         if roi in self.AllRois:
             if livePlot is True:
-                if self.imageType == 'frame':
+                if self.imageType == 'frames':
                     times = self.imageTimes[0:len(self.BFData[roi.ID])]
-                elif self.imageType == 'scans':
+                elif self.imageType in ['scans', 'PMT']:
                     times = self.scannerTimes(roi)
                 else:
-                    raise ValueError('image type for time array not known: %s', self.imageType)
+                    raise ValueError('Image type for time array not known: %s', self.imageType)
                 try:
                     roi.plot.setData(times, self.BFData[roi.ID],
                                      pen=pg.mkPen(np.append(roi.color[0:3], 255), width=1.0)) #, pen=pg.mkPen(roi.color), clear=True)
@@ -2853,11 +2889,14 @@ class pbm_ImageAnalysis(AnalysisModule):
             Return:
             a list of the aligned images
         """
-        from acq4.analysis.tools import ImageP # avaialable as part of the STXMPy package
+        try:
+            from acq4.analysis.tools import ImageP # avaialable as part of the STXMPy package
+        except:
+            raise ImportError('cann import ImageP for stack registration')
 
         imgstack = self.imageData
         cut = False
-        imgi = 0 # use first image as reference
+        imgi = 0  # use first image as reference
         N = len(imgstack)            
         if imgi < 0 or imgi >= N:
             print "Invalid index: %d not in 0 - %d" %(imgi, N)

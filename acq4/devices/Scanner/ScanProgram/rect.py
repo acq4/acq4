@@ -494,7 +494,7 @@ class RectScan(SystemSolver):
 
         shape = self.imageShape
         stride = self.imageStride
-        
+
         if subpixel and fracOffset != 0:
             interp = data[:-1] * (1.0 - fracOffset) + data[1:] * fracOffset
             image = pg.subArray(interp, intOffset, shape, stride)            
