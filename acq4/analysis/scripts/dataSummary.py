@@ -2,7 +2,7 @@ __author__ = 'pbmanis'
 """
 dataSummary: This script reads all of the data files in a given directory, and prints out top level information
 including notes, protocols run (and whether or not they are complete), and image files associated with a cell.
-Currently, this routine makes assumptions about the layout as a heirichal structure [days, slices, cells, protocols]
+Currently, this routine makes assumptions about the layout as a hierarchical structure [days, slices, cells, protocols]
 and does not print out information if there are no successful protocols run.
 June, 2014, Paul B. Manis.
 
@@ -40,12 +40,15 @@ class DataSummary():
         #2011.10.17_000
         minday = (2011, 10, 17)
         minday = minday[0]*1e4+minday[1]*1e2+minday[2]
-        maxday = (2014, 1, 1)
+        maxday = (2014, 12, 31)
         maxday = maxday[0]*1e4+maxday[1]*1e2+maxday[2]
         days = []
         for thisfile in allfiles:
             m = daytype.match(thisfile)
+            if m == '.DS_Store':
+                continue
             if m is None:
+                print 'File is not a match: ', thisfile
                 continue  # no match
             if len(m.groups()) == 4:  # perfect match
                 # print m.groups()
@@ -301,10 +304,10 @@ class DataSummary():
 #        print 'loadfilerequested dh: ', dh
 
         if len(dh) == 0:
-            raise Exception("IVCurve::loadFileRequested: " +
+            raise Exception("DataSummary::loadFileRequested: " +
                             "Select an IV protocol directory.")
         if len(dh) != 1:
-            raise Exception("IVCURVE::loadFileRequested: " +
+            raise Exception("DataSummary::loadFileRequested: " +
                             "Can only load one file at a time.")
 #        if self.current_dirhandle != dh[0]:  # is this the current file/directory?
         self.get_file_information(default_dh=dh)  # No, get info from most recent file requested

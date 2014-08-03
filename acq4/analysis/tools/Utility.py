@@ -189,27 +189,33 @@ def SignalFilter(signal, LPF, HPF, samplefreq):
     return(w)
 
 # filter with Butterworth low pass, using time-causal lfilter 
-def SignalFilter_LPFButter(signal, LPF, samplefreq, NPole = 8):
+def SignalFilter_LPFButter(signal, LPF, samplefreq, NPole = 8, bidir=False):
     flpf = float(LPF)
     sf = float(samplefreq)
     wn = [flpf/(sf/2.0)]
     b, a = spSignal.butter(NPole, wn, btype='low', output='ba')
     zi = spSignal.lfilter_zi(b,a)
-    out, zo = spSignal.lfilter(b, a, signal, zi=zi*signal[0])
+    if bidir:
+        out, zo = spSignal.filtfilt(b, a, signal, zi=zi*signal[0])
+    else:
+        out, zo = spSignal.lfilter(b, a, signal, zi=zi*signal[0])
     return(numpy.array(out))
 
 # filter with Butterworth high pass, using time-causal lfilter 
-def SignalFilter_HPFButter(signal, HPF, samplefreq, NPole = 8):
+def SignalFilter_HPFButter(signal, HPF, samplefreq, NPole = 8, bidir=False):
     flpf = float(HPF)
     sf = float(samplefreq)
     wn = [flpf/(sf/2.0)]
     b, a = spSignal.butter(NPole, wn, btype='high', output='ba')
     zi = spSignal.lfilter_zi(b,a)
-    out, zo = spSignal.lfilter(b, a, signal, zi=zi*signal[0])
-    return(numpy.array(out)) 
+    if bidir:
+        out, zo = spSignal.filtfilt(b, a, signal, zi=zi*signal[0])
+    else:
+        out, zo = spSignal.lfilter(b, a, signal, zi=zi*signal[0])
+    return(numpy.array(out))
         
 # filter signal with low-pass Bessel
-def SignalFilter_LPFBessel(signal, LPF, samplefreq, NPole = 8, reduce = False):
+def SignalFilter_LPFBessel(signal, LPF, samplefreq, NPole=8, reduce=False, bidir=False):
     """ Low pass filter a signal, possibly reducing the number of points in the
         data array.
         signal: a numpya array of dim = 1, 2 or 3. The "last" dimension is filtered.
@@ -237,7 +243,11 @@ def SignalFilter_LPFBessel(signal, LPF, samplefreq, NPole = 8, reduce = False):
             output = 'ba')
     if signal.ndim == 1:
         sm = numpy.mean(signal)
-        w=spSignal.lfilter(filter_b, filter_a, signal-sm) # filter the incoming signal
+        if bidir:
+            w=spSignal.filtfilt(filter_b, filter_a, signal-sm) # filter the incoming signal
+        else:
+            w=spSignal.lfilter(filter_b, filter_a, signal-sm) # filter the incoming signal
+
         w = w + sm
         if reduction > 1:
             w = spSignal.resample(w, reduction)
@@ -246,7 +256,11 @@ def SignalFilter_LPFBessel(signal, LPF, samplefreq, NPole = 8, reduce = False):
         sh = numpy.shape(signal)
         for i in range(0, numpy.shape(signal)[0]):
             sm = numpy.mean(signal[i,:])
-            w1 = spSignal.lfilter(filter_b, filter_a, signal[i,:]-sm)
+            if bidir:
+                w1 = spSignal.filtfilt(filter_b, filter_a, signal[i, :]-sm)
+            else:
+                w1 = spSignal.lfilter(filter_b, filter_a, signal[i, :]-sm)
+
             w1 = w1 + sm
             if reduction == 1:
                 w1 = spSignal.resample(w1, reduction)
@@ -259,7 +273,10 @@ def SignalFilter_LPFBessel(signal, LPF, samplefreq, NPole = 8, reduce = False):
         for i in range(0, numpy.shape(signal)[0]):
             for j in range(0, numpy.shape(signal)[1]):
                 sm = numpy.mean(signal[i,j,:])
-                w1 = spSignal.lfilter(filter_b, filter_a, signal[i,j,:]-sm)
+                if bidir:
+                    w1 = spSignal.filtfilt(filter_b, filter_a, signal[i,j,:]-sm)
+                else:
+                    w1 = spSignal.lfilter(filter_b, filter_a, signal[i,j,:]-sm)
                 w1 = w1 + sm
                 if reduction == 1:
                     w1 = spSignal.resample(w1, reduction)
