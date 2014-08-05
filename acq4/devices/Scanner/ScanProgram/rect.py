@@ -494,7 +494,7 @@ class RectScan(SystemSolver):
 
         shape = self.imageShape
         stride = self.imageStride
-        
+
         if subpixel and fracOffset != 0:
             interp = data[:-1] * (1.0 - fracOffset) + data[1:] * fracOffset
             image = pg.subArray(interp, intOffset, shape, stride)            
@@ -506,38 +506,41 @@ class RectScan(SystemSolver):
             image[:, 1::2] = image[:, 1::2, ::-1]
         return image
 
-    def measureMirrorLag(self, data, auto=True, shift=0., minShift=0., maxShift=100.e-6):
+    def measureMirrorLag(self, data, auto=True, shift=0., minShift=0., maxShift=100, transpose=False):
         """
         Estimate the mirror lag in a bidirectional raster scan.
         The *data* argument is a photodetector recording array.
         This can be used as the *offset* argument to extractImage().
         """
         ## split image into fields
-        # units of the shift coming in here are in pixels (integer)
+        # units of the shift coming in here are in pixels (integer) (not seconds, as previously)
         img = self.extractImage(data)
-
+        if transpose:
+            img = img.transpose()
         nr = 2 * (img.shape[1] // 2)
-        f1 = img[:,0:nr:2]
-        f2 = img[:,1:nr+1:2]
-        
+        f1 = img[:, 0:nr:2]
+        f2 = img[:, 1:nr+1:2]
+        if img.shape[0] < maxShift:
+            maxShift = img.shape[0]
+
         ## find optimal shift
         if auto:
             bestShift = None
             bestError = None
-            #errs = []
+            errs = []
             for shift in range(int(minShift), int(maxShift)):
                 f2s = f2[:-shift] if shift > 0 else f2
                 err1 = np.abs((f1[shift:, 1:]-f2s[:, 1:])**2).sum()
                 err2 = np.abs((f1[shift:, 1:]-f2s[:, :-1])**2).sum()
                 totErr = (err1+err2) / float(f1.shape[0]-shift)
-                #errs.append(totErr)
-                if totErr < bestError or bestError is None:
+                errs.append(totErr)
+                if bestError is None or totErr < bestError:
                     bestError = totErr
                     bestShift = shift
-            #pg.plot(errs)
+            # pg.plot(errs)
         else:
             bestShift = shift
-        if bestShift is None: # nothing...
+        if bestShift is None:  # nothing...
             return img, 0.
         ## reconstruct from shifted fields
         leftShift = bestShift // 2

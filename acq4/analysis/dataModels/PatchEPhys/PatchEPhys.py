@@ -42,6 +42,9 @@ Notes:
     
 """
 
+def knownClampNames():
+    return deviceNames['Clamp']
+
 def isSequence(dh):
     """Return true if dh is a directory handle for a protocol sequence."""
     return dirType(dh) == 'ProtocolSequence'
@@ -206,15 +209,16 @@ def getParent(child, parentType):
     return getParent(parent, parentType)
 
 def getClampFile(protoDH):
-    """Given a protocol directory handle, return the clamp file handle within. 
-    If there are multiple clamps, only the first is returned.
-    Return None if no clamps are found."""
+    """
+    Given a protocol directory handle, return the clamp file handle within.
+    If there are multiple clamps, only the first one encountered in deviceNames is returned.
+    Return None if no clamps are found.
+    """
     if protoDH.name()[-8:] == 'DS_Store': ## OS X filesystem puts .DS_Store files in all directories
         return None
     files = protoDH.ls()
-    names = deviceNames['Clamp']
-    for n in names:
-        if n in files: 
+    for n in deviceNames['Clamp']:
+        if n in files:
             return protoDH[n]
         if n+'.ma' in files:
             return protoDH[n+'.ma']
@@ -225,7 +229,7 @@ def isClampFile(fh):
         return False
     else:
         return True
-        
+
 def getClampCommand(data, generateEmpty=True):    
     """Returns the command data from a clamp MetaArray.
     If there was no command specified, the function will return all zeros if generateEmpty=True (default)."""
@@ -252,12 +256,18 @@ def getClampPrimary(data):
     else:
         return data['Channel': 'scaled']
 
-def getClampMode(data):
+def getClampMode(data_handle):
     """Given a clamp file handle or MetaArray, return the recording mode."""
-    if not (hasattr(data, 'implements') and data.implements('MetaArray')):
-        if not isClampFile(data):
-            raise Exception('%s not a clamp file.' % data.shortName())
-        data = data.read()
+    if (hasattr(data_handle, 'implements') and data_handle.implements('MetaArray')):
+        data = data_handle
+    elif isClampFile(data_handle):
+        data = data_handle.read(readAllData=False)
+    else:
+        raise Exception('%s not a clamp file.' % data)
+    # if isClampFile(data_handle):
+    #     data = data_handle.read(readAllData=False)
+    # else:
+    #     data = data_handle
     info = data._info[-1]
     if 'ClampState' in info:
         return info['ClampState']['mode']
@@ -266,19 +276,18 @@ def getClampMode(data):
             mode = info['mode']
             return mode
         except KeyError:
-            return 'vc' # None  kludge to handle simulations, which don't seem to fully fill the structures.
+            return 'vc'  # None  kludge to handle simulations, which don't seem to fully fill the structures.
 
-def getClampHoldingLevel(fh):
+def getClampHoldingLevel(data_handle):
     """Given a clamp file handle, return the holding level (voltage for VC, current for IC).
     TODO: This function should add in the amplifier's internal holding value, if available?
     """
+    if not isClampFile(data_handle):
+        raise Exception('%s not a clamp file.' % data_handle.shortName())
     
-    if not isClampFile(fh):
-        raise Exception('%s not a clamp file.' % fh.shortName())
-    
-    data = fh.read()
+    data = data_handle.read(readAllData=False)
     info = data._info[-1]
-    p1 = fh.parent()
+    p1 = data_handle.parent()
     p2 = p1.parent()
     if isSequence(p2):
         sinfo = p2.info()
@@ -292,33 +301,39 @@ def getClampHoldingLevel(fh):
         return info['DAQ']['command']['holding']
     else:
         try:
-            if fh.shortName()[-3:] == '.ma':
-                name = fh.shortName()[:-3]
+            if data_handle.shortName()[-3:] == '.ma':
+                name = data_handle.shortName()[:-3]
             else:
-                name = fh.shortName()
+                name = data_handle.shortName()
             holding = float(sinfo['devices'][name]['holdingSpin']) ## in volts
             return holding
         except KeyError:
             return None
 
-def getClampState(data):
+def getClampState(data_handle):
     """
     Return the full clamp state
     """
+    if not isClampFile(data_handle):
+        raise Exception('%s not a clamp file.' % data_handle.shortName())
+    data = data_handle.read(readAllData=False)
     info = data._info[-1]
     if 'ClampState' in info.keys():
         return info['ClampState']
     else:
         return None
 
-def getWCCompSettings(data):
+def getWCCompSettings(data_handle):
     """
     return the compensation settings, if available
     Settings are returned as a group in a dictionary
     """
+    if not isClampFile(data_handle):
+        raise Exception('%s not a clamp file.' % data_handle.shortName())
+    data = data_handle.read(readAllData=False)
     info = data._info[-1]
-    d={}
-    if 'ClampState' in info.keys():
+    d = {}
+    if 'ClampState' in info.keys() and 'ClampParams' in info['ClampState'].keys():
         par = info['ClampState']['ClampParams']
         d['WCCompValid'] = True
         d['WCEnabled'] = par['WholeCellCompEnable']
@@ -332,9 +347,11 @@ def getWCCompSettings(data):
         return {'WCCompValid': False, 'WCEnable': 0, 'WCResistance': 0., 'WholeCellCap': 0.,
                 'CompEnable': 0, 'CompCorrection': 0., 'CompBW': 50000. }
 
-def getSampleRate(data):
+def getSampleRate(data_handle):
     """given clamp data, return the data sampling rate """
-    #data = fh.read()
+    if not isClampFile(data_handle):
+        raise Exception('%s not a clamp file.' % data_handle.shortName())
+    data = data_handle.read(readAllData=False)
     info = data._info[-1]
     if 'DAQ' in info.keys():
         return(info['DAQ']['primary']['rate'])
@@ -364,6 +381,28 @@ def getDevices(protoDH):
     if len(devList) == 0:
         return None
     return devList
+
+
+def getClampDeviceNames(protoDH):
+    """
+    get the Clamp devices used in the current protocol
+    :param data:
+    :return:
+    """
+    if protoDH.name()[-8:] == 'DS_Store': ## OS X filesystem puts .DS_Store files in all directories
+        return None
+    files = protoDH.ls()
+    clampDeviceNames = []
+    for knownDevName in deviceNames['Clamp']:  # go through known devices
+        if knownDevName in files:
+            clampDeviceNames.append(knownDevName)
+        elif knownDevName+'.ma' in files:
+            clampDeviceNames.append(knownDevName)
+        else:
+                pass
+    if len(clampDeviceNames) == 0:
+        return None
+    return clampDeviceNames
 
 
 def getNamedDeviceFile(protoDH, deviceName):
@@ -403,18 +442,24 @@ def getCellInfo(dh):
 
 def getACSF(dh):
     dayInfo = getDayInfo(dh)
-    return dayInfo.get('solution', '')
+    if dayInfo is not None:
+        return dayInfo.get('solution', '')
+    return None
     
 def getInternalSoln(dh):
     dayInfo = getDayInfo(dh)
-    return dayInfo.get('internal', '')
+    if dayInfo is not None:
+        return dayInfo.get('internal', '')
+    return None
 
 def getTemp(dh):
     if dh.isFile():
         dh = dh.parent()
     temp = dh.info().get(('Temperature','BathTemp'), None)
     if temp is None:
-        temp = getDayInfo(dh).get('temperature', '')
+        dayinfo = getDayInfo(dh)
+        if dayinfo is not None:
+            temp = getDayInfo(dh).get('temperature', '')
     return temp
 
 def getCellType(dh):

@@ -70,7 +70,7 @@ class IVCurve(AnalysisModule):
         self.color_list = itertools.cycle(self.colors)
         self.symbol_list = itertools.cycle(self.symbols)
         self.data_mode = 'IC'  # analysis depends on the type of data we have.
-        self.ic_modes = ['IC', 'CC', 'IClamp', 'ic']
+        self.ic_modes = ['IC', 'CC', 'IClamp', 'ic', 'I-Clamp Fast', 'I-Clamp Slow']
         self.vc_modes = ['VC', 'VClamp', 'vc']  # list of VC modes
 
         #--------------graphical elements-----------------
@@ -363,7 +363,10 @@ class IVCurve(AnalysisModule):
         self.analysis_summary['Internal'] = self.dataModel.getInternalSoln(dh)
         self.analysis_summary['Temp'] = self.dataModel.getTemp(dh)
         self.analysis_summary['CellType'] = self.dataModel.getCellType(dh)
-        ct = self.analysis_summary['Cell']['__timestamp__']
+        if self.analysis_summary['Cell'] is not None:
+            ct = self.analysis_summary['Cell']['__timestamp__']
+        else:
+            ct = 0.
         pt = dh.info()['__timestamp__']
         self.analysis_summary['ElapsedTime'] = pt-ct  # save elapsed time between cell opening and protocol start
         (date, sliceid, cell, proto, p3) = self.file_cell_protocol()
@@ -456,7 +459,8 @@ class IVCurve(AnalysisModule):
                 # Check if there is no clamp file for this iteration of the protocol
                 # Usually this indicates that the protocol was stopped early.
                 if data_file_handle is None:
-                    raise Exception('IVCurve.loadFileRequested: Missing data in %s, element: %d' % (directory_name, i))
+                    print 'IVCurve.loadFileRequested: Missing data in %s, element: %d' % (directory_name, i)
+                    #raise Exception('IVCurve.loadFileRequested: Missing data in %s, element: %d' % (directory_name, i))
                     continue
             except:
                 raise Exception("Error loading data for protocol %s:"
@@ -465,7 +469,7 @@ class IVCurve(AnalysisModule):
             data_file = data_file_handle.read()
             # only consider data in a particular range
             data = self.dataModel.getClampPrimary(data_file)
-            self.data_mode = self.dataModel.getClampMode(data)
+            self.data_mode = self.dataModel.getClampMode(data_file)
             if self.data_mode is None:
                 self.data_mode = self.ic_modes[0]  # set a default mode
             if self.data_mode in ['model_ic', 'model_vc']:  # lower case means model was run
@@ -489,9 +493,10 @@ class IVCurve(AnalysisModule):
                     continue  # skip adding the data to the arrays
 
             self.devicesUsed = self.dataModel.getDevices(data_dir_handle)
+            self.clampDevices = self.dataModel.getClampDeviceNames(data_dir_handle)
             self.holding = self.dataModel.getClampHoldingLevel(data_file_handle)
-            self.amp_settings = self.dataModel.getWCCompSettings(data_file)
-            self.clamp_state = self.dataModel.getClampState(data_file)
+            self.amp_settings = self.dataModel.getWCCompSettings(data_file_handle)
+            self.clamp_state = self.dataModel.getClampState(data_file_handle)
             # print self.devicesUsed
             cmd = self.dataModel.getClampCommand(data_file)
 
@@ -539,12 +544,26 @@ class IVCurve(AnalysisModule):
             data.infoCopy(-1)]
         traces = traces[:len(self.values)]
         self.traces = MetaArray(traces, info=info)
-        sfreq = self.dataModel.getSampleRate(data)
+        sfreq = self.dataModel.getSampleRate(data_file_handle)
         self.sample_interval = 1./sfreq
-        vc_command = data_dir_handle.parent().info()['devices']['Clamp1']
-        vc_info = vc_command['waveGeneratorWidget']['stimuli']['Pulse']
-        pulsestart = vc_info['start']['value']
-        pulsedur = vc_info['length']['value']
+        vc_command = data_dir_handle.parent().info()['devices'][self.clampDevices[0]]
+        if 'waveGeneratorWidget' in vc_command:
+            vc_info = vc_command['waveGeneratorWidget']['stimuli']['Pulse']
+            pulsestart = vc_info['start']['value']
+            pulsedur = vc_info['length']['value']
+        elif 'daqState' in vc_command:
+            vc_state = vc_command['daqState']['channels']['command']['waveGeneratorWidget']
+            func = vc_state['function']
+            # regex parse the function string: pulse(100, 1000, amp)
+            pulsereg = re.compile("(^pulse)\((\d*),\s*(\d*),\s*(\w*)\)")
+            match = pulsereg.match(func)
+            g = match.groups()
+            if g is None:
+                raise Exception('loadFileRequested (IVCurve) cannot parse waveGenerator function: %s' % func)
+            pulsestart = float(g[1])/1000. # values coming in are in ms, but need s
+            pulsedur = float(g[2])/1000.
+        else:
+            raise Exception("loadFileRequested (IVCurve): cannot find pulse information")
         cmdtimes = np.array([pulsestart, pulsedur])
         if self.ctrl.IVCurve_KeepT.isChecked() is False:
             self.tstart = cmdtimes[0] # cmd.xvals('Time')[cmdtimes[0]]

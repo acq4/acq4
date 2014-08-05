@@ -14,6 +14,7 @@ class CSVExporter(Exporter):
         self.params = Parameter(name='params', type='group', children=[
             {'name': 'separator', 'type': 'list', 'value': 'comma', 'values': ['comma', 'tab']},
             {'name': 'precision', 'type': 'int', 'value': 10, 'limits': [0, None]},
+            {'name': 'columnMode', 'type': 'list', 'values': ['(x,y) per plot', '(x,y,y,y) for all plots']}
         ])
         
     def parameters(self):
@@ -32,7 +33,9 @@ class CSVExporter(Exporter):
         data = []
         header = []
 
-        for i,c in enumerate(self.item.curves):
+        appendAllX = self.params['columnMode'] == '(x,y) per plot'
+
+        for i, c in enumerate(self.item.curves):
             cd = c.getData()
             if cd[0] is None:
                 continue
@@ -43,7 +46,10 @@ class CSVExporter(Exporter):
             else:
                 xName = 'x%04d' % i
                 yName = 'y%04d' % i
-            header.extend([xName, yName])
+            if appendAllX or i == 0:
+                header.extend([xName, yName])
+            else:
+                header.extend([yName])
 
         if self.params['separator'] == 'comma':
             sep = ','
@@ -55,11 +61,17 @@ class CSVExporter(Exporter):
         numFormat = '%%0.%dg' % self.params['precision']
         numRows = max([len(d[0]) for d in data])
         for i in range(numRows):
-            for d in data:
+            for j, d in enumerate(data):
                 if d is not None and i < len(d[0]):
-                    fd.write('%g%s%g%s'%(d[0][i], sep, d[1][i], sep))
+                    if appendAllX or j == 0:
+                        fd.write('%g%s%g%s' % (d[0][i], sep, d[1][i], sep))
+                    else:
+                        fd.write('%g%s' % (d[1][i], sep))
                 else:
-                    fd.write(' %s %s' % (sep, sep))
+                    if appendAllX or j == 0:
+                        fd.write(' %s %s' % (sep, sep))
+                    else:
+                        fd.write(' %s' % (sep))
             fd.write('\n')
         fd.close()
 
