@@ -976,14 +976,16 @@ class ROI(GraphicsObject):
         return QtCore.QRectF(0, 0, self.state['size'][0], self.state['size'][1]).normalized()
 
     def paint(self, p, opt, widget):
-        p.save()
-        r = self.boundingRect()
+        # p.save()
+        # Note: don't use self.boundingRect here, because subclasses may need to redefine it.
+        r = QtCore.QRectF(0, 0, self.state['size'][0], self.state['size'][1]).normalized()
+        
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         p.setPen(self.currentPen)
         p.translate(r.left(), r.top())
         p.scale(r.width(), r.height())
         p.drawRect(0, 0, 1, 1)
-        p.restore()
+        # p.restore()
 
     def getArraySlice(self, data, img, axes=(0,1), returnSlice=True):
         """Return a tuple of slice objects that can be used to slice the region from data covered by this ROI.
@@ -1880,10 +1882,7 @@ class PolyLineROI(ROI):
     def addHandle(self, info, index=None):
         h = ROI.addHandle(self, info, index=index)
         h.sigRemoveRequested.connect(self.removeHandle)
-        return h
-        
-    def listPoints(self):
-        return [p['item'].pos() for p in self.handles]    
+        return h  
         
     def segmentClicked(self, segment, ev=None, pos=None): ## pos should be in this item's coordinate system
         if ev != None:
@@ -2155,71 +2154,93 @@ class CrosshairROI(ROI):
             size=[1,1]
         if pos == None:
             pos = [0,0]
+        self._shape = None
         ROI.__init__(self, pos, size, **kargs)
         
-        
-        self.addScaleRotateHandle(Point(0.5,0), Point(0, 0))
+        self.sigRegionChanged.connect(self.invalidate)
+        self.addScaleRotateHandle(Point(1, 0), Point(0, 0))
         self.aspectLocked = True
+
+    def invalidate(self):
+        self._shape = None
+        self.prepareGeometryChange()
         
     def boundingRect(self):
-        size = self.size()
-        return QtCore.QRectF(-size[0]/2., -size[1]/2., size[0], size[1]).normalized()
+        #size = self.size()
+        #return QtCore.QRectF(-size[0]/2., -size[1]/2., size[0], size[1]).normalized()
+        return self.shape().boundingRect()
     
-    def getRect(self):
-        ## same as boundingRect -- for internal use so that boundingRect can be re-implemented in subclasses
-        size = self.size()
-        return QtCore.QRectF(-size[0]/2., -size[1]/2., size[0], size[1]).normalized()
+    #def getRect(self):
+        ### same as boundingRect -- for internal use so that boundingRect can be re-implemented in subclasses
+        #size = self.size()
+        #return QtCore.QRectF(-size[0]/2., -size[1]/2., size[0], size[1]).normalized()
         
     
     def shape(self):
-        p = QtGui.QPainterPath()
-    
-        #h1 = self.handles[0]['item'].pos()
-        #h2 = self.handles[1]['item'].pos()
-        w1 = Point(-0.5, 0)*self.size()
-        w2 = Point(0.5, 0)*self.size()
-        h1 = Point(0, -0.5)*self.size()
-        h2 = Point(0, 0.5)*self.size()
-        
-        dh = h2-h1
-        dw = w2-w1
-        if dh.length() == 0 or dw.length() == 0:
-            return p
-        pxv = self.pixelVectors(dh)[1]
-        if pxv is None:
-            return p
+        if self._shape is None:
+            radius = self.getState()['size'][1]
+            p = QtGui.QPainterPath()
+            p.moveTo(Point(0, -radius))
+            p.lineTo(Point(0, radius))
+            p.moveTo(Point(-radius, 0))
+            p.lineTo(Point(radius, 0))
+            p = self.mapToDevice(p)
+            stroker = QtGui.QPainterPathStroker()
+            stroker.setWidth(10)
+            outline = stroker.createStroke(p)
+            self._shape = self.mapFromDevice(outline)
             
-        pxv *= 4
         
-        p.moveTo(h1+pxv)
-        p.lineTo(h2+pxv)
-        p.lineTo(h2-pxv)
-        p.lineTo(h1-pxv)
-        p.lineTo(h1+pxv)
-        
-        pxv = self.pixelVectors(dw)[1]
-        if pxv is None:
-            return p
+            ##h1 = self.handles[0]['item'].pos()
+            ##h2 = self.handles[1]['item'].pos()
+            #w1 = Point(-0.5, 0)*self.size()
+            #w2 = Point(0.5, 0)*self.size()
+            #h1 = Point(0, -0.5)*self.size()
+            #h2 = Point(0, 0.5)*self.size()
             
-        pxv *= 4
+            #dh = h2-h1
+            #dw = w2-w1
+            #if dh.length() == 0 or dw.length() == 0:
+                #return p
+            #pxv = self.pixelVectors(dh)[1]
+            #if pxv is None:
+                #return p
+                
+            #pxv *= 4
+            
+            #p.moveTo(h1+pxv)
+            #p.lineTo(h2+pxv)
+            #p.lineTo(h2-pxv)
+            #p.lineTo(h1-pxv)
+            #p.lineTo(h1+pxv)
+            
+            #pxv = self.pixelVectors(dw)[1]
+            #if pxv is None:
+                #return p
+                
+            #pxv *= 4
+            
+            #p.moveTo(w1+pxv)
+            #p.lineTo(w2+pxv)
+            #p.lineTo(w2-pxv)
+            #p.lineTo(w1-pxv)
+            #p.lineTo(w1+pxv)
         
-        p.moveTo(w1+pxv)
-        p.lineTo(w2+pxv)
-        p.lineTo(w2-pxv)
-        p.lineTo(w1-pxv)
-        p.lineTo(w1+pxv)
-        
-        return p
+        return self._shape
     
     def paint(self, p, *args):
-        p.save()
-        r = self.getRect()
+        #p.save()
+        #r = self.getRect()
+        radius = self.getState()['size'][1]
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         p.setPen(self.currentPen)
-        p.translate(r.left(), r.top())
-        p.scale(r.width()/10., r.height()/10.) ## need to scale up a little because drawLine has trouble dealing with 0.5
-        p.drawLine(0,5, 10,5)
-        p.drawLine(5,0, 5,10)
-        p.restore()
+        #p.translate(r.left(), r.top())
+        #p.scale(r.width()/10., r.height()/10.) ## need to scale up a little because drawLine has trouble dealing with 0.5
+        #p.drawLine(0,5, 10,5)
+        #p.drawLine(5,0, 5,10)
+        #p.restore()
+        
+        p.drawLine(Point(0, -radius), Point(0, radius))
+        p.drawLine(Point(-radius, 0), Point(radius, 0))
         
         

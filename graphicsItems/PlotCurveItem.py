@@ -420,7 +420,6 @@ class PlotCurveItem(GraphicsObject):
         x = None
         y = None
         path = self.getPath()
-        
         profiler('generate path')
         
         if self._exportOpts is not False:

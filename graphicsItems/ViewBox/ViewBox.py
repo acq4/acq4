@@ -1494,7 +1494,7 @@ class ViewBox(GraphicsWidget):
         aspect = self.state['aspectLocked']  # size ratio / view ratio
         tr = self.targetRect()
         bounds = self.rect()
-        if aspect is not False and aspect != 0 and tr.height() != 0 and bounds.height() != 0:
+        if aspect is not False and 0 not in [aspect, tr.height(), bounds.height(), bounds.width()]:
             
             ## This is the view range aspect ratio we have requested
             targetRatio = tr.width() / tr.height() if tr.height() != 0 else 1
@@ -1590,18 +1590,16 @@ class ViewBox(GraphicsWidget):
         if any(changed):
             self.sigRangeChanged.emit(self, self.state['viewRange'])
             self.update()
+            self._matrixNeedsUpdate = True
         
-        # Inform linked views that the range has changed
-        for ax in [0, 1]:
-            if not changed[ax]:
-                continue
-            link = self.linkedView(ax)
-            if link is not None:
-                link.linkedViewChanged(self, ax)
+            # Inform linked views that the range has changed
+            for ax in [0, 1]:
+                if not changed[ax]:
+                    continue
+                link = self.linkedView(ax)
+                if link is not None:
+                    link.linkedViewChanged(self, ax)
         
-        self.update()
-        self._matrixNeedsUpdate = True
-
     def updateMatrix(self, changed=None):
         ## Make the childGroup's transform match the requested viewRange.
         bounds = self.rect()

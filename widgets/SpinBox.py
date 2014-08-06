@@ -233,6 +233,18 @@ class SpinBox(QtGui.QAbstractSpinBox):
         
     def setDecimals(self, decimals):
         self.setOpts(decimals=decimals)
+        
+    def selectNumber(self):
+        """
+        Select the numerical portion of the text to allow quick editing by the user.
+        """
+        le = self.lineEdit()
+        text = le.text()
+        try:
+            index = text.index(' ')
+        except ValueError:
+            return
+        le.setSelection(0, index)
 
     def value(self):
         """
