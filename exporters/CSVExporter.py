@@ -56,10 +56,11 @@ class CSVExporter(Exporter):
         numRows = max([len(d[0]) for d in data])
         for i in range(numRows):
             for d in data:
-                if d is not None and i < len(d[0]):
-                    fd.write('%g%s%g%s'%(d[0][i], sep, d[1][i], sep))
-                else:
-                    fd.write(' %s %s' % (sep, sep))
+                for j in [0, 1]:
+                    if d is not None and i < len(d[j]):
+                        fd.write(numFormat % d[j][i] + sep)
+                    else:
+                        fd.write(' %s' % sep)
             fd.write('\n')
         fd.close()
 
