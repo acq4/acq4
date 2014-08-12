@@ -26,7 +26,8 @@ class InfiniteLine(GraphicsObject):
     sigPositionChangeFinished = QtCore.Signal(object)
     sigPositionChanged = QtCore.Signal(object)
     
-    def __init__(self, pos=None, angle=90, pen=None, movable=False, bounds=None):
+    def __init__(self, pos=None, angle=90, pen=None, movable=False, bounds=None, 
+                 span=(0, 1), markers=None):
         """
         =============== ==================================================================
         **Arguments:**
@@ -39,6 +40,11 @@ class InfiniteLine(GraphicsObject):
         movable         If True, the line can be dragged to a new position by the user.
         bounds          Optional [min, max] bounding values. Bounds are only valid if the
                         line is vertical or horizontal.
+        span            Optional tuple (min, max) giving the range over the view to draw
+                        the line. For example, with a vertical line, use span=(0.5, 1)
+                        to draw only on the top half of the view.
+        markers         List of (marker, position, size) tuples, one per marker to display
+                        on the line. See the addMarker method.
         =============== ==================================================================
         """
         
@@ -62,9 +68,18 @@ class InfiniteLine(GraphicsObject):
         
         self.setPen(pen)
         self.setHoverPen(color=(255,0,0), width=self.pen.width())
+        self.span = span
         self.currentPen = self.pen
-        #self.setFlag(self.ItemSendsScenePositionChanges)
-      
+        self.markers = []
+        self._maxMarkerSize = 0
+        if markers is not None:
+            for m in markers:
+                self.addMarker(*m)
+                
+        # Cache variables for managing bounds
+        self._endPoints = [0, 1] # 
+        self._bounds = None
+        
     def setMovable(self, m):
         """Set whether the line is movable by the user."""
         self.movable = m
@@ -95,6 +110,50 @@ class InfiniteLine(GraphicsObject):
         if self.mouseHovering:
             self.currentPen = self.hoverPen
             self.update()
+        
+    def addMarker(self, marker, position, size=10.0):
+        """Add a marker to be displayed on the line. 
+        
+        ============= =========================================================
+        **Arguments**
+        marker        String indicating the style of marker to add:
+                      '<|', '|>', '>|', '|<', '<|>', '>|<', 'o'
+        position      Position (0.0-1.0) along the visible extent of the line
+                      to place the marker.
+        size          Size of the marker in pixels. Default is 10.0.
+        ============= =========================================================
+        """
+        path = QtGui.QPainterPath()
+        if marker == 'o': 
+            path.addEllipse(QtCore.QRectF(-0.5, -0.5, 1, 1))
+        if '<|' in marker:
+            p = QtGui.QPolygonF([Point(0.5, 0), Point(0, -0.5), Point(-0.5, 0)])
+            path.addPolygon(p)
+            path.closeSubpath()
+        if '|>' in marker:
+            p = QtGui.QPolygonF([Point(0.5, 0), Point(0, 0.5), Point(-0.5, 0)])
+            path.addPolygon(p)
+            path.closeSubpath()
+        if '>|' in marker:
+            p = QtGui.QPolygonF([Point(0.5, -0.5), Point(0, 0), Point(-0.5, -0.5)])
+            path.addPolygon(p)
+            path.closeSubpath()
+        if '|<' in marker:
+            p = QtGui.QPolygonF([Point(0.5, 0.5), Point(0, 0), Point(-0.5, 0.5)])
+            path.addPolygon(p)
+            path.closeSubpath()
+        if '^' in marker:
+            p = QtGui.QPolygonF([Point(0, -0.5), Point(0.5, 0), Point(0, 0.5)])
+            path.addPolygon(p)
+            path.closeSubpath()
+        if 'v' in marker:
+            p = QtGui.QPolygonF([Point(0, -0.5), Point(-0.5, 0), Point(0, 0.5)])
+            path.addPolygon(p)
+            path.closeSubpath()
+        
+        self.markers.append((path, position, size))
+        self._maxMarkerSize = max([m[2] / 2. for m in self.markers])
+        self.update()
         
     def setAngle(self, angle):
         """
@@ -178,22 +237,68 @@ class InfiniteLine(GraphicsObject):
                 
     def boundingRect(self):
         #br = UIGraphicsItem.boundingRect(self)
-        br = self.viewRect()
+        vr = self.viewRect()  # bounds of containing ViewBox mapped to local coords.
+        
         ## add a 4-pixel radius around the line for mouse interaction.
         
         px = self.pixelLength(direction=Point(1,0), ortho=True)  ## get pixel length orthogonal to the line
         if px is None:
             px = 0
-        w = (max(4, self.pen.width()/2, self.hoverPen.width()/2)+1) * px
+        w = (max(4, self._maxMarkerSize, self.pen.width()/2, self.hoverPen.width()/2)+1)
+        w = w * px
+        br = QtCore.QRectF(vr)
         br.setBottom(-w)
         br.setTop(w)
-        return br.normalized()
-    
+
+        length = br.width()
+        left = br.left() + length * self.span[0]
+        right = br.left() + length * self.span[1]
+        br.setLeft(left - w)
+        br.setRight(right + w)
+        br = br.normalized()
+        
+        if self._bounds != br:
+            self._bounds = br
+            self.prepareGeometryChange()
+        
+        self._endPoints = (left, right)
+        self._lastViewRect = vr
+        
+        return self._bounds
+
     def paint(self, p, *args):
-        br = self.boundingRect()
+        p.setRenderHint(p.Antialiasing)
+        
+        left, right = self._endPoints
         p.setPen(self.currentPen)
-        p.drawLine(Point(br.right(), 0), Point(br.left(), 0))
+        p.drawLine(Point(left, 0), Point(right, 0))
+        
         #p.drawRect(self.boundingRect())
+        
+        if len(self.markers) == 0:
+            return
+        
+        # paint markers in native coordinate system
+        tr = p.transform()
+        p.resetTransform()
+        
+        start = tr.map(Point(left, 0))
+        end = tr.map(Point(right, 0))
+        dif = end - start
+        length = Point(dif).length()
+        angle = np.arctan2(dif.y(), dif.x()) * 180 / np.pi
+        
+        p.rotate(angle)
+        p.translate(start)
+        
+        p.setBrush(fn.mkBrush(self.currentPen.color()))
+        tr = p.transform()
+        for path, pos, size in self.markers:
+            p.setTransform(tr)
+            x = length * pos
+            p.translate(x, 0)
+            p.scale(size, size)
+            p.drawPath(path)
         
     def dataBounds(self, axis, frac=1.0, orthoRange=None):
         if axis == 0:
@@ -246,30 +351,4 @@ class InfiniteLine(GraphicsObject):
         else:
             self.currentPen = self.pen
         self.update()
-        
-    #def hoverEnterEvent(self, ev):
-        #print "line hover enter"
-        #ev.ignore()
-        #self.updateHoverPen()
-
-    #def hoverMoveEvent(self, ev):
-        #print "line hover move"
-        #ev.ignore()
-        #self.updateHoverPen()
-
-    #def hoverLeaveEvent(self, ev):
-        #print "line hover leave"
-        #ev.ignore()
-        #self.updateHoverPen(False)
-        
-    #def updateHoverPen(self, hover=None):
-        #if hover is None:
-            #scene = self.scene()
-            #hover = scene.claimEvent(self, QtCore.Qt.LeftButton, scene.Drag)
-        
-        #if hover:
-            #self.currentPen = fn.mkPen(255, 0,0)
-        #else:
-            #self.currentPen = self.pen
-        #self.update()
 
