@@ -23,8 +23,11 @@ else:
     profile = True
     sys.argv.pop(ind)    
 
-import faulthandler
-faulthandler.enable()
+try:
+    import faulthandler
+    faulthandler.enable()
+except:
+    pass
 
 ## Initialize Qt
 app = pg.mkQApp()
