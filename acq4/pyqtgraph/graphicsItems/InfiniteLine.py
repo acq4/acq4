@@ -69,8 +69,12 @@ class InfiniteLine(GraphicsObject):
             pen = (200, 200, 100)
         
         self.setPen(pen)
-        hp = 'r' if hoverPen is None else hoverPen
-        self.setHoverPen(hp)
+        
+        if hoverPen is None:
+            hoverPen = QtGui.QPen(self.pen)
+            hoverPen.setWidth(self.pen.width() * 3)
+        self.setHoverPen(hoverPen)
+        
         self.span = span
         self.currentPen = self.pen
         self.markers = []
@@ -110,7 +114,7 @@ class InfiniteLine(GraphicsObject):
         
         Added in version 0.9.9."""
         # If user did not supply a width, then copy it from pen
-        widthSpecified = (len(args) == 0 and isinstance(args[0], QtGui.QPen) or
+        widthSpecified = (len(args) == 1 and isinstance(args[0], QtGui.QPen) or
                           (isinstance(args[0], dict) and 'width' in args[0]) or
                           'width' in kwargs)
         self.hoverPen = fn.mkPen(*args, **kwargs)
