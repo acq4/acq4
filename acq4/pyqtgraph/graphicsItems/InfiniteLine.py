@@ -288,8 +288,8 @@ class InfiniteLine(GraphicsObject):
         length = Point(dif).length()
         angle = np.arctan2(dif.y(), dif.x()) * 180 / np.pi
         
-        p.rotate(angle)
         p.translate(start)
+        p.rotate(angle)
         
         p.setBrush(fn.mkBrush(self.currentPen.color()))
         tr = p.transform()

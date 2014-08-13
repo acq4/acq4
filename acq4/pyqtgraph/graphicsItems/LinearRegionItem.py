@@ -27,44 +27,47 @@ class LinearRegionItem(UIGraphicsItem):
     Vertical = 0
     Horizontal = 1
     
-    def __init__(self, values=[0,1], orientation=None, brush=None, movable=True, bounds=None):
+    def __init__(self, values=[0,1], orientation='vertical', brush=None, movable=True, bounds=None,
+                 span=(0, 1)):
         """Create a new LinearRegionItem.
         
         ==============  =====================================================================
         **Arguments:**
         values          A list of the positions of the lines in the region. These are not
                         limits; limits can be set by specifying bounds.
-        orientation     Options are LinearRegionItem.Vertical or LinearRegionItem.Horizontal.
-                        If not specified it will be vertical.
+        orientation     Options are 'vertical' or 'horizontal', indicating the 
+                        The default is 'vertical', indicating that the 
         brush           Defines the brush that fills the region. Can be any arguments that
                         are valid for :func:`mkBrush <pyqtgraph.mkBrush>`. Default is
                         transparent blue.
         movable         If True, the region and individual lines are movable by the user; if
                         False, they are static.
         bounds          Optional [min, max] bounding values for the region
+        span            Optional [min, max] giving the range over the view to draw
+                        the region. For example, with a vertical line, use span=(0.5, 1)
+                        to draw only on the top half of the view.
         ==============  =====================================================================
         """
         
         UIGraphicsItem.__init__(self)
-        if orientation is None:
-            orientation = LinearRegionItem.Vertical
         self.orientation = orientation
         self.bounds = QtCore.QRectF()
         self.blockLineSignal = False
         self.moving = False
         self.mouseHovering = False
         
-        if orientation == LinearRegionItem.Horizontal:
+        # note LinearRegionItem.Horizontal and LinearRegionItem.Vertical
+        # are kept for backward compatibility.
+        if orientation in ('horizontal', LinearRegionItem.Horizontal):
             self.lines = [
                 InfiniteLine(QtCore.QPointF(0, values[0]), 0, movable=movable, bounds=bounds), 
                 InfiniteLine(QtCore.QPointF(0, values[1]), 0, movable=movable, bounds=bounds)]
-        elif orientation == LinearRegionItem.Vertical:
+        elif orientation in ('vertical', LinearRegionItem.Vertical):
             self.lines = [
                 InfiniteLine(QtCore.QPointF(values[1], 0), 90, movable=movable, bounds=bounds), 
                 InfiniteLine(QtCore.QPointF(values[0], 0), 90, movable=movable, bounds=bounds)]
         else:
-            raise Exception('Orientation must be one of LinearRegionItem.Vertical or LinearRegionItem.Horizontal')
-        
+            raise Exception("Orientation must be 'vertical' or 'horizontal'.")
         
         for l in self.lines:
             l.setParentItem(self)
