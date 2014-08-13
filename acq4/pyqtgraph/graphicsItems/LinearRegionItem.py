@@ -34,7 +34,8 @@ class LinearRegionItem(GraphicsObject):
         }
     
     def __init__(self, values=(0, 1), orientation='vertical', brush=None, pen=None,
-                 movable=True, bounds=None, span=(0, 1), swapMode='sort'):
+                 hoverBrush=None, hoverPen=None, movable=True, bounds=None, 
+                 span=(0, 1), swapMode='sort'):
         """Create a new LinearRegionItem.
         
         ==============  =====================================================================
@@ -47,6 +48,8 @@ class LinearRegionItem(GraphicsObject):
                         are valid for :func:`mkBrush <pyqtgraph.mkBrush>`. Default is
                         transparent blue.
         pen             The pen to use when drawing the lines that bound the region.
+        hoverBrush      The brush to use when the mouse is hovering over the region.
+        hoverPen        The pen to use when the mouse is hovering over the region.
         movable         If True, the region and individual lines are movable by the user; if
                         False, they are static.
         bounds          Optional [min, max] bounding values for the region
@@ -82,6 +85,7 @@ class LinearRegionItem(GraphicsObject):
             bounds=bounds,
             span=span,
             pen=pen,
+            hoverPen=hoverPen,
             )
             
         if orientation in ('horizontal', LinearRegionItem.Horizontal):
@@ -108,6 +112,12 @@ class LinearRegionItem(GraphicsObject):
         if brush is None:
             brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 50))
         self.setBrush(brush)
+        
+        if hoverBrush is None:
+            c = self.brush.color()
+            c.setAlpha(min(c.alpha() * 2, 255))
+            hoverBrush = fn.mkBrush(c)
+        self.setHoverBrush(hoverBrush)
         
         self.setMovable(movable)
         
@@ -143,6 +153,13 @@ class LinearRegionItem(GraphicsObject):
         """
         self.brush = fn.mkBrush(*br, **kargs)
         self.currentBrush = self.brush
+
+    def setHoverBrush(self, *br, **kargs):
+        """Set the brush that fills the region when the mouse is hovering over.
+        Can have any arguments that are valid
+        for :func:`mkBrush <pyqtgraph.mkBrush>`.
+        """
+        self.hoverBrush = fn.mkBrush(*br, **kargs)
 
     def setBounds(self, bounds):
         """Optional [min, max] bounding values for the region. To have no bounds on the
@@ -262,9 +279,7 @@ class LinearRegionItem(GraphicsObject):
             return
         self.mouseHovering = hover
         if hover:
-            c = self.brush.color()
-            c.setAlpha(min(c.alpha() * 2, 255))
-            self.currentBrush = fn.mkBrush(c)
+            self.currentBrush = self.hoverBrush
         else:
             self.currentBrush = self.brush
         self.update()
