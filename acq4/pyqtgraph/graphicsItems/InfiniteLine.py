@@ -111,15 +111,15 @@ class InfiniteLine(GraphicsObject):
             self.currentPen = self.hoverPen
             self.update()
         
-    def addMarker(self, marker, position, size=10.0):
+    def addMarker(self, marker, position=0.5, size=10.0):
         """Add a marker to be displayed on the line. 
         
         ============= =========================================================
         **Arguments**
         marker        String indicating the style of marker to add:
-                      '<|', '|>', '>|', '|<', '<|>', '>|<', 'o'
+                      '<|', '|>', '>|', '|<', '<|>', '>|<', '^', 'v', 'o'
         position      Position (0.0-1.0) along the visible extent of the line
-                      to place the marker.
+                      to place the marker. Default is 0.5.
         size          Size of the marker in pixels. Default is 10.0.
         ============= =========================================================
         """
@@ -153,6 +153,13 @@ class InfiniteLine(GraphicsObject):
         
         self.markers.append((path, position, size))
         self._maxMarkerSize = max([m[2] / 2. for m in self.markers])
+        self.update()
+
+    def clearMarkers(self):
+        """ Remove all markers from this line.
+        """
+        self.markers = []
+        self._maxMarkerSize = 0
         self.update()
         
     def setAngle(self, angle):
