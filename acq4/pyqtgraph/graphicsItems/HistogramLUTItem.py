@@ -36,7 +36,7 @@ class HistogramLUTItem(GraphicsWidget):
     sigLevelsChanged = QtCore.Signal(object)
     sigLevelChangeFinished = QtCore.Signal(object)
     
-    def __init__(self, image=None, fillHistogram=True):
+    def __init__(self, image=None, fillHistogram=True, rgbHistogram=False, rgbLevels=False):
         """
         If *image* (ImageItem) is provided, then the control will be automatically linked to the image and changes to the control will be immediately reflected in the image's appearance.
         By default, the histogram is rendered with a fill. For performance, set *fillHistogram* = False.
@@ -44,6 +44,8 @@ class HistogramLUTItem(GraphicsWidget):
         GraphicsWidget.__init__(self)
         self.lut = None
         self.imageItem = lambda: None  # fake a dead weakref
+        self.rgbLevels = rgbLevels
+        self.rgbHistogram = rgbHistogram
         
         self.layout = QtGui.QGraphicsGridLayout()
         self.setLayout(self.layout)
@@ -56,9 +58,24 @@ class HistogramLUTItem(GraphicsWidget):
         self.gradient = GradientEditorItem()
         self.gradient.setOrientation('right')
         self.gradient.loadPreset('grey')
-        self.region = LinearRegionItem([0, 1], LinearRegionItem.Horizontal)
-        self.region.setZValue(1000)
-        self.vb.addItem(self.region)
+        self.regions = [
+            LinearRegionItem([0, 1], 'horizontal', swapMode='block'),
+            LinearRegionItem([0, 1], 'horizontal', swapMode='block', pen='r',
+                             brush=fn.mkBrush((255, 0, 0, 50)), span=(0., 1/3.)),
+            LinearRegionItem([0, 1], 'horizontal', swapMode='block', pen='g',
+                             brush=fn.mkBrush((0, 255, 0, 50)), span=(1/3., 2/3.)),
+            LinearRegionItem([0, 1], 'horizontal', swapMode='block', pen='b',
+                             brush=fn.mkBrush((0, 0, 255, 50)), span=(2/3., 1.))]
+        for region in self.regions:
+            region.setZValue(1000)
+            self.vb.addItem(region)
+            region.lines[0].addMarker('<|', 0.5)
+            region.lines[1].addMarker('|>', 0.5)
+            
+        self._showRegions()
+            
+        self.region = self.regions[0]  # for backward compatibility.
+        
         self.axis = AxisItem('left', linkView=self.vb, maxTickLength=-10)
         self.layout.addItem(self.axis, 0, 0)
         self.layout.addItem(self.vb, 0, 1)
@@ -96,6 +113,9 @@ class HistogramLUTItem(GraphicsWidget):
         #return QtCore.QSizeF(115, 200)
         
     def paint(self, p, *args):
+        if self.rgbLevels:
+            return
+        
         pen = self.region.lines[0].pen
         rgn = self.getLevels()
         p1 = self.vb.mapFromViewToItem(self, Point(self.vb.viewRect().center().x(), rgn[0]))
@@ -203,3 +223,16 @@ class HistogramLUTItem(GraphicsWidget):
         
     def setLevels(self, mn, mx):
         self.region.setRegion([mn, mx])
+
+    def _showRegions(self):
+        if self.rgbLevels:
+            self.regions[0].setVisible(False)
+            for i in range(1,4):
+                self.regions[i].setVisible(True)
+            self.gradient.hide()
+        else:
+            self.regions[0].setVisible(True)
+            for i in range(1,4):
+                self.regions[i].setVisible(False)
+            self.gradient.show()
+            

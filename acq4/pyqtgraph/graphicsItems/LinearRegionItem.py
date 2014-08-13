@@ -33,7 +33,7 @@ class LinearRegionItem(GraphicsObject):
         'horizontal': 1,
         }
     
-    def __init__(self, values=(0, 1), orientation='vertical', brush=None, 
+    def __init__(self, values=(0, 1), orientation='vertical', brush=None, pen=None,
                  movable=True, bounds=None, span=(0, 1), swapMode='sort'):
         """Create a new LinearRegionItem.
         
@@ -46,6 +46,7 @@ class LinearRegionItem(GraphicsObject):
         brush           Defines the brush that fills the region. Can be any arguments that
                         are valid for :func:`mkBrush <pyqtgraph.mkBrush>`. Default is
                         transparent blue.
+        pen             The pen to use when drawing the lines that bound the region.
         movable         If True, the region and individual lines are movable by the user; if
                         False, they are static.
         bounds          Optional [min, max] bounding values for the region
@@ -80,16 +81,21 @@ class LinearRegionItem(GraphicsObject):
             movable=movable,
             bounds=bounds,
             span=span,
+            pen=pen,
             )
             
         if orientation in ('horizontal', LinearRegionItem.Horizontal):
             self.lines = [
-                InfiniteLine(QtCore.QPointF(0, values[0]), 0, **lineKwds), 
-                InfiniteLine(QtCore.QPointF(0, values[1]), 0, **lineKwds)]
+                # rotate lines to 180 to preserve expected line orientation 
+                # with respect to region. This ensures that placing a '<|' 
+                # marker on lines[0] causes it to point left in vertical mode
+                # and down in horizontal mode. 
+                InfiniteLine(QtCore.QPointF(0, values[0]), angle=180, **lineKwds), 
+                InfiniteLine(QtCore.QPointF(0, values[1]), angle=180, **lineKwds)]
         elif orientation in ('vertical', LinearRegionItem.Vertical):
             self.lines = [
-                InfiniteLine(QtCore.QPointF(values[0], 0), 90, **lineKwds), 
-                InfiniteLine(QtCore.QPointF(values[1], 0), 90, **lineKwds)]
+                InfiniteLine(QtCore.QPointF(values[0], 0), angle=90, **lineKwds), 
+                InfiniteLine(QtCore.QPointF(values[1], 0), angle=90, **lineKwds)]
         else:
             raise Exception("Orientation must be 'vertical' or 'horizontal'.")
         
@@ -257,7 +263,7 @@ class LinearRegionItem(GraphicsObject):
         self.mouseHovering = hover
         if hover:
             c = self.brush.color()
-            c.setAlpha(c.alpha() * 2)
+            c.setAlpha(min(c.alpha() * 2, 255))
             self.currentBrush = fn.mkBrush(c)
         else:
             self.currentBrush = self.brush

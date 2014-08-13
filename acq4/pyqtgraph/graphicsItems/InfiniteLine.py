@@ -27,7 +27,7 @@ class InfiniteLine(GraphicsObject):
     sigPositionChanged = QtCore.Signal(object)
     
     def __init__(self, pos=None, angle=90, pen=None, movable=False, bounds=None, 
-                 span=(0, 1), markers=None):
+                 hoverPen=None, span=(0, 1), markers=None):
         """
         =============== ==================================================================
         **Arguments:**
@@ -37,6 +37,8 @@ class InfiniteLine(GraphicsObject):
         pen             Pen to use when drawing line. Can be any arguments that are valid
                         for :func:`mkPen <pyqtgraph.mkPen>`. Default pen is transparent
                         yellow.
+        hoverPen        Pen to use when the mouse cursor hovers over the line. 
+                        Only used when movable=True.
         movable         If True, the line can be dragged to a new position by the user.
         bounds          Optional [min, max] bounding values. Bounds are only valid if the
                         line is vertical or horizontal.
@@ -67,7 +69,8 @@ class InfiniteLine(GraphicsObject):
             pen = (200, 200, 100)
         
         self.setPen(pen)
-        self.setHoverPen(color=(255,0,0), width=self.pen.width())
+        hp = 'r' if hoverPen is None else hoverPen
+        self.setHoverPen(hp)
         self.span = span
         self.currentPen = self.pen
         self.markers = []
@@ -106,7 +109,14 @@ class InfiniteLine(GraphicsObject):
         If the line is not movable, then hovering is also disabled.
         
         Added in version 0.9.9."""
+        # If user did not supply a width, then copy it from pen
+        widthSpecified = (len(args) == 0 and isinstance(args[0], QtGui.QPen) or
+                          (isinstance(args[0], dict) and 'width' in args[0]) or
+                          'width' in kwargs)
         self.hoverPen = fn.mkPen(*args, **kwargs)
+        if not widthSpecified:
+            self.hoverPen.setWidth(self.pen.width())
+            
         if self.mouseHovering:
             self.currentPen = self.hoverPen
             self.update()
@@ -170,7 +180,7 @@ class InfiniteLine(GraphicsObject):
         Note that the use of value() and setValue() changes if the line is 
         not vertical or horizontal.
         """
-        self.angle = ((angle+45) % 180) - 45   ##  -45 <= angle < 135
+        self.angle = angle #((angle+45) % 180) - 45   ##  -45 <= angle < 135
         self.resetTransform()
         self.rotate(self.angle)
         self.update()
@@ -251,7 +261,8 @@ class InfiniteLine(GraphicsObject):
         px = self.pixelLength(direction=Point(1,0), ortho=True)  ## get pixel length orthogonal to the line
         if px is None:
             px = 0
-        w = (max(4, self._maxMarkerSize, self.pen.width()/2, self.hoverPen.width()/2)+1)
+        pw = max(self.pen.width() / 2, self.hoverPen.width() / 2)
+        w = max(4, self._maxMarkerSize + pw) + 1
         w = w * px
         br = QtCore.QRectF(vr)
         br.setBottom(-w)
@@ -277,7 +288,9 @@ class InfiniteLine(GraphicsObject):
         p.setRenderHint(p.Antialiasing)
         
         left, right = self._endPoints
-        p.setPen(self.currentPen)
+        pen = self.currentPen
+        pen.setJoinStyle(QtCore.Qt.MiterJoin)
+        p.setPen(pen)
         p.drawLine(Point(left, 0), Point(right, 0))
         
         #p.drawRect(self.boundingRect())
@@ -299,6 +312,7 @@ class InfiniteLine(GraphicsObject):
         p.rotate(angle)
         
         p.setBrush(fn.mkBrush(self.currentPen.color()))
+        #p.setPen(fn.mkPen(None))
         tr = p.transform()
         for path, pos, size in self.markers:
             p.setTransform(tr)
