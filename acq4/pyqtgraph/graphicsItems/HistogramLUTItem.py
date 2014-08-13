@@ -36,7 +36,7 @@ class HistogramLUTItem(GraphicsWidget):
     sigLevelsChanged = QtCore.Signal(object)
     sigLevelChangeFinished = QtCore.Signal(object)
     
-    def __init__(self, image=None, fillHistogram=True, rgbHistogram=False, rgbLevels=False):
+    def __init__(self, image=None, fillHistogram=True, rgbHistogram=False, levelMode='mono'):
         """
         If *image* (ImageItem) is provided, then the control will be automatically linked to the image and changes to the control will be immediately reflected in the image's appearance.
         By default, the histogram is rendered with a fill. For performance, set *fillHistogram* = False.
@@ -44,7 +44,7 @@ class HistogramLUTItem(GraphicsWidget):
         GraphicsWidget.__init__(self)
         self.lut = None
         self.imageItem = lambda: None  # fake a dead weakref
-        self.rgbLevels = rgbLevels
+        self.levelMode = levelMode
         self.rgbHistogram = rgbHistogram
         
         self.layout = QtGui.QGraphicsGridLayout()
@@ -52,9 +52,12 @@ class HistogramLUTItem(GraphicsWidget):
         self.layout.setContentsMargins(1,1,1,1)
         self.layout.setSpacing(0)
         self.vb = ViewBox()
+        self.vb.setBackgroundColor(0.3)
         self.vb.setMaximumWidth(152)
         self.vb.setMinimumWidth(45)
         self.vb.setMouseEnabled(x=False, y=True)
+        item = PlotDataItem(x=np.linspace(0, 1, 10), y=[1,4,2,3,7,4,6,5,8,7])
+        self.vb.addItem(item)
         self.gradient = GradientEditorItem()
         self.gradient.setOrientation('right')
         self.gradient.loadPreset('grey')
@@ -65,12 +68,16 @@ class HistogramLUTItem(GraphicsWidget):
             LinearRegionItem([0, 1], 'horizontal', swapMode='block', pen='g',
                              brush=fn.mkBrush((0, 255, 0, 50)), span=(1/3., 2/3.)),
             LinearRegionItem([0, 1], 'horizontal', swapMode='block', pen='b',
-                             brush=fn.mkBrush((0, 0, 255, 50)), span=(2/3., 1.))]
+                             brush=fn.mkBrush((0, 0, 255, 50)), span=(2/3., 1.)),
+            LinearRegionItem([0, 1], 'horizontal', swapMode='block', pen='w',
+                             brush=fn.mkBrush((255, 255, 255, 50)), span=(2/3., 1.))]
         for region in self.regions:
             region.setZValue(1000)
             self.vb.addItem(region)
             region.lines[0].addMarker('<|', 0.5)
             region.lines[1].addMarker('|>', 0.5)
+            region.sigRegionChanged.connect(self.regionChanging)
+            region.sigRegionChangeFinished.connect(self.regionChanged)
             
         self._showRegions()
             
@@ -88,8 +95,6 @@ class HistogramLUTItem(GraphicsWidget):
         #self.vb.addItem(self.grid)
         
         self.gradient.sigGradientChanged.connect(self.gradientChanged)
-        self.region.sigRegionChanged.connect(self.regionChanging)
-        self.region.sigRegionChangeFinished.connect(self.regionChanged)
         self.vb.sigRangeChanged.connect(self.viewRangeChanged)
         self.plot = PlotDataItem()
         self.plot.rotate(90)
@@ -113,7 +118,7 @@ class HistogramLUTItem(GraphicsWidget):
         #return QtCore.QSizeF(115, 200)
         
     def paint(self, p, *args):
-        if self.rgbLevels:
+        if self.levelMode != 'mono':
             return
         
         pen = self.region.lines[0].pen
@@ -121,10 +126,10 @@ class HistogramLUTItem(GraphicsWidget):
         p1 = self.vb.mapFromViewToItem(self, Point(self.vb.viewRect().center().x(), rgn[0]))
         p2 = self.vb.mapFromViewToItem(self, Point(self.vb.viewRect().center().x(), rgn[1]))
         gradRect = self.gradient.mapRectToParent(self.gradient.gradRect.rect())
-        for pen in [fn.mkPen('k', width=3), pen]:
+        for pen in [fn.mkPen((0, 0, 0, 100), width=3), pen]:
             p.setPen(pen)
-            p.drawLine(p1, gradRect.bottomLeft())
-            p.drawLine(p2, gradRect.topLeft())
+            p.drawLine(p1 + Point(0, 5), gradRect.bottomLeft())
+            p.drawLine(p2 - Point(0, 5), gradRect.topLeft())
             p.drawLine(gradRect.topLeft(), gradRect.topRight())
             p.drawLine(gradRect.bottomLeft(), gradRect.bottomRight())
         #p.drawRect(self.boundingRect())
@@ -223,16 +228,29 @@ class HistogramLUTItem(GraphicsWidget):
         
     def setLevels(self, mn, mx):
         self.region.setRegion([mn, mx])
+        
+    def setLevelMode(self, mode):
+        """ Set the method of controlling the image levels offered to the user. 
+        Options are 'mono', 'rgba', 'rgb', and 'rg'.
+        """
+        self.levelMode = mode
+        self._showRegions()
 
     def _showRegions(self):
-        if self.rgbLevels:
-            self.regions[0].setVisible(False)
-            for i in range(1,4):
-                self.regions[i].setVisible(True)
-            self.gradient.hide()
-        else:
-            self.regions[0].setVisible(True)
-            for i in range(1,4):
-                self.regions[i].setVisible(False)
-            self.gradient.show()
+        for rgn in self.regions:
+            rgn.setVisible(False)
             
+        if self.levelMode in ('rg', 'rgb', 'rgba'):
+            imax = len(self.levelMode)+1
+            xdif = 1.0 / (imax-1)
+            for i in range(1, imax):
+                self.regions[i].setVisible(True)
+                self.regions[i].setSpan((i-1) * xdif, i * xdif)
+            self.gradient.hide()
+        elif self.levelMode == 'mono':
+            self.regions[0].setVisible(True)
+            self.gradient.show()
+        else:
+            raise ValueError("Unknown level mode %r" %  self.levelMode) 
+        
+        self.update()

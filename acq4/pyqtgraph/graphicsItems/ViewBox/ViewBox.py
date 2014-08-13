@@ -423,6 +423,7 @@ class ViewBox(GraphicsWidget):
             ch.setParentItem(None)
         
     def resizeEvent(self, ev):
+        self._matrixNeedsUpdate = True
         self.linkedXChanged()
         self.linkedYChanged()
         self.updateAutoRange()

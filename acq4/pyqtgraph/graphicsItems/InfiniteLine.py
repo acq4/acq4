@@ -86,6 +86,7 @@ class InfiniteLine(GraphicsObject):
         # Cache variables for managing bounds
         self._endPoints = [0, 1] # 
         self._bounds = None
+        self._lastViewSize = None
         
     def setMovable(self, m):
         """Set whether the line is movable by the user."""
@@ -255,6 +256,10 @@ class InfiniteLine(GraphicsObject):
         #else:
             #print "ignore", change
         #return GraphicsObject.itemChange(self, change, val)
+    
+    def setSpan(self, mn, mx):
+        self.span = (mn, mx)
+        self.update()
                 
     def boundingRect(self):
         #br = UIGraphicsItem.boundingRect(self)
@@ -279,8 +284,11 @@ class InfiniteLine(GraphicsObject):
         br.setRight(right + w)
         br = br.normalized()
         
-        if self._bounds != br:
+        vs = self.getViewBox().size()
+        
+        if self._bounds != br or self._lastViewSize != vs:
             self._bounds = br
+            self._lastViewSize = vs
             self.prepareGeometryChange()
         
         self._endPoints = (left, right)
@@ -308,12 +316,17 @@ class InfiniteLine(GraphicsObject):
         
         start = tr.map(Point(left, 0))
         end = tr.map(Point(right, 0))
+        up = tr.map(Point(left, 1))
         dif = end - start
         length = Point(dif).length()
         angle = np.arctan2(dif.y(), dif.x()) * 180 / np.pi
         
         p.translate(start)
         p.rotate(angle)
+        
+        up = up - start
+        det = up.x() * dif.y() - dif.x() * up.y()
+        p.scale(1, 1 if det > 0 else -1)
         
         p.setBrush(fn.mkBrush(self.currentPen.color()))
         #p.setPen(fn.mkPen(None))

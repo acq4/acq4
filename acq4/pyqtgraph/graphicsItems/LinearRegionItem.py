@@ -94,8 +94,10 @@ class LinearRegionItem(GraphicsObject):
                 # with respect to region. This ensures that placing a '<|' 
                 # marker on lines[0] causes it to point left in vertical mode
                 # and down in horizontal mode. 
-                InfiniteLine(QtCore.QPointF(0, values[0]), angle=180, **lineKwds), 
-                InfiniteLine(QtCore.QPointF(0, values[1]), angle=180, **lineKwds)]
+                InfiniteLine(QtCore.QPointF(0, values[0]), angle=0, **lineKwds), 
+                InfiniteLine(QtCore.QPointF(0, values[1]), angle=0, **lineKwds)]
+            self.lines[0].scale(1, -1)
+            self.lines[1].scale(1, -1)
         elif orientation in ('vertical', LinearRegionItem.Vertical):
             self.lines = [
                 InfiniteLine(QtCore.QPointF(values[0], 0), angle=90, **lineKwds), 
@@ -144,7 +146,8 @@ class LinearRegionItem(GraphicsObject):
         self.blockLineSignal = False
         self.lines[1].setValue(rgn[1])
         #self.blockLineSignal = False
-        self.lineMoved()
+        self.lineMoved(0)
+        self.lineMoved(1)
         self.lineMoveFinished()
 
     def setBrush(self, *br, **kargs):
@@ -177,6 +180,12 @@ class LinearRegionItem(GraphicsObject):
             l.setMovable(m)
         self.movable = m
         self.setAcceptHoverEvents(m)
+
+    def setSpan(self, mn, mx):
+        self.span = (mn, mx)
+        self.lines[0].setSpan(mn, mx)
+        self.lines[1].setSpan(mn, mx)
+        self.update()
 
     def boundingRect(self):
         br = self.viewRect()  # bounds of containing ViewBox mapped to local coords.
