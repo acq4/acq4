@@ -31,7 +31,7 @@ class ImagingModule(AnalysisModule):
 
         self.params = Parameter(name='imager', children=[
             dict(name='scanner', type='interface', interfaceTypes=['scanner']),
-            dict(name='detector', type='interface', interfaceTypes=['daqChannelGroup']),
+            dict(name='detectors', type='group', addText="Add detector.."),
             dict(name='decomb', type='float', value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=1e-6, children=[
                 dict(name='auto', type='bool', value=True),
                 dict(name='subpixel', type='bool', value=False),
@@ -41,6 +41,7 @@ class ImagingModule(AnalysisModule):
             ])
         self.ptree.setParameters(self.params, showTop=False)
         self.params.sigTreeStateChanged.connect(self.update)
+        self.params.child('detectors').sigAddNew.connect(self.addNewDetector)
 
         self.man = getManager()
         self.lastFrame = None
@@ -50,6 +51,11 @@ class ImagingModule(AnalysisModule):
         self.plotWidget.imageItem.setAutoDownsample(True)
         # self.ui.scannerComboBox.setTypes('scanner')
         # self.ui.detectorComboBox.setTypes('daqChannelGroup')
+
+    def addNewDetector(self):
+        self.params.child('detectors').addChild(
+            dict(name='detector', type='interface', interfaceTypes=['daqChannelGroup']),
+            autoIncrementName=True)
                 
     def quit(self):
         self.clear()
@@ -73,7 +79,7 @@ class ImagingModule(AnalysisModule):
         frame contains all of the data returned from all devices
         """
         self.lastFrame = frame
-        self.update()
+        self.update()  # updates image
 
         # Store image if requested
         storeFlag = frame['cmd']['protocol']['storeData'] # get flag 
@@ -103,17 +109,15 @@ class ImagingModule(AnalysisModule):
         # imageDownSample = self.ui.downSampling.value() # this is the "image" downsample,
         # get the downsample for the daq. This is far more complicated than it should be...
 
-        # Get PMT signal
-        pmt = frame['result'][self.params['detector']]["Channel":'Input']
-        # info = finfo.infoCopy()
-        # daqDownSample = info[1]['DAQ']['Input'].get('downsampling', 1)
-        # if daqDownSample != 1:
-            # raise HelpfulException("Set downsampling in DAQ to 1!")
-        # get the data and the command used on the scanner
-        pmtdata = pmt.asarray()
+        # Get PMT signal(s)
+        pmtdata = []
+        for detector in self.params.param('detectors'):
+            data = frame['result'][detector.value()]["Channel":'Input']
+            pmtdata.append(data.asarray())
+        
         t = pmt.xvals('Time')
-        # dt = t[1]-t[0]
 
+        # parse program options
         progs = frame['cmd'][self.params['scanner']]['program']
         if len(progs) == 0:
             self.image.setImage(np.zeros((1,1)))
@@ -121,11 +125,6 @@ class ImagingModule(AnalysisModule):
 
         # For now, we only support single-component scan programs.
         prog = progs[0]
-        # nscans = prog['nScans']
-        # limits = prog['points']
-        # dist = (pg.Point(limits[0])-pg.Point(limits[1])).length()
-        # startT = prog['startTime']
-        # endT = prog['endTime'] # note that this value is shared by all types, so rectscan computes in program generator...
         
         if prog['type'] == 'rect':
             # keep track of some analysis in case it should be stored later
@@ -139,12 +138,17 @@ class ImagingModule(AnalysisModule):
             # Determine decomb duration
             auto = self.params['decomb', 'auto']
             if auto:
-                (decombed, lag) = rs.measureMirrorLag(pmtdata)
+                (decombed, lag) = rs.measureMirrorLag(pmtdata[0])
                 self.params['decomb'] = lag
             decomb = self.params['decomb']
             
             # Extract from PMT array
-            imageData = rs.extractImage(pmtdata, offset=decomb, subpixel=self.params['decomb', 'subpixel'])
+            imageData = []
+            for chan in pmtdata:
+                chanImage = rs.extractImage(chan, offset=decomb, subpixel=self.params['decomb', 'subpixel'])
+                imageData.append(chanImage.reshape(chanImage.shape + (1,)))
+            imageData = np.concatenate(imageData, axis=-1)
+                
             if imageData.size == 0:
                 self.clear()
                 raise Exception('image Data has zero size')
@@ -166,7 +170,8 @@ class ImagingModule(AnalysisModule):
             result['transform'] = pg.SRTTransform3D(tr)
 
             # Display image locally
-            self.plotWidget.setImage(imageData)
+            levelMode = 'mono' if imageData.shape[-1] == 1 else 'rgba'
+            self.plotWidget.setImage(imageData, levelMode)
             self.plotWidget.getView().setAspectLocked(True)
 #            self.plotWidget.imageItem.setRect(QtCore.QRectF(0., 0., rs.width, rs.height))  # TODO: rs.width and rs.height might not be correct!
             self.plotWidget.imageItem.resetTransform()
