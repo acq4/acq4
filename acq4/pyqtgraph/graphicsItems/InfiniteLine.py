@@ -258,8 +258,9 @@ class InfiniteLine(GraphicsObject):
         #return GraphicsObject.itemChange(self, change, val)
     
     def setSpan(self, mn, mx):
-        self.span = (mn, mx)
-        self.update()
+        if self.span != (mn, mx):
+            self.span = (mn, mx)
+            self.update()
                 
     def boundingRect(self):
         #br = UIGraphicsItem.boundingRect(self)

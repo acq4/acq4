@@ -930,7 +930,9 @@ def makeARGB(data, lut=None, levels=None, scale=None, useRGBA=False):
                 minVal, maxVal = levels[i]
                 if minVal == maxVal:
                     maxVal += 1e-16
-                newData[...,i] = rescaleData(data[...,i], scale/(maxVal-minVal), minVal, dtype=int)
+                rng = maxVal-minVal
+                rng = 1 if rng == 0 else rng
+                newData[...,i] = rescaleData(data[...,i], scale / rng, minVal, dtype=int)
             data = newData
         else:
             minVal, maxVal = levels
@@ -939,7 +941,9 @@ def makeARGB(data, lut=None, levels=None, scale=None, useRGBA=False):
             if maxVal == minVal:
                 data = rescaleData(data, 1, minVal, dtype=int)
             else:
-                data = rescaleData(data, scale/(maxVal-minVal), minVal, dtype=int)
+                rng = maxVal-minVal
+                rng = 1 if rng == 0 else rng
+                data = rescaleData(data, scale / rng, minVal, dtype=int)
 
     profile()
 

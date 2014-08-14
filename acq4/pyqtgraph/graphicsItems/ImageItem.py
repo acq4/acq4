@@ -92,6 +92,11 @@ class ImageItem(GraphicsObject):
             return None
         return self.image.shape[1]
 
+    def channels(self):
+        if self.image is None:
+            return None
+        return self.image.shape[2] if self.image.ndim == 3 else 1
+
     def boundingRect(self):
         if self.image is None:
             return QtCore.QRectF(0., 0., 0., 0.)

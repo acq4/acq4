@@ -94,11 +94,11 @@ class HistogramLUTItem(GraphicsWidget):
         self.vb.sigRangeChanged.connect(self.viewRangeChanged)
         add = QtGui.QPainter.CompositionMode_Plus
         self.plots = [
-            PlotCurveItem(pen=(200, 200, 200, 200)),  # mono
-            PlotCurveItem(pen=(255, 0, 0, 200), compositionMode=add),  # r
-            PlotCurveItem(pen=(0, 255, 0, 200), compositionMode=add),  # g
-            PlotCurveItem(pen=(0, 0, 255, 200), compositionMode=add),  # b
-            PlotCurveItem(pen=(200, 200, 200, 200), compositionMode=add),  # a
+            PlotCurveItem(pen=(200, 200, 200, 100)),  # mono
+            PlotCurveItem(pen=(255, 0, 0, 100), compositionMode=add),  # r
+            PlotCurveItem(pen=(0, 255, 0, 100), compositionMode=add),  # g
+            PlotCurveItem(pen=(0, 0, 255, 100), compositionMode=add),  # b
+            PlotCurveItem(pen=(200, 200, 200, 100), compositionMode=add),  # a
             ]
         
         self.plot = self.plots[0]  # for backward compatibility.
@@ -117,7 +117,7 @@ class HistogramLUTItem(GraphicsWidget):
         #self.setSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding)
         
     def fillHistogram(self, fill=True, level=0.0, color=(100, 100, 200)):
-        colors = [color, (255, 0, 0, 100), (0, 255, 0, 100), (0, 0, 255, 100), (255, 255, 255, 50)]
+        colors = [color, (255, 0, 0, 50), (0, 255, 0, 50), (0, 0, 255, 50), (255, 255, 255, 50)]
         for i,plot in enumerate(self.plots):
             if fill:
                 plot.setFillLevel(level)
@@ -234,12 +234,17 @@ class HistogramLUTItem(GraphicsWidget):
                 else:
                     # hide channels not present in image data
                     self.plots[i].setVisible(False)
+            # make sure we are displaying the correct number of channels
+            self._showRegions()
             
     def getLevels(self):
         if self.levelMode == 'mono':
             return self.region.getRegion()
         else:
-            return [r.getRegion() for r in self.regions[1:len(self.levelMode)+1]]
+            nch = self.imageItem().channels()
+            if nch is None:
+                nch = 3
+            return [r.getRegion() for r in self.regions[1:nch+1]]
         
     def setLevels(self, min=None, max=None, rgba=None):
         """Set the min/max (bright and dark) levels.
@@ -260,19 +265,27 @@ class HistogramLUTItem(GraphicsWidget):
         
     def setLevelMode(self, mode):
         """ Set the method of controlling the image levels offered to the user. 
-        Options are 'mono', 'rgba', and 'rgb'.
+        Options are 'mono' or 'rgba'.
         """
+        assert mode in ('mono', 'rgba')
         self.levelMode = mode
         self._showRegions()
+        self.imageChanged()
+        self.update()
 
     def _showRegions(self):
         for i in range(len(self.regions)):
             self.regions[i].setVisible(False)
             
-        if self.levelMode in ('rgb', 'rgba'):
-            imax = len(self.levelMode)+1
-            xdif = 1.0 / (imax-1)
-            for i in range(1, imax):
+        if self.levelMode == 'rgba':
+            imax = 4
+            if self.imageItem() is not None:
+                # Only show rgb channels if connected image lacks alpha.
+                nch = self.imageItem().channels()
+                if nch is None:
+                    nch = 3
+            xdif = 1.0 / nch
+            for i in range(1, nch+1):
                 self.regions[i].setVisible(True)
                 self.regions[i].setSpan((i-1) * xdif, i * xdif)
             self.gradient.hide()
@@ -281,6 +294,4 @@ class HistogramLUTItem(GraphicsWidget):
             self.gradient.show()
         else:
             raise ValueError("Unknown level mode %r" %  self.levelMode) 
-        
-        self.imageChanged()
-        self.update()
+    

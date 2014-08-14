@@ -182,6 +182,8 @@ class LinearRegionItem(GraphicsObject):
         self.setAcceptHoverEvents(m)
 
     def setSpan(self, mn, mx):
+        if self.span == (mn, mx):
+            return
         self.span = (mn, mx)
         self.lines[0].setSpan(mn, mx)
         self.lines[1].setSpan(mn, mx)
