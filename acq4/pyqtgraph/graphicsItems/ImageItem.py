@@ -306,6 +306,10 @@ class ImageItem(GraphicsObject):
         else:
             image = self.image
         
+        # Convert single-channel image to 2D array
+        if image.ndim == 3 and image.shape[-1] == 1:
+            image = image[..., 0]
+
         argb, alpha = fn.makeARGB(image.transpose((1, 0, 2)[:image.ndim]), lut=lut, levels=self.levels)
         self.qimage = fn.makeQImage(argb, alpha, transpose=False)
 

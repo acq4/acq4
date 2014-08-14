@@ -24,8 +24,8 @@ class ImagingModule(AnalysisModule):
         self.layout.addWidget(self.splitter)
         self.ptree = ParameterTree()
         self.splitter.addWidget(self.ptree)
-        self.plotWidget = pg.ImageView()
-        self.splitter.addWidget(self.plotWidget)
+        self.imageView = pg.ImageView()
+        self.splitter.addWidget(self.imageView)
 
         # self.postGuiInit()
 
@@ -48,7 +48,9 @@ class ImagingModule(AnalysisModule):
         # self.SUF = SUFA.ScannerUtilities()
         # self.ui.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
         self.img = pg.ImageItem()  ## image shown in camera module
-        self.plotWidget.imageItem.setAutoDownsample(True)
+        self.img.setLookupTable(self.imageView.ui.histogram.getLookupTable)  # image fetches LUT from the ImageView
+        self.imageView.ui.histogram.sigLevelsChanged.connect(self._updateCamModImage)
+        self.imageView.imageItem.setAutoDownsample(True)
         # self.ui.scannerComboBox.setTypes('scanner')
         # self.ui.detectorComboBox.setTypes('daqChannelGroup')
 
@@ -65,6 +67,11 @@ class ImagingModule(AnalysisModule):
         return self.params.saveState(filter='user')
 
     def restoreState(self, state):
+        # for backward compat:
+        det = state['children'].pop('detector', None)
+        if det is not None:
+            state['children']['detectors']['children']['detector'] = det
+
         self.params.restoreState(state, removeChildren=False)
 
     def taskSequenceStarted(self, *args):
@@ -113,9 +120,11 @@ class ImagingModule(AnalysisModule):
         pmtdata = []
         for detector in self.params.param('detectors'):
             data = frame['result'][detector.value()]["Channel":'Input']
+            t = data.xvals('Time')
             pmtdata.append(data.asarray())
         
-        t = pmt.xvals('Time')
+        if len(pmtdata) == 0:
+            return
 
         # parse program options
         progs = frame['cmd'][self.params['scanner']]['program']
@@ -178,12 +187,12 @@ class ImagingModule(AnalysisModule):
             result['transform'] = pg.SRTTransform3D(tr)
 
             # Display image locally
-            self.plotWidget.setImage(imageData, levelMode)
-            self.plotWidget.getView().setAspectLocked(True)
-#            self.plotWidget.imageItem.setRect(QtCore.QRectF(0., 0., rs.width, rs.height))  # TODO: rs.width and rs.height might not be correct!
-            self.plotWidget.imageItem.resetTransform()
-            self.plotWidget.imageItem.scale((rs.width/rs.height)/(imageData.shape[1]/imageData.shape[2]), 1.0)
-            self.plotWidget.autoRange()
+            self.imageView.setImage(imageData, levelMode=levelMode)
+            self.imageView.getView().setAspectLocked(True)
+#            self.imageView.imageItem.setRect(QtCore.QRectF(0., 0., rs.width, rs.height))  # TODO: rs.width and rs.height might not be correct!
+            self.imageView.imageItem.resetTransform()
+            self.imageView.imageItem.scale((rs.width/rs.height)/(imageData.shape[1]/imageData.shape[2]), 1.0)
+            self.imageView.autoRange()
 
             # Display image remotely (in the same camera module as used by the scanner device)
             if self.params['display']:
@@ -300,7 +309,7 @@ class ImagingModule(AnalysisModule):
                 dirhandle.writeFile(ma, 'Imaging.ma')
         
     def clear(self):
-        self.plotWidget.clear()
+        self.imageView.clear()
         scene = self.img.scene()
         if scene is not None:
             scene.removeItem(self.img)
@@ -312,6 +321,6 @@ class ImagingModule(AnalysisModule):
         self.img.setImage(opacity=float(alpha/100.))
         
         
-        
-
-        
+    def _updateCamModImage(self):
+        # update image levels
+        self.img.setLevels(self.imageView.ui.histogram.getLevels())
