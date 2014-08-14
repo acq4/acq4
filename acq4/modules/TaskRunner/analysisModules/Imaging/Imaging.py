@@ -147,8 +147,16 @@ class ImagingModule(AnalysisModule):
             for chan in pmtdata:
                 chanImage = rs.extractImage(chan, offset=decomb, subpixel=self.params['decomb', 'subpixel'])
                 imageData.append(chanImage.reshape(chanImage.shape + (1,)))
-            imageData = np.concatenate(imageData, axis=-1)
                 
+            if len(imageData) == 1:
+                imageData = imageData[0]
+                levelMode = 'mono'
+            else:
+                if len(imageData) == 2:
+                    imageData.append(np.zeros(imageData[0].shape, dtype=imageData[0].dtype))
+                imageData = np.concatenate(imageData, axis=-1)
+                levelMode = 'rgba'
+
             if imageData.size == 0:
                 self.clear()
                 raise Exception('image Data has zero size')
@@ -159,7 +167,7 @@ class ImagingModule(AnalysisModule):
                 imageData = pg.downsample(imageData, ds, axis=2)
 
             # Collected as (frame, row, col) but pg prefers images like (frame, col, row)
-            imageData = imageData.transpose(0, 2, 1)  
+            imageData = imageData.transpose((0, 2, 1, 3)[:imageData.ndim])
             result['image'] = imageData
 
             # compute global transform
@@ -170,7 +178,6 @@ class ImagingModule(AnalysisModule):
             result['transform'] = pg.SRTTransform3D(tr)
 
             # Display image locally
-            levelMode = 'mono' if imageData.shape[-1] == 1 else 'rgba'
             self.plotWidget.setImage(imageData, levelMode)
             self.plotWidget.getView().setAspectLocked(True)
 #            self.plotWidget.imageItem.setRect(QtCore.QRectF(0., 0., rs.width, rs.height))  # TODO: rs.width and rs.height might not be correct!
