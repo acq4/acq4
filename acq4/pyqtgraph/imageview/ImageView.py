@@ -208,7 +208,7 @@ class ImageView(QtGui.QWidget):
         
         self.roiClicked() ## initialize roi plot to correct shape / visibility
 
-    def setImage(self, img, autoRange=True, autoLevels=True, levels=None, axes=None, xvals=None, pos=None, scale=None, transform=None, autoHistogramRange=True):
+    def setImage(self, img, autoRange=True, autoLevels=True, levels=None, axes=None, xvals=None, pos=None, scale=None, transform=None, autoHistogramRange=True, levelMode=None):
         """
         Set the image to be displayed in the widget.
         
@@ -231,6 +231,10 @@ class ImageView(QtGui.QWidget):
                            and *scale*.
         autoHistogramRange If True, the histogram y-range is automatically scaled to fit the
                            image data.
+        levelMode          If specified, this sets the user interaction mode for setting image 
+                           levels. Options are 'mono', which provides a single level control for
+                           all image channels, and 'rgb' or 'rgba', which provide individual
+                           controls for each channel.
         ================== =======================================================================
         """
         profiler = debug.Profiler()
@@ -247,6 +251,8 @@ class ImageView(QtGui.QWidget):
         
         self.image = img
         self.imageDisp = None
+        if levelMode is not None:
+            self.ui.histogram.setLevelMode(levelMode)
         
         if xvals is not None:
             self.tVals = xvals

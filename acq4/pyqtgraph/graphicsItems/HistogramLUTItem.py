@@ -61,11 +61,11 @@ class HistogramLUTItem(GraphicsWidget):
         self.regions = [
             LinearRegionItem([0, 1], 'horizontal', swapMode='block'),
             LinearRegionItem([0, 1], 'horizontal', swapMode='block', pen='r',
-                             brush=fn.mkBrush((255, 0, 0, 50)), span=(0., 1/3.)),
+                             brush=fn.mkBrush((255, 50, 50, 50)), span=(0., 1/3.)),
             LinearRegionItem([0, 1], 'horizontal', swapMode='block', pen='g',
-                             brush=fn.mkBrush((0, 255, 0, 50)), span=(1/3., 2/3.)),
+                             brush=fn.mkBrush((50, 255, 50, 50)), span=(1/3., 2/3.)),
             LinearRegionItem([0, 1], 'horizontal', swapMode='block', pen='b',
-                             brush=fn.mkBrush((0, 0, 255, 50)), span=(2/3., 1.)),
+                             brush=fn.mkBrush((50, 50, 255, 80)), span=(2/3., 1.)),
             LinearRegionItem([0, 1], 'horizontal', swapMode='block', pen='w',
                              brush=fn.mkBrush((255, 255, 255, 50)), span=(2/3., 1.))]
         for region in self.regions:
@@ -92,12 +92,13 @@ class HistogramLUTItem(GraphicsWidget):
         
         self.gradient.sigGradientChanged.connect(self.gradientChanged)
         self.vb.sigRangeChanged.connect(self.viewRangeChanged)
+        add = QtGui.QPainter.CompositionMode_Plus
         self.plots = [
-            PlotDataItem(pen='w'),  # mono
-            PlotDataItem(pen='r'),  # r
-            PlotDataItem(pen='g'),  # g
-            PlotDataItem(pen='b'),  # b
-            PlotDataItem(pen='w'),  # a
+            PlotCurveItem(pen=(200, 200, 200, 200)),  # mono
+            PlotCurveItem(pen=(255, 0, 0, 200), compositionMode=add),  # r
+            PlotCurveItem(pen=(0, 255, 0, 200), compositionMode=add),  # g
+            PlotCurveItem(pen=(0, 0, 255, 200), compositionMode=add),  # b
+            PlotCurveItem(pen=(200, 200, 200, 200), compositionMode=add),  # a
             ]
         
         self.plot = self.plots[0]  # for backward compatibility.
@@ -120,7 +121,7 @@ class HistogramLUTItem(GraphicsWidget):
         for i,plot in enumerate(self.plots):
             if fill:
                 plot.setFillLevel(level)
-                plot.setFillBrush(colors[i])
+                plot.setBrush(colors[i])
             else:
                 plot.setFillLevel(None)
         
@@ -259,7 +260,7 @@ class HistogramLUTItem(GraphicsWidget):
         
     def setLevelMode(self, mode):
         """ Set the method of controlling the image levels offered to the user. 
-        Options are 'mono', 'rgba', 'rgb', and 'rg'.
+        Options are 'mono', 'rgba', and 'rgb'.
         """
         self.levelMode = mode
         self._showRegions()
@@ -268,7 +269,7 @@ class HistogramLUTItem(GraphicsWidget):
         for i in range(len(self.regions)):
             self.regions[i].setVisible(False)
             
-        if self.levelMode in ('rg', 'rgb', 'rgba'):
+        if self.levelMode in ('rgb', 'rgba'):
             imax = len(self.levelMode)+1
             xdif = 1.0 / (imax-1)
             for i in range(1, imax):
