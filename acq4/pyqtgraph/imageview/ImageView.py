@@ -26,6 +26,7 @@ from ..graphicsItems.ROI import *
 from ..graphicsItems.LinearRegionItem import *
 from ..graphicsItems.InfiniteLine import *
 from ..graphicsItems.ViewBox import *
+from ..graphicsItems.VTickGroup import VTickGroup
 from .. import ptime as ptime
 from .. import debug as debug
 from ..SignalProxy import SignalProxy
@@ -112,8 +113,8 @@ class ImageView(QtGui.QWidget):
         """
         QtGui.QWidget.__init__(self, parent, *args)
         self._imageLevels = None  # [(min, max), ...] per channel image metrics
-        self.levelMin = 0    # min / max levels across all channels
-        self.levelMax = 4096
+        self.levelMin = None    # min / max levels across all channels
+        self.levelMax = None
         
         self.name = name
         self.image = None
@@ -157,12 +158,14 @@ class ImageView(QtGui.QWidget):
         self.view.addItem(self.normRoi)
         self.normRoi.hide()
         self.roiCurve = self.ui.roiPlot.plot()
-        self.timeLine = InfiniteLine(0, movable=True)
+        self.timeLine = InfiniteLine(0, movable=True, markers=[('^', 0), ('v', 1)])
         self.timeLine.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, 200)))
         self.timeLine.setZValue(1)
         self.ui.roiPlot.addItem(self.timeLine)
         self.ui.splitter.setSizes([self.height()-35, 35])
         self.ui.roiPlot.hideAxis('left')
+        self.frameTicks = VTickGroup(yrange=[0.5, 1])
+        self.ui.roiPlot.addItem(self.frameTicks, ignoreBounds=True)
         
         self.keysPressed = {}
         self.playTimer = QtCore.QTimer()
@@ -296,10 +299,9 @@ class ImageView(QtGui.QWidget):
         profiler()
 
         if self.axes['t'] is not None:
-            #self.ui.roiPlot.show()
             self.ui.roiPlot.setXRange(self.tVals.min(), self.tVals.max())
+            self.frameTicks.setXVals(self.tVals)
             self.timeLine.setValue(0)
-            #self.ui.roiPlot.setMouseEnabled(False, False)
             if len(self.tVals) > 1:
                 start = self.tVals.min()
                 stop = self.tVals.max() + abs(self.tVals[-1] - self.tVals[0]) * 0.02
@@ -311,8 +313,7 @@ class ImageView(QtGui.QWidget):
                 stop = 1
             for s in [self.timeLine, self.normRgn]:
                 s.setBounds([start, stop])
-        #else:
-            #self.ui.roiPlot.hide()
+        
         profiler()
 
         self.imageItem.resetTransform()
@@ -350,18 +351,14 @@ class ImageView(QtGui.QWidget):
             
     def autoLevels(self):
         """Set the min/max intensity levels automatically to match the image data."""
-        self.setLevels(self._imageLevels)
+        self.setLevels(rgba=self._imageLevels)
 
-    def setLevels(self, *args):
+    def setLevels(self, *args, **kwds):
         """Set the min/max (bright and dark) levels.
         
-        Arguments may be:
-        
-        * min, max 
-        * (min, max) tuple
-        * [(rmin, rmax), (gmin, gmax), (bmin, bmax)] list of per-channel levels
+        See :func:`HistogramLUTItem.setLevels <pyqtgraph.HistogramLUTItem.setLevels>`.
         """
-        self.ui.histogram.setLevels(*args)
+        self.ui.histogram.setLevels(*args, **kwds)
 
     def autoRange(self):
         """Auto scale and pan the view around the image such that the image fills the view."""
@@ -582,7 +579,7 @@ class ImageView(QtGui.QWidget):
             
         cax = self.axes['c']
         if cax is None:
-            [(float(nanmin(data)), float(nanmax(data)))]
+            return [(float(nanmin(data)), float(nanmax(data)))]
         else:
             return [(float(nanmin(data.take(i, axis=cax))), 
                      float(nanmax(data.take(i, axis=cax)))) for i in range(data.shape[-1])]

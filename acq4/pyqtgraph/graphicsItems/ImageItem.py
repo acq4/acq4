@@ -277,10 +277,15 @@ class ImageItem(GraphicsObject):
         profile = debug.Profiler()
         if self.image is None or self.image.size == 0:
             return
-        if isinstance(self.lut, collections.Callable):
-            lut = self.lut(self.image)
+        
+        # Request a lookup table if this image has only one channel
+        if self.image.ndim == 2 or self.image.shape[2] == 1:
+            if isinstance(self.lut, collections.Callable):
+                lut = self.lut(self.image)
+            else:
+                lut = self.lut
         else:
-            lut = self.lut
+            lut = None
 
         if self.autoDownsample:
             # reduce dimensions of image based on screen resolution

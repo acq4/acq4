@@ -82,7 +82,7 @@ class HistogramLUTItem(GraphicsWidget):
         self.axis = AxisItem('left', linkView=self.vb, maxTickLength=-10)
         self.layout.addItem(self.axis, 0, 0)
         self.layout.addItem(self.vb, 0, 1)
-        #self.layout.addItem(self.gradient, 0, 2)
+        self.layout.addItem(self.gradient, 0, 2)
         self.range = None
         self.gradient.setFlag(self.gradient.ItemStacksBehindParent)
         self.vb.setFlag(self.gradient.ItemStacksBehindParent)
@@ -240,21 +240,21 @@ class HistogramLUTItem(GraphicsWidget):
         else:
             return [r.getRegion() for r in self.regions[1:len(self.levelMode)+1]]
         
-    def setLevels(self, *args):
+    def setLevels(self, min=None, max=None, rgba=None):
         """Set the min/max (bright and dark) levels.
         
-        Arguments may be:
-        
-        * min, max 
-        * (min, max) tuple
-        * [(rmin, rmax), (gmin, gmax), (bmin, bmax)] list of per-channel levels
+        Arguments may be *min* and *max* for single-channel data, or 
+        *rgba* = [(rmin, rmax), ...] for multi-channel data.
         """
         if self.levelMode == 'mono':
-            if len(args) == 1:
-                args = args[0]
-            self.region.setRegion(args)
+            if min is None:
+                min, max = rgba[0]
+            assert None not in (min, max)
+            self.region.setRegion((min, max))
         else:
-            for i, levels in enumerate(args[0]):
+            if rgba is None:
+                raise TypeError("Must specify rgba argument when levelMode != 'mono'.")
+            for i, levels in enumerate(rgba):
                 self.regions[i+1].setRegion(levels)
         
     def setLevelMode(self, mode):
