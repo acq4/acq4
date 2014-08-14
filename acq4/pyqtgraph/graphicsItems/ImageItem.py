@@ -356,20 +356,26 @@ class ImageItem(GraphicsObject):
         stepData = self.image[::step[0], ::step[1]]
         
         if bins == 'auto':
+            mn = stepData.min()
+            mx = stepData.max()
             if stepData.dtype.kind in "ui":
-                mn = stepData.min()
-                mx = stepData.max()
+                # For integer data, we select the bins carefully to avoid aliasing
                 step = np.ceil((mx-mn) / 500.)
                 bins = np.arange(mn, mx+1.01*step, step, dtype=np.int)
-                if len(bins) == 0:
-                    bins = [mn, mx]
             else:
-                bins = 500
+                # for float data, let numpy select the bins.
+                bins = np.linspace(mn, mx, 500)
+            
+            if len(bins) == 0:
+                bins = [mn, mx]
 
         kwds['bins'] = bins
         if perChannel:
-            hist = [np.histogram(stepData[..., i], **kwds) for i in range(stepData.shape[-1])]
-            return [(h[1][:-1], h[0]) for h in hist]
+            hist = []
+            for i in range(stepData.shape[-1]):
+                h = np.histogram(stepData[..., i], **kwds)
+                hist.append((h[1][:-1], h[0]))
+            return hist
         else:
             hist = np.histogram(stepData, **kwds)
             return hist[1][:-1], hist[0]

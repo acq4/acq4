@@ -111,8 +111,10 @@ class ImageView(QtGui.QWidget):
             pg.ImageView(view=pg.PlotItem())
         """
         QtGui.QWidget.__init__(self, parent, *args)
+        self._imageLevels = None  # [(min, max), ...] per channel image metrics
+        self.levelMin = 0    # min / max levels across all channels
         self.levelMax = 4096
-        self.levelMin = 0
+        
         self.name = name
         self.image = None
         self.axes = {}
@@ -368,12 +370,13 @@ class ImageView(QtGui.QWidget):
         
     def getProcessedImage(self):
         """Returns the image data after it has been processed by any normalization options in use.
-        This method also sets the attributes self.levelMin and self.levelMax 
-        to indicate the range of data in the image."""
+        """
         if self.imageDisp is None:
             image = self.normalize(self.image)
             self.imageDisp = image
-            self._imageLevels = list(map(float, self.quickMinMax(self.imageDisp)))
+            self._imageLevels = self.quickMinMax(self.imageDisp)
+            self.levelMin = min([level[0] for level in self._imageLevels])
+            self.levelMax = max([level[1] for level in self._imageLevels])
             
         return self.imageDisp
         
@@ -576,7 +579,13 @@ class ImageView(QtGui.QWidget):
             sl = [slice(None)] * data.ndim
             sl[ax] = slice(None, None, 2)
             data = data[sl]
-        return [nanmin(data[...,i]), nanmax(data[...,i]) for i in range(data.shape[-1])]
+            
+        cax = self.axes['c']
+        if cax is None:
+            [(float(nanmin(data)), float(nanmax(data)))]
+        else:
+            return [(float(nanmin(data.take(i, axis=cax))), 
+                     float(nanmax(data.take(i, axis=cax)))) for i in range(data.shape[-1])]
 
     def normalize(self, image):
         """
@@ -649,6 +658,7 @@ class ImageView(QtGui.QWidget):
         
         if autoHistogramRange:
             self.ui.histogram.setHistogramRange(self.levelMin, self.levelMax)
+            
         if self.axes['t'] is None:
             self.imageItem.updateImage(image)
         else:
