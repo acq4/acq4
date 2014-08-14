@@ -77,7 +77,8 @@ class ImageView(QtGui.QWidget):
     sigTimeChanged = QtCore.Signal(object, object)
     sigProcessingChanged = QtCore.Signal(object)
     
-    def __init__(self, parent=None, name="ImageView", view=None, imageItem=None, *args):
+    def __init__(self, parent=None, name="ImageView", view=None, imageItem=None, 
+                 levelMode='mono', *args):
         """
         By default, this class creates an :class:`ImageItem <pyqtgraph.ImageItem>` to display image data
         and a :class:`ViewBox <pyqtgraph.ViewBox>` to contain the ImageItem. 
@@ -99,6 +100,9 @@ class ImageView(QtGui.QWidget):
         imageItem     (ImageItem) If specified, this object will be used to
                       display the image. Must be an instance of ImageItem
                       or other compatible object.
+        levelMode     See the *levelMode* argument to 
+                      :func:`HistogramLUTItem.__init__() 
+                      <pyqtgraph.HistogramLUTItem.__init__>`
         ============= =========================================================
         
         Note: to display axis ticks inside the ImageView, instantiate it 
@@ -116,6 +120,7 @@ class ImageView(QtGui.QWidget):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.scene = self.ui.graphicsView.scene()
+        self.ui.histogram.setLevelMode(levelMode)
         
         self.ignoreTimeLine = False
         
@@ -343,11 +348,18 @@ class ImageView(QtGui.QWidget):
             
     def autoLevels(self):
         """Set the min/max intensity levels automatically to match the image data."""
-        self.setLevels(self.levelMin, self.levelMax)
+        self.setLevels(self._imageLevels)
 
-    def setLevels(self, min, max):
-        """Set the min/max (bright and dark) levels."""
-        self.ui.histogram.setLevels(min, max)
+    def setLevels(self, *args):
+        """Set the min/max (bright and dark) levels.
+        
+        Arguments may be:
+        
+        * min, max 
+        * (min, max) tuple
+        * [(rmin, rmax), (gmin, gmax), (bmin, bmax)] list of per-channel levels
+        """
+        self.ui.histogram.setLevels(*args)
 
     def autoRange(self):
         """Auto scale and pan the view around the image such that the image fills the view."""
@@ -361,7 +373,7 @@ class ImageView(QtGui.QWidget):
         if self.imageDisp is None:
             image = self.normalize(self.image)
             self.imageDisp = image
-            self.levelMin, self.levelMax = list(map(float, self.quickMinMax(self.imageDisp)))
+            self._imageLevels = list(map(float, self.quickMinMax(self.imageDisp)))
             
         return self.imageDisp
         
@@ -557,13 +569,14 @@ class ImageView(QtGui.QWidget):
     def quickMinMax(self, data):
         """
         Estimate the min/max values of *data* by subsampling.
+        Returns [(min, max), ...] with one item per channel
         """
         while data.size > 1e6:
             ax = np.argmax(data.shape)
             sl = [slice(None)] * data.ndim
             sl[ax] = slice(None, None, 2)
             data = data[sl]
-        return nanmin(data), nanmax(data)
+        return [nanmin(data[...,i]), nanmax(data[...,i]) for i in range(data.shape[-1])]
 
     def normalize(self, image):
         """

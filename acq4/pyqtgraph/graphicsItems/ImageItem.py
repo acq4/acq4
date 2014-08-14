@@ -324,7 +324,8 @@ class ImageItem(GraphicsObject):
             self.render()
         self.qimage.save(fileName, *args)
 
-    def getHistogram(self, bins='auto', step='auto', targetImageSize=200, targetHistogramSize=500, **kwds):
+    def getHistogram(self, bins='auto', step='auto', perChannel=False, targetImageSize=200, 
+                     targetHistogramSize=500, **kwds):
         """Returns x and y arrays containing the histogram values for the current image.
         For an explanation of the return format, see numpy.histogram().
         
@@ -339,6 +340,9 @@ class ImageItem(GraphicsObject):
         * Integer images will have approximately *targetHistogramSize* bins, 
           with each bin having an integer width.
         * All other types will have *targetHistogramSize* bins.
+        
+        If *perChannel* is True, then the histogram is computed once per channel
+        and the output is a list of the results.
         
         This method is also used when automatically computing levels.
         """
@@ -363,9 +367,12 @@ class ImageItem(GraphicsObject):
                 bins = 500
 
         kwds['bins'] = bins
-        hist = np.histogram(stepData, **kwds)
-        
-        return hist[1][:-1], hist[0]
+        if perChannel:
+            hist = [np.histogram(stepData[..., i], **kwds) for i in range(stepData.shape[-1])]
+            return [(h[1][:-1], h[0]) for h in hist]
+        else:
+            hist = np.histogram(stepData, **kwds)
+            return hist[1][:-1], hist[0]
 
     def setPxMode(self, b):
         """

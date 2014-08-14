@@ -52,12 +52,9 @@ class HistogramLUTItem(GraphicsWidget):
         self.layout.setContentsMargins(1,1,1,1)
         self.layout.setSpacing(0)
         self.vb = ViewBox()
-        self.vb.setBackgroundColor(0.3)
         self.vb.setMaximumWidth(152)
         self.vb.setMinimumWidth(45)
         self.vb.setMouseEnabled(x=False, y=True)
-        item = PlotDataItem(x=np.linspace(0, 1, 10), y=[1,4,2,3,7,4,6,5,8,7])
-        self.vb.addItem(item)
         self.gradient = GradientEditorItem()
         self.gradient.setOrientation('right')
         self.gradient.loadPreset('grey')
@@ -79,14 +76,13 @@ class HistogramLUTItem(GraphicsWidget):
             region.sigRegionChanged.connect(self.regionChanging)
             region.sigRegionChangeFinished.connect(self.regionChanged)
             
-        self._showRegions()
             
         self.region = self.regions[0]  # for backward compatibility.
         
         self.axis = AxisItem('left', linkView=self.vb, maxTickLength=-10)
         self.layout.addItem(self.axis, 0, 0)
         self.layout.addItem(self.vb, 0, 1)
-        self.layout.addItem(self.gradient, 0, 2)
+        #self.layout.addItem(self.gradient, 0, 2)
         self.range = None
         self.gradient.setFlag(self.gradient.ItemStacksBehindParent)
         self.vb.setFlag(self.gradient.ItemStacksBehindParent)
@@ -96,9 +92,20 @@ class HistogramLUTItem(GraphicsWidget):
         
         self.gradient.sigGradientChanged.connect(self.gradientChanged)
         self.vb.sigRangeChanged.connect(self.viewRangeChanged)
-        self.plot = PlotDataItem()
-        self.plot.rotate(90)
+        self.plots = [
+            PlotDataItem(pen='w'),  # mono
+            PlotDataItem(pen='r'),  # r
+            PlotDataItem(pen='g'),  # g
+            PlotDataItem(pen='b'),  # b
+            PlotDataItem(pen='w'),  # a
+            ]
+        
+        self.plot = self.plots[0]  # for backward compatibility.
+        for plot in self.plots:
+            plot.rotate(90)
+        
         self.fillHistogram(fillHistogram)
+        self._showRegions()
             
         self.vb.addItem(self.plot)
         self.autoHistogramRange()
@@ -108,11 +115,13 @@ class HistogramLUTItem(GraphicsWidget):
         #self.setSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding)
         
     def fillHistogram(self, fill=True, level=0.0, color=(100, 100, 200)):
-        if fill:
-            self.plot.setFillLevel(level)
-            self.plot.setFillBrush(color)
-        else:
-            self.plot.setFillLevel(None)
+        colors = [color, (255, 0, 0, 100), (0, 255, 0, 100), (0, 0, 255, 100), (255, 255, 255, 50)]
+        for i,plot in enumerate(self.plots):
+            if fill:
+                plot.setFillLevel(level)
+                plot.setFillBrush(colors[i])
+            else:
+                plot.setFillLevel(None)
         
     #def sizeHint(self, *args):
         #return QtCore.QSizeF(115, 200)
@@ -140,37 +149,16 @@ class HistogramLUTItem(GraphicsWidget):
         self.vb.enableAutoRange(self.vb.YAxis, False)
         self.vb.setYRange(mn, mx, padding)
         
-        #d = mx-mn
-        #mn -= d*padding
-        #mx += d*padding
-        #self.range = [mn,mx]
-        #self.updateRange()
-        #self.vb.setMouseEnabled(False, True)
-        #self.region.setBounds([mn,mx])
-        
     def autoHistogramRange(self):
         """Enable auto-scaling on the histogram plot."""
         self.vb.enableAutoRange(self.vb.XYAxes)
-        #self.range = None
-        #self.updateRange()
-        #self.vb.setMouseEnabled(False, False)
-            
-    #def updateRange(self):
-        #self.vb.autoRange()
-        #if self.range is not None:
-            #self.vb.setYRange(*self.range)
-        #vr = self.vb.viewRect()
-        
-        #self.region.setBounds([vr.top(), vr.bottom()])
 
     def setImageItem(self, img):
         self.imageItem = weakref.ref(img)
         img.sigImageChanged.connect(self.imageChanged)
         img.setLookupTable(self.getLookupTable)  ## send function pointer, not the result
-        #self.gradientChanged()
         self.regionChanged()
         self.imageChanged(autoLevel=True)
-        #self.vb.autoRange()
         
     def viewRangeChanged(self):
         self.update()
@@ -183,11 +171,11 @@ class HistogramLUTItem(GraphicsWidget):
                 self.imageItem().setLookupTable(self.getLookupTable)  ## send function pointer, not the result
             
         self.lut = None
-        #if self.imageItem is not None:
-            #self.imageItem.setLookupTable(self.gradient.getLookupTable(512))
         self.sigLookupTableChanged.emit(self)
 
     def getLookupTable(self, img=None, n=None, alpha=None):
+        if self.levelMode is not 'mono':
+            return None
         if n is None:
             if img.dtype == np.uint8:
                 n = 256
@@ -198,36 +186,75 @@ class HistogramLUTItem(GraphicsWidget):
         return self.lut
 
     def regionChanged(self):
-        #if self.imageItem is not None:
-            #self.imageItem.setLevels(self.region.getRegion())
         self.sigLevelChangeFinished.emit(self)
-        #self.update()
 
     def regionChanging(self):
         if self.imageItem() is not None:
-            self.imageItem().setLevels(self.region.getRegion())
+            self.imageItem().setLevels(self.getLevels())
         self.sigLevelsChanged.emit(self)
         self.update()
 
     def imageChanged(self, autoLevel=False, autoRange=False):
-        profiler = debug.Profiler()
-        h = self.imageItem().getHistogram()
-        profiler('get histogram')
-        if h[0] is None:
+        if self.imageItem() is None:
             return
-        self.plot.setData(*h)
-        profiler('set plot')
-        if autoLevel:
-            mn = h[0][0]
-            mx = h[0][-1]
-            self.region.setRegion([mn, mx])
-            profiler('set region')
+        if self.levelMode == 'mono':
+            for plt in self.plots[1:]:
+                plt.setVisible(False)
+            self.plots[0].setVisible(True)
+            # plot one histogram for all image data
+            profiler = debug.Profiler()
+            h = self.imageItem().getHistogram()
+            profiler('get histogram')
+            if h[0] is None:
+                return
+            self.plot.setData(*h)
+            profiler('set plot')
+            if autoLevel:
+                mn = h[0][0]
+                mx = h[0][-1]
+                self.region.setRegion([mn, mx])
+                profiler('set region')
+        else:
+            # plot one histogram for each channel
+            self.plots[0].setVisible(False)
+            ch = self.imageItem().getHistogram(perChannel=True)
+            if ch[0] is None:
+                return
+            for i in range(1, 5):
+                if len(ch) >= i:
+                    h = ch[i-1]
+                    self.plots[i].setVisible(True)
+                    self.plots[i].setData(*h)
+                    if autoLevel:
+                        mn = h[0][0]
+                        mx = h[0][-1]
+                        self.region[i].setRegion([mn, mx])
+                else:
+                    # hide channels not present in image data
+                    self.plots[i].setVisible(False)
             
     def getLevels(self):
-        return self.region.getRegion()
+        if self.levelMode == 'mono':
+            return self.region.getRegion()
+        else:
+            return [r.getRegion() for r in self.regions[1:len(self.levelMode)+1]]
         
-    def setLevels(self, mn, mx):
-        self.region.setRegion([mn, mx])
+    def setLevels(self, *args):
+        """Set the min/max (bright and dark) levels.
+        
+        Arguments may be:
+        
+        * min, max 
+        * (min, max) tuple
+        * [(rmin, rmax), (gmin, gmax), (bmin, bmax)] list of per-channel levels
+        """
+        if self.levelMode == 'mono':
+            if len(args) == 1:
+                args = args[0]
+            self.region.setRegion(args)
+        else:
+            for i, levels in enumerate(args[0]):
+                self.regions[i+1].setRegion(levels)
         
     def setLevelMode(self, mode):
         """ Set the method of controlling the image levels offered to the user. 
@@ -237,8 +264,8 @@ class HistogramLUTItem(GraphicsWidget):
         self._showRegions()
 
     def _showRegions(self):
-        for rgn in self.regions:
-            rgn.setVisible(False)
+        for i in range(len(self.regions)):
+            self.regions[i].setVisible(False)
             
         if self.levelMode in ('rg', 'rgb', 'rgba'):
             imax = len(self.levelMode)+1
@@ -253,4 +280,5 @@ class HistogramLUTItem(GraphicsWidget):
         else:
             raise ValueError("Unknown level mode %r" %  self.levelMode) 
         
+        self.imageChanged()
         self.update()
