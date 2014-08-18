@@ -54,9 +54,9 @@ class ImagingModule(AnalysisModule):
         # self.ui.scannerComboBox.setTypes('scanner')
         # self.ui.detectorComboBox.setTypes('daqChannelGroup')
 
-    def addNewDetector(self):
+    def addNewDetector(self, name='detector', value=None):
         self.params.child('detectors').addChild(
-            dict(name='detector', type='interface', interfaceTypes=['daqChannelGroup']),
+            dict(name=name, type='interface', interfaceTypes=['daqChannelGroup'], value=value),
             autoIncrementName=True)
                 
     def quit(self):
@@ -67,12 +67,20 @@ class ImagingModule(AnalysisModule):
         return self.params.saveState(filter='user')
 
     def restoreState(self, state):
+        detectors = {}
+
         # for backward compat:
         det = state['children'].pop('detector', None)
         if det is not None:
-            state['children']['detectors']['children']['detector'] = det
+            detectors['detector'] = det['value']
+        # current format:
+        dets = state['children'].pop('detectors', {})
+        for name, data in dets['children'].items():
+            detectors[name] = data['value']
 
         self.params.restoreState(state, removeChildren=False)
+        for name, det in detectors.items():
+            self.addNewDetector(name, det)
 
     def taskSequenceStarted(self, *args):
         pass
