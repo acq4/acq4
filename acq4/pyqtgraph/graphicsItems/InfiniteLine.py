@@ -60,13 +60,14 @@ class InfiniteLine(GraphicsObject):
         if pen is None:
             pen = (200, 200, 100)
         self.setPen(pen)
+        self.setHoverPen(color=(255,0,0), width=self.pen.width())  ###
         self.currentPen = self.pen
-        self._bounds = None
+        ### self._bounds = None
         #self.setFlag(self.ItemSendsScenePositionChanges)
       
     def setMovable(self, m):
         """Set whether the line is movable by the user."""
-        self.movable = m
+        self.movable = (m, m)  # single value: sets both axes the same
         self.setAcceptHoverEvents(m)
       
     def setBounds(self, bounds):
@@ -80,7 +81,22 @@ class InfiniteLine(GraphicsObject):
         self.pen = fn.mkPen(*args, **kwargs)
         self.currentPen = self.pen
         self.update()
-        
+
+    ###
+    def setHoverPen(self, *args, **kwargs):
+        """Set the pen for drawing the line while the mouse hovers over it.
+        Allowable arguments are any that are valid
+        for :func:`mkPen <pyqtgraph.mkPen>`.
+
+        If the line is not movable, then hovering is also disabled.
+
+        Added in version 0.9.9."""
+        self.hoverPen = fn.mkPen(*args, **kwargs)
+        if self.mouseHovering:
+            self.currentPen = self.hoverPen
+            self.update()
+    ###
+
     def setAngle(self, angle):
         """
         Takes angle argument in degrees.
@@ -162,19 +178,18 @@ class InfiniteLine(GraphicsObject):
         #return GraphicsObject.itemChange(self, change, val)
                 
     def boundingRect(self):
-        if self._bounds is None:
-            #br = UIGraphicsItem.boundingRect(self)
-            br = self.viewRect()
-            ## add a 4-pixel radius around the line for mouse interaction.
-            
-            px = self.pixelLength(direction=Point(1,0), ortho=True)  ## get pixel length orthogonal to the line
-            if px is None:
-                px = 0
-            br.setBottom(-px*4)
-            br.setTop(px*4)
-            self._bounds = br.normalized()
-        return self._bounds
-    
+        #br = UIGraphicsItem.boundingRect(self)
+        br = self.viewRect()
+        ## add a 4-pixel radius around the line for mouse interaction.
+
+        px = self.pixelLength(direction=Point(1,0), ortho=True)  ## get pixel length orthogonal to the line
+        if px is None:
+            px = 0
+        w = (max(4, self.pen.width()/2, self.hoverPen.width()/2)+1) * px
+        br.setBottom(-w)
+        br.setTop(w)
+        return br.normalized()
+
     def viewTransformChanged(self):
         self._bounds = None
         self.update()
@@ -222,7 +237,9 @@ class InfiniteLine(GraphicsObject):
                 return
                 
             #pressDelta = self.mapToParent(ev.buttonDownPos()) - Point(self.p)
-            self.setPos(self.cursorOffset + self.mapToParent(ev.pos()))
+            if self.movable:
+                #print 'everybody moves'
+                self.setPos(self.cursorOffset + self.mapToParent(ev.pos()))
             self.sigDragged.emit(self)
             if ev.isFinish():
                 self.moving = False

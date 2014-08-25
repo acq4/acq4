@@ -209,14 +209,15 @@ def getParent(child, parentType):
     return getParent(parent, parentType)
 
 def getClampFile(protoDH):
-    """Given a protocol directory handle, return the clamp file handle within. 
-    If there are multiple clamps, only the first is returned.
-    Return None if no clamps are found."""
+    """
+    Given a protocol directory handle, return the clamp file handle within.
+    If there are multiple clamps, only the first one encountered in deviceNames is returned.
+    Return None if no clamps are found.
+    """
     if protoDH.name()[-8:] == 'DS_Store': ## OS X filesystem puts .DS_Store files in all directories
         return None
     files = protoDH.ls()
-    names = deviceNames['Clamp']
-    for n in names:
+    for n in deviceNames['Clamp']:
         if n in files:
             return protoDH[n]
         if n+'.ma' in files:
@@ -257,10 +258,16 @@ def getClampPrimary(data):
 
 def getClampMode(data_handle):
     """Given a clamp file handle or MetaArray, return the recording mode."""
-    # if not (hasattr(data, 'implements') and data.implements('MetaArray')):
-    #     if not isClampFile(data):
-    #         raise Exception('%s not a clamp file.' % data.shortName())
-    data = data_handle.read(readAllData=False)
+    if (hasattr(data_handle, 'implements') and data_handle.implements('MetaArray')):
+        data = data_handle
+    elif isClampFile(data_handle):
+        data = data_handle.read(readAllData=False)
+    else:
+        raise Exception('%s not a clamp file.' % data.shortName())
+    # if isClampFile(data_handle):
+    #     data = data_handle.read(readAllData=False)
+    # else:
+    #     data = data_handle
     info = data._info[-1]
     if 'ClampState' in info:
         return info['ClampState']['mode']
@@ -307,6 +314,8 @@ def getClampState(data_handle):
     """
     Return the full clamp state
     """
+    if not isClampFile(data_handle):
+        raise Exception('%s not a clamp file.' % data_handle.shortName())
     data = data_handle.read(readAllData=False)
     info = data._info[-1]
     if 'ClampState' in info.keys():
@@ -319,6 +328,8 @@ def getWCCompSettings(data_handle):
     return the compensation settings, if available
     Settings are returned as a group in a dictionary
     """
+    if not isClampFile(data_handle):
+        raise Exception('%s not a clamp file.' % data_handle.shortName())
     data = data_handle.read(readAllData=False)
     info = data._info[-1]
     d = {}
@@ -338,6 +349,8 @@ def getWCCompSettings(data_handle):
 
 def getSampleRate(data_handle):
     """given clamp data, return the data sampling rate """
+    if not isClampFile(data_handle):
+        raise Exception('%s not a clamp file.' % data_handle.shortName())
     data = data_handle.read(readAllData=False)
     info = data._info[-1]
     if 'DAQ' in info.keys():

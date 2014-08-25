@@ -126,7 +126,7 @@ class ImageView(QtGui.QWidget):
         self.view.addItem(self.normRoi)
         self.normRoi.hide()
         self.roiCurve = self.ui.roiPlot.plot()
-        self.timeLine = InfiniteLine(0, movable=True)
+        self.timeLine = InfiniteLine(0, movable=True)  # slider, no vertical movement of bar
         self.timeLine.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, 200)))
         self.timeLine.setZValue(1)
         self.ui.roiPlot.addItem(self.timeLine)
