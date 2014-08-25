@@ -14,13 +14,14 @@ import acq4.pyqtgraph.flowchart as fc
 import acq4.pyqtgraph.debug as debug
 import os
 
-class TraceAnalyzer(AnalysisModule):
+class ChR2TraceAnalyzer(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         
         fcpath = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "flowcharts")
         confpath = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "configs")
         
+        self._sizeHint = (1024, 800)  # try to establish size of window
         self.confWidget = QtGui.QWidget()
         self.confLoader = ConfLoader(self, confpath)
         self.fileLoader = DataLoader(self, host.dataManager())
