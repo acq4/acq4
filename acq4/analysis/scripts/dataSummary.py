@@ -29,16 +29,17 @@ class DataSummary():
         self.tw['day'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
         self.tw['slice'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
         self.tw['cell'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
-        self.img_re = re.compile('(.tif)')
-        self.s2p_re = re.compile('(2pStack)')
-        self.i2p_re = re.compile('(2pImage)')
+        self.img_re = re.compile('^Image_(\d{3,3}).tif')
+        self.s2p_re = re.compile('^2pStack_(\d{3,3}).ma')
+        self.i2p_re = re.compile('^2pImage_(\d{3,3}).ma')
+        self.monitor = False
         allfiles = os.listdir(basedir)
         # look for names that match the acq4 "day" template:
         # example: 2013.03.28_000
         daytype = re.compile("(\d{4,4}).(\d{2,2}).(\d{2,2})_(\d{3,3})")
 #        daytype = re.compile("(2011).(06).(08)_(\d{3,3})")  # specify a day
         #2011.10.17_000
-        minday = (2011, 10, 17)
+        minday = (2010, 1, 11)
         minday = minday[0]*1e4+minday[1]*1e2+minday[2]
         maxday = (2014, 1, 1)
         maxday = maxday[0]*1e4+maxday[1]*1e2+maxday[2]
@@ -140,6 +141,7 @@ class DataSummary():
         allfiles = os.listdir(cell)
         #celltype = re.compile("(Cell_)(\d{3,3})")
         protocols = []
+        nonprotocols = []
         images = []  # tiff
         stacks2p = []
         images2p = []
@@ -147,6 +149,8 @@ class DataSummary():
         for thisfile in allfiles:
             if os.path.isdir(os.path.join(cell, thisfile)):
                 protocols.append(thisfile)
+            else:
+                nonprotocols.append(thisfile)
 #        if len(protocols) == 0:
 #            pass
             #print '         No protocols this cell entry'
@@ -155,14 +159,16 @@ class DataSummary():
         for protocol in protocols:
             dh = DataManager.getDirHandle(os.path.join(cell, protocol), create=False)
             self.cell_summary(dh)
+            if self.monitor:
+                print 'Investigating Protocol: %s', dh.name()
             dirs = dh.subDirs()
+            protocolok = True
             modes = []
             complete = False
             ncomplete = 0
             ntotal = 0
             clampDevices = self.dataModel.getClampDeviceNames(dh)
             # must handle multiple data formats, even in one experiment...
-            protocolok = True
             if clampDevices is not None:
                 data_mode = dh.info()['devices'][clampDevices[0]]['mode']  # get mode from top of protocol information
             else:
@@ -177,9 +183,9 @@ class DataSummary():
                 try:
                     data_mode = dh.info()['devices'][clampDevices[0]]['mode']
                 except:
+                    data_mode = 'Unknown'
                     # protocolok = False
                     # print '<<cannot read protocol data mode>>'
-                    continue
             if data_mode not in modes:
                 modes.append(data_mode)
             for i, directory_name in enumerate(dirs):  # dirs has the names of the runs within the protocol
@@ -213,9 +219,9 @@ class DataSummary():
 #            print '         No protocols this cell'
         self.protocolstring += '\t'
 
-        for thisfile in allfiles:
-            if os.path.isdir(os.path.join(cell, thisfile)):  # skip protocols
-                continue
+        for thisfile in nonprotocols:
+#            if os.path.isdir(os.path.join(cell, thisfile)):  # skip protocols
+#                continue
             x = self.img_re.match(thisfile)  # look for image files
             if x is not None:
                 images.append(thisfile)
@@ -234,6 +240,8 @@ class DataSummary():
             self.imagestring += '2pImages: %d' % len(images2p)
         if ngoodprotocols > 0 or len(self.imagestring) > 0:
             print self.daystring + self.slicestring + self.cellstring + self.protocolstring + self.imagestring + '\t'
+        if ngoodprotocols == 0:
+            print self.daystring + self.slicestring + self.cellstring + '<No complete protocols found>'
 
 
     def get_file_information(self, dh=None):
