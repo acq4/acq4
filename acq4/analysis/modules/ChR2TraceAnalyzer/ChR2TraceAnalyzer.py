@@ -37,7 +37,7 @@ class ChR2TraceAnalyzer(AnalysisModule):
         confpath = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "configs")
         self.dbIdentity = "ChR2TraceAnalysis"  ## how we identify to the database; this determines which tables we own
 
-        self._sizeHint = (1024, 768)  # try to establish size of window
+        self._sizeHint = (1024, 800)  # try to establish size of window
         self.confWidget = QtGui.QWidget()
         self.confLoader = ConfLoader(self, confpath)
         self.fileLoader = DataLoader(self, host.dataManager())
@@ -116,7 +116,7 @@ class ChR2TraceAnalyzer(AnalysisModule):
                 self.processCellClicked(sel = d)
         print '\nAnalysis of Slice completed'
 
-    def processCellClicked(self, sel = None):
+    def processCellClicked(self, sel=None):
         """
         A cell directory is selected. For each protocol that matches
         our protocol selector, process the protocol for this cell.
@@ -129,12 +129,19 @@ class ChR2TraceAnalyzer(AnalysisModule):
         if not os.path.isdir(sel):
             raise Exception('Must select a cell Directory to process')
         dircontents = glob.glob(os.path.join(sel, 'BlueLED*'))
-        if dircontents == []:
-            raise Exception('Cell directory had no protocol matching BlueLED')
-        for d in dircontents:
-            self.fileLoader.loadFile([self.dataManager().dm.getDirHandle(d)])
-            self.processProtocolClicked()
-        print "\nAnalysis of cell completed"
+        if dircontents != []:
+            for d in dircontents:
+                self.fileLoader.loadFile([self.dataManager().dm.getDirHandle(d)])
+                self.processProtocolClicked()
+            print "\nAnalysis of cell completed"
+            return
+        dircontents = glob.glob(os.path.join(sel, 'Laser-Blue*'))
+        if dircontents != []:
+            for d in dircontents:
+                self.fileLoader.loadFile([self.dataManager().dm.getDirHandle(d)])
+                self.processProtocolClicked()
+            print "\nAnalysis of cell completed"
+            return
 
     def fileLoaded(self, dh):
         files = self.fileLoader.loadedFiles()
@@ -171,13 +178,12 @@ class ChR2TraceAnalyzer(AnalysisModule):
 
         output = []
         table = self.getElement('Results')
-        for fh in self.fileLoader.loadedFiles():
-            print 'FH (input): ', fh
-            print 'dir fh: ', dir(fh)
-            print 'name: %s' % fh.name()
+        for i, fh in enumerate(self.fileLoader.loadedFiles()):
+            # print 'dir fh: ', dir(fh)
+            # print 'name: %s' % fh.name()
             try:
-                res = self.flowchart.process(Input=fh, Output=self.ChR2.protocolInfo, Instance=self.ChR2)
-                output.append(res) # [res[k] for k in res.keys()])
+                res = self.flowchart.process(Input=fh, Output=self.ChR2.protocolInfoLaser, Instance=self.ChR2)
+                output.append(res)  # [res[k] for k in res.keys()])
             except:
                 raise ValueError('ChR2TraceAnalyzer.processProtocolClicked: Error processing flowchart %s' % fh)
         table.setData(output)
@@ -186,7 +192,7 @@ class ChR2TraceAnalyzer(AnalysisModule):
         for i in ['1', '2', '3']:
             name = 'Scatter Plot%s' % i
             pl.append(self.getElement(name, create=False))
-            self.ChR2.plotSummary(plotWidget = pl)
+            self.ChR2.plotSummary(plotWidget=pl)
         print '\nAnalysis of protocol finished'
 
     def outputChanged(self):
