@@ -26,7 +26,7 @@ else:
 try:
     import faulthandler
     faulthandler.enable()
-except:
+except ImportError:
     pass
 
 ## Initialize Qt

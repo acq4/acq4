@@ -266,8 +266,7 @@ class Imager(Module):
         self.win = ImagerWindow(self) # make the main window - mostly to catch window close event...
         self.ui = Ui_Form()
         self.testMode = False # set to True to just display the scan signals
-        self.win.show()
-        self.win.setWindowTitle('Multiphoton Imager V 1.01')
+        self.win.setWindowTitle('Multiphoton Imager V 1.03')
         self.win.resize(1200, 900) # make the window big enough to use on a large monitor...
 
         self.w1 = QtGui.QSplitter() # divide l, r
@@ -284,6 +283,8 @@ class Imager(Module):
         self.w2s.setSizes([1,1,900]) # Ui top widget has multiple splitters itself - force small space..
         self.view = ImagerView()
         self.w1.addWidget(self.view)   # add the view to the right of w1     
+        self.win.show()
+
         self.originalROI = None
         self.currentStack = None
         self.currentStackLength = 0
@@ -299,7 +300,8 @@ class Imager(Module):
         self.img = None # overlay image in the camera Window... 
         self.dwellTime = 0. # "pixel dwell time" computed from scan time and points.
         self.fieldSize = 63.0*120e-6 # field size for 63x, will be scaled for others
-        
+        self.pmt_plot = None
+        self.mirror_plot = None
         # we assume that you are not going to change the current camera or scope while running
         # ... not just yet anyway.
         # if this is to be allowed on a system, the change must be signaled to this class,
@@ -1035,10 +1037,20 @@ class Imager(Module):
         # (should this be a settable parameter? )
         imgData = NP.fliplr(imgData)        
         if self.param['Show PMT V']:
-            xv=NP.linspace(0, samples/sampleRate, imgData.size)
-            pg.plot(y=imgData.reshape(imgData.shape[0]*imgData.shape[1]), x=xv)
+            #print samples, sampleRate, imgData.size, imgData.shape
+            xv=NP.linspace(0, imgData.size/sampleRate, imgData.size)
+            if self.pmt_plot is None:
+                self.pmt_plot = pg.plot(x=xv, y=imgData.reshape(imgData.shape[0]*imgData.shape[1]))
+            else:
+                self.pmt_plot.clear()
+                self.pmt_plot.plot(xv, imgData.reshape(imgData.shape[0]*imgData.shape[1]))
+
         if self.param['Show Mirror V']:
-            pg.plot(y=y, x=NP.linspace(0, samples/self.param['Sample Rate'], len(x)))
+            if self.mirror_plot is None:
+                self.mirror_plot = pg.plot(x=NP.linspace(0, samples/self.param['Sample Rate'], len(x)), y=y )
+            else:
+                self.mirror_plot.clear()
+                self.mirror_plot.plot(y, NP.linspace(samples/self.param['Sample Rate'], len(x)), y)
         
         # generate all meta-data for this frame
         info = self.saveParams()
