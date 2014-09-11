@@ -173,7 +173,8 @@ class Manager(QtCore.QObject):
         -D --disable-all   Disable all devices
     """
                     raise
-            
+            else:
+                opts = []
             
             QtCore.QObject.__init__(self)
             atexit.register(self.quit)
