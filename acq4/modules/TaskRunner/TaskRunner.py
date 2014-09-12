@@ -7,6 +7,7 @@ import acq4.util.configfile as configfile
 from collections import OrderedDict
 from acq4.util.SequenceRunner import *
 from acq4.util.Mutex import Mutex, MutexLocker
+from acq4.util.Thread import Thread
 from acq4.Manager import getManager, logMsg, logExc
 from acq4.util.debug import *
 import acq4.util.ptime as ptime
@@ -1089,7 +1090,7 @@ class Task:
             
         
         
-class TaskThread(QtCore.QThread):
+class TaskThread(Thread):
     
     sigPaused = QtCore.Signal()
     sigNewFrame = QtCore.Signal(object)
@@ -1097,7 +1098,7 @@ class TaskThread(QtCore.QThread):
     sigTaskStarted = QtCore.Signal(object)
     
     def __init__(self, ui):
-        QtCore.QThread.__init__(self)
+        Thread.__init__(self)
         self.ui = ui
         self.dm = self.ui.manager
         self.lock = Mutex(QtCore.QMutex.Recursive)

@@ -4,6 +4,7 @@ from acq4.devices.Device import *
 from acq4.pyqtgraph.SignalProxy import SignalProxy
 import serial, os, time
 from acq4.util.Mutex import Mutex, MutexLocker
+from acq4.util.Thread import Thread
 #import pdb
 
 class SerialMouse(Device):
@@ -108,13 +109,13 @@ class SMInterface(QtGui.QLabel):
         
     
     
-class MouseThread(QtCore.QThread):
+class MouseThread(Thread):
     
     sigButtonChanged = QtCore.Signal(object)
     sigPositionChanged = QtCore.Signal(object)
     
     def __init__(self, dev, startState=None):
-        QtCore.QThread.__init__(self)
+        Thread.__init__(self)
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.dev = dev
         self.port = self.dev.port
