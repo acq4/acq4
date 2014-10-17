@@ -415,7 +415,7 @@ class IVCurve(AnalysisModule):
         #        self.sequence = self.dataModel.listSequenceParams(dh)  # already done in 'getfileinfo'
         self.trace_times = np.zeros(0)
         sequence_values = []
-        # builidng command voltages - get amplitudes to clamp
+        # building command voltages - get amplitudes to clamp
         clamp = ('Clamp1', 'Pulse_amplitude')
         reps = ('protocol', 'repetitions')
 
