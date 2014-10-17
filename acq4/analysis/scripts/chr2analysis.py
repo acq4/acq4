@@ -112,44 +112,66 @@ class ChR2():
         array.
         """
         #global summary
-        nspikes = len(inputs)
-        self.devicemode = 'Laser'
-        #print inputs
-#        print 'FH parent info: ', fh.parent().info()
-        reps = fh.parent().info()['protocol']['conf']['repetitions'] # fh.info()[('protocol', 'repetitions')]
-        pulseDurIndex = fh.info()['Laser-Blue', 'Shutter.duration']  # fh.info()[('Laser-Blue', 'Command.PulseTrain_length')]
-#        print 'pulsedurindex: ', pulseDurIndex
-        fn = fh.shortName()
-        # find date string in the path, and return path to current data set
-        # allows us to identify the data set by date, slice, cell, protocol, etc.
-        dm = re.compile(r'(\d{4,4})\.(\d{2,2})\.(\d{2,2})*')
-        dsearch = dm.search(fh.name())
-        expname = fh.name()[dsearch.start():] # pull full path for experiment here, but leave out everything above the date
-        pulseDur = fh.parent().info()['sequenceParams'][('Laser-Blue','Shutter.duration')] # [pulseDurIndex]
-        pulseDur = pulseDur[pulseDurIndex]
-        pulseTrainCommandShutter = fh.parent().info()['devices']['Laser-Blue']['channels']['Shutter']
-        pulseTrainFcn = pulseTrainCommandShutter['waveGeneratorWidget']['function']
-        r = re.compile('(?P<type>pulse)\((?P<delay>\d+),\s(?P<param>\w+),\s(?P<value>\d+)\)')
-        s = r.match(pulseTrainFcn)
-        startTime = float(s.group('delay'))*1e-3   # pulseTrainFcn['start']['value'] # retrieve start time
-        rep = 0  # fh.info()[('protocol', 'repetitions')]
-        ipi = 1  # pulseTrainInfo['interpulse_length']['value'] # retrieve interpulse interval
-        npulses = 1 # pulseTrainInfo['pulse_number']['value'] # retrieve number of pulses in train
-        spikeTimes = [t['time'] for t in inputs]
-        # figure max of derivative of the data after each stimulus pulse. 5 msec window.
-        t = derivative.xvals("Time")
-        slopes = np.zeros(npulses)
-        for n in range(npulses):
-            t0 = startTime + n * ipi
-            t1 = t0 + 3e-3
-            x = np.where((t > t0) & (t <= t1))
-            slopes[n] = np.max(derivative[x])
+        try:
+            nspikes = len(inputs)
+            self.devicemode = 'Laser'
+            #print inputs
+    #        print 'FH parent info: ', fh.parent().info()
+            print '1'
+            reps = fh.parent().info()['protocol']['conf']['repetitions'] # fh.info()[('protocol', 'repetitions')]
+            print '2'
+            print fh.info().keys()
+            print fh.info()
+            try:
+                pulseDurIndex = fh.info()['Laser-Blue', 'Shutter.duration']
+            except:
+                try:
+                    pulseDurIndex = fh.info()['Laser-UV', 'Shutter.duration']
+                except:
+                    raise ValueError(" No key for Laser-Blue or Laser-UV in data set")
+            # fh.info()[('Laser-Blue', 'Command.PulseTrain_length')]
+    #        print 'pulsedurindex: ', pulseDurIndex
+            fn = fh.shortName()
+            # find date string in the path, and return path to current data set
+            # allows us to identify the data set by date, slice, cell, protocol, etc.
+            dm = re.compile(r'(\d{4,4})\.(\d{2,2})\.(\d{2,2})*')
+            dsearch = dm.search(fh.name())
+            expname = fh.name()[dsearch.start():] # pull full path for experiment here, but leave out everything above the date
+            print '3'
+            pulseDur = fh.parent().info()['sequenceParams'][('Laser-Blue','Shutter.duration')] # [pulseDurIndex]
+            print '4'
+            pulseDur = pulseDur[pulseDurIndex]
+            print '5'
+            pulseTrainCommandShutter = fh.parent().info()['devices']['Laser-Blue']['channels']['Shutter']
+            print '6'
+            pulseTrainFcn = pulseTrainCommandShutter['waveGeneratorWidget']['function']
+            r = re.compile('(?P<type>pulse)\((?P<delay>\d+),\s(?P<param>\w+),\s(?P<value>\d+)\)')
+            s = r.match(pulseTrainFcn)
+            print '6.5'
+            startTime = float(s.group('delay'))*1e-3   # pulseTrainFcn['start']['value'] # retrieve start time
+            print '7'
+            rep = 0  # fh.info()[('protocol', 'repetitions')]
+            ipi = 1  # pulseTrainInfo['interpulse_length']['value'] # retrieve interpulse interval
+            npulses = 1 # pulseTrainInfo['pulse_number']['value'] # retrieve number of pulses in train
+            spikeTimes = [t['time'] for t in inputs]
+            # figure max of derivative of the data after each stimulus pulse. 5 msec window.
+            t = derivative.xvals("Time")
+            slopes = np.zeros(npulses)
+            print '8'
+            for n in range(npulses):
+                t0 = startTime + n * ipi
+                t1 = t0 + 3e-3
+                x = np.where((t > t0) & (t <= t1))
+                print 'n, x: ', n, x
+                slopes[n] = np.max(derivative[x])
 
-        res = OrderedDict([('Experiment: ', expname), ('File: ', fn), ('startTime', startTime),
-                           ('NPulses', npulses), ('IPI', ipi), ('PulseDur', pulseDur), ('Reps', reps),
-                           ('thisRep', rep),
-                           ('NSpikes', nspikes), ('SpikeTimes', spikeTimes), ('Slopes', slopes)])
-        self.summary.append(res)
+            res = OrderedDict([('Experiment: ', expname), ('File: ', fn), ('startTime', startTime),
+                               ('NPulses', npulses), ('IPI', ipi), ('PulseDur', pulseDur), ('Reps', reps),
+                               ('thisRep', rep),
+                               ('NSpikes', nspikes), ('SpikeTimes', spikeTimes), ('Slopes', slopes)])
+            self.summary.append(res)
+        except:
+            raise Exception('Laser stuff failed')
         return res
 
 

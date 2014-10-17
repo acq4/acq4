@@ -415,7 +415,7 @@ class IVCurve(AnalysisModule):
         #        self.sequence = self.dataModel.listSequenceParams(dh)  # already done in 'getfileinfo'
         self.trace_times = np.zeros(0)
         sequence_values = []
-        # builidng command voltages - get amplitudes to clamp
+        # building command voltages - get amplitudes to clamp
         clamp = ('Clamp1', 'Pulse_amplitude')
         reps = ('protocol', 'repetitions')
 
@@ -550,9 +550,13 @@ class IVCurve(AnalysisModule):
         self.sample_interval = 1. / sfreq
         vc_command = data_dir_handle.parent().info()['devices'][self.clampDevices[0]]
         if 'waveGeneratorWidget' in vc_command:
-            vc_info = vc_command['waveGeneratorWidget']['stimuli']['Pulse']
-            pulsestart = vc_info['start']['value']
-            pulsedur = vc_info['length']['value']
+            try:
+                vc_info = vc_command['waveGeneratorWidget']['stimuli']['Pulse']
+                pulsestart = vc_info['start']['value']
+                pulsedur = vc_info['length']['value']
+            except KeyError:
+                pulsestart = 0.
+                pulsedur = np.max(self.time_base)
         elif 'daqState' in vc_command:
             vc_state = vc_command['daqState']['channels']['command']['waveGeneratorWidget']
             func = vc_state['function']
