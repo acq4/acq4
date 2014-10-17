@@ -550,9 +550,13 @@ class IVCurve(AnalysisModule):
         self.sample_interval = 1. / sfreq
         vc_command = data_dir_handle.parent().info()['devices'][self.clampDevices[0]]
         if 'waveGeneratorWidget' in vc_command:
-            vc_info = vc_command['waveGeneratorWidget']['stimuli']['Pulse']
-            pulsestart = vc_info['start']['value']
-            pulsedur = vc_info['length']['value']
+            try:
+                vc_info = vc_command['waveGeneratorWidget']['stimuli']['Pulse']
+                pulsestart = vc_info['start']['value']
+                pulsedur = vc_info['length']['value']
+            except KeyError:
+                pulsestart = 0.
+                pulsedur = np.max(self.time_base)
         elif 'daqState' in vc_command:
             vc_state = vc_command['daqState']['channels']['command']['waveGeneratorWidget']
             func = vc_state['function']
