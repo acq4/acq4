@@ -62,16 +62,19 @@ class CSVExporter(Exporter):
         numRows = max([len(d[0]) for d in data])
         for i in range(numRows):
             for j, d in enumerate(data):
-                if d is not None and i < len(d[0]):
-                    if appendAllX or j == 0:
-                        fd.write('%g%s%g%s' % (d[0][i], sep, d[1][i], sep))
+                # write x value if this is the first column, or if we want x 
+                # for all rows
+                if appendAllX or j == 0:
+                    if d is not None and i < len(d[0]):
+                        fd.write(numFormat % d[0][i] + sep)
                     else:
-                        fd.write('%g%s' % (d[1][i], sep))
+                        fd.write(' %s' % sep)
+                
+                # write y value 
+                if d is not None and i < len(d[1]):
+                    fd.write(numFormat % d[1][i] + sep)
                 else:
-                    if appendAllX or j == 0:
-                        fd.write(' %s %s' % (sep, sep))
-                    else:
-                        fd.write(' %s' % (sep))
+                    fd.write(' %s' % sep)
             fd.write('\n')
         fd.close()
 

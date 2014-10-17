@@ -42,7 +42,7 @@ Notes:
     
 """
 
-def knownClamps():
+def knownClampNames():
     return deviceNames['Clamp']
 
 def isSequence(dh):
@@ -263,7 +263,7 @@ def getClampMode(data_handle):
     elif isClampFile(data_handle):
         data = data_handle.read(readAllData=False)
     else:
-        raise Exception('%s not a clamp file.' % data.shortName())
+        raise Exception('%s not a clamp file.' % data)
     # if isClampFile(data_handle):
     #     data = data_handle.read(readAllData=False)
     # else:

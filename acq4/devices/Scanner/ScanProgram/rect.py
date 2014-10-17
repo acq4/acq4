@@ -506,7 +506,7 @@ class RectScan(SystemSolver):
             image[:, 1::2] = image[:, 1::2, ::-1]
         return image
 
-    def measureMirrorLag(self, data, auto=True, transpose=False, shift=0., minShift=0., maxShift=100):
+    def measureMirrorLag(self, data, auto=True, shift=0., minShift=0., maxShift=100, transpose=False):
         """
         Estimate the mirror lag in a bidirectional raster scan.
         The *data* argument is a photodetector recording array.

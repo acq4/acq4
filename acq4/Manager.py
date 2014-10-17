@@ -618,13 +618,12 @@ class Manager(QtCore.QObject):
         print "Done reloading.\n"
         logMsg("Reloaded all libraries under %s." %path, msgType='status')
         
-
     def createWindowShortcut(self, keys, win):
         ## Note: this is probably not safe to call from other threads.
         try:
             sh = QtGui.QShortcut(QtGui.QKeySequence(keys), win)
             sh.setContext(QtCore.Qt.ApplicationShortcut)
-            sh.activated.connect(lambda *args: win.raise_)
+            sh.activated.connect(lambda *args: win.raise_())
         except:
             printExc("Error creating shortcut '%s':" % keys)
         

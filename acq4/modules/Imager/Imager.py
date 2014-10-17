@@ -326,8 +326,9 @@ class Imager(Module):
             self.scopeDev.sigObjectiveChanged.connect(self.objectiveUpdate)
             self.scopeDev.sigGlobalTransformChanged.connect(self.transformChanged)
         
-        self.detectorDev = self.manager.getDevice(config['detector'][0])
-        self.detectorChannel = config['detector'][1]
+        # config may specify a single detector device (dev, channel) or a list of devices 
+        # to select from [(dev1, channel1), ...]
+        self.detectors = config.get('detectors', [config.get('detector')])
         
         self.attenuatorDev = self.manager.getDevice(config['attenuator'][0])
         self.attenuatorChannel = config['attenuator'][1]
@@ -386,6 +387,7 @@ class Imager(Module):
             dict(name='Scope Device', type='interface', interfaceTypes=['microscope']),
             dict(name='Scanner Device', type='interface', interfaceTypes=['scanner']),
             dict(name='Laser Device', type='interface', interfaceTypes=['laser']),
+            dict(name='Photodetector', type='list', values=self.detectors),
             dict(name='Camera Module', type='interface', interfaceTypes=['cameraModule']),
             dict(name="Tiles", type="bool", value=False, children=[
                 dict(name='Stage', type='interface', interfaceTypes='stage'),
@@ -949,6 +951,7 @@ class Imager(Module):
         samples = SUF.getSamples()
         for N in xrange(self.param['Average']):
             # set up a task for the task manager.
+            pdDevice, pdChannel = self.param['Photodetector']
             cmd= {'protocol': {'duration': samples/self.param['Sample Rate']},
                   'DAQ' : {'rate': self.param['Sample Rate'], 'numPts': samples,
                            'downsample': self.param['Downsample']}, 
@@ -957,8 +960,8 @@ class Imager(Module):
                       'YAxis' : {'command': self.yScanner}
                       },
                   self.attenuatorDev.name(): {self.attenuatorChannel: {'preset': self.param['Pockels']}},
-                  self.detectorDev.name(): {
-                      self.detectorChannel: {'record': True},
+                  pdDevice: {
+                      pdChannel: {'record': True},
                     #  'PlateVoltage': {'record' : False, 'recordInit': True}
                       }
                 }
@@ -975,7 +978,7 @@ class Imager(Module):
                     QtGui.QApplication.processEvents()
                     time.sleep(0.01)     
             data = task.getResult() # obvious, but here is where we get the data
-            imgData1 = data[self.detectorDev.name()][self.detectorChannel].view(NP.ndarray) # which is a PMT voltage array
+            imgData1 = data[pdDevice][pdChannel].view(NP.ndarray) # which is a PMT voltage array
             xys = SUF.getScanXYSize()
             imgData1.shape = (xys[1], xys[0]) # (nPointsY, pixelsPerRow) # make 2d image
             imgData += imgData1.transpose() # sum if we are averaging.

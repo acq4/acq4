@@ -3,10 +3,10 @@ from ..python2_3 import sortList
 from .. import functions as fn
 from .GraphicsObject import GraphicsObject
 from .GraphicsWidget import GraphicsWidget
+from ..widgets.SpinBox import SpinBox
 import weakref
 from ..pgcollections import OrderedDict
 from ..colormap import ColorMap
-from ..widgets.SpinBox import SpinBox
 
 import numpy as np
 
@@ -34,15 +34,13 @@ class TickSliderItem(GraphicsWidget):
     
     A rectangular item with tick marks along its length that can (optionally) be moved by the user."""
         
-    def __init__(self, orientation='bottom', allowAdd=True, dataParent=None, **kargs):
+    def __init__(self, orientation='bottom', allowAdd=True, **kargs):
         """
         ==============  =================================================================================
         **Arguments:**
         orientation     Set the orientation of the gradient. Options are: 'left', 'right'
                         'top', and 'bottom'.
         allowAdd        Specifies whether ticks can be added to the item by the user.
-        dataParent      (optional) A parent object that the TickSliderItem uses to get the values that its 0 and 1 
-                        ends map to. The dataParent must have the functions getLevels and setLevels.
         tickPen         Default is white. Specifies the color of the outline of the ticks.
                         Can be any of the valid arguments for :func:`mkPen <pyqtgraph.mkPen>`
         ==============  =================================================================================
@@ -55,8 +53,6 @@ class TickSliderItem(GraphicsWidget):
         self.ticks = {}
         self.maxDim = 20
         self.allowAdd = allowAdd
-        self.dataParent = dataParent
-        self.moving = False
         if 'tickPen' in kargs:
             self.tickPen = fn.mkPen(kargs['tickPen'])
         else:
@@ -241,14 +237,14 @@ class TickSliderItem(GraphicsWidget):
             pos.setX(min(max(pos.x(), 0), self.length))
             self.addTick(pos.x()/self.length)
         elif ev.button() == QtCore.Qt.RightButton:
-            if self.moving:
-                ev.accept()
-                self.setPos(self.startPosition)
-                self.moving = False
-                self.sigMoving.emit(self)
-                self.sigMoved.emit(self)
-            else:
-                self.showMenu(ev)
+            #if self.moving:
+                #ev.accept()
+                #self.setPos(self.startPosition)
+                #self.moving = False
+                #self.sigMoving.emit(self)
+                #self.sigMoved.emit(self)
+            #else:
+            self.showMenu(ev)
         
         #if  ev.button() == QtCore.Qt.RightButton:
             #if self.moving:
@@ -291,56 +287,29 @@ class TickSliderItem(GraphicsWidget):
         tick.update()
         #tick.setBrush(QtGui.QBrush(QtGui.QColor(tick.color)))
 
-    def setTickValue(self, tick, val, dataUnits=False):
+    def setTickValue(self, tick, val):
         ## public
         """
         Set the position (along the slider) of the tick.
         
-        ============= ==================================================================
-        **Arguments** 
-        tick          Can be either an integer corresponding to the index of the tick 
-                      or a Tick object. Ex: if you had a slider with 3 ticks and you 
-                      wanted to change the middle tick, the index would be 1.
-        val           The desired position of the tick. 
-        
-                          * When dataUnits is False (default): If val is < 0, position 
-                            will be set to 0. If val is > 1, position will be set to 1.
-                          * When dataUnits is True: If val is outside the bounds of the 
-                            current data levels, the data levels will be expanded to 
-                            include the new value and the tick will be set to a 0 or 1 
-                            position. All other ticks will keep their 0 to 1 values.
-                             
-        dataUnits     If True, set the value of the tick in data units using the mapping
-                      levels from self.dataParent.
-        ============= ==================================================================        
+        ==============   ==================================================================
+        **Arguments:**
+        tick             Can be either an integer corresponding to the index of the tick
+                         or a Tick object. Ex: if you had a slider with 3 ticks and you
+                         wanted to change the middle tick, the index would be 1.
+        val              The desired position of the tick. If val is < 0, position will be
+                         set to 0. If val is > 1, position will be set to 1.
+        ==============   ==================================================================
         """
-        if dataUnits is False:
-            tick = self.getTick(tick)
-            val = min(max(0.0, val), 1.0)
-            x = val * self.length
-            pos = tick.pos()
-            pos.setX(x)
-            tick.setPos(pos)
-            self.ticks[tick] = val
-        else:
-            if self.dataParent is None:
-                raise Exception("Cannot set values in data units without a dataParent being specified. See TickSliderItem.__init__ or TickSliderItem.setDataParent.")
-            tick = self.getTick(tick)
-            mn, mx = self.dataParent.getLevels()
-            if val < mn:
-                mn = val
-                self.dataParent.setLevels(val, mx)
-            elif val > mx:
-                mx = val
-                self.dataParent.setLevels(mn, val)    
-            
-            newTickValue = (val - mn)/(mx-mn) ## in 0-1 units
-            self.setTickValue(tick, newTickValue)
-            
-    def setDataParent(self, parent):
-        """Set the parent object to use for mapping tick values to data units. parent must have the funtions setLevels and getLevels."""
-        self.dataParent = parent
-    
+        tick = self.getTick(tick)
+        val = min(max(0.0, val), 1.0)
+        x = val * self.length
+        pos = tick.pos()
+        pos.setX(x)
+        tick.setPos(pos)
+        self.ticks[tick] = val
+        self.updateGradient()
+        
     def tickValue(self, tick):
         ## public
         """Return the value (from 0.0 to 1.0) of the specified tick.
@@ -354,28 +323,7 @@ class TickSliderItem(GraphicsWidget):
         """
         tick = self.getTick(tick)
         return self.ticks[tick]
-
-
-    def tickDataValue(self, tick):
-        """If a dataParent object has been specified, return the value of the specified 
-        tick in data units, else return None (Use :func:`tickValue <TickSlicerItem.tickValue>` instead). 
-        ============= ==================================================================
-        **Arguments** 
-        tick          Can be either an integer corresponding to the index of the tick 
-                      or a Tick object. Ex: if you had a slider with 3 ticks and you 
-                      wanted the value of the middle tick, the index would be 1.
-        ============= ==================================================================
-        """
-        if self.dataParent is None:
-            return 
         
-        val = self.tickValue(tick)
-        levels = self.dataParent.getLevels()
-        
-        return (val * (levels[1] - levels[0])) + levels[0]
-
- 
-
     def getTick(self, tick):
         ## public
         """Return the Tick object at the specified index.
@@ -946,43 +894,41 @@ class TickMenu(QtGui.QMenu):
         l = QtGui.QGridLayout()
         w.setLayout(l)
         
-        dataVal = value=sliderItem.tickDataValue(tick)
-        if dataVal == None:
-            dataVal = 0
+        value = sliderItem.tickValue(tick)
         self.fracPosSpin = SpinBox()
-        self.fracPosSpin.setOpts(value=sliderItem.tickValue(tick), bounds=(0.0, 1.0), step=0.01, decimals=2)
-        self.dataPosSpin = SpinBox(value=dataVal)
-        self.dataPosSpin.setOpts(decimals=3, siPrefix=True)
+        self.fracPosSpin.setOpts(value=value, bounds=(0.0, 1.0), step=0.01, decimals=2)
+        #self.dataPosSpin = SpinBox(value=dataVal)
+        #self.dataPosSpin.setOpts(decimals=3, siPrefix=True)
                 
-        l.addWidget(QtGui.QLabel("Position (fractional):"), 0,0)
+        l.addWidget(QtGui.QLabel("Position:"), 0,0)
         l.addWidget(self.fracPosSpin, 0, 1)
-        l.addWidget(QtGui.QLabel("Position (data units):"), 1, 0)
-        l.addWidget(self.dataPosSpin, 1,1)
+        #l.addWidget(QtGui.QLabel("Position (data units):"), 1, 0)
+        #l.addWidget(self.dataPosSpin, 1,1)
         
-        if self.sliderItem().dataParent is None:
-            self.dataPosSpin.setEnabled(False)
+        #if self.sliderItem().dataParent is None:
+        #    self.dataPosSpin.setEnabled(False)
         
         a = QtGui.QWidgetAction(self)
         a.setDefaultWidget(w)
         positionMenu.addAction(a)        
         
-        self.fracPosSpin.valueChanged.connect(self.fractionalValueChanged)
-        self.dataPosSpin.valueChanged.connect(self.dataValueChanged)
+        self.fracPosSpin.sigValueChanging.connect(self.fractionalValueChanged)
+        #self.dataPosSpin.valueChanged.connect(self.dataValueChanged)
         
-        colorAct = self.addAction("Set Color", lambda: self.gradientItem().raiseColorDialog(self.tick()))
+        colorAct = self.addAction("Set Color", lambda: self.sliderItem().raiseColorDialog(self.tick()))
         if not self.tick().colorChangeAllowed:
             colorAct.setEnabled(False)
 
-    def fractionalValueChanged(self, val):
-        self.sliderItem().setTickValue(self.tick(), val)
-        if self.sliderItem().dataParent is not None:
-            self.dataPosSpin.blockSignals(True)
-            self.dataPosSpin.setValue(self.sliderItem().tickDataValue(self.tick()))
-            self.dataPosSpin.blockSignals(False)
+    def fractionalValueChanged(self, x):
+        self.sliderItem().setTickValue(self.tick(), self.fracPosSpin.value())
+        #if self.sliderItem().dataParent is not None:
+        #    self.dataPosSpin.blockSignals(True)
+        #    self.dataPosSpin.setValue(self.sliderItem().tickDataValue(self.tick()))
+        #    self.dataPosSpin.blockSignals(False)
             
-    def dataValueChanged(self, val):
-        self.sliderItem().setTickValue(self.tick(), val, dataUnits=True)
-        self.fracPosSpin.blockSignals(True)
-        self.fracPosSpin.setValue(self.sliderItem().tickValue(self.tick()))
-        self.fracPosSpin.blockSignals(False)
+    #def dataValueChanged(self, val):
+    #    self.sliderItem().setTickValue(self.tick(), val, dataUnits=True)
+    #    self.fracPosSpin.blockSignals(True)
+    #    self.fracPosSpin.setValue(self.sliderItem().tickValue(self.tick()))
+    #    self.fracPosSpin.blockSignals(False)
 

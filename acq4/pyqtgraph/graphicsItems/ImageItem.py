@@ -92,6 +92,11 @@ class ImageItem(GraphicsObject):
             return None
         return self.image.shape[1]
 
+    def channels(self):
+        if self.image is None:
+            return None
+        return self.image.shape[2] if self.image.ndim == 3 else 1
+
     def boundingRect(self):
         if self.image is None:
             return QtCore.QRectF(0., 0., 0., 0.)
@@ -277,10 +282,15 @@ class ImageItem(GraphicsObject):
         profile = debug.Profiler()
         if self.image is None or self.image.size == 0:
             return
-        if isinstance(self.lut, collections.Callable):
-            lut = self.lut(self.image)
+        
+        # Request a lookup table if this image has only one channel
+        if self.image.ndim == 2 or self.image.shape[2] == 1:
+            if isinstance(self.lut, collections.Callable):
+                lut = self.lut(self.image)
+            else:
+                lut = self.lut
         else:
-            lut = self.lut
+            lut = None
 
         if self.autoDownsample:
             # reduce dimensions of image based on screen resolution
@@ -296,6 +306,10 @@ class ImageItem(GraphicsObject):
         else:
             image = self.image
         
+        # Convert single-channel image to 2D array
+        if image.ndim == 3 and image.shape[-1] == 1:
+            image = image[..., 0]
+
         argb, alpha = fn.makeARGB(image.transpose((1, 0, 2)[:image.ndim]), lut=lut, levels=self.levels)
         self.qimage = fn.makeQImage(argb, alpha, transpose=False)
 
@@ -324,7 +338,8 @@ class ImageItem(GraphicsObject):
             self.render()
         self.qimage.save(fileName, *args)
 
-    def getHistogram(self, bins='auto', step='auto', targetImageSize=200, targetHistogramSize=500, **kwds):
+    def getHistogram(self, bins='auto', step='auto', perChannel=False, targetImageSize=200, 
+                     targetHistogramSize=500, **kwds):
         """Returns x and y arrays containing the histogram values for the current image.
         For an explanation of the return format, see numpy.histogram().
         
@@ -340,6 +355,9 @@ class ImageItem(GraphicsObject):
           with each bin having an integer width.
         * All other types will have *targetHistogramSize* bins.
         
+        If *perChannel* is True, then the histogram is computed once per channel
+        and the output is a list of the results.
+        
         This method is also used when automatically computing levels.
         """
         if self.image is None:
@@ -352,20 +370,29 @@ class ImageItem(GraphicsObject):
         stepData = self.image[::step[0], ::step[1]]
         
         if bins == 'auto':
+            mn = stepData.min()
+            mx = stepData.max()
             if stepData.dtype.kind in "ui":
-                mn = stepData.min()
-                mx = stepData.max()
+                # For integer data, we select the bins carefully to avoid aliasing
                 step = np.ceil((mx-mn) / 500.)
                 bins = np.arange(mn, mx+1.01*step, step, dtype=np.int)
-                if len(bins) == 0:
-                    bins = [mn, mx]
             else:
-                bins = 500
+                # for float data, let numpy select the bins.
+                bins = np.linspace(mn, mx, 500)
+            
+            if len(bins) == 0:
+                bins = [mn, mx]
 
         kwds['bins'] = bins
-        hist = np.histogram(stepData, **kwds)
-        
-        return hist[1][:-1], hist[0]
+        if perChannel:
+            hist = []
+            for i in range(stepData.shape[-1]):
+                h = np.histogram(stepData[..., i], **kwds)
+                hist.append((h[1][:-1], h[0]))
+            return hist
+        else:
+            hist = np.histogram(stepData, **kwds)
+            return hist[1][:-1], hist[0]
 
     def setPxMode(self, b):
         """

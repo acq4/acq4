@@ -447,12 +447,15 @@ class GroupParameter(Parameter):
     instead of a button.
     """
     itemClass = GroupParameterItem
+    
+    sigAddNew = QtCore.Signal(object, object)  # self, type
 
     def addNew(self, typ=None):
         """
         This method is called when the user has requested to add a new item to the group.
+        By default, it emits ``sigAddNew(self, typ)``.
         """
-        raise Exception("Must override this function in subclass.")
+        self.sigAddNew.emit(self, typ)
     
     def setAddList(self, vals):
         """Change the list of options available for the user to add to the group."""
@@ -545,7 +548,6 @@ class ListParameter(Parameter):
         self.forward, self.reverse = self.mapping(limits)
         
         Parameter.setLimits(self, limits)
-        #print self.name(), self.value(), limits, self.reverse
         if len(self.reverse[0]) > 0 and self.value() not in self.reverse[0]:
             self.setValue(self.reverse[0][0])
             
