@@ -19,6 +19,8 @@ import textwrap
 import gc
 
 
+
+
 class DataSummary():
     def __init__(self, basedir=None):
         print 'basedir: ', basedir
@@ -39,9 +41,9 @@ class DataSummary():
         daytype = re.compile("(\d{4,4}).(\d{2,2}).(\d{2,2})_(\d{3,3})")
 #        daytype = re.compile("(2011).(06).(08)_(\d{3,3})")  # specify a day
         #2011.10.17_000
-        minday = (2010, 1, 11)
+        minday = (2012, 12, 4)
         minday = minday[0]*1e4+minday[1]*1e2+minday[2]
-        maxday = (2014, 12, 31)
+        maxday = (2012, 12, 31)
         maxday = maxday[0]*1e4+maxday[1]*1e2+maxday[2]
         days = []
         for thisfile in allfiles:
@@ -49,7 +51,7 @@ class DataSummary():
             if m == '.DS_Store':
                 continue
             if m is None:
-                print 'File is not a match: ', thisfile
+               # print 'Top level file %s is incorrectly placed ' % thisfile
                 continue  # no match
             if len(m.groups()) == 4:  # perfect match
                 # print m.groups()
@@ -102,6 +104,7 @@ class DataSummary():
             self.slicestring += '\t'
             self.doCells(os.path.join(day, slice))
             DataManager.cleanup()
+            del dh
             gc.collect()
 
 
@@ -133,6 +136,7 @@ class DataSummary():
             self.cellstring += '\t'
             self.doProtocols(os.path.join(slice, cell))
             DataManager.cleanup() # clean up after each cell
+            del dh
             gc.collect()
 
 #        if len(cells) == 0:
@@ -203,9 +207,13 @@ class DataSummary():
                     # Check if there is no clamp file for this iteration of the protocol
                     # Usually this indicates that the protocol was stopped early.
                     # data_file = data_file_handle.read()
-                    self.holding = self.dataModel.getClampHoldingLevel(data_file_handle)
-                    self.amp_settings = self.dataModel.getWCCompSettings(data_file_handle)
-                    ncomplete += 1
+                    try:
+                        self.holding = self.dataModel.getClampHoldingLevel(data_file_handle)
+                        self.amp_settings = self.dataModel.getWCCompSettings(data_file_handle)
+                        ncomplete += 1
+                    except:
+                        raise ValueError('complete = %d when failed' % ncomplete)
+
                 DataManager.cleanup()  # close all opened files
                 gc.collect()  # and force garbage collection of freed objects inside the loop
             if ncomplete == ntotal:
@@ -223,8 +231,9 @@ class DataSummary():
 #                    print 'No data in protocol'
 #        if len(protocols) == 0:
 #            print '         No protocols this cell'
-        DataManager.cleanup()
-        gc.collect()
+            DataManager.cleanup()
+            del dh
+            gc.collect()
         self.protocolstring += '\t'
 
         for thisfile in nonprotocols:
@@ -412,6 +421,9 @@ class DataSummary():
                 self.values.append(sequence_values[i])
             else:
                 self.values.append(cmd[len(cmd) / 2])
+            data_file.close()
+            del data_file
+            
         if traces is None or len(traces) == 0:
             print "IVCurve::loadFileRequested: No data found in this run..."
             return False
@@ -467,6 +479,8 @@ class DataSummary():
         for i in range(len(self.values)):
             cmdList.append('%8.3f %s' %
                            (self.command_scale_factor * self.values[i], self.command_units))
+        dh.close()
+        del dh
         return True
 
     def file_cell_protocol(self, filename):
