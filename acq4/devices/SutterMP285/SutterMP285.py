@@ -6,6 +6,7 @@ from acq4.devices.OptomechDevice import *
 from acq4.drivers.SutterMP285 import *
 from acq4.drivers.SutterMP285 import SutterMP285 as SutterMP285Driver  ## name collision with device class
 from acq4.util.Mutex import Mutex
+from acq4.util.Thread import Thread
 import acq4.util.debug as debug
 import os, time
 #import pdb
@@ -241,13 +242,13 @@ class SMP285Interface(QtGui.QWidget):
 class TimeoutError(Exception):
     pass
         
-class SutterMP285Thread(QtCore.QThread):
+class SutterMP285Thread(Thread):
 
     sigPositionChanged = QtCore.Signal(object)
     sigError = QtCore.Signal(object)
 
     def __init__(self, dev, driver, driverLock, scale, limits, maxSpd):
-        QtCore.QThread.__init__(self)
+        Thread.__init__(self)
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.scale = scale
         self.mp285 = driver

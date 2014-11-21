@@ -1,5 +1,6 @@
 import time
 from acq4.util.Mutex import Mutex
+from acq4.util.Thread import Thread
 from PyQt4 import QtGui, QtCore
 import acq4.util.debug as debug
 from acq4.util.metaarray import MetaArray
@@ -13,7 +14,7 @@ except ImportError:
     HAVE_IMAGEFILE = False
 
 
-class RecordThread(QtCore.QThread):
+class RecordThread(Thread):
     """
     Thread class used by camera module for storing data to disk.
     """
@@ -22,7 +23,7 @@ class RecordThread(QtCore.QThread):
     sigRecordingFinished = QtCore.Signal()
     
     def __init__(self, ui):
-        QtCore.QThread.__init__(self)
+        Thread.__init__(self)
         self.ui = ui
         self.m = acq4.Manager.getManager()
         self.ui.cam.sigNewFrame.connect(self.newCamFrame)

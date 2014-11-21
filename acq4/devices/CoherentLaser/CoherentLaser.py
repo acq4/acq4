@@ -3,6 +3,7 @@ from acq4.devices.Laser import *
 #import serial, struct
 from acq4.drivers.Coherent import *
 from acq4.util.Mutex import Mutex
+from acq4.util.Thread import Thread
 import acq4.util.debug as debug
 import time
 
@@ -110,14 +111,14 @@ class CoherentTask(LaserTask):
             self.dev.closeShutter()
         LaserTask.stop(self, abort)
         
-class CoherentThread(QtCore.QThread):
+class CoherentThread(Thread):
 
     sigPowerChanged = QtCore.Signal(object)
     sigWavelengthChanged = QtCore.Signal(object)
     sigError = QtCore.Signal(object)
 
     def __init__(self, dev, driver, lock):
-        QtCore.QThread.__init__(self)
+        Thread.__init__(self)
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.dev = dev
         self.driver = driver
