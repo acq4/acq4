@@ -38,8 +38,8 @@ class ScanProgramComponent:
         
     def ctrlParameter(self):
         """
-        The Parameter (see acq4.pyqtgraph.parametertree) set used to allow the 
-        user to define this component.        
+        The Parameter set (see acq4.pyqtgraph.parametertree) that allows the 
+        user to configure this component.
         """
         raise NotImplementedError()
     
