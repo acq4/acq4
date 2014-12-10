@@ -1,3 +1,4 @@
+from __future__ import division
 import weakref
 import numpy as np
 from PyQt4 import QtCore, QtGui
@@ -85,15 +86,10 @@ class SpiralScanROI(pg.ROI):
     
     def paint(self, p, *args):
         if self._path is None:
-            radii = self.radii
-            angles = self.angles
-            # draw 30 pts per turn
-            npts = min(5000, int(30 * abs(angles[1] - angles[0]) / np.pi))
-            theta = np.linspace(angles[0], angles[1], npts)
-            r = np.linspace(radii[0], radii[1], npts)
-            x = r * np.cos(theta) + radii[1]
-            y = r * np.sin(theta) + radii[1]
-            self._path = pg.arrayToQPath(x, y)
+            ss = SpiralScan(self.radii, self.angles)
+            npts = min(5000, int(30 * abs(self.angles[1] - self.angles[0]) / np.pi))
+            pts = ss.path(npts)
+            self._path = pg.arrayToQPath(pts[:,0], pts[:,1])
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         p.setPen(self.currentPen)
         p.drawPath(self._path)
@@ -150,16 +146,9 @@ class SpiralScanControl(QtCore.QObject):
         a1 = 2 * np.pi * turns
         self.roi.setAngles(a0, a1)
         
-        # compute length of spiral:
-        # This is L = (spacing / 2pi) * Integral(sqrt(Theta^2 + 1) dTheta)
-        # = sp/2pi * (a1/2 sqrt(a1^2+1) + 1/2 ln(a1 + sqrt(a1^2+1)) - 
-        #             a0/2 sqrt(a0^2+1) - 1/2 ln(a0 + sqrt(a0^2+1)))
-        s0 = (a0**2 + 1)**0.5
-        s1 = (a1**2 + 1)**0.5
-        slen = ((spacing / 2*np.pi) * 
-                ((a1 / 2.) * s1 + 0.5 * np.log(a1 + s1)) - 
-                ((a0 / 2.) * s0 + 0.5 * np.log(a0 + s0)))
-        self.params['speed'] = 1e-3 * slen / self.params['duration']
+        ss = SpiralScan((inner, outer), (a0, a1))
+        
+        self.params['speed'] = 1e-3 * ss.length() / self.params['duration']
         self.update()
         
     def update(self):
@@ -175,6 +164,78 @@ class SpiralScanControl(QtCore.QObject):
         task = {'type': self.name, 'active': self.isActive(), 'scanInfo': {'pos': (0,0)}}
         return task
 
+
+class SpiralScan(object):
+    """Class used for computing and storing information about spiral scan 
+    geometry.
+    
+    Parameters
+    ----------
+    radii : tuple
+        Inner and outer spiral radii (in m)
+    angles : tuple
+        Start and end angles (in radians) corresponding to inner and outer
+        radii, respectively. An angle of 0 points along the x axis and positive
+        angles turn counter-clockwise. The number of spiral turns is determined
+        by the difference between the end and start angles.
+    """
+    def __init__(self, radii, angles):
+        self.radii = radii
+        self.angles = angles
+        
+    def length(self):
+        """Return exact length of spiral.
+        """
+        u = self.pitch()
+        #a0 = self.radii[0] / u
+        #a1 = a0 + (self.angles[1] - self.angles[0])
+        return self.spiralLength(self.radii[0], u) - self.spiralLength(self.radii[1], u)
+
+    @staticmethod
+    def spiralLength(r, u):
+        """Length of spiral given radius and pitch. 
+        """
+        a = r / u
+        return 0.5 * u * (a * (a**2 + 1)**0.5 + np.arcsinh(a))
+
+    def pitch(self):
+        """Return the difference in radius for one complete turn.
+        """
+        return (self.radii[1] - self.radii[0]) / (self.angles[1] - self.angles[0])
+
+    def path(self, npts=None, uniform=True):
+        """Generate *npts* x/y points along the path of the spiral.
+        
+        If *uniform* is True, then all returned points are equally spaced along
+        the length of the spiral (this is used for generating scanner
+        voltages).
+        
+        If *uniform* is False, then the returned path points have equal angular
+        spacing (this is faster to compute; used only for generating spiral 
+        graphics).
+        """
+        radii = self.radii
+        angles = self.angles
+        r = np.linspace(radii[0], radii[1], npts)
+        theta = np.linspace(angles[0], angles[1], npts)
+        pts = np.empty((npts, 2))
+        pts[:, 0] = r * np.cos(theta) + radii[1]
+        pts[:, 1] = r * np.sin(theta) + radii[1]
+        
+        if uniform:
+            # Resample to have uniform length. 
+            # An analytic solution would be preferred, but there might not be one..
+            
+            # First compute length at every sample on the spiral
+            u = self.pitch()
+            l1 = self.spiralLength(r, u) - self.spiralLength(radii[0], u)
+            
+            # Now resample points to have uniform spacing
+            l2 = np.linspace(0, l1[-1], npts)
+            pts = scipy.interpolate.griddata(l1, pts, l2, method='linear')
+        
+        return pts
+        
 
 class SpiralScanParameter(pTypes.SimpleParameter):
     """
