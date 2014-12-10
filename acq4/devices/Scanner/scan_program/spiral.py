@@ -1,6 +1,7 @@
 from __future__ import division
 import weakref
 import numpy as np
+import scipy.interpolate
 from PyQt4 import QtCore, QtGui
 
 import acq4.pyqtgraph as pg
@@ -189,7 +190,7 @@ class SpiralScan(object):
         u = self.pitch()
         #a0 = self.radii[0] / u
         #a1 = a0 + (self.angles[1] - self.angles[0])
-        return self.spiralLength(self.radii[0], u) - self.spiralLength(self.radii[1], u)
+        return self.spiralLength(self.radii[1], u) - self.spiralLength(self.radii[0], u)
 
     @staticmethod
     def spiralLength(r, u):
