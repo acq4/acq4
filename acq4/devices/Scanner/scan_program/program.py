@@ -17,7 +17,7 @@ def registerScanComponent(component):
     COMPONENTS[component.name] = component
 
 for cType in ['step', 'line', 'rect', 'loop', 'ellipse', 'spiral']:
-    mod = importlib.import_module('.' + cType, 'acq4.devices.Scanner.ScanProgram')
+    mod = importlib.import_module('.' + cType, 'acq4.devices.Scanner.scan_program')
     clsName = cType.capitalize() + "ScanComponent"
     registerScanComponent(getattr(mod, clsName))
 

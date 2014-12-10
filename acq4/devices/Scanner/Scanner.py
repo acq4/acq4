@@ -5,7 +5,7 @@ from acq4.Manager import logMsg, logExc
 from acq4.util.Mutex import Mutex, MutexLocker
 from DeviceGui import ScannerDeviceGui
 from TaskGui import ScannerTaskGui
-from .ScanProgram import ScanProgram 
+from .scan_program import ScanProgram 
 import os, pickle 
 import acq4.util.ptime as ptime
 from acq4.util.debug import *

@@ -14,7 +14,7 @@ import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 
 from TaskTemplate import Ui_Form
-from .ScanProgram import ScanProgram
+from .scan_program import ScanProgram
 
 ### Error IDs:
 ###  1: Could not find spot size from calibration. (from ScannerTaskGui.pointSize)
