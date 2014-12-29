@@ -595,7 +595,7 @@ class TargetPoint(pg.EllipseROI):
         #if 'host' in args:
             #self.host = args.pop('host')
         
-        pg.ROI.__init__(self, (0,0), [ptSize] * 2, movable=args.get('movable', True))
+        pg.EllipseROI.__init__(self, (0,0), [ptSize] * 2, movable=args.get('movable', True))
         self.aspectLocked = True
         self.overPen = None
         self.underPen = self.pen

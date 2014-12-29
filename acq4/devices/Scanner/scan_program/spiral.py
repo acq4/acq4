@@ -49,7 +49,12 @@ class SpiralScanComponent(ScanProgramComponent):
         *array*. Returns the start and stop indexes used by this component.
         """
         # NOTE: point should have constant speed regardless of radius.
-        raise NotImplementedError()
+        rs = RectScan()
+        rs.restoreState(cmd['scanInfo'])
+        
+        mapper = lambda x, y: dev.mapToScanner(x, y, cmd['laser'])
+        rs.writeArray(array.T, mapper) # note RectScan expects (N,2), whereas Program provides (2,N)
+        return rs.scanOffset, rs.scanOffset + rs.scanStride[0]
         
     def generatePosCmd(self, array):
         """
@@ -107,9 +112,15 @@ class SpiralScanControl(QtCore.QObject):
         self.name = component.name
         self.component = weakref.ref(component)
 
-        self.params = SpiralScanParameter()
-
-        self.params.component = self.component
+        params = [
+            dict(name='radius', type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='thickness', type='float', value=25, suffix='%', bounds=[0, 100], step=1),
+            dict(name='spacing', type='float', value=2e-6, suffix='m', siPrefix=True, step=0.5e-6, bounds=[1e-7, None]),
+            dict(name='duration', type='float', value=0.002, suffix='s', bounds=[1e-6, None], siPrefix=True, step=1e-3),
+            dict(name='speed', type='float', readonly=True, value=0, suffix='m/ms', siPrefix=True),
+        ]
+        self.params = pTypes.SimpleParameter(name='spiral_scan', type='bool', value=True, 
+                                             removable=True, renamable=True, children=params)
         
         self.roi = SpiralScanROI(pos=[0.0, 0.0], radius=self.params['radius'])
 
@@ -124,32 +135,19 @@ class SpiralScanControl(QtCore.QObject):
         return self.params.value()
     
     def setVisible(self, vis):
-        if vis:
-            self.roi.setOpacity(1.0)  ## have to hide this way since we still want the children to be visible
-            for h in self.roi.handles:
-                h['item'].setOpacity(1.0)
-        else:
-            self.roi.setOpacity(0.0)
-            for h in self.roi.handles:
-                h['item'].setOpacity(0.0)
+        self.roi.setVisible(vis)
     
     def parameters(self):
         return self.params
 
     def paramsChanged(self, param=None, changes=None):
-        outer = self.params['radius']
-        inner = outer - (outer * self.params['thickness'] / 100.)
-        self.roi.setRadii(inner, outer)
+        state = self.generateTask()
+        self.roi.setRadii(*state['radii'])
+        self.roi.setAngles(*state['angles'])
         
-        spacing = self.params['spacing']
-        turns = (outer - inner) / spacing
-        a0 = 0
-        a1 = 2 * np.pi * turns
-        self.roi.setAngles(a0, a1)
+        ss = SpiralScan(state['radii'], state['angles'])
         
-        ss = SpiralScan((inner, outer), (a0, a1))
-        
-        self.params['speed'] = 1e-3 * ss.length() / self.params['duration']
+        self.params['speed'] = 1e-3 * ss.length() / state['duration']
         self.update()
         
     def update(self):
@@ -162,7 +160,20 @@ class SpiralScanControl(QtCore.QObject):
         self.params['radius'] = w / 2.
         
     def generateTask(self):
-        task = {'type': self.name, 'active': self.isActive(), 'scanInfo': {'pos': (0,0)}}
+        outer = self.params['radius']
+        inner = outer - (outer * self.params['thickness'] / 100.)
+        spacing = self.params['spacing']
+        turns = (outer - inner) / spacing
+        a0 = 0
+        a1 = 2 * np.pi * turns
+        scanInfo = {
+            'startTime': self.params['startTime'],
+            'duration': self.params['duration'],
+            'pos': self.roi.mapToView(self.roi.pos() + self.roi.size()/2.),
+            'radii': (inner, outer),
+            'angles': (a0, a1),
+        }
+        task = {'type': self.name, 'active': self.isActive(), 'scanInfo': scanInfo}
         return task
 
 
@@ -237,20 +248,3 @@ class SpiralScan(object):
         
         return pts
         
-
-class SpiralScanParameter(pTypes.SimpleParameter):
-    """
-    Parameter used to control spiral scanning settings.
-    """
-    def __init__(self):
-        fixed = [{'name': 'fixed', 'type': 'bool', 'value': True}] # child of parameters that may be determined by the user
-        params = [
-            dict(name='radius', type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
-            dict(name='thickness', type='float', value=25, suffix='%', bounds=[0, 100], step=1),
-            dict(name='spacing', type='float', value=2e-6, suffix='m', siPrefix=True, step=0.5e-6, bounds=[1e-7, None]),
-            dict(name='duration', type='float', value=0.002, suffix='s', bounds=[1e-6, None], siPrefix=True, step=1e-3),
-            dict(name='speed', type='float', readonly=True, value=0, suffix='m/ms', siPrefix=True),
-        ]
-        pTypes.SimpleParameter.__init__(self, name='spiral_scan', type='bool', value=True, removable=True, renamable=True, children=params)
-
-        #self.sigTreeStateChanged.connect(self.updateSystem)

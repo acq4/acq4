@@ -4,9 +4,9 @@ from .component import ScanProgramComponent
 
 
     
-class EllipseScanComponent(ScanProgramComponent):
-    """
-    Scans the laser in the shape of an ellipse.    
-    """
-    name = 'ellipse'
+#class EllipseScanComponent(ScanProgramComponent):
+    #"""
+    #Scans the laser in the shape of an ellipse.    
+    #"""
+    #name = 'ellipse'
     

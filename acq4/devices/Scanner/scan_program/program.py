@@ -19,7 +19,8 @@ def registerScanComponent(component):
 for cType in ['step', 'line', 'rect', 'loop', 'ellipse', 'spiral']:
     mod = importlib.import_module('.' + cType, 'acq4.devices.Scanner.scan_program')
     clsName = cType.capitalize() + "ScanComponent"
-    registerScanComponent(getattr(mod, clsName))
+    if hasattr(mod, clsName):
+        registerScanComponent(getattr(mod, clsName))
 
 
 
@@ -59,13 +60,13 @@ class ScanProgram:
         if isinstance(component, basestring):
             component = COMPONENTS[component](self)
         
-        self.components.append(component)
         if self.sampleRate is not None:
             component.setSampleRate(*self.sampleRate)
         self.ctrlGroup.addChild(component.ctrlParameter(), autoIncrementName=True)
         if self.canvas is not None:
             for item in component.graphicsItems():
                 self.canvas.addItem(item, None, [1, 1], 1000)
+        self.components.append(component)
 
     def removeComponent(self, component):
         """
@@ -81,7 +82,6 @@ class ScanProgram:
         control over the design of the program.
         """
         return self.ctrlGroup
-
 
     def setCanvas(self, canvas):
         """
