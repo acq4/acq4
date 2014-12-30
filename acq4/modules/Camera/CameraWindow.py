@@ -31,6 +31,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         ## Start building UI
         QtGui.QMainWindow.__init__(self)
+        self.setWindowTitle('Camera')
         self.cw = dockarea.DockArea()
         self.setCentralWidget(self.cw)
         self.gv = pg.GraphicsView()

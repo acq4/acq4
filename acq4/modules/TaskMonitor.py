@@ -14,30 +14,21 @@ class TaskMonitor(Module):
         self.cw.addWidget(self.taskTree)
         self.cw.addWidget(self.resultTree)
         self.win.show()
+        self.win.setWindowTitle('Task Monitor')
         self.man.sigTaskCreated.connect(self.showTask)
         self.taskTimer = QtCore.QTimer()
         self.taskTimer.timeout.connect(self.checkResult)
         
     def showTask(self, cmd, task):
         self._lastTask = task
-        print ">>>>>>>>>>>"
-        print cmd
-        print "==========="
         self.taskTree.setData(cmd)
-        print cmd
-        print "<<<<<<<<<<<"
         self.resultTree.clear()
         self.taskTimer.start(100)
 
     def checkResult(self):
         if self._lastTask.isDone():
             result = self._lastTask.getResult()
-            print ">>>>>>>>>>>"
-            print result
-            print "==========="
             self.resultTree.setData(result)
-            print result
-            print "<<<<<<<<<<<"
             self.taskTimer.stop()
 
     

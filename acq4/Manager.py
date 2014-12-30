@@ -33,9 +33,8 @@ from .LogWindow import LogWindow
 from .util.HelpfulException import HelpfulException
 
 
-
-
 LOG = None
+
 
 ### All other modules can use this function to get the manager instance
 def getManager():
@@ -46,6 +45,9 @@ def getManager():
 def __reload__(old):
     Manager.CREATED = old['Manager'].CREATED
     Manager.single = old['Manager'].single
+    # preserve old log window
+    global LOG
+    LOG = old['LOG']
     
 def logMsg(msg, **kwargs):
     """msg: the text of the log message
@@ -1193,6 +1195,7 @@ class Task:
                 result = {'protocol': {'startTime': self.startTime}}
                 for devName in self.tasks:
                     try:
+                        print "Get result for ", devName
                         result[devName] = self.tasks[devName].getResult()
                     except:
                         printExc( "Error getting result for task %s (will set result=None for this task):" % devName)
