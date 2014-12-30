@@ -2,7 +2,7 @@ from acq4.modules.Module import Module
 from PyQt4 import QtGui, QtCore
 from acq4.pyqtgraph import DataTreeWidget
 
-class Debugger(Module):
+class TaskMonitor(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config) 
         self.man = manager
@@ -20,14 +20,24 @@ class Debugger(Module):
         
     def showTask(self, cmd, task):
         self._lastTask = task
+        print ">>>>>>>>>>>"
+        print cmd
+        print "==========="
         self.taskTree.setData(cmd)
+        print cmd
+        print "<<<<<<<<<<<"
         self.resultTree.clear()
         self.taskTimer.start(100)
 
     def checkResult(self):
         if self._lastTask.isDone():
             result = self._lastTask.getResult()
+            print ">>>>>>>>>>>"
+            print result
+            print "==========="
             self.resultTree.setData(result)
+            print result
+            print "<<<<<<<<<<<"
             self.taskTimer.stop()
 
     

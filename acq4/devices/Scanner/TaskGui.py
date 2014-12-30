@@ -312,19 +312,22 @@ class ScannerTaskGui(TaskGui):
             }
         else: # doing programmed scans
             daqName = self.dev.getDaqName()
+            daqState = self.taskRunner.getDevice(daqName).currentState()
             task = {
                # 'position': target, 
                 'minWaitTime': delay,
                 #'camera': self.cameraModule().config['camDev'], 
                 'laser': self.ui.laserCombo.currentText(),
                 'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
-                'duration': self.taskRunner.getParam('duration'),
-                'numPts': self.taskRunner.getDevice(daqName).currentState()['numPts'],
                 'program': self.scanProgram.generateTask(),
-                   #('step', 0.0, None),           ## start with step to "off" position 
-                   #('step', 0.2, (1.3e-6, 4e-6)), ## step to the given location after 200ms
-                   #('line', (0.2, 0.205), (1.3e-6, 4e-6))  ## 5ms sweep to the new position 
-                   #('step', 0.205, None),           ## finish step to "off" position at 205ms
+                
+                # Need to provide information about DAQ to allow program components
+                # to generate voltage signals.
+                # Do we really?? Whoever is constructing the task already has access to this information.
+                #'duration': self.taskRunner.getParam('duration'),
+                #'numPts': daqState['numPts'],
+                #'sampleRate': daqState['rate'],
+                #'downsample': daqState['downsample'],
                #]
             }
         

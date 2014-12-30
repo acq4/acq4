@@ -119,7 +119,6 @@ class ScanProgram:
                     i.scene().removeItem(i)
 
     def setSampleRate(self, rate, downsample):
-        print "set sample rate:", rate, downsample
         self.sampleRate = (rate, downsample)
         for c in self.components:
             c.setSampleRate(rate, downsample)

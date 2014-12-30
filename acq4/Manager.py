@@ -1174,18 +1174,13 @@ class Task:
         self.abortRequested = abort
         try:
             if not self.stopped:
-                #print "stopping tasks.."
-                ## Stop all tasks
-                for t in self.startedDevs[:]:
-                    #print "  stopping", t
-                    ## Force all tasks to stop immediately.
-                    #print "Stopping task", t, "..."
+                ## Stop all device tasks
+                while len(self.startedDevs) > 0:
+                    t = self.startedDevs.pop()
                     try:
                         self.tasks[t].stop(abort=abort)
-                        self.startedDevs.remove(t)
                     except:
                         printExc("Error while stopping task %s:" % t)
-                    #print "   ..task", t, "stopped"
                     prof.mark("   ..task "+ t+ " stopped")
                 self.stopped = True
             
