@@ -81,4 +81,31 @@ class ScanProgramComponent:
         raise NotImplementedError()
 
 
-    
+
+class ComponentScanGenerator(object):
+    """Class responsible for computing and saving information about the geometry
+    of the scan.
+    """
+    def writeArray(self, array, mapping=None):
+        """
+        Given a (N,2) array, write the scan path into the 
+        array region(s) used by this component.
+        
+        The optional *mapping* argument provides a callable that maps from 
+        global position to another coordinate system (eg. mirror voltage).
+        It must accept two arrays as arguments: (x, y)
+        """
+
+    def writeMask(self, array):
+        """
+        Write 1s into the array in the active region of the scan.
+        This is used to indicate the part of the scan when the laser should be enabled. 
+        """
+        offset = self.activeOffset
+        shape = self.activeShape
+        stride = self.activeStride
+        
+        target = pg.subArray(array, offset, shape, stride)
+        target[:] = 1
+
+

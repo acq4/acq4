@@ -749,6 +749,11 @@ class RectScanParameter(pTypes.SimpleParameter):
     def __init__(self):
         fixed = [{'name': 'fixed', 'type': 'bool', 'value': True}] # child of parameters that may be determined by the user
         params = [
+            dict(name='startTime', type='float', value=0, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='numFrames', type='int', value=1, bounds=[1, None]),
+            dict(name='frameDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='interFrameDuration', type='float', value=0, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='totalDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='width', readonly=True, type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='height', readonly=True, type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='minOverscan', type='float', value=30.e-6, suffix='s', siPrefix=True, bounds=[0., 1.], step=0.1, dec=True, minStep=1e-7),
@@ -756,11 +761,6 @@ class RectScanParameter(pTypes.SimpleParameter):
             dict(name='pixelWidth', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
             dict(name='pixelHeight', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
             dict(name='pixelAspectRatio', type='float', value=1, bounds=[1e-3, 1e3], step=0.5, dec=True),
-            dict(name='startTime', type='float', value=0, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
-            dict(name='numFrames', type='int', value=1, bounds=[1, None]),
-            dict(name='frameDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
-            dict(name='interFrameDuration', type='float', value=0, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
-            dict(name='totalDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='scanOffset', type='int', readonly=True),
             dict(name='scanShape', type='str', readonly=True),
             dict(name='scanStride', type='str', readonly=True),

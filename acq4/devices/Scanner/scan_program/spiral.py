@@ -50,6 +50,12 @@ class SpiralScanComponent(ScanProgramComponent):
         """
         # NOTE: point should have constant speed regardless of radius.
         raise NotImplementedError()
+        ss = SpiralScan()
+        ss.restoreState(cmd['scanInfo'])
+        
+        mapper = lambda x, y: dev.mapToScanner(x, y, cmd['laser'])
+        ss.writeArray(array.T, mapper) # note RectScan expects (N,2), whereas Program provides (2,N)
+        return ss.indexBounds
         
     def generatePosCmd(self, array):
         """
@@ -180,9 +186,55 @@ class SpiralScan(object):
         angles turn counter-clockwise. The number of spiral turns is determined
         by the difference between the end and start angles.
     """
-    def __init__(self, radii, angles):
+    def __init__(self, radii=None, angles=None):
+        self.state = {
+            'pos': (0, 0),
+            'radii': radii,
+            'angles': angles,
+            'startTime': 0,
+            'duration': 2e-3,
+            'repeat': 1,
+            'repeatPeriod': 0,
+        }
+
+        self.pos = pos
         self.radii = radii
         self.angles = angles
+
+
+    def writeArray(self, array, mapping=None):
+        """
+        Given a (N,2) array, write the scan path into the 
+        array region(s) used by this component.
+        
+        The optional *mapping* argument provides a callable that maps from 
+        global position to another coordinate system (eg. mirror voltage).
+        It must accept two arrays as arguments: (x, y)
+        """
+
+
+    def writeMask(self, array):
+        """
+        Write 1s into the array in the active region of the scan.
+        This is used to indicate the part of the scan when the laser should be enabled. 
+        """
+        offset = self.activeOffset
+        shape = self.activeShape
+        stride = self.activeStride
+        
+        target = pg.subArray(array, offset, shape, stride)
+        target[:] = 1
+
+
+    def saveState(self):
+        """
+        Save the state of this component to a dictionary.
+        """
+
+    def restoreState(self, state):
+        """
+        Restore the state of this component 
+        """
         
     def length(self):
         """Return exact length of spiral.
@@ -245,10 +297,11 @@ class SpiralScanParameter(pTypes.SimpleParameter):
     def __init__(self):
         fixed = [{'name': 'fixed', 'type': 'bool', 'value': True}] # child of parameters that may be determined by the user
         params = [
+            dict(name='startTime', type='float', value=0.0, suffix='s', bounds=[0, None], siPrefix=True, step=10e-3),
+            dict(name='duration', type='float', value=0.002, suffix='s', bounds=[1e-6, None], siPrefix=True, step=1e-3),
             dict(name='radius', type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='thickness', type='float', value=25, suffix='%', bounds=[0, 100], step=1),
             dict(name='spacing', type='float', value=2e-6, suffix='m', siPrefix=True, step=0.5e-6, bounds=[1e-7, None]),
-            dict(name='duration', type='float', value=0.002, suffix='s', bounds=[1e-6, None], siPrefix=True, step=1e-3),
             dict(name='speed', type='float', readonly=True, value=0, suffix='m/ms', siPrefix=True),
         ]
         pTypes.SimpleParameter.__init__(self, name='spiral_scan', type='bool', value=True, removable=True, renamable=True, children=params)
