@@ -115,9 +115,9 @@ class SpiralScanControl(QtCore.QObject):
         params = [
             dict(name='startTime', type='float', value=0.0, suffix='s', bounds=[0, None], siPrefix=True, step=10e-3),
             dict(name='duration', type='float', value=0.002, suffix='s', bounds=[1e-6, None], siPrefix=True, step=1e-3),
-            dict(name='radius', type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='radius', type='float', value=10e-6, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='thickness', type='float', value=25, suffix='%', bounds=[0, 100], step=1),
-            dict(name='spacing', type='float', value=2e-6, suffix='m', siPrefix=True, step=0.5e-6, bounds=[1e-7, None]),
+            dict(name='spacing', type='float', value=0.5e-6, suffix='m', siPrefix=True, step=0.1e-6, bounds=[1e-7, None]),
             dict(name='speed', type='float', readonly=True, value=0, suffix='m/ms', siPrefix=True),
         ]
         self.params = pTypes.SimpleParameter(name='spiral_scan', type='bool', value=True, 
@@ -142,7 +142,7 @@ class SpiralScanControl(QtCore.QObject):
         return self.params
 
     def paramsChanged(self, param=None, changes=None):
-        state = self.generateTask()
+        state = self.generateTask()['scanInfo']
         self.roi.setRadii(*state['radii'])
         self.roi.setAngles(*state['angles'])
         
@@ -203,7 +203,7 @@ class SpiralScan(object):
             'repeatPeriod': 0,
         }
 
-        self.pos = pos
+        # self.pos = pos
         self.radii = radii
         self.angles = angles
 
@@ -223,13 +223,10 @@ class SpiralScan(object):
         """
         Write 1s into the array in the active region of the scan.
         This is used to indicate the part of the scan when the laser should be enabled. 
+
+        For spiral scans, the entire array is made active.
         """
-        offset = self.activeOffset
-        shape = self.activeShape
-        stride = self.activeStride
-        
-        target = pg.subArray(array, offset, shape, stride)
-        target[:] = 1
+        array[:] = 1
 
 
     def saveState(self):

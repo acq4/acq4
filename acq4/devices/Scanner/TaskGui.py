@@ -607,6 +607,9 @@ class TargetPoint(pg.EllipseROI):
         ])
         self.params.item = self
 
+    def _addHandles(self):
+        pass
+
     def isActive(self):
         return self.params.value()
 
