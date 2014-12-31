@@ -1243,6 +1243,8 @@ class TaskThread(Thread):
                 self._currentTask = task
                 l.unlock()
                 task.execute(block=False)
+                # record estimated end time
+                endTime = time.time() + cmd['protocol']['duration']
                 self.sigTaskStarted.emit(params)
                 prof.mark('execute')
             except:
@@ -1274,7 +1276,9 @@ class TaskThread(Thread):
                         task.stop(abort=True)
                         return
                     l.unlock()
-                    time.sleep(1e-3)
+                    # adjust sleep time based on estimated time remaining in the task.
+                    sleep = np.clip((endTime - time.time()) * 0.5, 1e-3, 20e-3)
+                    time.sleep(sleep)
                     
                 result = task.getResult()
             except:

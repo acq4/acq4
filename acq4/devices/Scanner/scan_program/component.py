@@ -1,6 +1,7 @@
 from PyQt4 import QtGui, QtCore
 import weakref
 
+
 class ScanProgramComponent:
     """
     Base class for all components that make up a scan program.
