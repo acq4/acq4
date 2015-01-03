@@ -78,7 +78,7 @@ class ScannerTaskGui(TaskGui):
         self.ui.itemTree.setParameters(self.positionCtrlGroup, showTop=False)
         self.positionCtrlGroup.sigChildRemoved.connect(self.positionCtrlRemoved)
         
-        self.scanProgram = ScanProgram(dev)
+        self.scanProgram = ScanProgram()
         self.ui.programTree.setParameters(self.scanProgram.ctrlParameter(), showTop=False)
 
         ## Set up SpinBoxes
@@ -169,7 +169,7 @@ class ScannerTaskGui(TaskGui):
 
     def daqChanged(self, state):
         # Something changed in DAQ; check that we have the correct sample rate
-        self.scanProgram.setSampling(state['rate'], state['nSamples'], state['downsample'])
+        self.scanProgram.setSampling(state['rate'], state['numPts'], state['downsample'])
         
     def getLaser(self):
         return self.ui.laserCombo.currentText()
@@ -311,7 +311,7 @@ class ScannerTaskGui(TaskGui):
                 'duration': self.taskRunner.getParam('duration')
             }
         else: # doing programmed scans
-            laser = self.ui.laserCombo.currentValue()
+            laser = self.ui.laserCombo.getSelectedObj()
             self.scanProgram.setDevices(scanner=self.dev, laser=laser)
             cmd = self.scanProgram.generateVoltageArray()
             task = {

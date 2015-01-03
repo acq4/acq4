@@ -52,7 +52,7 @@ class ScanProgram:
         
         self.sampleRate = None
         self.numSamples = None
-        self.downsamples = None
+        self.downsample = None
         
         self.ctrlGroup = ScanProgramCtrlGroup()  # used to display GUI for components
         self.ctrlGroup.sigAddNewRequested.connect(self.paramRequestedNewComponent)
@@ -122,11 +122,10 @@ class ScanProgram:
         """Set the sampling properties used by all components in the program:
         sample rate, number of samples, and downsampling factor.
         """
-        changed = self.sampleRate or samples != self.numSamples or downsample != self.downsample
-        if changed
+        if self.sampleRate or samples != self.numSamples or downsample != self.downsample:
             self.sampleRate = rate
             self.numSamples = samples
-            self.downsamples = downsample
+            self.downsample = downsample
             for component in self.components:
                 component.samplingChanged()
 

@@ -31,7 +31,7 @@ class ScanProgramComponent:
     @property
     def laser(self):
         if self._laser is None:
-            return self.program.laser
+            return self.program().laser
         else:
             return self._laser
 
@@ -65,7 +65,7 @@ class ScanProgramComponent:
         """Map from global coordinates to scan mirror voltages, using the
         ScanProgram to provide the mapping.
         """
-        return self.program.scanner.mapToScanner(x, y, self.laser)
+        return self.program().scanner.mapToScanner(x, y, self.laser.name())
 
     def generateTask(self):
         """

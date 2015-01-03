@@ -17,8 +17,8 @@ class RectScanComponent(ScanProgramComponent):
     """
     name = 'rect'
     
-    def __init__(self, cmd=None, scanProgram=None):
-        ScanProgramComponent.__init__(self, cmd, scanProgram)
+    def __init__(self, scanProgram=None):
+        ScanProgramComponent.__init__(self, scanProgram)
         self.ctrl = RectScanControl(self)
         
     def samplingChanged(self):
@@ -40,9 +40,8 @@ class RectScanComponent(ScanProgramComponent):
         return self.ctrl.getGraphicsItems()
 
     def generateVoltageArray(self, array):
-        rs = self.ctrl.parameter.system
-        mapper = lambda x, y: dev.mapToScanner(x, y, self.laser)
-        rs.writeArray(array, mapper)
+        rs = self.ctrl.params.system
+        rs.writeArray(array, self.mapToScanner)
         return rs.scanOffset, rs.scanOffset + rs.scanStride[0]
         
 
@@ -121,8 +120,8 @@ class RectScanControl(QtCore.QObject):
         except TypeError:
             reconnect = False
         try:
-            self.params.system.sampleRate = self.component().sampleRate
-            self.params.system.downsample = self.component().downsample
+            self.params.system.sampleRate = self.component().program().sampleRate
+            self.params.system.downsample = self.component().program().downsample
             self.params.updateSystem()
             try:
                 oswidth = np.linalg.norm(self.params.system.osVector)
