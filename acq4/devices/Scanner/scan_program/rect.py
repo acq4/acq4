@@ -21,8 +21,7 @@ class RectScanComponent(ScanProgramComponent):
         ScanProgramComponent.__init__(self, cmd, scanProgram)
         self.ctrl = RectScanControl(self)
         
-    def setSampleRate(self, rate, downsample):
-        ScanProgramComponent.setSampleRate(self, rate, downsample)
+    def samplingChanged(self):
         self.ctrl.update()
 
     def ctrlParameter(self):
@@ -40,16 +39,10 @@ class RectScanComponent(ScanProgramComponent):
         """
         return self.ctrl.getGraphicsItems()
 
-    def generateTask(self):
-        return self.ctrl.generateTask()
-
-    @classmethod
-    def generateVoltageArray(cls, array, dev, cmd):
-        rs = RectScan()
-        rs.restoreState(cmd['scanInfo'])
-        
-        mapper = lambda x, y: dev.mapToScanner(x, y, cmd['laser'])
-        rs.writeArray(array.T, mapper) # note RectScan expects (N,2), whereas Program provides (2,N)
+    def generateVoltageArray(self, array):
+        rs = self.ctrl.parameter.system
+        mapper = lambda x, y: dev.mapToScanner(x, y, self.laser)
+        rs.writeArray(array, mapper)
         return rs.scanOffset, rs.scanOffset + rs.scanStride[0]
         
 

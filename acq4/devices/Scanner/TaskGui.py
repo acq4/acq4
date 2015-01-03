@@ -169,7 +169,7 @@ class ScannerTaskGui(TaskGui):
 
     def daqChanged(self, state):
         # Something changed in DAQ; check that we have the correct sample rate
-        self.scanProgram.setSampleRate(state['rate'], state['downsample'])
+        self.scanProgram.setSampling(state['rate'], state['nSamples'], state['downsample'])
         
     def getLaser(self):
         return self.ui.laserCombo.currentText()
@@ -290,7 +290,7 @@ class ScannerTaskGui(TaskGui):
         
     def generateTask(self, params=None):
         if self.cameraModule() is None:
-            raise Exception('No camera module selected, can not build task.')
+            raise Exception('No camera module selected, cannot build task.')
         
         if params is None or 'targets' not in params:
             target = self.testTarget.listPoints()[0]
@@ -311,15 +311,17 @@ class ScannerTaskGui(TaskGui):
                 'duration': self.taskRunner.getParam('duration')
             }
         else: # doing programmed scans
-            daqName = self.dev.getDaqName()
-            daqState = self.taskRunner.getDevice(daqName).currentState()
+            laser = self.ui.laserCombo.currentValue()
+            self.scanProgram.setDevices(scanner=self.dev, laser=laser)
+            cmd = self.scanProgram.generateVoltageArray()
             task = {
-               # 'position': target, 
                 'minWaitTime': delay,
+                'xCommand': cmd[:, 0],
+                'yCommand': cmd[:, 1],
+               # 'position': target, 
                 #'camera': self.cameraModule().config['camDev'], 
-                'laser': self.ui.laserCombo.currentText(),
-                'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
-                'program': self.scanProgram.generateTask(),
+                #'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
+                #'program': self.scanProgram.generateTask(),
                 
                 # Need to provide information about DAQ to allow program components
                 # to generate voltage signals.
@@ -335,7 +337,6 @@ class ScannerTaskGui(TaskGui):
     
     def hideSpotMarker(self):
         self.spotMarker.hide()
-        
         
     def handleResult(self, result, params):
         if not self.spotMarker.isVisible():

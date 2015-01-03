@@ -20,20 +20,29 @@ class ScanProgramComponent:
     name = None  # Must be the string used to identify this component
                  # in the task command structure.
                  
-    def __init__(self, scanProgram=None, cmd=None):
+    def __init__(self, scanProgram):
+        self._laser = None
         self.params = None
-        self.cmd = cmd
-        self.sampleRate = 1000
-        self.downsample = 1
         self.program = weakref.ref(scanProgram)
 
-    def setSampleRate(self, rate, downsample):
-        self.sampleRate = rate
-        self.downsample = downsample
+    def setLaser(self, laser):
+        self._laser = laser
 
-    def isActive(self):
+    @property
+    def laser(self):
+        if self._laser is None:
+            return self.program.laser
+        else:
+            return self._laser
+
+    def samplingChanged(self):
+        """Called by parent ScanProgram when any sampling parameters have
+        changed.
         """
-        Return True if this component is currently active.
+        pass
+        
+    def isActive(self):
+        """Return True if this component is currently active.
         """
         return self.ctrlParameter().value()
         
@@ -56,7 +65,7 @@ class ScanProgramComponent:
         """Map from global coordinates to scan mirror voltages, using the
         ScanProgram to provide the mapping.
         """
-        return self.program.mapToScanner(x, y)
+        return self.program.scanner.mapToScanner(x, y, self.laser)
 
     def generateTask(self):
         """
@@ -65,21 +74,15 @@ class ScanProgramComponent:
         """
         raise NotImplementedError()
         
-    @classmethod
-    def generateVoltageArray(cls, array, dev, cmd):
-        """
-        Generate mirror voltages for this scan component and store inside
+    def generateVoltageArray(self, array):
+        """Generate mirror voltages for this scan component and store inside
         *array*. Returns the start and stop indexes used by this component.
         """
         raise NotImplementedError()
         
-    def generatePosCmd(self, array):
+    def generatePosArray(self, array):
         """
         Generate the position commands for this scan component and store
         inside *array*.
-        
         """
         raise NotImplementedError()
-
-
-    
