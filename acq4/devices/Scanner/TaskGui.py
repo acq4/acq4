@@ -642,6 +642,7 @@ class TargetPoint(pg.EllipseROI):
     def close(self):
         if self.scene() is not None:
             self.scene().removeItem(self)
+        self.dev.sigGlobalSubdeviceChanged.disconnect(self.opticStateChanged)
 
 
 class Grid(pg.CrosshairROI):

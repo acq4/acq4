@@ -173,9 +173,9 @@ class ScanProgram:
             startInd, stopInd = component.generateVoltageArray(arr)
 
             # fill unused space in the array from the last component to this one
-            arr[:,lastStopInd:startInd] = lastValue[:,np.newaxis]
+            arr[lastStopInd:startInd] = lastValue[np.newaxis, :]
             
-            lastValue = arr[:,stopInd-1]
+            lastValue = arr[stopInd-1]
             lastStopInd = stopInd
             
         return arr

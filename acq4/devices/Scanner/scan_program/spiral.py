@@ -16,8 +16,8 @@ class SpiralScanComponent(ScanProgramComponent):
     Scans the laser in the shape of an elliptical spiral.    
     """    
     name = 'spiral'
-    def __init__(self, cmd=None, scanProgram=None):
-        ScanProgramComponent.__init__(self, cmd, scanProgram)
+    def __init__(self, scanProgram):
+        ScanProgramComponent.__init__(self, scanProgram)
         self.ctrl = SpiralScanControl(self)
 
     def ctrlParameter(self):
@@ -35,26 +35,13 @@ class SpiralScanComponent(ScanProgramComponent):
         """
         return self.ctrl.getGraphicsItems()
 
-    def generateTask(self):
-        """
-        Generate the task structure that fully describes the behavior of this 
-        component.
-        """
-        return self.ctrl.generateTask()
-        
-    @classmethod
-    def generateVoltageArray(cls, array, dev, cmd):
+    def generateVoltageArray(self, array):
         """
         Generate mirror voltages for this scan component and store inside
         *array*. Returns the start and stop indexes used by this component.
         """
         # NOTE: point should have constant speed regardless of radius.
-        rs = RectScan()
-        rs.restoreState(cmd['scanInfo'])
-        
-        mapper = lambda x, y: dev.mapToScanner(x, y, cmd['laser'])
-        rs.writeArray(array.T, mapper) # note RectScan expects (N,2), whereas Program provides (2,N)
-        return rs.scanOffset, rs.scanOffset + rs.scanStride[0]
+        return self.ctrl.writeArray(array, self.mapToScanner)
         
     def generatePosCmd(self, array):
         """
@@ -92,14 +79,13 @@ class SpiralScanROI(pg.ROI):
     
     def paint(self, p, *args):
         if self._path is None:
-            ss = SpiralScan(self.radii, self.angles)
+            sg = SpiralGeometry(self.radii, self.angles)
             npts = min(5000, int(30 * abs(self.angles[1] - self.angles[0]) / np.pi))
-            pts = ss.path(npts)
+            pts = sg.path(npts)
             self._path = pg.arrayToQPath(pts[:,0], pts[:,1])
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         p.setPen(self.currentPen)
         p.drawPath(self._path)
-        
 
 
 class SpiralScanControl(QtCore.QObject):
@@ -141,45 +127,63 @@ class SpiralScanControl(QtCore.QObject):
         return self.params
 
     def paramsChanged(self, param=None, changes=None):
-        state = self.generateTask()
-        self.roi.setRadii(*state['radii'])
-        self.roi.setAngles(*state['angles'])
+        sg = self.spiralGeometry()
         
-        ss = SpiralScan(state['radii'], state['angles'])
+        self.roi.setRadii(*sg.radii)
+        self.roi.setAngles(*sg.angles)
         
-        self.params['speed'] = 1e-3 * ss.length() / state['duration']
+        self.params['speed'] = 1e-3 * sg.length() / self.params['duration']
         self.update()
         
     def update(self):
         pass
     
     def roiChanged(self):
-        """ read the ROI size and repost in the parameter tree """
+        # read the ROI size and repost in the parameter tree
         state = self.roi.getState()
         w, h = state['size']
         self.params['radius'] = w / 2.
         
-    def generateTask(self):
+    def spiralGeometry(self):
+        """Return a SpiralGeometry instance corresponding to the parameter
+        state.
+        """
+        # Compute radii and angles from parameters
         outer = self.params['radius']
         inner = outer - (outer * self.params['thickness'] / 100.)
         spacing = self.params['spacing']
         turns = (outer - inner) / spacing
         a0 = 0
         a1 = 2 * np.pi * turns
-        scanInfo = {
-            'startTime': self.params['startTime'],
-            'duration': self.params['duration'],
-            'pos': self.roi.mapToView(self.roi.pos() + self.roi.size()/2.),
-            'radii': (inner, outer),
-            'angles': (a0, a1),
-        }
-        task = {'type': self.name, 'active': self.isActive(), 'scanInfo': scanInfo}
-        return task
+        radii = (inner, outer)
+        angles = (a0, a1)
+        
+        return SpiralGeometry(radii, angles)
+
+    def writeArray(self, array, mapping=None):
+        # Compute start/end indexes
+        rate = self.component().program().sampleRate
+        npts = self.params['duration'] * rate
+        start = self.params['startTime'] * rate
+        
+        # Generate spiral path
+        sg = self.spiralGeometry()
+        path = sg.path(npts, uniform=True)
+        
+        # Move to center position
+        center = self.roi.mapToView(self.roi.pos() + self.roi.size()/2.)
+        path += center
+        
+        # map to scanner voltage and write into array
+        if mapping is not None:
+            path = mapping(path)
+        array[start:start+npts] = path
+        
+        return start, start + npts
 
 
-class SpiralScan(object):
-    """Class used for computing and storing information about spiral scan 
-    geometry.
+class SpiralGeometry(object):
+    """Class used for computing information about spiral scan geometry.
     
     Parameters
     ----------
@@ -199,8 +203,6 @@ class SpiralScan(object):
         """Return exact length of spiral.
         """
         u = self.pitch()
-        #a0 = self.radii[0] / u
-        #a1 = a0 + (self.angles[1] - self.angles[0])
         return self.spiralLength(self.radii[1], u) - self.spiralLength(self.radii[0], u)
 
     @staticmethod
