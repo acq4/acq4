@@ -99,10 +99,11 @@ class SpiralScanControl(QtCore.QObject):
         self.component = weakref.ref(component)
 
         params = [
-            dict(name='radius', type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
-            dict(name='thickness', type='float', value=25, suffix='%', bounds=[0, 100], step=1),
-            dict(name='spacing', type='float', value=2e-6, suffix='m', siPrefix=True, step=0.5e-6, bounds=[1e-7, None]),
+            dict(name='startTime', type='float', value=0, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='duration', type='float', value=0.002, suffix='s', bounds=[1e-6, None], siPrefix=True, step=1e-3),
+            dict(name='radius', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='thickness', type='float', value=25, suffix='%', bounds=[0, 100], step=1),
+            dict(name='spacing', type='float', value=0.5e-6, suffix='m', siPrefix=True, step=0.1e-6, bounds=[1e-7, None]),
             dict(name='speed', type='float', readonly=True, value=0, suffix='m/ms', siPrefix=True),
         ]
         self.params = pTypes.SimpleParameter(name='spiral_scan', type='bool', value=True, 
@@ -172,12 +173,14 @@ class SpiralScanControl(QtCore.QObject):
         
         # Move to center position
         center = self.roi.mapToView(self.roi.pos() + self.roi.size()/2.)
-        path += center
+        path += np.array([center.x(), center.y()])
         
         # map to scanner voltage and write into array
+        x, y = (path[:, 0], path[:, 1])
         if mapping is not None:
-            path = mapping(path)
-        array[start:start+npts] = path
+            x, y = mapping(x, y)
+        array[start:start+npts, 0] = x
+        array[start:start+npts, 1] = y
         
         return start, start + npts
 
