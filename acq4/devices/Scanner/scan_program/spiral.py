@@ -51,6 +51,9 @@ class SpiralScanComponent(ScanProgramComponent):
         """
         raise NotImplementedError()
 
+    def scanMask(self):
+        return self.ctrl.scanMask()
+
 
 class SpiralScanROI(pg.ROI):
     def __init__(self, pos=None, radius=None, **args):
@@ -163,9 +166,7 @@ class SpiralScanControl(QtCore.QObject):
 
     def writeArray(self, array, mapping=None):
         # Compute start/end indexes
-        rate = self.component().program().sampleRate
-        npts = self.params['duration'] * rate
-        start = self.params['startTime'] * rate
+        start, npts = self._arrayIndexes()
         
         # Generate spiral path
         sg = self.spiralGeometry()
@@ -183,6 +184,18 @@ class SpiralScanControl(QtCore.QObject):
         array[start:start+npts, 1] = y
         
         return start, start + npts
+    
+    def _arrayIndexes(self):
+        rate = self.component().program().sampleRate
+        npts = self.params['duration'] * rate
+        start = self.params['startTime'] * rate
+        return start, npts
+
+    def scanMask(self):
+        mask = np.zeros(self.component().program().numSamples, dtype=bool)
+        start, npts = self._arrayIndexes()
+        mask[start:start+npts] = True
+        return mask
 
 
 class SpiralGeometry(object):

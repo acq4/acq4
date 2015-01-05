@@ -318,19 +318,6 @@ class ScannerTaskGui(TaskGui):
                 'minWaitTime': delay,
                 'xCommand': cmd[:, 0],
                 'yCommand': cmd[:, 1],
-               # 'position': target, 
-                #'camera': self.cameraModule().config['camDev'], 
-                #'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
-                #'program': self.scanProgram.generateTask(),
-                
-                # Need to provide information about DAQ to allow program components
-                # to generate voltage signals.
-                # Do we really?? Whoever is constructing the task already has access to this information.
-                #'duration': self.taskRunner.getParam('duration'),
-                #'numPts': daqState['numPts'],
-                #'sampleRate': daqState['rate'],
-                #'downsample': daqState['downsample'],
-               #]
             }
         
         return task
@@ -373,29 +360,6 @@ class ScannerTaskGui(TaskGui):
             if name not in names:
                 return name
             num += 1
-        
-    #def addProgram(self, name=None): 
-        #camMod = self.cameraModule()
-        #if camMod is None:
-            #return False
-        #self.ui.programControlsLayout.setEnabled(True)
-        #item = TargetProgram()
-        #if name is None:
-            #name = 'Program' + str(self.nextId)
-        #self.nextId += 1 
-        #item.name = name
-        #item.objective = self.currentObjective
-        #self.items[name] = item
-        #treeitem = QtGui.QTreeWidgetItem(QtCore.QStringList(name))
-        #treeitem.setCheckState(0, QtCore.Qt.Checked)
-        #self.ui.itemTree.addTopLevelItem(treeitem)
-        #self.updateItemColor(treeitem)
-        #camMod.ui.addItem(item.origin, None, [1,1], 1000)
-        #item.connect(QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
-        #item.connect(QtCore.SIGNAL('regionChanged'), self.getTargetList)
-        #item.connect(QtCore.SIGNAL('pointsChanged'), self.itemChanged)
-        #self.itemChanged(item)
-        #self.updateDeviceTargetList(item)
         
     def addItem(self, itemType, state=None):
         
@@ -481,7 +445,6 @@ class ScannerTaskGui(TaskGui):
                     i.setTargetPen(j, None)
         return locations
 
-    
     def sequenceChanged(self):
         self.targets = None
         self.sigSequenceChanged.emit(self.dev.name())
@@ -577,8 +540,9 @@ class ScannerTaskGui(TaskGui):
         pass
 
     def previewProgram(self):
-        task = self.generateTask()
-        self.scanProgram.preview(task)
+        self.ui.programTimeline.clear()
+        self.scanProgram.plotTimeline(self.ui.programTimeline)
+        #self.scanProgram.preview()
     
     def quit(self):
         s = self.testTarget.scene()

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'TaskTemplate.ui'
+# Form implementation generated from reading ui file './acq4/devices/Scanner/TaskTemplate.ui'
 #
-# Created: Thu May 29 15:21:37 2014
+# Created: Sun Jan  4 11:55:24 2015
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -93,37 +93,32 @@ class Ui_Form(object):
         self.gridLayout_3.setMargin(3)
         self.gridLayout_3.setSpacing(3)
         self.gridLayout_3.setObjectName(_fromUtf8("gridLayout_3"))
-        self.tdPlotWidget = PlotWidget(self.groupBox)
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.tdPlotWidget.sizePolicy().hasHeightForWidth())
-        self.tdPlotWidget.setSizePolicy(sizePolicy)
-        self.tdPlotWidget.setObjectName(_fromUtf8("tdPlotWidget"))
-        self.gridLayout_3.addWidget(self.tdPlotWidget, 0, 0, 1, 2)
-        self.label_3 = QtGui.QLabel(self.groupBox)
-        self.label_3.setObjectName(_fromUtf8("label_3"))
-        self.gridLayout_3.addWidget(self.label_3, 1, 0, 1, 1)
         self.minTimeSpin = SpinBox(self.groupBox)
         self.minTimeSpin.setSuffix(_fromUtf8(""))
         self.minTimeSpin.setDecimals(2)
         self.minTimeSpin.setMaximum(1000000.0)
         self.minTimeSpin.setObjectName(_fromUtf8("minTimeSpin"))
         self.gridLayout_3.addWidget(self.minTimeSpin, 1, 1, 1, 1)
-        self.label_4 = QtGui.QLabel(self.groupBox)
-        self.label_4.setObjectName(_fromUtf8("label_4"))
-        self.gridLayout_3.addWidget(self.label_4, 2, 0, 1, 1)
+        self.timeLabel = QtGui.QLabel(self.groupBox)
+        self.timeLabel.setObjectName(_fromUtf8("timeLabel"))
+        self.gridLayout_3.addWidget(self.timeLabel, 4, 0, 1, 2)
         self.minDistSpin = SpinBox(self.groupBox)
         self.minDistSpin.setSuffix(_fromUtf8(""))
         self.minDistSpin.setMaximum(1000000.0)
         self.minDistSpin.setObjectName(_fromUtf8("minDistSpin"))
         self.gridLayout_3.addWidget(self.minDistSpin, 2, 1, 1, 1)
+        self.label_3 = QtGui.QLabel(self.groupBox)
+        self.label_3.setObjectName(_fromUtf8("label_3"))
+        self.gridLayout_3.addWidget(self.label_3, 1, 0, 1, 1)
         self.recomputeBtn = QtGui.QPushButton(self.groupBox)
         self.recomputeBtn.setObjectName(_fromUtf8("recomputeBtn"))
         self.gridLayout_3.addWidget(self.recomputeBtn, 5, 0, 1, 2)
-        self.timeLabel = QtGui.QLabel(self.groupBox)
-        self.timeLabel.setObjectName(_fromUtf8("timeLabel"))
-        self.gridLayout_3.addWidget(self.timeLabel, 4, 0, 1, 2)
+        self.label_4 = QtGui.QLabel(self.groupBox)
+        self.label_4.setObjectName(_fromUtf8("label_4"))
+        self.gridLayout_3.addWidget(self.label_4, 2, 0, 1, 1)
+        self.tdPlotWidget = PlotWidget(self.groupBox)
+        self.tdPlotWidget.setObjectName(_fromUtf8("tdPlotWidget"))
+        self.gridLayout_3.addWidget(self.tdPlotWidget, 0, 0, 1, 2)
         self.gridLayout.addWidget(self.groupBox, 5, 0, 1, 2)
         self.simulateShutterCheck = QtGui.QCheckBox(Form)
         self.simulateShutterCheck.setObjectName(_fromUtf8("simulateShutterCheck"))
@@ -165,17 +160,29 @@ class Ui_Form(object):
         self.gridLayout_6.setObjectName(_fromUtf8("gridLayout_6"))
         self.gridLayout_9 = QtGui.QGridLayout()
         self.gridLayout_9.setObjectName(_fromUtf8("gridLayout_9"))
-        spacerItem3 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-        self.gridLayout_9.addItem(spacerItem3, 0, 0, 1, 1)
         self.previewBtn = QtGui.QPushButton(self.groupBox_4)
         self.previewBtn.setObjectName(_fromUtf8("previewBtn"))
-        self.gridLayout_9.addWidget(self.previewBtn, 0, 1, 1, 1)
-        self.gridLayout_6.addLayout(self.gridLayout_9, 1, 0, 1, 1)
+        self.gridLayout_9.addWidget(self.previewBtn, 0, 0, 1, 1)
+        spacerItem3 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        self.gridLayout_9.addItem(spacerItem3, 0, 1, 1, 1)
+        self.programPreviewSlider = QtGui.QSlider(self.groupBox_4)
+        self.programPreviewSlider.setMaximum(999)
+        self.programPreviewSlider.setProperty("value", 666)
+        self.programPreviewSlider.setOrientation(QtCore.Qt.Horizontal)
+        self.programPreviewSlider.setTickPosition(QtGui.QSlider.TicksBelow)
+        self.programPreviewSlider.setTickInterval(333)
+        self.programPreviewSlider.setObjectName(_fromUtf8("programPreviewSlider"))
+        self.gridLayout_9.addWidget(self.programPreviewSlider, 0, 2, 1, 1)
+        self.gridLayout_6.addLayout(self.gridLayout_9, 2, 0, 1, 1)
         self.programTree = ParameterTree(self.groupBox_4)
         self.programTree.setObjectName(_fromUtf8("programTree"))
         self.programTree.headerItem().setText(0, _fromUtf8("1"))
         self.programTree.header().setVisible(False)
         self.gridLayout_6.addWidget(self.programTree, 0, 0, 1, 1)
+        self.programTimeline = PlotWidget(self.groupBox_4)
+        self.programTimeline.setMaximumSize(QtCore.QSize(16777215, 100))
+        self.programTimeline.setObjectName(_fromUtf8("programTimeline"))
+        self.gridLayout_6.addWidget(self.programTimeline, 1, 0, 1, 1)
         self.gridLayout_4.addWidget(self.groupBox_4, 1, 2, 1, 1)
 
         self.retranslateUi(Form)
@@ -195,20 +202,20 @@ class Ui_Form(object):
         self.sizeCustomRadio.setText(_translate("Form", "Use custom size:", None))
         self.sizeSpin.setToolTip(_translate("Form", "Specifies the display size of the target spots. Does not change the way data is collected.", None))
         self.groupBox.setTitle(_translate("Form", "Spot Sequence", None))
-        self.label_3.setText(_translate("Form", "Minimum time", None))
         self.minTimeSpin.setToolTip(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">When stimulating a sequence of points, this is the minimum amount of time that must pass before stimulating the same spot a second time. Points farther away will require smaller delays. Points farther than the minimum distance (specified below) will require no delay.</span></p></body></html>", None))
-        self.label_4.setText(_translate("Form", "Minimum distance", None))
+        self.timeLabel.setText(_translate("Form", "Total Time:", None))
         self.minDistSpin.setToolTip(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">When stimulating a sequence of points, this is the minimum distance between two spots such that no time delay is required between stimulating them. Points closer than this distance will require some delay, which is determined in part by the minimum time specified above.</span></p></body></html>", None))
+        self.label_3.setText(_translate("Form", "Minimum time", None))
         self.recomputeBtn.setText(_translate("Form", "Recompute Order", None))
-        self.timeLabel.setText(_translate("Form", "Total Time:", None))
+        self.label_4.setText(_translate("Form", "Minimum distance", None))
         self.simulateShutterCheck.setText(_translate("Form", "Simulate Shutter", None))
         self.groupBox_3.setTitle(_translate("Form", "Position Control Items", None))
         self.hideCheck.setToolTip(_translate("Form", "Hide all items from view.", None))

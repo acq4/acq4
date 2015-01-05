@@ -180,12 +180,6 @@ class ScanProgram:
             
         return arr
     
-    def preview(self, task):
-        va = self.generateVoltageArray(self.dev, task)
-        plt = getattr(self, 'previewPlot', pg.plot())
-        plt.clear()
-        plt.plot(va[0], va[1])
-
     def close(self):
         self.clearGraphicsItems()
 
@@ -195,6 +189,23 @@ class ScanProgram:
     def paramRequestedRemove(self, parent, param):
         self.removeComponent(param.component())
 
+    def plotTimeline(self, plot):
+        """Create a timeline showing scan mirror usage by each program 
+        component.
+        """
+        
+        time = np.linspace(0, (self.numSamples-1) / self.sampleRate, self.numSamples)
+        for i, component in enumerate(self.components):
+            mask = component.scanMask()
+            color = pg.mkColor((i, len(self.components)*1.3))
+            item = plot.plot(time, mask, pen=color, fillLevel=0, fillBrush=color)
+            item.setZValue(i)
+    
+    def preview(self, task):
+        va = self.generatePositionArray()
+        plt = getattr(self, 'previewPlot', pg.plot())
+        plt.clear()
+        plt.plot(va[0], va[1])
 
 
 class ScanProgramCtrlGroup(pTypes.GroupParameter):

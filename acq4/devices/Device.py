@@ -23,9 +23,6 @@ class Device(QtCore.QObject):
         ### Return a handle unique to this task
         pass
     
-    #def __del__(self):
-        #self.quit()
-        
     def quit(self):
         pass
     

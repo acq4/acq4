@@ -86,3 +86,17 @@ class ScanProgramComponent:
         inside *array*.
         """
         raise NotImplementedError()
+
+    def scanMask(self):
+        """Return a boolean array indicating regions where this component 
+        drives the scan mirrors.
+        """
+        raise NotImplementedError()
+
+    def laserMask(self):
+        """Return boolean array indicating regions where this component intends
+        the laser to be active. 
+        
+        By default, this returns the output of scanMask().
+        """
+        return self.scanMask()
