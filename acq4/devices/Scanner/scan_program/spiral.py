@@ -111,7 +111,8 @@ class SpiralScanControl(QtCore.QObject):
         ]
         self.params = pTypes.SimpleParameter(name='spiral_scan', type='bool', value=True, 
                                              removable=True, renamable=True, children=params)
-        
+        self.params.component = self.component  # required by ScanProgram.paramRequestedRemove()
+
         self.roi = SpiralScanROI(pos=[0.0, 0.0], radius=self.params['radius'])
 
         self.params.sigTreeStateChanged.connect(self.paramsChanged)

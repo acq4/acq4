@@ -196,10 +196,19 @@ class ScanProgram:
         
         time = np.linspace(0, (self.numSamples-1) / self.sampleRate, self.numSamples)
         for i, component in enumerate(self.components):
-            mask = component.scanMask()
+            scanMask = component.scanMask()
+            laserMask = component.laserMask()
             color = pg.mkColor((i, len(self.components)*1.3))
-            item = plot.plot(time, mask, pen=color, fillLevel=0, fillBrush=color)
+            fill = pg.mkColor(color)
+            fill.setAlpha(50)
+            plot.addLegend(offset=(-10, 10))
+            item = plot.plot(time, scanMask, pen=color, fillLevel=0, fillBrush=fill, name=component.name)
             item.setZValue(i)
+            fill.setAlpha(100)
+            item = plot.plot(time, laserMask, pen=None, fillLevel=0, fillBrush=fill)
+            item.setZValue(i+0.5)
+            legend = pg.LegendItem()
+
     
     def preview(self, task):
         va = self.generatePositionArray()
