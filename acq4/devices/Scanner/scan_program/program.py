@@ -33,35 +33,44 @@ class ScanProgram:
     
     * GUI for generating task commands and interactive representation of 
       command in camera module
-    * Convert task command to mirror voltage command
+    * Generate mirror voltage commands
     * Save / restore functionality
     * Masking arrays for controlling laser power
     * Extraction and analysis of imaging data generated during a scan
     
     Note that most of the functionality of ScanProgram is provided through 
-    subclasses of ScanProgramComponent.
+    subclasses of ScanProgramComponent. The available components are listed in
+    the COMPONENTS global variable, which may be used to install new component
+    types at runtime.
     """
-    def __init__(self, dev):
-        self.dev = dev
+    def __init__(self):
         self.components = []
-        self.canvas = None
+        
+        self.canvas = None  # used to display graphical controls for components
+        self.scanner = None
+        self.laser = None  # may be overridden by each component
+        
         self.sampleRate = None
-        self.ctrlGroup = ScanProgramCtrlGroup()
+        self.numSamples = None
+        self.downsample = None
+        
+        self.ctrlGroup = ScanProgramCtrlGroup()  # used to display GUI for components
         self.ctrlGroup.sigAddNewRequested.connect(self.paramRequestedNewComponent)
         self.ctrlGroup.sigChildRemoved.connect(self.paramRequestedRemove)
+
         
     def addComponent(self, component):
-        """
-        Add a new component to this program. May specify either a 
+        """Add a new component to this program. May specify either a 
         ScanProgramComponent instance or a string indicating the type of a new
         component to create.
+        
+        For supported component types, see the COMPONENTS global variable. This
+        may also be used to install new component types at runtime.
         """
         ## called when "Add Control.." combo is changed
         if isinstance(component, basestring):
             component = COMPONENTS[component](self)
         
-        if self.sampleRate is not None:
-            component.setSampleRate(*self.sampleRate)
         self.ctrlGroup.addChild(component.ctrlParameter(), autoIncrementName=True)
         if self.canvas is not None:
             for item in component.graphicsItems():
@@ -69,25 +78,25 @@ class ScanProgram:
         self.components.append(component)
 
     def removeComponent(self, component):
-        """
-        Remove a component from this program.
+        """Remove a component from this program.
         """
         self.components.remove(component)
         self.clearGraphicsItems(component)
         
     def ctrlParameter(self):
-        """
-        Return the control Parameter for this scan program. 
+        """Return the control Parameter for this scan program. 
+        
         This object may be displayed on a ParameterTree to provide the user
         control over the design of the program.
         """
         return self.ctrlGroup
 
     def setCanvas(self, canvas):
-        """
-        Set the canvas into which this scan program should add information
-        about the layout of its components. The canvas must be any object
-        with an `addItem(QGraphicsItem)` method, such as pyqtgraph.ViewBox.
+        """Set the canvas into which this scan program should add information
+        about the layout of its components. 
+        
+        The canvas must be any object with an `addItem(QGraphicsItem)` method,
+        such as pyqtgraph.ViewBox.
         """
         self.canvas = canvas
         if canvas is None:
@@ -97,10 +106,32 @@ class ScanProgram:
                 for i in c.graphicsItems():
                     c.addItem(i)
 
-    def generateTask(self):
+    def setDevices(self, scanner=None, laser=None):
+        """Set the scanner and default laser devices to use with this scan
+        program.
+        
+        Note that the laser device is only a default and may be overridden by
+        each component individually.
         """
-        Return the list of component task commands. This is intended to be used
-        as the value to the 'program' key in a Scanner task command. 
+        if scanner is not None:
+            self.scanner = scanner
+        if laser is not None:
+            self.laser = laser
+        
+    def setSampling(self, rate, samples, downsample):
+        """Set the sampling properties used by all components in the program:
+        sample rate, number of samples, and downsampling factor.
+        """
+        if self.sampleRate or samples != self.numSamples or downsample != self.downsample:
+            self.sampleRate = rate
+            self.numSamples = samples
+            self.downsample = downsample
+            for component in self.components:
+                component.samplingChanged()
+
+    def saveState(self):
+        """Return a serializable data structure representing the state of the 
+        scan program.
         """
         task = []
         for component in self.components:
@@ -108,7 +139,15 @@ class ScanProgram:
                 task.append(component.generateTask())
         return task
 
+    def restoreState(self, state):
+        """Restore the state of this program from the result of a previous call
+        to saveState(). 
+        """
+        raise NotImplementedError()
+
     def clearGraphicsItems(self, component=None):
+        """Remove all graphics items for this program from the attached canvas.
+        """
         if component is None:
             comps = self.components
         else:
@@ -118,79 +157,29 @@ class ScanProgram:
                 if i.scene() is not None:
                     i.scene().removeItem(i)
 
-    def setSampleRate(self, rate, downsample):
-        self.sampleRate = (rate, downsample)
-        for c in self.components:
-            c.setSampleRate(rate, downsample)
-
-    def mapToScanner(self, x, y):
-        return self.dev.mapToScanner(x, y, self.cmd['laser'])
-    
-    @classmethod
-    def generateVoltageArray(cls, dev, command):
-        """LASER LOGO
-        Turn a list of movement commands into arrays of x and y values.
-        prg looks like:
-        { 
-            numPts: 10000,
-            duration: 1.0,
-            commands: [
-               {'type': 'step', 'time': 0.0, 'pos': None),           ## start with step to "off" position 
-               ('type': 'step', 'time': 0.2, 'pos': (1.3e-6, 4e-6)), ## step to the given location after 200ms
-               ('type': 'line', 'time': (0.2, 0.205), 'pos': (1.3e-6, 4e-6))  ## 5ms sweep to the new position 
-               ('type': 'step', 'time': 0.205, 'pos': None),           ## finish step to "off" position at 205ms
-           ]
-        }
-        
-        Commands we might add in the future:
-          - circle
-          - spiral
-        # """
-        # dt = command['duration'] / command['numPts']
-        arr = np.zeros((2, command['numPts']))
-        cmds = command['program']
+    def generateVoltageArray(self):
+        """Generate an array of x,y voltage commands needed to drive the scanner
+        for this program.
+        """
+        arr = np.zeros((self.numSamples, 2))
         lastPos = None     
-        lastValue = np.array(dev.getVoltage())
+        lastValue = np.array(self.scanner.getVoltage())
         lastStopInd = 0
-        for i in range(len(cmds)):
-            cmd = cmds[i]
-            if cmd['active'] is False:
+        
+        for component in self.components:
+            if not component.isActive():
                 continue
             
-            # startInd = int(cmd['startTime'] / dt)
-            # stopInd = int(cmd['endTime'] / dt)
-            # if stopInd >= arr.shape[1]:
-            #     raise HelpfulException('Scan Program duration is longer than protocol duration') 
-            # arr[:,lastStopInd:startInd] = lastValue[:,np.newaxis]
-            # cmd['startStopIndices'] = (startInd, stopInd)
-            
-            if cmd['type'] not in COMPONENTS:
-                raise Exception('No registered scan component class named "%s".' % cmd['type'])
-            
-            component = COMPONENTS[cmd['type']]
-            cmd['laser'] = command['laser']  # todo: should be handled individually by components
-                                             # (because each component may be used with a different laser)
-            startInd, stopInd = component.generateVoltageArray(arr, dev, cmd) #, startInd, stopInd)
+            startInd, stopInd = component.generateVoltageArray(arr)
 
             # fill unused space in the array from the last component to this one
-            arr[:,lastStopInd:startInd] = lastValue[:,np.newaxis]
-            # assert compStopInd <= stopInd
-            # stopInd = compStopInd
+            arr[lastStopInd:startInd] = lastValue[np.newaxis, :]
             
-            lastValue = arr[:,stopInd-1]
+            lastValue = arr[stopInd-1]
             lastStopInd = stopInd
             
-            
-        # arr[:,lastStopInd:] = lastValue[:,np.newaxis]
-        
         return arr
     
-    def preview(self, task):
-        va = self.generateVoltageArray(self.dev, task)
-        plt = getattr(self, 'previewPlot', pg.plot())
-        plt.clear()
-        plt.plot(va[0], va[1])
-
     def close(self):
         self.clearGraphicsItems()
 
@@ -200,6 +189,23 @@ class ScanProgram:
     def paramRequestedRemove(self, parent, param):
         self.removeComponent(param.component())
 
+    def plotTimeline(self, plot):
+        """Create a timeline showing scan mirror usage by each program 
+        component.
+        """
+        
+        time = np.linspace(0, (self.numSamples-1) / self.sampleRate, self.numSamples)
+        for i, component in enumerate(self.components):
+            mask = component.scanMask()
+            color = pg.mkColor((i, len(self.components)*1.3))
+            item = plot.plot(time, mask, pen=color, fillLevel=0, fillBrush=color)
+            item.setZValue(i)
+    
+    def preview(self, task):
+        va = self.generatePositionArray()
+        plt = getattr(self, 'previewPlot', pg.plot())
+        plt.clear()
+        plt.plot(va[0], va[1])
 
 
 class ScanProgramCtrlGroup(pTypes.GroupParameter):

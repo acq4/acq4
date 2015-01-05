@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file './acq4/util/generator/GeneratorTemplate.ui'
 #
-# Created: Tue Dec 24 01:49:16 2013
-#      by: PyQt4 UI code generator 4.10
+# Created: Sun Jan  4 11:48:53 2015
+#      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
 

@@ -17,12 +17,11 @@ class RectScanComponent(ScanProgramComponent):
     """
     name = 'rect'
     
-    def __init__(self, cmd=None, scanProgram=None):
-        ScanProgramComponent.__init__(self, cmd, scanProgram)
+    def __init__(self, scanProgram=None):
+        ScanProgramComponent.__init__(self, scanProgram)
         self.ctrl = RectScanControl(self)
         
-    def setSampleRate(self, rate, downsample):
-        ScanProgramComponent.setSampleRate(self, rate, downsample)
+    def samplingChanged(self):
         self.ctrl.update()
 
     def ctrlParameter(self):
@@ -40,17 +39,22 @@ class RectScanComponent(ScanProgramComponent):
         """
         return self.ctrl.getGraphicsItems()
 
-    def generateTask(self):
-        return self.ctrl.generateTask()
-
-    @classmethod
-    def generateVoltageArray(cls, array, dev, cmd):
-        rs = RectScan()
-        rs.restoreState(cmd['scanInfo'])
-        
-        mapper = lambda x, y: dev.mapToScanner(x, y, cmd['laser'])
-        rs.writeArray(array.T, mapper) # note RectScan expects (N,2), whereas Program provides (2,N)
+    def generateVoltageArray(self, array):
+        rs = self.ctrl.params.system
+        rs.writeArray(array, self.mapToScanner)
         return rs.scanOffset, rs.scanOffset + rs.scanStride[0]
+        
+    def scanMask(self):
+        mask = np.zeros(self.program().numSamples, dtype=bool)
+        rs = self.ctrl.params.system
+        rs.writeScanMask(mask)
+        return mask
+        
+    def laserMask(self):
+        mask = np.zeros(self.program().numSamples, dtype=bool)
+        rs = self.ctrl.params.system
+        rs.writeLaserMask(mask)
+        return mask
         
 
 class RectScanROI(pg.ROI):
@@ -128,8 +132,8 @@ class RectScanControl(QtCore.QObject):
         except TypeError:
             reconnect = False
         try:
-            self.params.system.sampleRate = self.component().sampleRate
-            self.params.system.downsample = self.component().downsample
+            self.params.system.sampleRate = self.component().program().sampleRate
+            self.params.system.downsample = self.component().program().downsample
             self.params.updateSystem()
             try:
                 oswidth = np.linalg.norm(self.params.system.osVector)
@@ -332,7 +336,7 @@ class RectScan(SystemSolver):
         # copy data into array (one copy per frame)
         target[:] = qm[np.newaxis, ...]
         
-    def writeMask(self, array):
+    def writeLaserMask(self, array):
         """
         Write 1s into the array in the active region of the scan.
         This is useful for ensuring that a laser is disabled during the overscan
@@ -341,6 +345,19 @@ class RectScan(SystemSolver):
         offset = self.activeOffset
         shape = self.activeShape
         stride = self.activeStride
+        
+        target = pg.subArray(array, offset, shape, stride)
+        target[:] = 1
+        
+    def writeScanMask(self, array):
+        """
+        Write 1s into the array in the active region of the scan.
+        This is useful for ensuring that a laser is disabled during the overscan
+        and inter-frame time periods. 
+        """
+        offset = self.scanOffset
+        shape = self.scanShape
+        stride = self.scanStride
         
         target = pg.subArray(array, offset, shape, stride)
         target[:] = 1
@@ -868,34 +885,13 @@ class RectScanParameter(pTypes.SimpleParameter):
             param.blockSignals(False)
 
 
-class RectScanVideo:
-    """
-    Manages the system of equations necessary to define a sequence of rectangular scans.
-    (note this appears to be a general-case loop)
-
-    Input parameters:
-
-        * # of frames
-        * Frame exposure duration
-        * Inter-frame duration
-        * Frame rate
-        * Total duration
-
-    Output parameters:
-
-        * total exposure time per um^2
-        * position array, voltage array, laser mask array
-        * scan offset, shape, strides
-        * video offset, shape, strides
-        * image transform
-
-
-    """
 
 
 
 class ScannerUtility:
     """
+    Deprecated utilities for raster scanning.
+    
     1. Decombing routine for scanned images. 
     2. Compute scan voltages for a recangular region
     adding an overscan region.

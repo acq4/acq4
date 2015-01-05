@@ -78,7 +78,7 @@ class ScannerTaskGui(TaskGui):
         self.ui.itemTree.setParameters(self.positionCtrlGroup, showTop=False)
         self.positionCtrlGroup.sigChildRemoved.connect(self.positionCtrlRemoved)
         
-        self.scanProgram = ScanProgram(dev)
+        self.scanProgram = ScanProgram()
         self.ui.programTree.setParameters(self.scanProgram.ctrlParameter(), showTop=False)
 
         ## Set up SpinBoxes
@@ -169,7 +169,7 @@ class ScannerTaskGui(TaskGui):
 
     def daqChanged(self, state):
         # Something changed in DAQ; check that we have the correct sample rate
-        self.scanProgram.setSampleRate(state['rate'], state['downsample'])
+        self.scanProgram.setSampling(state['rate'], state['numPts'], state['downsample'])
         
     def getLaser(self):
         return self.ui.laserCombo.currentText()
@@ -290,7 +290,7 @@ class ScannerTaskGui(TaskGui):
         
     def generateTask(self, params=None):
         if self.cameraModule() is None:
-            raise Exception('No camera module selected, can not build task.')
+            raise Exception('No camera module selected, cannot build task.')
         
         if params is None or 'targets' not in params:
             target = self.testTarget.listPoints()[0]
@@ -311,31 +311,19 @@ class ScannerTaskGui(TaskGui):
                 'duration': self.taskRunner.getParam('duration')
             }
         else: # doing programmed scans
-            daqName = self.dev.getDaqName()
-            daqState = self.taskRunner.getDevice(daqName).currentState()
+            laser = self.ui.laserCombo.getSelectedObj()
+            self.scanProgram.setDevices(scanner=self.dev, laser=laser)
+            cmd = self.scanProgram.generateVoltageArray()
             task = {
-               # 'position': target, 
                 'minWaitTime': delay,
-                #'camera': self.cameraModule().config['camDev'], 
-                'laser': self.ui.laserCombo.currentText(),
-                'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
-                'program': self.scanProgram.generateTask(),
-                
-                # Need to provide information about DAQ to allow program components
-                # to generate voltage signals.
-                # Do we really?? Whoever is constructing the task already has access to this information.
-                #'duration': self.taskRunner.getParam('duration'),
-                #'numPts': daqState['numPts'],
-                #'sampleRate': daqState['rate'],
-                #'downsample': daqState['downsample'],
-               #]
+                'xCommand': cmd[:, 0],
+                'yCommand': cmd[:, 1],
             }
         
         return task
     
     def hideSpotMarker(self):
         self.spotMarker.hide()
-        
         
     def handleResult(self, result, params):
         if not self.spotMarker.isVisible():
@@ -372,29 +360,6 @@ class ScannerTaskGui(TaskGui):
             if name not in names:
                 return name
             num += 1
-        
-    #def addProgram(self, name=None): 
-        #camMod = self.cameraModule()
-        #if camMod is None:
-            #return False
-        #self.ui.programControlsLayout.setEnabled(True)
-        #item = TargetProgram()
-        #if name is None:
-            #name = 'Program' + str(self.nextId)
-        #self.nextId += 1 
-        #item.name = name
-        #item.objective = self.currentObjective
-        #self.items[name] = item
-        #treeitem = QtGui.QTreeWidgetItem(QtCore.QStringList(name))
-        #treeitem.setCheckState(0, QtCore.Qt.Checked)
-        #self.ui.itemTree.addTopLevelItem(treeitem)
-        #self.updateItemColor(treeitem)
-        #camMod.ui.addItem(item.origin, None, [1,1], 1000)
-        #item.connect(QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
-        #item.connect(QtCore.SIGNAL('regionChanged'), self.getTargetList)
-        #item.connect(QtCore.SIGNAL('pointsChanged'), self.itemChanged)
-        #self.itemChanged(item)
-        #self.updateDeviceTargetList(item)
         
     def addItem(self, itemType, state=None):
         
@@ -480,7 +445,6 @@ class ScannerTaskGui(TaskGui):
                     i.setTargetPen(j, None)
         return locations
 
-    
     def sequenceChanged(self):
         self.targets = None
         self.sigSequenceChanged.emit(self.dev.name())
@@ -576,8 +540,9 @@ class ScannerTaskGui(TaskGui):
         pass
 
     def previewProgram(self):
-        task = self.generateTask()
-        self.scanProgram.preview(task)
+        self.ui.programTimeline.clear()
+        self.scanProgram.plotTimeline(self.ui.programTimeline)
+        #self.scanProgram.preview()
     
     def quit(self):
         s = self.testTarget.scene()
@@ -644,6 +609,7 @@ class TargetPoint(pg.EllipseROI):
     def close(self):
         if self.scene() is not None:
             self.scene().removeItem(self)
+        self.dev.sigGlobalSubdeviceChanged.disconnect(self.opticStateChanged)
 
 
 class Grid(pg.CrosshairROI):
