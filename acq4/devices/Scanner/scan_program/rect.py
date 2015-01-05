@@ -782,7 +782,7 @@ class RectScanParameter(pTypes.SimpleParameter):
             dict(name='scanShape', type='str', readonly=True),
             dict(name='scanStride', type='str', readonly=True),
             dict(name='imageShape', type='str', readonly=True),
-            dict(name='scanSpeed', type='float', readonly=True, suffix='m/ms', siPrefix=True, bounds=[1e-9, None]), 
+            dict(name='scanSpeed', type='float', readonly=True, suffix='m/s', siPrefix=True, bounds=[1e-9, None]), 
             dict(name='frameExposure', title=u'frame exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True, bounds=[1e-9, None]), 
             dict(name='totalExposure', title=u'total exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True, bounds=[1e-9, None]),
         ]

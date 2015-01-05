@@ -136,13 +136,11 @@ class SpiralScanControl(QtCore.QObject):
         
         self.roi.setRadii(*sg.radii)
         self.roi.setAngles(*sg.angles)
-        
+
         self.params['speed'] = 1e-3 * sg.length() / self.params['duration']
-        self.update()
+
+        self.roi.setVisible(self.isActive())
         
-    def update(self):
-        pass
-    
     def roiChanged(self):
         # read the ROI size and repost in the parameter tree
         state = self.roi.getState()
@@ -174,7 +172,9 @@ class SpiralScanControl(QtCore.QObject):
         path = sg.path(npts, uniform=True)
         
         # Move to center position
-        center = self.roi.mapToView(self.roi.pos() + self.roi.size()/2.)
+        center = self.roi.mapToView(pg.Point(0, 0)) 
+        print path
+        print center
         path += np.array([center.x(), center.y()])
         
         # map to scanner voltage and write into array
