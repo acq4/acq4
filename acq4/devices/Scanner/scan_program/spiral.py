@@ -211,53 +211,10 @@ class SpiralGeometry(object):
         angles turn counter-clockwise. The number of spiral turns is determined
         by the difference between the end and start angles.
     """
-    def __init__(self, radii=None, angles=None):
-        self.state = {
-            'pos': (0, 0),
-            'radii': radii,
-            'angles': angles,
-            'startTime': 0,
-            'duration': 2e-3,
-            'repeat': 1,
-            'repeatPeriod': 0,
-        }
-
-        # self.pos = pos
+    def __init__(self, radii, angles):
         self.radii = radii
         self.angles = angles
 
-
-    def writeArray(self, array, mapping=None):
-        """
-        Given a (N,2) array, write the scan path into the 
-        array region(s) used by this component.
-        
-        The optional *mapping* argument provides a callable that maps from 
-        global position to another coordinate system (eg. mirror voltage).
-        It must accept two arrays as arguments: (x, y)
-        """
-
-
-    def writeMask(self, array):
-        """
-        Write 1s into the array in the active region of the scan.
-        This is used to indicate the part of the scan when the laser should be enabled. 
-
-        For spiral scans, the entire array is made active.
-        """
-        array[:] = 1
-
-
-    def saveState(self):
-        """
-        Save the state of this component to a dictionary.
-        """
-
-    def restoreState(self, state):
-        """
-        Restore the state of this component 
-        """
-        
     def length(self):
         """Return exact length of spiral.
         """
