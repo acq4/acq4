@@ -76,6 +76,7 @@ class ScanProgram:
             for item in component.graphicsItems():
                 self.canvas.addItem(item, None, [1, 1], 1000)
         self.components.append(component)
+        return component
 
     def removeComponent(self, component):
         """Remove a component from this program.
@@ -136,15 +137,17 @@ class ScanProgram:
         task = []
         for component in self.components:
             if component.isActive():
-                task.append(component.generateTask())
+                task.append(component.saveState())
         return task
 
     def restoreState(self, state):
         """Restore the state of this program from the result of a previous call
         to saveState(). 
         """
-        raise NotImplementedError()
-
+        for compState in state:
+            comp = self.addComponent(compState['type'])
+            comp.restoreState(compState)
+        
     def clearGraphicsItems(self, component=None):
         """Remove all graphics items for this program from the attached canvas.
         """

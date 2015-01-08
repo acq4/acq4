@@ -17,8 +17,7 @@ class ScanProgramComponent:
     
     """
     
-    name = None  # Must be the string used to identify this component
-                 # in the task command structure.
+    type = None  # String identifying the type of this scan component.
                  
     def __init__(self, scanProgram):
         self._laser = None
@@ -45,6 +44,11 @@ class ScanProgramComponent:
         """Return True if this component is currently active.
         """
         return self.ctrlParameter().value()
+    
+    def name(self):
+        """Return the name of this component.
+        """
+        return self.ctrlParameter().name()
         
     def ctrlParameter(self):
         """
@@ -67,13 +71,6 @@ class ScanProgramComponent:
         """
         return self.program().scanner.mapToScanner(x, y, self.laser.name())
 
-    def generateTask(self):
-        """
-        Generate the task structure that fully describes the behavior of this 
-        component.
-        """
-        raise NotImplementedError()
-        
     def generateVoltageArray(self, array):
         """Generate mirror voltages for this scan component and store inside
         *array*. Returns the start and stop indexes used by this component.
@@ -100,3 +97,19 @@ class ScanProgramComponent:
         By default, this returns the output of scanMask().
         """
         return self.scanMask()
+
+    def saveState(self):
+        """Return a serializable data structure representing the state of this 
+        component.
+        
+        Subclasses must extend this method.
+        """
+        state = {'type': self.type}
+        return state
+    
+    def restoreState(self, state):
+        """Restore the state of this component from the result of a previous 
+        call to saveState(). 
+        """
+        raise NotImplementedError()
+

@@ -16,6 +16,7 @@ class SpiralScanComponent(ScanProgramComponent):
     Scans the laser in the shape of an elliptical spiral.    
     """    
     name = 'spiral'
+    
     def __init__(self, scanProgram):
         ScanProgramComponent.__init__(self, scanProgram)
         self.ctrl = SpiralScanControl(self)
@@ -54,6 +55,18 @@ class SpiralScanComponent(ScanProgramComponent):
     def scanMask(self):
         return self.ctrl.scanMask()
 
+    def saveState(self):
+        state = {'name': self.params.name(), 'active': self.isActive(), 
+                 'scanInfo': self.ctrl.saveState()}
+        return task
+    
+    def restoreState(self, state):
+        state = state.copy()
+        self.params.setName(state['name'])
+        self.params.setValue(state['active'])
+        self.ctrl.restoreState(state['scanInfo'])
+
+    
 
 class SpiralScanROI(pg.ROI):
     def __init__(self, pos=None, radius=None, **args):
@@ -105,7 +118,7 @@ class SpiralScanControl(QtCore.QObject):
             dict(name='startTime', type='float', value=0.0, suffix='s', bounds=[0, None], siPrefix=True, step=10e-3),
             dict(name='duration', type='float', value=0.002, suffix='s', bounds=[1e-6, None], siPrefix=True, step=1e-3),
             dict(name='radius', type='float', value=10e-6, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
-            dict(name='thickness', type='float', value=25, suffix='%', bounds=[0, 100], step=1),
+            dict(name='thickness', type='float', value=2e-6, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='spacing', type='float', value=0.5e-6, suffix='m', siPrefix=True, step=0.1e-6, bounds=[1e-7, None]),
             dict(name='speed', type='float', readonly=True, value=0, suffix='m/ms', siPrefix=True),
         ]
@@ -144,8 +157,10 @@ class SpiralScanControl(QtCore.QObject):
     def roiChanged(self):
         # read the ROI size and repost in the parameter tree
         state = self.roi.getState()
-        w, h = state['size']
-        self.params['radius'] = w / 2.
+        r = state['size'][0] / 2.
+        s = r / self.params['radius']
+        self.params['radius'] = r
+        self.params['thickness'] = s * self.params['thickness']
         
     def spiralGeometry(self):
         """Return a SpiralGeometry instance corresponding to the parameter
@@ -153,7 +168,7 @@ class SpiralScanControl(QtCore.QObject):
         """
         # Compute radii and angles from parameters
         outer = self.params['radius']
-        inner = outer - (outer * self.params['thickness'] / 100.)
+        inner = max(0, outer - self.params['thickness'])
         spacing = self.params['spacing']
         turns = (outer - inner) / spacing
         a0 = 0
@@ -173,8 +188,6 @@ class SpiralScanControl(QtCore.QObject):
         
         # Move to center position
         center = self.roi.mapToView(pg.Point(0, 0)) 
-        print path
-        print center
         path += np.array([center.x(), center.y()])
         
         # map to scanner voltage and write into array
@@ -198,6 +211,23 @@ class SpiralScanControl(QtCore.QObject):
         mask[start:start+npts] = True
         return mask
 
+    def saveState(self):
+        center = self.roi.mapToView(pg.Point(0, 0))
+        return {
+            'startTime': self.params['startTime'],
+            'duration': self.params['duration'],
+            'radius':, self.params['radius'],
+            'thickness': self.params['thickness'],
+            'spacing': self.params['spacing'],
+            'center': (center.x(), center.y()),
+        }
+
+    def restoreState(self, state):
+        state = state.copy()
+        self.roi.setPos(*state.pop('center'))
+        for k in state:
+            self.params[k] = state[k]
+        
 
 class SpiralGeometry(object):
     """Class used for computing information about spiral scan geometry.

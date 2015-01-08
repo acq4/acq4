@@ -15,7 +15,7 @@ class RectScanComponent(ScanProgramComponent):
     """
     Does a raster scan of a rectangular area.
     """
-    name = 'rect'
+    type = 'rect'
     
     def __init__(self, scanProgram=None):
         ScanProgramComponent.__init__(self, scanProgram)
@@ -55,6 +55,14 @@ class RectScanComponent(ScanProgramComponent):
         rs = self.ctrl.params.system
         rs.writeLaserMask(mask)
         return mask
+
+    def saveState(self):
+        state = ScanProgramComponent.saveState(self)
+        state.update(self.ctrl.saveState())
+        return state
+    
+    def restoreState(self, state):
+        self.ctrl.restoreState(state)
         
 
 class RectScanROI(pg.ROI):
@@ -78,7 +86,6 @@ class RectScanROI(pg.ROI):
         p.setPen(pg.mkPen(0.3))
         p.drawRect(self.boundingRect())
         pg.ROI.paint(self, p, *args)
-
 
 
 
@@ -157,11 +164,18 @@ class RectScanControl(QtCore.QObject):
         self.params.system.p2 = pg.Point(self.roi.mapToView(pg.Point(0,h)))
         self.params.updateSystem()
         
-    def generateTask(self):
+    def saveState(self):
         sys = self.params.system
         sys.solve()
-        task = {'type': self.name, 'active': self.isActive(), 'scanInfo': sys.saveState()}
+        task = {'name': self.params.name(), 'active': self.isActive(), 
+                'scanInfo': sys.saveState()}
         return task
+    
+    def restoreState(self, state):
+        state = state.copy()
+        self.params.setName(state['name'])
+        self.params.setValue(state['active'])
+        self.params.system.restoreState(state['scanInfo'])
 
 
 arr = np.ndarray # just to clean up defaultState below..
