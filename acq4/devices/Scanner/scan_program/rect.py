@@ -96,7 +96,6 @@ class RectScanControl(QtCore.QObject):
     def __init__(self, component):
         QtCore.QObject.__init__(self)
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
-        self.name = component.name
         self.blockUpdate = False
         self.component = weakref.ref(component)
 

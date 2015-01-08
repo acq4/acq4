@@ -61,8 +61,8 @@ class NiDAQTask(TaskGui):
         self.updateFilterCtrl()
         
     def quit(self):
+        self.taskRunner.sigTaskChanged.disconnect(self.taskChanged)
         TaskGui.quit(self)
-        QtCore.QObject.disconnect(self.taskRunner, QtCore.SIGNAL('taskChanged'), self.taskChanged)
         
     def saveState(self):
         return self.stateGroup.state()

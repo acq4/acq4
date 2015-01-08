@@ -318,10 +318,11 @@ class ScannerTask(DeviceTask):
                 self.cmd['xCommand'], self.cmd['yCommand'] = self.dev.mapToScanner(self.cmd['xPosition'], self.cmd['yPosition'], self.cmd['laser'])
                 prof.mark('position arrays')
             
-            ## Otherwise if program is specified, generate the command arrays now
-            elif 'program' in self.cmd:
-                self.generateProgramArrays(self.cmd)    
-                prof.mark('program')
+            # Deprecated - this should be done by the task creator instead.
+            # The 'program' key is now ignored as meta-data.
+            # elif 'program' in self.cmd:
+            #     self.generateProgramArrays(self.cmd)    
+            #     prof.mark('program')
                 
             ## If shuttering is requested, generate proper arrays and shutter the laser now
             if self.cmd.get('simulateShutter', False):
@@ -358,10 +359,11 @@ class ScannerTask(DeviceTask):
         self.cmd['xCommand'][~mask] = offPos[0]
         self.cmd['yCommand'][~mask] = offPos[1]
         
-    def generateProgramArrays(self, command):
-        arr = ScanProgram.generateVoltageArray(self.dev, command)
-        self.cmd['xCommand'] = arr[0] ## arrays of voltage values
-        self.cmd['yCommand'] = arr[1]
+    # Deprecated - this should be done by the task creator instead.
+    # def generateProgramArrays(self, command):
+    #     arr = ScanProgram.generateVoltageArray(self.dev, command)
+    #     self.cmd['xCommand'] = arr[0] ## arrays of voltage values
+    #     self.cmd['yCommand'] = arr[1]
         
     def createChannels(self, daqTask):
         self.daqTasks = []

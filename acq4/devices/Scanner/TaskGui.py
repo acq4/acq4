@@ -318,6 +318,7 @@ class ScannerTaskGui(TaskGui):
                 'minWaitTime': delay,
                 'xCommand': cmd[:, 0],
                 'yCommand': cmd[:, 1],
+                'program': self.scanProgram.saveState(),
             }
         
         return task

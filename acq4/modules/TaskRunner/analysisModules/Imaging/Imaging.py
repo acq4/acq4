@@ -10,7 +10,7 @@ import acq4.util.functions as fn
 import acq4.util.metaarray as metaarray
 from acq4.util.HelpfulException import HelpfulException
 # import acq4.devices.Scanner.ScanUtilityFuncs as SUFA
-from acq4.devices.Scanner.ScanProgram.rect import RectScan
+from acq4.devices.Scanner.scan_program.rect import RectScan
 from acq4.pyqtgraph.parametertree import ParameterTree, Parameter
 
 class ImagingModule(AnalysisModule):
@@ -41,7 +41,7 @@ class ImagingModule(AnalysisModule):
             ])
         self.ptree.setParameters(self.params, showTop=False)
         self.params.sigTreeStateChanged.connect(self.update)
-        self.params.child('detectors').sigAddNew.connect(self.addNewDetector)
+        self.params.child('detectors').sigAddNew.connect(self.addDetectorClicked)
 
         self.man = getManager()
         self.lastFrame = None
@@ -53,6 +53,9 @@ class ImagingModule(AnalysisModule):
         self.imageView.imageItem.setAutoDownsample(True)
         # self.ui.scannerComboBox.setTypes('scanner')
         # self.ui.detectorComboBox.setTypes('daqChannelGroup')
+
+    def addDetectorClicked(self):
+        self.addNewDetector()
 
     def addNewDetector(self, name='detector', value=None):
         self.params.child('detectors').addChild(

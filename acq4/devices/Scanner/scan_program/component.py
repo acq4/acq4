@@ -24,6 +24,12 @@ class ScanProgramComponent:
         self.params = None
         self.program = weakref.ref(scanProgram)
 
+    @property
+    def name(self):
+        """Return the name of this component.
+        """
+        return self.ctrlParameter().name()
+    
     def setLaser(self, laser):
         self._laser = laser
 
@@ -44,11 +50,6 @@ class ScanProgramComponent:
         """Return True if this component is currently active.
         """
         return self.ctrlParameter().value()
-    
-    def name(self):
-        """Return the name of this component.
-        """
-        return self.ctrlParameter().name()
         
     def ctrlParameter(self):
         """

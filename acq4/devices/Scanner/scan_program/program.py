@@ -14,7 +14,7 @@ from acq4.pyqtgraph import QtGui, QtCore
 COMPONENTS = OrderedDict()
 
 def registerScanComponent(component):
-    COMPONENTS[component.name] = component
+    COMPONENTS[component.type] = component
 
 for cType in ['step', 'line', 'rect', 'loop', 'ellipse', 'spiral']:
     mod = importlib.import_module('.' + cType, 'acq4.devices.Scanner.scan_program')

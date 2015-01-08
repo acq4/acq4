@@ -11,7 +11,7 @@ class LineScanComponent(ScanProgramComponent):
     """
     Scans the laser over a path composed of multiple line segments.
     """
-    name = 'line'
+    type = 'line'
     
     def __init__(self, scanProgram):
         ScanProgramComponent.__init__(self, scanProgram)

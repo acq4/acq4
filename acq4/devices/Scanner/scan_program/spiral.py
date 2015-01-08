@@ -15,7 +15,7 @@ class SpiralScanComponent(ScanProgramComponent):
     """
     Scans the laser in the shape of an elliptical spiral.    
     """    
-    name = 'spiral'
+    type = 'spiral'
     
     def __init__(self, scanProgram):
         ScanProgramComponent.__init__(self, scanProgram)
@@ -216,7 +216,7 @@ class SpiralScanControl(QtCore.QObject):
         return {
             'startTime': self.params['startTime'],
             'duration': self.params['duration'],
-            'radius':, self.params['radius'],
+            'radius': self.params['radius'],
             'thickness': self.params['thickness'],
             'spacing': self.params['spacing'],
             'center': (center.x(), center.y()),
