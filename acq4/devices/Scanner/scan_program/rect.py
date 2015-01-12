@@ -68,8 +68,10 @@ class RectScanComponent(ScanProgramComponent):
 class RectScanROI(pg.ROI):
     def __init__(self, size, pos):
         pg.ROI.__init__(self, size=size, pos=pos)
-        self.addScaleHandle([1,1], [0.5, 0.5])
-        self.addRotateHandle([0,0], [0.5, 0.5])
+        # ROI is designed to be used on image data with the +y-axis pointing downward.
+        # In the camera module, +y points upward.
+        self.addScaleHandle([1,0], [0.5, 0.5])
+        self.addRotateHandle([0,1], [0.5, 0.5])
         self.overScan = 0.  # distance 
 
     def setOverScan(self, os):
@@ -158,9 +160,10 @@ class RectScanControl(QtCore.QObject):
         in the parameter tree """
         state = self.roi.getState()
         w, h = state['size']
-        self.params.system.p0 = pg.Point(self.roi.mapToView(pg.Point(0,0)))
-        self.params.system.p1 = pg.Point(self.roi.mapToView(pg.Point(w,0)))
-        self.params.system.p2 = pg.Point(self.roi.mapToView(pg.Point(0,h)))
+        # Remember: ROI origin is in bottom-left because camera module has +y pointing upward.
+        self.params.system.p0 = pg.Point(self.roi.mapToView(pg.Point(0,h)))  # top-left
+        self.params.system.p1 = pg.Point(self.roi.mapToView(pg.Point(w,h)))  # rop-right
+        self.params.system.p2 = pg.Point(self.roi.mapToView(pg.Point(0,0)))  # bottom-left
         self.params.updateSystem()
         
     def saveState(self):

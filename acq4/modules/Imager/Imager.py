@@ -36,7 +36,7 @@ from acq4.devices.Microscope import Microscope
 import time
 import pprint
 from .imagerTemplate import Ui_Form
-from acq4.devices.Scanner.ScanProgram.rect import ScannerUtility
+from acq4.devices.Scanner.scan_program.rect import ScannerUtility
 
 SUF = ScannerUtility()
 
@@ -369,15 +369,15 @@ class Imager(Module):
             dict(name='Downsample', type='int', value=1, limits=[1,None]),
             dict(name='Frame Time', type='float', readonly=True, value=0.0),
             dict(name='Average', type='int', value=1, limits=[1,100]),
-            dict(name='Pockels', type='float', value= 0.03, suffix='V', dec=True, minStep=1e-3, limits=[0, 1.5], step=0.1, siPrefix=True),
-            dict(name='Wavelength', type='float', value= 700, suffix = 'nm', readonly = True),
-            dict(name='Power', type='float', value = 0.00, suffix = 'W', readonly = True),
+            dict(name='Pockels', type='float', value=0.03, suffix='V', step=0.005, limits=[0, 1.5], siPrefix=True),
+            dict(name='Wavelength', type='float', value=700, suffix='nm', readonly=True),
+            dict(name='Power', type='float', value=0.00, suffix='W', readonly=True),
             dict(name='Objective', type='str', value='Unknown', readonly=True),
             dict(name='Follow Stage', type='bool', value=True),
             dict(name='Image Width', type='int', value=500, readonly=False),
             dict(name='Image Height', type='int', value=500, readonly=False),
-            dict(name='xSpan', type='float', value = 1.0, limits=[0.01, 2.5]), #limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
-            dict(name='ySpan', type = 'float', value = 1.0, limits=[0.01, 2.5]), # limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True),
+            dict(name='xSpan', type='float', value=1.0, limits=[0.01, 2.5]), #limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
+            dict(name='ySpan', type='float', value=1.0, limits=[0.01, 2.5]), # limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True),
             dict(name='Bidirectional', type='bool', value=True),
             dict(name='Decomb', type='bool', value=True, children=[
                 dict(name='Auto', type='bool', value=True),
