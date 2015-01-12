@@ -259,8 +259,8 @@ class RectScan(SystemSolver):
             ('pixelHeight', [None, float, None, 'nfr']),
             ('pixelAspectRatio', [None, float, None, 'nf']),
             ('bidirectional', [None, bool, None, 'f']),
-            ('sampleRate', [None, float, None, 'f']),
-            ('downsample', [None, int, None, 'f']),
+            ('sampleRate', [None, float, None, 'f']),  # Sample rate of DAQ used to drive scan mirrors and record from PMT
+            ('downsample', [None, int, None, 'f']),    # Downsampling used by DAQ (recorded data is downsampled by this factor)
             ('frameDuration', [None, float, None, 'nfr']),
             ('scanOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe
             ('scanShape', [None, tuple, None, 'n']),   # the full scan area including overscan
@@ -378,14 +378,21 @@ class RectScan(SystemSolver):
         target = pg.subArray(array, offset, shape, stride)
         target[:] = 1
         
-    def extractImage(self, data, offset=0.0, correctBidir=True, subpixel=False):
-        """
-        Extract image data from a photodetector recording.
+    def extractImage(self, data, offset=0.0, subpixel=False):
+        """Extract image data from a photodetector recording.
+
+        This method returns an array of shape (frames, height, width) giving
+        the image data collected during a scan. The redurned data excludes
+        overscan regions, corrects for mirror lag, and reverses the
+        even-numbered rows if the scan is bidirectional.
+
         Offset is a time in seconds to offset the data before unpacking
-        the image array. (This allows to correct for mirror lag)
+        the image array (this allows to correct for mirror lag). If subpixel 
+        is True, then the offset may shift the image by a fraction of a pixel 
+        using linear interpolation.
         """
         offset = self.imageOffset + offset * self.sampleRate / self.downsample
-        intOffset = int(offset)
+        intOffset = np.round(offset)
         fracOffset = offset - intOffset
 
         shape = self.imageShape
@@ -397,60 +404,67 @@ class RectScan(SystemSolver):
         else:
             image = pg.subArray(data, intOffset, shape, stride)
 
-        if correctBidir and self.bidirectional:
+        if self.bidirectional:
             image = image.copy()
             image[:, 1::2] = image[:, 1::2, ::-1]
         return image
 
-    def measureMirrorLag(self, data, auto=True, shift=0., minShift=0., maxShift=100, transpose=False):
-        """
-        Estimate the mirror lag in a bidirectional raster scan.
-        The *data* argument is a photodetector recording array.
-        This can be used as the *offset* argument to extractImage().
-        """
-        ## split image into fields
-        # units of the shift coming in here are in pixels (integer) (not seconds, as previously)
-        img = self.extractImage(data)
-        if transpose:
-            img = img.transpose()
-        nr = 2 * (img.shape[1] // 2)
-        f1 = img[:, 0:nr:2]
-        f2 = img[:, 1:nr+1:2]
-        if img.shape[0] < maxShift:
-            maxShift = img.shape[0]
+    def measureMirrorLag(self, data, subpixel=False, minOffset=0., maxOffset=500e-6):
+        """Estimate the mirror lag in a bidirectional raster scan.
 
-        ## find optimal shift
-        if auto:
-            bestShift = None
-            bestError = None
-            errs = []
-            for shift in range(int(minShift), int(maxShift)):
-                f2s = f2[:-shift] if shift > 0 else f2
-                err1 = np.abs((f1[shift:, 1:]-f2s[:, 1:])**2).sum()
-                err2 = np.abs((f1[shift:, 1:]-f2s[:, :-1])**2).sum()
-                totErr = (err1+err2) / float(f1.shape[0]-shift)
-                errs.append(totErr)
-                if bestError is None or totErr < bestError:
-                    bestError = totErr
-                    bestShift = shift
-            # pg.plot(errs)
-        else:
-            bestShift = shift
-        if bestShift is None:  # nothing...
-            return img, 0.
-        ## reconstruct from shifted fields
-        leftShift = bestShift // 2
-        rightShift = int(leftShift + (bestShift % 2))
-        if rightShift < 1:
-            return img, 0
-        decombed = np.zeros(img.shape, dtype=data.dtype)
-        if leftShift > 0:
-            decombed[:-leftShift, ::2] = img[leftShift:, ::2]
-        else:
-            decombed[:, ::2] = img[:, ::2]
-        decombed[rightShift:, 1::2] = img[:-rightShift, 1::2]
-        return decombed, bestShift
-    
+        The *data* argument is a photodetector recording array.
+        The return value can be used as the *offset* argument to extractImage().
+        """
+        if not self.bidirectional:
+            raise Exception("Mirror lag can only be measured for bidirectional scans.")
+
+        # decide how far to search
+        rowTime = self.scanShape[1] / self.sampleRate
+        pxTime = self.downsample / self.sampleRate
+        maxOffset = min(maxOffset, rowTime * 0.7)
+
+        # find optimal shift by pixel
+        offsets = np.arange(minOffset, maxOffset, pxTime)
+        bestOffset = self._findBestOffset(data, offsets, subpixel=False)
+
+        # Refine optimal shift by subpixel
+        if subpixel:
+            # Refine the estimate in two stages
+            for i in range(2):
+                w = offsets[1] - offsets[0]
+                minOffset = bestOffset - (w/2)
+                maxOffset = bestOffset + (w/2)
+                offsets = np.linspace(minOffset, maxOffset, 5)
+                bestOffset = self._findBestOffset(data, offsets, subpixel=True)
+
+        return bestOffset
+
+    def _findBestOffset(self, data, offsets, subpixel):
+        # Try generating image using each item from a list of offsets. 
+        # Return the offset that produced the least error between fields.
+        bestOffset = None
+        bestError = None
+        errs = []
+        for offset in offsets:
+            # get base image averaged over frames
+            img = self.extractImage(data, offset=offset, subpixel=subpixel).mean(axis=0)
+
+            # split image into fields
+            nr = 2 * (img.shape[0] // 2)
+            f1 = img[0:nr:2]
+            f2 = img[1:nr+1:2]
+
+            err1 = np.abs((f1[:-1]-f2[:-1])**2).sum()
+            err2 = np.abs((f1[1:] -f2[:-1])**2).sum()
+            totErr = err1 + err2
+            errs.append(totErr)
+            if bestError is None or totErr < bestError:
+                bestError = totErr
+                bestOffset = offset
+        # pg.plot(errs)
+
+        return bestOffset
+
     def imageTransform(self):
         """
         Return the transform that maps from image pixel coordinates to global coordinates.

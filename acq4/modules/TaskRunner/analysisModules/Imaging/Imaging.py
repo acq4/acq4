@@ -32,7 +32,7 @@ class ImagingModule(AnalysisModule):
         self.params = Parameter(name='imager', children=[
             dict(name='scanner', type='interface', interfaceTypes=['scanner']),
             dict(name='detectors', type='group', addText="Add detector.."),
-            dict(name='decomb', type='float', value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=1e-6, children=[
+            dict(name='decomb', type='float', readonly=True, value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=1e-6, decimals=5, children=[
                 dict(name='auto', type='bool', value=True),
                 dict(name='subpixel', type='bool', value=False),
                 ]),
@@ -59,7 +59,7 @@ class ImagingModule(AnalysisModule):
 
     def addNewDetector(self, name='detector', value=None):
         self.params.child('detectors').addChild(
-            dict(name=name, type='interface', interfaceTypes=['daqChannelGroup'], value=value),
+            dict(name=name, type='interface', interfaceTypes=['daqChannelGroup'], value=value, removable=True),
             autoIncrementName=True)
                 
     def quit(self):
@@ -119,6 +119,9 @@ class ImagingModule(AnalysisModule):
             fh.setInfo(transform=result['transform'])
 
     def update(self):
+        # If auto-decomb is selected, then user cannot edit decomb offset
+        self.params.param('decomb').setReadonly(self.params['decomb', 'auto'])
+
         self.lastResult = []
         frame = self.lastFrame
         if frame is None:
@@ -158,7 +161,7 @@ class ImagingModule(AnalysisModule):
             # Determine decomb duration
             auto = self.params['decomb', 'auto']
             if auto:
-                (decombed, lag) = rs.measureMirrorLag(pmtdata[0])
+                lag = rs.measureMirrorLag(pmtdata[0], subpixel=self.params['decomb', 'subpixel'])
                 self.params['decomb'] = lag
             decomb = self.params['decomb']
             
@@ -197,8 +200,10 @@ class ImagingModule(AnalysisModule):
             tr = st * tr
             result['transform'] = pg.SRTTransform3D(tr)
 
+            frameTimes = rs.frameTimes()
+
             # Display image locally
-            self.imageView.setImage(imageData, levelMode=levelMode)
+            self.imageView.setImage(imageData, xvals=frameTimes, levelMode=levelMode)
             self.imageView.getView().setAspectLocked(True)
 #            self.imageView.imageItem.setRect(QtCore.QRectF(0., 0., rs.width, rs.height))  # TODO: rs.width and rs.height might not be correct!
             self.imageView.imageItem.resetTransform()
