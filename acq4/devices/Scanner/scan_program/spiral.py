@@ -44,6 +44,14 @@ class SpiralScanComponent(ScanProgramComponent):
         # NOTE: point should have constant speed regardless of radius.
         return self.ctrl.writeArray(array, self.mapToScanner)
         
+    def generatePositionArray(self, array):
+        """
+        Generate mirror position values for this scan component and store inside
+        *array*. Returns the start and stop indexes used by this component.
+        """
+        # NOTE: point should have constant speed regardless of radius.
+        return self.ctrl.writeArray(array)
+        
     def generatePosCmd(self, array):
         """
         Generate the position commands for this scan component and store
@@ -111,7 +119,7 @@ class SpiralScanControl(QtCore.QObject):
     def __init__(self, component):
         QtCore.QObject.__init__(self)
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
-        self.name = component.name
+        # self.name = component.name
         self.component = weakref.ref(component)
 
         params = [
@@ -138,8 +146,9 @@ class SpiralScanControl(QtCore.QObject):
     def isActive(self):
         return self.params.value()
     
-    def setVisible(self, vis):
-        self.roi.setVisible(vis)
+    def updateVisibility(self):
+        v = self.params.value() and self.component().program().isVisible()
+        self.roi.setVisible(v)
     
     def parameters(self):
         return self.params
@@ -152,7 +161,8 @@ class SpiralScanControl(QtCore.QObject):
 
         self.params['speed'] = 1e-3 * sg.length() / self.params['duration']
 
-        self.roi.setVisible(self.isActive())
+        # self.roi.setVisible(self.isActive())
+        self.updateVisibility()
         
     def roiChanged(self):
         # read the ROI size and repost in the parameter tree

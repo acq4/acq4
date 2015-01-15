@@ -114,3 +114,9 @@ class ScanProgramComponent:
         """
         raise NotImplementedError()
 
+    def updateVisibility(self):
+        """
+        """
+        v = self.program().isVisible() and self.isActive()
+        for item in self.graphicsItems():
+            item.setVisible(v)

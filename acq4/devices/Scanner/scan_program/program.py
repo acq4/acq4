@@ -58,6 +58,12 @@ class ScanProgram:
         self.ctrlGroup.sigAddNewRequested.connect(self.paramRequestedNewComponent)
         self.ctrlGroup.sigChildRemoved.connect(self.paramRequestedRemove)
 
+        self.previewItems = []  # graphics items used to preview the program
+        self.previewTimer = QtCore.QTimer()
+        self.previewTimer.timeout.connect(self.previewStep)
+        self.previewData = {}
+
+        self._visible = True  # whether graphics items should be displayed
         
     def addComponent(self, component):
         """Add a new component to this program. May specify either a 
@@ -151,6 +157,7 @@ class ScanProgram:
     def clearGraphicsItems(self, component=None):
         """Remove all graphics items for this program from the attached canvas.
         """
+        self.clearPreview()
         if component is None:
             comps = self.components
         else:
@@ -164,16 +171,27 @@ class ScanProgram:
         """Generate an array of x,y voltage commands needed to drive the scanner
         for this program.
         """
+        return self.generatePositionArray(_voltage=True)
+
+    def generatePositionArray(self, _voltage=False):
+        """Generate an array of x,y position values for this scan program.
+        """
         arr = np.zeros((self.numSamples, 2))
-        lastPos = None     
-        lastValue = np.array(self.scanner.getVoltage())
+        lastPos = None
+        if _voltage:
+            lastValue = np.array(self.scanner.getVoltage())
+        else:
+            lastValue = np.array([np.nan, np.nan])
         lastStopInd = 0
         
         for component in self.components:
             if not component.isActive():
                 continue
             
-            startInd, stopInd = component.generateVoltageArray(arr)
+            if _voltage:
+                startInd, stopInd = component.generateVoltageArray(arr)
+            else:
+                startInd, stopInd = component.generatePositionArray(arr)
 
             # fill unused space in the array from the last component to this one
             arr[lastStopInd:startInd] = lastValue[np.newaxis, :]
@@ -212,12 +230,65 @@ class ScanProgram:
             item.setZValue(i+0.5)
             legend = pg.LegendItem()
 
-    
-    def preview(self, task):
-        va = self.generatePositionArray()
-        plt = getattr(self, 'previewPlot', pg.plot())
-        plt.clear()
-        plt.plot(va[0], va[1])
+    def clearPreview(self):
+        for item in self.previewItems:
+            scene = item.scene()
+            if scene is not None:
+                scene.removeItem(item)
+        self.previewItems = []
+        self.previewTimer.stop()
+
+    def preview(self, view, rate=0.1):
+        """Add graphics items to *view* showing the path of the scanner.
+        """
+        self.clearPreview()
+        path = pg.PlotCurveItem()
+        self.previewData = {
+            'path': path,
+            'data': self.generatePositionArray(),
+            'lastTime': pg.ptime.time(),
+            'rate': rate,
+            'index': 0,
+            'sampleRate': self.sampleRate,
+        }
+        self.previewItems.append(path)
+        view.addItem(path)
+        self.previewTimer.start(16)
+
+    def setPreviewRate(self, rate):
+        self.previewData['rate'] = rate
+
+    def previewStep(self):
+        # decide how much to advance preview
+        data = self.previewData
+        now = pg.ptime.time()
+        dt = (now - data['lastTime']) * data['rate']
+        index = data['index'] + dt * data['sampleRate']
+        npts = data['data'].shape[0]
+        end = min(index, npts)
+        va = data['data'][:end]
+
+        data['index'] = index
+        data['lastTime'] = now
+
+        # draw path
+        path = data['path']
+        path.setData(va[:,0], va[:,1])
+
+        # Stop preview and delete path data if we reached the end
+        if end >= npts-1:
+            self.previewTimer.stop()
+            data['data'] = None
+
+    def setVisible(self, v):
+        """Sets whether component controls are visible in the camera module.
+        """
+        self._visible = v
+        for c in self.components:
+            c.updateVisibility()
+
+    def isVisible(self):
+        return self._visible
 
 
 class ScanProgramCtrlGroup(pTypes.GroupParameter):

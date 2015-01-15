@@ -51,6 +51,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         ## set up ViewBox
         self.view = pg.ViewBox()
+        self.view.enableAutoRange(False, False)
         self.view.setAspectLocked(True)
         self.gv.setCentralItem(self.view)
         

@@ -141,7 +141,10 @@ class ImagingModule(AnalysisModule):
             return
 
         # parse program options
-        progs = frame['cmd'][self.params['scanner']]['program']
+        scanCmd = frame['cmd'][self.params['scanner']]
+        if 'program' not in scanCmd:
+            return
+        progs = scanCmd['program']
         if len(progs) == 0:
             self.image.setImage(np.zeros((1,1)))
             return
