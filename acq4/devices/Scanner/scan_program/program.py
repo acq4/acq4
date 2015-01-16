@@ -174,30 +174,54 @@ class ScanProgram:
         """Generate an array of x,y position values for this scan program.
         """
         arr = np.zeros((self.numSamples, 2))
-        lastPos = None
-        if _voltage:
-            lastValue = np.array(self.scanner.getVoltage())
-        else:
-            lastValue = np.array([np.nan, np.nan])
-        lastStopInd = 0
-        
+
+        # Generate command for each component
         for component in self.components:
             if not component.isActive():
                 continue
             
             if _voltage:
-                startInd, stopInd = component.generateVoltageArray(arr)
+                component.generateVoltageArray(arr)
             else:
-                startInd, stopInd = component.generatePositionArray(arr)
+                component.generatePositionArray(arr)
 
-            # fill unused space in the array from the last component to this one
-            arr[lastStopInd:startInd] = lastValue[np.newaxis, :]
-            
-            lastValue = arr[stopInd-1]
-            lastStopInd = stopInd
+        # Fill in gaps
+        mask = self.generateLaserMask().astype(np.byte)
+        dif = mask[1:] - mask[:-1]
+        on = list(np.argwhere(dif == 1)[:,0]+1)
+        off = list(np.argwhere(dif == -1)[:,0]+1)
+        if on[-1] < off[-1]:
+            on.append(len(arr))
+
+        if _voltage:
+            lastValue = np.array(self.scanner.getVoltage())
+        else:
+            lastValue = np.array([np.nan, np.nan])
+        lastOff = 0
+
+        while len(on) > 0 or len(off) > 0:
+            nextOn  = on[0]  if len(on)  > 0 else np.inf
+            nextOff = off[0] if len(off) > 0 else np.inf
+
+            if nextOn < nextOff:
+                on.pop(0)
+                arr[lastOff:nextOn] = lastValue
+            else:
+                off.pop(0)
+                lastOff = nextOff
+                lastValue = arr[nextOff-1]
             
         return arr
     
+    def generateLaserMask(self):
+        mask = np.zeros(self.numSamples, dtype=bool)
+        for component in self.components:
+            if not component.isActive():
+                continue
+            mask |= component.scanMask()
+
+        return mask
+
     def close(self):
         self.clearGraphicsItems()
 
@@ -228,6 +252,7 @@ class ScanProgramPreview(object):
 
         self.path = None
         self.timeline = None
+        self.spot = None
         self.masks = []
 
         self.rate = 0.1
@@ -242,14 +267,18 @@ class ScanProgramPreview(object):
 
     def stop(self):
         self.timer.stop()
-        if self.path is not None and self.path.scene() is not None:
-            self.path.scene().removeItem(self.path)
+        for item in self.path, self.spot:
+            if item is not None and item.scene() is not None:
+                item.scene().removeItem(item)
 
         if self.timeline is not None and self.timeline.scene() is not None:
             self.plot.removeItem(self.timeline)
 
         self.path = None
         self.timeline = None
+        self.spot = None
+        self.data = None
+        self.laserMask = None
 
     def start(self, canvas, plot):
         """Add graphics items to *view* showing the path of the scanner.
@@ -257,8 +286,12 @@ class ScanProgramPreview(object):
         self.clear()
 
         self.path = pg.PlotCurveItem()
+        self.spot = QtGui.QGraphicsEllipseItem(QtCore.QRectF(-1, -1, 2, 2))
+        self.spot.scale(1e-6, 1e-6)
+        self.spot.setPen(pg.mkPen('y'))
 
         self.data = self.program.generatePositionArray()
+        self.laserMask = self.program.generateLaserMask()
         self.lastTime = pg.ptime.time()
         self.index = 0
         self.sampleRate = self.program.sampleRate
@@ -267,6 +300,7 @@ class ScanProgramPreview(object):
 
         if canvas is not None:
             canvas.addItem(self.path)
+            canvas.addItem(self.spot)
         if plot is not None:
             self.plot = plot
             self.plotTimeline(plot)
@@ -293,11 +327,17 @@ class ScanProgramPreview(object):
         # draw path
         self.path.setData(va[:,0], va[:,1])
         self.timeline.setValue(self.index / self.sampleRate)
+        self.spot.setPos(va[-1,0], va[-1,1])
+        if self.laserMask[index]:
+            self.spot.setBrush(pg.mkBrush('y'))
+        else:
+            self.spot.setBrush(pg.mkBrush('k'))
 
         # Stop preview and delete path data if we reached the end
         if end >= npts-1:
             self.timer.stop()
             self.data = None
+            self.laserMask = None
 
     def clearTimeline(self):
         for item in self.masks:
