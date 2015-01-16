@@ -103,6 +103,7 @@ class ScannerTaskGui(TaskGui):
         self.tdPlot.setLabel('left', text="Wait time", units='s')
 
         self.ui.scanProgramSplitter.setSizes([600, 100])
+        self.ui.programTimeline.setDownsampling(True)
         ## Note we use lambda functions for all these clicks to strip out the arg sent with the signal
         
         self.ui.showPosCtrlCheck.toggled.connect(self.showPosCtrls)

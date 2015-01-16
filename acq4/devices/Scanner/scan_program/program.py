@@ -190,8 +190,8 @@ class ScanProgram:
         dif = mask[1:] - mask[:-1]
         on = list(np.argwhere(dif == 1)[:,0]+1)
         off = list(np.argwhere(dif == -1)[:,0]+1)
-        if on[-1] < off[-1]:
-            on.append(len(arr))
+        if mask[-1] == 0:
+            on.append(len(mask))
 
         if _voltage:
             lastValue = np.array(self.scanner.getVoltage())
@@ -297,6 +297,7 @@ class ScanProgramPreview(object):
         self.sampleRate = self.program.sampleRate
 
         self.timeline = pg.InfiniteLine(angle=90)
+        self.timeline.setZValue(100)
 
         if canvas is not None:
             canvas.addItem(self.path)
@@ -318,7 +319,7 @@ class ScanProgramPreview(object):
         dt = (now - self.lastTime) * self.rate
         index = self.index + dt * self.sampleRate
         npts = data.shape[0]
-        end = min(index, npts)
+        end = min(index, npts-1)
         va = data[:end]
 
         self.index = index
@@ -326,9 +327,9 @@ class ScanProgramPreview(object):
 
         # draw path
         self.path.setData(va[:,0], va[:,1])
-        self.timeline.setValue(self.index / self.sampleRate)
+        self.timeline.setValue(end / self.sampleRate)
         self.spot.setPos(va[-1,0], va[-1,1])
-        if self.laserMask[index]:
+        if self.laserMask[end]:
             self.spot.setBrush(pg.mkBrush('y'))
         else:
             self.spot.setBrush(pg.mkBrush('k'))
