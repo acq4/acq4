@@ -43,6 +43,11 @@ class RectScanComponent(ScanProgramComponent):
         rs = self.ctrl.params.system
         rs.writeArray(array, self.mapToScanner)
         return rs.scanOffset, rs.scanOffset + rs.scanStride[0]
+
+    def generatePositionArray(self, array):
+        rs = self.ctrl.params.system
+        rs.writeArray(array)
+        return rs.scanOffset, rs.scanOffset + rs.scanStride[0]
         
     def scanMask(self):
         mask = np.zeros(self.program().numSamples, dtype=bool)
@@ -86,7 +91,15 @@ class RectScanROI(pg.ROI):
 
     def paint(self, p, *args):
         p.setPen(pg.mkPen(0.3))
-        p.drawRect(self.boundingRect())
+
+        #p.drawRect(self.boundingRect())  # causes artifacts at large scale
+        br = self.boundingRect()
+        # p.drawPolygon(QtGui.QPolygonF([br.topLeft(), br.topRight(), br.bottomRight(), br.bottomLeft()]))
+        p.drawLine(br.topLeft(), br.topRight())
+        p.drawLine(br.bottomLeft(), br.bottomRight())
+        p.drawLine(br.topLeft(), br.bottomLeft())
+        p.drawLine(br.bottomRight(), br.topRight())
+
         pg.ROI.paint(self, p, *args)
 
 
@@ -117,15 +130,18 @@ class RectScanControl(QtCore.QObject):
     def isActive(self):
         return self.params.value()
  
-    def setVisible(self, vis):
-        if vis:
-            self.roi.setOpacity(1.0)  ## have to hide this way since we still want the children to be visible
-            for h in self.roi.handles:
-                h['item'].setOpacity(1.0)
-        else:
-            self.roi.setOpacity(0.0)
-            for h in self.roi.handles:
-                h['item'].setOpacity(0.0)
+    # def setVisible(self, vis):
+    #     if vis:
+    #         self.roi.setOpacity(1.0)  ## have to hide this way since we still want the children to be visible
+    #         for h in self.roi.handles:
+    #             h['item'].setOpacity(1.0)
+    #     else:
+    #         self.roi.setOpacity(0.0)
+    #         for h in self.roi.handles:
+    #             h['item'].setOpacity(0.0)
+    def updateVisibility(self):
+        v = self.params.value() and self.component().program().isVisible()
+        self.roi.setVisible(v)
                 
     def parameters(self):
         return self.params
@@ -149,7 +165,7 @@ class RectScanControl(QtCore.QObject):
             except RuntimeError:
                 self.roi.setOverScan(0)
                 
-            self.setVisible(self.params.value())
+            self.updateVisibility()
         
         finally:
             if reconnect:
@@ -310,12 +326,6 @@ class RectScan(SystemSolver):
         nf, ny, nx = shape
         stride = self.scanStride
         
-        # position difference between adjacent rows / columns
-        # pts = self.osP0, self.osP1, self.osP2
-        # dx = (pts[1]-pts[0]) / (shape[2]-1)
-        # dy = (pts[2]-pts[0]) / (shape[1]-1)
-        # dx, dy = self.sampleVectors
-
         dx = self.colVector
         dy = self.rowVector
 
@@ -331,7 +341,8 @@ class RectScan(SystemSolver):
         q += self.scanOrigin.reshape(1,1,2)
         
         # Convert via mapping (usually to mirror voltages)
-        #x, y = self.scannerDev.mapToScanner(q[0].flatten(), q[1].flatten(), self.laserDev)
+        # xy = q.reshape(q.shape[0]*q.shape[1], 2)
+        # pg.plot(xy[:,0], xy[:,1])
         if mapping is None:
             qm = q
         else:
@@ -477,6 +488,9 @@ class RectScan(SystemSolver):
         p0 = self.activeOrigin
         p1 = p0 + acs[2] * dx
         p2 = p0 + acs[1] * dy
+
+        print p0, p1, p2
+        print acs, dx, dy
 
         localPts = map(pg.Vector, [[0,0], [ims[2],0], [0,ims[1]], [0,0,1]]) # w and h of data of image in pixels.
         globalPts = map(pg.Vector, [p0, p1, p2, [0,0,1]])
@@ -774,14 +788,16 @@ class RectScan(SystemSolver):
 
     def _rowVector(self):
         nf, ny, nx = self.scanShape
-        return (self.osP2-self.osP0) / (ny-1)
+        return (self.osP2-self.osP0) / ny
 
     def _colVector(self):
         nf, ny, nx = self.scanShape
-        return (self.osP1-self.osP0) / (nx-1)
+        return (self.osP1-self.osP0) / nx
 
     def _scanOrigin(self):
-        return self.osP0
+        # shift scan origin 1/2 row downward to scan through the center of the pixel.
+        yv = self.rowVector * 0.5
+        return self.osP0 + yv
 
     def _activeOrigin(self):
         return self.osP0 + self.colVector * self.osLen
@@ -798,7 +814,7 @@ class RectScanParameter(pTypes.SimpleParameter):
         params = [
             dict(name='startTime', type='float', value=0, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='numFrames', type='int', value=1, bounds=[1, None]),
-            dict(name='frameDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='frameDuration', type='float', value=50e-3, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='interFrameDuration', type='float', value=0, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='totalDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='width', readonly=True, type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),

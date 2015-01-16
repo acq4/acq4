@@ -38,6 +38,7 @@ class ImagingModule(AnalysisModule):
                 ]),
             dict(name='downsample', type='int', value=1, suffix='x', bounds=[1,None]),
             dict(name='display', type='bool', value=True),
+            dict(name='scanProgram', type='list', values=[]),
             ])
         self.ptree.setParameters(self.params, showTop=False)
         self.params.sigTreeStateChanged.connect(self.update)
@@ -141,13 +142,22 @@ class ImagingModule(AnalysisModule):
             return
 
         # parse program options
-        progs = frame['cmd'][self.params['scanner']]['program']
+        scanCmd = frame['cmd'][self.params['scanner']]
+        if 'program' not in scanCmd:
+            return
+        progs = scanCmd['program']
         if len(progs) == 0:
             self.image.setImage(np.zeros((1,1)))
             return
 
-        # For now, we only support single-component scan programs.
-        prog = progs[0]
+        # Update list so user can select program component
+        supportedTypes = ['rect']
+        progs = dict([(prog['name'], prog) for prog in progs if prog['type'] in supportedTypes])
+        self.params.child('scanProgram').setLimits(progs.keys())
+        selectedProg = self.params['scanProgram']
+        if selectedProg not in progs:
+            return
+        prog = progs[selectedProg]
         
         if prog['type'] == 'rect':
             # keep track of some analysis in case it should be stored later

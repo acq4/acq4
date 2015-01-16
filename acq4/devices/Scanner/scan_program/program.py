@@ -58,6 +58,9 @@ class ScanProgram:
         self.ctrlGroup.sigAddNewRequested.connect(self.paramRequestedNewComponent)
         self.ctrlGroup.sigChildRemoved.connect(self.paramRequestedRemove)
 
+        self._visible = True  # whether graphics items should be displayed
+
+        self.preview = ScanProgramPreview(self)
         
     def addComponent(self, component):
         """Add a new component to this program. May specify either a 
@@ -151,6 +154,7 @@ class ScanProgram:
     def clearGraphicsItems(self, component=None):
         """Remove all graphics items for this program from the attached canvas.
         """
+        self.preview.clear()
         if component is None:
             comps = self.components
         else:
@@ -164,25 +168,60 @@ class ScanProgram:
         """Generate an array of x,y voltage commands needed to drive the scanner
         for this program.
         """
+        return self.generatePositionArray(_voltage=True)
+
+    def generatePositionArray(self, _voltage=False):
+        """Generate an array of x,y position values for this scan program.
+        """
         arr = np.zeros((self.numSamples, 2))
-        lastPos = None     
-        lastValue = np.array(self.scanner.getVoltage())
-        lastStopInd = 0
-        
+
+        # Generate command for each component
         for component in self.components:
             if not component.isActive():
                 continue
             
-            startInd, stopInd = component.generateVoltageArray(arr)
+            if _voltage:
+                component.generateVoltageArray(arr)
+            else:
+                component.generatePositionArray(arr)
 
-            # fill unused space in the array from the last component to this one
-            arr[lastStopInd:startInd] = lastValue[np.newaxis, :]
-            
-            lastValue = arr[stopInd-1]
-            lastStopInd = stopInd
+        # Fill in gaps
+        mask = self.generateLaserMask().astype(np.byte)
+        dif = mask[1:] - mask[:-1]
+        on = list(np.argwhere(dif == 1)[:,0]+1)
+        off = list(np.argwhere(dif == -1)[:,0]+1)
+        if mask[-1] == 0:
+            on.append(len(mask))
+
+        if _voltage:
+            lastValue = np.array(self.scanner.getVoltage())
+        else:
+            lastValue = np.array([np.nan, np.nan])
+        lastOff = 0
+
+        while len(on) > 0 or len(off) > 0:
+            nextOn  = on[0]  if len(on)  > 0 else np.inf
+            nextOff = off[0] if len(off) > 0 else np.inf
+
+            if nextOn < nextOff:
+                on.pop(0)
+                arr[lastOff:nextOn] = lastValue
+            else:
+                off.pop(0)
+                lastOff = nextOff
+                lastValue = arr[nextOff-1]
             
         return arr
     
+    def generateLaserMask(self):
+        mask = np.zeros(self.numSamples, dtype=bool)
+        for component in self.components:
+            if not component.isActive():
+                continue
+            mask |= component.scanMask()
+
+        return mask
+
     def close(self):
         self.clearGraphicsItems()
 
@@ -192,32 +231,148 @@ class ScanProgram:
     def paramRequestedRemove(self, parent, param):
         self.removeComponent(param.component())
 
+    def setVisible(self, v):
+        """Sets whether component controls are visible in the camera module.
+        """
+        self._visible = v
+        for c in self.components:
+            c.updateVisibility()
+
+    def isVisible(self):
+        return self._visible
+
+
+class ScanProgramPreview(object):
+    """Displays and animates the path of the scanner and timing of components.
+    """
+    def __init__(self, program):
+        self.program = program
+        self.canvas = None     # for displaying scan path
+        self.timeplot = None   # plotwidget to display timeline
+
+        self.path = None
+        self.timeline = None
+        self.spot = None
+        self.masks = []
+
+        self.rate = 0.1
+        self.timer = QtCore.QTimer()
+        self.timer.timeout.connect(self.step)
+
+        self.lastTime = None
+
+    def clear(self):
+        self.stop()
+        self.clearTimeline()
+
+    def stop(self):
+        self.timer.stop()
+        for item in self.path, self.spot:
+            if item is not None and item.scene() is not None:
+                item.scene().removeItem(item)
+
+        if self.timeline is not None and self.timeline.scene() is not None:
+            self.plot.removeItem(self.timeline)
+
+        self.path = None
+        self.timeline = None
+        self.spot = None
+        self.data = None
+        self.laserMask = None
+
+    def start(self, canvas, plot):
+        """Add graphics items to *view* showing the path of the scanner.
+        """
+        self.clear()
+
+        self.path = pg.PlotCurveItem()
+        self.spot = QtGui.QGraphicsEllipseItem(QtCore.QRectF(-1, -1, 2, 2))
+        self.spot.scale(1e-6, 1e-6)
+        self.spot.setPen(pg.mkPen('y'))
+
+        self.data = self.program.generatePositionArray()
+        self.laserMask = self.program.generateLaserMask()
+        self.lastTime = pg.ptime.time()
+        self.index = 0
+        self.sampleRate = self.program.sampleRate
+
+        self.timeline = pg.InfiniteLine(angle=90)
+        self.timeline.setZValue(100)
+
+        if canvas is not None:
+            canvas.addItem(self.path)
+            canvas.addItem(self.spot)
+        if plot is not None:
+            self.plot = plot
+            self.plotTimeline(plot)
+            plot.addItem(self.timeline)
+
+        self.timer.start(16)
+
+    def setRate(self, rate):
+        self.rate = rate
+
+    def step(self):
+        # decide how much to advance preview
+        data = self.data
+        now = pg.ptime.time()
+        dt = (now - self.lastTime) * self.rate
+        index = self.index + dt * self.sampleRate
+        npts = data.shape[0]
+        end = min(index, npts-1)
+        va = data[:end]
+
+        self.index = index
+        self.lastTime = now
+
+        # draw path
+        self.path.setData(va[:,0], va[:,1])
+        self.timeline.setValue(end / self.sampleRate)
+        self.spot.setPos(va[-1,0], va[-1,1])
+        if self.laserMask[end]:
+            self.spot.setBrush(pg.mkBrush('y'))
+        else:
+            self.spot.setBrush(pg.mkBrush('k'))
+
+        # Stop preview and delete path data if we reached the end
+        if end >= npts-1:
+            self.timer.stop()
+            self.data = None
+            self.laserMask = None
+
+    def clearTimeline(self):
+        for item in self.masks:
+            scene = item.scene()
+            if scene is not None:
+                self.plot.removeItem(item)
+        self.masks = []
+
     def plotTimeline(self, plot):
         """Create a timeline showing scan mirror usage by each program 
         component.
         """
-        
-        time = np.linspace(0, (self.numSamples-1) / self.sampleRate, self.numSamples)
-        for i, component in enumerate(self.components):
+        self.clearTimeline()
+        numSamples = self.program.numSamples
+        sampleRate = self.program.sampleRate
+        components = self.program.components
+
+        time = np.linspace(0, (numSamples-1) / sampleRate, numSamples)
+        for i, component in enumerate(components):
             scanMask = component.scanMask()
             laserMask = component.laserMask()
-            color = pg.mkColor((i, len(self.components)*1.3))
+            color = pg.mkColor((i, len(components)*1.3))
             fill = pg.mkColor(color)
             fill.setAlpha(50)
             plot.addLegend(offset=(-10, 10))
             item = plot.plot(time, scanMask, pen=color, fillLevel=0, fillBrush=fill, name=component.name)
             item.setZValue(i)
+            self.masks.append(item)
+
             fill.setAlpha(100)
             item = plot.plot(time, laserMask, pen=None, fillLevel=0, fillBrush=fill)
             item.setZValue(i+0.5)
-            legend = pg.LegendItem()
+            self.masks.append(item)
 
-    
-    def preview(self, task):
-        va = self.generatePositionArray()
-        plt = getattr(self, 'previewPlot', pg.plot())
-        plt.clear()
-        plt.plot(va[0], va[1])
 
 
 class ScanProgramCtrlGroup(pTypes.GroupParameter):

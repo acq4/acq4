@@ -14,7 +14,7 @@ import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 
 from TaskTemplate import Ui_Form
-from .scan_program import ScanProgram
+from .scan_program import ScanProgram, ScanProgramPreview
 
 ### Error IDs:
 ###  1: Could not find spot size from calibration. (from ScannerTaskGui.pointSize)
@@ -79,6 +79,7 @@ class ScannerTaskGui(TaskGui):
         self.positionCtrlGroup.sigChildRemoved.connect(self.positionCtrlRemoved)
         
         self.scanProgram = ScanProgram()
+        self.scanProgram.setDevices(scanner=self.dev)
         self.ui.programTree.setParameters(self.scanProgram.ctrlParameter(), showTop=False)
 
         ## Set up SpinBoxes
@@ -93,16 +94,19 @@ class ScannerTaskGui(TaskGui):
             (self.ui.minDistSpin, 'minDist'),
             (self.ui.simulateShutterCheck, 'simulateShutter'),
             (self.ui.sizeSpin, 'spotSize'),
+            (self.ui.enablePosCtrlCheck, 'enablePosCtrl'),
+            (self.ui.enableScanProgCheck, 'enableScanProg'),
         ])
         self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6, 'sizeSpin':100e-6})
         self.tdPlot = self.ui.tdPlotWidget.plotItem
         self.tdPlot.setLabel('bottom', text="Distance", units='m')
         self.tdPlot.setLabel('left', text="Wait time", units='s')
 
+        self.ui.scanProgramSplitter.setSizes([600, 100])
+        self.ui.programTimeline.setDownsampling(True)
         ## Note we use lambda functions for all these clicks to strip out the arg sent with the signal
         
-        self.ui.hideCheck.toggled.connect(self.showInterface)
-        self.ui.hideMarkerBtn.clicked.connect(self.hideSpotMarker)
+        self.ui.showPosCtrlCheck.toggled.connect(self.showPosCtrls)
         self.ui.cameraCombo.currentIndexChanged.connect(self.camModChanged)
         self.ui.laserCombo.currentIndexChanged.connect(self.laserDevChanged)
         self.ui.sizeFromCalibrationRadio.toggled.connect(self.updateSpotSizes)
@@ -111,7 +115,11 @@ class ScannerTaskGui(TaskGui):
         self.ui.minDistSpin.valueChanged.connect(self.sequenceChanged)
         self.ui.recomputeBtn.clicked.connect(self.recomputeClicked)
         self.ui.loadConfigBtn.clicked.connect(self.loadConfiguration)
-        self.ui.previewBtn.clicked.connect(self.previewProgram)
+        self.ui.previewBtn.toggled.connect(self.previewProgram)
+        self.ui.enablePosCtrlCheck.toggled.connect(self.enablePosCtrlToggled)
+        self.ui.enableScanProgCheck.toggled.connect(self.enableScanProgToggled)
+        self.ui.showLastSpotCheck.toggled.connect(self.showLastSpotToggled)
+        self.ui.programPreviewSlider.valueChanged.connect(self.previewRateChanged)
         
         self.dev.sigGlobalSubdeviceChanged.connect(self.opticStateChanged)
         
@@ -121,11 +129,9 @@ class ScannerTaskGui(TaskGui):
         self.spotMarker.setPen(pg.mkPen(color=(255,255,255), width = 2))
 
         self.spotMarker.hide()
-        self.updateSpotSizes()
-
+        self.laserDevChanged()  # also updates spot sizes
         self.camModChanged()
         self.updateTDPlot()
-        
             
         #self.ui.simulateShutterCheck.setChecked(False)
         if 'offVoltage' not in self.dev.config: ## we don't have a voltage for virtual shuttering
@@ -139,15 +145,27 @@ class ScannerTaskGui(TaskGui):
     def setHaveCalibration(self, have):
         self.haveCalibration = have
         self.updateVisibility()
-        
-    def showInterface(self, b):
+
+    def enablePosCtrlToggled(self, b):
+        self.ui.positionCtrlGroup.setVisible(b)
+        self.updateVisibility()
+
+    def enableScanProgToggled(self, b):
+        self.ui.scanProgramGroup.setVisible(b)
+        self.updateVisibility()
+
+    def showPosCtrls(self, b):
         self.updateVisibility()
         
     def updateVisibility(self):
-        b = self.haveCalibration and not self.ui.hideCheck.isChecked()
+        b = self.haveCalibration and self.ui.showPosCtrlCheck.isChecked() and self.ui.enablePosCtrlCheck.isChecked()
         for k in self.items:
             self.items[k].setVisible(b)
         self.testTarget.setVisible(b)
+
+        b = self.haveCalibration and self.ui.enableScanProgCheck.isChecked()
+        self.scanProgram.setVisible(b)
+
         
     def camModChanged(self):
         camMod = self.cameraModule()
@@ -196,6 +214,8 @@ class ScannerTaskGui(TaskGui):
         ## called when laser device combo is changed
         ## need to update spot size
         self.updateSpotSizes()
+        self.scanProgram.setDevices(laser=self.ui.laserCombo.getSelectedObj())
+
         
     def sizeSpinEdited(self):
         self.ui.sizeCustomRadio.setChecked(True)
@@ -311,8 +331,6 @@ class ScannerTaskGui(TaskGui):
                 'duration': self.taskRunner.getParam('duration')
             }
         else: # doing programmed scans
-            laser = self.ui.laserCombo.getSelectedObj()
-            self.scanProgram.setDevices(scanner=self.dev, laser=laser)
             cmd = self.scanProgram.generateVoltageArray()
             task = {
                 'minWaitTime': delay,
@@ -323,12 +341,10 @@ class ScannerTaskGui(TaskGui):
         
         return task
     
-    def hideSpotMarker(self):
-        self.spotMarker.hide()
+    def showLastSpotToggled(self, b):
+        self.spotMarker.setVisible(b)
         
     def handleResult(self, result, params):
-        if not self.spotMarker.isVisible():
-            self.spotMarker.show()
         #print 'ScannerTaskGui.handleResult() result:', result
         if 'position' in result:
             pos = result['position']
@@ -470,8 +486,6 @@ class ScannerTaskGui(TaskGui):
             self.ui.recomputeBtn.setEnabled(True)
 
     def generateTargets(self):
-        #items = self.activeItems()
-        #prof= Profiler('ScanerTaskGui.generateTargets()')
         self.targets = []
         locations = self.getTargetList()
         
@@ -481,23 +495,14 @@ class ScannerTaskGui(TaskGui):
         nTries = np.clip(int(10 - len(locations)/20), 1, 10)
         
         ## About to compute order/timing of targets; display a progress dialog
-        #prof.mark('setup')
-        #progressDlg = QtGui.QProgressDialog("Computing pseudo-optimal target sequence...", 0, 1000)
-        #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
-        #progressDlg.setMinimumDuration(500)
-        #prof.mark('progressDlg')
         deadTime = self.taskRunner.getParam('duration')
 
         state = self.stateGroup.state()
         minTime = state['minTime']
         minDist = state['minDist']
 
-        #try:
         with pg.ProgressDialog("Computing random target sequence...", 0, 1000, busyCursor=True) as dlg:
-            #times=[]
             for i in range(nTries):
-                #prof.mark('attempt: %i' %i)
-                
                 ## Run in a remote process for a little speedup
                 for n, m in optimize.opt2(locations, minTime, minDist, deadTime, greed=1.0):
                     ## we can update the progress dialog here.
@@ -505,33 +510,16 @@ class ScannerTaskGui(TaskGui):
                         solution = n
                     else:
                         prg = int(((i/float(nTries)) + ((n/float(m))/float(nTries))) * 1000)
-                        #print n,m, prg
                         dlg.setValue(prg)
-                        #print i
                         if dlg.wasCanceled():
                             raise Exception("Target sequence computation canceled by user.")
-                #prof.mark('foundSolution')
                 time = sum([l[1] for l in solution])
                 if bestTime is None or time < bestTime:
-                    #print "  new best time:", time
                     bestTime = time
                     bestSolution = solution[:]
-                    #print "new best:", len(bestSolution), minTime
-                #prof.mark('check time')
-        #except:
-            #raise
-        #finally:
-            ## close progress dialog no matter what happens
-            #print "Times: ", times
-            #progressDlg.setValue(1000)
         
         self.targets = bestSolution
-        #print "Solution:"
-        #for t in self.targets:
-            #print "  ", t
         self.ui.timeLabel.setText('Total time: %0.1f sec'% bestTime)
-        #prof.mark('Done.')
-        #prof.finish()
         
     def activeItems(self):
         return [self.items[i] for i in self.items if self.items[i].isActive()]
@@ -540,11 +528,24 @@ class ScannerTaskGui(TaskGui):
         """Task has started; color the current and previous targets"""
         pass
 
-    def previewProgram(self):
-        self.ui.programTimeline.clear()
-        self.scanProgram.plotTimeline(self.ui.programTimeline)
-        #self.scanProgram.preview()
+    def previewProgram(self, b):
+        if b:
+            if self.currentCamMod is None:
+                canvas = None
+            else:
+                canvas = self.currentCamMod.window()
+            self.scanProgram.preview.setRate(self._previewRate())
+            self.scanProgram.preview.start(canvas, self.ui.programTimeline)
+        else:
+            self.scanProgram.preview.stop()
+
+    def _previewRate(self):
+        rs = self.ui.programPreviewSlider
+        return 10 ** (3. * ((float(rs.value()) / rs.maximum()) - 1))
     
+    def previewRateChanged(self):
+        self.scanProgram.preview.setRate(self._previewRate())
+
     def quit(self):
         s = self.testTarget.scene()
         if s is not None:

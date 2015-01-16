@@ -1,1 +1,1 @@
-from .program import ScanProgram, ScanProgramCtrlGroup, COMPONENTS, registerScanComponent
+from .program import ScanProgram, ScanProgramCtrlGroup, COMPONENTS, registerScanComponent, ScanProgramPreview
