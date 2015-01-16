@@ -14,7 +14,7 @@ import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 
 from TaskTemplate import Ui_Form
-from .scan_program import ScanProgram
+from .scan_program import ScanProgram, ScanProgramPreview
 
 ### Error IDs:
 ###  1: Could not find spot size from calibration. (from ScannerTaskGui.pointSize)
@@ -102,6 +102,7 @@ class ScannerTaskGui(TaskGui):
         self.tdPlot.setLabel('bottom', text="Distance", units='m')
         self.tdPlot.setLabel('left', text="Wait time", units='s')
 
+        self.ui.scanProgramSplitter.setSizes([600, 100])
         ## Note we use lambda functions for all these clicks to strip out the arg sent with the signal
         
         self.ui.showPosCtrlCheck.toggled.connect(self.showPosCtrls)
@@ -528,20 +529,21 @@ class ScannerTaskGui(TaskGui):
 
     def previewProgram(self, b):
         if b:
-            self.ui.programTimeline.clear()
-            self.scanProgram.plotTimeline(self.ui.programTimeline)
-            if self.currentCamMod is not None:
-                self.scanProgram.preview(self.currentCamMod.window(), self._previewRate())
+            if self.currentCamMod is None:
+                canvas = None
+            else:
+                canvas = self.currentCamMod.window()
+            self.scanProgram.preview.setRate(self._previewRate())
+            self.scanProgram.preview.start(canvas, self.ui.programTimeline)
         else:
-            self.scanProgram.clearPreview()
+            self.scanProgram.preview.stop()
 
     def _previewRate(self):
         rs = self.ui.programPreviewSlider
         return 10 ** (3. * ((float(rs.value()) / rs.maximum()) - 1))
     
     def previewRateChanged(self):
-        print self._previewRate()
-        self.scanProgram.setPreviewRate(self._previewRate())
+        self.scanProgram.preview.setRate(self._previewRate())
 
     def quit(self):
         s = self.testTarget.scene()

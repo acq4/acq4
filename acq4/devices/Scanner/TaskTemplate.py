@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'acq4/devices/Scanner/TaskTemplate.ui'
 #
-# Created: Thu Jan 15 20:47:29 2015
+# Created: Fri Jan 16 19:24:42 2015
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -164,9 +164,9 @@ class Ui_Form(object):
         self.previewBtn = QtGui.QPushButton(self.scanProgramGroup)
         self.previewBtn.setCheckable(True)
         self.previewBtn.setObjectName(_fromUtf8("previewBtn"))
-        self.gridLayout_9.addWidget(self.previewBtn, 0, 0, 1, 1)
+        self.gridLayout_9.addWidget(self.previewBtn, 1, 0, 1, 1)
         spacerItem1 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-        self.gridLayout_9.addItem(spacerItem1, 0, 1, 1, 1)
+        self.gridLayout_9.addItem(spacerItem1, 1, 1, 1, 1)
         self.programPreviewSlider = QtGui.QSlider(self.scanProgramGroup)
         self.programPreviewSlider.setMaximum(999)
         self.programPreviewSlider.setProperty("value", 666)
@@ -174,17 +174,18 @@ class Ui_Form(object):
         self.programPreviewSlider.setTickPosition(QtGui.QSlider.TicksBelow)
         self.programPreviewSlider.setTickInterval(333)
         self.programPreviewSlider.setObjectName(_fromUtf8("programPreviewSlider"))
-        self.gridLayout_9.addWidget(self.programPreviewSlider, 0, 2, 1, 1)
-        self.gridLayout_6.addLayout(self.gridLayout_9, 2, 0, 1, 1)
-        self.programTree = ParameterTree(self.scanProgramGroup)
+        self.gridLayout_9.addWidget(self.programPreviewSlider, 1, 2, 1, 1)
+        self.gridLayout_6.addLayout(self.gridLayout_9, 1, 0, 1, 1)
+        self.scanProgramSplitter = QtGui.QSplitter(self.scanProgramGroup)
+        self.scanProgramSplitter.setOrientation(QtCore.Qt.Vertical)
+        self.scanProgramSplitter.setObjectName(_fromUtf8("scanProgramSplitter"))
+        self.programTree = ParameterTree(self.scanProgramSplitter)
         self.programTree.setObjectName(_fromUtf8("programTree"))
         self.programTree.headerItem().setText(0, _fromUtf8("1"))
         self.programTree.header().setVisible(False)
-        self.gridLayout_6.addWidget(self.programTree, 0, 0, 1, 1)
-        self.programTimeline = PlotWidget(self.scanProgramGroup)
-        self.programTimeline.setMaximumSize(QtCore.QSize(16777215, 100))
+        self.programTimeline = PlotWidget(self.scanProgramSplitter)
         self.programTimeline.setObjectName(_fromUtf8("programTimeline"))
-        self.gridLayout_6.addWidget(self.programTimeline, 1, 0, 1, 1)
+        self.gridLayout_6.addWidget(self.scanProgramSplitter, 0, 0, 1, 1)
         self.gridLayout_4.addWidget(self.scanProgramGroup, 1, 2, 1, 1)
 
         self.retranslateUi(Form)
