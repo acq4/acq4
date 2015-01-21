@@ -36,6 +36,8 @@ from acq4.devices.Microscope import Microscope
 import time
 import pprint
 from .imagerTemplate import Ui_Form
+from acq4.devices.Scanner.scan_program import ScanProgram
+from acq4.devices.Scanner.scan_program.rect import RectScan
 # from acq4.devices.Scanner.scan_program.rect import ScannerUtility
 
 # SUF = ScannerUtility()
@@ -270,7 +272,6 @@ class Imager(Module):
         self.originalROI = None
         self.currentStack = None
         self.currentStackLength = 0
-        self.roi = None # no current ROI
         self.regionCtrl = None
         self.currentRoi = None
         self.tileRoi = None
@@ -342,8 +343,8 @@ class Imager(Module):
         self.ui.saveROI.clicked.connect(self.saveROI)
         self.ui.Align_to_Camera.clicked.connect(self.reAlign)
 
-        self.scanprogram = ScanProgram()
-        self.scanprogram.addComponent('rect')
+        self.scanProgram = ScanProgram()
+        self.scanProgram.addComponent('rect')
 
         self.param = PT.Parameter(name = 'param', children=[
             dict(name="Preset", type='list', value='StandardDef', 
@@ -353,7 +354,7 @@ class Imager(Module):
             dict(name='Blank Screen', type='bool', value=True),
             dict(name='Image Width', type='int', value=500, readonly=False),
             dict(name='Image Height', type='int', value=500, readonly=False),
-            dict(name='Frame Time', type='float', readonly=True, value=0.0),
+            dict(name='Frame Time', type='float', value=50e-3),
             dict(name='Sample Rate', type='float', value=1.0e6, suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10e3, 5e6], siPrefix=True),
             dict(name='Downsample', type='int', value=1, limits=[1,None]),
             dict(name='Average', type='int', value=1, limits=[1,100]),
@@ -369,7 +370,7 @@ class Imager(Module):
                 dict(name='Auto', type='bool', value=True),
                 dict(name='Shift', type='float', value=100e-6, suffix='s', step=10e-6, siPrefix=True),
             ]),       
-            dict(name='Overscan', type='float', value=150e-5, suffix='s' siPrefix=True),
+            dict(name='Overscan', type='float', value=150e-6, suffix='s', siPrefix=True),
             dict(name='Scope Device', type='interface', interfaceTypes=['microscope']),
             dict(name='Scanner Device', type='interface', interfaceTypes=['scanner']),
             dict(name='Laser Device', type='interface', interfaceTypes=['laser']),
@@ -435,6 +436,7 @@ class Imager(Module):
         if reset:
             self.clearROIMap()
         if self.param['Objective'] not in self.objectiveROImap: # add the objective and an ROI
+            print "create roi:",  self.param['Objective']
             self.objectiveROImap[self.param['Objective']] = self.createROI()
         for obj in self.objectiveROImap:
             if obj == self.param['Objective']:
@@ -487,33 +489,21 @@ class Imager(Module):
         return(color)
             
     def createROI(self, roiColor='r'):
-       # the initial ROI will be nearly as big as the field, and centered.
-        #cpos = self.cameraModule.ui.view.viewRect().center() # center position, stage coordinates
+        # the initial ROI will be nearly as big as the field, and centered.
         cpos = self.scannerDev.mapToGlobal((0,0)) # get center position in scanner coordinates
-        #csize = pg.Point([x*400 for x in self.cameraModule.ui.view.viewPixelSize()])
         csize = self.scannerDev.mapToGlobal((self.fieldSize, self.fieldSize))
         objScale = self.scannerDev.parentDevice().getObjective().scale().x()
         height = width = self.fieldSize*objScale
         
-        #width  = csize.x() # width is x in M
-        #height = csize.y()
         csize = pg.Point(width, height)
         cpos = cpos - csize/2.
- 
-        #brect = self.camdev.getBoundary().boundingRect()
-        #width = brect.width()
-        #height = brect.height()
-        #x = brect.x()# +width*0.05
-        #y = brect.y()# +height*0.05
         
         roiColor = self.getObjectiveColor(self.scopeDev.currentObjective) # pick up an objective color...
         roi = RegionCtrl(cpos, csize, roiColor) # Note that the position actually gets over ridden by the camera additem below..
         roi.setZValue(10000)
         self.cameraModule.window().addItem(roi)
-        roi.setPos(cpos) # now is the time to do this. aaaaargh. Several hours later!!!
+        roi.setPos(cpos)
         roi.sigRegionChangeFinished.connect(self.roiChanged)
-        #self.originalROI = [width, height, x, y]
-        #print 'originalROI: ', self.originalROI
         return roi
     
     def hideROI(self, roi):
@@ -551,11 +541,13 @@ class Imager(Module):
     def roiChanged(self):
         """ read the ROI rectangle width and height and repost
         in the parameter tree """
-        state = self.currentRoi.getState()
+        roi = self.currentRoi
+        state = roi.getState()
+        w, h = state['size']
         rparam = self.scanProgram.components[0].ctrlParameter()
-        rparam['p0'] = pg.Point(self.roi.mapToView(pg.Point(0,h)))  # top-left
-        rparam['p1'] = pg.Point(self.roi.mapToView(pg.Point(w,h)))  # rop-right
-        rparam['p2'] = pg.Point(self.roi.mapToView(pg.Point(0,0)))  # bottom-left
+        rparam.system.p0 = pg.Point(roi.mapToView(pg.Point(0,h)))  # top-left
+        rparam.system.p1 = pg.Point(roi.mapToView(pg.Point(w,h)))  # rop-right
+        rparam.system.p2 = pg.Point(roi.mapToView(pg.Point(0,0)))  # bottom-left
 
         #print 'roiChanged state: ', state
         # self.width, self.height = state['size']
@@ -647,17 +639,14 @@ class Imager(Module):
             self.param['Wavelength'] = 0.0
             self.param['Power'] = 0.0
 
-        self.scanprogram.setDevices(scanner=self.params['Scanner Device'], laser=self.params['Laser Device'])
-        rect = self.scanprogram.components[0]
+        self.scanProgram.setDevices(scanner=self.getScannerDevice(), laser=self.getLaserDevice())
+        rect = self.scanProgram.components[0]
         rparams = rect.ctrlParameter()
-        rparams['p0'] = p0
-        rparams['p1'] = p1
-        rparams['p2'] = p2
-        rparams['sampleRate'] = self.param['Sample Rate']
-        rparams['downsample'] = self.param['Downsample']
+        rparams.system.sampleRate = self.param['Sample Rate']
+        rparams.system.downsample = self.param['Downsample']
         rparams['minOverscan'] = self.param['Overscan']
         rparams['bidirectional'] = True
-        rparams['frameDuration'] = self.param['Frame Duration']
+        rparams['frameDuration'] = self.param['Frame Time']
         rparams['frameDuration', 'fixed'] = True
         rparams['pixelAspectRatio'] = self.param['Downsample']
         rparams['pixelAspectRatio', 'fixed'] = True
@@ -924,11 +913,9 @@ class Imager(Module):
             self.param['Wavelength'] = 0.0
             self.param['Power'] = 0.0
         
-        if doShutter and self.laserDev is not None and self.laserDev.hasShutter:
-            self.laserDev.openShutter()
 
         # compute the scan voltages and return some computed values
-        cmd = self.scanprogram.generateVoltageArray()
+        cmd = self.scanProgram.generateVoltageArray()
         self.xScanner = cmd[:,0]
         self.yScanner = cmd[:,1]
 
@@ -948,13 +935,16 @@ class Imager(Module):
         # samples = SUF.getSamples()
         rect = self.scanProgram.components[0].ctrlParameter()
         samples = cmd.shape[0]
-        sampleRate = rect['sampleRate']
+        sampleRate = self.param['Sample Rate']
         duration = samples / sampleRate
         program = self.scanProgram.saveState()  # meta-data to annotate protocol
 
         # set up a task for the task manager.
         pdDevice, pdChannel = self.param['Photodetector']
-        scanDev = self.params['Scanner Device']
+        scanDev = self.param['Scanner Device']
+
+        laserCmd = {'pCell': {'preset': self.param['Pockels']},
+                    'shutterMode': 'open',}
 
         cmd= {'protocol': {'duration': duration},
               'DAQ' : {'rate': sampleRate, 'numPts': samples,
@@ -964,12 +954,14 @@ class Imager(Module):
                   'yCommand' : self.yScanner,
                   'program': program, 
                   },
-              self.attenuatorDev.name(): {self.attenuatorChannel: {'preset': self.param['Pockels']}},
+              # self.attenuatorDev.name(): {self.attenuatorChannel: {'preset': self.param['Pockels']}},
+              self.laserDev.name(): laserCmd,  # 
               pdDevice: {
                   pdChannel: {'record': True},
                 #  'PlateVoltage': {'record' : False, 'recordInit': True}
                   }
             }
+
         task = self.Manager.createTask(cmd)
 
         # Blank screen and execute task
@@ -1081,18 +1073,20 @@ class Imager(Module):
         self.view.resetFrameCount() # always reset the ROI in the imager display if it is being used
 
         reCompute = True
-        while True:
-            (img, info) = self.takeImage(doShutter = False, reCompute=reCompute)
-            reCompute = False
-            if img is None:
-                if self.laserDev.hasShutter:
-                    self.laserDev.closeShutter()
-                return
-            QtGui.QApplication.processEvents()
-            if not self.vbutton.isChecked(): # note only checks the button that called us...
-                if self.laserDev.hasShutter:
-                    self.laserDev.closeShutter()
-                return
+        if self.laserDev is not None and self.laserDev.hasShutter:
+            self.laserDev.openShutter()
+        try:
+            while True:
+                (img, info) = self.takeImage(reCompute=reCompute)
+                reCompute = False
+                if img is None:
+                    return
+                QtGui.QApplication.processEvents()
+                if not self.vbutton.isChecked(): # note only checks the button that called us...
+                    return
+        finally:
+            if self.laserDev is not None and self.laserDev.hasShutter:
+                self.laserDev.closeShutter()
         
     def recordToggled(self, b):
         if not b:
@@ -1108,6 +1102,9 @@ class Imager(Module):
             
     def getScannerDevice(self):
         return self.manager.getDevice(self.param['Scanner Device'])
+            
+    def getLaserDevice(self):
+        return self.manager.getDevice(self.param['Laser Device'])
             
     def setupCameraModule(self):
         modName = self.param['Camera Module']
@@ -1132,8 +1129,9 @@ class ImagingFrame(object):
     def __init__(self, data, program):
         self.data = data  # raw pmt signal
         self.program = ScanProgram()
-        self.program.restoreState(program)  # description of scan program
-        self.rect = self.program.components[0]
+        self.program.restoreState(program)
+        self.rect = self.program.components[0].ctrlParameter().system
 
     def getImage(self, decomb=True, auto=False, offset=None):
-        return self.rect.extractImage(self.data, offset='auto')
+        offset = self.rect.measureMirrorLag(self.data, subpixel=True)
+        return self.rect.extractImage(self.data, offset=offset, subpixel=True)

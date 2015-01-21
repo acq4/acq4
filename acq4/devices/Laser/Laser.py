@@ -772,10 +772,11 @@ class LaserTask(DAQGenericTask):
                 #self.cmd['daqProtocol']['shutter']['command'] = np.zeros(len(calcCmds['shutter']), dtype=np.byte)
                 self.cmd['daqProtocol']['shutter'] = {'preset': 0}
             elif self.cmd['shutterMode'] is 'open':
-                self.cmd['daqProtocol']['shutter'] = {'command': np.ones(len(calcCmds['shutter']), dtype=np.byte)}
+                self.cmd['daqProtocol']['shutter'] = {'preset': 1}
+                # self.cmd['daqProtocol']['shutter'] = {'command': np.ones(len(calcCmds['shutter']), dtype=np.byte)}
                 
-                ## set to holding value, not 0
-                self.cmd['daqProtocol']['shutter']['command'][-1] = 0
+                # ## set to holding value, not 0
+                # self.cmd['daqProtocol']['shutter']['command'][-1] = 0
             
         if 'pCell' in self.cmd:
             self.cmd['daqProtocol']['pCell'] = self.cmd['pCell']
