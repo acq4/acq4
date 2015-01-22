@@ -616,21 +616,30 @@ def subArray(data, offset, shape, stride):
     #data = data.flatten()
     data = data[offset:]
     shape = tuple(shape)
-    stride = tuple(stride)
     extraShape = data.shape[1:]
-    #print data.shape, offset, shape, stride
-    for i in range(len(shape)):
-        mask = (slice(None),) * i + (slice(None, shape[i] * stride[i]),)
-        newShape = shape[:i+1]
-        if i < len(shape)-1:
-            newShape += (stride[i],)
-        newShape += extraShape 
-        #print i, mask, newShape
-        #print "start:\n", data.shape, data
-        data = data[mask]
-        #print "mask:\n", data.shape, data
-        data = data.reshape(newShape)
-        #print "reshape:\n", data.shape, data
+
+    strides = list(data.strides[::-1])
+    for s in shape[1:][::-1]:
+        strides.append(strides[-1] * s)
+    strides = tuple(strides[::-1])
+    
+    return np.ndarray(buffer=data, shape=shape+extraShape, strides=strides, dtype=data.dtype)
+
+
+
+    # #print data.shape, offset, shape, stride
+    # for i in range(len(shape)):
+    #     mask = (slice(None),) * i + (slice(None, shape[i] * stride[i]),)
+    #     newShape = shape[:i+1]
+    #     if i < len(shape)-1:
+    #         newShape += (stride[i],)
+    #     newShape += extraShape 
+    #     #print i, mask, newShape
+    #     #print "start:\n", data.shape, data
+    #     data = data[mask]
+    #     #print "mask:\n", data.shape, data
+    #     data = data.reshape(newShape)
+    #     #print "reshape:\n", data.shape, data
     
     return data
 

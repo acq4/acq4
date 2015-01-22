@@ -250,7 +250,6 @@ class Imager(Module):
         Module.__init__(self, manager, name, config) 
         self.win = ImagerWindow(self) # make the main window - mostly to catch window close event...
         self.ui = Ui_Form()
-        self.testMode = False # set to True to just display the scan signals
         self.win.show()
         self.win.setWindowTitle('Multiphoton Imager V 1.01')
         self.win.resize(1200, 900) # make the window big enough to use on a large monitor...
@@ -345,6 +344,7 @@ class Imager(Module):
 
         self.scanProgram = ScanProgram()
         self.scanProgram.addComponent('rect')
+        self.rectMode = 'frameTime'  # decide whether scan params are determined by frame duration or image resolution
 
         self.param = PT.Parameter(name = 'param', children=[
             dict(name="Preset", type='list', value='StandardDef', 
@@ -352,13 +352,18 @@ class Imager(Module):
                          'video-ultra']),
             dict(name='Store', type='bool', value=True),
             dict(name='Blank Screen', type='bool', value=True),
-            dict(name='Image Width', type='int', value=500, readonly=False),
-            dict(name='Image Height', type='int', value=500, readonly=False),
-            dict(name='Frame Time', type='float', value=50e-3),
+            dict(name='Image Width', type='int', value=500, readonly=True, limits=[1, None]),
+            dict(name='Image Height', type='int', value=500, readonly=True, limits=[1, None]),
+            dict(name='Frame Time', type='float', value=50e-3, suffix='s', siPrefix=True, dec=True, step=0.5, minStep=100e-6),
+            dict(name='Pixel Size', type='float', value=1e-6, suffix='m', siPrefix=True, dec=True, step=0.5, minStep=100e-9),
             dict(name='Sample Rate', type='float', value=1.0e6, suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10e3, 5e6], siPrefix=True),
             dict(name='Downsample', type='int', value=1, limits=[1,None]),
             dict(name='Average', type='int', value=1, limits=[1,100]),
+
             dict(name='Pockels', type='float', value=0.03, suffix='V', step=0.005, limits=[0, 1.5], siPrefix=True),
+            dict(name='Scan Speed', type='float', value=0.00, suffix='m/s', siPrefix=True, readonly=True),
+            dict(name='Exposure per Frame', type='float', value=0.00, suffix='s/um^2', siPrefix=True, readonly=True),
+            dict(name='Total Exposure', type='float', value=0.00, suffix='s/um^2', siPrefix=True, readonly=True),
             dict(name='Wavelength', type='float', value=700, suffix='nm', readonly=True),
             dict(name='Power', type='float', value=0.00, suffix='W', readonly=True),
             dict(name='Objective', type='str', value='Unknown', readonly=True),
@@ -436,7 +441,7 @@ class Imager(Module):
         if reset:
             self.clearROIMap()
         if self.param['Objective'] not in self.objectiveROImap: # add the objective and an ROI
-            print "create roi:",  self.param['Objective']
+            # print "create roi:",  self.param['Objective']
             self.objectiveROImap[self.param['Objective']] = self.createROI()
         for obj in self.objectiveROImap:
             if obj == self.param['Objective']:
@@ -625,34 +630,74 @@ class Imager(Module):
             ]
 
         
-    def updateParams(self):
+    def updateParams(self, root=None, changes=()):
         """Parameters have changed; update any dependent parameters and the scan program.
         """
         #check the devices first        
         # use the presets if they are engaged
         # preset = self.param['Preset']
         # self.loadPreset(preset)
-        if self.laserDev is not None:
-            self.param['Wavelength'] = (self.laserDev.getWavelength()*1e9)
-            self.param['Power'] = (self.laserDev.outputPower())
-        else:
-            self.param['Wavelength'] = 0.0
-            self.param['Power'] = 0.0
 
+
+        sampleRate = self.param['Sample Rate']
+        downsample = self.param['Downsample']
+        # we'll let the rect tell us later how many samples are needed
+        self.scanProgram.setSampling(rate=sampleRate, samples=0, downsample=downsample)
         self.scanProgram.setDevices(scanner=self.getScannerDevice(), laser=self.getLaserDevice())
+
+        # decide whether scan params are determined by frame duration or image resolution
+        for param, change, arg in changes:
+            if change != 'value':
+                continue
+            if param is self.param.child('Frame Time'):
+                self.rectMode = 'frameTime'
+            elif (param is self.param.child('Pixel Size')):
+                self.rectMode = 'pixelSize'
+
         rect = self.scanProgram.components[0]
         rparams = rect.ctrlParameter()
-        rparams.system.sampleRate = self.param['Sample Rate']
-        rparams.system.downsample = self.param['Downsample']
+
+        if self.rectMode == 'frameTime':
+            rparams['pixelWidth', 'fixed'] = False
+            rparams['frameDuration'] = self.param['Frame Time']
+            rparams['frameDuration', 'fixed'] = True
+        elif self.rectMode == 'pixelSize':
+            rparams['frameDuration', 'fixed'] = False
+            rparams['pixelWidth'] = self.param['Pixel Size']
+            rparams['pixelWidth', 'fixed'] = True
+        else:
+            raise RuntimeError("Invalid rect scan mode '%s'" % self.rectMode)
+
         rparams['minOverscan'] = self.param['Overscan']
         rparams['bidirectional'] = True
-        rparams['frameDuration'] = self.param['Frame Time']
-        rparams['frameDuration', 'fixed'] = True
-        rparams['pixelAspectRatio'] = self.param['Downsample']
+        rparams['pixelAspectRatio'] = 1.0 #self.param['Downsample']
         rparams['pixelAspectRatio', 'fixed'] = True
+        rparams['numFrames'] = self.param['Average']
 
-        self.param['Image Width'] = rparams['pixelWidth']
-        self.param['Image Height'] = rparams['pixelWidth']
+
+
+        nSamples = rparams.system.scanStride[0] * rparams.system.numFrames
+        self.scanProgram.setSampling(rate=sampleRate, samples=nSamples, downsample=downsample)
+
+        with self.param.treeChangeBlocker():
+            # Update dependent parameters
+            if self.rectMode == 'frameTime':
+                self.param['Pixel Size'] = rparams.system.pixelWidth
+            else:
+                self.param['Frame Time'] = rparams.system.frameDuration
+            self.param['Image Width'] = rparams.system.imageShape[2]
+            self.param['Image Height'] = rparams.system.imageShape[1]
+
+            if self.laserDev is not None:
+                self.param['Wavelength'] = (self.laserDev.getWavelength()*1e9)
+                self.param['Power'] = (self.laserDev.outputPower())
+            else:
+                self.param['Wavelength'] = 0.0
+                self.param['Power'] = 0.0
+
+            self.param['Scan Speed'] = rparams.system.scanSpeed
+            self.param['Exposure per Frame'] = rparams.system.frameExposure
+            self.param['Total Exposure'] = rparams.system.totalExposure
 
         
     def loadPreset(self, preset):
@@ -660,22 +705,25 @@ class Imager(Module):
         load the selected preset into the parameters, and calculate some
         useful parameters for display for the user.
         """
-        if preset != '':
-            self.param['Preset'] = ''
-            global Presets
-            for k,v in Presets[preset].iteritems():
-                self.param[k] = v
+
+        # TODO: resurrect this
+
+       #  if preset != '':
+       #      self.param['Preset'] = ''
+       #      global Presets
+       #      for k,v in Presets[preset].iteritems():
+       #          self.param[k] = v
                 
-       # with every change, recalculate some values about the display
-        state = self.currentRoi.getState()
-        self.width, self.height = state['size']
-        self.pixelSize = self.width/self.param['Image Width']
-        self.ui.pixelSize.setText('%8.3f' % (self.pixelSize*1e6))
-        self.param['Frame Time'] = self.param['Image Width']*self.param['Image Height']*self.param['Downsample']/self.param['Sample Rate']
-        self.param['Z-Stack', 'Depth'] = self.param['Z-Stack', 'Step Size'] * (self.param['Z-Stack', 'Steps']-1)
-        self.param['Timed', 'Duration'] = self.param['Timed', 'Interval'] * (self.param['Timed', 'N Intervals']-1)
-        self.dwellTime = self.param['Downsample']/self.param['Sample Rate']
-        self.ui.dwellTime.setText('%6.1f' % (self.dwellTime*1e6))
+       # # with every change, recalculate some values about the display
+       #  state = self.currentRoi.getState()
+       #  self.width, self.height = state['size']
+       #  self.pixelSize = self.width/self.param['Image Width']
+       #  self.ui.pixelSize.setText('%8.3f' % (self.pixelSize*1e6))
+       #  self.param['Frame Time'] = self.param['Image Width']*self.param['Image Height']*self.param['Downsample']/self.param['Sample Rate']
+       #  self.param['Z-Stack', 'Depth'] = self.param['Z-Stack', 'Step Size'] * (self.param['Z-Stack', 'Steps']-1)
+       #  self.param['Timed', 'Duration'] = self.param['Timed', 'Interval'] * (self.param['Timed', 'N Intervals']-1)
+       #  self.dwellTime = self.param['Downsample']/self.param['Sample Rate']
+       #  self.ui.dwellTime.setText('%6.1f' % (self.dwellTime*1e6))
                 
     def imageAlphaAdjust(self):
         if self.img is None:
@@ -842,22 +890,23 @@ class Imager(Module):
         Take one image as a snap, regardless of whether a Z stack or a Timed acquisition is selected
         """            
         ## moved shutter operations to takeImage itself.
-        (imgData, info) = self.takeImage()
-        if self.testMode or imgData is None:
-            return
-        if dirhandle is None:
-            dirhandle = self.manager.getCurrentDir()
-        self.view.setImage(imgData)
-        info['2pImageType'] = 'Snap'
+        frame = self.takeImage()
+        # self.view.setImage(imgData)
+        frame.info['2pImageType'] = 'Snap'
+
         if self.param['Store']:
+            if dirhandle is None:
+                dirhandle = self.manager.getCurrentDir()
             #microscope = self.#info['microscope'] = self.param['Scope Device'].value()
             #scope = self.Manager.getDevice(self.param['Scope Device'])
             #print dir(scope)
             #m = self.handle.info()['microscope']
-           ### this needs to be fixed so that the microscope info is stored in the file - current NOT
-           ### due to API change that I can't figure out.
-           ###
-           #info['microscope'] = scope.getState()
+            ### this needs to be fixed so that the microscope info is stored in the file - current NOT
+            ### due to API change that I can't figure out.
+            ###
+            #info['microscope'] = scope.getState()
+            imgData = frame.getImage()
+            info = frame.info
             if self.ui.record_button.isChecked():
                 mainfo = [
                     {'name': 'Frame'},
@@ -865,7 +914,7 @@ class Imager(Module):
                     {'name': 'Y'},
                     info
                 ]
-                #print 'info: ', info    
+                #print 'info: ', info  
                 data = MA.MetaArray(imgData[np.newaxis, ...], info=mainfo, appendAxis='Frame')
                 if self.currentStack is None:
                     fh = dirhandle.writeFile(data, '2pStack.ma', info=info, autoIncrement=True,  appendAxis='Frame')
@@ -877,7 +926,8 @@ class Imager(Module):
                 
             else:
                 dirhandle.writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
-        return(imgData, info)
+
+        return frame
     
     def PMT_Stop(self):
         self.stopFlag = True
@@ -984,7 +1034,8 @@ class Imager(Module):
         # grab results and store PMT data for display
         data = task.getResult()
         pmtData = data[pdDevice][pdChannel].view(np.ndarray)
-        self.lastFrame = ImagingFrame(pmtData, program)
+        info = self.saveParams()
+        self.lastFrame = ImagingFrame(pmtData, program, info)
         self.updateImage()
 
         # xys = SUF.getScanXYSize()
@@ -1040,7 +1091,7 @@ class Imager(Module):
         # self.hideOverlayImage() # hide if the box is checked    
 
 
-        img = self.lastFrame.getImage(decomb=True, auto=True)
+        img = self.lastFrame.getImage(decomb=True)
         self.view.setImage(img, autoLevels=False)
 
     
@@ -1126,12 +1177,22 @@ class Imager(Module):
 class ImagingFrame(object):
     """Represents a single collected image frame and its associated metadata."""
 
-    def __init__(self, data, program):
+    def __init__(self, data, program, info):
         self.data = data  # raw pmt signal
         self.program = ScanProgram()
         self.program.restoreState(program)
         self.rect = self.program.components[0].ctrlParameter().system
 
-    def getImage(self, decomb=True, auto=False, offset=None):
-        offset = self.rect.measureMirrorLag(self.data, subpixel=True)
-        return self.rect.extractImage(self.data, offset=offset, subpixel=True)
+        tr = self.rect.imageTransform()
+        info['transform'] = pg.SRTTransform3D(tr)
+        self.info = info
+
+    def getImage(self, decomb=True, offset=None):
+        if decomb is True:
+            if offset is None:
+                offset = self.rect.measureMirrorLag(self.data, subpixel=True)
+        else:
+            offset = 0
+
+        img = self.rect.extractImage(self.data, offset=offset, subpixel=True)
+        return img.mean(axis=0)

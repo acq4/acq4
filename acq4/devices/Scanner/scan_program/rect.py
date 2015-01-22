@@ -285,7 +285,7 @@ class RectScan(SystemSolver):
             ('numCols', [None, int, None, 'n']),     # Same as scanShape[1] 
             ('activeCols', [None, int, None, 'n']),  # Same as activeShape[1] 
             ('frameLen', [None, int, None, 'n']),
-            ('frameExposure', [None, float, None, 'n']),
+            ('frameExposure', [None, float, None, 'n']),  # scanner dwell time per square um
             ('scanSpeed', [None, float, None, 'n']),
             ('activeOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe
             ('activeShape', [None, tuple, None, 'n']),   # the 'active' scan area excluding overscan
@@ -305,7 +305,7 @@ class RectScan(SystemSolver):
             ('interFrameDuration', [None, float, None, 'f']),
             ('interFrameLen', [None, int, None, 'n']),
             ('numFrames', [None, int, None, 'f']),
-            ('totalExposure', [None, float, None, 'n']),
+            ('totalExposure', [None, float, None, 'n']),  # total scanner dwell time per square um (multiplied across all frames)
             ('totalDuration', [None, float, None, 'n']),
             ])
 
@@ -489,8 +489,8 @@ class RectScan(SystemSolver):
         p1 = p0 + acs[2] * dx
         p2 = p0 + acs[1] * dy
 
-        print p0, p1, p2
-        print acs, dx, dy
+        # print p0, p1, p2
+        # print acs, dx, dy
 
         localPts = map(pg.Vector, [[0,0], [ims[2],0], [0,ims[1]], [0,0,1]]) # w and h of data of image in pixels.
         globalPts = map(pg.Vector, [p0, p1, p2, [0,0,1]])
@@ -539,7 +539,7 @@ class RectScan(SystemSolver):
     def _osVector(self):
         # This vector is p1 -> osP1
         # Compute from p0, overscan, and scanSpeed
-        osDist = self.osLen / self.downsample * self.pixelWidth
+        osDist = (self.osLen // self.downsample) * self.pixelWidth
 
         #speed = self.scanSpeed
         #os = self.overscanDuration
@@ -554,7 +554,7 @@ class RectScan(SystemSolver):
 
     def _osLen(self):
         """Length of overscan (non-downsampled)"""
-        return np.ceil(self.minOverscan * self.sampleRate / self.downsample) * self.downsample
+        return int(np.ceil(self.minOverscan * self.sampleRate / self.downsample) * self.downsample)
 
         #osv = self.osVector
         #return np.ceil(np.linalg.norm(osv) / self.pixelWidth)
@@ -717,12 +717,12 @@ class RectScan(SystemSolver):
             raise
 
     def _imageOffset(self):
-        return (self.scanOffset + self.osLen) / self.downsample
+        return (self.scanOffset + self.osLen) // self.downsample
     
     def _imageStride(self):
         ds = self.downsample
         ss = self.scanStride
-        return (ss[0] / ds, ss[1] / ds, 1)
+        return (ss[0] // ds, ss[1] // ds, 1)
 
     def _numRows(self):
         try:
