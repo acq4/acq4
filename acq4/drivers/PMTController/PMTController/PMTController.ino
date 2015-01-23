@@ -35,6 +35,7 @@ This work was supported by NIH/NIDCD grant DC0099809
 (in theory) be controlled. This also simplifies the coding.
 Added peak/mean measurement of PMT current, and ability to control the time interval over
 which the measurements are made.
+1/23/2015 (pbm) : add command to get number of PMTs supported by this device (version 0.31)
 
 This software is free to use and modify under the MIT License (see README.md on github site).
 
@@ -43,7 +44,7 @@ This software is free to use and modify under the MIT License (see README.md on 
 #include <stdio.h>
 #include <stdlib.h>
 
-const float controller_version  = 0.3;  // a number for the version of this controller code.
+const float controller_version  = 0.31;  // a number for the version of this controller code.
 
 // assign hardware ports
 const unsigned PMT_monitor[] = {1, 0};   // ADCs to read PMT current from current amp
@@ -255,6 +256,11 @@ void processCmd(char cmd) {
   
   switch (cmd) {
     
+    case 'n':  // return the number of pmts in the device
+      sprintf(str, "PMTs: %02d", NPMT);
+      SerialUSB.println(str);
+      break;
+    
     case 'v':  // return version of this controller software
       sprintf(str, "%5.2f", controller_version);
       SerialUSB.println(str);
@@ -305,7 +311,7 @@ void processCmd(char cmd) {
       device = SerialUSB.parseInt();
       if (device >= 0 && device < NPMT) {
         errFlag = digitalRead(PMT_ERR_TTL_IN[device]);
-        sprintf(str, "E%1d %d", device, errFlag);
+        sprintf(str, "E%1d %02d", device, errFlag);
         SerialUSB.println(str);
       }
       break;
@@ -359,6 +365,8 @@ void processCmd(char cmd) {
       break;
       
     case '?': // print a list of commands
+      sprintf(str, "n       : Report number of PMTs supported by this device");
+      SerialUSB.println(str);
       sprintf(str, "v       : Report Controller Firmware Version");
       SerialUSB.println(str);
       sprintf(str, "d#      : Print ID of the selected PMT #");
@@ -379,7 +387,7 @@ void processCmd(char cmd) {
       SerialUSB.println(str);
       sprintf(str, "t###.   : Set the reading/averaging period for mean/peak mode (msec, float)");
       SerialUSB.println(str);
-      sprintf(str, "s       : Report overall status");
+      sprintf(str, "s       : Report overall status (prints one line per known PMT)");
       SerialUSB.println(str);
       break;
    }

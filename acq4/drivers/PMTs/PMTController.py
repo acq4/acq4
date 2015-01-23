@@ -127,11 +127,11 @@ class PMTController(SerialDevice):
     
     def getOverloadState(self, devicenum):
         if devicenum in self.devicelist:
-            self.write('e%1d' % devicenum)
+            self.write('o%1d' % devicenum)
         else:
             raise ValueError ('PMTController.resetDevice: bad device (expect in [0,1], got %d)' % devicenum)
         result = self.read(length=4, timeout=5.0, term='\r')
-        return(int(result[3]))
+        return(int(result[3:-2]))
 
     def getStatus(self):
         """
@@ -161,13 +161,13 @@ class PMTController(SerialDevice):
         """
         reset the specified PMT from here
         """
-        if devicenum in [0,1]:
+        if devicenum in self.PMTList]:
             self.write('r%1d' % devicenum)
         else:
-            raise ValueError ('PMTController.resetDevice: bad device (expect in [0,1], got %d)' % devicenum)
+            raise ValueError ('PMTController.resetDevice: bad device (0 to %d; got %d)' % (self.PMTList[-1], devicenum)
 
     def resetAllPMTs(self):
-        for i in range(2):
+        for i in self.PMTList:
             self.resetPMT(i)
 
     def raiseError(self, errVals):
