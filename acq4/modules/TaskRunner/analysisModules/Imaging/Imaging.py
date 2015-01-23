@@ -41,7 +41,7 @@ class ImagingModule(AnalysisModule):
             ])
         self.ptree.setParameters(self.params, showTop=False)
         self.params.sigTreeStateChanged.connect(self.update)
-        self.params.child('detectors').sigAddNew.connect(self.addNewDetector)
+        self.params.child('detectors').sigAddNew.connect(self.addDetectorClicked)
 
         self.man = getManager()
         self.lastFrame = None
@@ -53,6 +53,9 @@ class ImagingModule(AnalysisModule):
         self.imageView.imageItem.setAutoDownsample(True)
         # self.ui.scannerComboBox.setTypes('scanner')
         # self.ui.detectorComboBox.setTypes('daqChannelGroup')
+
+    def addDetectorClicked(self):
+        self.addNewDetector()
 
     def addNewDetector(self, name='detector', value=None):
         self.params.child('detectors').addChild(
@@ -75,7 +78,7 @@ class ImagingModule(AnalysisModule):
             detectors['detector'] = det['value']
         # current format:
         dets = state['children'].pop('detectors', {})
-        for name, data in dets['children'].items():
+        for name, data in dets.get('children', {}).items():
             detectors[name] = data['value']
 
         self.params.restoreState(state, removeChildren=False)
