@@ -1,3 +1,13 @@
+"""
+
+Summary
+-------
+Interface to PMT controller (Arduino Due)
+
+The PMTController class provides an interface to the PMT controller, which is implemented
+as a serial device (USB) on an Arduino Due. 
+
+"""
 import serial, struct, time, collections, threading
 from ..SerialDevice import SerialDevice
 
@@ -27,7 +37,8 @@ class PMTController(SerialDevice):
     """
     def __init__(self, port, baud=115200):
         """
-        port: serial COM port (0 => com1)"""
+        port: serial COM port (0 => com1)
+        """
         self.devicelist = range(0,2)  # for number of PMTs available - pmt 0,1 so far
         SerialDevice.__init__(self, port=port, baudrate=baud)
  
