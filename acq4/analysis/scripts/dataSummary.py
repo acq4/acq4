@@ -19,6 +19,8 @@ import textwrap
 import gc
 
 
+
+
 class DataSummary():
     def __init__(self, basedir=None):
         print 'basedir: ', basedir
@@ -29,18 +31,19 @@ class DataSummary():
         self.tw['day'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
         self.tw['slice'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
         self.tw['cell'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
-        self.img_re = re.compile('(.tif)')
-        self.s2p_re = re.compile('(2pStack)')
-        self.i2p_re = re.compile('(2pImage)')
+        self.img_re = re.compile('^Image_(\d{3,3}).tif')
+        self.s2p_re = re.compile('^2pStack_(\d{3,3}).ma')
+        self.i2p_re = re.compile('^2pImage_(\d{3,3}).ma')
+        self.monitor = False
         allfiles = os.listdir(basedir)
         # look for names that match the acq4 "day" template:
         # example: 2013.03.28_000
         daytype = re.compile("(\d{4,4}).(\d{2,2}).(\d{2,2})_(\d{3,3})")
 #        daytype = re.compile("(2011).(06).(08)_(\d{3,3})")  # specify a day
         #2011.10.17_000
-        minday = (2011, 10, 17)
+        minday = (2012, 12, 4)
         minday = minday[0]*1e4+minday[1]*1e2+minday[2]
-        maxday = (2014, 12, 31)
+        maxday = (2012, 12, 31)
         maxday = maxday[0]*1e4+maxday[1]*1e2+maxday[2]
         days = []
         for thisfile in allfiles:
@@ -48,7 +51,7 @@ class DataSummary():
             if m == '.DS_Store':
                 continue
             if m is None:
-                print 'File is not a match: ', thisfile
+               # print 'Top level file %s is incorrectly placed ' % thisfile
                 continue  # no match
             if len(m.groups()) == 4:  # perfect match
                 # print m.groups()
@@ -101,6 +104,7 @@ class DataSummary():
             self.slicestring += '\t'
             self.doCells(os.path.join(day, slice))
             DataManager.cleanup()
+            del dh
             gc.collect()
 
 
@@ -132,6 +136,7 @@ class DataSummary():
             self.cellstring += '\t'
             self.doProtocols(os.path.join(slice, cell))
             DataManager.cleanup() # clean up after each cell
+            del dh
             gc.collect()
 
 #        if len(cells) == 0:
@@ -146,6 +151,7 @@ class DataSummary():
         allfiles = os.listdir(cell)
         #celltype = re.compile("(Cell_)(\d{3,3})")
         protocols = []
+        nonprotocols = []
         images = []  # tiff
         stacks2p = []
         images2p = []
@@ -153,6 +159,8 @@ class DataSummary():
         for thisfile in allfiles:
             if os.path.isdir(os.path.join(cell, thisfile)):
                 protocols.append(thisfile)
+            else:
+                nonprotocols.append(thisfile)
 #        if len(protocols) == 0:
 #            pass
             #print '         No protocols this cell entry'
@@ -161,14 +169,16 @@ class DataSummary():
         for protocol in protocols:
             dh = DataManager.getDirHandle(os.path.join(cell, protocol), create=False)
             self.cell_summary(dh)
+            if self.monitor:
+                print 'Investigating Protocol: %s', dh.name()
             dirs = dh.subDirs()
+            protocolok = True
             modes = []
             complete = False
             ncomplete = 0
             ntotal = 0
             clampDevices = self.dataModel.getClampDeviceNames(dh)
             # must handle multiple data formats, even in one experiment...
-            protocolok = True
             if clampDevices is not None:
                 data_mode = dh.info()['devices'][clampDevices[0]]['mode']  # get mode from top of protocol information
             else:
@@ -183,9 +193,9 @@ class DataSummary():
                 try:
                     data_mode = dh.info()['devices'][clampDevices[0]]['mode']
                 except:
+                    data_mode = 'Unknown'
                     # protocolok = False
                     # print '<<cannot read protocol data mode>>'
-                    continue
             if data_mode not in modes:
                 modes.append(data_mode)
             for i, directory_name in enumerate(dirs):  # dirs has the names of the runs within the protocol
@@ -197,9 +207,13 @@ class DataSummary():
                     # Check if there is no clamp file for this iteration of the protocol
                     # Usually this indicates that the protocol was stopped early.
                     # data_file = data_file_handle.read()
-                    self.holding = self.dataModel.getClampHoldingLevel(data_file_handle)
-                    self.amp_settings = self.dataModel.getWCCompSettings(data_file_handle)
-                    ncomplete += 1
+                    try:
+                        self.holding = self.dataModel.getClampHoldingLevel(data_file_handle)
+                        self.amp_settings = self.dataModel.getWCCompSettings(data_file_handle)
+                        ncomplete += 1
+                    except:
+                        raise ValueError('complete = %d when failed' % ncomplete)
+
                 DataManager.cleanup()  # close all opened files
                 gc.collect()  # and force garbage collection of freed objects inside the loop
             if ncomplete == ntotal:
@@ -217,13 +231,14 @@ class DataSummary():
 #                    print 'No data in protocol'
 #        if len(protocols) == 0:
 #            print '         No protocols this cell'
-        DataManager.cleanup()
-        gc.collect()
+            DataManager.cleanup()
+            del dh
+            gc.collect()
         self.protocolstring += '\t'
 
-        for thisfile in allfiles:
-            if os.path.isdir(os.path.join(cell, thisfile)):  # skip protocols
-                continue
+        for thisfile in nonprotocols:
+#            if os.path.isdir(os.path.join(cell, thisfile)):  # skip protocols
+#                continue
             x = self.img_re.match(thisfile)  # look for image files
             if x is not None:
                 images.append(thisfile)
@@ -242,6 +257,8 @@ class DataSummary():
             self.imagestring += '2pImages: %d' % len(images2p)
         if ngoodprotocols > 0 or len(self.imagestring) > 0:
             print self.daystring + self.slicestring + self.cellstring + self.protocolstring + self.imagestring + '\t'
+        if ngoodprotocols == 0:
+            print self.daystring + self.slicestring + self.cellstring + '<No complete protocols found>'
 
 
     def get_file_information(self, dh=None):
@@ -404,6 +421,9 @@ class DataSummary():
                 self.values.append(sequence_values[i])
             else:
                 self.values.append(cmd[len(cmd) / 2])
+            data_file.close()
+            del data_file
+            
         if traces is None or len(traces) == 0:
             print "IVCurve::loadFileRequested: No data found in this run..."
             return False
@@ -459,6 +479,8 @@ class DataSummary():
         for i in range(len(self.values)):
             cmdList.append('%8.3f %s' %
                            (self.command_scale_factor * self.values[i], self.command_units))
+        dh.close()
+        del dh
         return True
 
     def file_cell_protocol(self, filename):
