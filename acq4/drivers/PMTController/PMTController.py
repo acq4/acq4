@@ -1,3 +1,19 @@
+"""
+
+V0.30 commands:
+v       : Report Controller Firmware Version
+d#      : Print ID of the selected PMT #
+i#      : Read the current from the selected PMT #
+c#       : Read the mean or peak current
+m       : Select Mean reading mode
+p       : Select Peak reading mode
+a#      : Read the command voltage to the PMT #
+r#      : Reset the power to the selected PMT #
+o#      : Read the Overcurrent status of the selected PMT #
+t###.   : Set the reading/averaging period for mean/peak mode (msec, float)
+s       : Report overall status
+
+"""
 import serial, struct, time, collections
 
 try:
@@ -57,8 +73,9 @@ class PMTController(SerialDevice):
         """Return the current status of the PMT:
             devicename, I, Measured, V, Overcurrentflag
         """
-        self.write('S')
-        packet = self.readUntil(term='\r')
+        self.write('s\n')
+        packet1 = self.readUntil(term='\r')
+        packet2 = self.readUntil(term='\r')
         return packet[:-1]
 
     @threadsafe
@@ -69,13 +86,13 @@ class PMTController(SerialDevice):
         """
         if pmt is None:
             raise ValueError ("PMTController Device getPMTId requires a pmt number")
-        self.write('I%d' % pmt)
+        self.write('d%d\n' % pmt)
         packet = self.readUntil(term='\r')
         return packet[:-1]
 
     @threadsafe
     def getFirmwareVersion(self):
-        self.write('V')
+        self.write('v\n')
         packet = self.readUntil(term='\r')
         return packet[:-1]
 
@@ -90,16 +107,16 @@ class PMTController(SerialDevice):
         packet = self.readUntil(term='\r')
         return packet[:-1]
 
-    @threadsafe
-    def getPMTMeasures(self, pmt=None):
-        """
-        get the peak or mean measured current from one PMT
-        """
-        if pmt is None:
-            raise ValueError ("PMTController Device getPMTMeasures requires a pmt number")
-        self.write('M%d' % pmt)
-        packet = self.readUntil(term='\r')
-        return packet[:-1]
+    # @threadsafe
+    # def getPMTMeasures(self, pmt=None):
+    #     """
+    #     get the peak or mean measured current from one PMT
+    #     """
+    #     if pmt is None:
+    #         raise ValueError ("PMTController Device getPMTMeasures requires a pmt number")
+    #     self.write('m%d\n' % pmt)
+    #     packet = self.readUntil(term='\r')
+    #     return packet[:-1]
 
     @threadsafe
     def getPMTAnodeV(self, pmt=None):
@@ -108,7 +125,7 @@ class PMTController(SerialDevice):
         """
         if pmt is None:
             raise ValueError ("PMTController Device getPMTAnodeV requires a pmt number")
-        self.write('v%d' % pmt)
+        self.write('a%d\n' % pmt)
         packet = self.readUntil(term='\r')
         return packet[:-1]
 
@@ -119,7 +136,7 @@ class PMTController(SerialDevice):
         """
         if pmt is None:
             raise ValueError ("PMTController Device getPMTOverCurrent requires a pmt number")
-        self.write('O%d' % pmt)
+        self.write('o%d\n' % pmt)
         packet = self.readUntil(term='\r')
         return packet[:-1]
 
@@ -132,22 +149,21 @@ class PMTController(SerialDevice):
         """
         if pmt is None:
             raise ValueError ("PMTController Device resetPMT requires a pmt number")
-        self.write('R%d' % pmt)
+        self.write('r%d\n' % pmt)
 
 
 if __name__ == '__main__':
     """Test subclass that reads the PMT information"""
 
-    class PMTC(PMTController):
-        """Test subclass that, at the moment, does nothing"""
-        def __init__(self):
-            pass
 
-    s = PMTC(port=3)   # we have to set the port manually here - no reading from config.
+    s = PMTController(port='COM8')   # we have to set the port manually here - no reading from config.
 
-    vers = s.getVersion()
+    vers = s.getFirmwareVersion()
     print("PMT firmware version: {:s}".format(vers))
-    while True:
-        status = s.getStatus()
-        print('Status: {:s}'.format(status))
+
+    status = s.getPMTStatus()
+    print('Status: {:s}\n'.format(status))
+    v0 = s.getPMTAnodeV(0)
+    v1 = s.getPMTAnodeV(1)
+    print ('V0: {:s}  V1: {:s}'.format(v0, v1))
 
