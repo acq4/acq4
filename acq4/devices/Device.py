@@ -23,9 +23,6 @@ class Device(QtCore.QObject):
         ### Return a handle unique to this task
         pass
     
-    #def __del__(self):
-        #self.quit()
-        
     def quit(self):
         pass
     
@@ -70,6 +67,10 @@ class Device(QtCore.QObject):
         """Return the name of the channel on daq that this device raises when it starts.
         Allows the DAQ to trigger off of this device."""
         return None
+    
+    def __repr__(self):
+        return '<%s "%s">' % (self.__class__.__name__, self.name())
+    
 
 class DeviceTask:
     """

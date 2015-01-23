@@ -3,6 +3,7 @@ from __future__ import with_statement
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util.Mutex import Mutex
+from acq4.util.Thread import Thread
 #from acq4.devices.Device import *
 from acq4.devices.Microscope import Microscope
 from PyQt4 import QtCore
@@ -758,13 +759,13 @@ class CameraTaskResult:
         return self._frameTimes, self._frameTimesPrecise
         
         
-class AcquireThread(QtCore.QThread):
+class AcquireThread(Thread):
     
     sigNewFrame = QtCore.Signal(object)
     sigShowMessage = QtCore.Signal(object)
     
     def __init__(self, dev):
-        QtCore.QThread.__init__(self)
+        Thread.__init__(self)
         self.dev = dev
         #self.cam = self.dev.getCamera()
         self.camLock = self.dev.camLock
@@ -793,8 +794,7 @@ class AcquireThread(QtCore.QThread):
         self.lock.lock()
         self.stopThread = False
         self.lock.unlock()
-        QtCore.QThread.start(self, *args)
-        
+        Thread.start(self, *args)
     
     def connectCallback(self, method):
         with self.connectMutex:

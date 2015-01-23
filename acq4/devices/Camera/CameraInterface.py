@@ -651,7 +651,7 @@ class CameraInterface(QtCore.QObject):
             prof()
             
             ## update image in viewport
-            self.imageItem.updateImage(data)#, levels=[bl, wl])
+            self.imageItem.updateImage(data.copy())  # using data.copy() here avoids crashes!
             self.imageItem.setOpacity(self.alpha)
             self.imageItem.setTransform(self.currentFrame.frameTransform().as2D())
             prof()
