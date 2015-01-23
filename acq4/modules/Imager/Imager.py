@@ -1092,7 +1092,7 @@ class Imager(Module):
 
 
         img = self.lastFrame.getImage(decomb=True)
-        self.view.setImage(img, autoLevels=False)
+        self.view.setImage(img.T, autoLevels=False)
 
     
     def toggleVideo_std(self, b):
@@ -1128,10 +1128,8 @@ class Imager(Module):
             self.laserDev.openShutter()
         try:
             while True:
-                (img, info) = self.takeImage(reCompute=reCompute)
+                frame = self.takeImage(reCompute=reCompute)
                 reCompute = False
-                if img is None:
-                    return
                 QtGui.QApplication.processEvents()
                 if not self.vbutton.isChecked(): # note only checks the button that called us...
                     return
