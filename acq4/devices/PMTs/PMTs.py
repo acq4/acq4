@@ -1,4 +1,14 @@
 # -*- coding: utf-8 -*-
+"""
+
+Summary
+-------
+Interface to PMT controller (Arduino Due)
+
+The PMT class provides an interface to the PMT controller, which is implemented
+as a serial device (USB) on an Arduino Due. 
+
+"""
 from __future__ import with_statement
 from acq4.devices.Device import *
 #import serial, struct
