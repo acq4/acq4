@@ -23,11 +23,10 @@ else:
     profile = True
     sys.argv.pop(ind)    
 
-try:
-    import faulthandler
-    faulthandler.enable()
-except ImportError:
-    pass
+
+## Enable stack trace output when a crash is detected
+from .util.debug import enable_faulthandler
+enable_faulthandler()
 
 ## Initialize Qt
 app = pg.mkQApp()

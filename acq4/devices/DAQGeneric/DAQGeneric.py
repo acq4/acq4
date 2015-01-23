@@ -397,7 +397,7 @@ class DAQGenericTask(DeviceTask):
         ## Stop DAQ tasks before setting holding level.
         #print "STOP"
         for ch in self.daqTasks:
-            #print "Stop task", ch
+            #print "Stop task", self.daqTasks[ch]
             try:
                 self.daqTasks[ch].stop(abort=abort)
             except:

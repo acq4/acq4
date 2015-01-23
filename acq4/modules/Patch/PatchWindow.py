@@ -7,6 +7,7 @@ from acq4.pyqtgraph import WidgetGroup
 from acq4.pyqtgraph import PlotWidget
 from acq4.util.metaarray import *
 from acq4.util.Mutex import Mutex, MutexLocker
+from acq4.util.Thread import Thread
 import traceback, sys, time
 from numpy import *
 import scipy.optimize
@@ -392,7 +393,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.startBtn.setChecked(False)
         
         
-class PatchThread(QtCore.QThread):
+class PatchThread(Thread):
     
     sigNewFrame = QtCore.Signal(object)
     
@@ -400,7 +401,7 @@ class PatchThread(QtCore.QThread):
         self.ui = ui
         self.manager = ui.manager
         self.clampName = ui.clampName
-        QtCore.QThread.__init__(self)
+        Thread.__init__(self)
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.stopThread = True
         self.paramsUpdated = True

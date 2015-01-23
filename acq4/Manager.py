@@ -33,9 +33,8 @@ from .LogWindow import LogWindow
 from .util.HelpfulException import HelpfulException
 
 
-
-
 LOG = None
+
 
 ### All other modules can use this function to get the manager instance
 def getManager():
@@ -46,6 +45,9 @@ def getManager():
 def __reload__(old):
     Manager.CREATED = old['Manager'].CREATED
     Manager.single = old['Manager'].single
+    # preserve old log window
+    global LOG
+    LOG = old['LOG']
     
 def logMsg(msg, **kwargs):
     """msg: the text of the log message
@@ -173,7 +175,8 @@ class Manager(QtCore.QObject):
         -D --disable-all   Disable all devices
     """
                     raise
-            
+            else:
+                opts = []
             
             QtCore.QObject.__init__(self)
             atexit.register(self.quit)
@@ -886,6 +889,8 @@ class Task:
         self.command = command
         self.result = None
         
+        self.taskLock = Mutex(recursive=True)
+        
         self.lockedDevs = []
         self.startedDevs = []
         self.startTime = None
@@ -908,11 +913,6 @@ class Task:
         self.devNames.remove('protocol')
         self.devs = {devName: self.dm.getDevice(devName) for devName in self.devNames}
         
-        #self.configDeps = {devName: set() for devName in self.devNames}
-        #self.configCosts = {}
-        #self.startDeps = {devName: set() for devName in self.devNames}
-        #self.startCosts = {}
-        
         ## Create task objects. Each task object is a handle to the device which is unique for this task run.
         self.tasks = {}
         #print "devNames: ", self.devNames
@@ -924,15 +924,6 @@ class Task:
                 continue
             self.tasks[devName] = task
 
-    #def addConfigDependency(self, task, before=None, after=None, cost=None):
-        #"""
-        #Declare that *task* must be configured before or after other devices.
-        #Arguments *before* and *after* may be either Devices or their names.
-        #"""
-        #task = task.name() if isinstance(task, Device) else task
-        #dep = [d.name() if isinstance(d, Device) else d for d in dep]
-        #self.configDeps[task].extend(*dep)
-        
     @staticmethod
     def getDevName(obj):
         if isinstance(obj, basestring):
@@ -962,18 +953,8 @@ class Task:
         # convert sets to lists
         deps = dict([(k, list(deps[k])) for k in deps.keys()])
         
-        # for testing, randomize the key order and ensure all devices are still started in the correct order
-        #keys = deps.keys()
-        #import random
-        #random.shuffle(keys)
-        #deps = OrderedDict([(k, deps[k]) for k in keys])
-        
         #return sorted order
         order = self.toposort(deps, cost)
-        #print "Config Order:"
-        #print "    deps:", deps
-        #print "    cost:", cost
-        #print "    order:", order
         return order
         
     def getStartOrder(self):
@@ -989,158 +970,145 @@ class Task:
                 
         deps = dict([(k, list(deps[k])) for k in deps.keys()])
         
-        # for testing, randomize the key order and ensure all devices are still started in the correct order
-        #keys = deps.keys()
-        #import random
-        #random.shuffle(keys)
-        #deps = OrderedDict([(k, deps[k]) for k in keys])
-        
         #return sorted order
-        #print "Start Order:"
-        #print "    deps:", deps
         order = self.toposort(deps)
-        #print "    order:", order
         return order
         
     def execute(self, block=True, processEvents=True):
         """Start the task.
+        
         If block is true, then the function blocks until the task is complete.
-        if processEvents is true, then Qt events are processed while waiting for the task to complete."""
-        self.lockedDevs = []
-        self.startedDevs = []
-        self.stopped = False
-        self.abortRequested = False
-        #print "======  Executing task %d:" % self.id
-        #print self.cfg
-        #print "======================="
-        
-        ## We need to make sure devices are stopped and unlocked properly if anything goes wrong..
-        from acq4.util.debug import Profiler
-        prof = Profiler('Manager.Task.execute', disabled=True)
-        try:
-        
-            #print self.id, "Task.execute:", self.tasks
-            ## Reserve all hardware
-            self.dm.lockReserv()
+        if processEvents is true, then Qt events are processed while waiting for the task to complete.        
+        """
+        with self.taskLock:
+            self.lockedDevs = []
+            self.startedDevs = []
+            self.stopped = False
+            self.abortRequested = False
+            #print "======  Executing task %d:" % self.id
+            #print self.cfg
+            #print "======================="
+            
+            ## We need to make sure devices are stopped and unlocked properly if anything goes wrong..
+            from acq4.util.debug import Profiler
+            prof = Profiler('Manager.Task.execute', disabled=True)
             try:
-                for devName in self.tasks:
-                    #print "  %d Task.execute: Reserving hardware" % self.id, devName
-                    res = self.tasks[devName].reserve(block=True)
-                    #if not res:
-                        #print "Locked from:"
-                        #for tb in self.tasks[devName].dev._lock_.tb:
-                            #print "====="
-                            #print tb
-                        #raise Exception('Damn')
-                    self.lockedDevs.append(devName)
-                    #print "  %d Task.execute: reserved" % self.id, devName
-                #self.reserved = True
-            except:
-                #print "  %d Task.execute: problem reserving hardware; will unreserve these:"%self.id, self.lockedDevs
+            
+                #print self.id, "Task.execute:", self.tasks
+                ## Reserve all hardware
+                self.dm.lockReserv()
+                try:
+                    for devName in self.tasks:
+                        #print "  %d Task.execute: Reserving hardware" % self.id, devName
+                        res = self.tasks[devName].reserve(block=True)
+                        self.lockedDevs.append(devName)
+                        #print "  %d Task.execute: reserved" % self.id, devName
+                except:
+                    #print "  %d Task.execute: problem reserving hardware; will unreserve these:"%self.id, self.lockedDevs
+                    raise
+                finally:
+                    self.dm.unlockReserv()
+                    
+                prof.mark('reserve')
+
+                ## Determine order of device configuration.
+                configOrder = self.getConfigOrder()
+                    
+
+                ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
+                ## This is how we allow multiple devices to communicate and decide how to operate together.
+                ## Each task may modify the startOrder list to suit its needs.
+                #print "Configuring subtasks.."
+                for devName in configOrder:
+                    self.tasks[devName].configure()
+                    prof.mark('configure %s' % devName)
+                    
+                startOrder = self.getStartOrder()
+                #print "done"
+
+                if 'leadTime' in self.cfg:
+                    time.sleep(self.cfg['leadTime'])
+                    
+                prof.mark('leadSleep')
+
+                self.result = None
+                
+                
+                ## Start tasks in specific order
+                #print "Starting tasks.."
+                for devName in startOrder:
+                    #print "  ", devName
+                    try:
+                        self.startedDevs.append(devName)
+                        self.tasks[devName].start()
+                    except:
+                        self.startedDevs.remove(devName)
+                        raise HelpfulException("Error starting device '%s'; aborting task." % devName)
+                    prof.mark('start %s' % devName)
+                self.startTime = ptime.time()
+                
+                #print "  %d Task started" % self.id
+                    
+                if not block:
+                    prof.finish()
+                    #print "  %d Not blocking; execute complete" % self.id
+                    return
+                
+                ## Wait until all tasks are done
+                #print "Waiting for all tasks to finish.."
+                timeout = self.cfg.get('timeout', None)
+                
+                lastProcess = ptime.time()
+                isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
+                #print "isGuiThread:", isGuiThread
+                while not self.isDone():
+                    now = ptime.time()
+                    elapsed = now - self.startTime
+                    if timeout is not None and elapsed > timeout:
+                        raise Exception("Task timed out (>%0.2fs); aborting." % timeout)
+                    if isGuiThread:
+                        if processEvents and now-lastProcess > 20e-3:  ## only process Qt events every 20ms
+                            QtGui.QApplication.processEvents()
+                            lastProcess = ptime.time()
+                        
+                    if elapsed < self.cfg['duration']-10e-3:  ## If the task duration has not elapsed yet, only wake up every 10ms, and attempt to wake up 5ms before the end
+                        sleep = min(10e-3, self.cfg['duration']-elapsed-5e-3)
+                    else:
+                        sleep = 1.0e-3  ## afterward, wake up more quickly so we can respond as soon as the task finishes
+                    #print "sleep for", sleep
+                    time.sleep(sleep)
+                #print "all tasks finshed."
+                
+                self.stop()
+                #print "  %d execute complete" % self.id
+            except: 
+                #printExc("==========  Error in task execution:  ==============")
+                self.abort()
+                self._releaseAll()
                 raise
             finally:
-                self.dm.unlockReserv()
-                
-            prof.mark('reserve')
-
-            ## Determine order of device configuration.
-            configOrder = self.getConfigOrder()
-                
-
-            ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
-            ## This is how we allow multiple devices to communicate and decide how to operate together.
-            ## Each task may modify the startOrder list to suit its needs.
-            #print "Configuring subtasks.."
-            for devName in configOrder:
-                self.tasks[devName].configure()
-                prof.mark('configure %s' % devName)
-                
-            startOrder = self.getStartOrder()
-            #print "done"
-
-            if 'leadTime' in self.cfg:
-                time.sleep(self.cfg['leadTime'])
-                
-            prof.mark('leadSleep')
-
-            self.result = None
-            
-            
-            
-            ## Start tasks in specific order
-            #print "Starting tasks.."
-            for devName in startOrder:
-                #print "  ", devName
-                try:
-                    self.startedDevs.append(devName)
-                    self.tasks[devName].start()
-                except:
-                    self.startedDevs.remove(devName)
-                    raise HelpfulException("Error starting device '%s'; aborting task." % devName)
-                prof.mark('start %s' % devName)
-            self.startTime = ptime.time()
-            
-                    
-            
-            #print "  %d Task started" % self.id
-                
-            if not block:
                 prof.finish()
-                #print "  %d Not blocking; execute complete" % self.id
-                return
-            
-            ## Wait until all tasks are done
-            #print "Waiting for all tasks to finish.."
-            timeout = self.cfg.get('timeout', None)
-            
-            lastProcess = ptime.time()
-            isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
-            #print "isGuiThread:", isGuiThread
-            while not self.isDone():
-                now = ptime.time()
-                elapsed = now - self.startTime
-                if timeout is not None and elapsed > timeout:
-                    raise Exception("Task timed out (>%0.2fs); aborting." % timeout)
-                if isGuiThread:
-                    if processEvents and now-lastProcess > 20e-3:  ## only process Qt events every 20ms
-                        QtGui.QApplication.processEvents()
-                        lastProcess = ptime.time()
-                    
-                if elapsed < self.cfg['duration']-10e-3:  ## If the task duration has not elapsed yet, only wake up every 10ms, and attempt to wake up 5ms before the end
-                    sleep = min(10e-3, self.cfg['duration']-elapsed-5e-3)
-                else:
-                    sleep = 1.0e-3  ## afterward, wake up more quickly so we can respond as soon as the task finishes
-                #print "sleep for", sleep
-                time.sleep(sleep)
-            #print "all tasks finshed."
-            
-            self.stop()
-            #print "  %d execute complete" % self.id
-        except: 
-            #printExc("==========  Error in task execution:  ==============")
-            self.abort()
-            self.releaseAll()
-            raise
-        finally:
-            prof.finish()
         
         
     def isDone(self):
-        #print "Manager.Task.isDone"
-        if not self.abortRequested:
-            t = ptime.time()
-            if self.startTime is None or t - self.startTime < self.cfg['duration']:
-                #print "  not done yet"
-                return False
+        """Return True if all tasks are completed and ready to return results.
+        """
+        with self.taskLock:
+            #print "Manager.Task.isDone"
+            if not self.abortRequested:
+                t = ptime.time()
+                if self.startTime is None or t - self.startTime < self.cfg['duration']:
+                    #print "  not done yet"
+                    return False
+                #else:
+                    #print "  duration elapsed; start:", self.startTime, "now:", t, "diff:", t-self.startTime, 'duration:', self.cfg['duration']
             #else:
-                #print "  duration elapsed; start:", self.startTime, "now:", t, "diff:", t-self.startTime, 'duration:', self.cfg['duration']
-        #else:
-            #print "  aborted, checking tasks.."
-        d = self.tasksDone()
-        #print "  tasks say:", d
-        return d
+                #print "  aborted, checking tasks.."
+            d = self._tasksDone()
+            #print "  tasks say:", d
+            return d
         
-    def tasksDone(self):
+    def _tasksDone(self):
         for t in self.tasks:
             if not self.tasks[t].isDone():
                 #print "Task %s not finished" % t
@@ -1154,7 +1122,7 @@ class Task:
         return self.command.get('protocol', {}).get('duration', None)
     
     def runTime(self):
-        """Return the length of time since this task has been running.
+        """Return the length of time since this task began running.
         If the task has already finished, return the length of time the task ran for.
         If the task has not started yet, return None.
         """
@@ -1166,82 +1134,79 @@ class Task:
         
     def stop(self, abort=False):
         """Stop all tasks and read data. If abort is True, does not attempt to collect data from the run.
-        
-        Note: this method is NOT thread-safe; the thread that started the task should
-        be the one to stop it."""
-        prof = Profiler("Manager.Task.stop", disabled=True)
-        self.abortRequested = abort
-        try:
-            if not self.stopped:
-                #print "stopping tasks.."
-                ## Stop all tasks
-                for t in self.startedDevs[:]:
-                    #print "  stopping", t
-                    ## Force all tasks to stop immediately.
-                    #print "Stopping task", t, "..."
-                    try:
-                        self.tasks[t].stop(abort=abort)
-                        self.startedDevs.remove(t)
-                    except:
-                        printExc("Error while stopping task %s:" % t)
-                    #print "   ..task", t, "stopped"
-                    prof.mark("   ..task "+ t+ " stopped")
-                self.stopped = True
-            
-            if not abort and not self.tasksDone():
-                raise Exception("Cannot get result; task is still running.")
-            
-            if not abort and self.result is None:
-                #print "Get results.."
-                ## Let each device generate its own output structure.
-                result = {'protocol': {'startTime': self.startTime}}
-                for devName in self.tasks:
-                    try:
-                        result[devName] = self.tasks[devName].getResult()
-                    except:
-                        printExc( "Error getting result for task %s (will set result=None for this task):" % devName)
-                        result[devName] = None
-                    prof.mark("get result: "+devName)
-                self.result = result
-                #print "RESULT 1:", self.result
+        """
+        with self.taskLock:
+
+            prof = Profiler("Manager.Task.stop", disabled=True)
+            self.abortRequested = abort
+            try:
+                if not self.stopped:
+                    ## Stop all device tasks
+                    while len(self.startedDevs) > 0:
+                        t = self.startedDevs.pop()
+                        try:
+                            self.tasks[t].stop(abort=abort)
+                        except:
+                            printExc("Error while stopping task %s:" % t)
+                        prof.mark("   ..task "+ t+ " stopped")
+                    self.stopped = True
                 
-                ## Store data if requested
-                if 'storeData' in self.cfg and self.cfg['storeData'] is True:
-                    self.cfg['storageDir'].setInfo(result['protocol'])
-                    for t in self.tasks:
-                        self.tasks[t].storeResult(self.cfg['storageDir'])
-                prof.mark("store data")
-        finally:   ## Regardless of any other problems, at least make sure we release hardware for future use
-            ## Release all hardware for use elsewhere
-            if self.stopTime is None:
-                self.stopTime = ptime.time()
-            
-            self.releaseAll()
-            prof.mark("release all")
-            prof.finish()
-            
-        if abort:
-            gc.collect()  ## it is often the case that now is a good time to garbage-collect.
-        #print "tasks:", self.tasks
-        #print "RESULT:", self.result        
+                if not abort and not self._tasksDone():
+                    raise Exception("Cannot get result; task is still running.")
+                
+                if not abort and self.result is None:
+                    #print "Get results.."
+                    ## Let each device generate its own output structure.
+                    result = {'protocol': {'startTime': self.startTime}}
+                    for devName in self.tasks:
+                        try:
+                            result[devName] = self.tasks[devName].getResult()
+                        except:
+                            printExc("Error getting result for task %s (will "
+                                     "set result=None for this task):" % devName)
+                            result[devName] = None
+                        prof.mark("get result: "+devName)
+                    self.result = result
+                    #print "RESULT 1:", self.result
+                    
+                    ## Store data if requested
+                    if 'storeData' in self.cfg and self.cfg['storeData'] is True:
+                        self.cfg['storageDir'].setInfo(result['protocol'])
+                        for t in self.tasks:
+                            self.tasks[t].storeResult(self.cfg['storageDir'])
+                    prof.mark("store data")
+            finally:   
+                ## Regardless of any other problems, at least make sure we 
+                ## release hardware for future use
+                if self.stopTime is None:
+                    self.stopTime = ptime.time()
+                
+                self._releaseAll()
+                prof.mark("release all")
+                prof.finish()
+                
+            if abort:
+                gc.collect()  ## it is often the case that now is a good time to garbage-collect.
+            #print "tasks:", self.tasks
+            #print "RESULT:", self.result        
         
     def getResult(self):
-        self.stop()
-        return self.result
+        with self.taskLock:
+            self.stop()
+            return self.result
 
-    def releaseAll(self):
-        #if self.reserved:
-        #print self.id,"Task.releaseAll:"
-        for t in self.lockedDevs[:]:
-            #print "  %d releasing" % self.id, t
-            try:
-                self.tasks[t].release()
-                self.lockedDevs.remove(t)
-            except:
-                printExc("Error while releasing hardware for task %s:" % t)
-                
-                #print "  %d released" % self.id, t
-        #self.reserved = False
+    def _releaseAll(self):
+        with self.taskLock:
+            #print self.id,"Task.releaseAll:"
+            for t in self.lockedDevs[:]:
+                #print "  %d releasing" % self.id, t
+                try:
+                    self.tasks[t].release()
+                    self.lockedDevs.remove(t)
+                except:
+                    printExc("Error while releasing hardware for task %s:" % t)
+                    
+                    #print "  %d released" % self.id, t
 
     def abort(self):
         """Stop all tasks, to not attempt to get data."""

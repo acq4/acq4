@@ -215,8 +215,9 @@ class ImageView(QtGui.QWidget):
         ================== =======================================================================
         **Arguments:**
         img                (numpy array) the image to be displayed.
-        xvals              (numpy array) 1D array of z-axis values corresponding to the third axis
-                           in a 3D image. For video, this array should contain the time of each frame.
+        xvals              (numpy array) 1D array of z-axis values corresponding to the first axis
+                           in a 3D image. For video, this array should contain the time of each 
+                           frame.
         autoRange          (bool) whether to scale/pan the view to fit the image.
         autoLevels         (bool) whether to update the white/black levels to fit the image.
         levels             (min, max); the white and black level values to use.
