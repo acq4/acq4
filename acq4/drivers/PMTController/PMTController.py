@@ -74,9 +74,10 @@ class PMTController(SerialDevice):
             devicename, I, Measured, V, Overcurrentflag
         """
         self.write('s\n')
-        packet1 = self.readUntil(term='\r')
-        packet2 = self.readUntil(term='\r')
-        return packet[:-1]
+        packet1 = self.readUntil(term='\r\n')
+        print repr(packet1)
+        packet2 = self.readUntil(term='\r\n')
+        return [packet1[:-1], packet2[:-1]]
 
     @threadsafe
     def getPMTId(self, pmt=None):
@@ -87,13 +88,13 @@ class PMTController(SerialDevice):
         if pmt is None:
             raise ValueError ("PMTController Device getPMTId requires a pmt number")
         self.write('d%d\n' % pmt)
-        packet = self.readUntil(term='\r')
+        packet = self.readUntil(term='\r\n')
         return packet[:-1]
 
     @threadsafe
     def getFirmwareVersion(self):
         self.write('v\n')
-        packet = self.readUntil(term='\r')
+        packet = self.readUntil(term='\r\n')
         return packet[:-1]
 
     @threadsafe
@@ -103,8 +104,8 @@ class PMTController(SerialDevice):
         """
         if pmt is None:
             raise ValueError ("PMTController Device getPMTCurrent requires a pmt number")
-        self.write('i%d' % pmt)
-        packet = self.readUntil(term='\r')
+        self.write('i%d\n' % pmt)
+        packet = self.readUntil(term='\r\n')
         return packet[:-1]
 
     # @threadsafe
@@ -126,8 +127,8 @@ class PMTController(SerialDevice):
         if pmt is None:
             raise ValueError ("PMTController Device getPMTAnodeV requires a pmt number")
         self.write('a%d\n' % pmt)
-        packet = self.readUntil(term='\r')
-        return packet[:-1]
+        packet = self.readUntil(term='\r\n')
+        return float(packet[2:-3])
 
     @threadsafe
     def getPMTOverCurrent(self, pmt=None):
@@ -137,8 +138,8 @@ class PMTController(SerialDevice):
         if pmt is None:
             raise ValueError ("PMTController Device getPMTOverCurrent requires a pmt number")
         self.write('o%d\n' % pmt)
-        packet = self.readUntil(term='\r')
-        return packet[:-1]
+        packet = self.readUntil(term='\r\n')
+        return packet[:-2]
 
     @threadsafe
     def resetPMT(self, pmt=None):
@@ -162,8 +163,9 @@ if __name__ == '__main__':
     print("PMT firmware version: {:s}".format(vers))
 
     status = s.getPMTStatus()
-    print('Status: {:s}\n'.format(status))
+    print('Status0: {:s}\n'.format(status[0]))
+    print('Status1: {:s}\n'.format(status[1]))
     v0 = s.getPMTAnodeV(0)
     v1 = s.getPMTAnodeV(1)
-    print ('V0: {:s}  V1: {:s}'.format(v0, v1))
+    print ('V0: {:6.3f}  \nV1: {:6.3f}'.format(v0, v1))
 
