@@ -344,7 +344,6 @@ class Imager(Module):
 
         self.scanProgram = ScanProgram()
         self.scanProgram.addComponent('rect')
-        self.rectMode = 'frameTime'  # decide whether scan params are determined by frame duration or image resolution
 
         self.param = PT.Parameter(name = 'param', children=[
             dict(name="Preset", type='list', value='StandardDef', 
@@ -352,10 +351,10 @@ class Imager(Module):
                          'video-ultra']),
             dict(name='Store', type='bool', value=True),
             dict(name='Blank Screen', type='bool', value=True),
-            dict(name='Image Width', type='int', value=500, readonly=True, limits=[1, None]),
-            dict(name='Image Height', type='int', value=500, readonly=True, limits=[1, None]),
-            dict(name='Frame Time', type='float', value=50e-3, suffix='s', siPrefix=True, dec=True, step=0.5, minStep=100e-6),
-            dict(name='Pixel Size', type='float', value=1e-6, suffix='m', siPrefix=True, dec=True, step=0.5, minStep=100e-9),
+            dict(name='Image Width', type='int', value=500, readonly=False, limits=[1, None]),
+            dict(name='Image Height', type='int', value=500, readonly=False, limits=[1, None]),
+            dict(name='Frame Time', type='float', value=50e-3, suffix='s', siPrefix=True, readonly=True, dec=True, step=0.5, minStep=100e-6),
+            dict(name='Pixel Size', type='float', value=1e-6, suffix='m', siPrefix=True, readonly=True),
             dict(name='Sample Rate', type='float', value=1.0e6, suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10e3, 5e6], siPrefix=True),
             dict(name='Downsample', type='int', value=1, limits=[1,None]),
             dict(name='Average', type='int', value=1, limits=[1,100]),
@@ -553,6 +552,7 @@ class Imager(Module):
         rparam.system.p0 = pg.Point(roi.mapToView(pg.Point(0,h)))  # top-left
         rparam.system.p1 = pg.Point(roi.mapToView(pg.Point(w,h)))  # rop-right
         rparam.system.p2 = pg.Point(roi.mapToView(pg.Point(0,0)))  # bottom-left
+        rparam['imageRows', 'fixed'] = False  # need to let this float to accomodate new roi shape
 
         #print 'roiChanged state: ', state
         # self.width, self.height = state['size']
@@ -645,48 +645,26 @@ class Imager(Module):
         self.scanProgram.setSampling(rate=sampleRate, samples=0, downsample=downsample)
         self.scanProgram.setDevices(scanner=self.getScannerDevice(), laser=self.getLaserDevice())
 
-        # decide whether scan params are determined by frame duration or image resolution
-        for param, change, arg in changes:
-            if change != 'value':
-                continue
-            if param is self.param.child('Frame Time'):
-                self.rectMode = 'frameTime'
-            elif (param is self.param.child('Pixel Size')):
-                self.rectMode = 'pixelSize'
-
         rect = self.scanProgram.components[0]
         rparams = rect.ctrlParameter()
 
-        if self.rectMode == 'frameTime':
-            rparams['pixelWidth', 'fixed'] = False
-            rparams['frameDuration'] = self.param['Frame Time']
-            rparams['frameDuration', 'fixed'] = True
-        elif self.rectMode == 'pixelSize':
-            rparams['frameDuration', 'fixed'] = False
-            rparams['pixelWidth'] = self.param['Pixel Size']
-            rparams['pixelWidth', 'fixed'] = True
-        else:
-            raise RuntimeError("Invalid rect scan mode '%s'" % self.rectMode)
-
+        rparams['imageRows'] = self.param['Image Height']
+        rparams['imageRows', 'fixed'] = True
+        rparams['imageCols'] = self.param['Image Width']
+        rparams['imageCols', 'fixed'] = True
         rparams['minOverscan'] = self.param['Overscan']
         rparams['bidirectional'] = True
         rparams['pixelAspectRatio'] = 1.0 #self.param['Downsample']
         rparams['pixelAspectRatio', 'fixed'] = True
         rparams['numFrames'] = self.param['Average']
 
-
-
         nSamples = rparams.system.scanStride[0] * rparams.system.numFrames
         self.scanProgram.setSampling(rate=sampleRate, samples=nSamples, downsample=downsample)
 
         with self.param.treeChangeBlocker():
             # Update dependent parameters
-            if self.rectMode == 'frameTime':
-                self.param['Pixel Size'] = rparams.system.pixelWidth
-            else:
-                self.param['Frame Time'] = rparams.system.frameDuration
-            self.param['Image Width'] = rparams.system.imageShape[2]
-            self.param['Image Height'] = rparams.system.imageShape[1]
+            self.param['Pixel Size'] = rparams.system.pixelWidth
+            self.param['Frame Time'] = rparams.system.frameDuration
 
             if self.laserDev is not None:
                 self.param['Wavelength'] = (self.laserDev.getWavelength()*1e9)
@@ -698,6 +676,8 @@ class Imager(Module):
             self.param['Scan Speed'] = rparams.system.scanSpeed
             self.param['Exposure per Frame'] = rparams.system.frameExposure
             self.param['Total Exposure'] = rparams.system.totalExposure
+
+        print rparams.system.checkOverconstraint()
 
         
     def loadPreset(self, preset):

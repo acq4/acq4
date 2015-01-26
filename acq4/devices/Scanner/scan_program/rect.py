@@ -291,8 +291,10 @@ class RectScan(SystemSolver):
             ('activeShape', [None, tuple, None, 'n']),   # the 'active' scan area excluding overscan
             ('activeStride', [None, tuple, None, 'n']),  # and ignoring downsampling (index in samples)
             ('imageOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe 
-            ('imageShape', [None, arr, None, 'nf']),   # the 'active' image area excluding overscan
+            ('imageShape', [None, arr, None, 'n']),   # the 'active' image area excluding overscan
             ('imageStride', [None, tuple, None, 'n']),  # and accounting for downsampling (index in pixels)
+            ('imageRows', [None, int, None, 'nf']),   # alias for numRows
+            ('imageCols', [None, int, None, 'nf']),   # alias for activeCols
 
             # variables needed to reconstruct exact image location
             ('rowVector', [None, arr, None, 'n']),    # vector pointing from one row to the next
@@ -707,20 +709,7 @@ class RectScan(SystemSolver):
         return self.scanStride
 
     def _imageShape(self):
-
-        try:
-            return self.numFrames, self.numRows, self.activeCols // self.downsample
-            # # image size and pixel size
-            # w = self.width
-            # h = self.height
-            # pxw = self.pixelWidth
-            # pxh = self.pixelHeight
-            
-            # nx = int(w / pxw) + 1
-            # ny = int(h / pxh) + 1
-            # return (ny, nx)
-        except RuntimeError:
-            raise
+        return self.numFrames, self.imageRows, self.imageCols
 
     def _imageOffset(self):
         return (self.scanOffset + self.osLen) // self.downsample
@@ -741,6 +730,11 @@ class RectScan(SystemSolver):
         except RuntimeError:
             pass
 
+        try:
+            return self.imageRows
+        except RuntimeError:
+            pass
+
         h = self.height
         pxh = self.pixelHeight
         
@@ -754,6 +748,11 @@ class RectScan(SystemSolver):
         # return np.floor(distance / self.fullWidth)
 
     def _activeCols(self):
+        try:
+            return self.imageCols
+        except RuntimeError:
+            pass
+
         try:
             sw = self.scanShape[2]
             osl = self.osLen
@@ -774,6 +773,11 @@ class RectScan(SystemSolver):
         except RuntimeError:
             pass
 
+    def _imageRows(self):
+        return self.numRows  # just an alias
+
+    def _imageCols(self):
+        return self.activeCols // self.downsample
 
     def _numCols(self):
         try:
@@ -836,6 +840,8 @@ class RectScanParameter(pTypes.SimpleParameter):
             dict(name='totalDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='width', readonly=True, type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='height', readonly=True, type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='imageRows', type='int', value=500, limits=[1, None]),
+            dict(name='imageCols', type='int', value=500, limits=[1, None]),
             dict(name='minOverscan', type='float', value=30.e-6, suffix='s', siPrefix=True, bounds=[0., 1.], step=0.1, dec=True, minStep=1e-7),
             dict(name='bidirectional', type='bool', value=True),
             dict(name='pixelWidth', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
