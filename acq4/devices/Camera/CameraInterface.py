@@ -13,7 +13,7 @@ import acq4.Manager as Manager
 from RecordThread import RecordThread
 from CameraInterfaceTemplate import Ui_Form as CameraInterfaceTemplate
 from acq4.devices.OptomechDevice import DeviceTreeItemGroup
-from acq4.util.imaging import FrameDisplay
+from acq4.util.imaging import ImagingCtrl
 
         
 class CameraInterface(QtCore.QObject):
@@ -143,7 +143,7 @@ class CameraInterface(QtCore.QObject):
         self.ui.frameToBgBtn.clicked.connect(self.addPersistentFrame)
 
         self.frameDisplay.imageUpdated.connect(self.imageUpdated)
-        
+
         
     def newFrame(self, frame):
         self.frameDisplay.newFrame(frame)

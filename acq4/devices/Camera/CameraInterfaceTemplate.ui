@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>198</width>
-    <height>256</height>
+    <width>161</width>
+    <height>72</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -20,154 +20,6 @@
    <property name="margin">
     <number>0</number>
    </property>
-   <item>
-    <widget class="QWidget" name="recordCtrlWidget" native="true">
-     <layout class="QGridLayout" name="gridLayout_3">
-      <property name="spacing">
-       <number>0</number>
-      </property>
-      <item row="0" column="1">
-       <widget class="QPushButton" name="acquireVideoBtn">
-        <property name="toolTip">
-         <string>Start/stop camera acquisition.
-In general, this can just stay on always.</string>
-        </property>
-        <property name="text">
-         <string>Acquire Video</string>
-        </property>
-        <property name="checkable">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="0">
-       <widget class="QPushButton" name="acquireFrameBtn">
-        <property name="text">
-         <string>Acquire Frame</string>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="0" colspan="2">
-       <widget class="Line" name="line">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-       </widget>
-      </item>
-      <item row="6" column="1">
-       <widget class="QPushButton" name="recordStackBtn">
-        <property name="toolTip">
-         <string>Start/stop recording frames as they are acquired. 
-Frames are written to the current storage directory set in 
-the data manager window.</string>
-        </property>
-        <property name="text">
-         <string>Record Stack</string>
-        </property>
-        <property name="checkable">
-         <bool>true</bool>
-        </property>
-        <property name="flat">
-         <bool>false</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="7" column="0" colspan="2">
-       <layout class="QGridLayout" name="gridLayout">
-        <item row="0" column="0">
-         <widget class="QCheckBox" name="recordXframesCheck">
-          <property name="text">
-           <string>Stack Limit</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1" colspan="2">
-         <widget class="QSpinBox" name="recordXframesSpin">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="suffix">
-           <string> frames</string>
-          </property>
-          <property name="minimum">
-           <number>1</number>
-          </property>
-          <property name="maximum">
-           <number>1000000</number>
-          </property>
-          <property name="value">
-           <number>100</number>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="0">
-         <widget class="QLabel" name="label_9">
-          <property name="text">
-           <string>Stack Size:</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="1">
-         <widget class="ValueLabel" name="stackSizeLabel">
-          <property name="text">
-           <string>0 frames</string>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="0">
-         <widget class="QLabel" name="label">
-          <property name="text">
-           <string>Acquiring:</string>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="1">
-         <widget class="ValueLabel" name="fpsLabel">
-          <property name="text">
-           <string>0 fps</string>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="0">
-         <widget class="QLabel" name="label_7">
-          <property name="text">
-           <string>Displaying:</string>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="1">
-         <widget class="ValueLabel" name="displayFpsLabel">
-          <property name="text">
-           <string>0 fps</string>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="2">
-         <widget class="ValueLabel" name="displayPercentLabel">
-          <property name="text">
-           <string>(0%)</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </item>
-      <item row="6" column="0">
-       <widget class="FeedbackButton" name="saveFrameBtn">
-        <property name="text">
-         <string>Save Frame</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="0" colspan="2">
-       <widget class="QPushButton" name="frameToBgBtn">
-        <property name="text">
-         <string>Last Frame → Background</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
    <item>
     <widget class="QWidget" name="devCtrlWidget" native="true">
      <layout class="QGridLayout" name="gridLayout_4">
@@ -226,16 +78,6 @@ the data manager window.</string>
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header>acq4.pyqtgraph</header>
-  </customwidget>
-  <customwidget>
-   <class>FeedbackButton</class>
-   <extends>QPushButton</extends>
-   <header>acq4.pyqtgraph</header>
-  </customwidget>
-  <customwidget>
-   <class>ValueLabel</class>
-   <extends>QLabel</extends>
    <header>acq4.pyqtgraph</header>
   </customwidget>
  </customwidgets>
