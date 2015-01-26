@@ -291,7 +291,7 @@ class RectScan(SystemSolver):
             ('activeShape', [None, tuple, None, 'n']),   # the 'active' scan area excluding overscan
             ('activeStride', [None, tuple, None, 'n']),  # and ignoring downsampling (index in samples)
             ('imageOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe 
-            ('imageShape', [None, tuple, None, 'n']),   # the 'active' image area excluding overscan
+            ('imageShape', [None, arr, None, 'nf']),   # the 'active' image area excluding overscan
             ('imageStride', [None, tuple, None, 'n']),  # and accounting for downsampling (index in pixels)
 
             # variables needed to reconstruct exact image location
@@ -518,7 +518,13 @@ class RectScan(SystemSolver):
         return np.linalg.norm(self.p1 - self.p0)
             
     def _height(self):
-        return np.linalg.norm(self.p2 - self.p0)
+        try:
+            return np.linalg.norm(self.p2 - self.p0)
+        except RuntimeError:
+            pass
+
+        ar = self.pixelAspectRatio  # w/h
+        return self.width * (self.numRows / (self.activeCols * ar))
 
     def _angle(self):
         dp = self.p1 - self.p0
@@ -528,13 +534,13 @@ class RectScan(SystemSolver):
         p0 = self.p0
         width = self.width
         angle = self.angle
-        return p0 + width * np.array(np.cos(angle), np.sin(angle))
+        return p0 + width * np.array([np.cos(angle), np.sin(angle)])
 
     def _p2(self):
         p0 = self.p0
         height = self.height
         angle = self.angle
-        return p0 + height * np.array(np.sin(angle), -np.cos(angle))
+        return p0 + height * np.array([np.sin(angle), -np.cos(angle)])
 
     def _osVector(self):
         # This vector is p1 -> osP1
@@ -753,10 +759,21 @@ class RectScan(SystemSolver):
             osl = self.osLen
             return sw - osl*2
         except RuntimeError:
+            pass
+
+        try:
             w = self.width
             pxw = self.pixelWidth
             nx = int(w / pxw) + 1
             return nx * self.downsample
+        except RuntimeError:
+            pass
+
+        try:
+            return self.imageShape[0] * self.downsample
+        except RuntimeError:
+            pass
+
 
     def _numCols(self):
         try:
