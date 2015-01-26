@@ -4,9 +4,9 @@ Summary
 
 Device code to interface with the PMT Controller implemented in an Arduino Due.
 Provides connection to the PMT to read various status flags, values, and
-errors, as well as commands to reset the PMT overcurrent flag. 
+errors, as well as commands to reset the PMT overcurrent flag.
 
-V0.30 commands:
+Arduino Due Firmware commands (V0.31):
 n       : Report the number of PMTs handled by this controller
 v       : Report Controller Firmware Version
 d#      : Print ID of the selected PMT #
@@ -21,7 +21,7 @@ t###.   : Set the reading/averaging period for mean/peak mode (msec, float)
 s       : Report overall status for all PMTs in the system.
 
 """
-import serial, struct, time, collections
+import time
 
 try:
     # this is nicer because it provides deadlock debugging information
@@ -30,13 +30,14 @@ except ImportError:
     from threading import RLock
 
 try:
-    from ..SerialDevice import SerialDevice, TimeoutError, DataError
+    from ..SerialDevice import SerialDevice
 except ValueError:
-    ## relative imports not allowed when running from command prompt
+    # relative imports not allowed when running from command prompt
     if __name__ == '__main__':
-        import sys, os
+        import sys
+        import os
         sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-        from SerialDevice import SerialDevice, TimeoutError, DataError
+        from SerialDevice import SerialDevice
 
 
 def threadsafe(method):
@@ -93,7 +94,7 @@ class PMTController(SerialDevice):
     @threadsafe
     def getNumberofPMTs(self):
         """ Get the number of PMTs known to the controller
-        
+
         Returns
         -------
         npmt : int
@@ -107,7 +108,7 @@ class PMTController(SerialDevice):
     def getPMTStatus(self):
         """Get the current overall status of the PMT:
             devicename, I, Measured, V, Overcurrentflag
-        
+
         Returns
         -------
         status : strings
@@ -122,17 +123,20 @@ class PMTController(SerialDevice):
     @threadsafe
     def getPMTStatusDict(self):
         """ Get the PMT status and parse into a dictionary. All PMTs are interrogated.
-        Returns a dictionary with one entry per PMT.
-        Each entry is a dictionary of the status values
+        Returns
+        -------
+        statusdict : dictionary
+            A dictionary with one entry per PMT. Each PMT entry is, in turn,
+            a dictionary of the status values
         """
         r = self.getPMTStatus()
-        d = {}
+        statusdict = {}
         for i in self.PMTList:
-            
-            d['PMT%02d' % i] = {'Type': r[i][6:15], 'Iinst': float(r[i][19:26]), 'Units': r[i][26:28], 
-                                'Measuremode': r[i][30:34], 'Imeasuremode': float(r[i][34:44]), 
-                                'Vcmd': float(r[i][52:58]), 'Error': int(r[i][64:66])}
-        return d
+            statusdict['PMT%02d' % i] = {'Type': r[i][6:15], 'Iinst': float(r[i][19:26]),
+                                         'Units': r[i][26:28], 'Measuremode': r[i][30:34],
+                                         'Imeasuremode': float(r[i][34:44]), 'Vcmd': float(r[i][52:58]),
+                                         'Error': int(r[i][64:66])}
+        return statusdict
 
     @threadsafe
     def getPMTId(self, pmt=None):
@@ -149,7 +153,7 @@ class PMTController(SerialDevice):
             The PMT name as encoded in the firmware.
         """
         if pmt not in self.PMTList:
-            raise ValueError ("PMTController Device getPMTId requires a pmt number")
+            raise ValueError("PMTController Device getPMTId requires a pmt number")
         self.write('d%d\n' % pmt)
         packet = self.readUntil(term='\r\n')
         return packet[6:15]
@@ -170,7 +174,7 @@ class PMTController(SerialDevice):
             The PMT current, in microamperes.
         """
         if pmt not in self.PMTList:
-            raise ValueError ("PMTController Device getPMTCurrent requires a pmt number")
+            raise ValueError("PMTController Device getPMTCurrent requires a pmt number")
         self.write('i%d\n' % pmt)
         packet = self.readUntil(term='\r\n')
         return float(packet[3:9])
@@ -222,7 +226,7 @@ class PMTController(SerialDevice):
             The pmt current, measured as peak or average (depending on setting)
         """
         if pmt not in self.PMTList:
-            raise ValueError ("PMTController Device getPMTMeasures requires a pmt number")
+            raise ValueError("PMTController Device getPMTMeasures requires a pmt number")
         self.write('c%d\n' % pmt)
         packet = self.readUntil(term='\r\n')
         return (packet[0], float(packet[3:12]))
@@ -243,7 +247,7 @@ class PMTController(SerialDevice):
             Command anode voltage, in V.
         """
         if pmt not in self.PMTList:
-            raise ValueError ("PMTController Device getPMTAnodeV requires a pmt number")
+            raise ValueError("PMTController Device getPMTAnodeV requires a pmt number")
         self.write('a%d\n' % pmt)
         packet = self.readUntil(term='\r\n')
         return float(packet[3:9])
@@ -264,7 +268,7 @@ class PMTController(SerialDevice):
             0 if ok, 1 if overcurrent detection has tripped and shut off pmt
         """
         if pmt not in self.PMTList:
-            raise ValueError ("PMTController Device getPMTOverCurrent requires a pmt number")
+            raise ValueError("PMTController Device getPMTOverCurrent requires a pmt number")
         self.write('o%d\n' % pmt)
         packet = self.readUntil(term='\r\n')
         return int(packet[3:5])
@@ -272,15 +276,15 @@ class PMTController(SerialDevice):
     @threadsafe
     def resetPMT(self, pmt=None):
         """ Reset a specific PMT
-        
+
         Parameters
         ----------
         pmt : int
             The pmt to read. Default None.
-        
+
         """
         if pmt not in self.PMTList:
-            raise ValueError ("PMTController Device resetPMT requires a pmt number")
+            raise ValueError("PMTController Device resetPMT requires a pmt number")
         self.write('r%d\n' % pmt)
 
 
@@ -309,7 +313,7 @@ if __name__ == '__main__':
         anodei = s.getPMTCurrent(pmt=i)  # instantaneous current
         mtype, curr = s.getPMTMeasures(pmt=i)  # average or peak current
         o = s.getPMTOverCurrent(pmt=i)
-        print ('V{0:d}: {1:6.3f}  I: {2:6.3f}  meas({3:1s}): {4:6.3f}, over: {5:1d}'.format(i, v, anodei, mtype, curr, o))
+        print('V{0:d}: {1:6.3f}  I: {2:6.3f}  meas({3:1s}): {4:6.3f}, over: {5:1d}'
+              .format(i, v, anodei, mtype, curr, o))
 
     print (s.getPMTStatusDict())
-
