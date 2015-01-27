@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'acq4/util/imaging/imaging_template.ui'
 #
-# Created: Mon Jan 26 16:36:39 2015
+# Created: Tue Jan 27 22:02:33 2015
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -74,9 +74,6 @@ class Ui_Form(object):
         self.label_9 = QtGui.QLabel(Form)
         self.label_9.setObjectName(_fromUtf8("label_9"))
         self.gridLayout.addWidget(self.label_9, 3, 0, 1, 1)
-        self.stackSizeLabel = ValueLabel(Form)
-        self.stackSizeLabel.setObjectName(_fromUtf8("stackSizeLabel"))
-        self.gridLayout.addWidget(self.stackSizeLabel, 3, 1, 1, 1)
         self.label = QtGui.QLabel(Form)
         self.label.setObjectName(_fromUtf8("label"))
         self.gridLayout.addWidget(self.label, 5, 0, 1, 1)
@@ -101,6 +98,9 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.recordStackBtn, 1, 0, 1, 3)
         spacerItem2 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.gridLayout.addItem(spacerItem2, 4, 0, 1, 1)
+        self.stackSizeLabel = QtGui.QLabel(Form)
+        self.stackSizeLabel.setObjectName(_fromUtf8("stackSizeLabel"))
+        self.gridLayout.addWidget(self.stackSizeLabel, 3, 1, 1, 2)
         self.gridLayout_2.addLayout(self.gridLayout, 6, 0, 1, 2)
         spacerItem3 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.gridLayout_2.addItem(spacerItem3, 3, 0, 1, 1)
@@ -123,7 +123,6 @@ class Ui_Form(object):
         self.recordXframesCheck.setText(_translate("Form", "Stack Limit", None))
         self.recordXframesSpin.setSuffix(_translate("Form", " frames", None))
         self.label_9.setText(_translate("Form", "Stack Size:", None))
-        self.stackSizeLabel.setText(_translate("Form", "0 frames", None))
         self.label.setText(_translate("Form", "Acquiring:", None))
         self.fpsLabel.setText(_translate("Form", "0 fps", None))
         self.label_7.setText(_translate("Form", "Displaying:", None))
@@ -133,5 +132,6 @@ class Ui_Form(object):
 "Frames are written to the current storage directory set in \n"
 "the data manager window.", None))
         self.recordStackBtn.setText(_translate("Form", "Record Stack", None))
+        self.stackSizeLabel.setText(_translate("Form", "0 frames", None))
 
 from acq4.pyqtgraph import ValueLabel, FeedbackButton

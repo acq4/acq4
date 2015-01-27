@@ -60,7 +60,7 @@ class ImagingCtrl(QtGui.QWidget):
         self.ui.acquireFrameBtn.clicked.connect(self.acquireFrameClicked)
         self.ui.recordStackBtn.toggled.connect(self.toggleRecord)
         self.ui.saveFrameBtn.clicked.connect(self.saveFrameClicked)
-        self.ui.pinFrameBtn.clicked.connect(self.addPinnedFrame)
+        self.ui.pinFrameBtn.clicked.connect(self.pinFrameClicked)
 
     def newFrame(self, frame):
         self.ui.saveFrameBtn.setEnabled(True)
@@ -73,8 +73,9 @@ class ImagingCtrl(QtGui.QWidget):
         if fps is not None:
             self.ui.displayFpsLabel.setValue(fps)
 
-        self.recordThread.newFrame(frame)
-        self.ui.stackSizeLabel.setText('%d frames' % self.recordThread.stackSize)
+        queued = self.recordThread.newFrame(frame)
+        if self.ui.recordStackBtn.isChecked():
+            self.ui.stackSizeLabel.setText('%d frames' % self.recordThread.stackSize)
 
     def saveFrameClicked(self):
         if self.ui.linkSavePinBtn.isChecked():
@@ -83,6 +84,7 @@ class ImagingCtrl(QtGui.QWidget):
 
     def toggleRecord(self, b):
         if b:
+            self.ui.stackSizeLabel.setText('0 frames')
             self.ui.recordStackBtn.setChecked(True)
             self.ui.recordXframesCheck.setEnabled(False)
             self.ui.recordXframesSpin.setEnabled(False)
@@ -97,7 +99,7 @@ class ImagingCtrl(QtGui.QWidget):
             self.ui.recordXframesSpin.setEnabled(True)
             self.recordThread.stopRecording()
 
-    def recordFinished(self):
+    def recordFinished(self, fh, numFrames):
         self.toggleRecord(False)
 
     def recordThreadStopped(self):
@@ -111,10 +113,19 @@ class ImagingCtrl(QtGui.QWidget):
 
     def quit(self):
         try:
-            # self.recordThread.sigShowMessage.disconnect(self.showMessage)
             self.recordThread.finished.disconnect(self.recordThreadStopped)
+        except TypeError:
+            pass
+        try:
             self.recordThread.sigRecordingFailed.disconnect(self.recordingFailed)
+        except TypeError:
+            pass
+        try:
             self.recordThread.sigRecordingFinished.disconnect(self.recordFinished)
+        except TypeError:
+            pass
+        try:
+            self.recordThread.finished.disconnect(self.recordThreadStopped)
         except TypeError:
             pass
 
@@ -123,7 +134,7 @@ class ImagingCtrl(QtGui.QWidget):
             raise Exception("Timed out while waiting for rec. thread exit!")
 
     def acquisitionStopped(self):
-        self.toggleRecord(False)
+        # self.toggleRecord(False)
         self.ui.acquireVideoBtn.setChecked(False)
         self.ui.acquireVideoBtn.setEnabled(True)
 
@@ -138,10 +149,13 @@ class ImagingCtrl(QtGui.QWidget):
     def acquireFrameClicked(self):
         self.sigAcquireFrameClicked.emit()
 
+    def pinFrameClicked(self):
+        if self.ui.linkSavePinBtn.isChecked():
+            self.recordThread.saveFrame()
+        self.addPinnedFrame()
+
     def addPinnedFrame(self):
         """Make a copy of the current camera frame and pin it to the view background"""
-        if self.ui.linkSavePinBtn.isChecked():
-            self.saveFrameClicked()
 
         data = self.frameDisplay.visibleImage()
         if data is None:
@@ -160,7 +174,7 @@ class ImagingCtrl(QtGui.QWidget):
         view = self.frameDisplay.imageItem().getViewBox()
         if view is not None:
             view.addItem(im)
-        im.setTransform(self.frameDisplay.imageItem().globalTransform().as2D())
+        im.setTransform(self.frameDisplay.currentFrame.globalTransform().as2D())
 
     def removePinnedFrame(self, fr):
         self.pinnedFrames.remove(fr)

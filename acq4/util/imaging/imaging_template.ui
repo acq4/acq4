@@ -139,13 +139,6 @@ In general, this can just stay on always.</string>
        </property>
       </widget>
      </item>
-     <item row="3" column="1">
-      <widget class="ValueLabel" name="stackSizeLabel">
-       <property name="text">
-        <string>0 frames</string>
-       </property>
-      </widget>
-     </item>
      <item row="5" column="0">
       <widget class="QLabel" name="label">
        <property name="text">
@@ -224,6 +217,13 @@ the data manager window.</string>
         </size>
        </property>
       </spacer>
+     </item>
+     <item row="3" column="1" colspan="2">
+      <widget class="QLabel" name="stackSizeLabel">
+       <property name="text">
+        <string>0 frames</string>
+       </property>
+      </widget>
      </item>
     </layout>
    </item>

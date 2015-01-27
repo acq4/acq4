@@ -20,7 +20,7 @@ class RecordThread(Thread):
     """
     # sigShowMessage = QtCore.Signal(object)
     sigRecordingFailed = QtCore.Signal()
-    sigRecordingFinished = QtCore.Signal()
+    sigRecordingFinished = QtCore.Signal(object, object)  # file handle, num frames
     sigSavedFrame = QtCore.Signal(object)
     
     def __init__(self, ui):
@@ -40,6 +40,7 @@ class RecordThread(Thread):
         self.currentStack = None  # file handle of currently recorded stack
         self.startFrameTime = None
         self.lastFrameTime = None
+        self.currentFrameNum = 0
 
     def startRecording(self, frameLimit=None):
         """Ask the recording thread to begin recording a new image stack.
@@ -134,6 +135,10 @@ class RecordThread(Thread):
             time.sleep(100e-3)
 
     def handleFrames(self, frames):
+        # Write as many frames into the stack as possible.
+        # If False appears in the list of frames, it indicates the end of a stack
+        # and any further frames are written to a new stack.
+
         recFrames = []
         for frame in frames:
 
@@ -141,15 +146,16 @@ class RecordThread(Thread):
                 # stop current recording
                 if len(recFrames) > 0:
                     ## write prior frames now
-                    self.writeFrames(recFrames)
+                    self.writeFrames(recFrames, dh)
                     recFrames = []
 
                 if self.currentStack is not None:
                     dur = self.lastFrameTime - self.startFrameTime
-                    self.currentStack.setInfo({'frames': self.currentFrameNum, 'duration': dur, 'averageFPS': ((self.currentFrameNum-1)/dur)})
+                    self.currentStack.setInfo({'frames': self.currentFrameNum, 'duration': dur, 'averageFPS': (self.currentFrameNum/dur)})
                     # self.showMessage('Finished recording %s - %d frames, %02f sec' % (self.currentStack.name(), self.currentFrameNum, dur)) 
-                    self.sigRecordingFinished.emit(self.currentStack, dur)
+                    self.sigRecordingFinished.emit(self.currentStack, self.currentFrameNum)
                     self.currentStack = None
+                    self.currentFrameNum = 0
                 continue
 
 
@@ -180,6 +186,7 @@ class RecordThread(Thread):
             
         if len(recFrames) > 0:
             self.writeFrames(recFrames, dh)
+            self.currentFrameNum += len(recFrames)
 
     def writeFrames(self, frames, dh):
         newRec = self.currentStack is None
