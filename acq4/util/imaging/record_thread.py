@@ -7,6 +7,7 @@ from acq4.util.metaarray import MetaArray
 import numpy as np
 import acq4.util.ptime as ptime
 import acq4.Manager
+from acq4.util.DataManager import FileHandle, DirHandle
 try:
     from acq4.filetypes.ImageFile import *
     HAVE_IMAGEFILE = True
@@ -15,236 +16,195 @@ except ImportError:
 
 
 class RecordThread(Thread):
+    """Class for offloading image recording to a worker thread.
     """
-    Thread class used by camera module for storing data to disk.
-    """
-    sigShowMessage = QtCore.Signal(object)
+    # sigShowMessage = QtCore.Signal(object)
     sigRecordingFailed = QtCore.Signal()
     sigRecordingFinished = QtCore.Signal()
+    sigSavedFrame = QtCore.Signal(object)
     
     def __init__(self, ui):
         Thread.__init__(self)
-        self.ui = ui
         self.m = acq4.Manager.getManager()
-        self.ui.cam.sigNewFrame.connect(self.newCamFrame)
         
-        ui.ui.recordStackBtn.toggled.connect(self.toggleRecord)
-        ui.ui.saveFrameBtn.clicked.connect(self.snapClicked)
-        self.recording = False
-        self.recordStart = False
-        self.recordStop = False
-        self.takeSnap = False
-        self.currentRecord = None
+        self._stackSize = 0  # size of currently recorded stack
+        self._recording = False
+        self.currentFrame = None
         self.frameLimit = None
         
+        # Interaction with worker thread:
         self.lock = Mutex(QtCore.QMutex.Recursive)
-        self.camLock = Mutex()
-        self.newCamFrames = []
-        
-    def newCamFrame(self, frame=None):
+        self.newFrames = []  # list of frames and the files they should be sored / appended to.
+
+        # Attributes private to worker thread:
+        self.currentStack = None  # file handle of currently recorded stack
+        self.startFrameTime = None
+        self.lastFrameTime = None
+
+    def startRecording(self, frameLimit=None):
+        """Ask the recording thread to begin recording a new image stack.
+
+        *frameLimit* may specify the maximum number of frames in the stack before
+        the recording will stop.
+        """
+        if self.recording:
+            raise Exception("Already recording; cannot start a new stack.")
+
+        self.frameLimit = frameLimit
+        self._stackSize = 0
+        self._recording = True
+
+    def stopRecording(self):
+        """Ask the recording thread to stop recording new images to the image
+        stack.
+        """
+        self.frameLimit = None
+        self._stackSize = 0
+        self._recording = False
+        with self.lock:
+            self.newFrames.append(False)
+
+    @property
+    def recording(self):
+        """Bool indicating whether the thread is currently recording new frames
+        to an image stack.
+        """
+        return self._recording
+
+    def saveFrame(self):
+        """Ask the recording thread to save the most recently acquired frame.
+        """
+        with self.lock:
+            self.newFrames.append({'frame': self.currentFrame, 'dir': self.m.getCurrentDir(), 'stack': False})
+
+    def newFrame(self, frame=None):
+        """Inform the recording thread that a new frame has arrived.
+
+        Returns the number of frames currently waiting to be written.
+        """
         if frame is None:
             return
+
+        self.currentFrame = frame
         with self.lock:
-            newRec = self.recordStart
-            
-            if self.frameLimit is not None:
-                self.frameLimit -= 1
-                if self.frameLimit < 0:
-                    self.recordStop = True
-                    self.frameLimit = None
-                    self.sigRecordingFinished.emit()
-            lastRec = self.recordStop and self.recording
-            if self.recordStop:
-                self.recording = False
-                self.recordStop = False
-            if self.recordStart:
-                self.recordStart = False
-                self.recording = True
-            recording = self.recording or lastRec
-            takeSnap = self.takeSnap
-            self.takeSnap = False
-            recFile = self.currentRecord
-        if recording or takeSnap:
-            with self.camLock:
-                ## remember the record/snap/storageDir states since they might change 
-                ## before the write thread gets to this frame
-                self.newCamFrames.append({'frame': frame, 'record': recording, 'snap': takeSnap, 'newRec': newRec, 'lastRec': lastRec})
-                if self.currentRecord is not None:
-                    self.showMessage("Recording %s - %d" % (self.currentRecord.name(), self.currentFrameNum))
+            if self.recording:
+                self.newFrames.append({'frame': self.currentFrame, 'dir': self.m.getCurrentDir(), 'stack': True})
+                self._stackSize += 1
+            framesLeft = len(self.newFrames)
+        if self.recording:
+            if self.frameLimit is not None and self._stackSize >= self.frameLimit:
+                self.frameLimit = None
+                self.stopRecording()
+        return framesLeft
+
+    @property
+    def stackSize(self):
+        """The total number of frames requested for storage in the current
+        image stack.
+        """
+        return self._stackSize
+
+    def quit(self):
+        """Stop the recording thread.
+
+        No new frames will be written after the thread exits.
+        """
+        with self.lock:
+            self.stopThread = True
+            self.newFrames = []
+            self.currentFrame = None
     
-    def run(self): ### run is called indirectly (by C somewhere) by calling start() from the parent thread; DO NOT call directly
+    def run(self):
+        # run is invoked in the worker thread automatically after calling start()
         self.stopThread = False
         
         while True:
-            try:
-                with self.camLock:
-                    handleCamFrames = self.newCamFrames[:]
-                    self.newCamFrames = []
-            except:
-                debug.printExc('Error in camera recording thread:')
-                break
+            with self.lock:
+                if self.stopThread:
+                    break
+                newFrames = self.newFrames[:]
+                self.newFrames = []
             
             try:
-                self.handleCamFrames(handleCamFrames)
-                #while len(handleCamFrames) > 0:
-                    #self.handleCamFrame(handleCamFrames.pop(0))
+                self.handleFrames(newFrames)
             except:
-                debug.printExc('Error in camera recording thread:')
-                self.toggleRecord(False)
-                #self.emit(QtCore.SIGNAL('recordingFailed'))
+                debug.printExc('Error in image recording thread:')
                 self.sigRecordingFailed.emit()
                 
-            time.sleep(10e-3)
-            
-            #print "  RecordThread run: stop check"
-            with self.lock as l:
-                #print "  RecordThread run:   got lock"
-                if self.stopThread:
-                    #print "  RecordThread run:   stop requested, exiting loop"
-                    break
-            #print "  RecordThread run:   unlocked"
+            time.sleep(100e-3)
 
-    def handleCamFrames(self, frames):
+    def handleFrames(self, frames):
         recFrames = []
-        newRec = False
         for frame in frames:
+
+            if frame is False:
+                # stop current recording
+                if len(recFrames) > 0:
+                    ## write prior frames now
+                    self.writeFrames(recFrames)
+                    recFrames = []
+
+                if self.currentStack is not None:
+                    dur = self.lastFrameTime - self.startFrameTime
+                    self.currentStack.setInfo({'frames': self.currentFrameNum, 'duration': dur, 'averageFPS': ((self.currentFrameNum-1)/dur)})
+                    # self.showMessage('Finished recording %s - %d frames, %02f sec' % (self.currentStack.name(), self.currentFrameNum, dur)) 
+                    self.sigRecordingFinished.emit(self.currentStack, dur)
+                    self.currentStack = None
+                continue
+
+
             data = frame['frame'].data()
             info = frame['frame'].info()
-            if frame['record']:
-                recFrames.append((data, info))
-                if frame['newRec']:
-                    self.startFrameTime = info['time']
-                    newRec = True
-                
-                
-                if frame['lastRec']:
-                    dur = info['time'] - self.startFrameTime
-                    self.currentRecord.setInfo({'frames': self.currentFrameNum, 'duration': dur, 'averageFPS': ((self.currentFrameNum-1)/dur)})
-                    self.showMessage('Finished recording %s - %d frames, %02f sec' % (self.currentRecord.name(), self.currentFrameNum, dur)) 
-            else:
-                if len(recFrames) > 0:
-                    ## do recording
-                    self.writeFrames(recFrames, newRec)
-                    recFrames = []
-                    newRec = False
-                
-            
-            if frame['snap']:
+            dh = frame['dir']
+            stack = frame['stack']
+
+            if stack is False:
+                # Store single frame to new file
                 try:
                     if HAVE_IMAGEFILE:
                         fileName = 'image.tif'
-                        fh = self.m.getCurrentDir().writeFile(data, fileName, info, fileType="ImageFile", autoIncrement=True)
+                        fh = dh.writeFile(data, fileName, info, fileType="ImageFile", autoIncrement=True)
                     else:
                         fileName = 'image.ma'
-                        fh = self.m.getCurrentDir().writeFile(data, fileName, info, fileType="MetaArray", autoIncrement=True)
+                        fh = dh.writeFile(data, fileName, info, fileType="MetaArray", autoIncrement=True)
 
-                    fn = fh.name()
-                    self.showMessage("Saved image %s" % fn)
-                    with self.lock:
-                        self.takeSnap = False
-                    self.ui.ui.saveFrameBtn.success("Saved.")
+                    self.sigSavedFrame.emit(fh.name())
                 except:
-                    self.ui.ui.saveFrameBtn.failure("Error.")
+                    self.sigSavedFrame.emit(False)
                     raise
-                    
-        if len(recFrames) > 0:
-            self.writeFrames(recFrames, newRec)
-            
+                continue
 
-    def writeFrames(self, frames, newRec):
+            # Store frame to current (or new) stack
+            recFrames.append((data, info))
+            self.lastFrameTime = info['time']
+            
+        if len(recFrames) > 0:
+            self.writeFrames(recFrames, dh)
+
+    def writeFrames(self, frames, dh):
+        newRec = self.currentStack is None
+
+        if newRec:
+            self.startFrameTime = frames[0][1]['time']
+
         times = [f[1]['time'] for f in frames]
         arrayInfo = [
             {'name': 'Time', 'values': array(times) - self.startFrameTime, 'units': 's'},
             {'name': 'X'},
             {'name': 'Y'}
         ]
-        #import random
-        #if random.random() < 0.01:
-            #raise Exception("TEST")
         imgs = [f[0][np.newaxis,...] for f in frames]
         
         data = MetaArray(np.concatenate(imgs, axis=0), info=arrayInfo)
         if newRec:
-            self.currentRecord = self.m.getCurrentDir().writeFile(data, 'video', autoIncrement=True, info=frames[0][1], appendAxis='Time')
-            self.currentFrameNum = 0
+            self.currentStack = dh.writeFile(data, 'video', autoIncrement=True, info=frames[0][1], appendAxis='Time')
+            # self.currentFrameNum = 0
         else:
-            data.write(self.currentRecord.name(), appendAxis='Time')
-            s = 1.0/self.currentFrameNum
+            data.write(self.currentStack.name(), appendAxis='Time')
+        #     s = 1.0/self.currentFrameNum
             
-        #self.showMessage("Recording %s - %d" % (self.currentRecord.name(), self.currentFrameNum))
-        
-        self.currentFrameNum += len(frames)
-
-    #def handleCamFrame(self, frame):
-        #(data, info) = frame['frame']
-        
-        #if frame['record']:
-            #if frame['newRec']:
-                #self.startFrameTime = info['time']
-                
-            #arrayInfo = [
-                #{'name': 'Time', 'values': array([info['time'] - self.startFrameTime]), 'units': 's'},
-                #{'name': 'X'},
-                #{'name': 'Y'}
-            #]
-            ##import random
-            ##if random.random() < 0.01:
-                ##raise Exception("TEST")
-            #data = MetaArray(data[np.newaxis], info=arrayInfo)
-            #if frame['newRec']:
-                #self.currentRecord = self.m.getCurrentDir().writeFile(data, 'video', autoIncrement=True, info=info, appendAxis='Time')
-                #self.currentFrameNum = 0
-            #else:
-                #now = ptime.time()
-                #data.write(self.currentRecord.name(), appendAxis='Time')
-                #print "Frame write: %0.2gms" % (1000*(ptime.time()-now))
-                #s = 1.0/self.currentFrameNum
-                
-            #self.showMessage("Recording %s - %d" % (self.currentRecord.name(), self.currentFrameNum))
-            
-            #self.currentFrameNum += 1
-            
-            #if frame['lastRec']:
-                #dur = info['time'] - self.startFrameTime
-                #self.currentRecord.setInfo({'frames': self.currentFrameNum, 'duration': dur, 'averageFPS': ((self.currentFrameNum-1)/dur)})
-                #self.showMessage('Finished recording %s - %d frames, %02f sec' % (self.currentRecord.name(), self.currentFrameNum, dur)) 
-                
-            
-        
-        #if frame['snap']:
-            #fileName = 'image.tif'
-            
-            #fh = self.m.getCurrentDir().writeFile(data, fileName, info, fileType="ImageFile", autoIncrement=True)
-            #fn = fh.name()
-            #self.showMessage("Saved image %s" % fn)
-            #with self.lock:
-                #self.takeSnap = False
+        # self.currentFrameNum += len(frames)
     
-    def showMessage(self, msg):
-        #self.emit(QtCore.SIGNAL('showMessage'), msg)
-        self.sigShowMessage.emit(msg)
+    # def showMessage(self, msg):
+    #     self.sigShowMessage.emit(msg)
     
-    def snapClicked(self):
-        with self.lock:
-            self.takeSnap = True
-
-    def toggleRecord(self, b):
-        with self.lock:
-            if b: ### Only the GUI thread is allowed to initiate recording
-                self.recordStart = True
-                self.frameLimit = None
-                if self.ui.ui.recordXframesCheck.isChecked():
-                    self.frameLimit = self.ui.ui.recordXframesSpin.value()
-            else:
-                if self.recording:
-                    self.recordStop = True
-
-    def stop(self):
-        #QtCore.QObject.disconnect(self.ui.cam, QtCore.SIGNAL('newFrame'), self.newCamFrame)
-        self.ui.cam.sigNewFrame.disconnect(self.newCamFrame)
-        #print "RecordThread stop.."    
-        with self.lock:
-        #print "  RecordThread stop: locked"
-            self.stopThread = True
-        #print "  RecordThread stop: done"
-        

@@ -10,7 +10,6 @@ import scipy.ndimage
 from acq4.util.debug import printExc, Profiler
 from acq4.util.metaarray import *
 import acq4.Manager as Manager
-from RecordThread import RecordThread
 from CameraInterfaceTemplate import Ui_Form as CameraInterfaceTemplate
 from acq4.devices.OptomechDevice import DeviceTreeItemGroup
 from acq4.util.imaging import ImagingCtrl
@@ -44,7 +43,7 @@ class CameraInterface(QtCore.QObject):
         # takes care of displaying image data, 
         # contrast & background subtraction user interfaces
         self.imagingCtrl = ImagingCtrl()
-        self.frameDisplay = FrameDisplay()
+        self.frameDisplay = self.imagingCtrl.frameDisplay
 
         ## Move control panels into docks
         recDock = dockarea.Dock(name="Recording", widget=self.imagingCtrl, size=(100, 10), autoOrientation=False)
@@ -120,10 +119,9 @@ class CameraInterface(QtCore.QObject):
         self.cam.sigCameraStarted.connect(self.cameraStarted)
         self.cam.sigShowMessage.connect(self.showMessage)
 
-
         self.frameDisplay.imageUpdated.connect(self.imageUpdated)
         self.imagingCtrl.sigAcquireVideoClicked.connect(self.toggleAcquire)
-        self.imagingCtrl.ui.acquireFrameBtn.disable()
+        self.imagingCtrl.ui.acquireFrameBtn.setEnabled(False)
         
     def newFrame(self, frame):
         self.imagingCtrl.newFrame(frame)
