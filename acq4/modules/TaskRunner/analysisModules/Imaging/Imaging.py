@@ -32,10 +32,7 @@ class ImagingModule(AnalysisModule):
         self.params = Parameter(name='imager', children=[
             dict(name='scanner', type='interface', interfaceTypes=['scanner']),
             dict(name='detectors', type='group', addText="Add detector.."),
-            dict(name='decomb', type='float', readonly=True, value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=1e-6, decimals=5, children=[
-                dict(name='auto', type='bool', value=True),
-                dict(name='subpixel', type='bool', value=False),
-                ]),
+            self.decomb.param,
             dict(name='downsample', type='int', value=1, suffix='x', bounds=[1,None]),
             dict(name='display', type='bool', value=True),
             dict(name='scanProgram', type='list', values=[]),

@@ -18,10 +18,12 @@ from acq4.util.imaging import ImagingCtrl
         
 class CameraInterface(QtCore.QObject):
     """
-    This class provides all the functionality necessary for a camera to display images and controls within the camera module's main window. Each camera that connects to a camera module must implement an instance of this interface.
+    This class provides all the functionality necessary for a camera to display 
+    images and controls within the camera module's main window. Each camera that 
+    connects to a camera module must implement an instance of this interface.
     
-    The interface provides a control GUI via the controlWidget() method and directly manages its own GraphicsItems
-    within the camera module's view box.
+    The interface provides a control GUI via the controlWidget() method and 
+    directly manages its own GraphicsItems within the camera module's view box.
     """
     
     sigNewFrame = QtCore.Signal(object, object)  # self, frame
@@ -31,7 +33,6 @@ class CameraInterface(QtCore.QObject):
         self.module = module
         self.view = module.getView()
         self.hasQuit = False
-        self.persistentFrames = []
         self.boundaryItems = {}
 
         ## setup UI
@@ -42,11 +43,11 @@ class CameraInterface(QtCore.QObject):
 
         # takes care of displaying image data, 
         # contrast & background subtraction user interfaces
+        self.imagingCtrl = ImagingCtrl()
         self.frameDisplay = FrameDisplay()
 
-
         ## Move control panels into docks
-        recDock = dockarea.Dock(name="Recording", widget=self.ui.recordCtrlWidget, size=(100, 10), autoOrientation=False)
+        recDock = dockarea.Dock(name="Recording", widget=self.imagingCtrl, size=(100, 10), autoOrientation=False)
         devDock = dockarea.Dock(name="Device Control", widget=self.ui.devCtrlWidget, size=(100, 10), autoOrientation=False)
         dispDock = dockarea.Dock(name="Display Control", widget=self.frameDisplay.contrastWidget(), size=(100, 600), autoOrientation=False)
         bgDock = dockarea.Dock(name="Background Subtraction", widget=self.frameDisplay.backgroundWidget(), size=(100, 10), autoOrientation=False)
@@ -54,15 +55,6 @@ class CameraInterface(QtCore.QObject):
         self.widget.addDock(devDock, 'bottom', recDock)
         self.widget.addDock(dispDock, 'bottom', devDock)
         self.widget.addDock(bgDock, 'bottom', dispDock)
-        
-        ## format labels
-        self.ui.fpsLabel.setFormatStr('{avgValue:.1f} fps')
-        self.ui.fpsLabel.setAverageTime(2.0)
-        self.ui.displayFpsLabel.setFormatStr('{avgValue:.1f} fps')
-        self.ui.displayFpsLabel.setAverageTime(2.0)
-        self.ui.displayPercentLabel.setFormatStr('({avgValue:.1f}%)')
-        self.ui.displayPercentLabel.setAverageTime(4.0)
-
         
         ## Camera state variables
         self.cam = camera
@@ -84,14 +76,6 @@ class CameraInterface(QtCore.QObject):
         self.view.addItem(self.imageItem)
         self.imageItem.setParentItem(self.imageItemGroup)
         self.imageItem.setZValue(-10)
-
-        ## set up recording thread
-        self.recordThread = RecordThread(self)
-        self.recordThread.start()
-        self.recordThread.sigShowMessage.connect(self.showMessage)
-        self.recordThread.finished.connect(self.recordThreadStopped)
-        self.recordThread.sigRecordingFinished.connect(self.recordFinished)
-        self.recordThread.sigRecordingFailed.connect(self.recordingFailed)
 
         ## open camera, determine bit depth and sensor area
         self.openCamera()
@@ -125,9 +109,6 @@ class CameraInterface(QtCore.QObject):
         self.ui.spinExposure.setValue(self.exposure)
         self.ui.spinExposure.setOpts(dec=True, step=1, minStep=100e-6, siPrefix=True, suffix='s', bounds=[0, 10])
 
-        ## connect UI signals
-        self.ui.acquireVideoBtn.clicked.connect(self.toggleAcquire)
-        self.ui.recordStackBtn.toggled.connect(self.toggleRecord)
         #Signals from self.ui.btnSnap and self.ui.recordStackBtn are caught by the RecordThread
         self.ui.btnFullFrame.clicked.connect(lambda: self.setRegion())
         self.proxy1 = SignalProxy(self.ui.binningCombo.currentIndexChanged, slot=self.binningComboChanged)
@@ -139,20 +120,14 @@ class CameraInterface(QtCore.QObject):
         self.cam.sigCameraStarted.connect(self.cameraStarted)
         self.cam.sigShowMessage.connect(self.showMessage)
 
-        ## Connect Persistent Frames dock
-        self.ui.frameToBgBtn.clicked.connect(self.addPersistentFrame)
 
         self.frameDisplay.imageUpdated.connect(self.imageUpdated)
-
+        self.imagingCtrl.sigAcquireVideoClicked.connect(self.toggleAcquire)
+        self.imagingCtrl.ui.acquireFrameBtn.disable()
         
     def newFrame(self, frame):
+        self.imagingCtrl.newFrame(frame)
         self.frameDisplay.newFrame(frame)
-        fps = self.frameDisplay.acquireFps
-        if fps is not None:
-            self.ui.fpsLabel.setValue(fps)
-        fps = self.frameDisplay.displayFps
-        if fps is not None:
-            self.ui.displayFpsLabel.setValue(fps)
 
         # ?? what's this for?
         # if self.frameDisplay.nextFrame is not None:
@@ -225,28 +200,6 @@ class CameraInterface(QtCore.QObject):
         self.lastCameraPosition = pos
         self.cameraItemGroup.setTransform(tr)
         
-    def toggleRecord(self, b):
-        if b:
-            self.ui.recordStackBtn.setChecked(True)
-            self.ui.recordXframesCheck.setEnabled(False)
-            self.ui.recordXframesSpin.setEnabled(False)
-        else:
-            self.ui.recordStackBtn.setChecked(False)
-            self.ui.recordXframesCheck.setEnabled(True)
-            self.ui.recordXframesSpin.setEnabled(True)
-
-    def recordFinished(self):
-        self.toggleRecord(False)
-
-    def recordThreadStopped(self):
-        self.toggleRecord(False)
-        self.ui.recordStackBtn.setEnabled(False)  ## Recording thread has stopped, can't record anymore.
-        self.showMessage("Recording thread died! See console for error message.")
-
-    def recordingFailed(self):
-        self.toggleRecord(False)
-        self.showMessage("Recording failed! See console for error message.")
-
     def regionWidgetChanged(self, *args):
         self.updateRegion()
 
@@ -260,17 +213,10 @@ class CameraInterface(QtCore.QObject):
 
     def quit(self):
         self.frameDisplay.quit()
+        self.imagingCtrl.quit()
 
         if self.hasQuit:
             return
-
-        try:
-            self.recordThread.sigShowMessage.disconnect(self.showMessage)
-            self.recordThread.finished.disconnect(self.recordThreadStopped)
-            self.recordThread.sigRecordingFailed.disconnect(self.recordingFailed)
-            self.recordThread.sigRecordingFinished.disconnect(self.recordFinished)
-        except TypeError:
-            pass
 
         try:
             self.cam.sigNewFrame.disconnect(self.newFrame)
@@ -285,20 +231,12 @@ class CameraInterface(QtCore.QObject):
             self.cam.stop()
             if not self.cam.wait(10000):
                 printExc("Timed out while waiting for acq thread exit!")
-        if self.recordThread.isRunning():
-            self.recordThread.stop()
-            if not self.recordThread.wait(10000):
-                raise Exception("Timed out while waiting for rec. thread exit!")
-        del self.recordThread  ## Required due to cyclic reference
 
     def cameraStopped(self):
-        self.toggleRecord(False)
-        self.ui.acquireVideoBtn.setChecked(False)
-        self.ui.acquireVideoBtn.setEnabled(True)
+        self.imagingCtrl.acquisitionStopped()
 
     def cameraStarted(self):
-        self.ui.acquireVideoBtn.setChecked(True)
-        self.ui.acquireVideoBtn.setEnabled(True)
+        self.imagingCtrl.acquisitionStarted()
 
     def binningComboChanged(self, args):
         self.setBinning(*args)
@@ -339,8 +277,10 @@ class CameraInterface(QtCore.QObject):
         self.roi.setPos([rgn[0], rgn[1]])
         self.roi.setSize([self.camSize[0], self.camSize[1]])
 
-    def toggleAcquire(self):
-        if self.ui.acquireVideoBtn.isChecked():
+    def toggleAcquire(self, acq):
+        """User clicked the acquire video button.
+        """
+        if acq:
             try:
                 self.cam.setParam('triggerMode', 'Normal', autoRestart=False)
                 self.setBinning(autoRestart=False)
@@ -349,40 +289,16 @@ class CameraInterface(QtCore.QObject):
                 self.cam.start()
                 Manager.logMsg("Camera started aquisition.", importance=0)
             except:
-                self.ui.acquireVideoBtn.setChecked(False)
+                self.imagingCtrl.acquisitionStopped()
                 printExc("Error starting camera:")
         
         else:
-            #print "ACQ untoggled, stop record"
-            self.toggleRecord(False)
             self.cam.stop()
             Manager.logMsg("Camera stopped acquisition.", importance=0)
 
     def showMessage(self, msg, delay=2000):
         self.module.showMessage(msg, delay)
 
-    def addPersistentFrame(self):
-        """Make a copy of the current camera frame and store it in the background"""
-        data = self.frameDisplay.visibleImage()
-        if data is None:
-            return
-
-        im = pg.ImageItem(data, levels=self.ui.histogram.getLevels(), lut=self.ui.histogram.getLookupTable(img=data), removable=True)
-        im.sigRemoveRequested.connect(self.removePersistentFrame)
-        if len(self.persistentFrames) == 0:
-            z = -10000
-        else:
-            z = self.persistentFrames[-1].zValue() + 1
-
-        self.persistentFrames.append(im)
-        self.module.addItem(im, z=z)
-        im.setTransform(self.currentFrame.globalTransform().as2D())
-
-    def removePersistentFrame(self, fr):
-        self.persistentFrames.remove(fr)
-        self.module.removeItem(fr)
-        fr.sigRemoveRequested.disconnect(self.removePersistentFrame)
-        
     def getImageItem(self):
         return self.imageItem
 

@@ -51,8 +51,6 @@ Presets = {
         'Downsample': 1,
         'Image Width': 256,
         'Image Height': 256,
-        'xSpan': 1.0,
-        'ySpan': 1.0,
         'Store': False,
         'Blank Screen': False,
         'Bidirectional': True,
@@ -63,8 +61,6 @@ Presets = {
         'Downsample': 2,
         'Image Width': 128 ,
         'Image Height': 128,
-        'xSpan': 1.0,
-        'ySpan': 1.0,
         'Store': False,
         'Blank Screen': False,
         'Bidirectional': True,
@@ -75,8 +71,6 @@ Presets = {
         'Downsample': 2,
         'Image Width': 64,
         'Image Height': 64,
-        'xSpan': 0.15,
-        'ySpan': 0.15,
         'Store': False,
         'Blank Screen': False,
         'Bidirectional': True,
@@ -88,8 +82,6 @@ Presets = {
         'Downsample': 10,
         'Image Width': 512,
         'Image Height': 512,
-        'xSpan': 1.0,
-        'ySpan': 1.0,
         'Blank Screen': True,
         'Bidirectional' : True,
         'Decomb': True,
@@ -99,13 +91,12 @@ Presets = {
         'Downsample': 2,
         'Image Width': 1024,
         'Image Height': 1024,
-        'xSpan': 1.0,
-        'ySpan': 1.0,
         'Blank Screen': True,
         'Bidirectional': True,
         'Decomb': True,
     },
 }
+
 
 class ImagerWindow(QtGui.QMainWindow):
     """
@@ -123,6 +114,7 @@ class ImagerWindow(QtGui.QMainWindow):
     
     def closeEvent(self, ev):
         self.module.quit()
+
 
 class ImagerView(pg.ImageView):
     """
@@ -184,26 +176,70 @@ class ImagerView(pg.ImageView):
 
 
 class Black(QtGui.QWidget):
-    """ make a black rectangle to fill screen when "blanking" """
+    """ make a black rectangle to fill screen when "blanking" 
+
+    Also draws a Cancel button that emits sigCancelClicked when clicked."""
+
+    sigCancelClicked = QtCore.Signal()
+
+    def __init__(self, parent=None):
+        QtGui.QWidget.__init__(self, parent)
+        self.cancelRect = None
+        self.cancelPressed = False
+
     def paintEvent(self, event):
         p = QtGui.QPainter(self)
         brush = pg.mkBrush(0.0)
         p.fillRect(self.rect(), brush)
+
+        center = self.rect().center()
+        r = QtCore.QPoint(70, 30)
+        self.cancelRect = QtCore.QRect(center-r, center+r)
+        p.setPen(pg.mkPen(150, 0, 0))
+        f = p.font()
+        f.setPointSize(18)
+        p.setFont(f)
+        if self.cancelPressed:
+            p.fillRect(self.cancelRect, pg.mkBrush(80, 0, 0))
+        p.drawRect(self.cancelRect)
+        p.drawText(self.cancelRect, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter, "Cancel")
         p.end()
+
+    def mousePressEvent(self, ev):
+        if ev.button() == QtCore.Qt.LeftButton and self.cancelRect.contains(ev.pos()):
+            ev.accept()
+            self.cancelPressed = True
+            self.update()
+
+    def mouseReleaseEvent(self, ev):
+        if ev.button() == QtCore.Qt.LeftButton:
+            if self.cancelRect.contains(ev.pos()) and self.cancelPressed:
+                self.sigCancelClicked.emit()
+            self.cancelPressed = False
+            self.update()
+
      
 
-class ScreenBlanker:
+class ScreenBlanker(QtCore.QObject):
     """
     Perform the blanking on ALL screens that we can detect.
     This is so that extraneous light does not leak into the 
     detector during acquisition.
     """
+    def __init__(self, blank=True):
+        QtCore.QObject.__init__(self)
+        self.blank = blank
+
     def __enter__(self):
         self.widgets = []
+        if not self.blank:
+            return
+
         d = QtGui.QApplication.desktop()
         for i in range(d.screenCount()): # look for all screens
             w = Black()
-            self.widgets.append(w) # make a black widget
+            w.sigCancelClicked.connect(self.cancelClicked)
+            self.widgets.append(w)
             sg = d.screenGeometry(i) # get the screen size
             w.move(sg.x(), sg.y()) # put the widget there
             w.showFullScreen() # duh
@@ -212,7 +248,13 @@ class ScreenBlanker:
     def __exit__(self, *args):
         for w in self.widgets:
             w.hide() # just take them away
+            w.sigCancelClicked.disconnect(self.cancelClicked)
         self.widgets = []
+
+    def cancelClicked(self):
+        """Called when a cancel button is clicked.
+        """
+        print "Cancel!"
 
         
 class RegionCtrl(pg.ROI):
@@ -273,6 +315,7 @@ class Imager(Module):
         self.currentStackLength = 0
         self.regionCtrl = None
         self.currentRoi = None
+        self.ignoreRoiChange = False
         self.tileRoi = None
         self.tileRoiVisible = False
         self.tilexPos = 0.
@@ -282,6 +325,7 @@ class Imager(Module):
         self.img = None # overlay image in the camera Window... 
         self.dwellTime = 0. # "pixel dwell time" computed from scan time and points.
         self.fieldSize = 63.0*120e-6 # field size for 63x, will be scaled for others
+        self.scanProtocol = None  # cached scan protocol computed by generateScanProtocol
         
         # we assume that you are not going to change the current camera or scope while running
         # ... not just yet anyway.
@@ -358,7 +402,8 @@ class Imager(Module):
             dict(name='Sample Rate', type='float', value=1.0e6, suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10e3, 5e6], siPrefix=True),
             dict(name='Downsample', type='int', value=1, limits=[1,None]),
             dict(name='Average', type='int', value=1, limits=[1,100]),
-
+            dict(name='Bidirectional', type='bool', value=True),
+            dict(name='Overscan', type='float', value=150e-6, suffix='s', siPrefix=True),
             dict(name='Pockels', type='float', value=0.03, suffix='V', step=0.005, limits=[0, 1.5], siPrefix=True),
             dict(name='Scan Speed', type='float', value=0.00, suffix='m/s', siPrefix=True, readonly=True),
             dict(name='Exposure per Frame', type='float', value=0.00, suffix='s/um^2', siPrefix=True, readonly=True),
@@ -367,14 +412,10 @@ class Imager(Module):
             dict(name='Power', type='float', value=0.00, suffix='W', readonly=True),
             dict(name='Objective', type='str', value='Unknown', readonly=True),
             dict(name='Follow Stage', type='bool', value=True),
-            dict(name='xSpan', type='float', value=1.0, limits=[0.01, 2.5]), #limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True), #  True image width and height, in microns
-            dict(name='ySpan', type='float', value=1.0, limits=[0.01, 2.5]), # limits=[0., 20.e-3], step=10e-6, siPrefix=True, readonly=True),
-            dict(name='Bidirectional', type='bool', value=True),
-            dict(name='Decomb', type='bool', value=True, children=[
+            dict(name='Decomb', type='float', readonly=True, value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=1e-6, decimals=5, children=[
                 dict(name='Auto', type='bool', value=True),
-                dict(name='Shift', type='float', value=100e-6, suffix='s', step=10e-6, siPrefix=True),
-            ]),       
-            dict(name='Overscan', type='float', value=150e-6, suffix='s', siPrefix=True),
+                dict(name='Subpixel', type='bool', value=False),
+                ]),
             dict(name='Scope Device', type='interface', interfaceTypes=['microscope']),
             dict(name='Scanner Device', type='interface', interfaceTypes=['scanner']),
             dict(name='Laser Device', type='interface', interfaceTypes=['laser']),
@@ -554,14 +595,22 @@ class Imager(Module):
     def roiChanged(self):
         """ read the ROI rectangle width and height and repost
         in the parameter tree """
+        if self.ignoreRoiChange:
+            return
         roi = self.currentRoi
         state = roi.getState()
         w, h = state['size']
         rparam = self.scanProgram.components[0].ctrlParameter()
         rparam.system.p0 = pg.Point(roi.mapToView(pg.Point(0,h)))  # top-left
         rparam.system.p1 = pg.Point(roi.mapToView(pg.Point(w,h)))  # rop-right
-        rparam.system.p2 = pg.Point(roi.mapToView(pg.Point(0,0)))  # bottom-left
-        rparam['imageRows', 'fixed'] = False  # need to let this float to accomodate new roi shape
+        rows = self.param['Image Width'] * h / w
+        with self.param.treeChangeBlocker():
+            self.param['Image Height'] = rows
+        # rparam.system.p2 = pg.Point(roi.mapToView(pg.Point(0,0)))  # bottom-left
+        # rparam['imageRows', 'fixed'] = False  # need to let this float to accomodate new roi shape
+
+        # with self.param.treeChangeBlocker():
+            # self.param['Image Height'] = rparam.system.imageRows
 
         #print 'roiChanged state: ', state
         # self.width, self.height = state['size']
@@ -644,9 +693,10 @@ class Imager(Module):
         """
         #check the devices first        
         # use the presets if they are engaged
-        # preset = self.param['Preset']
-        # self.loadPreset(preset)
+        preset = self.param['Preset']
+        self.loadPreset(preset)
 
+        self.scanProtocol = None  # invalidate cache
 
         sampleRate = self.param['Sample Rate']
         downsample = self.param['Downsample']
@@ -656,6 +706,16 @@ class Imager(Module):
 
         rect = self.scanProgram.components[0]
         rparams = rect.ctrlParameter()
+
+        for param, change, args in changes:
+            if change == 'value' and param is self.param.child('Image Height'):
+                # user explicitly requested image height; change ROI to match.
+                try:
+                    self.ignoreRoiChange = True
+                    size = self.currentRoi.size()
+                    self.currentRoi.setSize([size[0], size[0] * self.param['Image Height'] / self.param['Image Width']])
+                finally:
+                    self.ignoreRoiChange = False
 
         rparams['imageRows'] = self.param['Image Height']
         rparams['imageRows', 'fixed'] = True
@@ -686,7 +746,8 @@ class Imager(Module):
             self.param['Exposure per Frame'] = rparams.system.frameExposure
             self.param['Total Exposure'] = rparams.system.totalExposure
 
-        print rparams.system.checkOverconstraint()
+        if rparams.system.checkOverconstraint() is not False:
+            raise RuntimeError("Scan calculator is overconstrained (this is a bug).")
 
         
     def loadPreset(self, preset):
@@ -694,25 +755,22 @@ class Imager(Module):
         load the selected preset into the parameters, and calculate some
         useful parameters for display for the user.
         """
-
-        # TODO: resurrect this
-
-       #  if preset != '':
-       #      self.param['Preset'] = ''
-       #      global Presets
-       #      for k,v in Presets[preset].iteritems():
-       #          self.param[k] = v
+        if preset != '':
+            self.param['Preset'] = ''
+            global Presets
+            for k,v in Presets[preset].items():
+                self.param[k] = v
                 
-       # # with every change, recalculate some values about the display
-       #  state = self.currentRoi.getState()
-       #  self.width, self.height = state['size']
-       #  self.pixelSize = self.width/self.param['Image Width']
-       #  self.ui.pixelSize.setText('%8.3f' % (self.pixelSize*1e6))
-       #  self.param['Frame Time'] = self.param['Image Width']*self.param['Image Height']*self.param['Downsample']/self.param['Sample Rate']
-       #  self.param['Z-Stack', 'Depth'] = self.param['Z-Stack', 'Step Size'] * (self.param['Z-Stack', 'Steps']-1)
-       #  self.param['Timed', 'Duration'] = self.param['Timed', 'Interval'] * (self.param['Timed', 'N Intervals']-1)
-       #  self.dwellTime = self.param['Downsample']/self.param['Sample Rate']
-       #  self.ui.dwellTime.setText('%6.1f' % (self.dwellTime*1e6))
+       # with every change, recalculate some values about the display
+        # state = self.currentRoi.getState()
+        # self.width, self.height = state['size']
+        # self.pixelSize = self.width/self.param['Image Width']
+        # self.ui.pixelSize.setText('%8.3f' % (self.pixelSize*1e6))
+        # self.param['Frame Time'] = self.param['Image Width']*self.param['Image Height']*self.param['Downsample']/self.param['Sample Rate']
+        # self.param['Z-Stack', 'Depth'] = self.param['Z-Stack', 'Step Size'] * (self.param['Z-Stack', 'Steps']-1)
+        # self.param['Timed', 'Duration'] = self.param['Timed', 'Interval'] * (self.param['Timed', 'N Intervals']-1)
+        # self.dwellTime = self.param['Downsample']/self.param['Sample Rate']
+        # self.ui.dwellTime.setText('%6.1f' % (self.dwellTime*1e6))
                 
     def imageAlphaAdjust(self):
         if self.img is None:
@@ -941,6 +999,7 @@ class Imager(Module):
     def takeImage(self, doShutter = True, reCompute = True):
         """
         Take an image using the scanning system and PMT, and return with the data.
+
         doShutter True means that we normally trigger the shutter from here
         but there may be times when that is not appropriate
         """
@@ -952,76 +1011,29 @@ class Imager(Module):
             self.param['Wavelength'] = 0.0
             self.param['Power'] = 0.0
         
-
-        # compute the scan voltages and return some computed values
-        cmd = self.scanProgram.generateVoltageArray()
-        self.xScanner = cmd[:,0]
-        self.yScanner = cmd[:,1]
-
-        # (self.xScanner, self.yScanner) = SUF.designRectScan(scannerDev = self.scannerDev,
-        #                         laserDev = self.laserDev.name(), 
-        #                         rectRoi = points,
-        #                         pixelSize = self.pixelSize,
-        #                         sampleRate = self.param['Sample Rate'],
-        #                         downSample = self.param['Downsample'],
-        #                         overScan = self.param['Overscan'],
-        #                         bidirectional = self.param['Bidirectional'])
-
-        
-
-        # Now, take some data
-        # imgData = np.zeros(SUF.getScanXYSize()) # allocate an array
-        # samples = SUF.getSamples()
-        rect = self.scanProgram.components[0].ctrlParameter()
-        samples = cmd.shape[0]
-        sampleRate = self.param['Sample Rate']
-        duration = samples / sampleRate
-        program = self.scanProgram.saveState()  # meta-data to annotate protocol
-
-        # set up a task for the task manager.
-        pdDevice, pdChannel = self.param['Photodetector']
-        scanDev = self.param['Scanner Device']
-
-        laserCmd = {'pCell': {'preset': self.param['Pockels']},
-                    'shutterMode': 'open',}
-
-        cmd= {'protocol': {'duration': duration},
-              'DAQ' : {'rate': sampleRate, 'numPts': samples,
-                       'downsample': self.param['Downsample']}, 
-              scanDev: {
-                  'xCommand' : self.xScanner,
-                  'yCommand' : self.yScanner,
-                  'program': program, 
-                  },
-              # self.attenuatorDev.name(): {self.attenuatorChannel: {'preset': self.param['Pockels']}},
-              self.laserDev.name(): laserCmd,  # 
-              pdDevice: {
-                  pdChannel: {'record': True},
-                #  'PlateVoltage': {'record' : False, 'recordInit': True}
-                  }
-            }
-
-        task = self.Manager.createTask(cmd)
+        # generate the scan protocol and task
+        prot = self.generateProtocol()
+        import pprint
+        pprint.pprint(prot)
+        task = self.Manager.createTask(prot)
 
         # Blank screen and execute task
-        if self.param['Blank Screen'] and not self.ui.video_button.isChecked(): # prevent video push from using blanking
-            with ScreenBlanker():
-                task.execute(block = False)
-                while not task.isDone():
-                    QtGui.QApplication.processEvents()
-                    time.sleep(0.01)
-        else:
+        blank = self.param['Blank Screen'] and not self.ui.video_button.isChecked()
+        with ScreenBlanker(blank):
             task.execute(block = False)
             while not task.isDone():
                 QtGui.QApplication.processEvents()
                 time.sleep(0.01)
 
         # Close shutter if needed
-        if doShutter and self.laserDev is not None and self.laserDev.hasShutter:
-            self.laserDev.closeShutter() # immediately after acquisition...        
+        # if doShutter and self.laserDev is not None and self.laserDev.hasShutter:
+        #     self.laserDev.closeShutter() # immediately after acquisition...        
 
         # grab results and store PMT data for display
         data = task.getResult()
+        pdDevice, pdChannel = self.param['Photodetector']
+        scanDev = self.param['Scanner Device']
+        program = prot[scanDev]['program']
         pmtData = data[pdDevice][pdChannel].view(np.ndarray)
         info = self.saveParams()
         self.lastFrame = ImagingFrame(pmtData, program, info)
@@ -1067,6 +1079,51 @@ class Imager(Module):
         #print 'info: ', info
         return self.lastFrame
 
+    def generateProtocol(self):
+        # return cached command if possible
+        if self.scanProtocol is not None:
+            vscan = self.scanProtocol
+        else:
+            # Generate scan voltages
+            vscan = self.scanProgram.generateVoltageArray()
+            self.scanProtocol = vscan
+
+        # sample rate, duration, and other meta data
+        rect = self.scanProgram.components[0].ctrlParameter()
+        samples = vscan.shape[0]
+        sampleRate = self.param['Sample Rate']
+        duration = samples / sampleRate
+        program = self.scanProgram.saveState()  # meta-data to annotate protocol
+
+        # Look up device names
+        pdDevice, pdChannel = self.param['Photodetector']
+        scanDev = self.param['Scanner Device']
+
+        prot = {
+            'protocol': {
+                'duration': duration,
+                },
+            'DAQ' : {
+                'rate': sampleRate, 
+                'numPts': samples,
+                'downsample': self.param['Downsample']
+                }, 
+            scanDev: {
+                'xCommand' : vscan[:, 0],
+                'yCommand' : vscan[:, 1],
+                'program': program, 
+                },
+            # self.attenuatorDev.name(): {self.attenuatorChannel: {'preset': self.param['Pockels']}},
+            self.laserDev.name(): {
+                'pCell': {'preset': self.param['Pockels']},
+                'shutterMode': 'open',
+                },
+            pdDevice: {
+                pdChannel: {'record': True},
+            },
+        }
+
+        return prot
 
     def updateImage(self):
         """Update images displayed in the canvas and local view to reflect the most recently acquired data 
@@ -1151,13 +1208,13 @@ class Imager(Module):
         if self.regionCtrl is not None:
             self.regionCtrl.scene().removeItem(self.regionCtrl)
         
-        pp = pprint.PrettyPrinter(indent=4)
-        #pp.pprint(dir(mod))
-        scope = self.getScopeDevice()
-        pos = self.currentRoi.mapToParent(self.currentRoi.pos())
-        si = self.currentRoi.mapToParent(self.currentRoi.size())
-        #print 'setup: pos, size: ', pos, si
-        #pp.pprint((scope.config))
+        # pp = pprint.PrettyPrinter(indent=4)
+        # #pp.pprint(dir(mod))
+        # scope = self.getScopeDevice()
+        # pos = self.currentRoi.mapToParent(self.currentRoi.pos())
+        # si = self.currentRoi.mapToParent(self.currentRoi.size())
+        # #print 'setup: pos, size: ', pos, si
+        # #pp.pprint((scope.config))
         
 
 
@@ -1175,11 +1232,13 @@ class ImagingFrame(object):
         self.info = info
 
     def getImage(self, decomb=True, offset=None):
-        if decomb is True:
-            if offset is None:
-                offset = self.rect.measureMirrorLag(self.data, subpixel=True)
-        else:
-            offset = 0
+        # if decomb is True:
+        #     if offset is None:
+        #         offset = self.rect.measureMirrorLag(self.data, subpixel=True)
+        # else:
+        #     offset = 0
 
-        img = self.rect.extractImage(self.data, offset=offset, subpixel=True)
+        offset = 0
+        subpixel = False
+        img = self.rect.extractImage(self.data, offset=offset, subpixel=subpixel)
         return img.mean(axis=0)
