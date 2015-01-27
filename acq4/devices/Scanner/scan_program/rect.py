@@ -726,11 +726,6 @@ class RectScan(SystemSolver):
             pass
 
         try:
-            return self.imageShape[1]
-        except RuntimeError:
-            pass
-
-        try:
             return self.imageRows
         except RuntimeError:
             pass
@@ -749,7 +744,7 @@ class RectScan(SystemSolver):
 
     def _activeCols(self):
         try:
-            return self.imageCols
+            return self.imageCols * self.downsample
         except RuntimeError:
             pass
 
@@ -765,11 +760,6 @@ class RectScan(SystemSolver):
             pxw = self.pixelWidth
             nx = int(w / pxw) + 1
             return nx * self.downsample
-        except RuntimeError:
-            pass
-
-        try:
-            return self.imageShape[0] * self.downsample
         except RuntimeError:
             pass
 

@@ -415,18 +415,27 @@ class Imager(Module):
         self.param.sigTreeStateChanged.connect(self.updateParams)
 
     def quit(self):
+        self.abort()
         if self.img is not None:# clear the image ovelay if it exists
-            self.cameraModule.window().removeItem(self.img)
+            if self.img.scene() is not None:
+                self.img.scene().removeItem(img)
             self.img = None
-        for obj in self.objectiveROImap: # remove the ROI's for all objectives.
+        for obj,item in self.objectiveROImap.items(): # remove the ROI's for all objectives.
             try:
-                self.cameraModule.window().removeItem(self.objectiveROImap[obj])
+                if item.scene() is not None:
+                    item.scene().removeItem(item)
             except:
                 pass
         if self.tileRoi is not None:
-            self.cameraModule.window().removeItem(self.tileRoi)
+            if self.tileRoi.scene() is not None:
+                self.tileRoi.scene().removeItem(self.tileRoi)
             self.tileRoi = None
         Module.quit(self)
+
+    def abort(self):
+        """Immediately stop all acquisition and close any shutters in use.
+        """
+        pass
 
     def objectiveUpdate(self, reset=False):
         """ Update the objective information and the associated ROI
