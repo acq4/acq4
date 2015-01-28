@@ -26,6 +26,7 @@ from acq4.modules.Module import Module
 from PyQt4 import QtGui, QtCore
 from acq4.pyqtgraph import ImageView
 import acq4.pyqtgraph as pg
+import acq4.pyqtgraph.dockarea
 from acq4.Manager import getManager
 import acq4.Manager
 import acq4.util.InterfaceCombo as InterfaceCombo
@@ -38,6 +39,7 @@ import pprint
 from .imagerTemplate import Ui_Form
 from acq4.devices.Scanner.scan_program import ScanProgram
 from acq4.devices.Scanner.scan_program.rect import RectScan
+from acq4.util import imaging
 # from acq4.devices.Scanner.scan_program.rect import ScannerUtility
 
 # SUF = ScannerUtility()
@@ -279,10 +281,9 @@ class Imager(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config) 
         self.win = ImagerWindow(self) # make the main window - mostly to catch window close event...
-        self.ui = Ui_Form()
         self.win.show()
         self.win.setWindowTitle('Multiphoton Imager V 1.01')
-        self.win.resize(1200, 900) # make the window big enough to use on a large monitor...
+        self.win.resize(500, 900) # make the window big enough to use on a large monitor...
 
         self.w1 = QtGui.QSplitter() # divide l, r
         self.w1.setOrientation(QtCore.Qt.Horizontal)
@@ -294,7 +295,10 @@ class Imager(Module):
         # acquisition control
         self.w2s = QtGui.QSplitter()
         self.w2s.setOrientation(QtCore.Qt.Vertical)
-        self.ui.setupUi(self.w2s)  # put the ui on the top 
+        self.ctrlWidget = QtGui.QWidget()
+        self.w2s.addWidget(self.ctrlWidget)
+        self.ui = Ui_Form()
+        self.ui.setupUi(self.ctrlWidget)  # put the ui on the top 
 
         # create the parameter tree for controlling device behavior
         self.tree = PT.ParameterTree()
@@ -303,19 +307,19 @@ class Imager(Module):
 
         # takes care of displaying image data, 
         # contrast & background subtraction user interfaces
-        self.imagingCtrl = ImagingCtrl()
+        self.imagingCtrl = imaging.ImagingCtrl()
         self.frameDisplay = self.imagingCtrl.frameDisplay
         self.imageItem = self.frameDisplay.imageItem()
 
         # create docks for imaging, contrast, and background subtraction
-        recDock = dockarea.Dock(name="Recording", widget=self.imagingCtrl, size=(100, 10), autoOrientation=False)
-        scanDock = pg.dockarea.Dock(name="Acquisition Control", widget=self.w2s, size=(100, 800), autoOrientation=False)
-        dispDock = dockarea.Dock(name="Display Control", widget=self.frameDisplay.contrastWidget(), size=(100, 600), autoOrientation=False)
-        bgDock = dockarea.Dock(name="Background Subtraction", widget=self.frameDisplay.backgroundWidget(), size=(100, 10), autoOrientation=False)
-        self.widget.addDock(recDock)
-        self.widget.addDock(scanDock, 'bottom', recDock)
-        self.widget.addDock(dispDock, 'bottom', scanDock)
-        self.widget.addDock(bgDock, 'bottom', dispDock)
+        recDock = pg.dockarea.Dock(name="Acquisition Control", widget=self.imagingCtrl, size=(250, 250), autoOrientation=False)
+        scanDock = pg.dockarea.Dock(name="Device Control", widget=self.w2s, size=(250, 800), autoOrientation=False)
+        dispDock = pg.dockarea.Dock(name="Display Control", widget=self.frameDisplay.contrastWidget(), size=(250, 800), autoOrientation=False)
+        bgDock = pg.dockarea.Dock(name="Background Subtraction", widget=self.frameDisplay.backgroundWidget(), size=(250, 100), autoOrientation=False)
+        self.dockarea.addDock(recDock)
+        self.dockarea.addDock(dispDock, 'right', recDock)
+        self.dockarea.addDock(scanDock, 'bottom', recDock)
+        self.dockarea.addDock(bgDock, 'bottom', dispDock)
 
 
         # TODO: resurrect this for situations when the camera module can't be used
@@ -341,6 +345,10 @@ class Imager(Module):
 
         self.scanProtocol = None  # cached scan protocol computed by generateScanProtocol
         
+        self.objectiveROImap = {} # this is a dict that we will populate with the name
+        # of the objective and the associated ROI object .
+        # That way, each objective has a scan region appopriate for it's magnification.
+
         # we assume that you are not going to change the current camera or scope while running
         # ... not just yet anyway.
         # if this is to be allowed on a system, the change must be signaled to this class,
@@ -370,9 +378,6 @@ class Imager(Module):
         self.attenuatorDev = self.manager.getDevice(config['attenuator'][0])
         self.attenuatorChannel = config['attenuator'][1]
         
-        self.objectiveROImap = {} # this is a dict that we will populate with the name
-        # of the objective and the associated ROI object .
-        # That way, each objective has a scan region appopriate for it's magnification.
         
         # self.ui.hide_check.stateChanged.connect(self.hideOverlayImage)
         # self.ui.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
@@ -501,23 +506,23 @@ class Imager(Module):
         Used to report that the objective has changed in the parameter tree,
         and then reposition the ROI that drives the image region.
         """
-        if self.img is not None:# clear the image ovelay if it exists
-            self.cameraModule.window().removeItem(self.img)
-            self.img = None
+        # if self.img is not None:# clear the image ovelay if it exists
+        #     self.cameraModule.window().removeItem(self.img)
+        #     self.img = None
         self.param['Objective'] = self.scopeDev.currentObjective.name()
         if reset:
             self.clearROIMap()
         if self.param['Objective'] not in self.objectiveROImap: # add the objective and an ROI
             # print "create roi:",  self.param['Objective']
             self.objectiveROImap[self.param['Objective']] = self.createROI()
-        for obj in self.objectiveROImap:
+        for obj, roi in self.objectiveROImap.items():
             if obj == self.param['Objective']:
-                self.currentRoi = self.objectiveROImap[obj]
-                self.currentRoi.show()
+                self.currentRoi = roi
+                roi.show()
                 self.roiChanged() # do this now as well so that the parameter tree is correct. 
-
-                continue
-            self.hideROI(self.objectiveROImap[obj])
+            else:
+                roi.hide()
+                # self.hideROI(self.objectiveROImap[obj])
 
     def clearROIMap(self):
         for k in self.objectiveROImap.keys():
@@ -532,7 +537,7 @@ class Imager(Module):
         perhaps the stage position, etc. This needs to be obtained to re-align
         the scanner ROI
         """
-        globalTr = self.getScannerDevice().globalTransform()
+        globalTr = self.scannerDev.globalTransform()
         pt1 = globalTr.map(self.currentRoi.scannerCoords[0])
         pt2 = globalTr.map(self.currentRoi.scannerCoords[1])
         diff = pt2 - pt1
@@ -577,12 +582,12 @@ class Imager(Module):
         roi.sigRegionChangeFinished.connect(self.roiChanged)
         return roi
     
-    def hideROI(self, roi):
-        """ just make the current roi invisible... 
-        although we probalby also want to hide the associated image if it is present...
-        """
-        roi.hide()
-        self.hideOverlayImage()
+    # def hideROI(self, roi):
+    #     """ just make the current roi invisible... 
+    #     although we probalby also want to hide the associated image if it is present...
+    #     """
+    #     roi.hide()
+    #     self.hideOverlayImage()
     
     def restoreROI(self):
         
@@ -694,7 +699,7 @@ class Imager(Module):
         self.param['Tiles', 'Y1'] = self.tileHeight * 1e6
         # record position of ROI in Scanner's local coordinate system
         # we can use this later to allow the ROI to track stage movement
-        tr = self.getScannerDevice().inverseGlobalTransform() # maps from global to device local
+        tr = self.scannerDev.inverseGlobalTransform() # maps from global to device local
         pt1 = pg.Point(self.tilexPos, self.tileyPos)
         pt2 = pg.Point(self.tilexPos+self.tileWidth, self.tileyPos+self.tileHeight)
         self.tileRoi.scannerCoords = [
@@ -717,7 +722,7 @@ class Imager(Module):
         downsample = self.param['Downsample']
         # we'll let the rect tell us later how many samples are needed
         self.scanProgram.setSampling(rate=sampleRate, samples=0, downsample=downsample)
-        self.scanProgram.setDevices(scanner=self.getScannerDevice(), laser=self.getLaserDevice())
+        self.scanProgram.setDevices(scanner=self.scannerDev, laser=self.laserDev)
 
         rect = self.scanProgram.components[0]
         rparams = rect.ctrlParameter()
@@ -941,11 +946,11 @@ class Imager(Module):
     #     self.loadPreset('HighDef')
     #     self.PMT_Snap()
     
-    # def PMT_SnapClicked(self):
-    #     """
-    #     Prevent passing button state junk from Qt to the snap routine instead of dirhandle.
-    #     """
-    #     self.PMT_Snap()
+    def PMT_SnapClicked(self):
+        """
+        Prevent passing button state junk from Qt to the snap routine instead of dirhandle.
+        """
+        self.PMT_Snap()
         
     def PMT_Snap(self, dirhandle=None):
         """
@@ -1012,7 +1017,7 @@ class Imager(Module):
         return params
     
          
-    def takeImage(self):
+    def takeImage(self, allowBlanking=True):
         """
         Take an image using the scanning system and PMT, and return with the data.
         """
@@ -1029,7 +1034,7 @@ class Imager(Module):
         task = self.manager.createTask(prot)
 
         # Blank screen and execute task
-        blank = self.param['Blank Screen'] and not self.ui.video_button.isChecked()
+        blank = allowBlanking and self.param['Blank Screen'] is True
         with ScreenBlanker(blank):
             task.execute(block = False)
             while not task.isDone():
@@ -1039,7 +1044,7 @@ class Imager(Module):
         # grab results and store PMT data for display
         data = task.getResult()
         pdDevice, pdChannel = self.param['Photodetector']
-        scanDev = self.scannerDevice.name()
+        scanDev = self.scannerDev.name()
         program = prot[scanDev]['program']
         pmtData = data[pdDevice][pdChannel].view(np.ndarray)
         info = self.saveParams()
@@ -1067,7 +1072,7 @@ class Imager(Module):
 
         # Look up device names
         pdDevice, pdChannel = self.param['Photodetector']
-        scanDev = self.scannerDevice.name()
+        scanDev = self.scannerDev.name()
 
         prot = {
             'protocol': {
@@ -1150,7 +1155,7 @@ class Imager(Module):
         try:
             self.imagingCtrl.acquisitionStarted()
             while True:
-                frame = self.takeImage()
+                frame = self.takeImage(allowBlanking=False)
                 QtGui.QApplication.processEvents()
                 if not self.vbutton.isChecked(): # note only checks the button that called us...
                     return
