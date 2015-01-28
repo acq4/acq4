@@ -125,7 +125,7 @@ class CameraInterface(QtCore.QObject):
         
     def newFrame(self, frame):
         self.imagingCtrl.newFrame(frame)
-        self.frameDisplay.newFrame(frame)
+        # self.frameDisplay.newFrame(frame)
 
         # ?? what's this for?
         # if self.frameDisplay.nextFrame is not None:
@@ -174,7 +174,7 @@ class CameraInterface(QtCore.QObject):
         self.imageItem.setTransform(frame.frameTransform().as2D())
         
         ## Update viewport to correct for scope movement/scaling
-        tr = pg.SRTTransform(frame.cameraTransform())
+        tr = pg.SRTTransform(frame.deviceTransform())
         self.updateTransform(tr)
 
         self.imageItemGroup.setTransform(tr)
@@ -210,7 +210,6 @@ class CameraInterface(QtCore.QObject):
             self.cam.setParam('region', self.region, autoRestart=autoRestart)
 
     def quit(self):
-        self.frameDisplay.quit()
         self.imagingCtrl.quit()
 
         if self.hasQuit:
@@ -275,7 +274,7 @@ class CameraInterface(QtCore.QObject):
         self.roi.setPos([rgn[0], rgn[1]])
         self.roi.setSize([self.camSize[0], self.camSize[1]])
 
-    def toggleAcquire(self, acq):
+    def toggleAcquire(self, mode, acq):
         """User clicked the acquire video button.
         """
         if acq:

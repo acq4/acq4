@@ -154,4 +154,5 @@ class FrameDisplay(QtCore.QObject):
             pass
 
     def quit(self):
+        self.imageItem = None
         self.hasQuit = True

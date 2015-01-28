@@ -18,8 +18,8 @@ class ImagingCtrl(QtGui.QWidget):
     * FPS display
     """
 
-    sigAcquireVideoClicked = QtCore.Signal(object)  # bool
-    sigAcquireFrameClicked = QtCore.Signal()
+    sigAcquireVideoClicked = QtCore.Signal(object, object)  # mode, bool
+    sigAcquireFrameClicked = QtCore.Signal(object)  # mode
 
     frameDisplayClass = FrameDisplay  # let subclasses override this class
 
@@ -30,6 +30,10 @@ class ImagingCtrl(QtGui.QWidget):
         self.frameDisplay = self.frameDisplayClass()
 
         self.pinnedFrames = []
+
+        # User-added buttons for specific acquisition modes
+        # (frame buttons, video buttons)
+        self.customButtons = ([], [])
 
         self.ui = Ui_Form()
         self.ui.setupUi(self)
@@ -62,6 +66,28 @@ class ImagingCtrl(QtGui.QWidget):
         self.ui.saveFrameBtn.clicked.connect(self.saveFrameClicked)
         self.ui.pinFrameBtn.clicked.connect(self.pinFrameClicked)
 
+    def addFrameButton(self, name):
+        """Add a new button below the original "Acquire Frame" button.
+
+        When this button is clicked, the sigAcquireFrameClicked signal is emitted
+        with *name* as the first argument.
+        """
+        btn = QtGui.QPushButton(name)
+        self.customButtons[0].append(btn)
+        self.ui.acqBtnLayout.addWidget(btn, len(self.customButtons[0]), 0)
+        btn.clicked.connect(lambda: self.sigAcquireFrameClicked.emit(name))
+
+    def addVideoButton(self, name):
+        """Add a new button below the original "Acquire Video" button.
+
+        When this button is clicked, the sigAcquireVideoClicked signal is emitted
+        with *name* as the first argument.
+        """
+        btn = QtGui.QPushButton(name)
+        self.customButtons[1].append(btn)
+        self.ui.acqBtnLayout.addWidget(btn, len(self.customButtons[1]), 1)
+        btn.clicked.connect(lambda: self.sigAcquireVideoClicked.emit(name))
+
     def newFrame(self, frame):
         self.ui.saveFrameBtn.setEnabled(True)
         self.ui.pinFrameBtn.setEnabled(True)
@@ -76,6 +102,8 @@ class ImagingCtrl(QtGui.QWidget):
         queued = self.recordThread.newFrame(frame)
         if self.ui.recordStackBtn.isChecked():
             self.ui.stackSizeLabel.setText('%d frames' % self.recordThread.stackSize)
+
+        self.frameDisplay.newFrame(frame)
 
     def saveFrameClicked(self):
         if self.ui.linkSavePinBtn.isChecked():
@@ -130,6 +158,7 @@ class ImagingCtrl(QtGui.QWidget):
             pass
 
         self.recordThread.quit()
+        self.frameDisplay.quit()
         if not self.recordThread.wait(10000):
             raise Exception("Timed out while waiting for rec. thread exit!")
 
@@ -144,10 +173,10 @@ class ImagingCtrl(QtGui.QWidget):
 
     def acquireVideoClicked(self):
         acq = self.ui.acquireVideoBtn.isChecked()
-        self.sigAcquireVideoClicked.emit(acq)
+        self.sigAcquireVideoClicked.emit(None, acq)
 
     def acquireFrameClicked(self):
-        self.sigAcquireFrameClicked.emit()
+        self.sigAcquireFrameClicked.emit(None)
 
     def pinFrameClicked(self):
         if self.ui.linkSavePinBtn.isChecked():

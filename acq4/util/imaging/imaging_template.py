@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'acq4/util/imaging/imaging_template.ui'
 #
-# Created: Tue Jan 27 22:02:33 2015
+# Created: Wed Jan 28 15:16:50 2015
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -26,13 +26,11 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(184, 171)
+        Form.resize(184, 173)
         self.gridLayout_2 = QtGui.QGridLayout(Form)
         self.gridLayout_2.setMargin(0)
         self.gridLayout_2.setSpacing(0)
         self.gridLayout_2.setObjectName(_fromUtf8("gridLayout_2"))
-        spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        self.gridLayout_2.addItem(spacerItem, 1, 0, 1, 1)
         self.horizontalLayout = QtGui.QHBoxLayout()
         self.horizontalLayout.setObjectName(_fromUtf8("horizontalLayout"))
         self.saveFrameBtn = FeedbackButton(Form)
@@ -46,19 +44,14 @@ class Ui_Form(object):
         self.pinFrameBtn = QtGui.QPushButton(Form)
         self.pinFrameBtn.setObjectName(_fromUtf8("pinFrameBtn"))
         self.horizontalLayout.addWidget(self.pinFrameBtn)
-        self.gridLayout_2.addLayout(self.horizontalLayout, 4, 0, 1, 2)
-        self.acquireFrameBtn = QtGui.QPushButton(Form)
-        self.acquireFrameBtn.setObjectName(_fromUtf8("acquireFrameBtn"))
-        self.gridLayout_2.addWidget(self.acquireFrameBtn, 0, 0, 1, 1)
+        self.gridLayout_2.addLayout(self.horizontalLayout, 3, 0, 1, 2)
+        spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.gridLayout_2.addItem(spacerItem, 2, 0, 1, 1)
         self.line = QtGui.QFrame(Form)
         self.line.setFrameShape(QtGui.QFrame.HLine)
         self.line.setFrameShadow(QtGui.QFrame.Sunken)
         self.line.setObjectName(_fromUtf8("line"))
-        self.gridLayout_2.addWidget(self.line, 2, 0, 1, 2)
-        self.acquireVideoBtn = QtGui.QPushButton(Form)
-        self.acquireVideoBtn.setCheckable(True)
-        self.acquireVideoBtn.setObjectName(_fromUtf8("acquireVideoBtn"))
-        self.gridLayout_2.addWidget(self.acquireVideoBtn, 0, 1, 1, 1)
+        self.gridLayout_2.addWidget(self.line, 1, 0, 1, 2)
         self.gridLayout = QtGui.QGridLayout()
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
         self.recordXframesCheck = QtGui.QCheckBox(Form)
@@ -74,6 +67,9 @@ class Ui_Form(object):
         self.label_9 = QtGui.QLabel(Form)
         self.label_9.setObjectName(_fromUtf8("label_9"))
         self.gridLayout.addWidget(self.label_9, 3, 0, 1, 1)
+        self.stackSizeLabel = QtGui.QLabel(Form)
+        self.stackSizeLabel.setObjectName(_fromUtf8("stackSizeLabel"))
+        self.gridLayout.addWidget(self.stackSizeLabel, 3, 1, 1, 2)
         self.label = QtGui.QLabel(Form)
         self.label.setObjectName(_fromUtf8("label"))
         self.gridLayout.addWidget(self.label, 5, 0, 1, 1)
@@ -91,19 +87,24 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.displayPercentLabel, 6, 2, 1, 1)
         spacerItem1 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.gridLayout.addItem(spacerItem1, 0, 0, 1, 1)
+        spacerItem2 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.gridLayout.addItem(spacerItem2, 4, 0, 1, 1)
         self.recordStackBtn = QtGui.QPushButton(Form)
         self.recordStackBtn.setCheckable(True)
         self.recordStackBtn.setFlat(False)
         self.recordStackBtn.setObjectName(_fromUtf8("recordStackBtn"))
         self.gridLayout.addWidget(self.recordStackBtn, 1, 0, 1, 3)
-        spacerItem2 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        self.gridLayout.addItem(spacerItem2, 4, 0, 1, 1)
-        self.stackSizeLabel = QtGui.QLabel(Form)
-        self.stackSizeLabel.setObjectName(_fromUtf8("stackSizeLabel"))
-        self.gridLayout.addWidget(self.stackSizeLabel, 3, 1, 1, 2)
-        self.gridLayout_2.addLayout(self.gridLayout, 6, 0, 1, 2)
-        spacerItem3 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        self.gridLayout_2.addItem(spacerItem3, 3, 0, 1, 1)
+        self.gridLayout_2.addLayout(self.gridLayout, 5, 0, 1, 2)
+        self.acqBtnLayout = QtGui.QGridLayout()
+        self.acqBtnLayout.setObjectName(_fromUtf8("acqBtnLayout"))
+        self.acquireFrameBtn = QtGui.QPushButton(Form)
+        self.acquireFrameBtn.setObjectName(_fromUtf8("acquireFrameBtn"))
+        self.acqBtnLayout.addWidget(self.acquireFrameBtn, 0, 0, 1, 1)
+        self.acquireVideoBtn = QtGui.QPushButton(Form)
+        self.acquireVideoBtn.setCheckable(True)
+        self.acquireVideoBtn.setObjectName(_fromUtf8("acquireVideoBtn"))
+        self.acqBtnLayout.addWidget(self.acquireVideoBtn, 0, 1, 1, 1)
+        self.gridLayout_2.addLayout(self.acqBtnLayout, 0, 0, 1, 2)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
@@ -116,13 +117,10 @@ class Ui_Form(object):
         self.linkSavePinBtn.setText(_translate("Form", "<>", None))
         self.pinFrameBtn.setToolTip(_translate("Form", "Pin the last acquired frame to the view background", None))
         self.pinFrameBtn.setText(_translate("Form", "Pin Frame", None))
-        self.acquireFrameBtn.setText(_translate("Form", "Acquire Frame", None))
-        self.acquireVideoBtn.setToolTip(_translate("Form", "Start/stop camera acquisition.\n"
-"In general, this can just stay on always.", None))
-        self.acquireVideoBtn.setText(_translate("Form", "Acquire Video", None))
         self.recordXframesCheck.setText(_translate("Form", "Stack Limit", None))
         self.recordXframesSpin.setSuffix(_translate("Form", " frames", None))
         self.label_9.setText(_translate("Form", "Stack Size:", None))
+        self.stackSizeLabel.setText(_translate("Form", "0 frames", None))
         self.label.setText(_translate("Form", "Acquiring:", None))
         self.fpsLabel.setText(_translate("Form", "0 fps", None))
         self.label_7.setText(_translate("Form", "Displaying:", None))
@@ -132,6 +130,9 @@ class Ui_Form(object):
 "Frames are written to the current storage directory set in \n"
 "the data manager window.", None))
         self.recordStackBtn.setText(_translate("Form", "Record Stack", None))
-        self.stackSizeLabel.setText(_translate("Form", "0 frames", None))
+        self.acquireFrameBtn.setText(_translate("Form", "Acquire Frame", None))
+        self.acquireVideoBtn.setToolTip(_translate("Form", "Start/stop camera acquisition.\n"
+"In general, this can just stay on always.", None))
+        self.acquireVideoBtn.setText(_translate("Form", "Acquire Video", None))
 
 from acq4.pyqtgraph import ValueLabel, FeedbackButton
