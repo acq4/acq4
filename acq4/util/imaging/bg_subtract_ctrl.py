@@ -1,5 +1,7 @@
 import scipy.ndimage
+import numpy as np
 from PyQt4 import QtCore, QtGui
+
 from acq4 import pyqtgraph as pg
 from .bg_subtract_template import Ui_Form
 
@@ -76,13 +78,13 @@ class BgSubtractCtrl(QtGui.QWidget):
             if self.ui.contAvgBgCheck.isChecked():
                 x = 1.0 - 1.0 / (self.ui.bgTimeSpin.value()+1.0)
             else:
-                x = float(self.bgFrameCount)/(self.bgFrameCount + 1)
+                x = float(self.bgFrameCount) / (self.bgFrameCount + 1)
                 self.bgFrameCount += 1
             
-            if self.backgroundFrame == None or self.backgroundFrame.shape != frame.data().shape:
-                self.backgroundFrame = frame.data().astype(float)
+            if self.backgroundFrame == None or self.backgroundFrame.shape != frame.getImage().shape:
+                self.backgroundFrame = frame.getImage().astype(np.float32)
             else:
-                self.backgroundFrame = x * self.backgroundFrame + (1-x)*frame.data().astype(float)
+                self.backgroundFrame = x * self.backgroundFrame + (1-x)*frame.getImage().astype(np.float32)
         
     def processImage(self, data):
         if self.ui.divideBgBtn.isChecked():

@@ -27,11 +27,12 @@ class FrameDisplay(QtCore.QObject):
         self.contrastCtrl = self.contrastClass()
         self.contrastCtrl.setImageItem(self._imageItem)
         self.bgCtrl = self.bgSubtractClass()
-        self.bgCtrl.needFrameUpdate.connect(self.requestFrameUpdate)
+        self.bgCtrl.needFrameUpdate.connect(self.updateFrame)
 
         self.nextFrame = None
-        self.updateFrame = False
+        self._updateFrame = False
         self.currentFrame = None
+        self.lastFrameTime = None
         self.lastDrawTime = None
         self.acquireFps = None
         self.displayFps = None
@@ -49,8 +50,10 @@ class FrameDisplay(QtCore.QObject):
     def newFrame(self, frame):
         self.currentFrame = frame
 
-    def requestFrameUpdate(self):
-        self.updateFrame = True
+    def updateFrame(self):
+        """Redisplay the current frame.
+        """
+        self._updateFrame = True
         self.contrastCtrl.resetAutoGain()
 
     def imageItem(self):
@@ -82,9 +85,14 @@ class FrameDisplay(QtCore.QObject):
         elif self.currentFrame is not None:
             lf = self.currentFrame
         
-        if lf is not None:
-            fps = frame.info()['fps']
-            self.acquireFps = fps
+        now = pg.ptime.time()
+        if self.lastFrameTime is not None:
+            dt = new - self.lastFrameTime
+            self.lastFrameTime = now
+            self.acquireFps = 1.0 / dt
+
+        # if lf is not None:
+        #     fps = frame.info()['fps']
         
         ## self.nextFrame gets picked up by drawFrame() at some point
         self.nextFrame = frame
@@ -103,10 +111,10 @@ class FrameDisplay(QtCore.QObject):
                 #sys.stdout.write('-')
                 return
             ## if there is no new frame and no controls have changed, just exit
-            if not self.updateFrame and self.nextFrame is None:
+            if not self._updateFrame and self.nextFrame is None:
                 #sys.stdout.write('-')
                 return
-            self.updateFrame = False
+            self._updateFrame = False
             
             ## If there are no new frames and no previous frames, then there is nothing to draw.
             if self.currentFrame is None and self.nextFrame is None:
@@ -126,7 +134,7 @@ class FrameDisplay(QtCore.QObject):
                 self.currentFrame = self.nextFrame
                 self.nextFrame = None
             
-            data = self.currentFrame.data()
+            data = self.currentFrame.getImage()
             info = self.currentFrame.info()
             prof()
             

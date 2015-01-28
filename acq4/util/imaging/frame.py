@@ -17,14 +17,26 @@ class Frame(object):
         self._data = data
         self._info = info        
         ## Complete transform maps from image coordinates to global.
-        self._info['transform'] = SRTTransform3D(self.deviceTransform() * self.frameTransform())
+        if 'transform' not in info:
+            info['transform'] = SRTTransform3D(self.deviceTransform() * self.frameTransform())
         
     def data(self):
+        """Return raw imaging data.
+        """
         return self._data
     
     def info(self):
+        """Return the meta info dict for this frame.
+        """
         return self._info
     
+    def getImage(self):
+        """Return processed image data.
+
+        By default, this method just returns self.data().
+        """
+        return self._data
+
     def deviceTransform(self):
         """Return the transform that maps from imager device coordinates to global."""
         return SRTTransform3D(self._info['deviceTransform'])

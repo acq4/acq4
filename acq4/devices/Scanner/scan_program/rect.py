@@ -291,7 +291,7 @@ class RectScan(SystemSolver):
             ('activeShape', [None, tuple, None, 'n']),   # the 'active' scan area excluding overscan
             ('activeStride', [None, tuple, None, 'n']),  # and ignoring downsampling (index in samples)
             ('imageOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe 
-            ('imageShape', [None, arr, None, 'n']),   # the 'active' image area excluding overscan
+            ('imageShape', [None, tuple, None, 'n']),   # the 'active' image area excluding overscan
             ('imageStride', [None, tuple, None, 'n']),  # and accounting for downsampling (index in pixels)
             ('imageRows', [None, int, None, 'nf']),   # alias for numRows
             ('imageCols', [None, int, None, 'nf']),   # alias for activeCols
@@ -526,11 +526,11 @@ class RectScan(SystemSolver):
             pass
 
         ar = self.pixelAspectRatio  # w/h
-        return self.width * (self.numRows / (self.activeCols * ar))
+        return self.width * (self.numRows / ((self.activeCols // self.downsample) * ar))
 
     def _angle(self):
         dp = self.p1 - self.p0
-        return np.arctan2(*dp)
+        return np.arctan2(*dp[::-1])
 
     def _p1(self):
         p0 = self.p0
@@ -598,7 +598,7 @@ class RectScan(SystemSolver):
         except RuntimeError:
             pass
 
-        return self.width / (self.numCols - 1)
+        return self.width / (self.activeCols / self.downsample)
         
     def _pixelHeight(self):
         try:

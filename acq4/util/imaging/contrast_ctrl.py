@@ -61,6 +61,7 @@ class ContrastCtrl(QtGui.QWidget):
         
     def alphaChanged(self, val):
         self.alpha = val / self.ui.alphaSlider.maximum() ## slider only works in integers and we need a 0 to 1 value
+        self.imageItem.setOpacity(self.alpha)
 
     def getLevels(self):
         return self.ui.histogram.getLevels()

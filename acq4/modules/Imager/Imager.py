@@ -53,30 +53,24 @@ Presets = {
         'Downsample': 1,
         'Image Width': 256,
         'Image Height': 256,
-        'Store': False,
         'Blank Screen': False,
         'Bidirectional': True,
-        'Decomb': True,
     },
     'video-fast': {
         'Average': 1,
         'Downsample': 2,
         'Image Width': 128 ,
         'Image Height': 128,
-        'Store': False,
         'Blank Screen': False,
         'Bidirectional': True,
-        'Decomb' : True,
     },
 
     'video-ultra': {
         'Downsample': 2,
         'Image Width': 64,
         'Image Height': 64,
-        'Store': False,
         'Blank Screen': False,
         'Bidirectional': True,
-        'Decomb' : True,
     },
     
     'StandardDef': {
@@ -86,7 +80,6 @@ Presets = {
         'Image Height': 512,
         'Blank Screen': True,
         'Bidirectional' : True,
-        'Decomb': True,
     },
     'HighDef': { # 7/25/2013 parameters for high def ok... 
         'Average': 4,
@@ -95,7 +88,6 @@ Presets = {
         'Image Height': 1024,
         'Blank Screen': True,
         'Bidirectional': True,
-        'Decomb': True,
     },
 }
 
@@ -118,51 +110,51 @@ class ImagerWindow(QtGui.QMainWindow):
         self.module.quit()
 
 
-class ImagerView(pg.ImageView):
-    """
-    Subclass ImageView so that we can display the ROI differently.
-    This one just catches the Roi data.
+# class ImagerView(pg.ImageView):
+#     """
+#     Subclass ImageView so that we can display the ROI differently.
+#     This one just catches the Roi data.
     
-    10/2/2013 pbm
-    """
-    def __init__(self):
-        pg.ImageView.__init__(self)
-        self.resetFrameCount()
+#     10/2/2013 pbm
+#     """
+#     def __init__(self):
+#         pg.ImageView.__init__(self)
+#         self.resetFrameCount()
         
-    def resetFrameCount(self):
-        self.ImagerFrameCount = 0
-        self.ImagerFrameArray = np.zeros(0)
-        self.ImagerFrameData = np.zeros(0)
+#     def resetFrameCount(self):
+#         self.ImagerFrameCount = 0
+#         self.ImagerFrameArray = np.zeros(0)
+#         self.ImagerFrameData = np.zeros(0)
 
-    def setImage(self, *args, **kargs):
-        pg.ImageView.setImage(self, *args, **kargs)
-        self.newFrameROI()
+#     def setImage(self, *args, **kargs):
+#         pg.ImageView.setImage(self, *args, **kargs)
+#         self.newFrameROI()
 
-    def roiChanged(self):
-        self.newFrameROI()
+#     def roiChanged(self):
+#         self.newFrameROI()
     
-    def newFrameROI(self):
-        """
-        override ROI display information
-        """
-        if self.image is None:
-            return           
-        image = self.getProcessedImage()
-        if image.ndim == 2:
-            axes = (0, 1)
-        elif image.ndim == 3:
-            axes = (1, 2)
-        else:
-            return
-        data, coords = self.roi.getArrayRegion(image.view(np.ndarray), self.imageItem, axes, returnMappedCoords=True)
-        if data is not None:
-            while data.ndim > 1:
-                data = data.mean(axis=1)
-            self.ImagerFrameCount += 1
+#     def newFrameROI(self):
+#         """
+#         override ROI display information
+#         """
+#         if self.image is None:
+#             return           
+#         image = self.getProcessedImage()
+#         if image.ndim == 2:
+#             axes = (0, 1)
+#         elif image.ndim == 3:
+#             axes = (1, 2)
+#         else:
+#             return
+#         data, coords = self.roi.getArrayRegion(image.view(np.ndarray), self.imageItem, axes, returnMappedCoords=True)
+#         if data is not None:
+#             while data.ndim > 1:
+#                 data = data.mean(axis=1)
+#             self.ImagerFrameCount += 1
 
-            self.ImagerFrameArray = np.append(self.ImagerFrameArray, self.ImagerFrameCount)
-            self.ImagerFrameData = np.append(self.ImagerFrameData, data.mean())
-            self.roiCurve.setData(x = self.ImagerFrameArray, y = self.ImagerFrameData)
+#             self.ImagerFrameArray = np.append(self.ImagerFrameArray, self.ImagerFrameCount)
+#             self.ImagerFrameData = np.append(self.ImagerFrameData, data.mean())
+#             self.roiCurve.setData(x = self.ImagerFrameArray, y = self.ImagerFrameData)
 
 
 class Black(QtGui.QWidget):
@@ -312,10 +304,10 @@ class Imager(Module):
         self.imageItem = self.frameDisplay.imageItem()
 
         # create docks for imaging, contrast, and background subtraction
-        recDock = pg.dockarea.Dock(name="Acquisition Control", widget=self.imagingCtrl, size=(250, 250), autoOrientation=False)
+        recDock = pg.dockarea.Dock(name="Acquisition Control", widget=self.imagingCtrl, size=(250, 10), autoOrientation=False)
         scanDock = pg.dockarea.Dock(name="Device Control", widget=self.w2s, size=(250, 800), autoOrientation=False)
         dispDock = pg.dockarea.Dock(name="Display Control", widget=self.frameDisplay.contrastWidget(), size=(250, 800), autoOrientation=False)
-        bgDock = pg.dockarea.Dock(name="Background Subtraction", widget=self.frameDisplay.backgroundWidget(), size=(250, 100), autoOrientation=False)
+        bgDock = pg.dockarea.Dock(name="Background Subtraction", widget=self.frameDisplay.backgroundWidget(), size=(250, 10), autoOrientation=False)
         self.dockarea.addDock(recDock)
         self.dockarea.addDock(dispDock, 'right', recDock)
         self.dockarea.addDock(scanDock, 'bottom', recDock)
@@ -339,6 +331,7 @@ class Imager(Module):
         self.tileWidth = 2e-4
         self.tileHeight = 2e-4
         self.stopFlag = False
+        self.lastFrame = None
 
         self.dwellTime = 0. # "pixel dwell time" computed from scan time and points.
         self.fieldSize = 63.0*120e-6 # field size for 63x, will be scaled for others
@@ -362,6 +355,8 @@ class Imager(Module):
         self.laserDev = self.manager.getDevice(config['laser'])
         self.scannerDev = self.manager.getDevice(config['scanner'])
         
+        self.cameraModule.window().addItem(self.imageItem)
+
         # find first scope device that is parent of scanner
         dev = self.scannerDev
         while dev is not None and not isinstance(dev, Microscope):
@@ -415,7 +410,7 @@ class Imager(Module):
         self.scanProgram.addComponent('rect')
 
         self.param = PT.Parameter(name = 'param', children=[
-            dict(name="Preset", type='list', value='StandardDef', 
+            dict(name="Preset", type='list', value='video-fast', 
                  values=['StandardDef', 'HighDef', 'video-std', 'video-fast', 
                          'video-ultra']),
             # dict(name='Store', type='bool', value=True),
@@ -425,7 +420,7 @@ class Imager(Module):
             dict(name='Downsample', type='int', value=1, limits=[1,None]),
             dict(name='Average', type='int', value=1, limits=[1,100]),
             dict(name='Bidirectional', type='bool', value=True),
-            dict(name='Overscan', type='float', value=150e-6, suffix='s', siPrefix=True),
+            dict(name='Overscan', type='float', value=150e-6, suffix='s', siPrefix=True, limits=[0, None], step=10e-6),
             dict(name='Pockels', type='float', value=0.03, suffix='V', step=0.005, limits=[0, 1.5], siPrefix=True),
             dict(name='Blank Screen', type='bool', value=True),
             dict(name='Image Width', type='int', value=500, readonly=False, limits=[1, None]),
@@ -437,7 +432,7 @@ class Imager(Module):
             dict(name='Power', type='float', value=0.00, suffix='W', readonly=True),
             dict(name='Objective', type='str', value='Unknown', readonly=True),
             dict(name='Follow Stage', type='bool', value=True),
-            dict(name='Decomb', type='float', readonly=True, value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=1e-6, decimals=5, children=[
+            dict(name='Decomb', type='float', value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=1e-6, decimals=5, children=[
                 dict(name='Auto', type='bool', value=True),
                 dict(name='Subpixel', type='bool', value=False),
                 ]),
@@ -477,6 +472,7 @@ class Imager(Module):
         # check the devices...        
         self.updateParams() # also force update now to make sure all parameters are synchronized
         self.param.sigTreeStateChanged.connect(self.updateParams)
+        self.param.child('Decomb').sigTreeStateChanged.connect(self.updateDecomb)
 
     def quit(self):
         self.abort()
@@ -642,15 +638,15 @@ class Imager(Module):
         # self.pixelSize = self.width/self.param['Image Width']
         # self.ui.pixelSize.setText('%8.3f' % (self.pixelSize*1e6)) # in microns
         
-        # # record position of ROI in Scanner's local coordinate system
-        # # we can use this later to allow the ROI to track stage movement
-        # tr = self.getScannerDevice().inverseGlobalTransform() # maps from global to device local
-        # pt1 = pg.Point(self.xPos, self.yPos)
-        # pt2 = pg.Point(self.xPos+self.width, self.yPos+self.height)
-        # self.currentRoi.scannerCoords = [
-        #     tr.map(pt1),
-        #     tr.map(pt2),
-        #     ]
+        # record position of ROI in Scanner's local coordinate system
+        # we can use this later to allow the ROI to track stage movement
+        tr = self.scannerDev.inverseGlobalTransform() # maps from global to device local
+        pt1 = pg.Point(*state['pos'])
+        pt2 = pt1 + pg.Point(*state['size'])
+        self.currentRoi.scannerCoords = [
+            tr.map(pt1),
+            tr.map(pt2),
+            ]
 
     def reAlign(self):
         self.objectiveUpdate(reset=True) # try this... 
@@ -679,7 +675,7 @@ class Imager(Module):
         self.tileRoi = RegionCtrl(cpos, csize, [255., 0., 0.]) # Note that the position actually gets overridden by the camera additem below..
         self.tileRoi.setZValue(11000)
         self.cameraModule.window().addItem(self.tileRoi)
-        self.tileRoi.setPos(cpos) # now is the time to do this. aaaaargh. Several hours later!!!
+        self.tileRoi.setPos(cpos)
         self.tileRoi.sigRegionChangeFinished.connect(self.tileROIChanged)
         self.tileRoiVisible = True
         return self.tileRoi
@@ -748,6 +744,7 @@ class Imager(Module):
         rparams['numFrames'] = self.param['Average']
 
         nSamples = rparams.system.scanStride[0] * rparams.system.numFrames
+        nSamples += sampleRate * 200e-6  # generate some padding for decomb
         self.scanProgram.setSampling(rate=sampleRate, samples=nSamples, downsample=downsample)
 
         with self.param.treeChangeBlocker():
@@ -768,6 +765,11 @@ class Imager(Module):
 
         if rparams.system.checkOverconstraint() is not False:
             raise RuntimeError("Scan calculator is overconstrained (this is a bug).")
+
+    def updateDecomb(self):
+        if self.lastFrame is not None:
+            self.lastFrame.setDecomb(self.param['Decomb'], self.param['Decomb', 'Subpixel'])
+            self.frameDisplay.updateFrame()
 
         
     def loadPreset(self, preset):
@@ -937,6 +939,8 @@ class Imager(Module):
             if self.param['Store']:
                 dh = self.manager.getCurrentDir().writeFile(imgData, imageFilename + '.ma', info=info, autoIncrement=True)
 
+    def PMT_Stop(self):
+        self.stopFlag = True
             
     # def PMT_Snap_std(self):
     #     self.loadPreset('StandardDef')
@@ -960,7 +964,8 @@ class Imager(Module):
         assert dirhandle is None
 
         frame = self.takeImage()
-        frame.info['2pImageType'] = 'Snap'
+
+        frame.info()['2pImageType'] = 'Snap'
 
         # if self.param['Store']:
         #     if dirhandle is None:
@@ -996,9 +1001,34 @@ class Imager(Module):
         #         dirhandle.writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
 
         return frame
+
+    def toggleVideo(self, mode, start):
+        if start:
+            self.startVideo()
+            
+    def startVideo(self):
+        if self.laserDev is not None and self.laserDev.hasShutter:
+            # force shutter to stay open for the duration of the acquisition
+            self.laserDev.openShutter()
+        try:
+            self.imagingCtrl.acquisitionStarted()
+            import cProfile
+            prof = cProfile.Profile()
+            prof.enable()
+
+            while True:
+                # Qt event loop is visited while waiting for imaging results.
+                frame = self.takeImage(allowBlanking=False)
+                if not self.imagingCtrl.ui.acquireVideoBtn.isChecked():
+                    break
+            
+            prof.disable()
+            prof.print_stats(sort='cumulative')
+        finally:
+            self.imagingCtrl.acquisitionStopped()
+            if self.laserDev is not None and self.laserDev.hasShutter:
+                self.laserDev.closeShutter()
     
-    def PMT_Stop(self):
-        self.stopFlag = True
 
     def saveParams(self, root=None):
         if root is None:
@@ -1048,7 +1078,13 @@ class Imager(Module):
         program = prot[scanDev]['program']
         pmtData = data[pdDevice][pdChannel].view(np.ndarray)
         info = self.saveParams()
+
+        info['deviceTranform'] = self.scannerDev.globalTransform()
+        tr = self.scanProgram.components[0].ctrlParameter().system.imageTransform()
+        info['transform'] = pg.SRTTransform3D(tr)
+
         self.lastFrame = ImagingFrame(pmtData, program, info)
+        self.updateDecomb()
 
         self.imagingCtrl.newFrame(self.lastFrame)
 
@@ -1065,10 +1101,14 @@ class Imager(Module):
 
         # sample rate, duration, and other meta data
         rect = self.scanProgram.components[0].ctrlParameter()
+
         samples = vscan.shape[0]
         sampleRate = self.param['Sample Rate']
         duration = samples / sampleRate
         program = self.scanProgram.saveState()  # meta-data to annotate protocol
+
+        pcell = np.empty(vscan.shape[0], dtype=np.float32)
+        pcell[:] = self.param['Pockels']
 
         # Look up device names
         pdDevice, pdChannel = self.param['Photodetector']
@@ -1090,7 +1130,7 @@ class Imager(Module):
                 },
             # self.attenuatorDev.name(): {self.attenuatorChannel: {'preset': self.param['Pockels']}},
             self.laserDev.name(): {
-                'pCell': {'preset': self.param['Pockels']},
+                'pCell': {'command': pcell}, # {'preset': self.param['Pockels']},
                 'shutterMode': 'open',
                 },
             pdDevice: {
@@ -1139,30 +1179,7 @@ class Imager(Module):
     #     if b:
     #         self.startVideo()
         
-    def toggleVideo(self, b):
-        self.vbutton = self.ui.video_button
-        if b:
-            self.startVideo()
-            
-    def startVideo(self):
-        # if self.laserDev.hasShutter:
-        #     self.laserDev.openShutter()
-        # self.view.resetFrameCount() # always reset the ROI in the imager display if it is being used
 
-        if self.laserDev is not None and self.laserDev.hasShutter:
-            # force shutter to stay open for the duration of the acquisition
-            self.laserDev.openShutter()
-        try:
-            self.imagingCtrl.acquisitionStarted()
-            while True:
-                frame = self.takeImage(allowBlanking=False)
-                QtGui.QApplication.processEvents()
-                if not self.vbutton.isChecked(): # note only checks the button that called us...
-                    return
-        finally:
-            self.imagingCtrl.acquisitionStopped()
-            if self.laserDev is not None and self.laserDev.hasShutter:
-                self.laserDev.closeShutter()
         
     # def recordToggled(self, b):
     #     if not b:
@@ -1201,16 +1218,22 @@ class ImagingFrame(imaging.Frame):
     """Represents a single collected image frame and its associated metadata."""
 
     def __init__(self, data, program, info):
-        self.program = ScanProgram()
-        self.program.restoreState(program)
-        self.rect = self.program.components[0].ctrlParameter().system
-
-
+        self._program_state = program
+        self._program = None
+        self._decomb = (0, False)
+        self._image = None
         imaging.Frame.__init__(self, data, info)
 
-        # Don't use the default global transform
-        tr = self.rect.imageTransform()
-        info['transform'] = pg.SRTTransform3D(tr)
+    @property
+    def program(self):
+        if self._program is None:
+            self._program = ScanProgram()
+            self._program.restoreState(self._program_state)
+        return self._program
+
+    @property
+    def rectScan(self):
+        return self.program.components[0].ctrlParameter().system
 
     def getImage(self, decomb=True, offset=None):
         # if decomb is True:
@@ -1218,9 +1241,16 @@ class ImagingFrame(imaging.Frame):
         #         offset = self.rect.measureMirrorLag(self.data, subpixel=True)
         # else:
         #     offset = 0
+        if self._image is None:
+            offset, subpixel = self._decomb
+            img = self.rectScan.extractImage(self._data, offset=offset, subpixel=subpixel)
+            # note we transpose the image here because pg prefers (col, row) order.
+            self._image = img.mean(axis=0).T
 
-        offset = 0
-        subpixel = False
-        img = self.rect.extractImage(self.data, offset=offset, subpixel=subpixel)
-        return img.mean(axis=0)
+        return self._image
 
+    def setDecomb(self, offset, subpixel):
+        d = (offset, subpixel)
+        if self._decomb != d:
+            self._decomb = d
+            self._image = None

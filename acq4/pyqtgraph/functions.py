@@ -619,29 +619,12 @@ def subArray(data, offset, shape, stride):
     extraShape = data.shape[1:]
 
     strides = list(data.strides[::-1])
-    for s in shape[1:][::-1]:
-        strides.append(strides[-1] * s)
+    itemsize = strides[-1]
+    for s in stride[1::-1]:
+        strides.append(itemsize * s)
     strides = tuple(strides[::-1])
     
     return np.ndarray(buffer=data, shape=shape+extraShape, strides=strides, dtype=data.dtype)
-
-
-
-    # #print data.shape, offset, shape, stride
-    # for i in range(len(shape)):
-    #     mask = (slice(None),) * i + (slice(None, shape[i] * stride[i]),)
-    #     newShape = shape[:i+1]
-    #     if i < len(shape)-1:
-    #         newShape += (stride[i],)
-    #     newShape += extraShape 
-    #     #print i, mask, newShape
-    #     #print "start:\n", data.shape, data
-    #     data = data[mask]
-    #     #print "mask:\n", data.shape, data
-    #     data = data.reshape(newShape)
-    #     #print "reshape:\n", data.shape, data
-    
-    return data
 
 
 def transformToArray(tr):
