@@ -285,7 +285,7 @@ class RectScan(SystemSolver):
             ('numCols', [None, int, None, 'n']),     # Same as scanShape[1] 
             ('activeCols', [None, int, None, 'n']),  # Same as activeShape[1] 
             ('frameLen', [None, int, None, 'n']),
-            ('frameExposure', [None, float, None, 'n']),
+            ('frameExposure', [None, float, None, 'n']),  # scanner dwell time per square um
             ('scanSpeed', [None, float, None, 'n']),
             ('activeOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe
             ('activeShape', [None, tuple, None, 'n']),   # the 'active' scan area excluding overscan
@@ -293,6 +293,8 @@ class RectScan(SystemSolver):
             ('imageOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe 
             ('imageShape', [None, tuple, None, 'n']),   # the 'active' image area excluding overscan
             ('imageStride', [None, tuple, None, 'n']),  # and accounting for downsampling (index in pixels)
+            ('imageRows', [None, int, None, 'nf']),   # alias for numRows
+            ('imageCols', [None, int, None, 'nf']),   # alias for activeCols
 
             # variables needed to reconstruct exact image location
             ('rowVector', [None, arr, None, 'n']),    # vector pointing from one row to the next
@@ -305,7 +307,7 @@ class RectScan(SystemSolver):
             ('interFrameDuration', [None, float, None, 'f']),
             ('interFrameLen', [None, int, None, 'n']),
             ('numFrames', [None, int, None, 'f']),
-            ('totalExposure', [None, float, None, 'n']),
+            ('totalExposure', [None, float, None, 'n']),  # total scanner dwell time per square um (multiplied across all frames)
             ('totalDuration', [None, float, None, 'n']),
             ])
 
@@ -403,13 +405,14 @@ class RectScan(SystemSolver):
         using linear interpolation.
         """
         offset = self.imageOffset + offset * self.sampleRate / self.downsample
-        intOffset = np.round(offset)
+        intOffset = np.floor(offset)
         fracOffset = offset - intOffset
 
         shape = self.imageShape
         stride = self.imageStride
 
         if subpixel and fracOffset != 0:
+            print fracOffset
             interp = data[:-1] * (1.0 - fracOffset) + data[1:] * fracOffset
             image = pg.subArray(interp, intOffset, shape, stride)            
         else:
@@ -430,9 +433,20 @@ class RectScan(SystemSolver):
             raise Exception("Mirror lag can only be measured for bidirectional scans.")
 
         # decide how far to search
-        rowTime = self.scanShape[1] / self.sampleRate
+        rowTime = self.scanShape[2] / self.sampleRate
         pxTime = self.downsample / self.sampleRate
         maxOffset = min(maxOffset, rowTime * 0.7)
+
+        # see whether we need to pad the data
+        stride = self.imageStride
+        shape = self.imageShape
+        offset = self.imageOffset + maxOffset * self.sampleRate / self.downsample
+        minSize = stride[0] * shape[0] + offset
+        if data.shape[0] < minSize:
+            appendShape = list(data.shape)
+            appendShape[0] = 1 + minSize - data.shape[0]
+            data = np.concatenate([data, np.zeros(appendShape, dtype=data.dtype)], axis=0)
+
 
         # find optimal shift by pixel
         offsets = np.arange(minOffset, maxOffset, pxTime)
@@ -473,7 +487,6 @@ class RectScan(SystemSolver):
                 bestError = totErr
                 bestOffset = offset
         # pg.plot(errs)
-
         return bestOffset
 
     def imageTransform(self):
@@ -489,8 +502,8 @@ class RectScan(SystemSolver):
         p1 = p0 + acs[2] * dx
         p2 = p0 + acs[1] * dy
 
-        print p0, p1, p2
-        print acs, dx, dy
+        # print p0, p1, p2
+        # print acs, dx, dy
 
         localPts = map(pg.Vector, [[0,0], [ims[2],0], [0,ims[1]], [0,0,1]]) # w and h of data of image in pixels.
         globalPts = map(pg.Vector, [p0, p1, p2, [0,0,1]])
@@ -518,28 +531,34 @@ class RectScan(SystemSolver):
         return np.linalg.norm(self.p1 - self.p0)
             
     def _height(self):
-        return np.linalg.norm(self.p2 - self.p0)
+        try:
+            return np.linalg.norm(self.p2 - self.p0)
+        except RuntimeError:
+            pass
+
+        ar = self.pixelAspectRatio  # w/h
+        return self.width * (self.numRows / ((self.activeCols // self.downsample) * ar))
 
     def _angle(self):
         dp = self.p1 - self.p0
-        return np.arctan2(*dp)
+        return np.arctan2(*dp[::-1])
 
     def _p1(self):
         p0 = self.p0
         width = self.width
         angle = self.angle
-        return p0 + width * np.array(np.cos(angle), np.sin(angle))
+        return p0 + width * np.array([np.cos(angle), np.sin(angle)])
 
     def _p2(self):
         p0 = self.p0
         height = self.height
         angle = self.angle
-        return p0 + height * np.array(np.sin(angle), -np.cos(angle))
+        return p0 + height * np.array([np.sin(angle), -np.cos(angle)])
 
     def _osVector(self):
         # This vector is p1 -> osP1
         # Compute from p0, overscan, and scanSpeed
-        osDist = self.osLen / self.downsample * self.pixelWidth
+        osDist = (self.osLen // self.downsample) * self.pixelWidth
 
         #speed = self.scanSpeed
         #os = self.overscanDuration
@@ -554,7 +573,7 @@ class RectScan(SystemSolver):
 
     def _osLen(self):
         """Length of overscan (non-downsampled)"""
-        return np.ceil(self.minOverscan * self.sampleRate / self.downsample) * self.downsample
+        return int(np.ceil(self.minOverscan * self.sampleRate / self.downsample) * self.downsample)
 
         #osv = self.osVector
         #return np.ceil(np.linalg.norm(osv) / self.pixelWidth)
@@ -590,7 +609,7 @@ class RectScan(SystemSolver):
         except RuntimeError:
             pass
 
-        return self.width / (self.numCols - 1)
+        return self.width / (self.activeCols / self.downsample)
         
     def _pixelHeight(self):
         try:
@@ -664,7 +683,7 @@ class RectScan(SystemSolver):
             pxar = self.pixelAspectRatio
             osLen = self.osLen
             ds = self.downsample
-            
+
             maxSamples = int(dur * sr)
 
             # given we may use maxPixels, what is the best way to fill 
@@ -679,7 +698,7 @@ class RectScan(SystemSolver):
             a = 1. / sr
             b = 2. * self.overscanDuration
             c = - shapeRatio * dur
-            numActiveCols = int((-b + (b**2 - 4*a*c) ** 0.5) / (2*a))
+            numActiveCols = np.round((-b + (b**2 - 4*a*c) ** 0.5) / (2*a))
             numCols = numActiveCols + osLen * 2
             # make sure numCols is a multiple of ds
             numCols = int(numCols / ds) * ds
@@ -701,28 +720,15 @@ class RectScan(SystemSolver):
         return self.scanStride
 
     def _imageShape(self):
-
-        try:
-            return self.numFrames, self.numRows, self.activeCols // self.downsample
-            # # image size and pixel size
-            # w = self.width
-            # h = self.height
-            # pxw = self.pixelWidth
-            # pxh = self.pixelHeight
-            
-            # nx = int(w / pxw) + 1
-            # ny = int(h / pxh) + 1
-            # return (ny, nx)
-        except RuntimeError:
-            raise
+        return self.numFrames, self.imageRows, self.imageCols
 
     def _imageOffset(self):
-        return (self.scanOffset + self.osLen) / self.downsample
+        return (self.scanOffset + self.osLen) // self.downsample
     
     def _imageStride(self):
         ds = self.downsample
         ss = self.scanStride
-        return (ss[0] / ds, ss[1] / ds, 1)
+        return (ss[0] // ds, ss[1] // ds, 1)
 
     def _numRows(self):
         try:
@@ -731,7 +737,7 @@ class RectScan(SystemSolver):
             pass
 
         try:
-            return self.imageShape[1]
+            return self.imageRows
         except RuntimeError:
             pass
 
@@ -749,14 +755,30 @@ class RectScan(SystemSolver):
 
     def _activeCols(self):
         try:
+            return self.imageCols * self.downsample
+        except RuntimeError:
+            pass
+
+        try:
             sw = self.scanShape[2]
             osl = self.osLen
             return sw - osl*2
         except RuntimeError:
+            pass
+
+        try:
             w = self.width
             pxw = self.pixelWidth
             nx = int(w / pxw) + 1
             return nx * self.downsample
+        except RuntimeError:
+            pass
+
+    def _imageRows(self):
+        return self.numRows  # just an alias
+
+    def _imageCols(self):
+        return self.activeCols // self.downsample
 
     def _numCols(self):
         try:
@@ -819,6 +841,8 @@ class RectScanParameter(pTypes.SimpleParameter):
             dict(name='totalDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='width', readonly=True, type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='height', readonly=True, type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='imageRows', type='int', value=500, limits=[1, None]),
+            dict(name='imageCols', type='int', value=500, limits=[1, None]),
             dict(name='minOverscan', type='float', value=30.e-6, suffix='s', siPrefix=True, bounds=[0., 1.], step=0.1, dec=True, minStep=1e-7),
             dict(name='bidirectional', type='bool', value=True),
             dict(name='pixelWidth', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),

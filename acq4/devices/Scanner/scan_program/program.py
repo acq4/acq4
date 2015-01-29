@@ -50,9 +50,9 @@ class ScanProgram:
         self.scanner = None
         self.laser = None  # may be overridden by each component
         
-        self.sampleRate = None
-        self.numSamples = None
-        self.downsample = None
+        self.sampleRate = 100e3
+        self.numSamples = 10e3
+        self.downsample = 1
         
         self.ctrlGroup = ScanProgramCtrlGroup()  # used to display GUI for components
         self.ctrlGroup.sigAddNewRequested.connect(self.paramRequestedNewComponent)

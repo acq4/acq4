@@ -318,6 +318,11 @@ class SimpleParameter(Parameter):
             self.value = self.colorValue
             self.saveState = self.saveColorState
     
+    def setValue(self, value, blockSignal=None):
+        if self.opts['type'] == 'int':
+            value = int(value)
+        Parameter.setValue(self, value, blockSignal)
+
     def colorValue(self):
         return fn.mkColor(Parameter.value(self))
     
@@ -593,6 +598,7 @@ class ActionParameterItem(ParameterItem):
         ParameterItem.__init__(self, param, depth)
         self.layoutWidget = QtGui.QWidget()
         self.layout = QtGui.QHBoxLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
         self.layoutWidget.setLayout(self.layout)
         self.button = QtGui.QPushButton(param.name())
         #self.layout.addSpacing(100)
