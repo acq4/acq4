@@ -454,7 +454,7 @@ class Imager(Module):
                 dict(name='Objective', type='str', value='Unknown', readonly=True),
             ]),
             dict(name='Image Control', type='group', children=[
-                dict(name='Decomb', type='float', value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=1e-6, decimals=5, children=[
+                dict(name='Decomb', type='float', value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=2e-7, decimals=5, children=[
                     dict(name='Auto', type='action'),
                     dict(name='Subpixel', type='bool', value=False),
                     ]),
@@ -641,6 +641,8 @@ class Imager(Module):
         in the parameter tree """
         if self.ignoreRoiChange:
             return
+
+        self.scanProtocol = None  # invalidate cache
 
         roi = self.currentRoi
         state = roi.getState()
@@ -1152,6 +1154,8 @@ class Imager(Module):
         else:
             # Generate scan voltages
             vscan = self.scanProgram.generateVoltageArray()
+            # scanner lags laser too much to make this worthwhile without some timing correction
+            # mask = self.scanProgram.generateLaserMask().astype(np.float32)
             self.scanProtocol = vscan
 
         # sample rate, duration, and other meta data
@@ -1165,6 +1169,7 @@ class Imager(Module):
 
         pcell = np.empty(vscan.shape[0], dtype=np.float32)
         pcell[:] = scanParams['Pockels']
+        pcell[-1] = 0
 
         # Look up device names
         pdDevice, pdChannel = scanParams['Photodetector']
