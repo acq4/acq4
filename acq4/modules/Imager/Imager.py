@@ -208,14 +208,18 @@ class ScreenBlanker(QtCore.QObject):
     This is so that extraneous light does not leak into the 
     detector during acquisition.
     """
+    sigCancelClicked = QtCore.Signal()
+
     def __init__(self, blank=True):
         QtCore.QObject.__init__(self)
         self.blank = blank
+        self.cancelled = False
 
     def __enter__(self):
+        self.cancelled = False
         self.widgets = []
         if not self.blank:
-            return
+            return self
 
         d = QtGui.QApplication.desktop()
         for i in range(d.screenCount()): # look for all screens
@@ -226,6 +230,7 @@ class ScreenBlanker(QtCore.QObject):
             w.move(sg.x(), sg.y()) # put the widget there
             w.showFullScreen() # duh
         QtGui.QApplication.processEvents() # make it so
+        return self
         
     def __exit__(self, *args):
         for w in self.widgets:
@@ -236,7 +241,8 @@ class ScreenBlanker(QtCore.QObject):
     def cancelClicked(self):
         """Called when a cancel button is clicked.
         """
-        print "Cancel!"
+        self.cancelled = True
+        self.sigCancelClicked.emit()
 
         
 class RegionCtrl(pg.ROI):
@@ -325,6 +331,7 @@ class Imager(Module):
         # self.w1.addWidget(self.view)   # add the view to the right of w1     
 
         self.videoRunning = False
+        self.abort = False
         self.storedROI = None
         # self.currentStack = None
         # self.currentStackLength = 0
@@ -490,8 +497,10 @@ class Imager(Module):
         self.param.child('Image Control').sigTreeStateChanged.connect(self.updateDecomb)
         self.param.child('Image Control', 'Decomb', 'Auto').sigActivated.connect(self.autoDecomb)
 
+        self.manager.sigAbortAll.connect(self.abortTask)
+
     def quit(self):
-        self.abort()
+        self.abortTask()
         if self.imageItem is not None and self.imageItem.scene() is not None:
             self.imageItem.scene().removeItem(self.imageItem)
         self.imageItem = None
@@ -508,10 +517,13 @@ class Imager(Module):
         self.imagingCtrl.quit()
         Module.quit(self)
 
-    def abort(self):
+    def abortTask(self):
         """Immediately stop all acquisition and close any shutters in use.
         """
-        pass
+        self.abort = True
+        if self.laserDev is not None and self.laserDev.hasShutter:
+            self.laserDev.closeShutter()
+
 
     def objectiveUpdate(self, reset=False):
         """ Update the objective information and the associated ROI
@@ -998,7 +1010,8 @@ class Imager(Module):
         assert dirhandle is None
 
         frame = self.takeImage()
-
+        if frame is False:  # aborted
+            return
         frame.info()['2pImageType'] = 'Snap'
 
         # if self.param['Store']:
@@ -1050,6 +1063,8 @@ class Imager(Module):
                 frame = self.takeImage(allowBlanking=False)
                 if not self.imagingCtrl.ui.acquireVideoBtn.isChecked():
                     break
+                if frame is False:  # aborted
+                    break
                 # Qt event loop is usually visited while waiting for imaging results, but
                 # we can't count on that.
                 QtGui.QApplication.processEvents()
@@ -1099,11 +1114,15 @@ class Imager(Module):
 
         # Blank screen and execute task
         blank = allowBlanking and self.param['Scan Control', 'Blank Screen'] is True
-        with ScreenBlanker(blank):
+        with ScreenBlanker(blank) as blanker:
             start = pg.ptime.time()
             task.execute(block = False)
             while not task.isDone():
                 QtGui.QApplication.processEvents()
+                if blanker.cancelled or self.abort:
+                    task.abort()
+                    self.abort = False
+                    return False
                 time.sleep(0.01)
 
         # grab results and store PMT data for display
