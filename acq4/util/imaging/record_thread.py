@@ -151,7 +151,11 @@ class RecordThread(Thread):
 
                 if self.currentStack is not None:
                     dur = self.lastFrameTime - self.startFrameTime
-                    self.currentStack.setInfo({'frames': self.currentFrameNum, 'duration': dur, 'averageFPS': (self.currentFrameNum/dur)})
+                    if dur > 0:
+                        fps = (self.currentFrameNum+1) / dur
+                    else:
+                        fps = 0
+                    self.currentStack.setInfo({'frames': self.currentFrameNum, 'duration': dur, 'averageFPS': fps})
                     # self.showMessage('Finished recording %s - %d frames, %02f sec' % (self.currentStack.name(), self.currentFrameNum, dur)) 
                     self.sigRecordingFinished.emit(self.currentStack, self.currentFrameNum)
                     self.currentStack = None
@@ -159,7 +163,7 @@ class RecordThread(Thread):
                 continue
 
 
-            data = frame['frame'].data()
+            data = frame['frame'].getImage()
             info = frame['frame'].info()
             dh = frame['dir']
             stack = frame['stack']

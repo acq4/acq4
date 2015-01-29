@@ -21,75 +21,75 @@
 # UNC Chapel Hill
 # Distributed under MIT/X11 license. See license.txt for more infomation.
 #
+import time
+import pprint
+from PyQt4 import QtGui, QtCore
+import numpy as np
+from collections import OrderedDict
 
 from acq4.modules.Module import Module
-from PyQt4 import QtGui, QtCore
-from acq4.pyqtgraph import ImageView
+# from acq4.pyqtgraph import ImageView
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.dockarea
 from acq4.Manager import getManager
 import acq4.Manager
 import acq4.util.InterfaceCombo as InterfaceCombo
 import acq4.pyqtgraph.parametertree as PT
-import numpy as np
 import acq4.util.metaarray as MA
 from acq4.devices.Microscope import Microscope
-import time
-import pprint
-from .imagerTemplate import Ui_Form
+from acq4.util.Mutex import Mutex
 from acq4.devices.Scanner.scan_program import ScanProgram
 from acq4.devices.Scanner.scan_program.rect import RectScan
 from acq4.util import imaging
-# from acq4.devices.Scanner.scan_program.rect import ScannerUtility
+from .imagerTemplate import Ui_Form
 
-# SUF = ScannerUtility()
 
-"""
-Create some useful configurations for the user.
-"""
-Presets = {
-    'video-std': {
+# Create some useful configurations for the user.
+VideoModes = OrderedDict([
+    ('256x1', {
         'Average': 1,
         'Downsample': 1,
         'Image Width': 256,
         'Image Height': 256,
         'Blank Screen': False,
         'Bidirectional': True,
-    },
-    'video-fast': {
+    }),
+    ('128x2', {
         'Average': 1,
         'Downsample': 2,
         'Image Width': 128 ,
         'Image Height': 128,
         'Blank Screen': False,
         'Bidirectional': True,
-    },
-
-    'video-ultra': {
+    }),
+    ('64x2', {
         'Downsample': 2,
         'Image Width': 64,
         'Image Height': 64,
         'Blank Screen': False,
         'Bidirectional': True,
-    },
-    
-    'StandardDef': {
+    }),
+])
+
+FrameModes = OrderedDict([
+    ('512x10', {
         'Average': 1,
         'Downsample': 10,
         'Image Width': 512,
         'Image Height': 512,
         'Blank Screen': True,
         'Bidirectional' : True,
-    },
-    'HighDef': { # 7/25/2013 parameters for high def ok... 
+    }),
+    ('4x1024x2', {
         'Average': 4,
         'Downsample': 2,
         'Image Width': 1024,
         'Image Height': 1024,
         'Blank Screen': True,
         'Bidirectional': True,
-    },
-}
+    }),
+])
+
 
 
 class ImagerWindow(QtGui.QMainWindow):
@@ -252,9 +252,9 @@ class RegionCtrl(pg.ROI):
         pg.ROI.__init__(self, pos, size=size, pen=roiColor)
         self.addScaleHandle([0,0], [1,1])
         self.addScaleHandle([1,1], [0,0])
+        self.addScaleHandle([0,1], [1,0])
+        self.addScaleHandle([1,0], [0,1])
         self.setZValue(1200)
-        #self.addRotateHandle([1,0], [0,1])
-        #self.addRotateHandle([0,1], [1,0])
 
 class TileControl(pg.ROI):
     """
@@ -265,9 +265,8 @@ class TileControl(pg.ROI):
         self.addScaleHandle([0,0], [1,1])
         self.addScaleHandle([1,1], [0,0])
         self.setZValue(1400)
-        #self.addRotateHandle([1,0], [0,1])
-        #self.addRotateHandle([0,1], [1,0])
     
+
 
 class Imager(Module):
     def __init__(self, manager, name, config):
@@ -285,17 +284,24 @@ class Imager(Module):
         self.w1.addWidget(self.dockarea)
 
         # acquisition control
-        self.w2s = QtGui.QSplitter()
-        self.w2s.setOrientation(QtCore.Qt.Vertical)
+        # self.w2s = QtGui.QSplitter()
+        # self.w2s.setOrientation(QtCore.Qt.Vertical)
+        self.w2s = QtGui.QWidget()
+        self.w2sl = QtGui.QVBoxLayout()
+        self.w2s.setLayout(self.w2sl)
+        self.w2sl.setContentsMargins(0, 0, 0, 0)
+        self.w2sl.setSpacing(0)
         self.ctrlWidget = QtGui.QWidget()
-        self.w2s.addWidget(self.ctrlWidget)
+        # self.w2s.addWidget(self.ctrlWidget)
         self.ui = Ui_Form()
         self.ui.setupUi(self.ctrlWidget)  # put the ui on the top 
+        self.w2sl.addWidget(self.ctrlWidget)
 
         # create the parameter tree for controlling device behavior
         self.tree = PT.ParameterTree()
-        self.w2s.addWidget(self.tree) # put the parameters on the bottom
-        self.w2s.setSizes([1,1,900]) # Ui top widget has multiple splitters itself - force small space..
+        # self.w2s.addWidget(self.tree) # put the parameters on the bottom
+        # self.w2s.setSizes([1,1,900]) # Ui top widget has multiple splitters itself - force small space..
+        self.w2sl.addWidget(self.tree)
 
         # takes care of displaying image data, 
         # contrast & background subtraction user interfaces
@@ -318,7 +324,7 @@ class Imager(Module):
         # self.view = ImagerView()
         # self.w1.addWidget(self.view)   # add the view to the right of w1     
 
-
+        self.videoRunning = False
         self.storedROI = None
         # self.currentStack = None
         # self.currentStackLength = 0
@@ -373,6 +379,9 @@ class Imager(Module):
         self.attenuatorDev = self.manager.getDevice(config['attenuator'][0])
         self.attenuatorChannel = config['attenuator'][1]
         
+        self.laserMonitor = QtCore.QTimer()
+        self.laserMonitor.timeout.connect(self.updateLaserInfo)
+        self.laserMonitor.start(3000)
         
         # self.ui.hide_check.stateChanged.connect(self.hideOverlayImage)
         # self.ui.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
@@ -387,14 +396,15 @@ class Imager(Module):
         # self.ui.record_button.toggled.connect(self.recordToggled)
 
         self.frameDisplay.imageUpdated.connect(self.imageUpdated)
-        self.imagingCtrl.sigAcquireFrameClicked.connect(self.PMT_SnapClicked)
-        self.imagingCtrl.sigAcquireVideoClicked.connect(self.toggleVideo)
+        self.imagingCtrl.sigAcquireFrameClicked.connect(self.acquireFrameClicked)
+        self.imagingCtrl.sigStartVideoClicked.connect(self.startVideoClicked)
+        self.imagingCtrl.sigStopVideoClicked.connect(self.stopVideoClicked)
 
         # Add custom imaging modes
-        self.imagingCtrl.addFrameButton('1024x1024x5')
-        self.imagingCtrl.addFrameButton('512x512')
-        self.imagingCtrl.addVideoButton('256x256')
-        self.imagingCtrl.addVideoButton('128x128')
+        for mode in FrameModes:
+            self.imagingCtrl.addFrameButton(mode)
+        for mode in VideoModes:
+            self.imagingCtrl.addVideoButton(mode)
 
         # Connect other UI controls
         self.ui.run_button.clicked.connect(self.PMT_Run)
@@ -410,37 +420,42 @@ class Imager(Module):
         self.scanProgram.addComponent('rect')
 
         self.param = PT.Parameter(name = 'param', children=[
-            dict(name="Preset", type='list', value='video-fast', 
-                 values=['StandardDef', 'HighDef', 'video-std', 'video-fast', 
-                         'video-ultra']),
-            # dict(name='Store', type='bool', value=True),
-            dict(name='Frame Time', type='float', value=50e-3, suffix='s', siPrefix=True, readonly=True, dec=True, step=0.5, minStep=100e-6),
-            dict(name='Pixel Size', type='float', value=1e-6, suffix='m', siPrefix=True, readonly=True),
-            dict(name='Sample Rate', type='float', value=1.0e6, suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10e3, 5e6], siPrefix=True),
-            dict(name='Downsample', type='int', value=1, limits=[1,None]),
-            dict(name='Average', type='int', value=1, limits=[1,100]),
-            dict(name='Bidirectional', type='bool', value=True),
-            dict(name='Overscan', type='float', value=150e-6, suffix='s', siPrefix=True, limits=[0, None], step=10e-6),
-            dict(name='Pockels', type='float', value=0.03, suffix='V', step=0.005, limits=[0, 1.5], siPrefix=True),
-            dict(name='Blank Screen', type='bool', value=True),
-            dict(name='Image Width', type='int', value=500, readonly=False, limits=[1, None]),
-            dict(name='Image Height', type='int', value=500, readonly=False, limits=[1, None]),
-            dict(name='Scan Speed', type='float', value=0.00, suffix='m/s', siPrefix=True, readonly=True),
-            dict(name='Exposure per Frame', type='float', value=0.00, suffix='s/um^2', siPrefix=True, readonly=True),
-            dict(name='Total Exposure', type='float', value=0.00, suffix='s/um^2', siPrefix=True, readonly=True),
-            dict(name='Wavelength', type='float', value=700, suffix='nm', readonly=True),
-            dict(name='Power', type='float', value=0.00, suffix='W', readonly=True),
-            dict(name='Objective', type='str', value='Unknown', readonly=True),
-            dict(name='Follow Stage', type='bool', value=True),
-            dict(name='Decomb', type='float', value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=1e-6, decimals=5, children=[
-                dict(name='Auto', type='bool', value=True),
-                dict(name='Subpixel', type='bool', value=False),
-                ]),
+            # dict(name="Preset", type='list', value='video-fast', 
+            #      values=['StandardDef', 'HighDef', 'video-std', 'video-fast', 
+            #              'video-ultra']),
+            dict(name='Scan Control', type='group', children=[
+                dict(name='Pockels', type='float', value=0.03, suffix='V', step=0.005, limits=[0, 1.5], siPrefix=True),
+                dict(name='Sample Rate', type='int', value=1.0e6, suffix='Hz', dec=True, minStep=100., step=0.5, limits=[10e3, 50e6], siPrefix=True),
+                dict(name='Downsample', type='int', value=1, limits=[1,None]),
+                dict(name='Average', type='int', value=1, limits=[1,100]),
+                dict(name='Blank Screen', type='bool', value=True),
+                dict(name='Image Width', type='int', value=500, readonly=False, limits=[1, None]),
+                dict(name='Image Height', type='int', value=500, readonly=False, limits=[1, None]),
+                dict(name='Bidirectional', type='bool', value=True),
+                dict(name='Overscan', type='float', value=50e-6, suffix='s', siPrefix=True, limits=[0, None], step=10e-6),
+                dict(name='Photodetector', type='list', values=self.detectors),
+                dict(name='Follow Stage', type='bool', value=True),
+            ]),
+            dict(name='Scan Properties', type='group', children=[
+                dict(name='Frame Time', type='float', value=50e-3, suffix='s', siPrefix=True, readonly=True, dec=True, step=0.5, minStep=100e-6),
+                dict(name='Pixel Size', type='float', value=1e-6, suffix='m', siPrefix=True, readonly=True),
+                dict(name='Scan Speed', type='float', value=0.00, suffix='m/s', siPrefix=True, readonly=True),
+                dict(name='Exposure per Frame', type='float', value=0.00, suffix='s/um^2', siPrefix=True, readonly=True),
+                dict(name='Total Exposure', type='float', value=0.00, suffix='s/um^2', siPrefix=True, readonly=True),
+                dict(name='Wavelength', type='float', value=700, suffix='nm', readonly=True),
+                dict(name='Power', type='float', value=0.00, suffix='W', readonly=True),
+                dict(name='Objective', type='str', value='Unknown', readonly=True),
+            ]),
+            dict(name='Image Control', type='group', children=[
+                dict(name='Decomb', type='float', value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=1e-6, decimals=5, children=[
+                    dict(name='Auto', type='action'),
+                    dict(name='Subpixel', type='bool', value=False),
+                    ]),
+                dict(name='Camera Module', type='interface', interfaceTypes=['cameraModule']),
+            ]),
             # dict(name='Scope Device', type='interface', interfaceTypes=['microscope']),
             # dict(name='Scanner Device', type='interface', interfaceTypes=['scanner']),
             # dict(name='Laser Device', type='interface', interfaceTypes=['laser']),
-            dict(name='Photodetector', type='list', values=self.detectors),
-            dict(name='Camera Module', type='interface', interfaceTypes=['cameraModule']),
             dict(name="Tiles", type="bool", value=False, children=[
                 dict(name='Stage', type='interface', interfaceTypes='stage'),
                 dict(name="X0", type="float", value=-100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
@@ -465,18 +480,19 @@ class Imager(Module):
             dict(name='Show PMT V', type='bool', value=False),
             dict(name='Show Mirror V', type='bool', value=False),
         ])
-        self.tree.setParameters(self.param)
+        self.tree.setParameters(self.param, showTop=False)
 
         # insert an ROI into the camera image that corresponds to our scan area                
         self.objectiveUpdate() # force update of objective information and create appropriate ROI
         # check the devices...        
         self.updateParams() # also force update now to make sure all parameters are synchronized
-        self.param.sigTreeStateChanged.connect(self.updateParams)
-        self.param.child('Decomb').sigTreeStateChanged.connect(self.updateDecomb)
+        self.param.child('Scan Control').sigTreeStateChanged.connect(self.updateParams)
+        self.param.child('Image Control').sigTreeStateChanged.connect(self.updateDecomb)
+        self.param.child('Image Control', 'Decomb', 'Auto').sigActivated.connect(self.autoDecomb)
 
     def quit(self):
         self.abort()
-        if self.imageItem.scene() is not None:
+        if self.imageItem is not None and self.imageItem.scene() is not None:
             self.imageItem.scene().removeItem(self.imageItem)
         self.imageItem = None
         for obj,item in self.objectiveROImap.items(): # remove the ROI's for all objectives.
@@ -505,14 +521,14 @@ class Imager(Module):
         # if self.img is not None:# clear the image ovelay if it exists
         #     self.cameraModule.window().removeItem(self.img)
         #     self.img = None
-        self.param['Objective'] = self.scopeDev.currentObjective.name()
+        self.param['Scan Properties', 'Objective'] = self.scopeDev.currentObjective.name()
         if reset:
             self.clearROIMap()
-        if self.param['Objective'] not in self.objectiveROImap: # add the objective and an ROI
+        if self.param['Scan Properties', 'Objective'] not in self.objectiveROImap: # add the objective and an ROI
             # print "create roi:",  self.param['Objective']
-            self.objectiveROImap[self.param['Objective']] = self.createROI()
+            self.objectiveROImap[self.param['Scan Properties', 'Objective']] = self.createROI()
         for obj, roi in self.objectiveROImap.items():
-            if obj == self.param['Objective']:
+            if obj == self.param['Scan Properties', 'Objective']:
                 self.currentRoi = roi
                 roi.show()
                 self.roiChanged() # do this now as well so that the parameter tree is correct. 
@@ -613,15 +629,17 @@ class Imager(Module):
         in the parameter tree """
         if self.ignoreRoiChange:
             return
+
         roi = self.currentRoi
         state = roi.getState()
         w, h = state['size']
         rparam = self.scanProgram.components[0].ctrlParameter()
         rparam.system.p0 = pg.Point(roi.mapToView(pg.Point(0,h)))  # top-left
         rparam.system.p1 = pg.Point(roi.mapToView(pg.Point(w,h)))  # rop-right
-        rows = self.param['Image Width'] * h / w
-        with self.param.treeChangeBlocker():
-            self.param['Image Height'] = rows
+        param = self.param.child('Scan Control')
+        rows = param['Image Width'] * h / w
+        with param.treeChangeBlocker():
+            param['Image Height'] = rows
         # rparam.system.p2 = pg.Point(roi.mapToView(pg.Point(0,0)))  # bottom-left
         # rparam['imageRows', 'fixed'] = False  # need to let this float to accomodate new roi shape
 
@@ -709,13 +727,15 @@ class Imager(Module):
         """
         #check the devices first        
         # use the presets if they are engaged
-        preset = self.param['Preset']
-        self.loadPreset(preset)
+        # preset = self.param['Preset']
+        # self.loadPreset(preset)
+
+        scanControl = self.param.child('Scan Control')
 
         self.scanProtocol = None  # invalidate cache
 
-        sampleRate = self.param['Sample Rate']
-        downsample = self.param['Downsample']
+        sampleRate = scanControl['Sample Rate']
+        downsample = scanControl['Downsample']
         # we'll let the rect tell us later how many samples are needed
         self.scanProgram.setSampling(rate=sampleRate, samples=0, downsample=downsample)
         self.scanProgram.setDevices(scanner=self.scannerDev, laser=self.laserDev)
@@ -724,64 +744,62 @@ class Imager(Module):
         rparams = rect.ctrlParameter()
 
         for param, change, args in changes:
-            if change == 'value' and param is self.param.child('Image Height'):
+            if change == 'value' and param is scanControl.child('Image Height'):
                 # user explicitly requested image height; change ROI to match.
                 try:
                     self.ignoreRoiChange = True
                     size = self.currentRoi.size()
-                    self.currentRoi.setSize([size[0], size[0] * self.param['Image Height'] / self.param['Image Width']])
+                    self.currentRoi.setSize([size[0], size[0] * scanControl['Image Height'] / scanControl['Image Width']])
                 finally:
                     self.ignoreRoiChange = False
 
-        rparams['imageRows'] = self.param['Image Height']
+        rparams['imageRows'] = scanControl['Image Height']
         rparams['imageRows', 'fixed'] = True
-        rparams['imageCols'] = self.param['Image Width']
+        rparams['imageCols'] = scanControl['Image Width']
         rparams['imageCols', 'fixed'] = True
-        rparams['minOverscan'] = self.param['Overscan']
+        rparams['minOverscan'] = scanControl['Overscan']
         rparams['bidirectional'] = True
-        rparams['pixelAspectRatio'] = 1.0 #self.param['Downsample']
+        rparams['pixelAspectRatio'] = 1.0
         rparams['pixelAspectRatio', 'fixed'] = True
-        rparams['numFrames'] = self.param['Average']
+        rparams['numFrames'] = scanControl['Average']
 
+        rparams.system.solve()
         nSamples = rparams.system.scanStride[0] * rparams.system.numFrames
-        nSamples += sampleRate * 200e-6  # generate some padding for decomb
+        nSamples += int(sampleRate * 200e-6)  # generate some padding for decomb
         self.scanProgram.setSampling(rate=sampleRate, samples=nSamples, downsample=downsample)
 
-        with self.param.treeChangeBlocker():
-            # Update dependent parameters
-            self.param['Pixel Size'] = rparams.system.pixelWidth
-            self.param['Frame Time'] = rparams.system.frameDuration
+        # Update dependent parameters
+        scanProp = self.param.child('Scan Properties')
+        scanProp['Pixel Size'] = rparams.system.pixelWidth
+        scanProp['Frame Time'] = rparams.system.frameDuration
 
-            if self.laserDev is not None:
-                self.param['Wavelength'] = (self.laserDev.getWavelength()*1e9)
-                self.param['Power'] = (self.laserDev.outputPower())
-            else:
-                self.param['Wavelength'] = 0.0
-                self.param['Power'] = 0.0
-
-            self.param['Scan Speed'] = rparams.system.scanSpeed
-            self.param['Exposure per Frame'] = rparams.system.frameExposure
-            self.param['Total Exposure'] = rparams.system.totalExposure
+        scanProp['Scan Speed'] = rparams.system.scanSpeed
+        scanProp['Exposure per Frame'] = rparams.system.frameExposure
+        scanProp['Total Exposure'] = rparams.system.totalExposure
 
         if rparams.system.checkOverconstraint() is not False:
             raise RuntimeError("Scan calculator is overconstrained (this is a bug).")
 
     def updateDecomb(self):
         if self.lastFrame is not None:
-            self.lastFrame.setDecomb(self.param['Decomb'], self.param['Decomb', 'Subpixel'])
+            self.lastFrame.setDecomb(self.param['Image Control', 'Decomb'], self.param['Image Control', 'Decomb', 'Subpixel'])
             self.frameDisplay.updateFrame()
 
-        
-    def loadPreset(self, preset):
-        """
-        load the selected preset into the parameters, and calculate some
-        useful parameters for display for the user.
-        """
-        if preset != '':
-            self.param['Preset'] = ''
-            global Presets
-            for k,v in Presets[preset].items():
-                self.param[k] = v
+    def autoDecomb(self):
+        if self.lastFrame is not None:
+            self.lastFrame.autoDecomb()
+            self.param.child('Image Control', 'Decomb').setValue(self.lastFrame._decomb[0])
+
+    # def loadPreset(self, preset):
+    #     """
+    #     load the selected preset into the parameters, and calculate some
+    #     useful parameters for display for the user.
+    #     """
+    #     if preset != '':
+    #         self.param['Preset'] = ''
+    #         global Presets
+    #         for k,v in Presets[preset].items():
+    #             self.param[k] = v
                 
        # with every change, recalculate some values about the display
         # state = self.currentRoi.getState()
@@ -950,12 +968,28 @@ class Imager(Module):
     #     self.loadPreset('HighDef')
     #     self.PMT_Snap()
     
-    def PMT_SnapClicked(self):
+    def loadModeSettings(self, params):
+        param = self.param.child('Scan Control')
+        with param.treeChangeBlocker():  # accumulate changes, emit once at the end.
+            for name, val in params.items():
+                param[name] = val
+
+    def acquireFrameClicked(self, mode):
+        """User requested acquisition of a single frame.
         """
-        Prevent passing button state junk from Qt to the snap routine instead of dirhandle.
-        """
+        if mode is not None:
+            self.loadModeSettings(FrameModes[mode])
         self.PMT_Snap()
         
+    def startVideoClicked(self, mode):
+        if mode is not None:
+            self.loadModeSettings(VideoModes[mode])
+        if not self.videoRunning:
+            self.startVideo()
+
+    def stopVideoClicked(self):
+        self.videoRunning = False
+            
     def PMT_Snap(self, dirhandle=None):
         """
         Take one image as a snap, regardless of whether a Z stack or a Timed acquisition is selected
@@ -1002,29 +1036,26 @@ class Imager(Module):
 
         return frame
 
-    def toggleVideo(self, mode, start):
-        if start:
-            self.startVideo()
-            
     def startVideo(self):
+        if self.videoRunning:
+            raise RuntimeError("Video acquisition already started.")
+
         if self.laserDev is not None and self.laserDev.hasShutter:
             # force shutter to stay open for the duration of the acquisition
             self.laserDev.openShutter()
         try:
+            self.videoRunning = True
             self.imagingCtrl.acquisitionStarted()
-            import cProfile
-            prof = cProfile.Profile()
-            prof.enable()
-
-            while True:
-                # Qt event loop is visited while waiting for imaging results.
+            while self.videoRunning:
                 frame = self.takeImage(allowBlanking=False)
                 if not self.imagingCtrl.ui.acquireVideoBtn.isChecked():
                     break
-            
-            prof.disable()
-            prof.print_stats(sort='cumulative')
+                # Qt event loop is usually visited while waiting for imaging results, but
+                # we can't count on that.
+                QtGui.QApplication.processEvents()
+
         finally:
+            self.videoRunning = False
             self.imagingCtrl.acquisitionStopped()
             if self.laserDev is not None and self.laserDev.hasShutter:
                 self.laserDev.closeShutter()
@@ -1046,26 +1077,30 @@ class Imager(Module):
         
         return params
     
+
+    def updateLaserInfo(self):
+        if self.laserDev is not None:
+            self.param['Scan Properties', 'Wavelength'] = (self.laserDev.getWavelength()*1e9)
+            self.param['Scan Properties', 'Power'] = (self.laserDev.outputPower())
+        else:
+            self.param['Scan Properties', 'Wavelength'] = 0.0
+            self.param['Scan Properties', 'Power'] = 0.0
          
     def takeImage(self, allowBlanking=True):
         """
         Take an image using the scanning system and PMT, and return with the data.
         """
         # first make sure laser information is updated on the module interface
-        if self.laserDev is not None:
-            self.param['Wavelength'] = (self.laserDev.getWavelength()*1e9)
-            self.param['Power'] = (self.laserDev.outputPower())
-        else:
-            self.param['Wavelength'] = 0.0
-            self.param['Power'] = 0.0
-        
+        self.updateLaserInfo()
+
         # generate the scan protocol and task
         prot = self.generateProtocol()
         task = self.manager.createTask(prot)
 
         # Blank screen and execute task
-        blank = allowBlanking and self.param['Blank Screen'] is True
+        blank = allowBlanking and self.param['Scan Control', 'Blank Screen'] is True
         with ScreenBlanker(blank):
+            start = pg.ptime.time()
             task.execute(block = False)
             while not task.isDone():
                 QtGui.QApplication.processEvents()
@@ -1073,13 +1108,14 @@ class Imager(Module):
 
         # grab results and store PMT data for display
         data = task.getResult()
-        pdDevice, pdChannel = self.param['Photodetector']
+        pdDevice, pdChannel = self.param['Scan Control', 'Photodetector']
         scanDev = self.scannerDev.name()
         program = prot[scanDev]['program']
         pmtData = data[pdDevice][pdChannel].view(np.ndarray)
         info = self.saveParams()
+        info['time'] = start
 
-        info['deviceTranform'] = self.scannerDev.globalTransform()
+        info['deviceTranform'] = pg.SRTTransform3D(self.scannerDev.globalTransform())
         tr = self.scanProgram.components[0].ctrlParameter().system.imageTransform()
         info['transform'] = pg.SRTTransform3D(tr)
 
@@ -1102,16 +1138,17 @@ class Imager(Module):
         # sample rate, duration, and other meta data
         rect = self.scanProgram.components[0].ctrlParameter()
 
+        scanParams = self.param.child('Scan Control')
         samples = vscan.shape[0]
-        sampleRate = self.param['Sample Rate']
+        sampleRate = scanParams['Sample Rate']
         duration = samples / sampleRate
         program = self.scanProgram.saveState()  # meta-data to annotate protocol
 
         pcell = np.empty(vscan.shape[0], dtype=np.float32)
-        pcell[:] = self.param['Pockels']
+        pcell[:] = scanParams['Pockels']
 
         # Look up device names
-        pdDevice, pdChannel = self.param['Photodetector']
+        pdDevice, pdChannel = scanParams['Photodetector']
         scanDev = self.scannerDev.name()
 
         prot = {
@@ -1121,7 +1158,7 @@ class Imager(Module):
             'DAQ' : {
                 'rate': sampleRate, 
                 'numPts': samples,
-                'downsample': self.param['Downsample']
+                'downsample': scanParams['Downsample']
                 }, 
             scanDev: {
                 'xCommand' : vscan[:, 0],
@@ -1218,6 +1255,7 @@ class ImagingFrame(imaging.Frame):
     """Represents a single collected image frame and its associated metadata."""
 
     def __init__(self, data, program, info):
+        self.lock = Mutex(recursive=True)  # because frame may be accesed by recording thread.
         self._program_state = program
         self._program = None
         self._decomb = (0, False)
@@ -1226,14 +1264,16 @@ class ImagingFrame(imaging.Frame):
 
     @property
     def program(self):
-        if self._program is None:
-            self._program = ScanProgram()
-            self._program.restoreState(self._program_state)
+        with self.lock:
+            if self._program is None:
+                self._program = ScanProgram()
+                self._program.restoreState(self._program_state)
         return self._program
 
     @property
     def rectScan(self):
-        return self.program.components[0].ctrlParameter().system
+        with self.lock:
+            return self.program.components[0].ctrlParameter().system
 
     def getImage(self, decomb=True, offset=None):
         # if decomb is True:
@@ -1254,3 +1294,13 @@ class ImagingFrame(imaging.Frame):
         if self._decomb != d:
             self._decomb = d
             self._image = None
+
+    def autoDecomb(self):
+        offset, subpixel = self._decomb
+        offset = self.rectScan.measureMirrorLag(self._data, subpixel=subpixel)
+        self.setDecomb(offset, subpixel)
+
+
+
+
+

@@ -76,7 +76,7 @@ class FrameDisplay(QtCore.QObject):
         """
         if self.currentFrame is None:
             return
-        return self.currentFrame.data()
+        return self.currentFrame.getImage()
 
     def newFrame(self, frame):
         lf = None

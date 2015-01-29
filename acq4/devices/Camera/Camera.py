@@ -841,9 +841,8 @@ class AcquireThread(Thread):
                     
                     for frame in frames:
                         frameInfo = info.copy()
-                        data = frame['data']
-                        del frame['data']
-                        frameInfo.update(frame)
+                        data = frame.pop('data')
+                        frameInfo.update(frame)  # copies 'time' key supplied by camera
                         out = Frame(data, frameInfo)
                         with self.connectMutex:
                             conn = list(self.connections)

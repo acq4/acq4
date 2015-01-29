@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>180</width>
-    <height>118</height>
+    <height>69</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -20,187 +20,13 @@
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <property name="horizontalSpacing">
-    <number>0</number>
-   </property>
-   <property name="verticalSpacing">
-    <number>2</number>
-   </property>
    <property name="margin">
     <number>0</number>
    </property>
+   <property name="spacing">
+    <number>0</number>
+   </property>
    <item row="0" column="0">
-    <widget class="QLabel" name="label_6">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="text">
-      <string>Xpos (mm)</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="1">
-    <widget class="QLabel" name="xpos">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="2">
-    <widget class="QLabel" name="label">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="text">
-      <string>Width (um)</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="3">
-    <widget class="QLabel" name="width">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="0">
-    <widget class="QLabel" name="label_8">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="text">
-      <string>Ypos (mm)</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="1">
-    <widget class="QLabel" name="ypos">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="2">
-    <widget class="QLabel" name="label_4">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="text">
-      <string>Height (um)</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="3">
-    <widget class="QLabel" name="height">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-   </item>
-   <item row="2" column="0">
-    <widget class="QLabel" name="label_11">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="text">
-      <string>Pixel (um)</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-     </property>
-    </widget>
-   </item>
-   <item row="2" column="1">
-    <widget class="QLabel" name="pixelSize">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-   </item>
-   <item row="2" column="2">
-    <widget class="QLabel" name="label_3">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="text">
-      <string>Dwell  (us)</string>
-     </property>
-    </widget>
-   </item>
-   <item row="2" column="3">
-    <widget class="QLabel" name="dwellTime">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-   </item>
-   <item row="3" column="0" colspan="2">
     <widget class="QPushButton" name="Align_to_Camera">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -219,7 +45,7 @@
      </property>
     </widget>
    </item>
-   <item row="3" column="2" colspan="2">
+   <item row="0" column="1">
     <widget class="QPushButton" name="saveROI">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -238,7 +64,7 @@
      </property>
     </widget>
    </item>
-   <item row="4" column="0" colspan="2">
+   <item row="1" column="0">
     <widget class="QPushButton" name="set_TilesButton">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -260,7 +86,7 @@
      </property>
     </widget>
    </item>
-   <item row="4" column="2" colspan="2">
+   <item row="1" column="1">
     <widget class="QPushButton" name="restoreROI">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -279,7 +105,7 @@
      </property>
     </widget>
    </item>
-   <item row="5" column="0" colspan="2">
+   <item row="2" column="0">
     <widget class="QPushButton" name="run_button">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -298,7 +124,7 @@
      </property>
     </widget>
    </item>
-   <item row="5" column="2" colspan="2">
+   <item row="2" column="1">
     <widget class="QPushButton" name="stop_button">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">

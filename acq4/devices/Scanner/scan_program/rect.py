@@ -405,13 +405,14 @@ class RectScan(SystemSolver):
         using linear interpolation.
         """
         offset = self.imageOffset + offset * self.sampleRate / self.downsample
-        intOffset = np.round(offset)
+        intOffset = np.floor(offset)
         fracOffset = offset - intOffset
 
         shape = self.imageShape
         stride = self.imageStride
 
         if subpixel and fracOffset != 0:
+            print fracOffset
             interp = data[:-1] * (1.0 - fracOffset) + data[1:] * fracOffset
             image = pg.subArray(interp, intOffset, shape, stride)            
         else:
@@ -435,6 +436,16 @@ class RectScan(SystemSolver):
         rowTime = self.scanShape[1] / self.sampleRate
         pxTime = self.downsample / self.sampleRate
         maxOffset = min(maxOffset, rowTime * 0.7)
+
+        # see whether we need to pad the data
+        stride = self.imageStride
+        shape = self.imageShape
+        offset = self.imageOffset + maxOffset * self.sampleRate / self.downsample
+        minSize = stride[0] * shape[0] + offset
+        if data.shape[0] < minSize:
+            appendShape = list(data.shape)
+            appendShape[0] = 1 + minSize - data.shape[0]
+            data = np.concatenate([data, np.zeros(appendShape, dtype=data.dtype)], axis=0)
 
         # find optimal shift by pixel
         offsets = np.arange(minOffset, maxOffset, pxTime)
@@ -672,7 +683,7 @@ class RectScan(SystemSolver):
             pxar = self.pixelAspectRatio
             osLen = self.osLen
             ds = self.downsample
-            
+
             maxSamples = int(dur * sr)
 
             # given we may use maxPixels, what is the best way to fill 
@@ -687,7 +698,7 @@ class RectScan(SystemSolver):
             a = 1. / sr
             b = 2. * self.overscanDuration
             c = - shapeRatio * dur
-            numActiveCols = int((-b + (b**2 - 4*a*c) ** 0.5) / (2*a))
+            numActiveCols = np.round((-b + (b**2 - 4*a*c) ** 0.5) / (2*a))
             numCols = numActiveCols + osLen * 2
             # make sure numCols is a multiple of ds
             numCols = int(numCols / ds) * ds

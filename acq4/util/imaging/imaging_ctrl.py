@@ -16,9 +16,27 @@ class ImagingCtrl(QtGui.QWidget):
     * Save frame, pin frame
     * Record stack
     * FPS display
+    * Internal FrameDisplay that handles image display, contrast, and
+      background subtraction.
+
+    Basic usage:
+    
+    * Place self.frameDisplay.imageItem() in a ViewBox.
+    * Display this widget along with self.frameDisplay.contrastCtrl and .bgCtrl
+      to provide the user interface.
+    * Connect to sigAcquireVideoClicked and sigAcquireFrameClicked to handle
+      user requests for acquisition.
+    * Call acquisitionStarted() and acquisitionStopped() to provide feedback
+    * Call newFrame(Frame) whenever a new frame is available from the imaging
+      device.
+    * Connect to self.frameDisplay.imageUpdated to set image transform whenever
+      the image is updated. (Note that not all calls to newFrame() will result
+      in an image update)
+
     """
 
-    sigAcquireVideoClicked = QtCore.Signal(object, object)  # mode, bool
+    sigStartVideoClicked = QtCore.Signal(object)  # mode
+    sigStopVideoClicked = QtCore.Signal()
     sigAcquireFrameClicked = QtCore.Signal(object)  # mode
 
     frameDisplayClass = FrameDisplay  # let subclasses override this class
@@ -30,6 +48,8 @@ class ImagingCtrl(QtGui.QWidget):
         self.frameDisplay = self.frameDisplayClass()
 
         self.pinnedFrames = []
+
+        self.stackShape = None
 
         # User-added buttons for specific acquisition modes
         # (frame buttons, video buttons)
@@ -62,7 +82,7 @@ class ImagingCtrl(QtGui.QWidget):
         ## connect UI signals
         self.ui.acquireVideoBtn.clicked.connect(self.acquireVideoClicked)
         self.ui.acquireFrameBtn.clicked.connect(self.acquireFrameClicked)
-        self.ui.recordStackBtn.toggled.connect(self.toggleRecord)
+        self.ui.recordStackBtn.toggled.connect(self.recordStackToggled)
         self.ui.saveFrameBtn.clicked.connect(self.saveFrameClicked)
         self.ui.pinFrameBtn.clicked.connect(self.pinFrameClicked)
 
@@ -86,7 +106,7 @@ class ImagingCtrl(QtGui.QWidget):
         btn = QtGui.QPushButton(name)
         self.customButtons[1].append(btn)
         self.ui.acqBtnLayout.addWidget(btn, len(self.customButtons[1]), 1)
-        btn.clicked.connect(lambda: self.sigAcquireVideoClicked.emit(name))
+        btn.clicked.connect(lambda: self.acquireVideoClicked(None, name))
 
     def newFrame(self, frame):
         self.ui.saveFrameBtn.setEnabled(True)
@@ -99,6 +119,14 @@ class ImagingCtrl(QtGui.QWidget):
         if fps is not None:
             self.ui.displayFpsLabel.setValue(fps)
 
+        if self.recordingStack():
+            frameShape = frame.getImage().shape
+            if self.stackShape is None:
+                self.stackShape = frameShape
+            elif self.stackShape != frameShape:
+                # new iamge does not match stack shape; need to stop recording.
+                self.endStack()
+
         queued = self.recordThread.newFrame(frame)
         if self.ui.recordStackBtn.isChecked():
             self.ui.stackSizeLabel.setText('%d frames' % self.recordThread.stackSize)
@@ -110,33 +138,57 @@ class ImagingCtrl(QtGui.QWidget):
             self.addPinnedFrame()
         self.recordThread.saveFrame()
 
-    def toggleRecord(self, b):
+    def recordStackToggled(self, b):
         if b:
-            self.ui.stackSizeLabel.setText('0 frames')
-            self.ui.recordStackBtn.setChecked(True)
-            self.ui.recordXframesCheck.setEnabled(False)
-            self.ui.recordXframesSpin.setEnabled(False)
-            if self.ui.recordXframesCheck.isChecked():
-                frameLimit = self.ui.recordXframesSpin.value()
-            else:
-                frameLimit = None
-            self.recordThread.startRecording(frameLimit)
+            self.startStack()
         else:
-            self.ui.recordStackBtn.setChecked(False)
-            self.ui.recordXframesCheck.setEnabled(True)
-            self.ui.recordXframesSpin.setEnabled(True)
-            self.recordThread.stopRecording()
+            self.endStack()
+
+    def startStack(self):
+        """Begin recording a new stack. 
+
+        Raises an exception if a stack is already in progress.
+        """
+        if self.recordingStack():
+            raise RuntimeError("Cannot start stack record; stack already in progress.")
+        self.ui.stackSizeLabel.setText('0 frames')
+        self.ui.recordStackBtn.setChecked(True)
+        self.ui.recordXframesCheck.setEnabled(False)
+        self.ui.recordXframesSpin.setEnabled(False)
+        if self.ui.recordXframesCheck.isChecked():
+            frameLimit = self.ui.recordXframesSpin.value()
+        else:
+            frameLimit = None
+        self.recordThread.startRecording(frameLimit)
+        self.stackShape = None
+
+    def endStack(self):
+        """Finish recording the current stack.
+
+        Does nothing if no stack is currently in progress.
+        """
+        self.ui.recordStackBtn.setChecked(False)
+        self.ui.recordXframesCheck.setEnabled(True)
+        self.ui.recordXframesSpin.setEnabled(True)
+        self.recordThread.stopRecording()
+
+    def recordingStack(self):
+        """Return True if a stack is currently being recorded.
+        """
+        return self.recordThread.recording
 
     def recordFinished(self, fh, numFrames):
-        self.toggleRecord(False)
+        # called by recording thread when it completes a stack recording
+        # self.endStack()
+        pass
 
     def recordThreadStopped(self):
-        self.toggleRecord(False)
+        self.endStack()
         self.ui.recordStackBtn.setEnabled(False)  ## Recording thread has stopped, can't record anymore.
         printExc("Recording thread died! See console for error message.")
 
     def recordingFailed(self):
-        self.toggleRecord(False)
+        self.endStack()
         printExc("Recording failed! See console for error message.")
 
     def quit(self):
@@ -166,14 +218,20 @@ class ImagingCtrl(QtGui.QWidget):
         # self.toggleRecord(False)
         self.ui.acquireVideoBtn.setChecked(False)
         self.ui.acquireVideoBtn.setEnabled(True)
+        for btn in [self.ui.acquireFrameBtn] + self.customButtons[0]:
+            btn.setEnabled(True)
 
     def acquisitionStarted(self):
         self.ui.acquireVideoBtn.setChecked(True)
         self.ui.acquireVideoBtn.setEnabled(True)
+        for btn in [self.ui.acquireFrameBtn] + self.customButtons[0]:
+            btn.setEnabled(False)
 
-    def acquireVideoClicked(self):
-        acq = self.ui.acquireVideoBtn.isChecked()
-        self.sigAcquireVideoClicked.emit(None, acq)
+    def acquireVideoClicked(self, b, name=None):
+        if name is not None or self.ui.acquireVideoBtn.isChecked():
+            self.sigStartVideoClicked.emit(name)
+        else:
+            self.sigStopVideoClicked.emit()
 
     def acquireFrameClicked(self):
         self.sigAcquireFrameClicked.emit(None)

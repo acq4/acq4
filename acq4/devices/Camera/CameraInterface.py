@@ -120,7 +120,8 @@ class CameraInterface(QtCore.QObject):
         self.cam.sigShowMessage.connect(self.showMessage)
 
         self.frameDisplay.imageUpdated.connect(self.imageUpdated)
-        self.imagingCtrl.sigAcquireVideoClicked.connect(self.toggleAcquire)
+        self.imagingCtrl.sigStartVideoClicked.connect(self.startAcquireClicked)
+        self.imagingCtrl.sigStopVideoClicked.connect(self.stopAcquireClicked)
         self.imagingCtrl.ui.acquireFrameBtn.setEnabled(False)
         
     def newFrame(self, frame):
@@ -274,24 +275,23 @@ class CameraInterface(QtCore.QObject):
         self.roi.setPos([rgn[0], rgn[1]])
         self.roi.setSize([self.camSize[0], self.camSize[1]])
 
-    def toggleAcquire(self, mode, acq):
+    def startAcquireClicked(self, mode):
         """User clicked the acquire video button.
         """
-        if acq:
-            try:
-                self.cam.setParam('triggerMode', 'Normal', autoRestart=False)
-                self.setBinning(autoRestart=False)
-                self.setExposure(autoRestart=False)
-                self.updateRegion(autoRestart=False)
-                self.cam.start()
-                Manager.logMsg("Camera started aquisition.", importance=0)
-            except:
-                self.imagingCtrl.acquisitionStopped()
-                printExc("Error starting camera:")
-        
-        else:
-            self.cam.stop()
-            Manager.logMsg("Camera stopped acquisition.", importance=0)
+        try:
+            self.cam.setParam('triggerMode', 'Normal', autoRestart=False)
+            self.setBinning(autoRestart=False)
+            self.setExposure(autoRestart=False)
+            self.updateRegion(autoRestart=False)
+            self.cam.start()
+            Manager.logMsg("Camera started aquisition.", importance=0)
+        except:
+            self.imagingCtrl.acquisitionStopped()
+            printExc("Error starting camera:")
+
+    def stopAcquireClicked(self):
+        self.cam.stop()
+        Manager.logMsg("Camera stopped acquisition.", importance=0)
 
     def showMessage(self, msg, delay=2000):
         self.module.showMessage(msg, delay)
