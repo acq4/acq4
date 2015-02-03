@@ -178,9 +178,11 @@ class OutputChannelGui(DaqChannelGui):
         self.ui.waveGeneratorWidget.sigParametersChanged.connect(self.sequenceChanged)
         self.ui.holdingCheck.stateChanged.connect(self.holdingCheckChanged)
         self.ui.holdingSpin.valueChanged.connect(self.holdingSpinChanged)
+        self.ui.functionCheck.toggled.connect(self.functionCheckToggled)
         self.dev.sigHoldingChanged.connect(self.updateHolding)
         
         self.holdingCheckChanged()
+        self.ui.functionCheck.setChecked(True)
 
     def getSpins(self):
         return (self.ui.preSetSpin, self.ui.holdingSpin)
@@ -213,6 +215,13 @@ class OutputChannelGui(DaqChannelGui):
         self.ui.holdingSpin.valueChanged.disconnect(self.holdingSpinChanged)
         self.dev.sigHoldingChanged.disconnect(self.updateHolding)
 
+    def functionCheckToggled(self, checked):
+        if checked:
+            self.ui.waveGeneratorWidget.setEnabled(True)
+            self.updateWaves()
+        else:
+            self.ui.waveGeneratorWidget.setEnabled(False)
+            self.updateWaves()
 
     def daqChanged(self, state):
         self.rate = state['rate']
@@ -253,6 +262,9 @@ class OutputChannelGui(DaqChannelGui):
     def updateWaves(self):
         if self._block_update:
             return
+        if not self.ui.functionCheck.isChecked():
+            self.plot.clear()
+            return
 
         self.clearPlots()
         
@@ -269,13 +281,13 @@ class OutputChannelGui(DaqChannelGui):
         try:
             for w in waves:
                 if w is not None:
-                    self.ui.functionCheck.setChecked(True)
+                    # self.ui.functionCheck.setChecked(True)
                     self.plotCurve(w, color=QtGui.QColor(100, 100, 100))
             
             ## display single-mode wave in red
             single = self.getSingleWave()
             if single is not None:
-                self.ui.functionCheck.setChecked(True)
+                # self.ui.functionCheck.setChecked(True)
                 self.plotCurve(single, color=QtGui.QColor(200, 100, 100))
         finally:
             self.plot.enableAutoRange(x=autoRange[0], y=autoRange[1])

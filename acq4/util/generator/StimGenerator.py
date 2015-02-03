@@ -208,7 +208,6 @@ class StimGenerator(QtGui.QWidget):
             else:
                 self.ui.stack.setCurrentIndex(0)
 
-
     def setAdvancedMode(self, adv):
         if self.lockMode or self.advancedMode == adv:
             return
@@ -266,8 +265,6 @@ class StimGenerator(QtGui.QWidget):
             self.ui.functionText.setPlainText(funcStr)
         finally:
             self.lockMode = False
-
-    
     
     def test(self):
         try:
