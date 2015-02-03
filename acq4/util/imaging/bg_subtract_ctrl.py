@@ -24,6 +24,8 @@ class BgSubtractCtrl(QtGui.QWidget):
 
         self.backgroundFrame = None
         self.blurredBackgroundFrame = None
+        self.lastFrameTime = None
+        self.requestBgReset = False
 
         ## Connect Background Subtraction Dock
         self.ui.bgBlurSpin.valueChanged.connect(self.updateBackgroundBlur)
@@ -57,7 +59,9 @@ class BgSubtractCtrl(QtGui.QWidget):
     def collectBgClicked(self, checked):
         if checked:
             if not self.ui.contAvgBgCheck.isChecked():
-                self.backgroundFrame = None ## reset background frame
+                # don't reset the background frame just yet; anyone may call processImage()
+                # before the next frame arrives.
+                self.requestBgReset = True
                 self.bgFrameCount = 0
                 self.bgStartTime = pg.ptime.time()
             self.ui.collectBgBtn.setText("Collecting...")
@@ -65,26 +69,38 @@ class BgSubtractCtrl(QtGui.QWidget):
             self.ui.collectBgBtn.setText("Collect Background")
 
     def newFrame(self, frame):
-        ## stop collecting bg frames if we are in static mode and time is up
-        if self.ui.collectBgBtn.isChecked() and not self.ui.contAvgBgCheck.isChecked():
+        now = pg.ptime.time()
+        if self.lastFrameTime is None:
+            dt = 0
+        else:
+            dt = now - self.lastFrameTime
+        self.lastFrameTime = now
+        if not self.ui.collectBgBtn.isChecked():
+            return
+        
+        # integrate new frame into background
+        if self.ui.contAvgBgCheck.isChecked():
+            x = np.exp(-dt * 5 / max(self.ui.bgTimeSpin.value(), 0.01))
+        else:
+            ## stop collecting bg frames if we are in static mode and time is up
             timeLeft = self.ui.bgTimeSpin.value() - (pg.ptime.time()-self.bgStartTime)
             if timeLeft > 0:
                 self.ui.collectBgBtn.setText("Collecting... (%d)" % int(timeLeft+1))
             else:
                 self.ui.collectBgBtn.setChecked(False)
                 self.ui.collectBgBtn.setText("Collect Background")
-        
-        if self.ui.collectBgBtn.isChecked():
-            if self.ui.contAvgBgCheck.isChecked():
-                x = 1.0 - 1.0 / (self.ui.bgTimeSpin.value()+1.0)
-            else:
-                x = float(self.bgFrameCount) / (self.bgFrameCount + 1)
-                self.bgFrameCount += 1
-            
-            if self.backgroundFrame == None or self.backgroundFrame.shape != frame.getImage().shape:
-                self.backgroundFrame = frame.getImage().astype(np.float32)
-            else:
-                self.backgroundFrame = x * self.backgroundFrame + (1-x)*frame.getImage().astype(np.float32)
+
+            x = float(self.bgFrameCount) / (self.bgFrameCount + 1)
+            self.bgFrameCount += 1
+    
+        img = frame.getImage().astype(np.float32)
+        if self.requestBgReset or self.backgroundFrame == None or self.backgroundFrame.shape != img.shape:
+            self.requestBgReset = False
+            self.backgroundFrame = img
+            self.needFrameUpdate.emit()
+        else:
+            self.backgroundFrame = x * self.backgroundFrame + (1-x) * img
+        self.blurredBackgroundFrame = None
         
     def processImage(self, data):
         if self.ui.divideBgBtn.isChecked():
