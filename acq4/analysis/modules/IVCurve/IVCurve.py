@@ -70,6 +70,7 @@ class IVCurve(AnalysisModule):
         self.symbols = ['o', 's', 't', 'd', '+']
         self.color_list = itertools.cycle(self.colors)
         self.symbol_list = itertools.cycle(self.symbols)
+        self.script_header = False
         self.data_mode = 'IC'  # analysis depends on the type of data we have.
         self.ic_modes = ['IC', 'CC', 'IClamp', 'ic', 'I-Clamp Fast', 'I-Clamp Slow']
         self.vc_modes = ['VC', 'VClamp', 'vc']  # list of VC modes
@@ -175,9 +176,9 @@ class IVCurve(AnalysisModule):
         self.traces = []
         self.fsl = []  # first spike latency
         self.fisi = []  # first isi
-        self.ar = []  # adaptation ratio
         self.rmp = []  # resting membrane potential during sequence
         self.analysis_summary = {}
+        self.script_header = True
 
     def resetKeepAnalysis(self):
         self.keep_analysis_count = 0  # reset counter.
@@ -360,8 +361,22 @@ class IVCurve(AnalysisModule):
         self.analysis_summary['Cell'] = self.dataModel.getCellInfo(dh)
         self.analysis_summary['ACSF'] = self.dataModel.getACSF(dh)
         self.analysis_summary['Internal'] = self.dataModel.getInternalSoln(dh)
-        self.analysis_summary['Temp'] = self.dataModel.getTemp(dh)
+        self.analysis_summary['Temperature'] = self.dataModel.getTemp(dh)
         self.analysis_summary['CellType'] = self.dataModel.getCellType(dh)
+        today = self.analysis_summary['Day']
+        print today.keys()
+        if 'species' in today.keys():
+          self.analysis_summary['Species'] = today['species']
+        if 'age' in today.keys():
+          self.analysis_summary['Age'] = today['age']
+        if 'sex' in today.keys():
+          self.analysis_summary['Sex'] = today['sex']
+        if 'weight' in today.keys():
+          self.analysis_summary['Weight'] = today['weight']
+        if 'temperature' in today.keys():
+          self.analysis_summary['Temperature'] = today['temperature']
+        self.analysis_summary['Description'] = today['description']
+
         if self.analysis_summary['Cell'] is not None:
             ct = self.analysis_summary['Cell']['__timestamp__']
         else:
@@ -370,6 +385,7 @@ class IVCurve(AnalysisModule):
         self.analysis_summary['ElapsedTime'] = pt - ct  # save elapsed time between cell opening and protocol start
         (date, sliceid, cell, proto, p3) = self.file_cell_protocol()
         self.analysis_summary['CellID'] = os.path.join(date, sliceid, cell)  # use this as the ID for the cell later on
+        self.analysis_summary['Protocol'] = proto
 
     def loadFileRequested(self, dh):
         """
@@ -575,6 +591,7 @@ class IVCurve(AnalysisModule):
             self.tstart = cmdtimes[0]  # cmd.xvals('Time')[cmdtimes[0]]
             self.tend = np.sum(cmdtimes)  # cmd.xvals('Time')[cmdtimes[1]] + self.tstart
             self.tdur = self.tend - self.tstart
+            self.analysis_summary['PulseWindow'] = [self.tstart, self.tend, self.tdur]
         # if self.ctrl.IVCurve_KeepT.isChecked() is False:
         #     self.tstart += self.sample_interval
         #     self.tend += self.sample_interval
@@ -755,8 +772,10 @@ class IVCurve(AnalysisModule):
                               symbolPen='y',
                               symbolBrush=(255, 255, 0, 200), symbol='s')
             return
+        twin = self.tend - self.tstart  # measurements window in seconds
+        maxspkrate = 50  # max rate to count  in adaptation is 50 spikes/second
         minspk = 4
-        maxspk = 10  # range of spike counts
+        maxspk = int(maxspkrate*twin)  # scale max dount by range of spike counts
         threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 1e-3
         ntr = len(self.traces)
         self.spikecount = np.zeros(ntr)
@@ -765,7 +784,6 @@ class IVCurve(AnalysisModule):
         ar = np.zeros(ntr)
         rmp = np.zeros(ntr)
         # rmp is taken from the mean of all the baselines in the traces
-        self.Rmp = np.mean(rmp)
 
         for i in range(ntr):
             (spike, spk) = Utility.findspikes(self.time_base, self.traces[i],
@@ -788,9 +806,10 @@ class IVCurve(AnalysisModule):
             (rmp[i], r2) = Utility.measure('mean', self.time_base, self.traces[i],
                                            0.0, self.tstart)
         iAR = np.where(ar > 0)
-        ARmean = np.mean(ar[iAR])  # only where we made the measurement
-        self.adapt_ratio = ARmean
-        self.ctrl.IVCurve_AR.setText(u'%7.3f' % ARmean)
+
+        self.adapt_ratio = np.mean(ar[iAR])  # only where we made the measurement
+        self.analysis_summary['AdaptRatio'] = self.adapt_ratio
+        self.ctrl.IVCurve_AR.setText(u'%7.3f' % self.adapt_ratio)
         fisi *= 1.0e3
         fsl *= 1.0e3
         self.fsl = fsl
@@ -820,8 +839,18 @@ class IVCurve(AnalysisModule):
         :param script_header:
         :return:
         """
-        data_template = (
-            OrderedDict([('ElapsedTime', '{:>8.2f}'), ('Drugs', '{:<8s}'), ('HoldV', '{:>5.1f}'), ('JP', '{:>5.1f}'),
+        
+        if self.data_mode in self.ic_modes:
+          data_template = (
+            OrderedDict([('Species', '{:>s}'), ('Age', '{:>5s}'), ('Sex', '{:>1s}'), ('Weight', '{:>5s}'),
+                         ('Temperature', '{:>5s}'), ('ElapsedTime', '{:>8.2f}'), 
+                         ('RMP', '{:>5.1f}'), ('Rin', '{:>5.1f}'),
+                         ('tau', '{:>5.1f}'), ('AdaptRatio', '{:>7.3f}'),
+                         ('tauh', '{:>5.1f}'), ('Gh', '{:>6.2f}'),
+                        ]))
+        else:
+          data_template = (
+            OrderedDict([('ElapsedTime', '{:>8.2f}'), ('HoldV', '{:>5.1f}'), ('JP', '{:>5.1f}'),
                          ('Rs', '{:>6.2f}'), ('Cm', '{:>6.1f}'), ('Ru', '{:>6.2f}'),
                          ('Erev', '{:>6.2f}'),
                          ('gsyn_Erev', '{:>9.2f}'), ('gsyn_60', '{:>7.2f}'), ('gsyn_13', '{:>7.2f}'),
@@ -831,20 +860,22 @@ class IVCurve(AnalysisModule):
                          ('win2Start', '{:>9.3f}'), ('win2End', '{:>7.3f}'),
                          ('win0Start', '{:>9.3f}'), ('win0End', '{:>7.3f}'),
             ]))
+        
         # summary table header is written anew for each cell
-        if script_header:
+        if self.script_header:
             print('{:34s}\t{:24s}\t'.format("Cell", "Protocol")),
             for k in data_template.keys():
                 print('{:<s}\t'.format(k)),
             print ''
+            self.script_header = False
         ltxt = ''
         ltxt += ('{:34s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Protocol']))
-
+          
         for a in data_template.keys():
             if a in self.analysis_summary.keys():
                 ltxt += ((data_template[a] + '\t').format(self.analysis_summary[a]))
             else:
-                ltxt += '<   >\t'
+                ltxt += (('NaN\t'))
         print ltxt
         if copytoclipboard:
             clipb = QtGui.QApplication.clipboard()
@@ -868,11 +899,11 @@ class IVCurve(AnalysisModule):
             #         self.tau*1000., self.adapt_ratio, self.tau2*1000))
             # print '-'*80
 
-    def update_Tau_membrane(self, peak_time=None, printWindow=True, whichTau=1):
+    def update_Tau_membrane(self, peak_time=None, printWindow=False, whichTau=1):
         """
         Compute time constant (single exponential) from the
         onset of the response
-        using lrpk window, and only the smallest 3 steps...
+        using lrpk window, and only the smallest 1/3 of the steps...
         """
 
         if len(self.cmd) == 0:  # probably not ready yet to do the update.
@@ -880,29 +911,42 @@ class IVCurve(AnalysisModule):
         if self.data_mode not in self.ic_modes:  # only permit in IC
             return
         rgnpk = list(self.regions['lrwin0']['region'].getRegion())
-        Func = 'exp1'  # single exponential fit.
+        Func = 'exp1'  # single exponential fit with DC offset.
         Fits = Fitting.Fitting()
-        initpars = [-60.0 * 1e-3, -5.0 * 1e-3, 10.0 * 1e-3]
+        initpars = [self.rmp*1e-3, 0.010, 0.01]
+        peak_time=None
         icmdneg = np.where(self.cmd < 0)
         maxcmd = np.min(self.cmd)
         ineg = np.where(self.cmd[icmdneg] >= maxcmd / 3)
-        if peak_time is not None:
+        if peak_time is not None and ineg != np.array([]):
             rgnpk[1] = np.max(peak_time[ineg[0]])
         whichdata = ineg[0]
         itaucmd = self.cmd[ineg]
         whichaxis = 0
-        (fpar, xf, yf, names) = Fits.FitRegion(whichdata, whichaxis,
-                                               # self.traces.xvals('Time'),
-                                               #self.traces.view(np.ndarray),
+        fpar = []
+        names = []
+
+        for j, k in enumerate(whichdata):
+            self.data_plot.plot(self.time_base,  self.traces[k], pen=pg.mkPen('y'))
+            (fparx, xf, yf, namesx) = Fits.FitRegion([k], whichaxis,
                                                self.time_base,
                                                self.traces,
-                                               dataType='xy',
+                                               dataType='2d',
                                                t0=rgnpk[0], t1=rgnpk[1],
                                                fitFunc=Func,
                                                fitPars=initpars,
-                                               method='simplex')
-        if not fpar:
-            raise Exception('IVCurve::update_Tau_membrane: Charging tau fitting failed - see log')
+                                               method='SLSQP',
+                                               bounds=[(-0.1, 0.1), (-0.1, 0.1), (0.005, 0.30)])
+        
+            if not fparx:
+              raise Exception('IVCurve::update_Tau_membrane: Charging tau fitting failed - see log')
+            #print 'j: ', j, len(fpar)
+            fpar.append(fparx[0])
+            names.append(namesx[0])
+        self.taupars = fpar
+        self.tauwin = rgnpk
+        self.taufunc = Func
+        self.whichdata = whichdata
         taus = []
         for j in range(len(fpar)):
             outstr = ""
@@ -915,9 +959,24 @@ class IVCurve(AnalysisModule):
         meantau = np.mean(taus)
         self.ctrl.IVCurve_Tau.setText(u'%18.1f ms' % (meantau * 1.e3))
         self.tau = meantau
+        self.analysis_summary['tau'] = self.tau*1.e3
         tautext = 'Mean Tau: %8.1f'
         if printWindow:
             print tautext % (meantau * 1e3)
+        self.show_tau_plot()
+
+    def show_tau_plot(self):
+        Fits = Fitting.Fitting()
+        fitPars = self.taupars
+        xFit = np.zeros((len(self.taupars), 500))
+        for i in range(len(self.taupars)):
+          xFit[i,:] = np.arange(0, self.tauwin[1]-self.tauwin[0], (self.tauwin[1]-self.tauwin[0])/500.)
+        yFit = np.zeros((len(fitPars), xFit.shape[1]))
+        fitfunc = Fits.fitfuncmap[self.taufunc]
+        for k, whichdata in enumerate(self.whichdata):
+            yFit[k] = fitfunc[0](fitPars[k], xFit[k], C=None)  # +self.ivbaseline[whichdata]
+            self.data_plot.plot(xFit[k]+self.tauwin[0], yFit[k], pen=pg.mkPen('w'))
+        
 
     def update_Tauh(self, printWindow=False):
         """ compute tau (single exponential) from the onset of the markers
@@ -1009,6 +1068,9 @@ class IVCurve(AnalysisModule):
         Gpk = itarget / self.neg_pk
         Gss = itarget / self.neg_ss
         self.Gh = Gss - Gpk
+        self.analysis_summary['tauh'] = self.tau2*1.e3
+        self.analysis_summary['Gh'] = self.Gh
+
         self.ctrl.IVCurve_Gh.setText('%8.2f nS' % (self.Gh * 1e9))
 
     def update_ssAnalysis(self):
@@ -1072,6 +1134,7 @@ class IVCurve(AnalysisModule):
                                    (self.ivss) / np.diff(self.cmd))
                 self.ctrl.IVCurve_Rin.setText(u'%9.1f M\u03A9'
                                               % (self.r_in * 1.0e-6))
+                self.analysis_summary['Rin'] = self.r_in*1.0e-6
             else:
                 self.ctrl.IVCurve_Rin.setText(u'No valid points')
         self.yleak = np.zeros(len(self.ivss))
@@ -1180,10 +1243,10 @@ class IVCurve(AnalysisModule):
         self.ivbaseline = data1.mean(axis=1)  # all traces
         self.ivbaseline_cmd = commands
         self.cmd = commands
-        self.averageRMP = np.mean(self.ivbaseline) * 1e3  # convert to mV
-        self.ctrl.IVCurve_vrmp.setText('%8.2f' % self.averageRMP)
-
+        self.rmp = np.mean(self.ivbaseline) * 1e3  # convert to mV
+        self.ctrl.IVCurve_vrmp.setText('%8.2f' % self.rmp)
         self.update_RMPPlot()
+        self.analysis_summary['RMP'] = self.rmp
 
     def make_map_symbols(self):
         """
