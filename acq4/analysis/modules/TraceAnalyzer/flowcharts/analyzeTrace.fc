@@ -1,0 +1,41 @@
+pos: (0.0, 0.0)
+connects: [('ButterworthFilter.0', 'Out', 'PlotWidget.1', 'In'), ('ColumnSelect.0', 'primary', 'ButterworthFilter.0', 'In'), ('ButterworthFilter.0', 'Out', 'ThresholdEvents.0', 'In'), ('ThresholdEvents.0', 'plot', 'PlotWidget.1', 'In'), ('Input', 'Input', 'ReadFile', 'input'), ('ThresholdEvents.0', 'Out', 'EventFitter.0', 'events'), ('RegionSelect.0', 'region', 'PlotWidget.1', 'In'), ('ReadFile', 'output', 'ColumnSelect.0', 'In'), ('RegionSelect.0', 'widget', 'PlotWidget.1', 'In'), ('EventFitter.0', 'output', 'Output', 'Output'), ('EventFitter.0', 'plot', 'PlotWidget.0', 'In'), ('ButterworthFilter.0', 'Out', 'RegionSelect.0', 'data'), ('ButterworthFilter.0', 'Out', 'EventFitter.0', 'waveform')]
+terminals:
+    Input:
+        multi: False
+        io: 'in'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+    Output:
+        multi: False
+        io: 'out'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+bypass: False
+inputNode:
+    terminals:
+        Input:
+            multi: False
+            io: 'out'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+    pos: (-649.1263671039807, -287.48384487479865)
+    bypass: False
+nodes: [{'state': {'pos': (61.07708073690435, -33.31477131103867), 'bypass': False}, 'pos': (61.07708073690435, -33.31477131103867), 'class': 'PlotWidget', 'name': 'PlotWidget.1'}, {'state': {'pos': (275.4021095045864, -256.52373909499795), 'bypass': False}, 'pos': (275.4021095045864, -256.52373909499795), 'class': 'PlotWidget', 'name': 'PlotWidget.0'}, {'state': {'pos': (-528.0365607553027, -176.69893457585812), 'bypass': False, 'ctrl': {'start': 0.0294653413873, 'stop': 0.592395971269, 'display': True, 'movable': True}}, 'pos': (-528.0365607553027, -176.69893457585812), 'class': 'RegionSelect', 'name': 'RegionSelect.0'}, {'state': {'columns': ['primary'], 'pos': (-644.6554733830935, -58.220017860109024), 'bypass': False}, 'pos': (-644.6554733830935, -58.220017860109024), 'class': 'ColumnSelect', 'name': 'ColumnSelect.0'}, {'state': {'pos': (-647.0552218276582, 44.937853453966), 'bypass': False, 'ctrl': {'bidir': False, 'gStop': 40.0, 'wStop': 2000.0, 'band': u'lowpass', 'wPass': 1000.0, 'gPass': 2.0}}, 'pos': (-647.0552218276582, 44.937853453966), 'class': 'ButterworthFilter', 'name': 'ButterworthFilter.0'}, {'state': {'text': "# Access inputs as args['input_name']\nreturn {'output': args['input']['Clamp1.ma'].read()} ## one key per output terminal\n", 'terminals': OrderedDict([('input', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False}), ('output', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False})]), 'pos': (-641.0039010731207, -172.1651739285519), 'bypass': False}, 'pos': (-641.0039010731207, -172.1651739285519), 'class': 'PythonEval', 'name': 'ReadFile'}, {'state': {'pos': (-95.46136983606539, -148.93584022139626), 'bypass': False, 'ctrl': {'multiFit': False, 'plotEvents': True, 'plotFits': True, 'plotGuess': False}}, 'pos': (-95.46136983606539, -148.93584022139626), 'class': 'EventFitter', 'name': 'EventFitter.0'}, {'state': {'pos': (-475.70093643789335, 104.0593427769675), 'bypass': False, 'ctrl': {'baseline': -1.41347895365e-10, 'minLength': 1, 'eventLimit': 100, 'deadTime': 0.0, 'adjustTimes': True, 'threshold': -2.27105419577e-12, 'minPeak': -1.60084951101e-11, 'display': True, 'reverseTime': 0.0, 'minSum': 0.0}}, 'pos': (-475.70093643789335, 104.0593427769675), 'class': 'ThresholdEvents', 'name': 'ThresholdEvents.0'}]
+outputNode:
+    terminals:
+        Output:
+            multi: False
+            io: 'in'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+    pos: (158.95671835484666, -144.18842957248285)
+    bypass: False
