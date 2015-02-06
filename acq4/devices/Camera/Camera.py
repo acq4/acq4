@@ -3,6 +3,7 @@ from __future__ import with_statement
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util.Mutex import Mutex
+from acq4.util.Thread import Thread
 #from acq4.devices.Device import *
 from acq4.devices.Microscope import Microscope
 from PyQt4 import QtCore
@@ -14,6 +15,7 @@ from deviceGUI import *
 import acq4.util.ptime as ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import *
+from acq4.util import imaging
 from acq4.pyqtgraph import Vector, SRTTransform3D
 
 from CameraInterface import CameraInterface
@@ -412,65 +414,16 @@ class Camera(DAQGeneric, OptomechDevice):
         return self.acqThread.wait(*args, **kargs)
 
         
-class Frame(object):
+class Frame(imaging.Frame):
     def __init__(self, data, info):
-        object.__init__(self)
-        self._data = data
-        self._info = info
-        
         ## make frame transform to map from image coordinates to sensor coordinates.
         ## (these may differ due to binning and region of interest settings)
-        tr = Camera.makeFrameTransform(self._info['region'], self._info['binning'])
-        self._frameTransform = tr
-        
-        ## Complete transform maps from image coordinates to global.
-        self._info['transform'] = SRTTransform3D(self.cameraTransform() * tr)
-        
-        
-    def data(self):
-        return self._data
-    
-    def info(self):
-        return self._info
-    
-    def cameraTransform(self):
-        """Returns the transform that maps from camera coordinates to global."""
-        return SRTTransform3D(self._info['cameraTransform'])
-    
-    def frameTransform(self):
-        """Return the transform that maps from this frame's image coordinates
-        to its source camera coordinates. This transform takes into account
-        the camera's region and binning settings.
-        """
-        return SRTTransform3D(self._frameTransform)
-        
-    def globalTransform(self):
-        """
-        Return the transform that maps this frame's image coordinates
-        to global coordinates. This is equivalent to cameraTransform * frameTransform
-        """
-        return SRTTransform3D(self._info['transform'])
-        
-        
-    def mapFromFrameToScope(obj):
-        """
-        Map from the frame's data coordinates to scope coordinates
-        """
-        pass
-    
-    def mapFromFrameToGlobal(obj):
-        """
-        Map from the frame's data coordinates to global coordinates
-        """
-        return self.globalTransform().map(obj)
-    
-    
-    def mapFromFrameToSensor(obj):
-        """
-        Map from the frame's data coordinates to the camera's sensor coordinates
-        """
-        pass
-    
+        tr = Camera.makeFrameTransform(info['region'], info['binning'])
+        info['frameTransform'] = tr
+
+        imaging.Frame.__init__(self, data, info)
+
+
     
         
 class CameraTask(DAQGenericTask):
@@ -758,13 +711,13 @@ class CameraTaskResult:
         return self._frameTimes, self._frameTimesPrecise
         
         
-class AcquireThread(QtCore.QThread):
+class AcquireThread(Thread):
     
     sigNewFrame = QtCore.Signal(object)
     sigShowMessage = QtCore.Signal(object)
     
     def __init__(self, dev):
-        QtCore.QThread.__init__(self)
+        Thread.__init__(self)
         self.dev = dev
         #self.cam = self.dev.getCamera()
         self.camLock = self.dev.camLock
@@ -793,8 +746,7 @@ class AcquireThread(QtCore.QThread):
         self.lock.lock()
         self.stopThread = False
         self.lock.unlock()
-        QtCore.QThread.start(self, *args)
-        
+        Thread.start(self, *args)
     
     def connectCallback(self, method):
         with self.connectMutex:
@@ -854,8 +806,6 @@ class AcquireThread(QtCore.QThread):
                 now = ptime.time()
                 frames = self.dev.newFrames()
                 
-                #with self.camLock:
-                    #frame = self.cam.lastFrame()
                 ## If a new frame is available, process it and inform other threads
                 if len(frames) > 0:
                     if lastFrameId is not None:
@@ -866,33 +816,21 @@ class AcquireThread(QtCore.QThread):
                     ## Build meta-info for this frame(s)
                     info = camState.copy()
                     
-                    ## frameInfo includes pixelSize, objective, centerPosition, scopePosition, imagePosition
                     ss = self.dev.getScopeState()
                     if ss['id'] != scopeState:
-                        #print "scope state changed"
                         scopeState = ss['id']
                         ## regenerate frameInfo here
                         ps = ss['pixelSize']  ## size of CCD pixel
-                        #pos = ss['centerPosition']
-                        #pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
-                        
                         transform = pg.SRTTransform3D(ss['transform'])
-                        #transform.translate(region[0]*ps[0], region[1]*ps[1])  ## correct for ROI here
                         
                         frameInfo = {
                             'pixelSize': [ps[0] * binning[0], ps[1] * binning[1]],  ## size of image pixel
-                            #'scopePosition': ss['scopePosition'],
-                            #'centerPosition': pos,
                             'objective': ss.get('objective', None),
-                            #'imagePosition': pos2
-                            #'cameraTransform': ss['transform'],
-                            'cameraTransform': transform,
+                            'deviceTransform': transform,
                         }
                         
                     ## Copy frame info to info array
                     info.update(frameInfo)
-                    #for k in frameInfo:
-                        #info[k] = frameInfo[k]
                     
                     ## Process all waiting frames. If there is more than one frame waiting, guess the frame times.
                     dt = (now - lastFrameTime) / len(frames)
@@ -903,16 +841,13 @@ class AcquireThread(QtCore.QThread):
                     
                     for frame in frames:
                         frameInfo = info.copy()
-                        data = frame['data']
-                        #print data
-                        del frame['data']
-                        frameInfo.update(frame)
+                        data = frame.pop('data')
+                        frameInfo.update(frame)  # copies 'time' key supplied by camera
                         out = Frame(data, frameInfo)
                         with self.connectMutex:
                             conn = list(self.connections)
                         for c in conn:
                             c(out)
-                        #self.emit(QtCore.SIGNAL("newFrame"), out)
                         self.sigNewFrame.emit(out)
                         
                     lastFrameTime = now
@@ -956,11 +891,9 @@ class AcquireThread(QtCore.QThread):
             except:
                 pass
             printExc("Error starting camera acquisition:")
-            #self.emit(QtCore.SIGNAL("showMessage"), "ERROR starting acquisition (see console output)")
             self.sigShowMessage.emit("ERROR starting acquisition (see console output)")
         finally:
             pass
-            #print "Camera ACQ thread exited."
         
     def stop(self, block=False):
         #print "AcquireThread.stop: Requesting thread stop, acquiring lock first.."

@@ -10,7 +10,7 @@ import acq4.util.functions as fn
 import acq4.util.metaarray as metaarray
 from acq4.util.HelpfulException import HelpfulException
 # import acq4.devices.Scanner.ScanUtilityFuncs as SUFA
-from acq4.devices.Scanner.ScanProgram.rect import RectScan
+from acq4.devices.Scanner.scan_program.rect import RectScan
 from acq4.pyqtgraph.parametertree import ParameterTree, Parameter
 
 class ImagingModule(AnalysisModule):
@@ -32,16 +32,17 @@ class ImagingModule(AnalysisModule):
         self.params = Parameter(name='imager', children=[
             dict(name='scanner', type='interface', interfaceTypes=['scanner']),
             dict(name='detectors', type='group', addText="Add detector.."),
-            dict(name='decomb', type='float', value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=1e-6, children=[
+            dict(name='decomb', type='float', readonly=True, value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=1e-6, decimals=5, children=[
                 dict(name='auto', type='bool', value=True),
                 dict(name='subpixel', type='bool', value=False),
                 ]),
             dict(name='downsample', type='int', value=1, suffix='x', bounds=[1,None]),
             dict(name='display', type='bool', value=True),
+            dict(name='scanProgram', type='list', values=[]),
             ])
         self.ptree.setParameters(self.params, showTop=False)
         self.params.sigTreeStateChanged.connect(self.update)
-        self.params.child('detectors').sigAddNew.connect(self.addNewDetector)
+        self.params.child('detectors').sigAddNew.connect(self.addDetectorClicked)
 
         self.man = getManager()
         self.lastFrame = None
@@ -54,9 +55,12 @@ class ImagingModule(AnalysisModule):
         # self.ui.scannerComboBox.setTypes('scanner')
         # self.ui.detectorComboBox.setTypes('daqChannelGroup')
 
+    def addDetectorClicked(self):
+        self.addNewDetector()
+
     def addNewDetector(self, name='detector', value=None):
         self.params.child('detectors').addChild(
-            dict(name=name, type='interface', interfaceTypes=['daqChannelGroup'], value=value),
+            dict(name=name, type='interface', interfaceTypes=['daqChannelGroup'], value=value, removable=True),
             autoIncrementName=True)
                 
     def quit(self):
@@ -116,6 +120,9 @@ class ImagingModule(AnalysisModule):
             fh.setInfo(transform=result['transform'])
 
     def update(self):
+        # If auto-decomb is selected, then user cannot edit decomb offset
+        self.params.param('decomb').setReadonly(self.params['decomb', 'auto'])
+
         self.lastResult = []
         frame = self.lastFrame
         if frame is None:
@@ -135,13 +142,22 @@ class ImagingModule(AnalysisModule):
             return
 
         # parse program options
-        progs = frame['cmd'][self.params['scanner']]['program']
+        scanCmd = frame['cmd'][self.params['scanner']]
+        if 'program' not in scanCmd:
+            return
+        progs = scanCmd['program']
         if len(progs) == 0:
             self.image.setImage(np.zeros((1,1)))
             return
 
-        # For now, we only support single-component scan programs.
-        prog = progs[0]
+        # Update list so user can select program component
+        supportedTypes = ['rect']
+        progs = dict([(prog['name'], prog) for prog in progs if prog['type'] in supportedTypes])
+        self.params.child('scanProgram').setLimits(progs.keys())
+        selectedProg = self.params['scanProgram']
+        if selectedProg not in progs:
+            return
+        prog = progs[selectedProg]
         
         if prog['type'] == 'rect':
             # keep track of some analysis in case it should be stored later
@@ -155,7 +171,7 @@ class ImagingModule(AnalysisModule):
             # Determine decomb duration
             auto = self.params['decomb', 'auto']
             if auto:
-                (decombed, lag) = rs.measureMirrorLag(pmtdata[0])
+                lag = rs.measureMirrorLag(pmtdata[0], subpixel=self.params['decomb', 'subpixel'])
                 self.params['decomb'] = lag
             decomb = self.params['decomb']
             
@@ -194,8 +210,10 @@ class ImagingModule(AnalysisModule):
             tr = st * tr
             result['transform'] = pg.SRTTransform3D(tr)
 
+            frameTimes = rs.frameTimes()
+
             # Display image locally
-            self.imageView.setImage(imageData, levelMode=levelMode)
+            self.imageView.setImage(imageData, xvals=frameTimes, levelMode=levelMode)
             self.imageView.getView().setAspectLocked(True)
 #            self.imageView.imageItem.setRect(QtCore.QRectF(0., 0., rs.width, rs.height))  # TODO: rs.width and rs.height might not be correct!
             self.imageView.imageItem.resetTransform()

@@ -15,19 +15,15 @@ from .Manager import *
 from numpy import *
 
 # Pull some args out
-try:
-    ind = sys.argv.index('--profile')
-except ValueError:
-    profile = False
-else:
+if "--profile" in sys.argv:
     profile = True
-    sys.argv.pop(ind)    
+    sys.argv.pop(sys.argv.index('--profile'))
+else:
+    profile = False
 
-try:
-    import faulthandler
-    faulthandler.enable()
-except:
-    pass
+## Enable stack trace output when a crash is detected
+from .util.debug import enable_faulthandler
+enable_faulthandler()
 
 ## Initialize Qt
 app = pg.mkQApp()

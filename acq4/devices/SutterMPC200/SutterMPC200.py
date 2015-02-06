@@ -3,6 +3,7 @@ from PyQt4 import QtGui, QtCore
 from ..Stage import Stage
 from acq4.drivers.SutterMPC200 import SutterMPC200 as MPC200_Driver
 from acq4.util.Mutex import Mutex
+from acq4.util.Thread import Thread
 from acq4.pyqtgraph import debug
 import time
 
@@ -69,17 +70,17 @@ class SutterMPC200(Stage):
 
 
 
-class MonitorThread(QtCore.QThread):
+class MonitorThread(Thread):
     def __init__(self, dev):
         self.dev = dev
         self.lock = Mutex(recursive=True)
         self.stopped = False
         self.interval = 0.1
-        QtCore.QThread.__init__(self)
+        Thread.__init__(self)
 
     def start(self):
         self.stopped = False
-        QtCore.QThread.start(self)
+        Thread.start(self)
 
     def stop(self):
         with self.lock:
@@ -90,7 +91,7 @@ class MonitorThread(QtCore.QThread):
             self.interval = i
 
     def run(self):
-        minInterval = 100e-6
+        minInterval = 10e-3
         interval = minInterval
         while True:
             try:

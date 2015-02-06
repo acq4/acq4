@@ -31,6 +31,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         ## Start building UI
         QtGui.QMainWindow.__init__(self)
+        self.setWindowTitle('Camera')
         self.cw = dockarea.DockArea()
         self.setCentralWidget(self.cw)
         self.gv = pg.GraphicsView()
@@ -50,6 +51,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         ## set up ViewBox
         self.view = pg.ViewBox()
+        self.view.enableAutoRange(x=False, y=False)
         self.view.setAspectLocked(True)
         self.gv.setCentralItem(self.view)
         

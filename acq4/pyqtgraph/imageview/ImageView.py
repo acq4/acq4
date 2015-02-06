@@ -157,14 +157,14 @@ class ImageView(QtGui.QWidget):
         self.normRoi.setZValue(20)
         self.view.addItem(self.normRoi)
         self.normRoi.hide()
-        self.roiCurve = self.ui.roiPlot.plot()
+        self.roiCurves = []
         self.timeLine = InfiniteLine(0, movable=True, markers=[('^', 0), ('v', 1)])
         self.timeLine.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, 200)))
         self.timeLine.setZValue(1)
         self.ui.roiPlot.addItem(self.timeLine)
         self.ui.splitter.setSizes([self.height()-35, 35])
         self.ui.roiPlot.hideAxis('left')
-        self.frameTicks = VTickGroup(yrange=[0.5, 1])
+        self.frameTicks = VTickGroup(yrange=[0.8, 1], pen=0.4)
         self.ui.roiPlot.addItem(self.frameTicks, ignoreBounds=True)
         
         self.keysPressed = {}
@@ -215,8 +215,9 @@ class ImageView(QtGui.QWidget):
         ================== =======================================================================
         **Arguments:**
         img                (numpy array) the image to be displayed.
-        xvals              (numpy array) 1D array of z-axis values corresponding to the third axis
-                           in a 3D image. For video, this array should contain the time of each frame.
+        xvals              (numpy array) 1D array of z-axis values corresponding to the first axis
+                           in a 3D image. For video, this array should contain the time of each 
+                           frame.
         autoRange          (bool) whether to scale/pan the view to fit the image.
         autoLevels         (bool) whether to update the white/black levels to fit the image.
         levels             (min, max); the white and black level values to use.
@@ -523,13 +524,15 @@ class ImageView(QtGui.QWidget):
             #self.ui.roiPlot.show()
             self.ui.roiPlot.setMouseEnabled(True, True)
             self.ui.splitter.setSizes([self.height()*0.6, self.height()*0.4])
-            self.roiCurve.show()
+            for c in self.roiCurves:
+                c.show()
             self.roiChanged()
             self.ui.roiPlot.showAxis('left')
         else:
             self.roi.hide()
             self.ui.roiPlot.setMouseEnabled(False, False)
-            self.roiCurve.hide()
+            for c in self.roiCurves:
+                c.hide()
             self.ui.roiPlot.hideAxis('left')
             
         if self.hasTimeAxis():
@@ -553,24 +556,46 @@ class ImageView(QtGui.QWidget):
             return
             
         image = self.getProcessedImage()
-        if image.ndim == 2:
-            axes = (0, 1)
-        elif image.ndim == 3:
-            axes = (1, 2)
-        else:
-            return
+
+        # Extract image data from ROI
+        axes = (self.axes['x'], self.axes['y'])
         data, coords = self.roi.getArrayRegion(image.view(np.ndarray), self.imageItem, axes, returnMappedCoords=True)
-        if data is not None:
-            while data.ndim > 1:
-                data = data.mean(axis=1)
-            if image.ndim == 3:
-                self.roiCurve.setData(y=data, x=self.tVals)
+        if data is None:
+            return
+
+        # Convert extracted data into 1D plot data
+        if self.axes['t'] is None:
+            # Average across y-axis of ROI
+            data = data.mean(axis=axes[1])
+            coords = coords[:,:,0] - coords[:,0:1,0]
+            xvals = (coords**2).sum(axis=0) ** 0.5
+        else:
+            # Average data within entire ROI for each frame
+            data = data.mean(axis=max(axes)).mean(axis=min(axes))
+            xvals = self.tVals
+
+        # Handle multi-channel data
+        if data.ndim == 1:
+            plots = [(xvals, data, 'w')]
+        if data.ndim == 2:
+            if data.shape[1] == 1:
+                colors = 'w'
             else:
-                while coords.ndim > 2:
-                    coords = coords[:,:,0]
-                coords = coords - coords[:,0,np.newaxis]
-                xvals = (coords**2).sum(axis=0) ** 0.5
-                self.roiCurve.setData(y=data, x=xvals)
+                colors = 'rgbw'
+            plots = []
+            for i in range(data.shape[1]):
+                d = data[:,i]
+                plots.append((xvals, d, colors[i]))
+
+        # Update plot line(s)
+        while len(plots) < len(self.roiCurves):
+            c = self.roiCurves.pop()
+            c.scene().removeItem(c)
+        while len(plots) > len(self.roiCurves):
+            self.roiCurves.append(self.ui.roiPlot.plot())
+        for i in range(len(plots)):
+            x, y, p = plots[i]
+            self.roiCurves[i].setData(x, y, pen=p)
 
     def quickMinMax(self, data):
         """

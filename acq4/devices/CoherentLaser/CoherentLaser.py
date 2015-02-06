@@ -3,6 +3,7 @@ from acq4.devices.Laser import *
 #import serial, struct
 from acq4.drivers.Coherent import *
 from acq4.util.Mutex import Mutex
+from acq4.util.Thread import Thread
 import acq4.util.debug as debug
 import time
 
@@ -96,28 +97,31 @@ class CoherentLaser(Laser):
         return CoherentTask(self, cmd, parentTask)
         
 class CoherentTask(LaserTask):
-    def start(self):
-        self.shutterOpened = self.dev.getShutter()
-        if not self.shutterOpened:
-            self.dev.openShutter()
-            time.sleep(2.0)  ## opening the shutter causes momentary power drop; give laser time to recover
-                             ## Note: It is recommended to keep the laser's shutter open rather than
-                             ## rely on this to open it for you.
-        LaserTask.start(self)
+    pass
+    # This is disabled--internal shutter in coherent laser should NOT be used by ACQ4; use a separate shutter.
+    #
+    # def start(self):
+    #     # self.shutterOpened = self.dev.getShutter()
+    #     # if not self.shutterOpened:
+    #     #     self.dev.openShutter()
+    #     #     time.sleep(2.0)  ## opening the shutter causes momentary power drop; give laser time to recover
+    #     #                      ## Note: It is recommended to keep the laser's shutter open rather than
+    #     #                      ## rely on this to open it for you.
+    #     LaserTask.start(self)
         
-    def stop(self, abort):
-        if not self.shutterOpened:
-            self.dev.closeShutter()
-        LaserTask.stop(self, abort)
+    # def stop(self, abort):
+    #     if not self.shutterOpened:
+    #         self.dev.closeShutter()
+    #     LaserTask.stop(self, abort)
         
-class CoherentThread(QtCore.QThread):
+class CoherentThread(Thread):
 
     sigPowerChanged = QtCore.Signal(object)
     sigWavelengthChanged = QtCore.Signal(object)
     sigError = QtCore.Signal(object)
 
     def __init__(self, dev, driver, lock):
-        QtCore.QThread.__init__(self)
+        Thread.__init__(self)
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.dev = dev
         self.driver = driver

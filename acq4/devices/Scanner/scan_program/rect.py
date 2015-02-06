@@ -15,20 +15,19 @@ class RectScanComponent(ScanProgramComponent):
     """
     Does a raster scan of a rectangular area.
     """
-    name = 'rect'
+    type = 'rect'
     
-    def __init__(self, cmd=None, scanProgram=None):
-        ScanProgramComponent.__init__(self, cmd, scanProgram)
+    def __init__(self, scanProgram=None):
+        ScanProgramComponent.__init__(self, scanProgram)
         self.ctrl = RectScanControl(self)
         
-    def setSampleRate(self, rate, downsample):
-        ScanProgramComponent.setSampleRate(self, rate, downsample)
+    def samplingChanged(self):
         self.ctrl.update()
 
     def ctrlParameter(self):
         """
-        The Parameter (see acq4.pyqtgraph.parametertree) set used to allow the 
-        user to define this component.        
+        The Parameter set (see acq4.pyqtgraph.parametertree) that allows the 
+        user to configure this component.
         """
         return self.ctrl.parameters()
     
@@ -40,83 +39,44 @@ class RectScanComponent(ScanProgramComponent):
         """
         return self.ctrl.getGraphicsItems()
 
-    def generateTask(self):
-        return self.ctrl.generateTask()
+    def generateVoltageArray(self, array):
+        rs = self.ctrl.params.system
+        rs.writeArray(array, self.mapToScanner)
+        return rs.scanOffset, rs.scanOffset + rs.scanStride[0]
 
-    @classmethod
-    def generateVoltageArray(cls, array, dev, cmd):
-        rs = RectScan()
-        rs.restoreState(cmd['scanInfo'])
-        
-        mapper = lambda x, y: dev.mapToScanner(x, y, cmd['laser'])
-        rs.writeArray(array.T, mapper) # note RectScan expects (N,2), whereas Program provides (2,N)
+    def generatePositionArray(self, array):
+        rs = self.ctrl.params.system
+        rs.writeArray(array)
         return rs.scanOffset, rs.scanOffset + rs.scanStride[0]
         
-        #pts = cmd['points']
-        ## print 'cmd: ', cmd
-        #SUF = ScannerUtility()
-        #SUF.setScannerDev(dev)
-        #SUF.setLaserDev(cmd['laser'])
+    def scanMask(self):
+        mask = np.zeros(self.program().numSamples, dtype=bool)
+        rs = self.ctrl.params.system
+        rs.writeScanMask(mask)
+        return mask
         
-        #width  = (pts[1] -pts[0]).length() # width is x in M
-        #height = (pts[2]- pts[0]).length() # heigh in M
-        #rect = [pts[0][0], pts[0][1], width, height]
-        #overScanPct = cmd['overScan']
-        #SUF.setRectRoi(pts)
-        #SUF.setOverScan(overScanPct)
-        #SUF.setDownSample(1)
-        #SUF.setBidirectional(True)
-        #pixelSize = cmd['pixelSize']
-        ## recalulate pixelSize based on:
-        ## number of scans (reps) and total duration
-        #nscans = cmd['nScans']
-        #dur = cmd['duration']#  - cmd['startTime'] # time for nscans
-        #durPerScan = dur/nscans # time for one scan
-        #SUF.setPixelSize(cmd['pixelSize']) # pixelSize/np.sqrt(pixsf)) # adjust the pixel size
-        #SUF.setSampleRate(1./dt) # actually this is not used... 
-        #(x,y) = SUF.designRectScan() # makes one rectangle
-        #effScanTime = (SUF.getPixelsPerRow()/pixelSize)*(height/pixelSize)*dt # time it actually takes for one scan 
-        #pixsf = durPerScan/effScanTime # correction for pixel size based pm to,e
+    def laserMask(self):
+        mask = np.zeros(self.program().numSamples, dtype=bool)
+        rs = self.ctrl.params.system
+        rs.writeLaserMask(mask)
+        return mask
 
-        #cmd['imageSize'] = (SUF.getPixelsPerRow(), SUF.getnPointsY())
-
-        #printParameters = False
-        #if printParameters:
-            #print 'scans: ', nscans
-            #print 'width: ', width
-            #print 'points in width: ', width/pixelSize
-            #print 'dt: ', dt
-            #print 'points in a scan: ', (width/pixelSize)*(height/pixelSize)
-            #print 'effective scan time: ', effScanTime
-            #print 'pixsf: ', pixsf
-            #print 'original: ', pixelSize
-            #print 'new pix size: ', pixelSize*pixsf
+    def saveState(self):
+        state = ScanProgramComponent.saveState(self)
+        state.update(self.ctrl.saveState())
+        return state
+    
+    def restoreState(self, state):
+        self.ctrl.restoreState(state)
         
-        #n = SUF.getnPointsY() # get number of rows
-        #m = SUF.getPixelsPerRow() # get number of points per row
-
-        ### Build array with scanner voltages for rect repeated once per scan
-        #for i in range(cmd['nScans']):
-            #thisStart = startInd+i*n*m
-            #array[0, thisStart:thisStart + len(x)] = x
-            #array[1, thisStart:thisStart + len(y)] = y
-        #array[0, startInd+n*m*cmd['nScans']:stopInd] = array[0, startInd+n*m*cmd['nScans'] -1] # fill in any unused sample on this scan section
-        #array[1, startInd+n*m*cmd['nScans']:stopInd] = array[1, startInd+n*m*cmd['nScans'] -1]
-        #lastPos = (x[-1], y[-1])
-            
-            
-        ## A side-effect modification of the 'command' dict so that analysis can access
-        ## this information later
-        #cmd['scanParameters'] = SUF.packScannerParams()
-        #cmd['scanInfo'] = SUF.getScanInfo()
-
-        #return stopInd
 
 class RectScanROI(pg.ROI):
     def __init__(self, size, pos):
         pg.ROI.__init__(self, size=size, pos=pos)
-        self.addScaleHandle([1,1], [0.5, 0.5])
-        self.addRotateHandle([0,0], [0.5, 0.5])
+        # ROI is designed to be used on image data with the +y-axis pointing downward.
+        # In the camera module, +y points upward.
+        self.addScaleHandle([1,0], [0.5, 0.5])
+        self.addRotateHandle([0,1], [0.5, 0.5])
         self.overScan = 0.  # distance 
 
     def setOverScan(self, os):
@@ -131,9 +91,16 @@ class RectScanROI(pg.ROI):
 
     def paint(self, p, *args):
         p.setPen(pg.mkPen(0.3))
-        p.drawRect(self.boundingRect())
-        pg.ROI.paint(self, p, *args)
 
+        #p.drawRect(self.boundingRect())  # causes artifacts at large scale
+        br = self.boundingRect()
+        # p.drawPolygon(QtGui.QPolygonF([br.topLeft(), br.topRight(), br.bottomRight(), br.bottomLeft()]))
+        p.drawLine(br.topLeft(), br.topRight())
+        p.drawLine(br.bottomLeft(), br.bottomRight())
+        p.drawLine(br.topLeft(), br.bottomLeft())
+        p.drawLine(br.bottomRight(), br.topRight())
+
+        pg.ROI.paint(self, p, *args)
 
 
 
@@ -144,7 +111,6 @@ class RectScanControl(QtCore.QObject):
     def __init__(self, component):
         QtCore.QObject.__init__(self)
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
-        self.name = component.name
         self.blockUpdate = False
         self.component = weakref.ref(component)
 
@@ -164,15 +130,18 @@ class RectScanControl(QtCore.QObject):
     def isActive(self):
         return self.params.value()
  
-    def setVisible(self, vis):
-        if vis:
-            self.roi.setOpacity(1.0)  ## have to hide this way since we still want the children to be visible
-            for h in self.roi.handles:
-                h['item'].setOpacity(1.0)
-        else:
-            self.roi.setOpacity(0.0)
-            for h in self.roi.handles:
-                h['item'].setOpacity(0.0)
+    # def setVisible(self, vis):
+    #     if vis:
+    #         self.roi.setOpacity(1.0)  ## have to hide this way since we still want the children to be visible
+    #         for h in self.roi.handles:
+    #             h['item'].setOpacity(1.0)
+    #     else:
+    #         self.roi.setOpacity(0.0)
+    #         for h in self.roi.handles:
+    #             h['item'].setOpacity(0.0)
+    def updateVisibility(self):
+        v = self.params.value() and self.component().program().isVisible()
+        self.roi.setVisible(v)
                 
     def parameters(self):
         return self.params
@@ -187,8 +156,8 @@ class RectScanControl(QtCore.QObject):
         except TypeError:
             reconnect = False
         try:
-            self.params.system.sampleRate = self.component().sampleRate
-            self.params.system.downsample = self.component().downsample
+            self.params.system.sampleRate = self.component().program().sampleRate
+            self.params.system.downsample = self.component().program().downsample
             self.params.updateSystem()
             try:
                 oswidth = np.linalg.norm(self.params.system.osVector)
@@ -196,105 +165,35 @@ class RectScanControl(QtCore.QObject):
             except RuntimeError:
                 self.roi.setOverScan(0)
                 
-            self.setVisible(self.params.value())
+            self.updateVisibility()
         
         finally:
             if reconnect:
                 self.params.sigTreeStateChanged.connect(self.paramsChanged)
-        #self.update(changed=[changes[0][0].name()])
-        
-    #def update(self, changed=()):
-        ## Update all parameters to ensure consistency. 
-        ## *changed* may be a list of parameter names that have changed;
-        ## these will be kept constant during the update, if possible.
-        
-        #if self.blockUpdate:
-            #return
-
-        #try:
-            #self.blockUpdate = True
-
-            #if 'overScan' in changed:
-                #self.roi.setOverScan(self.params['overScan'])
-
-            #self.setVisible(self.params.value())
-            
-            ## TODO: this should be calculated by the same code that is used to generate the voltage array
-            ## (as currently written, it is unlikely to match the actual output exactly)
-
-            ## w = self.params['width'] * (1.0 + self.params['overScan']/100.)
-            ## h = self.params['height']
-            ## sampleRate = float(self.component().sampleRate)
-            ## downsample = self.component().downsample
-            
-            ## if 'duration' in changed:
-            ##     # Set pixelSize to match duration
-            ##     duration = self.params['duration']
-            ##     maxSamples = int(duration * sampleRate)
-            ##     maxPixels = maxSamples / downsample
-            ##     ar = w / h
-            ##     pxHeight = int((maxPixels / ar)**0.5)
-            ##     pxWidth = int(ar * pxHeight)
-            ##     imgSize = (pxWidth, pxHeight)
-            ##     pxSize = w / (pxWidth-1)
-            ##     self.params['pixelSize'] = pxSize
-            ## else:
-            ##     # set duration to match pixelSize
-            ##     pxSize = self.params['pixelSize']
-            ##     imgSize = (int(w / pxSize) + 1, int(h / pxSize) + 1) 
-            ##     samples = imgSize[0] * imgSize[1] * downsample
-            ##     duration = samples / sampleRate
-            ##     self.params['duration'] = duration
-
-            ## # Set read-only parameters:
-
-            ## self.params['imageSize'] = str(imgSize)
-            
-            ## speed = w / (imgSize[0] * downsample / sampleRate)
-            ## self.params['scanSpeed'] = speed * 1e-3
-
-            ## samplesPerUm2 = 1e-12 * downsample / pxSize**2
-            ## frameExp = samplesPerUm2 / sampleRate
-            ## totalExp = frameExp * self.params['nScans']
-            ## self.params['frameExp'] = frameExp
-            ## self.params['totalExp'] = totalExp
-
-        #finally:
-            #self.blockUpdate = False
-
     
     def roiChanged(self):
         """ read the ROI rectangle width and height and repost
         in the parameter tree """
         state = self.roi.getState()
         w, h = state['size']
-        #self.params['width'] = w
-        #self.params['height'] = h
-        self.params.system.p0 = pg.Point(self.roi.mapToView(pg.Point(0,0)))
-        self.params.system.p1 = pg.Point(self.roi.mapToView(pg.Point(w,0)))
-        self.params.system.p2 = pg.Point(self.roi.mapToView(pg.Point(0,h)))
+        # Remember: ROI origin is in bottom-left because camera module has +y pointing upward.
+        self.params.system.p0 = pg.Point(self.roi.mapToView(pg.Point(0,h)))  # top-left
+        self.params.system.p1 = pg.Point(self.roi.mapToView(pg.Point(w,h)))  # rop-right
+        self.params.system.p2 = pg.Point(self.roi.mapToView(pg.Point(0,0)))  # bottom-left
         self.params.updateSystem()
         
-    def generateTask(self):
-        #state = self.roi.getState()
-        #w, h = state['size']
-        #p0 = pg.Point(0,0)
-        #p1 = pg.Point(w,0)
-        #p2 = pg.Point(0, h)
-        #points = [p0, p1, p2]
-        #points = [pg.Point(self.roi.mapToView(p)) for p in points] # convert to view points (as needed for scanner)
+    def saveState(self):
         sys = self.params.system
         sys.solve()
-        task = {'type': self.name, 'active': self.isActive(), 'scanInfo': sys.saveState()}
+        task = {'name': self.params.name(), 'active': self.isActive(), 
+                'scanInfo': sys.saveState()}
         return task
-        #, 'points': points, 'startTime': self.params['startTime'], 
-                #'endTime': self.params['duration']+self.params['startTime'], 'duration': self.params['duration'],
-                #'nScans': self.params['nScans'],
-                #'pixelSize': self.params['pixelSize'], 'overScan': self.params['overScan'],
-                #}
-        
-
-
+    
+    def restoreState(self, state):
+        state = state.copy()
+        self.params.setName(state['name'])
+        self.params.setValue(state['active'])
+        self.params.system.restoreState(state['scanInfo'])
 
 
 arr = np.ndarray # just to clean up defaultState below..
@@ -376,8 +275,8 @@ class RectScan(SystemSolver):
             ('pixelHeight', [None, float, None, 'nfr']),
             ('pixelAspectRatio', [None, float, None, 'nf']),
             ('bidirectional', [None, bool, None, 'f']),
-            ('sampleRate', [None, float, None, 'f']),
-            ('downsample', [None, int, None, 'f']),
+            ('sampleRate', [None, float, None, 'f']),  # Sample rate of DAQ used to drive scan mirrors and record from PMT
+            ('downsample', [None, int, None, 'f']),    # Downsampling used by DAQ (recorded data is downsampled by this factor)
             ('frameDuration', [None, float, None, 'nfr']),
             ('scanOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe
             ('scanShape', [None, tuple, None, 'n']),   # the full scan area including overscan
@@ -386,7 +285,7 @@ class RectScan(SystemSolver):
             ('numCols', [None, int, None, 'n']),     # Same as scanShape[1] 
             ('activeCols', [None, int, None, 'n']),  # Same as activeShape[1] 
             ('frameLen', [None, int, None, 'n']),
-            ('frameExposure', [None, float, None, 'n']),
+            ('frameExposure', [None, float, None, 'n']),  # scanner dwell time per square um
             ('scanSpeed', [None, float, None, 'n']),
             ('activeOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe
             ('activeShape', [None, tuple, None, 'n']),   # the 'active' scan area excluding overscan
@@ -394,6 +293,8 @@ class RectScan(SystemSolver):
             ('imageOffset', [None, int, None, 'n']),  # Offset, shape, and stride describe 
             ('imageShape', [None, tuple, None, 'n']),   # the 'active' image area excluding overscan
             ('imageStride', [None, tuple, None, 'n']),  # and accounting for downsampling (index in pixels)
+            ('imageRows', [None, int, None, 'nf']),   # alias for numRows
+            ('imageCols', [None, int, None, 'nf']),   # alias for activeCols
 
             # variables needed to reconstruct exact image location
             ('rowVector', [None, arr, None, 'n']),    # vector pointing from one row to the next
@@ -406,7 +307,7 @@ class RectScan(SystemSolver):
             ('interFrameDuration', [None, float, None, 'f']),
             ('interFrameLen', [None, int, None, 'n']),
             ('numFrames', [None, int, None, 'f']),
-            ('totalExposure', [None, float, None, 'n']),
+            ('totalExposure', [None, float, None, 'n']),  # total scanner dwell time per square um (multiplied across all frames)
             ('totalDuration', [None, float, None, 'n']),
             ])
 
@@ -427,12 +328,6 @@ class RectScan(SystemSolver):
         nf, ny, nx = shape
         stride = self.scanStride
         
-        # position difference between adjacent rows / columns
-        # pts = self.osP0, self.osP1, self.osP2
-        # dx = (pts[1]-pts[0]) / (shape[2]-1)
-        # dy = (pts[2]-pts[0]) / (shape[1]-1)
-        # dx, dy = self.sampleVectors
-
         dx = self.colVector
         dy = self.rowVector
 
@@ -448,7 +343,8 @@ class RectScan(SystemSolver):
         q += self.scanOrigin.reshape(1,1,2)
         
         # Convert via mapping (usually to mirror voltages)
-        #x, y = self.scannerDev.mapToScanner(q[0].flatten(), q[1].flatten(), self.laserDev)
+        # xy = q.reshape(q.shape[0]*q.shape[1], 2)
+        # pg.plot(xy[:,0], xy[:,1])
         if mapping is None:
             qm = q
         else:
@@ -469,7 +365,7 @@ class RectScan(SystemSolver):
         # copy data into array (one copy per frame)
         target[:] = qm[np.newaxis, ...]
         
-    def writeMask(self, array):
+    def writeLaserMask(self, array):
         """
         Write 1s into the array in the active region of the scan.
         This is useful for ensuring that a laser is disabled during the overscan
@@ -482,79 +378,117 @@ class RectScan(SystemSolver):
         target = pg.subArray(array, offset, shape, stride)
         target[:] = 1
         
-    def extractImage(self, data, offset=0.0, correctBidir=True, subpixel=False):
+    def writeScanMask(self, array):
         """
-        Extract image data from a photodetector recording.
+        Write 1s into the array in the active region of the scan.
+        This is useful for ensuring that a laser is disabled during the overscan
+        and inter-frame time periods. 
+        """
+        offset = self.scanOffset
+        shape = self.scanShape
+        stride = self.scanStride
+        
+        target = pg.subArray(array, offset, shape, stride)
+        target[:] = 1
+        
+    def extractImage(self, data, offset=0.0, subpixel=False):
+        """Extract image data from a photodetector recording.
+
+        This method returns an array of shape (frames, height, width) giving
+        the image data collected during a scan. The redurned data excludes
+        overscan regions, corrects for mirror lag, and reverses the
+        even-numbered rows if the scan is bidirectional.
+
         Offset is a time in seconds to offset the data before unpacking
-        the image array. (This allows to correct for mirror lag)
+        the image array (this allows to correct for mirror lag). If subpixel 
+        is True, then the offset may shift the image by a fraction of a pixel 
+        using linear interpolation.
         """
         offset = self.imageOffset + offset * self.sampleRate / self.downsample
-        intOffset = int(offset)
+        intOffset = np.floor(offset)
         fracOffset = offset - intOffset
 
         shape = self.imageShape
         stride = self.imageStride
 
         if subpixel and fracOffset != 0:
+            print fracOffset
             interp = data[:-1] * (1.0 - fracOffset) + data[1:] * fracOffset
             image = pg.subArray(interp, intOffset, shape, stride)            
         else:
             image = pg.subArray(data, intOffset, shape, stride)
 
-        if correctBidir and self.bidirectional:
+        if self.bidirectional:
             image = image.copy()
             image[:, 1::2] = image[:, 1::2, ::-1]
         return image
 
-    def measureMirrorLag(self, data, auto=True, shift=0., minShift=0., maxShift=100, transpose=False):
-        """
-        Estimate the mirror lag in a bidirectional raster scan.
-        The *data* argument is a photodetector recording array.
-        This can be used as the *offset* argument to extractImage().
-        """
-        ## split image into fields
-        # units of the shift coming in here are in pixels (integer) (not seconds, as previously)
-        img = self.extractImage(data)
-        if transpose:
-            img = img.transpose()
-        nr = 2 * (img.shape[1] // 2)
-        f1 = img[:, 0:nr:2]
-        f2 = img[:, 1:nr+1:2]
-        if img.shape[0] < maxShift:
-            maxShift = img.shape[0]
+    def measureMirrorLag(self, data, subpixel=False, minOffset=0., maxOffset=500e-6):
+        """Estimate the mirror lag in a bidirectional raster scan.
 
-        ## find optimal shift
-        if auto:
-            bestShift = None
-            bestError = None
-            errs = []
-            for shift in range(int(minShift), int(maxShift)):
-                f2s = f2[:-shift] if shift > 0 else f2
-                err1 = np.abs((f1[shift:, 1:]-f2s[:, 1:])**2).sum()
-                err2 = np.abs((f1[shift:, 1:]-f2s[:, :-1])**2).sum()
-                totErr = (err1+err2) / float(f1.shape[0]-shift)
-                errs.append(totErr)
-                if bestError is None or totErr < bestError:
-                    bestError = totErr
-                    bestShift = shift
-            # pg.plot(errs)
-        else:
-            bestShift = shift
-        if bestShift is None:  # nothing...
-            return img, 0.
-        ## reconstruct from shifted fields
-        leftShift = bestShift // 2
-        rightShift = int(leftShift + (bestShift % 2))
-        if rightShift < 1:
-            return img, 0
-        decombed = np.zeros(img.shape, dtype=data.dtype)
-        if leftShift > 0:
-            decombed[:-leftShift, ::2] = img[leftShift:, ::2]
-        else:
-            decombed[:, ::2] = img[:, ::2]
-        decombed[rightShift:, 1::2] = img[:-rightShift, 1::2]
-        return decombed, bestShift
-    
+        The *data* argument is a photodetector recording array.
+        The return value can be used as the *offset* argument to extractImage().
+        """
+        if not self.bidirectional:
+            raise Exception("Mirror lag can only be measured for bidirectional scans.")
+
+        # decide how far to search
+        rowTime = self.scanShape[2] / self.sampleRate
+        pxTime = self.downsample / self.sampleRate
+        maxOffset = min(maxOffset, rowTime * 0.7)
+
+        # see whether we need to pad the data
+        stride = self.imageStride
+        shape = self.imageShape
+        offset = self.imageOffset + maxOffset * self.sampleRate / self.downsample
+        minSize = stride[0] * shape[0] + offset
+        if data.shape[0] < minSize:
+            appendShape = list(data.shape)
+            appendShape[0] = 1 + minSize - data.shape[0]
+            data = np.concatenate([data, np.zeros(appendShape, dtype=data.dtype)], axis=0)
+
+
+        # find optimal shift by pixel
+        offsets = np.arange(minOffset, maxOffset, pxTime)
+        bestOffset = self._findBestOffset(data, offsets, subpixel=False)
+
+        # Refine optimal shift by subpixel
+        if subpixel:
+            # Refine the estimate in two stages
+            for i in range(2):
+                w = offsets[1] - offsets[0]
+                minOffset = bestOffset - (w/2)
+                maxOffset = bestOffset + (w/2)
+                offsets = np.linspace(minOffset, maxOffset, 5)
+                bestOffset = self._findBestOffset(data, offsets, subpixel=True)
+
+        return bestOffset
+
+    def _findBestOffset(self, data, offsets, subpixel):
+        # Try generating image using each item from a list of offsets. 
+        # Return the offset that produced the least error between fields.
+        bestOffset = None
+        bestError = None
+        errs = []
+        for offset in offsets:
+            # get base image averaged over frames
+            img = self.extractImage(data, offset=offset, subpixel=subpixel).mean(axis=0)
+
+            # split image into fields
+            nr = 2 * (img.shape[0] // 2)
+            f1 = img[0:nr:2]
+            f2 = img[1:nr+1:2]
+
+            err1 = np.abs((f1[:-1]-f2[:-1])**2).sum()
+            err2 = np.abs((f1[1:] -f2[:-1])**2).sum()
+            totErr = err1 + err2
+            errs.append(totErr)
+            if bestError is None or totErr < bestError:
+                bestError = totErr
+                bestOffset = offset
+        # pg.plot(errs)
+        return bestOffset
+
     def imageTransform(self):
         """
         Return the transform that maps from image pixel coordinates to global coordinates.
@@ -567,6 +501,9 @@ class RectScan(SystemSolver):
         p0 = self.activeOrigin
         p1 = p0 + acs[2] * dx
         p2 = p0 + acs[1] * dy
+
+        # print p0, p1, p2
+        # print acs, dx, dy
 
         localPts = map(pg.Vector, [[0,0], [ims[2],0], [0,ims[1]], [0,0,1]]) # w and h of data of image in pixels.
         globalPts = map(pg.Vector, [p0, p1, p2, [0,0,1]])
@@ -594,28 +531,34 @@ class RectScan(SystemSolver):
         return np.linalg.norm(self.p1 - self.p0)
             
     def _height(self):
-        return np.linalg.norm(self.p2 - self.p0)
+        try:
+            return np.linalg.norm(self.p2 - self.p0)
+        except RuntimeError:
+            pass
+
+        ar = self.pixelAspectRatio  # w/h
+        return self.width * (self.numRows / ((self.activeCols // self.downsample) * ar))
 
     def _angle(self):
         dp = self.p1 - self.p0
-        return np.arctan2(*dp)
+        return np.arctan2(*dp[::-1])
 
     def _p1(self):
         p0 = self.p0
         width = self.width
         angle = self.angle
-        return p0 + width * np.array(np.cos(angle), np.sin(angle))
+        return p0 + width * np.array([np.cos(angle), np.sin(angle)])
 
     def _p2(self):
         p0 = self.p0
         height = self.height
         angle = self.angle
-        return p0 + height * np.array(np.sin(angle), -np.cos(angle))
+        return p0 + height * np.array([np.sin(angle), -np.cos(angle)])
 
     def _osVector(self):
         # This vector is p1 -> osP1
         # Compute from p0, overscan, and scanSpeed
-        osDist = self.osLen / self.downsample * self.pixelWidth
+        osDist = (self.osLen // self.downsample) * self.pixelWidth
 
         #speed = self.scanSpeed
         #os = self.overscanDuration
@@ -630,7 +573,7 @@ class RectScan(SystemSolver):
 
     def _osLen(self):
         """Length of overscan (non-downsampled)"""
-        return np.ceil(self.minOverscan * self.sampleRate / self.downsample) * self.downsample
+        return int(np.ceil(self.minOverscan * self.sampleRate / self.downsample) * self.downsample)
 
         #osv = self.osVector
         #return np.ceil(np.linalg.norm(osv) / self.pixelWidth)
@@ -666,7 +609,7 @@ class RectScan(SystemSolver):
         except RuntimeError:
             pass
 
-        return self.width / (self.numCols - 1)
+        return self.width / (self.activeCols / self.downsample)
         
     def _pixelHeight(self):
         try:
@@ -740,7 +683,7 @@ class RectScan(SystemSolver):
             pxar = self.pixelAspectRatio
             osLen = self.osLen
             ds = self.downsample
-            
+
             maxSamples = int(dur * sr)
 
             # given we may use maxPixels, what is the best way to fill 
@@ -755,7 +698,7 @@ class RectScan(SystemSolver):
             a = 1. / sr
             b = 2. * self.overscanDuration
             c = - shapeRatio * dur
-            numActiveCols = int((-b + (b**2 - 4*a*c) ** 0.5) / (2*a))
+            numActiveCols = np.round((-b + (b**2 - 4*a*c) ** 0.5) / (2*a))
             numCols = numActiveCols + osLen * 2
             # make sure numCols is a multiple of ds
             numCols = int(numCols / ds) * ds
@@ -777,28 +720,15 @@ class RectScan(SystemSolver):
         return self.scanStride
 
     def _imageShape(self):
-
-        try:
-            return self.numFrames, self.numRows, self.activeCols // self.downsample
-            # # image size and pixel size
-            # w = self.width
-            # h = self.height
-            # pxw = self.pixelWidth
-            # pxh = self.pixelHeight
-            
-            # nx = int(w / pxw) + 1
-            # ny = int(h / pxh) + 1
-            # return (ny, nx)
-        except RuntimeError:
-            raise
+        return self.numFrames, self.imageRows, self.imageCols
 
     def _imageOffset(self):
-        return (self.scanOffset + self.osLen) / self.downsample
+        return (self.scanOffset + self.osLen) // self.downsample
     
     def _imageStride(self):
         ds = self.downsample
         ss = self.scanStride
-        return (ss[0] / ds, ss[1] / ds, 1)
+        return (ss[0] // ds, ss[1] // ds, 1)
 
     def _numRows(self):
         try:
@@ -807,7 +737,7 @@ class RectScan(SystemSolver):
             pass
 
         try:
-            return self.imageShape[1]
+            return self.imageRows
         except RuntimeError:
             pass
 
@@ -825,14 +755,30 @@ class RectScan(SystemSolver):
 
     def _activeCols(self):
         try:
+            return self.imageCols * self.downsample
+        except RuntimeError:
+            pass
+
+        try:
             sw = self.scanShape[2]
             osl = self.osLen
             return sw - osl*2
         except RuntimeError:
+            pass
+
+        try:
             w = self.width
             pxw = self.pixelWidth
             nx = int(w / pxw) + 1
             return nx * self.downsample
+        except RuntimeError:
+            pass
+
+    def _imageRows(self):
+        return self.numRows  # just an alias
+
+    def _imageCols(self):
+        return self.activeCols // self.downsample
 
     def _numCols(self):
         try:
@@ -864,14 +810,16 @@ class RectScan(SystemSolver):
 
     def _rowVector(self):
         nf, ny, nx = self.scanShape
-        return (self.osP2-self.osP0) / (ny-1)
+        return (self.osP2-self.osP0) / ny
 
     def _colVector(self):
         nf, ny, nx = self.scanShape
-        return (self.osP1-self.osP0) / (nx-1)
+        return (self.osP1-self.osP0) / nx
 
     def _scanOrigin(self):
-        return self.osP0
+        # shift scan origin 1/2 row downward to scan through the center of the pixel.
+        yv = self.rowVector * 0.5
+        return self.osP0 + yv
 
     def _activeOrigin(self):
         return self.osP0 + self.colVector * self.osLen
@@ -886,23 +834,25 @@ class RectScanParameter(pTypes.SimpleParameter):
     def __init__(self):
         fixed = [{'name': 'fixed', 'type': 'bool', 'value': True}] # child of parameters that may be determined by the user
         params = [
+            dict(name='startTime', type='float', value=0, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='numFrames', type='int', value=1, bounds=[1, None]),
+            dict(name='frameDuration', type='float', value=50e-3, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='interFrameDuration', type='float', value=0, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
+            dict(name='totalDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='width', readonly=True, type='float', value=2e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='height', readonly=True, type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
+            dict(name='imageRows', type='int', value=500, limits=[1, None]),
+            dict(name='imageCols', type='int', value=500, limits=[1, None]),
             dict(name='minOverscan', type='float', value=30.e-6, suffix='s', siPrefix=True, bounds=[0., 1.], step=0.1, dec=True, minStep=1e-7),
             dict(name='bidirectional', type='bool', value=True),
             dict(name='pixelWidth', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
             dict(name='pixelHeight', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
             dict(name='pixelAspectRatio', type='float', value=1, bounds=[1e-3, 1e3], step=0.5, dec=True),
-            dict(name='startTime', type='float', value=0, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
-            dict(name='numFrames', type='int', value=1, bounds=[1, None]),
-            dict(name='frameDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
-            dict(name='interFrameDuration', type='float', value=0, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
-            dict(name='totalDuration', type='float', value=5e-1, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='scanOffset', type='int', readonly=True),
             dict(name='scanShape', type='str', readonly=True),
             dict(name='scanStride', type='str', readonly=True),
             dict(name='imageShape', type='str', readonly=True),
-            dict(name='scanSpeed', type='float', readonly=True, suffix='m/ms', siPrefix=True, bounds=[1e-9, None]), 
+            dict(name='scanSpeed', type='float', readonly=True, suffix='m/s', siPrefix=True, bounds=[1e-9, None]), 
             dict(name='frameExposure', title=u'frame exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True, bounds=[1e-9, None]), 
             dict(name='totalExposure', title=u'total exposure/μm²', type='float', readonly=True, suffix='s', siPrefix=True, bounds=[1e-9, None]),
         ]
@@ -1005,34 +955,13 @@ class RectScanParameter(pTypes.SimpleParameter):
             param.blockSignals(False)
 
 
-class RectScanVideo:
-    """
-    Manages the system of equations necessary to define a sequence of rectangular scans.
-    (note this appears to be a general-case loop)
-
-    Input parameters:
-
-        * # of frames
-        * Frame exposure duration
-        * Inter-frame duration
-        * Frame rate
-        * Total duration
-
-    Output parameters:
-
-        * total exposure time per um^2
-        * position array, voltage array, laser mask array
-        * scan offset, shape, strides
-        * video offset, shape, strides
-        * image transform
-
-
-    """
 
 
 
 class ScannerUtility:
     """
+    Deprecated utilities for raster scanning.
+    
     1. Decombing routine for scanned images. 
     2. Compute scan voltages for a recangular region
     adding an overscan region.

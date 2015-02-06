@@ -1167,3 +1167,23 @@ class ThreadColor(object):
             c = (len(self.colors) % 15) + 1
             self.colors[tid] = c
         return self.colors[tid]
+
+
+def enable_faulthandler():
+    """ Enable faulthandler for all threads. 
+    
+    If the faulthandler package is available, this function disables and then 
+    re-enables fault handling for all threads (this is necessary to ensure any
+    new threads are handled correctly), and returns True.
+
+    If faulthandler is not available, then returns False.
+    """
+    try:
+        import faulthandler
+        # necessary to disable first or else new threads may not be handled.
+        faulthandler.disable()
+        faulthandler.enable(all_threads=True)
+        return True
+    except ImportError:
+        return False
+

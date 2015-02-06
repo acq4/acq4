@@ -67,6 +67,8 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
             if isinstance(relativeTo, basestring):
                 relativeTo = self.docks[relativeTo]
             container = self.getContainer(relativeTo)
+            if container is None:
+                raise TypeError("Dock %s is not contained in a DockArea; cannot add another dock relative to it." % relativeTo)
             neighbor = relativeTo
         
         ## what container type do we need?

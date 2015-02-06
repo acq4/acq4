@@ -152,30 +152,25 @@ class Coherent(object):
         ## If expect is >0, then try to get a packet of that length, ignoring CRLF within that data
         ## if block is False, then return immediately if no data is available.
         start = time.time()
-        res = ''
+        s = ''
         errors = []
         packets = []
         while True:
-            s = self.read()
+            s += self.read()
             #print "read:", repr(s)
             if not block and len(s) == 0:
                 return
             
-            if expect > 0:  ## move bytes into result without checking for \r
-                nb = expect-len(res)
-                res += s[:nb]
-                s = s[nb:]
-            
-            try:
-                while len(s) > 0:  ## pull packets out of s one at a time
-                    res += s[:s.index('\r\n')]
-                    s = s[s.index('\r\n')+2:]
-                    packets.append(res)
-                    res = ''
-            except ValueError:   ## partial packet; append and wait for more data
-                res += s  
+            while len(s) > 0:  ## pull packets out of s one at a time
+                if '\r\n' in s[expect:]:
+                    i = expect + s[expect:].index('\r\n')
+                    packets.append(s[:i])
+                    expect = 0
+                    s = s[i+2:]
+                else:
+                    break
                 
-            if len(res) == 0:
+            if len(s) == 0:
                 if len(packets) == 1:
                     if 'Error' in packets[0]:
                         raise Exception(packets[0])
@@ -185,7 +180,7 @@ class Coherent(object):
             
             time.sleep(0.01)
             if time.time() - start > timeout:
-                raise TimeoutError("Timeout while waiting for response. (Data so far: %s, %s)" % (repr(res), repr(s)))
+                raise TimeoutError("Timeout while waiting for response. (Data so far: %s, %s)" % (repr(s)))
 
 
 
