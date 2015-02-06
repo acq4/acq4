@@ -17,17 +17,21 @@ import re
 import os.path
 import itertools
 import functools
-
-from PyQt4 import QtGui, QtCore
+import gc
 import numpy as np
 
+from PyQt4 import QtGui, QtCore
+
+from acq4.util import DataManager
 from acq4.analysis.AnalysisModule import AnalysisModule
 import acq4.pyqtgraph as pg
+from acq4.pyqtgraph import configfile
 from acq4.util.metaarray import MetaArray
 import acq4.util.matplotlibexporter as matplotlibexporter
 import acq4.analysis.tools.Utility as Utility  # pbm's utilities...
 import acq4.analysis.tools.Fitting as Fitting  # pbm's fitting stuff...
 import ctrlTemplate
+
 
 
 # noinspection PyPep8
@@ -115,6 +119,12 @@ class IVCurve(AnalysisModule):
         [self.ctrl.IVCurve_RMPMode.currentIndexChanged.connect(x)
          for x in [self.update_rmpAnalysis, self.countSpikes]]
         self.ctrl.dbStoreBtn.clicked.connect(self.dbStoreClicked)
+        self.ctrl.IVCurve_OpenScript_Btn.clicked.connect(self.read_script)
+        self.ctrl.IVCurve_RunScript_Btn.clicked.connect(self.rerun_script)
+        self.ctrl.IVCurve_PrintScript_Btn.clicked.connect(self.print_script_output)
+        #self.scripts_form.PSPReversal_ScriptCopy_Btn.clicked.connect(self.copy_script_output)
+        #self.scripts_form.PSPReversal_ScriptFormatted_Btn.clicked.connect(self.print_formatted_script_output)
+        self.ctrl.IVCurve_ScriptName.setText('None')
         self.clear_results()
         self.layout = self.getElement('Plots', create=True)
 
@@ -364,7 +374,7 @@ class IVCurve(AnalysisModule):
         self.analysis_summary['Temperature'] = self.dataModel.getTemp(dh)
         self.analysis_summary['CellType'] = self.dataModel.getCellType(dh)
         today = self.analysis_summary['Day']
-        print today.keys()
+        # print today.keys()
         if 'species' in today.keys():
           self.analysis_summary['Species'] = today['species']
         if 'age' in today.keys():
@@ -375,7 +385,8 @@ class IVCurve(AnalysisModule):
           self.analysis_summary['Weight'] = today['weight']
         if 'temperature' in today.keys():
           self.analysis_summary['Temperature'] = today['temperature']
-        self.analysis_summary['Description'] = today['description']
+        if 'description' in today.keys():
+            self.analysis_summary['Description'] = today['description']
 
         if self.analysis_summary['Cell'] is not None:
             ct = self.analysis_summary['Cell']['__timestamp__']
@@ -607,7 +618,7 @@ class IVCurve(AnalysisModule):
         self.make_map_symbols()
         # if self.data_mode in self.ic_modes:
         #     # for adaptation ratio:
-        #     self.update_all_analysis()
+        #     self.updateAnalysis()
         if self.data_mode in self.vc_modes:
             self.spikecount = np.zeros(len(np.array(self.values)))
 
@@ -708,7 +719,7 @@ class IVCurve(AnalysisModule):
                                                         tstart_ss + tdur_ss])
             # rmp measurement
             self.regions['lrrmp']['region'].setRegion([0., self.tstart * 0.9])  # rmp window
-            print 'rmp window region: ', self.tstart * 0.9
+            # print 'rmp window region: ', self.tstart * 0.9
         for r in ['lrtau', 'lrwin0', 'lrwin1', 'lrrmp']:
             self.regions[r]['region'].setBounds([0., np.max(self.time_base)])  # limit regions to data
 
@@ -734,7 +745,7 @@ class IVCurve(AnalysisModule):
     def updateAnalysis(self, **kwargs):
         """updateAnalysis re-reads the time parameters and counts the spikes"""
         self.get_window_analysisPars()
-        self.readParameters(clearFlag=True, pw=True)
+        self.readParameters(clearFlag=True, pw=False)
         self.countSpikes()
 
     def countSpikes(self):
@@ -831,7 +842,7 @@ class IVCurve(AnalysisModule):
         (p2, date) = os.path.split(p1)
         return date, cell, proto, p2
 
-    def printAnalysis(self, script_header=True, copytoclipboard=False):
+    def printAnalysis(self, printnow=True, script_header=True, copytoclipboard=False):
         """
         Print the CCIV summary information (Cell, protocol, etc)
         Print a nice formatted version of the analysis output to the terminal.
@@ -862,42 +873,289 @@ class IVCurve(AnalysisModule):
             ]))
         
         # summary table header is written anew for each cell
-        if self.script_header:
-            print('{:34s}\t{:24s}\t'.format("Cell", "Protocol")),
-            for k in data_template.keys():
-                print('{:<s}\t'.format(k)),
-            print ''
-            self.script_header = False
         ltxt = ''
-        ltxt += ('{:34s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Protocol']))
+        if script_header:
+            ltxt = '{:34s}\t{:24s}\t'.format("Cell", "Protocol")
+            for k in data_template.keys():
+                ltxt += '{:<s}\t'.format(k)
+            ltxt += '\n'
+            script_header = False
+
+        ltxt += '{:34s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Protocol'])
           
         for a in data_template.keys():
             if a in self.analysis_summary.keys():
-                ltxt += ((data_template[a] + '\t').format(self.analysis_summary[a]))
+                ltxt += (data_template[a] + '\t').format(self.analysis_summary[a])
             else:
-                ltxt += (('NaN\t'))
-        print ltxt
+                ltxt += 'NaN\t'
+    
+        if printnow:
+            printltxt
+        
         if copytoclipboard:
             clipb = QtGui.QApplication.clipboard()
             clipb.clear(mode=clipb.Clipboard)
             clipb.setText(ltxt, mode=clipb.Clipboard)
 
-            #
-            # (date, cell, proto, p2) = self.fileCellProtocol()
-            # print 'sequence: ', self.values
-            # smin = np.amin(self.values)*1e12
-            # smax = np.amax(self.values)*1e12
-            # sstep = np.mean(np.diff(self.values))*1e12
-            # seq = '%g;%g/%g' % (smin, smax, sstep)
-            # print '='*80
-            # print ("%14s,%14s,%16s,%20s,%9s,%9s,%10s,%9s,%10s" %
-            # ("Date", "Cell", "Protocol",
-            #         "Sequence", "RMP(mV)", " Rin(Mohm)",  "tau(ms)",
-            #         "ARatio", "tau2(ms)"))
-            # print ("%14s,%14s,%16s,%20s,%8.1f,%8.1f,%8.2f,%8.3f,%8.2f" %
-            #        (date, cell, proto, seq, self.Rmp*1000., self.r_in*1e-6,
-            #         self.tau*1000., self.adapt_ratio, self.tau2*1000))
-            # print '-'*80
+        return ltxt
+
+
+    def read_script(self, name=''):
+        """
+        read a script file from disk, and use that information to drive the analysis
+        :param name:
+        :return:
+        """
+        
+        if not name:
+            self.script_name = '/Users/pbmanis/Desktop/acq4_scripts/IVCurve_XY.cfg'
+
+        self.script = configfile.readConfigFile(self.script_name)
+        if self.script is None:
+            print 'failed to read script'
+            self.ctrl.IVCurve_ScriptName.setText('None')
+            return
+        
+        self.ctrl.IVCurve_ScriptName.setText(os.path.basename(self.script_name))
+
+#        print 'script ok:', self.script
+        # fh = open(self.script_name)  # read the raw text file too
+        # txt = fh.read()
+        # fh.close()
+       # self.scripts_form.PSPReversal_Script_TextEdit.setPlainText(txt)  # show script
+       # self.scripts_form.PSPReversal_ScriptFile.setText(self.script_name)
+        if self.validate_script():
+            self.run_script()
+        else:
+            raise Exception("Script failed validation - see terminal output")
+
+    def rerun_script(self):
+        """
+        revalidate and run the current script
+        :return:
+        """
+        if self.validate_script():
+            self.run_script()
+        else:
+            raise Exception("Script failed validation - see terminal output")
+
+    def validate_script(self):
+        """
+        validate the current script - by checking the existence of the files needed for the analysis
+
+        :return: False if cannot find files; True if all are found
+        """
+        if self.script['module'] != 'IVCurve':
+            print 'Script is not for IVCurve (found %s)' % self.script['module']
+            return False
+        all_found = True
+        trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
+        for c in self.script['Cells']:
+            if self.script['Cells'][c]['include'] is False:
+                continue
+            sortedkeys = sorted(self.script['Cells'][c]['choice'].keys())  # sort by order of recording
+            for p in sortedkeys:
+                pr = self.script['protocol'] + '_' + p  # add the underscore here
+                if c[-1] in trailingchars:
+                    cell = c[:-1]
+                else:
+                    cell = c
+                fn = os.path.join(cell, pr)
+                dm_selected_file = self.dataManager().selectedFile().name()
+                DataManager.cleanup()
+                gc.collect()
+                fullpath = os.path.join(dm_selected_file, fn)
+                file_ok = os.path.exists(fullpath)
+                if file_ok:
+                    print('File found: {:s}'.format(fullpath))
+                else:
+                    print '  current dataManager self.dm points to file: ', dm_selected_file
+                    print '  and file not found was: ', fullpath
+                    all_found = False
+                #else:
+                #    print 'file found ok: %s' % fullpath
+        return all_found
+
+    def run_script(self):
+        """
+        Run a script, doing all of the requested analysis
+        :return:
+        """
+        if self.script['testfiles']:
+            return
+        # settext = self.scripts_form.PSPReversal_ScriptResults_text.setPlainText
+        # apptext = self.scripts_form.PSPReversal_ScriptResults_text.appendPlainText
+        self.textout = ('Script File: {:<32s}\n'.format(self.script_name))
+        # settext(self.textout)
+        script_header = True  # reset the table to a print new header for each cell
+        trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
+        for cell in self.script['Cells']:
+            thiscell = self.script['Cells'][cell]
+            #print 'processing cell: %s' % thiscell
+            if thiscell['include'] is False:  # skip this cell
+                print 'Skipped: ' % cell
+                continue
+            sortedkeys = sorted(thiscell['choice'].keys())  # sort by order of recording (# on protocol)
+            for p in sortedkeys:
+                if thiscell['choice'][p] not in self.script['datafilter']:  # pick out steady-state conditions
+                    print 'p: %s not in data: ' % (thiscell['choice'][p]), self.script['datafilter']
+                    continue
+                # print 'working on %s' % thiscell['choice'][p]
+                pr = self.script['protocol'] + '_' + p  # add the underscore here
+                if cell[-1] in trailingchars:  # check last letter - if not a number clip it
+                    cell_file = cell[:-1]
+                else:
+                    cell_file = cell
+                fn = os.path.join(cell_file, pr)
+                dm_selected_file = self.dataManager().selectedFile().name()
+                fullpath = os.path.join(dm_selected_file, fn)
+                file_ok = os.path.exists(fullpath)
+                if not file_ok:  # get the directory handle and take it from there
+                    print 'File is not ok: %s' % fullpath
+                    continue
+                # self.ctrl.PSPReversal_KeepT.setChecked(QtCore.Qt.Unchecked)  # make sure this is unchecked
+                dh = self.dataManager().manager.dirHandle(fullpath)
+                if not self.loadFileRequested([dh]):  # note: must pass a list
+                    print 'Failed to load requested file: ', fullpath
+                    continue  # skip bad sets of records...
+               # apptext(('Protocol: {:<s} <br>Choice: {:<s}'.format(pr, thiscell['choice'][p])))
+                self.analysis_summary['Drugs'] = thiscell['choice'][p]
+                # alt_flag = bool(thiscell['alternation'])
+                # self.analysis_parameters['alternation'] = alt_flag
+                # self.ctrl.PSPReversal_Alternation.setChecked((QtCore.Qt.Unchecked, QtCore.Qt.Checked)[alt_flag])
+                # if 'junctionpotential' in thiscell:
+                #     self.analysis_parameters['junction'] = thiscell['junctionpotential']
+                #     self.ctrl.PSPReversal_Junction.setValue(float(thiscell['junctionpotential']))
+                # else:
+                #     self.analysis_parameters['junction'] = float(self.script['global_jp'])
+                #     self.ctrl.PSPReversal_Junction.setValue(float(self.script['global_jp']))
+
+                self.auto_updater = False
+                self.get_script_analysisPars(self.script, thiscell)
+                m = thiscell['choice'][p]  # get the tag for the manipulation
+                self.updateAnalysis()
+                DataManager.cleanup()
+                del dh
+                gc.collect()
+                # self.update_rmp_analysis()
+                # for win in ['win0', 'win1', 'win2']:
+                #     self.update_win_analysis(win)
+                ptxt = self.printAnalysis(printnow=False, script_header=script_header, copytoclipboard=False)
+                # apptext(ptxt)
+                #print 'ptxt: ', ptxt
+                self.textout += ptxt + '\n'
+                #print 'textout: ', self.textout
+                # print protocol result, optionally a cell header.
+                # self.print_formatted_script_output(script_header)
+                script_header = False
+        print self.textout
+        self.auto_updater = True # restore function
+        print '\nDone'
+
+    def get_script_analysisPars(self, script_globals, thiscell):
+        """
+        set the analysis times and modes from the script. Also updates the qt windows
+        :return: Nothing.
+        """
+        self.analysis_parameters = {}
+        self.analysis_parameters['baseline'] = False
+
+        self.analysis_parameters['lrwin1'] = {}
+        self.analysis_parameters[' '] = {}
+        self.analysis_parameters['lrwin0'] = {}
+        self.analysis_parameters['lrrmp'] = {}
+        self.auto_updater = False  # turn off the updates
+        scriptg = {'global_jp': ['junction'], 'global_win1_mode': ['lrwin1', 'mode'],
+                   'global_win2_mode': ['lrwin2', 'mode']}
+        for k in scriptg.keys():  # set globals first
+            if k in script_globals.keys():
+                if len(scriptg[k]) == 1:
+                    self.analysis_parameters[scriptg[k][0]] = script_globals[k]
+                else:
+                    self.analysis_parameters[scriptg[k][0]] = {scriptg[k][1]: script_globals[k]}
+        if 'junctionpotential' in thiscell:
+            self.analysis_parameters['junction'] = thiscell['junctionpotential']
+        if 'alternation' in thiscell:
+            self.analysis_parameters['alternation'] = thiscell['alternation']
+        else:
+            self.analysis_parameters['alternation'] = True
+
+        # for n in range(0, 3):  # get the current region definitions
+        #     self.regions['lrwin%d'%n]['region'].setRegion([x*1e-3 for x in thiscell['win%d'%n]])
+        #     self.regions['lrwin%d'%n]['start'].setValue(thiscell['win%d'%n][0])
+        #     self.regions['lrwin%d'%n]['stop'].setValue(thiscell['win%d'%n][1])
+        #     self.analysis_parameters['lrwin%d'%n]['times'] = [t*1e-3 for t in thiscell['win%d'%n]]  # convert to sec
+        #     self.show_or_hide('lrwin%d'%n, forcestate=True)
+
+        # for win in ['win1', 'win2']:  # set the modes for the 2 windows
+        #     winmode = win+'_mode'
+        #     lrwinx = 'lr'+win
+        #     if winmode in thiscell:
+        #         thiswin = thiscell[winmode]
+        #         r = self.regions[lrwinx]['mode'].findText(thiswin)
+        #         if r >= 0:
+        #             print 'setting %s mode to %s ' % (win, thiswin)
+        #             self.regions[lrwinx]['mode'].setCurrentIndex(r)
+        #             self.analysis_parameters[lrwinx]['mode'] = thiswin
+        #         else:
+        #             print '%s analysis mode not recognized: %s' % (win, thiswin)
+        #     else:
+        #         r = self.regions[lrwinx]['mode'].findText(self.analysis_parameters[lrwinx]['mode'])
+        #         if r >= 0:
+        #             self.regions[lrwinx]['mode'].setCurrentIndex(r)
+        return
+
+    def print_script_output(self):
+        """
+        print a clean version of the results to the terminal
+        :return:
+        """
+        print self.remove_html_markup(self.textout)
+
+    def copy_script_output(self):
+        """
+        Copy script output (results) to system clipboard
+        :return: Nothing
+        """
+        self.scripts_form.PSPReversal_ScriptResults_text.copy()
+
+    def print_formatted_script_output(self, script_header=True, copytoclipboard=False):
+        """
+        Print a nice formatted version of the analysis output to the terminal.
+        The output can be copied to another program (excel, prism) for further analysis
+        :param script_header:
+        :return:
+        """
+        data_template = (OrderedDict([('ElapsedTime', '{:>8.2f}'), ('Drugs', '{:<8s}'), ('HoldV', '{:>5.1f}'), ('JP', '{:>5.1f}'),
+                                                                        ('Rs', '{:>6.2f}'), ('Cm', '{:>6.1f}'), ('Ru', '{:>6.2f}'),
+                                                                        ('Erev', '{:>6.2f}'),
+                                                                        ('gsyn_Erev', '{:>9.2f}'), ('gsyn_60', '{:>7.2f}'), ('gsyn_13', '{:>7.2f}'), 
+                                                                        #('p0', '{:6.3e}'), ('p1', '{:6.3e}'), ('p2', '{:6.3e}'), ('p3', '{:6.3e}'),
+                                                                        ('I_ionic+', '{:>8.3f}'), ('I_ionic-', '{:>8.3f}'), ('ILeak', '{:>7.3f}'),
+                                                                        ('win1Start', '{:>9.3f}'), ('win1End', '{:>7.3f}'),
+                                                                        ('win2Start', '{:>9.3f}'), ('win2End', '{:>7.3f}'),
+                                                                        ('win0Start', '{:>9.3f}'), ('win0End', '{:>7.3f}'),
+                                                                        ]))
+        # summary table header is written anew for each cell
+        if script_header:
+            print('{:34s}\t{:24s}\t'.format("Cell", "Protocol")),
+            for k in data_template.keys():
+                print('{:<s}\t'.format(k)),
+            print ''
+        ltxt = ''
+        ltxt += ('{:34s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Protocol']))
+
+        for a in data_template.keys():
+            if a in self.analysis_summary.keys():
+                ltxt += ((data_template[a] + '\t').format(self.analysis_summary[a]))
+            else:
+                ltxt += '<   >\t'
+        print ltxt
+        if copytoclipboard:
+            clipb = QtGui.QApplication.clipboard()
+            clipb.clear(mode=clipb.Clipboard )
+            clipb.setText(ltxt, mode=clipb.Clipboard)
+
 
     def update_Tau_membrane(self, peak_time=None, printWindow=False, whichTau=1):
         """
@@ -977,7 +1235,6 @@ class IVCurve(AnalysisModule):
             yFit[k] = fitfunc[0](fitPars[k], xFit[k], C=None)  # +self.ivbaseline[whichdata]
             self.data_plot.plot(xFit[k]+self.tauwin[0], yFit[k], pen=pg.mkPen('w'))
         
-
     def update_Tauh(self, printWindow=False):
         """ compute tau (single exponential) from the onset of the markers
             using lrtau window, and only for the step closest to the selected
