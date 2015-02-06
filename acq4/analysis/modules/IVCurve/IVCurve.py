@@ -337,11 +337,11 @@ class IVCurve(AnalysisModule):
         Two-dimensional sequences are supported.
         :return nothing:
         """
-        dh = self.file_loader_instance.selectedFiles()
-        if len(dh) == 0:  # when using scripts, the fileloader may not know...
-            if default_dh is not None:
-                dh = default_dh
-            else:
+        if default_dh is None:
+            dh = self.file_loader_instance.selectedFiles()
+        else:
+            dh = default_dh
+        if len(dh) == 0:  # when using scripts, the fileloader may not know..
                 return
         dh = dh[0]  # only the first file
         self.sequence = self.dataModel.listSequenceParams(dh)
@@ -419,7 +419,7 @@ class IVCurve(AnalysisModule):
             raise Exception("IVCurve::loadFileRequested: " +
                             "Select an IV protocol directory.")
         if len(dh) != 1:
-            raise Exception("IVCURVE::loadFileRequested: " +
+            raise Exception("IVCurve::loadFileRequested: " +
                             "Can only load one file at a time.")
         self.clear_results()
         #        if self.current_dirhandle != dh[0]:  # is this the current file/directory?
@@ -907,15 +907,17 @@ class IVCurve(AnalysisModule):
         :return:
         """
         
-        if not name:
-            self.script_name = '/Users/pbmanis/Desktop/acq4_scripts/IVCurve_XY.cfg'
-
+        self.script_name = QtGui.QFileDialog.getOpenFileName(
+                   None, 'Open Script File', '/Users/pbmanis/Desktop/acq4_scripts/', 'Script (*.cfg)')
+        #if not name:
+        #    self.script_name = '/Users/pbmanis/Desktop/acq4_scripts/IVCurve_XY.cfg
+        if self.script_name == '':  # cancel returns empty string
+            return
         self.script = configfile.readConfigFile(self.script_name)
         if self.script is None:
-            print 'failed to read script'
+            print 'Failed to read script'
             self.ctrl.IVCurve_ScriptName.setText('None')
             return
-        
         self.ctrl.IVCurve_ScriptName.setText(os.path.basename(self.script_name))
 
 #        print 'script ok:', self.script
@@ -985,7 +987,7 @@ class IVCurve(AnalysisModule):
             return
         # settext = self.scripts_form.PSPReversal_ScriptResults_text.setPlainText
         # apptext = self.scripts_form.PSPReversal_ScriptResults_text.appendPlainText
-        self.textout = ('Script File: {:<32s}\n'.format(self.script_name))
+        self.textout = ('\nScript File: {:<32s}\n'.format(self.script_name))
         # settext(self.textout)
         script_header = True  # reset the table to a print new header for each cell
         trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
@@ -1018,7 +1020,9 @@ class IVCurve(AnalysisModule):
                 if not self.loadFileRequested([dh]):  # note: must pass a list
                     print 'Failed to load requested file: ', fullpath
                     continue  # skip bad sets of records...
-               # apptext(('Protocol: {:<s} <br>Choice: {:<s}'.format(pr, thiscell['choice'][p])))
+                # apptext(('Protocol: {:<s} <br>Choice: {:<s}'.format(pr, thiscell['choice'][p])))
+                #print dir(self.data_plot)
+                # self.main_layout.update()
                 self.analysis_summary['Drugs'] = thiscell['choice'][p]
                 # alt_flag = bool(thiscell['alternation'])
                 # self.analysis_parameters['alternation'] = alt_flag
@@ -1173,7 +1177,7 @@ class IVCurve(AnalysisModule):
         Fits = Fitting.Fitting()
         initpars = [self.rmp*1e-3, 0.010, 0.01]
         peak_time=None
-        icmdneg = np.where(self.cmd < 0)
+        icmdneg = np.where(self.cmd < -20e-12)
         maxcmd = np.min(self.cmd)
         ineg = np.where(self.cmd[icmdneg] >= maxcmd / 3)
         if peak_time is not None and ineg != np.array([]):
@@ -1183,7 +1187,7 @@ class IVCurve(AnalysisModule):
         whichaxis = 0
         fpar = []
         names = []
-
+        okdata = []
         for j, k in enumerate(whichdata):
             self.data_plot.plot(self.time_base,  self.traces[k], pen=pg.mkPen('y'))
             (fparx, xf, yf, namesx) = Fits.FitRegion([k], whichaxis,
@@ -1199,12 +1203,15 @@ class IVCurve(AnalysisModule):
             if not fparx:
               raise Exception('IVCurve::update_Tau_membrane: Charging tau fitting failed - see log')
             #print 'j: ', j, len(fpar)
+            if fparx[0][1] < 2.5e-3:  # amplitude must be > 2.5 mV to be useful
+                continue
             fpar.append(fparx[0])
             names.append(namesx[0])
+            okdata.append(k)
         self.taupars = fpar
         self.tauwin = rgnpk
         self.taufunc = Func
-        self.whichdata = whichdata
+        self.whichdata = okdata
         taus = []
         for j in range(len(fpar)):
             outstr = ""
