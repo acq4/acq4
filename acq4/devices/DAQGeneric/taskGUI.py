@@ -6,7 +6,6 @@ from DaqChannelGui import *
 from acq4.devices.Device import TaskGui
 from acq4.util.SequenceRunner import *
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
-#from PyQt4 import Qwt5 as Qwt
 from acq4.pyqtgraph import PlotWidget
 import numpy
 import weakref
@@ -43,7 +42,6 @@ class DAQGenericTaskGui(TaskGui):
             (w, p) = self.createChannelWidget(ch)
             plotParent.addWidget(p)
             ctrlParent.addWidget(w)
-        
 
     def createChannelWidget(self, ch, daqName=None):
         conf = self.dev._DGConfig[ch]
@@ -53,22 +51,18 @@ class DAQGenericTaskGui(TaskGui):
         if 'units' in conf:
             units = conf['units']
             
-        #p.setAxisTitle(PlotWidget.yLeft, ch+units)
         p.setLabel('left', text=ch, units=units)
-        #print "Plot label:", ch, units
         self.plots[ch] = p
         
         p.registerPlot(self.dev.name() + '.' + ch)
         
         if conf['type'] in ['ao', 'do']:
             w = OutputChannelGui(self, ch, conf, p, self.dev, self.taskRunner, daqName)
-            #QtCore.QObject.connect(w, QtCore.SIGNAL('sequenceChanged'), self.sequenceChanged)
             w.sigSequenceChanged.connect(self.sequenceChanged)
         elif conf['type'] in ['ai', 'di']:
             w = InputChannelGui(self, ch, conf, p, self.dev, self.taskRunner, daqName)
         else:
             raise Exception("Unrecognized device type '%s'" % conf['type'])
-        # w.setUnits(units)
         self.channels[ch] = w
         
         return (w, p)
@@ -93,12 +87,8 @@ class DAQGenericTaskGui(TaskGui):
                 except KeyError:
                     printExc("Warning: Cannot restore state for channel %s.%s (channel does not exist on this device)" % (self.dev.name(), ch))
                     continue    
-                #self.channels[ch].restoreState(state['channels'][ch])
         except:
             printExc('Error while restoring GUI state:')
-            #sys.excepthook(*sys.exc_info())
-        #self.ui.waveGeneratorWidget.update()
-            
         
     def listSequence(self):
         ## returns sequence parameter names and lengths
@@ -110,7 +100,6 @@ class DAQGenericTaskGui(TaskGui):
         return l
         
     def sequenceChanged(self):
-        #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name())
         self.sigSequenceChanged.emit(self.dev.name())
         
     def taskStarted(self, params):  ## automatically invoked from TaskGui
@@ -130,9 +119,7 @@ class DAQGenericTaskGui(TaskGui):
         for ch in self.channels:
             self.channels[ch].taskSequenceStarted()
         
-        
     def generateTask(self, params=None):
-        #print "generating task with:", params
         if params is None:
             params = {}
         p = {}
@@ -144,24 +131,13 @@ class DAQGenericTaskGui(TaskGui):
                 if k[:len(search)] == search:
                     chParams[k[len(search):]] = params[k]
             ## request the task from the channel
-            #print "  requesting %s task with params:"%ch, chParams
             p[ch] = self.channels[ch].generateTask(chParams)
-        #print p
         return p
         
     def handleResult(self, result, params):
-        #print "handling result:", result
         if result is None:
             return
         for ch in self.channels:
-            #print "\nhandle result for", ch
-            #print 'result:', type(result)
-            #print result
-            #print "--------\n"
-            #if ch not in result:
-                #print "  no result"
-                #continue
-            #print result.infoCopy()
             if result.hasColumn(0, ch):
                 self.channels[ch].handleResult(result[ch], params)
             
