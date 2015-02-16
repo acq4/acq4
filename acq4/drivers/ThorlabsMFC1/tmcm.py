@@ -56,14 +56,14 @@ COMMANDS = {
     'sac': 29,
 }
 
-PARAMETERS = {
+PARAMETERS = {    # negative values indicate read-only parameters
     'target_position': 0,
-    'position': 1,
+    'actual_position': 1,
     'target_speed': 2,
-    'speed': 3,
-    'max_speed': 4,
-    'max_acceleration': 5,
-    'max_current': 6,
+    'actual_speed': 3,
+    'maximum_speed': 4,
+    'maximum_acceleration': 5,
+    'maximum_current': 6,
     'standby_current': 7,
     'target_pos_reached': 8,
     'ref_switch_status': 9,
@@ -71,7 +71,8 @@ PARAMETERS = {
     'left_limit_switch_status': 11,
     'right_limit_switch_disable': 12,
     'left_limit_switch_disable': 13,
-    'acceleration': 135,
+    'minimum_speed': -130,
+    'acceleration': -135,
     'ramp_mode': 138,
     'microstep_resolution': 140,
     'soft_stop_flag': 149,
@@ -85,14 +86,15 @@ PARAMETERS = {
     'freewheeling': 204,
     'stall_detection_threshold': 205,
     'actual_load_value': 206,
-    'driver_error_flags': 208,
+    'driver_error_flags': -208,
     'encoder_position': 209,
     'encoder_prescaler': 210,
     'fullstep_threshold': 211,
     'maximum_encoder_deviation': 212,
     'power_down_delay': 214,
-    'absolute_encoder_value': 215,
+    'absolute_encoder_value': -215,
 }
+
 
 STATUS = {
     1: "Wrong checksum",
@@ -184,15 +186,19 @@ class TMCM140(SerialDevice):
         return parts
         
     @threadsafe
-    def rotate(self, direction, velocity):
+    def rotate(self, velocity):
         """Begin rotating motor.
         
-        direction: 'r' or 'l'
-        velocity: 0-2047
+        velocity: -2047 to +2047
+                  negative values turn left; positive values turn right.
         """
-        assert isinstance(velocity, int)
-        assert 0 <= velocity < 2048
-        assert direction in ('r', 'l')
+        assert isinstance(velocity, int)        
+        assert -2047 <= velocity <= 2047
+        if velocity < 0:
+            direction = 'l'
+            velocity = -velocity
+        else:
+            direction = 'r'
         self.command('ro'+direction, 0, 0, velocity)
         self.get_reply()
 
@@ -202,7 +208,7 @@ class TMCM140(SerialDevice):
         self.get_reply()
         
     @threadsafe
-    def move_to(self, pos, relative=False, velocity=None):
+    def move(self, pos, relative=False, velocity=None):
         """Rotate until reaching *pos*.
         
         pos: The target position
@@ -222,24 +228,96 @@ class TMCM140(SerialDevice):
         self.get_reply()
         
     @threadsafe
-    def get_pos(self):
-        """Return the current position of the motor.
-        
-        This value is stored when the motor is powered off ?
-        """
-        return self._get_param('position')
-    
-    def _get_param(self, param):
-        pnum = PARAMETERS[param]
+    def get_param(self, param):
+        pnum = abs(PARAMETERS[param])
         self.command('gap', pnum, 0, 0)
         return self.get_reply()[4]
         
+    def __getitem__(self, param):
+        return self.get_param(param)
         
+    @threadsafe
+    def set_param(self, param, value, **kwds):
+        pnum = PARAMETERS[param]
+        if pnum < 0:
+            raise TypeError("Parameter %s is read-only." % param)
+        if pnum == PARAMETERS['maximum_current'] and value > 100:
+            if kwds.get('force', False) is not True:
+                raise Exception("Refusing to set max_current > 100 (this can damage the motor). "
+                                "To override, use force=True.")
+        self.command('sap', pnum, 0, value)
+        self.get_reply()
+
+    @threadsafe
+    def set_params(self, **kwds):
+        for param, value in kwds.values():
+            self.set_param(param, value)
         
+    def __setitem__(self, param, value):
+        return self.set_param(param, value)
+    
     
 if __name__ == '__main__':
     import time
+    import pyqtgraph as pg
     s = TMCM140(port='/dev/ttyACM0', baudrate=9600)
-    s.rotate('l', 100)
-    time.sleep(0.2)
+    
+    s['maximum_current'] = 50
     s.stop()
+    s['encoder_position'] = 0
+    s['actual_position'] = 0
+    
+    def step_curve(decay_threshold=-1):
+        """Measure encoder following single steps at all microstep resolutions.
+        """
+        s['mixed_decay_threshold'] = decay_threshold
+        s['stall_detection_threshold'] = 0
+        plt = pg.plot()
+        for res in range(8):
+            x = []
+            s['microstep_resolution'] = res
+            s['encoder_prescaler'] = int(2**res * 100)
+            for i in range(150):
+                s.move(1, relative=True)
+                while s['target_pos_reached'] == 0:
+                    pass
+                x.append(s['encoder_position'])
+                x.append(s['encoder_position'])
+                x.append(s['encoder_position'])
+                print i, x[-1]
+            plt.plot(x, symbol='o')
+            pg.QtGui.QApplication.processEvents()
+
+    def test_stall(threshold=7, ustep=3, speed=800):
+        s['microstep_resolution'] = ustep
+        s['mixed_decay_threshold'] = 2047
+        s['stall_detection_threshold'] = threshold
+        while True:
+            s.rotate(speed)
+            time.sleep(0.5)
+            s.stop()
+            time.sleep(0.2)
+
+    def test_seek():
+        global x, t
+        ures = 3
+        s['microstep_resolution'] = ures
+        s['encoder_prescaler'] = int(2**ures * 100)
+        s['standby_current'] = 0
+        s['maximum_speed'] = 50
+        
+        s.move(1000, relative=True)
+        start = time.time()
+        t = []
+        x = []
+        while True:
+            now = time.time()
+            if now - start > 3:
+                break
+            t.append(now-start)
+            x.append(s['encoder_position'])
+            
+        pg.plot(t, x)
+        
+    step_curve()
+    #test_seek()
