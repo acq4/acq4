@@ -5,3 +5,5 @@ MANIFEST
 dist
 build
 tempLog.txt
+.idea
+

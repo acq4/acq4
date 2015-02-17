@@ -485,6 +485,8 @@ def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpola
         sthra = list(numpy.where(numpy.diff(sp) > mingap))
         sthr = [sp[x] for x in sthra[0]] # bump indices by 1
         for k in sthr:
+            if k == 0:
+                continue
             x = xt[k-1:k+1]
             y = v[k-1:k+1]
             if interpolate:

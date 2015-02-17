@@ -15,13 +15,11 @@ from .Manager import *
 from numpy import *
 
 # Pull some args out
-try:
-    ind = sys.argv.index('--profile')
-except ValueError:
-    profile = False
-else:
+if "--profile" in sys.argv:
     profile = True
-    sys.argv.pop(ind)    
+    sys.argv.pop(sys.argv.index('--profile'))
+else:
+    profile = False
 
 
 ## Enable stack trace output when a crash is detected
