@@ -899,11 +899,12 @@ class IVCurve(AnalysisModule):
             #         self.tau*1000., self.adapt_ratio, self.tau2*1000))
             # print '-'*80
 
-    def update_Tau_membrane(self, peak_time=None, printWindow=False, whichTau=1):
+    def update_Tau_membrane(self, peak_time=None, printWindow=False, whichTau=1, vrange=[-5., -20.]):
         """
         Compute time constant (single exponential) from the
         onset of the response
-        using lrpk window, and only the smallest 1/3 of the steps...
+        using lrpk window, and only steps that produce a voltage change between 5 and 20 mV below rest
+        or as specified
         """
 
         if len(self.cmd) == 0:  # probably not ready yet to do the update.
@@ -920,7 +921,13 @@ class IVCurve(AnalysisModule):
         ineg = np.where(self.cmd[icmdneg] >= maxcmd / 3)
         if peak_time is not None and ineg != np.array([]):
             rgnpk[1] = np.max(peak_time[ineg[0]])
-        whichdata = ineg[0]
+        rgnindx = [int((rgnpk[1]-0.005)/dt), int((rgnpk[1])/dt)]
+        vmeans = np.mean(self.traces[rgnindx[0]:rgnindx[1]])
+        print vmax, vrange
+        indxs = np.where(np.logical_and((vrange[0] >= vmeans[ineg]), (vmeans[ineg] >= vrange[1])))
+        indxs = list(indxs[0])
+        whichdata = ineg[0][indxs]  # restricts to valid values
+        print 'vmeans selected: ', vmeans[whichdata]
         itaucmd = self.cmd[ineg]
         whichaxis = 0
         fpar = []
