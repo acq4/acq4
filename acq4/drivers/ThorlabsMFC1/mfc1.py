@@ -25,12 +25,12 @@ class MFC1(object):
         self.mcm = TMCM140(port, baudrate)
         self.mcm.stop()
         self.mcm.set_params(
-            maximum_current=10,
+            maximum_current=50,
             standby_current=0,
             mixed_decay_threshold=-1,
-            encoder_prescaler=6400,
+            encoder_prescaler=8192,
+            microstep_resolution=6,
         )
-        self.setResolution(16)
         
     def position(self):
         """Return the current encoder position.
@@ -44,14 +44,6 @@ class MFC1(object):
         whether the move is complete.
         """
         
-if __name__ == '__main__':
-    m = MFC1('/dev/ttyACM0')
-    m.mcm.start_download()
-    m.mcm.command('ror', 0, 0, 100)
-    m.mcm.command('wait', 0, 0, 1000)
-    m.mcm.command('stop', 0, 0, 0)
-    m.mcm.stop_download()
-    
         
     
     

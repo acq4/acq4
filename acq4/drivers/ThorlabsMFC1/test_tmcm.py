@@ -3,12 +3,11 @@ path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')
 sys.path.append(path)
 
 from acq4.drivers.ThorlabsMFC1.tmcm import TMCM140
-from acq4.drivers.ThorlabsMFC1 import MFC1
 import acq4.pyqtgraph as pg
 
 
 if len(sys.argv) < 2:
-    print "Usage:  pythion test.py device\n  (device may be com3, /dev/ttyACM0, etc.)"
+    print "Usage:  python test.py device\n  (device may be com3, /dev/ttyACM0, etc.)"
     sys.exit(1)
 
 s = TMCM140(port=sys.argv[1], baudrate=9600)

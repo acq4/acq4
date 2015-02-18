@@ -263,7 +263,7 @@ class TMCM140(SerialDevice):
         
         The driver is thread-locked until all parameters are set.
         """
-        for param, value in kwds.values():
+        for param, value in kwds.items():
             self.set_param(param, value)
         
     def __setitem__(self, param, value):
