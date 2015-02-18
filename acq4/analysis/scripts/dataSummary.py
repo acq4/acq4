@@ -7,6 +7,7 @@ and does not print out information if there are no successful protocols run.
 June, 2014, Paul B. Manis.
 
 """
+from collections import OrderedDict
 import sys
 from acq4.util.metaarray import MetaArray
 from acq4.analysis.dataModels import PatchEPhys
@@ -22,7 +23,7 @@ import gc
 
 
 class DataSummary():
-    def __init__(self, basedir=None):
+    def __init__(self, basedir=None, daylistfile=None):
         print 'basedir: ', basedir
         self.analysis_summary = {}
         self.dataModel = PatchEPhys
@@ -31,20 +32,32 @@ class DataSummary():
         self.tw['day'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
         self.tw['slice'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
         self.tw['cell'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
-        self.img_re = re.compile('^Image_(\d{3,3}).tif')
+        self.img_re = re.compile('^[Ii]mage_(\d{3,3}).tif')  # make case insensitive - for some reason in Xuying's data
         self.s2p_re = re.compile('^2pStack_(\d{3,3}).ma')
         self.i2p_re = re.compile('^2pImage_(\d{3,3}).ma')
         self.monitor = False
+        self.reportIncompleteProtocols = False  # do include incomplete protocol runs in print
         allfiles = os.listdir(basedir)
         # look for names that match the acq4 "day" template:
         # example: 2013.03.28_000
         daytype = re.compile("(\d{4,4}).(\d{2,2}).(\d{2,2})_(\d{3,3})")
 #        daytype = re.compile("(2011).(06).(08)_(\d{3,3})")  # specify a day
         #2011.10.17_000
-        minday = (2012, 12, 4)
-        minday = minday[0]*1e4+minday[1]*1e2+minday[2]
-        maxday = (2012, 12, 31)
-        maxday = maxday[0]*1e4+maxday[1]*1e2+maxday[2]
+        # operate in two modes:
+        # second, between two dates
+        if daylistfile is None:
+            minday = (2012, 12, 4)
+            minday = minday[0]*1e4+minday[1]*1e2+minday[2]
+            maxday = (2012, 12, 31)
+            maxday = maxday[0]*1e4+maxday[1]*1e2+maxday[2]
+        else:
+            daylist = []
+            with open(daylistfile, 'r') as f:
+                for line in f:
+                    if line[0] != '#':
+                        daylist.append(line[0:10])
+            f.close()
+
         days = []
         for thisfile in allfiles:
             m = daytype.match(thisfile)
@@ -53,21 +66,27 @@ class DataSummary():
             if m is None:
                # print 'Top level file %s is incorrectly placed ' % thisfile
                 continue  # no match
-            if len(m.groups()) == 4:  # perfect match
+            if len(m.groups()) >= 3:  # perfect match
                 # print m.groups()
                 idl = [int(d) for d in m.groups()]
                 id = idl[0]*1e4+idl[1]*1e2+idl[2]
                 # print 'id: ', id
                 # print 'minday: ', minday
-                if id >= minday and id <= maxday:
-                    days.append(thisfile)
+                if daylist is None:
+                    if id >= minday and id <= maxday:
+                        days.append(thisfile[0:10])
+                else:
+                    #print 'using daylist, thisfile: ', thisfile[0:10]
+                    #print 'daylist: ', daylist
+                    if thisfile[0:10] in daylist:
+                        days.append(thisfile)
         print 'Days reported: ', days
         for day in days:
             #print 'processing day: %s' % day
             self.daystring = '%s\t' % (day)
             dh = DataManager.getDirHandle(os.path.join(self.basedir, day), create=False)
             dx = self.dataModel.getDayInfo(dh)
-            if 'notes' in dx.keys() and len(dx['notes']) > 0:
+            if dx is not None and 'notes' in dx.keys() and len(dx['notes']) > 0:
                 l = self.tw['day'].wrap(dx['notes'])
                 for i in l:
                     self.daystring += i
@@ -82,6 +101,7 @@ class DataSummary():
         :param day:
         :return nothing:
         """
+
         allfiles = os.listdir(day)
         slicetype = re.compile("(slice\_)(\d{3,3})")
         slices = []
@@ -95,7 +115,7 @@ class DataSummary():
             self.slicestring = '%s\t' % (slice)
             dh = DataManager.getDirHandle(os.path.join(day, slice), create=False)
             sl = self.dataModel.getSliceInfo(dh)
-            if 'notes' in sl.keys() and len(sl['notes']) > 0:
+            if sl is not None and 'notes' in sl.keys() and len(sl['notes']) > 0:
                 l = self.tw['slice'].wrap(sl['notes'])
                 for i in l:
                     self.slicestring += i
@@ -106,7 +126,6 @@ class DataSummary():
             DataManager.cleanup()
             del dh
             gc.collect()
-
 
     def doCells(self, slice):
         """
@@ -126,8 +145,8 @@ class DataSummary():
         for cell in cells:
             self.cellstring = '%s\t' % (cell)
             dh = DataManager.getDirHandle(os.path.join(slice, cell), create=False)
-            cl = self.dataModel.getSliceInfo(dh)
-            if 'notes' in cl.keys() and len(cl['notes']) > 0:
+            cl = self.dataModel.getCellInfo(dh)
+            if cl is not None and 'notes' in cl.keys() and len(cl['notes']) > 0:
                 l = self.tw['cell'].wrap(cl['notes'])
                 for i in l:
                     self.cellstring += i
@@ -152,6 +171,7 @@ class DataSummary():
         #celltype = re.compile("(Cell_)(\d{3,3})")
         protocols = []
         nonprotocols = []
+        anyprotocols = False
         images = []  # tiff
         stacks2p = []
         images2p = []
@@ -161,33 +181,32 @@ class DataSummary():
                 protocols.append(thisfile)
             else:
                 nonprotocols.append(thisfile)
-#        if len(protocols) == 0:
-#            pass
-            #print '         No protocols this cell entry'
-        ngoodprotocols = 0
+
         self.protocolstring = ''
-        for protocol in protocols:
+        self.summarystring = 'NaN\t'*6
+
+        for np, protocol in enumerate(protocols):
             dh = DataManager.getDirHandle(os.path.join(cell, protocol), create=False)
-            self.cell_summary(dh)
+            if np == 0:
+                self.cell_summary(dh)
             if self.monitor:
                 print 'Investigating Protocol: %s', dh.name()
             dirs = dh.subDirs()
-            protocolok = True
+            protocolok = True  # assume that protocol is ok
             modes = []
-            complete = False
-            ncomplete = 0
-            ntotal = 0
+            nexpected = len(dirs)  # acq4 writes dirs before, so this is the expected fill
+            ncomplete = 0  # count number actually done
             clampDevices = self.dataModel.getClampDeviceNames(dh)
             # must handle multiple data formats, even in one experiment...
             if clampDevices is not None:
                 data_mode = dh.info()['devices'][clampDevices[0]]['mode']  # get mode from top of protocol information
-            else:
+            else:  # try to set a data mode indirectly
                 if 'devices' not in dh.info().keys():
-                    protocolok = False
-                    ntotal = -1
+                    protocolok = False  # can't parse protocol device...
                     continue
                 devices = dh.info()['devices'].keys()  # try to get clamp devices from another location
-                for kc in self.dataModel.knownClamps():
+                #print dir(self.dataModel)
+                for kc in self.dataModel.knownClampNames():
                     if kc in devices:
                         clampDevices = [kc]
                 try:
@@ -200,37 +219,38 @@ class DataSummary():
                 modes.append(data_mode)
             for i, directory_name in enumerate(dirs):  # dirs has the names of the runs within the protocol
                 data_dir_handle = dh[directory_name]  # get the directory within the protocol
-#                try:
-                data_file_handle = self.dataModel.getClampFile(data_dir_handle)  # get pointer to clamp data
-                ntotal += 1
+                try:
+                    data_file_handle = self.dataModel.getClampFile(data_dir_handle)  # get pointer to clamp data
+                except:
+                    data_file_handle = None
                 if data_file_handle is not None:  # no clamp file found - skip
+                    ncomplete += 1
                     # Check if there is no clamp file for this iteration of the protocol
                     # Usually this indicates that the protocol was stopped early.
                     # data_file = data_file_handle.read()
                     try:
                         self.holding = self.dataModel.getClampHoldingLevel(data_file_handle)
-                        self.amp_settings = self.dataModel.getWCCompSettings(data_file_handle)
-                        ncomplete += 1
                     except:
-                        raise ValueError('complete = %d when failed' % ncomplete)
-
+                        self.holding = 0.
+                    try:
+                        self.amp_settings = self.dataModel.getWCCompSettings(data_file_handle)
+                    except:
+                        self.amp_settings = None
+                        #raise ValueError('complete = %d when failed' % ncomplete)
+                #else:
+                #    break  # do not keep looking if the file is not found
                 DataManager.cleanup()  # close all opened files
+                # del dh
                 gc.collect()  # and force garbage collection of freed objects inside the loop
-            if ncomplete == ntotal:
-                complete = True
             if modes == []:
                 modes = ['Unknown mode']
-            if complete and protocolok:  # accumulate protocols
-                self.protocolstring += '{:<s} ({:s}, {:d}), '.format(protocol, modes[0][0], ncomplete)
-                ngoodprotocols += 1
-#                print ' mode: %s  complete, %d traces' % (modes[0], ncomplete)
-#            else:
-#                if len(modes) > 0:
-#                    print ' mode: %s  Incomplete (%d of %d)' % (modes[0], ncomplete, ntotal)
-#                else:
-#                    print 'No data in protocol'
-#        if len(protocols) == 0:
-#            print '         No protocols this cell'
+            if protocolok and ncomplete == nexpected:  # accumulate protocols
+                self.protocolstring += '[{:<s}: {:s} {:d}], '.format(protocol, modes[0][0], ncomplete)
+                anyprotocols = True  # indicate that ANY protocol ran to completion
+            else:
+                if self.reportIncompleteProtocols:
+                    self.protocolstring += '[{:<s}, ({:s}, {:d}/{:d}, Incomplete)], '.format(protocol, modes[0][0], ncomplete, nexpected)
+
             DataManager.cleanup()
             del dh
             gc.collect()
@@ -250,15 +270,18 @@ class DataSummary():
                 images2p.append(thisfile)
         self.imagestring = ''
         if len(images) > 0:
-            self.imagestring += 'Images: %d' % len(images)
+            self.imagestring += 'Images: %d ' % len(images)
         if len(stacks2p) > 0:
-            self.imagestring += '2pStacks: %d' % len(stacks2p)
+            self.imagestring += '2pStacks: %d ' % len(stacks2p)
         if len(images2p) > 0:
-            self.imagestring += '2pImages: %d' % len(images2p)
-        if ngoodprotocols > 0 or len(self.imagestring) > 0:
-            print self.daystring + self.slicestring + self.cellstring + self.protocolstring + self.imagestring + '\t'
-        if ngoodprotocols == 0:
-            print self.daystring + self.slicestring + self.cellstring + '<No complete protocols found>'
+            self.imagestring += '2pImages: %d ' % len(images2p)
+        if len(images) + len(stacks2p) + len(images2p) == 0:
+            self.imagestring = 'No Images '
+        
+        if anyprotocols:
+            print self.daystring + self.summarystring + self.slicestring + self.cellstring + self.protocolstring + self.imagestring + '\t'
+        else:
+            print self.daystring + self.summarystring + self.slicestring + self.cellstring + '<No complete protocols>\t' + self.imagestring + '\t'
 
 
     def get_file_information(self, dh=None):
@@ -283,9 +306,12 @@ class DataSummary():
         """
         cell_summary generates a dictionary of information about the cell
         for the selected directory handle (usually a protocol; could be a file)
+        builds a formatted string with some of the information.
         :param dh: the directory handle for the data, as passed to loadFileRequested
         :return nothing:
         """
+        self.analysis_summary = {}  # always clear the summary.
+        self.summarystring = ''
         # other info into a dictionary
         self.analysis_summary['Day'] = self.dataModel.getDayInfo(dh)
         self.analysis_summary['Slice'] = self.dataModel.getSliceInfo(dh)
@@ -294,14 +320,44 @@ class DataSummary():
         self.analysis_summary['Internal'] = self.dataModel.getInternalSoln(dh)
         self.analysis_summary['Temp'] = self.dataModel.getTemp(dh)
         self.analysis_summary['CellType'] = self.dataModel.getCellType(dh)
+        today = self.analysis_summary['Day']
+        if today is not None:
+            #print today.keys()
+            if 'species' in today.keys():
+                self.analysis_summary['Species'] = today['species']
+            if 'age' in today.keys():
+                self.analysis_summary['Age'] = today['age']
+            if 'sex' in today.keys():
+                self.analysis_summary['Sex'] = today['sex']
+            if 'weight' in today.keys():
+                self.analysis_summary['Weight'] = today['weight']
+            if 'temperature' in today.keys():
+                self.analysis_summary['Temperature'] = today['temperature']
+            if 'description' in today.keys():
+                self.analysis_summary['Description'] = today['description']
+
         if self.analysis_summary['Cell'] is not None:
             ct = self.analysis_summary['Cell']['__timestamp__']
         else:
             ct = 0.
-        pt = dh.info()['__timestamp__']
+        try:
+            pt = dh.info()['__timestamp__']
+        except:
+            pt = 0.
         self.analysis_summary['ElapsedTime'] = pt-ct  # save elapsed time between cell opening and protocol start
         (date, sliceid, cell, proto, p3) = self.file_cell_protocol(dh.name())
         self.analysis_summary['CellID'] = os.path.join(date, sliceid, cell)  # use this as the "ID" for the cell later on
+        data_template = (
+            OrderedDict([('Species', '{:>s}'), ('Age', '{:>5s}'), ('Sex', '{:>1s}'), ('Weight', '{:>5s}'),
+                         ('Temperature', '{:>5s}'), ('ElapsedTime', '{:>8.2f}')]))
+ 
+        ltxt = ''
+        for a in data_template.keys():
+            if a in self.analysis_summary.keys():
+                ltxt += ((data_template[a] + '\t').format(self.analysis_summary[a]))
+            else:
+                ltxt += (('NaN\t'))
+        self.summarystring = ltxt
 
     def loadFileRequested(self, dh):
         """
@@ -497,4 +553,7 @@ class DataSummary():
 
 
 if __name__ == "__main__":
-    DataSummary(basedir=sys.argv[1])
+    if len(sys.argv) == 2:
+        DataSummary(basedir=sys.argv[1])
+    if len(sys.argv) == 3:
+        DataSummary(basedir=sys.argv[1], daylistfile=sys.argv[2])
