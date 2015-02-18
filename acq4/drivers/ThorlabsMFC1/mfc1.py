@@ -2,7 +2,10 @@
 Thorlabs MFC1 : microscope focus controller based on Trinamic TMCM-140-42-SE
 and PDx-140-42-SE.
 
+"""
 
+
+"""
 Hardware notes:
 
 * Although the controller supports up to 64 microsteps per full step, the
@@ -11,7 +14,9 @@ Hardware notes:
 
 * Stall detection only works for a limited range of current + speed + threshold
 
+* Encoder has 4096 values per rotation; gear ratio is 1:5.
 
+* Setting encoder prescaler to 8192 yields +1 per encoder step 
 """
 from .tmcm import TMCM140
 
@@ -23,6 +28,7 @@ class MFC1(object):
             maximum_current=10,
             standby_current=0,
             mixed_decay_threshold=-1,
+            encoder_prescaler=6400,
         )
         self.setResolution(16)
         
@@ -35,9 +41,7 @@ class MFC1(object):
         assert res in 2**np.arange(7)
         res = int(np.log2(res))
         
-        self.mcm.set_params(
-            microstep_resolution=res,
-            encoder_prescaler=int(100 * 2**res)
+        self.mcm['microstep_resolution'] = res
         )
         
     def position(self):

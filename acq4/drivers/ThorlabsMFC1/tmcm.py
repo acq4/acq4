@@ -53,8 +53,37 @@ COMMANDS = {
     
     'sio': 14,
     'gio': 15,
+    
+    'calc': 19,
+    'comp': 20,
+    'jc': 21,
+    'ja': 22,
+    'csub': 23,
+    'rsub': 24,
+    'wait': 27,
+    'stop': 28,
+    'sco': 30,
+    'gco': 31,
+    'cco': 32,
+    'calcx': 33,
+    'aap': 34,
+    'agp': 35,
+    'aco': 39,
+    
     'sac': 29,
+    
+    'stop_application': 128,
+    'run_application': 129,
+    'step_application': 130,
+    'reset_application': 131,
+    'start_download': 132,
+    'stop_download': 133,
+    'get_application_status': 135,
+    'get_firmware_version': 136,
+    'restore_factory_settings': 137,    
 }
+
+
 
 PARAMETERS = {    # negative values indicate read-only parameters
     'target_position': 0,
@@ -96,6 +125,37 @@ PARAMETERS = {    # negative values indicate read-only parameters
 }
 
 
+GLOBAL_PARAMETERS = {
+    'eeprom_magic': 64,
+    'baud_rate': 65,
+    'serial_address': 66,
+    'ascii_mode': 67,
+    'eeprom_lock': 73,
+    'auto_start_mode': 77,
+    'tmcl_code_protection': 81,
+    'coordinate_storage': 84,
+    'tmcl_application_status': 128,
+    'download_mode': 129,
+    'tmcl_program_counter': 130,
+    'tick_timer': 132,
+    'random_number': -133,
+}
+
+
+OPERATORS = {
+    'add': 0,
+    'sub': 1,
+    'mul': 2,
+    'div': 3,
+    'mod': 4,
+    'and': 5,
+    'or': 6,
+    'xor': 7,
+    'not': 8,
+    'load': 9,
+}
+
+
 STATUS = {
     1: "Wrong checksum",
     2: "Invalid command",
@@ -132,11 +192,126 @@ class TMCM140(SerialDevice):
         SerialDevice.__init__(self, port=self.port, baudrate=baudrate)
 
     @threadsafe
-    def command(self, cmd, type, motor, value, block=True):
-        """Send a command to the controller.
+    def command(self, cmd, type, motor, value):
+        """Send a command to the controller and return the reply.
         
-        If block is True, then wait until the controller becomes available if
-        it is currently busy.
+        If an error is returned from the controller then raise an exception.
+        """
+        self._send_cmd(cmd, type, motor, value)
+        return self._get_reply()
+   
+    def rotate(self, velocity):
+        """Begin rotating motor.
+        
+        velocity: -2047 to +2047
+                  negative values turn left; positive values turn right.
+        """
+        assert isinstance(velocity, int)        
+        assert -2047 <= velocity <= 2047
+        if velocity < 0:
+            direction = 'l'
+            velocity = -velocity
+        else:
+            direction = 'r'
+        self.command('ro'+direction, 0, 0, velocity)
+
+    def stop(self):
+        """Stop the motor.
+        
+        Note: does not stop currently running programs.
+        """
+        self.command('mst', 0, 0, 0)
+        
+    def move(self, pos, relative=False, velocity=None):
+        """Rotate until reaching *pos*.
+        
+        pos: The target position
+        relative: If True, then *pos* is interpreted as relative to the current 
+                  position
+        velocity: Optionally set the target velocity before moving 
+        """
+        assert isinstance(pos, int)
+        assert -2**32 <= pos < 2**32
+        if velocity is not None:
+            assert isinstance(velocity, int) 
+            assert 0 <= velocity < 2048
+            raise NotImplementedError()
+        
+        type = 1 if relative else 0
+        self.command('mvp', type, 0, pos)
+        
+    def get_param(self, param):
+        pnum = abs(PARAMETERS[param])
+        return self.command('gap', pnum, 0, 0)[4]
+        
+    def __getitem__(self, param):
+        return self.get_param(param)
+        
+    def set_param(self, param, value, **kwds):
+        pnum = PARAMETERS[param]
+        if pnum < 0:
+            raise TypeError("Parameter %s is read-only." % param)
+        if pnum == PARAMETERS['maximum_current'] and value > 100:
+            if kwds.get('force', False) is not True:
+                raise Exception("Refusing to set max_current > 100 (this can damage the motor). "
+                                "To override, use force=True.")
+        self.command('sap', pnum, 0, value)
+
+    @threadsafe
+    def set_params(self, **kwds):
+        """Set multiple parameters.
+        
+        The driver is thread-locked until all parameters are set.
+        """
+        for param, value in kwds.values():
+            self.set_param(param, value)
+        
+    def __setitem__(self, param, value):
+        return self.set_param(param, value)
+
+    def get_global(self, param):
+        pnum = abs(GLOBAL_PARAMETERS[param])
+        return self.command('ggp', pnum, 0, 0)[4]
+        
+    def set_global(self, param, value):
+        pnum = GLOBAL_PARAMETERS[param]
+        if pnum < 0:
+            raise TypeError("Parameter %s is read-only." % param)
+        self.command('sgp', pnum, 0, value)
+            
+    def stop_program(self):
+        """Stop the currently running TMCL program.
+        """
+        self.command('stop_application', 0, 0, 0)
+
+    def start_program(self, address=None):
+        """Start running TMCL program code from the given address (in bytes?), 
+        or from the current address if None.
+        """
+        if address is None:
+            self.command('run_application', 0, 0, 0)
+        else:
+            self.command('run_application', 1, 0, address)
+        
+    def start_download(self, address=0):
+        """Begin loading TMCL commands into EEPROM .
+        """
+        self.command('start_download', 0, 0, address)
+        
+    def stop_download(self):
+        """Finish loading TMCL commands into EEPROM.
+        """
+        self.command('stop_download', 0, 0, 0)
+        
+    def program_status(self):
+        """Return current program status:
+        
+        0=stop, 1=run, 2=step, 3=reset
+        """
+        return self.command('get_application_status', 0, 0, 0)[4]
+        
+    def _send_cmd(self, cmd, type, motor, value):
+        """Send a command to the controller.
         """
         if self._waiting_for_reply:
             raise Exception("Cannot send command; previous reply has not been "
@@ -157,8 +332,7 @@ class TMCM140(SerialDevice):
         self.write(cmd + struct.pack('B', chksum))
         self._waiting_for_reply = True
         
-    @threadsafe
-    def get_reply(self):
+    def _get_reply(self):
         """Read and parse a reply from the controller.
         
         Raise an exception if an error was reported.
@@ -184,78 +358,9 @@ class TMCM140(SerialDevice):
             raise TMCMError(status)        
         
         return parts
-        
-    @threadsafe
-    def rotate(self, velocity):
-        """Begin rotating motor.
-        
-        velocity: -2047 to +2047
-                  negative values turn left; positive values turn right.
-        """
-        assert isinstance(velocity, int)        
-        assert -2047 <= velocity <= 2047
-        if velocity < 0:
-            direction = 'l'
-            velocity = -velocity
-        else:
-            direction = 'r'
-        self.command('ro'+direction, 0, 0, velocity)
-        self.get_reply()
-
-    @threadsafe
-    def stop(self):
-        self.command('mst', 0, 0, 0)
-        self.get_reply()
-        
-    @threadsafe
-    def move(self, pos, relative=False, velocity=None):
-        """Rotate until reaching *pos*.
-        
-        pos: The target position
-        relative: If True, then *pos* is interpreted as relative to the current 
-                  position
-        velocity: Optionally set the target velocity before moving 
-        """
-        assert isinstance(pos, int)
-        assert -2**32 <= pos < 2**32
-        if velocity is not None:
-            assert isinstance(velocity, int) 
-            assert 0 <= velocity < 2048
-            raise NotImplementedError()
-        
-        type = 1 if relative else 0
-        self.command('mvp', type, 0, pos)
-        self.get_reply()
-        
-    @threadsafe
-    def get_param(self, param):
-        pnum = abs(PARAMETERS[param])
-        self.command('gap', pnum, 0, 0)
-        return self.get_reply()[4]
-        
-    def __getitem__(self, param):
-        return self.get_param(param)
-        
-    @threadsafe
-    def set_param(self, param, value, **kwds):
-        pnum = PARAMETERS[param]
-        if pnum < 0:
-            raise TypeError("Parameter %s is read-only." % param)
-        if pnum == PARAMETERS['maximum_current'] and value > 100:
-            if kwds.get('force', False) is not True:
-                raise Exception("Refusing to set max_current > 100 (this can damage the motor). "
-                                "To override, use force=True.")
-        self.command('sap', pnum, 0, value)
-        self.get_reply()
-
-    @threadsafe
-    def set_params(self, **kwds):
-        for param, value in kwds.values():
-            self.set_param(param, value)
-        
-    def __setitem__(self, param, value):
-        return self.set_param(param, value)
+   
     
+        
     
 if __name__ == '__main__':
     import time
@@ -273,10 +378,11 @@ if __name__ == '__main__':
         s['mixed_decay_threshold'] = decay_threshold
         s['stall_detection_threshold'] = 0
         plt = pg.plot()
-        for res in range(8):
+        for res in range(7):
             x = []
             s['microstep_resolution'] = res
-            s['encoder_prescaler'] = int(2**res * 100)
+            #s['encoder_prescaler'] = int(2**res * 100)
+            s['encoder_prescaler'] = 6400
             for i in range(150):
                 s.move(1, relative=True)
                 while s['target_pos_reached'] == 0:
@@ -300,24 +406,43 @@ if __name__ == '__main__':
 
     def test_seek():
         global x, t
-        ures = 3
+        ures = 6
+        s.stop()
         s['microstep_resolution'] = ures
-        s['encoder_prescaler'] = int(2**ures * 100)
+        s['encoder_prescaler'] = 8192
+        s['encoder_position'] = 0
         s['standby_current'] = 0
         s['maximum_speed'] = 50
+        s['power_down_delay'] = 1200
+        #s['freewheeling'] = 1000
+        #s['actual_position'] = 0
         
-        s.move(1000, relative=True)
+        s.move(600, relative=True)
         start = time.time()
         t = []
         x = []
         while True:
             now = time.time()
             if now - start > 3:
+                print "QUIT"
                 break
             t.append(now-start)
             x.append(s['encoder_position'])
             
         pg.plot(t, x)
         
-    step_curve()
+    def test_encoder():
+        plt = pg.plot()
+        data = []
+        while True:
+            data.append(s['encoder_position'])
+            if len(data) > 100:
+                data.pop(0)
+            plt.plot(data, clear=True)
+            pg.QtGui.QApplication.processEvents()
+
+        
+    #step_curve()
     #test_seek()
+
+        
