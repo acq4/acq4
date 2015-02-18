@@ -32,18 +32,6 @@ class MFC1(object):
         )
         self.setResolution(16)
         
-    def setResolution(self, res):
-        """Set the microstep resolution of the motor.
-        
-        Must be 1, 2, 4, 8, 16, 32, or 64. Note that higher values have highly 
-        irregular step sizes, but may result in smoother rotation.
-        """
-        assert res in 2**np.arange(7)
-        res = int(np.log2(res))
-        
-        self.mcm['microstep_resolution'] = res
-        )
-        
     def position(self):
         """Return the current encoder position.
         """
@@ -56,4 +44,14 @@ class MFC1(object):
         whether the move is complete.
         """
         
+if __name__ == '__main__':
+    m = MFC1('/dev/ttyACM0')
+    m.mcm.start_download()
+    m.mcm.command('ror', 0, 0, 100)
+    m.mcm.command('wait', 0, 0, 1000)
+    m.mcm.command('stop', 0, 0, 0)
+    m.mcm.stop_download()
+    
         
+    
+    
