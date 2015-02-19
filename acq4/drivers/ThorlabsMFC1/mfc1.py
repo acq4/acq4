@@ -29,7 +29,7 @@ class MFC1(object):
             standby_current=0,
             mixed_decay_threshold=-1,
             encoder_prescaler=8192,
-            microstep_resolution=6,
+            microstep_resolution=5,
         )
         
     def position(self):

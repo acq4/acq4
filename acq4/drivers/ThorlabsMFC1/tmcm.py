@@ -153,6 +153,22 @@ OPERATORS = {
     'xor': 7,
     'not': 8,
     'load': 9,
+    'swap': 10,
+}
+
+
+CONDITIONS = {
+    'ze': 0,
+    'nz': 1, 
+    'eq': 2,
+    'ne': 3,
+    'gt': 4,
+    'ge': 5,
+    'lt': 6,
+    'le': 7,
+    'eto': 8,
+    'eal': 9,
+    'esd': 12,
 }
 
 
@@ -248,6 +264,11 @@ class TMCM140(SerialDevice):
         return self.get_param(param)
         
     def set_param(self, param, value, **kwds):
+        """Set a parameter value.
+        
+        If valus is 'accum' then the parameter is set from the accumulator
+        register.
+        """
         pnum = PARAMETERS[param]
         if pnum < 0:
             raise TypeError("Parameter %s is read-only." % param)
@@ -255,7 +276,10 @@ class TMCM140(SerialDevice):
             if kwds.get('force', False) is not True:
                 raise Exception("Refusing to set max_current > 100 (this can damage the motor). "
                                 "To override, use force=True.")
-        self.command('sap', pnum, 0, value)
+        if value == 'accum':
+            self.command('aap', pnum, 0, 0)
+        else:
+            self.command('sap', pnum, 0, value)
 
     @threadsafe
     def set_params(self, **kwds):
@@ -303,12 +327,48 @@ class TMCM140(SerialDevice):
         """
         self.command('stop_download', 0, 0, 0)
         
+    def write_program(self, address=0):
+        return ProgramManager(self, address)
+        
     def program_status(self):
         """Return current program status:
         
         0=stop, 1=run, 2=step, 3=reset
         """
         return self.command('get_application_status', 0, 0, 0)[4]
+        
+    def calc(self, op, value):
+        opnum = OPERATORS[op]
+        if opnum > 9:
+            raise TypeError("Operator %s invalid for calc" % op)
+        self.command('calc', opnum, 0, value)
+
+    def calcx(self, op, value):
+        opnum = OPERATORS[op]
+        self.command('calcx', opnum, 0, value)
+
+    def comp(self, val):
+        self.command('comp', 0, 0, val)
+        
+    def compx(self, val):
+        self.command('compx', 0, 0, val)
+        
+    def jump(self, *args):
+        """Program jump to *addr* (instruction index).
+        
+        Usage: 
+        
+            jump(address)
+            jump(cond, address)
+            
+        Where *cond* may be ze, nz, eq, ne, gt, ge, lt, le, eto, eal, or esd.
+        """
+        if len(args) == 1:
+            assert isinstance(args[0], int)
+            self.command('ja', 0, 0, args[0])
+        else:
+            cnum = CONDITIONS[args[0]]
+            self.command('jc', cnum, 0, args[1])
         
     def _send_cmd(self, cmd, type, motor, value):
         """Send a command to the controller.
@@ -359,4 +419,21 @@ class TMCM140(SerialDevice):
         
         return parts
    
-    
+
+class ProgramManager(object):
+    def __init__(self, mcm, start=0):
+        self.mcm = mcm
+        self.start = start
+        
+    def __enter__(self):
+        self.mcm.start_download(self.start)
+        return self
+        
+    def __exit__(self, *args):
+        # insert an extra stop to ensure the program can't leak
+        # into previously written code.
+        self.mcm.command('stop', 0, 0, 0)
+        self.mcm.stop_download()
+        
+
+

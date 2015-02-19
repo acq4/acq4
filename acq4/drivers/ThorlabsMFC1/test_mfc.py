@@ -10,29 +10,53 @@ if len(sys.argv) < 2:
     print "Usage:  python test.py device\n  (device may be com3, /dev/ttyACM0, etc.)"
     sys.exit(1)
 
-m = MFC1(sys.argv[1])
+mfc = MFC1(sys.argv[1])
 
-m.mcm.stop_program()
-m.mcm.stop()
+m = mfc.mcm
+m.stop_program()
+m.stop()
+m['encoder_position'] = 0
+
 
 i = 0
-m.mcm.start_download(0)
-#m.mcm.command('wait', 0, 0, i)
-#m.mcm.rotate(100)
-#m.mcm.command('wait', 0, 0, i)
-#m.mcm.stop()
-#m.mcm.command('wait', 0, 0, i)
-m.mcm.move(1000, relative=True)
-m.mcm.command('wait', 1, 0, 0)
-m.mcm.move(-1000, relative=True)
-m.mcm.command('wait', 1, 0, 0)
+with m.write_program():
+    # start with a brief wait because sometimes the first command may be ignored.
+    m.command('wait', 0, 0, 1)    
+    m.get_param('encoder_position')
+    m.calc('sub', 10000)
+    m.comp(-4000)
+    m.jump('gt', 7)
+    m.set_param('target_speed', 2000)
+    m.jump(1)
+    
+    m.comp(-100)
+    m.jump('gt', 12)
+    m.calc('mul', -1)
+    m.set_param('target_speed', 'accum')
+    m.jump(1)
+
+    m.calc('div', -2)
+    m.set_param('target_speed', 'accum')
+    m.jump(1)
 
 
-m.mcm.command('ja', 0, 0, 0)
-#m.mcm.command('stop', 0, 0, 0) 
-m.mcm.stop_download()
+plt = pg.plot()
+data = []
+t= []
+start = time.time()
+started = False
+while True:
+    now = time.time()
+    if not started and now - start > 0.2:
+        m.start_program(0)
+        started = True
+    if now - start > 1.5:
+        break
+    data.append(m['encoder_position'])
+    t.append(now-start)
+plt.plot(t, data, clear=True)
 
-m.mcm.start_program(0)
-#time.sleep(2)
-#m.mcm.stop_program()
-#m.mcm.stop()
+
+time.sleep(1.5)
+m.stop_program()
+m.stop()
