@@ -1,5 +1,5 @@
 import sys
-sys.path.append('..\..\util')
+sys.path.append('..\\..\\..\\')
 
 import pvcam
 import atexit
