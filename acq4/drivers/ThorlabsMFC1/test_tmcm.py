@@ -79,13 +79,30 @@ def test_seek():
     
 def test_encoder():
     plt = pg.plot()
-    data = []
+    pos = []
     while True:
-        data.append(s['encoder_position'])
-        if len(data) > 100:
-            data.pop(0)
-        plt.plot(data, clear=True)
+        pos.append(s['encoder_position'])
+        while len(pos) > 300:
+            pos.pop(0)
+        plt.plot(pos, clear=True)
         pg.QtGui.QApplication.processEvents()
+
+
+def test_load():
+    plt = pg.plot()
+    load = []
+    s['mixed_decay_threshold'] = 2047
+    s.rotate(200)
+    
+    def update():
+        load.append(s['actual_load_value'])
+        while len(load) > 300:
+            load.pop(0)
+        plt.plot(load, clear=True)
+    global t
+    t = pg.QtCore.QTimer()
+    t.timeout.connect(update)
+    t.start(0)
 
     
 #step_curve()

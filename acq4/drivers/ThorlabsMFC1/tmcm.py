@@ -294,14 +294,32 @@ class TMCM140(SerialDevice):
         return self.set_param(param, value)
 
     def get_global(self, param):
-        pnum = abs(GLOBAL_PARAMETERS[param])
-        return self.command('ggp', pnum, 0, 0)[4]
+        """Return a global parameter or copy global to accumulator.
+        
+        Use param='gpX' to refer to general-purpose variables.
+        """
+        if param.startswith('gp'):
+            pnum = int(param[2:])
+            bank = 2
+        else:
+            pnum = abs(GLOBAL_PARAMETERS[param])
+            bank = 0
+        return self.command('ggp', pnum, bank, 0)[4]
         
     def set_global(self, param, value):
-        pnum = GLOBAL_PARAMETERS[param]
+        if param.startswith('gp'):
+            pnum = int(param[2:])
+            bank = 2
+        else:
+            pnum = GLOBAL_PARAMETERS[param]
+            bank = 0
         if pnum < 0:
             raise TypeError("Parameter %s is read-only." % param)
-        self.command('sgp', pnum, 0, value)
+        
+        if value == 'accum':
+            self.command('agp', pnum, bank, 0)
+        else:
+            self.command('sgp', pnum, bank, value)
             
     def stop_program(self):
         """Stop the currently running TMCL program.
@@ -343,15 +361,12 @@ class TMCM140(SerialDevice):
             raise TypeError("Operator %s invalid for calc" % op)
         self.command('calc', opnum, 0, value)
 
-    def calcx(self, op, value):
+    def calcx(self, op):
         opnum = OPERATORS[op]
-        self.command('calcx', opnum, 0, value)
+        self.command('calcx', opnum, 0, 0)
 
     def comp(self, val):
         self.command('comp', 0, 0, val)
-        
-    def compx(self, val):
-        self.command('compx', 0, 0, val)
         
     def jump(self, *args):
         """Program jump to *addr* (instruction index).
@@ -389,7 +404,8 @@ class TMCM140(SerialDevice):
             cmd = struct.pack('>BBBBi', self.module_addr, cmd_num, type, motor, value)
             
         chksum = sum(bytearray(cmd)) % 256
-        self.write(cmd + struct.pack('B', chksum))
+        out = cmd + struct.pack('B', chksum)
+        self.write(out)
         self._waiting_for_reply = True
         
     def _get_reply(self):
@@ -424,6 +440,7 @@ class ProgramManager(object):
     def __init__(self, mcm, start=0):
         self.mcm = mcm
         self.start = start
+        self.count = 0
         
     def __enter__(self):
         self.mcm.start_download(self.start)
@@ -435,5 +452,7 @@ class ProgramManager(object):
         self.mcm.command('stop', 0, 0, 0)
         self.mcm.stop_download()
         
-
+    def __getattr__(self, name):
+        self.count += 1
+        return getattr(self.mcm, name)
 

@@ -12,51 +12,45 @@ if len(sys.argv) < 2:
 
 mfc = MFC1(sys.argv[1])
 
-m = mfc.mcm
-m.stop_program()
-m.stop()
-m['encoder_position'] = 0
+print "pos:", mfc.position()
 
+win = pg.GraphicsWindow()
+p1 = win.addPlot(title='position')
+p2 = win.addPlot(title='speed', row=1, col=0)
+p3 = win.addPlot(title='target speed', row=2, col=0)
+p4 = win.addPlot(title='distance', row=3, col=0)
+p2.setXLink(p1)
+p3.setXLink(p1)
+p4.setXLink(p1)
 
-i = 0
-with m.write_program():
-    # start with a brief wait because sometimes the first command may be ignored.
-    m.command('wait', 0, 0, 1)    
-    m.get_param('encoder_position')
-    m.calc('sub', 10000)
-    m.comp(-4000)
-    m.jump('gt', 7)
-    m.set_param('target_speed', 2000)
-    m.jump(1)
-    
-    m.comp(-100)
-    m.jump('gt', 12)
-    m.calc('mul', -1)
-    m.set_param('target_speed', 'accum')
-    m.jump(1)
-
-    m.calc('div', -2)
-    m.set_param('target_speed', 'accum')
-    m.jump(1)
-
-
-plt = pg.plot()
-data = []
-t= []
+t = []
+x = []
+v = []
+vt = []
+dx = []
+dxt = []
 start = time.time()
 started = False
 while True:
     now = time.time()
+    pos = mfc.position()
     if not started and now - start > 0.2:
-        m.start_program(0)
+        move = pos + 20000
+        print "move:", move
+        mfc.move(move)
         started = True
-    if now - start > 1.5:
+    if now - start > 2:
         break
-    data.append(m['encoder_position'])
     t.append(now-start)
-plt.plot(t, data, clear=True)
+    x.append(pos)
+    v.append(mfc.mcm['actual_speed'])
+    vt.append(mfc.mcm['target_speed'])
+    dx.append(mfc.mcm.get_global('gp1'))
+    dxt.append(mfc.mcm.get_global('gp2'))
+p1.plot(t, x, clear=True)
+p2.plot(t, v, clear=True)
+p3.plot(t, vt, clear=True)
+p4.plot(t, dx, clear=True)
+p4.plot(t, dxt, pen='g')
 
-
-time.sleep(1.5)
-m.stop_program()
-m.stop()
+print "Final:", mfc.position()
