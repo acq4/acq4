@@ -33,7 +33,7 @@ LIB = CLibrary(windll.Pvcam32, HEADERS, prefix='pl_')
 
 cameraDefaults = {
     'ALL': [
-        ('PMODE', LIB.PMODE_NORMAL),  ## PMODE_FT ?
+        #('PMODE', LIB.PMODE_NORMAL),  ## PMODE_FT ?
         ('SHTR_OPEN_MODE', LIB.OPEN_PRE_SEQUENCE),
         ('CLEAR_MODE', LIB.CLEAR_PRE_EXPOSURE),
         ('CLEAR_CYCLES', 2),
@@ -447,6 +447,7 @@ class _CameraClass:
             return self.setParams(zip(self.groupParams[paramName], value))
         
         ## If this is an enum parameter, convert string values to int before setting
+
         if paramName in self.enumTable:
             if isinstance(value, basestring):
                 strVal = value

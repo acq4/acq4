@@ -18,9 +18,11 @@ class NiDAQTask(TaskGui):
         self.ignorePeriod = False
         self.ignoreRate = False
         self.rate = 40e3
+
+        self._block_update = False # use to block signal emission during bulk updates
+
         self.updateNPts()
         self.updateDevList()
-        #self.devs = []
         self.ui.rateSpin.setOpts(dec=True, step=0.5, minStep=10, bounds=[1,None], siPrefix=True, suffix='Hz')
         self.ui.periodSpin.setOpts(dec=True, step=0.5, minStep=1e-6, bounds=[1e-6,None], siPrefix=True, suffix='s')
         self.ui.besselCutoffSpin.setOpts(value=20e3, dec=True, step=0.5, minStep=10, bounds=[1,None], siPrefix=True, suffix='Hz')
@@ -46,8 +48,6 @@ class NiDAQTask(TaskGui):
             (self.ui.butterworthBidirCheck, 'butterworthBidirectional'),
         ])
         
-        
-        
         self.ui.rateSpin.valueChanged.connect(self.rateChanged)
         self.ui.periodSpin.sigValueChanging.connect(self.updateRateSpin)
         self.ui.rateSpin.sigValueChanging.connect(self.updatePeriodSpin)
@@ -68,25 +68,15 @@ class NiDAQTask(TaskGui):
         return self.stateGroup.state()
         
     def restoreState(self, state):
-        
+        block = self._block_update
         try:
-            #if 'rate' in state:
-                #if 'downsample' in state:
-                    #self.ui.downsampleSpin.setValue(state['downsample'])
-                #self.ui.rateSpin.setValue(state['rate'] / 1000.)
-                ##print "trigger dev:", state['triggerDevice']
-                ##print self.devs
-                #if 'triggerDevice' in state and state['triggerDevice'] in self.devs:
-                    #self.ui.triggerDevList.setCurrentIndex(self.devs.index(state['triggerDevice'])+1)
-                    ##print "Set index to", self.devs.index(state['triggerDevice'])+1
-                #else:
-                    #self.ui.triggerDevList.setCurrentIndex(0)
-                    ##print "No index"
-            #else:
+            self._block_update = True
             self.stateGroup.setState(state)
-        except:
-            #sys.excepthook(*sys.exc_info())
+        except Exception:
             printExc("Error while loading DAQ task GUI configuration (proceeding with default configuration) :")
+        finally:
+            self._block_update = block
+            self.stateChanged()
         
     def generateTask(self, params=None):
         task = self.currentState()
@@ -140,13 +130,14 @@ class NiDAQTask(TaskGui):
     def rateChanged(self):
         self.rate = self.ui.rateSpin.value()
         self.updateNPts()
-        self.sigChanged.emit(self.currentState())
+        # self.sigChanged.emit(self.currentState())
         
     def stateChanged(self):
+        if self._block_update:
+            return
         self.sigChanged.emit(self.currentState())
         
     def taskChanged(self, n, v):
-        #print "caught task change", n, v
         if n == 'duration':
             self.updateNPts()
             self.sigChanged.emit(self.currentState())
@@ -166,19 +157,11 @@ class NiDAQTask(TaskGui):
         ## select out devices which have trigger channel to this DAQ
         self.devs = [d.name() for d in allDevs if d.getTriggerChannel(self.dev.name()) is not None]
             
-            
         self.ui.triggerDevList.clear()
         self.ui.triggerDevList.addItem('No Trigger')
         
         for d in self.devs:
-            #print d, self.dev.name
-            #dev = self.dev.dm.getDevice(d)
-            #if dev.getTriggerChannel(self.dev.name) is not None:
-                #print "------"
             self.ui.triggerDevList.addItem(d)
-        #for p in self.dev.listTriggerPorts():
-            #self.ui.triggerDevList.addItem(p)
-        ## Add list of triggerable port names here?
             
     def updateDenoiseCtrl(self):
         denoise = self.ui.denoiseCombo.currentText()

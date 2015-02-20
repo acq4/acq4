@@ -129,6 +129,7 @@ class Manager(QtCore.QObject):
     sigBaseDirChanged = QtCore.Signal()
     sigLogDirChanged = QtCore.Signal(object) #dir
     sigTaskCreated = QtCore.Signal(object, object)  ## for debugger module
+    sigAbortAll = QtCore.Signal()  # User requested abort all tasks via ESC key
     
     CREATED = False
     single = None
@@ -261,9 +262,12 @@ class Manager(QtCore.QObject):
         #print "active window:", win
         self.quitShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+q'), win)
         self.quitShortcut.setContext(QtCore.Qt.ApplicationShortcut)
+        self.abortShortcut = QtGui.QShortcut(QtGui.QKeySequence('Esc'), win)
+        self.abortShortcut.setContext(QtCore.Qt.ApplicationShortcut)
         self.reloadShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+r'), win)
         self.reloadShortcut.setContext(QtCore.Qt.ApplicationShortcut)
         self.quitShortcut.activated.connect(self.quit)
+        self.abortShortcut.activated.connect(self.sigAbortAll)
         self.reloadShortcut.activated.connect(self.reloadAll)
     
         

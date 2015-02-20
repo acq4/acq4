@@ -91,7 +91,7 @@ class MonitorThread(Thread):
             self.interval = i
 
     def run(self):
-        minInterval = 100e-6
+        minInterval = 10e-3
         interval = minInterval
         while True:
             try:

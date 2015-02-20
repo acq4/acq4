@@ -15,13 +15,17 @@ from .Manager import *
 from numpy import *
 
 # Pull some args out
-try:
-    ind = sys.argv.index('--profile')
-except ValueError:
-    profile = False
-else:
+if "--profile" in sys.argv:
     profile = True
-    sys.argv.pop(ind)    
+    sys.argv.pop(sys.argv.index('--profile'))
+else:
+    profile = False
+if "--callgraph" in sys.argv:
+    callgraph = True
+    sys.argv.pop(sys.argv.index('--callgraph'))
+else:
+    callgraph = False
+
 
 ## Enable stack trace output when a crash is detected
 from .util.debug import enable_faulthandler
@@ -104,9 +108,16 @@ else:
     if profile:
         import cProfile
         cProfile.run('app.exec_()', sort='cumulative')    
+        pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
+                   # this avoids otherwise irritating exit crashes.
+    elif callgraph:
+        from pycallgraph import PyCallGraph
+        from pycallgraph.output import GraphvizOutput
+        with PyCallGraph(output=GraphvizOutput()):
+            app.exec_()
     else:
         app.exec_()
-    pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
-               # this avoids otherwise irritating exit crashes.
+        pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
+                   # this avoids otherwise irritating exit crashes.
     
     
