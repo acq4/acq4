@@ -5,6 +5,8 @@ from acq4.util.Mutex import Mutex
 import acq4.pyqtgraph as pg
 
 class Stage(Device, OptomechDevice):
+    """Base class for mechanical stages with motorized control and/or position feedback.
+    """
 
     sigPositionChanged = QtCore.Signal(object)
 
@@ -15,7 +17,7 @@ class Stage(Device, OptomechDevice):
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.pos = [0]*3
         
-        self.scale = config.get('scale', None) ## Allow config to apply extra scale factor
+        # self.scale = config.get('scale', None) ## Allow config to apply extra scale factor
         
         dm.declareInterface(name, ['stage'], self)
 
@@ -23,19 +25,21 @@ class Stage(Device, OptomechDevice):
         pass
 
     def posChanged(self, pos):
-        """
-        Called whenever the position of the stage has changed.
-        (subclasses must handle calling this method)
+        """Handle device position changes by updating the device transform and
+        emitting sigPositionChanged.
+
+        Subclasses must call this method when the device position has changed.
         """
         with self.lock:
             rel = [0] * len(self.pos)
             rel[:len(pos)] = [pos[i] - self.pos[i] for i in range(len(pos))]
             self.pos[:len(pos)] = pos
-        self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
         
         tr = pg.SRTTransform3D()
         tr.translate(*self.pos)
         self.setDeviceTransform(tr) ## this informs rigidly-connected devices that they have moved
+
+        self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
 
     def getPosition(self, refresh=False):
         """
@@ -67,7 +71,6 @@ class Stage(Device, OptomechDevice):
         """
         raise NotImplementedError()
 
-
     def moveTo(self, pos, speed, block=True, timeout = 10.):
         """Move by the absolute position. 
         pos must be a sequence (dx, dy, dz) with values in meters.
@@ -94,7 +97,6 @@ class StageInterface(QtGui.QWidget):
 
         self.win = win
         self.dev = dev
-        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.update)
         self.dev.sigPositionChanged.connect(self.update)
         self.update()
         

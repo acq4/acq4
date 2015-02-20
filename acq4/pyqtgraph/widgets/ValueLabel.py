@@ -56,7 +56,6 @@ class ValueLabel(QtGui.QLabel):
     def averageValue(self):
         return reduce(lambda a,b: a+b, [v[1] for v in self.values]) / float(len(self.values))
         
-        
     def paintEvent(self, ev):
         self.setText(self.generateText())
         return QtGui.QLabel.paintEvent(self, ev)
