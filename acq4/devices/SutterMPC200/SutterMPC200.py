@@ -79,7 +79,7 @@ class MonitorThread(Thread):
         self.dev = dev
         self.lock = Mutex(recursive=True)
         self.stopped = False
-        self.interval = 0.1
+        self.interval = 0.3
         Thread.__init__(self)
 
     def start(self):
@@ -95,7 +95,7 @@ class MonitorThread(Thread):
             self.interval = i
 
     def run(self):
-        minInterval = 10e-3
+        minInterval = 100e-3
         interval = minInterval
         while True:
             try:

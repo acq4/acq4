@@ -20,6 +20,12 @@ class ThorlabsMFC1(Stage):
         self.dev = MFC1_Driver(self.port)
         man.sigAbortAll.connect(self.dev.stop)
 
+        # Optionally use ROE-200 z axis to control focus
+        roe = config.pop('roe', None)
+        if roe is not None:
+            dev = man.getDevice(roe)
+            dev.sigPositionChanged.connect(self._roeChanged)
+
         self._lastPos = None
 
         Stage.__init__(self, man, config, name)
@@ -28,7 +34,6 @@ class ThorlabsMFC1(Stage):
 
         self._monitor = MonitorThread(self)
         self._monitor.start()
-
 
     def mfcPosChanged(self, pos, oldpos):
         self.posChanged(pos)
@@ -53,13 +58,16 @@ class ThorlabsMFC1(Stage):
         self._monitor.stop()
         Stage.quit(self)
 
+    def _roeChanged(self, change):
+        self.moveBy(change['rel'])
+
 
 class MonitorThread(Thread):
     def __init__(self, dev):
         self.dev = dev
         self.lock = Mutex(recursive=True)
         self.stopped = False
-        self.interval = 0.1
+        self.interval = 0.3
         Thread.__init__(self)
 
     def start(self):
@@ -75,7 +83,7 @@ class MonitorThread(Thread):
             self.interval = i
 
     def run(self):
-        minInterval = 10e-3
+        minInterval = 100e-3
         interval = minInterval
         lastPos = None
         while True:
