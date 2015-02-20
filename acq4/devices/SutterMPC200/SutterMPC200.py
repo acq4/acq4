@@ -29,6 +29,7 @@ class SutterMPC200(Stage):
         self.drive = config.pop('drive')
         self.dev = MPC200_Driver.getDevice(self.port)
         self._notifier.sigPosChanged.connect(self.mpc200PosChanged)
+        man.sigAbortAll.connect(self.stop)
 
         Stage.__init__(self, man, config, name)
 
@@ -39,6 +40,9 @@ class SutterMPC200(Stage):
         if self._monitor is None:
             self._monitor = MonitorThread(self)
             self._monitor.start()
+
+    def stop(self):
+        self.dev.stop(self.drive)
 
     def checkPositionChange(self, drive=None, pos=None):
         ## Anyone may call this function; if any drive has changed position, 

@@ -199,6 +199,17 @@ class SutterMPC200(SerialDevice):
         
         # watch for updates
 
+    @threadsafe
+    @resetDrive
+    def stop(self, drive):
+        """Stop moving *drive*
+        """
+        if drive is not None:
+            self.setDrive(drive)
+            self.write('\3')
+            self.read(1, term='\r')
+
+
 
 
         
