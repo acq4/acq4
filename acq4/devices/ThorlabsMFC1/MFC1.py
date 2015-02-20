@@ -26,6 +26,9 @@ class ThorlabsMFC1(Stage):
             dev = man.getDevice(roe)
             dev.sigPositionChanged.connect(self._roeChanged)
 
+        # Optionally read limits from config
+        self.limits = config.pop('limits', (None, None))
+
         self._lastPos = None
 
         Stage.__init__(self, man, config, name)
@@ -52,14 +55,21 @@ class ThorlabsMFC1(Stage):
         self.moveTo(cpos, speed)
 
     def moveTo(self, pos, speed=None):
-        self.dev.move(pos[2] / self.scale[2])
+        z = pos[2]
+        if z < self.limits[0]:
+            z = self.limits[0]
+        if z > self.limits[1]:
+            z = self.limits[1]
+        self.dev.move(z / self.scale[2])
 
     def quit(self):
         self._monitor.stop()
         Stage.quit(self)
 
     def _roeChanged(self, change):
-        self.moveBy(change['rel'])
+        target = self.dev.target_position() * self.scale[2]
+        target += change['rel'][2]
+        self.moveTo([0, 0, target])
 
 
 class MonitorThread(Thread):

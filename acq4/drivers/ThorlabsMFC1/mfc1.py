@@ -116,6 +116,17 @@ class MFC1(object):
         """
         return self.mcm['encoder_position']
     
+    def target_position(self):
+        """Return the final target position if the motor is currently moving
+        to a specific position.
+
+        If the motor is stopped or freely rotating, return the current position.
+        """
+        if self.program_running():
+            return self.mcm.get_global('gp0')
+        else:
+            return self.position()
+
     def move(self, position, block=False):
         """Move to the requested position.
         
@@ -123,7 +134,8 @@ class MFC1(object):
         whether the move is complete.
         """
         self.mcm.set_global('gp0', position)
-        self.mcm.start_program()
+        if not self.program_running():
+            self.mcm.start_program()
         
     def rotate(self, speed):
         """Begin rotating at *speed*. Positive values turn right.
@@ -137,3 +149,6 @@ class MFC1(object):
         """
         self.mcm.stop_program()
         self.mcm.stop()
+
+    def program_running(self):
+        return self.mcm.get_global('tmcl_application_status') == 1
