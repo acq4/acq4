@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
-from ..Stage import Stage
+from ..Stage import Stage, StageInterface
 from acq4.drivers.ThorlabsMFC1 import MFC1 as MFC1_Driver
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
@@ -17,14 +17,20 @@ class ThorlabsMFC1(Stage):
 
     def __init__(self, man, config, name):
         self.port = config.pop('port')
+        self.scale = config.pop('scale', (1, 1, 1))
         self.dev = MFC1_Driver(self.port)
         man.sigAbortAll.connect(self.dev.stop)
 
         # Optionally use ROE-200 z axis to control focus
         roe = config.pop('roe', None)
+        self._roeDev = None
+        self._roeEnabled = True
         if roe is not None:
             dev = man.getDevice(roe)
-            dev.sigPositionChanged.connect(self._roeChanged)
+            self._roeDev = dev
+            # need to connect to internal change signal because 
+            # the public signal should already have z-axis information removed.
+            dev._notifier.sigPosChanged.connect(self._roeChanged)
 
         # Optionally read limits from config
         self.limits = config.pop('limits', (None, None))
@@ -66,10 +72,22 @@ class ThorlabsMFC1(Stage):
         self._monitor.stop()
         Stage.quit(self)
 
-    def _roeChanged(self, change):
-        target = self.dev.target_position() * self.scale[2]
-        target += change['rel'][2]
+    def _roeChanged(self, drive, pos, oldpos):
+        if self._roeEnabled is not True:
+            return
+        if drive != self._roeDev.drive:
+            return
+        dz = pos[2] - oldpos[2]
+        if dz == 0:
+            return
+        target = self.dev.target_position() * self.scale[2] + dz
         self.moveTo([0, 0, target])
+
+    def deviceInterface(self, win):
+        return MFC1StageInterface(self, win)
+
+    def setRoeEnabled(self, enable):
+        self._roeEnabled = enable
 
 
 class MonitorThread(Thread):
@@ -114,3 +132,19 @@ class MonitorThread(Thread):
             except:
                 debug.printExc('Error in MFC1 monitor thread:')
                 time.sleep(maxInterval)
+
+
+class MFC1StageInterface(StageInterface):
+    def __init__(self, dev, win):
+        StageInterface.__init__(self, dev, win)
+        if dev._roeDev is not None:
+            self.connectRoeBtn = QtGui.QPushButton('Enable ROE')
+            self.connectRoeBtn.setCheckable(True)
+            self.connectRoeBtn.setChecked(True)
+            self.layout.addWidget(self.connectRoeBtn, 3, 0, 1, 1)
+            self.connectRoeBtn.toggled.connect(self.connectRoeToggled)
+
+    def connectRoeToggled(self, b):
+        self.dev.setRoeEnabled(b)
+
+

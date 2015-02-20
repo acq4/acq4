@@ -7,8 +7,16 @@ class TimeoutError(Exception):
 
 
 class DataError(Exception):
-    """Raised when a serial communication is corrupt."""
-    pass
+    """Raised when a serial communication is corrupt.
+
+    *data* attribute contains the corrupt packet.
+    *extra* attribute contains any data left in the serial buffer 
+    past the end of the packet.
+    """
+    def __init__(self, msg, data, extra):
+        self.data = data
+        self.extra = extra
+        Exception.__init__(self, msg)
 
 
 class SerialDevice(object):
@@ -97,8 +105,10 @@ class SerialDevice(object):
             raise TimeoutError("Timed out waiting for serial data (received so far: %s)" % repr(packet))
         if term is not None:
             if packet[-len(term):] != term:
-                self.clearBuffer()
-                raise DataError("Packet corrupt: %s (len=%d)" % (repr(packet), len(packet)))
+                time.sleep(0.01)
+                extra = self.readAll()
+                err = DataError("Packet corrupt: %s (len=%d)" % (repr(packet), len(packet)), packet, extra)
+                raise err
             return packet[:-len(term)]
         return packet
         

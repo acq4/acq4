@@ -17,7 +17,7 @@ class Stage(Device, OptomechDevice):
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.pos = [0]*3
         
-        self.scale = config.get('scale', None) ## Allow config to apply extra scale factor
+        # self.scale = config.get('scale', None) ## Allow config to apply extra scale factor
         
         dm.declareInterface(name, ['stage'], self)
 
