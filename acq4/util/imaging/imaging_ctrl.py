@@ -48,8 +48,8 @@ class ImagingCtrl(QtGui.QWidget):
         self.frameDisplay = self.frameDisplayClass()
 
         self.pinnedFrames = []
-
         self.stackShape = None
+        self.lastFrameTime = None
 
         # User-added buttons for specific acquisition modes
         # (frame buttons, video buttons)
@@ -112,9 +112,16 @@ class ImagingCtrl(QtGui.QWidget):
         self.ui.saveFrameBtn.setEnabled(True)
         self.ui.pinFrameBtn.setEnabled(True)
 
-        fps = self.frameDisplay.acquireFps
-        if fps is not None:
+        # update acquisition frame rate
+        now = frame.info()['time']
+        if self.lastFrameTime is not None:
+            dt = now - self.lastFrameTime
+            fps = 1.0 / dt
+            print dt, fps
             self.ui.fpsLabel.setValue(fps)
+        self.lastFrameTime = now
+
+        # update display frame rate
         fps = self.frameDisplay.displayFps
         if fps is not None:
             self.ui.displayFpsLabel.setValue(fps)

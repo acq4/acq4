@@ -64,14 +64,14 @@ class SpiralScanComponent(ScanProgramComponent):
         return self.ctrl.scanMask()
 
     def saveState(self):
-        state = {'name': self.params.name(), 'active': self.isActive(), 
+        state = {'name': self.ctrlParameter().name(), 'active': self.isActive(), 
                  'scanInfo': self.ctrl.saveState()}
-        return task
+        return state
     
     def restoreState(self, state):
         state = state.copy()
-        self.params.setName(state['name'])
-        self.params.setValue(state['active'])
+        self.ctrlParameter().setName(state['name'])
+        self.ctrlParameter().setValue(state['active'])
         self.ctrl.restoreState(state['scanInfo'])
 
     

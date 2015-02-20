@@ -211,7 +211,7 @@ if __name__ == '__main__':
         def driveChanged(self, newdrive, olddrive):
             print newdrive, olddrive
 
-    s = MPC200(port='COM3')
+    s = MPC200(port='COM4')
     
     while True:
         s.getPos()
