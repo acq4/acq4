@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from acq4.devices.Camera import Camera
+from acq4.devices.Camera import Camera, CameraTask
 from PyQt4 import QtCore
 import time, sys, traceback
-#from metaarray import *
 import acq4.util.ptime as ptime
 from acq4.util.Mutex import Mutex, MutexLocker
 from acq4.util.debug import *
 import acq4.util.functions as fn
-#from collections import OrderedDict
 import numpy as np
 import scipy
 from collections import OrderedDict
@@ -41,7 +39,7 @@ class MockCamera(Camera):
         ])
             
         self.paramRanges = OrderedDict([
-            ('triggerMode',     (['Normal'], True, True, [])),
+            ('triggerMode',     (['Normal', 'TriggerStart'], True, True, [])),
             ('exposure',        ((0.001, 10.), True, True, [])),
             #('binning',         ([range(1,10), range(1,10)], True, True, [])),
             #('region',          ([(0, 511), (0, 511), (1, 512), (1, 512)], True, True, [])),
@@ -160,7 +158,7 @@ class MockCamera(Camera):
         fps = 1.0 / (exp+(40e-3/(bin[0]*bin[1])))
         nf = int(dt * fps)
         if nf > 0:
-            self.lastFrameTime = now
+            self.lastFrameTime = now + exp
             data = self.getNoise(shape)
             data[data<0] = 0
             
@@ -249,6 +247,37 @@ class MockCamera(Camera):
     def getParam(self, param):
         return self.getParams([param])[param]
 
+    def createTask(self, cmd, parentTask):
+        with self.lock:
+            return MockCameraTask(self, cmd, parentTask)
+
+
+class MockCameraTask(CameraTask):
+    """Generate exposure waveform when recording with mockcamera.
+    """
+    def __init__(self, dev, cmd, parentTask):
+        CameraTask.__init__(self, dev, cmd, parentTask)
+        self._DAQCmd['exposure']['lowLevelConf'] = {'mockFunc': self.makeExpWave}
+        self.frameTimes = []
+        
+    def makeExpWave(self):
+        ## Called by DAQGeneric to simulate a read-from-DAQ
+        # first look up the DAQ configuration so we know the sample rate / number
+        daq = self.dev.listChannels()['exposure']['device']
+        cmd = self.parentTask().tasks[daq].cmd
+        start = self.parentTask().startTime
+        sampleRate = cmd['rate']
+        
+        data = np.zeros(cmd['numPts'], dtype=np.uint8)
+        for f in self.frames:
+            t = f.info()['time']
+            exp = f.info()['exposure']
+            i0 = int((t - start) * sampleRate)
+            i1 = i0 + int((exp-0.1e-3) * sampleRate)
+            data[i0:i1] = 1
+            
+        return data
+        
 
 def mandelbrot(w=500, h=None, maxIter=20, xRange=(-2.0, 1.0), yRange=(-1.2, 1.2)):
     x0,x1 = xRange
