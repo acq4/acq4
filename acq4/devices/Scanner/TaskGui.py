@@ -240,10 +240,10 @@ class ScannerTaskGui(TaskGui):
     def pointSize(self):
         ## returns (calibrated spot size, requested display size)
         try:
-            camMod = self.cameraModule()
-            if camMod is None:
-                return (1,1)
-            cam = camMod.config['camDev']
+            #camMod = self.cameraModule()
+            #if camMod is None:
+                #return (1,1)
+            #cam = camMod.config['camDev']
             laser = self.getLaser()
             cal = self.dev.getCalibration(laser)
             ss = cal['spot'][1]
@@ -633,7 +633,7 @@ class Grid(pg.CrosshairROI):
         self.params.param('Active Regions').addNew = self.addActiveRegion
         self.rgns = []
         self.pointSize = ptSize
-        self._points = []
+        self._points = np.empty((0,2), dtype=float)
         self._scene = None 
         self._scatter = pg.ScatterPlotItem(pxMode=False, brush=None, antialias=True)
         self._scatter.setParentItem(self)
