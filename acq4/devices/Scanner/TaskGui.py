@@ -743,6 +743,12 @@ class Grid(pg.CrosshairROI):
     def invalidatePoints(self):
         self._points = None
         self._needScatterUpdate = True
+        # Update points in scatter plot item
+        # NOTE: we would rather have this inside prepareForPaint()
+        if self._needScatterUpdate:
+            pts = self.localPoints()
+            self._scatter.setData(x=pts[:,0], y=pts[:,1], size=self.pointSize)
+            self._needScatterUpdate = False
         self.update()
         
     def stateChangeFinished(self):
@@ -813,7 +819,7 @@ class Grid(pg.CrosshairROI):
         pts = pts * np.array(sep).reshape(1, 2)
         pts += np.array(start).reshape(1, 2)
         return pts
-            
+    
     def getSnapPosition(self, pos):
         ## Given that pos has been requested, return the nearest snap-to position
         ## optionally, snap may be passed in to specify a rectangular snap grid.
@@ -854,11 +860,14 @@ class Grid(pg.CrosshairROI):
             self._scene.sigPrepareForPaint.connect(self.prepareForPaint)
 
     def prepareForPaint(self):
-        # Update points in scatter plot item
-        pts = self.localPoints()
-        if self._needScatterUpdate:
-            self._scatter.setData(x=pts[:,0], y=pts[:,1], size=self.pointSize)
-            self._needScatterUpdate = False
+        # NOTE: disabled for now because this generates artifacts. 
+        # Update is moved to invalidatePoints()
+        pass
+        ## Update points in scatter plot item
+        #if self._needScatterUpdate:
+            #pts = self.localPoints()
+            #self._scatter.setData(x=pts[:,0], y=pts[:,1], size=self.pointSize)
+            #self._needScatterUpdate = False
 
         
 class TargetOcclusion(pg.PolygonROI):
