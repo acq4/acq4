@@ -156,10 +156,8 @@ class MockCamera(Camera):
         
         ## update cells
         spikes = np.random.poisson(min(dt, 0.4) * self.cells['rate'])
-        print dt, spikes
         self.cells['value'] *= np.exp(-dt / self.cells['decayTau'])
         self.cells['value'] = np.clip(self.cells['value'] + spikes * 0.2, 0, 1)
-        print self.cells['value']
         shape = region[2:]
         self.lastFrameTime = now + exp
         data = self.getNoise(shape)
