@@ -30,27 +30,9 @@ class CameraTaskGui(DAQGenericTaskGui):
             p.plotItem.ctrl.maxTracesSpin.setValue(1)
             p.plotItem.ctrl.forgetTracesCheck.setChecked(True)
         
-        #self.stateGroup = WidgetGroup([
-            #(self.ui.recordCheck, 'record'),
-            #(self.ui.triggerCheck, 'trigger'),
-            #(self.ui.displayCheck, 'display'),
-            #(self.ui.recordExposeCheck, 'recordExposeChannel'),
-            #(self.ui.splitter, 'splitter')
-        #])
-        
         conf = self.dev.camConfig
-        #if 'exposeChannel' not in conf:
-            #self.ui.exposureGroupBox.hide()
-        #if 'triggerInChannel' not in conf:
-            #self.ui.triggerGroupBox.hide()
-        #if 'triggerOutChannel' not in conf:
-            #self.ui.triggerCheck.hide()
-            
-        #self.exposeCurve = None
             
         tModes = self.dev.listParams('triggerMode')[0]
-        #tModes.remove('Normal')
-        #tModes = ['Normal'] + tModes
         for m in tModes:
             item = self.ui.triggerModeCombo.addItem(m)
         
@@ -58,11 +40,11 @@ class CameraTaskGui(DAQGenericTaskGui):
         if 'trigger' in self.plots:
             l = pg.InfiniteLine()
             self.vLines.append(l)
-            self.plots['trigger'].addItem(self.vLines[0])
+            self.plots['trigger'].addItem(l)
         if 'exposure' in self.plots:
             l = pg.InfiniteLine()
             self.vLines.append(l)
-            self.plots['exposure'].addItem(self.vLines[1])
+            self.plots['exposure'].addItem(l)
             
         self.frameTicks = pg.VTickGroup()
         self.frameTicks.setYRange([0.8, 1.0])
@@ -71,11 +53,9 @@ class CameraTaskGui(DAQGenericTaskGui):
         
         self.taskRunner.sigTaskPaused.connect(self.taskPaused)
         
-            
     def timeChanged(self, i, t):
         for l in self.vLines:
             l.setValue(t)
-        
 
     def saveState(self):
         s = self.currentState()
@@ -87,7 +67,6 @@ class CameraTaskGui(DAQGenericTaskGui):
         if 'daqState' in state:
             DAQGenericTaskGui.restoreState(self, state['daqState'])
         
-        
     def generateTask(self, params=None):
         daqProt = DAQGenericTaskGui.generateTask(self, params)
         
@@ -96,7 +75,6 @@ class CameraTaskGui(DAQGenericTaskGui):
         state = self.currentState()
         task = {
             'record': state['recordCheck'],
-            #'recordExposeChannel': state['recordExposeCheck'],
             'triggerProtocol': state['triggerCheck'],
             'params': {
                 'triggerMode': state['triggerModeCombo']
@@ -123,37 +101,24 @@ class CameraTaskGui(DAQGenericTaskGui):
             self.dev.popState('cam_proto_state')
             self.dev.pushState('cam_proto_state')
         
-        
     def currentState(self):
         return self.stateGroup.state()
         
     def handleResult(self, result, params):
-        #print result
         state = self.stateGroup.state()
         if state['displayCheck']:
             if result is None or len(result.frames()) == 0:
                 print "No images returned from camera task."
                 self.ui.imageView.clear()
             else:
-                self.ui.imageView.setImage(result.asMetaArray())
-                #print "  frame times:", list(result['frames'].xvals('Time'))
                 frameTimes, precise = result.frameTimes()
                 if precise:
+                    self.ui.imageView.setImage(result.asMetaArray(), xvals=frameTimes)
                     self.frameTicks.setXVals(frameTimes)
+                else:
+                    self.ui.imageView.setImage(result.asMetaArray())
                 
         DAQGenericTaskGui.handleResult(self, result.daqResult(), params)
-        #if state['displayExposureCheck'] and 'expose' in result and result['expose'] is not None:
-            #d = result['expose']
-            #if self.exposeCurve is None:
-                #self.exposeCurve = self.ui.exposePlot.plot(d.view(ndarray), x=d.xvals('Time'), pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
-            #else:
-                #self.exposeCurve.setData(y=d.view(ndarray), x=d.xvals('Time'))
-                #self.ui.exposePlot.replot()
-
-
-    #def recordExposeClicked(self):
-        #daq = self.dev.config['exposeChannel'][0]
-        #self.task.getDevice(daq)
         
     def quit(self):
         self.ui.imageView.close()

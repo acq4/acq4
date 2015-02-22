@@ -200,7 +200,6 @@ class MockClampTask(DAQGenericTask):
         ## Called by DAQGeneric to simulate a read-from-DAQ
         res = self.job.result(timeout=30)._getValue()
         return res
-        
 
     def write(self, data, dt):
         ## Called by DAQGeneric to simulate a write-to-DAQ

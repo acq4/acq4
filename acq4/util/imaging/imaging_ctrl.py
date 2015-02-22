@@ -116,9 +116,9 @@ class ImagingCtrl(QtGui.QWidget):
         now = frame.info()['time']
         if self.lastFrameTime is not None:
             dt = now - self.lastFrameTime
-            fps = 1.0 / dt
-            print dt, fps
-            self.ui.fpsLabel.setValue(fps)
+            if dt > 0:
+                fps = 1.0 / dt
+                self.ui.fpsLabel.setValue(fps)
         self.lastFrameTime = now
 
         # update display frame rate

@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from acq4.devices.Camera import Camera
+from acq4.devices.Camera import Camera, CameraTask
 from PyQt4 import QtCore
 import time, sys, traceback
-#from metaarray import *
 import acq4.util.ptime as ptime
 from acq4.util.Mutex import Mutex, MutexLocker
 from acq4.util.debug import *
 import acq4.util.functions as fn
-#from collections import OrderedDict
 import numpy as np
 import scipy
 from collections import OrderedDict
@@ -21,7 +19,7 @@ class MockCamera(Camera):
         self.ringSize = 100
         self.frameId = 0
         self.noise = np.random.normal(size=10000000, loc=100, scale=50)  ## pre-generate noise for use in images
-        self.bgData = mandelbrot(w=1000, maxIter=60).astype(np.float32)
+        self.bgData = mandelbrot(w=4000, maxIter=60).astype(np.float32)
         self.background = None
         
         self.params = OrderedDict([
@@ -41,7 +39,7 @@ class MockCamera(Camera):
         ])
             
         self.paramRanges = OrderedDict([
-            ('triggerMode',     (['Normal'], True, True, [])),
+            ('triggerMode',     (['Normal', 'TriggerStart'], True, True, [])),
             ('exposure',        ((0.001, 10.), True, True, [])),
             #('binning',         ([range(1,10), range(1,10)], True, True, [])),
             #('region',          ([(0, 511), (0, 511), (1, 512), (1, 512)], True, True, [])),
@@ -81,30 +79,13 @@ class MockCamera(Camera):
         cells['x'] = np.random.normal(size=cells.shape, scale=100e-6, loc=100e-6)
         cells['y'] = np.random.normal(size=cells.shape, scale=100e-6)
         cells['size'] = np.random.normal(size=cells.shape, scale=2e-6, loc=10e-6)
-        cells['rate'] = np.random.lognormal(size=cells.shape, mean=0, sigma=1) * .3
+        cells['rate'] = np.random.lognormal(size=cells.shape, mean=0, sigma=1) * 1.0
         cells['intensity'] = np.random.uniform(size=cells.shape, low=1000, high=10000)
         cells['decayTau'] = np.random.uniform(size=cells.shape, low=15e-3, high=500e-3)
         self.cells = cells
         
-        
-    
     def setupCamera(self):
         pass
-        #self.pvc = PVCDriver
-        #cams = self.pvc.listCameras()
-        #print "Cameras:", cams
-        #if len(cams) < 1:
-            #raise Exception('No cameras found by pvcam driver')
-        
-        #if self.camConfig['serial'] is None:  ## Just pick first camera
-            #ind = 0
-        #else:
-            #if self.camConfig['serial'] in cams:
-                #ind = cams.index(self.camConfig['serial'])
-            #else:
-                #raise Exception('Can not find pvcam camera "%s"' % str(self.camConfig['serial']))
-        #print "Selected camera:", cams[ind]
-        #self.cam = self.pvc.getCamera(cams[ind])
         
     def globalTransformChanged(self):
         self.background = None
@@ -112,33 +93,9 @@ class MockCamera(Camera):
     def startCamera(self):
         self.cameraStarted = True
         self.lastFrameTime = ptime.time()
-        ### Attempt camera start. If the driver complains that it can not allocate memory, reduce the ring size until it works. (Ridiculous driver bug)
-        #printRingSize = False
-        #self.stopOk = False
-        #while True:
-            #try:
-                #with self.camLock:
-                    #self.cam.setParam('ringSize', self.ringSize)
-                    #self.acqBuffer = self.cam.start()
-                #break
-            #except Exception, e:
-                #if len(e.args) == 2 and e.args[1] == 15:
-                    #printRingSize = True
-                    #self.ringSize = int(self.ringSize * 0.9)
-                    #if self.ringSize < 2:
-                        #raise Exception("Will not reduce camera ring size < 2")
-                #else:
-                    #raise
-        #if printRingSize:
-            #print "Reduced camera ring size to %d" % self.ringSize
         
     def stopCamera(self):
         self.cameraStopped = True
-        #with self.camLock:
-            #if not self.stopOk:      ### If no frames have arrived since starting the camera, then 
-                                #### it is not safe to stop the camera immediately--this can hang the (lame) driver
-                #time.sleep(1.0)
-            #self.cam.stop()
         
     def getNoise(self, shape):
         n = shape[0] * shape[1]
@@ -154,7 +111,8 @@ class MockCamera(Camera):
             tr = self.globalTransform()
             tr = pg.SRTTransform(tr)
             m = QtGui.QTransform()
-            m.scale(2e6, 2e6)
+            m.scale(3e6, 3e6)
+            m.translate(0.0005, 0.0005)
             tr = tr * m
             
             origin = tr.map(pg.Point(0,0))
@@ -163,15 +121,6 @@ class MockCamera(Camera):
             origin = np.array([origin.x(), origin.y()])
             x = np.array([x.x(), x.y()])
             y = np.array([y.x(), y.y()])
-            
-            ## render fractal on the fly
-            #m = pg.SRTTransform(tr).matrix()
-            #tr = np.array([[1,0,0],[0,1,0],[0,0,1]])
-            #xy = xy = np.ones((3,w,h))
-            #xy[:2] = np.mgrid[0:w, 0:h]
-            #xy = np.dot(xy.transpose(1,2,0), m[:,:2])
-            #xy = xy.transpose(2,0,1)
-            #self.background = mandelbrot(xy)
             
             ## slice fractal from pre-rendered data
             vectors = (x,y)
@@ -196,107 +145,57 @@ class MockCamera(Camera):
         
         dt = now - self.lastFrameTime
         exp = self.getParam('exposure')
+        bin = self.getParam('binning')
+        fps = 1.0 / (exp+(40e-3/(bin[0]*bin[1])))
+        nf = int(dt * fps)
+        if nf == 0:
+            return []
+        
         region = self.getParam('region') 
         bg = self.getBackground()[region[0]:region[0]+region[2], region[1]:region[1]+region[3]]
         
         ## update cells
-        spikes = np.random.poisson(max(dt, 0.4) * self.cells['rate'])
+        spikes = np.random.poisson(min(dt, 0.4) * self.cells['rate'])
         self.cells['value'] *= np.exp(-dt / self.cells['decayTau'])
         self.cells['value'] = np.clip(self.cells['value'] + spikes * 0.2, 0, 1)
-        
         shape = region[2:]
-        bin = self.getParam('binning')
-        nf = int(dt / (exp+(40e-3/(bin[0]*bin[1]))))
-        if nf > 0:
-            self.lastFrameTime = now
-            #data = np.random.normal(size=(shape[0], shape[1]), loc=100, scale=50)
-            data = self.getNoise(shape)
-            data[data<0] = 0
-            
-            #sig = self.signal[region[0]:region[0]+region[2], region[1]:region[1]+region[3]]
-            data += bg * (exp*1000)
-            
-            ## draw cells
-            px = (self.pixelVectors()[0]**2).sum() ** 0.5
-            
-            ## Generate transform that maps grom global coordinates to image coordinates
-            cameraTr = pg.SRTTransform3D(self.inverseGlobalTransform())
-            frameTr = self.makeFrameTransform(region, [1, 1]).inverted()[0] # note we use binning=(1,1) here because the image is downsampled later.
-            tr = pg.SRTTransform(frameTr * cameraTr)
-            
-            for cell in self.cells:
-                w = cell['size'] / px
-                pos = pg.Point(cell['x'], cell['y'])
-                imgPos = tr.map(pos)
-                start = (int(imgPos.x()), int(imgPos.y()))
-                stop = (start[0]+w, start[1]+w)
-                val = cell['intensity'] * cell['value'] * self.getParam('exposure')
-                data[max(0,start[0]):max(0,stop[0]), max(0,start[1]):max(0,stop[1])] += val
-            
-            
-            data = fn.downsample(data, bin[0], axis=0)
-            data = fn.downsample(data, bin[1], axis=1)
-            data = data.astype(np.uint16)
-            
-            
-            
-            
-            self.frameId += 1
-            frames = []
-            for i in range(nf):
-                frames.append({'data': data, 'time': now, 'id': self.frameId})
-            return frames
-            
-        else:
-            return []
+        self.lastFrameTime = now + exp
+        data = self.getNoise(shape)
+        data[data<0] = 0
         
+        data += bg * (exp*1000)
         
+        ## draw cells
+        px = (self.pixelVectors()[0]**2).sum() ** 0.5
         
-        #with self.camLock:
-            #index = self.cam.lastFrame()
-        #now = ptime.time()
-        #if self.lastFrameTime is None:
-            #self.lastFrameTime = now
+        ## Generate transform that maps grom global coordinates to image coordinates
+        cameraTr = pg.SRTTransform3D(self.inverseGlobalTransform())
+        # note we use binning=(1,1) here because the image is downsampled later.
+        frameTr = self.makeFrameTransform(region, [1, 1]).inverted()[0]
+        tr = pg.SRTTransform(frameTr * cameraTr)
+        
+        for cell in self.cells:
+            w = cell['size'] / px
+            pos = pg.Point(cell['x'], cell['y'])
+            imgPos = tr.map(pos)
+            start = (int(imgPos.x()), int(imgPos.y()))
+            stop = (start[0]+w, start[1]+w)
+            val = cell['intensity'] * cell['value'] * self.getParam('exposure')
+            data[max(0,start[0]):max(0,stop[0]), max(0,start[1]):max(0,stop[1])] += val
+        
+        data = fn.downsample(data, bin[0], axis=0)
+        data = fn.downsample(data, bin[1], axis=1)
+        data = data.astype(np.uint16)
+        
+        self.frameId += 1
+        frames = []
+        for i in range(nf):
+            frames.append({'data': data, 'time': now + (i / fps), 'id': self.frameId})
+        return frames
             
-        #if index is None:  ## no frames available yet
-            #return []
-        
-        #if index == self.lastIndex:  ## no new frames since last check
-            #return []
-        
-        #self.stopOk = True
-        
-        ### Determine how many new frames have arrived since last check
-        #if self.lastIndex is not None:
-            #diff = (index - self.lastIndex) % self.ringSize
-            #if diff > (self.ringSize / 2):
-                #print "Image acquisition buffer is at least half full (possible dropped frames)"
-        #else:
-            #self.lastIndex = index-1
-            #diff = 1
-    
-        #dt = (now - self.lastFrameTime) / diff
-        #frames = []
-        #for i in range(diff):
-            #fInd = (i+self.lastIndex+1) % self.ringSize
-            #frame = {}
-            #frame['time'] = self.lastFrameTime + (dt * (i+1))
-            #frame['id'] = self.frameId
-            #frame['data'] = self.acqBuffer[fInd].copy()
-            ##print frame['data']
-            #frames.append(frame)
-            #self.frameId += 1
-                
-        #self.lastFrame = frame
-        #self.lastFrameTime = now
-        #self.lastIndex = index
-        #return frames
-        
                 
     def quit(self):
         pass
-        #Camera.quit(self)
-        #self.pvc.quit()
         
     def listParams(self, params=None):
         """List properties of specified parameters, or of all parameters if None"""
@@ -310,17 +209,8 @@ class MockCamera(Camera):
             for k in params:
                 out[k] = self.paramRanges[k]
             return out
-        
 
     def setParams(self, params, autoRestart=True, autoCorrect=True):
-        #print "PVCam: setParams", params
-        #with self.camLock:
-            #if 'ringSize' in params:
-                #self.ringSize = params['ringSize']
-            #newVals, restart = self.cam.setParams(params, autoCorrect=autoCorrect)
-        ##restart = True  ## pretty much _always_ need a restart with these cameras.
-        
-        #self.emit(QtCore.SIGNAL('paramsChanged'), newVals)
         dp = []
         ap = {}
         for k in params:
@@ -330,13 +220,6 @@ class MockCamera(Camera):
         params.update(ap)
         for k in dp:
             del params[k]
-        
-        #if 'region' in params:
-            #params['regionX'], params['regionY'], params['regionW'], params['regionH'] = params['region']
-            #del params['region']
-        #if 'binning' in params:
-            #params['binningX'], params['binningY'] = params['binning']
-            #del params['binning']
         
         self.params.update(params)
         newVals = params
@@ -349,37 +232,51 @@ class MockCamera(Camera):
     def getParams(self, params=None):
         if params is None:
             params = self.listParams().keys()
-        #with self.camLock:
-            #return self.cam.getParams(params)
         vals = OrderedDict()
         for k in params:
             if k in self.groupParams:
                 vals[k] = self.getParams(self.groupParams[k]).values()
-            #if k == 'region':
-                #vals[k] = self.getParams(['regionX', 'regionY', 'regionW', 'regionH']).values()
-            #elif k == 'binning':
-                #vals[k] = self.getParams(['binningX', 'binningY']).values()
             else:
                 vals[k] = self.params[k]
         return vals
 
-
     def setParam(self, param, value, autoRestart=True, autoCorrect=True):
         return self.setParams({param: value}, autoRestart=autoRestart, autoCorrect=autoCorrect)
-        #with self.camLock:
-            #newVal, restart = self.cam.setParam(param, value, autoCorrect=autoCorrect)
-        ##restart = True  ## pretty much _always_ need a restart with these cameras.
-        
-        #if autoRestart and restart:
-            #self.restart()
-        #self.emit(QtCore.SIGNAL('paramsChanged'), {param: newVal})
-        #return (newVal, restart)
 
     def getParam(self, param):
-        #with self.camLock:
-            #return self.cam.getParam(param)
         return self.getParams([param])[param]
 
+    def createTask(self, cmd, parentTask):
+        with self.lock:
+            return MockCameraTask(self, cmd, parentTask)
+
+
+class MockCameraTask(CameraTask):
+    """Generate exposure waveform when recording with mockcamera.
+    """
+    def __init__(self, dev, cmd, parentTask):
+        CameraTask.__init__(self, dev, cmd, parentTask)
+        self._DAQCmd['exposure']['lowLevelConf'] = {'mockFunc': self.makeExpWave}
+        self.frameTimes = []
+        
+    def makeExpWave(self):
+        ## Called by DAQGeneric to simulate a read-from-DAQ
+        # first look up the DAQ configuration so we know the sample rate / number
+        daq = self.dev.listChannels()['exposure']['device']
+        cmd = self.parentTask().tasks[daq].cmd
+        start = self.parentTask().startTime
+        sampleRate = cmd['rate']
+        
+        data = np.zeros(cmd['numPts'], dtype=np.uint8)
+        for f in self.frames:
+            t = f.info()['time']
+            exp = f.info()['exposure']
+            i0 = int((t - start) * sampleRate)
+            i1 = i0 + int((exp-0.1e-3) * sampleRate)
+            data[i0:i1] = 1
+            
+        return data
+        
 
 def mandelbrot(w=500, h=None, maxIter=20, xRange=(-2.0, 1.0), yRange=(-1.2, 1.2)):
     x0,x1 = xRange

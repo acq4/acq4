@@ -1,56 +1,34 @@
 """
-Use neuron to simulate cells with known conductances, etc.
-This is useful for testing.
-Luke Campagnola, 2013
-
-Added synaptic conductance (standard Neuron AlphaSynapse) 5/2014 pbm.
+Use NEURON to simulate a simple cell for testing with MockClamp
 """
 import numpy as np
-#import pickle
 import sys, os
 
-## change working directory so neuron can find compiled mod files.
-## Manis says: this is not necessary! Undo chdirs; set mech path and load from there
-## the existing path works on unix systems; need to load different file under windows
-
-## Need to figure out a way for the mechanisms to be compiled automatically
-
-wd = os.getcwd()
-mechpath = os.path.join(os.path.dirname(__file__), 'i386/.libs/libnrnmech.so') # 'neuron')
-
-#print "Path to mechanisms: ", mechpath
-#os.chdir(path)
+# Try standard locations to find neuron library
+for nrnpath in ['/usr/local/nrn/lib/python']:
+    if os.path.isdir(nrnpath):
+        sys.path.append(nrnpath)
 from neuron import h
 import neuron
 
-#if 'hh' not in dir(h):  # prevent double load attempt if run from command line.
-h.nrn_load_dll(mechpath)
-#os.chdir(wd)
+# try to load extra mechanisms
+for name in ('i386', 'x86_64'):
+    mechlib = os.path.join(os.path.dirname(__file__), name + '/.libs/libnrnmech.so')
+    print "NEURON load:", mechlib
+    if os.path.isfile(mechlib):
+        h.nrn_load_dll(mechlib)
 
-#opts = pickle.loads(sys.stdin.read())
-#opts = {
-    #'data': np.zeros(1000),
-    #'dt': 1e-4,
-#}
-#opts['data'][600:700] = 100e-12
-#sys.stderr.write("%f, %f, %f" % (opts['data'].min(), opts['data'].max(), opts['dt']))
-#sys.stdout.write(pickle.dumps(opts['data']))
-
-
-#data = opts['data']  ## convert to nA
-#dt = opts['dt']*1e3  ## convert to ms
-#leadTime = 1  #1ms for membrane to settle
 
 h.celsius = 22
 
 soma = h.Section()
 soma.insert('hh')
 soma.insert('pas')
-soma.insert('hcno')
+#soma.insert('hcno')
 soma.L = 20
 soma.diam = 20
 soma(0.5).pas.g = 2e-5
-soma(0.5).hcno.gbar = 15e-4
+#soma(0.5).hcno.gbar = 15e-4
 
 ic = h.IClamp(soma(0.5))
 ic.dur = 1e9
@@ -60,7 +38,7 @@ icRec.record(soma(0.5)._ref_v)
 
 vc = h.SEClamp(soma(0.5))
 vc.dur1 = 1e9
-vc.rs = 0.1  # Rs, in megohms
+vc.rs = 5  # Rs, in megohms
 #vc.amp1 = 0
 #vc.dur2 = 1e9
 vcrs = vc.rs
@@ -125,16 +103,11 @@ def run(cmd):
     #print len(out), out
     #out = np.array(out)[:len(data)]
 
-    print 'neuronsim running with mode = %s' % mode
     if mode == 'ic':
         out = np.array(icRec)[:len(data)] * 1e-3 + np.random.normal(size=len(data), scale=0.3e-3)
     elif mode == 'vc':
         out = np.array(vcRec)[:len(data)] * 1e-9 + np.random.normal(size=len(data), scale=3.e-12)
-    print 'added noise to output'
     return out
-
-#sys.stdout.write(pickle.dumps(out))
-#print np.array(vm)
 
 
 # provide a visible test to make sure code is working and failures are not ours.

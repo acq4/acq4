@@ -5,7 +5,8 @@ __all__ = ['PathButton']
 
 
 class PathButton(QtGui.QPushButton):
-    """Simple PushButton extension which paints a QPainterPath on its face"""
+    """Simple PushButton extension that paints a QPainterPath centered on its face.
+    """
     def __init__(self, parent=None, path=None, pen='default', brush=None, size=(30,30)):
         QtGui.QPushButton.__init__(self, parent)
         self.path = None
@@ -18,7 +19,6 @@ class PathButton(QtGui.QPushButton):
         if size is not None:
             self.setFixedWidth(size[0])
             self.setFixedHeight(size[1])
-            
             
     def setBrush(self, brush):
         self.brush = fn.mkBrush(brush)
