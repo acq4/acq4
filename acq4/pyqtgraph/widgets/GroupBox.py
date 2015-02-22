@@ -4,6 +4,8 @@ from .PathButton import PathButton
 class GroupBox(QtGui.QGroupBox):
     """Subclass of QGroupBox that implements collapse handle.
     """
+    sigCollapseChanged = QtCore.Signal(object)
+    
     def __init__(self, *args):
         QtGui.QGroupBox.__init__(self, *args)
         
@@ -33,7 +35,10 @@ class GroupBox(QtGui.QGroupBox):
         
     def toggleCollapsed(self):
         self.setCollapsed(not self._collapsed)
- 
+
+    def collapsed(self):
+        return self._collapsed
+    
     def setCollapsed(self, c):
         if c == self._collapsed:
             return
@@ -50,3 +55,10 @@ class GroupBox(QtGui.QGroupBox):
                 ch.setVisible(not c)
         
         self._collapsed = c
+        self.sigCollapseChanged.emit(c)
+        
+    def widgetGroupInterface(self):
+        return (self.sigCollapseChanged, 
+                GroupBox.collapsed, 
+                GroupBox.setCollapsed, 
+                True)

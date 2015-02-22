@@ -51,7 +51,7 @@ class DaqChannelGui(QtGui.QWidget):
         
         self.displayCheckChanged()
         self.ui.displayCheck.stateChanged.connect(self.displayCheckChanged)
-        self.ui.groupBox.toggled.connect(self.groupBoxClicked)
+        #self.ui.groupBox.sigCollapseChanged.connect(self.groupBoxClicked)
         
         if 'units' in self.config:
             self.setUnits(self.config['units'])
@@ -59,12 +59,12 @@ class DaqChannelGui(QtGui.QWidget):
             self.setUnits('')
             
     def updateTitle(self):
-        if self.ui.groupBox.isChecked():
-            plus = ""
-        else:
-            plus = "[+] "
+        #if self.ui.groupBox.isChecked():
+            #plus = ""
+        #else:
+            #plus = "[+] "
         
-        self.ui.groupBox.setTitle(plus + self.name + " (%s)" %self.units)
+        self.ui.groupBox.setTitle(self.name + " (%s)" %self.units)
     
     def setUnits(self, units):
         self.units = units
@@ -76,9 +76,9 @@ class DaqChannelGui(QtGui.QWidget):
     def getSpins(self):
         return []
 
-    def groupBoxClicked(self, b):
-        self.setChildrenVisible(self.ui.groupBox, b)
-        self.updateTitle()
+    #def groupBoxClicked(self, b):
+        #self.setChildrenVisible(self.ui.groupBox, b)
+        #self.updateTitle()
             
     def setChildrenVisible(self, obj, vis):
         for c in obj.children():

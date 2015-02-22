@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './acq4/devices/DAQGeneric/DOChannelTemplate.ui'
+# Form implementation generated from reading ui file 'DOChannelTemplate.ui'
 #
-# Created: Tue Dec 24 01:49:09 2013
-#      by: PyQt4 UI code generator 4.10
+# Created: Sun Feb 22 13:29:09 2015
+#      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -31,12 +31,12 @@ class Ui_Form(object):
         self.verticalLayout_3.setSpacing(0)
         self.verticalLayout_3.setMargin(0)
         self.verticalLayout_3.setObjectName(_fromUtf8("verticalLayout_3"))
-        self.groupBox = QtGui.QGroupBox(Form)
+        self.groupBox = GroupBox(Form)
         font = QtGui.QFont()
         font.setBold(True)
         font.setWeight(75)
         self.groupBox.setFont(font)
-        self.groupBox.setCheckable(True)
+        self.groupBox.setCheckable(False)
         self.groupBox.setObjectName(_fromUtf8("groupBox"))
         self.verticalLayout_2 = QtGui.QVBoxLayout(self.groupBox)
         self.verticalLayout_2.setSpacing(0)
@@ -128,4 +128,5 @@ class Ui_Form(object):
         self.functionCheck.setText(_translate("Form", "Enable Function", None))
         self.displayCheck.setText(_translate("Form", "Display", None))
 
+from acq4.pyqtgraph import GroupBox
 from acq4.util.generator.StimGenerator import StimGenerator
