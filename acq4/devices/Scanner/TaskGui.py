@@ -637,6 +637,7 @@ class Grid(pg.CrosshairROI):
         self._scene = None 
         self._scatter = pg.ScatterPlotItem(pxMode=False, brush=None, antialias=True)
         self._scatter.setParentItem(self)
+        self._needScatterUpdate = False
         self.params.param('layout').sigStateChanged.connect(self.invalidatePoints)
         self.params.param('spacing').sigStateChanged.connect(self.invalidatePoints)
         self.params.param('Active Regions').sigChildRemoved.connect(self.rgnRemoved)
@@ -741,6 +742,7 @@ class Grid(pg.CrosshairROI):
     
     def invalidatePoints(self):
         self._points = None
+        self._needScatterUpdate = True
         self.update()
         
     def stateChangeFinished(self):
@@ -854,7 +856,9 @@ class Grid(pg.CrosshairROI):
     def prepareForPaint(self):
         # Update points in scatter plot item
         pts = self.localPoints()
-        self._scatter.setData(x=pts[:,0], y=pts[:,1], size=self.pointSize)
+        if self._needScatterUpdate:
+            self._scatter.setData(x=pts[:,0], y=pts[:,1], size=self.pointSize)
+            self._needScatterUpdate = False
 
         
 class TargetOcclusion(pg.PolygonROI):

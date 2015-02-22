@@ -79,7 +79,7 @@ class MockCamera(Camera):
         cells['x'] = np.random.normal(size=cells.shape, scale=100e-6, loc=100e-6)
         cells['y'] = np.random.normal(size=cells.shape, scale=100e-6)
         cells['size'] = np.random.normal(size=cells.shape, scale=2e-6, loc=10e-6)
-        cells['rate'] = np.random.lognormal(size=cells.shape, mean=0, sigma=1) * .3
+        cells['rate'] = np.random.lognormal(size=cells.shape, mean=0, sigma=1) * 1.0
         cells['intensity'] = np.random.uniform(size=cells.shape, low=1000, high=10000)
         cells['decayTau'] = np.random.uniform(size=cells.shape, low=15e-3, high=500e-3)
         self.cells = cells
@@ -145,55 +145,56 @@ class MockCamera(Camera):
         
         dt = now - self.lastFrameTime
         exp = self.getParam('exposure')
+        bin = self.getParam('binning')
+        fps = 1.0 / (exp+(40e-3/(bin[0]*bin[1])))
+        nf = int(dt * fps)
+        if nf == 0:
+            return []
+        
         region = self.getParam('region') 
         bg = self.getBackground()[region[0]:region[0]+region[2], region[1]:region[1]+region[3]]
         
         ## update cells
-        spikes = np.random.poisson(max(dt, 0.4) * self.cells['rate'])
+        spikes = np.random.poisson(min(dt, 0.4) * self.cells['rate'])
+        print dt, spikes
         self.cells['value'] *= np.exp(-dt / self.cells['decayTau'])
         self.cells['value'] = np.clip(self.cells['value'] + spikes * 0.2, 0, 1)
-        
+        print self.cells['value']
         shape = region[2:]
-        bin = self.getParam('binning')
-        fps = 1.0 / (exp+(40e-3/(bin[0]*bin[1])))
-        nf = int(dt * fps)
-        if nf > 0:
-            self.lastFrameTime = now + exp
-            data = self.getNoise(shape)
-            data[data<0] = 0
+        self.lastFrameTime = now + exp
+        data = self.getNoise(shape)
+        data[data<0] = 0
+        
+        data += bg * (exp*1000)
+        
+        ## draw cells
+        px = (self.pixelVectors()[0]**2).sum() ** 0.5
+        
+        ## Generate transform that maps grom global coordinates to image coordinates
+        cameraTr = pg.SRTTransform3D(self.inverseGlobalTransform())
+        # note we use binning=(1,1) here because the image is downsampled later.
+        frameTr = self.makeFrameTransform(region, [1, 1]).inverted()[0]
+        tr = pg.SRTTransform(frameTr * cameraTr)
+        
+        for cell in self.cells:
+            w = cell['size'] / px
+            pos = pg.Point(cell['x'], cell['y'])
+            imgPos = tr.map(pos)
+            start = (int(imgPos.x()), int(imgPos.y()))
+            stop = (start[0]+w, start[1]+w)
+            val = cell['intensity'] * cell['value'] * self.getParam('exposure')
+            data[max(0,start[0]):max(0,stop[0]), max(0,start[1]):max(0,stop[1])] += val
+        
+        data = fn.downsample(data, bin[0], axis=0)
+        data = fn.downsample(data, bin[1], axis=1)
+        data = data.astype(np.uint16)
+        
+        self.frameId += 1
+        frames = []
+        for i in range(nf):
+            frames.append({'data': data, 'time': now + (i / fps), 'id': self.frameId})
+        return frames
             
-            data += bg * (exp*1000)
-            
-            ## draw cells
-            px = (self.pixelVectors()[0]**2).sum() ** 0.5
-            
-            ## Generate transform that maps grom global coordinates to image coordinates
-            cameraTr = pg.SRTTransform3D(self.inverseGlobalTransform())
-            # note we use binning=(1,1) here because the image is downsampled later.
-            frameTr = self.makeFrameTransform(region, [1, 1]).inverted()[0]
-            tr = pg.SRTTransform(frameTr * cameraTr)
-            
-            for cell in self.cells:
-                w = cell['size'] / px
-                pos = pg.Point(cell['x'], cell['y'])
-                imgPos = tr.map(pos)
-                start = (int(imgPos.x()), int(imgPos.y()))
-                stop = (start[0]+w, start[1]+w)
-                val = cell['intensity'] * cell['value'] * self.getParam('exposure')
-                data[max(0,start[0]):max(0,stop[0]), max(0,start[1]):max(0,stop[1])] += val
-            
-            data = fn.downsample(data, bin[0], axis=0)
-            data = fn.downsample(data, bin[1], axis=1)
-            data = data.astype(np.uint16)
-            
-            self.frameId += 1
-            frames = []
-            for i in range(nf):
-                frames.append({'data': data, 'time': now + (i / fps), 'id': self.frameId})
-            return frames
-            
-        else:
-            return []
                 
     def quit(self):
         pass
