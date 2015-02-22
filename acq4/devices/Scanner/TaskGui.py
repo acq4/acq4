@@ -77,6 +77,8 @@ class ScannerTaskGui(TaskGui):
         self.positionCtrlGroup.sigAddNewRequested.connect(self.addPositionCtrl)
         self.ui.itemTree.setParameters(self.positionCtrlGroup, showTop=False)
         self.positionCtrlGroup.sigChildRemoved.connect(self.positionCtrlRemoved)
+        self.ui.spotSequenceGroup.setCollapsed(True)
+        self.ui.spotDisplayGroup.setCollapsed(True)
         
         self.scanProgram = ScanProgram()
         self.scanProgram.setDevices(scanner=self.dev)
