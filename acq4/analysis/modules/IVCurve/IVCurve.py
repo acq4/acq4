@@ -963,6 +963,8 @@ class IVCurve(AnalysisModule):
                 else:
                     cell = c
                 fn = os.path.join(cell, pr)
+                print fn
+                print 'dm selected file: ', self.dataManager().selectedFile()
                 dm_selected_file = self.dataManager().selectedFile().name()
                 DataManager.cleanup()
                 gc.collect()
@@ -1180,16 +1182,25 @@ class IVCurve(AnalysisModule):
         peak_time=None
         icmdneg = np.where(self.cmd < -20e-12)
         maxcmd = np.min(self.cmd)
-        ineg = np.where(self.cmd[icmdneg] >= maxcmd / 3)
+        ineg = np.where(self.cmd[icmdneg] < 0.0)
         if peak_time is not None and ineg != np.array([]):
             rgnpk[1] = np.max(peak_time[ineg[0]])
+        dt = self.sample_interval
         rgnindx = [int((rgnpk[1]-0.005)/dt), int((rgnpk[1])/dt)]
-        vmeans = np.mean(self.traces[rgnindx[0]:rgnindx[1]])
-        print vmax, vrange
-        indxs = np.where(np.logical_and((vrange[0] >= vmeans[ineg]), (vmeans[ineg] >= vrange[1])))
+        rmps = self.ivbaseline
+        #print 'rmp: ', self.rmp
+        #print 'rmps: ', rmps
+        #print 'traces shape: ', self.traces.shape
+        vmeans = np.mean(self.traces[:, rgnindx[0]:rgnindx[1]], axis=1) - self.ivbaseline
+        #print 'region: ', rgnpk
+        #print 'vmeans: ', vmeans
+        #print 'vrange: ', vrange[0]*1e-3, vrange[1]*1e-3
+        indxs = np.where(np.logical_and((vrange[0]*1e-3 >= vmeans[ineg]), 
+                         (vmeans[ineg] >= vrange[1]*1e-3)))
         indxs = list(indxs[0])
         whichdata = ineg[0][indxs]  # restricts to valid values
-        print 'vmeans selected: ', vmeans[whichdata]
+        #print 'indices: ', indxs
+        #print 'vmeans selected: ', vmeans[whichdata]
         itaucmd = self.cmd[ineg]
         whichaxis = 0
         fpar = []
