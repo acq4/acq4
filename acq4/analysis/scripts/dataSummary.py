@@ -25,17 +25,23 @@ import gc
 class DataSummary():
     def __init__(self, basedir=None, daylistfile=None):
         print 'basedir: ', basedir
+        self.monitor = False
         self.analysis_summary = {}
         self.dataModel = PatchEPhys
         self.basedir = basedir
-        self.tw = {}
+        self.tw = {}  # for notes
         self.tw['day'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
         self.tw['slice'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
         self.tw['cell'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
+        self.twd = {}  # for description
+        self.twd['day'] = textwrap.TextWrapper(initial_indent="Description: ", subsequent_indent=" "*4)
+        self.twd['slice'] = textwrap.TextWrapper(initial_indent="Description: ", subsequent_indent=" "*4)
+        self.twd['cell'] = textwrap.TextWrapper(initial_indent="Description: ", subsequent_indent=" "*4)
+        
         self.img_re = re.compile('^[Ii]mage_(\d{3,3}).tif')  # make case insensitive - for some reason in Xuying's data
         self.s2p_re = re.compile('^2pStack_(\d{3,3}).ma')
         self.i2p_re = re.compile('^2pImage_(\d{3,3}).ma')
-        self.monitor = True
+
         self.reportIncompleteProtocols = False  # do include incomplete protocol runs in print
         allfiles = os.listdir(basedir)
         # look for names that match the acq4 "day" template:
@@ -45,10 +51,11 @@ class DataSummary():
         #2011.10.17_000
         # operate in two modes:
         # second, between two dates
+        daylist = None
         if daylistfile is None:
-            minday = (2012, 12, 4)
+            minday = (2010, 1, 1)
             minday = minday[0]*1e4+minday[1]*1e2+minday[2]
-            maxday = (2012, 12, 31)
+            maxday = (2015, 12, 31)
             maxday = maxday[0]*1e4+maxday[1]*1e2+maxday[2]
         else:
             daylist = []
@@ -74,7 +81,7 @@ class DataSummary():
                 # print 'minday: ', minday
                 if daylist is None:
                     if id >= minday and id <= maxday:
-                        days.append(thisfile[0:10])
+                        days.append(thisfile)  # was [0:10]
                 else:
                     #print 'using daylist, thisfile: ', thisfile[0:10]
                     #print 'daylist: ', daylist
@@ -82,10 +89,18 @@ class DataSummary():
                         days.append(thisfile)
         print 'Days reported: ', days
         for day in days:
-            #print 'processing day: %s' % day
+            if self.monitor:
+                print 'processing day: %s' % day
             self.daystring = '%s\t' % (day)
             dh = DataManager.getDirHandle(os.path.join(self.basedir, day), create=False)
             dx = self.dataModel.getDayInfo(dh)
+            if dx is not None and 'description' in dx.keys() and len(dx['description']) > 0:
+                l = self.twd['day'].wrap(dx['description'])
+                for i in l:
+                    self.daystring += i
+            else:
+                self.daystring += ' [no description]'
+            self.daystring += '\t'
             if dx is not None and 'notes' in dx.keys() and len(dx['notes']) > 0:
                 l = self.tw['day'].wrap(dx['notes'])
                 for i in l:
@@ -115,6 +130,15 @@ class DataSummary():
             self.slicestring = '%s\t' % (slice)
             dh = DataManager.getDirHandle(os.path.join(day, slice), create=False)
             sl = self.dataModel.getSliceInfo(dh)
+
+            if sl is not None and 'description' in sl.keys() and len(sl['description']) > 0:
+                l = self.twd['slice'].wrap(sl['description'])
+                for i in l:
+                    self.slicestring += i
+            else:
+                self.slicestring += ' No slice description'
+            self.slicestring += '\t'
+
             if sl is not None and 'notes' in sl.keys() and len(sl['notes']) > 0:
                 l = self.tw['slice'].wrap(sl['notes'])
                 for i in l:
@@ -152,6 +176,13 @@ class DataSummary():
                     self.cellstring += i
             else:
                 self.cellstring += ' No cell notes'
+            if cl is not None and 'description' in cl.keys() and len(cl['description']) > 0:
+                l = self.twd['cell'].wrap(cl['description'])
+                for i in l:
+                    self.cellstring += i
+            else:
+                self.cellstring += ' No cell description'
+
             self.cellstring += '\t'
             self.doProtocols(os.path.join(slice, cell))
             DataManager.cleanup() # clean up after each cell
@@ -335,6 +366,8 @@ class DataSummary():
                 self.analysis_summary['Temperature'] = today['temperature']
             if 'description' in today.keys():
                 self.analysis_summary['Description'] = today['description']
+            if 'notes' in today.keys():
+                self.analysis_summary['Notes'] = today['notes']
 
         if self.analysis_summary['Cell'] is not None:
             ct = self.analysis_summary['Cell']['__timestamp__']

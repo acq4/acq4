@@ -222,8 +222,8 @@ def getClampFile(protoDH):
             return protoDH[n]
         if n+'.ma' in files:
             return protoDH[n+'.ma']
-    print 'getClampFile: did not find protocol for clamp: ', files
-    print 'valid devices: ', deviceNames['Clamp']
+    #print 'getClampFile: did not find protocol for clamp: ', files
+    #print 'valid devices: ', deviceNames['Clamp']
     return None
 
 def isClampFile(fh):

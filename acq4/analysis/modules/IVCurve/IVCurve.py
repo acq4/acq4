@@ -851,13 +851,16 @@ class IVCurve(AnalysisModule):
         :return:
         """
         
-        if self.data_mode in self.ic_modes:
+#        print self.data_mode
+#        print self.ic_modes
+        if self.data_mode in self.ic_modes or self.data_mode == 'vc':
           data_template = (
             OrderedDict([('Species', '{:>s}'), ('Age', '{:>5s}'), ('Sex', '{:>1s}'), ('Weight', '{:>5s}'),
                          ('Temperature', '{:>5s}'), ('ElapsedTime', '{:>8.2f}'), 
                          ('RMP', '{:>5.1f}'), ('Rin', '{:>5.1f}'),
                          ('tau', '{:>5.1f}'), ('AdaptRatio', '{:>7.3f}'),
                          ('tauh', '{:>5.1f}'), ('Gh', '{:>6.2f}'),
+                         ('Description', '{:s}'),
                         ]))
         else:
           data_template = (
@@ -919,6 +922,16 @@ class IVCurve(AnalysisModule):
             self.ctrl.IVCurve_ScriptName.setText('None')
             return
         self.ctrl.IVCurve_ScriptName.setText(os.path.basename(self.script_name))
+        # set the data manager to the script if we can
+        print self.script['directory']
+        if 'directory' in self.script.keys():
+            try:
+                print dir(self.dataManager)
+                self.dataManager.setBaseDir(self.script['directory'])
+                print('Set base dir to: {:s}'.format(self.script['directory']))
+            except:
+                print('IVCurve:read_script: Cannot set base directory to %s\nLikely directory was not found' % self.script['directory'])
+            
 
 #        print 'script ok:', self.script
         # fh = open(self.script_name)  # read the raw text file too
@@ -950,6 +963,16 @@ class IVCurve(AnalysisModule):
         if self.script['module'] != 'IVCurve':
             print 'Script is not for IVCurve (found %s)' % self.script['module']
             return False
+        if 'directory' in self.script.keys():
+            try:
+                
+                #print dir(self.dataManager())
+                self.dataManager().setBaseDir(self.script['directory'])
+                print('Set base dir to: {:s}'.format(self.script['directory']))
+            except:
+                print('IVCurve:read_script: \n   Cannot set base directory to %s\n   Likely directory was not found' % self.script['directory'])
+                return False
+                
         all_found = True
         trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
         for c in self.script['Cells']:
@@ -963,9 +986,12 @@ class IVCurve(AnalysisModule):
                 else:
                     cell = c
                 fn = os.path.join(cell, pr)
-                print fn
-                print 'dm selected file: ', self.dataManager().selectedFile()
-                dm_selected_file = self.dataManager().selectedFile().name()
+                #print fn
+                #print 'dm selected file: ', self.dataManager().selectedFile()
+                if 'directory' in self.script.keys():
+                    dm_selected_file = self.script['directory']
+                else:
+                    dm_selected_file = self.dataManager().selectedFile().name()
                 DataManager.cleanup()
                 gc.collect()
                 fullpath = os.path.join(dm_selected_file, fn)
@@ -993,7 +1019,9 @@ class IVCurve(AnalysisModule):
         # settext(self.textout)
         script_header = True  # reset the table to a print new header for each cell
         trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
-        for cell in self.script['Cells']:
+        self.dataManager().setBaseDir(self.script['directory'])
+        ordered = sorted(self.script['Cells'].keys())  # order the analysis by date/slice/cell
+        for cell in ordered:
             thiscell = self.script['Cells'][cell]
             #print 'processing cell: %s' % thiscell
             if thiscell['include'] is False:  # skip this cell
@@ -1011,7 +1039,8 @@ class IVCurve(AnalysisModule):
                 else:
                     cell_file = cell
                 fn = os.path.join(cell_file, pr)
-                dm_selected_file = self.dataManager().selectedFile().name()
+                #dm_selected_file = self.dataManager().selectedFile().name()
+                dm_selected_file = self.script['directory']
                 fullpath = os.path.join(dm_selected_file, fn)
                 file_ok = os.path.exists(fullpath)
                 if not file_ok:  # get the directory handle and take it from there
@@ -1022,6 +1051,11 @@ class IVCurve(AnalysisModule):
                 if not self.loadFileRequested([dh]):  # note: must pass a list
                     print 'Failed to load requested file: ', fullpath
                     continue  # skip bad sets of records...
+                #print thiscell.keys()
+                #print 'old data mode: ', self.data_mode
+                if 'datamode' in thiscell.keys():
+                    self.data_mode = thiscell['datamode']
+                    print 'datamode may be overridden: self.data_mode = %s' % self.data_mode
                 # apptext(('Protocol: {:<s} <br>Choice: {:<s}'.format(pr, thiscell['choice'][p])))
                 #print dir(self.data_plot)
                 # self.main_layout.update()
