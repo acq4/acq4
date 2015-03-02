@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
-if __name__ == '__main__':
-    import os, sys
-    path = os.path.dirname(os.path.abspath(__file__))
-    sys.path.append(os.path.join(path, '..', '..'))
+import numpy as np
+import pickle, re, os
+import acq4.Manager
+import collections
+import acq4.util.functions as functions
+import acq4.util.advancedTypes as advancedTypes
+import acq4.util.debug as debug
+
 
 from PyQt4 import QtSql, QtCore
 ## Results from DB operations may vary depending on the API version in use.
@@ -12,25 +16,12 @@ else:
     HAVE_QVARIANT = False
 
 
-import numpy as np
-import pickle, re, os
-import acq4.Manager
-import acq4.util.DataManager as DataManager
-import collections
-import acq4.util.functions as functions
-import acq4.util.advancedTypes as advancedTypes
-import acq4.util.debug as debug
-
 def quoteList(strns):
     """Given a list of strings, return a single string like '"string1", "string2",...'
         Note: in SQLite, double quotes are for escaping table and column names; 
               single quotes are for string literals.
     """
     return ','.join(['"'+s+'"' for s in strns])
-
-
-
-
 
 class SqliteDatabase:
     """Encapsulates an SQLITE database through QtSql to make things a bit more pythonic.
@@ -443,8 +434,6 @@ class SqliteDatabase:
         ## that overrides the default conversion funcitons.
         
         ## Returns a dict-of-lists if batch=True, otherwise list-of-dicts
-        
-        
         data = TableData(data)
         
         converters = {}
@@ -507,7 +496,6 @@ class SqliteDatabase:
             res.append(self._readRecord(q.record()))
         return res
 
-
     def _queryToArray(self, q):
         prof = debug.Profiler("_queryToArray", disabled=True)
         recs = self._queryToDict(q)
@@ -525,7 +513,6 @@ class SqliteDatabase:
         prof.mark('converted to array')
         prof.finish()
         return arr
-
 
     def _readRecord(self, rec):
         prof = debug.Profiler("_readRecord", disabled=True)
@@ -560,34 +547,6 @@ class SqliteDatabase:
 
     def _readTableList(self):
         """Reads the schema for each table, extracting the column names and types."""
-        
-        ### Removed: use pragma table_info rather than parsing sqlite_master manually.
-        #res = self.select('sqlite_master', ['name', 'sql'], sql="where type = 'table'")
-        #ident = r"(\w+|'[^']+'|\"[^\"]+\")"
-        ##print "READ:"
-        #tables = advancedTypes.CaselessDict()
-        #for rec in res:
-            ##print rec
-            #sql = rec['sql'].replace('\n', ' ')
-            ##print sql
-            #m = re.match(r"\s*create\s+table\s+%s\s*\(([^\)]+)\)" % ident, sql, re.I)
-            ##print m.groups()
-            #columnstr = m.groups()[1].split(',')
-            #columns = advancedTypes.CaselessDict()
-            ##print columnstr
-            ##print columnstr
-            #for f in columnstr:
-                ##print "   ", f
-                #m = re.findall(ident, f)
-                ##print "   ", m
-                #if len(m) < 2:
-                    #typ = ''
-                #else:
-                    #typ = m[1].strip('\'"')
-                #column = m[0].strip('\'"')
-                #columns[column] = typ
-            #tables[rec['name']] = columns
-        
         names = self("select name from sqlite_master where type='table' or type='view'")
         tables = advancedTypes.CaselessDict()
         for table in names:
@@ -599,7 +558,6 @@ class SqliteDatabase:
             tables[table] = columns
             
         self.tables = tables
-        #print tables
 
 
 class Transaction:
@@ -867,41 +825,3 @@ def parseColumnDefs(defs, keyOrder=None):
         raise Exception("Invalid column-list specification: %s" % str(defs))
 
     
-        
-
-if __name__ == '__main__':
-    print "Avaliable DB drivers:", list(QtSql.QSqlDatabase.drivers())
-    db = SqliteDatabase()
-    db("create table 't' ('int' int, 'real' real, 'text' text, 'blob' blob, 'other' other)")
-    columns = db.tableSchema('t').keys()
-    
-    ## Test insertion and retrieval of different data types into each column type
-    vals = [
-        ('int', 1), 
-        ('float', 1.5), 
-        ('int-float', 10.0), 
-        ('int-string', '10'), 
-        ('float-string', '3.1415'), 
-        ('string', 'Stringy'), 
-        ('object', [1,'x']), 
-        ('byte-string', 'str\1\2\0str'),
-        ('None', None),
-    ]
-    
-    for name, val in vals:
-        db('delete from t')
-        db.insert('t', **dict([(f, val) for f in columns]))
-        print "\nInsert %s (%s):" % (name, repr(val))
-        print "  ", db.select('t')[0]
-        
-    print "\nTable extraction test:"
-    #db('delete from t')
-    for name, val in vals:
-        db.insert('t', **dict([(f, val) for f in columns]))
-        print "Insert %s (%s):" % (name, repr(val))
-    result =  db.select('t', toArray=True)
-    print "DATA:", result
-    print "DTYPE:", result.dtype
-    
-
-
