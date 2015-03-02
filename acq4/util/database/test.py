@@ -12,6 +12,7 @@ def testDataRetrieval():
     db = SqliteDatabase()
     db("create table 't' ('int' int, 'real' real, 'text' text, 'blob' blob, 'other' other)")
     columns = db.tableSchema('t').keys()
+    print columns
 
 
     ## Test insertion and retrieval of different data types into each column type
@@ -74,4 +75,21 @@ def testDataRetrieval():
     assert all(result == expect)
 
 
-
+def testBatchInsert():
+    db = SqliteDatabase()
+    db("create table 't' ('int' int, 'real' real, 'text' text, 'blob' blob, 'other' other)")
+    
+    data = np.array([
+        (1, 27.3, u'x', [5], None),
+        (3, 23.4, u'yy', None, None),
+        (5, 21.3, u'zzz', [(5,3), 'q'], None),
+        (7, 24.3, u'wwww', 'q', None),
+    ], dtype=[('int', int), ('real', float), ('text', object), ('blob', object), ('other', object)])
+    
+    db.insert('t', data)
+    
+    result = db.select('t', toArray=True)
+    assert np.all(result == data)
+    
+    for i, row in enumerate(db.iterSelect('t', limit=1)):
+        assert tuple(row[0].values()) == tuple(data[i])

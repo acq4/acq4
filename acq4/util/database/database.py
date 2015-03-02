@@ -16,13 +16,6 @@ else:
     HAVE_QVARIANT = False
 
 
-def quoteList(strns):
-    """Given a list of strings, return a single string like '"string1", "string2",...'
-        Note: in SQLite, double quotes are for escaping table and column names; 
-              single quotes are for string literals.
-    """
-    return ','.join(['"'+s+'"' for s in strns])
-
 class SqliteDatabase:
     """Encapsulates an SQLITE database through QtSql to make things a bit more pythonic.
     Arbitrary SQL may be executed by calling the db object directly, eg: db('select * from table')
@@ -200,9 +193,7 @@ class SqliteDatabase:
             yield res
             kargs['offset'] += kargs['limit']
         
-        
-        
-    def insert(self, table, records=None, replaceOnConflict=False, ignoreExtraColumns=False, addExtraColumns=False, **args):
+    def insert(self, table, records=None, replaceOnConflict=False, ignoreExtraColumns=False, **args):
         """Insert records (a dict or list of dicts) into table.
         If records is None, a single record may be specified via keyword arguments.
         
@@ -211,7 +202,7 @@ class SqliteDatabase:
         table                 Name of the table to insert into
         records               Data to insert. May be a variety of formats: numpy record array, list of dicts,
                               dict of lists, dict of values (single record)
-        replaceOnConflict     If True, inserts which conflict with pre-existing data will overwrite the
+        replaceOnConflict     If True, inserts that conflict with pre-existing data will overwrite the
                               pre-existing data. This occurs, for example, when a column has a 'unique' 
                               constraint.
         ignoreExtraColumns    If True, ignore any extra columns in the data that do not exist in the table
@@ -219,7 +210,6 @@ class SqliteDatabase:
         """
         for n,nmax in self.iterInsert(table=table, records=records, replaceOnConflict=replaceOnConflict, ignoreExtraColumns=ignoreExtraColumns, chunkAll=True, **args):
             pass
-        
         
     def iterInsert(self, table, records=None, replaceOnConflict=False, ignoreExtraColumns=False, chunkSize=500, chunkAll=False, **args):
         """
@@ -229,7 +219,7 @@ class SqliteDatabase:
             for n,nmax in db.iterInsert(table, data):
                 print "Insert %d%% complete" % (100. * n / nmax)
         
-        Use the chunkSize argument to determine how many records are inserted at per iteration.
+        Use the chunkSize argument to determine how many records are inserted per iteration.
         See insert() for a description of all other options.
         """
         
@@ -259,7 +249,6 @@ class SqliteDatabase:
                 self.exe(cmd, records, batch=True)
                 yield (numRecs, numRecs)
                 return
-
 
             chunkSize = int(chunkSize) ## just make sure
             offset = 0
@@ -558,6 +547,14 @@ class SqliteDatabase:
             tables[table] = columns
             
         self.tables = tables
+
+
+def quoteList(strns):
+    """Given a list of strings, return a single string like '"string1", "string2",...'
+        Note: in SQLite, double quotes are for escaping table and column names; 
+              single quotes are for string literals.
+    """
+    return ','.join(['"'+s+'"' for s in strns])
 
 
 class Transaction:
