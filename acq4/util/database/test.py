@@ -17,33 +17,33 @@ def testDataRetrieval():
 
     ## Test insertion and retrieval of different data types into each column type
     vals = [
-        ('int', 1), 
-        ('float', 1.5), 
-        ('int-float', 10.0), 
-        ('int-string', '10'), 
-        ('float-string', '3.1415'), 
-        ('string', 'Stringy'), 
-        ('object', [1,'x']), 
-        ('byte-string', 'str\1\2\0str'),
-        ('None', None),
+        ('int', (1,)*5), 
+        ('float', (1.5,)*5), 
+        ('int-float', (10.0,)*5), 
+        ('int-string', ('10',)*5), 
+        ('float-string', ('3.1415',)*5), 
+        ('string', ('Stringy',)*5), 
+        ('object', (None, None, [1,'x'], [1,'x'], None)), 
+        ('byte-string', ('str\1\2\0str',)*5),
+        ('None', (None,)*5),
     ]
 
     expect = [
-        (1L, 1.0, u'1', 1, 1L),
-        (1L, 1.5, u'1.5', 1.5, 1.5),
-        (10L, 10.0, u'10.0', 10.0, 10L),
-        (10L, 10.0, u'10', '10', 10L),
+        (1, 1.0, u'1', 1, 1),
+        (1, 1.5, u'1.5', 1.5, 1.5),
+        (10, 10.0, u'10.0', 10.0, 10),
+        (10, 10.0, u'10', '10', 10),
         (3.1415, 3.1415, u'3.1415', '3.1415', 3.1415),
         (u'Stringy', u'Stringy', u'Stringy', 'Stringy', u'Stringy',),
-        (u'', u'', u"[1, 'x']", [1, 'x'], u''),
-        (u'str\x01\x02', u'str\x01\x02', u'str\x01\x02', 'str\x01\x02\x00str', u'str\x01\x02'),
+        (None, None, u"[1, 'x']", [1, 'x'], None),
+        (u'str\1\2\0str', u'str\1\2\0str', u'str\1\2\0str', 'str\x01\x02\x00str', u'str\1\2\0str'),
         (None,)*5,
     ]
 
     for i, nv in enumerate(vals):
         name, val = nv
         db('delete from t')
-        db.insert('t', **dict([(f, val) for f in columns]))
+        db.insert('t', **dict(zip(columns, val)))
         result = db.select('t')[0]
         for j,v in enumerate(result.values()):
             assert type(v) == type(expect[i][j])
@@ -57,21 +57,11 @@ def testDataRetrieval():
     db.insert('t', **dict([(f, None) for f in columns]))
 
     for name, val in vals:
-        db.insert('t', **dict([(f, val) for f in columns]))
+        db.insert('t', **dict(zip(columns, val)))
     result =  db.select('t', toArray=True)
 
-    expect = np.array([
-        (None, None, None, None, None),
-        (1L, 1.0, u'1', 1, 1L),
-        (1L, 1.5, u'1.5', 1.5, 1.5),
-        (10L, 10.0, u'10.0', 10.0, 10L),
-        (10L, 10.0, u'10', '10', 10L),
-        (3.1415, 3.1415, u'3.1415', '3.1415', 3.1415),
-        (u'Stringy', u'Stringy', u'Stringy', 'Stringy', u'Stringy'),
-        (u'', u'', u"[1, 'x']", [1, 'x'], u''),
-        (u'str\x01\x02', u'str\x01\x02', u'str\x01\x02', 'str\x01\x02\x00str', u'str\x01\x02'),
-        (None, None, None, None, None)
-    ], dtype=[('int', 'O'), ('real', 'O'), ('text', 'O'), ('blob', 'O'), ('other', 'O')])
+    expect = np.array([(None,)*5] + expect, 
+       dtype=[('int', 'O'), ('real', 'O'), ('text', 'O'), ('blob', 'O'), ('other', 'O')])
     assert all(result == expect)
 
 
