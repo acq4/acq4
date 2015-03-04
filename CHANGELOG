@@ -17,7 +17,7 @@ acq4-0.9.3 (unreleased)
     Bugfixes:
         Fixed issues with Scanner grid controls in TaskRunner
     Maintenance:
-
+        util.database now uses built-in sqlite3 module instead of QtSql
 
 acq4-0.9.2 2014-01-10
 
