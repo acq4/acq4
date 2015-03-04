@@ -53,9 +53,9 @@ class DataSummary():
         # second, between two dates
         daylist = None
         if daylistfile is None:
-            minday = (2010, 1, 1)
+            minday = (2012, 2, 15)
             minday = minday[0]*1e4+minday[1]*1e2+minday[2]
-            maxday = (2015, 12, 31)
+            maxday = (2012, 2, 17)
             maxday = maxday[0]*1e4+maxday[1]*1e2+maxday[2]
         else:
             daylist = []
@@ -109,6 +109,8 @@ class DataSummary():
                 self.daystring += ' [no notes]'
             self.daystring += '\t'
             self.doSlices(os.path.join(self.basedir, day))
+            os.closerange(8, 65536)  # close all files in each iteration
+            gc.collect()
 
     def doSlices(self, day):
         """
@@ -176,6 +178,8 @@ class DataSummary():
                     self.cellstring += i
             else:
                 self.cellstring += ' No cell notes'
+            self.cellstring += '\t'
+
             if cl is not None and 'description' in cl.keys() and len(cl['description']) > 0:
                 l = self.twd['cell'].wrap(cl['description'])
                 for i in l:

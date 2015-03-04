@@ -878,13 +878,13 @@ class IVCurve(AnalysisModule):
         # summary table header is written anew for each cell
         ltxt = ''
         if script_header:
-            ltxt = '{:34s}\t{:24s}\t'.format("Cell", "Protocol")
+            ltxt = '{:34s}\t{:15s}\t{:24s}\t'.format("Cell", "Genotype", "Protocol")
             for k in data_template.keys():
                 ltxt += '{:<s}\t'.format(k)
             ltxt += '\n'
             script_header = False
 
-        ltxt += '{:34s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Protocol'])
+        ltxt += '{:34s}\t{:15s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Genotype'], self.analysis_summary['Protocol'])
           
         for a in data_template.keys():
             if a in self.analysis_summary.keys():
@@ -1060,6 +1060,10 @@ class IVCurve(AnalysisModule):
                 #print dir(self.data_plot)
                 # self.main_layout.update()
                 self.analysis_summary['Drugs'] = thiscell['choice'][p]
+                if 'genotype' in thiscell.keys():
+                    self.analysis_summary['Genotype'] = thiscell['genotype']
+                else:
+                    self.analysis_summary['Genotype'] = ''
                 # alt_flag = bool(thiscell['alternation'])
                 # self.analysis_parameters['alternation'] = alt_flag
                 # self.ctrl.PSPReversal_Alternation.setChecked((QtCore.Qt.Unchecked, QtCore.Qt.Checked)[alt_flag])
@@ -1394,8 +1398,7 @@ class IVCurve(AnalysisModule):
         Compute the steady-state IV from the selected time window
 
         Input parameters:
-            clear: a boolean flag that originally allowed accumulation of plots
-                    presently, ignored.
+            None.
         returns:
             nothing.
         modifies:
