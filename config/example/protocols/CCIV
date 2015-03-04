@@ -1,5 +1,5 @@
 protocol:
-    windowState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%02%00%00%00%02%00%00%05%A4%00%00%01L%FC%01%00%00%00%05%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01%25%00%00%00%AB%00%FF%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%01%5B%00%00%02~%00%00%00%00%00%00%00%00%FB%00%00%00%10%00T%00a%00s%00k%00D%00o%00c%00k%01%00%00%01%29%00%00%01O%00%00%01%18%00%FF%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%02%7C%00%00%01%D5%00%00%014%00%FF%FF%FF%FC%00%00%04U%00%00%01O%00%00%00%C1%00%FF%FF%FF%FA%00%00%00%00%02%00%00%00%02%FB%00%00%00%06%00D%00A%00Q%01%00%00%00%00%FF%FF%FF%FF%00%00%017%00%FF%FF%FF%FB%00%00%00%14%00d%00o%00c%00k%00W%00i%00d%00g%00e%00t%01%00%00%00%00%00%00%01%14%00%00%00%40%00%FF%FF%FF%00%00%00%03%00%00%05%A4%00%00%02%81%FC%01%00%00%00%01%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%00%00%00%00%05%A4%00%00%01%21%00%FF%FF%FF%00%00%05%A4%00%00%00%00%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
+    windowState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%02%00%00%00%02%00%00%03%F5%00%00%00%C6%FC%01%00%00%00%04%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01%14%00%00%00%C9%01%00%00%05%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%01%5B%00%00%02~%00%00%00%00%00%00%00%00%FB%00%00%00%10%00T%00a%00s%00k%00D%00o%00c%00k%01%00%00%01%17%00%00%01Y%00%00%01%26%01%00%00%05%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%02s%00%00%01%82%00%00%01W%01%00%00%05%00%00%00%03%00%00%03%F5%00%00%01%FF%FC%01%00%00%00%01%FC%00%00%00%00%00%00%03%F5%00%00%01%3C%00%FF%FF%FF%FA%00%00%00%02%02%00%00%00%03%FB%00%00%00%14%00d%00o%00c%00k%00W%00i%00d%00g%00e%00t%01%00%00%00%00%FF%FF%FF%FF%00%00%00%5B%01%00%00%05%FB%00%00%00%06%00D%00A%00Q%01%00%00%00%00%FF%FF%FF%FF%00%00%00%F3%01%00%00%05%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%01%E6%00%00%02%25%00%00%01%3D%01%00%00%05%00%00%03%F5%00%00%00%00%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
     params: [('Clamp1', 'command.Pulse_amplitude', True, [])]
     conf:
         continuous: False
@@ -44,8 +44,13 @@ devices:
                         forgetTracesCheck: False
                         view:
                             wheelScaleFactor: -0.125
-                            viewRange: [[-0.0024488775998915049, 0.082448877599891501], [-4.4152273992686999e-10, 1.4152273992686999e-10]]
+                            viewRange: [[-0.0029727660103012156, 0.082972766010301222], [-4.7960297521679917e-10, 4.7960297521679917e-10]]
                             autoPan: [False, False]
+                            limits:
+                                xRange: [None, None]
+                                yLimits: [None, None]
+                                yRange: [None, None]
+                                xLimits: [None, None]
                             enableMenu: True
                             mouseEnabled: [True, True]
                             linkedViews: [None, None]
@@ -53,14 +58,15 @@ devices:
                             background: None
                             yInverted: False
                             autoVisibleOnly: [False, False]
-                            targetRange: [[-0.0024488775998915049, 0.082448877599891501], [-4.4152273992686999e-10, 1.4152273992686999e-10]]
+                            targetRange: [[-0.0029727660103012156, 0.082972766010301222], [-4.7960297521679917e-10, 4.7960297521679917e-10]]
+                            xInverted: False
                             autoRange: [1.0, 1.0]
                             aspectLocked: False
                     holdingCheck: False
                     holdingSpin: 0.0
                     functionCheck: True
                     preSetCheck: False
-                    groupBox: True
+                    groupBox: False
                     displayCheck: True
                     preSetSpin: 0.0
                     waveGeneratorWidget:
@@ -77,21 +83,21 @@ devices:
                                 amplitude:
                                     sequence: 'range'
                                     start: -4e-10
-                                    stop: 1e-10
-                                    steps: 6
-                                    value: 0
+                                    stop: 4e-10
+                                    steps: 11
+                                    value: 1e-10
                                 sum:
                                     affect: 'length'
                                     sequence: 'off'
-                                    value: 0
+                                    value: 5.0000000000000005e-12
                                 type: 'pulse'
                         params:
                             Pulse_amplitude:
-                                default: '0*A'
+                                default: '100*pA'
                                 sequence: 'range'
                                 start: '-400*pA'
-                                stop: '100*pA'
-                                steps: 6
+                                stop: '400*pA'
+                                steps: 11
                         advancedMode: False
                 primary:
                     recordInitCheck: False
@@ -122,8 +128,13 @@ devices:
                         forgetTracesCheck: False
                         view:
                             wheelScaleFactor: -0.125
-                            viewRange: [[-0.0024481123256415386, 0.082423112325641548], [-0.066232737232121419, -0.063729203118434663]]
+                            viewRange: [[-0.002949521047276026, 0.08292452104727603], [-0.1648354109974907, 0.0324514260218138]]
                             autoPan: [False, False]
+                            limits:
+                                xRange: [None, None]
+                                yLimits: [None, None]
+                                yRange: [None, None]
+                                xLimits: [None, None]
                             enableMenu: True
                             mouseEnabled: [True, True]
                             linkedViews: [None, None]
@@ -131,10 +142,11 @@ devices:
                             background: None
                             yInverted: False
                             autoVisibleOnly: [False, False]
-                            targetRange: [[-0.0024481123256415386, 0.082423112325641548], [-0.066232737232121419, -0.063729203118434663]]
+                            targetRange: [[-0.002949521047276026, 0.08292452104727603], [-0.1648354109974907, 0.0324514260218138]]
+                            xInverted: False
                             autoRange: [1.0, 1.0]
                             aspectLocked: False
-                    groupBox: True
+                    groupBox: False
                     recordCheck: True
                     displayCheck: True
         mode: 'ic'
@@ -149,6 +161,8 @@ devices:
         denoiseWidth: 1
         butterworthStopDB: 10.0
         rate: 40000.0
+        butterworthBidirectional: False
         besselOrder: 4
         triggerDevice: u'No Trigger'
+        besselBidirectional: False
         besselCutoff: 20000.0

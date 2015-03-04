@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './acq4/devices/DAQGeneric/InputChannelTemplate.ui'
+# Form implementation generated from reading ui file 'InputChannelTemplate.ui'
 #
-# Created: Tue Dec 24 01:49:09 2013
-#      by: PyQt4 UI code generator 4.10
+# Created: Sun Feb 22 13:29:16 2015
+#      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -31,12 +31,12 @@ class Ui_Form(object):
         self.verticalLayout.setSpacing(0)
         self.verticalLayout.setMargin(0)
         self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
-        self.groupBox = QtGui.QGroupBox(Form)
+        self.groupBox = GroupBox(Form)
         font = QtGui.QFont()
         font.setBold(True)
         font.setWeight(75)
         self.groupBox.setFont(font)
-        self.groupBox.setCheckable(True)
+        self.groupBox.setCheckable(False)
         self.groupBox.setObjectName(_fromUtf8("groupBox"))
         self.gridLayout = QtGui.QGridLayout(self.groupBox)
         self.gridLayout.setSpacing(0)
@@ -79,3 +79,4 @@ class Ui_Form(object):
         self.displayCheck.setText(_translate("Form", "Display", None))
         self.recordInitCheck.setText(_translate("Form", "Record Initial State", None))
 
+from acq4.pyqtgraph import GroupBox

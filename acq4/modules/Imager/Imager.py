@@ -561,7 +561,11 @@ class Imager(Module):
         state = roi.getState()
         w, h = state['size']
         rparam = self.scanProgram.components[0].ctrlParameter()
-        rparam.system.p0 = pg.Point(roi.mapToView(pg.Point(0,h)))  # top-left
+        p0 = roi.mapToView(pg.Point(0,h))
+        if p0 is None:
+            # could not map pint; probably view has been closed.
+            return 
+        rparam.system.p0 = pg.Point(p0)  # top-left
         rparam.system.p1 = pg.Point(roi.mapToView(pg.Point(w,h)))  # rop-right
         param = self.param.child('Scan Control')
         rows = param['Image Width'] * h / w

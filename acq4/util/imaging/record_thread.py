@@ -209,13 +209,5 @@ class RecordThread(Thread):
         data = MetaArray(np.concatenate(imgs, axis=0), info=arrayInfo)
         if newRec:
             self.currentStack = dh.writeFile(data, 'video', autoIncrement=True, info=frames[0][1], appendAxis='Time')
-            # self.currentFrameNum = 0
         else:
             data.write(self.currentStack.name(), appendAxis='Time')
-        #     s = 1.0/self.currentFrameNum
-            
-        # self.currentFrameNum += len(frames)
-    
-    # def showMessage(self, msg):
-    #     self.sigShowMessage.emit(msg)
-    

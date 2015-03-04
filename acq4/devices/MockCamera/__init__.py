@@ -1,1 +1,1 @@
-from MockCamera import *
+from mock_camera import *

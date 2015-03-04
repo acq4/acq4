@@ -1,16 +1,23 @@
-acq4-0.9.2 (unreleased)
+acq4-0.9.3 (unreleased)
 
     API / behavior changes:
         Disabled HDF5 compression by default--lzf is not readable by most HDF5 libraries, and gzip is too slow. 
             (see the 'defaultCompression' config option).
     New Features:
+        Spiral scanning for single-cell photostimulation
+        Panic button: ESC key global shortcut closes shutters, stops stage/manipulator, aborts all tasks, etc.
+        Overhaul of 2p Imager module:
+            Uses services provided by scanner to provide raster scanning, which makes the behavior more consistent 
+            with task runner.
+            Shares image display code and user interface with cameras to make imaging consistent across device types
+        Support for Thorlabs MFC-1 focus controller using ROE-200 unused z-axis
         Added export option to ImageView
         Added new online analysis module for photostimulation (replaces old Uncaging module)
         Added support for controlling bidirectional filtering by NiDAQ device
     Bugfixes:
         Fixed issues with Scanner grid controls in TaskRunner
     Maintenance:
-
+        util.database now uses built-in sqlite3 module instead of QtSql
 
 acq4-0.9.2 2014-01-10
 

@@ -3,7 +3,6 @@ from acq4.modules.TaskRunner.analysisModules import AnalysisModule
 from acq4.Manager import getManager
 from PyQt4 import QtCore, QtGui
 from PhotostimTemplate import Ui_Form
-#from acq4.pyqtgraph import ImageItem
 import numpy as np
 import scipy.ndimage
 from acq4.util.metaarray import MetaArray
@@ -189,17 +188,7 @@ class Task:
     def recalculate(self, allFrames=False):
         if len(self.frames) < 1:
             return
-        #print "recalc", allFrames
-        #print self.state
-        ## calculate image
         if allFrames:
-            ## Clear out old displays
-            # for (i, p, s) in self.items:
-            #     s = i.scene()
-            #     if s is not None:
-            #         s.removeItem(i)
-            # self.items = []
-            
             ## Compute for all frames
             self.spots = {'pos': [], 'size': [], 'color': []}
             frames = self.frames
@@ -209,19 +198,12 @@ class Task:
         for f in frames:
             color = self.evaluateTrace(f['clamp'])
 
-            # spot = QtGui.QGraphicsEllipseItem(QtCore.QRectF(-0.5, -0.5, 1, 1))
-            # spot.setBrush(QtGui.QBrush(QtGui.QColor(r*255, g*255, b*255, alpha)))
-            # spot.setPen(QtGui.QPen(QtCore.Qt.NoPen))
             p = f['scanner']['position']
             s = f['scanner']['spotSize']
             self.spots['pos'].append(p)
             self.spots['size'].append(s)
             self.spots['color'].append(color)
-
-            # self.items.append([spot, p, [s, s]])
             
-        # self.hide()  ## Make sure only correct items are displayed
-        # self.show()
         x = [p[0] for p in self.spots['pos']]
         y = [p[1] for p in self.spots['pos']]
         self.scatter.setData(x, y, size=self.spots['size'], brush=self.spots['color'])
@@ -231,10 +213,6 @@ class Task:
         scene = camMod.ui.view.scene()
         if self.scatter.scene() is not scene:
             camMod.ui.addItem(self.scatter)
-        # for i in self.items:
-        #     (item, p, s) = i
-        #     if item.scene() is not scene:
-        #         camMod.ui.addItem(item, p, s, self.z)
 
     def evaluateTrace(self, data):
         bstart = self.state['clampBaseStartSpin']
@@ -251,24 +229,6 @@ class Task:
         std = base.std()
         testDetrend = test - med
         testBlur = scipy.ndimage.gaussian_filter(testDetrend, (1e-3 / dt))
-        # g = 0.0
-        # tol = self.state['pspToleranceSpin']
-        # r = clip(testBlur.max() / (tol*std), 0.0, 1.0)
-        # b = clip(-testBlur.min() / (tol*std), 0.0, 1.0)
-        
-        ## Only check first 10ms after stim
-        # testLen = 10e-3
-        # sec = abs(testBlur[:int(testLen/dt)])
-        # secMax = max(abs(testBlur.max()), abs(testBlur.min()))
-        # if sec.max() < secMax:
-        #     g = 0
-        # else:
-        #     sec = sec * (sec < (secMax * 0.5))
-        #     halfTime = argwhere(sec==sec.max())[0,0] * dt
-        #     g = (testLen-halfTime) / testLen
-        #     g = clip(g, 0.0, 1.0)
-        # g = g * max(r, b)
-        # return (r, g, b)
 
         # Compute size of positive / negative peaks
         mx = testDetrend.max()
@@ -291,8 +251,6 @@ class Task:
 
         spikes = np.argwhere(np.diff(mask.astype(np.int8)) == 1)
         results['nSpikes'] = len(spikes)
-        print results
-        print med, test.max(), thresh
         # generate spot color from analysis
         color = self.ui().ui.colorMapper.map(results)
 
@@ -307,29 +265,14 @@ class Task:
         
     def show(self):
         self.scatter.setVisible(True)
-        # for (i, p, s) in self.items:
-        #     i.show()
         
     def hide(self):
         self.scatter.setVisible(False)
-        # for (i, p, s) in self.items:
-        #     i.hide()
         
     def close(self):
         ## Remove items from scene
-        # if self.items is None:
-        #     return
-        # for (item, p, s) in self.items:
-        #     try:
-        #         scene = item.scene()
-        #         if scene is not None:
-        #             scene.removeItem(item)
-        #     except:
-        #         printExc("Error while cleaning up uncaging analysis:")
-                
         self.frames = None
         self.spots = None
         if self.scatter.scene() is not None:
             self.scatter.scene().removeItem(self.scatter)
-        # self.items = None
         

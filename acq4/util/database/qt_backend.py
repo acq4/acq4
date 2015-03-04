@@ -1,16 +1,9 @@
-# -*- coding: utf-8 -*-
-import numpy as np
-import pickle, re, os
-import acq4.Manager
-import collections
-import acq4.util.functions as functions
-import acq4.util.advancedTypes as advancedTypes
-import acq4.util.debug as debug
-from PyQt4 import QtCore
-import sqlite3
+"""
+Deprecated class based on QtSql; new implementation uses builtin sqlite3 package.
+"""
 
 class SqliteDatabase:
-    """Encapsulates an SQLITE database to add more features.
+    """Encapsulates an SQLITE database through QtSql to make things a bit more pythonic.
     Arbitrary SQL may be executed by calling the db object directly, eg: db('select * from table')
     Using the select() and insert() methods will do automatic type conversions and allows
     any picklable objects to be directly stored in BLOB type columns. (it is not necessarily
@@ -23,12 +16,24 @@ class SqliteDatabase:
         ## decide on an appropriate name for this connection.
         ## For file connections, the name should always be the name of the file
         ## to avoid opening more than one connection to the same file.
-        if fileName != ':memory:':
-            fileName = os.path.abspath(fileName)
-        self._connectionName = fileName
-        self.db = sqlite3.connect(self._connectionName)
-        self.db.row_factory = sqlite3.Row
-        self.db.isolation_level = None
+        if fileName == ':memory:':
+            c = 0
+            while True:
+                self._connectionName = ':memory:%d' % c
+                if self._connectionName not in QtSql.QSqlDatabase.connectionNames():
+                    break
+                c += 1
+        else:
+            self._connectionName = os.path.abspath(fileName)
+            
+        if self._connectionName not in QtSql.QSqlDatabase.connectionNames():
+            self.db = QtSql.QSqlDatabase.addDatabase("QSQLITE", self._connectionName)
+        else:
+            self.db = QtSql.QSqlDatabase.database(self._connectionName)
+            
+            
+        self.db.setDatabaseName(fileName)
+        self.db.open()
         self.tables = None
         self._transactions = []
         self._readTableList()
@@ -59,31 +64,47 @@ class SqliteDatabase:
         """
         p = debug.Profiler('SqliteDatabase.exe', disabled=True)
         p.mark('Command: %s' % cmd)
+        #print cmd
+        #import traceback
+        #traceback.print_stack()
         
+        q = QtSql.QSqlQuery(self.db)
         if data is None:
-            cur = self.db.execute(cmd)
+            self._exe(q, cmd)
             p.mark("Executed with no data")
         else:
             data = TableData(data)
             res = []
+            if not q.prepare(cmd):
+                print "SQL Query:\n    %s" % cmd
+                raise Exception("Error preparing SQL query (query is printed above): %s" % str(q.lastError().text()))
+            p.mark("Prepared query")
             if batch:
-                cur = self.db.executemany(cmd, data.__iter__())
+                for k in data.columnNames():
+                    q.bindValue(':'+k, data[k])
+                self._exe(q, batch=True)
+                    
             else:
                 for d in data:
+                    #print len(d)
+                    for k, v in d.iteritems():
+                        q.bindValue(':'+k, v)
+                        #print k, v, type(v)
                     p.mark("bound values for record")
-                    self.db.execute(cmd, d)
+                    #print "==execute with bound data=="
+                    #print cmd
+                    #print q.boundValues()
+                    #for k, v in q.boundValues().iteritems():
+                        #print str(k), v.typeName()
+                    self._exe(q)
                     p.mark("executed with data")
-
-        if cmd is not None:
-            if str(cmd)[:6].lower() == 'create':
-                self.tables = None  ## clear table cache
                 
         if toArray:
-            ret = self._queryToArray(cur)
+            ret = self._queryToArray(q)
         elif toDict:
-            ret = self._queryToDict(cur)
+            ret = self._queryToDict(q)
         else:
-            ret = cur
+            ret = q
         p.finish()
         return ret
             
@@ -343,6 +364,27 @@ class SqliteDatabase:
     def tableLength(self, table):
         return self('select count(*) from "%s"' % table)[0]['count(*)']
     
+    def _exe(self, query, cmd=None, batch=False):
+        """Execute an SQL query, raising an exception if there was an error. (internal use only)"""
+        if batch:
+            fn = query.execBatch
+        else:
+            fn = query.exec_
+            
+        if cmd is None:
+            ret = fn()
+        else:
+            ret = fn(cmd)
+        if not ret:
+            if cmd is not None:
+                print "SQL Query:\n    %s" % cmd
+                raise Exception("Error executing SQL (query is printed above): %s" % str(query.lastError().text()))
+            else:
+                raise Exception("Error executing SQL: %s" % str(query.lastError().text()))
+                
+        if str(query.executedQuery())[:6].lower() == 'create':
+            self.tables = None  ## clear table cache
+    
     def _buildWhereClause(self, where, table):
         if where is None or len(where) == 0:
             return ''
@@ -356,6 +398,7 @@ class SqliteDatabase:
                 conds.append('"%s"=%s' % (k,v))
         whereStr = "WHERE " + " AND ".join(conds)
         return whereStr
+
     
     def _prepareData(self, table, data, ignoreUnknownColumns=False, batch=False):
         ## Massage data so it is ready for insert into the DB. (internal use only)
@@ -378,7 +421,7 @@ class SqliteDatabase:
             
             typ = schema[k].lower()
             if typ == 'blob':
-                converters[k] = lambda obj: buffer(pickle.dumps(obj))
+                converters[k] = lambda obj: QtCore.QByteArray(pickle.dumps(obj))
             elif typ == 'int':
                 converters[k] = int
             elif typ == 'real':
@@ -399,9 +442,6 @@ class SqliteDatabase:
                 if k not in schema:
                     if ignoreUnknownColumns:
                         continue
-                    #if addUnknownColumns:  ## Is this just a bad idea?
-                        #dtyp = self.suggestColumnType(rec[k])
-                        #self.addColumn(table, k, dtyp)
                 if rec[k] is None:
                     newRec[k] = None
                 else:
@@ -424,8 +464,8 @@ class SqliteDatabase:
     def _queryToDict(self, q):
         prof = debug.Profiler("_queryToDict", disabled=True)
         res = []
-        for rec in q:
-            res.append(self._readRecord(rec))
+        while q.next():
+            res.append(self._readRecord(q.record()))
         return res
 
     def _queryToArray(self, q):
@@ -449,15 +489,31 @@ class SqliteDatabase:
     def _readRecord(self, rec):
         prof = debug.Profiler("_readRecord", disabled=True)
         data = collections.OrderedDict()
-        names = rec.keys()
-        for i in range(len(rec)):
-            val = rec[i]
-            name = names[i]
-            ## Unpickle byte arrays into their original objects.
-            ## (Hopefully they were stored as pickled data in the first place!)
-            if isinstance(val, buffer):
-                val = pickle.loads(str(val))
-            data[name] = val
+        for i in range(rec.count()):
+            f = rec.field(i)
+            n = str(f.name())
+            if rec.isNull(i):
+                val = None
+            else:
+                val = rec.value(i)
+                ## If we are using API 1 for QVariant (ie not PySide)
+                ## then val is a QVariant and must be coerced back to a python type
+                if HAVE_QVARIANT and isinstance(val, QtCore.QVariant):
+                    t = val.type()
+                    if t in [QtCore.QVariant.Int, QtCore.QVariant.LongLong]:
+                        val = val.toInt()[0]
+                    if t in [QtCore.QVariant.Double]:
+                        val = val.toDouble()[0]
+                    elif t == QtCore.QVariant.String:
+                        val = unicode(val.toString())
+                    elif t == QtCore.QVariant.ByteArray:
+                        val = val.toByteArray()
+                        
+                ## Unpickle byte arrays into their original objects.
+                ## (Hopefully they were stored as pickled data in the first place!)
+                if isinstance(val, QtCore.QByteArray):
+                    val = pickle.loads(str(val))
+            data[n] = val
         prof.finish()
         return data
 
@@ -474,284 +530,3 @@ class SqliteDatabase:
             tables[table] = columns
             
         self.tables = tables
-
-
-
-
-
-def quoteList(strns):
-    """Given a list of strings, return a single string like '"string1", "string2",...'
-        Note: in SQLite, double quotes are for escaping table and column names; 
-              single quotes are for string literals.
-    """
-    return ','.join(['"'+s+'"' for s in strns])
-
-
-class Transaction:
-    """See SQLiteDatabase.transaction()"""
-    def __init__(self, db, name=None):
-        self.db = db
-        self.name = name
-        
-    def __enter__(self):
-        if self.name is None:
-            self.name = 'transaction%d' % len(self.db._transactions)
-        self.db('SAVEPOINT %s' % self.name)
-        self.db._transactions.append(self)
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if exc_type is None:
-            self.db('RELEASE SAVEPOINT %s' % self.name)
-        else:
-            try:
-                self.db('ROLLBACK TRANSACTION TO %s' % self.name)
-                self.db.tables = None  ## make sure we are forced to re-read the table list after the rollback.
-            except Exception:
-                print "WARNING: Error occurred during transaction and rollback failed."
-                
-        if self.db._transactions[-1] is not self:
-            print self, self.db._transactions
-            raise Exception('Tried to exit transaction before another nested transaction has finished.')
-        self.db._transactions.pop(-1)
-
-
-class TableData:
-    """
-    Class for presenting multiple forms of tabular data through a consistent interface.
-    May contain:
-        - numpy record array
-        - list-of-dicts (all dicts are _not_ required to have the same keys)
-        - dict-of-lists
-        - dict (single record)
-               Note: if all the values in this record are lists, it will be interpreted as multiple records
-        
-    Data can be accessed and modified by column, by row, or by value
-        data[columnName]                        # returns list or array
-        data[rowId]                             # returns dict or ordereddict
-        data[columnName, rowId] = value
-        data[columnName] = [value, value, ...]
-        data[rowId] = {columnName: value, ...}
-    """
-    
-    def __init__(self, data):
-        self.data = data
-        if isinstance(data, np.ndarray):
-            self.mode = 'array'
-        elif isinstance(data, list):
-            self.mode = 'list'
-        elif isinstance(data, dict):
-            types = set(map(type, data.values()))
-            ## dict may be a dict-of-lists or a single record
-            types -= set([list, np.ndarray]) ## if dict contains any non-sequence values, it is probably a single record.
-            if len(types) != 0:
-                self.data = [self.data]
-                self.mode = 'list'
-            else:
-                self.mode = 'dict'
-        elif isinstance(data, TableData) or 'TableData' in str(type(data)):
-            self.data = data.data
-            self.mode = data.mode
-        else:
-            raise Exception("Cannot create TableData from object '%s' (type='%s')" % (str(data), type(data)))
-        
-        for fn in ['__getitem__', '__setitem__']:
-            setattr(self, fn, getattr(self, '_TableData'+fn+self.mode))
-        self.copy = getattr(self, 'copy_' + self.mode)
-        
-    def originalData(self):
-        return self.data
-    
-    def toArray(self):
-        if self.mode == 'array':
-            return self.data
-        if len(self) < 1:
-            #return np.array([])  ## need to return empty array *with correct columns*, but this is very difficult, so just return None
-            return None
-        rec1 = self[0]
-        #dtype = functions.suggestRecordDType(self)
-        ## Need to look through all data before deciding on dtype.
-        ## It is not sufficient to look at just the first record,
-        ## nor to look at the column types.
-        types = {k:set() for k in self.keys()}
-        for rec in self:
-            for k,v in rec.items():
-                types[k].add(type(v))
-        dtype = []
-        for k in self.keys():
-            t = types[k]
-            if t == set([float]) or t == set([float, type(None)]):
-                dtype.append((k, float))
-            elif t == set([int]):
-                dtype.append((k, int))
-            else:
-                dtype.append((k, object))
-        
-        #print rec1, dtype
-        arr = np.empty(len(self), dtype=dtype)
-        arr[0] = tuple(rec1.values())
-        for i in xrange(1, len(self)):
-            arr[i] = tuple(self[i].values())
-        return arr
-            
-    def __getitem__array(self, arg):
-        if isinstance(arg, basestring):
-            return self.data[arg]
-        elif isinstance(arg, int):
-            return collections.OrderedDict([(k, self.data[k][arg]) for k in self.columnNames()])
-        elif isinstance(arg, tuple):
-            return self.data[arg[0]][arg[1]]
-        elif isinstance(arg, slice):
-            return TableData(self.data[arg])
-        else:
-            raise Exception("Cannot index TableData with object '%s' (type='%s')" % (str(arg), type(arg)))
-            
-    def __getitem__list(self, arg):
-        if isinstance(arg, basestring):
-            return [d.get(arg, None) for d in self.data]
-        elif isinstance(arg, int):
-            return self.data[arg]
-        elif isinstance(arg, tuple):
-            arg = self._orderArgs(arg)
-            return self.data[arg[0]][arg[1]]
-        elif isinstance(arg, slice):
-            return TableData(self.data[arg])
-        else:
-            raise Exception("Cannot index TableData with object '%s' (type='%s')" % (str(arg), type(arg)))
-        
-    def __getitem__dict(self, arg):
-        if isinstance(arg, basestring):
-            return self.data[arg]
-        elif isinstance(arg, int):
-            return collections.OrderedDict([(k, v[arg]) for k, v in self.data.iteritems()])
-        elif isinstance(arg, tuple):
-            arg = self._orderArgs(arg)
-            return self.data[arg[1]][arg[0]]
-        elif isinstance(arg, slice):
-            return TableData(collections.OrderedDict([(k, v[arg]) for k, v in self.data.iteritems()]))
-        else:
-            raise Exception("Cannot index TableData with object '%s' (type='%s')" % (str(arg), type(arg)))
-
-    def __setitem__array(self, arg, val):
-        if isinstance(arg, tuple):
-            self.data[arg[0]][arg[1]] = val
-        else:
-            self.data[arg] = val
-
-    def __setitem__list(self, arg, val):
-        if isinstance(arg, basestring):
-            if len(val) != len(self.data):
-                raise Exception("Values (%d) and data set (%d) are not the same length." % (len(val), len(self.data)))
-            for i, rec in enumerate(self.data):
-                rec[arg] = val[i]
-        elif isinstance(arg, int):
-            self.data[arg] = val
-        elif isinstance(arg, tuple):
-            arg = self._orderArgs(arg)
-            self.data[arg[0]][arg[1]] = val
-        else:
-            raise TypeError(type(arg))
-        
-    def __setitem__dict(self, arg, val):
-        if isinstance(arg, basestring):
-            if len(val) != len(self.data[arg]):
-                raise Exception("Values (%d) and data set (%d) are not the same length." % (len(val), len(self.data[arg])))
-            self.data[arg] = val
-        elif isinstance(arg, int):
-            for k in self.data:
-                self.data[k][arg] = val[k]
-        elif isinstance(arg, tuple):
-            arg = self._orderArgs(arg)
-            self.data[arg[1]][arg[0]] = val
-        else:
-            raise TypeError(type(arg))
-
-    def _orderArgs(self, args):
-        ## return args in (int, str) order
-        if isinstance(args[0], basestring):
-            return (args[1], args[0])
-        else:
-            return args
-        
-    def copy_array(self):
-        return TableData(self.data.copy())
-        
-    def copy_list(self):
-        return TableData([rec.copy() for rec in self.data])
-        
-    def copy_dict(self):
-        return TableData({k:v[:] for k,v in self.data.iteritems()})
-        
-        
-    def __iter__(self):
-        for i in xrange(len(self)):
-            yield self[i]
-
-    def __len__(self):
-        if self.mode == 'array' or self.mode == 'list':
-            return len(self.data)
-        else:
-            return max(map(len, self.data.values()))
-
-    def columnNames(self):
-        """returns column names in no particular order"""
-        if self.mode == 'array':
-            return self.data.dtype.names
-        elif self.mode == 'list':
-            if len(self.data) == 0:
-                return []
-            return self.data[0].keys()  ## all records must have all keys. 
-            #names = set()
-            #for row in self.data:
-                #names.update(row.keys())
-            #return list(names)
-        elif self.mode == 'dict':
-            return self.data.keys()
-            
-    def keys(self):
-        return self.columnNames()
-    
-    
-def parseColumnDefs(defs, keyOrder=None):
-    """
-    Translate a few different forms of column definitions into a single common format.
-    These formats are accepted for all methods which request column definitions (createTable,
-    checkTable, etc)
-        list of tuples:  [(name, type, <constraints>), ...]
-        dict of strings: {name: type, ...}
-        dict of tuples:  {name: (type, <constraints>), ...}
-        dict of dicts:   {name: {'Type': type, ...}, ...}
-        
-    Returns dict of dicts as the common format.
-    """
-    if keyOrder is None:
-        keyOrder = ['Type', 'Constraints']
-    def isSequence(x):
-        return isinstance(x, list) or isinstance(x, tuple)
-    def toDict(args):
-        d = collections.OrderedDict()
-        for i,v in enumerate(args):
-            d[keyOrder[i]] = v
-            if i >= len(keyOrder) - 1:
-                break
-        return d
-        
-    if isSequence(defs) and all(map(isSequence, defs)):
-        return collections.OrderedDict([(c[0], toDict(c[1:])) for c in defs])
-        
-    if isinstance(defs, dict):
-        ret = collections.OrderedDict()
-        for k, v in defs.iteritems():
-            if isSequence(v):
-                ret[k] = toDict(v)
-            elif isinstance(v, dict):
-                ret[k] = v
-            elif isinstance(v, basestring):
-                ret[k] = {'Type': v}
-            else:
-                raise Exception("Invalid column-list specification: %s" % str(defs))
-        return ret
-        
-    else:
-        raise Exception("Invalid column-list specification: %s" % str(defs))
-
-    

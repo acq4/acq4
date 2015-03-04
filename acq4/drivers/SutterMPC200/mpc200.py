@@ -110,7 +110,16 @@ class SutterMPC200(SerialDevice):
 
         ## request position
         self.write('C')
-        packet = self.read(length=14, timeout=2.0, term='\r')
+        try:
+            packet = self.read(length=14, timeout=2.0, term='\r')
+        except DataError as err:
+            packet = err.data
+            # If interrupt occurred, there will be an extra 'I' byte at the beginning
+            if packet[0] == 'I' and err.extra == '\r':
+                packet = packet[1:]
+            else:
+                raise err
+
         
         drive, x, y, z = struct.unpack('=Blll', packet)
         pos = (x, y, z)
@@ -199,6 +208,17 @@ class SutterMPC200(SerialDevice):
         
         # watch for updates
 
+    @threadsafe
+    @resetDrive
+    def stop(self, drive):
+        """Stop moving *drive*
+        """
+        if drive is not None:
+            self.setDrive(drive)
+            self.write('\3')
+            self.read(1, term='\r')
+
+
 
 
         
@@ -211,7 +231,7 @@ if __name__ == '__main__':
         def driveChanged(self, newdrive, olddrive):
             print newdrive, olddrive
 
-    s = MPC200(port='COM3')
+    s = MPC200(port='COM4')
     
     while True:
         s.getPos()
