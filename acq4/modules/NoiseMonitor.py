@@ -17,7 +17,6 @@ class NoiseMonitor(Module):
         self.recordWritable = False
         self.resetDisplay = False
         self.showNewRecords = True
-        self.interval = 0.5
         
         self.win = QtGui.QSplitter()
         
@@ -35,7 +34,16 @@ class NoiseMonitor(Module):
         self.newBtn.clicked.connect(self.newRecord)
         self.loadBtn.clicked.connect(self.loadClicked)
         self.startBtn.toggled.connect(self.startToggled)
-        
+
+        self.params = pg.parametertree.Parameter.create(name='params', type='group', children=[
+        	dict(name='interval', type='float', value=2, suffix='s', siPrefix=True, limits=[0.001, None], step=1.0),
+        	dict(name='trace duration', type='float', value=1.0, suffix='s', siPrefix=True, limits=[0.001, None], step=1.0),
+        	dict(name='sample rate', type='int', value=1e6, suffix='Hz', siPrefix=True, limits=[100, None], step=1e5),
+        ])
+        self.ptree = pg.parametertree.ParameterTree()
+        self.ptree.setParameters(self.params)
+        self.ctrlWidget.addWidget(self.ptree, 4, 0)
+
         self.channelLayout = pg.LayoutWidget()
         self.win.addWidget(self.channelLayout)
         
@@ -43,6 +51,8 @@ class NoiseMonitor(Module):
         self.channelLayout.addWidget(self.channelSplitter, 0, 0)
         
         self.plot = pg.PlotWidget(labels={'left': ('Channel 1', 'A'), 'bottom': ('Time', 's')})
+        self.plot.setDownsampling(auto=True)
+        self.plot.setClipToView(True)
         self.channelSplitter.addWidget(self.plot)
         
         self.envelopePlot = pg.PlotWidget(labels={'left': ('Channel 1', 'A'), 'bottom': ('Time', 's')})
@@ -75,7 +85,8 @@ class NoiseMonitor(Module):
             try:
                 if self.recordDir is None or not self.recordWritable:
                     self.newRecord()
-                self.timer.start(self.interval * 1000)
+                self.timer.start(self.params['interval'] * 1000)
+                self.runOnce()
             except:
                 self.startBtn.setChecked(False)
                 raise
@@ -123,13 +134,13 @@ class NoiseMonitor(Module):
         data._data.file.close()
 
     def runOnce(self):
-        dur = 0.02
-        rate = 10000
+    	dur = self.params['trace duration']
+    	rate = self.params['sample rate']
         npts = int(dur * rate)
         cmd = {
             'protocol': {'duration': dur},
             'DAQ': {'rate': rate, 'numPts': npts},
-            'Clamp1': {'mode': 'vc', 'holding': 0, 'command': np.zeros(npts)},
+            'Clamp1': {'mode': 'vc', 'holding': 0, 'command': np.zeros(npts), 'recordSecondary': False},
         }
         task = self.manager.createTask(cmd)
         task.execute()
@@ -142,9 +153,9 @@ class NoiseMonitor(Module):
         dataArr = data.asarray()
         
         # inject random noise for testing
-        dataArr += np.random.normal(size=len(dataArr), scale=1e-9)
-        if np.random.random() > 0.9:
-            dataArr += np.sin(np.linspace(0, 1000 * np.random.random(), len(dataArr))) * 1e-9
+        # dataArr += np.random.normal(size=len(dataArr), scale=1e-9)
+        # if np.random.random() > 0.9:
+        #     dataArr += np.sin(np.linspace(0, 1000 * np.random.random(), len(dataArr))) * 1e-9
 
         # plot raw data only if envelope line is at max position
         if self.showNewRecords:
@@ -176,6 +187,12 @@ class NoiseMonitor(Module):
         fft = np.abs(np.fft.fft(dataArr))
         fft = fft[:len(fft)/2]
         freqArr = np.linspace(0, rate/2., len(fft))
+
+        # downsample spectrogram
+        ds = len(fft) // 1000
+        fft = fft[:ds*1000].reshape(ds, 1000).max(axis=0)
+        freqArr = freqArr[:ds*1000:ds]
+
         spec = pg.metaarray.MetaArray(fft[np.newaxis, :], info=[
             {'name': 'Trial', 'units': 's', 'values': trialArr},
             {'name': 'Frequency', 'units': 'Hz', 'values': freqArr}])

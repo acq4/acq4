@@ -372,11 +372,12 @@ class MultiClampTask(DeviceTask):
         """Return a list of the channels this task uses"""
         with MutexLocker(self.dev.lock):
             if self.usedChannels is None:
-                self.usedChannels = []
-                for ch in ['primary', 'secondary', 'command']:
-                    if ch in self.cmd:
-                        self.usedChannels.append(ch)
-                        
+                self.usedChannels = ['primary']
+                if self.cmd.get('recordSecondary', True):
+                    self.usedChannels.append('secondary')
+                if 'command' in self.cmd:
+                    self.usedChannels.append('command')
+                
             return self.usedChannels
         
                 
