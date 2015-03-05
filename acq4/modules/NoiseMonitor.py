@@ -1,8 +1,9 @@
-import time
+import time, weakref
 import numpy as np
 from PyQt4 import QtGui, QtCore
 
 from acq4.modules.Module import Module
+import acq4.util.InterfaceCombo  # just to register 'interface' parameter type
 from acq4.util.DataManager import getDirHandle
 import acq4.pyqtgraph as pg
 
@@ -15,8 +16,7 @@ class NoiseMonitor(Module):
         
         self.recordDir = None
         self.recordWritable = False
-        self.resetDisplay = False
-        self.showNewRecords = True
+        self.running = False
         
         self.win = QtGui.QSplitter()
         
@@ -47,44 +47,30 @@ class NoiseMonitor(Module):
         self.channelLayout = pg.LayoutWidget()
         self.win.addWidget(self.channelLayout)
         
-        self.channelSplitter = QtGui.QSplitter(QtCore.Qt.Vertical)
-        self.channelLayout.addWidget(self.channelSplitter, 0, 0)
-        
-        self.plot = pg.PlotWidget(labels={'left': ('Channel 1', 'A'), 'bottom': ('Time', 's')})
-        self.plot.setDownsampling(auto=True)
-        self.plot.setClipToView(True)
-        self.channelSplitter.addWidget(self.plot)
-        
-        self.envelopePlot = pg.PlotWidget(labels={'left': ('Channel 1', 'A'), 'bottom': ('Time', 's')})
-        self.channelSplitter.addWidget(self.envelopePlot)
-        
-        self.specView = pg.PlotItem(labels={'left': ('Frequency', 'Hz'), 'bottom': ('Time', 's')})
-        self.spectrogram = pg.ImageView(view=self.specView)
-        self.specView.setAspectLocked(False)
-        self.spectrogram.imageItem.setAutoDownsample(True)
-        self.channelSplitter.addWidget(self.spectrogram)
-        
-        self.channelSplitter.setStretchFactor(0, 10)
-        self.channelSplitter.setStretchFactor(1, 15)
-        self.channelSplitter.setStretchFactor(2, 30)
-        
-        self.specLine = pg.InfiniteLine()
-        self.spectrogram.addItem(self.specLine)
-        
-        self.envLine = pg.InfiniteLine(movable=True)
-        self.envelopePlot.addItem(self.envLine)
-        self.envLine.sigDragged.connect(self.lineDragged)
-        
+        self.channels = {}
+
         self.win.show()
         
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.runOnce)
-        
+
+    def runOnce(self):
+        if self.running:
+            return
+        self.running = True
+        try:
+            for w in self.channels.values():
+                w.runOnce()
+        finally:
+            self.running = False
+
     def startToggled(self, start):
         if start:
             try:
                 if self.recordDir is None or not self.recordWritable:
                     self.newRecord()
+                if self.startTime is None:
+                    self.startTime = time.time()
                 self.timer.start(self.params['interval'] * 1000)
                 self.runOnce()
             except:
@@ -99,14 +85,14 @@ class NoiseMonitor(Module):
     def newRecord(self):
         self.recordDir = self.manager.getCurrentDir().mkdir('NoiseMonitor', autoIncrement=True)
         self.recordWritable = True
-        self.rawDataFile = None
-        self.envelopeFile = None
-        self.spectrogramFile = None
-        self.startTime = time.time()
-        self.resetDisplay = True
+        self.updateFileLabel()
+        self.clearChannels()
+        self.startTime = None
+
+        for dev in self.config['devices']:
+            w = self.addChannel(dev, mode=self.config['devices'][dev]['mode'], recordDir=self.recordDir)
         
     def loadClicked(self):
-        self.recordWritable = False
         try:
             startDir = self.manager.getCurrentDir()
         except Exception:
@@ -115,6 +101,73 @@ class NoiseMonitor(Module):
         if dirname == '':
             return
         self.recordDir = getDirHandle(dirname)
+        self.recordWritable = False
+        self.updateFileLabel()
+        self.clearChannels()
+
+        for dev in self.recordDir.ls():
+            w = self.addChannel(dev, mode=None, recordDir=self.recordDir)
+
+    def updateFileLabel(self):
+        self.fileLabel.setText(self.recordDir.shortName() + (' (rw)' if self.recordWritable else ' (ro)'))
+
+    def addChannel(self, dev, mode, recordDir):
+        w = ChannelRecorder(self, dev, mode, recordDir)
+        self.channels[dev] = w
+        self.channelLayout.addWidget(w)
+
+    def clearChannels(self):
+        for w in self.channels.values():
+            w.hide()
+            w.setParent(None)
+        self.channels = {}
+
+
+class ChannelRecorder(QtGui.QSplitter):
+    def __init__(self, mod, dev, mode, recordDir):
+        self.mod = weakref.ref(mod)
+        self.dev = dev
+        self.mode = mode
+        self.writable = mode != None
+        self.recordDir = recordDir.getDir(self.dev, create=self.writable)
+        self.rawDataFile = None
+        self.envelopeFile = None
+        self.spectrogramFile = None
+        self.resetDisplay = True
+        self.showNewRecords = True
+
+        QtGui.QSplitter.__init__(self, QtCore.Qt.Vertical)
+
+        self.plot = pg.PlotWidget(labels={'left': ('Channel 1', 'A'), 'bottom': ('Time', 's')})
+        self.plot.setDownsampling(auto=True)
+        self.plot.setClipToView(True)
+        self.addWidget(self.plot)
+        
+        self.envelopePlot = pg.PlotWidget(labels={'left': ('Channel 1', 'A'), 'bottom': ('Time', 's')})
+        self.addWidget(self.envelopePlot)
+        
+        self.specView = pg.PlotItem(labels={'left': ('Frequency', 'Hz'), 'bottom': ('Time', 's')})
+        self.spectrogram = pg.ImageView(view=self.specView)
+        self.specView.setAspectLocked(False)
+        self.spectrogram.imageItem.setAutoDownsample(True)
+        self.addWidget(self.spectrogram)
+        
+        self.setStretchFactor(0, 10)
+        self.setStretchFactor(1, 15)
+        self.setStretchFactor(2, 30)
+        
+        self.specLine = pg.InfiniteLine()
+        self.spectrogram.addItem(self.specLine)
+        
+        self.envLine = pg.InfiniteLine(movable=True)
+        self.envelopePlot.addItem(self.envLine)
+        self.envLine.sigDragged.connect(self.lineDragged)
+
+        if not self.writable:
+            # Load previously collected data
+            self.loadRecord()
+
+    def loadRecord(self):
         self.rawDataFile = self.recordDir['rawData.ma']
         self.envelopeFile = self.recordDir['envelope.ma']
         self.spectrogramFile = self.recordDir['spectrogram.ma']
@@ -134,22 +187,24 @@ class NoiseMonitor(Module):
         data._data.file.close()
 
     def runOnce(self):
-    	dur = self.params['trace duration']
-    	rate = self.params['sample rate']
+        dev = self.dev
+        mode = self.mode
+    	dur = self.mod().params['trace duration']
+    	rate = self.mod().params['sample rate']
         npts = int(dur * rate)
         cmd = {
             'protocol': {'duration': dur},
             'DAQ': {'rate': rate, 'numPts': npts},
-            'Clamp1': {'mode': 'vc', 'holding': 0, 'command': np.zeros(npts), 'recordSecondary': False},
+            dev: {'mode': mode, 'holding': 0, 'command': np.zeros(npts), 'recordSecondary': False},
         }
-        task = self.manager.createTask(cmd)
+        task = self.mod().manager.createTask(cmd)
         task.execute()
         result = task.getResult()
         
-        trialArr = np.array([time.time() - self.startTime])
+        trialArr = np.array([time.time() - self.mod().startTime])
         
         # Raw data plot/storage
-        data = result['Clamp1']['Channel': 'primary']
+        data = result[dev]['Channel': 'primary']
         dataArr = data.asarray()
         
         # inject random noise for testing
@@ -209,8 +264,6 @@ class NoiseMonitor(Module):
         self.plot.plot(data.xvals('Time'), data.asarray(), clear=True)
         
     def plotAnalysis(self):
-        self.fileLabel.setText(self.recordDir.shortName() + (' (rw)' if self.recordWritable else ' (ro)'))
-
         # update envelope
         envelope = self.envelopeFile.read()
         trials = envelope.xvals('Trial')
