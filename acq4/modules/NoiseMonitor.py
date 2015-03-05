@@ -63,18 +63,63 @@ class NoiseMonitor(Module):
         task = self.manager.createTask(cmd)
         task.execute()
         result = task.getResult()
-
+        
+        
+        # Raw data plot/storage
         data = result['Clamp1']['Channel': 'primary']
-        
-        self.plot1.plot(data.asarray())
-        
-        ma = pg.metaarray.MetaArray(data.asarray()[np.newaxis, :], info=[
-            {'name': 'Trial', 'units': 's', 'values': np.array([time.time()])}] + data._info)
+        dataArr = data.asarray() + np.random.normal(size=data.shape[0], scale=1e-9)
+        self.plot1.plot(data.xvals('Time'), dataArr, clear=True)
+        trialArr = np.array([time.time() - self.startTime])
+        ma = pg.metaarray.MetaArray(dataArr[np.newaxis, :], info=[
+            {'name': 'Trial', 'units': 's', 'values': trialArr}] + data._info)
 
         if self.rawDataFile is None:
             self.rawDataFile = self.recordDir.writeFile(ma, 'rawData', appendAxis='Trial', newFile=True)
         else:
             ma.write(self.rawDataFile.name(), appendAxis='Trial')
+
+
+        # Envelope analysis
+        envData = np.array([[dataArr.min(), dataArr.mean(), dataArr.max(), dataArr.std()]])
+        env = pg.metaarray.MetaArray(envData, info=[
+            {'name': 'Trial', 'units': 's', 'values': trialArr},
+            {'name': 'Metric', 'units': 'V'}])
+        if self.envelopeFile is None:
+            self.envelopeFile = self.recordDir.writeFile(env, 'envelope', appendAxis='Trial', newFile=True)
+        else:
+            env.write(self.envelopeFile.name(), appendAxis='Trial')
+
+        envelope = self.envelopeFile.read()
+        envArr = envelope.asarray()
+        self.envelopePlot.clear()
+        grey = (255, 255, 255, 100)
+        c1 = self.envelopePlot.plot(envelope.xvals('Trial'), envArr[:,0], pen=grey)  # min
+        c2 = self.envelopePlot.plot(envelope.xvals('Trial'), envArr[:,2], pen=grey)  # max
+        fill = pg.FillBetweenItem(c1, c2, grey)
+        self.envelopePlot.addItem(fill)
+        c1 = self.envelopePlot.plot(envelope.xvals('Trial'), envArr[:,1] + envArr[:,3], pen=grey)  # +std
+        c2 = self.envelopePlot.plot(envelope.xvals('Trial'), envArr[:,1] - envArr[:,3], pen=grey)  # -std
+        fill = pg.FillBetweenItem(c1, c2, grey)
+        self.envelopePlot.addItem(fill)
+
+        self.envelopePlot.plot(envelope.xvals('Trial'), envArr[:,1])  # mean
+
+        # Spectrum analysis
+        fft = np.abs(np.fft.fft(dataArr))
+        fft = fft[:len(fft)/2]
+        freqArr = np.linspace(0, rate/2., len(fft))
+        spec = pg.metaarray.MetaArray(fft[np.newaxis, :], info=[
+            {'name': 'Trial', 'units': 's', 'values': trialArr},
+            {'name': 'Frequency', 'units': 'Hz', 'values': freqArr}])
+        if self.spectrogramFile is None:
+            self.spectrogramFile = self.recordDir.writeFile(spec, 'spectrogram', appendAxis='Trial', newFile=True)
+            auto = True
+        else:
+            spec.write(self.spectrogramFile.name(), appendAxis='Trial')
+            auto = False
+            
+        specArr = self.spectrogramFile.read().asarray()
+        self.spectrogram.setImage(specArr, autoLevels=auto)
 
         
     def quit(self):
