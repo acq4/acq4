@@ -851,13 +851,16 @@ class IVCurve(AnalysisModule):
         :return:
         """
         
-        if self.data_mode in self.ic_modes:
+#        print self.data_mode
+#        print self.ic_modes
+        if self.data_mode in self.ic_modes or self.data_mode == 'vc':
           data_template = (
             OrderedDict([('Species', '{:>s}'), ('Age', '{:>5s}'), ('Sex', '{:>1s}'), ('Weight', '{:>5s}'),
                          ('Temperature', '{:>5s}'), ('ElapsedTime', '{:>8.2f}'), 
                          ('RMP', '{:>5.1f}'), ('Rin', '{:>5.1f}'),
                          ('tau', '{:>5.1f}'), ('AdaptRatio', '{:>7.3f}'),
                          ('tauh', '{:>5.1f}'), ('Gh', '{:>6.2f}'),
+                         ('Description', '{:s}'),
                         ]))
         else:
           data_template = (
@@ -875,13 +878,13 @@ class IVCurve(AnalysisModule):
         # summary table header is written anew for each cell
         ltxt = ''
         if script_header:
-            ltxt = '{:34s}\t{:24s}\t'.format("Cell", "Protocol")
+            ltxt = '{:34s}\t{:15s}\t{:24s}\t'.format("Cell", "Genotype", "Protocol")
             for k in data_template.keys():
                 ltxt += '{:<s}\t'.format(k)
             ltxt += '\n'
             script_header = False
 
-        ltxt += '{:34s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Protocol'])
+        ltxt += '{:34s}\t{:15s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Genotype'], self.analysis_summary['Protocol'])
           
         for a in data_template.keys():
             if a in self.analysis_summary.keys():
@@ -919,6 +922,16 @@ class IVCurve(AnalysisModule):
             self.ctrl.IVCurve_ScriptName.setText('None')
             return
         self.ctrl.IVCurve_ScriptName.setText(os.path.basename(self.script_name))
+        # set the data manager to the script if we can
+        print self.script['directory']
+        if 'directory' in self.script.keys():
+            try:
+                print dir(self.dataManager)
+                self.dataManager.setBaseDir(self.script['directory'])
+                print('Set base dir to: {:s}'.format(self.script['directory']))
+            except:
+                print('IVCurve:read_script: Cannot set base directory to %s\nLikely directory was not found' % self.script['directory'])
+            
 
 #        print 'script ok:', self.script
         # fh = open(self.script_name)  # read the raw text file too
@@ -950,6 +963,16 @@ class IVCurve(AnalysisModule):
         if self.script['module'] != 'IVCurve':
             print 'Script is not for IVCurve (found %s)' % self.script['module']
             return False
+        if 'directory' in self.script.keys():
+            try:
+                
+                #print dir(self.dataManager())
+                self.dataManager().setBaseDir(self.script['directory'])
+                print('Set base dir to: {:s}'.format(self.script['directory']))
+            except:
+                print('IVCurve:read_script: \n   Cannot set base directory to %s\n   Likely directory was not found' % self.script['directory'])
+                return False
+                
         all_found = True
         trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
         for c in self.script['Cells']:
@@ -963,7 +986,12 @@ class IVCurve(AnalysisModule):
                 else:
                     cell = c
                 fn = os.path.join(cell, pr)
-                dm_selected_file = self.dataManager().selectedFile().name()
+                #print fn
+                #print 'dm selected file: ', self.dataManager().selectedFile()
+                if 'directory' in self.script.keys():
+                    dm_selected_file = self.script['directory']
+                else:
+                    dm_selected_file = self.dataManager().selectedFile().name()
                 DataManager.cleanup()
                 gc.collect()
                 fullpath = os.path.join(dm_selected_file, fn)
@@ -991,7 +1019,9 @@ class IVCurve(AnalysisModule):
         # settext(self.textout)
         script_header = True  # reset the table to a print new header for each cell
         trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
-        for cell in self.script['Cells']:
+        self.dataManager().setBaseDir(self.script['directory'])
+        ordered = sorted(self.script['Cells'].keys())  # order the analysis by date/slice/cell
+        for cell in ordered:
             thiscell = self.script['Cells'][cell]
             #print 'processing cell: %s' % thiscell
             if thiscell['include'] is False:  # skip this cell
@@ -1009,7 +1039,8 @@ class IVCurve(AnalysisModule):
                 else:
                     cell_file = cell
                 fn = os.path.join(cell_file, pr)
-                dm_selected_file = self.dataManager().selectedFile().name()
+                #dm_selected_file = self.dataManager().selectedFile().name()
+                dm_selected_file = self.script['directory']
                 fullpath = os.path.join(dm_selected_file, fn)
                 file_ok = os.path.exists(fullpath)
                 if not file_ok:  # get the directory handle and take it from there
@@ -1020,10 +1051,19 @@ class IVCurve(AnalysisModule):
                 if not self.loadFileRequested([dh]):  # note: must pass a list
                     print 'Failed to load requested file: ', fullpath
                     continue  # skip bad sets of records...
+                #print thiscell.keys()
+                #print 'old data mode: ', self.data_mode
+                if 'datamode' in thiscell.keys():
+                    self.data_mode = thiscell['datamode']
+                    print 'datamode may be overridden: self.data_mode = %s' % self.data_mode
                 # apptext(('Protocol: {:<s} <br>Choice: {:<s}'.format(pr, thiscell['choice'][p])))
                 #print dir(self.data_plot)
                 # self.main_layout.update()
                 self.analysis_summary['Drugs'] = thiscell['choice'][p]
+                if 'genotype' in thiscell.keys():
+                    self.analysis_summary['Genotype'] = thiscell['genotype']
+                else:
+                    self.analysis_summary['Genotype'] = ''
                 # alt_flag = bool(thiscell['alternation'])
                 # self.analysis_parameters['alternation'] = alt_flag
                 # self.ctrl.PSPReversal_Alternation.setChecked((QtCore.Qt.Unchecked, QtCore.Qt.Checked)[alt_flag])
@@ -1161,11 +1201,12 @@ class IVCurve(AnalysisModule):
             clipb.setText(ltxt, mode=clipb.Clipboard)
 
 
-    def update_Tau_membrane(self, peak_time=None, printWindow=False, whichTau=1):
+    def update_Tau_membrane(self, peak_time=None, printWindow=False, whichTau=1, vrange=[-5., -20.]):
         """
         Compute time constant (single exponential) from the
         onset of the response
-        using lrpk window, and only the smallest 1/3 of the steps...
+        using lrpk window, and only steps that produce a voltage change between 5 and 20 mV below rest
+        or as specified
         """
 
         if len(self.cmd) == 0:  # probably not ready yet to do the update.
@@ -1179,10 +1220,25 @@ class IVCurve(AnalysisModule):
         peak_time=None
         icmdneg = np.where(self.cmd < -20e-12)
         maxcmd = np.min(self.cmd)
-        ineg = np.where(self.cmd[icmdneg] >= maxcmd / 3)
+        ineg = np.where(self.cmd[icmdneg] < 0.0)
         if peak_time is not None and ineg != np.array([]):
             rgnpk[1] = np.max(peak_time[ineg[0]])
-        whichdata = ineg[0]
+        dt = self.sample_interval
+        rgnindx = [int((rgnpk[1]-0.005)/dt), int((rgnpk[1])/dt)]
+        rmps = self.ivbaseline
+        #print 'rmp: ', self.rmp
+        #print 'rmps: ', rmps
+        #print 'traces shape: ', self.traces.shape
+        vmeans = np.mean(self.traces[:, rgnindx[0]:rgnindx[1]], axis=1) - self.ivbaseline
+        #print 'region: ', rgnpk
+        #print 'vmeans: ', vmeans
+        #print 'vrange: ', vrange[0]*1e-3, vrange[1]*1e-3
+        indxs = np.where(np.logical_and((vrange[0]*1e-3 >= vmeans[ineg]), 
+                         (vmeans[ineg] >= vrange[1]*1e-3)))
+        indxs = list(indxs[0])
+        whichdata = ineg[0][indxs]  # restricts to valid values
+        #print 'indices: ', indxs
+        #print 'vmeans selected: ', vmeans[whichdata]
         itaucmd = self.cmd[ineg]
         whichaxis = 0
         fpar = []
@@ -1342,8 +1398,7 @@ class IVCurve(AnalysisModule):
         Compute the steady-state IV from the selected time window
 
         Input parameters:
-            clear: a boolean flag that originally allowed accumulation of plots
-                    presently, ignored.
+            None.
         returns:
             nothing.
         modifies:

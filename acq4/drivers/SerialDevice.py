@@ -143,7 +143,7 @@ class SerialDevice(object):
                 packet += self.read(1, timeout=timeout-elapsed)
             except TimeoutError:
                 raise TimeoutError("Timed out while reading serial packet. Data so far: '%s'" % repr(packet))
-            if len(packet) > minBytes and packet[-len(term)] == term:
+            if len(packet) > minBytes and packet[-len(term):] == term:
                 return packet
 
 
