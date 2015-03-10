@@ -855,12 +855,12 @@ class IVCurve(AnalysisModule):
 #        print self.ic_modes
         if self.data_mode in self.ic_modes or self.data_mode == 'vc':
           data_template = (
-            OrderedDict([('Species', '{:>s}'), ('Age', '{:>5s}'), ('Sex', '{:>1s}'), ('Weight', '{:>5s}'),
-                         ('Temperature', '{:>5s}'), ('ElapsedTime', '{:>8.2f}'), 
-                         ('RMP', '{:>5.1f}'), ('Rin', '{:>5.1f}'),
-                         ('tau', '{:>5.1f}'), ('AdaptRatio', '{:>7.3f}'),
-                         ('tauh', '{:>5.1f}'), ('Gh', '{:>6.2f}'),
-                         ('Description', '{:s}'),
+            OrderedDict([('Species', (12, '{:>12s}')), ('Age', (5, '{:>5s}')), ('Sex', (3, '{:>3s}')), ('Weight', (6, '{:>6s}')),
+                         ('Temperature', (10, '{:>10s}')), ('ElapsedTime', (11, '{:>11.2f}')), 
+                         ('RMP', (5, '{:>5.1f}')), ('Rin', (5, '{:>5.1f}')),
+                         ('tau', (5, '{:>5.1f}')), ('AdaptRatio', (9, '{:>9.3f}')),
+                         ('tauh', (5, '{:>5.1f}')), ('Gh', (6, '{:>6.2f}')),
+                         ('Description', (11, '{:s}')),
                         ]))
         else:
           data_template = (
@@ -880,7 +880,9 @@ class IVCurve(AnalysisModule):
         if script_header:
             ltxt = '{:34s}\t{:15s}\t{:24s}\t'.format("Cell", "Genotype", "Protocol")
             for k in data_template.keys():
-                ltxt += '{:<s}\t'.format(k)
+                cnv = '{:<%ds}' % (data_template[k][0])
+                print 'cnv: ', cnv
+                ltxt += (cnv + '\t').format(k)
             ltxt += '\n'
             script_header = False
 
@@ -888,9 +890,9 @@ class IVCurve(AnalysisModule):
           
         for a in data_template.keys():
             if a in self.analysis_summary.keys():
-                ltxt += (data_template[a] + '\t').format(self.analysis_summary[a])
+                ltxt += (data_template[a][1] + '\t').format(self.analysis_summary[a])
             else:
-                ltxt += 'NaN\t'
+                ltxt += ('{:>%ds}' % (data_template[a][0]) + '\t').format('NaN')
     
         if printnow:
             printltxt
