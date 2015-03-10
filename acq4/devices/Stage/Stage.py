@@ -23,6 +23,19 @@ class Stage(Device, OptomechDevice):
 
     def quit(self):
         pass
+    
+    def capabilities(self):
+        """Return a structure describing the capabilities of this device::
+        
+            {
+                'readPos': (x, y, z),  # whether eaxh axis can be read from the device
+                'setPos': (x, y, z),   # whether eaxh axis can be set on the device
+            }
+            
+        Subclasses must reimplement this method.
+        """
+        raise NotImplementedError
+        
 
     def posChanged(self, pos):
         """Handle device position changes by updating the device transform and
@@ -44,7 +57,9 @@ class Stage(Device, OptomechDevice):
     def getPosition(self, refresh=False):
         """
         Return the position of the stage.
-        If refresh==False, the last known position is returned. Otherwise, the current position is requested from the controller.
+        If refresh==False, the last known position is returned. Otherwise, the
+        current position is requested from the controller. If request is True,
+        then the position request may block if the device is currently moving.
         """
         if not refresh:
             return self.pos[:]
@@ -64,19 +79,88 @@ class Stage(Device, OptomechDevice):
     def deviceInterface(self, win):
         return StageInterface(self, win)
 
-    def moveBy(self, pos, speed, block=True, timeout = 10.):
-        """Move by the specified amounts. 
-        pos must be a sequence (dx, dy, dz) with values in meters.
-        speed will be set before moving unless speed=None
+    def setSpeed(self, speed):
+        """Set the default speed of the device when moving.
+        
+        Generally speeds are specified approximately in m/s, although many 
+        devices lack the capability to accurately set speed. This value may 
+        also be 'fast' to indicate the device should move as quickly as 
+        possible, or 'slow' to indicate the device should minimize vibrations
+        while moving.        
+        """
+        if speed not in ('fast', 'slow'):
+            speed = abs(float(speed))
+        self._defaultSpeed = speed
+
+    def isMoving(self):
+        """Return True if the device is currently moving.
+        """
+        raise NotImplementedError()        
+
+    def move(self, abs=None, rel=None, speed=None):
+        """Move the device to a new position.
+        
+        Must specify either *abs* for an absolute position, or *rel* for a
+        relative position. Either argument must be a sequence (x, y, z) with
+        values in meters. Optionally, values may be None to indicate no 
+        movement along that axis.
+        
+        If the *speed* argument is given, it temporarily overrides the default
+        speed that was defined by the last call to setSpeed().
+        
+        Return a MoveFuture instance that can be used to monitor the progress 
+        of the move.
+        """
+        raise NotImplementedError()
+        
+    def moveBy(self, pos, speed):
+        """Move by the specified relative distance. See move() for more 
+        information.
+        """
+        return self.move(rel=pos, speed=speed)
+
+    def moveTo(self, pos, speed, block=True, timeout = 10.):
+        """Move to the specified absolute position. See move() for more 
+        information.
+        """
+        return self.move(abs=pos, speed=speed)
+    
+    def stop(self):
+        """Stop moving the device immediately.
         """
         raise NotImplementedError()
 
-    def moveTo(self, pos, speed, block=True, timeout = 10.):
-        """Move by the absolute position. 
-        pos must be a sequence (dx, dy, dz) with values in meters.
-        speed will be set before moving unless speed=None
+
+class MoveFuture(object):
+    """Used to track the progress of a requested move operation.
+    """
+    def __init__(self, dev):
+        self.dev = dev
+        
+    def percentDone(self):
+        """Return the percent of the move that has completed. 
         """
         raise NotImplementedError()
+
+    def wasInterrupted(self):
+        """Return True if the move was interrupted before completing.
+        """
+        raise NotImplementedError()
+
+    def isDone(self):
+        """Return True if the move has completed or was interrupted.
+        """
+        return self.percentDone() == 100 or self.wasInterrupted()
+        
+    deef wait(self, timeout=10):
+        """Block until the move has completed, been interrupted, or the
+        specified timeout has elapsed.
+        """
+        start = ptime.time()
+        while ptime.time() < start+timeout:
+            if self.isDone():
+                break
+            time.sleep(0.1)
 
 
 class StageInterface(QtGui.QWidget):
