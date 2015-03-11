@@ -43,6 +43,13 @@ class ThorlabsMFC1(Stage):
 
         self._monitor = MonitorThread(self)
         self._monitor.start()
+        
+    def capabilities(self):
+        # device only reads/writes z-axis
+        return {
+            'getPos': (False, False, True),
+            'setPos': (False, False, True)
+        }
 
     def mfcPosChanged(self, pos, oldpos):
         self.posChanged(pos)

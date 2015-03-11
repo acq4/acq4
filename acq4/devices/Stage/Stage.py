@@ -4,6 +4,7 @@ from acq4.devices.OptomechDevice import *
 from acq4.util.Mutex import Mutex
 import acq4.pyqtgraph as pg
 
+
 class Stage(Device, OptomechDevice):
     """Base class for mechanical stages with motorized control and/or position feedback.
     """
@@ -16,26 +17,25 @@ class Stage(Device, OptomechDevice):
         self.config = config
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.pos = [0]*3
-        
-        # self.scale = config.get('scale', None) ## Allow config to apply extra scale factor
+        self._defaultSpeed = 'fast'
         
         dm.declareInterface(name, ['stage'], self)
 
     def quit(self):
-        pass
+        self.stop()
     
     def capabilities(self):
         """Return a structure describing the capabilities of this device::
         
             {
-                'readPos': (x, y, z),  # whether eaxh axis can be read from the device
+                'getPos': (x, y, z),   # whether eaxh axis can be read from the device
                 'setPos': (x, y, z),   # whether eaxh axis can be set on the device
             }
             
         Subclasses must reimplement this method.
         """
+        # todo: add other capability flags like resolution, speed, closed-loop, etc?
         raise NotImplementedError
-        
 
     def posChanged(self, pos):
         """Handle device position changes by updating the device transform and
@@ -59,7 +59,7 @@ class Stage(Device, OptomechDevice):
         Return the position of the stage.
         If refresh==False, the last known position is returned. Otherwise, the
         current position is requested from the controller. If request is True,
-        then the position request may block if the device is currently moving.
+        then the position request may block if the device is currently busy.
         """
         if not refresh:
             return self.pos[:]
@@ -79,7 +79,7 @@ class Stage(Device, OptomechDevice):
     def deviceInterface(self, win):
         return StageInterface(self, win)
 
-    def setSpeed(self, speed):
+    def setDefaultSpeed(self, speed):
         """Set the default speed of the device when moving.
         
         Generally speeds are specified approximately in m/s, although many 
@@ -111,7 +111,35 @@ class Stage(Device, OptomechDevice):
         Return a MoveFuture instance that can be used to monitor the progress 
         of the move.
         """
+        if speed is None:
+            speed = self._defaultSpeed
+        if speed is None:
+            raise TypeError("Must specify speed or set default speed before moving.")
+        if abs is None and rel is None:
+            raise TypeError("Must specify one of abs or rel arguments.")
+        return self._move(abs, rel, speed)
+        
+    def _move(self, abs, rel, speed):
+        """Must be reimplemented by subclasses and return a MoveFuture instance.
+        """
         raise NotImplementedError()
+
+    def _toAbsolutePosition(self, abs, rel):
+        """Helper function to convert absolute or relative position (possibly 
+        containing Nones) to an absolute position.
+        """
+        if rel is None:
+            if any([x is None for x in abs]):
+                pos = self.getPosition()
+                for i,x in enumerate(abs):
+                    if x is not None:
+                        pos[i] = x
+        else:
+            pos = self.getPosition()
+            for i,x in enumerate(rel):
+                if x is not None:
+                    pos[i] += x
+        return pos
         
     def moveBy(self, pos, speed):
         """Move by the specified relative distance. See move() for more 
@@ -134,13 +162,23 @@ class Stage(Device, OptomechDevice):
 class MoveFuture(object):
     """Used to track the progress of a requested move operation.
     """
-    def __init__(self, dev):
+    def __init__(self, dev, pos, speed):
         self.dev = dev
+        self.speed = speed
+        self.targetPos = pos
+        self.startPos = dev.getPosition()
         
     def percentDone(self):
-        """Return the percent of the move that has completed. 
+        """Return the percent of the move that has completed.
+        
+        The default implementation calls getPosition on the device to determine
+        the percent complete. Devices that do not provide position updates while 
+        moving should reimplement this method.
         """
-        raise NotImplementedError()
+        s = np.array(self.startPos)
+        t = np.array(self.targetPos)
+        p = np.array(self.dev.getPosition())
+        return 100 * ((p - s) / (t - s)).mean()
 
     def wasInterrupted(self):
         """Return True if the move was interrupted before completing.
