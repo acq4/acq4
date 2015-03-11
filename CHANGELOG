@@ -14,6 +14,7 @@ acq4-0.9.3 (unreleased)
         Added export option to ImageView
         Added new online analysis module for photostimulation (replaces old Uncaging module)
         Added support for controlling bidirectional filtering by NiDAQ device
+        NoiseMonitor module for tracking long-term changes in electrical noise
     Bugfixes:
         Fixed issues with Scanner grid controls in TaskRunner
     Maintenance:
