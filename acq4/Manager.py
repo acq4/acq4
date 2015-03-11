@@ -697,7 +697,6 @@ class Manager(QtCore.QObject):
             except TypeError:
                 pass
             
-            
         if isinstance(d, basestring):
             self.currentDir = self.baseDir.getDir(d, create=True)
         elif isinstance(d, DataManager.DirHandle):
@@ -705,7 +704,8 @@ class Manager(QtCore.QObject):
         else:
             raise Exception("Invalid argument type: ", type(d), d)
         
-        p = d
+        p = self.currentDir
+        
         ## Storage directory is about to change; 
         logDir = self.logWindow.getLogDir()
         while not p.info().get('expUnit', False) and p != self.baseDir and p != logDir:
@@ -715,16 +715,12 @@ class Manager(QtCore.QObject):
         else:
             if logDir is None:
                 logMsg("No log directory set. Log messages will not be stored.", msgType='warning', importance=8, docs=["userGuide/dataManagement.html#notes-and-logs"])
-        #self.currentDir.sigChanged.connect(self.currentDirChanged)
-        #self.sigCurrentDirChanged.emit()
+
         self.currentDir.sigChanged.connect(self.currentDirChanged)
-        #self.emit(QtCore.SIGNAL('currentDirChanged'))
         self.sigCurrentDirChanged.emit(None, None, None)
 
     def currentDirChanged(self, fh, change=None, args=()):
         """Handle situation where currentDir is moved or renamed"""
-        #self.sigCurrentDirChanged.emit(*args)
-        #self.emit(QtCore.SIGNAL('currentDirChanged'), fh, change, args)
         self.sigCurrentDirChanged.emit(fh, change, args)
             
             
