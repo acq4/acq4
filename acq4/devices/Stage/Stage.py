@@ -20,7 +20,7 @@ class Stage(Device, OptomechDevice):
         self._defaultSpeed = 'fast'
         
         self._progressDialog = None
-        self._progressTimer = QtGui.QTimer()
+        self._progressTimer = QtCore.QTimer()
         self._progressTimer.timeout.connect(self.updateProgressDialog)
 
         dm.declareInterface(name, ['stage'], self)
@@ -127,9 +127,9 @@ class Stage(Device, OptomechDevice):
         mfut = self._move(abs, rel, speed)
 
         if progress:
-            self._progressDialog = QtGui.QProgressDialog("%s moving..." % name, '', 0, 100)
+            self._progressDialog = QtGui.QProgressDialog("%s moving..." % self.name(), None, 0, 100)
             self._progressDialog.mf = mfut
-            self._progressTimer.start(200)
+            self._progressTimer.start(100)
 
         return mfut
         
@@ -148,6 +148,8 @@ class Stage(Device, OptomechDevice):
                 for i,x in enumerate(abs):
                     if x is not None:
                         pos[i] = x
+            else:
+                pos = abs
         else:
             pos = self.getPosition()
             for i,x in enumerate(rel):
@@ -155,17 +157,17 @@ class Stage(Device, OptomechDevice):
                     pos[i] += x
         return pos
         
-    def moveBy(self, pos, speed):
+    def moveBy(self, pos, speed, progress=False):
         """Move by the specified relative distance. See move() for more 
         information.
         """
-        return self.move(rel=pos, speed=speed)
+        return self.move(rel=pos, speed=speed, progress=progress)
 
-    def moveTo(self, pos, speed, block=True, timeout = 10.):
+    def moveTo(self, pos, speed, progress=False):
         """Move to the specified absolute position. See move() for more 
         information.
         """
-        return self.move(abs=pos, speed=speed)
+        return self.move(abs=pos, speed=speed, progress=progress)
     
     def stop(self):
         """Stop moving the device immediately.
@@ -173,8 +175,7 @@ class Stage(Device, OptomechDevice):
         raise NotImplementedError()
 
     def updateProgressDialog(self):
-        mf = self._progressDialog.mf
-        done = mf.percentDone()
+        done = self._progressDialog.mf.percentDone()
         self._progressDialog.setValue(done)
         if done == 100:
             self._progressTimer.stop()
@@ -211,7 +212,7 @@ class MoveFuture(object):
         """
         return self.percentDone() == 100 or self.wasInterrupted()
         
-    deef wait(self, timeout=10):
+    def wait(self, timeout=10):
         """Block until the move has completed, been interrupted, or the
         specified timeout has elapsed.
         """

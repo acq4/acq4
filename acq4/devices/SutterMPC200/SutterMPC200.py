@@ -1,11 +1,17 @@
 # -*- coding: utf-8 -*-
+import time
 from PyQt4 import QtGui, QtCore
-from ..Stage import Stage
+from ..Stage import Stage, MoveFuture
 from acq4.drivers.SutterMPC200 import SutterMPC200 as MPC200_Driver
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from acq4.pyqtgraph import debug
-import time
+from acq4.pyqtgraph import debug, ptime
+
+
+def __reload__(self, old, new):
+    # copy some globals if the module is reloaded
+    new['SutterMPC200']._monitor = old['SutterMPC200']._monitor
+
 
 class ChangeNotifier(QtCore.QObject):
     sigPosChanged = QtCore.Signal(object, object, object)
@@ -39,9 +45,9 @@ class SutterMPC200(Stage):
 
         ## May have multiple SutterMPC200 instances (one per drive), but 
         ## we only need one monitor.
-        if self._monitor is None:
-            self._monitor = MonitorThread(self)
-            self._monitor.start()
+        if SutterMPC200._monitor is None:
+            SutterMPC200._monitor = MonitorThread(self)
+            SutterMPC200._monitor.start()
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
@@ -62,10 +68,10 @@ class SutterMPC200(Stage):
         ## a signal, and the correct devices will be notified.
         if drive is None:
             drive, pos = self.dev.getPos()
-        if pos != self._pos_cache[drive]:
-            oldpos = self._pos_cache[drive]
+        if pos != self._pos_cache[drive-1]:
+            oldpos = self._pos_cache[drive-1]
             self._notifier.sigPosChanged.emit(drive, pos, oldpos)
-            self._pos_cache[drive] = pos
+            self._pos_cache[drive-1] = pos
             return (drive, pos, oldpos)
         return False
 
@@ -109,7 +115,7 @@ class SutterMPC200(Stage):
         speed = float(speed)
         minDiff = None
         bestKey = None
-        for k,v in self.dev.speedTable.values():
+        for k,v in self.dev.speedTable.items():
             diff = abs(speed - v)
             if minDiff is None or diff < minDiff:
                 minDiff = diff
@@ -155,9 +161,6 @@ class MonitorThread(Thread):
             self.nextMoveId += 1
             self.moveRequest = (id, drive, pos, speed)
             self._moveStatus[id] = (None, None)
-            # start the move here; the thread will check up on it until it's
-            # finished.
-            self.dev.dev.move(drive, pos, speed)
             
         return id
 
@@ -188,27 +191,32 @@ class MonitorThread(Thread):
                     if self.stopped:
                         break
                     maxInterval = self.interval
-                    if self.moveRequest is not None:
-                        currentMove = self.moveRequest
+                    moveRequest = self.moveRequest
+                    self.moveRequest = None
 
-                if currentMove is None:
+                if moveRequest is None:
+                    # just check for position update
                     if self.dev._checkPositionChange() is not False:
                         interval = minInterval
                     else:
                         interval = min(maxInterval, interval*2)
                 else:
-                    mid, drive, pos, speed = currentMove
+                    # move the drive
+                    mid, drive, pos, speed = moveRequest
                     try:
-                        with self.dev.dev.lock():
+                        with self.dev.dev.lock:
                             # record the move starting time only after locking the device
                             start = ptime.time()
-                            self._moveStatus[mid] = (start, False)
+                            with self.lock:
+                                self._moveStatus[mid] = (start, False)
                             self.dev.dev.moveTo(drive, pos, speed)
                     except Exception as err:
-                        self._moveStatus[mid] = (start, err)
+                        print "Move error:", str(err)
+                        with self.lock:
+                            self._moveStatus[mid] = (start, err)
                     else:
-                        self._moveStatus[mid] = (start, True)
-
+                        with self.lock:
+                            self._moveStatus[mid] = (start, True)
 
                 time.sleep(interval)
             except:
@@ -233,11 +241,13 @@ class MPC200MoveFuture(MoveFuture):
             if status is not None:
                 break
             time.sleep(5e-3)
+        if isinstance(status, Exception):
+            raise status
         
     def wasInterrupted(self):
         """Return True if the move was interrupted before completing.
         """
-        return isinstance(self._getStatus()[1], RuntimeError)
+        return isinstance(self._getStatus()[1], Exception)
 
     def percentDone(self):
         """Return an estimate of the percent of move completed based on the 
@@ -246,7 +256,7 @@ class MPC200MoveFuture(MoveFuture):
         if self.isDone():
             return 100
         dt = ptime.time() - self._getStatus()[0]
-        return np.clip(100 * dt / self._expectedDuration, 0, 99)
+        return max(min(100 * dt / self._expectedDuration, 99), 0)
     
     def isDone(self):
         """Return True if the move is complete.
@@ -255,10 +265,7 @@ class MPC200MoveFuture(MoveFuture):
 
     def _getStatus(self):
         # check status of move unless we already know it is complete.
-        # If the move was unsucessful, raise an exception.
         if self._moveStatus[1] in (None, False):
             self._moveStatus = SutterMPC200._monitor.moveStatus(self._id)
-        if isinstance(self._moveStatus[1], Exception):
-            raise stat
         return self._moveStatus
         
