@@ -282,6 +282,13 @@ class SutterMPC200(SerialDevice):
             if abs(newPos[i] - ustepPos[i]) > 1:
                 raise RuntimeError("Move was unsuccessful (%r != %r)."  % (tuple(newPos), tuple(ustepPos)))
 
+    def expectedMoveDuration(self, drive, pos, speed):
+        """Return the expected time duration required to move *drive* to *pos* at *speed*.
+        """
+        cpos = np.array(self.getPos(drive))
+        dx = np.abs(np.array(pos) - cpos).max()
+        return dx / self.speedTable[speed]
+
     # Disabled--official word from Sutter is that the position updates sent during a move are broken.
     # def readMoveUpdate(self):
     #     """Read a single update packet sent during a move.

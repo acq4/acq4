@@ -19,6 +19,10 @@ class Stage(Device, OptomechDevice):
         self.pos = [0]*3
         self._defaultSpeed = 'fast'
         
+        self._progressDialog = None
+        self._progressTimer = QtGui.QTimer()
+        self._progressTimer.timeout.connect(self.updateProgressDialog)
+
         dm.declareInterface(name, ['stage'], self)
 
     def quit(self):
@@ -97,7 +101,7 @@ class Stage(Device, OptomechDevice):
         """
         raise NotImplementedError()        
 
-    def move(self, abs=None, rel=None, speed=None):
+    def move(self, abs=None, rel=None, speed=None, progress=False):
         """Move the device to a new position.
         
         Must specify either *abs* for an absolute position, or *rel* for a
@@ -108,6 +112,8 @@ class Stage(Device, OptomechDevice):
         If the *speed* argument is given, it temporarily overrides the default
         speed that was defined by the last call to setSpeed().
         
+        If *progress* is True, then display a progress bar until the move is complete.
+
         Return a MoveFuture instance that can be used to monitor the progress 
         of the move.
         """
@@ -117,7 +123,15 @@ class Stage(Device, OptomechDevice):
             raise TypeError("Must specify speed or set default speed before moving.")
         if abs is None and rel is None:
             raise TypeError("Must specify one of abs or rel arguments.")
-        return self._move(abs, rel, speed)
+
+        mfut = self._move(abs, rel, speed)
+
+        if progress:
+            self._progressDialog = QtGui.QProgressDialog("%s moving..." % name, '', 0, 100)
+            self._progressDialog.mf = mfut
+            self._progressTimer.start(200)
+
+        return mfut
         
     def _move(self, abs, rel, speed):
         """Must be reimplemented by subclasses and return a MoveFuture instance.
@@ -157,6 +171,13 @@ class Stage(Device, OptomechDevice):
         """Stop moving the device immediately.
         """
         raise NotImplementedError()
+
+    def updateProgressDialog(self):
+        mf = self._progressDialog.mf
+        done = mf.percentDone()
+        self._progressDialog.setValue(done)
+        if done == 100:
+            self._progressTimer.stop()
 
 
 class MoveFuture(object):
