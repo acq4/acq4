@@ -36,9 +36,24 @@ def resetDrive(method):
 
 
 class SutterMPC200(SerialDevice):
+    """
+    Provides access to all drives on a Sutter MPC200 controller.
+
+    Example::
+
+        dev = SutterMPC200.getDevice('com4')
+
+        # get information about which drives are active
+        n, drives = dev.getDriveStatus()
+
+        # read position of drive 0
+        print dev.getPos(0)
+
+        # move drive 1 to x=10mm
+        dev.moveTo(1, [10e-3, 0, 0], 'fast')
+    """
 
     DEVICES = {}
-
 
     speedTable = {
         # Measured 2015.03 for sutter stage. (see measureSpeedTable() below)
@@ -67,24 +82,26 @@ class SutterMPC200(SerialDevice):
         """
         Return a SutterMPC200 instance for the specified serial port. Only one instance will 
         be created for each port.
+
+        *port* must be a serial COM port (eg. COM3 or /dev/ttyACM0)        
         """
         port = SerialDevice.normalizePortName(port)
-        if port not in cls.DEVICES:
-            cls.DEVICES[port] = SutterMPC200(port=port)
-        return cls.DEVICES[port]
+        if port in cls.DEVICES:
+            return cls.DEVICES[port]
+        else:
+            return SutterMPC200(port=port)
 
     def __init__(self, port):
-        """
-        port: serial COM port (eg. COM3 or /dev/ttyACM0)
-        """
+        port = SerialDevice.normalizePortName(port)
+        if port in SutterMPC200.DEVICES:
+            raise Exception("The port %s is already accessed by another instance of this class. Use getDevice(port) instead.")
+        SutterMPC200.DEVICES[port] = self
         self.lock = RLock()
         self.port = port
         self.pos = [(None,None)]*4  # used to remember position of each drive
         self.currentDrive = None
         SerialDevice.__init__(self, port=self.port, baudrate=128000)
         self.scale = [0.0625e-6]*3  # default is 16 usteps per micron
-        # time.sleep(1.0)  ## Give devices a moment to chill after opening the serial line.
-        # self.read()      ## and toss any junk in the buffer
 
     @threadsafe
     def setDrive(self, drive):
@@ -123,11 +140,13 @@ class SutterMPC200(SerialDevice):
 
     @threadsafe
     def getPos(self, drive=None, scaled=True):
-        """Get current driver and position reported by controller.
+        """Get current drive and position reported by controller.
+
         The drive will be reported as 1-4 depending on the currently active 
         drive. If *drive* is specified, then the active drive will be set 
         before reading position, and re-set to its original value afterward.
         Returns a tuple (x,y,z); values given in meters.
+
         If *scaled* is False, then values are returned as motor steps.
         """
         if drive is not None:
@@ -145,7 +164,6 @@ class SutterMPC200(SerialDevice):
             else:
                 raise err
 
-        
         drive, x, y, z = struct.unpack('<Blll', packet)
         drive -= 1
         pos = (x, y, z)
@@ -161,6 +179,13 @@ class SutterMPC200(SerialDevice):
             return drive, pos
         pos = [pos[i]*self.scale[i] for i in [0,1,2]]
         return drive, pos
+
+    @threadsafe
+    @resetDrive
+    def _getDrivePos(self, drive, scaled=True):
+        ## read the position of a specific drive
+        self.setDrive(drive)
+        return self.getPos(scaled=scaled)
 
     def posChanged(self, drive, newPos, oldPos):
         """
@@ -180,12 +205,6 @@ class SutterMPC200(SerialDevice):
 
     @threadsafe
     @resetDrive
-    def _getDrivePos(self, drive, scaled=True):
-        ## read the position of a specific drive
-        self.setDrive(drive)
-        return self.getPos(scaled=scaled)
-
-    @threadsafe
     def moveTo(self, drive, pos, speed, timeout=None, scaled=True):
         """Set the position of *drive*.
         
@@ -263,31 +282,32 @@ class SutterMPC200(SerialDevice):
             if abs(newPos[i] - ustepPos[i]) > 1:
                 raise RuntimeError("Move was unsuccessful (%r != %r)."  % (tuple(newPos), tuple(ustepPos)))
 
-    def readMoveUpdate(self):
-        """Read a single update packet sent during a move.
+    # Disabled--official word from Sutter is that the position updates sent during a move are broken.
+    # def readMoveUpdate(self):
+    #     """Read a single update packet sent during a move.
 
-        If the drive is moving, then return the current position of the drive.
-        If the drive is stopped, then return True.
-        If the drive motion was interrupted, then return False.
+    #     If the drive is moving, then return the current position of the drive.
+    #     If the drive is stopped, then return True.
+    #     If the drive motion was interrupted, then return False.
 
-        Note: update packets are not generated when moving in 'fast' mode.
-        """
-        try:
-            d = self.read(12, timeout=0.5)
-        except TimeoutError as err:
-            if err.data == 'I':
-                return False
-            else:
-                print "timeout:", repr(err.data)
-                return True
+    #     Note: update packets are not generated when moving in 'fast' mode.
+    #     """
+    #     try:
+    #         d = self.read(12, timeout=0.5)
+    #     except TimeoutError as err:
+    #         if err.data == 'I':
+    #             return False
+    #         else:
+    #             print "timeout:", repr(err.data)
+    #             return True
 
-        pos = []
-        # unpack four three-byte integers
-        for i in range(4):
-            x = d[i*3:(i+1)*3] + '\0'
-            pos.append(struct.unpack('<i', x)[0])
+    #     pos = []
+    #     # unpack four three-byte integers
+    #     for i in range(4):
+    #         x = d[i*3:(i+1)*3] + '\0'
+    #         pos.append(struct.unpack('<i', x)[0])
 
-        return pos
+    #     return pos
 
     @threadsafe
     @resetDrive
