@@ -1,4 +1,5 @@
 import serial, struct, time, collections
+import numpy as np
 
 try:
     # this is nicer because it provides deadlock debugging information
@@ -26,8 +27,8 @@ def threadsafe(method):
 def resetDrive(method):
     # decorator to reset any changes to currently active drive
     def resetDrive(self, *args, **kwds):
+        active = self.getActiveDrive()
         try:
-            active = self.getActiveDrive()
             return method(self, *args, **kwds)
         finally:
             self.setDrive(active)
@@ -37,6 +38,29 @@ def resetDrive(method):
 class SutterMPC200(SerialDevice):
 
     DEVICES = {}
+
+
+    speedTable = {
+        # Measured 2015.03 for sutter stage. (see measureSpeedTable() below)
+        # Values might vary for other devices..
+        0: 0.0003379,  # 0.003 m / 8.9 s
+        1: 0.0003606,  # 0.0033 m / 9.2 s
+        2: 0.000383,  # 0.0036 m / 9.5 s
+        3: 0.000412,  # 0.004 m / 9.7 s
+        4: 0.0004408,  # 0.0044 m / 10 s
+        5: 0.0004782,  # 0.0048 m / 10 s
+        6: 0.0005233,  # 0.0053 m / 10 s
+        7: 0.0005726,  # 0.0058 m / 10 s
+        8: 0.0006381,  # 0.0064 m / 10 s
+        9: 0.000718,  # 0.0071 m / 9.9 s
+        10: 0.0008146,  # 0.0078 m / 9.6 s
+        11: 0.0009575,  # 0.0086 m / 8.9 s
+        12: 0.001139,  # 0.0094 m / 8.3 s
+        13: 0.001404,  # 0.01 m / 7.4 s
+        14: 0.00189,  # 0.011 m / 6 s
+        15: 0.002767,  # 0.013 m / 4.5 s
+        'fast': 0.00465  # 0.025 m / 5.38 s
+    }
 
     @classmethod
     def getDevice(cls, port):
@@ -64,14 +88,15 @@ class SutterMPC200(SerialDevice):
 
     @threadsafe
     def setDrive(self, drive):
-        """Set the current drive (1-4)"""
+        """Set the current drive (0-3)"""
+        drive += 1
         cmd = b'I' + chr(drive)
         self.write(cmd)
         ret = self.read(2, term='\r')
         if ord(ret) == drive:
             return
         else:
-            raise Exception('MPC200: Drive %d is not connected' % drive)
+            raise Exception('MPC200: Drive %d is not connected' % (drive-1))
             
     @threadsafe
     def getDriveStatus(self):
@@ -81,23 +106,23 @@ class SutterMPC200(SerialDevice):
         """
         self.write('U')
         packet = self.read(length=6, term='\r')
-        res = struct.unpack('=BBBBB', packet)
+        res = struct.unpack('<BBBBB', packet)
         return res[0], res[1:]
 
     @threadsafe
     def getActiveDrive(self):
         self.write('K')
         packet = self.read(4, term='\r')
-        return struct.unpack('=B', packet[0])[0]
+        return struct.unpack('<B', packet[0])[0]-1
     
     @threadsafe
     def getFirmwareVersion(self):
         self.write('K')
         packet = self.read(4, term='\r')
-        return struct.unpack('=BB', packet[1:])
+        return struct.unpack('<BB', packet[1:])
 
     @threadsafe
-    def getPos(self, scaled=True, drive=None):
+    def getPos(self, drive=None, scaled=True):
         """Get current driver and position reported by controller.
         The drive will be reported as 1-4 depending on the currently active 
         drive. If *drive* is specified, then the active drive will be set 
@@ -121,7 +146,8 @@ class SutterMPC200(SerialDevice):
                 raise err
 
         
-        drive, x, y, z = struct.unpack('=Blll', packet)
+        drive, x, y, z = struct.unpack('<Blll', packet)
+        drive -= 1
         pos = (x, y, z)
 
         if drive != self.currentDrive:
@@ -160,53 +186,108 @@ class SutterMPC200(SerialDevice):
         return self.getPos(scaled=scaled)
 
     @threadsafe
-    @resetDrive
-    def moveTo(self, drive, pos, speed, timeout=2.0, scaled=True):
-        """Set the position of *driver*.
-        Returns a generator that yields the position and percent done until the
-        move is complete. This function should be invoked in a for-loop::
-        
-            for pos, percent in mpc.moveTo((x,y,z)):
-                print "Moving %d percent done" % percent
+    def moveTo(self, drive, pos, speed, timeout=None, scaled=True):
+        """Set the position of *drive*.
         
         Any item in the position may be set as None to leave it unchanged.
-        Raises an exception if the move is cancelled before it completes.
-        The move may also be cancelled while in-progress by sending "stop" 
-        to the generator::
         
-            gen = mpc.moveTo((x,y,z))
-            for pos, percent in gen:
-                if user_requested_stop():
-                    gen.send('stop')
-                    
         *speed* may be specified as an integer 0-15 for constant speed, or 
         'fast' indicating that the drive should use acceleration to move as
         quickly as possible. For constant speeds, a value of 15 is maximum,
         about 1.3mm/sec for the _fastest moving axis_, not for the net speed
-        of all three axes. 
+        of all three axes.
+
+        If *timeout* is None, then a suitable timeout is chosen based on the selected 
+        speed and distance to be traveled.
         
         Positions must be specified in meters unless *scaled* = False, in which 
         case position is specified in motor steps. 
+
+        This method will either 1) block until the move is complete, 2) raise 
+        TimeoutError if the timeout has elapsed or, 3) raise RuntimeError if the 
+        move was unsuccessful (final position does not match the requested position). 
         """
-        raise NotImplementedError()
+        assert drive is None or drive in range(4)
+        assert speed == 'fast' or speed in range(16)
+
         if drive is not None:
             self.setDrive(drive)
-        
-        # Convert pos argument to motor steps
-        if None in pos:
-            currentPos = self.getPos(scaled=False)
-        pos = [(pos[i]/self.scale[i] if pos[i] is not None else currentPos[i]) for i in range(3)]
-        
-        # Decide on move command
+
+        # get current position if needed
+        if None in pos or timeout is None:
+            currentPos = self.getPos(scaled=False)[1]
+
+        # scale position to microsteps, fill in Nones with current position
+        ustepPos = np.empty(3, dtype=int)
+        for i in range(3):
+            if pos[i] is None:
+                ustepPos[i] = currentPos[i]
+            else:
+                ustepPos[i] = np.round(pos[i] / self.scale[i])
+
+        # be sure to never request out-of-bounds position
+        for i,x in enumerate(ustepPos):
+            assert 0 <= x < (25e-3 / self.scale[i])
+
+        if timeout is None:
+            # maximum distance to be travelled along any axis
+            dist = (np.abs(ustepPos - currentPos) * self.scale).max()
+            v = self.speedTable[speed]
+            timeout = 1.0 + 1.5 * dist / v
+            # print "dist, speed, timeout:", dist, v, timeout
+
+        # Send move command
         if speed == 'fast':
-            cmd = b'M' + struct.pack('=lll', (x,y,z))
+            cmd = b'M' + struct.pack('<lll', *ustepPos)
+            self.write(cmd)
         else:
-            cmd = b'S' + struct.pack('=Blll', (s,x,y,z))
-            
-        # go!
-        self.sp.write(cmd)
-        
-        # watch for updates
+            #self.write(b'O')  # position updates on (these are broken in mpc200?)
+            self.write(b'F')  # position updates off
+            self.read(1, term='\r')
+            self.write(b'S' + struct.pack('B', speed))
+            # MPC200 crashes if the entire packet is written at once; this sleep is mandatory
+            time.sleep(0.03)
+            self.write(struct.pack('<3i', *ustepPos))
+
+        # wait for move to complete
+        try:
+            self.read(1, term='\r', timeout=timeout)
+        except DataError:
+            # If the move is interrupted, sometimes we get junk on the serial line.
+            time.sleep(0.03)
+            self.readAll()
+
+        # finally, make sure we ended up at the right place.
+        newPos = self.getPos(scaled=False)[1]
+        for i in range(3):
+            if abs(newPos[i] - ustepPos[i]) > 1:
+                raise RuntimeError("Move was unsuccessful (%r != %r)."  % (tuple(newPos), tuple(ustepPos)))
+
+    def readMoveUpdate(self):
+        """Read a single update packet sent during a move.
+
+        If the drive is moving, then return the current position of the drive.
+        If the drive is stopped, then return True.
+        If the drive motion was interrupted, then return False.
+
+        Note: update packets are not generated when moving in 'fast' mode.
+        """
+        try:
+            d = self.read(12, timeout=0.5)
+        except TimeoutError as err:
+            if err.data == 'I':
+                return False
+            else:
+                print "timeout:", repr(err.data)
+                return True
+
+        pos = []
+        # unpack four three-byte integers
+        for i in range(4):
+            x = d[i*3:(i+1)*3] + '\0'
+            pos.append(struct.unpack('<i', x)[0])
+
+        return pos
 
     @threadsafe
     @resetDrive
@@ -219,20 +300,22 @@ class SutterMPC200(SerialDevice):
             self.read(1, term='\r')
 
 
+def measureSpeedTable(dev, drive, dist=3e-3):
+    """Measure table of speeds supported by the stage.
 
-
-        
-if __name__ == '__main__':
-    class MPC200(SutterMPC200):
-        """Test subclass that overrides position- and drive-change callbacks"""
-        def posChanged(self, drive, newpos, oldpos):
-            print drive, newpos, oldpos
-
-        def driveChanged(self, newdrive, olddrive):
-            print newdrive, olddrive
-
-    s = MPC200(port='COM4')
-    
-    while True:
-        s.getPos()
+    Warning: this function moves the stage to (0, 0, 0); do not 
+    run this function unless you know it is safe for your setup!
+    """
+    v = []
+    for i in range(16):
+        pos = (dist, 0, 0)
+        dev.moveTo(drive, [0,0,0], 'fast')
+        start = ptime.time()
+        dev.moveTo(drive, pos, i, timeout=100)
+        stop = ptime.time()
+        dt = stop - start
+        v.append(dist / dt)
+        print '%d: %0.4g,  # %0.2g m / %0.2g s' % (i, v[-1], dist, dt)
+        dist *= 1.1
+    return v
 
