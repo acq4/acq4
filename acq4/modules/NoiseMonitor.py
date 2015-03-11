@@ -1,4 +1,4 @@
-import time, weakref
+import time, weakref, collections
 import numpy as np
 from PyQt4 import QtGui, QtCore
 
@@ -36,18 +36,18 @@ class NoiseMonitor(Module):
         self.startBtn.toggled.connect(self.startToggled)
 
         self.params = pg.parametertree.Parameter.create(name='params', type='group', children=[
-        	dict(name='interval', type='float', value=2, suffix='s', siPrefix=True, limits=[0.001, None], step=1.0),
-        	dict(name='trace duration', type='float', value=1.0, suffix='s', siPrefix=True, limits=[0.001, None], step=1.0),
+        	dict(name='interval', type='float', value=10, suffix='s', siPrefix=True, limits=[0.001, None], step=1.0),
+        	dict(name='trace duration', type='float', value=1.0, suffix='s', siPrefix=True, limits=[0.001, None], step=0.1),
         	dict(name='sample rate', type='int', value=1e6, suffix='Hz', siPrefix=True, limits=[100, None], step=1e5),
         ])
         self.ptree = pg.parametertree.ParameterTree()
         self.ptree.setParameters(self.params)
         self.ctrlWidget.addWidget(self.ptree, 4, 0)
 
-        self.channelLayout = pg.LayoutWidget()
+        self.channelLayout =QtGui.QSplitter()
         self.win.addWidget(self.channelLayout)
         
-        self.channels = {}
+        self.channels = collections.OrderedDict()
 
         self.win.show()
         
@@ -120,7 +120,7 @@ class NoiseMonitor(Module):
         for w in self.channels.values():
             w.hide()
             w.setParent(None)
-        self.channels = {}
+        self.channels = collections.OrderedDict()
 
 
 class ChannelRecorder(QtGui.QSplitter):
@@ -130,6 +130,16 @@ class ChannelRecorder(QtGui.QSplitter):
         self.mode = mode
         self.writable = mode != None
         self.recordDir = recordDir.getDir(self.dev, create=self.writable)
+        if self.writable:
+            self.recordDir.setInfo(mode=mode)
+        else:
+            mode = self.recordDir.info()['mode']
+
+        if mode[0] == 'v':
+            self.units = 'A'
+        else:
+            self.units = 'V'
+
         self.rawDataFile = None
         self.envelopeFile = None
         self.spectrogramFile = None
@@ -138,12 +148,12 @@ class ChannelRecorder(QtGui.QSplitter):
 
         QtGui.QSplitter.__init__(self, QtCore.Qt.Vertical)
 
-        self.plot = pg.PlotWidget(labels={'left': ('Channel 1', 'A'), 'bottom': ('Time', 's')})
+        self.plot = pg.PlotWidget(labels={'left': ('Primary', self.units), 'bottom': ('Time', 's')}, title="%s (%s)" % (dev, mode))
         self.plot.setDownsampling(auto=True)
         self.plot.setClipToView(True)
         self.addWidget(self.plot)
         
-        self.envelopePlot = pg.PlotWidget(labels={'left': ('Channel 1', 'A'), 'bottom': ('Time', 's')})
+        self.envelopePlot = pg.PlotWidget(labels={'left': ('Mean, Stdev, Peaks', self.units), 'bottom': ('Time', 's')})
         self.addWidget(self.envelopePlot)
         
         self.specView = pg.PlotItem(labels={'left': ('Frequency', 'Hz'), 'bottom': ('Time', 's')})
@@ -231,7 +241,7 @@ class ChannelRecorder(QtGui.QSplitter):
         envData = np.array([[dataArr.min(), dataArr.mean(), dataArr.max(), dataArr.std()]])
         env = pg.metaarray.MetaArray(envData, info=[
             {'name': 'Trial', 'units': 's', 'values': trialArr},
-            {'name': 'Metric', 'units': 'V'}])
+            {'name': 'Metric', 'units': self.units}])
         if self.envelopeFile is None:
             self.envelopeFile = self.recordDir.writeFile(env, 'envelope', appendAxis='Trial', newFile=True)
         else:
@@ -245,8 +255,11 @@ class ChannelRecorder(QtGui.QSplitter):
 
         # downsample spectrogram
         ds = len(fft) // 1000
-        fft = fft[:ds*1000].reshape(ds, 1000).max(axis=0)
+        fft = fft[:ds*1000].reshape(1000, ds).max(axis=1)
         freqArr = freqArr[:ds*1000:ds]
+
+        # log scale for pretty
+        fft = np.log10(fft)
 
         spec = pg.metaarray.MetaArray(fft[np.newaxis, :], info=[
             {'name': 'Trial', 'units': 's', 'values': trialArr},
