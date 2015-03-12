@@ -211,7 +211,7 @@ class MonitorThread(Thread):
                                 self._moveStatus[mid] = (start, False)
                             self.dev.dev.moveTo(drive, pos, speed)
                     except Exception as err:
-                        print "Move error:", str(err)
+                        debug.printExc('Move error:')
                         with self.lock:
                             self._moveStatus[mid] = (start, err)
                     else:

@@ -199,7 +199,7 @@ class SutterMPC200(SerialDevice):
         TimeoutError if the timeout has elapsed or, 3) raise RuntimeError if the 
         move was unsuccessful (final position does not match the requested position). 
         """
-        assert drive is None or drive in range(4)
+        assert drive is None or drive in range(1,5)
         assert speed == 'fast' or speed in range(16)
 
         if drive is not None:
@@ -236,10 +236,10 @@ class SutterMPC200(SerialDevice):
             #self.write(b'O')  # position updates on (these are broken in mpc200?)
             self.write(b'F')  # position updates off
             self.read(1, term='\r')
-            self.write(b'S' + struct.pack('B', speed))
+            self.write(b'S')
             # MPC200 crashes if the entire packet is written at once; this sleep is mandatory
             time.sleep(0.03)
-            self.write(struct.pack('<3i', *ustepPos))
+            self.write(struct.pack('<B3i', speed, *ustepPos))
 
         # wait for move to complete
         try:
@@ -306,6 +306,7 @@ def measureSpeedTable(dev, drive, dist=3e-3):
     Warning: this function moves the stage to (0, 0, 0); do not 
     run this function unless you know it is safe for your setup!
     """
+    from acq4.pyqtgraph import ptime
     v = []
     for i in range(16):
         pos = (dist, 0, 0)
