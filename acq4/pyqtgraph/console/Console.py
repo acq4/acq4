@@ -167,7 +167,6 @@ class ConsoleWidget(QtGui.QWidget):
         except:
             self.displayException()
             
-            
     def execMulti(self, nextLine):
         #self.stdout.write(nextLine+"\n")
         if nextLine.strip() != '':
@@ -198,6 +197,10 @@ class ConsoleWidget(QtGui.QWidget):
             self.multiline = None
 
     def write(self, strn, html=False):
+        isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
+        if not isGuiThread:
+            self.stdout.write(strn)
+            return
         self.output.moveCursor(QtGui.QTextCursor.End)
         if html:
             self.output.textCursor().insertHtml(strn)

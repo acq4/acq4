@@ -98,22 +98,19 @@ class SutterMPC200(SerialDevice):
         SutterMPC200.DEVICES[port] = self
         self.lock = RLock()
         self.port = port
-        self.pos = [(None,None)]*4  # used to remember position of each drive
-        self.currentDrive = None
         SerialDevice.__init__(self, port=self.port, baudrate=128000)
         self.scale = [0.0625e-6]*3  # default is 16 usteps per micron
 
     @threadsafe
     def setDrive(self, drive):
-        """Set the current drive (0-3)"""
-        drive += 1
+        """Set the current drive (1-4)"""
         cmd = b'I' + chr(drive)
         self.write(cmd)
         ret = self.read(2, term='\r')
         if ord(ret) == drive:
             return
         else:
-            raise Exception('MPC200: Drive %d is not connected' % (drive-1))
+            raise Exception('MPC200: Drive %d is not connected' % drive)
             
     @threadsafe
     def getDriveStatus(self):
@@ -130,7 +127,7 @@ class SutterMPC200(SerialDevice):
     def getActiveDrive(self):
         self.write('K')
         packet = self.read(4, term='\r')
-        return struct.unpack('<B', packet[0])[0]-1
+        return struct.unpack('<B', packet[0])[0]
     
     @threadsafe
     def getFirmwareVersion(self):
@@ -165,15 +162,7 @@ class SutterMPC200(SerialDevice):
                 raise err
 
         drive, x, y, z = struct.unpack('<Blll', packet)
-        drive -= 1
         pos = (x, y, z)
-
-        if drive != self.currentDrive:
-            self.driveChanged(drive, self.currentDrive)
-            self.currentDrive = drive
-        if pos != self.pos[drive][0]:
-            self.posChanged(drive, pos, self.pos[drive][0])
-        self.pos[drive] = pos, time.time()  # record new position
 
         if not scaled:
             return drive, pos
@@ -186,22 +175,6 @@ class SutterMPC200(SerialDevice):
         ## read the position of a specific drive
         self.setDrive(drive)
         return self.getPos(scaled=scaled)
-
-    def posChanged(self, drive, newPos, oldPos):
-        """
-        Method called whenever the position of a drive has changed. This is initiated by calling getPos().
-        Override this method to respond to position changes; the default does nothing. Note
-        that the values passed to this method are unscaled; multiply element-wise
-        by self.scale to obtain the scaled position values.
-        """
-        pass
-
-    def driveChanged(self, newDrive, oldDrive):
-        """
-        Method called whenever the current drive has changed. This is initiated by calling getPos().
-        Override this method to respond to drive changes; the default does nothing.
-        """
-        pass
 
     @threadsafe
     @resetDrive
@@ -226,7 +199,7 @@ class SutterMPC200(SerialDevice):
         TimeoutError if the timeout has elapsed or, 3) raise RuntimeError if the 
         move was unsuccessful (final position does not match the requested position). 
         """
-        assert drive is None or drive in range(4)
+        assert drive is None or drive in range(1,5)
         assert speed == 'fast' or speed in range(16)
 
         if drive is not None:
@@ -263,10 +236,10 @@ class SutterMPC200(SerialDevice):
             #self.write(b'O')  # position updates on (these are broken in mpc200?)
             self.write(b'F')  # position updates off
             self.read(1, term='\r')
-            self.write(b'S' + struct.pack('B', speed))
+            self.write(b'S')
             # MPC200 crashes if the entire packet is written at once; this sleep is mandatory
             time.sleep(0.03)
-            self.write(struct.pack('<3i', *ustepPos))
+            self.write(struct.pack('<B3i', speed, *ustepPos))
 
         # wait for move to complete
         try:
@@ -281,6 +254,13 @@ class SutterMPC200(SerialDevice):
         for i in range(3):
             if abs(newPos[i] - ustepPos[i]) > 1:
                 raise RuntimeError("Move was unsuccessful (%r != %r)."  % (tuple(newPos), tuple(ustepPos)))
+
+    def expectedMoveDuration(self, drive, pos, speed):
+        """Return the expected time duration required to move *drive* to *pos* at *speed*.
+        """
+        cpos = np.array(self.getPos(drive)[1])
+        dx = np.abs(np.array(pos) - cpos).max()
+        return dx / self.speedTable[speed]
 
     # Disabled--official word from Sutter is that the position updates sent during a move are broken.
     # def readMoveUpdate(self):
@@ -326,6 +306,7 @@ def measureSpeedTable(dev, drive, dist=3e-3):
     Warning: this function moves the stage to (0, 0, 0); do not 
     run this function unless you know it is safe for your setup!
     """
+    from acq4.pyqtgraph import ptime
     v = []
     for i in range(16):
         pos = (dist, 0, 0)
