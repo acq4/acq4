@@ -249,8 +249,8 @@ class CameraWindow(QtGui.QMainWindow):
         uiState = {'window': str(self.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
         Manager.getManager().writeConfigFile(uiState, self.stateFile)
         
-        for cam in self.cameras:
-            cam.quit()
+        for iface in self.interfaces.values():
+            iface.quit()
         
         self.module.quit(fromUi=True)
 
