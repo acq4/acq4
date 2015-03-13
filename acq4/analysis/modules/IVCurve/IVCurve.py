@@ -833,12 +833,16 @@ class IVCurve(AnalysisModule):
                              'peakIndex': None, 'peak_T': None, 'peak_V': None, 'AP_Latency': None,
                              'AP_beginV': None, 'halfwidth': None, 'trough_T': None,
                              'trough_V': None, 'peaktotroughT': None,
-                             'current': None, 'pulseDuration': None, 'tstart': self.tstart}  # initialize the structure
+                             'current': None, 'iHold': None,
+                             'pulseDuration': None, 'tstart': self.tstart}  # initialize the structure
                 # print len(self.traces[i])
                 # print j
                 # print spk
                 # print spk[j]
-                thisspike['current'] = self.values[i]
+                (ihold, r2) = Utility.measure('mean', self.time_base, self.cmd_wave[i],
+                                                           0.0, self.tstart)
+                thisspike['current'] = self.values[i] - ihold
+                thisspike['hold'] = ihold
                 thisspike['pulseDuration'] = self.tend - self.tstart  # in seconds
                 thisspike['peakIndex'] = spk[j]
                 thisspike['peak_T'] = self.time_base[thisspike['peakIndex']]
@@ -956,9 +960,13 @@ class IVCurve(AnalysisModule):
         Adds the classifying information according to Druckmann et al., Cerebral Cortex, 2013
         to the analysis summary
         """
+ 
         (jthr, j150) = self.getIVCurrentThresholds()  # get the indices for the traces we need to pull data from
         if jthr == j150:
-            print 'threshod and 150 the same: using next up value for j150'
+            print '\n%s:' % self.filename
+            print 'Threshold current T and 1.5T the same: using next up value for j150'
+            print ' >> Threshold current: %8.3f   1.5T current: %8.3f, next up: %8.3f' % (self.spikeInfo[jthr][0]['current']*1e12,
+                        self.spikeInfo[j150][0]['current']*1e12, self.spikeInfo[j150+1][0]['current']*1e12)
             j150 = jthr + 1
         if len(self.spikeInfo[j150]) >= 1:
             self.analysis_summary['AP1_Latency'] = (self.spikeInfo[j150][0]['AP_Latency'] - self.spikeInfo[j150][0]['tstart'])*1e3
@@ -966,20 +974,22 @@ class IVCurve(AnalysisModule):
         else:
             self.analysis_summary['AP1_Latency'] = np.inf
             self.analysis_summary['AP1_HalfWidth'] = np.inf
-            
+        
         if len(self.spikeInfo[j150]) >= 2:
             self.analysis_summary['AP2_Latency'] = (self.spikeInfo[j150][1]['AP_Latency'] - self.spikeInfo[j150][1]['tstart'])*1e3
             self.analysis_summary['AP2_HalfWidth'] = self.spikeInfo[j150][1]['halfwidth']*1e3
         else:
             self.analysis_summary['AP2_Latency'] = np.inf
             self.analysis_summary['AP2_HalfWidth'] = np.inf
-            
+        
         rate = len(self.spikeInfo[j150])/self.spikeInfo[j150][0]['pulseDuration']  # spikes per second, normalized for pulse duration
         # first AHP depth
         AHPDepth = self.spikeInfo[j150][0]['AP_beginV'] - self.spikeInfo[j150][0]['trough_V']
         self.analysis_summary['FiringRate'] = rate
         self.analysis_summary['AHP_Depth'] = AHPDepth*1e3  # convert to mV
         # pprint.pprint(self.analysis_summary)
+        # except:
+        #     raise ValueError ('Failed Classification for cell: %s' % self.filename)
         
     def fileCellProtocol(self):
         """
@@ -1183,7 +1193,7 @@ class IVCurve(AnalysisModule):
             thiscell = self.script['Cells'][cell]
             #print 'processing cell: %s' % thiscell
             if thiscell['include'] is False:  # skip this cell
-                print 'Skipped: ' % cell
+                print 'Skipped: %s' % cell
                 continue
             sortedkeys = sorted(thiscell['choice'].keys())  # sort by order of recording (# on protocol)
             for p in sortedkeys:
