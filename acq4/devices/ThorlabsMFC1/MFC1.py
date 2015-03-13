@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
-from ..Stage import Stage, StageInterface
+from ..Stage import Stage, StageInterface, MoveFuture
 from acq4.drivers.ThorlabsMFC1 import MFC1 as MFC1_Driver
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
@@ -64,19 +64,15 @@ class ThorlabsMFC1(Stage):
             self.posChanged([0, 0, pos])
         return [0, 0, pos]
 
-    def moveBy(self, pos, speed=None):
-        cpos = self.getPosition()
-        cpos[2] += pos[2]
-        self.moveTo(cpos, speed)
-
-    def moveTo(self, pos, speed=None):
+    def _move(self, abs, rel, speed=None):
+        # convert relative to absolute position, fill in Nones with current position.
+        pos = self._toAbsolutePosition(abs, rel)
         limits = self.getLimits()[2]
         if limits[0] is not None:
-            z = max(pos[2], limits[0])
+            pos[2] = max(pos[2], limits[0])
         if limits[1] is not None:
-            z = min(pos[2], limits[0])
-
-        self.dev.move(z / self.scale[2])
+            pos[2] = min(pos[2], limits[0])
+        return MFC1MoveFuture(self, pos, speed)
 
     def quit(self):
         self._monitor.stop()
@@ -100,10 +96,13 @@ class ThorlabsMFC1(Stage):
         self._roeEnabled = enable
 
     def setZero(self):
-        """Set the device to read z=0 at the current position.
+        """Reset the device position to 0 (without moving the motor).
         """
         self.dev.set_encoder(0)
         self._getPosition()
+
+    def stop(self):
+        self.dev.stop()
 
 
 class MonitorThread(Thread):
@@ -183,5 +182,46 @@ class MFC1StageInterface(StageInterface):
 
     def connectRoeToggled(self, b):
         self.dev.setRoeEnabled(b)
+
+
+class MFC1MoveFuture(MoveFuture):
+    """Provides access to a move-in-progress on an MPC200 drive.
+    """
+    def __init__(self, dev, pos, speed):
+        MoveFuture.__init__(self, dev, pos, speed)
+        self.startPos = dev.getPosition()
+        self.stopPos = pos
+        self._moveStatus = {'status': None}
+        self.id = dev.dev.move(pos[2] / dev.scale[2])
+
+    def wasInterrupted(self):
+        """Return True if the move was interrupted before completing.
+        """
+        return self._getStatus()['status'] in ('interrupted', 'failed')
+
+    def percentDone(self):
+        """Return an estimate of the percent of move completed based on the 
+        device's speed table.
+        """
+        if self.isDone():
+            return 100
+
+        pos = self.dev.getPosition()[2] - self.startPos[2]
+        target = self.stopPos[2] - self.startPos[2]
+        if target == 0:
+            return 99
+        return 100 * pos / target
+
+    def isDone(self):
+        """Return True if the move is complete.
+        """
+        return self._getStatus()['status'] in ('interrupted', 'failed', 'done')
+
+    def _getStatus(self):
+        # check status of move unless we already know it is complete.
+        if self._moveStatus['status'] in (None, 'moving'):
+            self._moveStatus = self.dev.dev.move_status(self.id)
+        return self._moveStatus
+        
 
 

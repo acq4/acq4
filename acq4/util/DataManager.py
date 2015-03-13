@@ -449,8 +449,8 @@ class FileHandle(QtCore.QObject):
     
     def isGrandchildOf(self, grandparent):
         """Return true if this files is anywhere in the tree beneath grandparent."""
-        gname = abspath(os.path.join(grandparent.name(), ''))
-        return self.name()[:len(gname)] == gname
+        gname = os.path.join(abspath(grandparent.name()), '')
+        return abspath(self.name())[:len(gname)] == gname
     
     def write(self, data, **kwargs):
         self.parent().writeFile(data, self.shortName(), **kwargs)

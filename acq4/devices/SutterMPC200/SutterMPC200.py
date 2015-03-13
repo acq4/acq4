@@ -257,6 +257,8 @@ class MPC200MoveFuture(MoveFuture):
         if self.isDone():
             return 100
         dt = ptime.time() - self._getStatus()[0]
+        if self._expectedDuration == 0:
+            return 99
         return max(min(100 * dt / self._expectedDuration, 99), 0)
     
     def isDone(self):
