@@ -187,10 +187,16 @@ class Stage(Device, OptomechDevice):
     def setLimits(self, x=None, y=None, z=None):
         """Set the (min, max) position limits to enforce for each axis.
 
+        Accepts keyword arguments 'x', 'y', 'z'; each supplied argument must be
+        a (min, max) tuple where either value may be None to disable the limit.
+
         Note that some devices do not support limits.
         """
         changed = []
         for axis, limit in enumerate((x, y, z)):
+            if limit is None:
+                continue
+            assert len(limit) == 2
             if self.capabilities()['limits'][axis] is not True:
                 raise TypeError("Device does not support settings limits for axis %d." % axis)
             if tuple(self._limits[axis]) != tuple(limit):
@@ -266,22 +272,33 @@ class StageInterface(QtGui.QWidget):
         for axis in (0, 1, 2):
             if cap['getPos'][axis]:
                 axLabel = QtGui.QLabel('XYZ'[axis])
+                axLabel.setMaximumWidth(15)
                 posLabel = QtGui.QLabel('0')
                 self.posLabels[axis] = posLabel
                 widgets = [axLabel, posLabel]
                 if cap['limits'][axis]:
                     minCheck = QtGui.QCheckBox('Min:')
-                    minBtn = QtGui.QPushButton('set')
-                    minBtn.setMaximumWidth(30)
+                    minCheck.tag = (axis, 0)
+                    # minBtn = QtGui.QPushButton('set')
+                    # minBtn.tag = (axis, 0)
+                    # minBtn.setMaximumWidth(30)
                     maxCheck = QtGui.QCheckBox('Max:')
-                    maxBtn = QtGui.QPushButton('set')
-                    maxBtn.setMaximumWidth(30)
+                    maxCheck.tag = (axis, 1)
+                    # maxBtn = QtGui.QPushButton('set')
+                    # maxBtn.tag = (axis, 1)
+                    # maxBtn.setMaximumWidth(30)
                     self.limitChecks[axis] = (minCheck, maxCheck)
-                    widgets.extend([minCheck, minBtn, maxCheck, maxBtn])
+                    widgets.extend([minCheck, maxCheck])
+                    for check in (minCheck, maxCheck):
+                        check.clicked.connect(self.limitCheckClicked)
+                    # for btn in (minBtn, maxBtn):
+                    #     btn.sigClicked.connect(self.limitBtnClicked)
+
                 for i,w in enumerate(widgets):
                     self.layout.addWidget(w, self.nextRow, i)
                 self.axCtrls[axis] = widgets
                 self.nextRow += 1
+
 
         self.updateLimits()
         self.dev.sigPositionChanged.connect(self.update)
@@ -299,24 +316,25 @@ class StageInterface(QtGui.QWidget):
     def updateLimits(self):
         limits = self.dev.getLimits()
         cap = self.dev.capabilities()
-        for axis in range(0, 1, 2):
+        for axis in (0, 1, 2):
             if not cap['limits'][axis]:
                 continue
             for i,limit in enumerate(limits[axis]):
                 check = self.limitChecks[axis][i]
-                cap = ('Max:', 'Min:')[i]
+                pfx = ('Min:', 'Max:')[i]
                 if limit is None:
-                    check.setCaption(cap)
+                    check.setText(pfx)
                     check.setChecked(False)
                 else:
-                    check.setCaption(cap + ' %s' % pg.siFormat(limit, suffix='m'))
+                    check.setText(pfx + ' %s' % pg.siFormat(limit, suffix='m'))
                     check.setChecked(True)
 
-
-
-
-
-
-
-
-
+    def limitCheckClicked(self, b):
+        check = self.sender()
+        axis, minmax = check.tag
+        limit = list(self.dev.getLimits()[axis])
+        if b:
+            limit[minmax] = self.dev.getPosition()[axis]
+        else:
+            limit[minmax] = None
+        self.dev.setLimits(**{'xyz'[axis]: tuple(limit)})

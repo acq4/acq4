@@ -71,7 +71,7 @@ class ThorlabsMFC1(Stage):
         if limits[0] is not None:
             pos[2] = max(pos[2], limits[0])
         if limits[1] is not None:
-            pos[2] = min(pos[2], limits[0])
+            pos[2] = min(pos[2], limits[1])
         return MFC1MoveFuture(self, pos, speed)
 
     def quit(self):
@@ -87,7 +87,8 @@ class ThorlabsMFC1(Stage):
         if dz == 0:
             return
         target = self.dev.target_position() * self.scale[2] + dz
-        self.moveTo([0, 0, target])
+        print dz, target
+        self.moveTo([0, 0, target], 'fast')
 
     def deviceInterface(self, win):
         return MFC1StageInterface(self, win)
@@ -156,29 +157,15 @@ class MFC1StageInterface(StageInterface):
             self.connectRoeBtn = QtGui.QPushButton('Enable ROE')
             self.connectRoeBtn.setCheckable(True)
             self.connectRoeBtn.setChecked(True)
-            self.layout.addWidget(self.connectRoeBtn, 3, 0, 1, 1)
+            self.layout.addWidget(self.connectRoeBtn, self.nextRow, 0, 1, 2)
             self.connectRoeBtn.toggled.connect(self.connectRoeToggled)
 
             self.setZeroBtn = QtGui.QPushButton('Set Zero')
-            self.layout.addWidget(self.setZeroBtn, 4, 0, 1, 1)
-            self.setZeroBtn.toggled.connect(self.setZeroClicked)
-
-            self.setUpperBtn = QtGui.QPushButton('Set Upper Limit')
-            self.layout.addWidget(self.setUpperBtn, 3, 1, 1, 1)
-            self.setUpperBtn.toggled.connect(self.setUpperClicked)
-
-            self.setLowerBtn = QtGui.QPushButton('Set Lower Limit')
-            self.layout.addWidget(self.setLowerBtn, 4, 1, 1, 1)
-            self.setLowerBtn.toggled.connect(self.setLowerClicked)
+            self.layout.addWidget(self.setZeroBtn, self.nextRow, 2, 1, 1)
+            self.setZeroBtn.clicked.connect(self.setZeroClicked)
 
     def setZeroClicked(self):
         self.dev.setZero()
-
-    def setUpperClicked(self):
-        self.dev.setUpperLimit()
-
-    def setLowerClicked(self):
-        self.dev.setLowerLimit()
 
     def connectRoeToggled(self, b):
         self.dev.setRoeEnabled(b)
