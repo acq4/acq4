@@ -32,14 +32,15 @@ class ThorlabsMFC1(Stage):
             # the public signal should already have z-axis information removed.
             dev._notifier.sigPosChanged.connect(self._roeChanged)
 
-        # Optionally read limits from config
-        self.limits = config.pop('limits', (None, None))
-
         self._lastPos = None
 
         Stage.__init__(self, man, config, name)
 
         self.getPosition(refresh=True)
+
+        # Optionally read limits from config
+        limits = list(config.pop('limits', (None, None)))
+        self.setLimits(z=limits)
 
         self._monitor = MonitorThread(self)
         self._monitor.start()
@@ -48,7 +49,8 @@ class ThorlabsMFC1(Stage):
         # device only reads/writes z-axis
         return {
             'getPos': (False, False, True),
-            'setPos': (False, False, True)
+            'setPos': (False, False, True),
+            'limits': (False, False, True),
         }
 
     def mfcPosChanged(self, pos, oldpos):
@@ -68,11 +70,12 @@ class ThorlabsMFC1(Stage):
         self.moveTo(cpos, speed)
 
     def moveTo(self, pos, speed=None):
-        z = pos[2]
-        if z < self.limits[0]:
-            z = self.limits[0]
-        if z > self.limits[1]:
-            z = self.limits[1]
+        limits = self.getLimits()[2]
+        if limits[0] is not None:
+            z = max(pos[2], limits[0])
+        if limits[1] is not None:
+            z = min(pos[2], limits[0])
+
         self.dev.move(z / self.scale[2])
 
     def quit(self):
@@ -95,6 +98,12 @@ class ThorlabsMFC1(Stage):
 
     def setRoeEnabled(self, enable):
         self._roeEnabled = enable
+
+    def setZero(self):
+        """Set the device to read z=0 at the current position.
+        """
+        self.dev.set_encoder(0)
+        self._getPosition()
 
 
 class MonitorThread(Thread):
@@ -150,6 +159,27 @@ class MFC1StageInterface(StageInterface):
             self.connectRoeBtn.setChecked(True)
             self.layout.addWidget(self.connectRoeBtn, 3, 0, 1, 1)
             self.connectRoeBtn.toggled.connect(self.connectRoeToggled)
+
+            self.setZeroBtn = QtGui.QPushButton('Set Zero')
+            self.layout.addWidget(self.setZeroBtn, 4, 0, 1, 1)
+            self.setZeroBtn.toggled.connect(self.setZeroClicked)
+
+            self.setUpperBtn = QtGui.QPushButton('Set Upper Limit')
+            self.layout.addWidget(self.setUpperBtn, 3, 1, 1, 1)
+            self.setUpperBtn.toggled.connect(self.setUpperClicked)
+
+            self.setLowerBtn = QtGui.QPushButton('Set Lower Limit')
+            self.layout.addWidget(self.setLowerBtn, 4, 1, 1, 1)
+            self.setLowerBtn.toggled.connect(self.setLowerClicked)
+
+    def setZeroClicked(self):
+        self.dev.setZero()
+
+    def setUpperClicked(self):
+        self.dev.setUpperLimit()
+
+    def setLowerClicked(self):
+        self.dev.setLowerLimit()
 
     def connectRoeToggled(self, b):
         self.dev.setRoeEnabled(b)

@@ -152,3 +152,6 @@ class MFC1(object):
 
     def program_running(self):
         return self.mcm.get_global('tmcl_application_status') == 1
+
+    def set_encoder(self, x):
+        self.mcm['encoder_position'] = x

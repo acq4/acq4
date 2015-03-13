@@ -328,3 +328,20 @@ class ScopeGUI(QtGui.QWidget):
             ss.setValue(obj.scale().x())
 
 
+class ScopeCameraModInterface(QtCore.QObject):
+    """Implements focus control user interface for use in the camera module.
+    """
+    def __init__(self, dev, mod):
+        self.dev = dev  # microscope device
+        self.mode = mod  # camera module
+
+        self.ctrl = QtGui.QWidget()
+        self.layout = QtGui.QGridLayout()
+        self.ctrl.setLayout(self.layout)
+        self.plot = pg.PlotWidget()
+        self.layout.addWidget(self.plot, 0, 0)
+
+        self.focusLine = self.plot.addLine(x=0)
+        self.surfaceLine = self.plot.addLine(x=0)
+
+        

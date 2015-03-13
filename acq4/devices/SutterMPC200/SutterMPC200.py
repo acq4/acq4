@@ -57,6 +57,7 @@ class SutterMPC200(Stage):
             return {
                 'getPos': (True, True, True),
                 'setPos': (True, True, True),
+                'limits': (False, False, False),
             }
 
     def stop(self):
