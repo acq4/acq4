@@ -87,7 +87,6 @@ class ThorlabsMFC1(Stage):
         if dz == 0:
             return
         target = self.dev.target_position() * self.scale[2] + dz
-        print dz, target
         self.moveTo([0, 0, target], 'fast')
 
     def deviceInterface(self, win):

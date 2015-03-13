@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from acq4.devices.OptomechDevice import *
+from acq4.devices.Stage import Stage
 from deviceTemplate import Ui_Form
 from acq4.util.Mutex import Mutex
 import acq4.pyqtgraph as pg
@@ -30,6 +31,7 @@ class Microscope(Device, OptomechDevice):
         self.switchDevice = None
         self.currentSwitchPosition = None
         self.currentObjective = None
+        self._focusDevice = None
         
         self.objectives = collections.OrderedDict()
         ## Format of self.objectives is:
@@ -146,6 +148,38 @@ class Microscope(Device, OptomechDevice):
     #def objectiveTransformChanged(self, obj):
         #if obj is self.currentObjective:
             #self.updateDeviceTransform()
+
+    def cameraModuleInterface(self, mod):
+        """Return an object to interact with camera module.
+        """
+        return ScopeCameraModInterface(self, mod)
+
+    def getFocusDepth(self):
+        """Return the z-position of the focal plane.
+
+        This method requires a device that provides focus position feedback.
+        """
+        return self.mapToGlobal(QtGui.QVector3D(0, 0, 0)).z()
+
+    def setFocusDepth(self, z):
+        """Set the z-position of the focal plane.
+
+        This method requires motorized focus control.
+        """
+        globalPos = self.mapToGlobal(QtGui.QVector3D(0, 0, z))
+        fd = self.focusDevice()
+        devPos = fd.mapFromGlobal(globalPos)
+        fd.moveTo([None, None, devPos.z()], 'fast')
+
+    def focusDevice(self):
+        if self._focusDevice is None:
+            p = self
+            while True:
+                if p is None or isinstance(p, Stage) and p.capabilities()['setPos'][2]:
+                    self._focusDevice = p
+                    break
+                p = p.parentDevice()
+        return self._focusDevice
 
 
 class Objective(OptomechDevice):
@@ -332,16 +366,42 @@ class ScopeCameraModInterface(QtCore.QObject):
     """Implements focus control user interface for use in the camera module.
     """
     def __init__(self, dev, mod):
+        QtCore.QObject.__init__(self)
         self.dev = dev  # microscope device
         self.mode = mod  # camera module
 
         self.ctrl = QtGui.QWidget()
         self.layout = QtGui.QGridLayout()
         self.ctrl.setLayout(self.layout)
+
         self.plot = pg.PlotWidget()
         self.layout.addWidget(self.plot, 0, 0)
+        self.focusLine = self.plot.addLine(y=0, movable=True)
+        self.surfaceLine = self.plot.addLine(y=0, pen='g')
 
-        self.focusLine = self.plot.addLine(x=0)
-        self.surfaceLine = self.plot.addLine(x=0)
+        self.setSurfaceBtn = QtGui.QPushButton('Set Surface')
+        self.layout.addWidget(self.setSurfaceBtn, 1, 0)
+        self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
 
-        
+        self.dev.sigGlobalTransformChanged.connect(self.transformChanged)
+        self.focusLine.sigDragged.connect(self.focusDragged)
+
+    def setSurfaceClicked(self):
+        focus = self.dev.getFocusDepth()
+        self.surfaceLine.setValue(focus)
+
+    def transformChanged(self):
+        focus = self.dev.getFocusDepth()
+        self.focusLine.setValue(focus)
+
+    def focusDragged(self):
+        self.dev.setFocusDepth(self.focusLine.value())
+
+    def controlWidget(self):
+        return self.ctrl
+
+    def boundingRect(self):
+        return None
+
+    def quit(self):
+        pass

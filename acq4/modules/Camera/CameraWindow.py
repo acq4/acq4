@@ -170,11 +170,15 @@ class CameraWindow(QtGui.QMainWindow):
             return
         bounds = None
         for iface in self.interfaces.values():
+            br = iface.boundingRect()
+            if br is None:
+                continue
             if bounds is None:
-                bounds = iface.boundingRect()
+                bounds = br
             else:
-                bounds |= iface.boundingRect()
-        self.setRange(bounds)
+                bounds |= br
+        if bounds is not None:
+            self.setRange(bounds)
         
     def autoRange(self, item=None):
         self.view.autoRange(item=item)
