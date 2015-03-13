@@ -198,7 +198,7 @@ class TMCM140(SerialDevice):
         baudrate: 9600 by default
         module_addr: 1 by default
         """
-        self.lock = RLock()
+        self.lock = RLock(debug=True)
         self.port = port
         assert isinstance(module_addr, int)
         assert module_addr > 0
@@ -443,6 +443,7 @@ class ProgramManager(object):
         self.count = 0
         
     def __enter__(self):
+        self.mcm.lock.acquire()
         self.mcm.start_download(self.start)
         return self
         
@@ -451,6 +452,7 @@ class ProgramManager(object):
         # into previously written code.
         self.mcm.command('stop', 0, 0, 0)
         self.mcm.stop_download()
+        self.mcm.lock.release()
         
     def __getattr__(self, name):
         self.count += 1

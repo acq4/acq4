@@ -8,10 +8,14 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 from PyQt4 import QtCore
 import traceback
 
+
 class Mutex(QtCore.QMutex):
-    """Extends QMutex to provide warning messages when a mutex stays locked for a long time.
-    Mostly just useful for debugging purposes. Should only be used with MutexLocker, not
-    QMutexLocker.
+    """Extends QMutex to provide:
+
+    * Warning messages when a mutex stays locked for a long time.
+      (if initialized with debug=True)
+    * Drop-in replacement for threading.Lock
+    * Context management (enter/exit)
     """
     
     def __init__(self, *args, **kargs):
@@ -20,7 +24,7 @@ class Mutex(QtCore.QMutex):
         QtCore.QMutex.__init__(self, *args)
         self.l = QtCore.QMutex()  ## for serializing access to self.tb
         self.tb = []
-        self.debug = False ## True to enable debugging functions
+        self.debug = kargs.pop('debug', False) ## True to enable debugging functions
 
     def tryLock(self, timeout=None, id=None):
         if timeout is None:
@@ -73,6 +77,16 @@ class Mutex(QtCore.QMutex):
             finally:
                 self.l.unlock()
 
+    def acquire(self, blocking=True):
+        """Mimics threading.Lock.acquire() to allow this class as a drop-in replacement.
+        """
+        return self.tryLock()
+        
+    def release(self): 
+        """Mimics threading.Lock.release() to allow this class as a drop-in replacement.
+        """
+        self.unlock()
+
     def depth(self):
         self.l.lock()
         n = len(self.tb)
@@ -93,6 +107,12 @@ class Mutex(QtCore.QMutex):
     def __enter__(self):
         self.lock()
         return self
+
+
+class RecursiveMutex(Mutex):
+    def __init__(self, **kwds):
+        kwds['recursive'] = True
+        Mutex.__init__(self, **kwds)
 
 
 class MutexLocker:

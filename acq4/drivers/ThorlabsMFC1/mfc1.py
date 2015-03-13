@@ -18,10 +18,30 @@ Hardware notes:
 
 * Setting encoder prescaler to 8192 yields +1 per encoder step 
 """
+try:
+    # this is nicer because it provides deadlock debugging information
+    from acq4.util.Mutex import RecursiveMutex as RLock
+except ImportError:
+    from threading import RLock
+
+from acq4.pyqtgraph import ptime
+
 from .tmcm import TMCM140
+
+
+
+def threadsafe(method):
+    # decorator for automatic mutex lock/unlock
+    def lockMutex(self, *args, **kwds):
+        with self.lock:
+            return method(self, *args, **kwds)
+    return lockMutex
+
 
 class MFC1(object):
     def __init__(self, port, baudrate=9600):
+        self.lock = RLock(debug=True)
+
         self.mcm = TMCM140(port, baudrate)
         self.mcm.stop_program()
         self.mcm.stop()
@@ -40,6 +60,9 @@ class MFC1(object):
         )
         self.mcm.set_global('gp0', self.mcm['encoder_position'])
         self._upload_program()
+
+        self._move_status = {}
+        self._last_move_id = -1
         
     def _upload_program(self):
         """Upload a program used to seek to a specific encoder value.
@@ -116,6 +139,7 @@ class MFC1(object):
         """
         return self.mcm['encoder_position']
     
+    @threadsafe
     def target_position(self):
         """Return the final target position if the motor is currently moving
         to a specific position.
@@ -127,28 +151,81 @@ class MFC1(object):
         else:
             return self.position()
 
-    def move(self, position, block=False):
+    @threadsafe
+    def move(self, position):
         """Move to the requested position.
+
+        If the motor is already moving, then update the target position.
         
-        If block is False, then return an object that may be used to check 
+        Return an object that may be used to check 
         whether the move is complete.
         """
-        self.mcm.set_global('gp0', position)
-        if not self.program_running():
+        id = self._last_move_id
+
+        if self.program_running():
+            self._interrupt_move()
+            self.mcm.set_global('gp0', position)
+            start = ptime.time()
+        else:
+            self.mcm.set_global('gp0', position)
             self.mcm.start_program()
+            start = ptime.time()
+
+        id += 1
+        self._last_move_id = id
+        self._move_status[id] = {'start': start, 'status': 'moving', 'target': position}
+        return id
+
+    @threadsafe
+    def move_status(self, id, clear=True):
+        """Return the status of a previously requested move.
+
+        The return value is a dict with the following keys:
+
+        * status: 'moving', 'interrupted', 'failed', or 'done'.
+        * start: the start time of the move.
+        * target: the target position of the move.
+        """
+        stat = self._move_status[id]
+        if stat['status'] == 'moving' and not self.program_running():
+            if abs(self.position() - stat['target']) <= 1:
+                stat['status'] = 'done'
+            else:
+                stat['status'] = 'failed'
+
+        if clear and stat['status'] != 'moving':
+            del self._move_status[id]
+
+        return stat
         
+    @threadsafe
     def rotate(self, speed):
         """Begin rotating at *speed*. Positive values turn right.
         """
+        self._interrupt_move()
         self.mcm.stop_program()
         self.mcm.rotate(speed)
+
+    def _interrupt_move(self):
+        """If a move is currently in progress, set its state to 'interrupted'
+        """
+        id = self._last_move_id
+        try:
+            stat = self.move_status(id, clear=False)
+            if stat['status'] == 'moving':
+                self._move_status[id]['status'] = 'interrupted'
+        except KeyError:
+            pass
     
     def stop(self):
         """Immediately stop the motor and any programs running on the motor
         comtrol module.
         """
+        self._interrupt_move()
         self.mcm.stop_program()
         self.mcm.stop()
 
     def program_running(self):
         return self.mcm.get_global('tmcl_application_status') == 1
+
+
