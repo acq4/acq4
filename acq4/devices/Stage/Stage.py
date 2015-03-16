@@ -63,20 +63,35 @@ class Stage(Device, OptomechDevice):
         self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
 
     def getPosition(self, refresh=False):
-        """
-        Return the position of the stage.
+        """Return the position of the stage.
+
         If refresh==False, the last known position is returned. Otherwise, the
         current position is requested from the controller. If request is True,
         then the position request may block if the device is currently busy.
+
+        In the contect of the optomechanical device hierarchy, this position is 
+        expressed in the parent coordinate system of the stage.
         """
         if not refresh:
             return self.pos[:]
         else:
             return self._getPosition()
 
+    def globalPosition(self):
+        """Return the position of the stage relative to the global coordinate system.
+        """
+        # note: the origin of the local coordinate frame is the center position of the device.
+        return self.mapToGlobal([0, 0, 0])
+
     def _getPosition(self):
         """
         Must be reimplemented by subclass to re-read position from device.
+        """
+        raise NotImplementedError()
+
+    def targetPosition(self):
+        """If the stage is moving, return the target position. Otherwise return 
+        the current position.
         """
         raise NotImplementedError()
 
@@ -120,6 +135,9 @@ class Stage(Device, OptomechDevice):
 
         Return a MoveFuture instance that can be used to monitor the progress 
         of the move.
+
+        Note: the position is expressed in the device's parent coordinate frame.
+        (this is the same coordinate system as used by getPosition)
         """
         if speed is None:
             speed = self._defaultSpeed
@@ -141,6 +159,14 @@ class Stage(Device, OptomechDevice):
         """Must be reimplemented by subclasses and return a MoveFuture instance.
         """
         raise NotImplementedError()
+
+    def moveToGlobal(self, pos, speed):
+        """Move the stage to a position expressed in the global coordinate frame.
+        """
+        pd = self.parentDevice()
+        if pd is not None:
+            pos = pd.mapFromGlobal(pos)
+        self.moveTo(pos, speed)
 
     def _toAbsolutePosition(self, abs, rel):
         """Helper function to convert absolute or relative position (possibly 

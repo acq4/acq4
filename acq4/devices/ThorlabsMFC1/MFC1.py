@@ -74,6 +74,9 @@ class ThorlabsMFC1(Stage):
             pos[2] = min(pos[2], limits[1])
         return MFC1MoveFuture(self, pos, speed)
 
+    def targetPosition(self):
+        return [0, 0, self.dev.target_position() * self.scale[2]]
+
     def quit(self):
         self._monitor.stop()
         Stage.quit(self)
