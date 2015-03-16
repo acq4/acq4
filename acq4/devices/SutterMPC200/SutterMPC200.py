@@ -8,9 +8,9 @@ from acq4.util.Thread import Thread
 from acq4.pyqtgraph import debug, ptime
 
 
-def __reload__(self, old, new):
+def __reload__(self, old):
     # copy some globals if the module is reloaded
-    new['SutterMPC200']._monitor = old['SutterMPC200']._monitor
+    SutterMPC200._monitor = old['SutterMPC200']._monitor
 
 
 class ChangeNotifier(QtCore.QObject):
@@ -39,6 +39,8 @@ class SutterMPC200(Stage):
         self._notifier.sigPosChanged.connect(self._mpc200PosChanged)
         man.sigAbortAll.connect(self.stop)
 
+        self._lastMove = None
+
         Stage.__init__(self, man, config, name)
 
         self.getPosition(refresh=True)
@@ -57,6 +59,7 @@ class SutterMPC200(Stage):
             return {
                 'getPos': (True, True, True),
                 'setPos': (True, True, True),
+                'limits': (False, False, False),
             }
 
     def stop(self):
@@ -90,6 +93,12 @@ class SutterMPC200(Stage):
         pos = [pos[i] * self.scale[i] for i in (0, 1, 2)]
         return pos
 
+    def targetPosition(self):
+        if self._lastMove is None or self._lastMove.isDone():
+            return self.getPosition()
+        else:
+            return self._lastMove.targetPos
+
     def quit(self):
         self._monitor.stop()
         Stage.quit(self)
@@ -106,7 +115,8 @@ class SutterMPC200(Stage):
         else:
             speed = self._getClosestSpeed(speed)
         
-        return MPC200MoveFuture(self, pos, speed)
+        self._lastMove = MPC200MoveFuture(self, pos, speed)
+        return self._lastMove
 
     def _getClosestSpeed(self, speed):
         """Return the MPC200 speed value (0-15 or 'fast') that most closely

@@ -215,15 +215,33 @@ class OptomechDevice(object):
                 return self.parentDevice().mapToGlobal(obj, subdev)
         
     def _mapTransform(self, obj, tr):
-        if isinstance(obj, tuple):
+        # convert to a type that can be mapped
+        retType = None
+        if isinstance(obj, (tuple, list)):
+            retType = type(obj)
             if np.isscalar(obj[0]):
-                obj = QtCore.QPointF(*obj)
+                if len(obj) == 2:
+                    obj = QtCore.QPointF(*obj)
+                elif len(obj) == 3:
+                    obj = QtGui.QVector3D(*obj)
+                else:
+                    raise TypeError("Cannot map %s of length %d." % (type(obj).__name__, len(obj)))
             elif isinstance(obj[0], np.ndarray):
                 obj = np.concatenate([x[np.newaxis, ...] for x in obj])
             else:
                 raise Exception ('Cannot map--object of type %s ' % str(type(obj[0])))
+
         if isinstance(obj, QtCore.QPointF):
-            return tr.map(obj)
+            ret = tr.map(obj)
+            if retType is not None:
+                return retType([ret.x(), ret.y()])
+            return ret
+        elif isinstance(obj, QtGui.QVector3D):
+            ret = tr.map(obj)
+            if retType is not None:
+                return retType([ret.x(), ret.y(), ret.z()])
+            return ret
+
         elif isinstance(obj, np.ndarray):
             # m = np.array(tr.copyDataTo()).reshape(4,4)
             # m1 = m[:2,:2, np.newaxis]

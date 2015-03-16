@@ -4,6 +4,7 @@ acq4-0.9.3 (unreleased)
         Disabled HDF5 compression by default--lzf is not readable by most HDF5 libraries, and gzip is too slow. 
             (see the 'defaultCompression' config option).
     New Features:
+        Motorized focus control interface in camera module
         Spiral scanning for single-cell photostimulation
         Panic button: ESC key global shortcut closes shutters, stops stage/manipulator, aborts all tasks, etc.
         Overhaul of 2p Imager module:
@@ -16,6 +17,7 @@ acq4-0.9.3 (unreleased)
         Added support for controlling bidirectional filtering by NiDAQ device
         NoiseMonitor module for tracking long-term changes in electrical noise
         Added motion support to MPC200 device
+        Objectives now have z-offset
     Bugfixes:
         Fixed issues with Scanner grid controls in TaskRunner
     Maintenance:

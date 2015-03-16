@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import time, types, os.path, re, sys
+from collections import OrderedDict
 from PyQt4 import QtGui, QtCore
-#from CameraTemplate import Ui_Form
 from acq4.LogWindow import LogButton
 from acq4.util.StatusBar import StatusBar
 import acq4.pyqtgraph as pg
@@ -12,18 +12,15 @@ from acq4.util.debug import Profiler
 import numpy as np
 
 
-
-        
-        
 class CameraWindow(QtGui.QMainWindow):
-    
-    #sigCameraPosChanged = QtCore.Signal()
-    #sigCameraScaleChanged = QtCore.Signal()
     
     def __init__(self, module):
         self.hasQuit = False
         self.module = module ## handle to the rest of the application
-
+        
+        self.interfaces = OrderedDict()  # owner: widget
+        self.docks = OrderedDict()       # owner: dock
+        
         ## ROI state variables
         self.lastPlotTime = None
         self.ROIs = []
@@ -55,28 +52,25 @@ class CameraWindow(QtGui.QMainWindow):
         self.view.setAspectLocked(True)
         self.gv.setCentralItem(self.view)
         
-        ## build camera control panels
+        ## search for all devices that provide a cameraModuleInterface() method
         man = Manager.getManager()
-        camNames = man.listInterfaces('camera')
-        self.cameras = []
-        self.cameraDocks = []
-        if len(camNames) == 0:
-            label = QtGui.QLabel("No cameras available")
+        devices = [man.getDevice(dev) for dev in man.listDevices()]
+        ifaces = OrderedDict([(dev.name(), dev.cameraModuleInterface(self)) for dev in devices if hasattr(dev, 'cameraModuleInterface')])
+        
+        # add each device's control panel in ots own dock
+        haveDevs = False
+        for dev, iface in ifaces.items():
+            if iface is not None:
+                haveDevs = True
+                self.addInterface(dev, iface)
+        
+        # Add explanatory label of no devices were found
+        if not haveDevs:
+            label = QtGui.QLabel("No imaging devices available")
             label.setAlignment(QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
             dock = dockarea.Dock(name="nocamera", widget=label, size=(100, 500), hideTitle=True)
             self.cw.addDock(dock, 'left', self.gvDock)
-        else:
-            for name in camNames:
-                camera = man.getInterface('camera', name)
-                iface = camera.cameraModuleInterface(self)
-                self.cameras.append(iface)
-                dock = dockarea.Dock(name=name, widget=iface.controlWidget(), size=(10, 500), hideTitle=(len(camNames)==1))
-                if len(self.cameraDocks) == 0:
-                    self.cw.addDock(dock, 'left', self.gvDock)
-                else:
-                    self.cw.addDock(dock, 'below', self.cameraDocks[0])
-                self.cameraDocks.append(dock)
-                iface.sigNewFrame.connect(self.newFrame)
+
 
         ## ROI plot ctrls
         self.roiWidget = QtGui.QWidget()
@@ -128,20 +122,13 @@ class CameraWindow(QtGui.QMainWindow):
         
         ### Set up status bar labels
         self.recLabel = QtGui.QLabel()
-        #self.fpsLabel = pg.ValueLabel(averageTime=2.0, formatStr='{avgValue:.1f} fps')
-        #self.displayFpsLabel = pg.ValueLabel(averageTime=2.0, formatStr='(displaying {avgValue:.1f} fps')
-        #self.displayPercentLabel = pg.ValueLabel(averageTime=4.0, formatStr='{avgValue:.1f}%)')
         self.rgnLabel = QtGui.QLabel()
         self.xyLabel = QtGui.QLabel()
         self.tLabel = QtGui.QLabel()
         self.vLabel = QtGui.QLabel()
         
-        #self.fpsLabel.setFixedWidth(50)
-        #self.displayFpsLabel.setFixedWidth(100)
-        #self.displayFpsLabel.setFixedWidth(100)
         self.vLabel.setFixedWidth(50)
         
-        #self.logBtn = LogButton('Log')
         self.setStatusBar(StatusBar())
         font = self.xyLabel.font()
         font.setPointSize(8)
@@ -152,32 +139,46 @@ class CameraWindow(QtGui.QMainWindow):
         
         ## done with UI
         self.show()
-        #self.autoRange()
         self.centerView()
-        
         
         self.gv.scene().sigMouseMoved.connect(self.updateMouse)
         
         ## Connect ROI dock
         self.rectBtn.clicked.connect(self.addROI)
-        #self.ui.btnClearROIs.clicked.connect(self.clearROIs)
-        #self.roiPlotCheck.stateChanged.connect(self.enableROIsChanged)
         self.roiTimeSpin.valueChanged.connect(self.setROITime)
         
+    def addInterface(self, name, iface):
+        """Display a new user interface in the camera module.
+        """
+        self.interfaces[name] = iface
+        dock = dockarea.Dock(name=name, widget=iface.controlWidget(), size=(10, 500))
+        if len(self.docks) == 0:
+            dock.hideTitleBar()
+            self.cw.addDock(dock, 'left', self.gvDock)
+        else:
+            list(self.docks.values())[0].showTitleBar()
+            self.cw.addDock(dock, 'below', list(self.docks.values())[0])
+        self.docks[name] = dock
+        if hasattr(iface, 'sigNewFrame'):
+            iface.sigNewFrame.connect(self.newFrame)
 
     def getView(self):
         return self.view
 
     def centerView(self):
-        if len(self.cameras) == 0:
+        if len(self.interfaces) == 0:
             return
         bounds = None
-        for cam in self.cameras:
+        for iface in self.interfaces.values():
+            br = iface.boundingRect()
+            if br is None:
+                continue
             if bounds is None:
-                bounds = cam.boundingRect()
+                bounds = br
             else:
-                bounds |= cam.boundingRect()
-        self.setRange(bounds)
+                bounds |= br
+        if bounds is not None:
+            self.setRange(bounds)
         
     def autoRange(self, item=None):
         self.view.autoRange(item=item)
@@ -199,13 +200,11 @@ class CameraWindow(QtGui.QMainWindow):
     
     def removeItem(self, item):
         self.view.removeItem(item)
-    
 
     def clearPersistentFrames(self):
         for i in self.persistentFrames:
             self.view.removeItem(i)
         self.persistentFrames = []
-
 
     def addROI(self):
         pen = pg.mkPen(pg.intColor(len(self.ROIs)))
@@ -229,19 +228,16 @@ class CameraWindow(QtGui.QMainWindow):
                 self.ROIs.remove(r)
                 break
         
-        
     def clearROIs(self):
         for r in self.ROIs:
             self.view.removeItem(r['roi'])
             self.roiPlot.removeItem(r['plot'])
         self.ROIs = []
-        
 
     def clearFrameBuffer(self):
         for r in self.ROIs:
             r['vals'] = []
             r['times'] = []
-
 
     def setROITime(self, val):
         pass
@@ -252,14 +248,13 @@ class CameraWindow(QtGui.QMainWindow):
     def closeEvent(self, ev):
         self.quit()
 
-
     def quit(self):
         geom = self.geometry()
         uiState = {'window': str(self.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
         Manager.getManager().writeConfigFile(uiState, self.stateFile)
         
-        for cam in self.cameras:
-            cam.quit()
+        for iface in self.interfaces.values():
+            iface.quit()
         
         self.module.quit(fromUi=True)
 
@@ -272,28 +267,11 @@ class CameraWindow(QtGui.QMainWindow):
             pos = self.view.mapSceneToView(pos)
         self.mouse = pos
         self.xyLabel.setText("X:%0.1fum Y:%0.1fum" % (pos.x() * 1e6, pos.y() * 1e6))
-        
-        #img = self.imageItem.image
-        #if img is None:
-            #return
-        #pos = self.imageItem.mapFromView(pos)
-        #if pos.x() < 0 or pos.y() < 0:
-            #z = ""
-        #else:
-            #try:
-                #z = img[int(pos.x()), int(pos.y())]
-                #if hasattr(z, 'shape') and len(z.shape) > 0:
-                    #z = "Z:(%s, %s, %s)" % (str(z[0]), str(z[1]), str(z[2]))
-                #else:
-                    #z = "Z:%s" % str(z)
-            #except IndexError:
-                #z = ""
-        
-        #self.vLabel.setText(z)
-    
 
     def newFrame(self, iface, frame):
-        #sys.stdout.write('+')
+        # New frame has arrived from an imaging device; 
+        # update ROI plots
+        
         if not self.roiPlotCheck.isChecked():
             return
         imageItem = iface.getImageItem()
@@ -305,15 +283,10 @@ class CameraWindow(QtGui.QMainWindow):
         ## Get rid of old frames
         minTime = None
         now = pg.time()
-        #if len(self.frameBuffer) > 0:
-            #while len(self.frameBuffer) > 0 and self.frameBuffer[0][1]['time'] < (now-self.ui.spinROITime.value()):
-                #self.frameBuffer.pop(0)
         for r in self.ROIs:
-            #print " >>", r['times'], now, frame[1]['time'], self.ui.spinROITime.value(), now-self.ui.spinROITime.value()
             while len(r['times']) > 0 and r['times'][0] < (now-self.roiTimeSpin.value()):
                 r['times'].pop(0)
                 r['vals'].pop(0)
-            #print " <<", r['times']
             if len(r['times']) > 0 and (minTime is None or r['times'][0] < minTime):
                 minTime = r['times'][0]
         if minTime is None:
@@ -350,4 +323,3 @@ class PlotROI(pg.ROI):
     def __init__(self, pos, size):
         pg.ROI.__init__(self, pos, size=size, removable=True)
         self.addScaleHandle([1, 1], [0, 0])
-

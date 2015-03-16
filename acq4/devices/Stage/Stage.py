@@ -10,6 +10,7 @@ class Stage(Device, OptomechDevice):
     """
 
     sigPositionChanged = QtCore.Signal(object)
+    sigLimitsChanged = QtCore.Signal(object)
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -19,6 +20,8 @@ class Stage(Device, OptomechDevice):
         self.pos = [0]*3
         self._defaultSpeed = 'fast'
         
+        self._limits = [(None, None), (None, None), (None, None)]
+
         self._progressDialog = None
         self._progressTimer = QtCore.QTimer()
         self._progressTimer.timeout.connect(self.updateProgressDialog)
@@ -32,8 +35,9 @@ class Stage(Device, OptomechDevice):
         """Return a structure describing the capabilities of this device::
         
             {
-                'getPos': (x, y, z),   # whether eaxh axis can be read from the device
-                'setPos': (x, y, z),   # whether eaxh axis can be set on the device
+                'getPos': (x, y, z),   # whether each axis can be read from the device
+                'setPos': (x, y, z),   # whether each axis can be set on the device
+                'limits': (x, y, z),   # whether limits can be set for each axis
             }
             
         Subclasses must reimplement this method.
@@ -59,20 +63,35 @@ class Stage(Device, OptomechDevice):
         self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
 
     def getPosition(self, refresh=False):
-        """
-        Return the position of the stage.
+        """Return the position of the stage.
+
         If refresh==False, the last known position is returned. Otherwise, the
         current position is requested from the controller. If request is True,
         then the position request may block if the device is currently busy.
+
+        In the contect of the optomechanical device hierarchy, this position is 
+        expressed in the parent coordinate system of the stage.
         """
         if not refresh:
             return self.pos[:]
         else:
             return self._getPosition()
 
+    def globalPosition(self):
+        """Return the position of the stage relative to the global coordinate system.
+        """
+        # note: the origin of the local coordinate frame is the center position of the device.
+        return self.mapToGlobal([0, 0, 0])
+
     def _getPosition(self):
         """
         Must be reimplemented by subclass to re-read position from device.
+        """
+        raise NotImplementedError()
+
+    def targetPosition(self):
+        """If the stage is moving, return the target position. Otherwise return 
+        the current position.
         """
         raise NotImplementedError()
 
@@ -116,6 +135,9 @@ class Stage(Device, OptomechDevice):
 
         Return a MoveFuture instance that can be used to monitor the progress 
         of the move.
+
+        Note: the position is expressed in the device's parent coordinate frame.
+        (this is the same coordinate system as used by getPosition)
         """
         if speed is None:
             speed = self._defaultSpeed
@@ -137,6 +159,14 @@ class Stage(Device, OptomechDevice):
         """Must be reimplemented by subclasses and return a MoveFuture instance.
         """
         raise NotImplementedError()
+
+    def moveToGlobal(self, pos, speed):
+        """Move the stage to a position expressed in the global coordinate frame.
+        """
+        pd = self.parentDevice()
+        if pd is not None:
+            pos = pd.mapFromGlobal(pos)
+        self.moveTo(pos, speed)
 
     def _toAbsolutePosition(self, abs, rel):
         """Helper function to convert absolute or relative position (possibly 
@@ -179,6 +209,33 @@ class Stage(Device, OptomechDevice):
         self._progressDialog.setValue(done)
         if done == 100:
             self._progressTimer.stop()
+
+    def setLimits(self, x=None, y=None, z=None):
+        """Set the (min, max) position limits to enforce for each axis.
+
+        Accepts keyword arguments 'x', 'y', 'z'; each supplied argument must be
+        a (min, max) tuple where either value may be None to disable the limit.
+
+        Note that some devices do not support limits.
+        """
+        changed = []
+        for axis, limit in enumerate((x, y, z)):
+            if limit is None:
+                continue
+            assert len(limit) == 2
+            if self.capabilities()['limits'][axis] is not True:
+                raise TypeError("Device does not support settings limits for axis %d." % axis)
+            if tuple(self._limits[axis]) != tuple(limit):
+                changed.append(axis)
+                self._limits[axis] = tuple(limit)
+
+        if len(changed) > 0:
+            self.sigLimitsChanged.emit(changed)
+
+    def getLimits(self):
+        """Return a list the (min, max) position limits for each axis.
+        """
+        return self._limits[:]
 
 
 class MoveFuture(object):
@@ -226,28 +283,84 @@ class MoveFuture(object):
 class StageInterface(QtGui.QWidget):
     def __init__(self, dev, win):
         QtGui.QWidget.__init__(self)
+        self.win = win
+        self.dev = dev
 
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
-        self.axLabels = []
-        self.posLabels = []
-        for axis in [0, 1, 2]:
-            axLabel = QtGui.QLabel('XYZ'[axis])
-            posLabel = QtGui.QLabel('0')
-            self.layout.addWidget(axLabel, axis, 0)
-            self.layout.addWidget(posLabel, axis, 1)
-            self.axLabels.append(axLabel)
-            self.posLabels.append(posLabel)
+        self.axCtrls = {}
+        self.posLabels = {}
+        self.limitChecks = {}
 
-        self.win = win
-        self.dev = dev
+        cap = dev.capabilities()
+        self.nextRow = 0
+
+        for axis in (0, 1, 2):
+            if cap['getPos'][axis]:
+                axLabel = QtGui.QLabel('XYZ'[axis])
+                axLabel.setMaximumWidth(15)
+                posLabel = QtGui.QLabel('0')
+                self.posLabels[axis] = posLabel
+                widgets = [axLabel, posLabel]
+                if cap['limits'][axis]:
+                    minCheck = QtGui.QCheckBox('Min:')
+                    minCheck.tag = (axis, 0)
+                    # minBtn = QtGui.QPushButton('set')
+                    # minBtn.tag = (axis, 0)
+                    # minBtn.setMaximumWidth(30)
+                    maxCheck = QtGui.QCheckBox('Max:')
+                    maxCheck.tag = (axis, 1)
+                    # maxBtn = QtGui.QPushButton('set')
+                    # maxBtn.tag = (axis, 1)
+                    # maxBtn.setMaximumWidth(30)
+                    self.limitChecks[axis] = (minCheck, maxCheck)
+                    widgets.extend([minCheck, maxCheck])
+                    for check in (minCheck, maxCheck):
+                        check.clicked.connect(self.limitCheckClicked)
+                    # for btn in (minBtn, maxBtn):
+                    #     btn.sigClicked.connect(self.limitBtnClicked)
+
+                for i,w in enumerate(widgets):
+                    self.layout.addWidget(w, self.nextRow, i)
+                self.axCtrls[axis] = widgets
+                self.nextRow += 1
+
+
+        self.updateLimits()
         self.dev.sigPositionChanged.connect(self.update)
+        self.dev.sigLimitsChanged.connect(self.updateLimits)
         self.update()
-        
 
     def update(self):
         pos = self.dev.getPosition()
         for i in range(3):
+            if i not in self.posLabels:
+                continue
             text = pg.siFormat(pos[i], suffix='m', precision=5)
             self.posLabels[i].setText(text)
 
+    def updateLimits(self):
+        limits = self.dev.getLimits()
+        cap = self.dev.capabilities()
+        for axis in (0, 1, 2):
+            if not cap['limits'][axis]:
+                continue
+            for i,limit in enumerate(limits[axis]):
+                check = self.limitChecks[axis][i]
+                pfx = ('Min:', 'Max:')[i]
+                if limit is None:
+                    check.setText(pfx)
+                    check.setChecked(False)
+                else:
+                    check.setText(pfx + ' %s' % pg.siFormat(limit, suffix='m'))
+                    check.setChecked(True)
+
+    def limitCheckClicked(self, b):
+        check = self.sender()
+        axis, minmax = check.tag
+        limit = list(self.dev.getLimits()[axis])
+        if b:
+            limit[minmax] = self.dev.getPosition()[axis]
+        else:
+            limit[minmax] = None
+        self.dev.setLimits(**{'xyz'[axis]: tuple(limit)})
