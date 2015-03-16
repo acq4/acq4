@@ -8,9 +8,9 @@ from acq4.util.Thread import Thread
 from acq4.pyqtgraph import debug, ptime
 
 
-def __reload__(self, old, new):
+def __reload__(self, old):
     # copy some globals if the module is reloaded
-    new['SutterMPC200']._monitor = old['SutterMPC200']._monitor
+    SutterMPC200._monitor = old['SutterMPC200']._monitor
 
 
 class ChangeNotifier(QtCore.QObject):
@@ -116,7 +116,7 @@ class SutterMPC200(Stage):
             speed = self._getClosestSpeed(speed)
         
         self._lastMove = MPC200MoveFuture(self, pos, speed)
-        return selfd._lastMove
+        return self._lastMove
 
     def _getClosestSpeed(self, speed):
         """Return the MPC200 speed value (0-15 or 'fast') that most closely
