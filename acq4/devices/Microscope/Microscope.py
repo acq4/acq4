@@ -230,7 +230,7 @@ class Objective(OptomechDevice):
     
     def setScale(self, scale):
         if not hasattr(scale, '__len__'):
-            scale = (scale, scale)
+            scale = (scale, scale, 1)
         
         tr = self.deviceTransform()
         tr.setScale(scale)
@@ -286,12 +286,13 @@ class ScopeGUI(QtGui.QWidget):
             #first = self.objList[i][first]
             xs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
             ys = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
+            zs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
             ss = pg.SpinBox(step=1e-7, bounds=(1e-10, None))
             
-            xs.index = ys.index = ss.index = i  ## used to determine which row has changed
-            widgets = (r, c, xs, ys, ss)
-            for col in range(5):
-                self.ui.objectiveLayout.addWidget(widgets[col], row, col)
+            xs.index = ys.index = zs.index = ss.index = i  ## used to determine which row has changed
+            widgets = (r, c, xs, ys, zs, ss)
+            for col, w in enumerate(widgets):
+                self.ui.objectiveLayout.addWidget(w, row, col)
             self.objWidgets[i] = widgets
             
             for o in self.objList[i].values():
@@ -307,6 +308,7 @@ class ScopeGUI(QtGui.QWidget):
             c.currentIndexChanged.connect(self.objComboChanged)
             xs.sigValueChanged.connect(self.offsetSpinChanged)
             ys.sigValueChanged.connect(self.offsetSpinChanged)
+            zs.sigValueChanged.connect(self.offsetSpinChanged)
             ss.sigValueChanged.connect(self.scaleSpinChanged)
             row += 1
         self.updateSpins()
@@ -338,11 +340,11 @@ class ScopeGUI(QtGui.QWidget):
         if self.blockSpinChange:
             return
         index = spin.index
-        (r, combo, xs, ys, ss) = self.objWidgets[index]
+        (r, combo, xs, ys, zs, ss) = self.objWidgets[index]
         obj = combo.itemData(combo.currentIndex())
         obj.sigTransformChanged.disconnect(self.updateSpins)
         try:
-            obj.setOffset((xs.value(), ys.value()))
+            obj.setOffset((xs.value(), ys.value(), zs.value()))
         finally:
             obj.sigTransformChanged.connect(self.updateSpins)
     
@@ -350,7 +352,7 @@ class ScopeGUI(QtGui.QWidget):
         if self.blockSpinChange:
             return
         index = spin.index
-        (r, combo, xs, ys, ss) = self.objWidgets[index]
+        (r, combo, xs, ys, zs, ss) = self.objWidgets[index]
         obj = combo.itemData(combo.currentIndex())
         obj.sigTransformChanged.disconnect(self.updateSpins)
         try:
@@ -360,11 +362,12 @@ class ScopeGUI(QtGui.QWidget):
         
     def updateSpins(self):
         for k, w in self.objWidgets.iteritems():
-            (r, combo, xs, ys, ss) = w
+            (r, combo, xs, ys, zs, ss) = w
             obj = combo.itemData(combo.currentIndex())
             offset = obj.offset()
             xs.setValue(offset.x())
             ys.setValue(offset.y())
+            zs.setValue(offset.z())
             ss.setValue(obj.scale().x())
 
 
@@ -405,12 +408,17 @@ class ScopeCameraModInterface(QtCore.QObject):
         focus = self.dev.getFocusDepth()
         self.focusLine.setValue(focus)
 
+        # Compute the target focal plane.
+        # This is a little tricky because the objective might have an offset+scale relative
+        # to the focus device.
         fd = self.dev.focusDevice()
         tpos = fd.targetPosition()
         pd = fd.parentDevice()
         if pd is not None:
             tpos = pd.mapToGlobal(tpos)
-        self.movableFocusLine.setValue(tpos[2])
+        fpos = fd.globalPosition()
+        dif = tpos[2] - fpos[2]
+        self.movableFocusLine.setValue(focus + dif)
 
     def focusDragged(self):
         self.dev.setFocusDepth(self.movableFocusLine.value())
