@@ -377,13 +377,14 @@ class ScopeCameraModInterface(QtCore.QObject):
     def __init__(self, dev, mod):
         QtCore.QObject.__init__(self)
         self.dev = dev  # microscope device
-        self.mode = mod  # camera module
+        self.mod = mod  # camera module
 
         self.ctrl = QtGui.QWidget()
         self.layout = QtGui.QGridLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
         self.ctrl.setLayout(self.layout)
 
-        self.plot = pg.PlotWidget()
+        self.plot = pg.PlotWidget(labels={'left': ('Depth', 'm')})
         self.plot.setYRange(0, 1e-3)
         self.plot.hideAxis('bottom')
         self.layout.addWidget(self.plot, 0, 0)
