@@ -384,16 +384,13 @@ class ScopeCameraModInterface(QtCore.QObject):
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.ctrl.setLayout(self.layout)
 
-        self.plot = pg.PlotWidget(labels={'left': ('Depth', 'm')})
-        self.plot.setYRange(0, 1e-3)
-        self.plot.hideAxis('bottom')
-        self.layout.addWidget(self.plot, 0, 0)
+        self.plot = mod.window().getDepthView()
         self.focusLine = self.plot.addLine(y=0, pen='y')
         self.surfaceLine = self.plot.addLine(y=0, pen='g')
         self.movableFocusLine = self.plot.addLine(y=0, pen='y', markers=[('<|>', 0.5, 10)], movable=True)
 
         self.setSurfaceBtn = QtGui.QPushButton('Set Surface')
-        self.layout.addWidget(self.setSurfaceBtn, 1, 0)
+        self.layout.addWidget(self.setSurfaceBtn, 0, 0)
         self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
 
         self.dev.sigGlobalTransformChanged.connect(self.transformChanged)

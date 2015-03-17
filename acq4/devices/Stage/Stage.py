@@ -15,6 +15,12 @@ class Stage(Device, OptomechDevice):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
+
+        # total device transform will be composed of a base transform (defined in the config)
+        # and a dynamic translation provided by the hardware.
+        self._baseTransform = QtGui.QMatrix4x4(self.deviceTransform())
+        self._stageTransform = QtGui.QMatrix4x4()
+
         self.config = config
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.pos = [0]*3
@@ -56,9 +62,11 @@ class Stage(Device, OptomechDevice):
             rel[:len(pos)] = [pos[i] - self.pos[i] for i in range(len(pos))]
             self.pos[:len(pos)] = pos
         
-        tr = pg.SRTTransform3D()
-        tr.translate(*self.pos)
-        self.setDeviceTransform(tr) ## this informs rigidly-connected devices that they have moved
+        self._stageTransform = QtGui.QMatrix4x4()
+        self._stageTransform.translate(*self.pos)
+
+        ## this informs rigidly-connected devices that they have moved
+        self.setDeviceTransform(self._baseTransform * self._stageTransform)
 
         self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
 
