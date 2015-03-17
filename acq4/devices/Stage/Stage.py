@@ -127,6 +127,13 @@ class Stage(Device, OptomechDevice):
         """
         raise NotImplementedError()
 
+    def globalTargetPosition(self):
+        """Returns the target position mapped to the global coordinate system.
+
+        See targetPosition().
+        """
+        return self.mapToGlobal(self.mapFromStage(self.targetPosition()))
+
     def getState(self):
         with self.lock:
             return (self.pos[:],)

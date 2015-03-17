@@ -410,10 +410,7 @@ class ScopeCameraModInterface(QtCore.QObject):
         # This is a little tricky because the objective might have an offset+scale relative
         # to the focus device.
         fd = self.dev.focusDevice()
-        tpos = fd.targetPosition()
-        pd = fd.parentDevice()
-        if pd is not None:
-            tpos = pd.mapToGlobal(tpos)
+        tpos = fd.globalTargetPosition()
         fpos = fd.globalPosition()
         dif = tpos[2] - fpos[2]
         self.movableFocusLine.setValue(focus + dif)
