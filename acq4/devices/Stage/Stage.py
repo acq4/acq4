@@ -7,6 +7,14 @@ import acq4.pyqtgraph as pg
 
 class Stage(Device, OptomechDevice):
     """Base class for mechanical stages with motorized control and/or position feedback.
+
+    This is an optomechanical device that modifies its own transform based on position or orientation
+    information received from a position control device. The transform is calculated as::
+
+        totalTransform = baseTransform * stageTransform
+
+    where *baseTransform* is defined in the configuration for the device, and *stageTransform* is
+    defined by the hardware.
     """
 
     sigPositionChanged = QtCore.Signal(object)
@@ -20,6 +28,7 @@ class Stage(Device, OptomechDevice):
         # and a dynamic translation provided by the hardware.
         self._baseTransform = QtGui.QMatrix4x4(self.deviceTransform())
         self._stageTransform = QtGui.QMatrix4x4()
+        self._invStageTransform = QtGui.QMatrix4x4()
 
         self.config = config
         self.lock = Mutex(QtCore.QMutex.Recursive)
@@ -51,6 +60,18 @@ class Stage(Device, OptomechDevice):
         # todo: add other capability flags like resolution, speed, closed-loop, etc?
         raise NotImplementedError
 
+    def stageTransform(self):
+        """Return the transform that maps from the local coordinate system to
+        the scaled position reported by the stage hardware.
+        """
+        return QtGui.QMatrix4x4(self._stageTransform)
+
+    def mapToStage(self, obj):
+        return self._mapTransform(obj, self._stageTransform)
+
+    def mapFromStage(self, obj):
+        return self._mapTransform(obj, self._invStageTransform)
+
     def posChanged(self, pos):
         """Handle device position changes by updating the device transform and
         emitting sigPositionChanged.
@@ -64,6 +85,8 @@ class Stage(Device, OptomechDevice):
         
         self._stageTransform = QtGui.QMatrix4x4()
         self._stageTransform.translate(*self.pos)
+        self._invStageTransform = QtGui.QMatrix4x4()
+        self._invStageTransform.translate(*[-x for x in self.pos])
 
         ## this informs rigidly-connected devices that they have moved
         self.setDeviceTransform(self._baseTransform * self._stageTransform)
@@ -77,8 +100,8 @@ class Stage(Device, OptomechDevice):
         current position is requested from the controller. If request is True,
         then the position request may block if the device is currently busy.
 
-        In the contect of the optomechanical device hierarchy, this position is 
-        expressed in the parent coordinate system of the stage.
+        The position returned is the exact position as reported by the stage hardware
+        multiplied by the scale factor in the device configuration.
         """
         if not refresh:
             return self.pos[:]
@@ -86,7 +109,8 @@ class Stage(Device, OptomechDevice):
             return self._getPosition()
 
     def globalPosition(self):
-        """Return the position of the stage relative to the global coordinate system.
+        """Return the position of the local coordinate system origin relative to 
+        the global coordinate system.
         """
         # note: the origin of the local coordinate frame is the center position of the device.
         return self.mapToGlobal([0, 0, 0])
@@ -144,8 +168,8 @@ class Stage(Device, OptomechDevice):
         Return a MoveFuture instance that can be used to monitor the progress 
         of the move.
 
-        Note: the position is expressed in the device's parent coordinate frame.
-        (this is the same coordinate system as used by getPosition)
+        Note: the position must be expressed in the same coordinate system as returned 
+        by getPosition().
         """
         if speed is None:
             speed = self._defaultSpeed
@@ -171,10 +195,9 @@ class Stage(Device, OptomechDevice):
     def moveToGlobal(self, pos, speed):
         """Move the stage to a position expressed in the global coordinate frame.
         """
-        pd = self.parentDevice()
-        if pd is not None:
-            pos = pd.mapFromGlobal(pos)
-        self.moveTo(pos, speed)
+        localPos = self.mapFromGlobal(pos)
+        stagePos = self.mapToStage(localPos)
+        self.moveTo(stagePos, speed)
 
     def _toAbsolutePosition(self, abs, rel):
         """Helper function to convert absolute or relative position (possibly 

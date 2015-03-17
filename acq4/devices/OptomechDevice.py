@@ -253,7 +253,6 @@ class OptomechDevice(object):
         else:
             raise Exception('Cannot map--object of type %s ' % str(type(obj))) 
     
-    
     def deviceTransform(self, subdev=None):
         """
         Return this device's affine transformation matrix. 
@@ -276,7 +275,6 @@ class OptomechDevice(object):
                 return tr
             else:
                 return tr * dev.deviceTransform()
-                
     
     def inverseDeviceTransform(self, subdev=None):
         """
@@ -519,8 +517,6 @@ class OptomechDevice(object):
             if len(subdev) > 0:
                 subdevs[dev] = subdev
         return subdevs
-        
-        
         
     def __subdeviceTransformChanged(self, subdev):
         #print "Subdevice transform changed", self, subdev
