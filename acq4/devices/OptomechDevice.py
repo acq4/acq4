@@ -94,7 +94,6 @@ class OptomechDevice(object):
         self.__subdevice = None
         self.__name = name
         
-        
         self.sigTransformChanged.connect(self.__emitGlobalTransformChanged)
         self.sigSubdeviceTransformChanged.connect(self.__emitGlobalSubdeviceTransformChanged)
         self.sigSubdeviceChanged.connect(self.__emitGlobalSubdeviceChanged)
