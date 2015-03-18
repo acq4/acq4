@@ -52,8 +52,9 @@ class DataSummary():
         #2011.10.17_000
         # operate in two modes:
         # second, between two dates
+        daylist = None
         if daylistfile is None:
-            minday = (2012, 12, 4)
+            minday = (2010, 1, 1)
             minday = minday[0]*1e4+minday[1]*1e2+minday[2]
             maxday = (2012, 12, 31)
             maxday = maxday[0]*1e4+maxday[1]*1e2+maxday[2]
@@ -64,7 +65,9 @@ class DataSummary():
                     if line[0] != '#':
                         daylist.append(line[0:10])
             f.close()
-
+        print daylistfile
+        print daylist
+        
         days = []
         for thisfile in allfiles:
             m = daytype.match(thisfile)

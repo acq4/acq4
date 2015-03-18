@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './acq4/analysis/modules/IVCurve/ctrlTemplate.ui'
 #
-# Created: Tue Mar 10 10:53:36 2015
+# Created: Wed Mar 18 14:10:53 2015
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -280,6 +280,7 @@ class Ui_Form(object):
         self.IVCurve_subLeak.setObjectName(_fromUtf8("IVCurve_subLeak"))
         self.gridLayout_3.addWidget(self.IVCurve_subLeak, 4, 0, 1, 1)
         self.pushButton = QtGui.QPushButton(self.frame)
+        self.pushButton.setCheckable(True)
         self.pushButton.setObjectName(_fromUtf8("pushButton"))
         self.gridLayout_3.addWidget(self.pushButton, 21, 3, 1, 1)
         self.IVCurve_LeakMin = QtGui.QDoubleSpinBox(self.frame)
@@ -425,6 +426,9 @@ class Ui_Form(object):
         self.IVCurve_ScriptName.setFont(font)
         self.IVCurve_ScriptName.setObjectName(_fromUtf8("IVCurve_ScriptName"))
         self.gridLayout_3.addWidget(self.groupBox, 22, 0, 1, 6)
+        self.IVCurve_FISI_ISI_button = QtGui.QPushButton(self.frame)
+        self.IVCurve_FISI_ISI_button.setObjectName(_fromUtf8("IVCurve_FISI_ISI_button"))
+        self.gridLayout_3.addWidget(self.IVCurve_FISI_ISI_button, 9, 5, 1, 1)
         self.gridLayout.addWidget(self.frame, 0, 0, 1, 1)
 
         self.retranslateUi(Form)
@@ -493,4 +497,5 @@ class Ui_Form(object):
         self.IVCurve_RunScript_Btn.setText(_translate("Form", "Run", None))
         self.IVCurve_PrintScript_Btn.setText(_translate("Form", "Print", None))
         self.IVCurve_ScriptName.setText(_translate("Form", "TextLabel", None))
+        self.IVCurve_FISI_ISI_button.setText(_translate("Form", "FISI/ISI", None))
 

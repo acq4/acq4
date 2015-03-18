@@ -64,6 +64,7 @@ class IVCurve(AnalysisModule):
         self.lrss_flag = True  # show is default
         self.lrpk_flag = True
         self.rmp_flag = True
+        self.showFISI = True # show FISI or ISI as a function of spike number (when False)
         self.lrtau_flag = False
         self.regions_exist = False
         self.fit_curve = None
@@ -120,6 +121,7 @@ class IVCurve(AnalysisModule):
         self.ctrl.IVCurve_getFileInfo.clicked.connect(self.get_file_information)
         [self.ctrl.IVCurve_RMPMode.currentIndexChanged.connect(x)
          for x in [self.update_rmpAnalysis, self.analyzeSpikes]]
+        self.ctrl.IVCurve_FISI_ISI_button.clicked.connect(self.displayFISI_ISI)
         self.ctrl.dbStoreBtn.clicked.connect(self.dbStoreClicked)
         self.ctrl.IVCurve_OpenScript_Btn.clicked.connect(self.read_script)
         self.ctrl.IVCurve_RunScript_Btn.clicked.connect(self.rerun_script)
@@ -224,6 +226,13 @@ class IVCurve(AnalysisModule):
                 region['region'].hide()
                 region['state'].setChecked(QtCore.Qt.Unchecked)
                 region['shstate'] = False
+
+    def displayFISI_ISI(self):
+        if self.showFISI:  # currently showin FISI/FSL; switch to ISI over time
+            self.showFISI = False
+        else:
+            self.showFISI = True
+        self.update_SpikePlots()
 
     def initialize_regions(self, reset=False):
         """
@@ -799,6 +808,7 @@ class IVCurve(AnalysisModule):
         fisi = np.zeros(ntr)
         ar = np.zeros(ntr)
         rmp = np.zeros(ntr)
+        allisi = {}
         # also information on spike shape, based on Druckman et al. Cerebral Cortex, 2013
         begin_dV = 12  # V/s or mV/ms
         self.spikeInfo = OrderedDict()
@@ -818,7 +828,8 @@ class IVCurve(AnalysisModule):
             fsl[i] = spikes[0] - self.tstart
             if len(spikes) > 1:
                 fisi[i] = spikes[1] - spikes[0]
-                # for Adaptation ratio analysis
+                allisi[i] = np.diff(spikes)
+            # for Adaptation ratio analysis
             if minspk <= len(spikes) <= maxspk:
                 misi = np.mean(np.diff(spikes[-3:]))
                 ar[i] = misi / fisi[i]
@@ -930,6 +941,7 @@ class IVCurve(AnalysisModule):
         fsl *= 1.0e3
         self.fsl = fsl
         self.fisi = fisi
+        self.allisi = allisi
         self.nospk = np.where(self.spikecount == 0)
         self.spk = np.where(self.spikecount > 0)
         self.update_SpikePlots()
@@ -968,14 +980,14 @@ class IVCurve(AnalysisModule):
             print ' >> Threshold current: %8.3f   1.5T current: %8.3f, next up: %8.3f' % (self.spikeInfo[jthr][0]['current']*1e12,
                         self.spikeInfo[j150][0]['current']*1e12, self.spikeInfo[j150+1][0]['current']*1e12)
             j150 = jthr + 1
-        if len(self.spikeInfo[j150]) >= 1:
+        if len(self.spikeInfo[j150]) >= 1 and self.spikeInfo[j150][0]['halfwidth'] is not None:
             self.analysis_summary['AP1_Latency'] = (self.spikeInfo[j150][0]['AP_Latency'] - self.spikeInfo[j150][0]['tstart'])*1e3
             self.analysis_summary['AP1_HalfWidth'] = self.spikeInfo[j150][0]['halfwidth']*1e3
         else:
             self.analysis_summary['AP1_Latency'] = np.inf
             self.analysis_summary['AP1_HalfWidth'] = np.inf
         
-        if len(self.spikeInfo[j150]) >= 2:
+        if len(self.spikeInfo[j150]) >= 2 and self.spikeInfo[j150][1]['halfwidth'] is not None:
             self.analysis_summary['AP2_Latency'] = (self.spikeInfo[j150][1]['AP_Latency'] - self.spikeInfo[j150][1]['tstart'])*1e3
             self.analysis_summary['AP2_HalfWidth'] = self.spikeInfo[j150][1]['halfwidth']*1e3
         else:
@@ -1622,6 +1634,9 @@ class IVCurve(AnalysisModule):
             self.ivss_cmd = commands[nospk]
             self.cmd = commands[nospk]
             # compute Rin from the SS IV:
+            # this makes the assumption that:
+            # successive trials are in order (as are commands)
+            # commands are not repeated...
             if len(self.cmd) > 0 and len(self.ivss) > 0:
                 self.r_in = np.max(np.diff
                                    (self.ivss) / np.diff(self.cmd))
@@ -1884,17 +1899,43 @@ class IVCurve(AnalysisModule):
                          symbolSize=6,
                          symbol=symbol, pen=pen,
                          symbolPen=pen, symbolBrush=filledbrush)
-        self.fslPlot.plot(x=xfsl, y=self.fsl[select] * yfslsc, clear=clearFlag,
+        fslmax = 0.
+        if self.showFISI:
+            self.fslPlot.plot(x=xfsl, y=self.fsl[select] * yfslsc, clear=clearFlag,
                           symbolSize=6,
                           symbol=symbol, pen=pen,
                           symbolPen=pen, symbolBrush=filledbrush)
-        self.fslPlot.plot(x=xfsl, y=self.fisi[select] * yfslsc, symbolSize=6,
+            self.fslPlot.plot(x=xfsl, y=self.fisi[select] * yfslsc, symbolSize=6,
                           symbol=symbol, pen=pen,
                           symbolPen=pen, symbolBrush=emptybrush)
-        if len(xfsl) > 0:
-            self.fslPlot.setXRange(0.0, np.max(xfsl))
+            if len(xfsl) > 0:
+                self.fslPlot.setXRange(0.0, np.max(xfsl))
+                self.fslPlot.setYRange(0., max(max(self.fsl[select]), max(self.fisi[select])))
+            ylabel = 'Fsl/Fisi (ms)'
+            xfsllabel = xlabel
+            self.fslPlot.setTitle('FSL/FISI')
+        else:
+            maxspk = 0
+            maxisi = 0.
+            clear = clearFlag
+            for i, k in enumerate(self.allisi.keys()):
+                nspk = len(self.allisi[k])
+                xisi = np.arange(nspk)
+                self.fslPlot.plot(x=xisi, y=self.allisi[k] * yfslsc, clear=clear,
+                              symbolSize=6,
+                              symbol=symbol, pen=pen,
+                              symbolPen=pen, symbolBrush=filledbrush)
+                clear = False
+                maxspk = max(nspk, maxspk)
+                maxisi = max(np.max(self.allisi[k]), maxisi)
+            self.fslPlot.setXRange(0.0, maxspk)
+            self.fslPlot.setYRange(0.0, maxisi)
+            xfsllabel = 'Spike Number'
+            ylabel = 'ISI (s)'
+            self.fslPlot.setTitle('ISI vs. Spike Number')
         self.fiPlot.setLabel('bottom', xlabel)
-        self.fslPlot.setLabel('bottom', xlabel)
+        self.fslPlot.setLabel('bottom', xfsllabel)
+        self.fslPlot.setLabel('left', ylabel)
 
     def readParameters(self, clearFlag=False, pw=False):
         """
