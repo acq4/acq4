@@ -888,7 +888,10 @@ class IVCurve(AnalysisModule):
           
         for a in data_template.keys():
             if a in self.analysis_summary.keys():
-                ltxt += (data_template[a] + '\t').format(self.analysis_summary[a])
+                txt = self.analysis_summary[a]
+                if a in ['Description', 'Notes']:
+                    txt = txt.replace('\n', ' ').replace('\r', '')  # remove line breaks from output, replace \n with space
+                ltxt += (data_template[a] + '\t').format(txt)
             else:
                 ltxt += 'NaN\t'
     
@@ -1025,7 +1028,7 @@ class IVCurve(AnalysisModule):
             thiscell = self.script['Cells'][cell]
             #print 'processing cell: %s' % thiscell
             if thiscell['include'] is False:  # skip this cell
-                print 'Skipped: ' % cell
+                print 'Skipped: %s' % cell
                 continue
             sortedkeys = sorted(thiscell['choice'].keys())  # sort by order of recording (# on protocol)
             for p in sortedkeys:

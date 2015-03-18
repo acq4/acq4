@@ -53,9 +53,9 @@ class DataSummary():
         # second, between two dates
         daylist = None
         if daylistfile is None:
-            minday = (2012, 2, 15)
+            minday = (2012, 4, 5)
             minday = minday[0]*1e4+minday[1]*1e2+minday[2]
-            maxday = (2012, 2, 17)
+            maxday = (2015, 1, 1)
             maxday = maxday[0]*1e4+maxday[1]*1e2+maxday[2]
         else:
             daylist = []
@@ -133,13 +133,13 @@ class DataSummary():
             dh = DataManager.getDirHandle(os.path.join(day, slice), create=False)
             sl = self.dataModel.getSliceInfo(dh)
 
-            if sl is not None and 'description' in sl.keys() and len(sl['description']) > 0:
-                l = self.twd['slice'].wrap(sl['description'])
-                for i in l:
-                    self.slicestring += i
-            else:
-                self.slicestring += ' No slice description'
-            self.slicestring += '\t'
+            # if sl is not None and 'description' in sl.keys() and len(sl['description']) > 0:
+            #     l = self.twd['slice'].wrap(sl['description'])
+            #     for i in l:
+            #         self.slicestring += i
+            # else:
+            #     self.slicestring += ' No slice description'
+            # self.slicestring += '\t'
 
             if sl is not None and 'notes' in sl.keys() and len(sl['notes']) > 0:
                 l = self.tw['slice'].wrap(sl['notes'])
@@ -180,12 +180,12 @@ class DataSummary():
                 self.cellstring += ' No cell notes'
             self.cellstring += '\t'
 
-            if cl is not None and 'description' in cl.keys() and len(cl['description']) > 0:
-                l = self.twd['cell'].wrap(cl['description'])
-                for i in l:
-                    self.cellstring += i
-            else:
-                self.cellstring += ' No cell description'
+            # if cl is not None and 'description' in cl.keys() and len(cl['description']) > 0:
+            #     l = self.twd['cell'].wrap(cl['description'])
+            #     for i in l:
+            #         self.cellstring += i
+            # else:
+            #     self.cellstring += ' No cell description'
 
             self.cellstring += '\t'
             self.doProtocols(os.path.join(slice, cell))
