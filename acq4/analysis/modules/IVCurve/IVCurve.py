@@ -1067,7 +1067,10 @@ class IVCurve(AnalysisModule):
           
         for a in data_template.keys():
             if a in self.analysis_summary.keys():
-                ltxt += (data_template[a][1] + '\t').format(self.analysis_summary[a])
+                txt = self.analysis_summary[a]
+                if a in ['Description', 'Notes']:
+                    txt = txt.replace('\n', ' ').replace('\r', '')  # remove line breaks from output, replace \n with space
+                ltxt += (data_template[a] + '\t').format(txt)
             else:
                 ltxt += ('{:>%ds}' % (data_template[a][0]) + '\t').format('NaN')
         ltxt = ltxt.replace('\n', ' ').replace('\r', '')  # remove line breaks

@@ -32,9 +32,7 @@ class FrameDisplay(QtCore.QObject):
         self.nextFrame = None
         self._updateFrame = False
         self.currentFrame = None
-        self.lastFrameTime = None
         self.lastDrawTime = None
-        self.acquireFps = None
         self.displayFps = None
         self.hasQuit = False
 
@@ -79,20 +77,11 @@ class FrameDisplay(QtCore.QObject):
         return self.currentFrame.getImage()
 
     def newFrame(self, frame):
-        lf = None
-        if self.nextFrame is not None:
-            lf = self.nextFrame
-        elif self.currentFrame is not None:
-            lf = self.currentFrame
-        
-        now = pg.ptime.time()
-        if self.lastFrameTime is not None:
-            dt = new - self.lastFrameTime
-            self.lastFrameTime = now
-            self.acquireFps = 1.0 / dt
-
-        # if lf is not None:
-        #     fps = frame.info()['fps']
+        # lf = None
+        # if self.nextFrame is not None:
+        #     lf = self.nextFrame
+        # elif self.currentFrame is not None:
+        #     lf = self.currentFrame
         
         ## self.nextFrame gets picked up by drawFrame() at some point
         self.nextFrame = frame

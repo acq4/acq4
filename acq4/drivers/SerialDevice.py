@@ -1,12 +1,23 @@
 import serial, time, sys
 
+
 class TimeoutError(Exception):
     """Raised when a serial communication times out."""
     pass
 
+
 class DataError(Exception):
-    """Raised when a serial communication is corrupt."""
-    pass
+    """Raised when a serial communication is corrupt.
+
+    *data* attribute contains the corrupt packet.
+    *extra* attribute contains any data left in the serial buffer 
+    past the end of the packet.
+    """
+    def __init__(self, msg, data, extra):
+        self.data = data
+        self.extra = extra
+        Exception.__init__(self, msg)
+
 
 class SerialDevice(object):
     """
@@ -45,7 +56,6 @@ class SerialDevice(object):
                 port = int(port[3:]) - 1
         return port
 
-
     def open(self, port=None, baudrate=None, **kwds):
         """ Open a serial port. If this port was previously closed, then calling 
         open() with no arguments will re-open the original port with the same settings.
@@ -59,7 +69,7 @@ class SerialDevice(object):
         port = SerialDevice.normalizePortName(port)
 
         self.__serialOpts.update({
-            'port': int(port),
+            'port': port,
             'baudrate': baudrate,
             })
         self.__serialOpts.update(kwds)
@@ -85,7 +95,7 @@ class SerialDevice(object):
         """
         Read *length* bytes or raise TimeoutError after *timeout* has elapsed.
 
-        If *term* is given, check that the pachet is terminated with *term* and 
+        If *term* is given, check that the packet is terminated with *term* and 
         return the packet excluding *term*. If the packet is not terminated 
         with *term*, then DataError is raised.
         """
@@ -95,8 +105,10 @@ class SerialDevice(object):
             raise TimeoutError("Timed out waiting for serial data (received so far: %s)" % repr(packet))
         if term is not None:
             if packet[-len(term):] != term:
-                self.clearBuffer()
-                raise DataError("Packet corrupt: %s (len=%d)" % (repr(packet), len(packet)))
+                time.sleep(0.01)
+                extra = self.readAll()
+                err = DataError("Packet corrupt: %s (len=%d)" % (repr(packet), len(packet)), packet, extra)
+                raise err
             return packet[:-len(term)]
         return packet
         
@@ -146,14 +158,13 @@ class SerialDevice(object):
             if len(packet) > minBytes and packet[-len(term):] == term:
                 return packet
 
-
     def clearBuffer(self):
         ## not recommended..
         d = self.readAll()
         time.sleep(0.1)
         d += self.readAll()
         if len(d) > 0:
-            print self, "Warning: tossed serial data ", repr(d)
+            print self, "Warning: discarded serial data ", repr(d)
         return d
 
 

@@ -82,7 +82,8 @@ class PatchWindow(QtGui.QMainWindow):
             self.restoreState(ws)
             
         self.ui.splitter_2.setSizes([self.width()/4, self.width()*3./4.])
-
+        self.ui.splitter.setStretchFactor(0, 30)
+        self.ui.splitter.setStretchFactor(1, 10)
 
         self.plots = {}
         for k in self.analysisItems:
@@ -90,10 +91,9 @@ class PatchWindow(QtGui.QMainWindow):
             p.setLabel('left', text=k, units=self.analysisItems[k])
             self.ui.plotLayout.addWidget(p)
             self.plots[k] = p
-        #irp = self.plots['inputResistance']
-        #irp.setManualYScale()
-        #irp.setYLog(True)
-        #irp.setYRange(1e6, 1e11)
+        irp = self.plots['inputResistance']
+        irp.setLogMode(y=True, x=False)
+        irp.setYRange(6, 11)
             
         
         self.ui.icPulseSpin.setOpts(dec=True, step=1, minStep=1e-12, bounds=[None,None], siPrefix=True, suffix='A')

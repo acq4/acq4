@@ -21,7 +21,7 @@ class MultiClampTaskGui(TaskGui):
         self.traces = {}  ## Stores traces from a sequence to allow average plotting
         self.resetInpPlots = False  ## Signals result handler to clear plots before adding a new one
         self.currentCmdPlot = None
-        
+        self._block_update = False  # blocks plotting during state changes
         
         self.ui = Ui_Form()
         self.ui.setupUi(self)
@@ -83,8 +83,6 @@ class MultiClampTaskGui(TaskGui):
         if name in checkMap:
             checkMap[name].setEnabled(value)
             self.devStateChanged()
-            
-        
 
     def devStateChanged(self, state=None):
         mode = self.getMode()
@@ -103,8 +101,6 @@ class MultiClampTaskGui(TaskGui):
         if not self.ui.secondarySignalCombo.isEnabled():
             ssig = state['secondarySignal']
         self.setSignals(psig, ssig)
-        
-            
 
     def saveState(self):
         state = self.stateGroup.state().copy()
@@ -114,17 +110,18 @@ class MultiClampTaskGui(TaskGui):
         return state
         
     def restoreState(self, state):
+        block = self._block_update
         try:
+            self._block_update = True
             self.setMode(state['mode'])
             if 'primarySignal' in state and 'secondarySignal' in state:
                 self.setSignals(state['primarySignal'], state['secondarySignal'])
             self.stateGroup.setState(state)
         except:
             printExc('Error while restoring MultiClamp task GUI state:')
-            
-        #self.ui.waveGeneratorWidget.update() ## should be called as a result of stateGroup.setState; don't need to call again
-        
-        
+        finally:
+            self._block_update = block
+        self.updateWaves()
         
     def daqChanged(self, state):
         self.rate = state['rate']
@@ -136,31 +133,39 @@ class MultiClampTaskGui(TaskGui):
         return self.ui.waveGeneratorWidget.listSequences()
 
     def sequenceChanged(self):
-        #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
         self.sigSequenceChanged.emit(self.dev.name())
 
     def updateWaves(self):
+        if self._block_update:
+            return
+
         self.clearCmdPlots()
         
-        ## display sequence waves
+        ## compute sequence waves
         params = {}
         ps = self.ui.waveGeneratorWidget.listSequences()
         for k in ps:
             params[k] = range(len(ps[k]))
         waves = []
         runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys())
-        for w in waves:
-            if w is not None:
-                #self.plotCmdWave(w / self.cmdScale, color=QtGui.QColor(100, 100, 100), replot=False)
-                self.plotCmdWave(w, color=QtGui.QColor(100, 100, 100), replot=False)
+
+        # Plot all waves but disable auto-range first to improve performance.
+        autoRange = self.ui.bottomPlotWidget.getViewBox().autoRangeEnabled()
+        self.ui.bottomPlotWidget.enableAutoRange(x=False, y=False)
+        try:
+            for w in waves:
+                if w is not None:
+                    self.plotCmdWave(w, color=QtGui.QColor(100, 100, 100), replot=False)
         
-        ## display single-mode wave in red
-        single = self.getSingleWave()
-        if single is not None:
-            #self.plotCmdWave(single / self.cmdScale, color=QtGui.QColor(200, 100, 100))
-            p = self.plotCmdWave(single, color=QtGui.QColor(200, 100, 100))
-            p.setZValue(1000)
-        #self.paramListChanged
+            ## display single-mode wave in red
+            single = self.getSingleWave()
+            if single is not None:
+                p = self.plotCmdWave(single, color=QtGui.QColor(200, 100, 100))
+                p.setZValue(1000)
+
+        finally:
+            # re-enable auto range if needed
+            self.ui.bottomPlotWidget.enableAutoRange(x=autoRange[0], y=autoRange[1])
         
     def clearCmdPlots(self):
         self.ui.bottomPlotWidget.clear()

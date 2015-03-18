@@ -141,7 +141,7 @@ class Laser(DAQGeneric, OptomechDevice):
         self.sigGlobalSubdeviceChanged.connect(self.opticStateChanged) ## called when objectives/filters have been switched
         
         manager.declareInterface(name, ['laser'], self)
-        
+        manager.sigAbortAll.connect(self.closeShutter)
         
     def configDir(self):
         """Return the name of the directory where configuration/calibration data should be stored"""
@@ -186,8 +186,6 @@ class Laser(DAQGeneric, OptomechDevice):
             fileName = os.path.join(calDir, 'powerHistory')
             date = str(time.strftime('%Y.%m.%d %H:%M:%S'))
             self.dm.appendConfigFile({'entry_'+str(self.powerHistoryCount):{'date': date, 'expectedPower':power}}, fileName)
-            
-    
 
     def writeCalibrationIndex(self, index):
         with self.lock:
@@ -230,7 +228,6 @@ class Laser(DAQGeneric, OptomechDevice):
             return self.getChanHolding('shutter') > 0
         else:
             raise Exception("No shutter on this laser.")
-        
    
     def openQSwitch(self):
         if self.hasQSwitch:
