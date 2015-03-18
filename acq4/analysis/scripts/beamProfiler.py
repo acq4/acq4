@@ -29,6 +29,8 @@ def measure():
         w,h = img.shape
         
         fit = imageAnalysis.fitGaussian2D(img, [100, w/2., h/2., w/4., 0])
+        # convert sigma to full width at 1/e
+        fit[0][3] *= 2 * 2**0.5
         print "WIDTH:", fit[0][3] * frame.info()['pixelSize'][0] * 1e6, "um"
         print " fit:", fit
     else:
