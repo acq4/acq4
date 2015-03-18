@@ -33,6 +33,7 @@ class DataSummary():
         self.tw['day'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
         self.tw['slice'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
         self.tw['cell'] = textwrap.TextWrapper(initial_indent="Notes: ", subsequent_indent=" "*4)
+
         self.twd = {}  # for description
         self.twd['day'] = textwrap.TextWrapper(initial_indent="Description: ", subsequent_indent=" "*4)
         self.twd['slice'] = textwrap.TextWrapper(initial_indent="Description: ", subsequent_indent=" "*4)
@@ -51,7 +52,6 @@ class DataSummary():
         #2011.10.17_000
         # operate in two modes:
         # second, between two dates
-        daylist = None
         if daylistfile is None:
             minday = (2012, 4, 5)
             minday = minday[0]*1e4+minday[1]*1e2+minday[2]
@@ -305,13 +305,13 @@ class DataSummary():
                 images2p.append(thisfile)
         self.imagestring = ''
         if len(images) > 0:
-            self.imagestring += 'Images: %d' % len(images)
+            self.imagestring += 'Images: %d ' % len(images)
         if len(stacks2p) > 0:
-            self.imagestring += '2pStacks: %d' % len(stacks2p)
+            self.imagestring += '2pStacks: %d ' % len(stacks2p)
         if len(images2p) > 0:
-            self.imagestring += '2pImages: %d' % len(images2p)
+            self.imagestring += '2pImages: %d ' % len(images2p)
         if len(images) + len(stacks2p) + len(images2p) == 0:
-            self.imagestring = 'No Images'
+            self.imagestring = 'No Images '
         
         if anyprotocols:
             print self.daystring + self.summarystring + self.slicestring + self.cellstring + self.protocolstring + self.imagestring + '\t'

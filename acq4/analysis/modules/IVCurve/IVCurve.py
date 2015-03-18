@@ -31,6 +31,8 @@ import acq4.util.matplotlibexporter as matplotlibexporter
 import acq4.analysis.tools.Utility as Utility  # pbm's utilities...
 import acq4.analysis.tools.Fitting as Fitting  # pbm's fitting stuff...
 import ctrlTemplate
+import pprint
+from collections import OrderedDict
 
 
 
@@ -117,7 +119,7 @@ class IVCurve(AnalysisModule):
         self.ctrl.IVCurve_KeepAnalysis.clicked.connect(self.resetKeepAnalysis)
         self.ctrl.IVCurve_getFileInfo.clicked.connect(self.get_file_information)
         [self.ctrl.IVCurve_RMPMode.currentIndexChanged.connect(x)
-         for x in [self.update_rmpAnalysis, self.countSpikes]]
+         for x in [self.update_rmpAnalysis, self.analyzeSpikes]]
         self.ctrl.dbStoreBtn.clicked.connect(self.dbStoreClicked)
         self.ctrl.IVCurve_OpenScript_Btn.clicked.connect(self.read_script)
         self.ctrl.IVCurve_RunScript_Btn.clicked.connect(self.rerun_script)
@@ -501,6 +503,8 @@ class IVCurve(AnalysisModule):
             self.data_mode = self.dataModel.getClampMode(data_file)
             if self.data_mode is None:
                 self.data_mode = self.ic_modes[0]  # set a default mode
+            if self.data_mode in ['vc']:  # should be "AND something"  - this is temp fix for Xuying's old data
+                self.data_mode = self.ic_modes[0]
             if self.data_mode in ['model_ic', 'model_vc']:  # lower case means model was run
                 self.modelmode = True
             self.ctrl.IVCurve_dataMode.setText(self.data_mode)
@@ -743,14 +747,14 @@ class IVCurve(AnalysisModule):
         #         self.get_junction()
 
     def updateAnalysis(self, **kwargs):
-        """updateAnalysis re-reads the time parameters and counts the spikes"""
+        """updateAnalysis re-reads the time parameters and re-analyzes the spikes"""
         self.get_window_analysisPars()
         self.readParameters(clearFlag=True, pw=False)
-        self.countSpikes()
+        self.analyzeSpikes()
 
-    def countSpikes(self):
+    def analyzeSpikes(self):
         """
-        countSpikes: Using the threshold set in the control panel, count the
+        analyzeSpikes: Using the threshold set in the control panel, count the
         number of spikes in the stimulation window (self.tstart, self.tend)
         Updates the spike plot(s).
 
@@ -769,8 +773,9 @@ class IVCurve(AnalysisModule):
             clearFlag = True
         else:
             clearFlag = False
+        printSpikeInfo = False
         if self.data_mode not in self.ic_modes or self.time_base is None:
-            # print ('IVCurve::countSpikes: Cannot count spikes, ' +
+            # print ('IVCurve::analyzeSpikes: Cannot count spikes, ' +
             #       'and dataMode is ', self.data_mode, 'and ICModes are: ', self.ic_modes, 'tx is: ', self.tx)
             self.spikecount = []
             self.fiPlot.plot(x=[], y=[], clear=clearFlag, pen='w',
@@ -794,28 +799,128 @@ class IVCurve(AnalysisModule):
         fisi = np.zeros(ntr)
         ar = np.zeros(ntr)
         rmp = np.zeros(ntr)
-        # rmp is taken from the mean of all the baselines in the traces
-
+        # also information on spike shape, based on Druckman et al. Cerebral Cortex, 2013
+        begin_dV = 12  # V/s or mV/ms
+        self.spikeInfo = OrderedDict()
+        
         for i in range(ntr):
-            (spike, spk) = Utility.findspikes(self.time_base, self.traces[i],
+            (spikes, spkx) = Utility.findspikes(self.time_base, self.traces[i],
                                               threshold, t0=self.tstart,
                                               t1=self.tend,
                                               dt=self.sample_interval,
                                               mode='schmitt',
                                               interpolate=False,
                                               debug=False)
-            if len(spike) == 0:
+          #  print self.tstart
+            if len(spikes) == 0:
                 continue
-            self.spikecount[i] = len(spike)
-            fsl[i] = spike[0] - self.tstart
-            if len(spike) > 1:
-                fisi[i] = spike[1] - spike[0]
+            self.spikecount[i] = len(spikes)
+            fsl[i] = spikes[0] - self.tstart
+            if len(spikes) > 1:
+                fisi[i] = spikes[1] - spikes[0]
                 # for Adaptation ratio analysis
-            if minspk <= len(spike) <= maxspk:
-                misi = np.mean(np.diff(spike[-3:]))
+            if minspk <= len(spikes) <= maxspk:
+                misi = np.mean(np.diff(spikes[-3:]))
                 ar[i] = misi / fisi[i]
+            spk = [np.abs(x-self.time_base).argmin()+1 for x in spikes]
+            # analyze the spike shape.
+            trspikes = OrderedDict()
+            if printSpikeInfo:
+                print np.array(self.values)
+                print len(self.traces)
+            for j in range(len(spikes)):
+                thisspike = {'trace': i, 'AP_number': j, 'AP_beginIndex': None, 'AP_endIndex': None, 
+                             'peakIndex': None, 'peak_T': None, 'peak_V': None, 'AP_Latency': None,
+                             'AP_beginV': None, 'halfwidth': None, 'trough_T': None,
+                             'trough_V': None, 'peaktotroughT': None,
+                             'current': None, 'iHold': None,
+                             'pulseDuration': None, 'tstart': self.tstart}  # initialize the structure
+                # print len(self.traces[i])
+                # print j
+                # print spk
+                # print spk[j]
+                (ihold, r2) = Utility.measure('mean', self.time_base, self.cmd_wave[i],
+                                                           0.0, self.tstart)
+                thisspike['current'] = self.values[i] - ihold
+                thisspike['hold'] = ihold
+                thisspike['pulseDuration'] = self.tend - self.tstart  # in seconds
+                thisspike['peakIndex'] = spk[j]
+                thisspike['peak_T'] = self.time_base[thisspike['peakIndex']]
+                thisspike['peak_V'] = self.traces[i][spk[j]]  # max voltage of spike
+                thisspike['tstart'] = self.tstart
+                
+                # find the minimum going forward - that is AHP min
+                k = spk[j]+1
+                v = thisspike['peak_V']
+                vlast = thisspike['peak_V']
+                while k < len(self.traces[i]):  # find end of spike
+                    v = self.traces[i][k]
+                    if v <= vlast:  # still falling
+                        k += 1  # step to next point
+                        vlast = v  # save current v
+                        continue
+                    else:
+                        thisspike['AP_endIndex'] = k
+                        thisspike['trough_T'] = self.time_base[thisspike['AP_endIndex']]
+                        thisspike['trough_V'] = v
+                        break
+                if thisspike['AP_endIndex'] is not None:
+                    thisspike['peaktotrough'] = thisspike['trough_T'] - thisspike['peak_T']
+                dv = np.diff(self.traces[i])/(self.time_base[1]-self.time_base[0])
+                k = spk[j]-1
+                while k > 0:  # find beginning of the spike
+                    if dv[k] > begin_dV:  # wait for slope at top of spike to exceed dV threshold
+                        break
+                    else:
+                        k -= 1  # still waiting
+                        continue
+                k -= 1
+                while k > 0:  # now look for low end slope to define start of AP
+                    if dv[k] > begin_dV:
+                        k -= 1
+                        continue
+                    else:
+                        thisspike['AP_beginIndex'] = k
+                        thisspike['AP_Latency'] = self.time_base[k]
+                        thisspike['AP_beginV'] = self.traces[i][thisspike['AP_beginIndex']]
+                        break
+                # measure half width
+                if thisspike['AP_beginIndex'] is not None and thisspike['AP_endIndex'] is not None:
+                    halfv = 0.5*(thisspike['peak_V'] + thisspike['AP_beginV'])
+                    k = thisspike['AP_beginIndex']
+                    kup = None
+                    while k < thisspike['peakIndex']:
+                        if self.traces[i][k] > halfv:
+                            kup = k
+                            break
+                        else:
+                            k += 1
+                    kdown = None
+                    k = thisspike['peakIndex']
+                    while k < thisspike['AP_endIndex']:
+                        if self.traces[i][k] < halfv:
+                            kdown = k
+                            break
+                        else:
+                            k += 1
+                    if kup is not None and kdown is not None:
+                        thisspike['halfwidth'] = self.time_base[kdown] - self.time_base[kup]
+                    #  print thisspike
+                trspikes[j] = thisspike
+            self.spikeInfo[i] = trspikes
+            # rmp is taken from the mean of all the baselines in the traces
             (rmp[i], r2) = Utility.measure('mean', self.time_base, self.traces[i],
                                            0.0, self.tstart)
+        if printSpikeInfo:
+            pp = pprint.PrettyPrinter(indent=4)
+            for m in sorted(self.spikeInfo.keys()):
+                print '----\nTrace: %d  has %d APs' % (m, len(self.spikeInfo[m].keys()))
+                for n in sorted(self.spikeInfo[m].keys()):
+                    pp.pprint(self.spikeInfo[m][n])
+        
+        self.getClassifyingInfo()  # build analysis summary here as well.
+                
+        
         iAR = np.where(ar > 0)
 
         self.adapt_ratio = np.mean(ar[iAR])  # only where we made the measurement
@@ -829,7 +934,63 @@ class IVCurve(AnalysisModule):
         self.spk = np.where(self.spikecount > 0)
         self.update_SpikePlots()
 
-
+    def getIVCurrentThresholds(self):
+        # figure out "threshold" for spike, get 150% and 300% points.
+        nsp = []
+        icmd = []
+        for m in sorted(self.spikeInfo.keys()):
+            n = len(self.spikeInfo[m].keys()) # number of spikes in the trace
+            if n > 0:
+                nsp.append(len(self.spikeInfo[m].keys()))
+                icmd.append(self.spikeInfo[m][0]['current'])
+                #print 'nsp: %d at i=%8.1f' % (nsp[-1], icmd[-1]*1e12)
+        iamin = np.argmin(icmd)
+        imin = np.min(icmd)
+        ia150 = np.argmin(np.abs(1.5*imin-np.array(icmd)))
+        iacmdthr = np.argmin(np.abs(imin-self.values))
+        ia150cmdthr = np.argmin(np.abs(icmd[ia150] - self.values))
+        #print 'thr indices and values: ', iacmdthr, ia150cmdthr, self.values[iacmdthr], self.values[ia150cmdthr]
+        return (iacmdthr, ia150cmdthr)  # return threshold indices into self.values array at threshold and 150% point
+        # print iamin, ia150
+        # print nsp, icmd, imin
+        # print icmd[iamin], icmd[ia150]
+    
+    def getClassifyingInfo(self):
+        """
+        Adds the classifying information according to Druckmann et al., Cerebral Cortex, 2013
+        to the analysis summary
+        """
+ 
+        (jthr, j150) = self.getIVCurrentThresholds()  # get the indices for the traces we need to pull data from
+        if jthr == j150:
+            print '\n%s:' % self.filename
+            print 'Threshold current T and 1.5T the same: using next up value for j150'
+            print ' >> Threshold current: %8.3f   1.5T current: %8.3f, next up: %8.3f' % (self.spikeInfo[jthr][0]['current']*1e12,
+                        self.spikeInfo[j150][0]['current']*1e12, self.spikeInfo[j150+1][0]['current']*1e12)
+            j150 = jthr + 1
+        if len(self.spikeInfo[j150]) >= 1:
+            self.analysis_summary['AP1_Latency'] = (self.spikeInfo[j150][0]['AP_Latency'] - self.spikeInfo[j150][0]['tstart'])*1e3
+            self.analysis_summary['AP1_HalfWidth'] = self.spikeInfo[j150][0]['halfwidth']*1e3
+        else:
+            self.analysis_summary['AP1_Latency'] = np.inf
+            self.analysis_summary['AP1_HalfWidth'] = np.inf
+        
+        if len(self.spikeInfo[j150]) >= 2:
+            self.analysis_summary['AP2_Latency'] = (self.spikeInfo[j150][1]['AP_Latency'] - self.spikeInfo[j150][1]['tstart'])*1e3
+            self.analysis_summary['AP2_HalfWidth'] = self.spikeInfo[j150][1]['halfwidth']*1e3
+        else:
+            self.analysis_summary['AP2_Latency'] = np.inf
+            self.analysis_summary['AP2_HalfWidth'] = np.inf
+        
+        rate = len(self.spikeInfo[j150])/self.spikeInfo[j150][0]['pulseDuration']  # spikes per second, normalized for pulse duration
+        # first AHP depth
+        AHPDepth = self.spikeInfo[j150][0]['AP_beginV'] - self.spikeInfo[j150][0]['trough_V']
+        self.analysis_summary['FiringRate'] = rate
+        self.analysis_summary['AHP_Depth'] = AHPDepth*1e3  # convert to mV
+        # pprint.pprint(self.analysis_summary)
+        # except:
+        #     raise ValueError ('Failed Classification for cell: %s' % self.filename)
+        
     def fileCellProtocol(self):
         """
         fileCellProtocol breaks the current filename down and returns a
@@ -850,17 +1011,20 @@ class IVCurve(AnalysisModule):
         :param script_header:
         :return:
         """
-        
-#        print self.data_mode
-#        print self.ic_modes
+
+        # Dictionary structure: key = information about 
         if self.data_mode in self.ic_modes or self.data_mode == 'vc':
           data_template = (
-            OrderedDict([('Species', '{:>s}'), ('Age', '{:>5s}'), ('Sex', '{:>1s}'), ('Weight', '{:>5s}'),
-                         ('Temperature', '{:>5s}'), ('ElapsedTime', '{:>8.2f}'), 
-                         ('RMP', '{:>5.1f}'), ('Rin', '{:>5.1f}'),
-                         ('tau', '{:>5.1f}'), ('AdaptRatio', '{:>7.3f}'),
-                         ('tauh', '{:>5.1f}'), ('Gh', '{:>6.2f}'),
-                         ('Description', '{:s}'),
+            OrderedDict([('Species', (12, '{:>12s}')), ('Age', (5, '{:>5s}')), ('Sex', (3, '{:>3s}')), ('Weight', (6, '{:>6s}')),
+                         ('Temperature', (10, '{:>10s}')), ('ElapsedTime', (11, '{:>11.2f}')), 
+                         ('RMP', (5, '{:>5.1f}')), ('Rin', (5, '{:>5.1f}')),
+                         ('tau', (5, '{:>5.1f}')), ('AdaptRatio', (9, '{:>9.3f}')),
+                         ('tauh', (5, '{:>5.1f}')), ('Gh', (6, '{:>6.2f}')),
+                         ('FiringRate', (12, '{:>9.1f}')), 
+                         ('AP1_HalfWidth', (13, '{:>13.2f}')), ('AP1_Latency', (11, '{:>11.1f}')), 
+                         ('AP2_HalfWidth', (13, '{:>13.2f}')), ('AP2_Latency', (11, '{:>11.1f}')), 
+                         ('AHP_Depth', (9, '{:9.2f}')),
+                         ('Description', (11, '{:s}')),
                         ]))
         else:
           data_template = (
@@ -876,14 +1040,17 @@ class IVCurve(AnalysisModule):
             ]))
         
         # summary table header is written anew for each cell
-        ltxt = ''
+        htxt = ''
         if script_header:
-            ltxt = '{:34s}\t{:15s}\t{:24s}\t'.format("Cell", "Genotype", "Protocol")
+            htxt = '{:34s}\t{:15s}\t{:24s}\t'.format("Cell", "Genotype", "Protocol")
             for k in data_template.keys():
-                ltxt += '{:<s}\t'.format(k)
-            ltxt += '\n'
+                cnv = '{:<%ds}' % (data_template[k][0])
+                # print 'cnv: ', cnv
+                htxt += (cnv + '\t').format(k)
             script_header = False
+            htxt += '\n'
 
+        ltxt = ''
         ltxt += '{:34s}\t{:15s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Genotype'], self.analysis_summary['Protocol'])
           
         for a in data_template.keys():
@@ -893,10 +1060,11 @@ class IVCurve(AnalysisModule):
                     txt = txt.replace('\n', ' ').replace('\r', '')  # remove line breaks from output, replace \n with space
                 ltxt += (data_template[a] + '\t').format(txt)
             else:
-                ltxt += 'NaN\t'
-    
+                ltxt += ('{:>%ds}' % (data_template[a][0]) + '\t').format('NaN')
+        ltxt = ltxt.replace('\n', ' ').replace('\r', '')  # remove line breaks
+        ltxt = htxt + ltxt
         if printnow:
-            printltxt
+            print ltxt
         
         if copytoclipboard:
             clipb = QtGui.QApplication.clipboard()
@@ -1058,7 +1226,7 @@ class IVCurve(AnalysisModule):
                 #print 'old data mode: ', self.data_mode
                 if 'datamode' in thiscell.keys():
                     self.data_mode = thiscell['datamode']
-                    print 'datamode may be overridden: self.data_mode = %s' % self.data_mode
+                    # print 'datamode may be overridden: self.data_mode = %s' % self.data_mode
                 # apptext(('Protocol: {:<s} <br>Choice: {:<s}'.format(pr, thiscell['choice'][p])))
                 #print dir(self.data_plot)
                 # self.main_layout.update()
@@ -1214,13 +1382,18 @@ class IVCurve(AnalysisModule):
 
         if len(self.cmd) == 0:  # probably not ready yet to do the update.
             return
+        #print self.data_mode
+        #print self.ic_modes
         if self.data_mode not in self.ic_modes:  # only permit in IC
             return
         rgnpk = list(self.regions['lrwin0']['region'].getRegion())
         Func = 'exp1'  # single exponential fit with DC offset.
         Fits = Fitting.Fitting()
+        if self.rmp == []:
+            self.update_rmpAnalysis()
+        #print self.rmp
         initpars = [self.rmp*1e-3, 0.010, 0.01]
-        peak_time=None
+        peak_time = None
         icmdneg = np.where(self.cmd < -20e-12)
         maxcmd = np.min(self.cmd)
         ineg = np.where(self.cmd[icmdneg] < 0.0)
@@ -1240,8 +1413,9 @@ class IVCurve(AnalysisModule):
                          (vmeans[ineg] >= vrange[1]*1e-3)))
         indxs = list(indxs[0])
         whichdata = ineg[0][indxs]  # restricts to valid values
-        #print 'indices: ', indxs
-        #print 'vmeans selected: ', vmeans[whichdata]
+       # print 'indices: ', indxs
+       #  print 'vmeans selected: ', vmeans[whichdata]
+       #  print 'rgnpks: ', rgnpk
         itaucmd = self.cmd[ineg]
         whichaxis = 0
         fpar = []
