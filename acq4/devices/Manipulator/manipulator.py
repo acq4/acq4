@@ -4,6 +4,7 @@ from PyQt4 import QtCore, QtGui
 import acq4.pyqtgraph as pg
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
+from acq4.devices.Stage import Stage
 from .cameraModTemplate import Ui_Form as CamModTemplate
 
 class Manipulator(Device, OptomechDevice):
@@ -19,6 +20,11 @@ class Manipulator(Device, OptomechDevice):
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
+        self._scopeDev = deviceManager.getDevice(config['scopeDevice'])
+        assert isinstance(self.parentDevice(), Stage)
+
+    def scopeDevice(self):
+        return self._scopeDev
     
     def quit(self):
         pass
@@ -26,9 +32,15 @@ class Manipulator(Device, OptomechDevice):
     def deviceInterface(self, win):
         """Return a widget with a UI to put in the device rack"""
         return None
-        
+
     def cameraModuleInterface(self, mod):
         return ManipulatorCamModInterface(self, mod)
+
+    def setStageOrientation(self, angle, inverty):
+        tr = pg.SRTTransform3D(self.parentDevice().baseTransform())
+        tr.setScale(1, -1 if inverty else 1)
+        tr.setRotate(angle)
+        self.parentDevice().setBaseTransform(tr)
 
 
 class ManipulatorCamModInterface(QtCore.QObject):
@@ -45,40 +57,82 @@ class ManipulatorCamModInterface(QtCore.QObject):
 
         self.calibrateAxis = Axis([0, 0], 0)
         mod.addItem(self.calibrateAxis)
+        self.calibrateAxis.setVisible(False)
 
-        self.transformChanged()
+        self.centerArrow = pg.ArrowItem()
+        mod.addItem(self.centerArrow)
+
+        self.depthLine = self.mod.getDepthView().addLine(y=0, markers=[('v', 1, 20)])
 
         self.ui.setOrientationBtn.toggled.connect(self.setOrientationToggled)
         self.mod.window().getView().scene().sigMouseClicked.connect(self.sceneMouseClicked)
         self.dev.sigGlobalTransformChanged.connect(self.transformChanged)
         self.calibrateAxis.sigRegionChangeFinished.connect(self.calibrateAxisChanged)
+        self.calibrateAxis.sigRegionChanged.connect(self.calibrateAxisChanging)
+
+        self.transformChanged()
 
     def setOrientationToggled(self):
         self.calibrateAxis.setVisible(self.ui.setOrientationBtn.isChecked())
 
     def sceneMouseClicked(self, ev):
-        if not self.ui.setCenterBtn.isChecked():
+        if ev.button() != QtCore.Qt.LeftButton or not self.ui.setCenterBtn.isChecked():
             return
 
         self.ui.setCenterBtn.setChecked(False)
+        pos = self.mod.getView().mapSceneToView(ev.scenePos())
+        self.calibrateAxis.setPos(pos)
 
     def transformChanged(self):
         pos = self.dev.mapToGlobal([0, 0, 0])
         x = self.dev.mapToGlobal([1, 0, 0])
-        angle = (pg.Point(x[:2]) - pg.Point(pos[:2])).angle(pg.Point(0, 0))
+
+        p1 = pg.Point(x[:2])
+        p2 = pg.Point(pos[:2])
+        p3 = pg.Point(1, 0)
+        angle = (p1 - p2).angle(p3)
         if angle is None:
             angle = 0
-        self.calibrateAxis.setPos(pos[:2])
-        self.calibrateAxis.setAngle(angle)
+
+        self.centerArrow.setPos(pos[0], pos[1])
+        self.centerArrow.setStyle(angle=180-angle)
+        self.depthLine.setValue(pos[2])
+
+        if self.ui.setOrientationBtn.isChecked():
+            return
+
+
+        self.calibrateAxis.sigRegionChangeFinished.disconnect(self.calibrateAxisChanged)
+        try:
+            self.calibrateAxis.setPos(pos[:2])
+            self.calibrateAxis.setAngle(angle)
+        finally:
+            self.calibrateAxis.sigRegionChangeFinished.connect(self.calibrateAxisChanged)
+
+    def calibrateAxisChanging(self):
+        pos = self.calibrateAxis.pos()
+        angle = self.calibrateAxis.angle()
+
+        self.centerArrow.setPos(pos[0], pos[1])
+        self.centerArrow.setStyle(angle=180-angle)
 
     def calibrateAxisChanged(self):
-        tr = pg.SRTTransform3D()
         pos = self.calibrateAxis.pos()
-        tr.setTranslate(pos)
-        tr.setRotate(self.calibrateAxis.angle())
-        self.dev.sigGlobalTransformChanged.disconnect(self.transformChanged)
+        angle = self.calibrateAxis.angle()
+        size = self.calibrateAxis.size()
+        z = self.dev.scopeDevice().getFocusDepth()
 
-        self.dev.setDeviceTransform(tr)
+        self.dev.sigGlobalTransformChanged.disconnect(self.transformChanged)
+        try:
+            # first orient the parent stage
+            self.dev.setStageOrientation(angle, size[1] < 0)
+            # next set our position offset
+            gpos = self.dev.mapFromGlobal(pos)
+            tr = self.dev.deviceTransform()
+            tr.translate(gpos.x(), gpos.y(), z)
+            self.dev.setDeviceTransform(tr)
+        finally:
+            self.dev.sigGlobalTransformChanged.connect(self.transformChanged)
 
     def controlWidget(self):
         return self.ctrl

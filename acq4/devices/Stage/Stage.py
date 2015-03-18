@@ -88,10 +88,27 @@ class Stage(Device, OptomechDevice):
         self._invStageTransform = QtGui.QMatrix4x4()
         self._invStageTransform.translate(*[-x for x in self.pos])
 
-        ## this informs rigidly-connected devices that they have moved
-        self.setDeviceTransform(self._baseTransform * self._stageTransform)
+        self._updateTransform()
 
         self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
+
+    def baseTransform(self):
+        """Return the base transform for this Stage.
+        """
+        return QtGui.QMatrix4x4(self._baseTransform)
+
+    def setBaseTransform(self, tr):
+        """Set the base transform of the stage. 
+
+        This sets the starting position and orientation of the stage before the 
+        hardware-reported stage position is taken into account.
+        """
+        self._baseTransform = QtGui.QMatrix4x4(tr)
+        self._updateTransform()
+
+    def _updateTransform(self):
+        ## this informs rigidly-connected devices that they have moved
+        self.setDeviceTransform(self._baseTransform * self._stageTransform)
 
     def getPosition(self, refresh=False):
         """Return the position of the stage.
