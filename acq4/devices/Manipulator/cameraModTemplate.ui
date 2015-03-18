@@ -99,12 +99,18 @@
         <property name="text">
          <string>Set center</string>
         </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
        </widget>
       </item>
       <item row="1" column="0">
        <widget class="QPushButton" name="setOrientationBtn">
         <property name="text">
          <string>Set orientation</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
         </property>
        </widget>
       </item>

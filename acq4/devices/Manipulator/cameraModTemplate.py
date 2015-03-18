@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'cameraModTemplate.ui'
 #
-# Created: Wed Mar 18 16:46:51 2015
+# Created: Wed Mar 18 17:18:07 2015
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -62,9 +62,11 @@ class Ui_Form(object):
         self.gridLayout.setSpacing(3)
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
         self.setCenterBtn = QtGui.QPushButton(self.groupBox)
+        self.setCenterBtn.setCheckable(True)
         self.setCenterBtn.setObjectName(_fromUtf8("setCenterBtn"))
         self.gridLayout.addWidget(self.setCenterBtn, 0, 0, 1, 1)
         self.setOrientationBtn = QtGui.QPushButton(self.groupBox)
+        self.setOrientationBtn.setCheckable(True)
         self.setOrientationBtn.setObjectName(_fromUtf8("setOrientationBtn"))
         self.gridLayout.addWidget(self.setOrientationBtn, 1, 0, 1, 1)
         self.gridLayout_3.addWidget(self.groupBox, 1, 0, 1, 1)

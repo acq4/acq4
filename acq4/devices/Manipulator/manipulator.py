@@ -4,7 +4,7 @@ from PyQt4 import QtCore, QtGui
 import acq4.pyqtgraph as pg
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
-
+from .cameraModTemplate import Ui_Form as CamModTemplate
 
 class Manipulator(Device, OptomechDevice):
     """Represents a manipulator controlling an electrode.
@@ -39,39 +39,46 @@ class ManipulatorCamModInterface(QtCore.QObject):
         self.dev = dev  # microscope device
         self.mod = mod  # camera module
 
-        self._calibrating = False
-
+        self.ui = CamModTemplate()
         self.ctrl = QtGui.QWidget()
-        self.layout = QtGui.QGridLayout()
-        self.ctrl.setLayout(self.layout)
-
-        self.calibrateBtn = QtGui.QPushButton("Calibrate manipulator")
-        self.calibrateBtn.setCheckable(True)
-        self.layout.addWidget(self.calibrateBtn)
+        self.ui.setupUi(self.ctrl)
 
         self.calibrateAxis = Axis([0, 0], 0)
         mod.addItem(self.calibrateAxis)
 
         self.transformChanged()
 
-        self.calibrateBtn.toggled.connect(self.calibrateToggled)
+        self.ui.setOrientationBtn.toggled.connect(self.setOrientationToggled)
         self.mod.window().getView().scene().sigMouseClicked.connect(self.sceneMouseClicked)
         self.dev.sigGlobalTransformChanged.connect(self.transformChanged)
         self.calibrateAxis.sigRegionChangeFinished.connect(self.calibrateAxisChanged)
 
-    def calibrateToggled(self):
-        # self._calibrating = self.calibrateBtn.isChecked()
-        self.axisMarker.setVisible(self.calibrateBtn.isChecked())
+    def setOrientationToggled(self):
+        self.calibrateAxis.setVisible(self.ui.setOrientationBtn.isChecked())
 
     def sceneMouseClicked(self, ev):
-        if not self._calibrating:
+        if not self.ui.setCenterBtn.isChecked():
             return
 
-        self.calibrateBtn.setChecked(False)
+        self.ui.setCenterBtn.setChecked(False)
 
     def transformChanged(self):
         pos = self.dev.mapToGlobal([0, 0, 0])
-        self.calibrateMarker.setPos(pos[0], pos[1])
+        x = self.dev.mapToGlobal([1, 0, 0])
+        angle = (pg.Point(x[:2]) - pg.Point(pos[:2])).angle(pg.Point(0, 0))
+        if angle is None:
+            angle = 0
+        self.calibrateAxis.setPos(pos[:2])
+        self.calibrateAxis.setAngle(angle)
+
+    def calibrateAxisChanged(self):
+        tr = pg.SRTTransform3D()
+        pos = self.calibrateAxis.pos()
+        tr.setTranslate(pos)
+        tr.setRotate(self.calibrateAxis.angle())
+        self.dev.sigGlobalTransformChanged.disconnect(self.transformChanged)
+
+        self.dev.setDeviceTransform(tr)
 
     def controlWidget(self):
         return self.ctrl
