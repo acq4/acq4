@@ -7,6 +7,32 @@ from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage
 from .cameraModTemplate import Ui_Form as CamModTemplate
 
+"""
+Todo:
+
+- movement planning:
+    - only move diagonally when within 50um of surface
+    - limited movement on x/z plane when near objective / recording chamber
+- home button
+- standby / target buttons
+- custom setpoint?
+- automatic find: 
+    - focus up 500um
+    - bring electrode to pre-set location
+    - advance slowly along diagonal until tip is detected
+    - auto set center
+    - move electrode to standby position
+    - back to original focus
+
+
+
+
+
+"""
+
+
+
+
 class Manipulator(Device, OptomechDevice):
     """Represents a manipulator controlling an electrode.
 

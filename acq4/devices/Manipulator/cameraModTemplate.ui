@@ -34,6 +34,9 @@
       </property>
       <item row="0" column="0">
        <widget class="QPushButton" name="homeBtn">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
         <property name="text">
          <string>Home</string>
         </property>
@@ -54,6 +57,9 @@
       </item>
       <item row="1" column="0">
        <widget class="QPushButton" name="standbyBtn">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
         <property name="text">
          <string>Standby</string>
         </property>
@@ -61,6 +67,9 @@
       </item>
       <item row="2" column="0">
        <widget class="QPushButton" name="targetBtn">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
         <property name="text">
          <string>Target</string>
         </property>
@@ -76,6 +85,9 @@
         </property>
         <property name="text">
          <string>Set</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
         </property>
        </widget>
       </item>

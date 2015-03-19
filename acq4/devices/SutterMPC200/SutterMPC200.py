@@ -65,7 +65,9 @@ class SutterMPC200(Stage):
             }
 
     def stop(self):
-        self.dev.stop(self.drive)
+        """Stop _any_ moving drives on the MPC200.
+        """
+        self.dev.stop()
 
     def _checkPositionChange(self, drive=None, pos=None):
         ## Anyone may call this function. 

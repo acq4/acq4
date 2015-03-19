@@ -100,6 +100,7 @@ class SutterMPC200(SerialDevice):
         self.port = port
         SerialDevice.__init__(self, port=self.port, baudrate=128000)
         self.scale = [0.0625e-6]*3  # default is 16 usteps per micron
+        self._moving = False
 
     @threadsafe
     def setDrive(self, drive):
@@ -234,8 +235,8 @@ class SutterMPC200(SerialDevice):
             self.write(cmd)
         else:
             #self.write(b'O')  # position updates on (these are broken in mpc200?)
-            self.write(b'F')  # position updates off
-            self.read(1, term='\r')
+            # self.write(b'F')  # position updates off
+            # self.read(1, term='\r')
             self.write(b'S')
             # MPC200 crashes if the entire packet is written at once; this sleep is mandatory
             time.sleep(0.03)
@@ -243,11 +244,14 @@ class SutterMPC200(SerialDevice):
 
         # wait for move to complete
         try:
+            self._moving = True
             self.read(1, term='\r', timeout=timeout)
         except DataError:
             # If the move is interrupted, sometimes we get junk on the serial line.
             time.sleep(0.03)
             self.readAll()
+        finally:
+            self._moving = False
 
         # finally, make sure we ended up at the right place.
         newPos = self.getPos(scaled=False)[1]
@@ -289,15 +293,25 @@ class SutterMPC200(SerialDevice):
 
     #     return pos
 
-    @threadsafe
-    @resetDrive
-    def stop(self, drive):
-        """Stop moving *drive*
+    def stop(self):
+        """Stop moving the active drive.
         """
-        if drive is not None:
-            self.setDrive(drive)
+        # lock before stopping if possible
+        if self.lock.acquire(blocking=False):
+            try:
+                self.write('\3')
+                self.read(1, term='\r')
+            finally:
+                self.lock.release()
+
+        # If the lock is in use, then we write immediately and hope for the best.
+        else:
             self.write('\3')
-            self.read(1, term='\r')
+            with self.lock:
+                time.sleep(0.02)
+                self.readAll()
+
+
 
 
 def measureSpeedTable(dev, drive, dist=3e-3):
