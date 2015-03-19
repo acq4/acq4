@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
+import numpy as np
 
 import acq4.pyqtgraph as pg
 from acq4.devices.Device import Device
@@ -24,9 +25,9 @@ Todo:
     - move electrode to standby position
     - back to original focus
 
-
-
-
+- show/hide markers
+- set center button text should change to "click electrode tip" during setting
+- better error reporting when moves are interrupted
 
 """
 
@@ -47,6 +48,7 @@ class Manipulator(Device, OptomechDevice):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
         self._scopeDev = deviceManager.getDevice(config['scopeDevice'])
+        self.pitch = config['pitch'] * np.pi / 180.
         assert isinstance(self.parentDevice(), Stage)
 
         cal = self.readConfigFile('calibration')
@@ -85,6 +87,35 @@ class Manipulator(Device, OptomechDevice):
         cal['transform'] = pg.SRTTransform3D(tr)
         self.writeConfigFile(cal, 'calibration')
 
+    def goHome(self, speed='fast'):
+        """Extract pipette tip diagonally, then move manipulator to [0, 0, 0]"""
+        stage = self.parentDevice()
+        # stage's home position
+        home = [0, 0, 0]
+        pos = stage.getPosition()
+        # # electrode tip in global coords
+        # pos = self.mapToGlobal([0, 0, 0])
+        dx = home[0] - pos[0]
+        dz = home[2] - pos[2]
+        dz2 = dx * np.tan(self.pitch)
+        if dz2 < dz:
+            waypoint = [home[0], pos[1], pos[2] + dz2]
+            self.movePath([waypoint, home], speed)
+        else:
+            dx2 = dz / np.tan(self.pitch)
+            waypoint1 = [pos[0] + dx, pos[1], home[2]]
+            waypoint2 = [home[0], pos[1], home[2]]
+            self.movePath([waypoint1, waypoint2, home], speed)
+
+    def movePath(self, pts, speed):
+        stage = self.parentDevice()
+        for pt in pts:
+            f = stage.moveTo(pt, speed)
+            f.wait()
+            if f.wasInterrupted():
+                raise Exception("Move was interrupted.")
+
+
 
 class ManipulatorCamModInterface(QtCore.QObject):
     """Implements user interface for manipulator.
@@ -112,6 +143,7 @@ class ManipulatorCamModInterface(QtCore.QObject):
         self.dev.sigGlobalTransformChanged.connect(self.transformChanged)
         self.calibrateAxis.sigRegionChangeFinished.connect(self.calibrateAxisChanged)
         self.calibrateAxis.sigRegionChanged.connect(self.calibrateAxisChanging)
+        self.ui.homeBtn.clicked.connect(self.homeClicked)
 
         self.transformChanged()
 
@@ -179,7 +211,15 @@ class ManipulatorCamModInterface(QtCore.QObject):
         return None
 
     def quit(self):
-        pass
+        for item in self.calibrateAxis, self.centerArrow, self.depthLine:
+            scene = item.scene()
+            if scene is not None:
+                scene.removeItem(item)
+
+    def homeClicked(self):
+        self.dev.goHome()
+
+
 
 
 class Target(pg.GraphicsObject):

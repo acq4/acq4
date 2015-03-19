@@ -221,7 +221,7 @@ class Stage(Device, OptomechDevice):
         """
         localPos = self.mapFromGlobal(pos)
         stagePos = self.mapToStage(localPos)
-        self.moveTo(stagePos, speed)
+        return self.moveTo(stagePos, speed)
 
     def _toAbsolutePosition(self, abs, rel):
         """Helper function to convert absolute or relative position (possibly 

@@ -247,7 +247,8 @@ class MPC200MoveFuture(MoveFuture):
         # because of MPC200 idiosyncracies, we must coordinate with the monitor
         # thread to do a move.
         self._expectedDuration = dev.dev.expectedMoveDuration(dev.drive, pos, speed)
-        self._id = SutterMPC200._monitor.move(dev.drive, pos, speed)
+        scaled = [pos[i] / dev.scale[i] for i in (0, 1, 2)]
+        self._id = SutterMPC200._monitor.move(dev.drive, scaled, speed)
         self._moveStatus = (None, None)
         while True:
             start, status = self._getStatus()

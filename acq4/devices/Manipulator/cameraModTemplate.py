@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'cameraModTemplate.ui'
 #
-# Created: Wed Mar 18 17:18:07 2015
+# Created: Thu Mar 19 22:39:51 2015
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -38,20 +38,20 @@ class Ui_Form(object):
         self.gridLayout_2.setSpacing(3)
         self.gridLayout_2.setObjectName(_fromUtf8("gridLayout_2"))
         self.homeBtn = QtGui.QPushButton(self.groupBox_2)
+        self.homeBtn.setEnabled(True)
         self.homeBtn.setObjectName(_fromUtf8("homeBtn"))
         self.gridLayout_2.addWidget(self.homeBtn, 0, 0, 1, 1)
-        self.setHomeBtn = QtGui.QPushButton(self.groupBox_2)
-        self.setHomeBtn.setMaximumSize(QtCore.QSize(30, 16777215))
-        self.setHomeBtn.setObjectName(_fromUtf8("setHomeBtn"))
-        self.gridLayout_2.addWidget(self.setHomeBtn, 0, 1, 1, 1)
         self.standbyBtn = QtGui.QPushButton(self.groupBox_2)
+        self.standbyBtn.setEnabled(False)
         self.standbyBtn.setObjectName(_fromUtf8("standbyBtn"))
         self.gridLayout_2.addWidget(self.standbyBtn, 1, 0, 1, 1)
         self.targetBtn = QtGui.QPushButton(self.groupBox_2)
+        self.targetBtn.setEnabled(False)
         self.targetBtn.setObjectName(_fromUtf8("targetBtn"))
         self.gridLayout_2.addWidget(self.targetBtn, 2, 0, 1, 1)
         self.setTargetBtn = QtGui.QPushButton(self.groupBox_2)
         self.setTargetBtn.setMaximumSize(QtCore.QSize(30, 16777215))
+        self.setTargetBtn.setCheckable(True)
         self.setTargetBtn.setObjectName(_fromUtf8("setTargetBtn"))
         self.gridLayout_2.addWidget(self.setTargetBtn, 2, 1, 1, 1)
         self.gridLayout_3.addWidget(self.groupBox_2, 0, 0, 1, 1)
@@ -78,7 +78,6 @@ class Ui_Form(object):
         Form.setWindowTitle(_translate("Form", "Form", None))
         self.groupBox_2.setTitle(_translate("Form", "Set points", None))
         self.homeBtn.setText(_translate("Form", "Home", None))
-        self.setHomeBtn.setText(_translate("Form", "Set", None))
         self.standbyBtn.setText(_translate("Form", "Standby", None))
         self.targetBtn.setText(_translate("Form", "Target", None))
         self.setTargetBtn.setText(_translate("Form", "Set", None))

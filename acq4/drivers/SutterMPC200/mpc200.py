@@ -220,7 +220,8 @@ class SutterMPC200(SerialDevice):
 
         # be sure to never request out-of-bounds position
         for i,x in enumerate(ustepPos):
-            assert 0 <= x < (25e-3 / self.scale[i])
+            if not (0 <= x < (25e-3 / self.scale[i])):
+                raise ValueError("Invalid coordinate %d=%g; must be in [0, 25e-3]" % (i, x * self.scale[i]))
 
         if timeout is None:
             # maximum distance to be travelled along any axis
@@ -230,6 +231,7 @@ class SutterMPC200(SerialDevice):
             # print "dist, speed, timeout:", dist, v, timeout
 
         # Send move command
+        self.readAll()
         if speed == 'fast':
             cmd = b'M' + struct.pack('<lll', *ustepPos)
             self.write(cmd)
