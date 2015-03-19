@@ -13,7 +13,7 @@ from acq4.util.debug import *
 class PVCam(Camera):
     def __init__(self, *args, **kargs):
         self.camLock = Mutex(Mutex.Recursive)  ## Lock to protect access to camera
-        self.ringSize = 100
+        self.ringSize = 50
         Camera.__init__(self, *args, **kargs)  ## superclass will call setupCamera when it is ready.
         self.acqBuffer = None
         self.frameId = 0
