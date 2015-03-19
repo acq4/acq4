@@ -22,12 +22,13 @@ Does NOT:
 """
 
 
-import inspect, os, sys, gc, traceback
+import inspect, os, sys, gc, traceback, types
 try:
     import __builtin__ as builtins
 except ImportError:
     import builtins
 from .debug import printExc
+
 
 def reloadAll(prefix=None, debug=False):
     """Automatically reload everything whose __file__ begins with prefix.
@@ -180,7 +181,7 @@ def updateClass(old, new, debug):
             #else:
                 #if debug:
                     #print "    Ignoring reference", type(ref)
-        except:
+        except Exception:
             print("Error updating reference (%s) for class change (%s -> %s)" % (safeStr(ref), safeStr(old), safeStr(new)))
             raise
         
@@ -199,6 +200,8 @@ def updateClass(old, new, debug):
                 
             if hasattr(oa, 'im_func') and hasattr(na, 'im_func') and oa.__func__ is not na.__func__:
                 depth = updateFunction(oa.__func__, na.__func__, debug)
+                if not hasattr(na.__func__, '__previous_reload_method__'):
+                    na.__func__.__previous_reload_method__ = oa  # important for managing signal connection
                 #oa.im_class = new  ## bind old method to new class  ## not allowed
                 if debug:
                     extra = ""
@@ -217,20 +220,39 @@ def updateClass(old, new, debug):
     if hasattr(old, '__previous_reload_version__'):
         updateClass(old.__previous_reload_version__, new, debug)
 
+    new.__previous_reload_version__ = old
+
 
 ## It is possible to build classes for which str(obj) just causes an exception.
 ## Avoid thusly:
 def safeStr(obj):
     try:
         s = str(obj)
-    except:
+    except Exception:
         try:
             s = repr(obj)
-        except:
+        except Exception:
             s = "<instance of %s at 0x%x>" % (safeStr(type(obj)), id(obj))
     return s
 
 
+def getPreviousVersion(obj):
+    """Return the previous version of *obj*, or None if this object has not
+    been reloaded.
+    """
+    if isinstance(obj, type) or inspect.isfunction(obj):
+        return getattr(obj, '__previous_reload_version__', None)
+    elif inspect.ismethod(obj):
+        if obj.im_self is None:
+            # unbound method
+            return getattr(obj.__func__, '__previous_reload_method__', None)
+        else:
+            oldmethod = getattr(obj.__func__, '__previous_reload_method__', None)
+            if oldmethod is None:
+                return None
+            self = obj.im_self
+            cls = oldmethod.im_class
+            return types.MethodType(oldmethod.__func__, self, cls)
 
 
 

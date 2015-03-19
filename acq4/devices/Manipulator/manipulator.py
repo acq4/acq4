@@ -101,13 +101,9 @@ class ManipulatorCamModInterface(QtCore.QObject):
         if self.ui.setOrientationBtn.isChecked():
             return
 
-
-        self.calibrateAxis.sigRegionChangeFinished.disconnect(self.calibrateAxisChanged)
-        try:
+        with pg.SignalBlock(self.calibrateAxis.sigRegionChangeFinished, self.calibrateAxisChanged):
             self.calibrateAxis.setPos(pos[:2])
             self.calibrateAxis.setAngle(angle)
-        finally:
-            self.calibrateAxis.sigRegionChangeFinished.connect(self.calibrateAxisChanged)
 
     def calibrateAxisChanging(self):
         pos = self.calibrateAxis.pos()
@@ -122,17 +118,16 @@ class ManipulatorCamModInterface(QtCore.QObject):
         size = self.calibrateAxis.size()
         z = self.dev.scopeDevice().getFocusDepth()
 
-        self.dev.sigGlobalTransformChanged.disconnect(self.transformChanged)
-        try:
-            # first orient the parent stage
-            self.dev.setStageOrientation(angle, size[1] < 0)
-            # next set our position offset
-            gpos = self.dev.mapFromGlobal(pos)
-            tr = self.dev.deviceTransform()
-            tr.translate(gpos.x(), gpos.y(), z)
-            self.dev.setDeviceTransform(tr)
-        finally:
-            self.dev.sigGlobalTransformChanged.connect(self.transformChanged)
+        # first orient the parent stage
+        self.dev.setStageOrientation(angle, size[1] < 0)
+
+        # next set our position offset
+        pos = [pos.x(), pos.y(), z]
+        gpos = self.dev.mapFromGlobal(pos)
+        print gpos
+        tr = self.dev.deviceTransform()
+        tr.translate(*gpos)
+        self.dev.setDeviceTransform(tr)
 
     def controlWidget(self):
         return self.ctrl
