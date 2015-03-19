@@ -43,6 +43,8 @@ class SutterMPC200(Stage):
 
         Stage.__init__(self, man, config, name)
 
+        # clear cached position for this device and re-read to generate an initial position update
+        self._pos_cache[self.drive-1] = None
         self.getPosition(refresh=True)
 
         ## May have multiple SutterMPC200 instances (one per drive), but 

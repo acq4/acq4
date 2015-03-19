@@ -23,9 +23,14 @@ class Manipulator(Device, OptomechDevice):
         self._scopeDev = deviceManager.getDevice(config['scopeDevice'])
         assert isinstance(self.parentDevice(), Stage)
 
+        cal = self.readConfigFile('calibration')
+        if cal != {}:
+            self.setStageOrientation(cal['angle'], cal['inverty'])
+            self.setDeviceTransform(cal['transform'])
+
     def scopeDevice(self):
         return self._scopeDev
-    
+
     def quit(self):
         pass
     
@@ -41,6 +46,18 @@ class Manipulator(Device, OptomechDevice):
         tr.setScale(1, -1 if inverty else 1)
         tr.setRotate(angle)
         self.parentDevice().setBaseTransform(tr)
+
+        cal = self.readConfigFile('calibration')
+        cal['angle'] = angle
+        cal['inverty'] = inverty
+        self.writeConfigFile(cal, 'calibration')
+
+    def setDeviceTransform(self, tr):
+        OptomechDevice.setDeviceTransform(self, tr)
+
+        cal = self.readConfigFile('calibration')
+        cal['transform'] = pg.SRTTransform3D(tr)
+        self.writeConfigFile(cal, 'calibration')
 
 
 class ManipulatorCamModInterface(QtCore.QObject):
