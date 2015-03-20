@@ -44,7 +44,9 @@ class CameraWindow(QtGui.QMainWindow):
         # And a plot area for displaying depth-related information
         self.depthPlot = pg.PlotWidget(labels={'left': ('Depth', 'm')})
         self.depthPlot.setYRange(0, 1e-3)
+        self.depthPlot.setXRange(-1, 1)
         self.depthPlot.hideAxis('bottom')
+        self.depthPlot.setMouseEnabled(x=False)
         self.depthDock = pg.dockarea.Dock(name='Depth', widget=self.depthPlot)
         self.cw.addDock(self.depthDock, 'right')
         self.depthDock.hide()

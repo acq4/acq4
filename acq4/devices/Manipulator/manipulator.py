@@ -124,33 +124,45 @@ class Manipulator(Device, OptomechDevice):
         if homeAngle > self.pitch:
             # diagonal move to 
             dz = -endPos[0] * np.tan(self.pitch)
-            waypoints = [
-                (self.mapToGlobal([endPos[0], 0, dz]), 'fast', True),  # force this move to be linear
-                (endPosGlobal, 'fast', False),
-            ]
-            self.movePath(waypoints)
+            waypoint = self.mapToGlobal([endPos[0], 0, dz])
+            self._moveToGlobal(waypoint, speed, linear=True).wait()
+            self._moveToGlobal(endPosGlobal, speed).wait()
         else:
             dx = -endPos[2] / np.tan(self.pitch)
-            waypoints = [
-                (self.mapToGlobal([dx, 0, endPos[2]]), 'fast', True),  # force this move to be linear
-                (self.mapToGlobal([endPos[0], 0, endPos[2]]), 'fast', False),
-                (endPosGlobal, 'fast', False),
-            ]
-            self.movePath(waypoints)
+            waypoint1 = self.mapToGlobal([dx, 0, endPos[2]])
+            waypoint2 = self.mapToGlobal([endPos[0], 0, endPos[2]])
+            self._moveToGlobal(waypoint1, speed, linear=True).wait()
+            self._moveToGlobal(waypoint2, speed).wait()
+            self._moveToGlobal(endPosGlobal, speed).wait()
 
-    def movePath(self, waypoints):
-        """Move the electrode tip along a path of waypoints.
-
-        *waypoints* must be a list of tuples::
-
-            [(globalPos1, speed1, linear1), ...]
-
+    def goStandby(self, speed):
+        """Move the electrode tip such that it is 100um above the sample surface with its
+        axis aligned to the target. 
         """
-        for pt, speed, linear in waypoints:
-            f = self._moveToGlobal(pt, speed, linear=linear)
-            f.wait()
-            if f.wasInterrupted():
-                raise Exception("Move was interrupted.")
+        stbyDepth = self.standbyDepth()
+        pos = self.globalPosition()
+
+        # first retract electrode to standby depth if needed
+        if pos[2] < stbyDepth:
+            self.advance(stbyDepth, speed).wait()
+
+    def standbyDepth(self):
+        """Return the global depth where the electrode should move in standby mode.
+
+        This is defined as the sample surface + 100um.
+        """
+        scope = self.scopeDevice()
+        surface = scope.getSurfaceDepth()
+        return surface + 100e-6
+
+    def advance(self, depth, speed):
+        """Move the electrode along its axis until it reaches the specified
+        (global) depth.
+        """
+        pos = self.globalPosition()
+        dz = depth - pos[2]
+        dx = -dz / np.tan(self.pitch)
+        return self._moveToLocal([dx, 0, dz], speed, linear=True)
 
     def globalPosition(self):
         """Return the position of the electrode tip in global coordinates.
@@ -194,6 +206,13 @@ class ManipulatorCamModInterface(QtCore.QObject):
         self.centerArrow = pg.ArrowItem()
         mod.addItem(self.centerArrow)
 
+        self.target = Target()
+        mod.addItem(self.target)
+        self.target.setVisible(False)
+        self.depthTarget = Target(movable=False)
+        mod.getDepthView().addItem(self.depthTarget)
+        self.depthTarget.setVisible(False)
+
         self.depthLine = self.mod.getDepthView().addLine(y=0, markers=[('v', 1, 20)])
 
         self.ui.setOrientationBtn.toggled.connect(self.setOrientationToggled)
@@ -202,6 +221,7 @@ class ManipulatorCamModInterface(QtCore.QObject):
         self.calibrateAxis.sigRegionChangeFinished.connect(self.calibrateAxisChanged)
         self.calibrateAxis.sigRegionChanged.connect(self.calibrateAxisChanging)
         self.ui.homeBtn.clicked.connect(self.homeClicked)
+        self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
 
         self.transformChanged()
 
@@ -209,12 +229,22 @@ class ManipulatorCamModInterface(QtCore.QObject):
         self.calibrateAxis.setVisible(self.ui.setOrientationBtn.isChecked())
 
     def sceneMouseClicked(self, ev):
-        if ev.button() != QtCore.Qt.LeftButton or not self.ui.setCenterBtn.isChecked():
+        if ev.button() != QtCore.Qt.LeftButton:
             return
 
-        self.ui.setCenterBtn.setChecked(False)
-        pos = self.mod.getView().mapSceneToView(ev.scenePos())
-        self.calibrateAxis.setPos(pos)
+        if self.ui.setCenterBtn.isChecked():
+            self.ui.setCenterBtn.setChecked(False)
+            pos = self.mod.getView().mapSceneToView(ev.scenePos())
+            self.calibrateAxis.setPos(pos)
+
+        elif self.ui.setTargetBtn.isChecked():
+            self.target.setVisible(True)
+            self.depthTarget.setVisible(True)
+            self.ui.setTargetBtn.setChecked(False)
+            pos = self.mod.getView().mapSceneToView(ev.scenePos())
+            self.target.setPos(pos)
+            z = self.dev.scopeDevice().getFocusDepth()
+            self.depthTarget.setPos(0, z)
 
     def transformChanged(self):
         pos = self.dev.mapToGlobal([0, 0, 0])
@@ -277,12 +307,19 @@ class ManipulatorCamModInterface(QtCore.QObject):
     def homeClicked(self):
         self.dev.goHome()
 
+    def setTargetToggled(self, b):
+        if b:
+            self.ui.setCenterBtn.setChecked(False)
 
+    def setCenterToggled(self, b):
+        if b:
+            self.ui.setTargetBtn.setChecked(False)
 
 
 class Target(pg.GraphicsObject):
-    def __init__(self):
+    def __init__(self, movable=True):
         pg.GraphicsObject.__init__(self)
+        self.movable = movable
         self.moving = False
 
     def boundingRect(self):
@@ -309,6 +346,8 @@ class Target(pg.GraphicsObject):
         p.drawLine(pg.Point(0, -h*2), pg.Point(0, h*2))
 
     def mouseDragEvent(self, ev):
+        if not self.movable:
+            return
         if ev.button() == QtCore.Qt.LeftButton:
             if ev.isStart():
                 self.moving = True
@@ -324,7 +363,8 @@ class Target(pg.GraphicsObject):
                 self.moving = False
 
     def hoverEvent(self, ev):
-        ev.acceptDrags(QtCore.Qt.LeftButton)
+        if self.movable:
+            ev.acceptDrags(QtCore.Qt.LeftButton)
 
 
 class Axis(pg.ROI):

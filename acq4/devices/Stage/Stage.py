@@ -329,12 +329,16 @@ class MoveFuture(object):
     def wait(self, timeout=10):
         """Block until the move has completed, been interrupted, or the
         specified timeout has elapsed.
+
+        If the move did not complete, raise an exception.
         """
         start = ptime.time()
         while ptime.time() < start+timeout:
             if self.isDone():
                 break
             time.sleep(0.1)
+        if not self.isDone() or self.wasInterrupted():
+            raise RuntimeError("Requested move did not complete.")
 
 
 class StageInterface(QtGui.QWidget):

@@ -32,6 +32,7 @@ class Microscope(Device, OptomechDevice):
         self.currentSwitchPosition = None
         self.currentObjective = None
         self._focusDevice = None
+        self._surfaceDepth = None
         
         self.objectives = collections.OrderedDict()
         ## Format of self.objectives is:
@@ -176,6 +177,11 @@ class Microscope(Device, OptomechDevice):
         # and this is where it needs to go
         fdpos[2] += dif
         fd.moveToGlobal(fdpos, 'fast')
+
+    def getSurfaceDepth(self):
+        """Return the z-position of the sample surface as marked by the user.
+        """
+        return self._surfaceDepth
 
     def focusDevice(self):
         if self._focusDevice is None:
@@ -401,6 +407,7 @@ class ScopeCameraModInterface(QtCore.QObject):
     def setSurfaceClicked(self):
         focus = self.dev.getFocusDepth()
         self.surfaceLine.setValue(focus)
+        self.dev._surfaceDepth = focus
 
     def transformChanged(self):
         focus = self.dev.getFocusDepth()
