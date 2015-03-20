@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from PyQt4 import QtTest
 from acq4.devices.Device import *
 from acq4.devices.OptomechDevice import *
 from acq4.util.Mutex import Mutex
@@ -326,9 +327,11 @@ class MoveFuture(object):
         """
         return self.percentDone() == 100 or self.wasInterrupted()
         
-    def wait(self, timeout=10):
+    def wait(self, timeout=10, updates=False):
         """Block until the move has completed, been interrupted, or the
         specified timeout has elapsed.
+
+        If *updates* is True, process Qt events while waiting.
 
         If the move did not complete, raise an exception.
         """
@@ -336,7 +339,10 @@ class MoveFuture(object):
         while ptime.time() < start+timeout:
             if self.isDone():
                 break
-            time.sleep(0.1)
+            if updates is True:
+                QtTest.QTest.qWait(100)
+            else:
+                time.sleep(0.1)
         if not self.isDone() or self.wasInterrupted():
             raise RuntimeError("Requested move did not complete.")
 

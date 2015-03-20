@@ -206,9 +206,7 @@ class SutterMPC200(SerialDevice):
         if drive is not None:
             self.setDrive(drive)
 
-        # get current position if needed
-        if None in pos or timeout is None:
-            currentPos = self.getPos(scaled=False)[1]
+        currentPos = self.getPos(scaled=False)[1]
 
         # scale position to microsteps, fill in Nones with current position
         ustepPos = np.empty(3, dtype=int)
@@ -216,7 +214,14 @@ class SutterMPC200(SerialDevice):
             if pos[i] is None:
                 ustepPos[i] = currentPos[i]
             else:
-                ustepPos[i] = np.round(pos[i] / self.scale[i])
+                if scaled:
+                    ustepPos[i] = np.round(pos[i] / self.scale[i])
+                else:
+                    ustepPos[i] = pos[i]
+
+        if np.all(np.abs(ustepPos-np.asarray(currentPos)) < 16):
+            # step is too small; MPC200 will ignore this command and will not return \r
+            return
 
         # be sure to never request out-of-bounds position
         for i,x in enumerate(ustepPos):
@@ -252,6 +257,10 @@ class SutterMPC200(SerialDevice):
             # If the move is interrupted, sometimes we get junk on the serial line.
             time.sleep(0.03)
             self.readAll()
+        except TimeoutError:
+            # just for debugging
+            print "start pos:", currentPos, "move pos:", ustepPos
+            raise
         finally:
             self._moving = False
 

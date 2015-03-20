@@ -125,17 +125,17 @@ class Manipulator(Device, OptomechDevice):
             # diagonal move to 
             dz = -endPos[0] * np.tan(self.pitch)
             waypoint = self.mapToGlobal([endPos[0], 0, dz])
-            self._moveToGlobal(waypoint, speed, linear=True).wait()
-            self._moveToGlobal(endPosGlobal, speed).wait()
+            self._moveToGlobal(waypoint, speed, linear=True).wait(updates=True)
+            self._moveToGlobal(endPosGlobal, speed).wait(updates=True)
         else:
             dx = -endPos[2] / np.tan(self.pitch)
             waypoint1 = self.mapToGlobal([dx, 0, endPos[2]])
             waypoint2 = self.mapToGlobal([endPos[0], 0, endPos[2]])
-            self._moveToGlobal(waypoint1, speed, linear=True).wait()
-            self._moveToGlobal(waypoint2, speed).wait()
-            self._moveToGlobal(endPosGlobal, speed).wait()
+            self._moveToGlobal(waypoint1, speed, linear=True).wait(updates=True)
+            self._moveToGlobal(waypoint2, speed).wait(updates=True)
+            self._moveToGlobal(endPosGlobal, speed).wait(updates=True)
 
-    def goStandby(self, speed):
+    def goStandby(self, target, speed):
         """Move the electrode tip such that it is 100um above the sample surface with its
         axis aligned to the target. 
         """
@@ -144,7 +144,22 @@ class Manipulator(Device, OptomechDevice):
 
         # first retract electrode to standby depth if needed
         if pos[2] < stbyDepth:
-            self.advance(stbyDepth, speed).wait()
+            self.advance(stbyDepth, 'slow').wait(updates=True)
+
+        # find axial intersection with current depth plane
+        pos = self.globalPosition()
+        dz = pos[2] - target[2]
+        dx = -dz / np.tan(self.pitch)
+        localTarget = self.mapFromGlobal(target)
+        stbyPos = np.asarray(localTarget) + np.array([dx, 0, dz])
+        # move to target axis
+        self._moveToLocal(stbyPos, 'slow', linear=True).wait(updates=True)
+
+        # advance to standby depth
+        self.advance(stbyDepth, 'slow').wait(updates=True)
+
+    def goTarget(self, target, speed):
+        self._moveToGlobal(target, speed, linear=True).wait(updates=True)
 
     def standbyDepth(self):
         """Return the global depth where the electrode should move in standby mode.
@@ -178,6 +193,7 @@ class Manipulator(Device, OptomechDevice):
         dif = np.asarray(pos) - np.asarray(self.globalPosition())
         stage = self.parentDevice()
         spos = np.asarray(stage.globalPosition())
+        print "move global:", spos+dif
         return stage.moveToGlobal(spos + dif, speed, linear=linear)
 
     def _moveToLocal(self, pos, speed, linear=False):
@@ -194,6 +210,7 @@ class ManipulatorCamModInterface(QtCore.QObject):
         QtCore.QObject.__init__(self)
         self.dev = dev  # microscope device
         self.mod = mod  # camera module
+        self._targetPos = None
 
         self.ui = CamModTemplate()
         self.ctrl = QtGui.QWidget()
@@ -222,6 +239,8 @@ class ManipulatorCamModInterface(QtCore.QObject):
         self.calibrateAxis.sigRegionChanged.connect(self.calibrateAxisChanging)
         self.ui.homeBtn.clicked.connect(self.homeClicked)
         self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
+        self.ui.targetBtn.clicked.connect(self.targetClicked)
+        self.ui.standbyBtn.clicked.connect(self.standbyClicked)
 
         self.transformChanged()
 
@@ -240,11 +259,14 @@ class ManipulatorCamModInterface(QtCore.QObject):
         elif self.ui.setTargetBtn.isChecked():
             self.target.setVisible(True)
             self.depthTarget.setVisible(True)
+            self.ui.targetBtn.setEnabled(True)
+            self.ui.standbyBtn.setEnabled(True)
             self.ui.setTargetBtn.setChecked(False)
             pos = self.mod.getView().mapSceneToView(ev.scenePos())
             self.target.setPos(pos)
             z = self.dev.scopeDevice().getFocusDepth()
             self.depthTarget.setPos(0, z)
+            self._targetPos = [pos.x(), pos.y(), z]
 
     def transformChanged(self):
         pos = self.dev.mapToGlobal([0, 0, 0])
@@ -287,7 +309,6 @@ class ManipulatorCamModInterface(QtCore.QObject):
         # next set our position offset
         pos = [pos.x(), pos.y(), z]
         gpos = self.dev.mapFromGlobal(pos)
-        print gpos
         tr = self.dev.deviceTransform()
         tr.translate(*gpos)
         self.dev.setDeviceTransform(tr)
@@ -314,6 +335,12 @@ class ManipulatorCamModInterface(QtCore.QObject):
     def setCenterToggled(self, b):
         if b:
             self.ui.setTargetBtn.setChecked(False)
+
+    def targetClicked(self):
+        self.dev.goTarget(self._targetPos, 'slow')
+
+    def standbyClicked(self):
+        self.dev.goStandby(self._targetPos, 'fast')
 
 
 class Target(pg.GraphicsObject):

@@ -14,6 +14,9 @@ def __reload__(self, old):
 
 
 class ChangeNotifier(QtCore.QObject):
+    """Used to send raw (unscaled) stage position updates to other devices. 
+    In particular, focus motors may use this to hijack unused ROE axes.
+    """
     sigPosChanged = QtCore.Signal(object, object, object)
 
 
@@ -29,14 +32,18 @@ class SutterMPC200(Stage):
     _pos_cache = [None] * 4
     _notifier = ChangeNotifier()
     _monitor = None
+    _drives = [None] * 4
     slowSpeed = 4  # speed to move when user requests 'slow' movement
 
     def __init__(self, man, config, name):
         self.port = config.pop('port')
         self.drive = config.pop('drive')
         self.scale = config.pop('scale', (1, 1, 1))
+        if self._drives[self.drive-1] is not None:
+            raise RuntimeError("Already created MPC200 device for drive %d!" % self.drive)
+        self._drives[self.drive-1] = self
         self.dev = MPC200_Driver.getDevice(self.port)
-        self._notifier.sigPosChanged.connect(self._mpc200PosChanged)
+        # self._notifier.sigPosChanged.connect(self._mpc200PosChanged)
         man.sigAbortAll.connect(self.stop)
 
         self._lastMove = None
@@ -69,26 +76,31 @@ class SutterMPC200(Stage):
         """
         self.dev.stop()
 
-    def _checkPositionChange(self, drive=None, pos=None):
+    @classmethod
+    def _checkPositionChange(cls, drive=None, pos=None):
         ## Anyone may call this function. 
         ## If any drive has changed position, SutterMPC200_notifier will emit 
         ## a signal, and the correct devices will be notified.
         if drive is None:
-            drive, pos = self.dev.getPos()
-        if pos != self._pos_cache[drive-1]:
-            oldpos = self._pos_cache[drive-1]
-            self._notifier.sigPosChanged.emit(drive, pos, oldpos)
-            self._pos_cache[drive-1] = pos
+            for dev in cls._drives:
+                if dev is None:
+                    continue
+                drive, pos = dev.dev.getPos()
+                break
+        if drive is None:
+            raise Exception("No MPC200 devices initialized yet.")
+        if pos != cls._pos_cache[drive-1]:
+            oldpos = cls._pos_cache[drive-1]
+            cls._notifier.sigPosChanged.emit(drive, pos, oldpos)
+            dev = cls._drives[drive-1]
+            if dev is None:
+                return False
+            pos = [pos[i] * dev.scale[i] for i in (0, 1, 2)]
+            cls._pos_cache[drive-1] = pos
+            dev.posChanged(pos)
+
             return (drive, pos, oldpos)
         return False
-
-    def _mpc200PosChanged(self, drive, pos, oldpos):
-        ## monitor thread reports that a drive has moved; 
-        ## if it is THIS drive, then handle the position change.
-        if drive != self.drive:
-            return
-        pos = [pos[i] * self.scale[i] for i in (0, 1, 2)]
-        self.posChanged(pos)
 
     def _getPosition(self):
         # Called by superclass when user requests position refresh
@@ -227,6 +239,7 @@ class MonitorThread(Thread):
                             with self.lock:
                                 self._moveStatus[mid] = (start, False)
                             self.dev.dev.moveTo(drive, pos, speed)
+                            self.dev._checkPositionChange()
                     except Exception as err:
                         debug.printExc('Move error:')
                         with self.lock:
