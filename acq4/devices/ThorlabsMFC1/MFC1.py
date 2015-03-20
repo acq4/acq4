@@ -64,7 +64,7 @@ class ThorlabsMFC1(Stage):
             self.posChanged([0, 0, pos])
         return [0, 0, pos]
 
-    def _move(self, abs, rel, speed=None):
+    def _move(self, abs, rel, speed, linear):
         # convert relative to absolute position, fill in Nones with current position.
         pos = self._toAbsolutePosition(abs, rel)
         limits = self.getLimits()[2]

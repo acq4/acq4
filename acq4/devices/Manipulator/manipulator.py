@@ -43,6 +43,17 @@ class Manipulator(Device, OptomechDevice):
     * Automatically align electrode for diagonal approach to cells
 
     This device must be configured with a Stage as its parent.
+
+    The local coordinate system of the device is configured such that the electrode is in the 
+    x/z plane, pointing toward +x and -z (assuming the pitch is positive). 
+
+             \\ +z
+              \\ |
+         pitch \\|
+    -x  <-------\\------> +x
+                |\\
+                | \\
+               -z   \ - electrode tip
     """
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
@@ -88,33 +99,80 @@ class Manipulator(Device, OptomechDevice):
         self.writeConfigFile(cal, 'calibration')
 
     def goHome(self, speed='fast'):
-        """Extract pipette tip diagonally, then move manipulator to [0, 0, 0]"""
-        stage = self.parentDevice()
-        # stage's home position
-        home = [0, 0, 0]
-        pos = stage.getPosition()
-        # # electrode tip in global coords
-        # pos = self.mapToGlobal([0, 0, 0])
-        dx = home[0] - pos[0]
-        dz = home[2] - pos[2]
-        dz2 = dx * np.tan(self.pitch)
-        if dz2 < dz:
-            waypoint = [home[0], pos[1], pos[2] + dz2]
-            self.movePath([waypoint, home], speed)
-        else:
-            dx2 = dz / np.tan(self.pitch)
-            waypoint1 = [pos[0] + dx, pos[1], home[2]]
-            waypoint2 = [home[0], pos[1], home[2]]
-            self.movePath([waypoint1, waypoint2, home], speed)
+        """Extract pipette tip diagonally, then move manipulator far away from the objective.
 
-    def movePath(self, pts, speed):
+        This method currently makes several assumptions:
+
+        * The position [0, 0, 0] on the parent stage device is a suitable home position (usually true for MPC200 stages)
+        * The electrode is aligned with the x/z plane of the parent stage
+        """
         stage = self.parentDevice()
-        for pt in pts:
-            f = stage.moveTo(pt, speed)
+        # stage's home position in local coords
+        # this assumes that [0, 0, 0] is a good home position, but 
+        # eventually this needs to be more configurable..
+        stagePos = stage.globalPosition()
+        stageHome = stage.mapToGlobal(stage.mapFromStage([0, 0, 0]))
+        globalMove = np.asarray(stageHome) - np.asarray(stagePos) # this is how much electrode should move in global coordinates
+
+        startPosGlobal = self.globalPosition()
+        endPosGlobal = np.asarray(startPosGlobal) + globalMove  # this is where electrode should end up in global coordinates
+        endPos = self.mapFromGlobal(endPosGlobal)  # and in local coordinates
+
+        # define the path to take in local coordiantes because that makes it
+        # easier to to the boundary intersections
+        homeAngle = np.arctan2(endPos[2], -endPos[0])
+        if homeAngle > self.pitch:
+            # diagonal move to 
+            dz = -endPos[0] * np.tan(self.pitch)
+            waypoints = [
+                (self.mapToGlobal([endPos[0], 0, dz]), 'fast', True),  # force this move to be linear
+                (endPosGlobal, 'fast', False),
+            ]
+            self.movePath(waypoints)
+        else:
+            dx = -endPos[2] / np.tan(self.pitch)
+            waypoints = [
+                (self.mapToGlobal([dx, 0, endPos[2]]), 'fast', True),  # force this move to be linear
+                (self.mapToGlobal([endPos[0], 0, endPos[2]]), 'fast', False),
+                (endPosGlobal, 'fast', False),
+            ]
+            self.movePath(waypoints)
+
+    def movePath(self, waypoints):
+        """Move the electrode tip along a path of waypoints.
+
+        *waypoints* must be a list of tuples::
+
+            [(globalPos1, speed1, linear1), ...]
+
+        """
+        for pt, speed, linear in waypoints:
+            f = self._moveToGlobal(pt, speed, linear=linear)
             f.wait()
             if f.wasInterrupted():
                 raise Exception("Move was interrupted.")
 
+    def globalPosition(self):
+        """Return the position of the electrode tip in global coordinates.
+
+        Note: the position in local coordinates is always [0, 0, 0].
+        """
+        return self.mapToGlobal([0, 0, 0])
+
+    def _moveToGlobal(self, pos, speed, linear=False):
+        """Move the electrode tip directly to the given position in global coordinates.
+        This method does _not_ implement any motion planning.
+        """
+        dif = np.asarray(pos) - np.asarray(self.globalPosition())
+        stage = self.parentDevice()
+        spos = np.asarray(stage.globalPosition())
+        return stage.moveToGlobal(spos + dif, speed, linear=linear)
+
+    def _moveToLocal(self, pos, speed, linear=False):
+        """Move the electrode tip directly to the given position in local coordinates.
+        This method does _not_ implement any motion planning.
+        """
+        return self._moveToGlobal(self.mapToGlobal(pos), speed, linear=linear)
 
 
 class ManipulatorCamModInterface(QtCore.QObject):
