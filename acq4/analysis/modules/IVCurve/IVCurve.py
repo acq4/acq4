@@ -109,7 +109,8 @@ class IVCurve(AnalysisModule):
         self.file_loader_instance = self.getElement('File Loader', create=True)
         # grab input form the "Ctrl" window
         self.ctrl.IVCurve_Update.clicked.connect(self.updateAnalysis)
-        self.ctrl.IVCurve_PrintResults.clicked.connect(self.printAnalysis)
+        self.ctrl.IVCurve_PrintResults.clicked.connect(functools.partial(self.printAnalysis, printnow=True, script_header=True))
+
         if not matplotlibexporter.HAVE_MPL:
             self.ctrl.IVCurve_MPLExport.setEnabled = False  # make button inactive
         #        self.ctrl.IVCurve_MPLExport.clicked.connect(self.matplotlibExport)
@@ -595,8 +596,15 @@ class IVCurve(AnalysisModule):
                 pulsestart = vc_info['start']['value']
                 pulsedur = vc_info['length']['value']
             except KeyError:
-                pulsestart = 0.
-                pulsedur = np.max(self.time_base)
+                try:
+                    vc_info = vc_command['waveGeneratorWidget']['function']
+                    pulse = vc_info[6:-1].split(',')
+                    pulsestart = eval(pulse[0])
+                    pulsedur = eval(pulse[1])
+                except:
+                    print 'WaveGeneratorWidget not found: setting pulsestart to 0 and duration to length of time_base'
+                    pulsestart = 0.
+                    pulsedur = np.max(self.time_base)
         elif 'daqState' in vc_command:
             vc_state = vc_command['daqState']['channels']['command']['waveGeneratorWidget']
             func = vc_state['function']
@@ -1023,7 +1031,7 @@ class IVCurve(AnalysisModule):
         :param script_header:
         :return:
         """
-
+        
         # Dictionary structure: key = information about 
         if self.data_mode in self.ic_modes or self.data_mode == 'vc':
           data_template = (
@@ -1063,6 +1071,8 @@ class IVCurve(AnalysisModule):
             htxt += '\n'
 
         ltxt = ''
+        if 'Genotype' not in self.analysis_summary.keys():
+            self.analysis_summary['Genotype'] = ' '
         ltxt += '{:34s}\t{:15s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Genotype'], self.analysis_summary['Protocol'])
           
         for a in data_template.keys():
@@ -1070,7 +1080,8 @@ class IVCurve(AnalysisModule):
                 txt = self.analysis_summary[a]
                 if a in ['Description', 'Notes']:
                     txt = txt.replace('\n', ' ').replace('\r', '')  # remove line breaks from output, replace \n with space
-                ltxt += (data_template[a] + '\t').format(txt)
+                #print a, data_template[a]
+                ltxt += (data_template[a][1]).format(txt) + ' \t'
             else:
                 ltxt += ('{:>%ds}' % (data_template[a][0]) + '\t').format('NaN')
         ltxt = ltxt.replace('\n', ' ').replace('\r', '')  # remove line breaks
