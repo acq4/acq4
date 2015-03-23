@@ -20,6 +20,10 @@ deviceNames = {
     'LED-Blue': ('LED-Blue',),
 }
 
+# current and voltage clamp modes that are know to us
+ic_modes = ['IC', 'CC', 'IClamp', 'ic', 'I-Clamp Fast', 'I-Clamp Slow']
+vc_modes = ['VC', 'VClamp', 'vc']  # list of VC modes
+
 
 """Function library for formalizing the raw data structures used in analysis.
 This provides a layer of abstraction between the raw data and the analysis routines.
@@ -470,3 +474,15 @@ def getCellType(dh):
         return cellInfo.get('type', '')
     else:
         return('Unknown')
+        
+def file_cell_protocol(filename):
+    """
+    file_cell_protocol breaks the current filename down and returns a
+    tuple: (date, cell, protocol)
+    last argument returned is the rest of the path...
+    """
+    (p0, proto) = os.path.split(filename)
+    (p1, cell) = os.path.split(p0)
+    (p2, sliceid) = os.path.split(p1)
+    (p3, date) = os.path.split(p2)
+    return date, sliceid, cell, proto, p3
