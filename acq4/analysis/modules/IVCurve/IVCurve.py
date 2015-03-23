@@ -32,6 +32,7 @@ from acq4.util.metaarray import MetaArray
 import acq4.util.matplotlibexporter as matplotlibexporter
 import acq4.analysis.tools.Utility as Utility  # pbm's utilities...
 import acq4.analysis.tools.Fitting as Fitting  # pbm's fitting stuff...
+import acq4.analysis.tools.ScriptProcessor as ScriptProcessor
 import ctrlTemplate
 import pprint
 
@@ -59,6 +60,22 @@ class IVCurve(AnalysisModule):
         AnalysisModule.__init__(self, host)
 
         self.Clamps = GetClamps.GetClamps(host)
+        self.data_template = (
+          OrderedDict([('Species', (12, '{:>12s}')), ('Age', (5, '{:>5s}')), ('Sex', (3, '{:>3s}')), ('Weight', (6, '{:>6s}')),
+                       ('Temperature', (10, '{:>10s}')), ('ElapsedTime', (11, '{:>11.2f}')), 
+                       ('RMP', (5, '{:>5.1f}')), ('Rin', (5, '{:>5.1f}')),
+                       ('tau', (5, '{:>5.1f}')), ('AdaptRatio', (9, '{:>9.3f}')),
+                       ('tauh', (5, '{:>5.1f}')), ('Gh', (6, '{:>6.2f}')),
+                       ('FiringRate', (12, '{:>9.1f}')), 
+                       ('AP1_HalfWidth', (13, '{:>13.2f}')), ('AP1_Latency', (11, '{:>11.1f}')), 
+                       ('AP2_HalfWidth', (13, '{:>13.2f}')), ('AP2_Latency', (11, '{:>11.1f}')), 
+                       ('AHP_Depth', (9, '{:9.2f}')),
+                       ('Description', (11, '{:s}')),
+                      ]))
+        self.Script = ScriptProcessor.ScriptProcessor(host)
+        self.Script.setAnalysis(analysis=self.updateAnalysis, 
+            fileloader = self.loadFileRequested, template = self.data_template,
+            clamps = self.Clamps)  # specify the routines to be called and data sets to be used
         self.loaded = None
         self.filename = None
         self.dirsSet = None
@@ -72,6 +89,7 @@ class IVCurve(AnalysisModule):
         self.fitted_data = None
         self.regions_exist = False
         self.regions = {}
+        self.analysis_summary = {}
         self.tx = None
         self.keep_analysis_count = 0
         self.colors = ['w', 'g', 'b', 'r', 'y', 'c']
@@ -110,7 +128,9 @@ class IVCurve(AnalysisModule):
         self.file_loader_instance = self.getElement('File Loader', create=True)
         # grab input form the "Ctrl" window
         self.ctrl.IVCurve_Update.clicked.connect(self.updateAnalysis)
-        self.ctrl.IVCurve_PrintResults.clicked.connect(functools.partial(self.printAnalysis, printnow=True, script_header=True))
+        self.ctrl.IVCurve_PrintResults.clicked.connect(
+            functools.partial(self.printAnalysis, printnow=True, 
+            script_header=True))
 
         if not matplotlibexporter.HAVE_MPL:
             self.ctrl.IVCurve_MPLExport.setEnabled = False  # make button inactive
@@ -127,7 +147,7 @@ class IVCurve(AnalysisModule):
         self.ctrl.dbStoreBtn.clicked.connect(self.dbStoreClicked)
         self.ctrl.IVCurve_OpenScript_Btn.clicked.connect(self.read_script)
         self.ctrl.IVCurve_RunScript_Btn.clicked.connect(self.rerun_script)
-        self.ctrl.IVCurve_PrintScript_Btn.clicked.connect(self.print_script_output)
+        self.ctrl.IVCurve_PrintScript_Btn.clicked.connect(self.Script.print_script_output)
         #self.scripts_form.PSPReversal_ScriptCopy_Btn.clicked.connect(self.copy_script_output)
         #self.scripts_form.PSPReversal_ScriptFormatted_Btn.clicked.connect(self.print_formatted_script_output)
         self.ctrl.IVCurve_ScriptName.setText('None')
@@ -384,7 +404,7 @@ class IVCurve(AnalysisModule):
             if  mode in ['off', 'Off']:
                 try:
                     reg['region'].sigRegionChangeFinished.disconnect()
-                except:  # may already be disconnected...
+                except:  # may already be disconnected...so fail gracefully
                     pass
 
     def loadFileRequested(self, dh):
@@ -421,7 +441,8 @@ class IVCurve(AnalysisModule):
         self.current_dirhandle = dh  # this is critical!
 
         self.analysis_summary = self.Clamps.cell_summary(dh)  # get other info as needed for the protocol
-
+        #print 'analysis summary: ', self.analysis_summary
+        
         pars = {}  # need to pass some parameters from the GUI
         pars['limits'] = self.ctrl.IVCurve_IVLimits.isChecked()  # checkbox: True if loading limited current range
         pars['cmin'] = self.ctrl.IVCurve_IVLimitMin.value()  # minimum current level to load
@@ -449,6 +470,7 @@ class IVCurve(AnalysisModule):
         #self._host_.dockArea.findAll()[1]['Parameters'].raiseDock()  # parameters window to the top
         self.get_window_analysisPars()  # prepare the analysis parameters
         self.updaterStatus('on')
+        self.updateAnalysis()
         return True
 
     def plot_traces(self, multimode=False):
@@ -559,6 +581,28 @@ class IVCurve(AnalysisModule):
         self.readParameters(clearFlag=True, pw=False)
         self.analyzeSpikes()
 
+    def read_script(self, name=''):
+        """
+        read a script file from disk, and use that information to drive the analysis
+        :param name:
+        :return:
+        """
+        
+        self.script_name = self.ScriptProcessor.read_script()
+        if self.script_name is None:
+            print 'Failed to read script'
+            self.ctrl.IVCurve_ScriptName.setText('None')
+            return
+        self.ctrl.IVCurve_ScriptName.setText(os.path.basename(self.script_name))
+        self.ScriptProcessor.run_script()
+
+    def rerun_script(self):
+        """
+        revalidate and run the current script
+        :return:
+        """
+        self.ScriptProcessor.run_script()
+        
     def analyzeSpikes(self):
         """
         analyzeSpikes: Using the threshold set in the control panel, count the
@@ -831,376 +875,6 @@ class IVCurve(AnalysisModule):
         (p2, date) = os.path.split(p1)
         return date, cell, proto, p2
 
-    def printAnalysis(self, printnow=True, script_header=True, copytoclipboard=False):
-        """
-        Print the CCIV summary information (Cell, protocol, etc)
-        Print a nice formatted version of the analysis output to the terminal.
-        The output can be copied to another program (excel, prism) for further analysis
-        :param script_header:
-        :return:
-        """
-        
-        # Dictionary structure: key = information about 
-        if self.Clamps.data_mode in self.ic_modes or self.Clamps.data_mode == 'vc':
-          data_template = (
-            OrderedDict([('Species', (12, '{:>12s}')), ('Age', (5, '{:>5s}')), ('Sex', (3, '{:>3s}')), ('Weight', (6, '{:>6s}')),
-                         ('Temperature', (10, '{:>10s}')), ('ElapsedTime', (11, '{:>11.2f}')), 
-                         ('RMP', (5, '{:>5.1f}')), ('Rin', (5, '{:>5.1f}')),
-                         ('tau', (5, '{:>5.1f}')), ('AdaptRatio', (9, '{:>9.3f}')),
-                         ('tauh', (5, '{:>5.1f}')), ('Gh', (6, '{:>6.2f}')),
-                         ('FiringRate', (12, '{:>9.1f}')), 
-                         ('AP1_HalfWidth', (13, '{:>13.2f}')), ('AP1_Latency', (11, '{:>11.1f}')), 
-                         ('AP2_HalfWidth', (13, '{:>13.2f}')), ('AP2_Latency', (11, '{:>11.1f}')), 
-                         ('AHP_Depth', (9, '{:9.2f}')),
-                         ('Description', (11, '{:s}')),
-                        ]))
-        else:
-          data_template = (
-            OrderedDict([('ElapsedTime', '{:>8.2f}'), ('HoldV', '{:>5.1f}'), ('JP', '{:>5.1f}'),
-                         ('Rs', '{:>6.2f}'), ('Cm', '{:>6.1f}'), ('Ru', '{:>6.2f}'),
-                         ('Erev', '{:>6.2f}'),
-                         ('gsyn_Erev', '{:>9.2f}'), ('gsyn_60', '{:>7.2f}'), ('gsyn_13', '{:>7.2f}'),
-                         # ('p0', '{:6.3e}'), ('p1', '{:6.3e}'), ('p2', '{:6.3e}'), ('p3', '{:6.3e}'),
-                         ('I_ionic+', '{:>8.3f}'), ('I_ionic-', '{:>8.3f}'), ('ILeak', '{:>7.3f}'),
-                         ('win1Start', '{:>9.3f}'), ('win1End', '{:>7.3f}'),
-                         ('win2Start', '{:>9.3f}'), ('win2End', '{:>7.3f}'),
-                         ('win0Start', '{:>9.3f}'), ('win0End', '{:>7.3f}'),
-            ]))
-        
-        # summary table header is written anew for each cell
-        htxt = ''
-        if script_header:
-            htxt = '{:34s}\t{:15s}\t{:24s}\t'.format("Cell", "Genotype", "Protocol")
-            for k in data_template.keys():
-                cnv = '{:<%ds}' % (data_template[k][0])
-                # print 'cnv: ', cnv
-                htxt += (cnv + '\t').format(k)
-            script_header = False
-            htxt += '\n'
-
-        ltxt = ''
-        if 'Genotype' not in self.analysis_summary.keys():
-            self.analysis_summary['Genotype'] = ' '
-        ltxt += '{:34s}\t{:15s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Genotype'], self.analysis_summary['Protocol'])
-          
-        for a in data_template.keys():
-            if a in self.analysis_summary.keys():
-                txt = self.analysis_summary[a]
-                if a in ['Description', 'Notes']:
-                    txt = txt.replace('\n', ' ').replace('\r', '')  # remove line breaks from output, replace \n with space
-                #print a, data_template[a]
-                ltxt += (data_template[a][1]).format(txt) + ' \t'
-            else:
-                ltxt += ('{:>%ds}' % (data_template[a][0]) + '\t').format('NaN')
-        ltxt = ltxt.replace('\n', ' ').replace('\r', '')  # remove line breaks
-        ltxt = htxt + ltxt
-        if printnow:
-            print ltxt
-        
-        if copytoclipboard:
-            clipb = QtGui.QApplication.clipboard()
-            clipb.clear(mode=clipb.Clipboard)
-            clipb.setText(ltxt, mode=clipb.Clipboard)
-
-        return ltxt
-
-
-    def read_script(self, name=''):
-        """
-        read a script file from disk, and use that information to drive the analysis
-        :param name:
-        :return:
-        """
-        
-        self.script_name = QtGui.QFileDialog.getOpenFileName(
-                   None, 'Open Script File', '/Users/pbmanis/Desktop/acq4_scripts/', 'Script (*.cfg)')
-        #if not name:
-        #    self.script_name = '/Users/pbmanis/Desktop/acq4_scripts/IVCurve_XY.cfg
-        if self.script_name == '':  # cancel returns empty string
-            return
-        self.script = configfile.readConfigFile(self.script_name)
-        if self.script is None:
-            print 'Failed to read script'
-            self.ctrl.IVCurve_ScriptName.setText('None')
-            return
-        self.ctrl.IVCurve_ScriptName.setText(os.path.basename(self.script_name))
-        # set the data manager to the script if we can
-        print self.script['directory']
-        if 'directory' in self.script.keys():
-            try:
-                print dir(self.dataManager)
-                self.dataManager.setBaseDir(self.script['directory'])
-                print('Set base dir to: {:s}'.format(self.script['directory']))
-            except:
-                print('IVCurve:read_script: Cannot set base directory to %s\nLikely directory was not found' % self.script['directory'])
-            
-
-#        print 'script ok:', self.script
-        # fh = open(self.script_name)  # read the raw text file too
-        # txt = fh.read()
-        # fh.close()
-       # self.scripts_form.PSPReversal_Script_TextEdit.setPlainText(txt)  # show script
-       # self.scripts_form.PSPReversal_ScriptFile.setText(self.script_name)
-        if self.validate_script():
-            self.run_script()
-        else:
-            raise Exception("Script failed validation - see terminal output")
-
-    def rerun_script(self):
-        """
-        revalidate and run the current script
-        :return:
-        """
-        if self.validate_script():
-            self.run_script()
-        else:
-            raise Exception("Script failed validation - see terminal output")
-
-    def validate_script(self):
-        """
-        validate the current script - by checking the existence of the files needed for the analysis
-
-        :return: False if cannot find files; True if all are found
-        """
-        if self.script['module'] != 'IVCurve':
-            print 'Script is not for IVCurve (found %s)' % self.script['module']
-            return False
-        if 'directory' in self.script.keys():
-            try:
-                
-                #print dir(self.dataManager())
-                self.dataManager().setBaseDir(self.script['directory'])
-                print('Set base dir to: {:s}'.format(self.script['directory']))
-            except:
-                print('IVCurve:read_script: \n   Cannot set base directory to %s\n   Likely directory was not found' % self.script['directory'])
-                return False
-                
-        all_found = True
-        trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
-        for c in self.script['Cells']:
-            if self.script['Cells'][c]['include'] is False:
-                continue
-            sortedkeys = sorted(self.script['Cells'][c]['choice'].keys())  # sort by order of recording
-            for p in sortedkeys:
-                pr = self.script['protocol'] + '_' + p  # add the underscore here
-                if c[-1] in trailingchars:
-                    cell = c[:-1]
-                else:
-                    cell = c
-                fn = os.path.join(cell, pr)
-                #print fn
-                #print 'dm selected file: ', self.dataManager().selectedFile()
-                if 'directory' in self.script.keys():
-                    dm_selected_file = self.script['directory']
-                else:
-                    dm_selected_file = self.dataManager().selectedFile().name()
-                DataManager.cleanup()
-                gc.collect()
-                fullpath = os.path.join(dm_selected_file, fn)
-                file_ok = os.path.exists(fullpath)
-                if file_ok:
-                    print('File found: {:s}'.format(fullpath))
-                else:
-                    print '  current dataManager self.dm points to file: ', dm_selected_file
-                    print '  and file not found was: ', fullpath
-                    all_found = False
-                #else:
-                #    print 'file found ok: %s' % fullpath
-        return all_found
-
-    def run_script(self):
-        """
-        Run a script, doing all of the requested analysis
-        :return:
-        """
-        if self.script['testfiles']:
-            return
-        # settext = self.scripts_form.PSPReversal_ScriptResults_text.setPlainText
-        # apptext = self.scripts_form.PSPReversal_ScriptResults_text.appendPlainText
-        self.textout = ('\nScript File: {:<32s}\n'.format(self.script_name))
-        # settext(self.textout)
-        script_header = True  # reset the table to a print new header for each cell
-        trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
-        self.dataManager().setBaseDir(self.script['directory'])
-        ordered = sorted(self.script['Cells'].keys())  # order the analysis by date/slice/cell
-        for cell in ordered:
-            thiscell = self.script['Cells'][cell]
-            #print 'processing cell: %s' % thiscell
-            if thiscell['include'] is False:  # skip this cell
-                print 'Skipped: %s' % cell
-                continue
-            sortedkeys = sorted(thiscell['choice'].keys())  # sort by order of recording (# on protocol)
-            for p in sortedkeys:
-                if thiscell['choice'][p] not in self.script['datafilter']:  # pick out steady-state conditions
-                    print 'p: %s not in data: ' % (thiscell['choice'][p]), self.script['datafilter']
-                    continue
-                # print 'working on %s' % thiscell['choice'][p]
-                pr = self.script['protocol'] + '_' + p  # add the underscore here
-                if cell[-1] in trailingchars:  # check last letter - if not a number clip it
-                    cell_file = cell[:-1]
-                else:
-                    cell_file = cell
-                fn = os.path.join(cell_file, pr)
-                #dm_selected_file = self.dataManager().selectedFile().name()
-                dm_selected_file = self.script['directory']
-                fullpath = os.path.join(dm_selected_file, fn)
-                file_ok = os.path.exists(fullpath)
-                if not file_ok:  # get the directory handle and take it from there
-                    print 'File is not ok: %s' % fullpath
-                    continue
-                # self.ctrl.PSPReversal_KeepT.setChecked(QtCore.Qt.Unchecked)  # make sure this is unchecked
-                dh = self.dataManager().manager.dirHandle(fullpath)
-                if not self.loadFileRequested([dh]):  # note: must pass a list
-                    print 'Failed to load requested file: ', fullpath
-                    continue  # skip bad sets of records...
-                #print thiscell.keys()
-                #print 'old data mode: ', self.Clamps.data_mode
-                if 'datamode' in thiscell.keys():
-                    self.Clamps.data_mode = thiscell['datamode']
-                    # print 'datamode may be overridden: self.Clamps.data_mode = %s' % self.Clamps.data_mode
-                # apptext(('Protocol: {:<s} <br>Choice: {:<s}'.format(pr, thiscell['choice'][p])))
-                #print dir(self.data_plot)
-                # self.main_layout.update()
-                self.analysis_summary['Drugs'] = thiscell['choice'][p]
-                if 'genotype' in thiscell.keys():
-                    self.analysis_summary['Genotype'] = thiscell['genotype']
-                else:
-                    self.analysis_summary['Genotype'] = ''
-                # alt_flag = bool(thiscell['alternation'])
-                # self.analysis_parameters['alternation'] = alt_flag
-                # self.ctrl.PSPReversal_Alternation.setChecked((QtCore.Qt.Unchecked, QtCore.Qt.Checked)[alt_flag])
-                # if 'junctionpotential' in thiscell:
-                #     self.analysis_parameters['junction'] = thiscell['junctionpotential']
-                #     self.ctrl.PSPReversal_Junction.setValue(float(thiscell['junctionpotential']))
-                # else:
-                #     self.analysis_parameters['junction'] = float(self.script['global_jp'])
-                #     self.ctrl.PSPReversal_Junction.setValue(float(self.script['global_jp']))
-
-                self.auto_updater = False
-                self.get_script_analysisPars(self.script, thiscell)
-                m = thiscell['choice'][p]  # get the tag for the manipulation
-                self.updateAnalysis()
-                DataManager.cleanup()
-                del dh
-                gc.collect()
-                # self.update_rmp_analysis()
-                # for win in ['win0', 'win1', 'win2']:
-                #     self.update_win_analysis(win)
-                ptxt = self.printAnalysis(printnow=False, script_header=script_header, copytoclipboard=False)
-                # apptext(ptxt)
-                #print 'ptxt: ', ptxt
-                self.textout += ptxt + '\n'
-                #print 'textout: ', self.textout
-                # print protocol result, optionally a cell header.
-                # self.print_formatted_script_output(script_header)
-                script_header = False
-        print self.textout
-        self.auto_updater = True # restore function
-        print '\nDone'
-
-    def get_script_analysisPars(self, script_globals, thiscell):
-        """
-        set the analysis times and modes from the script. Also updates the qt windows
-        :return: Nothing.
-        """
-        self.analysis_parameters = {}
-        self.analysis_parameters['baseline'] = False
-
-        self.analysis_parameters['lrwin1'] = {}
-        self.analysis_parameters[' '] = {}
-        self.analysis_parameters['lrwin0'] = {}
-        self.analysis_parameters['lrrmp'] = {}
-        self.auto_updater = False  # turn off the updates
-        scriptg = {'global_jp': ['junction'], 'global_win1_mode': ['lrwin1', 'mode'],
-                   'global_win2_mode': ['lrwin2', 'mode']}
-        for k in scriptg.keys():  # set globals first
-            if k in script_globals.keys():
-                if len(scriptg[k]) == 1:
-                    self.analysis_parameters[scriptg[k][0]] = script_globals[k]
-                else:
-                    self.analysis_parameters[scriptg[k][0]] = {scriptg[k][1]: script_globals[k]}
-        if 'junctionpotential' in thiscell:
-            self.analysis_parameters['junction'] = thiscell['junctionpotential']
-        if 'alternation' in thiscell:
-            self.analysis_parameters['alternation'] = thiscell['alternation']
-        else:
-            self.analysis_parameters['alternation'] = True
-
-        # for n in range(0, 3):  # get the current region definitions
-        #     self.regions['lrwin%d'%n]['region'].setRegion([x*1e-3 for x in thiscell['win%d'%n]])
-        #     self.regions['lrwin%d'%n]['start'].setValue(thiscell['win%d'%n][0])
-        #     self.regions['lrwin%d'%n]['stop'].setValue(thiscell['win%d'%n][1])
-        #     self.analysis_parameters['lrwin%d'%n]['times'] = [t*1e-3 for t in thiscell['win%d'%n]]  # convert to sec
-        #     self.show_or_hide('lrwin%d'%n, forcestate=True)
-
-        # for win in ['win1', 'win2']:  # set the modes for the 2 windows
-        #     winmode = win+'_mode'
-        #     lrwinx = 'lr'+win
-        #     if winmode in thiscell:
-        #         thiswin = thiscell[winmode]
-        #         r = self.regions[lrwinx]['mode'].findText(thiswin)
-        #         if r >= 0:
-        #             print 'setting %s mode to %s ' % (win, thiswin)
-        #             self.regions[lrwinx]['mode'].setCurrentIndex(r)
-        #             self.analysis_parameters[lrwinx]['mode'] = thiswin
-        #         else:
-        #             print '%s analysis mode not recognized: %s' % (win, thiswin)
-        #     else:
-        #         r = self.regions[lrwinx]['mode'].findText(self.analysis_parameters[lrwinx]['mode'])
-        #         if r >= 0:
-        #             self.regions[lrwinx]['mode'].setCurrentIndex(r)
-        return
-
-    def print_script_output(self):
-        """
-        print a clean version of the results to the terminal
-        :return:
-        """
-        print self.remove_html_markup(self.textout)
-
-    def copy_script_output(self):
-        """
-        Copy script output (results) to system clipboard
-        :return: Nothing
-        """
-        self.scripts_form.PSPReversal_ScriptResults_text.copy()
-
-    def print_formatted_script_output(self, script_header=True, copytoclipboard=False):
-        """
-        Print a nice formatted version of the analysis output to the terminal.
-        The output can be copied to another program (excel, prism) for further analysis
-        :param script_header:
-        :return:
-        """
-        data_template = (OrderedDict([('ElapsedTime', '{:>8.2f}'), ('Drugs', '{:<8s}'), ('HoldV', '{:>5.1f}'), ('JP', '{:>5.1f}'),
-                                                                        ('Rs', '{:>6.2f}'), ('Cm', '{:>6.1f}'), ('Ru', '{:>6.2f}'),
-                                                                        ('Erev', '{:>6.2f}'),
-                                                                        ('gsyn_Erev', '{:>9.2f}'), ('gsyn_60', '{:>7.2f}'), ('gsyn_13', '{:>7.2f}'), 
-                                                                        #('p0', '{:6.3e}'), ('p1', '{:6.3e}'), ('p2', '{:6.3e}'), ('p3', '{:6.3e}'),
-                                                                        ('I_ionic+', '{:>8.3f}'), ('I_ionic-', '{:>8.3f}'), ('ILeak', '{:>7.3f}'),
-                                                                        ('win1Start', '{:>9.3f}'), ('win1End', '{:>7.3f}'),
-                                                                        ('win2Start', '{:>9.3f}'), ('win2End', '{:>7.3f}'),
-                                                                        ('win0Start', '{:>9.3f}'), ('win0End', '{:>7.3f}'),
-                                                                        ]))
-        # summary table header is written anew for each cell
-        if script_header:
-            print('{:34s}\t{:24s}\t'.format("Cell", "Protocol")),
-            for k in data_template.keys():
-                print('{:<s}\t'.format(k)),
-            print ''
-        ltxt = ''
-        ltxt += ('{:34s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Protocol']))
-
-        for a in data_template.keys():
-            if a in self.analysis_summary.keys():
-                ltxt += ((data_template[a] + '\t').format(self.analysis_summary[a]))
-            else:
-                ltxt += '<   >\t'
-        print ltxt
-        if copytoclipboard:
-            clipb = QtGui.QApplication.clipboard()
-            clipb.clear(mode=clipb.Clipboard )
-            clipb.setText(ltxt, mode=clipb.Clipboard)
 
 
     def update_Tau_membrane(self, peak_time=None, printWindow=False, whichTau=1, vrange=[-5., -20.]):
@@ -1801,6 +1475,67 @@ class IVCurve(AnalysisModule):
             self.peakmode = self.ctrl.IVCurve_PeakMode.currentText()
             self.update_pkAnalysis()
 
+    def printAnalysis(self, printnow=True, script_header=True, copytoclipboard=False):
+        """
+        Print the analysis summary information (Cell, protocol, etc)
+        Print a nice formatted version of the analysis output to the terminal.
+        The output can be copied to another program (excel, prism) for further analysis
+        :param script_header:
+        :return:
+        """
+        
+        # Dictionary structure: key = information about 
+        if self.Clamps.data_mode in self.dataModel.ic_modes or self.Clamps.data_mode == 'vc':
+            data_template = self.data_template
+        else:
+          data_template = (
+            OrderedDict([('ElapsedTime', '{:>8.2f}'), ('HoldV', '{:>5.1f}'), ('JP', '{:>5.1f}'),
+                         ('Rs', '{:>6.2f}'), ('Cm', '{:>6.1f}'), ('Ru', '{:>6.2f}'),
+                         ('Erev', '{:>6.2f}'),
+                         ('gsyn_Erev', '{:>9.2f}'), ('gsyn_60', '{:>7.2f}'), ('gsyn_13', '{:>7.2f}'),
+                         # ('p0', '{:6.3e}'), ('p1', '{:6.3e}'), ('p2', '{:6.3e}'), ('p3', '{:6.3e}'),
+                         ('I_ionic+', '{:>8.3f}'), ('I_ionic-', '{:>8.3f}'), ('ILeak', '{:>7.3f}'),
+                         ('win1Start', '{:>9.3f}'), ('win1End', '{:>7.3f}'),
+                         ('win2Start', '{:>9.3f}'), ('win2End', '{:>7.3f}'),
+                         ('win0Start', '{:>9.3f}'), ('win0End', '{:>7.3f}'),
+            ]))
+        # summary table header is written anew for each cell
+        htxt = ''
+        if script_header:
+            htxt = '{:34s}\t{:15s}\t{:24s}\t'.format("Cell", "Genotype", "Protocol")
+            for k in data_template.keys():
+                cnv = '{:<%ds}' % (data_template[k][0])
+                # print 'cnv: ', cnv
+                htxt += (cnv + '\t').format(k)
+            script_header = False
+            htxt += '\n'
+
+        ltxt = ''
+        if 'Genotype' not in self.analysis_summary.keys():
+            self.analysis_summary['Genotype'] = ' '
+        ltxt += '{:34s}\t{:15s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Genotype'], self.analysis_summary['Protocol'])
+          
+        for a in data_template.keys():
+            if a in self.analysis_summary.keys():
+                txt = self.analysis_summary[a]
+                if a in ['Description', 'Notes']:
+                    txt = txt.replace('\n', ' ').replace('\r', '')  # remove line breaks from output, replace \n with space
+                #print a, data_template[a]
+                ltxt += (data_template[a][1]).format(txt) + ' \t'
+            else:
+                ltxt += ('{:>%ds}' % (data_template[a][0]) + '\t').format('NaN')
+        ltxt = ltxt.replace('\n', ' ').replace('\r', '')  # remove line breaks
+        ltxt = htxt + ltxt
+        if printnow:
+            print ltxt
+        
+        if copytoclipboard:
+            clipb = QtGui.QApplication.clipboard()
+            clipb.clear(mode=clipb.Clipboard)
+            clipb.setText(ltxt, mode=clipb.Clipboard)
+
+        return ltxt
+        
     def dbStoreClicked(self):
         """
         Store data into the current database for further analysis
