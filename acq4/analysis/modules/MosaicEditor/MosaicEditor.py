@@ -129,18 +129,23 @@ class MosaicEditor(AnalysisModule):
                 item = self.files[f]
                 item.show()
                 continue
+            
             if f.isFile():
                 item = self.canvas.addFile(f)
-                self.amendFile(f, item)
             elif f.isDir():
-                filesindir = glob.glob(f.name() + '/*.ma')
-                for fd in filesindir:
-                    try:
-                        fdh = DataManager.getFileHandle(fd) # open file to get handle.
-                    except IOError:
-                        continue # just skip file
-                    item = self.canvas.addFile(fdh)
-                    self.amendFile(f, item)
+                if self.dataModel.dirType(f) == 'Cell':  # note breaks loading all images in Cell directory
+                    item = self.canvas.addFile(f)
+                else:
+                    filesindir = glob.glob(f.name() + '/*.ma')
+                    for fd in filesindir:  # add files in the directory (ma files: e.g., images, videos)
+                        try:
+                            fdh = DataManager.getFileHandle(fd) # open file to get handle.
+                        except IOError:
+                            continue # just skip file
+                        item = self.canvas.addFile(fdh)
+                        self.amendFile(f, item)
+                    if len(filesindir) == 0:  # add protocol sequences
+                        item = self.canvas.addFile(f)
         self.canvas.selectItem(item)
         self.canvas.autoRange()
 
