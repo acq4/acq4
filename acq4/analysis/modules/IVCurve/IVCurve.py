@@ -75,7 +75,7 @@ class IVCurve(AnalysisModule):
         self.Script = ScriptProcessor.ScriptProcessor(host)
         self.Script.setAnalysis(analysis=self.updateAnalysis, 
             fileloader = self.loadFileRequested, template = self.data_template,
-            clamps = self.Clamps)  # specify the routines to be called and data sets to be used
+            clamps = self.Clamps, printer=self.printAnalysis)  # specify the routines to be called and data sets to be used
         self.loaded = None
         self.filename = None
         self.dirsSet = None
@@ -588,20 +588,20 @@ class IVCurve(AnalysisModule):
         :return:
         """
         
-        self.script_name = self.ScriptProcessor.read_script()
+        self.script_name = self.Script.read_script()
         if self.script_name is None:
             print 'Failed to read script'
             self.ctrl.IVCurve_ScriptName.setText('None')
             return
         self.ctrl.IVCurve_ScriptName.setText(os.path.basename(self.script_name))
-        self.ScriptProcessor.run_script()
+        self.Script.run_script()
 
     def rerun_script(self):
         """
         revalidate and run the current script
         :return:
         """
-        self.ScriptProcessor.run_script()
+        self.Script.run_script()
         
     def analyzeSpikes(self):
         """

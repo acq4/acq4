@@ -18,8 +18,10 @@ import os
 import os.path
 import numpy as np
 import re
+import gc
 from acq4.analysis.AnalysisModule import AnalysisModule
 from acq4.util.metaarray import MetaArray
+from acq4.util import DataManager
 from acq4.pyqtgraph import configfile
 from PyQt4 import QtGui, QtCore
 
@@ -27,9 +29,8 @@ class ScriptProcessor(AnalysisModule):
     
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
-        
-    
-    def setAnalysis(self, analysis=None, fileloader=None, template=None, clamps=None):
+
+    def setAnalysis(self, analysis=None, fileloader=None, template=None, clamps=None, printer=None):
         """
         Set the analysis and the file loader routines
         that will be called by our script
@@ -38,12 +39,20 @@ class ScriptProcessor(AnalysisModule):
         self.loadFile = fileloader
         self.data_template = template
         self.clamps = clamps
+        self.printAnalysis = printer
 
-    def read_script(self, name=''):
+    def read_script(self):
         """
         read a script file from disk, and use that information to drive the analysis
-        :param name:
-        :return:
+        Parameters
+        ----------
+        none
+         
+        Returns
+        -------
+        script_name : str
+            The name of the script that was opened. If the script was not found, could not
+            be read, or the dialog was cancelled, the return result will be None
         """
         
         self.script_name = QtGui.QFileDialog.getOpenFileName(
@@ -134,6 +143,7 @@ class ScriptProcessor(AnalysisModule):
         """
         if self.script['testfiles']:
             return
+        self.analysis_summary = {}
         # settext = self.scripts_form.PSPReversal_ScriptResults_text.setPlainText
         # apptext = self.scripts_form.PSPReversal_ScriptResults_text.appendPlainText
         self.textout = ('\nScript File: {:<32s}\n'.format(self.script_name))
