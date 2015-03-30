@@ -85,8 +85,8 @@ class IVCurve(AnalysisModule):
         self.showFISI = True # show FISI or ISI as a function of spike number (when False)
         self.lrtau_flag = False
         self.regions_exist = False
-        self.fit_curve = None
-        self.fitted_data = None
+        self.tauh_fits = {}
+        self.tauh_fitted = {}
         self.tau_fits = {}
         self.tau_fitted = {}
         self.regions_exist = False
@@ -1116,12 +1116,11 @@ class IVCurve(AnalysisModule):
         self.ctrl.IVCurve_tau2TStart.setValue(rgn[0] * 1.0e3)
         self.ctrl.IVCurve_tau2TStop.setValue(rgn[1] * 1.0e3)
         fd = self.Clamps.traces['Time': rgn[0]:rgn[1]][whichdata][0]
-        if self.fitted_data is None:  # first time through..
-            self.fitted_data = self.data_plot.plot(fd, pen=pg.mkPen('w'))
-        else:
-            self.fitted_data.clear()
-            self.fitted_data = self.data_plot.plot(fd, pen=pg.mkPen('w'))
-            self.fitted_data.update()
+        if len(self.tauh_fitted.keys()) > 0:
+            [self.tauh_fitted[k].clear() for k in self.tauh_fitted.keys()]
+        self.tauh_fitted = {}
+        for k, d in enumerate(whichdata):
+            self.tauh_fitted[k] = self.data_plot.plot(fd, pen=pg.mkPen('w'))
             # now do the fit
         whichaxis = 0
         (fpar, xf, yf, names) = Fits.FitRegion(whichdata, whichaxis,
@@ -1133,13 +1132,12 @@ class IVCurve(AnalysisModule):
                                                fitPars=initpars)
         if not fpar:
             raise Exception('IVCurve::update_Tauh: tau_h fitting failed - see log')
-        redpen = pg.mkPen('r', width=2.0, style=QtCore.Qt.DashLine)
-        if self.fit_curve is None:
-            self.fit_curve = self.data_plot.plot(xf[0], yf[0], pen=redpen)
-        else:
-            self.fit_curve.clear()
-            self.fit_curve = self.data_plot.plot(xf[0], yf[0], pen=redpen)
-            self.fit_curve.update()
+        bluepen = pg.mkPen('b', width=2.0, style=QtCore.Qt.DashLine)
+        if len(self.tauh_fits.keys()) > 0:
+            [self.tauh_fits[k].clear() for k in self.tauh_fits.keys()]
+        self.tauh_fits = {}
+        self.tauh_fits[0] = self.data_plot.plot(xf[0]+rgn[0], yf[0], pen=bluepen)
+#        self.tauh_fits.update()
         s = np.shape(fpar)
         taus = []
         for j in range(0, s[0]):
