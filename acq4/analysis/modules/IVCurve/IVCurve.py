@@ -87,11 +87,14 @@ class IVCurve(AnalysisModule):
         self.regions_exist = False
         self.fit_curve = None
         self.fitted_data = None
+        self.tau_fits = {}
+        self.tau_fitted = {}
         self.regions_exist = False
         self.regions = {}
         self.analysis_summary = {}
         self.tx = None
         self.keep_analysis_count = 0
+        self.doUpdates = True
         self.colors = ['w', 'g', 'b', 'r', 'y', 'c']
         self.symbols = ['o', 's', 't', 'd', '+']
         self.color_list = itertools.cycle(self.colors)
@@ -193,10 +196,10 @@ class IVCurve(AnalysisModule):
 
     def clear_results(self):
         """
-        clear results resets variables.
-
+        Clear results resets variables.
         This is typically needed every time a new data set is loaded.
         """
+        
         self.filename = ''
         self.r_in = 0.0
         self.tau = 0.0
@@ -218,14 +221,25 @@ class IVCurve(AnalysisModule):
     def resetKeepAnalysis(self):
         self.keep_analysis_count = 0  # reset counter.
 
-    def show_or_hide(self, lrregion=None, forcestate=None):
+    def show_or_hide(self, lrregion='', forcestate=None):
         """
         Show or hide specific regions in the display
-        :param lrregion: name of the region ('lrwin0', etc)
-        :param forcestate: set True to force the show status
-        :return:
+        
+        Parameters
+        ----------
+        lrregion : str, default: ''
+            name of the region('lrwin0', etc)
+        forcestate : None or Boolean, default: None
+            Set True to force the show status, False to Hide. 
+            If forcestate is None, then uses the region's 'shstate' value 
+            to set the state.
+        
+        Returns
+        -------
+        nothing
+        
         """
-        if lrregion is None:
+        if lrregion == '':
             print('PSPReversal:show_or_hide:: lrregion is {:<s}'.format(lrregion))
             return
         region = self.regions[lrregion]
@@ -275,7 +289,7 @@ class IVCurve(AnalysisModule):
                                       'plot': self.IV_plot,
                                       'state': self.ctrl.IVCurve_subLeak,
                                       'shstate': False,  # keep internal copy of the state
-                                      'mode': self.ctrl.IVCurve_subLeak,
+                                      'mode': self.ctrl.IVCurve_subLeak.isChecked(),
                                       'start': self.ctrl.IVCurve_LeakMin,
                                       'stop': self.ctrl.IVCurve_LeakMax,
                                       'updater': self.updateAnalysis,
@@ -283,7 +297,7 @@ class IVCurve(AnalysisModule):
             self.ctrl.IVCurve_subLeak.region = self.regions['lrleak']['region']  # save region with checkbox
             self.regions['lrwin0'] = {'name': 'win0',  # peak window
                                       'region': pg.LinearRegionItem([0, 1],
-                                                                    brush=pg.mkBrush(0, 255, 0, 50.)),
+                                                                    brush=pg.mkBrush(128, 128, 128, 50.)),
                                       'plot': self.data_plot,
                                       'state': self.ctrl.IVCurve_showHide_lrpk,
                                       'shstate': True,  # keep internal copy of the state
@@ -365,10 +379,18 @@ class IVCurve(AnalysisModule):
         """
         get_file_information reads the sequence information from the
         currently selected data file
-
         Two-dimensional sequences are supported.
-        :return nothing:
+        
+        Parameter
+        ---------
+        default_dh : data handle, default None
+            the data handle to use to access the file information
+            
+        Return
+        ------
+        nothing:
         """
+        
         if default_dh is None:
             dh = self.file_loader_instance.selectedFiles()
         else:
@@ -398,10 +420,12 @@ class IVCurve(AnalysisModule):
         Change the auto updater status
         """
         for regkey, reg in self.regions.items():
-            if mode in ['on', 'On']:
+            if mode in ['on', 'On', True]:
+                self.doUpdates = True
                 reg['region'].sigRegionChangeFinished.connect(
                     functools.partial(reg['updater'], region=reg['name']))
-            if  mode in ['off', 'Off']:
+            if  mode in ['off', 'Off', None, False]:
+                self.doUpdates = False
                 try:
                     reg['region'].sigRegionChangeFinished.disconnect()
                 except:  # may already be disconnected...so fail gracefully
@@ -439,7 +463,7 @@ class IVCurve(AnalysisModule):
         dh = dh[0]  # just get the first one
         self.filename = dh.name()
         self.current_dirhandle = dh  # this is critical!
-
+        self.loaded = dh
         self.analysis_summary = self.Clamps.cell_summary(dh)  # get other info as needed for the protocol
         #print 'analysis summary: ', self.analysis_summary
         
@@ -469,8 +493,10 @@ class IVCurve(AnalysisModule):
         self.setup_regions()
         #self._host_.dockArea.findAll()[1]['Parameters'].raiseDock()  # parameters window to the top
         self.get_window_analysisPars()  # prepare the analysis parameters
-        self.updaterStatus('on')
+        print 'turning on updates'
+        self.updaterStatus('on')  # re-enable update status
         self.updateAnalysis()
+        print 'finished analysis in loadfile'
         return True
 
     def plot_traces(self, multimode=False):
@@ -578,7 +604,63 @@ class IVCurve(AnalysisModule):
     def updateAnalysis(self, **kwargs):
         """updateAnalysis re-reads the time parameters and re-analyzes the spikes"""
         self.get_window_analysisPars()
-        self.readParameters(clearFlag=True, pw=False)
+        self.readParsUpdate(clearFlag=True, pw=False)
+        
+    def readParsUpdate(self, clearFlag=False, pw=False):
+        """
+        Read the parameter window entries, set the lr regions to the values
+        in the window, and do an update on the analysis
+        
+        Parameters
+        ----------
+        clearFlag : Boolean, False
+            appears to be unused
+        pw : Boolean, False
+            appears to be unused
+        
+        """
+        if not self.doUpdates:
+            return
+        (pen, filledbrush, emptybrush, symbol, n, clearFlag) = self.map_symbol()
+        # update RMP first as we might need it for the others.
+        if self.ctrl.IVCurve_showHide_lrrmp.isChecked():
+            rgnx1 = self.ctrl.IVCurve_rmpTStart.value() / 1.0e3
+            rgnx2 = self.ctrl.IVCurve_rmpTStop.value() / 1.0e3
+            self.regions['lrrmp']['region'].setRegion([rgnx1, rgnx2])
+            self.update_rmpAnalysis(clear=clearFlag, pw=pw)
+
+        if self.ctrl.IVCurve_showHide_lrss.isChecked():
+            rgnx1 = self.ctrl.IVCurve_ssTStart.value() / 1.0e3
+            rgnx2 = self.ctrl.IVCurve_ssTStop.value() / 1.0e3
+            self.regions['lrwin1']['region'].setRegion([rgnx1, rgnx2])
+            self.update_ssAnalysis()
+
+        if self.ctrl.IVCurve_showHide_lrpk.isChecked():
+            rgnx1 = self.ctrl.IVCurve_pkTStart.value() / 1.0e3
+            rgnx2 = self.ctrl.IVCurve_pkTStop.value() / 1.0e3
+            self.regions['lrwin0']['region'].setRegion([rgnx1, rgnx2])
+            self.update_pkAnalysis(clear=clearFlag, pw=pw)
+
+        if self.ctrl.IVCurve_subLeak.isChecked():
+            rgnx1 = self.ctrl.IVCurve_LeakMin.value() / 1e3
+            rgnx2 = self.ctrl.IVCurve_LeakMax.value() / 1e3
+            self.regions['lrleak']['region'].setRegion([rgnx1, rgnx2])
+            self.update_ssAnalysis()
+            self.update_pkAnalysis()
+
+        if self.ctrl.IVCurve_showHide_lrtau.isChecked():
+            # include tau in the list... if the tool is selected
+            rgnx1 = self.ctrl.IVCurve_tau2TStart.value() / 1e3
+            rgnx2 = self.ctrl.IVCurve_tau2TStop.value() / 1e3
+            self.regions['lrtau']['region'].setRegion([rgnx1, rgnx2])
+            self.update_Tauh()
+
+        if self.ctrl.IVCurve_PeakMode.currentIndexChanged:
+            self.peakmode = self.ctrl.IVCurve_PeakMode.currentText()
+            self.update_pkAnalysis()
+        
+        # now, analyze spikes. 
+        print 'calling analyzeSpikes from readparametersandupdateanalysis: '
         self.analyzeSpikes()
 
     def read_script(self, name=''):
@@ -626,6 +708,8 @@ class IVCurve(AnalysisModule):
             clearFlag = False
         printSpikeInfo = False
         print '***** analyzing Spikes'
+        # print self.Clamps.data_mode
+        # print self.ic_modes
         if self.Clamps.data_mode not in self.ic_modes or self.Clamps.time_base is None:
             # print ('IVCurve::analyzeSpikes: Cannot count spikes, ' +
             #       'and dataMode is ', self.Clamps.data_mode, 'and ICModes are: ', self.ic_modes, 'tx is: ', self.tx)
@@ -655,7 +739,6 @@ class IVCurve(AnalysisModule):
         # also information on spike shape, based on Druckman et al. Cerebral Cortex, 2013
         begin_dV = 12  # V/s or mV/ms
         self.spikeInfo = OrderedDict()
-        # print 'analyzing spikes'
         for i in range(ntr):
             # print 'tb: ', len(self.Clamps.time_base)
             # print 'max tb: ', np.max(self.Clamps.time_base)
@@ -675,7 +758,7 @@ class IVCurve(AnalysisModule):
                                               debug=False)
           #  print self.Clamps.tstart
             if len(spikes) == 0:
-                # print 'no spikes found'
+                #print 'no spikes found'
                 continue
             self.spikecount[i] = len(spikes)
             fsl[i] = spikes[0] - self.Clamps.tstart
@@ -875,8 +958,6 @@ class IVCurve(AnalysisModule):
         (p2, date) = os.path.split(p1)
         return date, cell, proto, p2
 
-
-
     def update_Tau_membrane(self, peak_time=None, printWindow=False, whichTau=1, vrange=[-5., -20.]):
         """
         Compute time constant (single exponential) from the
@@ -926,8 +1007,11 @@ class IVCurve(AnalysisModule):
         fpar = []
         names = []
         okdata = []
+        if len(self.tau_fitted.keys()) > 0:
+            [self.tau_fitted[k].clear() for k in self.tau_fitted.keys()]
+        self.tau_fitted = {}
         for j, k in enumerate(whichdata):
-            self.data_plot.plot(self.Clamps.time_base,  self.Clamps.traces[k], pen=pg.mkPen('y'))
+            self.tau_fitted[j] = self.data_plot.plot(self.Clamps.time_base,  self.Clamps.traces[k], pen=pg.mkPen('w'))
             (fparx, xf, yf, namesx) = Fits.FitRegion([k], whichaxis,
                                                self.Clamps.time_base,
                                                self.Clamps.traces,
@@ -976,20 +1060,31 @@ class IVCurve(AnalysisModule):
           xFit[i,:] = np.arange(0, self.tauwin[1]-self.tauwin[0], (self.tauwin[1]-self.tauwin[0])/500.)
         yFit = np.zeros((len(fitPars), xFit.shape[1]))
         fitfunc = Fits.fitfuncmap[self.taufunc]
+        if len(self.tau_fits.keys()) > 0:
+            [self.tau_fits[k].clear() for k in self.tau_fits.keys()]
+        self.tau_fits = {}
         for k, whichdata in enumerate(self.whichdata):
             yFit[k] = fitfunc[0](fitPars[k], xFit[k], C=None)  # +self.ivbaseline[whichdata]
-            self.data_plot.plot(xFit[k]+self.tauwin[0], yFit[k], pen=pg.mkPen('w'))
+            self.tau_fits[k] = self.data_plot.plot(xFit[k]+self.tauwin[0], yFit[k], pen=pg.mkPen('r', width=2, style=QtCore.Qt.DashLine))
         
     def update_Tauh(self, region=None, printWindow=False):
         """ compute tau (single exponential) from the onset of the markers
             using lrtau window, and only for the step closest to the selected
             current level in the GUI window.
+            
+            Parameters
+            ----------
+            region : dummy argument, default : None
+            printWindow : Boolean, default : False
+                
             region is a dummy argument... 
             Also compute the ratio of the sag from the peak (marker1) to the
             end of the trace (marker 2).
             Based on analysis in Fujino and Oertel, J. Neuroscience 2001,
             to type cells based on different Ih kinetics and magnitude.
         """
+        self.analysis_summary['tauh'] = np.nan
+        self.analysis_summary['Gh'] = np.nan
         if not self.ctrl.IVCurve_showHide_lrtau.isChecked():
             return
         rgn = self.regions['lrtau']['region'].getRegion()
@@ -1038,7 +1133,7 @@ class IVCurve(AnalysisModule):
                                                fitPars=initpars)
         if not fpar:
             raise Exception('IVCurve::update_Tauh: tau_h fitting failed - see log')
-        redpen = pg.mkPen('r', width=1.5, style=QtCore.Qt.DashLine)
+        redpen = pg.mkPen('r', width=2.0, style=QtCore.Qt.DashLine)
         if self.fit_curve is None:
             self.fit_curve = self.data_plot.plot(xf[0], yf[0], pen=redpen)
         else:
@@ -1079,10 +1174,14 @@ class IVCurve(AnalysisModule):
         """
         Compute the steady-state IV from the selected time window
 
-        Input parameters:
+        Parameters
+        ----------
             None.
-        returns:
+        
+        Returns
+        -------
             nothing.
+        
         modifies:
             ivss, yleak, ivss_cmd, cmd.
 
@@ -1156,8 +1255,14 @@ class IVCurve(AnalysisModule):
 
     def update_pkAnalysis(self, clear=False, pw=False):
         """
-            Compute the peak IV (minimum) from the selected window
-            mode can be 'min', 'max', or 'abs'
+        Compute the peak IV (minimum) from the selected window
+        mode can be 'min', 'max', or 'abs'
+
+        Parameters
+        ----------
+        clear : Boolean, False
+        pw : Boolean, False
+            pw is passed to update_taumembrane to control printing.
         """
         if self.Clamps.traces is None:
             return
@@ -1233,7 +1338,7 @@ class IVCurve(AnalysisModule):
 
     def update_rmpAnalysis(self, **kwargs):
         """
-            Compute the RMP over time/commands from the selected window
+        Compute the RMP over time/commands from the selected window
         """
         if self.Clamps.traces is None:
             return
@@ -1253,8 +1358,9 @@ class IVCurve(AnalysisModule):
 
     def make_map_symbols(self):
         """
-        Given the current state of things, (keep analysis count, for example),
-        return a tuple of pen, fill color, empty color, a symbol from
+        Given the current state of things, (keeping the analysis, when
+        superimposing multiple results, for example),
+        sets self.currentSymDict with a dict of pen, fill color, empty color, a symbol from
         our lists, and a clearflag. Used to overplot different data.
         """
         n = self.keep_analysis_count
@@ -1283,8 +1389,8 @@ class IVCurve(AnalysisModule):
 
     def update_IVPlot(self):
         """
-            Draw the peak and steady-sate IV to the I-V window
-            Note: x axis is always I or V, y axis V or I
+        Draw the peak and steady-sate IV to the I-V window
+        Note: x axis is always I or V, y axis V or I
         """
         if self.ctrl.IVCurve_KeepAnalysis.isChecked() is False:
             self.IV_plot.clear()
@@ -1321,8 +1427,8 @@ class IVCurve(AnalysisModule):
 
     def update_RMPPlot(self):
         """
-            Draw the RMP to the I-V window
-            Note: x axis can be I, T, or  # spikes
+        Draw the RMP to the I-V window
+        Note: x axis can be I, T, or  # spikes
         """
         if self.ctrl.IVCurve_KeepAnalysis.isChecked() is False:
             self.RMP_plot.clear()
@@ -1359,8 +1465,8 @@ class IVCurve(AnalysisModule):
 
     def update_SpikePlots(self):
         """
-            Draw the spike counts to the FI and FSL windows
-            Note: x axis can be I, T, or  # spikes
+        Draw the spike counts to the FI and FSL windows
+        Note: x axis can be I, T, or  # spikes
         """
         if self.Clamps.data_mode in self.vc_modes:
             self.fiPlot.clear()  # no plots of spikes in VC
@@ -1432,56 +1538,24 @@ class IVCurve(AnalysisModule):
         self.fslPlot.setLabel('bottom', xfsllabel)
         self.fslPlot.setLabel('left', ylabel)
 
-    def readParameters(self, clearFlag=False, pw=False):
-        """
-        Read the parameter window entries, set the lr regions to the values
-        in the window, and do an update on the analysis
-        """
-        (pen, filledbrush, emptybrush, symbol, n, clearFlag) = self.map_symbol()
-        # update RMP first as we might need it for the others.
-        if self.ctrl.IVCurve_showHide_lrrmp.isChecked():
-            rgnx1 = self.ctrl.IVCurve_rmpTStart.value() / 1.0e3
-            rgnx2 = self.ctrl.IVCurve_rmpTStop.value() / 1.0e3
-            self.regions['lrrmp']['region'].setRegion([rgnx1, rgnx2])
-            self.update_rmpAnalysis(clear=clearFlag, pw=pw)
-
-        if self.ctrl.IVCurve_showHide_lrss.isChecked():
-            rgnx1 = self.ctrl.IVCurve_ssTStart.value() / 1.0e3
-            rgnx2 = self.ctrl.IVCurve_ssTStop.value() / 1.0e3
-            self.regions['lrwin1']['region'].setRegion([rgnx1, rgnx2])
-            self.update_ssAnalysis()
-
-        if self.ctrl.IVCurve_showHide_lrpk.isChecked():
-            rgnx1 = self.ctrl.IVCurve_pkTStart.value() / 1.0e3
-            rgnx2 = self.ctrl.IVCurve_pkTStop.value() / 1.0e3
-            self.regions['lrwin0']['region'].setRegion([rgnx1, rgnx2])
-            self.update_pkAnalysis(clear=clearFlag, pw=pw)
-
-        if self.ctrl.IVCurve_subLeak.isChecked():
-            rgnx1 = self.ctrl.IVCurve_LeakMin.value() / 1e3
-            rgnx2 = self.ctrl.IVCurve_LeakMax.value() / 1e3
-            self.regions['lrleak']['region'].setRegion([rgnx1, rgnx2])
-            self.update_ssAnalysis()
-            self.update_pkAnalysis()
-
-        if self.ctrl.IVCurve_showHide_lrtau.isChecked():
-            # include tau in the list... if the tool is selected
-            rgnx1 = self.ctrl.IVCurve_tau2TStart.value() / 1e3
-            rgnx2 = self.ctrl.IVCurve_tau2TStop.value() / 1e3
-            self.regions['lrtau']['region'].setRegion([rgnx1, rgnx2])
-            self.update_Tauh()
-
-        if self.ctrl.IVCurve_PeakMode.currentIndexChanged:
-            self.peakmode = self.ctrl.IVCurve_PeakMode.currentText()
-            self.update_pkAnalysis()
-
     def printAnalysis(self, printnow=True, script_header=True, copytoclipboard=False):
         """
         Print the analysis summary information (Cell, protocol, etc)
-        Print a nice formatted version of the analysis output to the terminal.
+        in a nice formatted version to the terminal.
         The output can be copied to another program (excel, prism) for further analysis
-        :param script_header:
-        :return:
+        Parameters
+        ----------
+        printnow : Boolean, optional
+            Set true to print to terminal, default: True
+        script_header : Boolean, optional
+            Set to print the header line, default: True
+        copytoclipboard : Boolean, optional
+            copy the text to the system clipboard, default: False
+        
+        Return
+        ------
+        ltxt : string
+            The text that would be printed. Might be useful to capture for other purposes
         """
         
         # Dictionary structure: key = information about 
@@ -1540,38 +1614,111 @@ class IVCurve(AnalysisModule):
         """
         Store data into the current database for further analysis
         """
-        self.updateAnalysis()
+        #self.updateAnalysis()
+        if self.loaded is None:
+            return
+        self.dbIdentity = 'IVCurve'
         db = self._host_.dm.currentDatabase()
-        table = 'DirTable_Cell'
+        # print 'dir (db): ', dir(db)
+        # print 'dir (db.db): ', dir(db.db)
+        # print 'db.listTables: ', db.listTables()
+        # print 'db.tables: ', db.tables
+        #       
+        table = self.dbIdentity
+
+        print 'owner: ', db.tableOwner(table)
+        #print db.tableSchema('DirTable_Cell')
+
         columns = OrderedDict([
-            ('IVCurve_rmp', 'real'),
-            ('IVCurve_rinp', 'real'),
-            ('IVCurve_taum', 'real'),
-            ('IVCurve_neg_cmd', 'real'),
-            ('IVCurve_neg_pk', 'real'),
-            ('IVCurve_neg_ss', 'real'),
-            ('IVCurve_h_tau', 'real'),
-            ('IVCurve_h_g', 'real'),
+            ('ProtocolDir', 'directory:Protocol'),
+            ('ProtocolSequenceDir', 'directory:ProtocolSequence'),
+            ('Dir', 'text'),
+            ('Protocol', 'text'),
+            ('RMP', 'real'),
+            ('R_in', 'real'),
+            ('tau_m', 'real'),
+            ('neg_cmd', 'real'),
+            ('neg_pk', 'real'),
+            ('neg_ss', 'real'),
+            ('h_tau', 'real'),
+            ('h_g', 'real'),
+            ('AdaptRatio', 'real'),
+            ('FiringRate', 'real'),
+            ('AP1_HalfWidth', 'real'),
+            ('AP1_Latency', 'real'),
+            ('AP2_HalfWidth', 'real'),
+            ('AP2_Latency', 'real'),
+            ('AHP_Depth', 'real'),
         ])
 
-        rec = {
-            'IVCurve_rmp': self.neg_vrmp / 1000.,
-            'IVCurve_rinp': self.r_in,
-            'IVCurve_taum': self.tau,
-            'IVCurve_neg_cmd': self.neg_cmd,
-            'IVCurve_neg_pk': self.neg_pk,
-            'IVCurve_neg_ss': self.neg_ss,
-            'IVCurve_h_tau': self.tau2,
-            'IVCurve_h_g': self.Gh,
+        if table not in db.tables:
+            db.createTable(table, columns, owner=self.dbIdentity)
+        db.createDirTable(self.loaded)
+    #        identity = self.dbIdentity+'.analysis'
+        print 'describe: ', db.describeData(columns)
+        # print 'db tables: ', db.tables
+        # print 'db schema: ', db.tableSchema(table)
+        # print 'loaded: ', self.loaded
+        # print 'parent: ', self.loaded.parent()
+        # print 'name: ', self.loaded.parent().name()
+        try:
+            print self.neg_cmd
+        except:
+            self.neg_cmd = 0.
+            self.neg_pk = 0.
+            self.neg_ss = 0.
+            self.tau2 = 0.
+            self.Gh = 0.
+            
+        data = {
+            'ProtocolDir': self.loaded,
+            'ProtocolSequenceDir': self.dataModel.getParent(self.loaded, 'ProtocolSequence'),
+            'Dir': self.loaded.parent().name(),
+            'Protocol': self.loaded.name(),
+            'RMP': self.rmp / 1000.,
+            'R_in': self.r_in,
+            'tau_m': self.tau,
+            'AdaptRatio': self.adapt_ratio,
+            'neg_cmd': self.neg_cmd,
+            'neg_pk': self.neg_pk,
+            'neg_ss': self.neg_ss,
+            'h_tau': self.analysis_summary['tauh'],
+            'h_g': self.analysis_summary['Gh'],
+            'FiringRate': self.analysis_summary['FiringRate'],
+            'AP1_HalfWidth': self.analysis_summary['AP1_HalfWidth'],
+            'AP1_Latency': self.analysis_summary['AP1_Latency'],
+            'AP2_HalfWidth': self.analysis_summary['AP2_HalfWidth'],
+            'AP2_Latency': self.analysis_summary['AP2_Latency'],
+            'AHP_Depth': self.analysis_summary['AHP_Depth'],
         }
-
+        ## If only one record was given, make it into a list of one record
+        if isinstance(data, dict):
+            data = [data]
+            ## Make sure target table exists and has correct columns, links to input file
+        
+        fields = db.describeData(data)
+        ## override directory fields since describeData can't guess these for us
+        fields['ProtocolDir'] = 'directory:Protocol'
+        fields['ProtocolSequenceDir'] = 'directory:ProtocolSequence'
+        
         with db.transaction():
-            # Add columns if needed
-            if 'IVCurve_rmp' not in db.tableSchema(table):
-                for col, typ in columns.items():
-                    db.addColumn(table, col, typ)
+            db.checkTable(table, owner=self.dbIdentity, columns=fields, create=True, addUnknownColumns=True, indexes=[['ProtocolDir'], ['ProtocolSequenceDir']])
+            
+            # delete old
+            for source in set([d['ProtocolDir'] for d in data]):
+                #name = rec['SourceFile']
+                db.delete(table, where={'ProtocolDir': source})
 
-            db.update(table, rec, where={'Dir': self.loaded.parent()})
+            # write new
+            with pg.ProgressDialog("Storing IV Results..", 0, 100) as dlg:
+                for n, nmax in db.iterInsert(table, data, chunkSize=30):
+                    dlg.setMaximum(nmax)
+                    dlg.setValue(n)
+                    if dlg.wasCanceled():
+                        raise HelpfulException("Scan store canceled by user.", msgType='status')
+        print db.listTables()
+        #db.close()
+        #db.open()
         print "updated record for ", self.loaded.name()
 
     # ---- Helpers ----

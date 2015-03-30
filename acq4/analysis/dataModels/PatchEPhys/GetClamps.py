@@ -153,7 +153,7 @@ class GetClamps(AnalysisModule):
             data_file = data_file_handle.read()
             # only consider data in a particular range
             data = self.dataModel.getClampPrimary(data_file)
-            self.data_mode  = self.dataModel.getClampMode(data_file)
+            self.data_mode  = self.dataModel.getClampMode(data_file, dir_handle=dh)
             if self.data_mode is None:
                 self.data_mode = self.dataModel.ic_modes[0]  # set a default mode
             if self.data_mode in ['vc']:  # should be "AND something"  - this is temp fix for Xuying's old data

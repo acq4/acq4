@@ -262,7 +262,7 @@ def getClampPrimary(data):
     else:
         return data['Channel': 'scaled']
 
-def getClampMode(data_handle):
+def getClampMode(data_handle, dir_handle=None):
     """Given a clamp file handle or MetaArray, return the recording mode."""
     if (hasattr(data_handle, 'implements') and data_handle.implements('MetaArray')):
         data = data_handle
@@ -278,11 +278,20 @@ def getClampMode(data_handle):
     if 'ClampState' in info:
         return info['ClampState']['mode']
     else:
+
         try:
-            mode = info['mode']
+            mode = info['mode'] # if the mode is in the info (sometimes), return that
             return mode
         except KeyError:
-            return 'vc'  # None  kludge to handle simulations, which don't seem to fully fill the structures.
+            if dir_handle is not None:
+                devs =  dir_handle.info()['devices'].keys()  # get devices in parent directory
+                for dev in devs:  # for all the devices
+                    if dev in deviceNames['Clamp']:  # are any clamps?
+                       # print 'device / keys: ', dev, dir_handle.info()['devices'][dev].keys()
+                        #print  'mode: ', dir_handle.info()['devices'][dev]['mode']
+                        return dir_handle.info()['devices'][dev]['mode']
+            else:
+                return 'vc'  # None  kludge to handle simulations, which don't seem to fully fill the structures.
 
 def getClampHoldingLevel(data_handle):
     """Given a clamp file handle, return the holding level (voltage for VC, current for IC).
@@ -366,7 +375,7 @@ def getSampleRate(data_handle):
 
 def getDevices(protoDH):
     """
-    return a dictionary of all the (recognized) devices and thier file handles in the protocol directory
+    return a dictionary of all the (recognized) devices and their file handles in the protocol directory
     This can be handy to check which devices were recorded during a protocol (the keys of the dictionary)
     and for accessing the data (from the file handles)
     pbm 5/2014
