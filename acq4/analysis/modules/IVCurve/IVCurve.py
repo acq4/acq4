@@ -75,7 +75,8 @@ class IVCurve(AnalysisModule):
         self.Script = ScriptProcessor.ScriptProcessor(host)
         self.Script.setAnalysis(analysis=self.updateAnalysis, 
             fileloader = self.loadFileRequested, template = self.data_template,
-            clamps = self.Clamps, printer=self.printAnalysis)  # specify the routines to be called and data sets to be used
+            clamps = self.Clamps, printer=self.printAnalysis,
+            dbupdate=self.dbStoreClicked)  # specify the routines to be called and data sets to be used
         self.loaded = None
         self.filename = None
         self.dirsSet = None
@@ -101,6 +102,8 @@ class IVCurve(AnalysisModule):
         self.symbol_list = itertools.cycle(self.symbols)
         self.script_header = False
         self.Clamps.data_mode = 'IC'  # analysis depends on the type of data we have.
+        self.clear_results()
+        
         self.ic_modes = self.dataModel.ic_modes # ['IC', 'CC', 'IClamp', 'ic', 'I-Clamp Fast', 'I-Clamp Slow']
         self.vc_modes = self.dataModel.vc_modes # ['VC', 'VClamp', 'vc']  # list of VC modes
                 
@@ -154,7 +157,6 @@ class IVCurve(AnalysisModule):
         #self.scripts_form.PSPReversal_ScriptCopy_Btn.clicked.connect(self.copy_script_output)
         #self.scripts_form.PSPReversal_ScriptFormatted_Btn.clicked.connect(self.print_formatted_script_output)
         self.ctrl.IVCurve_ScriptName.setText('None')
-        self.clear_results()
         self.layout = self.getElement('Plots', create=True)
 
         # instantiate the graphs using a gridLayout (also facilitates matplotlib export; see export routine below)
@@ -431,7 +433,7 @@ class IVCurve(AnalysisModule):
                 except:  # may already be disconnected...so fail gracefully
                     pass
 
-    def loadFileRequested(self, dh):
+    def loadFileRequested(self, dh, analyze=True):
         """
         loadFileRequested is called by "file loader" when a file is requested.
             FileLoader is provided by the AnalysisModule class
@@ -493,10 +495,9 @@ class IVCurve(AnalysisModule):
         self.setup_regions()
         #self._host_.dockArea.findAll()[1]['Parameters'].raiseDock()  # parameters window to the top
         self.get_window_analysisPars()  # prepare the analysis parameters
-        print 'turning on updates'
         self.updaterStatus('on')  # re-enable update status
-        self.updateAnalysis()
-        print 'finished analysis in loadfile'
+        if analyze:  # only do this if requested (default). Don't do in script processing ....yet
+            self.updateAnalysis()
         return True
 
     def plot_traces(self, multimode=False):
@@ -601,8 +602,11 @@ class IVCurve(AnalysisModule):
         #         self.get_baseline()
         #         self.get_junction()
 
-    def updateAnalysis(self, **kwargs):
+    def updateAnalysis(self, presets=None):
         """updateAnalysis re-reads the time parameters and re-analyzes the spikes"""
+        if presets is not None:  # copy from dictionary of presets into analysis parameters
+            for k in presets.keys():
+                self.analysis_summary[k] = presets[k]
         self.get_window_analysisPars()
         self.readParsUpdate(clearFlag=True, pw=False)
         
@@ -621,6 +625,9 @@ class IVCurve(AnalysisModule):
         """
         if not self.doUpdates:
             return
+        self.analysis_summary['tauh'] = np.nan  # define these because they may not get filled...
+        self.analysis_summary['Gh'] = np.nan
+        
         (pen, filledbrush, emptybrush, symbol, n, clearFlag) = self.map_symbol()
         # update RMP first as we might need it for the others.
         if self.ctrl.IVCurve_showHide_lrrmp.isChecked():
@@ -660,7 +667,6 @@ class IVCurve(AnalysisModule):
             self.update_pkAnalysis()
         
         # now, analyze spikes. 
-        print 'calling analyzeSpikes from readparametersandupdateanalysis: '
         self.analyzeSpikes()
 
     def read_script(self, name=''):
@@ -707,12 +713,11 @@ class IVCurve(AnalysisModule):
         else:
             clearFlag = False
         printSpikeInfo = False
+        self.analysis_summary['FI_Curve'] = None
         print '***** analyzing Spikes'
-        # print self.Clamps.data_mode
-        # print self.ic_modes
         if self.Clamps.data_mode not in self.ic_modes or self.Clamps.time_base is None:
-            # print ('IVCurve::analyzeSpikes: Cannot count spikes, ' +
-            #       'and dataMode is ', self.Clamps.data_mode, 'and ICModes are: ', self.ic_modes, 'tx is: ', self.tx)
+            print ('IVCurve::analyzeSpikes: Cannot count spikes, ' +
+                   'and dataMode is ', self.Clamps.data_mode, 'and ICModes are: ', self.ic_modes, 'tx is: ', self.tx)
             self.spikecount = []
             self.fiPlot.plot(x=[], y=[], clear=clearFlag, pen='w',
                              symbolSize=6, symbolPen='b',
@@ -740,15 +745,6 @@ class IVCurve(AnalysisModule):
         begin_dV = 12  # V/s or mV/ms
         self.spikeInfo = OrderedDict()
         for i in range(ntr):
-            # print 'tb: ', len(self.Clamps.time_base)
-            # print 'max tb: ', np.max(self.Clamps.time_base)
-            # print 'tr: ', len(self.Clamps.traces[i])
-            # print 'max tr: ', np.max(self.Clamps.traces[i])
-            # print 'threshold: ', threshold
-            # print 'start: ', self.Clamps.tstart
-            # print 'end: ', self.Clamps.tend
-            # print 'dt: ', self.Clamps.sample_interval
-            # print 'timebase min/max: ', np.min(self.Clamps.time_base), np.max(self.Clamps.time_base)
             (spikes, spkx) = Utility.findspikes(self.Clamps.time_base, self.Clamps.traces[i],
                                               threshold, t0=self.Clamps.tstart,
                                               t1=self.Clamps.tend,
@@ -756,7 +752,6 @@ class IVCurve(AnalysisModule):
                                               mode='schmitt',
                                               interpolate=False,
                                               debug=False)
-          #  print self.Clamps.tstart
             if len(spikes) == 0:
                 #print 'no spikes found'
                 continue
@@ -782,10 +777,6 @@ class IVCurve(AnalysisModule):
                              'trough_V': None, 'peaktotroughT': None,
                              'current': None, 'iHold': None,
                              'pulseDuration': None, 'tstart': self.Clamps.tstart}  # initialize the structure
-                # print len(self.Clamps.traces[i])
-                # print j
-                # print spk
-                # print spk[j]
                 (ihold, r2) = Utility.measure('mean', self.Clamps.time_base, self.Clamps.cmd_wave[i],
                                                            0.0, self.Clamps.tstart)
                 thisspike['current'] = self.Clamps.values[i] - ihold
@@ -800,7 +791,11 @@ class IVCurve(AnalysisModule):
                 k = spk[j]+1
                 v = thisspike['peak_V']
                 vlast = thisspike['peak_V']
-                while k < len(self.Clamps.traces[i]):  # find end of spike
+                if j < self.spikecount[i] - 1:  # find end of spike (top of next, or end of trace)
+                    kend = spk[j+1]
+                else:
+                    kend = len(self.Clamps.traces[i])
+                while k < kend:  # find end of spike, defined as nadir of first (fast) AHP
                     v = self.Clamps.traces[i][k]
                     if v <= vlast:  # still falling
                         k += 1  # step to next point
@@ -815,14 +810,18 @@ class IVCurve(AnalysisModule):
                     thisspike['peaktotrough'] = thisspike['trough_T'] - thisspike['peak_T']
                 dv = np.diff(self.Clamps.traces[i])/(self.Clamps.time_base[1]-self.Clamps.time_base[0])
                 k = spk[j]-1
-                while k > 0:  # find beginning of the spike
+                if j > 0:
+                    kbegin = spk[j-1]
+                else:
+                    kbegin = 0
+                while k > kbegin:  # find beginning of the spike
                     if dv[k] > begin_dV:  # wait for slope at top of spike to exceed dV threshold
                         break
                     else:
                         k -= 1  # still waiting
                         continue
                 k -= 1
-                while k > 0:  # now look for low end slope to define start of AP
+                while k > kbegin:  # now look for low end slope to define start of AP
                     if dv[k] > begin_dV:
                         k -= 1
                         continue
@@ -864,13 +863,14 @@ class IVCurve(AnalysisModule):
                 print '----\nTrace: %d  has %d APs' % (m, len(self.spikeInfo[m].keys()))
                 for n in sorted(self.spikeInfo[m].keys()):
                     pp.pprint(self.spikeInfo[m][n])
-        
+        self.analysis_summary['spikes'] = self.spikeInfo  # save in the summary dictionary too
+        # summarize spike count
+        #spc = [i for i in icmd], [len(self.spikeInfo[m]) for m in self.spikeInfo)]
+        #print spc
+
         # print 'Spike Info: ', self.spikeInfo
         self.getClassifyingInfo()  # build analysis summary here as well.
-                
-        
         iAR = np.where(ar > 0)
-
         self.adapt_ratio = np.mean(ar[iAR])  # only where we made the measurement
         self.analysis_summary['AdaptRatio'] = self.adapt_ratio
         self.ctrl.IVCurve_AR.setText(u'%7.3f' % self.adapt_ratio)
@@ -881,6 +881,8 @@ class IVCurve(AnalysisModule):
         self.allisi = allisi
         self.nospk = np.where(self.spikecount == 0)
         self.spk = np.where(self.spikecount > 0)
+        self.analysis_summary['FI_Curve'] = np.array([self.Clamps.values, self.spikecount])
+#        print self.analysis_summary['FI_Curve']
         self.update_SpikePlots()
 
     def getIVCurrentThresholds(self):
@@ -1249,6 +1251,7 @@ class IVCurve(AnalysisModule):
         isort = np.argsort(self.ivss_cmd)
         self.ivss_cmd = self.ivss_cmd[isort]
         self.ivss = self.ivss[isort]
+        self.analysis_summary['IV_Curve_ss'] = [self.ivss_cmd, self.ivss]
         self.update_IVPlot()
 
     def update_pkAnalysis(self, clear=False, pw=False):
@@ -1330,6 +1333,7 @@ class IVCurve(AnalysisModule):
         isort = np.argsort(self.ivpk_cmd)
         self.ivpk_cmd = self.ivpk_cmd[isort]
         self.ivpk = self.ivpk[isort]
+        self.analysis_summary['IV_Curve_pk'] = [self.ivpk_cmd, self.ivpk]
         self.update_IVPlot()
         peak_time = self.Clamps.time_base[peak_pos]
         self.update_Tau_membrane(peak_time=peak_time, printWindow=pw)
@@ -1584,7 +1588,7 @@ class IVCurve(AnalysisModule):
 
         ltxt = ''
         if 'Genotype' not in self.analysis_summary.keys():
-            self.analysis_summary['Genotype'] = ' '
+            self.analysis_summary['Genotype'] = 'Unknown'
         ltxt += '{:34s}\t{:15s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Genotype'], self.analysis_summary['Protocol'])
           
         for a in data_template.keys():
@@ -1615,7 +1619,7 @@ class IVCurve(AnalysisModule):
         #self.updateAnalysis()
         if self.loaded is None:
             return
-        self.dbIdentity = 'IVCurve'
+        self.dbIdentity = 'IVCurve'  # type of data in the database
         db = self._host_.dm.currentDatabase()
         # print 'dir (db): ', dir(db)
         # print 'dir (db.db): ', dir(db.db)
@@ -1624,14 +1628,12 @@ class IVCurve(AnalysisModule):
         #       
         table = self.dbIdentity
 
-        print 'owner: ', db.tableOwner(table)
-        #print db.tableSchema('DirTable_Cell')
-
         columns = OrderedDict([
-            ('ProtocolDir', 'directory:Protocol'),
+#            ('ProtocolDir', 'directory:Protocol'),
             ('ProtocolSequenceDir', 'directory:ProtocolSequence'),
             ('Dir', 'text'),
             ('Protocol', 'text'),
+            ('Genotype', 'text'),
             ('RMP', 'real'),
             ('R_in', 'real'),
             ('tau_m', 'real'),
@@ -1647,18 +1649,13 @@ class IVCurve(AnalysisModule):
             ('AP2_HalfWidth', 'real'),
             ('AP2_Latency', 'real'),
             ('AHP_Depth', 'real'),
+            ('FI_Curve', 'text'),
+            ('IV_Curve_pk', 'text'),
+            ('IV_Curve_ss', 'text'),
         ])
 
         if table not in db.tables:
             db.createTable(table, columns, owner=self.dbIdentity)
-        db.createDirTable(self.loaded)
-    #        identity = self.dbIdentity+'.analysis'
-        print 'describe: ', db.describeData(columns)
-        # print 'db tables: ', db.tables
-        # print 'db schema: ', db.tableSchema(table)
-        # print 'loaded: ', self.loaded
-        # print 'parent: ', self.loaded.parent()
-        # print 'name: ', self.loaded.parent().name()
         try:
             print self.neg_cmd
         except:
@@ -1667,12 +1664,17 @@ class IVCurve(AnalysisModule):
             self.neg_ss = 0.
             self.tau2 = 0.
             self.Gh = 0.
-            
+
+        if 'Genotype' not in self.analysis_summary:
+            self.analysis_summary['Genotype'] = 'Unknown'
+#        print 'genytope: ', self.analysis_summary['Genotype']
+        
         data = {
-            'ProtocolDir': self.loaded,
-            'ProtocolSequenceDir': self.dataModel.getParent(self.loaded, 'ProtocolSequence'),
+            'ProtocolSequenceDir': self.loaded,
+#            'ProtocolSequenceDir': self.dataModel.getParent(self.loaded, 'ProtocolSequence'),
             'Dir': self.loaded.parent().name(),
             'Protocol': self.loaded.name(),
+            'Genotype': self.analysis_summary['Genotype'],
             'RMP': self.rmp / 1000.,
             'R_in': self.r_in,
             'tau_m': self.tau,
@@ -1688,6 +1690,9 @@ class IVCurve(AnalysisModule):
             'AP2_HalfWidth': self.analysis_summary['AP2_HalfWidth'],
             'AP2_Latency': self.analysis_summary['AP2_Latency'],
             'AHP_Depth': self.analysis_summary['AHP_Depth'],
+            'FI_Curve': repr(self.analysis_summary['FI_Curve'].tolist()), # convert array to string for storage
+            'IV_Curve_pk': repr(np.array(self.analysis_summary['IV_Curve_pk']).tolist()),
+            'IV_Curve_ss': repr(np.array(self.analysis_summary['IV_Curve_ss']).tolist()),
         }
         ## If only one record was given, make it into a list of one record
         if isinstance(data, dict):
@@ -1696,16 +1701,21 @@ class IVCurve(AnalysisModule):
         
         fields = db.describeData(data)
         ## override directory fields since describeData can't guess these for us
-        fields['ProtocolDir'] = 'directory:Protocol'
+#        fields['ProtocolDir'] = 'directory:Protocol'
         fields['ProtocolSequenceDir'] = 'directory:ProtocolSequence'
         
         with db.transaction():
-            db.checkTable(table, owner=self.dbIdentity, columns=fields, create=True, addUnknownColumns=True, indexes=[['ProtocolDir'], ['ProtocolSequenceDir']])
+            db.checkTable(table, owner=self.dbIdentity, columns=fields, create=True, addUnknownColumns=True, indexes=[['ProtocolSequenceDir'],])
             
+            dirtable = db.dirTableName(self.loaded)  # set up the DirTable Protocol Sequence directory.
+            if not db.hasTable(dirtable):
+                db.createDirTable(self.loaded)
+
             # delete old
-            for source in set([d['ProtocolDir'] for d in data]):
+            for source in set([d['ProtocolSequenceDir'] for d in data]):
+#                print 'source: ', source
                 #name = rec['SourceFile']
-                db.delete(table, where={'ProtocolDir': source})
+                db.delete(table, where={'ProtocolSequenceDir': source})
 
             # write new
             with pg.ProgressDialog("Storing IV Results..", 0, 100) as dlg:
@@ -1714,10 +1724,10 @@ class IVCurve(AnalysisModule):
                     dlg.setValue(n)
                     if dlg.wasCanceled():
                         raise HelpfulException("Scan store canceled by user.", msgType='status')
-        print db.listTables()
+#        print db.listTables()
         #db.close()
         #db.open()
-        print "updated record for ", self.loaded.name()
+        print "Updated record for ", self.loaded.name()
 
     # ---- Helpers ----
     # Some of these would normally live in a pyqtgraph-related module, but are

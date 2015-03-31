@@ -30,7 +30,7 @@ class ScriptProcessor(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
 
-    def setAnalysis(self, analysis=None, fileloader=None, template=None, clamps=None, printer=None):
+    def setAnalysis(self, analysis=None, fileloader=None, template=None, clamps=None, printer=None, dbupdate=None):
         """
         Set the analysis and the file loader routines
         that will be called by our script
@@ -40,6 +40,7 @@ class ScriptProcessor(AnalysisModule):
         self.data_template = template
         self.clamps = clamps
         self.printAnalysis = printer
+        self.dbUpdate = dbupdate
 
     def read_script(self):
         """
@@ -143,7 +144,6 @@ class ScriptProcessor(AnalysisModule):
         """
         if self.script['testfiles']:
             return
-        self.analysis_summary = {}
         # settext = self.scripts_form.PSPReversal_ScriptResults_text.setPlainText
         # apptext = self.scripts_form.PSPReversal_ScriptResults_text.appendPlainText
         self.textout = ('\nScript File: {:<32s}\n'.format(self.script_name))
@@ -153,6 +153,7 @@ class ScriptProcessor(AnalysisModule):
         self.dataManager().setBaseDir(self.script['directory'])
         ordered = sorted(self.script['Cells'].keys())  # order the analysis by date/slice/cell
         for cell in ordered:
+            presetDict = {}
             thiscell = self.script['Cells'][cell]
             #print 'processing cell: %s' % thiscell
             if thiscell['include'] is False:  # skip this cell
@@ -177,55 +178,39 @@ class ScriptProcessor(AnalysisModule):
                 if not file_ok:  # get the directory handle and take it from there
                     print 'File is not ok: %s' % fullpath
                     continue
-                # self.ctrl.PSPReversal_KeepT.setChecked(QtCore.Qt.Unchecked)  # make sure this is unchecked
+
+                m = thiscell['choice'][p]  # get the tag for the manipulation
+                presetDict['Choices'] = thiscell['choice'][p]
+                if 'genotype' in thiscell.keys():
+                    presetDict['Genotype'] = thiscell['genotype']
+                else:
+                    presetDict['Genotype'] = 'Unknown'
+
                 dh = self.dataManager().manager.dirHandle(fullpath)
-                if not self.loadFile([dh]):  # note: must pass a list
+                if not self.loadFile([dh], analyze=False):  # note: must pass a list of dh; don't let analyisis run at end
                     print 'Failed to load requested file: ', fullpath
                     continue  # skip bad sets of records...
-                #print thiscell.keys()
-                #print 'old data mode: ', self.Clamps.data_mode
                 if 'datamode' in thiscell.keys():
                     self.clamps.data_mode = thiscell['datamode']
-                    # print 'datamode may be overridden: self.Clamps.data_mode = %s' % self.Clamps.data_mode
-                # apptext(('Protocol: {:<s} <br>Choice: {:<s}'.format(pr, thiscell['choice'][p])))
-                #print dir(self.data_plot)
-                # self.main_layout.update()
-                self.analysis_summary['Drugs'] = thiscell['choice'][p]
-                if 'genotype' in thiscell.keys():
-                    self.analysis_summary['Genotype'] = thiscell['genotype']
-                else:
-                    self.analysis_summary['Genotype'] = ''
-                # alt_flag = bool(thiscell['alternation'])
-                # self.analysis_parameters['alternation'] = alt_flag
-                # self.ctrl.PSPReversal_Alternation.setChecked((QtCore.Qt.Unchecked, QtCore.Qt.Checked)[alt_flag])
-                # if 'junctionpotential' in thiscell:
-                #     self.analysis_parameters['junction'] = thiscell['junctionpotential']
-                #     self.ctrl.PSPReversal_Junction.setValue(float(thiscell['junctionpotential']))
-                # else:
-                #     self.analysis_parameters['junction'] = float(self.script['global_jp'])
-                #     self.ctrl.PSPReversal_Junction.setValue(float(self.script['global_jp']))
-
                 self.auto_updater = False
-                self.get_script_analysisPars(self.script, thiscell)
-                m = thiscell['choice'][p]  # get the tag for the manipulation
-                self.analysis()  # call the caller's analysis routine
+#                self.get_script_analysisPars(self.script, thiscell)
+                self.analysis(presets=presetDict)  # call the caller's analysis routine
+
+                if 'addtoDB' in self.script.keys():
+                    if self.script['addtoDB'] is True and self.dbUpdate is not None:
+                        self.dbUpdate()  # call routine in parent
+
+                ptxt = self.printAnalysis(printnow=False, script_header=script_header, copytoclipboard=False)
+                self.textout += ptxt + '\n'
+                script_header = False
+
                 DataManager.cleanup()
                 del dh
                 gc.collect()
-                # self.update_rmp_analysis()
-                # for win in ['win0', 'win1', 'win2']:
-                #     self.update_win_analysis(win)
-                ptxt = self.printAnalysis(printnow=False, script_header=script_header, copytoclipboard=False)
-                # apptext(ptxt)
-                #print 'ptxt: ', ptxt
-                self.textout += ptxt + '\n'
-                #print 'textout: ', self.textout
-                # print protocol result, optionally a cell header.
-                # self.print_formatted_script_output(script_header)
-                script_header = False
+
         print self.textout
         self.auto_updater = True # restore function
-        print '\nDone'
+#        print '\nDone'
 
     def get_script_analysisPars(self, script_globals, thiscell):
         """
@@ -294,39 +279,3 @@ class ScriptProcessor(AnalysisModule):
                 out = out + char
         return out
         
-    # def print_formatted_script_output(self, script_header=True, copytoclipboard=False):
-    #     """
-    #     Print a nice formatted version of the analysis output to the terminal.
-    #     The output can be copied to another program (excel, prism) for further analysis
-    #     :param script_header:
-    #     :return:
-    #     """
-    #     data_template = (OrderedDict([('ElapsedTime', '{:>8.2f}'), ('Drugs', '{:<8s}'), ('HoldV', '{:>5.1f}'), ('JP', '{:>5.1f}'),
-    #                                                                     ('Rs', '{:>6.2f}'), ('Cm', '{:>6.1f}'), ('Ru', '{:>6.2f}'),
-    #                                                                     ('Erev', '{:>6.2f}'),
-    #                                                                     ('gsyn_Erev', '{:>9.2f}'), ('gsyn_60', '{:>7.2f}'), ('gsyn_13', '{:>7.2f}'),
-    #                                                                     #('p0', '{:6.3e}'), ('p1', '{:6.3e}'), ('p2', '{:6.3e}'), ('p3', '{:6.3e}'),
-    #                                                                     ('I_ionic+', '{:>8.3f}'), ('I_ionic-', '{:>8.3f}'), ('ILeak', '{:>7.3f}'),
-    #                                                                     ('win1Start', '{:>9.3f}'), ('win1End', '{:>7.3f}'),
-    #                                                                     ('win2Start', '{:>9.3f}'), ('win2End', '{:>7.3f}'),
-    #                                                                     ('win0Start', '{:>9.3f}'), ('win0End', '{:>7.3f}'),
-    #                                                                     ]))
-    #     # summary table header is written anew for each cell
-    #     if script_header:
-    #         print('{:34s}\t{:24s}\t'.format("Cell", "Protocol")),
-    #         for k in data_template.keys():
-    #             print('{:<s}\t'.format(k)),
-    #         print ''
-    #     ltxt = ''
-    #     ltxt += ('{:34s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Protocol']))
-    #
-    #     for a in data_template.keys():
-    #         if a in self.analysis_summary.keys():
-    #             ltxt += ((data_template[a] + '\t').format(self.analysis_summary[a]))
-    #         else:
-    #             ltxt += '<   >\t'
-    #     print ltxt
-    #     if copytoclipboard:
-    #         clipb = QtGui.QApplication.clipboard()
-    #         clipb.clear(mode=clipb.Clipboard )
-    #         clipb.setText(ltxt, mode=clipb.Clipboard)
