@@ -100,7 +100,7 @@ class Manipulator(Device, OptomechDevice):
         cal['transform'] = pg.SRTTransform3D(tr)
         self.writeConfigFile(cal, 'calibration')
 
-    def goHome(self, speed='fast'):
+    def goOut(self, speed='fast'):
         """Extract pipette tip diagonally, then move manipulator far away from the objective.
 
         This method currently makes several assumptions:
@@ -113,6 +113,7 @@ class Manipulator(Device, OptomechDevice):
         # this assumes that [0, 0, 0] is a good home position, but 
         # eventually this needs to be more configurable..
         stagePos = stage.globalPosition()
+
         stageHome = stage.mapToGlobal(stage.mapFromStage([0, 0, 0]))
         globalMove = np.asarray(stageHome) - np.asarray(stagePos) # this is how much electrode should move in global coordinates
 
@@ -127,15 +128,49 @@ class Manipulator(Device, OptomechDevice):
             # diagonal move to 
             dz = -endPos[0] * np.tan(self.pitch)
             waypoint = self.mapToGlobal([endPos[0], 0, dz])
-            self._moveToGlobal(waypoint, speed, linear=True).wait(updates=True)
-            self._moveToGlobal(endPosGlobal, speed).wait(updates=True)
+            path = [
+                (waypoint, speed, True),
+                # (endPosGlobal, speed, False)
+            ]
         else:
             dx = -endPos[2] / np.tan(self.pitch)
             waypoint1 = self.mapToGlobal([dx, 0, endPos[2]])
             waypoint2 = self.mapToGlobal([endPos[0], 0, endPos[2]])
-            self._moveToGlobal(waypoint1, speed, linear=True).wait(updates=True)
-            self._moveToGlobal(waypoint2, speed).wait(updates=True)
-            self._moveToGlobal(endPosGlobal, speed).wait(updates=True)
+            path = [
+                (waypoint1, speed, True),
+                (waypoint2, speed, False),
+                # (endPosGlobal, speed, False),
+            ]
+
+        self._movePath(path)
+
+    def goIn(self, speed='fast'):
+        """Move the electrode tip so that it is axially aligned with the center of the microscope 
+        and 2mm away. 
+
+        This position is used for bringing in new electrodes.
+        """
+        scope = self.scopeDevice()
+        globalTarget = scope.mapToGlobal([0, 0, 0])
+        pos = self.globalPosition()
+        if np.linalg.norm(np.asarray(globalTarget) - pos) < 5e-3:
+            raise Exception('"In" position should only be used when electrode is far from objective.')
+
+        # compute intermediate position
+        localTarget = self.mapFromGlobal(globalTarget)
+        # local vector pointing in direction of electrode tip
+        evec = np.array([1., 0., -np.tan(self.pitch)])
+        evec /= np.linalg.norm(evec)
+        waypoint = localTarget - evec * 15e-3
+
+        final = localTarget - evec * 2e-3
+
+        path = [
+            (self.mapToGlobal(waypoint), speed, False),
+            (self.mapToGlobal(final), speed, True),
+        ]
+
+        self._movePath(path)
 
     def goStandby(self, target, speed):
         """Move the electrode tip such that it is 100um above the sample surface with its
@@ -288,7 +323,8 @@ class ManipulatorCamModInterface(QtCore.QObject):
         self.dev.sigGlobalTransformChanged.connect(self.transformChanged)
         self.calibrateAxis.sigRegionChangeFinished.connect(self.calibrateAxisChanged)
         self.calibrateAxis.sigRegionChanged.connect(self.calibrateAxisChanging)
-        self.ui.homeBtn.clicked.connect(self.homeClicked)
+        self.ui.outBtn.clicked.connect(self.outClicked)
+        self.ui.inBtn.clicked.connect(self.inClicked)
         self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
         self.ui.targetBtn.clicked.connect(self.targetClicked)
         self.ui.standbyBtn.clicked.connect(self.standbyClicked)
@@ -392,8 +428,11 @@ class ManipulatorCamModInterface(QtCore.QObject):
             if scene is not None:
                 scene.removeItem(item)
 
-    def homeClicked(self):
-        self.dev.goHome(self.selectedSpeed())
+    def outClicked(self):
+        self.dev.goOut(self.selectedSpeed())
+
+    def inClicked(self):
+        self.dev.goIn(self.selectedSpeed())
 
     def setTargetToggled(self, b):
         if b:

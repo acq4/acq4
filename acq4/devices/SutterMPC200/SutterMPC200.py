@@ -8,7 +8,7 @@ from acq4.util.Thread import Thread
 from acq4.pyqtgraph import debug, ptime
 
 
-def __reload__(self, old):
+def __reload__(old):
     # copy some globals if the module is reloaded
     SutterMPC200._monitor = old['SutterMPC200']._monitor
 
@@ -238,10 +238,11 @@ class MonitorThread(Thread):
                             start = ptime.time()
                             with self.lock:
                                 self._moveStatus[mid] = (start, False)
-                            self.dev.dev.moveTo(drive, pos, speed)
-                            self.dev._checkPositionChange()
+                            pos = self.dev.dev.moveTo(drive, pos, speed)
+                            self.dev._checkPositionChange(drive, pos)
                     except Exception as err:
                         debug.printExc('Move error:')
+                        self.dev._checkPositionChange(drive, err.args[1])
                         with self.lock:
                             self._moveStatus[mid] = (start, err)
                     else:

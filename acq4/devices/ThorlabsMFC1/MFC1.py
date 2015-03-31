@@ -18,7 +18,8 @@ class ThorlabsMFC1(Stage):
     def __init__(self, man, config, name):
         self.port = config.pop('port')
         self.scale = config.pop('scale', (1, 1, 1))
-        self.dev = MFC1_Driver(self.port)
+        params = config.pop('motorParams', {})
+        self.dev = MFC1_Driver(self.port, **params)
         man.sigAbortAll.connect(self.dev.stop)
 
         # Optionally use ROE-200 z axis to control focus

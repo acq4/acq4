@@ -196,9 +196,10 @@ class SutterMPC200(SerialDevice):
         Positions must be specified in meters unless *scaled* = False, in which 
         case position is specified in motor steps. 
 
-        This method will either 1) block until the move is complete, 2) raise 
-        TimeoutError if the timeout has elapsed or, 3) raise RuntimeError if the 
-        move was unsuccessful (final position does not match the requested position). 
+        This method will either 1) block until the move is complete and return the 
+        final position, 2) raise TimeoutError if the timeout has elapsed or, 3) raise 
+        RuntimeError if the move was unsuccessful (final position does not match the 
+        requested position). Exceptions contain the final position as ex.args[1].
         """
         assert drive is None or drive in range(1,5)
         assert speed == 'fast' or speed in range(16)
@@ -221,7 +222,7 @@ class SutterMPC200(SerialDevice):
 
         if np.all(np.abs(ustepPos-np.asarray(currentPos)) < 16):
             # step is too small; MPC200 will ignore this command and will not return \r
-            return
+            return tuple([currentPos[i] * self.scale[i] for i in (0, 1, 2)])
 
         # be sure to never request out-of-bounds position
         for i,x in enumerate(ustepPos):
@@ -266,9 +267,12 @@ class SutterMPC200(SerialDevice):
 
         # finally, make sure we ended up at the right place.
         newPos = self.getPos(scaled=False)[1]
+        scaled = tuple([newPos[i] * self.scale[i] for i in (0, 1, 2)])
         for i in range(3):
             if abs(newPos[i] - ustepPos[i]) > 1:
-                raise RuntimeError("Move was unsuccessful (%r != %r)."  % (tuple(newPos), tuple(ustepPos)))
+                raise RuntimeError("Move was unsuccessful (%r != %r)."  % (tuple(newPos), tuple(ustepPos)), scaled)
+
+        return scaled
 
     def expectedMoveDuration(self, drive, pos, speed):
         """Return the expected time duration required to move *drive* to *pos* at *speed*.

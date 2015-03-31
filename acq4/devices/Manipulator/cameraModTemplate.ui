@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>168</width>
-    <height>188</height>
+    <width>138</width>
+    <height>214</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -32,7 +32,7 @@
       <property name="spacing">
        <number>3</number>
       </property>
-      <item row="2" column="0">
+      <item row="3" column="0">
        <widget class="QPushButton" name="standbyBtn">
         <property name="enabled">
          <bool>false</bool>
@@ -42,7 +42,7 @@
         </property>
        </widget>
       </item>
-      <item row="3" column="0">
+      <item row="4" column="0">
        <widget class="QPushButton" name="targetBtn">
         <property name="enabled">
          <bool>false</bool>
@@ -52,17 +52,7 @@
         </property>
        </widget>
       </item>
-      <item row="1" column="0">
-       <widget class="QPushButton" name="homeBtn">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="text">
-         <string>Home</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="1">
+      <item row="4" column="1">
        <widget class="QPushButton" name="setTargetBtn">
         <property name="maximumSize">
          <size>
@@ -98,6 +88,20 @@
          </widget>
         </item>
        </layout>
+      </item>
+      <item row="2" column="0">
+       <widget class="QPushButton" name="inBtn">
+        <property name="text">
+         <string>Electrode In</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QPushButton" name="outBtn">
+        <property name="text">
+         <string>Electrode Out</string>
+        </property>
+       </widget>
       </item>
      </layout>
     </widget>
