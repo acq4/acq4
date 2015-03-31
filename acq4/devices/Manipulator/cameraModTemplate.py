@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'cameraModTemplate.ui'
 #
-# Created: Thu Mar 19 22:39:51 2015
+# Created: Tue Mar 31 18:25:50 2015
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -26,7 +26,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(141, 166)
+        Form.resize(168, 188)
         self.gridLayout_3 = QtGui.QGridLayout(Form)
         self.gridLayout_3.setMargin(0)
         self.gridLayout_3.setSpacing(0)
@@ -37,23 +37,33 @@ class Ui_Form(object):
         self.gridLayout_2.setMargin(3)
         self.gridLayout_2.setSpacing(3)
         self.gridLayout_2.setObjectName(_fromUtf8("gridLayout_2"))
-        self.homeBtn = QtGui.QPushButton(self.groupBox_2)
-        self.homeBtn.setEnabled(True)
-        self.homeBtn.setObjectName(_fromUtf8("homeBtn"))
-        self.gridLayout_2.addWidget(self.homeBtn, 0, 0, 1, 1)
         self.standbyBtn = QtGui.QPushButton(self.groupBox_2)
         self.standbyBtn.setEnabled(False)
         self.standbyBtn.setObjectName(_fromUtf8("standbyBtn"))
-        self.gridLayout_2.addWidget(self.standbyBtn, 1, 0, 1, 1)
+        self.gridLayout_2.addWidget(self.standbyBtn, 2, 0, 1, 1)
         self.targetBtn = QtGui.QPushButton(self.groupBox_2)
         self.targetBtn.setEnabled(False)
         self.targetBtn.setObjectName(_fromUtf8("targetBtn"))
-        self.gridLayout_2.addWidget(self.targetBtn, 2, 0, 1, 1)
+        self.gridLayout_2.addWidget(self.targetBtn, 3, 0, 1, 1)
+        self.homeBtn = QtGui.QPushButton(self.groupBox_2)
+        self.homeBtn.setEnabled(True)
+        self.homeBtn.setObjectName(_fromUtf8("homeBtn"))
+        self.gridLayout_2.addWidget(self.homeBtn, 1, 0, 1, 1)
         self.setTargetBtn = QtGui.QPushButton(self.groupBox_2)
         self.setTargetBtn.setMaximumSize(QtCore.QSize(30, 16777215))
         self.setTargetBtn.setCheckable(True)
         self.setTargetBtn.setObjectName(_fromUtf8("setTargetBtn"))
-        self.gridLayout_2.addWidget(self.setTargetBtn, 2, 1, 1, 1)
+        self.gridLayout_2.addWidget(self.setTargetBtn, 3, 1, 1, 1)
+        self.horizontalLayout = QtGui.QHBoxLayout()
+        self.horizontalLayout.setObjectName(_fromUtf8("horizontalLayout"))
+        self.slowRadio = QtGui.QRadioButton(self.groupBox_2)
+        self.slowRadio.setChecked(True)
+        self.slowRadio.setObjectName(_fromUtf8("slowRadio"))
+        self.horizontalLayout.addWidget(self.slowRadio)
+        self.fastRadio = QtGui.QRadioButton(self.groupBox_2)
+        self.fastRadio.setObjectName(_fromUtf8("fastRadio"))
+        self.horizontalLayout.addWidget(self.fastRadio)
+        self.gridLayout_2.addLayout(self.horizontalLayout, 0, 0, 1, 2)
         self.gridLayout_3.addWidget(self.groupBox_2, 0, 0, 1, 1)
         self.groupBox = QtGui.QGroupBox(Form)
         self.groupBox.setObjectName(_fromUtf8("groupBox"))
@@ -77,10 +87,12 @@ class Ui_Form(object):
     def retranslateUi(self, Form):
         Form.setWindowTitle(_translate("Form", "Form", None))
         self.groupBox_2.setTitle(_translate("Form", "Set points", None))
-        self.homeBtn.setText(_translate("Form", "Home", None))
         self.standbyBtn.setText(_translate("Form", "Standby", None))
         self.targetBtn.setText(_translate("Form", "Target", None))
+        self.homeBtn.setText(_translate("Form", "Home", None))
         self.setTargetBtn.setText(_translate("Form", "Set", None))
+        self.slowRadio.setText(_translate("Form", "slow", None))
+        self.fastRadio.setText(_translate("Form", "fast", None))
         self.groupBox.setTitle(_translate("Form", "Calibration", None))
         self.setCenterBtn.setText(_translate("Form", "Set center", None))
         self.setOrientationBtn.setText(_translate("Form", "Set orientation", None))

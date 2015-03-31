@@ -95,8 +95,8 @@ class SutterMPC200(Stage):
             dev = cls._drives[drive-1]
             if dev is None:
                 return False
-            pos = [pos[i] * dev.scale[i] for i in (0, 1, 2)]
             cls._pos_cache[drive-1] = pos
+            pos = [pos[i] * dev.scale[i] for i in (0, 1, 2)]
             dev.posChanged(pos)
 
             return (drive, pos, oldpos)

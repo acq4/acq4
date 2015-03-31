@@ -60,6 +60,7 @@ class Manipulator(Device, OptomechDevice):
         OptomechDevice.__init__(self, deviceManager, config, name)
         self._scopeDev = deviceManager.getDevice(config['scopeDevice'])
         self.pitch = config['pitch'] * np.pi / 180.
+        self._stageOrientation = {'angle': 0, 'inverty': False}
         assert isinstance(self.parentDevice(), Stage)
 
         cal = self.readConfigFile('calibration')
@@ -89,6 +90,7 @@ class Manipulator(Device, OptomechDevice):
         cal = self.readConfigFile('calibration')
         cal['angle'] = angle
         cal['inverty'] = inverty
+        self._stageOrientation = cal
         self.writeConfigFile(cal, 'calibration')
 
     def setDeviceTransform(self, tr):
@@ -139,27 +141,72 @@ class Manipulator(Device, OptomechDevice):
         """Move the electrode tip such that it is 100um above the sample surface with its
         axis aligned to the target. 
         """
+        self._movePath(self._standbyPath(target, speed))
+
+    def _movePath(self, path):
+        # move along a path defined in global coordinates. 
+        # Format is [(pos, speed, linear), ...]
+
+        # Simplify path if possible
+        pos = self.globalPosition()
+        path2 = []
+        for step in path:
+            pos2 = np.asarray(step[0])
+            if np.linalg.norm(pos2 - pos) > 1e-6:
+                path2.append(step)
+            pos = pos2
+
+        for pos, speed, linear in path2:
+            self._moveToGlobal(pos, speed, linear=linear).wait(updates=True)
+    
+    def _standbyPath(self, target, speed):
+        # Return steps (in global coords) needed to move to standby position
         stbyDepth = self.standbyDepth()
         pos = self.globalPosition()
 
-        # first retract electrode to standby depth if needed
+        # steps are in global coordinates.
+        path = []
+
         if pos[2] < stbyDepth:
-            self.advance(stbyDepth, 'slow').wait(updates=True)
+            dz = stbyDepth - pos[2]
+            dx = -dz / np.tan(self.pitch)
+            last = np.array([dx, 0., dz])
+            path.append([self.mapToGlobal(last), 100e-6, True])  # slow removal from sample
+        else:
+            last = np.array([0., 0., 0.])
 
-        # find axial intersection with current depth plane
-        pos = self.globalPosition()
-        dz = pos[2] - target[2]
-        dx = -dz / np.tan(self.pitch)
-        localTarget = self.mapFromGlobal(target)
-        stbyPos = np.asarray(localTarget) + np.array([dx, 0, dz])
-        # move to target axis
-        self._moveToLocal(stbyPos, 'slow', linear=True).wait(updates=True)
+        # local vector pointing in direction of electrode tip
+        evec = np.array([1., 0., -np.tan(self.pitch)])
+        evec /= np.linalg.norm(evec)
 
-        # advance to standby depth
-        self.advance(stbyDepth, 'slow').wait(updates=True)
+        # target in local coordinates
+        ltarget = self.mapFromGlobal(target)
+
+        # compute standby position
+        dz2 = stbyDepth - target[2]
+        dx2 = -dz2 / np.tan(self.pitch)
+        stby = ltarget + np.array([dx2, 0., dz2])
+
+        # compute intermediate position
+        targetToTip = last - ltarget
+        targetToStby = stby - ltarget
+        targetToStby /= np.linalg.norm(targetToStby)
+        closest = ltarget + np.dot(targetToTip, targetToStby) * targetToStby
+
+        if np.linalg.norm(stby - last) > 1e-6:
+            if (closest[2] > stby[2]) and (np.linalg.norm(stby - closest) > 1e-6):
+                path.append([self.mapToGlobal(closest), speed, True])
+            path.append([self.mapToGlobal(stby), speed, True])
+
+        return path
 
     def goTarget(self, target, speed):
-        self._moveToGlobal(target, speed, linear=True).wait(updates=True)
+        pos = self.globalPosition()
+        if np.linalg.norm(np.asarray(target) - pos) < 1e-7:
+            return
+        path = self._standbyPath(target, speed)
+        path.append([target, 100e-6, True])
+        self._movePath(path)
 
     def standbyDepth(self):
         """Return the global depth where the electrode should move in standby mode.
@@ -168,6 +215,8 @@ class Manipulator(Device, OptomechDevice):
         """
         scope = self.scopeDevice()
         surface = scope.getSurfaceDepth()
+        if surface is None:
+            raise Exception("Surface depth has not been set.")
         return surface + 100e-6
 
     def advance(self, depth, speed):
@@ -193,7 +242,6 @@ class Manipulator(Device, OptomechDevice):
         dif = np.asarray(pos) - np.asarray(self.globalPosition())
         stage = self.parentDevice()
         spos = np.asarray(stage.globalPosition())
-        print "move global:", spos+dif
         return stage.moveToGlobal(spos + dif, speed, linear=linear)
 
     def _moveToLocal(self, pos, speed, linear=False):
@@ -216,7 +264,8 @@ class ManipulatorCamModInterface(QtCore.QObject):
         self.ctrl = QtGui.QWidget()
         self.ui.setupUi(self.ctrl)
 
-        self.calibrateAxis = Axis([0, 0], 0)
+        cal = self.dev._stageOrientation
+        self.calibrateAxis = Axis([0, 0], 0, inverty=cal['inverty'])
         mod.addItem(self.calibrateAxis)
         self.calibrateAxis.setVisible(False)
 
@@ -230,7 +279,9 @@ class ManipulatorCamModInterface(QtCore.QObject):
         mod.getDepthView().addItem(self.depthTarget)
         self.depthTarget.setVisible(False)
 
-        self.depthLine = self.mod.getDepthView().addLine(y=0, markers=[('v', 1, 20)])
+        # self.depthLine = self.mod.getDepthView().addLine(y=0, markers=[('v', 1, 20)])
+        self.depthArrow = pg.ArrowItem(angle=-self.dev.pitch * 180 / np.pi)
+        self.mod.getDepthView().addItem(self.depthArrow)
 
         self.ui.setOrientationBtn.toggled.connect(self.setOrientationToggled)
         self.mod.window().getView().scene().sigMouseClicked.connect(self.sceneMouseClicked)
@@ -241,11 +292,15 @@ class ManipulatorCamModInterface(QtCore.QObject):
         self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
         self.ui.targetBtn.clicked.connect(self.targetClicked)
         self.ui.standbyBtn.clicked.connect(self.standbyClicked)
+        self.target.sigDragged.connect(self.targetDragged)
 
         self.transformChanged()
 
     def setOrientationToggled(self):
         self.calibrateAxis.setVisible(self.ui.setOrientationBtn.isChecked())
+
+    def selectedSpeed(self):
+        return 'fast' if self.ui.fastRadio.isChecked() else 'slow'
 
     def sceneMouseClicked(self, ev):
         if ev.button() != QtCore.Qt.LeftButton:
@@ -263,10 +318,19 @@ class ManipulatorCamModInterface(QtCore.QObject):
             self.ui.standbyBtn.setEnabled(True)
             self.ui.setTargetBtn.setChecked(False)
             pos = self.mod.getView().mapSceneToView(ev.scenePos())
-            self.target.setPos(pos)
             z = self.dev.scopeDevice().getFocusDepth()
-            self.depthTarget.setPos(0, z)
-            self._targetPos = [pos.x(), pos.y(), z]
+            self.setTargetPos(pos, z)
+
+    def setTargetPos(self, pos, z=None):
+        self.target.setPos(pos)
+        if z is None:
+            z = self._targetPos[2]
+        self.depthTarget.setPos(0, z)
+        self._targetPos = [pos.x(), pos.y(), z]
+
+    def targetDragged(self):
+        z = self.dev.scopeDevice().getFocusDepth()
+        self.setTargetPos(self.target.pos(), z)
 
     def transformChanged(self):
         pos = self.dev.mapToGlobal([0, 0, 0])
@@ -281,7 +345,8 @@ class ManipulatorCamModInterface(QtCore.QObject):
 
         self.centerArrow.setPos(pos[0], pos[1])
         self.centerArrow.setStyle(angle=180-angle)
-        self.depthLine.setValue(pos[2])
+        # self.depthLine.setValue(pos[2])
+        self.depthArrow.setPos(0, pos[2])
 
         if self.ui.setOrientationBtn.isChecked():
             return
@@ -289,6 +354,8 @@ class ManipulatorCamModInterface(QtCore.QObject):
         with pg.SignalBlock(self.calibrateAxis.sigRegionChangeFinished, self.calibrateAxisChanged):
             self.calibrateAxis.setPos(pos[:2])
             self.calibrateAxis.setAngle(angle)
+            ys = self.calibrateAxis.size()[1]
+
 
     def calibrateAxisChanging(self):
         pos = self.calibrateAxis.pos()
@@ -320,13 +387,13 @@ class ManipulatorCamModInterface(QtCore.QObject):
         return None
 
     def quit(self):
-        for item in self.calibrateAxis, self.centerArrow, self.depthLine:
+        for item in self.calibrateAxis, self.centerArrow, self.depthArrow:
             scene = item.scene()
             if scene is not None:
                 scene.removeItem(item)
 
     def homeClicked(self):
-        self.dev.goHome()
+        self.dev.goHome(self.selectedSpeed())
 
     def setTargetToggled(self, b):
         if b:
@@ -337,13 +404,15 @@ class ManipulatorCamModInterface(QtCore.QObject):
             self.ui.setTargetBtn.setChecked(False)
 
     def targetClicked(self):
-        self.dev.goTarget(self._targetPos, 'slow')
+        self.dev.goTarget(self._targetPos, self.selectedSpeed())
 
     def standbyClicked(self):
-        self.dev.goStandby(self._targetPos, 'fast')
+        self.dev.goStandby(self._targetPos, self.selectedSpeed())
 
 
 class Target(pg.GraphicsObject):
+    sigDragged = QtCore.Signal(object)
+
     def __init__(self, movable=True):
         pg.GraphicsObject.__init__(self)
         self.movable = movable
@@ -388,6 +457,7 @@ class Target(pg.GraphicsObject):
             self.setPos(self.cursorOffset + self.mapToParent(ev.pos()))
             if ev.isFinish():
                 self.moving = False
+                self.sigDragged.emit(self)
 
     def hoverEvent(self, ev):
         if self.movable:
@@ -397,7 +467,7 @@ class Target(pg.GraphicsObject):
 class Axis(pg.ROI):
     """Used for calibrating manipulator position and orientation.
     """
-    def __init__(self, pos, angle):
+    def __init__(self, pos, angle, inverty):
         arrow = pg.makeArrowPath(headLen=20, tipAngle=30, tailLen=60, tailWidth=2).translated(-84, 0)
         tr = QtGui.QTransform()
         tr.rotate(180)
@@ -407,6 +477,10 @@ class Axis(pg.ROI):
         self.pxLen = [1, 1]
 
         pg.ROI.__init__(self, pos, angle=angle, invertible=True, movable=False)
+        if inverty:
+            self.setSize([1, -1])
+        else:
+            self.setSize([1, 1])
         self.addRotateHandle([1, 0], [0, 0])
         self.addScaleHandle([0, 1], [0, 0])
         self.addTranslateHandle([0, 0])

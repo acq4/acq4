@@ -84,12 +84,12 @@ class Stage(Device, OptomechDevice):
             rel[:len(pos)] = [pos[i] - self.pos[i] for i in range(len(pos))]
             self.pos[:len(pos)] = pos
         
-        self._stageTransform = QtGui.QMatrix4x4()
-        self._stageTransform.translate(*self.pos)
-        self._invStageTransform = QtGui.QMatrix4x4()
-        self._invStageTransform.translate(*[-x for x in self.pos])
+            self._stageTransform = QtGui.QMatrix4x4()
+            self._stageTransform.translate(*self.pos)
+            self._invStageTransform = QtGui.QMatrix4x4()
+            self._invStageTransform.translate(*[-x for x in self.pos])
 
-        self._updateTransform()
+            self._updateTransform()
 
         self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
 
@@ -122,7 +122,8 @@ class Stage(Device, OptomechDevice):
         multiplied by the scale factor in the device configuration.
         """
         if not refresh:
-            return self.pos[:]
+            with self.lock:
+                return self.pos[:]
         else:
             return self._getPosition()
 
@@ -327,7 +328,7 @@ class MoveFuture(object):
         """
         return self.percentDone() == 100 or self.wasInterrupted()
         
-    def wait(self, timeout=10, updates=False):
+    def wait(self, timeout=None, updates=False):
         """Block until the move has completed, been interrupted, or the
         specified timeout has elapsed.
 
@@ -336,7 +337,7 @@ class MoveFuture(object):
         If the move did not complete, raise an exception.
         """
         start = ptime.time()
-        while ptime.time() < start+timeout:
+        while (timeout is None) or (ptime.time() < start + timeout):
             if self.isDone():
                 break
             if updates is True:

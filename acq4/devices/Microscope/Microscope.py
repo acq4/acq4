@@ -22,6 +22,7 @@ class Microscope(Device, OptomechDevice):
     
     sigObjectiveChanged = QtCore.Signal(object) ## (objective, lastObjective)
     sigObjectiveListChanged = QtCore.Signal()
+    sigSurfaceDepthChanged = QtCore.Signal(object)
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -68,6 +69,10 @@ class Microscope(Device, OptomechDevice):
         else:
             self.setObjectiveIndex(0)
         
+        cal = self.readConfigFile('calibration')
+        if 'surfaceDepth' in cal:
+            self.setSurfaceDepth(cal['surfaceDepth'])
+
         dm.declareInterface(name, ['microscope'], self)
 
     def quit(self):
@@ -182,6 +187,15 @@ class Microscope(Device, OptomechDevice):
         """Return the z-position of the sample surface as marked by the user.
         """
         return self._surfaceDepth
+
+    def setSurfaceDepth(self, depth):
+        self._surfaceDepth = depth
+        self.sigSurfaceDepthChanged.emit(depth)
+        self.writeCalibration()
+
+    def writeCalibration(self):
+        cal = {'surfaceDepth': self.getSurfaceDepth()}
+        self.writeConfigFile(cal, 'calibration')
 
     def focusDevice(self):
         if self._focusDevice is None:
@@ -392,7 +406,10 @@ class ScopeCameraModInterface(QtCore.QObject):
 
         self.plot = mod.window().getDepthView()
         self.focusLine = self.plot.addLine(y=0, pen='y')
-        self.surfaceLine = self.plot.addLine(y=0, pen='g')
+        sd = dev.getSurfaceDepth()
+        if sd is None:
+            sd = 0
+        self.surfaceLine = self.plot.addLine(y=sd, pen='g')
         self.movableFocusLine = self.plot.addLine(y=0, pen='y', markers=[('<|>', 0.5, 10)], movable=True)
 
         self.setSurfaceBtn = QtGui.QPushButton('Set Surface')
@@ -401,13 +418,16 @@ class ScopeCameraModInterface(QtCore.QObject):
 
         self.dev.sigGlobalTransformChanged.connect(self.transformChanged)
         self.movableFocusLine.sigDragged.connect(self.focusDragged)
+        self.dev.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
 
         self.transformChanged()
 
     def setSurfaceClicked(self):
         focus = self.dev.getFocusDepth()
-        self.surfaceLine.setValue(focus)
-        self.dev._surfaceDepth = focus
+        self.dev.setSurfaceDepth(focus)
+
+    def surfaceDepthChanged(self, depth):
+        self.surfaceLine.setValue(depth)
 
     def transformChanged(self):
         focus = self.dev.getFocusDepth()

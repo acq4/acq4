@@ -24,7 +24,7 @@ class ThorlabsMFC1(Stage):
         # Optionally use ROE-200 z axis to control focus
         roe = config.pop('roe', None)
         self._roeDev = None
-        self._roeEnabled = True
+        self._roeEnabled = "waiting"  # ROE control is disabled until after the first update
         if roe is not None:
             dev = man.getDevice(roe)
             self._roeDev = dev
@@ -82,9 +82,11 @@ class ThorlabsMFC1(Stage):
         Stage.quit(self)
 
     def _roeChanged(self, drive, pos, oldpos):
-        if self._roeEnabled is not True:
-            return
         if drive != self._roeDev.drive:
+            return
+        if self._roeEnabled is not True:
+            if self._roeEnabled == 'waiting':
+                self._roeEnabled = True
             return
         dz = pos[2] - oldpos[2]
         if dz == 0:
