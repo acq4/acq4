@@ -50,7 +50,7 @@ class MFC1(object):
             pulse_divisor=3,
             standby_current=0,
             mixed_decay_threshold=-1,
-            encoder_prescaler=8192,
+            encoder_prescaler=8192,   # causes encoder_position to have exactly the same resolution as the encoder itself
             microstep_resolution=5,
             fullstep_threshold=0,
             stall_detection_threshold=0,
@@ -72,8 +72,17 @@ class MFC1(object):
         
     def _upload_program(self):
         """Upload a program used to seek to a specific encoder value.
+
+        This controls the motor velocity while seeking for a specific encoder 
+        value.
+
+        Note: the move command provided by the tmcm firmware only tracks the motor
+        microsteps and does not make use of the encoder. Because the microsteps are not
+        uniform, it is not possible to reliably move to a specific encoder position
+        using the built-in move command.
         """
         m = self.mcm
+        max_speed = m['maximum_speed']
         with m.write_program() as p:
             # start with a brief wait because sometimes the first command may be 
             # ignored.
@@ -119,15 +128,14 @@ class MFC1(object):
             p.calc('div', 3)
             
             # new_speed = clip(new_speed, -2047, 2047)
-            max = 2000
-            p.comp(max)
+            p.comp(max_speed)
             p.jump('gt', p.count+3)
-            p.comp(-max)
+            p.comp(-max_speed)
             p.jump('lt', p.count+3)
             p.jump(p.count+3)
-            p.calc('load', max)
+            p.calc('load', max_speed)
             p.jump(p.count+1)
-            p.calc('load', -max)
+            p.calc('load', -max_speed)
             
             # 0 speed should never be requested if there is an offset
             p.comp(0)
