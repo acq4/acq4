@@ -100,6 +100,7 @@ class SutterMPC200(SerialDevice):
         self.port = port
         SerialDevice.__init__(self, port=self.port, baudrate=128000)
         self.scale = [0.0625e-6]*3  # default is 16 usteps per micron
+        self._moving = False
 
     @threadsafe
     def setDrive(self, drive):
@@ -195,9 +196,10 @@ class SutterMPC200(SerialDevice):
         Positions must be specified in meters unless *scaled* = False, in which 
         case position is specified in motor steps. 
 
-        This method will either 1) block until the move is complete, 2) raise 
-        TimeoutError if the timeout has elapsed or, 3) raise RuntimeError if the 
-        move was unsuccessful (final position does not match the requested position). 
+        This method will either 1) block until the move is complete and return the 
+        final position, 2) raise TimeoutError if the timeout has elapsed or, 3) raise 
+        RuntimeError if the move was unsuccessful (final position does not match the 
+        requested position). Exceptions contain the final position as `ex.lastPosition`.
         """
         assert drive is None or drive in range(1,5)
         assert speed == 'fast' or speed in range(16)
@@ -205,9 +207,7 @@ class SutterMPC200(SerialDevice):
         if drive is not None:
             self.setDrive(drive)
 
-        # get current position if needed
-        if None in pos or timeout is None:
-            currentPos = self.getPos(scaled=False)[1]
+        currentPos = self.getPos(scaled=False)[1]
 
         # scale position to microsteps, fill in Nones with current position
         ustepPos = np.empty(3, dtype=int)
@@ -215,11 +215,19 @@ class SutterMPC200(SerialDevice):
             if pos[i] is None:
                 ustepPos[i] = currentPos[i]
             else:
-                ustepPos[i] = np.round(pos[i] / self.scale[i])
+                if scaled:
+                    ustepPos[i] = np.round(pos[i] / self.scale[i])
+                else:
+                    ustepPos[i] = pos[i]
+
+        if np.all(np.abs(ustepPos-np.asarray(currentPos)) < 16):
+            # step is too small; MPC200 will ignore this command and will not return \r
+            return tuple([currentPos[i] * self.scale[i] for i in (0, 1, 2)])
 
         # be sure to never request out-of-bounds position
         for i,x in enumerate(ustepPos):
-            assert 0 <= x < (25e-3 / self.scale[i])
+            if not (0 <= x < (25e-3 / self.scale[i])):
+                raise ValueError("Invalid coordinate %d=%g; must be in [0, 25e-3]" % (i, x * self.scale[i]))
 
         if timeout is None:
             # maximum distance to be travelled along any axis
@@ -229,13 +237,14 @@ class SutterMPC200(SerialDevice):
             # print "dist, speed, timeout:", dist, v, timeout
 
         # Send move command
+        self.readAll()
         if speed == 'fast':
             cmd = b'M' + struct.pack('<lll', *ustepPos)
             self.write(cmd)
         else:
             #self.write(b'O')  # position updates on (these are broken in mpc200?)
-            self.write(b'F')  # position updates off
-            self.read(1, term='\r')
+            # self.write(b'F')  # position updates off
+            # self.read(1, term='\r')
             self.write(b'S')
             # MPC200 crashes if the entire packet is written at once; this sleep is mandatory
             time.sleep(0.03)
@@ -243,17 +252,29 @@ class SutterMPC200(SerialDevice):
 
         # wait for move to complete
         try:
+            self._moving = True
             self.read(1, term='\r', timeout=timeout)
         except DataError:
             # If the move is interrupted, sometimes we get junk on the serial line.
             time.sleep(0.03)
             self.readAll()
+        except TimeoutError:
+            # just for debugging
+            print "start pos:", currentPos, "move pos:", ustepPos
+            raise
+        finally:
+            self._moving = False
 
         # finally, make sure we ended up at the right place.
         newPos = self.getPos(scaled=False)[1]
+        scaled = tuple([newPos[i] * self.scale[i] for i in (0, 1, 2)])
         for i in range(3):
             if abs(newPos[i] - ustepPos[i]) > 1:
-                raise RuntimeError("Move was unsuccessful (%r != %r)."  % (tuple(newPos), tuple(ustepPos)))
+                err = RuntimeError("Move was unsuccessful (%r != %r)."  % (tuple(newPos), tuple(ustepPos)))
+                err.lastPosition = scaled
+                raise err
+
+        return scaled
 
     def expectedMoveDuration(self, drive, pos, speed):
         """Return the expected time duration required to move *drive* to *pos* at *speed*.
@@ -289,15 +310,25 @@ class SutterMPC200(SerialDevice):
 
     #     return pos
 
-    @threadsafe
-    @resetDrive
-    def stop(self, drive):
-        """Stop moving *drive*
+    def stop(self):
+        """Stop moving the active drive.
         """
-        if drive is not None:
-            self.setDrive(drive)
+        # lock before stopping if possible
+        if self.lock.acquire(blocking=False):
+            try:
+                self.write('\3')
+                self.read(1, term='\r')
+            finally:
+                self.lock.release()
+
+        # If the lock is in use, then we write immediately and hope for the best.
+        else:
             self.write('\3')
-            self.read(1, term='\r')
+            with self.lock:
+                time.sleep(0.02)
+                self.readAll()
+
+
 
 
 def measureSpeedTable(dev, drive, dist=3e-3):

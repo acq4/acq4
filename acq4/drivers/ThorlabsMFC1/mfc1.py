@@ -39,25 +39,31 @@ def threadsafe(method):
 
 
 class MFC1(object):
-    def __init__(self, port, baudrate=9600):
+    def __init__(self, port, baudrate=9600, **kwds):
         self.lock = RLock(debug=True)
 
-        self.mcm = TMCM140(port, baudrate)
-        self.mcm.stop_program()
-        self.mcm.stop()
-        self.mcm.set_params(
-            maximum_current=50,
+        params = dict(
+            maximum_current=100,
             maximum_acceleration=1000,
             maximum_speed=2000,
             ramp_divisor=7,
             pulse_divisor=3,
             standby_current=0,
             mixed_decay_threshold=-1,
-            encoder_prescaler=8192,
+            encoder_prescaler=8192,   # causes encoder_position to have exactly the same resolution as the encoder itself
             microstep_resolution=5,
             fullstep_threshold=0,
             stall_detection_threshold=0,
         )
+        for k, v in kwds.items():
+            if k not in params:
+                raise NameError("Unknown MFC1 parameter '%s'" % k)
+            params[k] = v
+
+        self.mcm = TMCM140(port, baudrate)
+        self.mcm.stop_program()
+        self.mcm.stop()
+        self.mcm.set_params(**params)
         self.mcm.set_global('gp0', self.mcm['encoder_position'])
         self._upload_program()
 
@@ -66,8 +72,17 @@ class MFC1(object):
         
     def _upload_program(self):
         """Upload a program used to seek to a specific encoder value.
+
+        This controls the motor velocity while seeking for a specific encoder 
+        value.
+
+        Note: the move command provided by the tmcm firmware only tracks the motor
+        microsteps and does not make use of the encoder. Because the microsteps are not
+        uniform, it is not possible to reliably move to a specific encoder position
+        using the built-in move command.
         """
         m = self.mcm
+        max_speed = m['maximum_speed']
         with m.write_program() as p:
             # start with a brief wait because sometimes the first command may be 
             # ignored.
@@ -113,15 +128,14 @@ class MFC1(object):
             p.calc('div', 3)
             
             # new_speed = clip(new_speed, -2047, 2047)
-            max = 2000
-            p.comp(max)
+            p.comp(max_speed)
             p.jump('gt', p.count+3)
-            p.comp(-max)
+            p.comp(-max_speed)
             p.jump('lt', p.count+3)
             p.jump(p.count+3)
-            p.calc('load', max)
+            p.calc('load', max_speed)
             p.jump(p.count+1)
-            p.calc('load', -max)
+            p.calc('load', -max_speed)
             
             # 0 speed should never be requested if there is an offset
             p.comp(0)

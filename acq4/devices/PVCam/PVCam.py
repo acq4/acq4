@@ -64,7 +64,7 @@ class PVCam(Camera):
         
     def startCamera(self):
         ## Attempt camera start. If the driver complains that it can not allocate memory, reduce the ring size until it works. (Ridiculous driver bug)
-        printRingSize = False
+        #  Update: as of 2015.03 the bug is still present.
         self.stopOk = False
         while True:
             try:
@@ -73,15 +73,15 @@ class PVCam(Camera):
                     self.acqBuffer = self.cam.start()
                 break
             except Exception, e:
-                if len(e.args) == 2 and e.args[1] == 15:
+                if len(e.args) == 2 and (e.args[1] in (15, 41)):
                     printRingSize = True
                     self.ringSize = int(self.ringSize * 0.9)
+                    print "PVCam error: %r" % e
+                    print "Trying again with smaller ring size %d" % self.ringSize
                     if self.ringSize < 2:
-                        raise Exception("Will not reduce camera ring size < 2")
+                        raise
                 else:
                     raise
-        if printRingSize:
-            print "Reduced camera ring size to %d" % self.ringSize
         
     def stopCamera(self):
         with self.camLock:

@@ -8,12 +8,15 @@ from acq4.util.Thread import Thread
 from acq4.pyqtgraph import debug, ptime
 
 
-def __reload__(self, old):
+def __reload__(old):
     # copy some globals if the module is reloaded
     SutterMPC200._monitor = old['SutterMPC200']._monitor
 
 
 class ChangeNotifier(QtCore.QObject):
+    """Used to send raw (unscaled) stage position updates to other devices. 
+    In particular, focus motors may use this to hijack unused ROE axes.
+    """
     sigPosChanged = QtCore.Signal(object, object, object)
 
 
@@ -29,20 +32,26 @@ class SutterMPC200(Stage):
     _pos_cache = [None] * 4
     _notifier = ChangeNotifier()
     _monitor = None
+    _drives = [None] * 4
     slowSpeed = 4  # speed to move when user requests 'slow' movement
 
     def __init__(self, man, config, name):
         self.port = config.pop('port')
         self.drive = config.pop('drive')
         self.scale = config.pop('scale', (1, 1, 1))
+        if self._drives[self.drive-1] is not None:
+            raise RuntimeError("Already created MPC200 device for drive %d!" % self.drive)
+        self._drives[self.drive-1] = self
         self.dev = MPC200_Driver.getDevice(self.port)
-        self._notifier.sigPosChanged.connect(self._mpc200PosChanged)
+        # self._notifier.sigPosChanged.connect(self._mpc200PosChanged)
         man.sigAbortAll.connect(self.stop)
 
         self._lastMove = None
 
         Stage.__init__(self, man, config, name)
 
+        # clear cached position for this device and re-read to generate an initial position update
+        self._pos_cache[self.drive-1] = None
         self.getPosition(refresh=True)
 
         ## May have multiple SutterMPC200 instances (one per drive), but 
@@ -63,28 +72,35 @@ class SutterMPC200(Stage):
             }
 
     def stop(self):
-        self.dev.stop(self.drive)
+        """Stop _any_ moving drives on the MPC200.
+        """
+        self.dev.stop()
 
-    def _checkPositionChange(self, drive=None, pos=None):
+    @classmethod
+    def _checkPositionChange(cls, drive=None, pos=None):
         ## Anyone may call this function. 
         ## If any drive has changed position, SutterMPC200_notifier will emit 
         ## a signal, and the correct devices will be notified.
         if drive is None:
-            drive, pos = self.dev.getPos()
-        if pos != self._pos_cache[drive-1]:
-            oldpos = self._pos_cache[drive-1]
-            self._notifier.sigPosChanged.emit(drive, pos, oldpos)
-            self._pos_cache[drive-1] = pos
+            for dev in cls._drives:
+                if dev is None:
+                    continue
+                drive, pos = dev.dev.getPos()
+                break
+        if drive is None:
+            raise Exception("No MPC200 devices initialized yet.")
+        if pos != cls._pos_cache[drive-1]:
+            oldpos = cls._pos_cache[drive-1]
+            cls._notifier.sigPosChanged.emit(drive, pos, oldpos)
+            dev = cls._drives[drive-1]
+            if dev is None:
+                return False
+            cls._pos_cache[drive-1] = pos
+            pos = [pos[i] * dev.scale[i] for i in (0, 1, 2)]
+            dev.posChanged(pos)
+
             return (drive, pos, oldpos)
         return False
-
-    def _mpc200PosChanged(self, drive, pos, oldpos):
-        ## monitor thread reports that a drive has moved; 
-        ## if it is THIS drive, then handle the position change.
-        if drive != self.drive:
-            return
-        pos = [pos[i] * self.scale[i] for i in (0, 1, 2)]
-        self.posChanged(pos)
 
     def _getPosition(self):
         # Called by superclass when user requests position refresh
@@ -103,7 +119,7 @@ class SutterMPC200(Stage):
         self._monitor.stop()
         Stage.quit(self)
 
-    def _move(self, abs, rel, speed):
+    def _move(self, abs, rel, speed, linear):
         # convert relative to absolute position, fill in Nones with current position.
         pos = self._toAbsolutePosition(abs, rel)
 
@@ -111,7 +127,10 @@ class SutterMPC200(Stage):
         if speed == 'slow':
             speed = self.slowSpeed
         elif speed == 'fast':
-            pass
+            if linear is True:
+                speed = 15
+            else:
+                speed = 'fast'
         else:
             speed = self._getClosestSpeed(speed)
         
@@ -219,11 +238,16 @@ class MonitorThread(Thread):
                             start = ptime.time()
                             with self.lock:
                                 self._moveStatus[mid] = (start, False)
-                            self.dev.dev.moveTo(drive, pos, speed)
+                            pos = self.dev.dev.moveTo(drive, pos, speed)
+                            self.dev._checkPositionChange(drive, pos)
                     except Exception as err:
                         debug.printExc('Move error:')
-                        with self.lock:
-                            self._moveStatus[mid] = (start, err)
+                        try:
+                            if hasattr(err, 'lastPosition'):
+                                self.dev._checkPositionChange(drive, err.lastPosition)
+                        finally:
+                            with self.lock:
+                                self._moveStatus[mid] = (start, err)
                     else:
                         with self.lock:
                             self._moveStatus[mid] = (start, True)
@@ -243,7 +267,13 @@ class MPC200MoveFuture(MoveFuture):
         # because of MPC200 idiosyncracies, we must coordinate with the monitor
         # thread to do a move.
         self._expectedDuration = dev.dev.expectedMoveDuration(dev.drive, pos, speed)
-        self._id = SutterMPC200._monitor.move(dev.drive, pos, speed)
+        scaled = []
+        for i in range(3):
+            if dev.scale[i] != 0:
+                scaled.append(pos[i] / dev.scale[i])
+            else:
+                scaled.append(None)
+        self._id = SutterMPC200._monitor.move(dev.drive, scaled, speed)
         self._moveStatus = (None, None)
         while True:
             start, status = self._getStatus()

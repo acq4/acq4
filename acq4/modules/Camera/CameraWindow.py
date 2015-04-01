@@ -35,23 +35,22 @@ class CameraWindow(QtGui.QMainWindow):
         self.gvDock = dockarea.Dock(name="View", widget=self.gv, hideTitle=True, size=(600,600))
         self.cw.addDock(self.gvDock)
         
-        ## Load previous window state
-        self.stateFile = os.path.join('modules', self.module.name + '_ui.cfg')
-        uiState = module.manager.readConfigFile(self.stateFile)
-        if 'geometry' in uiState:
-            geom = QtCore.QRect(*uiState['geometry'])
-            self.setGeometry(geom)
-        if 'window' in uiState:
-            ws = QtCore.QByteArray.fromPercentEncoding(uiState['window'])
-            self.restoreState(ws)
-        self.show()
-        
         ## set up ViewBox
         self.view = pg.ViewBox()
         self.view.enableAutoRange(x=False, y=False)
         self.view.setAspectLocked(True)
         self.gv.setCentralItem(self.view)
         
+        # And a plot area for displaying depth-related information
+        self.depthPlot = pg.PlotWidget(labels={'left': ('Depth', 'm')})
+        self.depthPlot.setYRange(0, 1e-3)
+        self.depthPlot.setXRange(-1, 1)
+        self.depthPlot.hideAxis('bottom')
+        self.depthPlot.setMouseEnabled(x=False)
+        self.depthDock = pg.dockarea.Dock(name='Depth', widget=self.depthPlot)
+        self.cw.addDock(self.depthDock, 'right')
+        self.depthDock.hide()
+
         ## search for all devices that provide a cameraModuleInterface() method
         man = Manager.getManager()
         devices = [man.getDevice(dev) for dev in man.listDevices()]
@@ -64,13 +63,12 @@ class CameraWindow(QtGui.QMainWindow):
                 haveDevs = True
                 self.addInterface(dev, iface)
         
-        # Add explanatory label of no devices were found
+        # Add explanatory label if no devices were found
         if not haveDevs:
             label = QtGui.QLabel("No imaging devices available")
             label.setAlignment(QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
             dock = dockarea.Dock(name="nocamera", widget=label, size=(100, 500), hideTitle=True)
             self.cw.addDock(dock, 'left', self.gvDock)
-
 
         ## ROI plot ctrls
         self.roiWidget = QtGui.QWidget()
@@ -112,7 +110,6 @@ class CameraWindow(QtGui.QMainWindow):
         self.roiDock = dockarea.Dock(name='ROI Plot', widget=self.roiWidget, size=(600, 10))
         self.cw.addDock(self.roiDock, 'bottom', self.gvDock)
         
-        
         #grid = pg.GridItem()
         #self.view.addItem(grid)
         
@@ -136,6 +133,18 @@ class CameraWindow(QtGui.QMainWindow):
         for label in labels:
             label.setFont(font)
             self.statusBar().insertPermanentWidget(0, label)
+
+        ## Load previous window state
+        self.stateFile = os.path.join('modules', self.module.name + '_ui.cfg')
+        uiState = module.manager.readConfigFile(self.stateFile)
+        if 'geometry' in uiState:
+            geom = QtCore.QRect(*uiState['geometry'])
+            self.setGeometry(geom)
+        if 'window' in uiState:
+            ws = QtCore.QByteArray.fromPercentEncoding(uiState['window'])
+            self.restoreState(ws)
+        if 'docks' in uiState:
+            self.cw.restoreState(uiState['docks'], missing='ignore')
         
         ## done with UI
         self.show()
@@ -164,6 +173,10 @@ class CameraWindow(QtGui.QMainWindow):
 
     def getView(self):
         return self.view
+
+    def getDepthView(self):
+        self.depthDock.show()
+        return self.depthPlot
 
     def centerView(self):
         if len(self.interfaces) == 0:
@@ -250,7 +263,11 @@ class CameraWindow(QtGui.QMainWindow):
 
     def quit(self):
         geom = self.geometry()
-        uiState = {'window': str(self.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
+        uiState = {
+            'window': str(self.saveState().toPercentEncoding()), 
+            'geometry': [geom.x(), geom.y(), geom.width(), geom.height()],
+            'docks': self.cw.saveState()
+        }
         Manager.getManager().writeConfigFile(uiState, self.stateFile)
         
         for iface in self.interfaces.values():

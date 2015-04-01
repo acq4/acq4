@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from PyQt4 import QtTest
 from acq4.devices.Device import *
 from acq4.devices.OptomechDevice import *
 from acq4.util.Mutex import Mutex
@@ -7,6 +8,14 @@ import acq4.pyqtgraph as pg
 
 class Stage(Device, OptomechDevice):
     """Base class for mechanical stages with motorized control and/or position feedback.
+
+    This is an optomechanical device that modifies its own transform based on position or orientation
+    information received from a position control device. The transform is calculated as::
+
+        totalTransform = baseTransform * stageTransform
+
+    where *baseTransform* is defined in the configuration for the device, and *stageTransform* is
+    defined by the hardware.
     """
 
     sigPositionChanged = QtCore.Signal(object)
@@ -15,6 +24,13 @@ class Stage(Device, OptomechDevice):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
+
+        # total device transform will be composed of a base transform (defined in the config)
+        # and a dynamic translation provided by the hardware.
+        self._baseTransform = QtGui.QMatrix4x4(self.deviceTransform())
+        self._stageTransform = QtGui.QMatrix4x4()
+        self._invStageTransform = QtGui.QMatrix4x4()
+
         self.config = config
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.pos = [0]*3
@@ -45,6 +61,18 @@ class Stage(Device, OptomechDevice):
         # todo: add other capability flags like resolution, speed, closed-loop, etc?
         raise NotImplementedError
 
+    def stageTransform(self):
+        """Return the transform that maps from the local coordinate system to
+        the scaled position reported by the stage hardware.
+        """
+        return QtGui.QMatrix4x4(self._stageTransform)
+
+    def mapToStage(self, obj):
+        return self._mapTransform(obj, self._stageTransform)
+
+    def mapFromStage(self, obj):
+        return self._mapTransform(obj, self._invStageTransform)
+
     def posChanged(self, pos):
         """Handle device position changes by updating the device transform and
         emitting sigPositionChanged.
@@ -56,11 +84,32 @@ class Stage(Device, OptomechDevice):
             rel[:len(pos)] = [pos[i] - self.pos[i] for i in range(len(pos))]
             self.pos[:len(pos)] = pos
         
-        tr = pg.SRTTransform3D()
-        tr.translate(*self.pos)
-        self.setDeviceTransform(tr) ## this informs rigidly-connected devices that they have moved
+            self._stageTransform = QtGui.QMatrix4x4()
+            self._stageTransform.translate(*self.pos)
+            self._invStageTransform = QtGui.QMatrix4x4()
+            self._invStageTransform.translate(*[-x for x in self.pos])
+
+            self._updateTransform()
 
         self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
+
+    def baseTransform(self):
+        """Return the base transform for this Stage.
+        """
+        return QtGui.QMatrix4x4(self._baseTransform)
+
+    def setBaseTransform(self, tr):
+        """Set the base transform of the stage. 
+
+        This sets the starting position and orientation of the stage before the 
+        hardware-reported stage position is taken into account.
+        """
+        self._baseTransform = QtGui.QMatrix4x4(tr)
+        self._updateTransform()
+
+    def _updateTransform(self):
+        ## this informs rigidly-connected devices that they have moved
+        self.setDeviceTransform(self._baseTransform * self._stageTransform)
 
     def getPosition(self, refresh=False):
         """Return the position of the stage.
@@ -69,16 +118,18 @@ class Stage(Device, OptomechDevice):
         current position is requested from the controller. If request is True,
         then the position request may block if the device is currently busy.
 
-        In the contect of the optomechanical device hierarchy, this position is 
-        expressed in the parent coordinate system of the stage.
+        The position returned is the exact position as reported by the stage hardware
+        multiplied by the scale factor in the device configuration.
         """
         if not refresh:
-            return self.pos[:]
+            with self.lock:
+                return self.pos[:]
         else:
             return self._getPosition()
 
     def globalPosition(self):
-        """Return the position of the stage relative to the global coordinate system.
+        """Return the position of the local coordinate system origin relative to 
+        the global coordinate system.
         """
         # note: the origin of the local coordinate frame is the center position of the device.
         return self.mapToGlobal([0, 0, 0])
@@ -94,6 +145,13 @@ class Stage(Device, OptomechDevice):
         the current position.
         """
         raise NotImplementedError()
+
+    def globalTargetPosition(self):
+        """Returns the target position mapped to the global coordinate system.
+
+        See targetPosition().
+        """
+        return self.mapToGlobal(self.mapFromStage(self.targetPosition()))
 
     def getState(self):
         with self.lock:
@@ -120,7 +178,7 @@ class Stage(Device, OptomechDevice):
         """
         raise NotImplementedError()        
 
-    def move(self, abs=None, rel=None, speed=None, progress=False):
+    def move(self, abs=None, rel=None, speed=None, progress=False, linear=False):
         """Move the device to a new position.
         
         Must specify either *abs* for an absolute position, or *rel* for a
@@ -133,11 +191,13 @@ class Stage(Device, OptomechDevice):
         
         If *progress* is True, then display a progress bar until the move is complete.
 
+        If *linear* is True, then the movement is required to be in a straight line.
+
         Return a MoveFuture instance that can be used to monitor the progress 
         of the move.
 
-        Note: the position is expressed in the device's parent coordinate frame.
-        (this is the same coordinate system as used by getPosition)
+        Note: the position must be expressed in the same coordinate system as returned 
+        by getPosition().
         """
         if speed is None:
             speed = self._defaultSpeed
@@ -146,7 +206,7 @@ class Stage(Device, OptomechDevice):
         if abs is None and rel is None:
             raise TypeError("Must specify one of abs or rel arguments.")
 
-        mfut = self._move(abs, rel, speed)
+        mfut = self._move(abs, rel, speed, linear=linear)
 
         if progress:
             self._progressDialog = QtGui.QProgressDialog("%s moving..." % self.name(), None, 0, 100)
@@ -155,18 +215,17 @@ class Stage(Device, OptomechDevice):
 
         return mfut
         
-    def _move(self, abs, rel, speed):
+    def _move(self, abs, rel, speed, linear):
         """Must be reimplemented by subclasses and return a MoveFuture instance.
         """
         raise NotImplementedError()
 
-    def moveToGlobal(self, pos, speed):
+    def moveToGlobal(self, pos, speed, linear=False):
         """Move the stage to a position expressed in the global coordinate frame.
         """
-        pd = self.parentDevice()
-        if pd is not None:
-            pos = pd.mapFromGlobal(pos)
-        self.moveTo(pos, speed)
+        localPos = self.mapFromGlobal(pos)
+        stagePos = self.mapToStage(localPos)
+        return self.moveTo(stagePos, speed, linear=linear)
 
     def _toAbsolutePosition(self, abs, rel):
         """Helper function to convert absolute or relative position (possibly 
@@ -187,17 +246,17 @@ class Stage(Device, OptomechDevice):
                     pos[i] += x
         return pos
         
-    def moveBy(self, pos, speed, progress=False):
+    def moveBy(self, pos, speed, progress=False, linear=False):
         """Move by the specified relative distance. See move() for more 
         information.
         """
-        return self.move(rel=pos, speed=speed, progress=progress)
+        return self.move(rel=pos, speed=speed, progress=progress, linear=linear)
 
-    def moveTo(self, pos, speed, progress=False):
+    def moveTo(self, pos, speed, progress=False, linear=False):
         """Move to the specified absolute position. See move() for more 
         information.
         """
-        return self.move(abs=pos, speed=speed, progress=progress)
+        return self.move(abs=pos, speed=speed, progress=progress, linear=linear)
     
     def stop(self):
         """Stop moving the device immediately.
@@ -269,15 +328,25 @@ class MoveFuture(object):
         """
         return self.percentDone() == 100 or self.wasInterrupted()
         
-    def wait(self, timeout=10):
+    def wait(self, timeout=None, updates=False):
         """Block until the move has completed, been interrupted, or the
         specified timeout has elapsed.
+
+        If *updates* is True, process Qt events while waiting.
+
+        If the move did not complete, raise an exception.
         """
         start = ptime.time()
-        while ptime.time() < start+timeout:
+        while (timeout is None) or (ptime.time() < start + timeout):
             if self.isDone():
                 break
-            time.sleep(0.1)
+            if updates is True:
+                QtTest.QTest.qWait(100)
+            else:
+                time.sleep(0.1)
+        if not self.isDone() or self.wasInterrupted():
+            raise RuntimeError("Move did not complete.")
+
 
 
 class StageInterface(QtGui.QWidget):

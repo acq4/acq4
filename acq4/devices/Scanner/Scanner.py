@@ -27,7 +27,6 @@ class Scanner(Device, OptomechDevice):
         self.lastRunTime = None
         self.calibrationIndex = None
         self.targetList = [1.0, {}]  ## stores the grids and points used by TaskGui so that they persist
-        self._configDir = os.path.join('devices', self.name() + '_config')
         self.currentCommand = [0,0] ## The last requested voltage values (but not necessarily the current voltage applied to the mirrors)
         self.currentVoltage = [0, 0]
         self.shutterOpen = True ## indicates whether the virtual shutter is closed (the beam is steered to its 'off' position).
@@ -166,31 +165,22 @@ class Scanner(Device, OptomechDevice):
     def getCalibrationIndex(self):
         with self.lock:
             if self.calibrationIndex is None:
-                calDir = self.configDir()
-                fileName = os.path.join(calDir, 'index')
-                index = self.dm.readConfigFile(fileName)
+                index = self.readConfigFile('index')
                 self.calibrationIndex = index
             return self.calibrationIndex
         
     def writeCalibrationDefaults(self, state):
         with self.lock:
-            calDir = self.configDir()
-            fileName = os.path.join(calDir, 'defaults')
-            self.dm.writeConfigFile(state, fileName)
+            self.writeConfigFile(state, 'defaults')
         
     def loadCalibrationDefaults(self):
         with self.lock:
-            calDir = self.configDir()
-            fileName = os.path.join(calDir, 'defaults')
-            state = self.dm.readConfigFile(fileName)
+            state = self.readConfigFile('defaults')
             return state
         
     def writeCalibrationIndex(self, index):
         with self.lock:
-            calDir = self.configDir()
-            fileName = os.path.join(calDir, 'index')
-            self.dm.writeConfigFile(index, fileName)
-            #configfile.writeConfigFile(index, fileName)
+            self.writeConfigFile(index, 'index')
             self.calibrationIndex = index
 
     def getCalibration(self, laser, opticState=None):
@@ -220,18 +210,11 @@ class Scanner(Device, OptomechDevice):
         params = camDev.listParams()
         params = [p for p in params if params[p][1] and params[p][2]]  ## Select only readable and writable parameters
         state = camDev.getParams(params)
-        fileName = os.path.join(self.configDir(), camera+'Config.cfg')
-        self.dm.writeConfigFile(state, fileName)
+        self.writeConfigFile(state, camera+'Config.cfg')
         
     def getCameraConfig(self, camera):
-        fileName = os.path.join(self.configDir(), camera+'Config.cfg')
-        return self.dm.readConfigFile(fileName)
+        return self.readConfigFile(camera+'Config.cfg')
         
-    def configDir(self):
-        """Return the name of the directory where configuration/calibration data should be stored"""
-        return self._configDir
-        
-    
     def createTask(self, cmd, parentTask):
         with self.lock:
             return ScannerTask(self, cmd, parentTask)

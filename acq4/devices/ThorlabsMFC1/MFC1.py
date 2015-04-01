@@ -18,13 +18,14 @@ class ThorlabsMFC1(Stage):
     def __init__(self, man, config, name):
         self.port = config.pop('port')
         self.scale = config.pop('scale', (1, 1, 1))
-        self.dev = MFC1_Driver(self.port)
+        params = config.pop('motorParams', {})
+        self.dev = MFC1_Driver(self.port, **params)
         man.sigAbortAll.connect(self.dev.stop)
 
         # Optionally use ROE-200 z axis to control focus
         roe = config.pop('roe', None)
         self._roeDev = None
-        self._roeEnabled = True
+        self._roeEnabled = "waiting"  # ROE control is disabled until after the first update
         if roe is not None:
             dev = man.getDevice(roe)
             self._roeDev = dev
@@ -64,7 +65,7 @@ class ThorlabsMFC1(Stage):
             self.posChanged([0, 0, pos])
         return [0, 0, pos]
 
-    def _move(self, abs, rel, speed=None):
+    def _move(self, abs, rel, speed, linear):
         # convert relative to absolute position, fill in Nones with current position.
         pos = self._toAbsolutePosition(abs, rel)
         limits = self.getLimits()[2]
@@ -82,9 +83,11 @@ class ThorlabsMFC1(Stage):
         Stage.quit(self)
 
     def _roeChanged(self, drive, pos, oldpos):
-        if self._roeEnabled is not True:
-            return
         if drive != self._roeDev.drive:
+            return
+        if self._roeEnabled is not True:
+            if self._roeEnabled == 'waiting':
+                self._roeEnabled = True
             return
         dz = pos[2] - oldpos[2]
         if dz == 0:

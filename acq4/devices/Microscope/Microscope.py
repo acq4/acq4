@@ -22,6 +22,7 @@ class Microscope(Device, OptomechDevice):
     
     sigObjectiveChanged = QtCore.Signal(object) ## (objective, lastObjective)
     sigObjectiveListChanged = QtCore.Signal()
+    sigSurfaceDepthChanged = QtCore.Signal(object)
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -32,6 +33,7 @@ class Microscope(Device, OptomechDevice):
         self.currentSwitchPosition = None
         self.currentObjective = None
         self._focusDevice = None
+        self._surfaceDepth = None
         
         self.objectives = collections.OrderedDict()
         ## Format of self.objectives is:
@@ -67,6 +69,10 @@ class Microscope(Device, OptomechDevice):
         else:
             self.setObjectiveIndex(0)
         
+        cal = self.readConfigFile('calibration')
+        if 'surfaceDepth' in cal:
+            self.setSurfaceDepth(cal['surfaceDepth'])
+
         dm.declareInterface(name, ['microscope'], self)
 
     def quit(self):
@@ -175,7 +181,21 @@ class Microscope(Device, OptomechDevice):
 
         # and this is where it needs to go
         fdpos[2] += dif
-        fd.moveToGlobal(fdpos, 'fast')
+        return fd.moveToGlobal(fdpos, 'fast')
+
+    def getSurfaceDepth(self):
+        """Return the z-position of the sample surface as marked by the user.
+        """
+        return self._surfaceDepth
+
+    def setSurfaceDepth(self, depth):
+        self._surfaceDepth = depth
+        self.sigSurfaceDepthChanged.emit(depth)
+        self.writeCalibration()
+
+    def writeCalibration(self):
+        cal = {'surfaceDepth': self.getSurfaceDepth()}
+        self.writeConfigFile(cal, 'calibration')
 
     def focusDevice(self):
         if self._focusDevice is None:
@@ -377,32 +397,37 @@ class ScopeCameraModInterface(QtCore.QObject):
     def __init__(self, dev, mod):
         QtCore.QObject.__init__(self)
         self.dev = dev  # microscope device
-        self.mode = mod  # camera module
+        self.mod = mod  # camera module
 
         self.ctrl = QtGui.QWidget()
         self.layout = QtGui.QGridLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
         self.ctrl.setLayout(self.layout)
 
-        self.plot = pg.PlotWidget()
-        self.plot.setYRange(0, 1e-3)
-        self.plot.hideAxis('bottom')
-        self.layout.addWidget(self.plot, 0, 0)
+        self.plot = mod.window().getDepthView()
         self.focusLine = self.plot.addLine(y=0, pen='y')
-        self.surfaceLine = self.plot.addLine(y=0, pen='g')
+        sd = dev.getSurfaceDepth()
+        if sd is None:
+            sd = 0
+        self.surfaceLine = self.plot.addLine(y=sd, pen='g')
         self.movableFocusLine = self.plot.addLine(y=0, pen='y', markers=[('<|>', 0.5, 10)], movable=True)
 
         self.setSurfaceBtn = QtGui.QPushButton('Set Surface')
-        self.layout.addWidget(self.setSurfaceBtn, 1, 0)
+        self.layout.addWidget(self.setSurfaceBtn, 0, 0)
         self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
 
         self.dev.sigGlobalTransformChanged.connect(self.transformChanged)
         self.movableFocusLine.sigDragged.connect(self.focusDragged)
+        self.dev.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
 
         self.transformChanged()
 
     def setSurfaceClicked(self):
         focus = self.dev.getFocusDepth()
-        self.surfaceLine.setValue(focus)
+        self.dev.setSurfaceDepth(focus)
+
+    def surfaceDepthChanged(self, depth):
+        self.surfaceLine.setValue(depth)
 
     def transformChanged(self):
         focus = self.dev.getFocusDepth()
@@ -412,10 +437,7 @@ class ScopeCameraModInterface(QtCore.QObject):
         # This is a little tricky because the objective might have an offset+scale relative
         # to the focus device.
         fd = self.dev.focusDevice()
-        tpos = fd.targetPosition()
-        pd = fd.parentDevice()
-        if pd is not None:
-            tpos = pd.mapToGlobal(tpos)
+        tpos = fd.globalTargetPosition()
         fpos = fd.globalPosition()
         dif = tpos[2] - fpos[2]
         self.movableFocusLine.setValue(focus + dif)
