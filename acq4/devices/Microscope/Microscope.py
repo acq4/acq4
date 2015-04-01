@@ -181,7 +181,7 @@ class Microscope(Device, OptomechDevice):
 
         # and this is where it needs to go
         fdpos[2] += dif
-        fd.moveToGlobal(fdpos, 'fast')
+        return fd.moveToGlobal(fdpos, 'fast')
 
     def getSurfaceDepth(self):
         """Return the z-position of the sample surface as marked by the user.

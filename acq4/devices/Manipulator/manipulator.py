@@ -151,7 +151,7 @@ class Manipulator(Device, OptomechDevice):
         This position is used for bringing in new electrodes.
         """
         scope = self.scopeDevice()
-        scope.setFocusDepth(scope.getSurfaceDepth() + 2e-3)
+        scope.setFocusDepth(scope.getSurfaceDepth() + 2e-3).wait()
         globalTarget = scope.mapToGlobal([0, 0, -500e-6])
         pos = self.globalPosition()
         if np.linalg.norm(np.asarray(globalTarget) - pos) < 5e-3:
