@@ -199,7 +199,7 @@ class SutterMPC200(SerialDevice):
         This method will either 1) block until the move is complete and return the 
         final position, 2) raise TimeoutError if the timeout has elapsed or, 3) raise 
         RuntimeError if the move was unsuccessful (final position does not match the 
-        requested position). Exceptions contain the final position as ex.args[1].
+        requested position). Exceptions contain the final position as `ex.lastPosition`.
         """
         assert drive is None or drive in range(1,5)
         assert speed == 'fast' or speed in range(16)
@@ -270,7 +270,9 @@ class SutterMPC200(SerialDevice):
         scaled = tuple([newPos[i] * self.scale[i] for i in (0, 1, 2)])
         for i in range(3):
             if abs(newPos[i] - ustepPos[i]) > 1:
-                raise RuntimeError("Move was unsuccessful (%r != %r)."  % (tuple(newPos), tuple(ustepPos)), scaled)
+                err = RuntimeError("Move was unsuccessful (%r != %r)."  % (tuple(newPos), tuple(ustepPos)))
+                err.lastPosition = scaled
+                raise err
 
         return scaled
 

@@ -145,13 +145,14 @@ class Manipulator(Device, OptomechDevice):
         self._movePath(path)
 
     def goIn(self, speed='fast'):
-        """Move the electrode tip so that it is axially aligned with the center of the microscope 
-        and 2mm away. 
+        """Focus the microscope 2mm above the surface, then move the electrode 
+        tip to 500um below the focal point of the microscope. 
 
         This position is used for bringing in new electrodes.
         """
         scope = self.scopeDevice()
-        globalTarget = scope.mapToGlobal([0, 0, 0])
+        scope.setFocusDepth(scope.getSurfaceDepth() + 2e-3)
+        globalTarget = scope.mapToGlobal([0, 0, -500e-6])
         pos = self.globalPosition()
         if np.linalg.norm(np.asarray(globalTarget) - pos) < 5e-3:
             raise Exception('"In" position should only be used when electrode is far from objective.')
@@ -163,13 +164,10 @@ class Manipulator(Device, OptomechDevice):
         evec /= np.linalg.norm(evec)
         waypoint = localTarget - evec * 15e-3
 
-        final = localTarget - evec * 2e-3
-
         path = [
             (self.mapToGlobal(waypoint), speed, False),
-            (self.mapToGlobal(final), speed, True),
+            (globalTarget, speed, True),
         ]
-
         self._movePath(path)
 
     def goStandby(self, target, speed):

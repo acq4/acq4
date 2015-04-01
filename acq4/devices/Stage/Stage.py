@@ -345,7 +345,8 @@ class MoveFuture(object):
             else:
                 time.sleep(0.1)
         if not self.isDone() or self.wasInterrupted():
-            raise RuntimeError("Requested move did not complete.")
+            raise RuntimeError("Move did not complete.")
+
 
 
 class StageInterface(QtGui.QWidget):
