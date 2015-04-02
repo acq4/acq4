@@ -467,8 +467,9 @@ def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpola
     #     pylab.show()
 
     dv = numpy.diff(v, axis=0) # compute slope
+    dv = numpy.insert(dv, 0, dv[0])
     dv /= dt
-    st=numpy.array([])
+    st = numpy.array([])
     spk = []
     spv = numpy.where(v > thresh)[0].tolist() # find points above threshold
     sps = numpy.where(dv > 0.0)[0].tolist() # find points where slope is positive
@@ -484,6 +485,7 @@ def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpola
     if mode is 'schmitt':
         sthra = list(numpy.where(numpy.diff(sp) > mingap))
         sthr = [sp[x] for x in sthra[0]] # bump indices by 1
+        #print 'findspikes: sthr: ', len(sthr), sthr
         for k in sthr:
             if k == 0:
                 continue
@@ -504,6 +506,7 @@ def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpola
         z = (numpy.array(numpy.where(numpy.diff(spv) > 1)[0])+1).tolist()
         z.insert(0, 0) # first element in spv is needed to get starting AP
         spk = []
+        #print 'findspikes peak: ', len(z)
         for k in z:
             zk = spv[k]
             spkp = numpy.argmax(v[zk:zk+kpkw])+zk # find the peak position
