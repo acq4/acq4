@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './acq4/devices/MultiClamp/TaskTemplate.ui'
+# Form implementation generated from reading ui file 'TaskTemplate.ui'
 #
-# Created: Tue Dec 24 01:49:06 2013
-#      by: PyQt4 UI code generator 4.10
+# Created: Mon Apr 06 21:06:58 2015
+#      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -26,7 +26,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(302, 110)
+        Form.resize(330, 97)
         Form.setAutoFillBackground(True)
         self.verticalLayout_3 = QtGui.QVBoxLayout(Form)
         self.verticalLayout_3.setSpacing(0)
@@ -52,16 +52,16 @@ class Ui_Form(object):
         self.horizontalLayout_2.setSpacing(0)
         self.horizontalLayout_2.setMargin(0)
         self.horizontalLayout_2.setObjectName(_fromUtf8("horizontalLayout_2"))
-        self.icModeRadio = QtGui.QRadioButton(self.frame_2)
-        self.icModeRadio.setObjectName(_fromUtf8("icModeRadio"))
-        self.horizontalLayout_2.addWidget(self.icModeRadio)
+        self.vcModeRadio = QtGui.QRadioButton(self.frame_2)
+        self.vcModeRadio.setObjectName(_fromUtf8("vcModeRadio"))
+        self.horizontalLayout_2.addWidget(self.vcModeRadio)
         self.i0ModeRadio = QtGui.QRadioButton(self.frame_2)
         self.i0ModeRadio.setChecked(True)
         self.i0ModeRadio.setObjectName(_fromUtf8("i0ModeRadio"))
         self.horizontalLayout_2.addWidget(self.i0ModeRadio)
-        self.vcModeRadio = QtGui.QRadioButton(self.frame_2)
-        self.vcModeRadio.setObjectName(_fromUtf8("vcModeRadio"))
-        self.horizontalLayout_2.addWidget(self.vcModeRadio)
+        self.icModeRadio = QtGui.QRadioButton(self.frame_2)
+        self.icModeRadio.setObjectName(_fromUtf8("icModeRadio"))
+        self.horizontalLayout_2.addWidget(self.icModeRadio)
         self.horizontalLayout_6 = QtGui.QHBoxLayout()
         self.horizontalLayout_6.setSpacing(0)
         self.horizontalLayout_6.setObjectName(_fromUtf8("horizontalLayout_6"))
@@ -167,9 +167,9 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(_translate("Form", "Form", None))
-        self.icModeRadio.setText(_translate("Form", "IC", None))
-        self.i0ModeRadio.setText(_translate("Form", "I=0", None))
         self.vcModeRadio.setText(_translate("Form", "VC", None))
+        self.i0ModeRadio.setText(_translate("Form", "I=0", None))
+        self.icModeRadio.setText(_translate("Form", "IC", None))
         self.holdingCheck.setText(_translate("Form", "Holding", None))
         self.primarySignalCheck.setText(_translate("Form", "Primary:", None))
         self.secondarySignalCheck.setText(_translate("Form", "Secondary:", None))

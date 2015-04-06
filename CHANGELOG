@@ -21,6 +21,8 @@ acq4-0.9.3 (unreleased)
         Objectives now have z-offset
     Bugfixes:
         Fixed issues with Scanner grid controls in TaskRunner
+        Fixed issues with MultiClamp starting with wrong state in TaskRunner
+        Cleaned up MultiClamp manager UI
     Maintenance:
         util.database now uses built-in sqlite3 module instead of QtSql
 
