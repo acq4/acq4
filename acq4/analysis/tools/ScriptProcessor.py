@@ -24,6 +24,7 @@ from acq4.util.metaarray import MetaArray
 from acq4.util import DataManager
 from acq4.pyqtgraph import configfile
 from PyQt4 import QtGui, QtCore
+from acq4.pyqtgraph.widgets.ProgressDialog import ProgressDialog
 
 class ScriptProcessor(AnalysisModule):
     
@@ -152,14 +153,20 @@ class ScriptProcessor(AnalysisModule):
         trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
         self.dataManager().setBaseDir(self.script['directory'])
         ordered = sorted(self.script['Cells'].keys())  # order the analysis by date/slice/cell
-        for cell in ordered:
+        prog1 = ProgressDialog("Script Processing..", 0, len(ordered))
+        ncell  = len(ordered)
+        for nc, cell in enumerate(ordered):
+            if prog1.wasCanceled():
+                break
             presetDict = {}
             thiscell = self.script['Cells'][cell]
             #print 'processing cell: %s' % thiscell
             if thiscell['include'] is False:  # skip this cell
-                print 'Skipped: %s' % cell
+                print 'Skipped: %s, reason:%s' % (cell, thiscell['reason'])
                 continue
             sortedkeys = sorted(thiscell['choice'].keys())  # sort by order of recording (# on protocol)
+            prog1.setValue(nc/ncell)
+#            prog2 = ProgressDialog("Cell Processing..%s" , 0, len(sortedkeys)):
             for p in sortedkeys:
                 if thiscell['choice'][p] not in self.script['datafilter']:  # pick out steady-state conditions
                     print 'p: %s not in data: ' % (thiscell['choice'][p]), self.script['datafilter']
@@ -185,6 +192,8 @@ class ScriptProcessor(AnalysisModule):
                     presetDict['Genotype'] = thiscell['genotype']
                 else:
                     presetDict['Genotype'] = 'Unknown'
+                if 'spikethresh' in thiscell.keys():
+                    presetDict['SpikeThreshold'] = thiscell['spikethresh']
 
                 dh = self.dataManager().manager.dirHandle(fullpath)
                 if not self.loadFile([dh], analyze=False):  # note: must pass a list of dh; don't let analyisis run at end
@@ -239,6 +248,10 @@ class ScriptProcessor(AnalysisModule):
             self.analysis_parameters['alternation'] = thiscell['alternation']
         else:
             self.analysis_parameters['alternation'] = True
+        if 'include' in thiscell.keys():
+            self.analysis_parameters['UseData'] = thiscell['include']
+        else:
+            self.analysis_parameters['UseData'] = True
         return
 
     def print_script_output(self):

@@ -467,7 +467,10 @@ def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpola
     #     pylab.show()
 
     dv = numpy.diff(v, axis=0) # compute slope
-    dv = numpy.insert(dv, 0, dv[0])
+    try:
+        dv = numpy.insert(dv, 0, dv[0])
+    except:
+        pass # print 'dv: ', dv
     dv /= dt
     st = numpy.array([])
     spk = []
