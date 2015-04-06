@@ -886,36 +886,34 @@ class ErrorDialog(QtGui.QDialog):
         ##   - If there are any helpfulExceptions, ONLY show those
         ##     otherwise, show everything
         self.lastEntry = entry
-        
+
+        msgLines = []
+        if entry['message'] is not None:
+            msgLines.append(entry['message'])
+
         ## extract list of exceptions
-        exceptions = []
-        #helpful = []
         key = 'exception'
         exc = entry
         while key in exc:
             exc = exc[key]
             
+            if exc is None:
+                break
+
             ## ignore this error if it was generated on the command line.
             tb = exc.get('traceback', ['',''])
             if len(tb) > 1 and 'File "<stdin>"' in tb[1]:
                 return False
             
-            if exc is None:
-                break
             key = 'oldExc'
             if exc['message'].startswith('HelpfulException'):
-                exceptions.append('<b>' + self.cleanText(re.sub(r'^HelpfulException: ', '', exc['message'])) + '</b>')
+                msgLines.append('<b>' + self.cleanText(re.sub(r'^HelpfulException: ', '', exc['message'])) + '</b>')
             elif exc['message'] == 'None':
                 continue
             else:
-                exceptions.append(self.cleanText(exc['message']))
-                
-        msg = "<br>".join(exceptions)
-        #if len(helpful) > 0:
-            #msg = '<b>' + '<br>'.join(helpful) + '</b>'
-        #else:
-            #msg = '<b>' + entry['message'] + '</b><br>' + '<br>'.join(exceptions)
-        
+                msgLines.append(self.cleanText(exc['message']))
+
+        msg = "<br>".join(msgLines)
         
         if self.disableCheck.isChecked():
             return False

@@ -51,7 +51,6 @@ class DaqChannelGui(QtGui.QWidget):
         
         self.displayCheckChanged()
         self.ui.displayCheck.stateChanged.connect(self.displayCheckChanged)
-        #self.ui.groupBox.sigCollapseChanged.connect(self.groupBoxClicked)
         
         if 'units' in self.config:
             self.setUnits(self.config['units'])
@@ -59,11 +58,6 @@ class DaqChannelGui(QtGui.QWidget):
             self.setUnits('')
             
     def updateTitle(self):
-        #if self.ui.groupBox.isChecked():
-            #plus = ""
-        #else:
-            #plus = "[+] "
-        
         self.ui.groupBox.setTitle(self.name + " (%s)" %self.units)
     
     def setUnits(self, units):
@@ -76,10 +70,6 @@ class DaqChannelGui(QtGui.QWidget):
     def getSpins(self):
         return []
 
-    #def groupBoxClicked(self, b):
-        #self.setChildrenVisible(self.ui.groupBox, b)
-        #self.updateTitle()
-            
     def setChildrenVisible(self, obj, vis):
         for c in obj.children():
             if isinstance(c, QtGui.QWidget):
@@ -91,7 +81,6 @@ class DaqChannelGui(QtGui.QWidget):
         return self.stateGroup.state()
     
     def restoreState(self, state):
-        
         self.stateGroup.setState(state)
         if hasattr(self.ui, 'waveGeneratorWidget'):
             self.ui.waveGeneratorWidget.update()
@@ -133,10 +122,8 @@ class OutputChannelGui(DaqChannelGui):
             self.ui = DOChannelTemplate.Ui_Form()
         else:
             raise Exception("Unrecognized channel type '%s'" % self.config['type'])
-        #pdb.set_trace()
         self.ui.setupUi(self)
         self.postUiInit()
-        #self.ui.waveGeneratorWidget.setTimeScale(1e-3)
         
         self.daqChanged(self.daqUI.currentState())
         

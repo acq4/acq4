@@ -2,6 +2,7 @@
 from __future__ import with_statement
 from acq4.drivers.MultiClamp.MultiClamp import MultiClamp as MultiClampDriver
 from acq4.devices.Device import *
+from acq4.Manager import logMsg
 from acq4.util.metaarray import MetaArray, axis
 from acq4.util.Mutex import Mutex, MutexLocker
 from PyQt4 import QtCore
@@ -11,9 +12,11 @@ from DeviceGui import *
 from taskGUI import *
 from acq4.util.debug import *
 
+
 class MultiClamp(Device):
     
     sigStateChanged = QtCore.Signal(object)
+    sigHoldingChanged = QtCore.Signal(object, object)  # self, mode
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -25,7 +28,7 @@ class MultiClamp(Device):
         self.stateLock = Mutex(Mutex.Recursive)  ## only for locking self.lastState and self.lastMode
         self.lastState = {}
         self.lastMode = None
-
+        self._switchingToMode = None
 
         try:
             # default holding state
@@ -87,33 +90,30 @@ class MultiClamp(Device):
 
     def mcUpdate(self, state=None, mode=None):
         """MC state (or internal holding state) has changed, handle the update."""
-        
-        #print "lock for update..."
         with self.stateLock:
             if state is None:
                 state = self.lastState[mode]
-            #print "  got lock for update"
             mode = state['mode']
-            #if mode == 'I=0':
-                #mode = 'IC'
             state['holding'] = self.holding[mode]
             self.lastState[mode] = state.copy()
-            self.lastMode = state['mode']
-            ## Has mode changed? has extCmdScale changed?
-            
-        #QtCore.QObject.emit(self, QtCore.SIGNAL('stateChanged'), state)
+            if self.lastMode != state['mode']:
+                self.lastMode = state['mode']
+                if state['mode'] != self._switchingToMode and state['mode'] != 'I=0':
+                    # oops! User changed the mode manually; we need to update the holding value immediately.
+                    self.setHolding(state['mode'])
+                    logMsg("Warning: MultiClamp mode should be changed from ACQ4, not from the MultiClamp Commander window.", msgType='error')
+
+                self._switchingToMode = None
+
         self.sigStateChanged.emit(state)
         
     def getLastState(self, mode=None):
         """Return the last known state for the given mode."""
         with self.stateLock:
-            #if mode == 'I=0':
-                #mode = 'IC'
             if mode is None:
                 mode = self.mc.getMode()
             if mode in self.lastState:
                 return self.lastState[mode]
-        
         
     def extCmdScale(self, mode):
         """Return our best guess as to the external command sensitivity for the given mode."""
@@ -144,22 +144,10 @@ class MultiClamp(Device):
     def taskInterface(self, taskRunner):
         with MutexLocker(self.lock):
             return MultiClampTaskGui(self, taskRunner)
-
-    #def setParams(self, params):
-        #with MutexLocker(self.lock):
-            #self.mc.setParams(params)
-    
-    #def getParam(self, param, cache=None):
-        #with MutexLocker(self.lock):
-            #return self.getParam(param)
     
     def createTask(self, cmd, parentTask):
         with MutexLocker(self.lock):
             return MultiClampTask(self, cmd, parentTask)
-    
-    #def getMode(self):
-        #with MutexLocker(self.lock):
-            #return self.mc.getMode()
     
     def getHolding(self, mode=None):
         with MutexLocker(self.lock):
@@ -172,9 +160,11 @@ class MultiClamp(Device):
             
     def setHolding(self, mode=None, value=None):
         """Define and/or set the holding values for this device. 
-        Note--these are computer-controlled holding values, NOT the holding values used by the amplifier.
-        It is important to have this because the amplifier's holding values can not be changed
-        before switching modes."""
+
+        Note--these are ACQ4-controlled holding values, NOT the holding values used by the amplifier.
+        It is important to have this because the amplifier's holding values cannot be changed
+        before switching modes.
+        """
         
         with MutexLocker(self.lock):
             currentMode = self.mc.getMode()
@@ -188,7 +178,11 @@ class MultiClamp(Device):
             ## Update stored holding value if value is supplied
             if value is not None:
                 self.holding[mode] = value
-                self.mcUpdate(mode=mode)
+                state = self.lastState[mode]
+                state['holding'] = value
+                if mode == currentMode:
+                    self.sigStateChanged.emit(state)
+                self.sigHoldingChanged.emit(self, mode)
                 
             ## We only want to set the actual DAQ channel if:
             ##   - currently in I=0, or 
@@ -199,48 +193,19 @@ class MultiClamp(Device):
             holding = self.holding[mode]
             daq = self.config['commandChannel']['device']
             chan = self.config['commandChannel']['channel']
-            #daq, chan = self.config['commandChannel'][:2]
             daqDev = self.dm.getDevice(daq)
             s = self.extCmdScale(mode)  ## use the scale for the last remembered state from this mode
             if s == 0:
                 if holding == 0.0:
                     s = 1.0
                 else:
-                    #print self.mc.getState()
                     raise Exception('Can not set holding value for multiclamp--external command sensitivity is disabled by commander.')
             scale = 1.0 / s
             #print "     setChannelValue", chan, holding
             daqDev.setChannelValue(chan, holding*scale, block=False)
         
-    #def getChanIndex(self):
-        #"""Given a channel name (as defined in the configuration), return the device index to use when making calls to the MC"""
-        #with MutexLocker(self.lock):
-            #if self.index is None:
-                #devs = self.mc.listDevices()
-                #if self.channelID not in devs:
-                    #raise Exception("Could not find device on multiclamp with description '%s'" % self.channelID)
-                #self.index = devs.index(self.channelID)
-            #return self.index
-        
     def listSignals(self, mode):
         return self.mc.listSignals(mode)
-        
-    #def listModeSignals(self):
-        ### Todo: move this upstream to the multiclamp driver (and make it actually correct)
-        #with MutexLocker(self.lock):
-            #sig = {
-                #'primary': {
-                    #'IC': ['MembranePotential'],
-                    #'I=0': ['MembranePotential'],
-                    #'VC': ['MembraneCurrent']
-                #},
-                #'secondary': {
-                    #'IC': ['MembranePotential', 'MembraneCurrent'],
-                    #'I=0': ['MembranePotential', 'MembraneCurrent'],
-                    #'VC': ['MembraneCurrent', 'MembranePotential']
-                #}
-            #}
-            #return sig
         
     def setMode(self, mode):
         """Set the mode for a multiclamp channel, gracefully switching between VC and IC modes."""
@@ -252,9 +217,11 @@ class MultiClamp(Device):
             mcMode = self.mc.getMode()
             if mcMode == mode:  ## Mode is already correct
                 return
-                
+            
+
             ## If switching ic <-> vc, switch to i=0 first
             if (mcMode=='IC' and mode=='VC') or (mcMode=='VC' and mode=='IC'):
+                self._switchingToMode = 'I=0'
                 self.mc.setMode('I=0')
                 mcMode = 'I=0'
                 #print "  set intermediate i0"
@@ -263,6 +230,7 @@ class MultiClamp(Device):
                 #print "  set holding"
                 self.setHolding(mode)
             #print "  set mode"
+            self._switchingToMode = mode
             self.mc.setMode(mode)
 
     def getDAQName(self):
@@ -272,7 +240,6 @@ class MultiClamp(Device):
 
 
 class MultiClampTask(DeviceTask):
-    
     
     recordParams = ['Holding', 'HoldingEnable', 'PipetteOffset', 'FastCompCap', 'SlowCompCap', 'FastCompTau', 'SlowCompTau', 'NeutralizationEnable', 'NeutralizationCap', 'WholeCellCompEnable', 'WholeCellCompCap', 'WholeCellCompResist', 'RsCompEnable', 'RsCompBandwidth', 'RsCompCorrection', 'PrimarySignalLPF', 'PrimarySignalHPF', 'OutputZeroEnable', 'OutputZeroAmplitude', 'LeakSubEnable', 'LeakSubResist', 'BridgeBalEnable', 'BridgeBalResist']
     

@@ -38,7 +38,6 @@ class MultiClampChannel:
         self.state = None
         self.callback = None
         self.lock = threading.RLock()
-        #self.lock = Mutex(Mutex.Recursive)
         
         ## handle for axon mccmsg library 
         self.axonDesc = {
@@ -86,7 +85,6 @@ class MultiClampChannel:
             
         return v
 
-
     def setParam(self, param, value):
         self.select()
         fn = "Set" + param
@@ -98,7 +96,6 @@ class MultiClampChannel:
             value = NAME_MAPS[fn][value]
         #print fn, value
         self.mc.call(fn, value)
-
 
     def getParams(self, params):
         """Reads multiple parameters from multiclamp.
@@ -113,7 +110,6 @@ class MultiClampChannel:
         for p in params:
             res[p] = self.getParam(p)
         return res
-
 
     def setParams(self, params):
         """Sets multiple parameters on multiclamp.
@@ -148,18 +144,11 @@ class MultiClampChannel:
         if mode == 'I=0':
             mode = 'IC'
             
-        #sig = None
-        #sigMap = SIGNAL_MAP[model][mode][priMap[primary]]
-        #for k in sigMap:
-            #if sigMap[k][0] == signal:
-                #sig = "SIGNAL_" + k
-                
         sigMap = SIGNAL_MAP[model][mode][priMap[primary]]
         if signal not in sigMap:
             raise Exception("Signal name '%s' not found. (Using map for model=%s, mode=%s, pri=%s)" % (signal, model, mode, priMap[primary]))
             
         sig = 'SIGNAL_' + sigMap[signal]
-        #print "Set signal %d = %s:" % (primary, signal), model, mode, priMap[primary], sig
         if primary == 0:
             self.setParam('PrimarySignal', sig)
         elif primary == 1:
@@ -191,7 +180,6 @@ class MultiClampChannel:
     def select(self):
         """Select this channel for parameter get/set"""
         self.mc.call('SelectMultiClamp', **self.axonDesc)
-        
 
 
 class MultiClamp:
@@ -213,8 +201,6 @@ class MultiClamp:
             raise Exception("Already created MultiClamp driver object; use MultiClamp.INSTANCE")
         self.handle = None
         self.lock = threading.RLock()
-        #self.lock = Mutex(Mutex.Recursive)
-        #self.devStates = []  ## Stores basic state of devices reported by telegraph
         
         self.channels = {} 
         self.chanDesc = {}  
@@ -225,7 +211,6 @@ class MultiClamp:
     
     def __del__(self):
         self.quit()
-        
     
     def quit(self):
         ## do other things to shut down driver?
@@ -250,7 +235,6 @@ class MultiClamp:
         if callback is not None:
             ch.setCallback(callback)
         return ch
-    
     
     def listChannels(self):
         """Return a list of strings used to identify all devices/channels.
@@ -278,7 +262,6 @@ class MultiClamp:
             if self.handle is not None and axlib is not None:
                 axlib.DestroyObject(self.handle)
                 self.handle = None
-
     
     def findDevices(self):
         while True:
@@ -297,7 +280,6 @@ class MultiClamp:
                     self.channels[strDesc] = MultiClampChannel(self, ch)
                 self.chanDesc[strDesc] = ch
 
-
     def findMultiClamp(self):
         if len(self.channels) == 0:
             fn = 'FindFirstMultiClamp'
@@ -313,14 +295,8 @@ class MultiClamp:
             raise
         
         desc = {'sn': ret['pszSerialNum'], 'model': ret['puModel'], 'com': ret['puCOMPortID'], 'dev': ret['puDeviceID'], 'chan': ret['puChannelID']}
-        
-        #if MODELS.has_key(desc['model']):
-            #desc['model'] = MODELS[desc['model']]
-        #else:
-            #desc['model'] = 'UNKNOWN'
+
         return desc
-
-
 
     def call(self, fName, *args, **kargs):   ## call is only used for functions that return a bool error status and have a pnError argument passed by reference.
         with self.lock:
@@ -486,90 +462,3 @@ SIGNAL_MAP = {
 
 ### Create instance of driver class
 MultiClamp()
-
-
-
-## In order to properly interpret the output of getPrimarySignal and getSecondarySignal, 
-## we also need to know the model and mode of the amplifier and translate via this table
-## Note: Completely retarded. This should have been handled by the axon library
-
-#SIGNAL_MAP = {
-    #axlib.HW_TYPE_MC700A: {
-        #'VC': {
-            #'PRI': {
-                #"VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
-                #"VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                #"VC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
-                #"VC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                #"VC_AUXILIARY1": ("BathPotential", 1., 'V')
-            #},
-            #'SEC': {
-                #"VC_MEMBPOTENTIAL": ("MembranePlusOffsetPotential", 10.0, 'V'),
-                #"VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                #"VC_PIPPOTENTIAL": ("PipettePotential", 1., 'V'),
-                #"VC_100XACMEMBPOTENTIAL": ("100XACPipettePotential", 100., 'V'),
-                #"VC_AUXILIARY1": ("BathPotential", 1., 'V')
-            #}
-        #},
-        #'IC': {
-            #'PRI': {   ## Driver bug? Primary IC signals use VC values. Bah.
-                #"VC_PIPPOTENTIAL": ("MembranePotential", 1.0, 'V'),
-                #"VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                #"VC_MEMBPOTENTIAL": ("CommandCurrent", 0.5e9, 'A'),
-                #"VC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                #"VC_AUXILIARY1": ("BathPotential", 1., 'V')
-            #},
-            #'SEC': {
-                #"IC_CMDCURRENT": ("CommandCurrent", 0.5e9, 'A'),
-                #"IC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                #"IC_MEMBPOTENTIAL": ("MembranePlusOffsetPotential", 1.0, 'V'),
-                #"IC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                #"IC_AUXILIARY1": ("BathPotential", 1., 'V')
-            #}
-        #}
-    #},
-        
-    #axlib.HW_TYPE_MC700B: {
-        #'VC': {
-            #'PRI': {
-                #"VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                #"VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
-                #"VC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
-                #"VC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                #"VC_EXTCMDPOTENTIAL": ("ExternalCommandPotential", 50., 'V'),
-                #"VC_AUXILIARY1": ("Auxiliaryl", 1., 'V'),
-                #"VC_AUXILIARY2": ("Auxiliary2", 1., 'V')
-            #},
-            #'SEC': {
-                #"VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                #"VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
-                #"VC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
-                #"VC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                #"VC_EXTCMDPOTENTIAL": ("ExternalCommandPotential", 50., 'V'),
-                #"VC_AUXILIARY1": ("Auxiliaryl", 1., 'V'),
-                #"VC_AUXILIARY2": ("Auxiliary2", 1., 'V')
-            #}
-        #},
-        #'IC': {
-            #'PRI': {
-                #"IC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
-                #"IC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                #"IC_CMDCURRENT": ("CommandCurrent", 0.5e9, 'A'),
-                #"IC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                #"IC_EXTCMDCURRENT": ("ExternalCommandCurrent", 2.5e9, 'A'),
-                #"IC_AUXILIARY1": ("Auxiliary1", 1., 'V'),
-                #"IC_AUXILIARY2": ("Auxiliary2", 1., 'V')
-            #},
-            #'SEC': {
-                #"IC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
-                #"IC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                #"IC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
-                #"IC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                #"IC_EXTCMDCURRENT": ("ExternalCommandCurrent", 2.5e9, 'A'),
-                #"IC_AUXILIARY1": ("Auxiliary1", 1., 'V'),
-                #"IC_AUXILIARY2": ("Auxiliary2", 1., 'V')
-            #}
-        #}
-    #}
-#}
-    
