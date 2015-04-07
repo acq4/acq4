@@ -299,20 +299,22 @@ class ManipulatorCamModInterface(QtCore.QObject):
 
         cal = self.dev._stageOrientation
         self.calibrateAxis = Axis([0, 0], 0, inverty=cal['inverty'])
+        self.calibrateAxis.setZValue(5000)
         mod.addItem(self.calibrateAxis)
         self.calibrateAxis.setVisible(False)
 
         self.centerArrow = pg.ArrowItem()
+        self.centerArrow.setZValue(5000)
         mod.addItem(self.centerArrow)
 
         self.target = Target()
+        self.target.setZValue(5000)
         mod.addItem(self.target)
         self.target.setVisible(False)
         self.depthTarget = Target(movable=False)
         mod.getDepthView().addItem(self.depthTarget)
         self.depthTarget.setVisible(False)
 
-        # self.depthLine = self.mod.getDepthView().addLine(y=0, markers=[('v', 1, 20)])
         self.depthArrow = pg.ArrowItem(angle=-self.dev.pitch * 180 / np.pi)
         self.mod.getDepthView().addItem(self.depthArrow)
 

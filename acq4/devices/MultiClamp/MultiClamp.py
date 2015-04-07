@@ -97,12 +97,12 @@ class MultiClamp(Device):
             state['holding'] = self.holding[mode]
             self.lastState[mode] = state.copy()
             if self.lastMode != state['mode']:
-                self.lastMode = state['mode']
-                if state['mode'] != self._switchingToMode and state['mode'] != 'I=0':
-                    # oops! User changed the mode manually; we need to update the holding value immediately.
+                if self.lastMode is not None and state['mode'] != self._switchingToMode and state['mode'] != 'I=0':
+                    # User changed the mode manually; we need to update the holding value immediately.
                     self.setHolding(state['mode'])
                     logMsg("Warning: MultiClamp mode should be changed from ACQ4, not from the MultiClamp Commander window.", msgType='error')
 
+                self.lastMode = state['mode']
                 self._switchingToMode = None
 
         self.sigStateChanged.emit(state)
