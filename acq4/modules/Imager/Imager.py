@@ -30,16 +30,17 @@ from collections import OrderedDict
 from acq4.modules.Module import Module
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.dockarea
-from acq4.Manager import getManager
 import acq4.Manager
 import acq4.util.InterfaceCombo as InterfaceCombo
-import acq4.pyqtgraph.parametertree as PT
-import acq4.util.metaarray as MA
 from acq4.devices.Microscope import Microscope
-from acq4.util.Mutex import Mutex
 from acq4.devices.Scanner.scan_program import ScanProgram
 from acq4.devices.Scanner.scan_program.rect import RectScan
+from acq4.pyqtgraph import parametertree as PT
+from acq4.util import metaarray as MA
+from acq4.util.Mutex import Mutex
 from acq4.util import imaging
+from acq4.util.Thread import Thread
+from acq4.util.debug import printExc
 from .imagerTemplate import Ui_Form
 
 
@@ -150,22 +151,19 @@ class Black(QtGui.QWidget):
 
 class ScreenBlanker(QtCore.QObject):
     """
-    Perform the blanking on ALL screens that we can detect.
+    Cover all screens with black.
     This is so that extraneous light does not leak into the 
     detector during acquisition.
     """
     sigCancelClicked = QtCore.Signal()
 
-    def __init__(self, blank=True):
+    def __init__(self):
         QtCore.QObject.__init__(self)
-        self.blank = blank
         self.cancelled = False
 
-    def __enter__(self):
+    def blank(self):
         self.cancelled = False
         self.widgets = []
-        if not self.blank:
-            return self
 
         d = QtGui.QApplication.desktop()
         for i in range(d.screenCount()): # look for all screens
@@ -176,18 +174,25 @@ class ScreenBlanker(QtCore.QObject):
             w.move(sg.x(), sg.y()) # put the widget there
             w.showFullScreen() # duh
         QtGui.QApplication.processEvents() # make it so
-        return self
-        
-    def __exit__(self, *args):
+
+    def unblank(self):
         for w in self.widgets:
             w.hide() # just take them away
             w.sigCancelClicked.disconnect(self.cancelClicked)
         self.widgets = []
+        
+    def __enter__(self):
+        self.blank()
+        return self
+
+    def __exit__(self, *args):
+        self.unblank()
 
     def cancelClicked(self):
         """Called when a cancel button is clicked.
         """
         self.cancelled = True
+        self.unblank()
         self.sigCancelClicked.emit()
 
         
@@ -270,7 +275,9 @@ class Imager(Module):
         # self.view = ImagerView()
         # self.w1.addWidget(self.view)   # add the view to the right of w1     
 
-        self.videoRunning = False
+        self.blanker = ScreenBlanker()
+        self.blanker.sigCancelClicked.connect(self.blankerCancelClicked)
+
         self.abort = False
         self.storedROI = None
         self.currentRoi = None
@@ -305,6 +312,13 @@ class Imager(Module):
             self.cameraModule = self.manager.getModule(config['cameraModule'])
         self.laserDev = self.manager.getDevice(config['laser'])
         self.scannerDev = self.manager.getDevice(config['scanner'])
+
+
+        self.imagingThread = ImagingThread(self.laserDev, self.scannerDev)
+        self.imagingThread.sigNewFrame.connect(self.newFrame)
+        self.imagingThread.sigVideoStopped.connect(self.videoStopped)
+        self.imagingThread.sigAborted.connect(self.imagingAborted)
+
         
         self.cameraModule.window().addItem(self.imageItem)
 
@@ -340,9 +354,9 @@ class Imager(Module):
             self.imagingCtrl.addVideoButton(mode)
 
         # Connect other UI controls
-        self.ui.run_button.clicked.connect(self.PMT_Run)
-        self.ui.stop_button.clicked.connect(self.PMT_Stop)
-        self.ui.set_TilesButton.clicked.connect(self.setTilesROI)
+        # self.ui.run_button.clicked.connect(self.PMT_Run)
+        # self.ui.stop_button.clicked.connect(self.PMT_Stop)
+        # self.ui.set_TilesButton.clicked.connect(self.setTilesROI)
         
         #self.ui.cameraSnapBtn.clicked.connect(self.cameraSnap)
         self.ui.restoreROI.clicked.connect(self.restoreROI)
@@ -386,29 +400,29 @@ class Imager(Module):
             # dict(name='Scope Device', type='interface', interfaceTypes=['microscope']),
             # dict(name='Scanner Device', type='interface', interfaceTypes=['scanner']),
             # dict(name='Laser Device', type='interface', interfaceTypes=['laser']),
-            dict(name="Tiles", type="bool", value=False, children=[
-                dict(name='Stage', type='interface', interfaceTypes='stage'),
-                dict(name="X0", type="float", value=-100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
-                dict(name="X1", type="float", value=100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
-                dict(name="Y0", type="float", value=-100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
-                dict(name="Y1", type="float", value=100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
-                dict(name="StepSize", type="float", value=100, suffix='um', dec=True, minStep=1e-5, step=0.5, limits=[1e-5,1e3], siPrefix=True),
+            # dict(name="Tiles", type="bool", value=False, children=[
+            #     dict(name='Stage', type='interface', interfaceTypes='stage'),
+            #     dict(name="X0", type="float", value=-100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
+            #     dict(name="X1", type="float", value=100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
+            #     dict(name="Y0", type="float", value=-100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
+            #     dict(name="Y1", type="float", value=100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
+            #     dict(name="StepSize", type="float", value=100, suffix='um', dec=True, minStep=1e-5, step=0.5, limits=[1e-5,1e3], siPrefix=True),
                 
-            ]),
-            dict(name="Z-Stack", type="bool", value=False, children=[
-                dict(name='Stage', type='interface', interfaceTypes='stage'),
-                dict(name="Step Size", type="float", value=5e-6, suffix='m', dec=True, minStep=1e-7, step=0.5, limits=[1e-9,1], siPrefix=True),
-                dict(name="Steps", type='int', value=10, step=1, limits=[1,None]),
-                dict(name="Depth", type="float", value=0, readonly=True, suffix='m', siPrefix=True)
-            ]),
-            dict(name="Timed", type="bool", value=False, children=[
-                dict(name="Interval", type="float", value=5.0, suffix='s', dec=True, minStep=0.1, step=0.5, limits=[0.1,30], siPrefix=True),
-                dict(name="N Intervals", type='int', value=10, step=1, limits=[1,None]),
-                dict(name="Duration", type="float", value=0, readonly=True, suffix='s', siPrefix = True),
-                dict(name="Current Frame", type='int', value = 0, readonly=True),
-            ]),
-            dict(name='Show PMT V', type='bool', value=False),
-            dict(name='Show Mirror V', type='bool', value=False),
+            # ]),
+            # dict(name="Z-Stack", type="bool", value=False, children=[
+            #     dict(name='Stage', type='interface', interfaceTypes='stage'),
+            #     dict(name="Step Size", type="float", value=5e-6, suffix='m', dec=True, minStep=1e-7, step=0.5, limits=[1e-9,1], siPrefix=True),
+            #     dict(name="Steps", type='int', value=10, step=1, limits=[1,None]),
+            #     dict(name="Depth", type="float", value=0, readonly=True, suffix='m', siPrefix=True)
+            # ]),
+            # dict(name="Timed", type="bool", value=False, children=[
+            #     dict(name="Interval", type="float", value=5.0, suffix='s', dec=True, minStep=0.1, step=0.5, limits=[0.1,30], siPrefix=True),
+            #     dict(name="N Intervals", type='int', value=10, step=1, limits=[1,None]),
+            #     dict(name="Duration", type="float", value=0, readonly=True, suffix='s', siPrefix = True),
+            #     dict(name="Current Frame", type='int', value = 0, readonly=True),
+            # ]),
+            # dict(name='Show PMT V', type='bool', value=False),
+            # dict(name='Show Mirror V', type='bool', value=False),
         ])
         self.tree.setParameters(self.param, showTop=False)
 
@@ -421,6 +435,9 @@ class Imager(Module):
         self.param.child('Image Control', 'Decomb', 'Auto').sigActivated.connect(self.autoDecomb)
 
         self.manager.sigAbortAll.connect(self.abortTask)
+
+        self.updateImagingProtocol()
+
 
     def quit(self):
         self.abortTask()
@@ -443,10 +460,9 @@ class Imager(Module):
     def abortTask(self):
         """Immediately stop all acquisition and close any shutters in use.
         """
-        self.abort = True
         if self.laserDev is not None and self.laserDev.hasShutter:
             self.laserDev.closeShutter()
-
+        self.imagingThread.abort()
 
     def objectiveUpdate(self, reset=False):
         """ Update the objective information and the associated ROI
@@ -585,51 +601,51 @@ class Imager(Module):
         self.objectiveUpdate(reset=True) # try this... 
         self.roiChanged()
 
-    def setTilesROI(self, roiColor = 'r'):
-        # the initial ROI will be larger than the current field and centered.
-        if self.tileRoi is not None and self.tileRoiVisible:
-            self.hideROI(self.tileRoi)
-            self.tileRoiVisible = False
-            if self.tileRoi is not None:
-                return
+    # def setTilesROI(self, roiColor = 'r'):
+    #     # the initial ROI will be larger than the current field and centered.
+    #     if self.tileRoi is not None and self.tileRoiVisible:
+    #         self.hideROI(self.tileRoi)
+    #         self.tileRoiVisible = False
+    #         if self.tileRoi is not None:
+    #             return
            
             
-        state = self.currentRoi.getState()
-        width, height = state['size']
-        x, y = state['pos']
+    #     state = self.currentRoi.getState()
+    #     width, height = state['size']
+    #     x, y = state['pos']
         
-        csize= [width*3.0,  height*3.0]
-        cpos = [x, y]
-        self.tileRoi = RegionCtrl(cpos, csize, [255., 0., 0.]) # Note that the position actually gets overridden by the camera additem below..
-        self.tileRoi.setZValue(11000)
-        self.cameraModule.window().addItem(self.tileRoi)
-        self.tileRoi.setPos(cpos)
-        self.tileRoi.sigRegionChangeFinished.connect(self.tileROIChanged)
-        self.tileRoiVisible = True
-        return self.tileRoi
+    #     csize= [width*3.0,  height*3.0]
+    #     cpos = [x, y]
+    #     self.tileRoi = RegionCtrl(cpos, csize, [255., 0., 0.]) # Note that the position actually gets overridden by the camera additem below..
+    #     self.tileRoi.setZValue(11000)
+    #     self.cameraModule.window().addItem(self.tileRoi)
+    #     self.tileRoi.setPos(cpos)
+    #     self.tileRoi.sigRegionChangeFinished.connect(self.tileROIChanged)
+    #     self.tileRoiVisible = True
+    #     return self.tileRoi
         
-    def tileROIChanged(self):
-        """ read the TILE ROI rectangle width and height and repost
-        in the parameter tree """
-        state = self.tileRoi.getState()
-        self.tileWidth, self.tileHeight = state['size']
-        self.tilexPos, self.tileyPos = state['pos']
-        x0, y0 =  self.tileRoi.pos()
-        x0 = x0 - self.xPos # align against currrent 2p Image lower left corner
-        y0 = y0 - self.yPos
-        self.param['Tiles', 'X0'] = x0 * 1e6
-        self.param['Tiles', 'Y0'] = y0 * 1e6
-        self.param['Tiles', 'X1'] = self.tileWidth * 1e6
-        self.param['Tiles', 'Y1'] = self.tileHeight * 1e6
-        # record position of ROI in Scanner's local coordinate system
-        # we can use this later to allow the ROI to track stage movement
-        tr = self.scannerDev.inverseGlobalTransform() # maps from global to device local
-        pt1 = pg.Point(self.tilexPos, self.tileyPos)
-        pt2 = pg.Point(self.tilexPos+self.tileWidth, self.tileyPos+self.tileHeight)
-        self.tileRoi.scannerCoords = [
-            tr.map(pt1),
-            tr.map(pt2),
-            ]
+    # def tileROIChanged(self):
+    #     """ read the TILE ROI rectangle width and height and repost
+    #     in the parameter tree """
+    #     state = self.tileRoi.getState()
+    #     self.tileWidth, self.tileHeight = state['size']
+    #     self.tilexPos, self.tileyPos = state['pos']
+    #     x0, y0 =  self.tileRoi.pos()
+    #     x0 = x0 - self.xPos # align against currrent 2p Image lower left corner
+    #     y0 = y0 - self.yPos
+    #     self.param['Tiles', 'X0'] = x0 * 1e6
+    #     self.param['Tiles', 'Y0'] = y0 * 1e6
+    #     self.param['Tiles', 'X1'] = self.tileWidth * 1e6
+    #     self.param['Tiles', 'Y1'] = self.tileHeight * 1e6
+    #     # record position of ROI in Scanner's local coordinate system
+    #     # we can use this later to allow the ROI to track stage movement
+    #     tr = self.scannerDev.inverseGlobalTransform() # maps from global to device local
+    #     pt1 = pg.Point(self.tilexPos, self.tileyPos)
+    #     pt2 = pg.Point(self.tilexPos+self.tileWidth, self.tileyPos+self.tileHeight)
+    #     self.tileRoi.scannerCoords = [
+    #         tr.map(pt1),
+    #         tr.map(pt2),
+    #         ]
 
         
     def updateParams(self, root=None, changes=()):
@@ -690,6 +706,17 @@ class Imager(Module):
         if rparams.system.checkOverconstraint() is not False:
             raise RuntimeError("Scan calculator is overconstrained (this is a bug).")
 
+        # send new protocol to acq thread if it is running
+        if self.imagingThread.isRunning():
+            self.updateImagingProtocol()
+
+    def updateImagingProtocol(self):
+        # send new protocol to acq thread
+        protocol = self.generateProtocol()
+        metainfo = self.saveParams()
+        system = self.scanProgram.components[0].ctrlParameter().system.copy()
+        self.imagingThread.setProtocol(protocol, metainfo, system)
+
     def updateDecomb(self):
         if self.lastFrame is not None:
             self.lastFrame.setDecomb(self.param['Image Control', 'Decomb'], self.param['Image Control', 'Decomb', 'Subpixel'])
@@ -699,140 +726,6 @@ class Imager(Module):
         if self.lastFrame is not None:
             self.lastFrame.autoDecomb()
             self.param.child('Image Control', 'Decomb').setValue(self.lastFrame._decomb[0])
-
-    def PMT_Run(self):
-        """
-        This routine handles special cases where we want multiple frames to be
-        automatically collected. The 3 modes implemented are:
-        Z-stack (currently not used as the stage isn't good enough...)
-        Tiles - collect a tiled x-y sequence of images as single images.
-        Timed - collect a series of images as a 2p-stack. 
-        The parameters for each are set in the paramtree, and the
-        data collection is initiated with the "Run" button and
-        can be terminated early with the "stop" button.
-        """
-        
-        info = {}
-        frameInfo = None  # will be filled in by takeImage()
-        self.stopFlag = False
-        if (self.param['Z-Stack'] and self.param['Timed']) or (self.param['Z-Stack'] and self.param['Tiles']) or self.param['Timed'] and self.param['Tiles']:
-            return # only one mode at a time... 
-        self.view.resetFrameCount() # always reset the ROI display in the imager window (different than in camera window) if it is being used
-        
-        if self.param['Z-Stack']: # moving in z for a focus stack
-            imageFilename = '2pZstack'
-            info['2pImageType'] = 'Z-Stack'
-            stage = self.manager.getDevice(self.param['Z-Stack', 'Stage'])
-            images = []
-            nSteps = self.param['Z-Stack', 'Steps']
-            for i in range(nSteps):
-                img, frameInfo = self.takeImage()
-                img = img[np.newaxis, ...]
-                if img is None:
-                    break
-                images.append(img)
-                self.view.setImage(img)
-                
-                if i < nSteps-1:
-                    ## speed 20 is quite slow; timeouts may occur if we go much slower than that..
-                    stage.moveBy([0.0, 0.0, self.param['Z-Stack', 'Step Size']], speed=20, block=True)  
-            imgData = np.concatenate(images, axis=0)
-            info.update(frameInfo)
-            if self.param['Store']:
-                dh = self.manager.getCurrentDir().writeFile(imgData, imageFilename + '.ma', info=info, autoIncrement=True)
-        
-        elif self.param['Tiles']: # moving in x and y to get a tiled image set
-            info['2pImageType'] = 'Tiles'
-            dirhandle = self.manager.getCurrentDir()
-            if self.param['Store']:
-                dirhandle = dirhandle.mkdir('2PTiles', autoIncrement=True, info=info)
-            imageFilename = '2pImage'
-            
-            stage = self.manager.getDevice(self.param['Tiles', 'Stage'])
-            #print dir(stage.mp285)
-            #print stage.mp285.stat()
-            #return
-            self.param['Timed', 'Current Frame'] = 0 # get frame times ...
-            images = []
-            originalPos = stage.pos
-            state = self.currentRoi.getState()
-            self.width, self.height = state['size']
-            originalSpeed = 200
-            mp285speed = 1000
-
-            x0 = self.param['Tiles', 'X0'] *1e-6 # convert back to meters
-            x1 = x0 + self.param['Tiles', 'X1'] *1e-6
-            y0 = self.param['Tiles', 'Y0'] *1e-6
-            y1 = y0 + self.param['Tiles', 'Y1'] *1e-6
-            tileXY = self.param['Tiles', 'StepSize']*1e-6
-            nXTiles = np.ceil((x1-x0)/tileXY)
-            nYTiles = np.ceil((y1-y0)/tileXY)
-           
-            # positions are relative......
-            xpos = np.arange(x0, x0+nXTiles*tileXY, tileXY) +originalPos[0]
-            ypos = np.arange(y0, y0+nYTiles*tileXY, tileXY) +originalPos[1]
-            stage.moveTo([xpos[0], ypos[0]],
-                         speed=mp285speed, fine = True, block=True) # move and wait until complete.  
-
-            ypath = 0
-            xdir = 1 # positive movement direction (serpentine tracking)
-            xpos1 = xpos
-            for yp in ypos:
-                if self.stopFlag:
-                    break
-                for xp in xpos1:
-                    if self.stopFlag:
-                        break
-                    stage.moveTo([xp, yp], speed=mp285speed, fine = True, block=True, timeout = 10.)
-                    (images, frameInfo) = self.PMT_Snap(dirhandle = dirhandle) # now take image
-                    #  stage.moveBy([tileXY*xdir, 0.], speed=mp285speed, fine = True, block=True, timeout = 10.)
-                xdir *= -1 # reverse direction
-                if xdir < 0:
-                    xpos1 = xpos[::-1] # reverse order of array, serpentine movement.
-                else:
-                    xpos1 = xpos
-            stage.moveTo([xpos[0], ypos[0]],
-                         speed=originalSpeed, fine = True, block=True, timeout = 30.) # move and wait until complete.  
-
-        elif self.param['Timed']: # 
-            imageFilename = '2pTimed'
-            info['2pImageType'] = 'Timed'
-            self.param['Timed', 'Current Frame'] = 0
-            images = []
-            nSteps = self.param['Timed', 'N Intervals']
-            for i in range(nSteps):
-                if self.stopFlag:
-                    break
-                self.param['Timed', 'Current Frame'] = i
-                (img, frameInfo) = self.takeImage()
-                img = img[np.newaxis, ...]
-                if img is None:
-                   return
-                images.append(img)
-                self.view.setImage(img)
-                if self.stopFlag:
-                    break
-                
-                if i < nSteps-1:
-                    time.sleep(self.param['Timed', 'Interval'])
-            imgData = np.concatenate(images, axis=0)
-            info.update(frameInfo)
-            if self.param['Store']:
-                dh = self.manager.getCurrentDir().writeFile(imgData, imageFilename + '.ma', info=info, autoIncrement=True)
-
-        else:
-            imageFilename = '2pImage'
-            info['2pImageType'] = 'Snap'
-            (imgData, frameInfo) = self.takeImage()
-            if imgData is None:
-                return
-            self.view.setImage(imgData)
-            info.update(frameInfo)
-            if self.param['Store']:
-                dh = self.manager.getCurrentDir().writeFile(imgData, imageFilename + '.ma', info=info, autoIncrement=True)
-
-    def PMT_Stop(self):
-        self.stopFlag = True
             
     def loadModeSettings(self, params):
         param = self.param.child('Scan Control')
@@ -845,74 +738,35 @@ class Imager(Module):
         """
         if mode is not None:
             self.loadModeSettings(FrameModes[mode])
-        self.PMT_Snap()
+        self.updateImagingProtocol()
+        self.takeImage()
         
     def startVideoClicked(self, mode):
         if mode is not None:
             self.loadModeSettings(VideoModes[mode])
-        if not self.videoRunning:
-            self.startVideo()
+        self.updateImagingProtocol()
+        self.imagingCtrl.acquisitionStarted()
+        self.imagingThread.startVideo()
 
     def stopVideoClicked(self):
-        self.videoRunning = False
-            
-    def PMT_Snap(self, dirhandle=None):
-        """
-        Take one image as a snap, regardless of whether a Z stack or a Timed acquisition is selected
-        """            
-        # need to resurrect this.
-        assert dirhandle is None
+        self.imagingThread.stopVideo()
 
-        frame = self.takeImage()
-        if frame is False:  # aborted
-            return
-        frame.info()['2pImageType'] = 'Snap'
+    def videoStopped(self):
+        self.imagingCtrl.acquisitionStopped()
 
-        return frame
+    def imagingAborted(self):
+        self.blanker.unblank()
 
-    def startVideo(self):
-        if self.videoRunning:
-            raise RuntimeError("Video acquisition already started.")
-
-        if self.laserDev is not None and self.laserDev.hasShutter:
-            # force shutter to stay open for the duration of the acquisition
-            self.laserDev.openShutter()
-        try:
-            self.videoRunning = True
-            self.imagingCtrl.acquisitionStarted()
-            while self.videoRunning:
-                frame = self.takeImage(allowBlanking=False)
-                if not self.imagingCtrl.ui.acquireVideoBtn.isChecked():
-                    break
-                if frame is False:  # aborted
-                    break
-                # Qt event loop is usually visited while waiting for imaging results, but
-                # we can't count on that.
-                QtGui.QApplication.processEvents()
-
-        finally:
-            self.videoRunning = False
-            self.imagingCtrl.acquisitionStopped()
-            if self.laserDev is not None and self.laserDev.hasShutter:
-                self.laserDev.closeShutter()
-    
+    def blankerCancelClicked(self):
+        self.imagingThread.abort()
 
     def saveParams(self, root=None):
-        if root is None:
-            root = self.param
-            
         params = {}
-        for child in root:
-            params[child.name()] = child.value()
-            if child.hasChildren() and child.value() is True:
-                for k,v in self.saveParams(child).items():
-                    params[child.name() + '.' + k] = v
-        # add the laser information            
-        params['wavelength'] = self.laserDev.getWavelength()
-        params['laserOutputPower'] = self.laserDev.outputPower()
-        
+        for grp in ('Scan Control', 'Scan Properties'):
+            for ch in self.param.child(grp):
+                params[ch.name()] = ch.value()
+
         return params
-    
 
     def updateLaserInfo(self):
         if self.laserDev is not None:
@@ -926,59 +780,28 @@ class Imager(Module):
         """
         Take an image using the scanning system and PMT, and return with the data.
         """
-        prof = pg.debug.Profiler(disabled=True)
+        # Blank screen and start acquisition
+        blank = allowBlanking and self.param['Scan Control', 'Blank Screen'] is True
+        if blank:
+            self.blanker.blank()
+
+        try:
+            self.imagingThread.takeFrame()
+        except Exception:
+            self.blanker.unblank()
+
+    def newFrame(self, frame):
+        """Acquisition thread has generated a new frame.
+        """
+        self.blanker.unblank()
+        self.lastFrame = frame
+        self.updateDecomb()
+        self.imagingCtrl.newFrame(self.lastFrame)
+
+    def generateProtocol(self):
         # first make sure laser information is updated on the module interface
         self.updateLaserInfo()
 
-        # generate the scan protocol and task
-        prot = self.generateProtocol()
-        prof('generate protocol')
-        task = self.manager.createTask(prot)
-        prof('create task')
-
-        # Blank screen and execute task
-        blank = allowBlanking and self.param['Scan Control', 'Blank Screen'] is True
-        with ScreenBlanker(blank) as blanker:
-            start = pg.ptime.time()
-            task.execute(block = False)
-            while not task.isDone():
-                QtGui.QApplication.processEvents()
-                if blanker.cancelled or self.abort:
-                    task.abort()
-                    self.abort = False
-                    return False
-                time.sleep(0.01)
-        prof('execute')
-
-        # grab results and store PMT data for display
-        data = task.getResult()
-        prof('get result')
-
-        pdDevice, pdChannel = self.param['Scan Control', 'Photodetector']
-        scanDev = self.scannerDev.name()
-        program = prot[scanDev]['program']
-        pmtData = data[pdDevice][pdChannel].view(np.ndarray)
-        info = self.saveParams()
-        info['time'] = start
-
-        info['deviceTranform'] = pg.SRTTransform3D(self.scannerDev.globalTransform())
-        rectSystem = self.scanProgram.components[0].ctrlParameter().system
-        tr = rectSystem.imageTransform()
-        info['transform'] = pg.SRTTransform3D(tr)
-        prof('meta info')
-
-        self.lastFrame = ImagingFrame(pmtData, rectSystem.copy(), info)
-        prof('create frame')
-
-        self.updateDecomb()
-        prof('decomb')
-
-        self.imagingCtrl.newFrame(self.lastFrame)
-        prof('update image')
-
-        return self.lastFrame
-
-    def generateProtocol(self):
         # return cached command if possible
         if self.scanProtocol is not None:
             vscan = self.scanProtocol
@@ -1020,9 +843,8 @@ class Imager(Module):
                 'yCommand' : vscan[:, 1],
                 'program': program, 
                 },
-            # self.attenuatorDev.name(): {self.attenuatorChannel: {'preset': self.param['Pockels']}},
             self.laserDev.name(): {
-                'pCell': {'command': pcell}, # {'preset': self.param['Pockels']},
+                'pCell': {'command': pcell},
                 'shutterMode': 'open',
                 },
             pdDevice: {
@@ -1036,6 +858,141 @@ class Imager(Module):
         ## New image is displayed; update image transform
         self.imageItem.setTransform(frame.globalTransform().as2D())
 
+    # def PMT_Run(self):
+    #     """
+    #     This routine handles special cases where we want multiple frames to be
+    #     automatically collected. The 3 modes implemented are:
+    #     Z-stack (currently not used as the stage isn't good enough...)
+    #     Tiles - collect a tiled x-y sequence of images as single images.
+    #     Timed - collect a series of images as a 2p-stack. 
+    #     The parameters for each are set in the paramtree, and the
+    #     data collection is initiated with the "Run" button and
+    #     can be terminated early with the "stop" button.
+    #     """
+        
+    #     info = {}
+    #     frameInfo = None  # will be filled in by takeImage()
+    #     self.stopFlag = False
+    #     if (self.param['Z-Stack'] and self.param['Timed']) or (self.param['Z-Stack'] and self.param['Tiles']) or self.param['Timed'] and self.param['Tiles']:
+    #         return # only one mode at a time... 
+    #     self.view.resetFrameCount() # always reset the ROI display in the imager window (different than in camera window) if it is being used
+        
+    #     if self.param['Z-Stack']: # moving in z for a focus stack
+    #         imageFilename = '2pZstack'
+    #         info['2pImageType'] = 'Z-Stack'
+    #         stage = self.manager.getDevice(self.param['Z-Stack', 'Stage'])
+    #         images = []
+    #         nSteps = self.param['Z-Stack', 'Steps']
+    #         for i in range(nSteps):
+    #             img, frameInfo = self.takeImage()
+    #             img = img[np.newaxis, ...]
+    #             if img is None:
+    #                 break
+    #             images.append(img)
+    #             self.view.setImage(img)
+                
+    #             if i < nSteps-1:
+    #                 ## speed 20 is quite slow; timeouts may occur if we go much slower than that..
+    #                 stage.moveBy([0.0, 0.0, self.param['Z-Stack', 'Step Size']], speed=20, block=True)  
+    #         imgData = np.concatenate(images, axis=0)
+    #         info.update(frameInfo)
+    #         if self.param['Store']:
+    #             dh = self.manager.getCurrentDir().writeFile(imgData, imageFilename + '.ma', info=info, autoIncrement=True)
+        
+    #     elif self.param['Tiles']: # moving in x and y to get a tiled image set
+    #         info['2pImageType'] = 'Tiles'
+    #         dirhandle = self.manager.getCurrentDir()
+    #         if self.param['Store']:
+    #             dirhandle = dirhandle.mkdir('2PTiles', autoIncrement=True, info=info)
+    #         imageFilename = '2pImage'
+            
+    #         stage = self.manager.getDevice(self.param['Tiles', 'Stage'])
+    #         #print dir(stage.mp285)
+    #         #print stage.mp285.stat()
+    #         #return
+    #         self.param['Timed', 'Current Frame'] = 0 # get frame times ...
+    #         images = []
+    #         originalPos = stage.pos
+    #         state = self.currentRoi.getState()
+    #         self.width, self.height = state['size']
+    #         originalSpeed = 200
+    #         mp285speed = 1000
+
+    #         x0 = self.param['Tiles', 'X0'] *1e-6 # convert back to meters
+    #         x1 = x0 + self.param['Tiles', 'X1'] *1e-6
+    #         y0 = self.param['Tiles', 'Y0'] *1e-6
+    #         y1 = y0 + self.param['Tiles', 'Y1'] *1e-6
+    #         tileXY = self.param['Tiles', 'StepSize']*1e-6
+    #         nXTiles = np.ceil((x1-x0)/tileXY)
+    #         nYTiles = np.ceil((y1-y0)/tileXY)
+           
+    #         # positions are relative......
+    #         xpos = np.arange(x0, x0+nXTiles*tileXY, tileXY) +originalPos[0]
+    #         ypos = np.arange(y0, y0+nYTiles*tileXY, tileXY) +originalPos[1]
+    #         stage.moveTo([xpos[0], ypos[0]],
+    #                      speed=mp285speed, fine = True, block=True) # move and wait until complete.  
+
+    #         ypath = 0
+    #         xdir = 1 # positive movement direction (serpentine tracking)
+    #         xpos1 = xpos
+    #         for yp in ypos:
+    #             if self.stopFlag:
+    #                 break
+    #             for xp in xpos1:
+    #                 if self.stopFlag:
+    #                     break
+    #                 stage.moveTo([xp, yp], speed=mp285speed, fine = True, block=True, timeout = 10.)
+    #                 (images, frameInfo) = self.PMT_Snap(dirhandle = dirhandle) # now take image
+    #                 #  stage.moveBy([tileXY*xdir, 0.], speed=mp285speed, fine = True, block=True, timeout = 10.)
+    #             xdir *= -1 # reverse direction
+    #             if xdir < 0:
+    #                 xpos1 = xpos[::-1] # reverse order of array, serpentine movement.
+    #             else:
+    #                 xpos1 = xpos
+    #         stage.moveTo([xpos[0], ypos[0]],
+    #                      speed=originalSpeed, fine = True, block=True, timeout = 30.) # move and wait until complete.  
+
+    #     elif self.param['Timed']: # 
+    #         imageFilename = '2pTimed'
+    #         info['2pImageType'] = 'Timed'
+    #         self.param['Timed', 'Current Frame'] = 0
+    #         images = []
+    #         nSteps = self.param['Timed', 'N Intervals']
+    #         for i in range(nSteps):
+    #             if self.stopFlag:
+    #                 break
+    #             self.param['Timed', 'Current Frame'] = i
+    #             (img, frameInfo) = self.takeImage()
+    #             img = img[np.newaxis, ...]
+    #             if img is None:
+    #                return
+    #             images.append(img)
+    #             self.view.setImage(img)
+    #             if self.stopFlag:
+    #                 break
+                
+    #             if i < nSteps-1:
+    #                 time.sleep(self.param['Timed', 'Interval'])
+    #         imgData = np.concatenate(images, axis=0)
+    #         info.update(frameInfo)
+    #         if self.param['Store']:
+    #             dh = self.manager.getCurrentDir().writeFile(imgData, imageFilename + '.ma', info=info, autoIncrement=True)
+
+    #     else:
+    #         imageFilename = '2pImage'
+    #         info['2pImageType'] = 'Snap'
+    #         (imgData, frameInfo) = self.takeImage()
+    #         if imgData is None:
+    #             return
+    #         self.view.setImage(imgData)
+    #         info.update(frameInfo)
+    #         if self.param['Store']:
+    #             dh = self.manager.getCurrentDir().writeFile(imgData, imageFilename + '.ma', info=info, autoIncrement=True)
+
+    # def PMT_Stop(self):
+    #     self.stopFlag = True
+
+
 
 class ImagingFrame(imaging.Frame):
     """Represents a single collected image frame and its associated metadata."""
@@ -1047,20 +1004,9 @@ class ImagingFrame(imaging.Frame):
         self._image = None
         imaging.Frame.__init__(self, data, info)
 
-    # @property
-    # def program(self):
-    #     # too expensive!
-    #     with self.lock:
-    #         if self._program is None:
-    #             self._program = ScanProgram()
-    #             self._program.restoreState(self._program_state)
-    #     return self._program
-
     @property
     def rectScan(self):
         return self._rectscan
-        # with self.lock:
-        #     return self.program.components[0].ctrlParameter().system
 
     def getImage(self, decomb=True, offset=None):
         if self._image is None:
@@ -1081,3 +1027,135 @@ class ImagingFrame(imaging.Frame):
         offset, subpixel = self._decomb
         offset = self.rectScan.measureMirrorLag(self._data, subpixel=subpixel)
         self.setDecomb(offset, subpixel)
+
+
+class ImagingThread(Thread):
+
+    sigNewFrame = QtCore.Signal(object)
+    sigVideoStopped = QtCore.Signal()
+    sigAborted = QtCore.Signal()
+
+    def __init__(self, laserDev, scannerDev):
+        Thread.__init__(self)
+        self._abort = False
+        self._video = True
+        self.lock = Mutex(recursive=True)
+        self.manager = acq4.Manager.getManager()
+        self.laserDev = laserDev
+        self.scannerDev = scannerDev
+
+    def setProtocol(self, prot, meta, sys):
+        #  prot = task protocol 
+        #  meta = output of saveParams to be stored with image
+        #  sys = rectscan system for extracting image from pmt data
+        with self.lock:
+            self.protocol = prot
+            self.metainfo = meta
+            self.system = sys
+
+    def abort(self):
+        with self.lock:
+            self._abort = True
+
+    def startVideo(self):
+        if self.isRunning():
+            raise RuntimeError("Imaging thread is already running.")
+        with self.lock:
+            self._abort = False
+            self._video = True
+        self.start()
+
+    def takeFrame(self):
+        if self.isRunning():
+            raise RuntimeError("Imaging thread is already running.")
+        with self.lock:
+            self._abort = False
+            self._video = False
+        self.start()
+
+    def run(self):
+        with self.lock:
+            video = self._video
+
+        try:
+            if video:
+                try:
+                    self.acquireVideo()
+                finally:
+                    self.sigVideoStopped.emit()
+            else:
+                self.acquireFrame()
+        except Exception:
+            self.sigAborted.emit()
+            printExc("Error in imaging acquisition thread.")
+
+    def acquireVideo(self):
+        if self.laserDev is not None and self.laserDev.hasShutter:
+            # force shutter to stay open for the duration of the acquisition
+            self.laserDev.openShutter()
+        try:
+            while True:
+                # take one frame
+                self.acquireFrame(allowBlanking=False)
+
+                # See whether acquisition should end
+                with self.lock:
+                    if self._video is False or self._abort is True:
+                        break
+        finally:
+            if self.laserDev is not None and self.laserDev.hasShutter:
+                self.laserDev.closeShutter()
+
+    def acquireFrame(self, allowBlanking=True):
+        """Acquire one frame and emit sigNewFrame.
+        """
+        with self.lock:
+            prot = self.protocol
+            meta = self.metainfo
+            rectSystem = self.system
+
+        print prot
+        task = self.manager.createTask(prot)
+
+        dur = prot['protocol']['duration']
+        start = pg.ptime.time()
+        endtime = start + dur - 0.005 
+
+        # Start the task
+        task.execute(block = False)
+
+        # Wait until the task has finished
+        while not task.isDone():
+            with self.lock:
+                abort = self._abort
+            if abort:
+                task.abort()
+                self._abort = False
+                raise Exception("Imaging acquisition aborted")
+            now = pg.ptime.time()
+            if now < endtime:
+                # long sleep until we expect the protocol to be almost done
+                time.sleep(min(0.1, endtime-now))
+            else:
+                time.sleep(5e-3)
+
+        # Get acquired data and generate metadata
+        data = task.getResult()
+        pdDevice, pdChannel = meta['Photodetector']
+        pmtData = data[pdDevice][pdChannel].view(np.ndarray)
+        info = meta.copy()
+        info['time'] = start
+
+        info['deviceTranform'] = pg.SRTTransform3D(self.scannerDev.globalTransform())
+        tr = rectSystem.imageTransform()
+        info['transform'] = pg.SRTTransform3D(tr)
+
+        frame = ImagingFrame(pmtData, rectSystem.copy(), info)
+        self.sigNewFrame.emit(frame)
+
+
+
+
+
+
+

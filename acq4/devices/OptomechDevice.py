@@ -386,7 +386,7 @@ class OptomechDevice(object):
     
     def __parentDeviceTransformChanged(self, sender, changed):
         ## called when any (grand)parent's transform has changed.
-        prof = pg.debug.Profiler(disabled=False)
+        prof = pg.debug.Profiler(disabled=True)
         self.invalidateCachedTransforms()
         self.sigGlobalTransformChanged.emit(self, changed)
         

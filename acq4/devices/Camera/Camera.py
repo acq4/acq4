@@ -353,7 +353,7 @@ class Camera(DAQGeneric, OptomechDevice):
             return self.scopeState
         
     def transformChanged(self):  ## called then this device's global transform changes.
-        prof = Profiler(disabled=False)
+        prof = Profiler(disabled=True)
         self.scopeState['transform'] = self.globalTransform()
         o = Vector(self.scopeState['transform'].map(Vector(0,0,0)))
         p = Vector(self.scopeState['transform'].map(Vector(1, 1)) - o)
