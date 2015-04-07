@@ -21,7 +21,7 @@ from acq4.util.functions import strncmp
 from acq4.util.configfile import *
 #from metaarray import MetaArray
 import time
-from acq4.util.Mutex import Mutex, MutexLocker
+from acq4.util.Mutex import Mutex
 from acq4.pyqtgraph import SignalProxy, ProgressDialog
 #from acq4.pyqtgraph.ProgressDialog import ProgressDialog
 from PyQt4 import QtCore, QtGui

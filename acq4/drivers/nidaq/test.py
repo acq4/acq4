@@ -3,12 +3,8 @@
 ## Workaround for symlinks not working in windows
 print "Starting up.."
 
-import sys, time, numpy, os
-from numpy import *
-#import os
-#md = os.path.abspath(os.path.dirname(__file__))
-#sys.path.append("c:\\Documents and Settings\experimenters\\luke\\acq4")
-#sys.path.append("c:\\Documents and Settings\experimenters\\luke\\acq4\\lib\\util")
+import sys, time, os
+import numpy as np
 modPath = os.path.split(__file__)[0]
 acq4Path = os.path.abspath(os.path.join(modPath, '..', '..', '..'))
 utilPath = os.path.join(acq4Path, 'lib', 'util')
@@ -19,15 +15,8 @@ import acq4.util.ptime as ptime
 
 if sys.argv[-1] == 'mock':
     from mock import NIDAQ as n
-    #import mock as nidaq
 else:
     from nidaq import NIDAQ as n
-    #from nidaq import SuperTask
-    #import nidaq
-    
-#from SuperTask import SuperTask
-    
-    
 
 
 print "Assert num devs > 0:"
@@ -86,7 +75,7 @@ def outputTest():
     task.CreateAOVoltageChan("/Dev1/ao0", "", -10., 10., n.Val_Volts, None)
     task.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
     
-    data = numpy.zeros((1000,), dtype=numpy.float64)
+    data = np.zeros((1000,), dtype=np.float64)
     data[200:400] = 5.0
     data[600:800] = 5.0
     task.write(data)
@@ -109,11 +98,7 @@ def syncADTest():
     task2.CfgSampClkTiming("/Dev1/ai/SampleClock", 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
     
     print task2.GetTaskChannels()
-    #data1 = numpy.zeros((1000,), dtype=numpy.uint32)
-    #data1[200:400] = 5
-    #data1[600:800] = 5
     task2.start()
-    #print "Wrote samples:", task2.write(data1)
     task1.start()
     data1 = task1.read()
     data2 = task2.read()
@@ -139,7 +124,7 @@ def syncAIOTest():
     
 
 
-    data1 = numpy.zeros((100,), dtype=numpy.float64)
+    data1 = np.zeros((100,), dtype=np.float64)
     data1[20:40] = 7.0
     data1[60:80] = 5.0
     print "  Wrote ao samples:", task2.write(data1)
@@ -185,7 +170,7 @@ def syncIOTest():
     #task2.SetSyncPulseSrc("/Dev1/SyncPulse")
 
 
-    data1 = numpy.zeros((100,), dtype=numpy.float64)
+    data1 = np.zeros((100,), dtype=np.float64)
     data1[20:40] = 7.0
     data1[60:80] = 5.0
     print "Wrote ao samples:", task2.write(data1)
@@ -278,7 +263,7 @@ def analogSuperTaskTest():
     st.addChannel('/Dev1/ao0', 'ao')
     st.addChannel('/Dev1/ao1', 'ao')
 
-    ao = zeros((2, 1000))
+    ao = np.zeros((2, 1000))
     ao[0, 200:300] = 1.0
     ao[1, 400:500] = 2.0
     st.setWaveform('/Dev1/ao0', ao[0])

@@ -98,7 +98,9 @@ def reload(module, debug=False, lists=False, dicts=False):
             if debug:
                 print("  Updating class %s.%s (0x%x -> 0x%x)" % (module.__name__, k, id(old), id(new)))
             updateClass(old, new, debug)
-                    
+            # don't put this inside updateClass because it is reentrant.
+            new.__previous_reload_version__ = old
+
         elif inspect.isfunction(old):
             depth = updateFunction(old, new, debug)
             if debug:
@@ -153,7 +155,6 @@ def updateFunction(old, new, debug, depth=0, visited=None):
 ##  1) find all instances of the old class and set instance.__class__ to the new class
 ##  2) update all old class methods to use code from the new class methods
 def updateClass(old, new, debug):
-
     ## Track town all instances and subclasses of old
     refs = gc.get_referrers(old)
     for ref in refs:
@@ -211,6 +212,8 @@ def updateClass(old, new, debug):
                 
     ## And copy in new functions that didn't exist previously
     for attr in dir(new):
+        if attr == '__previous_reload_version__':
+            continue
         if not hasattr(old, attr):
             if debug:
                 print("    Adding missing attribute %s" % attr)
@@ -219,8 +222,6 @@ def updateClass(old, new, debug):
     ## finally, update any previous versions still hanging around..
     if hasattr(old, '__previous_reload_version__'):
         updateClass(old.__previous_reload_version__, new, debug)
-
-    new.__previous_reload_version__ = old
 
 
 ## It is possible to build classes for which str(obj) just causes an exception.

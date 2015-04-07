@@ -96,7 +96,7 @@ class Device(QtCore.QObject):
         return '<%s "%s">' % (self.__class__.__name__, self.name())
     
 
-class DeviceTask:
+class DeviceTask(object):
     """
     DeviceTask handles all behavior of a single device during 
     execution of a task, including configuring the device based on the 

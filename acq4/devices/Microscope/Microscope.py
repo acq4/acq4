@@ -430,17 +430,25 @@ class ScopeCameraModInterface(QtCore.QObject):
         self.surfaceLine.setValue(depth)
 
     def transformChanged(self):
+        prof = pg.debug.Profiler(disabled=False)
         focus = self.dev.getFocusDepth()
+        prof('1')
         self.focusLine.setValue(focus)
+        prof('2')
 
         # Compute the target focal plane.
         # This is a little tricky because the objective might have an offset+scale relative
         # to the focus device.
         fd = self.dev.focusDevice()
+        prof('3')
         tpos = fd.globalTargetPosition()
+        prof('4')
         fpos = fd.globalPosition()
+        prof('5')
         dif = tpos[2] - fpos[2]
+        prof('6')
         self.movableFocusLine.setValue(focus + dif)
+        prof('7')
 
     def focusDragged(self):
         self.dev.setFocusDepth(self.movableFocusLine.value())

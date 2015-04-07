@@ -145,7 +145,9 @@ class DAQGeneric(Device):
             a voltage on the physical DAQ channel. If *mapping* is None, then it will use self.getMapping(*channel*)
             to determine the correct mapping.
         """
+        prof = Profiler(disabled=True)
         with self._DGLock:
+            prof('lock')
             #print "set holding", channel, level
             ### Set correct holding level here...
             if level is None:
@@ -158,13 +160,16 @@ class DAQGeneric(Device):
             if mapping is None:
                 mapping = self.getMapping(channel)
             val = mapping.mapToDaq(channel, self._DGHolding[channel])
+            prof('map')
             #print "Set holding for channel %s: %f => %f" % (channel, self._DGHolding[channel], val)
             
-            isVirtual = self._DGConfig[channel].get('virtual', False)
+            chConf = self._DGConfig[channel]
+            isVirtual = chConf.get('virtual', False)
             if not isVirtual:
-                daq = self._DGConfig[channel]['device']
-                chan = self._DGConfig[channel]['channel']
+                daq = chConf['device']
+                chan = chConf['channel']
                 daqDev = self.dm.getDevice(daq)
+            prof('get dev')
             
         ## release DGLock before setChannelValue
         if not isVirtual:
@@ -172,7 +177,9 @@ class DAQGeneric(Device):
                 daqDev.setChannelValue(chan, val, block=True)
             else:
                 daqDev.setChannelValue(chan, val, block=False, delaySetIfBusy=True)  ## Note: If a task is running, this will not be set until it completes.
+        prof('set channel value')
         self.sigHoldingChanged.emit(channel, val)
+        prof('emit')
         
     def getChanHolding(self, chan):
         with self._DGLock:
@@ -396,17 +403,21 @@ class DAQGenericTask(DeviceTask):
         #with self.dev._DGLock:  ##not necessary
         ## Stop DAQ tasks before setting holding level.
         #print "STOP"
+        prof = Profiler(disabled=True)
         for ch in self.daqTasks:
             #print "Stop task", self.daqTasks[ch]
             try:
                 self.daqTasks[ch].stop(abort=abort)
             except:
                 printExc("Error while stopping DAQ task:")
+            prof('stop %s' % ch)
         for ch in self._DAQCmd:
             if 'holding' in self._DAQCmd[ch]:
                 self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
+                prof('set holding %s' % ch)
             elif self.dev.isOutput(ch):  ## return all output channels to holding value
                 self.dev.setChanHolding(ch)
+                prof('reset to holding %s' % ch)
         
     def getResult(self):
         ## Access data recorded from DAQ task

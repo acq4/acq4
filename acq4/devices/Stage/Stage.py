@@ -84,13 +84,11 @@ class Stage(Device, OptomechDevice):
             rel[:len(pos)] = [pos[i] - self.pos[i] for i in range(len(pos))]
             self.pos[:len(pos)] = pos
         
-            self._stageTransform = QtGui.QMatrix4x4()
+            self._stageTransform = pg.SRTTransform3D()
             self._stageTransform.translate(*self.pos)
-            self._invStageTransform = QtGui.QMatrix4x4()
+            self._invStageTransform = pg.SRTTransform3D()
             self._invStageTransform.translate(*[-x for x in self.pos])
-
             self._updateTransform()
-
         self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
 
     def baseTransform(self):
@@ -151,7 +149,12 @@ class Stage(Device, OptomechDevice):
 
         See targetPosition().
         """
-        return self.mapToGlobal(self.mapFromStage(self.targetPosition()))
+        prof = pg.debug.Profiler(disabled=False)
+        tp = self.targetPosition()
+        prof('1')
+        lp = self.mapFromStage(tp)
+        prof('2')
+        return self.mapToGlobal(lp)
 
     def getState(self):
         with self.lock:

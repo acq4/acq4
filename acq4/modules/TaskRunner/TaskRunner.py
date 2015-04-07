@@ -6,7 +6,7 @@ import acq4.util.DirTreeWidget as DirTreeWidget
 import acq4.util.configfile as configfile
 from collections import OrderedDict
 from acq4.util.SequenceRunner import *
-from acq4.util.Mutex import Mutex, MutexLocker
+from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.Manager import getManager, logMsg, logExc
 from acq4.util.debug import *
@@ -1110,7 +1110,7 @@ class TaskThread(Thread):
                 
     def startTask(self, task, paramSpace=None):
         #print "TaskThread:startTask", self.lock.depth(), self.lock
-        with MutexLocker(self.lock):
+        with self.lock:
             #print "TaskThread:startTask got lock", self.lock.depth(), "    tracebacks follow:\n==========="
             #print "\n\n".join(self.lock.traceback())
             #print "======================"
@@ -1129,7 +1129,7 @@ class TaskThread(Thread):
             #print "TaskThread:startTask started", self.lock.depth()
     
     def pause(self, pause):
-        with MutexLocker(self.lock):
+        with self.lock:
             self.paused = pause
                 
     def run(self):
@@ -1140,7 +1140,7 @@ class TaskThread(Thread):
         #print "TaskThread:run()"
         try:
             #print "TaskThread:run   waiting for lock..", self.lock.depth()
-            with MutexLocker(self.lock):
+            with self.lock:
                 #print "TaskThread:run   got lock."
                 self.stopThread = False
                 self.abortThread = False
@@ -1177,7 +1177,7 @@ class TaskThread(Thread):
         startTime = ptime.time()
         if params is None:
             params = {}
-        with MutexLocker(self.lock) as l:
+        with self.lock as l:
             l.unlock()
         
             ## Select correct command to execute

@@ -73,6 +73,12 @@ class SystemSolver(object):
         self.__dict__['_currentGets'] = set()
         self.reset()
         
+    def copy(self):
+        sys = type(self)()
+        sys.__dict__['_vars'] = self.__dict__['_vars'].copy()
+        sys.__dict__['_currentGets'] = self.__dict__['_currentGets'].copy()
+        return sys
+
     def reset(self):
         """
         Reset all variables in the solver to their default state.

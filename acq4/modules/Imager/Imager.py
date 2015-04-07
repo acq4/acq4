@@ -479,6 +479,7 @@ class Imager(Module):
         perhaps the stage position, etc. This needs to be obtained to re-align
         the scanner ROI
         """
+        prof = pg.debug.Profiler(disabled=False)
         globalTr = self.scannerDev.globalTransform()
         pt1 = globalTr.map(self.currentRoi.scannerCoords[0])
         pt2 = globalTr.map(self.currentRoi.scannerCoords[1])
@@ -925,12 +926,15 @@ class Imager(Module):
         """
         Take an image using the scanning system and PMT, and return with the data.
         """
+        prof = pg.debug.Profiler(disabled=True)
         # first make sure laser information is updated on the module interface
         self.updateLaserInfo()
 
         # generate the scan protocol and task
         prot = self.generateProtocol()
+        prof('generate protocol')
         task = self.manager.createTask(prot)
+        prof('create task')
 
         # Blank screen and execute task
         blank = allowBlanking and self.param['Scan Control', 'Blank Screen'] is True
@@ -944,9 +948,12 @@ class Imager(Module):
                     self.abort = False
                     return False
                 time.sleep(0.01)
+        prof('execute')
 
         # grab results and store PMT data for display
         data = task.getResult()
+        prof('get result')
+
         pdDevice, pdChannel = self.param['Scan Control', 'Photodetector']
         scanDev = self.scannerDev.name()
         program = prot[scanDev]['program']
@@ -955,13 +962,19 @@ class Imager(Module):
         info['time'] = start
 
         info['deviceTranform'] = pg.SRTTransform3D(self.scannerDev.globalTransform())
-        tr = self.scanProgram.components[0].ctrlParameter().system.imageTransform()
+        rectSystem = self.scanProgram.components[0].ctrlParameter().system
+        tr = rectSystem.imageTransform()
         info['transform'] = pg.SRTTransform3D(tr)
+        prof('meta info')
 
-        self.lastFrame = ImagingFrame(pmtData, program, info)
+        self.lastFrame = ImagingFrame(pmtData, rectSystem.copy(), info)
+        prof('create frame')
+
         self.updateDecomb()
+        prof('decomb')
 
         self.imagingCtrl.newFrame(self.lastFrame)
+        prof('update image')
 
         return self.lastFrame
 
@@ -1027,26 +1040,27 @@ class Imager(Module):
 class ImagingFrame(imaging.Frame):
     """Represents a single collected image frame and its associated metadata."""
 
-    def __init__(self, data, program, info):
+    def __init__(self, data, rectscan, info):
         self.lock = Mutex(recursive=True)  # because frame may be accesed by recording thread.
-        self._program_state = program
-        self._program = None
+        self._rectscan = rectscan
         self._decomb = (0, False)
         self._image = None
         imaging.Frame.__init__(self, data, info)
 
-    @property
-    def program(self):
-        with self.lock:
-            if self._program is None:
-                self._program = ScanProgram()
-                self._program.restoreState(self._program_state)
-        return self._program
+    # @property
+    # def program(self):
+    #     # too expensive!
+    #     with self.lock:
+    #         if self._program is None:
+    #             self._program = ScanProgram()
+    #             self._program.restoreState(self._program_state)
+    #     return self._program
 
     @property
     def rectScan(self):
-        with self.lock:
-            return self.program.components[0].ctrlParameter().system
+        return self._rectscan
+        # with self.lock:
+        #     return self.program.components[0].ctrlParameter().system
 
     def getImage(self, decomb=True, offset=None):
         if self._image is None:
@@ -1067,8 +1081,3 @@ class ImagingFrame(imaging.Frame):
         offset, subpixel = self._decomb
         offset = self.rectScan.measureMirrorLag(self._data, subpixel=subpixel)
         self.setDecomb(offset, subpixel)
-
-
-
-
-

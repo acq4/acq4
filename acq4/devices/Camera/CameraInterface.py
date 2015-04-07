@@ -166,6 +166,7 @@ class CameraInterface(QtCore.QObject):
         ## This is only used when the camera is not running--
         ## if the camera is running, then this is taken care of in drawFrame to
         ## ensure that the image remains stationary on screen.
+        prof = Profiler(disabled=False)
         if not self.cam.isRunning():
             tr = pg.SRTTransform(self.cam.globalTransform())
             self.updateTransform(tr)

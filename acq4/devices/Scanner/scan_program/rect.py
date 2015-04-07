@@ -421,6 +421,7 @@ class RectScan(SystemSolver):
         if self.bidirectional:
             image = image.copy()
             image[:, 1::2] = image[:, 1::2, ::-1]
+
         return image
 
     def measureMirrorLag(self, data, subpixel=False, minOffset=0., maxOffset=500e-6):

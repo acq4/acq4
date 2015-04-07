@@ -4,7 +4,7 @@ from acq4.drivers.MultiClamp.MultiClamp import MultiClamp as MultiClampDriver
 from acq4.devices.Device import *
 from acq4.Manager import logMsg
 from acq4.util.metaarray import MetaArray, axis
-from acq4.util.Mutex import Mutex, MutexLocker
+from acq4.util.Mutex import Mutex
 from PyQt4 import QtCore
 from numpy import *
 import sys, traceback
@@ -136,21 +136,21 @@ class MultiClamp(Device):
         return self.mc.setParam(param, value)
 
     def deviceInterface(self, win):
-        with MutexLocker(self.lock):
+        with self.lock:
             if self.devRackGui is None:
                 self.devRackGui = MCDeviceGui(self, win)
             return self.devRackGui
 
     def taskInterface(self, taskRunner):
-        with MutexLocker(self.lock):
+        with self.lock:
             return MultiClampTaskGui(self, taskRunner)
     
     def createTask(self, cmd, parentTask):
-        with MutexLocker(self.lock):
+        with self.lock:
             return MultiClampTask(self, cmd, parentTask)
     
     def getHolding(self, mode=None):
-        with MutexLocker(self.lock):
+        with self.lock:
             if mode is None:  ## If no mode is specified, use the current mode
                 mode = self.mc.getMode()
             if mode == 'I=0':
@@ -166,7 +166,7 @@ class MultiClamp(Device):
         before switching modes.
         """
         
-        with MutexLocker(self.lock):
+        with self.lock:
             currentMode = self.mc.getMode()
             if mode is None:  ## If no mode is specified, use the current mode
                 mode = currentMode
@@ -235,7 +235,7 @@ class MultiClamp(Device):
 
     def getDAQName(self):
         """Return the DAQ name used by this device. (assumes there is only one DAQ for now)"""
-        with MutexLocker(self.lock):
+        with self.lock:
             return self.config['commandChannel']['device']
 
 
@@ -246,7 +246,7 @@ class MultiClampTask(DeviceTask):
     def __init__(self, dev, cmd, parentTask):
         DeviceTask.__init__(self, dev, cmd, parentTask)
         self.cmd = cmd
-        with MutexLocker(self.dev.lock):
+        with self.dev.lock:
             self.usedChannels = None
             self.daqTasks = {}
 
@@ -277,7 +277,7 @@ class MultiClampTask(DeviceTask):
     def configure(self):
         """Sets the state of a remote multiclamp to prepare for a program run."""
         #print "mc configure"
-        with MutexLocker(self.dev.lock):
+        with self.dev.lock:
             
             #from debug import Profiler
             #prof = Profiler()
@@ -337,7 +337,7 @@ class MultiClampTask(DeviceTask):
                 
     def getUsedChannels(self):
         """Return a list of the channels this task uses"""
-        with MutexLocker(self.dev.lock):
+        with self.dev.lock:
             if self.usedChannels is None:
                 self.usedChannels = ['primary']
                 if self.cmd.get('recordSecondary', True):
@@ -355,7 +355,7 @@ class MultiClampTask(DeviceTask):
         
         ## NOTE: no guarantee that self.configure has been run before createChannels is called! 
         
-        with MutexLocker(self.dev.lock):
+        with self.dev.lock:
             
             for ch in self.getUsedChannels():
                 chConf = self.dev.config[ch+'Channel']
@@ -386,7 +386,7 @@ class MultiClampTask(DeviceTask):
         ## Access data recorded from DAQ task
         ## create MetaArray and fill with MC state info
         #self.state['startTime'] = self.daqTasks[self.daqTasks.keys()[0]].getStartTime()
-        with MutexLocker(self.dev.lock):
+        with self.dev.lock:
             channels = self.getUsedChannels()
             #print channels
             result = {}
@@ -458,7 +458,7 @@ class MultiClampTask(DeviceTask):
             return marr
     
     def stop(self, abort=False):
-        with MutexLocker(self.dev.lock):
+        with self.dev.lock:
             ## This is just a bit sketchy, but these tasks have to be stopped before the holding level can be reset.
             for ch in self.daqTasks:
                 self.daqTasks[ch].stop(abort=abort)
