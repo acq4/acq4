@@ -1,5 +1,7 @@
 from collections import OrderedDict
 import numpy as np
+import copy
+
 
 class SystemSolver(object):
     """
@@ -75,8 +77,8 @@ class SystemSolver(object):
         
     def copy(self):
         sys = type(self)()
-        sys.__dict__['_vars'] = self.__dict__['_vars'].copy()
-        sys.__dict__['_currentGets'] = self.__dict__['_currentGets'].copy()
+        sys.__dict__['_vars'] = copy.deepcopy(self.__dict__['_vars'])
+        sys.__dict__['_currentGets'] = copy.deepcopy(self.__dict__['_currentGets'])
         return sys
 
     def reset(self):

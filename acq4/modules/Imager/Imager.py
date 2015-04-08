@@ -161,26 +161,27 @@ class ScreenBlanker(QtCore.QObject):
     def __init__(self):
         QtCore.QObject.__init__(self)
         self.cancelled = False
-
-    def blank(self):
-        self.cancelled = False
         self.widgets = []
-
         d = QtGui.QApplication.desktop()
         for i in range(d.screenCount()): # look for all screens
             w = Black()
+            w.hide()
             w.sigCancelClicked.connect(self.cancelClicked)
             self.widgets.append(w)
             sg = d.screenGeometry(i) # get the screen size
             w.move(sg.x(), sg.y()) # put the widget there
-            w.showFullScreen() # duh
+
+    def blank(self):
+        self.cancelled = False
+        for w in self.widgets:
+            w.showFullScreen()
+            w.show()
+            print w.geometry()
         QtGui.QApplication.processEvents() # make it so
 
     def unblank(self):
         for w in self.widgets:
-            w.hide() # just take them away
-            w.sigCancelClicked.disconnect(self.cancelClicked)
-        self.widgets = []
+            w.hide()
         
     def __enter__(self):
         self.blank()
