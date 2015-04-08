@@ -745,6 +745,10 @@ class Imager(Module):
     def acquireFrameClicked(self, mode):
         """User requested acquisition of a single frame.
         """
+        if self.imagingThread.isRunning():
+            self.imagingThread.stopVideo()
+            self.imagingThread.wait()
+
         if mode is not None:
             self.loadModeSettings(FrameModes[mode])
         self.updateImagingProtocol()
@@ -1067,23 +1071,22 @@ class ImagingThread(Thread):
             self._abort = True
 
     def startVideo(self):
-        if self.isRunning():
-            raise RuntimeError("Imaging thread is already running.")
         with self.lock:
             self._abort = False
             self._video = True
-        self.start()
+        if not self.isRunning():
+            self.start()
 
     def stopVideo(self):
         with self.lock:
             self._video = False
 
     def takeFrame(self):
-        if self.isRunning():
-            raise RuntimeError("Imaging thread is already running.")
         with self.lock:
             self._abort = False
             self._video = False
+        if self.isRunning():
+            self.wait()
         self.start()
 
     def run(self):
