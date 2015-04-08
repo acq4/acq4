@@ -586,8 +586,15 @@ class Imager(Module):
         rparam.system.p1 = pg.Point(roi.mapToView(pg.Point(w,h)))  # rop-right
         param = self.param.child('Scan Control')
         rows = param['Image Width'] * h / w
-        with param.treeChangeBlocker():
-            param['Image Height'] = rows
+        if param['Image Height'] != rows:
+            # update image height; this will cause acq thread protocol to be updated
+            with param.treeChangeBlocker():
+                param['Image Height'] = rows
+        else:
+            # ..otherwise we need to request the update here.
+            if self.imagingThread.isRunning():
+                self.updateImagingProtocol()
+
         
         # record position of ROI in Scanner's local coordinate system
         # we can use this later to allow the ROI to track stage movement
