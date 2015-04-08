@@ -22,6 +22,7 @@
 # Distributed under MIT/X11 license. See license.txt for more infomation.
 #
 import time
+import copy
 import pprint
 from PyQt4 import QtGui, QtCore
 import numpy as np
@@ -1065,6 +1066,10 @@ class ImagingThread(Thread):
             self._video = True
         self.start()
 
+    def stopVideo(self):
+        with self.lock:
+            self._video = False
+
     def takeFrame(self):
         if self.isRunning():
             raise RuntimeError("Imaging thread is already running.")
@@ -1074,35 +1079,30 @@ class ImagingThread(Thread):
         self.start()
 
     def run(self):
-        with self.lock:
-            video = self._video
-
         try:
-            if video:
-                try:
-                    self.acquireVideo()
-                finally:
-                    self.sigVideoStopped.emit()
-            else:
-                self.acquireFrame()
-        except Exception:
-            self.sigAborted.emit()
-            printExc("Error in imaging acquisition thread.")
+            with self.lock:
+                videoRequested = self._video
+            if videoRequested and self.laserDev is not None and self.laserDev.hasShutter:
+                # force shutter to stay open for the duration of the acquisition
+                self.laserDev.openShutter()
 
-    def acquireVideo(self):
-        if self.laserDev is not None and self.laserDev.hasShutter:
-            # force shutter to stay open for the duration of the acquisition
-            self.laserDev.openShutter()
-        try:
             while True:
                 # take one frame
                 self.acquireFrame(allowBlanking=False)
 
                 # See whether acquisition should end
                 with self.lock:
-                    if self._video is False or self._abort is True:
-                        break
+                    video, abort = self._video, self._abort
+                if video is False:
+                    break
+                if abort is True:
+                    raise Exception("Imaging acquisition aborted")
+        except Exception:
+            self.sigAborted.emit()
+            printExc("Error in imaging acquisition thread.")
         finally:
+            if videoRequested:
+                self.sigVideoStopped.emit()
             if self.laserDev is not None and self.laserDev.hasShutter:
                 self.laserDev.closeShutter()
 
@@ -1114,8 +1114,9 @@ class ImagingThread(Thread):
             meta = self.metainfo
             rectSystem = self.system
 
-        print prot
-        task = self.manager.createTask(prot)
+        # Need to build task from a deep copy of the protocol because 
+        # it will be modified after execution.
+        task = self.manager.createTask(copy.deepcopy(prot))
 
         dur = prot['protocol']['duration']
         start = pg.ptime.time()
