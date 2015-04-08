@@ -8,7 +8,7 @@ import time, sys, traceback
 from numpy import *
 from acq4.util.metaarray import *
 import acq4.util.ptime as ptime
-from acq4.util.Mutex import Mutex, MutexLocker
+from acq4.util.Mutex import Mutex
 from acq4.util.debug import *
 
 class QCam(Camera):

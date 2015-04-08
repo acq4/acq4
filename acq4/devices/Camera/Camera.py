@@ -303,21 +303,6 @@ class Camera(DAQGeneric, OptomechDevice):
         return CameraInterface(self, mod)
     
     ### Scope interface functions below
-
-    #def getPosition(self, justScope=False):
-        #"""Return the coordinate of the center of the sensor area
-        #If justScope is True, return the scope position, uncorrected for the objective offset"""
-        #with MutexLocker(self.lock):
-            #if justScope:
-                #return self.scopeState['scopePosition']
-            #else:
-                #return self.scopeState['centerPosition']
-
-    #@ftrace
-    #def getScale(self):
-        #"""Return the dimensions of 1 pixel with signs if the image is flipped"""
-        #with MutexLocker(self.lock):
-            #return self.scopeState['scale']
         
     #@ftrace
     def getPixelSize(self):
@@ -368,6 +353,7 @@ class Camera(DAQGeneric, OptomechDevice):
             return self.scopeState
         
     def transformChanged(self):  ## called then this device's global transform changes.
+        prof = Profiler(disabled=True)
         self.scopeState['transform'] = self.globalTransform()
         o = Vector(self.scopeState['transform'].map(Vector(0,0,0)))
         p = Vector(self.scopeState['transform'].map(Vector(1, 1)) - o)

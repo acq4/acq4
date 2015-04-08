@@ -128,7 +128,6 @@ class CoherentThread(Thread):
         self.driverLock = lock
         self.cmds = {}
         
-        
     def setWavelength(self, wl):
         pass
         
@@ -137,8 +136,6 @@ class CoherentThread(Thread):
         cmd = ['setShutter', opened]
         with self.lock:
             self.cmds.append(cmd)
-            
-        
         
     def run(self):
         self.stopThread = False
@@ -171,5 +168,3 @@ class CoherentThread(Thread):
         if block:
             if not self.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
-
-

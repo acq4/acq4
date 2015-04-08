@@ -6,7 +6,7 @@ from PyQt4 import QtGui, QtCore
 from acq4.pyqtgraph import WidgetGroup
 from acq4.pyqtgraph import PlotWidget
 from acq4.util.metaarray import *
-from acq4.util.Mutex import Mutex, MutexLocker
+from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 import traceback, sys, time
 from numpy import *
@@ -413,7 +413,7 @@ class PatchThread(Thread):
     def run(self):
         """Main loop for patch thread. This is where protocols are executed and data collected."""
         try:
-            with MutexLocker(self.lock) as l:
+            with self.lock as l:
                 self.stopThread = False
                 clamp = self.manager.getDevice(self.clampName)
                 daqName = clamp.listChannels().values()[0]['device']  ## Just guess the DAQ by checking one of the clamp's channels

@@ -64,7 +64,8 @@ class MFC1(object):
         self.mcm.stop_program()
         self.mcm.stop()
         self.mcm.set_params(**params)
-        self.mcm.set_global('gp0', self.mcm['encoder_position'])
+        self._target_position = self.mcm['encoder_position']
+        self.mcm.set_global('gp0', self._target_position)
         self._upload_program()
 
         self._move_status = {}
@@ -151,7 +152,11 @@ class MFC1(object):
     def position(self):
         """Return the current encoder position.
         """
-        return self.mcm['encoder_position']
+        pos = self.mcm['encoder_position']
+        if not self.program_running():
+            # when program is not running, target position should follow actual position
+            self._target_position = pos
+        return pos
     
     @threadsafe
     def target_position(self):
@@ -160,10 +165,7 @@ class MFC1(object):
 
         If the motor is stopped or freely rotating, return the current position.
         """
-        if self.program_running():
-            return self.mcm.get_global('gp0')
-        else:
-            return self.position()
+        return self._target_position
 
     @threadsafe
     def move(self, position):
@@ -184,6 +186,8 @@ class MFC1(object):
             self.mcm.set_global('gp0', position)
             self.mcm.start_program()
             start = ptime.time()
+
+        self._target_position = position
 
         id += 1
         self._last_move_id = id

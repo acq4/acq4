@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui, DataMapping
-from acq4.util.Mutex import Mutex, MutexLocker
+from acq4.util.Mutex import Mutex
 #from acq4.devices.Device import *
 from PyQt4 import QtCore, QtGui
 import time

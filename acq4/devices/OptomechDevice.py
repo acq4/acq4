@@ -16,7 +16,7 @@ class OptomechDevice(object):
     into its parent's coordinate system.
     
     This organization makes it simple to map coordinates between devices and the global coordinate system. 
-    This allows, for example, asking what is the physical location corresponding to a specific pixel in a 
+    This allows, for example, asking what is the physical location corresponding to a specific pixel in a
     camera image or asking what set of mirror voltages to use in order to stimulate a specific
     physical location.
     
@@ -386,6 +386,7 @@ class OptomechDevice(object):
     
     def __parentDeviceTransformChanged(self, sender, changed):
         ## called when any (grand)parent's transform has changed.
+        prof = pg.debug.Profiler(disabled=True)
         self.invalidateCachedTransforms()
         self.sigGlobalTransformChanged.emit(self, changed)
         

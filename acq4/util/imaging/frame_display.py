@@ -124,8 +124,9 @@ class FrameDisplay(QtCore.QObject):
                 self.nextFrame = None
             
             data = self.currentFrame.getImage()
+            prof('frame.getImage()')
             info = self.currentFrame.info()
-            prof()
+            prof('frame.info()')
             
             
             ## divide the background out of the current frame if needed

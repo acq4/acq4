@@ -2,7 +2,7 @@
 from acq4.devices.Device import *
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.Manager import logMsg, logExc
-from acq4.util.Mutex import Mutex, MutexLocker
+from acq4.util.Mutex import Mutex
 from DeviceGui import ScannerDeviceGui
 from TaskGui import ScannerTaskGui
 from .scan_program import ScanProgram 
@@ -350,7 +350,7 @@ class ScannerTask(DeviceTask):
         
     def createChannels(self, daqTask):
         self.daqTasks = []
-        with MutexLocker(self.dev.lock):
+        with self.dev.lock:
             ## If buffered waveforms are requested in the command, configure them here.
             for cmdName, channel in [('xCommand', 'XAxis'), ('yCommand', 'YAxis')]:
                 #cmdName = axis[0]
@@ -373,7 +373,7 @@ class ScannerTask(DeviceTask):
             with self.abortLock:
                 print "Abort!"
                 self.aborted = True
-        with MutexLocker(self.dev.lock):
+        with self.dev.lock:
             for t in self.daqTasks:
                 t.stop(abort=abort)
             self.dev.lastRunTime = ptime.time()
@@ -381,7 +381,7 @@ class ScannerTask(DeviceTask):
 
     def start(self):
         #print "start"
-        with MutexLocker(self.dev.lock):
+        with self.dev.lock:
             lastRunTime = self.dev.lastRunTime
         if lastRunTime is None:
             #print "  no wait"

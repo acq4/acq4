@@ -199,9 +199,9 @@ class CameraWindow(QtGui.QMainWindow):
     def setRange(self, *args, **kargs):
         self.view.setRange(*args, **kargs)
 
-    def addItem(self, item, pos=(0,0), scale=(1,1), z=0):
+    def addItem(self, item, pos=(0,0), scale=(1,1), z=None):
         """Adds an item into the scene. The item is placed in the global coordinate system;
-        it will (should) stay fixed on the subject even if the scope moves or changes objective."""
+        it will stay fixed on the subject even if the scope moves or changes objective."""
         
         self.view.addItem(item)
         
@@ -209,7 +209,8 @@ class CameraWindow(QtGui.QMainWindow):
             pos = self.view.viewRect().center()
         item.setPos(pg.Point(pos))
         item.scale(scale[0], scale[1])
-        item.setZValue(z)
+        if z is not None:
+            item.setZValue(z)
     
     def removeItem(self, item):
         self.view.removeItem(item)
