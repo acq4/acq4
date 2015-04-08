@@ -430,7 +430,7 @@ class ScopeCameraModInterface(QtCore.QObject):
         self.surfaceLine.setValue(depth)
 
     def transformChanged(self):
-        prof = pg.debug.Profiler(disabled=False)
+        prof = pg.debug.Profiler()
         focus = self.dev.getFocusDepth()
         prof('1')
         self.focusLine.setValue(focus)

@@ -280,7 +280,8 @@ class SutterMPC200(SerialDevice):
         """Return the expected time duration required to move *drive* to *pos* at *speed*.
         """
         cpos = np.array(self.getPos(drive)[1])
-        dx = np.abs(np.array(pos) - cpos).max()
+
+        dx = np.abs(np.array(pos) - cpos[:len(pos)]).max()
         return dx / self.speedTable[speed]
 
     # Disabled--official word from Sutter is that the position updates sent during a move are broken.

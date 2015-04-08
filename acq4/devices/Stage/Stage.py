@@ -4,6 +4,7 @@ from acq4.devices.Device import *
 from acq4.devices.OptomechDevice import *
 from acq4.util.Mutex import Mutex
 import acq4.pyqtgraph as pg
+from .calibration import *
 
 
 class Stage(Device, OptomechDevice):
@@ -149,7 +150,7 @@ class Stage(Device, OptomechDevice):
 
         See targetPosition().
         """
-        prof = pg.debug.Profiler(disabled=False)
+        prof = pg.debug.Profiler()
         tp = self.targetPosition()
         prof('1')
         lp = self.mapFromStage(tp)
@@ -298,6 +299,11 @@ class Stage(Device, OptomechDevice):
         """Return a list the (min, max) position limits for each axis.
         """
         return self._limits[:]
+
+    def calibrate(self, camera):
+        cal = StageCalibration(self)
+        cal.calibrate(camera)
+        return cal
 
 
 class MoveFuture(object):
