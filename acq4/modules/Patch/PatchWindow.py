@@ -413,61 +413,55 @@ class PatchThread(Thread):
     def run(self):
         """Main loop for patch thread. This is where protocols are executed and data collected."""
         try:
-            with self.lock as l:
+            with self.lock:
                 self.stopThread = False
                 clamp = self.manager.getDevice(self.clampName)
                 daqName = clamp.listChannels().values()[0]['device']  ## Just guess the DAQ by checking one of the clamp's channels
                 clampName = self.clampName
                 self.paramsUpdated = True
-                l.unlock()
-                
-                lastTime = None
-                while True:
-                    ## copy in parameters from GUI
-                    updateCommand = False
-                    l.relock()
+            
+            lastTime = None
+            while True:
+                ## copy in parameters from GUI
+                updateCommand = False
+                with self.lock:
                     if self.paramsUpdated:
                         with self.ui.paramLock:
                             params = self.ui.params.copy()
                             self.paramsUpdated = False
                         updateCommand = True
-                    l.unlock()
-                    
-                    ## run protocol and analysis
-                    try:
-                        self.runOnce(params, l, clamp, daqName, clampName)
-                    except:
-                        printExc("Error running/analyzing patch protocol")
-                    
-                    
-                    
-                    lastTime = ptime.time()-params['recordTime'] ## This is not a proper 'cycle time', but instead enforces a minimum interval between cycles (but this can be very important for performance)
-                    
-                    ## sleep until it is time for the next run
-                    c = 0
-                    stop = False
-                    while True:
-                        ## check for stop button every 100ms
-                        if c % 10 == 0:
-                            l.relock()
+                
+                ## run protocol and analysis
+                try:
+                    self.runOnce(params, clamp, daqName, clampName)
+                except:
+                    printExc("Error running/analyzing patch protocol")
+                
+                lastTime = ptime.time()-params['recordTime'] ## This is not a proper 'cycle time', but instead enforces a minimum interval between cycles (but this can be very important for performance)
+                
+                ## sleep until it is time for the next run
+                c = 0
+                stop = False
+                while True:
+                    ## check for stop button every 100ms
+                    if c % 10 == 0:
+                        with self.lock:
                             if self.stopThread:
-                                l.unlock()
                                 stop = True
                                 break
-                            l.unlock()
-                        now = ptime.time()
-                        if now >= (lastTime+params['cycleTime']):
-                            break
-                        
-                        time.sleep(10e-3) ## Wake up every 10ms
-                        c += 1
-                    if stop:
+                    now = ptime.time()
+                    if now >= (lastTime+params['cycleTime']):
                         break
+                    
+                    time.sleep(10e-3) ## Wake up every 10ms
+                    c += 1
+                if stop:
+                    break
         except:
             printExc("Error in patch acquisition thread, exiting.")
         #self.emit(QtCore.SIGNAL('threadStopped'))
         
-    def runOnce(self, params, l, clamp, daqName, clampName):
+    def runOnce(self, params, clamp, daqName, clampName):
         prof = Profiler('PatchThread.run', disabled=True)
         #lastTime = time.clock()   ## moved to after the command run
         

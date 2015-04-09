@@ -1177,126 +1177,113 @@ class TaskThread(Thread):
         startTime = ptime.time()
         if params is None:
             params = {}
-        with self.lock as l:
-            l.unlock()
         
-            ## Select correct command to execute
-            cmd = self.task
-            #print "Sequence array:", cmd.shape, cmd.infoCopy()
-            if params is not None:
-                for p in params:
-                    #print "Selecting %s: %s from sequence array" % (str(p), str(params[p]))
-                    cmd = cmd[p: params[p]]
-            prof.mark('select command')        
-            #print "Task:", cmd
-                    
-            ## Wait before starting if we've already run too recently
-            #print "sleep until next run time..", ptime.time(), self.lastRunTime, cmd['protocol']['cycleTime']
-            while (self.lastRunTime is not None) and (ptime.time() < self.lastRunTime + cmd['protocol']['cycleTime']):
-                l.relock()
+        ## Select correct command to execute
+        cmd = self.task
+        #print "Sequence array:", cmd.shape, cmd.infoCopy()
+        if params is not None:
+            for p in params:
+                #print "Selecting %s: %s from sequence array" % (str(p), str(params[p]))
+                cmd = cmd[p: params[p]]
+        prof.mark('select command')        
+        #print "Task:", cmd
+                
+        ## Wait before starting if we've already run too recently
+        #print "sleep until next run time..", ptime.time(), self.lastRunTime, cmd['protocol']['cycleTime']
+        while (self.lastRunTime is not None) and (ptime.time() < self.lastRunTime + cmd['protocol']['cycleTime']):
+            with self.lock:
                 if self.abortThread or self.stopThread:
-                    l.unlock()
                     #print "Task run aborted by user"
                     return
-                l.unlock()
-                time.sleep(1e-3)
-            #print "slept until", ptime.time()
-            prof.mark('sleep')
-            
-            # If paused, hang here for a bit.
-            emitSig = True
-            while True:
-                l.relock()
+            time.sleep(1e-3)
+        #print "slept until", ptime.time()
+        prof.mark('sleep')
+        
+        # If paused, hang here for a bit.
+        emitSig = True
+        while True:
+            with self.lock:
                 if self.abortThread or self.stopThread:
-                    l.unlock()
                     return
                 pause = self.paused
-                l.unlock()
-                if not pause:
-                    break
-                if emitSig:
-                    emitSig = False
-                    #self.emit(QtCore.SIGNAL('paused'))
-                    self.sigPaused.emit()
-                time.sleep(10e-3)
+            if not pause:
+                break
+            if emitSig:
+                emitSig = False
+                self.sigPaused.emit()
+            time.sleep(10e-3)
+        
+        prof.mark('pause')
+        
+        #print "BEFORE:\n", cmd
+        if type(cmd) is not dict:
+            print "========= TaskRunner.runOnce cmd: =================="
+            print cmd
+            print "========= TaskRunner.runOnce params: =================="
+            print "Params:", params
+            print "==========================="
+            raise Exception("TaskRunner.runOnce failed to generate a proper command structure. Object type was '%s', should have been 'dict'." % type(cmd))
             
-            prof.mark('pause')
-            
-            #print "BEFORE:\n", cmd
-            if type(cmd) is not dict:
-                print "========= TaskRunner.runOnce cmd: =================="
-                print cmd
-                print "========= TaskRunner.runOnce params: =================="
-                print "Params:", params
-                print "==========================="
-                raise Exception("TaskRunner.runOnce failed to generate a proper command structure. Object type was '%s', should have been 'dict'." % type(cmd))
-                
-            
-            task = self.dm.createTask(cmd)
-            prof.mark('create task')
-            
-            self.lastRunTime = ptime.time()
-            #self.emit(QtCore.SIGNAL('taskStarted'), params)
-            
-            try:
-                l.relock()
+        
+        task = self.dm.createTask(cmd)
+        prof.mark('create task')
+        
+        self.lastRunTime = ptime.time()
+        #self.emit(QtCore.SIGNAL('taskStarted'), params)
+        
+        try:
+            with self.lock:
                 self._currentTask = task
-                l.unlock()
-                task.execute(block=False)
-                # record estimated end time
-                endTime = time.time() + cmd['protocol']['duration']
-                self.sigTaskStarted.emit(params)
-                prof.mark('execute')
-            except:
-                l.relock()
+            task.execute(block=False)
+            # record estimated end time
+            endTime = time.time() + cmd['protocol']['duration']
+            self.sigTaskStarted.emit(params)
+            prof.mark('execute')
+        except:
+            with self.lock:
                 self._currentTask = None
-                l.unlock()
-                try:
-                    task.stop(abort=True)
-                except:
-                    pass
-                printExc("\nError starting task:")
-                exc = sys.exc_info()
-                raise HelpfulException("\nError starting task:", exc)
-            
-            prof.mark('start task')
-            ### Do not put code outside of these try: blocks; may cause device lockup
-            
             try:
-                ## wait for finish, watch for abort requests
-                while True:
-                    if task.isDone():
-                        prof.mark('task done')
-                        break
-                    l.relock()
+                task.stop(abort=True)
+            except:
+                pass
+            printExc("\nError starting task:")
+            exc = sys.exc_info()
+            raise HelpfulException("\nError starting task:", exc)
+        
+        prof.mark('start task')
+        ### Do not put code outside of these try: blocks; may cause device lockup
+        
+        try:
+            ## wait for finish, watch for abort requests
+            while True:
+                if task.isDone():
+                    prof.mark('task done')
+                    break
+                with self.lock:
                     if self.abortThread:
-                        l.unlock()
                         # should be taken care of in TaskThread.abort()
                         # NO -- task.stop() is not thread-safe.
                         task.stop(abort=True)
                         return
-                    l.unlock()
-                    # adjust sleep time based on estimated time remaining in the task.
-                    sleep = np.clip((endTime - time.time()) * 0.5, 1e-3, 20e-3)
-                    time.sleep(sleep)
-                    
-                result = task.getResult()
-            except:
-                ## Make sure the task is fully stopped if there was a failure at any point.
-                #printExc("\nError during task execution:")
-                print "\nStopping task.."
-                task.stop(abort=True)
-                print ""
-                raise HelpfulException("\nError during task execution:", sys.exc_info())
-            finally:
-                l.relock()
+                # adjust sleep time based on estimated time remaining in the task.
+                sleep = np.clip((endTime - time.time()) * 0.5, 1e-3, 20e-3)
+                time.sleep(sleep)
+                
+            result = task.getResult()
+        except:
+            ## Make sure the task is fully stopped if there was a failure at any point.
+            #printExc("\nError during task execution:")
+            print "\nStopping task.."
+            task.stop(abort=True)
+            print ""
+            raise HelpfulException("\nError during task execution:", sys.exc_info())
+        finally:
+            with self.lock:
                 self._currentTask = None
-                l.unlock()
-            #print "\nAFTER:\n", cmd
-            prof.mark('getResult')
+        #print "\nAFTER:\n", cmd
+        prof.mark('getResult')
             
         frame = {'params': params, 'cmd': cmd, 'result': result}
-        #self.emit(QtCore.SIGNAL('newFrame'), frame)
         self.sigNewFrame.emit(frame)
         prof.mark('emit newFrame')
         if self.stopThread:
