@@ -194,6 +194,10 @@ class ScriptProcessor(AnalysisModule):
                     presetDict['Genotype'] = 'Unknown'
                 if 'spikethresh' in thiscell.keys():
                     presetDict['SpikeThreshold'] = thiscell['spikethresh']
+                if 'bridgeCorrection' in thiscell.keys():
+                    presetDict['bridgeCorrection'] = thiscell['bridgeCorrection']
+                else:
+                    presetDict['bridgeCorrection'] = 0.0
 
                 dh = self.dataManager().manager.dirHandle(fullpath)
                 if not self.loadFile([dh], analyze=False):  # note: must pass a list of dh; don't let analyisis run at end

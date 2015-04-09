@@ -65,7 +65,7 @@ class IVCurve(AnalysisModule):
         self.data_template = (
           OrderedDict([('Species', (12, '{:>12s}')), ('Age', (5, '{:>5s}')), ('Sex', (3, '{:>3s}')), ('Weight', (6, '{:>6s}')),
                        ('Temperature', (10, '{:>10s}')), ('ElapsedTime', (11, '{:>11.2f}')), 
-                       ('RMP', (5, '{:>5.1f}')), ('Rin', (5, '{:>5.1f}')),
+                       ('RMP', (5, '{:>5.1f}')), ('Rin', (5, '{:>5.1f}')), ('Bridge', (5, '{:>5.1f}')),
                        ('tau', (5, '{:>5.1f}')), ('AdaptRatio', (9, '{:>9.3f}')),
                        ('tauh', (5, '{:>5.1f}')), ('Gh', (6, '{:>6.2f}')),
                        ('FiringRate', (12, '{:>9.1f}')), 
@@ -85,6 +85,7 @@ class IVCurve(AnalysisModule):
         self.lrss_flag = True  # show is default
         self.lrpk_flag = True
         self.rmp_flag = True
+        self.bridgeCorrection = 0.0 # bridge  correction in Mohm.
         self.showFISI = True # show FISI or ISI as a function of spike number (when False)
         self.lrtau_flag = False
         self.regions_exist = False
@@ -471,7 +472,10 @@ class IVCurve(AnalysisModule):
         self.loaded = dh
         self.analysis_summary = self.Clamps.cell_summary(dh)  # get other info as needed for the protocol
         #print 'analysis summary: ', self.analysis_summary
-        
+        try:
+            print self.bridgeCorrection
+        except:
+            self.bridgeCorrection = 0.
         pars = {}  # need to pass some parameters from the GUI
         pars['limits'] = self.ctrl.IVCurve_IVLimits.isChecked()  # checkbox: True if loading limited current range
         pars['cmin'] = self.ctrl.IVCurve_IVLimitMin.value()  # minimum current level to load
@@ -489,6 +493,12 @@ class IVCurve(AnalysisModule):
         if not ci:
             return False
         self.ctrl.IVCurve_dataMode.setText(self.Clamps.data_mode)
+        #self.bridgeCorrection = 200e6
+        if self.bridgeCorrection != 0.0:
+            #for i in range(self.Clamps.traces.shape[0]):
+            print 'doing bridge correction: ', self.bridgeCorrection
+            self.Clamps.traces = self.Clamps.traces - (self.bridgeCorrection * self.Clamps.cmd_wave)
+            
         # now plot the data 
         self.ctrl.IVCurve_tauh_Commands.clear()
         self.ctrl.IVCurve_tauh_Commands.addItems(ci['cmdList'])
@@ -622,6 +632,8 @@ class IVCurve(AnalysisModule):
             if 'SpikeThreshold' in presets.keys():
                 self.ctrl.IVCurve_SpikeThreshold.setValue(float(presets['SpikeThreshold']))
                 print 'set threshold to %f' % float(presets['SpikeThreshold'])
+            if 'bridgeCorrection' in presets.keys():
+                self.brideCorrection = presets['bridgeCorrection']
         self.get_window_analysisPars()
 #        print 'updateanalysis: readparsupdate'
         self.readParsUpdate(clearFlag=True, pw=False)
@@ -843,7 +855,10 @@ class IVCurve(AnalysisModule):
                     kend = self.spikeIndices[i][j+1]
                 else:
                     kend = len(self.Clamps.traces[i])
-                km = np.argmin(dv[k:kend])+k # find fastst falling point, use that for start of detection
+                try:
+                    km = np.argmin(dv[k:kend])+k # find fastst falling point, use that for start of detection
+                except:
+                    continue
                 v = self.Clamps.traces[i][km]
                 vlast = self.Clamps.traces[i][km]
                 #kmin = np.argmin(np.argmin(dv2[k:kend])) + k  # np.argmin(np.fabs(self.Clamps.traces[i][k:kend]))+k
@@ -862,7 +877,10 @@ class IVCurve(AnalysisModule):
                     if kbegin*dt <= self.Clamps.tstart:
                         kbegin = kbegin + int(0.0002/dt)  # 1 msec 
                 # revise k to start at max of rising phase
-                km = np.argmax(dv[kbegin:k]) + kbegin
+                try:
+                    km = np.argmax(dv[kbegin:k]) + kbegin
+                except:
+                    continue
                 if (km - kbegin < 1):
                     km = kbegin + int((k - kbegin)/2.) + 1
                 kthresh = np.argmin(np.fabs(dv[kbegin:km] - begin_dV)) + kbegin  # point where slope is closest to begin
@@ -926,7 +944,7 @@ class IVCurve(AnalysisModule):
                 aps.append(self.spikeShape[trace][spk]['AP_beginV'])
                 alllats.append(self.spikeShape[trace][spk]['AP_Latency'])
                 tps.append(self.spikeShape[trace][spk]['AP_Latency'])
-            u =self.data_plot.plot(tps, aps, pen=None, symbol='o', brush=pg.mkBrush('g'))
+            u =self.data_plot.plot(tps, aps, pen=None, symbol='o', brush=pg.mkBrush('g'), symbolSize=4)
             self.dataMarkers.append(u)
             for j, spk in enumerate(self.spikeShape[trace]):
                 # print 'plotting %d spikes: ' % len(self.spikeShape[trace])
@@ -937,21 +955,21 @@ class IVCurve(AnalysisModule):
             # u = self.data_plot.plot(allpeakt, allpeakv, pen=None, symbol='o', brush=pg.mkBrush('r'), size=2)
             # self.dataMarkers.append(u)
 
-            u = self.data_plot.plot(ptps, paps, pen=None, symbol='t', brush=pg.mkBrush('w'))
+            u = self.data_plot.plot(ptps, paps, pen=None, symbol='t', brush=pg.mkBrush('w'), symbolSize=4)
             self.dataMarkers.append(u)
 
             for j, spk in enumerate(self.spikeShape[trace]):
                 taps.append(self.spikeShape[trace][spk]['trough_V'])
                 ttps.append(self.spikeShape[trace][spk]['trough_T'])
-            u = self.data_plot.plot(ttps, taps, pen=None, symbol='+', brush=pg.mkBrush('r'))
+            u = self.data_plot.plot(ttps, taps, pen=None, symbol='+', brush=pg.mkBrush('r'), symbolSize=4)
             self.dataMarkers.append(u)
             for j, spk in enumerate(self.spikeShape[trace]):
                 tups.append(self.spikeShape[trace][spk]['hw_up'])
                 tdps.append(self.spikeShape[trace][spk]['hw_down'])
                 hwv.append(self.spikeShape[trace][spk]['hw_v'])
-            u =self.data_plot.plot(tups, hwv, pen=None, symbol='d', brush=pg.mkBrush('c'))
+            u =self.data_plot.plot(tups, hwv, pen=None, symbol='d', brush=pg.mkBrush('c'), symbolSize=4)
             self.dataMarkers.append(u)
-            d =self.data_plot.plot(tdps, hwv, pen=None, symbol='s', brush=pg.mkBrush('c'))
+            d =self.data_plot.plot(tdps, hwv, pen=None, symbol='s', brush=pg.mkBrush('c'), symbolSize=4)
             self.dataMarkers.append(d)
         #print sorted(allpeakt)
 
