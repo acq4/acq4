@@ -700,8 +700,11 @@ class Imager(Module):
                 # user explicitly requested image height; change ROI to match.
                 try:
                     self.ignoreRoiChange = True
-                    size = self.currentRoi.size()
-                    self.currentRoi.setSize([size[0], size[0] * scanControl['Image Height'] / scanControl['Image Width']])
+                    w, h = self.currentRoi.size()
+                    h2 = w * scanControl['Image Height'] / scanControl['Image Width']
+                    self.currentRoi.setSize([w, h2])
+                    pos = self.currentRoi.pos()
+                    self.currentRoi.setPos([pos[0], pos[1] + h - h2])
                 finally:
                     self.ignoreRoiChange = False
 
