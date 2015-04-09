@@ -16,17 +16,12 @@ class CameraWindow(QtGui.QMainWindow):
     
     def __init__(self, module):
         self.hasQuit = False
-        self.module = module ## handle to the rest of the application
+        self.module = module # handle to the rest of the application
         
         self.interfaces = OrderedDict()  # owner: widget
         self.docks = OrderedDict()       # owner: dock
         
-        ## ROI state variables
-        self.lastPlotTime = None
-        self.ROIs = []
-        self.plotCurves = []
-        
-        ## Start building UI
+        # Start building UI
         QtGui.QMainWindow.__init__(self)
         self.setWindowTitle('Camera')
         self.cw = dockarea.DockArea()
@@ -35,7 +30,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.gvDock = dockarea.Dock(name="View", widget=self.gv, hideTitle=True, size=(600,600))
         self.cw.addDock(self.gvDock)
         
-        ## set up ViewBox
+        # set up ViewBox
         self.view = pg.ViewBox()
         self.view.enableAutoRange(x=False, y=False)
         self.view.setAspectLocked(True)
@@ -51,7 +46,11 @@ class CameraWindow(QtGui.QMainWindow):
         self.cw.addDock(self.depthDock, 'right')
         self.depthDock.hide()
 
-        ## search for all devices that provide a cameraModuleInterface() method
+        # Add a group that will track to the center of the view
+        # self.trackedGroup = pg.GroupItem()
+        # self.view.addItem(self.trackedGroup)
+
+        # search for all devices that provide a cameraModuleInterface() method
         man = Manager.getManager()
         devices = [man.getDevice(dev) for dev in man.listDevices()]
         ifaces = OrderedDict([(dev.name(), dev.cameraModuleInterface(self)) for dev in devices if hasattr(dev, 'cameraModuleInterface')])
@@ -70,62 +69,25 @@ class CameraWindow(QtGui.QMainWindow):
             dock = dockarea.Dock(name="nocamera", widget=label, size=(100, 500), hideTitle=True)
             self.cw.addDock(dock, 'left', self.gvDock)
 
-        ## ROI plot ctrls
-        self.roiWidget = QtGui.QWidget()
-        self.roiLayout = QtGui.QGridLayout()
-        self.roiLayout.setSpacing(0)
-        self.roiLayout.setContentsMargins(0,0,0,0)
-        self.roiWidget.setLayout(self.roiLayout)
-        rectPath = QtGui.QPainterPath()
-        rectPath.addRect(0, 0, 1, 1)
-        self.rectBtn = pg.PathButton(path=rectPath)
-        ellPath = QtGui.QPainterPath()
-        ellPath.addEllipse(0, 0, 1, 1)
-        self.ellipseBtn = pg.PathButton(path=ellPath)
-        polyPath = QtGui.QPainterPath()
-        polyPath.moveTo(0,0)
-        polyPath.lineTo(2,3)
-        polyPath.lineTo(3,1)
-        polyPath.lineTo(5,0)
-        polyPath.lineTo(2, -2)
-        polyPath.lineTo(0,0)
-        self.polygonBtn = pg.PathButton(path=polyPath)
-        polyPath = QtGui.QPainterPath()
-        polyPath.moveTo(0,0)
-        polyPath.lineTo(2,3)
-        polyPath.lineTo(3,1)
-        polyPath.lineTo(5,0)
-        self.polylineBtn = pg.PathButton(path=polyPath)
-        self.roiLayout.addWidget(self.rectBtn, 0, 0)
-        self.roiLayout.addWidget(self.ellipseBtn, 0, 1)
-        self.roiLayout.addWidget(self.polygonBtn, 1, 0)
-        self.roiLayout.addWidget(self.polylineBtn, 1, 1)
-        self.roiTimeSpin = pg.SpinBox(value=5.0, suffix='s', siPrefix=True, dec=True, step=0.5, bounds=(0,None))
-        self.roiLayout.addWidget(self.roiTimeSpin, 2, 0, 1, 2)
-        self.roiPlotCheck = QtGui.QCheckBox('Plot')
-        self.roiLayout.addWidget(self.roiPlotCheck, 3, 0, 1, 2)
-        
-        self.roiPlot = pg.PlotWidget()
-        self.roiLayout.addWidget(self.roiPlot, 0, 2, self.roiLayout.rowCount(), 1)
+        # Add a dock with ROI buttons and plot
+        self.roiWidget = ROIPlotter(self)
         self.roiDock = dockarea.Dock(name='ROI Plot', widget=self.roiWidget, size=(600, 10))
         self.cw.addDock(self.roiDock, 'bottom', self.gvDock)
         
         #grid = pg.GridItem()
         #self.view.addItem(grid)
         
-        ##Scale bar
+        #Scale bar
         self.scaleBar = pg.ScaleBar(100e-6, offset=(-20,-20))
         self.scaleBar.setParentItem(self.view)
         
-        ### Set up status bar labels
+        ## Set up status bar labels
         self.recLabel = QtGui.QLabel()
         self.rgnLabel = QtGui.QLabel()
         self.xyLabel = QtGui.QLabel()
         self.tLabel = QtGui.QLabel()
         self.vLabel = QtGui.QLabel()
-        
         self.vLabel.setFixedWidth(50)
-        
         self.setStatusBar(StatusBar())
         font = self.xyLabel.font()
         font.setPointSize(8)
@@ -134,7 +96,7 @@ class CameraWindow(QtGui.QMainWindow):
             label.setFont(font)
             self.statusBar().insertPermanentWidget(0, label)
 
-        ## Load previous window state
+        # Load previous window state
         self.stateFile = os.path.join('modules', self.module.name + '_ui.cfg')
         uiState = module.manager.readConfigFile(self.stateFile)
         if 'geometry' in uiState:
@@ -146,15 +108,11 @@ class CameraWindow(QtGui.QMainWindow):
         if 'docks' in uiState:
             self.cw.restoreState(uiState['docks'], missing='ignore')
         
-        ## done with UI
+        # done with UI
         self.show()
         self.centerView()
         
         self.gv.scene().sigMouseMoved.connect(self.updateMouse)
-        
-        ## Connect ROI dock
-        self.rectBtn.clicked.connect(self.addROI)
-        self.roiTimeSpin.valueChanged.connect(self.setROITime)
         
     def addInterface(self, name, iface):
         """Display a new user interface in the camera module.
@@ -170,6 +128,8 @@ class CameraWindow(QtGui.QMainWindow):
         self.docks[name] = dock
         if hasattr(iface, 'sigNewFrame'):
             iface.sigNewFrame.connect(self.newFrame)
+        if hasattr(iface, 'sigTransformChanged'):
+            iface.sigTransformChanged.connect(self.ifaceTransformChanged)
 
     def getView(self):
         return self.view
@@ -215,47 +175,6 @@ class CameraWindow(QtGui.QMainWindow):
     def removeItem(self, item):
         self.view.removeItem(item)
 
-    def clearPersistentFrames(self):
-        for i in self.persistentFrames:
-            self.view.removeItem(i)
-        self.persistentFrames = []
-
-    def addROI(self):
-        pen = pg.mkPen(pg.intColor(len(self.ROIs)))
-        center = self.view.viewRect().center()
-        #print 'camerawindow.py: addROI:: ', self.view.viewPixelSize()
-        size = [x*50 for x in self.view.viewPixelSize()]
-        roi = PlotROI(center, size)
-        roi.setZValue(40000)
-        roi.setPen(pen)
-        self.view.addItem(roi)
-        plot = self.roiPlot.plot(pen=pen)
-        self.ROIs.append({'roi': roi, 'plot': plot, 'vals': [], 'times': []})
-        roi.sigRemoveRequested.connect(self.removeROI)
-
-    def removeROI(self, roi):
-        self.view.removeItem(roi)
-        roi.sigRemoveRequested.disconnect(self.removeROI)
-        for i, r in enumerate(self.ROIs):
-            if r['roi'] is roi:
-                self.roiPlot.removeItem(r['plot'])
-                self.ROIs.remove(r)
-                break
-        
-    def clearROIs(self):
-        for r in self.ROIs:
-            self.view.removeItem(r['roi'])
-            self.roiPlot.removeItem(r['plot'])
-        self.ROIs = []
-
-    def clearFrameBuffer(self):
-        for r in self.ROIs:
-            r['vals'] = []
-            r['times'] = []
-
-    def setROITime(self, val):
-        pass
-
     def showMessage(self, msg, delay=2000):
         self.statusBar().showMessage(str(msg), delay)
         
@@ -289,7 +208,173 @@ class CameraWindow(QtGui.QMainWindow):
     def newFrame(self, iface, frame):
         # New frame has arrived from an imaging device; 
         # update ROI plots
+        self.roiWidget.newFrame(iface, frame)
+    
+    def ifaceTransformChanged(self, iface):
+        # imaging device moved; update viewport and tracked group.
+        # This is only used when the camera is not running--
+        # if the camera is running, then this is taken care of in drawFrame to
+        # ensure that the image remains stationary on screen.
+        prof = Profiler()
+        if not self.cam.isRunning():
+            tr = pg.SRTTransform(self.cam.globalTransform())
+            self.updateTransform(tr)
+            
+    def updateTransform(self, tr):
+        # update view for new transform such that sensor bounds remain stationary on screen.
+        pos = tr.getTranslation()
         
+        scale = tr.getScale()
+        if scale != self.lastCameraScale:
+            anchor = self.view.mapViewToDevice(self.lastCameraPosition)
+            self.view.scaleBy(scale / self.lastCameraScale)
+            pg.QtGui.QApplication.processEvents()
+            anchor2 = self.view.mapDeviceToView(anchor)
+            diff = pos - anchor2
+            self.lastCameraScale = scale
+        else:
+            diff = pos - self.lastCameraPosition
+            
+        self.view.translateBy(diff)
+        self.lastCameraPosition = pos
+        self.cameraItemGroup.setTransform(tr)
+    
+
+class CameraModuleInterface(QtCore.QObject):
+    """ Base class used to plug new interfaces into the camera module.
+
+    """
+    sigNewFrame = QtCore.Signal(object, object)  # (self, frame)
+
+    def __init__(self, mod):
+        QtCore.QObject.__init__(self)
+        self.mod = mod
+
+    def graphicsItems(self):
+        """Return a list of all graphics items displayed by this interface.
+        """
+        raise NotImplementedError()
+
+    def controlWidget(self):
+        """Return a widget to be docked in the camera module window.
+
+        May return None.
+        """
+        return None
+
+    def boundingRect(self):
+        """Return the bounding rectangle of all graphics items.
+        """
+        raise NotImplementedError()
+
+    def getImageItem(self):
+        """Return the ImageItem used to display imaging data from this device.
+
+        May return None.
+        """
+        return None
+
+    def quit(self):
+        """Called when the interface is removed from the camera module or when
+        the camera module is about to quit.
+        """
+        for item in self.graphicsItems():
+            scene = item.scene()
+            if scene is not None:
+                scene.removeItem(item)
+
+
+
+
+
+class PlotROI(pg.ROI):
+    def __init__(self, pos, size):
+        pg.ROI.__init__(self, pos, size=size, removable=True)
+        self.addScaleHandle([1, 1], [0, 0])
+
+
+class ROIPlotter(QtGui.QWidget):
+    # ROI plot ctrls
+    def __init__(self, mod):
+        QtGui.QWidget.__init__(self)
+        self.mod = mod
+        self.view = mod.view
+
+        # ROI state variables
+        self.lastPlotTime = None
+        self.ROIs = []
+        self.plotCurves = []
+
+        # Set up UI
+        self.roiLayout = QtGui.QGridLayout()
+        self.roiLayout.setSpacing(0)
+        self.roiLayout.setContentsMargins(0,0,0,0)
+        self.setLayout(self.roiLayout)
+        rectPath = QtGui.QPainterPath()
+        rectPath.addRect(0, 0, 1, 1)
+        self.rectBtn = pg.PathButton(path=rectPath)
+        ellPath = QtGui.QPainterPath()
+        ellPath.addEllipse(0, 0, 1, 1)
+        self.ellipseBtn = pg.PathButton(path=ellPath)
+        polyPath = QtGui.QPainterPath()
+        polyPath.moveTo(0,0)
+        polyPath.lineTo(2,3)
+        polyPath.lineTo(3,1)
+        polyPath.lineTo(5,0)
+        polyPath.lineTo(2, -2)
+        polyPath.lineTo(0,0)
+        self.polygonBtn = pg.PathButton(path=polyPath)
+        polyPath = QtGui.QPainterPath()
+        polyPath.moveTo(0,0)
+        polyPath.lineTo(2,3)
+        polyPath.lineTo(3,1)
+        polyPath.lineTo(5,0)
+        self.polylineBtn = pg.PathButton(path=polyPath)
+        self.roiLayout.addWidget(self.rectBtn, 0, 0)
+        self.roiLayout.addWidget(self.ellipseBtn, 0, 1)
+        self.roiLayout.addWidget(self.polygonBtn, 1, 0)
+        self.roiLayout.addWidget(self.polylineBtn, 1, 1)
+        self.roiTimeSpin = pg.SpinBox(value=5.0, suffix='s', siPrefix=True, dec=True, step=0.5, bounds=(0,None))
+        self.roiLayout.addWidget(self.roiTimeSpin, 2, 0, 1, 2)
+        self.roiPlotCheck = QtGui.QCheckBox('Plot')
+        self.roiLayout.addWidget(self.roiPlotCheck, 3, 0, 1, 2)
+        
+        self.roiPlot = pg.PlotWidget()
+        self.roiLayout.addWidget(self.roiPlot, 0, 2, self.roiLayout.rowCount(), 1)
+
+        self.rectBtn.clicked.connect(self.addROI)
+
+    def addROI(self):
+        pen = pg.mkPen(pg.intColor(len(self.ROIs)))
+        center = self.view.viewRect().center()
+        #print 'camerawindow.py: addROI:: ', self.view.viewPixelSize()
+        size = [x*50 for x in self.view.viewPixelSize()]
+        roi = PlotROI(center, size)
+        roi.setZValue(40000)
+        roi.setPen(pen)
+        self.view.addItem(roi)
+        plot = self.roiPlot.plot(pen=pen)
+        self.ROIs.append({'roi': roi, 'plot': plot, 'vals': [], 'times': []})
+        roi.sigRemoveRequested.connect(self.removeROI)
+
+    def removeROI(self, roi):
+        self.view.removeItem(roi)
+        roi.sigRemoveRequested.disconnect(self.removeROI)
+        for i, r in enumerate(self.ROIs):
+            if r['roi'] is roi:
+                self.roiPlot.removeItem(r['plot'])
+                self.ROIs.remove(r)
+                break
+        
+    def clearROIs(self):
+        for r in self.ROIs:
+            self.view.removeItem(r['roi'])
+            self.roiPlot.removeItem(r['plot'])
+        self.ROIs = []
+
+    def newFrame(self, iface, frame):
+        """New frame has arrived; update ROI plot if needed.
+        """
         if not self.roiPlotCheck.isChecked():
             return
         imageItem = iface.getImageItem()
@@ -298,7 +383,7 @@ class CameraWindow(QtGui.QMainWindow):
         if imageItem.width() is None:
             return
         
-        ## Get rid of old frames
+        # Get rid of old frames
         minTime = None
         now = pg.time()
         for r in self.ROIs:
@@ -312,7 +397,7 @@ class CameraWindow(QtGui.QMainWindow):
                 
         prof.mark('remove old frames')
             
-        ## add new frame
+        # add new frame
         draw = False
         if self.lastPlotTime is None or now - self.lastPlotTime > 0.05:
             draw = True
@@ -334,10 +419,5 @@ class CameraWindow(QtGui.QMainWindow):
                 r['plot'].setData(np.array(r['times'])-minTime, r['vals'])
                 prof.mark('draw')
         prof.finish()
-    
-    
 
-class PlotROI(pg.ROI):
-    def __init__(self, pos, size):
-        pg.ROI.__init__(self, pos, size=size, removable=True)
-        self.addScaleHandle([1, 1], [0, 0])
+

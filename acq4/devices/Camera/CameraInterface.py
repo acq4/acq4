@@ -13,9 +13,10 @@ import acq4.Manager as Manager
 from CameraInterfaceTemplate import Ui_Form as CameraInterfaceTemplate
 from acq4.devices.OptomechDevice import DeviceTreeItemGroup
 from acq4.util.imaging import ImagingCtrl
+from acq4.modules.Camera import CameraModuleInterface
 
-        
-class CameraInterface(QtCore.QObject):
+
+class CameraInterface(CameraModuleInterface):
     """
     This class provides all the functionality necessary for a camera to display 
     images and controls within the camera module's main window. Each camera that 
@@ -28,7 +29,8 @@ class CameraInterface(QtCore.QObject):
     sigNewFrame = QtCore.Signal(object, object)  # self, frame
     
     def __init__(self, camera, module):
-        QtCore.QObject.__init__(self)
+        CameraModuleInterface.__init__(self, module)
+
         self.module = module
         self.view = module.getView()
         self.hasQuit = False
@@ -126,14 +128,6 @@ class CameraInterface(QtCore.QObject):
         
     def newFrame(self, frame):
         self.imagingCtrl.newFrame(frame)
-        # self.frameDisplay.newFrame(frame)
-
-        # ?? what's this for?
-        # if self.frameDisplay.nextFrame is not None:
-        #     self.ui.displayPercentLabel.setValue(0.)
-        # else:
-        #     self.ui.displayPercentLabel.setValue(100.)
-        
         self.sigNewFrame.emit(self, frame)
 
     def controlWidget(self):
@@ -160,13 +154,12 @@ class CameraInterface(QtCore.QObject):
         except:
             self.showMessage("Error opening camera")
             raise
-
+    
     def globalTransformChanged(self, emitter=None, changedDev=None, transform=None):
         ## scope has moved; update viewport and camera outlines.
         ## This is only used when the camera is not running--
         ## if the camera is running, then this is taken care of in drawFrame to
         ## ensure that the image remains stationary on screen.
-        prof = Profiler()
         if not self.cam.isRunning():
             tr = pg.SRTTransform(self.cam.globalTransform())
             self.updateTransform(tr)
@@ -199,7 +192,7 @@ class CameraInterface(QtCore.QObject):
         self.view.translateBy(diff)
         self.lastCameraPosition = pos
         self.cameraItemGroup.setTransform(tr)
-        
+
     def regionWidgetChanged(self, *args):
         self.updateRegion()
 

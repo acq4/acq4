@@ -434,9 +434,9 @@ class RectScan(SystemSolver):
             raise Exception("Mirror lag can only be measured for bidirectional scans.")
 
         # decide how far to search
-        rowTime = self.scanShape[2] / self.sampleRate
+        rowTime = self.activeShape[2] / self.sampleRate
         pxTime = self.downsample / self.sampleRate
-        maxOffset = min(maxOffset, rowTime * 0.7)
+        maxOffset = min(maxOffset, rowTime * 0.6)
 
         # see whether we need to pad the data
         stride = self.imageStride
@@ -447,7 +447,6 @@ class RectScan(SystemSolver):
             appendShape = list(data.shape)
             appendShape[0] = 1 + minSize - data.shape[0]
             data = np.concatenate([data, np.zeros(appendShape, dtype=data.dtype)], axis=0)
-
 
         # find optimal shift by pixel
         offsets = np.arange(minOffset, maxOffset, pxTime)
@@ -480,8 +479,8 @@ class RectScan(SystemSolver):
             f1 = img[0:nr:2]
             f2 = img[1:nr+1:2]
 
-            err1 = np.abs((f1[:-1]-f2[:-1])**2).sum()
-            err2 = np.abs((f1[1:] -f2[:-1])**2).sum()
+            err1 = np.abs((f1[:-1]-f2[:-1])**2).sum() / f1.size
+            err2 = np.abs((f1[1:] -f2[:-1])**2).sum() / f1.size
             totErr = err1 + err2
             errs.append(totErr)
             if bestError is None or totErr < bestError:

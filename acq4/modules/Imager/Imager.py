@@ -176,7 +176,6 @@ class ScreenBlanker(QtCore.QObject):
         for w in self.widgets:
             w.showFullScreen()
             w.show()
-            print w.geometry()
         QtGui.QApplication.processEvents() # make it so
 
     def unblank(self):
@@ -296,7 +295,7 @@ class Imager(Module):
         self.dwellTime = 0. # "pixel dwell time" computed from scan time and points.
         self.fieldSize = 63.0*120e-6 # field size for 63x, will be scaled for others
 
-        self.scanProtocol = None  # cached scan protocol computed by generateScanProtocol
+        self.scanVoltageCache = None  # cached scan protocol computed by generateScanProtocol
         
         self.objectiveROImap = {} # this is a dict that we will populate with the name
         # of the objective and the associated ROI object .
@@ -497,14 +496,20 @@ class Imager(Module):
         perhaps the stage position, etc. This needs to be obtained to re-align
         the scanner ROI
         """
-        prof = pg.debug.Profiler(disabled=False)
+        prof = pg.debug.Profiler()
         globalTr = self.scannerDev.globalTransform()
         pt1 = globalTr.map(self.currentRoi.scannerCoords[0])
         pt2 = globalTr.map(self.currentRoi.scannerCoords[1])
         diff = pt2 - pt1
-        self.currentRoi.setPos(pt1)
-        self.currentRoi.setSize(diff)
-        
+        pg.disconnect(self.currentRoi.sigRegionChangeFinished, self.roiChanged)
+        try:
+            self.currentRoi.setState({'pos': pt1, 'size': diff, 'angle': 0})
+        finally:
+            self.currentRoi.sigRegionChangeFinished.connect(self.roiChanged)
+        self.setScanPosFromRoi()
+        if self.imagingThread.isRunning():
+            self.updateImagingProtocol()
+
     def getObjectiveColor(self, objective):
         """
         for the current objective, parse a color or use a default. This is a kludge. 
@@ -572,20 +577,18 @@ class Imager(Module):
         if self.ignoreRoiChange:
             return
 
-        self.scanProtocol = None  # invalidate cache
+        self.scanVoltageCache = None  # invalidate cache
 
+        # update scan position
+        self.setScanPosFromRoi()
+
+        # update scan shape if needed
         roi = self.currentRoi
         state = roi.getState()
         w, h = state['size']
         rparam = self.scanProgram.components[0].ctrlParameter()
-        p0 = roi.mapToView(pg.Point(0,h))
-        if p0 is None:
-            # could not map pint; probably view has been closed.
-            return 
-        rparam.system.p0 = pg.Point(p0)  # top-left
-        rparam.system.p1 = pg.Point(roi.mapToView(pg.Point(w,h)))  # rop-right
         param = self.param.child('Scan Control')
-        rows = param['Image Width'] * h / w
+        rows = int(param['Image Width'] * h / w)
         if param['Image Height'] != rows:
             # update image height; this will cause acq thread protocol to be updated
             with param.treeChangeBlocker():
@@ -595,7 +598,6 @@ class Imager(Module):
             if self.imagingThread.isRunning():
                 self.updateImagingProtocol()
 
-        
         # record position of ROI in Scanner's local coordinate system
         # we can use this later to allow the ROI to track stage movement
         tr = self.scannerDev.inverseGlobalTransform() # maps from global to device local
@@ -605,6 +607,21 @@ class Imager(Module):
             tr.map(pt1),
             tr.map(pt2),
             ]
+
+    def setScanPosFromRoi(self):
+        # Update the position of the scan rectangle from the ROI
+        roi = self.currentRoi
+        w, h = roi.size()
+        
+        # get top-left ROI corner in global coordinates
+        p0 = roi.mapToView(pg.Point(0,h))
+        if p0 is None:
+            # could not map point; probably view has been closed.
+            return 
+
+        rparam = self.scanProgram.components[0].ctrlParameter()
+        rparam.system.p0 = pg.Point(p0)  # top-left
+        rparam.system.p1 = pg.Point(roi.mapToView(pg.Point(w,h)))  # rop-right
 
     def reAlign(self):
         self.objectiveUpdate(reset=True) # try this... 
@@ -667,7 +684,7 @@ class Imager(Module):
 
         scanControl = self.param.child('Scan Control')
 
-        self.scanProtocol = None  # invalidate cache
+        self.scanVoltageCache = None  # invalidate cache
 
         sampleRate = scanControl['Sample Rate']
         downsample = scanControl['Downsample']
@@ -723,8 +740,9 @@ class Imager(Module):
         # send new protocol to acq thread
         protocol = self.generateProtocol()
         metainfo = self.saveParams()
-        system = self.scanProgram.components[0].ctrlParameter().system.copy()
-        self.imagingThread.setProtocol(protocol, metainfo, system)
+        system = self.scanProgram.components[0].ctrlParameter().system
+        system.solve()
+        self.imagingThread.setProtocol(protocol, metainfo, system.copy())
 
     def updateDecomb(self):
         if self.lastFrame is not None:
@@ -816,14 +834,14 @@ class Imager(Module):
         self.updateLaserInfo()
 
         # return cached command if possible
-        if self.scanProtocol is not None:
-            vscan = self.scanProtocol
+        if self.scanVoltageCache is not None:
+            vscan = self.scanVoltageCache
         else:
             # Generate scan voltages
             vscan = self.scanProgram.generateVoltageArray()
             # scanner lags laser too much to make this worthwhile without some timing correction
             # mask = self.scanProgram.generateLaserMask().astype(np.float32)
-            self.scanProtocol = vscan
+            self.scanVoltageCache = vscan
 
         # sample rate, duration, and other meta data
         rect = self.scanProgram.components[0].ctrlParameter()
