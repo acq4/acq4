@@ -294,12 +294,10 @@ class ScannerTaskGui(TaskGui):
     
     def storeConfiguration(self):
         state = self.saveState(saveItems=True)
-        fileName = os.path.join(self.dev.configDir(), 'lastConfig')
-        self.dev.dm.writeConfigFile(state, fileName)
+        self.dev.writeConfigFile(state, 'lastConfig')
 
     def loadConfiguration(self):
-        fileName = os.path.join(self.dev.configDir(), 'lastConfig')
-        state = self.dev.dm.readConfigFile(fileName)
+        state = self.dev.readConfigFile('lastConfig')
         self.restoreState(state)
         
     def listSequence(self):
