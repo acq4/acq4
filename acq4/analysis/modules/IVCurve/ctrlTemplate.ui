@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>318</width>
-    <height>487</height>
+    <height>505</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -114,30 +114,6 @@
         <property name="maximum">
          <double>10000.000000000000000</double>
         </property>
-       </widget>
-      </item>
-      <item row="5" column="5">
-       <widget class="QComboBox" name="IVCurve_RMPMode">
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <item>
-         <property name="text">
-          <string>T (s)</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>I (pA)</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Sp (#/s)</string>
-         </property>
-        </item>
        </widget>
       </item>
       <item row="5" column="1" colspan="2">
@@ -249,18 +225,11 @@ p, li { white-space: pre-wrap; }
         </property>
        </widget>
       </item>
-      <item row="10" column="3">
-       <widget class="QLabel" name="label_16">
-        <property name="text">
-         <string>Command</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
       <item row="10" column="4" colspan="2">
        <widget class="QComboBox" name="IVCurve_tauh_Commands">
+        <property name="layoutDirection">
+         <enum>Qt::RightToLeft</enum>
+        </property>
         <item>
          <property name="text">
           <string>-0.6</string>
@@ -733,13 +702,6 @@ Times</string>
         </property>
        </widget>
       </item>
-      <item row="4" column="5">
-       <widget class="QLabel" name="label_18">
-        <property name="text">
-         <string>Abcissa</string>
-        </property>
-       </widget>
-      </item>
       <item row="2" column="5">
        <widget class="QPushButton" name="IVCurve_getFileInfo">
         <property name="text">
@@ -752,25 +714,6 @@ Times</string>
         <property name="text">
          <string>DataMode</string>
         </property>
-       </widget>
-      </item>
-      <item row="7" column="5">
-       <widget class="QComboBox" name="IVCurve_PeakMode">
-        <item>
-         <property name="text">
-          <string>Abs</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Min</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Max</string>
-         </property>
-        </item>
        </widget>
       </item>
       <item row="21" column="2">
@@ -831,6 +774,12 @@ Analysis</string>
       </item>
       <item row="22" column="0" colspan="6">
        <widget class="QGroupBox" name="groupBox">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+          <horstretch>0</horstretch>
+          <verstretch>40</verstretch>
+         </sizepolicy>
+        </property>
         <property name="title">
          <string>Scripts</string>
         </property>
@@ -838,8 +787,8 @@ Analysis</string>
          <property name="geometry">
           <rect>
            <x>0</x>
-           <y>20</y>
-           <width>65</width>
+           <y>35</y>
+           <width>56</width>
            <height>32</height>
           </rect>
          </property>
@@ -850,9 +799,9 @@ Analysis</string>
         <widget class="QPushButton" name="IVCurve_RunScript_Btn">
          <property name="geometry">
           <rect>
-           <x>70</x>
-           <y>20</y>
-           <width>65</width>
+           <x>55</x>
+           <y>35</y>
+           <width>51</width>
            <height>32</height>
           </rect>
          </property>
@@ -863,9 +812,9 @@ Analysis</string>
         <widget class="QPushButton" name="IVCurve_PrintScript_Btn">
          <property name="geometry">
           <rect>
-           <x>140</x>
-           <y>20</y>
-           <width>78</width>
+           <x>105</x>
+           <y>35</y>
+           <width>61</width>
            <height>32</height>
           </rect>
          </property>
@@ -876,9 +825,9 @@ Analysis</string>
         <widget class="QLabel" name="IVCurve_ScriptName">
          <property name="geometry">
           <rect>
-           <x>220</x>
-           <y>20</y>
-           <width>81</width>
+           <x>160</x>
+           <y>40</y>
+           <width>136</width>
            <height>21</height>
           </rect>
          </property>
@@ -893,10 +842,182 @@ Analysis</string>
         </widget>
        </widget>
       </item>
-      <item row="9" column="5">
+      <item row="4" column="5">
+       <widget class="QComboBox" name="IVCurve_RMPMode">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <item>
+         <property name="text">
+          <string>T (s)</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>I (pA)</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Sp (#/s)</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="5" column="5">
+       <widget class="QComboBox" name="IVCurve_PeakMode">
+        <item>
+         <property name="text">
+          <string>Abs</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Min</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Max</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="7" column="5">
        <widget class="QPushButton" name="IVCurve_FISI_ISI_button">
         <property name="text">
          <string>FISI/ISI</string>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="5">
+       <widget class="QLabel" name="label_16">
+        <property name="text">
+         <string>Command</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="10" column="3">
+       <widget class="QDoubleSpinBox" name="IVCurve_bridge">
+        <property name="palette">
+         <palette>
+          <active>
+           <colorrole role="WindowText">
+            <brush brushstyle="SolidPattern">
+             <color alpha="255">
+              <red>0</red>
+              <green>0</green>
+              <blue>0</blue>
+             </color>
+            </brush>
+           </colorrole>
+           <colorrole role="Text">
+            <brush brushstyle="SolidPattern">
+             <color alpha="255">
+              <red>255</red>
+              <green>0</green>
+              <blue>0</blue>
+             </color>
+            </brush>
+           </colorrole>
+           <colorrole role="ButtonText">
+            <brush brushstyle="SolidPattern">
+             <color alpha="255">
+              <red>0</red>
+              <green>0</green>
+              <blue>0</blue>
+             </color>
+            </brush>
+           </colorrole>
+          </active>
+          <inactive>
+           <colorrole role="WindowText">
+            <brush brushstyle="SolidPattern">
+             <color alpha="255">
+              <red>0</red>
+              <green>0</green>
+              <blue>0</blue>
+             </color>
+            </brush>
+           </colorrole>
+           <colorrole role="Text">
+            <brush brushstyle="SolidPattern">
+             <color alpha="255">
+              <red>69</red>
+              <green>69</green>
+              <blue>69</blue>
+             </color>
+            </brush>
+           </colorrole>
+           <colorrole role="ButtonText">
+            <brush brushstyle="SolidPattern">
+             <color alpha="255">
+              <red>0</red>
+              <green>0</green>
+              <blue>0</blue>
+             </color>
+            </brush>
+           </colorrole>
+          </inactive>
+          <disabled>
+           <colorrole role="WindowText">
+            <brush brushstyle="SolidPattern">
+             <color alpha="255">
+              <red>69</red>
+              <green>69</green>
+              <blue>69</blue>
+             </color>
+            </brush>
+           </colorrole>
+           <colorrole role="Text">
+            <brush brushstyle="SolidPattern">
+             <color alpha="255">
+              <red>69</red>
+              <green>69</green>
+              <blue>69</blue>
+             </color>
+            </brush>
+           </colorrole>
+           <colorrole role="ButtonText">
+            <brush brushstyle="SolidPattern">
+             <color alpha="255">
+              <red>106</red>
+              <green>104</green>
+              <blue>100</blue>
+             </color>
+            </brush>
+           </colorrole>
+          </disabled>
+         </palette>
+        </property>
+        <property name="font">
+         <font>
+          <family>Helvetica</family>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+        <property name="suffix">
+         <string>M</string>
+        </property>
+        <property name="decimals">
+         <number>1</number>
+        </property>
+        <property name="minimum">
+         <double>-50.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>200.000000000000000</double>
+        </property>
+        <property name="singleStep">
+         <double>10.000000000000000</double>
         </property>
        </widget>
       </item>

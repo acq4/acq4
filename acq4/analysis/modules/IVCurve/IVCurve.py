@@ -37,7 +37,7 @@ import acq4.analysis.tools.Fitting as Fitting  # pbm's fitting stuff...
 import acq4.analysis.tools.ScriptProcessor as ScriptProcessor
 import ctrlTemplate
 import pprint
-
+import time
 
 # noinspection PyPep8
 class IVCurve(AnalysisModule):
@@ -85,7 +85,7 @@ class IVCurve(AnalysisModule):
         self.lrss_flag = True  # show is default
         self.lrpk_flag = True
         self.rmp_flag = True
-        self.bridgeCorrection = 0.0 # bridge  correction in Mohm.
+        self.bridgeCorrection = None # bridge  correction in Mohm.
         self.showFISI = True # show FISI or ISI as a function of spike number (when False)
         self.lrtau_flag = False
         self.regions_exist = False
@@ -218,6 +218,7 @@ class IVCurve(AnalysisModule):
         self.ivss = []  # steady-state IV (window 2)
         self.ivpk = []  # peak IV (window 1)
         self.Clamps.traces = []
+
         self.fsl = []  # first spike latency
         self.fisi = []  # first isi
         self.rmp = []  # resting membrane potential during sequence
@@ -437,7 +438,7 @@ class IVCurve(AnalysisModule):
                 except:  # may already be disconnected...so fail gracefully
                     pass
 
-    def loadFileRequested(self, dh, analyze=True):
+    def loadFileRequested(self, dh, analyze=True, bridge=None):
         """
         loadFileRequested is called by "file loader" when a file is requested.
             FileLoader is provided by the AnalysisModule class
@@ -471,11 +472,8 @@ class IVCurve(AnalysisModule):
         self.current_dirhandle = dh  # this is critical!
         self.loaded = dh
         self.analysis_summary = self.Clamps.cell_summary(dh)  # get other info as needed for the protocol
-        #print 'analysis summary: ', self.analysis_summary
-        try:
-            print self.bridgeCorrection
-        except:
-            self.bridgeCorrection = 0.
+       # print 'analysis summary: ', self.analysis_summary
+ 
         pars = {}  # need to pass some parameters from the GUI
         pars['limits'] = self.ctrl.IVCurve_IVLimits.isChecked()  # checkbox: True if loading limited current range
         pars['cmin'] = self.ctrl.IVCurve_IVLimitMin.value()  # minimum current level to load
@@ -494,11 +492,22 @@ class IVCurve(AnalysisModule):
             return False
         self.ctrl.IVCurve_dataMode.setText(self.Clamps.data_mode)
         #self.bridgeCorrection = 200e6
-        if self.bridgeCorrection != 0.0:
+
+        print 'bridge: ', bridge
+        if bridge is not None:
+            self.bridgeCorrection = bridge
+            self.ctrl.IVCurve_bridge.setValue(self.bridgeCorrection)
             #for i in range(self.Clamps.traces.shape[0]):
-            print 'doing bridge correction: ', self.bridgeCorrection
+            print '******** Doing bridge correction: ', self.bridgeCorrection
             self.Clamps.traces = self.Clamps.traces - (self.bridgeCorrection * self.Clamps.cmd_wave)
-            
+        else:
+            br = self.ctrl.IVCurve_bridge.value()*1e6
+            print 'br: ', br
+            if br != 0.0:
+                self.bridgeCorrection = br
+                self.Clamps.traces = self.Clamps.traces - (self.bridgeCorrection * self.Clamps.cmd_wave)
+            else:
+                self.bridgeCorrection = None
         # now plot the data 
         self.ctrl.IVCurve_tauh_Commands.clear()
         self.ctrl.IVCurve_tauh_Commands.addItems(ci['cmdList'])
@@ -631,9 +640,12 @@ class IVCurve(AnalysisModule):
                 self.analysis_summary[k] = presets[k]
             if 'SpikeThreshold' in presets.keys():
                 self.ctrl.IVCurve_SpikeThreshold.setValue(float(presets['SpikeThreshold']))
-                print 'set threshold to %f' % float(presets['SpikeThreshold'])
+                #print 'set threshold to %f' % float(presets['SpikeThreshold'])
             if 'bridgeCorrection' in presets.keys():
-                self.brideCorrection = presets['bridgeCorrection']
+                self.bridgeCorrection = presets['bridgeCorrection']
+                print '####### BRIDGE CORRRECTION #######: ', self.bridgeCorrection
+            else:
+                self.bridgeCorrection = 0.
         self.get_window_analysisPars()
 #        print 'updateanalysis: readparsupdate'
         self.readParsUpdate(clearFlag=True, pw=False)
@@ -699,6 +711,7 @@ class IVCurve(AnalysisModule):
             self.update_pkAnalysis()
         
         self.analyzeSpikeShape()  # finally do the spike shape
+        self.ctrl.IVCurve_bridge.setValue(0.)  # reset bridge value after analysis.
 
     def read_script(self, name=''):
         """
@@ -1741,10 +1754,12 @@ class IVCurve(AnalysisModule):
 
         columns = OrderedDict([
 #            ('ProtocolDir', 'directory:Protocol'),
+            ('AnalysisDate', 'text'),
             ('ProtocolSequenceDir', 'directory:ProtocolSequence'),
             ('Dir', 'text'),
             ('Protocol', 'text'),
             ('Genotype', 'text'),
+            ('Celltype', 'text'),
             ('UseData', 'bool'),
             ('RMP', 'real'),
             ('R_in', 'real'),
@@ -1783,13 +1798,17 @@ class IVCurve(AnalysisModule):
         if 'Genotype' not in self.analysis_summary:
             self.analysis_summary['Genotype'] = 'Unknown'
 #        print 'genytope: ', self.analysis_summary['Genotype']
+        if 'Celltype' not in self.Script.analysis_parameters:
+            self.analysis_summary['Celltype'] = 'Unknown'
         
         data = {
+            'AnalysisDate': time.strftime("%Y-%m-%d %H:%M:%S"),
             'ProtocolSequenceDir': self.loaded,
 #            'ProtocolSequenceDir': self.dataModel.getParent(self.loaded, 'ProtocolSequence'),
             'Dir': self.loaded.parent().name(),
             'Protocol': self.loaded.name(),
             'Genotype': self.analysis_summary['Genotype'],
+            'Celltype': self.Script.analysis_parameters['Celltype'],  # uses global info, not per cell info
             'UseData' : True,
             'RMP': self.rmp / 1000.,
             'R_in': self.r_in,

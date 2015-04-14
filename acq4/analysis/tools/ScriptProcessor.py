@@ -192,21 +192,26 @@ class ScriptProcessor(AnalysisModule):
                     presetDict['Genotype'] = thiscell['genotype']
                 else:
                     presetDict['Genotype'] = 'Unknown'
+                if 'Celltype' in thiscell.keys():
+                    presetDict['Celltype'] = thiscell['Celltype']
+                else:
+                    presetDict['Celltype'] = 'Unknown'
                 if 'spikethresh' in thiscell.keys():
                     presetDict['SpikeThreshold'] = thiscell['spikethresh']
                 if 'bridgeCorrection' in thiscell.keys():
                     presetDict['bridgeCorrection'] = thiscell['bridgeCorrection']
                 else:
-                    presetDict['bridgeCorrection'] = 0.0
+                    presetDict['bridgeCorrection'] = None
+                
 
                 dh = self.dataManager().manager.dirHandle(fullpath)
-                if not self.loadFile([dh], analyze=False):  # note: must pass a list of dh; don't let analyisis run at end
+                if not self.loadFile([dh], analyze=False, bridge=presetDict['bridgeCorrection']):  # note: must pass a list of dh; don't let analyisis run at end
                     print 'Failed to load requested file: ', fullpath
                     continue  # skip bad sets of records...
                 if 'datamode' in thiscell.keys():
                     self.clamps.data_mode = thiscell['datamode']
                 self.auto_updater = False
-#                self.get_script_analysisPars(self.script, thiscell)
+                self.get_script_analysisPars(self.script, thiscell)
                 self.analysis(presets=presetDict)  # call the caller's analysis routine
 
                 if 'addtoDB' in self.script.keys():
@@ -239,7 +244,7 @@ class ScriptProcessor(AnalysisModule):
         self.analysis_parameters['lrrmp'] = {}
         self.auto_updater = False  # turn off the updates
         scriptg = {'global_jp': ['junction'], 'global_win1_mode': ['lrwin1', 'mode'],
-                   'global_win2_mode': ['lrwin2', 'mode']}
+                   'global_win2_mode': ['lrwin2', 'mode'], 'Celltype': ['Celltype']}
         for k in scriptg.keys():  # set globals first
             if k in script_globals.keys():
                 if len(scriptg[k]) == 1:
@@ -256,6 +261,7 @@ class ScriptProcessor(AnalysisModule):
             self.analysis_parameters['UseData'] = thiscell['include']
         else:
             self.analysis_parameters['UseData'] = True
+#        print 'analysis params after get script \n', self.analysis_parameters
         return
 
     def print_script_output(self):

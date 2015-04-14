@@ -96,8 +96,10 @@ class DataSummary():
         self.daylistfile = daylistfile
         if daylistfile is None:
             mindayx = (1970, 1, 1)
+            mindayx = (2012, 6, 12)
             self.minday = mindayx[0]*1e4+mindayx[1]*1e2+mindayx[2]
-            maxdayx = datetime.datetime.now().timetuple()[0:3]  # get today
+            #maxdayx = datetime.datetime.now().timetuple()[0:3]  # get today
+            maxdayx = (2012, 6, 18)
             self.maxday = maxdayx[0]*1e4+maxdayx[1]*1e2+maxdayx[2]
         else:
             self.daylist = []
