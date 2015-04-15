@@ -542,7 +542,6 @@ class Imager(Module):
         
         roiColor = self.getObjectiveColor(self.scopeDev.currentObjective) # pick up an objective color...
         roi = RegionCtrl(cpos, csize, roiColor) # Note that the position actually gets over ridden by the camera additem below..
-        roi.setZValue(10000)
         self.cameraModule.window().addItem(roi)
         roi.setPos(cpos)
         roi.sigRegionChangeFinished.connect(self.roiChanged)
