@@ -10,8 +10,11 @@ import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.dockarea as dockarea
 import acq4.Manager as Manager
 from acq4.util.debug import Profiler
+from acq4.util.Thread import Thread
+from acq4.util.Mutex import Mutex
 from .sequencerTemplate import Ui_Form as SequencerTemplate
-
+from acq4.util.metaarray import MetaArray
+from acq4.pyqtgraph import ptime
 
 class CameraWindow(QtGui.QMainWindow):
     
@@ -152,6 +155,8 @@ class CameraWindow(QtGui.QMainWindow):
         self.interfaces[name].quit()
 
     def _removeInterface(self, iface):
+        print "======== remove", iface
+        print self.interfaces
         name = None
         if isinstance(iface, CameraModuleInterface):
             for k,v in self.interfaces.items():
@@ -297,6 +302,7 @@ class CameraModuleInterface(QtCore.QObject):
     def __init__(self, mod):
         QtCore.QObject.__init__(self)
         self.mod = weakref.ref(mod)
+        self._hasQuit = False
 
     def graphicsItems(self):
         """Return a list of all graphics items displayed by this interface.
@@ -331,6 +337,9 @@ class CameraModuleInterface(QtCore.QObject):
         """Called when the interface is removed from the camera module or when
         the camera module is about to quit.
         """
+        if self._hasQuit:
+            return
+        self._hasQuit = True
         for item in self.graphicsItems():
             scene = item.scene()
             if scene is not None:
@@ -492,7 +501,7 @@ class ImageSequencer(QtGui.QWidget):
         self.ui.intervalSpin.setOpts(minimum=0, value=1, suffix='s', siPrefix=True, dec=True, minStep=1e-3, step=1)
 
         self.updateDeviceList()
-        self.updateStatusLabel()
+        self.ui.statusLabel.setText("[ stopped ]")
 
         self.thread = SequencerThread()
 
@@ -501,7 +510,7 @@ class ImageSequencer(QtGui.QWidget):
         mod.sigInterfaceAdded.connect(self.updateDeviceList)
         mod.sigInterfaceRemoved.connect(self.updateDeviceList)
         self.thread.finished.connect(self.threadStopped)
-        self.thread.sigIteration.connect(self.threadIterated)
+        self.thread.sigMessage.connect(self.threadMessage)
         self.ui.startBtn.clicked.connect(self.startClicked)
         self.ui.pauseBtn.clicked.connect(self.pauseClicked)
 
@@ -517,48 +526,23 @@ class ImageSequencer(QtGui.QWidget):
         if self.ui.deviceCombo.currentIndex() < 1:
             return None
         else:
-            return self.ui.deviceCombo.currentText()
+            name = self.ui.deviceCombo.currentText()
+            return self.mod().interfaces[name]
 
     def stateChanged(self, name, value):
-        self.updateStatusLabel()
         if name == 'deviceCombo':
             if self.imager is not None:
-                pg.disconnect(self.imager.sigNewFrame, self.thread.newFrame)
+                pg.disconnect(self.imager.sigNewFrame, self.newFrame)
             imager = self.selectedDevice()
             if imager is not None:
-                imager = self.mod().interfaces[imager]
                 imager.sigNewFrame.connect(self.newFrame)
             self.imager = imager
-
-    def updateStatusLabel(self):
-        status = "[ stopped ]   "
-        prot = self.makeProtocol()
-
-        if prot['zStack'] is True:
-            status += "Z-stack: %d frames   " % prot['zFrames']
-
-        if prot['timelapse'] is True:
-            minTime = prot['iterations'] * prot['interval']
-            status += "Timelapse: %d frames, min time %s   " % (prot['iterations'], minTime)
-
-        if prot['iterations'] == 0:
-            totFrames = 'unlimited'
-        else:
-            totFrames = prot['zFrames'] * prot['iterations']
-
-        status += "Total frames: %s" % totFrames
-
-        self.ui.statusLabel.setText(status)
 
     def makeProtocol(self):
         """Build a description of everything that needs to be done during the sequence.
         """
-        dev = self.selectedDevice()
-        if dev is None:
-            raise Exception("No imaging device selected.")
-
         prot = {
-            'imager': self.imager,
+            'imager': self.selectedDevice(),
             'zStack': self.ui.zStackGroup.isChecked(),
             'timelapse': self.ui.timelapseGroup.isChecked(),
         }
@@ -592,6 +576,8 @@ class ImageSequencer(QtGui.QWidget):
         self.thread.pause(b)
 
     def start(self):
+        if self.selectedDevice() is None:
+            raise Exception("No imaging device selected.")
         prot = self.makeProtocol()
         self.currentProtocol = prot
         dh = Manager.getManager().getCurrentDir().getDir('ImageSequence', create=True, autoIncrement=True)
@@ -599,26 +585,33 @@ class ImageSequencer(QtGui.QWidget):
         self.ui.startBtn.setText('Stop')
         self.ui.zStackGroup.setEnabled(False)
         self.ui.timelapseGroup.setEnabled(False)
+        self.ui.deviceCombo.setEnabled(False)
         self.thread.start(prot)
 
     def stop(self):
         self.thread.stop()
-        self.ui.zStackGroup.setEnabled(True)
-        self.ui.timelapseGroup.setEnabled(True)
 
     def threadStopped(self):
         self.ui.startBtn.setText('Start')
+        self.ui.startBtn.setChecked(False)
+        self.ui.zStackGroup.setEnabled(True)
+        self.ui.timelapseGroup.setEnabled(True)
+        self.ui.deviceCombo.setEnabled(True)
+        self.ui.statusLabel.setText("[ stopped ]")
 
-    def threadIterated(self, iter):
-        print "iter:", iter
+    def threadMessage(self, message):
+        self.ui.statusLabel.setText(message)
+
+    def newFrame(self, iface, frame):
+        self.thread.newFrame(frame)
 
 
+class SequencerThread(Thread):
 
-class SequenceThread(Thread):
-
-    sigIteration = QtCore.Signal(object)  # iter
+    sigMessage = QtCore.Signal(object)  # message
 
     def __init__(self):
+        Thread.__init__(self)
         self.prot = None
         self._stop = False
         self._frame = None
@@ -630,6 +623,7 @@ class SequenceThread(Thread):
             raise Exception("Sequence is already running.")
         self.prot = protocol
         self._stop = False
+        self.sigMessage.emit('[ running.. ]')
         Thread.start(self)
 
     def stop(self):
@@ -638,7 +632,7 @@ class SequenceThread(Thread):
 
     def pause(self, p):
         with self.lock:
-            self._pause = p
+            self._paused = p
 
     def newFrame(self, frame):
         with self.lock:
@@ -653,15 +647,23 @@ class SequenceThread(Thread):
             start = time.time()
             frame = self.getFrame()
             self.recordFrame(frame, i)
-            self.sigIteration.emit(i)
+            if maxIter == 0:
+                self.sigMessage.emit('[ running  iter=%d ]' % (i+1))
+            else:
+                self.sigMessage.emit('[ running  iter=%d/%s ]' % (i+1, maxIter))
             i += 1
 
-            self.sleep(until=start+interval)
+            try:
+                self.sleep(until=start+interval)
+            except Exception as e:
+                if e.message == 'stopped':
+                    return
+                raise
 
     def getFrame(self):
         # request next frame
         imager = self.prot['imager']
-        imager.takeFrame()
+        imager.takeImage()
 
         # wait for frame to arrive
         self.sleep(until='frame')
@@ -673,7 +675,7 @@ class SequenceThread(Thread):
     def recordFrame(self, frame, iter):
         # Handle new frame
         dh = self.prot['storageDir']
-        name = 'image_%d' % iter
+        name = 'image_%03d' % iter
 
         arrayInfo = [
             {'name': 'X'},
@@ -688,17 +690,18 @@ class SequenceThread(Thread):
         while True:
             with self.lock:
                 if self._stop:
-                    raise Exception("Acquisition aborted")
+                    raise Exception("stopped")
                 paused = self._paused
                 frame = self._frame
-            if until == 'frame':
-                wait = 0.1
-                if frame is not None:
-                    return
-            else:
-                now = ptime.time()
-                wait = until - now
-                if wait <= 0 and not paused:
-                    return
+            if not paused:
+                if until == 'frame':
+                    wait = 0.1
+                    if frame is not None:
+                        return
+                else:
+                    now = ptime.time()
+                    wait = until - now
+                    if wait <= 0:
+                        return
             time.sleep(min(0.1, wait))
 

@@ -1038,7 +1038,7 @@ class ImagerCamModInterface(CameraModuleInterface):
         return gitems
 
     def takeImage(self):
-        self.imager.takeImage()
+        self.imager.imagingThread.takeFrame()
 
     def getImageItem(self):
         return self.imager.imageItem
