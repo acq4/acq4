@@ -475,6 +475,8 @@ class ROIPlotter(QtGui.QWidget):
 
 
 class ImageSequencer(QtGui.QWidget):
+    """GUI for acquiring z-stacks, timelapse, and mosaic.
+    """
     def __init__(self, mod):
         self.mod = weakref.ref(mod)
         QtGui.QWidget.__init__(self)
@@ -492,10 +494,16 @@ class ImageSequencer(QtGui.QWidget):
         self.updateDeviceList()
         self.updateStatusLabel()
 
+        self.thread = SequencerThread()
+
         self.state = pg.WidgetGroup(self)
         self.state.sigChanged.connect(self.stateChanged)
         mod.sigInterfaceAdded.connect(self.updateDeviceList)
         mod.sigInterfaceRemoved.connect(self.updateDeviceList)
+        self.thread.finished.connect(self.threadStopped)
+        self.thread.sigIteration.connect(self.threadIterated)
+        self.ui.startBtn.clicked.connect(self.startClicked)
+        self.ui.pauseBtn.clicked.connect(self.pauseClicked)
 
     def updateDeviceList(self):
         items = ['Select device..']
@@ -515,7 +523,7 @@ class ImageSequencer(QtGui.QWidget):
         self.updateStatusLabel()
         if name == 'deviceCombo':
             if self.imager is not None:
-                pg.disconnect(self.imager.sigNewFrame, self.newFrame)
+                pg.disconnect(self.imager.sigNewFrame, self.thread.newFrame)
             imager = self.selectedDevice()
             if imager is not None:
                 imager = self.mod().interfaces[imager]
@@ -545,7 +553,12 @@ class ImageSequencer(QtGui.QWidget):
     def makeProtocol(self):
         """Build a description of everything that needs to be done during the sequence.
         """
+        dev = self.selectedDevice()
+        if dev is None:
+            raise Exception("No imaging device selected.")
+
         prot = {
+            'imager': self.imager,
             'zStack': self.ui.zStackGroup.isChecked(),
             'timelapse': self.ui.timelapseGroup.isChecked(),
         }
@@ -570,19 +583,122 @@ class ImageSequencer(QtGui.QWidget):
         return prot
 
     def startClicked(self, b):
+        if b:
+            self.start()
+        else:
+            self.stop()
+
+    def pauseClicked(self, b):
+        self.thread.pause(b)
+
+    def start(self):
         prot = self.makeProtocol()
+        self.currentProtocol = prot
+        dh = Manager.getManager().getCurrentDir().getDir('ImageSequence', create=True, autoIncrement=True)
+        prot['storageDir'] = dh
+        self.ui.startBtn.setText('Stop')
+        self.ui.zStackGroup.setEnabled(False)
+        self.ui.timelapseGroup.setEnabled(False)
+        self.thread.start(prot)
+
+    def stop(self):
+        self.thread.stop()
+        self.ui.zStackGroup.setEnabled(True)
+        self.ui.timelapseGroup.setEnabled(True)
+
+    def threadStopped(self):
+        self.ui.startBtn.setText('Start')
+
+    def threadIterated(self, iter):
+        print "iter:", iter
+
+
+
+class SequenceThread(Thread):
+
+    sigIteration = QtCore.Signal(object)  # iter
+
+    def __init__(self):
+        self.prot = None
+        self._stop = False
+        self._frame = None
+        self._paused = False
+        self.lock = Mutex(recursive=True)
+
+    def start(self, protocol):
+        if self.isRunning():
+            raise Exception("Sequence is already running.")
+        self.prot = protocol
+        self._stop = False
+        Thread.start(self)
+
+    def stop(self):
+        with self.lock:
+            self._stop = True
+
+    def pause(self, p):
+        with self.lock:
+            self._pause = p
 
     def newFrame(self, frame):
-        print "frame!"
+        with self.lock:
+            self._frame = frame
 
+    def run(self):
+        prot = self.prot
+        maxIter = prot['iterations']
+        interval = prot['interval']
+        i = 0
+        while maxIter == 0 or i < maxIter:
+            start = time.time()
+            frame = self.getFrame()
+            self.recordFrame(frame, i)
+            self.sigIteration.emit(i)
+            i += 1
 
+            self.sleep(until=start+interval)
 
+    def getFrame(self):
+        # request next frame
+        imager = self.prot['imager']
+        imager.takeFrame()
 
+        # wait for frame to arrive
+        self.sleep(until='frame')
+        with self.lock:
+            frame = self._frame
+            self._frame = None
+        return frame
 
+    def recordFrame(self, frame, iter):
+        # Handle new frame
+        dh = self.prot['storageDir']
+        name = 'image_%d' % iter
 
+        arrayInfo = [
+            {'name': 'X'},
+            {'name': 'Y'}
+        ]
+        data = MetaArray(frame.getImage(), info=arrayInfo)
+        dh.writeFile(data, name, info=frame.info()) # appendAxis='Depth')
 
-
-
-
-
+    def sleep(self, until):
+        # Wait until some event occurs
+        # check for pause / stop while waiting
+        while True:
+            with self.lock:
+                if self._stop:
+                    raise Exception("Acquisition aborted")
+                paused = self._paused
+                frame = self._frame
+            if until == 'frame':
+                wait = 0.1
+                if frame is not None:
+                    return
+            else:
+                now = ptime.time()
+                wait = until - now
+                if wait <= 0 and not paused:
+                    return
+            time.sleep(min(0.1, wait))
 
