@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
-import time, types, os.path, re, sys
+import time, types, os.path, re, sys, weakref
 from collections import OrderedDict
+import numpy as np
 from PyQt4 import QtGui, QtCore
 from acq4.LogWindow import LogButton
 from acq4.util.StatusBar import StatusBar
@@ -9,11 +10,14 @@ import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.dockarea as dockarea
 import acq4.Manager as Manager
 from acq4.util.debug import Profiler
-import numpy as np
+from .sequencerTemplate import Ui_Form as SequencerTemplate
 
 
 class CameraWindow(QtGui.QMainWindow):
     
+    sigInterfaceAdded = QtCore.Signal(object, object)
+    sigInterfaceRemoved = QtCore.Signal(object, object)
+
     def __init__(self, module):
         self.hasQuit = False
         self.module = module # handle to the rest of the application
@@ -71,8 +75,13 @@ class CameraWindow(QtGui.QMainWindow):
 
         # Add a dock with ROI buttons and plot
         self.roiWidget = ROIPlotter(self)
-        self.roiDock = dockarea.Dock(name='ROI Plot', widget=self.roiWidget, size=(600, 10))
+        self.roiDock = dockarea.Dock(name='ROI Plot', widget=self.roiWidget, size=(400, 10))
         self.cw.addDock(self.roiDock, 'bottom', self.gvDock)
+
+        # Add timelapse / z stack / mosaic controls
+        self.sequencerWidget = ImageSequencer(self)
+        self.sequencerDock = dockarea.Dock(name='Image Sequencer', widget=self.sequencerWidget, size=(200, 10))
+        self.cw.addDock(self.sequencerDock, 'right', self.roiDock)
         
         #grid = pg.GridItem()
         #self.view.addItem(grid)
@@ -117,19 +126,55 @@ class CameraWindow(QtGui.QMainWindow):
     def addInterface(self, name, iface):
         """Display a new user interface in the camera module.
         """
+        assert name not in self.interfaces
+
         self.interfaces[name] = iface
-        dock = dockarea.Dock(name=name, widget=iface.controlWidget(), size=(10, 500))
-        if len(self.docks) == 0:
-            dock.hideTitleBar()
-            self.cw.addDock(dock, 'left', self.gvDock)
+        widget = iface.controlWidget()
+        if widget is not None:
+            dock = dockarea.Dock(name=name, widget=iface.controlWidget(), size=(10, 500))
+            if len(self.docks) == 0:
+                dock.hideTitleBar()
+                self.cw.addDock(dock, 'left', self.gvDock)
+            else:
+                list(self.docks.values())[0].showTitleBar()
+                self.cw.addDock(dock, 'below', list(self.docks.values())[0])
+            self.docks[name] = dock
         else:
-            list(self.docks.values())[0].showTitleBar()
-            self.cw.addDock(dock, 'below', list(self.docks.values())[0])
-        self.docks[name] = dock
+            self.docks[name] = None
         if hasattr(iface, 'sigNewFrame'):
             iface.sigNewFrame.connect(self.newFrame)
         if hasattr(iface, 'sigTransformChanged'):
             iface.sigTransformChanged.connect(self.ifaceTransformChanged)
+
+        self.sigInterfaceAdded.emit(name, iface)
+
+    def removeInterface(self, name):
+        self.interfaces[name].quit()
+
+    def _removeInterface(self, iface):
+        name = None
+        if isinstance(iface, CameraModuleInterface):
+            for k,v in self.interfaces.items():
+                if v is iface:
+                    name = k
+                    break
+        elif isinstance(iface, str):
+            name = iface
+        else:
+            raise TypeError("string or CameraModuleInterface argument required.")
+
+        if name is None:
+            raise ValueError("Interface %s not found." % iface)
+        iface = self.interfaces.pop(name)
+        if hasattr(iface, 'sigNewFrame'):
+            pg.disconnect(iface.sigNewFrame, self.newFrame)
+        if hasattr(iface, 'sigTransformChanged'):
+            pg.disconnect(iface.sigTransformChanged, self.ifaceTransformChanged)
+        dock = self.docks.pop(name, None)
+        if dock is not None:
+            dock.close()
+
+        self.sigInterfaceRemoved.emit(name, iface)
 
     def getView(self):
         return self.view
@@ -246,9 +291,12 @@ class CameraModuleInterface(QtCore.QObject):
     """
     sigNewFrame = QtCore.Signal(object, object)  # (self, frame)
 
+    # indicates this is an interface to an imaging device. 
+    canImage = True
+
     def __init__(self, mod):
         QtCore.QObject.__init__(self)
-        self.mod = mod
+        self.mod = weakref.ref(mod)
 
     def graphicsItems(self):
         """Return a list of all graphics items displayed by this interface.
@@ -274,6 +322,11 @@ class CameraModuleInterface(QtCore.QObject):
         """
         return None
 
+    def takeImage(self):
+        """Request the imaging device to acquire a single frame.
+        """
+        raise NotImplementedError()
+
     def quit(self):
         """Called when the interface is removed from the camera module or when
         the camera module is about to quit.
@@ -282,7 +335,7 @@ class CameraModuleInterface(QtCore.QObject):
             scene = item.scene()
             if scene is not None:
                 scene.removeItem(item)
-
+        self.mod().window()._removeInterface(self)
 
 
 
@@ -297,7 +350,7 @@ class ROIPlotter(QtGui.QWidget):
     # ROI plot ctrls
     def __init__(self, mod):
         QtGui.QWidget.__init__(self)
-        self.mod = mod
+        self.mod = weakref.ref(mod)
         self.view = mod.view
 
         # ROI state variables
@@ -419,5 +472,117 @@ class ROIPlotter(QtGui.QWidget):
                 r['plot'].setData(np.array(r['times'])-minTime, r['vals'])
                 prof.mark('draw')
         prof.finish()
+
+
+class ImageSequencer(QtGui.QWidget):
+    def __init__(self, mod):
+        self.mod = weakref.ref(mod)
+        QtGui.QWidget.__init__(self)
+
+        self.imager = None
+
+        self.ui = SequencerTemplate()
+        self.ui.setupUi(self)
+
+        self.ui.zStartSpin.setOpts(value=100e-6, suffix='m', siPrefix=True, step=10e-6)
+        self.ui.zEndSpin.setOpts(value=50e-6, suffix='m', siPrefix=True, step=10e-6)
+        self.ui.zSpacingSpin.setOpts(minimum=1e-9, value=1e-6, suffix='m', siPrefix=True, dec=True, minStep=1e-9, step=0.5)
+        self.ui.intervalSpin.setOpts(minimum=0, value=1, suffix='s', siPrefix=True, dec=True, minStep=1e-3, step=1)
+
+        self.updateDeviceList()
+        self.updateStatusLabel()
+
+        self.state = pg.WidgetGroup(self)
+        self.state.sigChanged.connect(self.stateChanged)
+        mod.sigInterfaceAdded.connect(self.updateDeviceList)
+        mod.sigInterfaceRemoved.connect(self.updateDeviceList)
+
+    def updateDeviceList(self):
+        items = ['Select device..']
+        self.ui.deviceCombo.clear()
+        for k,v in self.mod().interfaces.items():
+            if v.canImage:
+                items.append(k)
+        self.ui.deviceCombo.setItems(items)
+
+    def selectedDevice(self):
+        if self.ui.deviceCombo.currentIndex() < 1:
+            return None
+        else:
+            return self.ui.deviceCombo.currentText()
+
+    def stateChanged(self, name, value):
+        self.updateStatusLabel()
+        if name == 'deviceCombo':
+            if self.imager is not None:
+                pg.disconnect(self.imager.sigNewFrame, self.newFrame)
+            imager = self.selectedDevice()
+            if imager is not None:
+                imager = self.mod().interfaces[imager]
+                imager.sigNewFrame.connect(self.newFrame)
+            self.imager = imager
+
+    def updateStatusLabel(self):
+        status = "[ stopped ]   "
+        prot = self.makeProtocol()
+
+        if prot['zStack'] is True:
+            status += "Z-stack: %d frames   " % prot['zFrames']
+
+        if prot['timelapse'] is True:
+            minTime = prot['iterations'] * prot['interval']
+            status += "Timelapse: %d frames, min time %s   " % (prot['iterations'], minTime)
+
+        if prot['iterations'] == 0:
+            totFrames = 'unlimited'
+        else:
+            totFrames = prot['zFrames'] * prot['iterations']
+
+        status += "Total frames: %s" % totFrames
+
+        self.ui.statusLabel.setText(status)
+
+    def makeProtocol(self):
+        """Build a description of everything that needs to be done during the sequence.
+        """
+        prot = {
+            'zStack': self.ui.zStackGroup.isChecked(),
+            'timelapse': self.ui.timelapseGroup.isChecked(),
+        }
+        if prot['zStack']:
+            start = self.ui.zStartSpin.value()
+            end = self.ui.zEndSpin.value()
+            spacing = self.ui.zSpacingSpin.value()
+            if end < start:
+                prot['zValues'] = np.arange(start, end, -spacing)
+            else:
+                prot['zValues'] = np.arange(start, end, spacing)
+            prot['zFrames'] = len(prot['zValues'])
+        else:
+            prot['zFrames'] = 1
+
+        if prot['timelapse']:
+            prot['iterations'] = self.ui.iterationsSpin.value()
+            prot['interval'] = self.ui.intervalSpin.value()
+        else:
+            prot['iterations'] = 1
+
+        return prot
+
+    def startClicked(self, b):
+        prot = self.makeProtocol()
+
+    def newFrame(self, frame):
+        print "frame!"
+
+
+
+
+
+
+
+
+
+
 
 

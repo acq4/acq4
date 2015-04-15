@@ -287,6 +287,8 @@ class Manipulator(Device, OptomechDevice):
 class ManipulatorCamModInterface(QtCore.QObject):
     """Implements user interface for manipulator.
     """
+    canImage = False
+
     def __init__(self, dev, mod):
         QtCore.QObject.__init__(self)
         self.dev = dev  # microscope device

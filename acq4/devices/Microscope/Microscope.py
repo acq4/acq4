@@ -394,6 +394,8 @@ class ScopeGUI(QtGui.QWidget):
 class ScopeCameraModInterface(QtCore.QObject):
     """Implements focus control user interface for use in the camera module.
     """
+    canImage = False
+    
     def __init__(self, dev, mod):
         QtCore.QObject.__init__(self)
         self.dev = dev  # microscope device

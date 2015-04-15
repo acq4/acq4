@@ -36,6 +36,7 @@ import acq4.util.InterfaceCombo as InterfaceCombo
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Scanner.scan_program import ScanProgram
 from acq4.devices.Scanner.scan_program.rect import RectScan
+from acq4.modules.Camera import CameraModuleInterface
 from acq4.pyqtgraph import parametertree as PT
 from acq4.util import metaarray as MA
 from acq4.util.Mutex import Mutex
@@ -283,16 +284,8 @@ class Imager(Module):
         self.storedROI = None
         self.currentRoi = None
         self.ignoreRoiChange = False
-        self.tileRoi = None
-        self.tileRoiVisible = False
-        self.tilexPos = 0.
-        self.tileyPos = 0.
-        self.tileWidth = 2e-4
-        self.tileHeight = 2e-4
-        self.stopFlag = False
         self.lastFrame = None
 
-        self.dwellTime = 0. # "pixel dwell time" computed from scan time and points.
         self.fieldSize = 63.0*120e-6 # field size for 63x, will be scaled for others
 
         self.scanVoltageCache = None  # cached scan protocol computed by generateScanProtocol
@@ -320,8 +313,9 @@ class Imager(Module):
         self.imagingThread.sigVideoStopped.connect(self.videoStopped)
         self.imagingThread.sigAborted.connect(self.imagingAborted)
 
-        
-        self.cameraModule.window().addItem(self.imageItem)
+        # connect user interface to camera module
+        self.camModInterface = ImagerCamModInterface(self, self.cameraModule)
+        self.cameraModule.window().addInterface(self.name, self.camModInterface)
 
         # find first scope device that is parent of scanner
         dev = self.scannerDev
@@ -442,20 +436,21 @@ class Imager(Module):
 
     def quit(self):
         self.abortTask()
-        if self.imageItem is not None and self.imageItem.scene() is not None:
-            self.imageItem.scene().removeItem(self.imageItem)
-        self.imageItem = None
-        for obj,item in self.objectiveROImap.items(): # remove the ROI's for all objectives.
-            try:
-                if item.scene() is not None:
-                    item.scene().removeItem(item)
-            except:
-                pass
-        if self.tileRoi is not None:
-            if self.tileRoi.scene() is not None:
-                self.tileRoi.scene().removeItem(self.tileRoi)
-            self.tileRoi = None
+        # if self.imageItem is not None and self.imageItem.scene() is not None:
+        #     self.imageItem.scene().removeItem(self.imageItem)
+        # for obj,item in self.objectiveROImap.items(): # remove the ROI's for all objectives.
+        #     try:
+        #         if item.scene() is not None:
+        #             item.scene().removeItem(item)
+        #     except:
+        #         pass
+        # if self.tileRoi is not None:
+        #     if self.tileRoi.scene() is not None:
+        #         self.tileRoi.scene().removeItem(self.tileRoi)
+        #     self.tileRoi = None
+        self.camModInterface.quit()
         self.imagingCtrl.quit()
+        self.imageItem = None
         Module.quit(self)
 
     def abortTask(self):
@@ -1025,6 +1020,31 @@ class Imager(Module):
     # def PMT_Stop(self):
     #     self.stopFlag = True
 
+
+class ImagerCamModInterface(CameraModuleInterface):
+    """For plugging in the 2p imager system to the camera module.
+    """
+    def __init__(self, imager, mod):
+        self.imager = imager
+
+        CameraModuleInterface.__init__(self, mod)
+
+        mod.window().addItem(imager.imageItem)
+
+        self.imager.imagingThread.sigNewFrame.connect(self.newFrame)
+
+    def graphicsItems(self):
+        gitems = [self.getImageItem()] + list(self.imager.objectiveROImap.values())
+        return gitems
+
+    def takeImage(self):
+        self.imager.takeImage()
+
+    def getImageItem(self):
+        return self.imager.imageItem
+
+    def newFrame(self, frame):
+        self.sigNewFrame.emit(self, frame)
 
 
 class ImagingFrame(imaging.Frame):
