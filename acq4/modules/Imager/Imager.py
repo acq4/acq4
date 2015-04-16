@@ -1046,6 +1046,17 @@ class ImagerCamModInterface(CameraModuleInterface):
     def newFrame(self, frame):
         self.sigNewFrame.emit(self, frame)
 
+    def getFocusDepth(self):
+        return self.imager.scannerDev.getFocusDepth()
+
+    def setFocusDepth(self, depth):
+        return self.imager.scannerDev.setFocusDepth(depth)
+
+    def setFocusHolding(self, hold):
+        dev = self.imager.scannerDev.getFocusDevice()
+        if hasattr(dev, 'setHolding'):
+            dev.setHolding(hold)
+
 
 class ImagingFrame(imaging.Frame):
     """Represents a single collected image frame and its associated metadata."""

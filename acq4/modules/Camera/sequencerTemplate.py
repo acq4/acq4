@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'sequencerTemplate.ui'
 #
-# Created: Wed Apr 15 18:47:39 2015
+# Created: Thu Apr 16 21:34:11 2015
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -26,7 +26,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(412, 124)
+        Form.resize(400, 106)
         self.gridLayout_3 = QtGui.QGridLayout(Form)
         self.gridLayout_3.setMargin(0)
         self.gridLayout_3.setSpacing(3)
@@ -36,6 +36,8 @@ class Ui_Form(object):
         self.timelapseGroup.setChecked(False)
         self.timelapseGroup.setObjectName(_fromUtf8("timelapseGroup"))
         self.gridLayout_2 = QtGui.QGridLayout(self.timelapseGroup)
+        self.gridLayout_2.setMargin(3)
+        self.gridLayout_2.setSpacing(3)
         self.gridLayout_2.setObjectName(_fromUtf8("gridLayout_2"))
         self.intervalSpin = SpinBox(self.timelapseGroup)
         self.intervalSpin.setMinimumSize(QtCore.QSize(75, 0))
@@ -58,6 +60,8 @@ class Ui_Form(object):
         self.zStackGroup.setChecked(False)
         self.zStackGroup.setObjectName(_fromUtf8("zStackGroup"))
         self.gridLayout = QtGui.QGridLayout(self.zStackGroup)
+        self.gridLayout.setMargin(3)
+        self.gridLayout.setSpacing(3)
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
         self.label_2 = QtGui.QLabel(self.zStackGroup)
         self.label_2.setObjectName(_fromUtf8("label_2"))

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>412</width>
-    <height>124</height>
+    <width>400</width>
+    <height>106</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -32,6 +32,12 @@
       <bool>false</bool>
      </property>
      <layout class="QGridLayout" name="gridLayout_2">
+      <property name="margin">
+       <number>3</number>
+      </property>
+      <property name="spacing">
+       <number>3</number>
+      </property>
       <item row="0" column="1">
        <widget class="SpinBox" name="intervalSpin">
         <property name="minimumSize">
@@ -91,6 +97,12 @@
       <bool>false</bool>
      </property>
      <layout class="QGridLayout" name="gridLayout">
+      <property name="margin">
+       <number>3</number>
+      </property>
+      <property name="spacing">
+       <number>3</number>
+      </property>
       <item row="0" column="0" rowspan="2">
        <widget class="QLabel" name="label_2">
         <property name="text">

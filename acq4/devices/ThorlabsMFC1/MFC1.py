@@ -110,6 +110,9 @@ class ThorlabsMFC1(Stage):
     def stop(self):
         self.dev.stop()
 
+    def setHolding(self, hold):
+        self.dev.set_holding(hold)
+
 
 class MonitorThread(Thread):
     def __init__(self, dev):
@@ -208,6 +211,15 @@ class MFC1MoveFuture(MoveFuture):
         """Return True if the move is complete.
         """
         return self._getStatus()['status'] in ('interrupted', 'failed', 'done')
+
+    def errorMessage(self):
+        stat = self._getStatus()
+        if stat['status'] == 'interrupted':
+            return "move was interrupted"
+        elif stat['status'] == 'failed':
+            return "did not reach the expected position (%s != %s)" % (stat['final_pos'], stat['target'])
+        else:
+            return None
 
     def _getStatus(self):
         # check status of move unless we already know it is complete.

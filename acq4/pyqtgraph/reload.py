@@ -176,7 +176,14 @@ def updateClass(old, new, debug):
                 ## This seems to work. Is there any reason not to?
                 ## Note that every time we reload, the class hierarchy becomes more complex.
                 ## (and I presume this may slow things down?)
-                ref.__bases__ = ref.__bases__[:ind] + (new,old) + ref.__bases__[ind+1:]
+                newBases = ref.__bases__[:ind] + (new,old) + ref.__bases__[ind+1:]
+                try:
+                    ref.__bases__ = newBases
+                except TypeError:
+                    print("    Error setting bases for class %s" % ref)
+                    print("        old bases: %s" % ref.__bases__)
+                    print("        new bases: %s" % newBases)
+                    raise
                 if debug:
                     print("    Changed superclass for %s" % safeStr(ref))
             #else:

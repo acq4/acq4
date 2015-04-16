@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
+import os, pickle 
+import numpy as np
+import acq4.pyqtgraph as pg
 from acq4.devices.Device import *
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.Manager import logMsg, logExc
 from acq4.util.Mutex import Mutex
-from DeviceGui import ScannerDeviceGui
-from TaskGui import ScannerTaskGui
-from .scan_program import ScanProgram 
-import os, pickle 
-import acq4.util.ptime as ptime
 from acq4.util.debug import *
-import numpy as np
-import acq4.pyqtgraph as pg
+import acq4.util.ptime as ptime
 from acq4.util.HelpfulException import HelpfulException
+from ..Stage import Stage
+from .DeviceGui import ScannerDeviceGui
+from .TaskGui import ScannerTaskGui
+from .scan_program import ScanProgram 
 
 class Scanner(Device, OptomechDevice):
     
@@ -228,7 +229,24 @@ class Scanner(Device, OptomechDevice):
             if self.devGui is None:
                 self.devGui = ScannerDeviceGui(self, win)
             return self.devGui
-    
+
+    def getFocusDepth(self):
+        return self.mapToGlobal([0, 0, 0])[2]
+
+    def setFocusDepth(self, depth, speed='slow'):
+        dev = self.getFocusDevice()
+        dz = depth - self.getFocusDepth()
+        dpos = dev.globalPosition()
+        return dev.moveToGlobal([dpos[0], dpos[1], dpos[2]+dz], speed)
+
+    def getFocusDevice(self):
+        dev = self.parentDevice()
+        while dev is not None:
+            if isinstance(dev, Stage) and dev.capabilities()['setPos'][2]:
+                return dev
+            dev = dev.parentDevice()
+        raise Exception("Device is not connected to a focus controller.")
+
 
 class ScannerTask(DeviceTask):
     """

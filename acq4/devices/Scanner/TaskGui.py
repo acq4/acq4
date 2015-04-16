@@ -167,7 +167,6 @@ class ScannerTaskGui(TaskGui):
 
         b = self.haveCalibration and self.ui.enableScanProgCheck.isChecked()
         self.scanProgram.setVisible(b)
-
         
     def camModChanged(self):
         camMod = self.cameraModule()

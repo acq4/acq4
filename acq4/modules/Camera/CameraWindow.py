@@ -16,6 +16,7 @@ from .sequencerTemplate import Ui_Form as SequencerTemplate
 from acq4.util.metaarray import MetaArray
 from acq4.pyqtgraph import ptime
 
+
 class CameraWindow(QtGui.QMainWindow):
     
     sigInterfaceAdded = QtCore.Signal(object, object)
@@ -537,6 +538,7 @@ class ImageSequencer(QtGui.QWidget):
             if imager is not None:
                 imager.sigNewFrame.connect(self.newFrame)
             self.imager = imager
+        self.updateStatus()
 
     def makeProtocol(self):
         """Build a description of everything that needs to be done during the sequence.
@@ -551,18 +553,18 @@ class ImageSequencer(QtGui.QWidget):
             end = self.ui.zEndSpin.value()
             spacing = self.ui.zSpacingSpin.value()
             if end < start:
-                prot['zValues'] = np.arange(start, end, -spacing)
+                prot['zStackValues'] = np.arange(start, end, -spacing)
             else:
-                prot['zValues'] = np.arange(start, end, spacing)
-            prot['zFrames'] = len(prot['zValues'])
+                prot['zStackValues'] = np.arange(start, end, spacing)
         else:
-            prot['zFrames'] = 1
+            prot['zStackValues'] = [None]
 
         if prot['timelapse']:
-            prot['iterations'] = self.ui.iterationsSpin.value()
-            prot['interval'] = self.ui.intervalSpin.value()
+            prot['timelapseCount'] = self.ui.iterationsSpin.value()
+            prot['timelapseInterval'] = self.ui.intervalSpin.value()
         else:
-            prot['iterations'] = 1
+            prot['timelapseCount'] = 1
+            prot['timelapseInterval'] = 0
 
         return prot
 
@@ -576,17 +578,22 @@ class ImageSequencer(QtGui.QWidget):
         self.thread.pause(b)
 
     def start(self):
-        if self.selectedDevice() is None:
-            raise Exception("No imaging device selected.")
-        prot = self.makeProtocol()
-        self.currentProtocol = prot
-        dh = Manager.getManager().getCurrentDir().getDir('ImageSequence', create=True, autoIncrement=True)
-        prot['storageDir'] = dh
-        self.ui.startBtn.setText('Stop')
-        self.ui.zStackGroup.setEnabled(False)
-        self.ui.timelapseGroup.setEnabled(False)
-        self.ui.deviceCombo.setEnabled(False)
-        self.thread.start(prot)
+        try:
+            if self.selectedDevice() is None:
+                raise Exception("No imaging device selected.")
+            prot = self.makeProtocol()
+            self.currentProtocol = prot
+            dh = Manager.getManager().getCurrentDir().getDir('ImageSequence', create=True, autoIncrement=True)
+            dh.setInfo(prot)
+            prot['storageDir'] = dh
+            self.ui.startBtn.setText('Stop')
+            self.ui.zStackGroup.setEnabled(False)
+            self.ui.timelapseGroup.setEnabled(False)
+            self.ui.deviceCombo.setEnabled(False)
+            self.thread.start(prot)
+        except Exception:
+            self.threadStopped()
+            raise
 
     def stop(self):
         self.thread.stop()
@@ -597,10 +604,25 @@ class ImageSequencer(QtGui.QWidget):
         self.ui.zStackGroup.setEnabled(True)
         self.ui.timelapseGroup.setEnabled(True)
         self.ui.deviceCombo.setEnabled(True)
-        self.ui.statusLabel.setText("[ stopped ]")
+        self.updateStatus()
 
     def threadMessage(self, message):
         self.ui.statusLabel.setText(message)
+
+    def updateStatus(self):
+        prot = self.makeProtocol()
+        if prot['timelapse']:
+            itermsg = 'iter=0/%d' % prot['timelapseCount']
+        else:
+            itermsg = 'iter=0'
+
+        if prot['zStack']:
+            depthmsg = 'depth=0/%d' % (len(prot['zStackValues']))
+        else:
+            depthmsg = ''
+
+        msg = '[ stopped  %s %s ]' % (itermsg, depthmsg)
+        self.ui.statusLabel.setText(msg)
 
     def newFrame(self, iface, frame):
         self.thread.newFrame(frame)
@@ -639,26 +661,81 @@ class SequencerThread(Thread):
             self._frame = frame
 
     def run(self):
-        prot = self.prot
-        maxIter = prot['iterations']
-        interval = prot['interval']
-        i = 0
-        while maxIter == 0 or i < maxIter:
-            start = time.time()
-            frame = self.getFrame()
-            self.recordFrame(frame, i)
-            if maxIter == 0:
-                self.sigMessage.emit('[ running  iter=%d ]' % (i+1))
-            else:
-                self.sigMessage.emit('[ running  iter=%d/%s ]' % (i+1, maxIter))
-            i += 1
+        try:
+            self.runSequence()
+        except Exception as e:
+            if e.message == 'stopped':
+                return
+            raise
 
+    def runSequence(self):
+        prot = self.prot
+        maxIter = prot['timelapseCount']
+        interval = prot['timelapseInterval']
+
+        depths = prot['zStackValues']
+        iter = 0
+        while True:
+            start = time.time()
+
+            self.holdImagerFocus(True)
             try:
-                self.sleep(until=start+interval)
-            except Exception as e:
-                if e.message == 'stopped':
-                    return
-                raise
+                for depthIndex in range(len(depths)):
+                    self.setFocusDepth(depthIndex, depths)
+
+                    frame = self.getFrame()
+                    self.recordFrame(frame, iter, depthIndex)
+
+                    self.sendStatusMessage(iter, maxIter, depthIndex, depths)
+
+                    # check for stop / pause
+                    self.sleep(until=0)
+
+            finally:
+                self.holdImagerFocus(False)
+
+            iter += 1
+            if maxIter == 0 or iter >= maxIter:
+                break
+
+            self.sleep(until=start+interval)
+
+    def sendStatusMessage(self, iter, maxIter, depthIndex, depths):
+        if maxIter == 0:
+            itermsg = 'iter=%d' % (iter+1)
+        else:
+            itermsg = 'iter=%d/%s' % (iter+1, maxIter)
+
+        if depthIndex is None:
+            depthmsg = ''
+        else:
+            depthstr = pg.siFormat(depths[depthIndex], suffix='m')
+            depthmsg = 'depth=%s %d/%d' % (depthstr, depthIndex+1, len(depths))
+
+        self.sigMessage.emit('[ running  %s  %s ]' % (itermsg, depthmsg))
+
+    def setFocusDepth(self, depthIndex, depths):
+        imager = self.prot['imager']
+        depth = depths[depthIndex]
+        if depth is None:
+            return
+
+        dz = depth - imager.getFocusDepth()
+
+        # Avoid hysteresis:
+        if depths[0] > depths[-1] and dz > 0:
+            # stack goes downward
+            imager.setFocusDepth(depth + 20e-6).wait()
+        elif depths[0] < depths[-1] and dz < 0:
+            # stack goes upward
+            imager.setFocusDepth(depth - 20e-6).wait()
+
+        imager.setFocusDepth(depth).wait()
+
+    def holdImagerFocus(self, hold):
+        """Tell the focus controller to lock or unlock.
+        """
+        imager = self.prot['imager'].setFocusHolding(hold)
 
     def getFrame(self):
         # request next frame
@@ -672,10 +749,10 @@ class SequencerThread(Thread):
             self._frame = None
         return frame
 
-    def recordFrame(self, frame, iter):
+    def recordFrame(self, frame, iter, depthIndex):
         # Handle new frame
         dh = self.prot['storageDir']
-        name = 'image_%03d' % iter
+        name = 'image_%03d_%03d' % (iter, depthIndex)
 
         arrayInfo = [
             {'name': 'X'},
@@ -693,11 +770,13 @@ class SequencerThread(Thread):
                     raise Exception("stopped")
                 paused = self._paused
                 frame = self._frame
-            if not paused:
+            if paused:
+                wait = 0.1
+            else:
                 if until == 'frame':
-                    wait = 0.1
                     if frame is not None:
                         return
+                    wait = 0.1
                 else:
                     now = ptime.time()
                     wait = until - now

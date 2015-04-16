@@ -54,6 +54,7 @@ class MFC1(object):
             microstep_resolution=5,
             fullstep_threshold=0,
             stall_detection_threshold=0,
+            freewheeling=1,
         )
         for k, v in kwds.items():
             if k not in params:
@@ -174,7 +175,7 @@ class MFC1(object):
         If the motor is already moving, then update the target position.
         
         Return an object that may be used to check 
-        whether the move is complete.
+        whether the move is complete (see move_status).
         """
         id = self._last_move_id
 
@@ -206,10 +207,12 @@ class MFC1(object):
         """
         stat = self._move_status[id]
         if stat['status'] == 'moving' and not self.program_running():
-            if abs(self.position() - stat['target']) <= 1:
+            pos = self.position()
+            if abs(pos - stat['target']) <= 2:  # can we get the tolerance lower?
                 stat['status'] = 'done'
             else:
                 stat['status'] = 'failed'
+                stat['final_pos'] = pos
 
         if clear and stat['status'] != 'moving':
             del self._move_status[id]
@@ -248,3 +251,12 @@ class MFC1(object):
 
     def set_encoder(self, x):
         self.mcm['encoder_position'] = x
+
+    def set_holding(self, hold):
+        """Set whether the motor should hold its position (True) or should
+        power down and allow freewheeling (False).
+        """
+        if hold:
+            self.mcm['standby_current'] = self.mcm['maximum_current']
+        else:
+            self.mcm['standby_current'] = 0
