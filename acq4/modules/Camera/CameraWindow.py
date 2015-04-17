@@ -775,14 +775,29 @@ class SequencerThread(Thread):
     def recordFrame(self, frame, iter, depthIndex):
         # Handle new frame
         dh = self.prot['storageDir']
-        name = 'image_%03d_%03d' % (iter, depthIndex)
+        name = 'image_%03d' % iter
 
-        arrayInfo = [
-            {'name': 'X'},
-            {'name': 'Y'}
-        ]
-        data = MetaArray(frame.getImage(), info=arrayInfo)
-        dh.writeFile(data, name, info=frame.info()) # appendAxis='Depth')
+        if self.prot['zStack']:
+            # start or append focus stack
+            arrayInfo = [
+                {'name': 'Depth', 'values': [self.prot['zStackValues'][depthIndex]]},
+                {'name': 'X'},
+                {'name': 'Y'}
+            ]
+            data = MetaArray(frame.getImage()[np.newaxis, ...], info=arrayInfo)
+            if depthIndex == 0:
+                self.currentDepthStack = dh.writeFile(data, name, info=frame.info(), appendAxis='Depth')
+            else:
+                data.write(self.currentDepthStack.name(), appendAxis='Depth')
+
+        else:
+            # record single-frame image
+            arrayInfo = [
+                {'name': 'X'},
+                {'name': 'Y'}
+            ]
+            data = MetaArray(frame.getImage(), info=arrayInfo)
+            dh.writeFile(data, name, info=frame.info()) # appendAxis='Depth')
 
     def sleep(self, until):
         # Wait until some event occurs
