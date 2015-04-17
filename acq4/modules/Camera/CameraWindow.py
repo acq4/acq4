@@ -711,7 +711,7 @@ class SequencerThread(Thread):
                             break
                         except RuntimeError:
                             if i == 4:
-                                raise
+                                print "Did not reach focus after 5 iterations (%g != %g)" % (self.prot['imager'].getDevice().getFocusDepth(), depths[depthIndex])
 
                     frame = self.getFrame()
                     self.recordFrame(frame, iter, depthIndex)
@@ -774,6 +774,9 @@ class SequencerThread(Thread):
     def getFrame(self):
         # request next frame
         imager = self.prot['imager']
+        with self.lock:
+            # clear out any previously received frames
+            self._frame = None
         imager.takeImage(closeShutter=False)   # we'll handle the shutter elsewhere
 
         # wait for frame to arrive
