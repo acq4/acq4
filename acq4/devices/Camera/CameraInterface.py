@@ -29,7 +29,7 @@ class CameraInterface(CameraModuleInterface):
     sigNewFrame = QtCore.Signal(object, object)  # self, frame
     
     def __init__(self, camera, module):
-        CameraModuleInterface.__init__(self, module)
+        CameraModuleInterface.__init__(self, camera, module)
 
         self.module = module
         self.view = module.getView()

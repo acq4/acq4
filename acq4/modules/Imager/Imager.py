@@ -803,7 +803,25 @@ class Imager(Module):
         else:
             self.param['Scan Properties', 'Wavelength'] = 0.0
             self.param['Scan Properties', 'Power'] = 0.0
-         
+
+    def openShutter(self, open):
+        if self.laserDev is not None and self.laserDev.hasShutter:
+            if open:
+                self.laserDev.openShutter()
+            else:
+                self.laserDev.closeShutter()
+
+    def getFocusDepth(self):
+        return self.scannerDev.getFocusDepth()
+
+    def setFocusDepth(self, depth):
+        return self.scannerDev.setFocusDepth(depth)
+
+    def setFocusHolding(self, hold):
+        dev = self.scannerDev.getFocusDevice()
+        if hasattr(dev, 'setHolding'):
+            dev.setHolding(hold)
+        
     def takeImage(self, allowBlanking=True):
         """
         Take an image using the scanning system and PMT, and return with the data.
@@ -1027,7 +1045,7 @@ class ImagerCamModInterface(CameraModuleInterface):
     def __init__(self, imager, mod):
         self.imager = imager
 
-        CameraModuleInterface.__init__(self, mod)
+        CameraModuleInterface.__init__(self, imager, mod)
 
         mod.window().addItem(imager.imageItem)
 
@@ -1037,25 +1055,14 @@ class ImagerCamModInterface(CameraModuleInterface):
         gitems = [self.getImageItem()] + list(self.imager.objectiveROImap.values())
         return gitems
 
-    def takeImage(self):
-        self.imager.imagingThread.takeFrame()
+    def takeImage(self, closeShutter=True):
+        self.imager.imagingThread.takeFrame(closeShutter=closeShutter)
 
     def getImageItem(self):
         return self.imager.imageItem
 
     def newFrame(self, frame):
         self.sigNewFrame.emit(self, frame)
-
-    def getFocusDepth(self):
-        return self.imager.scannerDev.getFocusDepth()
-
-    def setFocusDepth(self, depth):
-        return self.imager.scannerDev.setFocusDepth(depth)
-
-    def setFocusHolding(self, hold):
-        dev = self.imager.scannerDev.getFocusDevice()
-        if hasattr(dev, 'setHolding'):
-            dev.setHolding(hold)
 
 
 class ImagingFrame(imaging.Frame):
@@ -1103,6 +1110,7 @@ class ImagingThread(Thread):
         Thread.__init__(self)
         self._abort = False
         self._video = True
+        self._closeShutter = True  # whether to close shutter at end of acquisition
         self.lock = Mutex(recursive=True)
         self.manager = acq4.Manager.getManager()
         self.laserDev = laserDev
@@ -1125,6 +1133,7 @@ class ImagingThread(Thread):
         with self.lock:
             self._abort = False
             self._video = True
+            self._closeShutter = True
         if not self.isRunning():
             self.start()
 
@@ -1132,10 +1141,11 @@ class ImagingThread(Thread):
         with self.lock:
             self._video = False
 
-    def takeFrame(self):
+    def takeFrame(self, closeShutter=True):
         with self.lock:
             self._abort = False
             self._video = False
+            self._closeShutter = closeShutter
         if self.isRunning():
             self.wait()
         self.start()
@@ -1144,7 +1154,8 @@ class ImagingThread(Thread):
         try:
             with self.lock:
                 videoRequested = self._video
-            if videoRequested and self.laserDev is not None and self.laserDev.hasShutter:
+                closeShutter = self._closeShutter
+            if (videoRequested or not closeShutter) and self.laserDev is not None and self.laserDev.hasShutter:
                 # force shutter to stay open for the duration of the acquisition
                 self.laserDev.openShutter()
 
@@ -1165,7 +1176,7 @@ class ImagingThread(Thread):
         finally:
             if videoRequested:
                 self.sigVideoStopped.emit()
-            if self.laserDev is not None and self.laserDev.hasShutter:
+            if closeShutter and self.laserDev is not None and self.laserDev.hasShutter:
                 self.laserDev.closeShutter()
 
     def acquireFrame(self, allowBlanking=True):

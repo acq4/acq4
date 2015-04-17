@@ -300,10 +300,14 @@ class CameraModuleInterface(QtCore.QObject):
     # indicates this is an interface to an imaging device. 
     canImage = True
 
-    def __init__(self, mod):
+    def __init__(self, dev, mod):
         QtCore.QObject.__init__(self)
         self.mod = weakref.ref(mod)
+        self.dev = weakref.ref(dev)
         self._hasQuit = False
+
+    def getDevice(self):
+        return self.dev()
 
     def graphicsItems(self):
         """Return a list of all graphics items displayed by this interface.
@@ -525,7 +529,7 @@ class ImageSequencer(QtGui.QWidget):
                 items.append(k)
         self.ui.deviceCombo.setItems(items)
 
-    def selectedDevice(self):
+    def selectedImager(self):
         if self.ui.deviceCombo.currentIndex() < 1:
             return None
         else:
@@ -536,7 +540,7 @@ class ImageSequencer(QtGui.QWidget):
         if name == 'deviceCombo':
             if self.imager is not None:
                 pg.disconnect(self.imager.sigNewFrame, self.newFrame)
-            imager = self.selectedDevice()
+            imager = self.selectedImager()
             if imager is not None:
                 imager.sigNewFrame.connect(self.newFrame)
             self.imager = imager
@@ -546,7 +550,7 @@ class ImageSequencer(QtGui.QWidget):
         """Build a description of everything that needs to be done during the sequence.
         """
         prot = {
-            'imager': self.selectedDevice(),
+            'imager': self.selectedImager(),
             'zStack': self.ui.zStackGroup.isChecked(),
             'timelapse': self.ui.timelapseGroup.isChecked(),
         }
@@ -581,7 +585,7 @@ class ImageSequencer(QtGui.QWidget):
 
     def start(self):
         try:
-            if self.selectedDevice() is None:
+            if self.selectedImager() is None:
                 raise Exception("No imaging device selected.")
             prot = self.makeProtocol()
             self.currentProtocol = prot
@@ -632,15 +636,17 @@ class ImageSequencer(QtGui.QWidget):
         self.thread.newFrame(frame)
 
     def setStartClicked(self):
-        dev = self.selectedDevice()
+        dev = self.selectedImager()
         if dev is None:
             raise Exception("Must select an imaging device first.")
+        dev = dev.getDevice()
         self.ui.zStartSpin.setValue(dev.getFocusDepth())
 
     def setEndClicked(self):
-        dev = self.selectedDevice()
+        dev = self.selectedImager()
         if dev is None:
             raise Exception("Must select an imaging device first.")
+        dev = dev.getDevice()
         self.ui.zEndSpin.setValue(dev.getFocusDepth())
 
 
@@ -695,6 +701,7 @@ class SequencerThread(Thread):
             start = time.time()
 
             self.holdImagerFocus(True)
+            self.openShutter(True)   # don't toggle shutter between stack frames
             try:
                 for depthIndex in range(len(depths)):
                     # Focus motor is unreliable; ask a few times if needed.
@@ -715,6 +722,7 @@ class SequencerThread(Thread):
                     self.sleep(until=0)
 
             finally:
+                self.openShutter(False)
                 self.holdImagerFocus(False)
 
             iter += 1
@@ -738,7 +746,7 @@ class SequencerThread(Thread):
         self.sigMessage.emit('[ running  %s  %s ]' % (itermsg, depthmsg))
 
     def setFocusDepth(self, depthIndex, depths):
-        imager = self.prot['imager']
+        imager = self.prot['imager'].getDevice()
         depth = depths[depthIndex]
         if depth is None:
             return
@@ -758,12 +766,15 @@ class SequencerThread(Thread):
     def holdImagerFocus(self, hold):
         """Tell the focus controller to lock or unlock.
         """
-        imager = self.prot['imager'].setFocusHolding(hold)
+        imager = self.prot['imager'].getDevice().setFocusHolding(hold)
+
+    def openShutter(self, open):
+        imager = self.prot['imager'].getDevice().openShutter(open)
 
     def getFrame(self):
         # request next frame
         imager = self.prot['imager']
-        imager.takeImage()
+        imager.takeImage(closeShutter=False)   # we'll handle the shutter elsewhere
 
         # wait for frame to arrive
         self.sleep(until='frame')
@@ -797,7 +808,7 @@ class SequencerThread(Thread):
                 {'name': 'Y'}
             ]
             data = MetaArray(frame.getImage(), info=arrayInfo)
-            dh.writeFile(data, name, info=frame.info()) # appendAxis='Depth')
+            dh.writeFile(data, name, info=frame.info())
 
     def sleep(self, until):
         # Wait until some event occurs

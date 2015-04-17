@@ -181,8 +181,8 @@ def updateClass(old, new, debug):
                     ref.__bases__ = newBases
                 except TypeError:
                     print("    Error setting bases for class %s" % ref)
-                    print("        old bases: %s" % ref.__bases__)
-                    print("        new bases: %s" % newBases)
+                    print("        old bases: %s" % repr(ref.__bases__))
+                    print("        new bases: %s" % repr(newBases))
                     raise
                 if debug:
                     print("    Changed superclass for %s" % safeStr(ref))
