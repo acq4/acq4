@@ -208,7 +208,7 @@ class MFC1(object):
         stat = self._move_status[id]
         if stat['status'] == 'moving' and not self.program_running():
             pos = self.position()
-            if abs(pos - stat['target']) <= 2:  # can we get the tolerance lower?
+            if abs(pos - stat['target']) <= 3:  # can we get the tolerance lower?
                 stat['status'] = 'done'
             else:
                 stat['status'] = 'failed'

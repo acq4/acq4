@@ -514,6 +514,8 @@ class ImageSequencer(QtGui.QWidget):
         self.thread.sigMessage.connect(self.threadMessage)
         self.ui.startBtn.clicked.connect(self.startClicked)
         self.ui.pauseBtn.clicked.connect(self.pauseClicked)
+        self.ui.setStartBtn.clicked.connect(self.setStartClicked)
+        self.ui.setEndBtn.clicked.connect(self.setEndClicked)
 
     def updateDeviceList(self):
         items = ['Select device..']
@@ -553,9 +555,9 @@ class ImageSequencer(QtGui.QWidget):
             end = self.ui.zEndSpin.value()
             spacing = self.ui.zSpacingSpin.value()
             if end < start:
-                prot['zStackValues'] = np.arange(start, end, -spacing)
+                prot['zStackValues'] = list(np.arange(start, end, -spacing))
             else:
-                prot['zStackValues'] = np.arange(start, end, spacing)
+                prot['zStackValues'] = list(np.arange(start, end, spacing))
         else:
             prot['zStackValues'] = [None]
 
@@ -584,7 +586,9 @@ class ImageSequencer(QtGui.QWidget):
             prot = self.makeProtocol()
             self.currentProtocol = prot
             dh = Manager.getManager().getCurrentDir().getDir('ImageSequence', create=True, autoIncrement=True)
-            dh.setInfo(prot)
+            dhinfo = prot.copy()
+            del dhinfo['imager']
+            dh.setInfo(dhinfo)
             prot['storageDir'] = dh
             self.ui.startBtn.setText('Stop')
             self.ui.zStackGroup.setEnabled(False)
@@ -626,6 +630,18 @@ class ImageSequencer(QtGui.QWidget):
 
     def newFrame(self, iface, frame):
         self.thread.newFrame(frame)
+
+    def setStartClicked(self):
+        dev = self.selectedDevice()
+        if dev is None:
+            raise Exception("Must select an imaging device first.")
+        self.ui.zStartSpin.setValue(dev.getFocusDepth())
+
+    def setEndClicked(self):
+        dev = self.selectedDevice()
+        if dev is None:
+            raise Exception("Must select an imaging device first.")
+        self.ui.zEndSpin.setValue(dev.getFocusDepth())
 
 
 class SequencerThread(Thread):
@@ -681,7 +697,14 @@ class SequencerThread(Thread):
             self.holdImagerFocus(True)
             try:
                 for depthIndex in range(len(depths)):
-                    self.setFocusDepth(depthIndex, depths)
+                    # Focus motor is unreliable; ask a few times if needed.
+                    for i in range(5):
+                        try:
+                            self.setFocusDepth(depthIndex, depths)
+                            break
+                        except RuntimeError:
+                            if i == 4:
+                                raise
 
                     frame = self.getFrame()
                     self.recordFrame(frame, iter, depthIndex)
