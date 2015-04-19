@@ -1,6 +1,5 @@
 import numpy as np
 import scipy.stats, scipy.optimize
-import imreg_dft  # FFT image registration by Chris Gohlke; available via pip
 import acq4.pyqtgraph as pg
 
 
@@ -10,6 +9,7 @@ class StageCalibration(object):
         self.framedelay = None
 
     def calibrate(self, camera):
+        import imreg_dft  # FFT image registration by Chris Gohlke; available via pip
         n = 300
         dx = 10e-6
 

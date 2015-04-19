@@ -15,7 +15,8 @@ def printExc(msg='', indent=4, prefix='|', msgType='error'):
     pgdebug.printExc(msg, indent, prefix)
     try:
         import acq4.Manager
-        acq4.Manager.logExc(msg=msg, msgType=msgType)
+        if hasattr(acq4, 'Manager'):
+            acq4.Manager.logExc(msg=msg, msgType=msgType)
     except Exception:
         pgdebug.printExc("[failed to log this error to manager]")
         
