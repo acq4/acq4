@@ -3,6 +3,7 @@ from acq4.devices.OptomechDevice import *
 from acq4.devices.Stage import Stage
 from deviceTemplate import Ui_Form
 from acq4.util.Mutex import Mutex
+from acq4.modules.Camera import CameraModuleInterface
 import acq4.pyqtgraph as pg
 import collections
 
@@ -391,13 +392,13 @@ class ScopeGUI(QtGui.QWidget):
             ss.setValue(obj.scale().x())
 
 
-class ScopeCameraModInterface(QtCore.QObject):
+class ScopeCameraModInterface(CameraModuleInterface):
     """Implements focus control user interface for use in the camera module.
     """
+    canImage = False
+
     def __init__(self, dev, mod):
-        QtCore.QObject.__init__(self)
-        self.dev = dev  # microscope device
-        self.mod = mod  # camera module
+        CameraModuleInterface.__init__(self, dev, mod)
 
         self.ctrl = QtGui.QWidget()
         self.layout = QtGui.QGridLayout()
@@ -416,22 +417,22 @@ class ScopeCameraModInterface(QtCore.QObject):
         self.layout.addWidget(self.setSurfaceBtn, 0, 0)
         self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
 
-        self.dev.sigGlobalTransformChanged.connect(self.transformChanged)
+        dev.sigGlobalTransformChanged.connect(self.transformChanged)
+        dev.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
         self.movableFocusLine.sigDragged.connect(self.focusDragged)
-        self.dev.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
 
         self.transformChanged()
 
     def setSurfaceClicked(self):
-        focus = self.dev.getFocusDepth()
-        self.dev.setSurfaceDepth(focus)
+        focus = self.getDevice().getFocusDepth()
+        self.getDevice().setSurfaceDepth(focus)
 
     def surfaceDepthChanged(self, depth):
         self.surfaceLine.setValue(depth)
 
     def transformChanged(self):
         prof = pg.debug.Profiler()
-        focus = self.dev.getFocusDepth()
+        focus = self.getDevice().getFocusDepth()
         prof('1')
         self.focusLine.setValue(focus)
         prof('2')
@@ -439,7 +440,7 @@ class ScopeCameraModInterface(QtCore.QObject):
         # Compute the target focal plane.
         # This is a little tricky because the objective might have an offset+scale relative
         # to the focus device.
-        fd = self.dev.focusDevice()
+        fd = self.getDevice().focusDevice()
         prof('3')
         tpos = fd.globalTargetPosition()
         prof('4')
@@ -451,7 +452,7 @@ class ScopeCameraModInterface(QtCore.QObject):
         prof('7')
 
     def focusDragged(self):
-        self.dev.setFocusDepth(self.movableFocusLine.value())
+        self.getDevice().setFocusDepth(self.movableFocusLine.value())
 
     def controlWidget(self):
         return self.ctrl

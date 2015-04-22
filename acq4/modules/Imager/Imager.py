@@ -36,6 +36,7 @@ import acq4.util.InterfaceCombo as InterfaceCombo
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Scanner.scan_program import ScanProgram
 from acq4.devices.Scanner.scan_program.rect import RectScan
+from acq4.modules.Camera import CameraModuleInterface
 from acq4.pyqtgraph import parametertree as PT
 from acq4.util import metaarray as MA
 from acq4.util.Mutex import Mutex
@@ -47,17 +48,17 @@ from .imagerTemplate import Ui_Form
 
 # Create some useful configurations for the user.
 VideoModes = OrderedDict([
-    ('256x1', {
+    ('256x3', {
         'Average': 1,
-        'Downsample': 1,
+        'Downsample': 3,
         'Image Width': 256,
         'Image Height': 256,
         'Blank Screen': False,
         'Bidirectional': True,
     }),
-    ('128x2', {
+    ('128x4', {
         'Average': 1,
-        'Downsample': 2,
+        'Downsample': 4,
         'Image Width': 128 ,
         'Image Height': 128,
         'Blank Screen': False,
@@ -283,16 +284,8 @@ class Imager(Module):
         self.storedROI = None
         self.currentRoi = None
         self.ignoreRoiChange = False
-        self.tileRoi = None
-        self.tileRoiVisible = False
-        self.tilexPos = 0.
-        self.tileyPos = 0.
-        self.tileWidth = 2e-4
-        self.tileHeight = 2e-4
-        self.stopFlag = False
         self.lastFrame = None
 
-        self.dwellTime = 0. # "pixel dwell time" computed from scan time and points.
         self.fieldSize = 63.0*120e-6 # field size for 63x, will be scaled for others
 
         self.scanVoltageCache = None  # cached scan protocol computed by generateScanProtocol
@@ -320,8 +313,9 @@ class Imager(Module):
         self.imagingThread.sigVideoStopped.connect(self.videoStopped)
         self.imagingThread.sigAborted.connect(self.imagingAborted)
 
-        
-        self.cameraModule.window().addItem(self.imageItem)
+        # connect user interface to camera module
+        self.camModInterface = ImagerCamModInterface(self, self.cameraModule)
+        self.cameraModule.window().addInterface(self.name, self.camModInterface)
 
         # find first scope device that is parent of scanner
         dev = self.scannerDev
@@ -370,7 +364,7 @@ class Imager(Module):
         self.param = PT.Parameter(name = 'param', children=[
             dict(name='Scan Control', type='group', children=[
                 dict(name='Pockels', type='float', value=0.03, suffix='V', step=0.005, limits=[0, 1.5], siPrefix=True),
-                dict(name='Sample Rate', type='int', value=1.0e6, suffix='Hz', dec=True, minStep=100., step=0.5, limits=[10e3, 50e6], siPrefix=True),
+                dict(name='Sample Rate', type='int', value=2.0e6, suffix='Hz', dec=True, minStep=100., step=0.5, limits=[10e3, 50e6], siPrefix=True),
                 dict(name='Downsample', type='int', value=1, limits=[1,None]),
                 dict(name='Average', type='int', value=1, limits=[1,100]),
                 dict(name='Blank Screen', type='bool', value=True),
@@ -442,20 +436,21 @@ class Imager(Module):
 
     def quit(self):
         self.abortTask()
-        if self.imageItem is not None and self.imageItem.scene() is not None:
-            self.imageItem.scene().removeItem(self.imageItem)
-        self.imageItem = None
-        for obj,item in self.objectiveROImap.items(): # remove the ROI's for all objectives.
-            try:
-                if item.scene() is not None:
-                    item.scene().removeItem(item)
-            except:
-                pass
-        if self.tileRoi is not None:
-            if self.tileRoi.scene() is not None:
-                self.tileRoi.scene().removeItem(self.tileRoi)
-            self.tileRoi = None
+        # if self.imageItem is not None and self.imageItem.scene() is not None:
+        #     self.imageItem.scene().removeItem(self.imageItem)
+        # for obj,item in self.objectiveROImap.items(): # remove the ROI's for all objectives.
+        #     try:
+        #         if item.scene() is not None:
+        #             item.scene().removeItem(item)
+        #     except:
+        #         pass
+        # if self.tileRoi is not None:
+        #     if self.tileRoi.scene() is not None:
+        #         self.tileRoi.scene().removeItem(self.tileRoi)
+        #     self.tileRoi = None
+        self.camModInterface.quit()
         self.imagingCtrl.quit()
+        self.imageItem = None
         Module.quit(self)
 
     def abortTask(self):
@@ -808,7 +803,25 @@ class Imager(Module):
         else:
             self.param['Scan Properties', 'Wavelength'] = 0.0
             self.param['Scan Properties', 'Power'] = 0.0
-         
+
+    def openShutter(self, open):
+        if self.laserDev is not None and self.laserDev.hasShutter:
+            if open:
+                self.laserDev.openShutter()
+            else:
+                self.laserDev.closeShutter()
+
+    def getFocusDepth(self):
+        return self.scannerDev.getFocusDepth()
+
+    def setFocusDepth(self, depth):
+        return self.scannerDev.setFocusDepth(depth)
+
+    def setFocusHolding(self, hold):
+        dev = self.scannerDev.getFocusDevice()
+        if hasattr(dev, 'setHolding'):
+            dev.setHolding(hold)
+        
     def takeImage(self, allowBlanking=True):
         """
         Take an image using the scanning system and PMT, and return with the data.
@@ -1026,6 +1039,31 @@ class Imager(Module):
     #     self.stopFlag = True
 
 
+class ImagerCamModInterface(CameraModuleInterface):
+    """For plugging in the 2p imager system to the camera module.
+    """
+    def __init__(self, imager, mod):
+        self.imager = imager
+
+        CameraModuleInterface.__init__(self, imager, mod)
+
+        mod.window().addItem(imager.imageItem)
+
+        self.imager.imagingThread.sigNewFrame.connect(self.newFrame)
+
+    def graphicsItems(self):
+        gitems = [self.getImageItem()] + list(self.imager.objectiveROImap.values())
+        return gitems
+
+    def takeImage(self, closeShutter=True):
+        self.imager.imagingThread.takeFrame(closeShutter=closeShutter)
+
+    def getImageItem(self):
+        return self.imager.imageItem
+
+    def newFrame(self, frame):
+        self.sigNewFrame.emit(self, frame)
+
 
 class ImagingFrame(imaging.Frame):
     """Represents a single collected image frame and its associated metadata."""
@@ -1072,6 +1110,7 @@ class ImagingThread(Thread):
         Thread.__init__(self)
         self._abort = False
         self._video = True
+        self._closeShutter = True  # whether to close shutter at end of acquisition
         self.lock = Mutex(recursive=True)
         self.manager = acq4.Manager.getManager()
         self.laserDev = laserDev
@@ -1094,6 +1133,7 @@ class ImagingThread(Thread):
         with self.lock:
             self._abort = False
             self._video = True
+            self._closeShutter = True
         if not self.isRunning():
             self.start()
 
@@ -1101,10 +1141,11 @@ class ImagingThread(Thread):
         with self.lock:
             self._video = False
 
-    def takeFrame(self):
+    def takeFrame(self, closeShutter=True):
         with self.lock:
             self._abort = False
             self._video = False
+            self._closeShutter = closeShutter
         if self.isRunning():
             self.wait()
         self.start()
@@ -1113,7 +1154,8 @@ class ImagingThread(Thread):
         try:
             with self.lock:
                 videoRequested = self._video
-            if videoRequested and self.laserDev is not None and self.laserDev.hasShutter:
+                closeShutter = self._closeShutter
+            if (videoRequested or not closeShutter) and self.laserDev is not None and self.laserDev.hasShutter:
                 # force shutter to stay open for the duration of the acquisition
                 self.laserDev.openShutter()
 
@@ -1134,7 +1176,7 @@ class ImagingThread(Thread):
         finally:
             if videoRequested:
                 self.sigVideoStopped.emit()
-            if self.laserDev is not None and self.laserDev.hasShutter:
+            if closeShutter and self.laserDev is not None and self.laserDev.hasShutter:
                 self.laserDev.closeShutter()
 
     def acquireFrame(self, allowBlanking=True):

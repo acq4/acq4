@@ -6,6 +6,7 @@ import acq4.pyqtgraph as pg
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage
+from acq4.modules.Camera import CameraModuleInterface
 from .cameraModTemplate import Ui_Form as CamModTemplate
 
 """
@@ -284,20 +285,20 @@ class Manipulator(Device, OptomechDevice):
         return self._moveToGlobal(self.mapToGlobal(pos), speed, linear=linear)
 
 
-class ManipulatorCamModInterface(QtCore.QObject):
+class ManipulatorCamModInterface(CameraModuleInterface):
     """Implements user interface for manipulator.
     """
+    canImage = False
+
     def __init__(self, dev, mod):
-        QtCore.QObject.__init__(self)
-        self.dev = dev  # microscope device
-        self.mod = mod  # camera module
+        CameraModuleInterface.__init__(self, dev, mod)
         self._targetPos = None
 
         self.ui = CamModTemplate()
         self.ctrl = QtGui.QWidget()
         self.ui.setupUi(self.ctrl)
 
-        cal = self.dev._stageOrientation
+        cal = dev._stageOrientation
         self.calibrateAxis = Axis([0, 0], 0, inverty=cal['inverty'])
         self.calibrateAxis.setZValue(5000)
         mod.addItem(self.calibrateAxis)
@@ -315,12 +316,12 @@ class ManipulatorCamModInterface(QtCore.QObject):
         mod.getDepthView().addItem(self.depthTarget)
         self.depthTarget.setVisible(False)
 
-        self.depthArrow = pg.ArrowItem(angle=-self.dev.pitch * 180 / np.pi)
-        self.mod.getDepthView().addItem(self.depthArrow)
+        self.depthArrow = pg.ArrowItem(angle=-dev.pitch * 180 / np.pi)
+        mod.getDepthView().addItem(self.depthArrow)
 
         self.ui.setOrientationBtn.toggled.connect(self.setOrientationToggled)
-        self.mod.window().getView().scene().sigMouseClicked.connect(self.sceneMouseClicked)
-        self.dev.sigGlobalTransformChanged.connect(self.transformChanged)
+        mod.window().getView().scene().sigMouseClicked.connect(self.sceneMouseClicked)
+        dev.sigGlobalTransformChanged.connect(self.transformChanged)
         self.calibrateAxis.sigRegionChangeFinished.connect(self.calibrateAxisChanged)
         self.calibrateAxis.sigRegionChanged.connect(self.calibrateAxisChanging)
         self.ui.outBtn.clicked.connect(self.outClicked)
@@ -344,7 +345,7 @@ class ManipulatorCamModInterface(QtCore.QObject):
 
         if self.ui.setCenterBtn.isChecked():
             self.ui.setCenterBtn.setChecked(False)
-            pos = self.mod.getView().mapSceneToView(ev.scenePos())
+            pos = self.mod().getView().mapSceneToView(ev.scenePos())
             self.calibrateAxis.setPos(pos)
 
         elif self.ui.setTargetBtn.isChecked():
@@ -353,8 +354,8 @@ class ManipulatorCamModInterface(QtCore.QObject):
             self.ui.targetBtn.setEnabled(True)
             self.ui.standbyBtn.setEnabled(True)
             self.ui.setTargetBtn.setChecked(False)
-            pos = self.mod.getView().mapSceneToView(ev.scenePos())
-            z = self.dev.scopeDevice().getFocusDepth()
+            pos = self.mod().getView().mapSceneToView(ev.scenePos())
+            z = self.getDevice().scopeDevice().getFocusDepth()
             self.setTargetPos(pos, z)
 
     def setTargetPos(self, pos, z=None):
@@ -365,12 +366,13 @@ class ManipulatorCamModInterface(QtCore.QObject):
         self._targetPos = [pos.x(), pos.y(), z]
 
     def targetDragged(self):
-        z = self.dev.scopeDevice().getFocusDepth()
+        z = self.getDevice().scopeDevice().getFocusDepth()
         self.setTargetPos(self.target.pos(), z)
 
     def transformChanged(self):
-        pos = self.dev.mapToGlobal([0, 0, 0])
-        x = self.dev.mapToGlobal([1, 0, 0])
+        dev = self.getDevice()
+        pos = dev.mapToGlobal([0, 0, 0])
+        x = dev.mapToGlobal([1, 0, 0])
 
         p1 = pg.Point(x[:2])
         p2 = pg.Point(pos[:2])
@@ -404,17 +406,18 @@ class ManipulatorCamModInterface(QtCore.QObject):
         pos = self.calibrateAxis.pos()
         angle = self.calibrateAxis.angle()
         size = self.calibrateAxis.size()
-        z = self.dev.scopeDevice().getFocusDepth()
+        dev = self.getDevice()
+        z = dev.scopeDevice().getFocusDepth()
 
         # first orient the parent stage
-        self.dev.setStageOrientation(angle, size[1] < 0)
+        dev.setStageOrientation(angle, size[1] < 0)
 
         # next set our position offset
         pos = [pos.x(), pos.y(), z]
-        gpos = self.dev.mapFromGlobal(pos)
-        tr = self.dev.deviceTransform()
+        gpos = dev.mapFromGlobal(pos)
+        tr = dev.deviceTransform()
         tr.translate(*gpos)
-        self.dev.setDeviceTransform(tr)
+        dev.setDeviceTransform(tr)
 
     def controlWidget(self):
         return self.ctrl
@@ -429,10 +432,10 @@ class ManipulatorCamModInterface(QtCore.QObject):
                 scene.removeItem(item)
 
     def outClicked(self):
-        self.dev.goOut(self.selectedSpeed())
+        self.getDevice().goOut(self.selectedSpeed())
 
     def inClicked(self):
-        self.dev.goIn(self.selectedSpeed())
+        self.getDevice().goIn(self.selectedSpeed())
 
     def setTargetToggled(self, b):
         if b:
@@ -443,10 +446,10 @@ class ManipulatorCamModInterface(QtCore.QObject):
             self.ui.setTargetBtn.setChecked(False)
 
     def targetClicked(self):
-        self.dev.goTarget(self._targetPos, self.selectedSpeed())
+        self.getDevice().goTarget(self._targetPos, self.selectedSpeed())
 
     def standbyClicked(self):
-        self.dev.goStandby(self._targetPos, self.selectedSpeed())
+        self.getDevice().goStandby(self._targetPos, self.selectedSpeed())
 
 
 class Target(pg.GraphicsObject):

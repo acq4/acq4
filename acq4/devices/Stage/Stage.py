@@ -314,7 +314,7 @@ class MoveFuture(object):
         self.speed = speed
         self.targetPos = pos
         self.startPos = dev.getPosition()
-        
+
     def percentDone(self):
         """Return the percent of the move that has completed.
         
@@ -336,6 +336,12 @@ class MoveFuture(object):
         """Return True if the move has completed or was interrupted.
         """
         return self.percentDone() == 100 or self.wasInterrupted()
+
+    def errorMessage(self):
+        """Return a string description of the reason for a move failure,
+        or None if there was no failure (or if the reason is unknown).
+        """
+        return None
         
     def wait(self, timeout=None, updates=False):
         """Block until the move has completed, been interrupted, or the
@@ -354,8 +360,11 @@ class MoveFuture(object):
             else:
                 time.sleep(0.1)
         if not self.isDone() or self.wasInterrupted():
-            raise RuntimeError("Move did not complete.")
-
+            err = self.errorMessage()
+            if err is None:
+                raise RuntimeError("Move did not complete.")
+            else:
+                raise RuntimeError("Move did not complete: %s" % err)
 
 
 class StageInterface(QtGui.QWidget):
@@ -442,3 +451,15 @@ class StageInterface(QtGui.QWidget):
         else:
             limit[minmax] = None
         self.dev.setLimits(**{'xyz'[axis]: tuple(limit)})
+
+
+class StageHold(object):
+    def __init__(self, stage):
+        self.stage = stage
+
+    def __enter__(self):
+        self.stage.setHolding(True)
+        return self
+
+    def __exit__(self, *args):
+        self.stage.setHolding(False)

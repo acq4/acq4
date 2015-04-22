@@ -272,9 +272,9 @@ class TMCM140(SerialDevice):
         pnum = PARAMETERS[param]
         if pnum < 0:
             raise TypeError("Parameter %s is read-only." % param)
-        if pnum == PARAMETERS['maximum_current'] and value > 100:
+        if pnum in (PARAMETERS['maximum_current'], PARAMETERS['standby_current']) and value > 100:
             if kwds.get('force', False) is not True:
-                raise Exception("Refusing to set max_current > 100 (this can damage the motor). "
+                raise Exception("Refusing to set current > 100 (this can damage the motor). "
                                 "To override, use force=True.")
         if value == 'accum':
             self.command('aap', pnum, 0, 0)

@@ -4,6 +4,7 @@ acq4-0.9.3 (unreleased)
         Disabled HDF5 compression by default--lzf is not readable by most HDF5 libraries, and gzip is too slow. 
             (see the 'defaultCompression' config option).
     New Features:
+        Timelapse + z-stack in camera module
         Motorized focus control interface in camera module
         Support for tracking and controlling micromanipulators from camera module
         Spiral scanning for single-cell photostimulation

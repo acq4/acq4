@@ -215,3 +215,30 @@ class ComboBox(QtGui.QComboBox):
         QtGui.QComboBox.clear(self)
         self.itemsChanged()
         
+    def saveState(self):
+        ind = self.currentIndex()
+        data = self.itemData(ind)
+        #if not data.isValid():
+        if data is not None:
+            try:
+                if not data.isValid():
+                    data = None
+                else:
+                    data = data.toInt()[0]
+            except AttributeError:
+                pass
+        if data is None:
+            return asUnicode(self.itemText(ind))
+        else:
+            return data
+        
+    def restoreState(self, v):
+        if type(v) is int:
+            ind = self.findData(v)
+            if ind > -1:
+                self.setCurrentIndex(ind)
+                return
+        self.setCurrentIndex(self.findText(str(v)))
+
+    def widgetGroupInterface(self):
+        return (self.currentIndexChanged, self.saveState, self.restoreState)
