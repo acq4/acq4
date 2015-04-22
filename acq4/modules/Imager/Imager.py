@@ -48,17 +48,17 @@ from .imagerTemplate import Ui_Form
 
 # Create some useful configurations for the user.
 VideoModes = OrderedDict([
-    ('256x1', {
+    ('256x3', {
         'Average': 1,
-        'Downsample': 1,
+        'Downsample': 3,
         'Image Width': 256,
         'Image Height': 256,
         'Blank Screen': False,
         'Bidirectional': True,
     }),
-    ('128x2', {
+    ('128x4', {
         'Average': 1,
-        'Downsample': 2,
+        'Downsample': 4,
         'Image Width': 128 ,
         'Image Height': 128,
         'Blank Screen': False,
@@ -364,7 +364,7 @@ class Imager(Module):
         self.param = PT.Parameter(name = 'param', children=[
             dict(name='Scan Control', type='group', children=[
                 dict(name='Pockels', type='float', value=0.03, suffix='V', step=0.005, limits=[0, 1.5], siPrefix=True),
-                dict(name='Sample Rate', type='int', value=1.0e6, suffix='Hz', dec=True, minStep=100., step=0.5, limits=[10e3, 50e6], siPrefix=True),
+                dict(name='Sample Rate', type='int', value=2.0e6, suffix='Hz', dec=True, minStep=100., step=0.5, limits=[10e3, 50e6], siPrefix=True),
                 dict(name='Downsample', type='int', value=1, limits=[1,None]),
                 dict(name='Average', type='int', value=1, limits=[1,100]),
                 dict(name='Blank Screen', type='bool', value=True),

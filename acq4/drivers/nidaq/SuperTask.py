@@ -192,8 +192,13 @@ class SuperTask:
 
         for k in self.tasks:
             ## TODO: this must be skipped for the task which uses clkSource by default.
+            maxrate = self.tasks[k].GetSampClkMaxRate()
+            if rate > maxrate:
+                raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (int(rate), int(maxrate)))
+
             if k[1] != clkSource:
                 #print "%s CfgSampClkTiming(%s, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), clk, rate, nPts)
+
                 self.tasks[k].CfgSampClkTiming(clk, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
             else:
                 #print "%s CfgSampClkTiming('', %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
