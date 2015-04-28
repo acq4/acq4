@@ -488,11 +488,11 @@ def getCellType(dh):
 def file_cell_protocol(filename):
     """
     file_cell_protocol breaks the current filename down and returns a
-    tuple: (date, cell, protocol)
+    tuple: (date, sliceid, cell, proto, parent directory)
     last argument returned is the rest of the path...
     """
     (p0, proto) = os.path.split(filename)
     (p1, cell) = os.path.split(p0)
     (p2, sliceid) = os.path.split(p1)
-    (p3, date) = os.path.split(p2)
-    return date, sliceid, cell, proto, p3
+    (parentdir, date) = os.path.split(p2)
+    return date, sliceid, cell, proto, parentdir
