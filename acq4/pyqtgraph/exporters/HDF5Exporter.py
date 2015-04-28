@@ -41,19 +41,14 @@ class HDF5Exporter(Exporter):
         tlen = 0
         for i, c in enumerate(self.item.curves):
             d = c.getData()
-            if i > 0 and len(d[0]) < tlen:
-                continue
+            if i > 0 and len(d[0]) != tlen:
+                raise ValueError ("HDF5 Export requires all curves in plot to have same length")
             if appendAllX or i == 0:
                 data.append(d[0])
                 tlen = len(d[0])
             data.append(d[1])
-            print 'len(d): %d  for c = ' % len(d),
-            print c.objectName()
 
-        #print 'hdf5export data: ', fdata
-        #fdata = np.zeros((len(d)))
-        for i in range(len(data)):
-            print 'i %d: data: ', (i, len(data[i]))
+
         fdata = numpy.array(data).astype('double')
         dset = fd.create_dataset(dsname, data=fdata)
         fd.close()
