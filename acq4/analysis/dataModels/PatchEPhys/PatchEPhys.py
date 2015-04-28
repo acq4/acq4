@@ -283,15 +283,16 @@ def getClampMode(data_handle, dir_handle=None):
             mode = info['mode'] # if the mode is in the info (sometimes), return that
             return mode
         except KeyError:
-            if dir_handle is not None:
-                devs =  dir_handle.info()['devices'].keys()  # get devices in parent directory
-                for dev in devs:  # for all the devices
-                    if dev in deviceNames['Clamp']:  # are any clamps?
-                       # print 'device / keys: ', dev, dir_handle.info()['devices'][dev].keys()
-                        #print  'mode: ', dir_handle.info()['devices'][dev]['mode']
-                        return dir_handle.info()['devices'][dev]['mode']
-            else:
-                return 'vc'  # None  kludge to handle simulations, which don't seem to fully fill the structures.
+            raise KeyError('PatchEPhys, getClampMode: Cannot determine clamp mode for this data')
+            # if dir_handle is not None:
+            #     devs =  dir_handle.info()['devices'].keys()  # get devices in parent directory
+            #     for dev in devs:  # for all the devices
+            #         if dev in deviceNames['Clamp']:  # are any clamps?
+            #            # print 'device / keys: ', dev, dir_handle.info()['devices'][dev].keys()
+            #             #print  'mode: ', dir_handle.info()['devices'][dev]['mode']
+            #             return dir_handle.info()['devices'][dev]['mode']
+            # else:
+            #     return 'vc'  # None  kludge to handle simulations, which don't seem to fully fill the structures.
 
 def getClampHoldingLevel(data_handle):
     """Given a clamp file handle, return the holding level (voltage for VC, current for IC).
