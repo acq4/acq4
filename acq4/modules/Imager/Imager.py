@@ -231,10 +231,9 @@ class Imager(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config) 
         self.win = ImagerWindow(self) # make the main window - mostly to catch window close event...
-        self.ui = Ui_Form()
-        self.testMode = False # set to True to just display the scan signals
-        self.win.setWindowTitle('Multiphoton Imager V 1.03')
-        self.win.resize(1200, 900) # make the window big enough to use on a large monitor...
+        self.win.show()
+        self.win.setWindowTitle('Multiphoton Imager V 1.01')
+        self.win.resize(500, 900) # make the window big enough to use on a large monitor...
 
         self.w1 = QtGui.QSplitter() # divide l, r
         self.w1.setOrientation(QtCore.Qt.Horizontal)
@@ -255,7 +254,6 @@ class Imager(Module):
 
         # create the parameter tree for controlling device behavior
         self.tree = PT.ParameterTree()
-
         self.w2sl.addWidget(self.tree)
 
         # takes care of displaying image data, 
@@ -828,17 +826,7 @@ class Imager(Module):
         """
         Take an image using the scanning system and PMT, and return with the data.
         """
-
-        # first make sure laser information is updated on the module interface
-
-        self.updateLaserInfo()
-
-        # generate the scan protocol and task
-        prot = self.generateProtocol()
-        task = self.manager.createTask(prot)
-
-        # Blank screen and execute task
-
+        # Blank screen and start acquisition
         blank = allowBlanking and self.param['Scan Control', 'Blank Screen'] is True
         if blank:
             self.blanker.blank()

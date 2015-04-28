@@ -10,7 +10,6 @@ as it can be converted to/from a string using repr and eval.
 """
 
 import re, os, sys
-import gc
 from .pgcollections import OrderedDict
 GLOBAL_PATH = None # so not thread safe.
 from . import units
@@ -77,8 +76,6 @@ def appendConfigFile(data, fname):
     fd = open(fname, 'a')
     fd.write(s)
     fd.close()
-    del fd
-    gc.collect
 
 
 def genString(data, indent=''):
