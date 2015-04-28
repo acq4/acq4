@@ -43,7 +43,7 @@ class Frame(object):
     
     def frameTransform(self):
         """Return the transform that maps from this frame's image coordinates
-        to its source camera coordinates. This transform takes into account
+        to its imager device coordinates. This transform takes into account
         the camera's region and binning settings.
         """
         return SRTTransform3D(self._info['frameTransform'])

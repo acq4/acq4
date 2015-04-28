@@ -16,7 +16,7 @@ class OptomechDevice(object):
     into its parent's coordinate system.
     
     This organization makes it simple to map coordinates between devices and the global coordinate system. 
-    This allows, for example, asking what is the physical location corresponding to a specific pixel in a 
+    This allows, for example, asking what is the physical location corresponding to a specific pixel in a
     camera image or asking what set of mirror voltages to use in order to stimulate a specific
     physical location.
     
@@ -93,7 +93,6 @@ class OptomechDevice(object):
         self.__subdevices = collections.OrderedDict()
         self.__subdevice = None
         self.__name = name
-        
         
         self.sigTransformChanged.connect(self.__emitGlobalTransformChanged)
         self.sigSubdeviceTransformChanged.connect(self.__emitGlobalSubdeviceTransformChanged)
@@ -215,15 +214,33 @@ class OptomechDevice(object):
                 return self.parentDevice().mapToGlobal(obj, subdev)
         
     def _mapTransform(self, obj, tr):
-        if isinstance(obj, tuple):
+        # convert to a type that can be mapped
+        retType = None
+        if isinstance(obj, (tuple, list)):
+            retType = type(obj)
             if np.isscalar(obj[0]):
-                obj = QtCore.QPointF(*obj)
+                if len(obj) == 2:
+                    obj = QtCore.QPointF(*obj)
+                elif len(obj) == 3:
+                    obj = QtGui.QVector3D(*obj)
+                else:
+                    raise TypeError("Cannot map %s of length %d." % (type(obj).__name__, len(obj)))
             elif isinstance(obj[0], np.ndarray):
                 obj = np.concatenate([x[np.newaxis, ...] for x in obj])
             else:
                 raise Exception ('Cannot map--object of type %s ' % str(type(obj[0])))
+
         if isinstance(obj, QtCore.QPointF):
-            return tr.map(obj)
+            ret = tr.map(obj)
+            if retType is not None:
+                return retType([ret.x(), ret.y()])
+            return ret
+        elif isinstance(obj, QtGui.QVector3D):
+            ret = tr.map(obj)
+            if retType is not None:
+                return retType([ret.x(), ret.y(), ret.z()])
+            return ret
+
         elif isinstance(obj, np.ndarray):
             # m = np.array(tr.copyDataTo()).reshape(4,4)
             # m1 = m[:2,:2, np.newaxis]
@@ -234,7 +251,6 @@ class OptomechDevice(object):
             return m2
         else:
             raise Exception('Cannot map--object of type %s ' % str(type(obj))) 
-    
     
     def deviceTransform(self, subdev=None):
         """
@@ -258,7 +274,6 @@ class OptomechDevice(object):
                 return tr
             else:
                 return tr * dev.deviceTransform()
-                
     
     def inverseDeviceTransform(self, subdev=None):
         """
@@ -371,6 +386,7 @@ class OptomechDevice(object):
     
     def __parentDeviceTransformChanged(self, sender, changed):
         ## called when any (grand)parent's transform has changed.
+        prof = pg.debug.Profiler(disabled=True)
         self.invalidateCachedTransforms()
         self.sigGlobalTransformChanged.emit(self, changed)
         
@@ -501,8 +517,6 @@ class OptomechDevice(object):
             if len(subdev) > 0:
                 subdevs[dev] = subdev
         return subdevs
-        
-        
         
     def __subdeviceTransformChanged(self, subdev):
         #print "Subdevice transform changed", self, subdev

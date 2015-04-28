@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 from acq4.devices.OptomechDevice import *
+from acq4.devices.Stage import Stage
 from deviceTemplate import Ui_Form
 from acq4.util.Mutex import Mutex
+from acq4.modules.Camera import CameraModuleInterface
 import acq4.pyqtgraph as pg
 import collections
 
@@ -21,6 +23,7 @@ class Microscope(Device, OptomechDevice):
     
     sigObjectiveChanged = QtCore.Signal(object) ## (objective, lastObjective)
     sigObjectiveListChanged = QtCore.Signal()
+    sigSurfaceDepthChanged = QtCore.Signal(object)
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -30,6 +33,8 @@ class Microscope(Device, OptomechDevice):
         self.switchDevice = None
         self.currentSwitchPosition = None
         self.currentObjective = None
+        self._focusDevice = None
+        self._surfaceDepth = None
         
         self.objectives = collections.OrderedDict()
         ## Format of self.objectives is:
@@ -65,6 +70,10 @@ class Microscope(Device, OptomechDevice):
         else:
             self.setObjectiveIndex(0)
         
+        cal = self.readConfigFile('calibration')
+        if 'surfaceDepth' in cal:
+            self.setSurfaceDepth(cal['surfaceDepth'])
+
         dm.declareInterface(name, ['microscope'], self)
 
     def quit(self):
@@ -147,6 +156,58 @@ class Microscope(Device, OptomechDevice):
         #if obj is self.currentObjective:
             #self.updateDeviceTransform()
 
+    def cameraModuleInterface(self, mod):
+        """Return an object to interact with camera module.
+        """
+        return ScopeCameraModInterface(self, mod)
+
+    def getFocusDepth(self):
+        """Return the z-position of the focal plane.
+
+        This method requires a device that provides focus position feedback.
+        """
+        return self.mapToGlobal(QtGui.QVector3D(0, 0, 0)).z()
+
+    def setFocusDepth(self, z):
+        """Set the z-position of the focal plane.
+
+        This method requires motorized focus control.
+        """
+        # this is how much the focal plane needs to move (in the global frame)
+        dif = z - self.getFocusDepth()
+
+        # this is the current global location of the focus device 
+        fd = self.focusDevice()
+        fdpos = fd.globalPosition()
+
+        # and this is where it needs to go
+        fdpos[2] += dif
+        return fd.moveToGlobal(fdpos, 'fast')
+
+    def getSurfaceDepth(self):
+        """Return the z-position of the sample surface as marked by the user.
+        """
+        return self._surfaceDepth
+
+    def setSurfaceDepth(self, depth):
+        self._surfaceDepth = depth
+        self.sigSurfaceDepthChanged.emit(depth)
+        self.writeCalibration()
+
+    def writeCalibration(self):
+        cal = {'surfaceDepth': self.getSurfaceDepth()}
+        self.writeConfigFile(cal, 'calibration')
+
+    def focusDevice(self):
+        if self._focusDevice is None:
+            p = self
+            while True:
+                if p is None or isinstance(p, Stage) and p.capabilities()['setPos'][2]:
+                    self._focusDevice = p
+                    break
+                p = p.parentDevice()
+        return self._focusDevice
+
 
 class Objective(OptomechDevice):
     
@@ -190,7 +251,7 @@ class Objective(OptomechDevice):
     
     def setScale(self, scale):
         if not hasattr(scale, '__len__'):
-            scale = (scale, scale)
+            scale = (scale, scale, 1)
         
         tr = self.deviceTransform()
         tr.setScale(scale)
@@ -246,12 +307,13 @@ class ScopeGUI(QtGui.QWidget):
             #first = self.objList[i][first]
             xs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
             ys = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
+            zs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
             ss = pg.SpinBox(step=1e-7, bounds=(1e-10, None))
             
-            xs.index = ys.index = ss.index = i  ## used to determine which row has changed
-            widgets = (r, c, xs, ys, ss)
-            for col in range(5):
-                self.ui.objectiveLayout.addWidget(widgets[col], row, col)
+            xs.index = ys.index = zs.index = ss.index = i  ## used to determine which row has changed
+            widgets = (r, c, xs, ys, zs, ss)
+            for col, w in enumerate(widgets):
+                self.ui.objectiveLayout.addWidget(w, row, col)
             self.objWidgets[i] = widgets
             
             for o in self.objList[i].values():
@@ -267,6 +329,7 @@ class ScopeGUI(QtGui.QWidget):
             c.currentIndexChanged.connect(self.objComboChanged)
             xs.sigValueChanged.connect(self.offsetSpinChanged)
             ys.sigValueChanged.connect(self.offsetSpinChanged)
+            zs.sigValueChanged.connect(self.offsetSpinChanged)
             ss.sigValueChanged.connect(self.scaleSpinChanged)
             row += 1
         self.updateSpins()
@@ -298,11 +361,11 @@ class ScopeGUI(QtGui.QWidget):
         if self.blockSpinChange:
             return
         index = spin.index
-        (r, combo, xs, ys, ss) = self.objWidgets[index]
+        (r, combo, xs, ys, zs, ss) = self.objWidgets[index]
         obj = combo.itemData(combo.currentIndex())
         obj.sigTransformChanged.disconnect(self.updateSpins)
         try:
-            obj.setOffset((xs.value(), ys.value()))
+            obj.setOffset((xs.value(), ys.value(), zs.value()))
         finally:
             obj.sigTransformChanged.connect(self.updateSpins)
     
@@ -310,7 +373,7 @@ class ScopeGUI(QtGui.QWidget):
         if self.blockSpinChange:
             return
         index = spin.index
-        (r, combo, xs, ys, ss) = self.objWidgets[index]
+        (r, combo, xs, ys, zs, ss) = self.objWidgets[index]
         obj = combo.itemData(combo.currentIndex())
         obj.sigTransformChanged.disconnect(self.updateSpins)
         try:
@@ -320,11 +383,82 @@ class ScopeGUI(QtGui.QWidget):
         
     def updateSpins(self):
         for k, w in self.objWidgets.iteritems():
-            (r, combo, xs, ys, ss) = w
+            (r, combo, xs, ys, zs, ss) = w
             obj = combo.itemData(combo.currentIndex())
             offset = obj.offset()
             xs.setValue(offset.x())
             ys.setValue(offset.y())
+            zs.setValue(offset.z())
             ss.setValue(obj.scale().x())
 
 
+class ScopeCameraModInterface(CameraModuleInterface):
+    """Implements focus control user interface for use in the camera module.
+    """
+    canImage = False
+
+    def __init__(self, dev, mod):
+        CameraModuleInterface.__init__(self, dev, mod)
+
+        self.ctrl = QtGui.QWidget()
+        self.layout = QtGui.QGridLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.ctrl.setLayout(self.layout)
+
+        self.plot = mod.window().getDepthView()
+        self.focusLine = self.plot.addLine(y=0, pen='y')
+        sd = dev.getSurfaceDepth()
+        if sd is None:
+            sd = 0
+        self.surfaceLine = self.plot.addLine(y=sd, pen='g')
+        self.movableFocusLine = self.plot.addLine(y=0, pen='y', markers=[('<|>', 0.5, 10)], movable=True)
+
+        self.setSurfaceBtn = QtGui.QPushButton('Set Surface')
+        self.layout.addWidget(self.setSurfaceBtn, 0, 0)
+        self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
+
+        dev.sigGlobalTransformChanged.connect(self.transformChanged)
+        dev.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
+        self.movableFocusLine.sigDragged.connect(self.focusDragged)
+
+        self.transformChanged()
+
+    def setSurfaceClicked(self):
+        focus = self.getDevice().getFocusDepth()
+        self.getDevice().setSurfaceDepth(focus)
+
+    def surfaceDepthChanged(self, depth):
+        self.surfaceLine.setValue(depth)
+
+    def transformChanged(self):
+        prof = pg.debug.Profiler()
+        focus = self.getDevice().getFocusDepth()
+        prof('1')
+        self.focusLine.setValue(focus)
+        prof('2')
+
+        # Compute the target focal plane.
+        # This is a little tricky because the objective might have an offset+scale relative
+        # to the focus device.
+        fd = self.getDevice().focusDevice()
+        prof('3')
+        tpos = fd.globalTargetPosition()
+        prof('4')
+        fpos = fd.globalPosition()
+        prof('5')
+        dif = tpos[2] - fpos[2]
+        prof('6')
+        self.movableFocusLine.setValue(focus + dif)
+        prof('7')
+
+    def focusDragged(self):
+        self.getDevice().setFocusDepth(self.movableFocusLine.value())
+
+    def controlWidget(self):
+        return self.ctrl
+
+    def boundingRect(self):
+        return None
+
+    def quit(self):
+        pass

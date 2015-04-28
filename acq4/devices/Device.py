@@ -34,6 +34,30 @@ class Device(QtCore.QObject):
         """Return a widget with a UI to put in the task rack"""
         return TaskGui(self, task)
         
+    def configPath(self):
+        """Return the path used for storing configuration data for this device.
+
+        This path should resolve to `acq4/config/devices/DeviceName_config`.
+        """
+        return os.path.join('devices', self.name() + '_config')
+
+    def readConfigFile(self, filename):
+        """Read a config file from this device's configuration directory.
+        """
+        fileName = os.path.join(self.configPath(), filename)
+        return self.dm.readConfigFile(fileName)
+
+    def writeConfigFile(self, data, filename):
+        """Write data to a config file in this device's configuration directory.
+        """
+        fileName = os.path.join(self.configPath(), filename)
+        return self.dm.writeConfigFile(data, fileName)
+
+    def appendConfigFile(self, data, filename):
+        """Append data to a config file in this device's configuration directory.
+        """
+        fileName = os.path.join(self.configPath(), filename)
+        return self.dm.appendConfigFile(data, fileName)
 
     def reserve(self, block=True, timeout=20):
         #print "Device %s attempting lock.." % self.name()
@@ -72,7 +96,7 @@ class Device(QtCore.QObject):
         return '<%s "%s">' % (self.__class__.__name__, self.name())
     
 
-class DeviceTask:
+class DeviceTask(object):
     """
     DeviceTask handles all behavior of a single device during 
     execution of a task, including configuring the device based on the 

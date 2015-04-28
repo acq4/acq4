@@ -64,6 +64,11 @@ class _NIDAQ:
         if _NIDAQ.NIDAQ_CREATED:
             raise Exception("Will not create another nidaq instance--use the pre-existing NIDAQ object.")
         self.devices = {}
+
+        # cached tasks used for scalar AO/AI operations
+        # (this shaves a few ms from the cost of reading/writing scalars)
+        self._scalarTasks = {}
+
         # :TODO: initialize the driver
         _NIDAQ.NIDAQ_CREATED = True
 
@@ -80,52 +85,22 @@ class _NIDAQ:
             fn = LIB('functions', 'DAQmx' + attr)
             return lambda *args: self.call(attr, *args)
                 
-        #if attr[0] != "_" and hasattr(self.nidaq, 'DAQmx' + attr):
-            #return lambda *args: self.call(attr, *args)
-        #else:
-            #raise NameError(attr)
-
     def call(self, func, *args):
         func = 'DAQmx' + func
         ret = None
-        #retType, argSig = self.functions[func]
-        #print "CALL: ", func, args, argSig
         fn = LIB('functions', func)
         retType, argSig = fn.sig
         
         returnValue = None
         if func[:8] == "DAQmxGet":  ## byref arguments will be handled automatically.
-            #if argSig[-1][0] == 'data':
-                #returnValue = 'data'
-                #ret = getattr(ctypes, argSig[-1][1])()
-                #args += (byref(ret),)
             ## functions that return char* can be called with a null pointer to get the size of the buffer needed.
             if (argSig[-2][1] == ['char', '*'] or argSig[-2][1] == ['char', [-1]]) and argSig[-1][0] == 'bufferSize':
                 returnValue = argSig[-2][0]
                 extra = {returnValue: None, 'bufferSize': 0}
-                #print "correct for buffer return"
                 buffSize = fn(*args, **extra)()
-                #tmpargs = args + (getattr(ctypes, argSig[-2][1])(), getattr(ctypes, argSig[-1][1])())
-                #buffSize = self._call(func, *tmpargs)
                 ret = ctypes.create_string_buffer('\0' * buffSize)
                 args += (ret, buffSize)
                 
-        ## this is all handled by clibrary now.
-        #cArgs = []
-        #if len(args) > len(argSig):
-            #raise Exception("Argument list is too long (%d) for function signature: %s" % (len(args), str(argSig)))
-        #for i in range(0, len(args)):
-            #arg = args[i]
-            ##if type(args[i]) in [types.FloatType, types.IntType, types.LongType, types.BooleanType] and argSig[i][2] == 0:
-            #if hasattr(args[i], '__int__') and argSig[i][2] == 0:  ## all numbers and booleans probably have an __int__ method.
-                ##print func, i, argSig[i][0], argSig[i][1], type(arg)
-                #arg = getattr(ctypes, argSig[i][1])(arg)
-            ##else:
-                ##print "Warning: passing unknown argument type", type(args[i])
-            #cArgs.append(arg)
-        
-        #print "  FINAL CALL: ", cArgs
-        #errCode = self._call(func, *cArgs)
         ## if there is a 'reserved' argument, it MUST be 0 (don't let clibrary try to fill it for us)
         if argSig[-1][0] == 'reserved':
             ret = fn(*args, reserved=None)
@@ -136,19 +111,11 @@ class _NIDAQ:
         errCode = ret()
         
         if errCode < 0:
-            #print "NiDAQ Error while running function '%s%s'" % (func, str(args))
-            #for s in self.error(errCode):
-                #print s
-            #print self.error(errCode)[1]
             msg = "NiDAQ Error while running function '%s%s':\n%s" % (func, str(args), self.error())
             raise NIDAQError(errCode, msg)
-            #raise NIDAQError(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
         elif errCode > 0:
             print "NiDAQ Warning while running function '%s%s'" % (func, str(args))
             print self.error(errCode)
-            #debug.printTrace("Traceback:")
-            #raise NIDAQWarning(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
-        
             
         if returnValue is not None:  ## If a specific return value was indicated, return it now
             return ret[returnValue]
@@ -159,7 +126,6 @@ class _NIDAQ:
             return vals[0]
         elif len(vals) > 1:
             return vals
-        
         
     def _call(self, func, *args, **kargs):
         try:
@@ -198,14 +164,16 @@ class _NIDAQ:
             mode = mode.lower()
             mode = modes.get(mode, None)
         return mode
-        
     
     def writeAnalogSample(self, chan, value, vRange=[-10., 10.], timeout=10.0):
-        """Set the value of an AO or DO port"""
-        t = self.createTask()
-        t.CreateAOVoltageChan(chan, "", vRange[0], vRange[1], LIB.Val_Volts, None)
+        """Set the value of an AO port"""
+        key = ('ao', chan)
+        t = self._scalarTasks.get(key, None)
+        if t is None:
+            t = self.createTask()
+            t.CreateAOVoltageChan(chan, "", vRange[0], vRange[1], LIB.Val_Volts, None)
+            self._scalarTasks[key] = t
         t.WriteAnalogScalarF64(True, timeout, value)
-        return
         
     def readAnalogSample(self, chan, mode=None, vRange=[-10., 10.], timeout=10.0):
         """Get the value of an AI port"""
@@ -213,30 +181,35 @@ class _NIDAQ:
             mode = LIB.Val_Cfg_Default
         else:
             mode = self.interpretMode(mode)
-        t = self.createTask()
-        t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], LIB.Val_Volts, None)
-        #val = c_double(0.)
+
+        key = ('ai', mode, chan)
+        t = self._scalarTasks.get(key, None)
+        if t is None:
+            t = self.createTask()
+            t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], LIB.Val_Volts, None)
+            self._scalarTasks[key] = t
         return t.ReadAnalogScalarF64(timeout)
-        #return val.value
 
     def writeDigitalSample(self, chan, value, timeout=10.):
         """Set the value of an AO or DO port"""
-        t = self.createTask()
-        t.CreateDOChan(chan, "", LIB.Val_ChanForAllLines)
+        key = ('do', chan)
+        t = self._scalarTasks.get(key, None)
+        if t is None:
+            t = self.createTask()
+            t.CreateDOChan(chan, "", LIB.Val_ChanForAllLines)
+            self._scalarTasks[key] = t
         t.WriteDigitalScalarU32(True, timeout, value)
-        return
         
     def readDigitalSample(self, chan, timeout=10.0):
-        """Get the value of an AI port"""
-        t = self.createTask()
-        t.CreateDIChan(chan, "", LIB.Val_ChanForAllLines)
-        #val = c_ulong(0)
+        """Get the value of a DI port"""
+        key = ('di', chan)
+        t = self._scalarTasks.get(key, None)
+        if t is None:
+            t = self.createTask()
+            t.CreateDIChan(chan, "", LIB.Val_ChanForAllLines)
+            self._scalarTasks[key] = t
         return t.ReadDigitalScalarU32(timeout)
-        #return val.value
         
-    #def listPorts(self):
-        #ports = {'AI': [], 'AO': [], 'DOP': []}
-
     def listAIChannels(self, dev=None):
         return self.GetDevAIPhysicalChans(dev).split(", ")
 

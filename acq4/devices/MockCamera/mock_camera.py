@@ -4,7 +4,7 @@ from acq4.devices.Camera import Camera, CameraTask
 from PyQt4 import QtCore
 import time, sys, traceback
 import acq4.util.ptime as ptime
-from acq4.util.Mutex import Mutex, MutexLocker
+from acq4.util.Mutex import Mutex
 from acq4.util.debug import *
 import acq4.util.functions as fn
 import numpy as np

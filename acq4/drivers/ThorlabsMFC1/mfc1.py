@@ -18,33 +18,73 @@ Hardware notes:
 
 * Setting encoder prescaler to 8192 yields +1 per encoder step 
 """
+try:
+    # this is nicer because it provides deadlock debugging information
+    from acq4.util.Mutex import RecursiveMutex as RLock
+except ImportError:
+    from threading import RLock
+
+from acq4.pyqtgraph import ptime
+
 from .tmcm import TMCM140
 
+
+
+def threadsafe(method):
+    # decorator for automatic mutex lock/unlock
+    def lockMutex(self, *args, **kwds):
+        with self.lock:
+            return method(self, *args, **kwds)
+    return lockMutex
+
+
 class MFC1(object):
-    def __init__(self, port, baudrate=9600):
-        self.mcm = TMCM140(port, baudrate)
-        self.mcm.stop_program()
-        self.mcm.stop()
-        self.mcm.set_params(
-            maximum_current=50,
+    def __init__(self, port, baudrate=9600, **kwds):
+        self.lock = RLock(debug=True)
+
+        params = dict(
+            maximum_current=100,
             maximum_acceleration=1000,
             maximum_speed=2000,
             ramp_divisor=7,
             pulse_divisor=3,
             standby_current=0,
             mixed_decay_threshold=-1,
-            encoder_prescaler=8192,
+            encoder_prescaler=8192,   # causes encoder_position to have exactly the same resolution as the encoder itself
             microstep_resolution=5,
             fullstep_threshold=0,
             stall_detection_threshold=0,
+            freewheeling=1,
         )
-        self.mcm.set_global('gp0', self.mcm['encoder_position'])
+        for k, v in kwds.items():
+            if k not in params:
+                raise NameError("Unknown MFC1 parameter '%s'" % k)
+            params[k] = v
+
+        self.mcm = TMCM140(port, baudrate)
+        self.mcm.stop_program()
+        self.mcm.stop()
+        self.mcm.set_params(**params)
+        self._target_position = self.mcm['encoder_position']
+        self.mcm.set_global('gp0', self._target_position)
         self._upload_program()
+
+        self._move_status = {}
+        self._last_move_id = -1
         
     def _upload_program(self):
         """Upload a program used to seek to a specific encoder value.
+
+        This controls the motor velocity while seeking for a specific encoder 
+        value.
+
+        Note: the move command provided by the tmcm firmware only tracks the motor
+        microsteps and does not make use of the encoder. Because the microsteps are not
+        uniform, it is not possible to reliably move to a specific encoder position
+        using the built-in move command.
         """
         m = self.mcm
+        max_speed = m['maximum_speed']
         with m.write_program() as p:
             # start with a brief wait because sometimes the first command may be 
             # ignored.
@@ -90,15 +130,14 @@ class MFC1(object):
             p.calc('div', 3)
             
             # new_speed = clip(new_speed, -2047, 2047)
-            max = 2000
-            p.comp(max)
+            p.comp(max_speed)
             p.jump('gt', p.count+3)
-            p.comp(-max)
+            p.comp(-max_speed)
             p.jump('lt', p.count+3)
             p.jump(p.count+3)
-            p.calc('load', max)
+            p.calc('load', max_speed)
             p.jump(p.count+1)
-            p.calc('load', -max)
+            p.calc('load', -max_speed)
             
             # 0 speed should never be requested if there is an offset
             p.comp(0)
@@ -114,41 +153,110 @@ class MFC1(object):
     def position(self):
         """Return the current encoder position.
         """
-        return self.mcm['encoder_position']
+        pos = self.mcm['encoder_position']
+        if not self.program_running():
+            # when program is not running, target position should follow actual position
+            self._target_position = pos
+        return pos
     
+    @threadsafe
     def target_position(self):
         """Return the final target position if the motor is currently moving
         to a specific position.
 
         If the motor is stopped or freely rotating, return the current position.
         """
-        if self.program_running():
-            return self.mcm.get_global('gp0')
-        else:
-            return self.position()
+        return self._target_position
 
-    def move(self, position, block=False):
+    @threadsafe
+    def move(self, position):
         """Move to the requested position.
+
+        If the motor is already moving, then update the target position.
         
-        If block is False, then return an object that may be used to check 
-        whether the move is complete.
+        Return an object that may be used to check 
+        whether the move is complete (see move_status).
         """
-        self.mcm.set_global('gp0', position)
-        if not self.program_running():
+        id = self._last_move_id
+
+        if self.program_running():
+            self._interrupt_move()
+            self.mcm.set_global('gp0', position)
+            start = ptime.time()
+        else:
+            self.mcm.set_global('gp0', position)
             self.mcm.start_program()
+            start = ptime.time()
+
+        self._target_position = position
+
+        id += 1
+        self._last_move_id = id
+        self._move_status[id] = {'start': start, 'status': 'moving', 'target': position}
+        return id
+
+    @threadsafe
+    def move_status(self, id, clear=True):
+        """Return the status of a previously requested move.
+
+        The return value is a dict with the following keys:
+
+        * status: 'moving', 'interrupted', 'failed', or 'done'.
+        * start: the start time of the move.
+        * target: the target position of the move.
+        """
+        stat = self._move_status[id]
+        if stat['status'] == 'moving' and not self.program_running():
+            pos = self.position()
+            if abs(pos - stat['target']) <= 3:  # can we get the tolerance lower?
+                stat['status'] = 'done'
+            else:
+                stat['status'] = 'failed'
+                stat['final_pos'] = pos
+
+        if clear and stat['status'] != 'moving':
+            del self._move_status[id]
+
+        return stat
         
+    @threadsafe
     def rotate(self, speed):
         """Begin rotating at *speed*. Positive values turn right.
         """
+        self._interrupt_move()
         self.mcm.stop_program()
         self.mcm.rotate(speed)
+
+    def _interrupt_move(self):
+        """If a move is currently in progress, set its state to 'interrupted'
+        """
+        id = self._last_move_id
+        try:
+            stat = self.move_status(id, clear=False)
+            if stat['status'] == 'moving':
+                self._move_status[id]['status'] = 'interrupted'
+        except KeyError:
+            pass
     
     def stop(self):
         """Immediately stop the motor and any programs running on the motor
         comtrol module.
         """
+        self._interrupt_move()
         self.mcm.stop_program()
         self.mcm.stop()
 
     def program_running(self):
         return self.mcm.get_global('tmcl_application_status') == 1
+
+    def set_encoder(self, x):
+        self.mcm['encoder_position'] = x
+
+    def set_holding(self, hold):
+        """Set whether the motor should hold its position (True) or should
+        power down and allow freewheeling (False).
+        """
+        if hold:
+            self.mcm['standby_current'] = self.mcm['maximum_current']
+        else:
+            self.mcm['standby_current'] = 0

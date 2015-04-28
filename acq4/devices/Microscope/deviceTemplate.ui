@@ -61,13 +61,17 @@
      <property name="spacing">
       <number>4</number>
      </property>
-     <item row="0" column="0">
-      <widget class="QWidget" name="widget" native="true">
-       <property name="minimumSize">
-        <size>
-         <width>20</width>
-         <height>0</height>
-        </size>
+     <item row="0" column="5">
+      <widget class="QLabel" name="label_5">
+       <property name="text">
+        <string>Scale</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="3">
+      <widget class="QLabel" name="label_4">
+       <property name="text">
+        <string>Y</string>
        </property>
       </widget>
      </item>
@@ -88,17 +92,20 @@
        </property>
       </widget>
      </item>
-     <item row="0" column="3">
-      <widget class="QLabel" name="label_4">
-       <property name="text">
-        <string>Y</string>
+     <item row="0" column="0">
+      <widget class="QWidget" name="widget" native="true">
+       <property name="minimumSize">
+        <size>
+         <width>20</width>
+         <height>0</height>
+        </size>
        </property>
       </widget>
      </item>
      <item row="0" column="4">
-      <widget class="QLabel" name="label_5">
+      <widget class="QLabel" name="label">
        <property name="text">
-        <string>Scale</string>
+        <string>Z</string>
        </property>
       </widget>
      </item>

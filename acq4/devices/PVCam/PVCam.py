@@ -7,13 +7,13 @@ import time, sys, traceback
 from numpy import *
 from acq4.util.metaarray import *
 import acq4.util.ptime as ptime
-from acq4.util.Mutex import Mutex, MutexLocker
+from acq4.util.Mutex import Mutex
 from acq4.util.debug import *
 
 class PVCam(Camera):
     def __init__(self, *args, **kargs):
         self.camLock = Mutex(Mutex.Recursive)  ## Lock to protect access to camera
-        self.ringSize = 100
+        self.ringSize = 50
         Camera.__init__(self, *args, **kargs)  ## superclass will call setupCamera when it is ready.
         self.acqBuffer = None
         self.frameId = 0
@@ -64,7 +64,7 @@ class PVCam(Camera):
         
     def startCamera(self):
         ## Attempt camera start. If the driver complains that it can not allocate memory, reduce the ring size until it works. (Ridiculous driver bug)
-        printRingSize = False
+        #  Update: as of 2015.03 the bug is still present.
         self.stopOk = False
         while True:
             try:
@@ -73,15 +73,15 @@ class PVCam(Camera):
                     self.acqBuffer = self.cam.start()
                 break
             except Exception, e:
-                if len(e.args) == 2 and e.args[1] == 15:
+                if len(e.args) == 2 and (e.args[1] in (15, 41)):
                     printRingSize = True
                     self.ringSize = int(self.ringSize * 0.9)
+                    print "PVCam error: %r" % e
+                    print "Trying again with smaller ring size %d" % self.ringSize
                     if self.ringSize < 2:
-                        raise Exception("Will not reduce camera ring size < 2")
+                        raise
                 else:
                     raise
-        if printRingSize:
-            print "Reduced camera ring size to %d" % self.ringSize
         
     def stopCamera(self):
         with self.camLock:

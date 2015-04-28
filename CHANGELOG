@@ -4,6 +4,9 @@ acq4-0.9.3 (unreleased)
         Disabled HDF5 compression by default--lzf is not readable by most HDF5 libraries, and gzip is too slow. 
             (see the 'defaultCompression' config option).
     New Features:
+        Timelapse + z-stack in camera module
+        Motorized focus control interface in camera module
+        Support for tracking and controlling micromanipulators from camera module
         Spiral scanning for single-cell photostimulation
         Panic button: ESC key global shortcut closes shutters, stops stage/manipulator, aborts all tasks, etc.
         Overhaul of 2p Imager module:
@@ -14,9 +17,15 @@ acq4-0.9.3 (unreleased)
         Added export option to ImageView
         Added new online analysis module for photostimulation (replaces old Uncaging module)
         Added support for controlling bidirectional filtering by NiDAQ device
+        NoiseMonitor module for tracking long-term changes in electrical noise
+        Added motion support to MPC200 device
+        Objectives now have z-offset
     Bugfixes:
         Fixed issues with Scanner grid controls in TaskRunner
+        Fixed issues with MultiClamp starting with wrong state in TaskRunner
+        Cleaned up MultiClamp manager UI
     Maintenance:
+        Performance improvements for 2p imaging and stage input
         util.database now uses built-in sqlite3 module instead of QtSql
 
 acq4-0.9.2 2014-01-10

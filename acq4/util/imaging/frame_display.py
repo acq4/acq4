@@ -41,7 +41,7 @@ class FrameDisplay(QtCore.QObject):
         ## 60fps.
         self.frameTimer = QtCore.QTimer()
         self.frameTimer.timeout.connect(self.drawFrame)
-        self.frameTimer.start(32) ## draw frames no faster than 60Hz
+        self.frameTimer.start(30) ## draw frames no faster than 60Hz
         #QtCore.QTimer.singleShot(1, self.drawFrame)
         ## avoiding possible singleShot-induced crashes
 
@@ -96,7 +96,7 @@ class FrameDisplay(QtCore.QObject):
             
             ## If we last drew a frame < 1/30s ago, return.
             t = pg.ptime.time()
-            if (self.lastDrawTime is not None) and (t - self.lastDrawTime < .033333):
+            if (self.lastDrawTime is not None) and (t - self.lastDrawTime < .03):
                 #sys.stdout.write('-')
                 return
             ## if there is no new frame and no controls have changed, just exit

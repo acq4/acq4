@@ -5,6 +5,7 @@ from acq4.util.clibrary import *
 from collections import OrderedDict
 from acq4.util.debug import backtrace
 import acq4.util.ptime as ptime
+from acq4.util.Mutex import Mutex
 
 __all__ = ['PVCam']
 
@@ -101,6 +102,7 @@ class _PVCamClass:
     
     def __init__(self):
         self.cams = {}
+        self.lock = Mutex()
 
         #self.pvcam = windll.Pvcam32
         if _PVCamClass.PVCAM_CREATED:
@@ -119,8 +121,6 @@ class _PVCamClass:
         self.paramTable = OrderedDict()
         for p in externalParams:
             self.paramTable[p] = self.paramFromString(p)
-        
-        
 
     def reloadDriver(self):
         #if self.pvcam.pl_pvcam_uninit() < 1:
@@ -130,7 +130,6 @@ class _PVCamClass:
             #raise Exception("Could not initialize pvcam library (pl_pvcam_init): %s" % self.error())
         self.quit()
         self.__init__()
-        
 
     def listCameras(self):
         #nCam = c_int()
@@ -155,11 +154,14 @@ class _PVCamClass:
         return self.cams[cam]
     
     def call(self, func, *args, **kargs):
-        fn = LIB('functions', func)
-        res = fn(*args, **kargs)
-        if res() < 1:
-            raise Exception("Function '%s%s' failed: %s" % (func, str(args), self.error()), self.errno())
-        return res
+        with self.lock:
+            # print ">>", func, args, kargs
+            fn = LIB('functions', func)
+            res = fn(*args, **kargs)
+            if res() < 1:
+                raise Exception("Function '%s%s' failed: %s" % (func, str(args), self.error()), self.errno())
+            # print "<<", func
+            return res
 
     def errno(self):
         erc = LIB.error_code()()
@@ -329,14 +331,9 @@ class _CameraClass:
             self.isOpen = False
             
     def call(self, fn, *args, **kargs):
-        t = ptime.time()
-        ret = LIB('functions', fn)(*args, **kargs)
-        t2 = ptime.time()
-        if t2-t > 4.0:
-            print backtrace()
-            print "function took %f sec:" % (t2-t), fn, args, kargs
-        return ret
-        #return self.pvcam.call(fn, self.hCam, *args, **kargs)
+        # ret = LIB('functions', fn)(*args, **kargs)
+        # return ret
+        return self.pvcam.call(fn, *args, **kargs)
 
     def initCam(self, params=None):
         buf = create_string_buffer('\0' * LIB.CCD_NAME_LEN)
@@ -437,17 +434,11 @@ class _CameraClass:
         
         If autoCorrect is True, then value is adjusted to fit in bounds and quantized, and the new value is returned.
         Normally, camera parameters that do not need to be set (because they are already) will be ignored. However, this can be
-        overridden with forceSet. If delaySet is true, then parameters will not be changed on-camera until it is restarted."""
-        
-        
-        ## Make sure parameter exists on this hardware and is writable
-        #print "PVCam setParam", param, value
-        
+        overridden with forceSet."""
         if paramName in self.groupParams:
             return self.setParams(zip(self.groupParams[paramName], value))
         
         ## If this is an enum parameter, convert string values to int before setting
-
         if paramName in self.enumTable:
             if isinstance(value, basestring):
                 strVal = value
@@ -512,10 +503,6 @@ class _CameraClass:
                         #print "Warning: Quantized value to %s" % str(value)
                     else:
                         raise Exception("Value for parameter must be in increments of %s (requested %s)" % (str(stepval), str(value)))
-        #elif typ == TYPE_ENUM:
-        #    count = self._getParam(param, ATTR_COUNT)
-        #    if value > (count-1):
-        #        raise Exception("Enum value %d is out of range for parameter" % value)
         elif typ == LIB.TYPE_CHAR_PTR:
             count = self._getParam(param, LIB.ATTR_COUNT)
             if len(value) > count:
@@ -526,7 +513,6 @@ class _CameraClass:
         #print "pvcam setting parameter", paramName
         val = mkCObj(typ, value)
         self.call('pl_set_param', self.hCam, param, byref(val))
-        #LIB.pl_set_param(self.hCam, param, byref(val))
         
         if param in self.enumTable:
             val = self.enumTable[param][1][val.value]
@@ -650,7 +636,10 @@ class _CameraClass:
         
 
     def start(self):
-        """Start continuous frame acquisition."""
+        """Start continuous frame acquisition.
+
+        Return a buffer into which frames will be written as they are acquired.
+        Use lastFrame() to detect the arrival of new frames."""
         if self.mode != 0:
             raise Exception("Camera is not ready to start new acquisition")
         #assert(frames > 0)
@@ -674,7 +663,7 @@ class _CameraClass:
         if len(self.buf.data) != ssize:
             raise Exception('Created wrong size buffer! (%d != %d) Error: %s' %(len(self.buf.data), ssize, self.pvcam.error()))
         self.call('pl_exp_start_cont', self.hCam, self.buf.ctypes.data, ssize)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
-        #LIB.pl_exp_start_cont(self.hCam, self.buf.ctypes.data, ssize)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
+
         self.mode = 2
 
         return self.buf.transpose((0, 2, 1))
@@ -692,8 +681,6 @@ class _CameraClass:
             return LIB.BULB_MODE
         else:
             raise Exception('Unknown trigger mode %s.' % tm)
-   
-    
 
     def lastFrame(self):
         """Return the index of the last frame transferred."""
@@ -701,8 +688,10 @@ class _CameraClass:
         try:
             frame = self.call('pl_exp_get_latest_frame', self.hCam)[1]
             #frame = LIB.pl_exp_get_latest_frame(self.hCam)[1]
-        except:
-            if sys.exc_info()[1][1] == 3029:  ## No frame is ready yet (?)
+        except Exception as ex:
+            # if sys.exc_info()[1][1] == 3029:  ## No frame is ready yet (?)
+            #     return None
+            if ex.args[1] == 38:   # No frame ready yet
                 return None
             else:
                 raise

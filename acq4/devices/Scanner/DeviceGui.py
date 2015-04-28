@@ -233,7 +233,8 @@ class ScannerDeviceGui(QtGui.QWidget):
             amp = mfBlur.max() - median(mfBlur)  ## guess intensity of spot
             (x, y) = argwhere(mfBlur == mfBlur.max())[0]   ## guess location of spot
             fit = fitGaussian2D(maxFrame, [amp, x, y, maxFrame.shape[0] / 10, 0.])[0]  ## gaussian fit to locate spot exactly
-            fit[3] = abs(fit[3]) ## sometimes the fit for width comes out negative. *shrug*
+            # convert sigma to full width at 1/e
+            fit[3] = abs(2 * (2 ** 0.5) * fit[3]) ## sometimes the fit for width comes out negative. *shrug*
             someFrame = cameraResult.frames()[0]
             frameTransform = pg.SRTTransform(someFrame.globalTransform())
             pixelSize = someFrame.info()['pixelSize'][0]

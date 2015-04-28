@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>302</width>
-    <height>110</height>
+    <width>330</width>
+    <height>97</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -54,9 +54,9 @@
              <number>0</number>
             </property>
             <item>
-             <widget class="QRadioButton" name="icModeRadio">
+             <widget class="QRadioButton" name="vcModeRadio">
               <property name="text">
-               <string>IC</string>
+               <string>VC</string>
               </property>
              </widget>
             </item>
@@ -71,9 +71,9 @@
              </widget>
             </item>
             <item>
-             <widget class="QRadioButton" name="vcModeRadio">
+             <widget class="QRadioButton" name="icModeRadio">
               <property name="text">
-               <string>VC</string>
+               <string>IC</string>
               </property>
              </widget>
             </item>
@@ -276,6 +276,11 @@
  </widget>
  <customwidgets>
   <customwidget>
+   <class>SpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>acq4.pyqtgraph</header>
+  </customwidget>
+  <customwidget>
    <class>StimGenerator</class>
    <extends>QWidget</extends>
    <header>acq4.util.generator.StimGenerator</header>
@@ -286,11 +291,6 @@
    <extends>QWidget</extends>
    <header>acq4.pyqtgraph</header>
    <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>SpinBox</class>
-   <extends>QDoubleSpinBox</extends>
-   <header>acq4.pyqtgraph</header>
   </customwidget>
  </customwidgets>
  <resources/>

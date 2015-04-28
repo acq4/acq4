@@ -1,9 +1,14 @@
 import serial, time, sys
-
+import logging
 
 class TimeoutError(Exception):
-    """Raised when a serial communication times out."""
-    pass
+    """Raised when a serial communication times out.
+
+    *data* attribute contains any data received so far.
+    """
+    def __init__(self, msg, data):
+        self.data = data
+        Exception.__init__(self, msg)
 
 
 class DataError(Exception):
@@ -74,21 +79,26 @@ class SerialDevice(object):
             })
         self.__serialOpts.update(kwds)
         self.serial = serial.Serial(**self.__serialOpts)
+        logging.info('Opened serial port: %s', self.__serialOpts)
 
     def close(self):
         """Close the serial port."""
         self.serial.close()
         self.serial = None
+        logging.info('Closed serial port: %s', self.__serialOpts['port'])
 
     def readAll(self):
         """Read all bytes waiting in buffer; non-blocking."""
         n = self.serial.inWaiting()
         if n > 0:
-            return self.serial.read(n)
+            d = self.serial.read(n)
+            logging.info('Serial port %s readAll: %r', self.__serialOpts['port'], d)
+            return d
         return ''
     
     def write(self, data):
         """Write *data* to the serial port"""
+        logging.info('Serial port %s write: %r', self.__serialOpts['port'], data)
         self.serial.write(data)
 
     def read(self, length, timeout=5, term=None):
@@ -102,14 +112,16 @@ class SerialDevice(object):
         #self.serial.setTimeout(timeout) #broken!
         packet = self._readWithTimeout(length, timeout)
         if len(packet) < length:
-            raise TimeoutError("Timed out waiting for serial data (received so far: %s)" % repr(packet))
+            raise TimeoutError("Timed out waiting for serial data (received so far: %s)" % repr(packet), packet)
         if term is not None:
             if packet[-len(term):] != term:
                 time.sleep(0.01)
                 extra = self.readAll()
                 err = DataError("Packet corrupt: %s (len=%d)" % (repr(packet), len(packet)), packet, extra)
                 raise err
+            logging.info('Serial port %s read: %r', self.__serialOpts['port'], packet)
             return packet[:-len(term)]
+        logging.info('Serial port %s read: %r', self.__serialOpts['port'], packet)
         return packet
         
     def _readWithTimeout(self, nBytes, timeout):
@@ -133,7 +145,6 @@ class SerialDevice(object):
             sleep = min(0.05, 2*sleep) # wait a bit longer next time
         return packet
 
-
     def readUntil(self, term, minBytes=0, timeout=5):
         """Read from the serial port until *term* is received, or *timeout* has elapsed.
 
@@ -150,12 +161,15 @@ class SerialDevice(object):
         while True:
             elapsed = time.time()-start
             if elapsed >= timeout:
-                raise TimeoutError("Timed out while reading serial packet. Data so far: '%s'" % repr(packet))
+                err = TimeoutError("Timed out while reading serial packet. Data so far: '%s'" % repr(packet), packet)
+                raise err
             try:
                 packet += self.read(1, timeout=timeout-elapsed)
             except TimeoutError:
+
                 raise TimeoutError("Timed out while reading serial packet. Data so far: '%s'" % repr(packet))
             if len(packet) > minBytes and packet[-len(term):] == term:
+
                 return packet
 
     def clearBuffer(self):
