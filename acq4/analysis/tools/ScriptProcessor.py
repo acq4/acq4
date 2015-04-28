@@ -162,7 +162,11 @@ class ScriptProcessor(AnalysisModule):
             thiscell = self.script['Cells'][cell]
             #print 'processing cell: %s' % thiscell
             if thiscell['include'] is False:  # skip this cell
-                print 'Skipped: %s, reason:%s' % (cell, thiscell['reason'])
+                try:
+                    print 'Skipped: %s, reason:%s' % (cell, thiscell['reason'])
+                except:
+                    raise ValueError('cell %s has no tag "reason" but "include" is False' % cell)
+                    
                 continue
             sortedkeys = sorted(thiscell['choice'].keys())  # sort by order of recording (# on protocol)
             prog1.setValue(nc/ncell)

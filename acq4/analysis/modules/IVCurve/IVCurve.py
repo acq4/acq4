@@ -544,9 +544,9 @@ class IVCurve(AnalysisModule):
         self.cmd_plot.plotItem.clearPlots()
         ntr = self.Clamps.traces.shape[0]
         self.data_plot.setDownsampling(auto=False, mode='mean')
-        self.data_plot.setClipToView(True)
+        self.data_plot.setClipToView(False)  # setting True deletes some points used for decoration of spikes by shape
         self.cmd_plot.setDownsampling(auto=False, mode='mean')
-        self.cmd_plot.setClipToView(True)
+        self.cmd_plot.setClipToView(True)  # can leave this true since we do not put symbols on the plot
         self.data_plot.disableAutoRange()
         self.cmd_plot.disableAutoRange()
         cmdindxs = np.unique(self.Clamps.cmd)  # find the unique voltages
@@ -1760,7 +1760,7 @@ class IVCurve(AnalysisModule):
             ('Protocol', 'text'),
             ('Genotype', 'text'),
             ('Celltype', 'text'),
-            ('UseData', 'bool'),
+            ('UseData', 'int'),
             ('RMP', 'real'),
             ('R_in', 'real'),
             ('tau_m', 'real'),
@@ -1809,7 +1809,7 @@ class IVCurve(AnalysisModule):
             'Protocol': self.loaded.name(),
             'Genotype': self.analysis_summary['Genotype'],
             'Celltype': self.Script.analysis_parameters['Celltype'],  # uses global info, not per cell info
-            'UseData' : True,
+            'UseData' : 1,
             'RMP': self.rmp / 1000.,
             'R_in': self.r_in,
             'tau_m': self.tau,
@@ -1832,7 +1832,6 @@ class IVCurve(AnalysisModule):
             'IV_Curve_pk': repr(np.array(self.analysis_summary['IV_Curve_pk']).tolist()),
             'IV_Curve_ss': repr(np.array(self.analysis_summary['IV_Curve_ss']).tolist()),
          }
-       # print 'pulse duration: ', self.analysis_summary['pulseDuration']
         ## If only one record was given, make it into a list of one record
         if isinstance(data, dict):
             data = [data]
