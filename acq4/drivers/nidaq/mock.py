@@ -205,6 +205,9 @@ class Task:
         self.nPts = nPts
         #print self.chans, self.clock
         
+    def GetSampClkMaxRate(self):
+        return 2e6
+        
     def device(self):
         return '/'+self.chans[0].split('/')[1]
         
