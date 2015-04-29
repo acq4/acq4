@@ -79,7 +79,7 @@ class ImagingModule(AnalysisModule):
             detectors['detector'] = det['value']
         # current format:
         dets = state['children'].pop('detectors', {})
-        for name, data in dets['children'].items():
+        for name, data in dets.get('children', {}).items():
             detectors[name] = data['value']
 
         self.params.restoreState(state, removeChildren=False)

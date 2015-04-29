@@ -127,20 +127,26 @@ class MosaicEditor(AnalysisModule):
         for f in files:
             if f in self.files:   ## Do not allow loading the same file more than once
                 item = self.files[f]
-                item.show()
+                item.show()  # just show the file; but do not load it
                 continue
-            if f.isFile():
+            
+            if f.isFile():  # add specified files
                 item = self.canvas.addFile(f)
-                self.amendFile(f, item)
-            elif f.isDir():
-                filesindir = glob.glob(f.name() + '/*.ma')
-                for fd in filesindir:
-                    try:
-                        fdh = DataManager.getFileHandle(fd) # open file to get handle.
-                    except IOError:
-                        continue # just skip file
-                    item = self.canvas.addFile(fdh)
-                    self.amendFile(f, item)
+            elif f.isDir():  # Directories are more complicated
+                if self.dataModel.dirType(f) == 'Cell':  #  If it is a cell, just add the cell "Marker" to the plot
+                # note: this breaks loading all images in Cell directory (need another way to do that)
+                    item = self.canvas.addFile(f)
+                else:  # in all other directory types, look for MetaArray files
+                    filesindir = glob.glob(f.name() + '/*.ma')
+                    for fd in filesindir:  # add files in the directory (ma files: e.g., images, videos)
+                        try:
+                            fdh = DataManager.getFileHandle(fd) # open file to get handle.
+                        except IOError:
+                            continue # just skip file
+                        item = self.canvas.addFile(fdh)  # add it
+                        self.amendFile(f, item)
+                    if len(filesindir) == 0:  # add protocol sequences
+                        item = self.canvas.addFile(f)
         self.canvas.selectItem(item)
         self.canvas.autoRange()
 
@@ -246,7 +252,7 @@ class MosaicEditor(AnalysisModule):
 
     def updateScaling(self):
         """
-        Set all the seleccted images to have the scaling in the editor bar (absolute values)
+        Set all the selected images to have the scaling in the editor bar (absolute values)
         """
         nsel =  len(self.canvas.selectedItems())
         if nsel == 0:

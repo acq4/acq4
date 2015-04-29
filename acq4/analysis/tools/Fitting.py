@@ -34,16 +34,14 @@ if the current curve and the current plot instance are passed.
     Additional Terms:
     The author(s) would appreciate that any modifications to this program, or
     corrections of erros, be reported to the principal author, Paul Manis, at
-    pmanis@med.unc.edu, with the subject line "PySounds Modifications".
+    pmanis@med.unc.edu, with the subject line "Fitting Modifications".
 
-    Note: This program also relies on the TrollTech Qt libraries for the GUI.
-    You must obtain these libraries from TrollTech directly, under their license
-    to use the program.
 """
 
 import sys
 import numpy
 import scipy
+import scipy.optimize
 
 try:
     import openopt
@@ -80,8 +78,10 @@ class Fitting():
         self.fitfuncmap = {
         'exp0'  : (self.exp0eval, [0.0, 20.0], 2000, 'k', [0, 100, 1.],
                    [1.0, 5.0], ['A0', 'tau'], None, None),
-        'exp1'  : (self.expeval, [0.0, 0.0, 20.0], 2000, 'k', [0, 100, 1.],
-                   [0.5, 1.0, 5.0], ['DC', 'A0', 'tau'], None, self.expevalprime),
+        'exp1'  : (self.expeval, [-60, 3.0, 15.0], 10000, 'k', [0, 100, 1.],
+                   [0.5, 1.0, 5.0], ['DC', 'A0', 'tau'], None, None), #self.expevalprime),
+        'exptau'  : (self.exptaueval, [-60, 3.0, 15.0], 10000, 'k', [0, 100, 1.],
+                   [0.5, 1.0, 5.0], ['DC', 'A0', 'tau'], None, None), #self.expevalprime),
         'expsum'  : (self.expsumeval,  [0.0, -0.5, 200.0, -0.25, 450.0], 500000, 'k',  [0, 1000, 1.],
                    [0.0, -1.0, 150.0, -0.25, 350.0], ['DC', 'A0', 'tau0', 'A1', 'tau1'], None, None),
         'expsum2'  : (self.expsumeval2,  [0., -0.5, -0.250], 50000, 'k',  [0, 1000, 1.],
@@ -163,6 +163,20 @@ class Fitting():
             else:
                 return y - yd
 
+    def exptaueval(self, p, x, y=None, C = None, sumsq = True, weights=None):
+        """
+        Exponential with offset, decay from starting value
+        """
+        yd = (p[0]+p[1]) - p[1] * numpy.exp(-x/p[2])
+#        print yd.shape
+#        print y.shape
+        if y is None:
+            return yd
+        else:
+            if sumsq is True:
+                return numpy.sum((y - yd)**2.0)
+            else:
+                return y - yd
     
     def expeval(self, p, x, y=None, C = None, sumsq = False, weights=None):
         """
@@ -185,7 +199,6 @@ class Fitting():
         """
         ydp = p[1] * numpy.exp(-x/p[2])/(p[2]*p[2])
         yd = p[0] + p[1] * numpy.exp(-x/p[2])
-        print y
         if y is None:
             return (yd, ydp)
         else:
@@ -434,16 +447,20 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
         # print 'datatype: ', dataType
         # print 'nblock: ', nblock
         # print 'whichdata: ', whichdata
+
         for block in range(nblock):
             for record in whichdata:
                 if dataType == 'blocks':
                     (tx, dy) = self.getClipData(tdat[block], ydat[block][record, thisaxis, :], t0, t1)
+                elif ydat.ndim == 1:
+                    (tx, dy) = self.getClipData(tdat, ydat, t0, t1)
+
                 else:
                     (tx, dy) = self.getClipData(tdat, ydat[record,:], t0, t1)
                 # print 'Fitting.py: block, type, Fit data: ', block, dataType
                 # print tx.shape
                 # print dy.shape
-                tx = numpy.array(tx)
+                tx = numpy.array(tx)-t0
                 dy = numpy.array(dy)
                 yn.append(names)
                 if not any(tx):
@@ -461,11 +478,11 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                             print "optimize.leastsq error flag is: %d" % (ier)
                             print mesg
                 elif method == 'curve_fit':
-                    print fpars
-                    print fixedPars
                     plsq, cov = scipy.optimize.curve_fit(func[0], tx, dy, p0=fpars)
                     ier = 0
                 elif method in ['fmin', 'simplex', 'Nelder-Mead', 'bfgs', 'TNC', 'SLSQP', 'COBYLA', 'L-BFGS-B']: # use standard wrapper from scipy for those routintes
+                    if constraints is None:
+                        constraints = ()
                     res = scipy.optimize.minimize(func[0], fpars, args=(tx, dy, fixedPars, True),
                      method=method, jac=None, hess=None, hessp=None, bounds=bounds, constraints=constraints, tol=None, callback=None, 
                      options={'maxiter': func[2], 'disp': False })
@@ -539,14 +556,18 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
         else:
             fcolor = color
         if yFit is None:
-            yFit = numpy.array([])
+            yFit = numpy.zeros((len(fitPars), xFit.shape[1]))
             for k in range(0, len(fitPars)):
                 yFit[k] = func[0](fitPars[k], xFit[k], C=fixedPars)
-        if plotInstance is None or fitPlot is None:
-            return(yfit)
+        if fitPlot is None:
+            return(yFit)
         for k in range(0, len(fitPars)):
-            plotInstance.PlotLine(fitPlot, xFit[k], yFit[k], color = fcolor)
-        return(yfit)
+            print dir(plotInstance)
+            if plotInstance is None:
+                fitPlot.plot(xFit[k], yFit[k], pen=fcolor)
+            else:
+                plotInstance.PlotLine(fitPlot, xFit[k], yFit[k], color = fcolor)
+        return(yFit)
         
     def getFitErr(self):
         """ Return the fit error for the most recent fit
@@ -730,7 +751,7 @@ if __name__ == "__main__":
     if exploreError is True:
         # explore the error surface for a function:
 
-        func = 'exppulse'
+        func = 'exp1'
         f = Fits.fitfuncmap[func]
         p1range = numpy.arange(0.1, 5.0, 0.1)
         p2range = numpy.arange(0.1, 5.0, 0.1)
@@ -775,7 +796,7 @@ if __name__ == "__main__":
     
     signal_to_noise = 100000.
     for func in Fits.fitfuncmap:
-        if func != 'exppulse':
+        if func != 'exp1':
             continue
         print "\nFunction: %s\nTarget: " % (func),
         f = Fits.fitfuncmap[func]
@@ -795,7 +816,7 @@ if __name__ == "__main__":
 
         if func == 'exppulse':
             C = f[7]
-            
+        tv = f[5]
         y = f[0](f[1], x, C=C)
         yd = numpy.array(y)
         noise = numpy.random.normal(0, 0.1, yd.shape)
@@ -843,6 +864,7 @@ if __name__ == "__main__":
             # print names
         
         else:
+            initialgr = f[0](f[5], x, None )
             (fpar, xf, yf, names) = Fits.FitRegion(
                 numpy.array([1]), 0, x, yd, fitFunc = func, fixedPars = C, constraints = cons, bounds = bnds, method=testMethod)
         #print fpar
@@ -860,7 +882,7 @@ if __name__ == "__main__":
         print( "FIT(%d)   : %s" % (j, outstr) )
         print( "init(%d) : %s" % (j, initstr) )
         print( "Error:   : %f" % (Fits.fitSum2Err))
-        if func is 'exppulse':
+        if func is 'exp1':
             pylab.figure()
             pylab.plot(numpy.array(x), yd, 'ro-')
             pylab.hold(True)

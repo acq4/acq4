@@ -27,6 +27,7 @@ else:
     callgraph = False
 
 
+
 ## Enable stack trace output when a crash is detected
 from .util.debug import enable_faulthandler
 enable_faulthandler()

@@ -1,0 +1,55 @@
+pos: (0.0, 0.0)
+connects: [('HistogramDetrend.0', 'Out', 'DenoiseFilter.0', 'In'), ('EventListPlotter.0', 'plot', 'Data Plot', 'In'), ('DerivativeFilter.0', 'Out', 'PythonEval.0', 'Derivative'), ('ButterworthFilter.0', 'Out', 'DerivativeFilter.0', 'In'), ('ThresholdEvents.0', 'Out', 'PythonEval.0', 'input'), ('ColumnSelect.0', 'primary', 'HistogramDetrend.0', 'In'), ('ExpDeconvolve.0', 'Out', 'ThresholdEvents.1', 'In'), ('Input', 'Input', 'ReadFile', 'input'), ('ColumnSelect.1', 'time', 'EventListPlotter.0', 'events'), ('ThresholdEvents.0', 'Out', 'Output', 'Output'), ('ButterworthFilter.0', 'Out', 'ThresholdEvents.0', 'In'), ('ThresholdEvents.0', 'Out', 'ColumnSelect.1', 'In'), ('Input', 'Input', 'PythonEval.0', 'File'), ('ThresholdEvents.1', 'plot', 'PSP Plot', 'In'), ('DerivativeFilter.0', 'Out', 'Data Plot', 'In'), ('ReadFile', 'output', 'ColumnSelect.0', 'In'), ('DenoiseFilter.0', 'Out', 'ButterworthFilter.0', 'In'), ('ButterworthFilter.0', 'Out', 'Data Plot', 'In'), ('ThresholdEvents.0', 'plot', 'Data Plot', 'In'), ('ExpDeconvolve.0', 'Out', 'PSP Plot', 'In'), ('ButterworthFilter.0', 'Out', 'ExpDeconvolve.0', 'In'), ('Input', u'Instance', 'PythonEval.0', 'Instance')]
+terminals:
+    Input:
+        multi: False
+        io: 'in'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+    Output:
+        multi: False
+        io: 'out'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+    Instance:
+        multi: False
+        io: 'in'
+        renamable: True
+        multiable: False
+        removable: True
+        optional: False
+bypass: False
+inputNode:
+    terminals:
+        Input:
+            multi: False
+            io: 'out'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+        Instance:
+            multi: False
+            io: 'out'
+            renamable: True
+            multiable: False
+            removable: True
+            optional: False
+    pos: (-619.7045650994675, 56.176592229020855)
+    bypass: False
+nodes: [{'state': {'pos': (-9.751667928991083, -193.18697629959843), 'bypass': False}, 'pos': (-9.751667928991083, -193.18697629959843), 'class': 'PlotWidget', 'name': 'PSP Plot'}, {'state': {'pos': (-247.13629815478356, 153.23376458808266), 'bypass': False, 'ctrl': {'threshold': 10.0, 'radius': 2}}, 'pos': (-247.13629815478356, 153.23376458808266), 'class': 'DenoiseFilter', 'name': 'DenoiseFilter.0'}, {'state': {'pos': (440.47550646665263, -179.1602228505306), 'bypass': False}, 'pos': (440.47550646665263, -179.1602228505306), 'class': 'PlotWidget', 'name': 'Data Plot'}, {'state': {'pos': (-377.7451042885629, 154.33249616098527), 'bypass': False, 'ctrl': {'numBins': 20, 'offsetOnly': True, 'windowSize': 500}}, 'pos': (-377.7451042885629, 154.33249616098527), 'class': 'HistogramDetrend', 'name': 'HistogramDetrend.0'}, {'state': {'columns': ['primary'], 'pos': (-393.69366478324355, -55.90279620007435), 'bypass': False}, 'pos': (-393.69366478324355, -55.90279620007435), 'class': 'ColumnSelect', 'name': 'ColumnSelect.0'}, {'state': {'columns': ['time'], 'pos': (144.06151789307125, -200.37721730118608), 'bypass': False}, 'pos': (144.06151789307125, -200.37721730118608), 'class': 'ColumnSelect', 'name': 'ColumnSelect.1'}, {'state': {'pos': (-114.18723130145031, 150.85296730245003), 'bypass': False, 'ctrl': {'bidir': True, 'gStop': 40.0, 'wStop': 8000.0, 'band': u'lowpass', 'wPass': 4000.0, 'gPass': 1.0}}, 'pos': (-114.18723130145031, 150.85296730245003), 'class': 'ButterworthFilter', 'name': 'ButterworthFilter.0'}, {'state': {'text': "# Access inputs as args['input_name']\nreturn {'output': args['input']['AxoPatch200.ma'].read()} ## one key per output terminal", 'terminals': OrderedDict([('input', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False}), ('output', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False})]), 'pos': (-504.6754330063934, -54.52696326931209), 'bypass': False}, 'pos': (-504.6754330063934, -54.52696326931209), 'class': 'PythonEval', 'name': 'ReadFile'}, {'state': {'pos': (67.33056474809916, 148.03092033789426), 'bypass': False, 'ctrl': {}}, 'pos': (67.33056474809916, 148.03092033789426), 'class': 'DerivativeFilter', 'name': 'DerivativeFilter.0'}, {'state': {'text': "# Access inputs as args['input_name']\n# import a python file here\n#from acq4.analysis.scripts.chr2analysis #import ChR2\n\n#name, startTime, ipi, pdur, nspikes = \n\nres = args['Instance'].protocolInfoLaser( args['File'], args['input'], args['Derivative'])\t\t   \n\nreturn {'output': res} ## one key per output terminal", 'terminals': OrderedDict([('input', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': False, 'optional': False}), ('output', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': True, 'removable': False, 'optional': False}), ('File', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': True, 'optional': False}), ('Derivative', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': True, 'optional': False}), ('Instance', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': True, 'optional': False})]), 'pos': (296.5663875012864, 46.00042451606555), 'bypass': False}, 'pos': (296.5663875012864, 46.00042451606555), 'class': 'PythonEval', 'name': 'PythonEval.0'}, {'state': {'pos': (262.32818886866016, -200.05487109156988), 'bypass': False, 'ctrl': {'color': (255, 0, 0, 255)}}, 'pos': (262.32818886866016, -200.05487109156988), 'class': 'EventListPlotter', 'name': 'EventListPlotter.0'}, {'state': {'pos': (-214.3593604915224, -118.68473765487353), 'bypass': False, 'ctrl': {'baseline': 0.0, 'minLength': 0, 'eventLimit': 100, 'deadTime': 0.0, 'adjustTimes': False, 'threshold': 0.02, 'minPeak': 0.03, 'display': False, 'reverseTime': 0.0, 'minSum': 0.0}}, 'pos': (-214.3593604915224, -118.68473765487353), 'class': 'ThresholdEvents', 'name': 'ThresholdEvents.1'}, {'state': {'pos': (-23.581246125440316, -43.20026696636201), 'bypass': False, 'ctrl': {'baseline': 0.0, 'minLength': 0, 'eventLimit': 100, 'deadTime': 0.0, 'adjustTimes': False, 'threshold': 0.0670491139249, 'minPeak': 0.00901841479712, 'display': True, 'reverseTime': -8.0, 'minSum': 0.0}}, 'pos': (-23.581246125440316, -43.20026696636201), 'class': 'ThresholdEvents', 'name': 'ThresholdEvents.0'}, {'state': {'pos': (-393.45565166784775, -192.7069203118049), 'bypass': False, 'ctrl': {'tau': 0.03}}, 'pos': (-393.45565166784775, -192.7069203118049), 'class': 'ExpDeconvolve', 'name': 'ExpDeconvolve.0'}]
+outputNode:
+    terminals:
+        Output:
+            multi: False
+            io: 'in'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+    pos: (445.6101424770717, -62.6834854872653)
+    bypass: False

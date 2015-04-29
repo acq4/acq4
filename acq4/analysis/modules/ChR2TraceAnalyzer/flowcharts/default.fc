@@ -1,0 +1,69 @@
+pos: (0.0, 0.0)
+connects: [('PostRegion', 'region', 'RegionNames', 'regions'), ('BesselFilter.0', 'Out', 'Plot_001', 'In'), ('SubtractMode', 'Out', 'BesselFilter.0', 'In'), ('ReadFile', 'output', 'ColumnSelect.1', 'In'), ('SpikeDetect.0', 'Out', 'ColumnSelect.2', 'In'), ('DirRegion', 'widget', u'Plot_000', 'In'), ('EventMasker.0', 'output', 'LabelRegions.0', 'events'), ('ThresholdEvents.0', 'Out', 'EventFitter.0', 'events'), ('ColumnSelect.2', 'time', 'EventListPlotter.1', 'events'), ('HistogramDetrend.0', 'Out', u'Plot_000', 'In'), ('PostRegion', 'widget', u'Plot_000', 'In'), ('EventListPlotter.1', 'plot', u'Plot_000', 'In'), ('ColumnJoin.0', 'output', 'Output', 'events'), ('LabelRegions.0', 'output', 'ColumnJoin.0', 'data'), ('Input', 'dataIn', 'ColumnJoin.0', 'SourceFile'), ('DirRegion', 'region', 'RegionNames', 'regions'), ('LabelRegions.0', 'output', 'ColumnSelect.0', 'In'), ('SubtractMode', 'Out', 'EventFitter.0', 'waveform'), ('ModeFilter.0', 'Out', 'Plot_001', 'In'), ('ModeFilter.0', 'Out', 'SubtractMode', 'B'), ('RegionNames', 'output', 'Output', u'regions'), ('PreRegion', 'widget', u'Plot_000', 'In'), ('RemoveDirect.0', 'plot', u'Plot_000', 'In'), ('RemoveDirect.0', 'output', 'HistogramDetrend.0', 'In'), ('ThresholdEvents.0', 'plot', 'Plot_001', 'In'), ('PreRegion', 'region', 'LabelRegions.0', 'regions'), ('BesselFilter.2', 'Out', 'RemoveDirect.0', 'data'), ('EventListPlotter.0', 'plot', 'Plot_001', 'In'), ('ColumnSelect.0', 'time', 'EventListPlotter.0', 'events'), ('ExpDeconvolve.1', 'Out', 'BesselFilter.1', 'In'), ('DirRegion', 'region', 'LabelRegions.0', 'regions'), ('RemoveDirect.0', 'fitParams', 'Output', u'directFit'), ('BesselFilter.1', 'Out', 'ModeFilter.0', 'In'), ('PostRegion', 'region', 'LabelRegions.0', 'regions'), ('RemovePeriodic.0', 'Out', 'DenoiseFilter.0', 'In'), ('ColumnSelect.1', 'primary', 'RemovePeriodic.0', 'In'), ('ExpDeconvolve.1', 'Out', 'SubtractMode', 'A'), ('ColumnSelect.1', 'primary', 'SpikeDetect.0', 'In'), ('BesselFilter.0', 'Out', 'ThresholdEvents.0', 'In'), ('HistogramDetrend.0', 'Out', 'ExpDeconvolve.1', 'In'), ('PreRegion', 'region', 'RegionNames', 'regions'), ('EventListPlotter.0', 'plot', u'Plot_000', 'In'), ('Input', 'dataIn', 'ReadFile', 'input'), ('EventFitter.0', 'plot', u'Plot_000', 'In'), ('EventFitter.0', 'output', 'EventMasker.0', 'events'), ('DenoiseFilter.0', 'Out', 'BesselFilter.2', 'In'), ('SpikeDetect.0', 'Out', 'EventMasker.0', 'regions')]
+terminals:
+    dataIn:
+        multi: False
+        io: 'in'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+    events:
+        multi: False
+        io: 'out'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+    regions:
+        multi: False
+        io: 'out'
+        renamable: True
+        multiable: True
+        removable: True
+        optional: False
+    directFit:
+        multi: False
+        io: 'out'
+        renamable: True
+        multiable: True
+        removable: True
+        optional: False
+bypass: False
+inputNode:
+    terminals:
+        dataIn:
+            multi: False
+            io: 'out'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+    pos: (-336.13410534420166, -390.27408754823836)
+    bypass: False
+nodes: [{'state': {'pos': (-93.37600569594355, -161.2686197214665), 'bypass': False, 'ctrl': {'numBins': 50, 'offsetOnly': True, 'windowSize': 2000}}, 'pos': (-93.37600569594355, -161.2686197214665), 'class': 'HistogramDetrend', 'name': 'HistogramDetrend.0'}, {'state': {'pos': (533.456068041432, 95.60193338073904), 'bypass': False, 'ctrl': {'band': u'lowpass', 'cutoff': 2000.0, 'order': 4, 'bidir': True}}, 'pos': (533.456068041432, 95.60193338073904), 'class': 'BesselFilter', 'name': 'BesselFilter.0'}, {'state': {'pos': (369.60520170645543, -383.589044814311), 'bypass': False, 'ctrl': {'band': u'lowpass', 'cutoff': 800.0, 'order': 4, 'bidir': True}}, 'pos': (369.60520170645543, -383.589044814311), 'class': 'BesselFilter', 'name': 'BesselFilter.1'}, {'state': {'pos': (-338.76975341124546, 157.332124698565), 'bypass': False, 'ctrl': {'band': u'lowpass', 'cutoff': 6000.0, 'order': 4, 'bidir': True}}, 'pos': (-338.76975341124546, 157.332124698565), 'class': 'BesselFilter', 'name': 'BesselFilter.2'}, {'state': {'pos': (-339.07534958763847, 52.1851757199142), 'bypass': True, 'ctrl': {'threshold': 4.0, 'radius': 4}}, 'pos': (-339.07534958763847, 52.1851757199142), 'class': 'DenoiseFilter', 'name': 'DenoiseFilter.0'}, {'state': {'terminals': OrderedDict([('output', {'multi': False, 'io': 'out', 'renamable': False, 'multiable': False, 'removable': False, 'optional': False}), ('SourceFile', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False}), ('data', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False})]), 'pos': (1529.8529669973982, -119.59762608448717), 'bypass': False, 'order': ['SourceFile', 'data']}, 'pos': (1529.8529669973982, -119.59762608448717), 'class': 'ColumnJoin', 'name': 'ColumnJoin.0'}, {'state': {'text': "rgn = {}\nfor term, r in args['regions'].iteritems():\n    rgn[term.node().name()] = r\nreturn {'output': rgn}", 'terminals': OrderedDict([('output', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False}), ('regions', {'multi': True, 'io': 'in', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False})]), 'pos': (1511.292901083585, -237.54296780960487), 'bypass': False}, 'pos': (1511.292901083585, -237.54296780960487), 'class': 'PythonEval', 'name': 'RegionNames'}, {'state': {'pos': (1118.1248371925772, -600.9163496410893), 'bypass': False, 'ctrl': {'start': 0.103, 'stop': 0.108, 'display': False, 'movable': False}}, 'pos': (1118.1248371925772, -600.9163496410893), 'class': 'RegionSelect', 'name': 'PostRegion'}, {'state': {'pos': (1536.3054571025607, 119.03607047658394), 'bypass': False}, 'pos': (1536.3054571025607, 119.03607047658394), 'class': 'PlotWidget', 'name': 'Plot_001'}, {'state': {'pos': (-95.89570837252118, 51.52145840353519), 'bypass': False, 'ctrl': {'subtractDirect': False, 'risePower': 2.0, 'plotColor': (255, 0, 0, 255), 'minDirectDuration': 0.005, 'stimulusTime': 0.1}}, 'pos': (-95.89570837252118, 51.52145840353519), 'class': 'RemoveDirect', 'name': 'RemoveDirect.0'}, {'state': {'pos': (1374.5786573887203, -4.532208785068562), 'bypass': False, 'ctrl': {'color': (128, 128, 128, 255)}}, 'pos': (1374.5786573887203, -4.532208785068562), 'class': 'EventListPlotter', 'name': 'EventListPlotter.0'}, {'state': {'pos': (316.4727781547989, -159.69291825784381), 'bypass': False, 'ctrl': {'color': (172, 0, 2, 255)}}, 'pos': (316.4727781547989, -159.69291825784381), 'class': 'EventListPlotter', 'name': 'EventListPlotter.1'}, {'state': {'pos': (977.2615345266515, -47.11195277625701), 'bypass': True, 'ctrl': {'postPadding': 0.01, 'prePadding': -0.02}}, 'pos': (977.2615345266515, -47.11195277625701), 'class': 'EventMasker', 'name': 'EventMasker.0'}, {'state': {'pos': (599.874303017764, -446.6094610322313), 'bypass': True}, 'pos': (599.874303017764, -446.6094610322313), 'class': 'Subtract', 'name': 'SubtractMode'}, {'state': {'pos': (-335.4658633769637, -60.03121586864052), 'bypass': False, 'ctrl': {'f0': 60.0, 'harmonics': 30, 'samples': 1}}, 'pos': (-335.4658633769637, -60.03121586864052), 'class': 'RemovePeriodic', 'name': 'RemovePeriodic.0'}, {'state': {'text': "{'output': input.read()}", 'terminals': OrderedDict([('input', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False}), ('output', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': False, 'removable': False, 'optional': False})]), 'pos': (-339.03109643213054, -277.4992118125836), 'bypass': False}, 'pos': (-339.03109643213054, -277.4992118125836), 'class': 'PythonEval', 'name': 'ReadFile'}, {'state': {'pos': (1131.8145397749965, -64.21642778865228), 'bypass': False}, 'pos': (1131.8145397749965, -64.21642778865228), 'class': 'LabelRegions', 'name': 'LabelRegions.0'}, {'state': {'pos': (822.724739632016, -35.94469419037148), 'bypass': False, 'ctrl': {'multiFit': False, 'plotEvents': False, 'plotFits': True, 'plotGuess': False}}, 'pos': (822.724739632016, -35.94469419037148), 'class': 'EventFitter', 'name': 'EventFitter.0'}, {'state': {'pos': (657.9104111476462, 36.0316046673153), 'bypass': False, 'ctrl': {'baseline': 0.0, 'minLength': 5, 'eventLimit': 280, 'deadTime': 0.0, 'adjustTimes': True, 'threshold': 8e-12, 'minPeak': 3e-11, 'display': True, 'reverseTime': 0.004, 'minSum': 0.0}}, 'pos': (657.9104111476462, 36.0316046673153), 'class': 'ThresholdEvents', 'name': 'ThresholdEvents.0'}, {'state': {'pos': (4.815614238755231, -60.681120049778116), 'bypass': True, 'ctrl': {'radius': 3, 'minDiff': 3e-11}}, 'pos': (4.815614238755231, -60.681120049778116), 'class': 'SpikeDetect', 'name': 'SpikeDetect.0'}, {'state': {'columns': ['time'], 'pos': (194.19690518572355, -143.14578051339382), 'bypass': False}, 'pos': (194.19690518572355, -143.14578051339382), 'class': 'ColumnSelect', 'name': 'ColumnSelect.2'}, {'state': {'pos': (253.32859213644082, -456.9560015515664), 'bypass': False, 'ctrl': {'tau': 0.0005}}, 'pos': (253.32859213644082, -456.9560015515664), 'class': 'ExpDeconvolve', 'name': 'ExpDeconvolve.1'}, {'state': {'columns': ['time'], 'pos': (1264.3548185629093, -6.381976812651921), 'bypass': False}, 'pos': (1264.3548185629093, -6.381976812651921), 'class': 'ColumnSelect', 'name': 'ColumnSelect.0'}, {'state': {'columns': ['primary'], 'pos': (-336.13189749940614, -166.73411350370455), 'bypass': False}, 'pos': (-336.13189749940614, -166.73411350370455), 'class': 'ColumnSelect', 'name': 'ColumnSelect.1'}, {'state': {'pos': (1485.0012388655823, -562.2019780676075), 'bypass': False}, 'pos': (1485.0012388655823, -562.2019780676075), 'class': 'PlotWidget', 'name': u'Plot_000'}, {'state': {'pos': (866.1993403341838, -536.3476454710344), 'bypass': False, 'ctrl': {'start': 0.0, 'stop': 0.1, 'display': False, 'movable': False}}, 'pos': (866.1993403341838, -536.3476454710344), 'class': 'RegionSelect', 'name': 'PreRegion'}, {'state': {'pos': (480.35568018550083, -384.31071069747946), 'bypass': False, 'ctrl': {'window': 1000}}, 'pos': (480.35568018550083, -384.31071069747946), 'class': 'ModeFilter', 'name': 'ModeFilter.0'}, {'state': {'pos': (992.6325853630201, -567.4967854268216), 'bypass': False, 'ctrl': {'start': 0.1, 'stop': 0.1001, 'display': False, 'movable': False}}, 'pos': (992.6325853630201, -567.4967854268216), 'class': 'RegionSelect', 'name': 'DirRegion'}]
+outputNode:
+    terminals:
+        events:
+            multi: False
+            io: 'in'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+        regions:
+            multi: False
+            io: 'in'
+            renamable: True
+            multiable: True
+            removable: True
+            optional: False
+        directFit:
+            multi: False
+            io: 'in'
+            renamable: True
+            multiable: True
+            removable: True
+            optional: False
+    pos: (1649.7820381925437, -140.4651226736956)
+    bypass: False
