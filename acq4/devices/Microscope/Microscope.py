@@ -441,6 +441,8 @@ class ScopeCameraModInterface(CameraModuleInterface):
         # This is a little tricky because the objective might have an offset+scale relative
         # to the focus device.
         fd = self.getDevice().focusDevice()
+        if fd is None:
+            return
         prof('3')
         tpos = fd.globalTargetPosition()
         prof('4')
