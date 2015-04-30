@@ -178,7 +178,7 @@ class Photostim(AnalysisModule):
                     debug.printExc("Error loading file %s" % fh.name())
                     return False
                 dlg += 1
-                if dlg.wasCancelled():
+                if dlg.wasCanceled():
                     return
 
     def loadScan(self, fh):
