@@ -53,6 +53,7 @@ class STDPAnalyzer(AnalysisModule):
             p.setLabel('bottom', 'Time')
 
         self.traceSelectRgn = pg.LinearRegionItem()
+        self.traceSelectRgn.setRegion([0, 300])
         self.plots.exptPlot.addItem(self.traceSelectRgn)
         self.traceSelectRgn.sigRegionChanged.connect(self.updateTracesPlot)
 
@@ -70,14 +71,22 @@ class STDPAnalyzer(AnalysisModule):
         if files is None:
             return
 
+        n = 0
         for f in files:
-            arr = np.zeros((len(f.ls())), dtype=[('timestamp', float), ('data', object)])
-            for i, protoDir in enumerate(f.ls()):
-                data = self.dataModel.getClampFile(f[protoDir]).read()
-                timestamp = data.infoCopy()[-1]['startTime']
-                arr[i]['timestamp'] = timestamp
-                arr[i]['data'] = data
-            self.traces = np.concatenate((self.traces, arr))
+            n += len(f.ls())
+
+        with pg.ProgressDialog("Loading data..", 0, n) as dlg:
+            for f in files:
+                arr = np.zeros((len(f.ls())), dtype=[('timestamp', float), ('data', object)])
+                for i, protoDir in enumerate(f.ls()):
+                    data = self.dataModel.getClampFile(f[protoDir]).read()
+                    timestamp = data.infoCopy()[-1]['startTime']
+                    arr[i]['timestamp'] = timestamp
+                    arr[i]['data'] = data
+                    dlg += 1
+                    if dlg.wasCanceled():
+                        return
+                self.traces = np.concatenate((self.traces, arr))
 
         self.updateExptPlot()
 
