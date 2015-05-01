@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'acq4/analysis/modules/STDPAnalyzer/STDPControlTemplate.ui'
 #
-# Created: Fri May  1 11:35:43 2015
+# Created: Fri May  1 16:05:04 2015
 #      by: PyQt4 UI code generator 4.11.1
 #
 # WARNING! All changes made in this file will be lost!
@@ -26,7 +26,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(252, 139)
+        Form.resize(249, 139)
         self.gridLayout = QtGui.QGridLayout(Form)
         self.gridLayout.setMargin(3)
         self.gridLayout.setSpacing(3)
@@ -72,9 +72,12 @@ class Ui_Form(object):
         self.gridLayout_3.addLayout(self.gridLayout_2, 1, 1, 1, 1)
         spacerItem = QtGui.QSpacerItem(10, 20, QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Minimum)
         self.gridLayout_3.addItem(spacerItem, 1, 0, 1, 1)
+        spacerItem1 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        self.gridLayout_3.addItem(spacerItem1, 1, 2, 1, 1)
+        self.gridLayout_3.setColumnStretch(1, 1)
         self.gridLayout.addWidget(self.traceDisplayGroup, 0, 0, 1, 1)
-        spacerItem1 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        self.gridLayout.addItem(spacerItem1, 1, 0, 1, 1)
+        spacerItem2 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.gridLayout.addItem(spacerItem2, 1, 0, 1, 1)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)

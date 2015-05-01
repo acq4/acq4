@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>252</width>
+    <width>249</width>
     <height>139</height>
    </rect>
   </property>
@@ -25,7 +25,7 @@
      <property name="title">
       <string>Trace Display:</string>
      </property>
-     <layout class="QGridLayout" name="gridLayout_3">
+     <layout class="QGridLayout" name="gridLayout_3" columnstretch="0,1,0">
       <property name="margin">
        <number>3</number>
       </property>
@@ -119,6 +119,19 @@
         <property name="sizeHint" stdset="0">
          <size>
           <width>10</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item row="1" column="2">
+       <spacer name="horizontalSpacer_2">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
           <height>20</height>
          </size>
         </property>

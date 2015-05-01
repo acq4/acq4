@@ -72,15 +72,18 @@ class STDPAnalyzer(AnalysisModule):
 
 
     def loadFileRequested(self, files):
-        """Called by FileLoader when the load file button is clicked.
-                files - a list of the file(s) currently selected in FileLoader
+        """Called by FileLoader when the load file button is clicked, once for each selected file.
+                files - a list of (one of) the file currently selected in FileLoader
         """
+        #print "loadFileRequested"
         if files is None:
             return
 
-        n = 0
-        for f in files:
-            n += len(f.ls())
+        # n = 0
+        # for f in files:
+        #     n += len(f.ls())
+        # print "   ", n
+        n = len(files[0].ls()) 
 
         with pg.ProgressDialog("Loading data..", 0, n) as dlg:
             for f in files:
@@ -95,19 +98,26 @@ class STDPAnalyzer(AnalysisModule):
                         return
                 self.traces = np.concatenate((self.traces, arr))
                 self.lastAverageState = {}
-
+        #print "   ", len(self.traces)
         self.updateExptPlot()
+        return True
 
     def updateExptPlot(self):
         self.expStart = self.traces['timestamp'].min()
-        # self.timeTicks.setXVals(list(self.traces['timestamp']-expStart))
-        self.plots.exptPlot.plot(x=self.traces['timestamp']-self.expStart, y=[1]*len(self.traces), pen=None, symbol='o')
+        self.plots.exptPlot.clear()
+        self.plots.exptPlot.addItem(self.traceSelectRgn)
+
         if self.ctrl.averageCheck.isChecked():
-            self.plots.exptPlot.plot(x=self.averagedTraces['avgTimeStamp']-self.expStart, y=y[2]*len(self.averagedTraces), pen=None, symbol='o', symbolBrush=(255,0,0))
+            #print "updateExptPlot", len(self.traces), len(self.averagedTraces)
+            self.plots.exptPlot.plot(x=self.traces['timestamp']-self.expStart, y=[1]*len(self.traces), pen=None, symbol='o', alpha=50)
+            self.plots.exptPlot.plot(x=self.averagedTraces['avgTimeStamp']-self.expStart, y=[2]*len(self.averagedTraces), pen=None, symbol='o', symbolBrush=(255,0,0))
+        else:
+            self.plots.exptPlot.plot(x=self.traces['timestamp']-self.expStart, y=[1]*len(self.traces), pen=None, symbol='o')
 
     def updateTracesPlot(self):
         rgn = self.traceSelectRgn.getRegion()
         self.plots.tracesPlot.clear()
+
         if not self.ctrl.averageCheck.isChecked():
             data = self.traces[(self.traces['timestamp'] > rgn[0]+self.expStart)*(self.traces['timestamp'] < rgn[1]+self.expStart)]['data']
             for i, d in enumerate(data):
@@ -116,12 +126,17 @@ class STDPAnalyzer(AnalysisModule):
         if self.ctrl.averageCheck.isChecked():
             data = self.averagedTraces[(self.averagedTraces['avgTimeStamp'] > rgn[0]+self.expStart)*(self.averagedTraces['avgTimeStamp'] < rgn[1]+self.expStart)]
             displayOrig = self.ctrl.displayTracesCheck.isChecked()
+            #print "   len(data):", len(data)
             for i, d in enumerate(data['avgData']):
-                self.plots.tracesPlot.plot(d['primary'], pen=pg.intColor(i, len(data)))
+                self.plots.tracesPlot.plot(d, pen=pg.intColor(i, len(data)))
                 if displayOrig:
-                    for t in data['origTimes']:
-                        orig = self.traces[self.traces['timestamp']==t]['data']
-                        self.plots.tracesPlot.plot(orig['primary'], pen=pg.intcolor(i, len(data), alpha=100))
+                    #print "   origTimes:", data['origTimes'] , type(data['origTimes']), type(data['origTimes'][0])
+                    for t in data['origTimes'][i]:
+                        orig = self.traces[self.traces['timestamp']==t]['data'][0]
+                        #sample = self.traces[0]['data']
+                        #print orig.infoCopy()
+                        #print sample.infoCopy()
+                        self.plots.tracesPlot.plot(orig['primary'], pen=pg.intColor(i, len(data), alpha=30))
 
 
     def resetAveragedTraces(self, n=0):
@@ -129,13 +144,18 @@ class STDPAnalyzer(AnalysisModule):
         self.averagedTraces = np.zeros(n, dtype=[('avgTimeStamp', float), ('avgData', object), ('origTimes', object)])
 
     def averageCtrlChanged(self):
+        prof = pg.debug.Profiler("STDPAnalyzer.averageCtrlChanged", disabled=True)
         if not self.ctrl.averageCheck.isChecked(): ## if we're not averaging anyway, we don't need to do anything
+            self.updateExptPlot()
             return
         if not self.needNewAverage(): ## if the parameters for averaging didn't change, we don't need to do anything
             return
 
+        prof.mark("  need new averages")
         self.getNewAverages()
+        prof.mark("  got new averages")
         self.updateExptPlot()
+        prof.mark('  updated exptPlot')
 
     def needNewAverage(self):
         ### Checks if the current values for the averaging controls are the same as when we last averaged
@@ -173,36 +193,55 @@ class STDPAnalyzer(AnalysisModule):
             raise Exception("Unable to average traces. Please make sure an averaging method is selected.")
 
         self.lastAverageState = {'method': method, 'value': value}
+        #print "finished getNewAverages"
 
     def averageByTime(self, time):
+        #print "averageByTime called."
         t = 0
         i = 0
         n = int((self.traces['timestamp'].max() - self.expStart)/time) + ((self.traces['timestamp'].max() - self.expStart) % time > 0) ### weird solution for rounding up
         self.resetAveragedTraces(n)
+        # print "   computed numbers, reset average array. "
+        # print "      n:", n
+        # print "      timestamp.max():", self.traces['timestamp'].max()
+        # print "      expStart:", self.expStart
+        # print "      timestamp.min():", self.traces['timestamp'].min()
+        # print "      time:", time
+
         while t < len(self.traces):
-            traces = self.traces[(self.traces['timestamp'] > self.expStart+time*i)*(self.traces['timestamp'] < self.expStart+time*i+time)]
-            if len(traces) > 0:
+            traces = self.traces[(self.traces['timestamp'] >= self.expStart+time*i)*(self.traces['timestamp'] < self.expStart+time*i+time)]
+            if len(traces) > 1:
                 x = traces[0]['data']['primary']
                 for t2 in traces[1:]:
                     x += t2['data']['primary']
                 x /= float(len(traces))
+            elif len(traces) == 1:
+                x = traces[0]['data']['primary']
             else:
+                t += len(traces)
+                i += 1
                 continue
-            print i, self.averagedTraces.shape
+            #print "   averaged set ", i
             self.averagedTraces[i]['avgTimeStamp'] = traces['timestamp'].mean()
             self.averagedTraces[i]['avgData'] = x
             self.averagedTraces[i]['origTimes'] = list(traces['timestamp'])
+            #print "   assigned values for set", i
             t += len(traces)
             i += 1
+
+            #print (len(self.averagedTraces[self.averagedTraces['avgTimeStamp'] <= self.expStart]))
+        self.averagedTraces = self.averagedTraces[self.averagedTraces['avgTimeStamp'] != 0] ## clean up any left over zeros from pauses in data collection
+        #print "  finished averaging"
+
 
     def averageByNumber(self, number):
         t = 0
         i = 0
-        n = int(len(traces)/number) + (len(traces) % number > 0) ### weird solution for rounding up
+        n = int(len(self.traces)/number) + (len(self.traces) % number > 0) ### weird solution for rounding up
         self.resetAveragedTraces(n)
 
-        while t < len(traces):
-            traces = self.traces[i:i+number]
+        while t < len(self.traces):
+            traces = self.traces[i*number:i*number+number]
 
             x = traces[0]['data']['primary']
             for t2 in traces[1:]:
