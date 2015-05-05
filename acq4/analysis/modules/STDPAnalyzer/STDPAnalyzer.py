@@ -31,49 +31,93 @@ class STDPAnalyzer(AnalysisModule):
         #     RI_plot - displays the input resistance over the course of the experiment
 
         self._elements_ = OrderedDict([
-            ('File Loader', {'type':'fileInput', 'host':self, 'showFileTree':True, 'size': (160, 100)}),
-            ('Control Panel', {'type':'ctrl', 'object': self.ctrlWidget, 'pos':('below', 'File Loader'),'size': (160, 400)}),
+            ('File Loader', {'type':'fileInput', 'host':self, 'showFileTree':True, 'size': (100, 100)}),
+            ('Control Panel', {'type':'ctrl', 'object': self.ctrlWidget, 'pos':('below', 'File Loader'),'size': (100, 400)}),
             ('Plots', {'type': 'ctrl', 'object': self.plotsWidget, 'pos': ('right', 'File Loader'), 'size': (400, 700)})
         ])
         self.initializeElements()
            
         
-        ## Set labels/titles on plots 
-        self.plots.exptPlot.setTitle('Experiment Timecourse')
-        self.plots.tracesPlot.setLabel('left', "Voltage") ### TODO: check whether traces are in VC or IC
-        self.plots.tracesPlot.setTitle("Data")
-        self.plots.plasticityPlot.setLabel('left', 'Slope')
-        self.plots.plasticityPlot.setTitle('Plasticity')
-        self.plots.RMP_plot.setTitle('Resting Membrane Potential')
-        self.plots.RMP_plot.setLabel('left', 'Voltage')
-        self.plots.RI_plot.setLabel('left', 'Resistance')
-        self.plots.RI_plot.setTitle('Input Resistance')
+        ## Set labels/titles on plots  -- takes a lot of space
+        # self.plots.exptPlot.setTitle('Experiment Timecourse')
+        # self.plots.tracesPlot.setLabel('left', "Voltage") ### TODO: check whether traces are in VC or IC
+        # self.plots.tracesPlot.setTitle("Data")
+        # self.plots.plasticityPlot.setLabel('left', 'Slope')
+        # self.plots.plasticityPlot.setTitle('Plasticity')
+        # self.plots.RMP_plot.setTitle('Resting Membrane Potential')
+        # self.plots.RMP_plot.setLabel('left', 'Voltage')
+        # self.plots.RI_plot.setLabel('left', 'Resistance')
+        # self.plots.RI_plot.setTitle('Input Resistance')
 
         for p in [self.plots.exptPlot, self.plots.tracesPlot, self.plots.plasticityPlot, self.plots.RMP_plot, self.plots.RI_plot]:
             p.setLabel('bottom', 'Time')
 
+        ## Set up measurement regions in plots
         self.traceSelectRgn = pg.LinearRegionItem()
         self.traceSelectRgn.setRegion([0, 300])
         self.plots.exptPlot.addItem(self.traceSelectRgn)
         self.traceSelectRgn.sigRegionChanged.connect(self.updateTracesPlot)
 
-        self.traces = np.array([], dtype=[('timestamp', float), ('data', object)]) 
-        self.averagedTraces = None
-        self.lastAverageState = {}
-        self.resetAveragedTraces()
-        self.files = []
+        self.baselineRgn = pg.LinearRegionItem(brush=(0,255,0,100))
+        self.plots.tracesPlot.addItem(self.baselineRgn)
+        
+        self.pspRgn = pg.LinearRegionItem(brush=(255,0,0,100))
+        self.plots.tracesPlot.addItem(self.pspRgn)
 
+        self.healthRgn = pg.LinearRegionItem(brush=(0,0,255,100))
+        self.plots.tracesPlot.addItem(self.healthRgn)
 
         ### Connect control panel
         self.averageCtrl = pg.WidgetGroup(self.ctrl.traceDisplayGroup) ##TODO: save state when we save data
         self.ctrl.averageTimeSpin.setOpts(suffix='s', siPrefix=True, dec=True, value=60, step=1)
+        self.ctrl.averageNumberSpin.setOpts(step=1, dec=True)
         self.averageCtrl.sigChanged.connect(self.averageCtrlChanged)
+
+        self.analysisCtrl = pg.WidgetGroup(self.ctrl.analysisGroup)
+        self.ctrl.baselineCheck.toggled.connect(self.regionDisplayToggled)
+        self.ctrl.pspCheck.toggled.connect(self.regionDisplayToggled)
+        self.ctrl.healthCheck.toggled.connect(self.regionDisplayToggled)
+
+        self.ctrl.baselineStartSpin.setOpts(suffix='s', siPrefix=True, dec=True, step=1, minStep=0.001)
+        self.ctrl.baselineEndSpin.setOpts(suffix='s', siPrefix=True, dec=True, step=1, minStep=0.001)
+        self.ctrl.baselineStartSpin.valueChanged.connect(self.baselineSpinChanged)
+        self.ctrl.baselineEndSpin.valueChanged.connect(self.baselineSpinChanged)
+        self.baselineRgn.sigRegionChangeFinished.connect(self.baselineRgnChanged)
+
+        self.ctrl.pspStartSpin.setOpts(suffix='s', siPrefix=True, dec=True, step=1, minStep=0.001)
+        self.ctrl.pspEndSpin.setOpts(suffix='s', siPrefix=True, dec=True, step=1, minStep=0.001)
+        self.ctrl.pspStartSpin.valueChanged.connect(self.pspSpinChanged)
+        self.ctrl.pspEndSpin.valueChanged.connect(self.pspSpinChanged)
+        self.pspRgn.sigRegionChangeFinished.connect(self.pspRgnChanged)
+
+        self.ctrl.healthStartSpin.setOpts(suffix='s', siPrefix=True, dec=True, step=1, minStep=0.001)
+        self.ctrl.healthEndSpin.setOpts(suffix='s', siPrefix=True, dec=True, step=1, minStep=0.001)
+        self.ctrl.healthStartSpin.valueChanged.connect(self.healthSpinChanged)
+        self.ctrl.healthEndSpin.valueChanged.connect(self.healthSpinChanged)
+        self.healthRgn.sigRegionChangeFinished.connect(self.healthRgnChanged)
+
+        self.baselineRgn.setRegion((0,0.05))
+        self.pspRgn.setRegion((0.052,0.067))
+        self.healthRgn.setRegion((0.2,0.35))
+
+        self.ctrl.measureAvgSpin.setOpts(step=1, dec=True)
+        self.ctrl.measureModeCombo.addItems(['Slope (max)', 'Amplitude (max)'])
+
+        ### Set up internal information storage
+        self.traces = np.array([], dtype=[('timestamp', float), ('data', object)]) 
+        self.averagedTraces = None
+        self.resetAveragedTraces()
+        self.lastAverageState = {}
+        self.files = []
+
+
+
 
 
 
     def loadFileRequested(self, files):
         """Called by FileLoader when the load file button is clicked, once for each selected file.
-                files - a list of (one of) the file currently selected in FileLoader
+                files - a list of the file currently selected in FileLoader
         """
         #print "loadFileRequested"
         if files is None:
@@ -103,6 +147,9 @@ class STDPAnalyzer(AnalysisModule):
         return True
 
     def updateExptPlot(self):
+        if len(self.traces) == 0:
+            return
+            
         self.expStart = self.traces['timestamp'].min()
         self.plots.exptPlot.clear()
         self.plots.exptPlot.addItem(self.traceSelectRgn)
@@ -254,10 +301,93 @@ class STDPAnalyzer(AnalysisModule):
             t += len(traces)
             i += 1
 
+    def regionDisplayToggled(self):
+        if self.ctrl.baselineCheck.isChecked():
+            self.baselineRgn.show()
+        else:
+            self.baselineRgn.hide()
 
+        if self.ctrl.pspCheck.isChecked():
+            self.pspRgn.show()
+        else:
+            self.pspRgn.hide()
 
+        if self.ctrl.healthCheck.isChecked():
+            self.healthRgn.show()
+        else:
+            self.healthRgn.hide()
 
+    def baselineRgnChanged(self):
+        try:
+            self.ctrl.baselineStartSpin.blockSignals(True)
+            self.ctrl.baselineEndSpin.blockSignals(True)
+            rgn = self.baselineRgn.getRegion()
+            self.ctrl.baselineStartSpin.setValue(rgn[0])
+            self.ctrl.baselineEndSpin.setValue(rgn[1])
+        except:
+            raise
+        finally:
+            self.ctrl.baselineStartSpin.blockSignals(False)
+            self.ctrl.baselineEndSpin.blockSignals(False)
 
+    def baselineSpinChanged(self):
+        try:
+            self.baselineRgn.blockSignals(True)
+            start = self.ctrl.baselineStartSpin.value()
+            end = self.ctrl.baselineEndSpin.value()
+            self.baselineRgn.setRegion((start, end))
+        except:
+            raise
+        finally:
+            self.baselineRgn.blockSignals(False)
+
+    def pspRgnChanged(self):
+        try:
+            self.ctrl.pspStartSpin.blockSignals(True)
+            self.ctrl.pspEndSpin.blockSignals(True)
+            rgn = self.pspRgn.getRegion()
+            self.ctrl.pspStartSpin.setValue(rgn[0])
+            self.ctrl.pspEndSpin.setValue(rgn[1])
+        except:
+            raise
+        finally:
+            self.ctrl.pspStartSpin.blockSignals(False)
+            self.ctrl.pspEndSpin.blockSignals(False)
+
+    def pspSpinChanged(self):
+        try:
+            self.pspRgn.blockSignals(True)
+            start = self.ctrl.pspStartSpin.value()
+            end = self.ctrl.pspEndSpin.value()
+            self.pspRgn.setRegion((start, end))
+        except:
+            raise
+        finally:
+            self.pspRgn.blockSignals(False)
+
+    def healthRgnChanged(self):
+        try:
+            self.ctrl.healthStartSpin.blockSignals(True)
+            self.ctrl.healthEndSpin.blockSignals(True)
+            rgn = self.healthRgn.getRegion()
+            self.ctrl.healthStartSpin.setValue(rgn[0])
+            self.ctrl.healthEndSpin.setValue(rgn[1])
+        except:
+            raise
+        finally:
+            self.ctrl.healthStartSpin.blockSignals(False)
+            self.ctrl.healthEndSpin.blockSignals(False)
+
+    def healthSpinChanged(self):
+        try:
+            self.healthRgn.blockSignals(True)
+            start = self.ctrl.healthStartSpin.value()
+            end = self.ctrl.healthEndSpin.value()
+            self.healthRgn.setRegion((start, end))
+        except:
+            raise
+        finally:
+            self.healthRgn.blockSignals(False)
 
 
 
