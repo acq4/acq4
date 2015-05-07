@@ -5,6 +5,7 @@ from acq4.analysis.AnalysisModule import AnalysisModule
 import STDPControlTemplate, STDPPlotsTemplate
 import acq4.pyqtgraph as pg
 import numpy as np
+from acq4.util.functions import measureResistance
 
 
 class STDPAnalyzer(AnalysisModule):
@@ -42,11 +43,11 @@ class STDPAnalyzer(AnalysisModule):
         # self.plots.exptPlot.setTitle('Experiment Timecourse')
         # self.plots.tracesPlot.setLabel('left', "Voltage") ### TODO: check whether traces are in VC or IC
         # self.plots.tracesPlot.setTitle("Data")
-        # self.plots.plasticityPlot.setLabel('left', 'Slope')
+         self.plots.plasticityPlot.setLabel('left', 'Slope')
         # self.plots.plasticityPlot.setTitle('Plasticity')
         # self.plots.RMP_plot.setTitle('Resting Membrane Potential')
-        # self.plots.RMP_plot.setLabel('left', 'Voltage')
-        # self.plots.RI_plot.setLabel('left', 'Resistance')
+         self.plots.RMP_plot.setLabel('left', 'Voltage')
+         self.plots.RI_plot.setLabel('left', 'Resistance')
         # self.plots.RI_plot.setTitle('Input Resistance')
 
         for p in [self.plots.exptPlot, self.plots.tracesPlot, self.plots.plasticityPlot, self.plots.RMP_plot, self.plots.RI_plot]:
@@ -58,13 +59,13 @@ class STDPAnalyzer(AnalysisModule):
         self.plots.exptPlot.addItem(self.traceSelectRgn)
         self.traceSelectRgn.sigRegionChanged.connect(self.updateTracesPlot)
 
-        self.baselineRgn = pg.LinearRegionItem(brush=(0,255,0,100))
+        self.baselineRgn = pg.LinearRegionItem(brush=(0,150,0,50))
         self.plots.tracesPlot.addItem(self.baselineRgn)
         
-        self.pspRgn = pg.LinearRegionItem(brush=(255,0,0,100))
+        self.pspRgn = pg.LinearRegionItem(brush=(150,0,0,50))
         self.plots.tracesPlot.addItem(self.pspRgn)
 
-        self.healthRgn = pg.LinearRegionItem(brush=(0,0,255,100))
+        self.healthRgn = pg.LinearRegionItem(brush=(0,0,150,50))
         self.plots.tracesPlot.addItem(self.healthRgn)
 
         ### Connect control panel
@@ -96,9 +97,11 @@ class STDPAnalyzer(AnalysisModule):
         self.ctrl.healthEndSpin.valueChanged.connect(self.healthSpinChanged)
         self.healthRgn.sigRegionChangeFinished.connect(self.healthRgnChanged)
 
+        self.ctrl.analyzeBtn.clicked.connect(self.analyze)
+
         self.baselineRgn.setRegion((0,0.05))
         self.pspRgn.setRegion((0.052,0.067))
-        self.healthRgn.setRegion((0.2,0.35))
+        self.healthRgn.setRegion((0.24,0.34))
 
         self.ctrl.measureAvgSpin.setOpts(step=1, dec=True)
         self.ctrl.measureModeCombo.addItems(['Slope (max)', 'Amplitude (max)'])
@@ -149,7 +152,7 @@ class STDPAnalyzer(AnalysisModule):
     def updateExptPlot(self):
         if len(self.traces) == 0:
             return
-            
+
         self.expStart = self.traces['timestamp'].min()
         self.plots.exptPlot.clear()
         self.plots.exptPlot.addItem(self.traceSelectRgn)
@@ -161,9 +164,14 @@ class STDPAnalyzer(AnalysisModule):
         else:
             self.plots.exptPlot.plot(x=self.traces['timestamp']-self.expStart, y=[1]*len(self.traces), pen=None, symbol='o')
 
+    def clearTracesPlot(self):
+        self.plots.tracesPlot.clear()
+        for item in [self.baselineRgn, self.pspRgn, self.healthRgn]:
+            self.plots.tracesPlot.addItem(item)
+
     def updateTracesPlot(self):
         rgn = self.traceSelectRgn.getRegion()
-        self.plots.tracesPlot.clear()
+        self.clearTracesPlot()
 
         if not self.ctrl.averageCheck.isChecked():
             data = self.traces[(self.traces['timestamp'] > rgn[0]+self.expStart)*(self.traces['timestamp'] < rgn[1]+self.expStart)]['data']
@@ -175,7 +183,7 @@ class STDPAnalyzer(AnalysisModule):
             displayOrig = self.ctrl.displayTracesCheck.isChecked()
             #print "   len(data):", len(data)
             for i, d in enumerate(data['avgData']):
-                self.plots.tracesPlot.plot(d, pen=pg.intColor(i, len(data)))
+                self.plots.tracesPlot.plot(d['primary'], pen=pg.intColor(i, len(data)))
                 if displayOrig:
                     #print "   origTimes:", data['origTimes'] , type(data['origTimes']), type(data['origTimes'][0])
                     for t in data['origTimes'][i]:
@@ -258,12 +266,12 @@ class STDPAnalyzer(AnalysisModule):
         while t < len(self.traces):
             traces = self.traces[(self.traces['timestamp'] >= self.expStart+time*i)*(self.traces['timestamp'] < self.expStart+time*i+time)]
             if len(traces) > 1:
-                x = traces[0]['data']['primary']
+                x = traces[0]['data']
                 for t2 in traces[1:]:
-                    x += t2['data']['primary']
+                    x += t2['data']
                 x /= float(len(traces))
             elif len(traces) == 1:
-                x = traces[0]['data']['primary']
+                x = traces[0]['data']
             else:
                 t += len(traces)
                 i += 1
@@ -388,6 +396,91 @@ class STDPAnalyzer(AnalysisModule):
             raise
         finally:
             self.healthRgn.blockSignals(False)
+
+    def analyze(self):
+        for p in [self.plots.plasticityPlot, self.plots.RMP_plot, self.plots.RI_plot]:
+            p.clear()
+
+        if self.ctrl.averageAnalysisCheck.isChecked():
+            times = self.averagedTraces['avgTimeStamp']
+            traces = self.averagedTraces['avgData']
+        else:
+            times = self.traces['timestamp']
+            traces = self.traces['data']
+
+        self.analysisResults = np.zeros(len(traces), dtype=[('time', float), 
+                                                            ('RMP', float), 
+                                                            ('pspSlope', float),
+                                                            ('pspAmplitude', float),
+                                                            ('InputResistance', float)
+                                                            ])
+
+        self.analysisResults['time'] = times
+
+        if self.ctrl.baselineCheck.isChecked():
+            self.measureBaseline(traces)
+            self.plots.RMP_plot.plot(x=times-self.expStart, y=self.analysisResults['RMP'])
+
+        if self.ctrl.pspCheck.isChecked():
+            self.measurePSP(traces)
+            if self.ctrl.measureModeCombo.currentText() == 'Slope (max)':
+                self.plots.plasticityPlot.plot(x=times-self.expStart, y=self.analysisResults['pspSlope'])
+                self.plots.plasticityPlot.setLabel('left', "Slope")
+            elif self.ctrl.measureModeCombo.currentText() == 'Amplitude (max)':
+                self.plots.plasticityPlot.plot(x=times-self.expStart, y=self.analysisResults['pspAmplitude'])
+                self.plots.plasticityPlot.setLabel('left', "Amplitude")
+        if self.ctrl.healthCheck.isChecked():
+            self.measureHealth(traces)
+            self.plots.RI_plot.plot(x=times-self.expStart, y=self.analysisResults['InputResistance'])
+
+    def measureBaseline(self, traces):
+        rgn = self.baselineRgn.getRegion()
+        print "MeasureBaseline:"
+        print "   ", traces[0].shape
+
+
+        for i, trace in enumerate(traces):
+            data = trace['primary']['Time':rgn[0]:rgn[1]]
+            self.analysisResults[i]['RMP'] = data.mean()
+
+    def measurePSP(self, traces):
+        rgn = self.pspRgn.getRegion()
+        timestep = traces[0].axisValues('Time')[1] - traces[0].axisValues('Time')[0]
+        ptsToAvg = self.ctrl.measureAvgSpin.value()
+
+        for i, trace in enumerate(traces):
+            data = trace['primary']['Time':rgn[0]:rgn[1]]
+
+            ## Measure PSP slope
+            slopes = np.diff(data)
+            maxSlopePosition = np.argwhere(slopes == slopes.max())
+            avgMaxSlope = slopes[maxSlopePosition-int(ptsToAvg/2):maxSlopePosition+int(ptsToAvg/2)].mean()/timestep
+            self.analysisResults[i]['pspSlope'] = avgMaxSlope
+
+            ## Measure PSP Amplitude
+            if self.analysisResults['RMP'][i] != 0:
+                baseline = self.analysisResults['RMP'][i]
+            else:
+                baseline = data[:5].mean() ## if we don't have a baseline measurement, just use the first 5 points
+            peakPosition = np.argwhere(data == data.max())
+            avgPeak = data[peakPosition-int(ptsToAvg/2):peakPosition+int(ptsToAvg/2)].mean() - baseline
+            self.analysisResults[i]['pspAmplitude'] = avgPeak
+
+    def measureHealth(self, traces):
+        rgn = self.healthRgn.getRegion()
+
+        for i, trace in enumerate(traces):
+            data = trace['Time':rgn[0]:rgn[1]]
+            inputResistance = measureResistance(data, 'IC')[0]
+            self.analysisResults[i]['InputResistance'] = inputResistance
+
+
+
+
+
+
+
+
 
 
 

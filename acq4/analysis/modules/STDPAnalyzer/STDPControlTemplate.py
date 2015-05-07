@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'acq4/analysis/modules/STDPAnalyzer/STDPControlTemplate.ui'
 #
-# Created: Tue May  5 16:10:25 2015
+# Created: Tue May  5 16:37:29 2015
 #      by: PyQt4 UI code generator 4.11.1
 #
 # WARNING! All changes made in this file will be lost!
@@ -133,10 +133,10 @@ class Ui_Form(object):
         self.label_7.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.label_7.setObjectName(_fromUtf8("label_7"))
         self.gridLayout_5.addWidget(self.label_7, 2, 0, 1, 1)
-        self.pointsToAvgSpin = QtGui.QCheckBox(self.analysisGroup)
-        self.pointsToAvgSpin.setChecked(True)
-        self.pointsToAvgSpin.setObjectName(_fromUtf8("pointsToAvgSpin"))
-        self.gridLayout_5.addWidget(self.pointsToAvgSpin, 3, 0, 1, 2)
+        self.pointsToAvgCheck = QtGui.QCheckBox(self.analysisGroup)
+        self.pointsToAvgCheck.setChecked(True)
+        self.pointsToAvgCheck.setObjectName(_fromUtf8("pointsToAvgCheck"))
+        self.gridLayout_5.addWidget(self.pointsToAvgCheck, 3, 0, 1, 2)
         self.measureModeCombo = ComboBox(self.analysisGroup)
         self.measureModeCombo.setObjectName(_fromUtf8("measureModeCombo"))
         self.gridLayout_5.addWidget(self.measureModeCombo, 2, 1, 1, 2)
@@ -171,9 +171,9 @@ class Ui_Form(object):
         self.gridLayout_6.addWidget(self.label_5, 0, 0, 1, 1)
         self.gridLayout_6.setColumnStretch(1, 5)
         self.gridLayout_4.addLayout(self.gridLayout_6, 5, 1, 1, 1)
-        self.pushButton = QtGui.QPushButton(self.analysisGroup)
-        self.pushButton.setObjectName(_fromUtf8("pushButton"))
-        self.gridLayout_4.addWidget(self.pushButton, 7, 0, 1, 3)
+        self.analyzeBtn = QtGui.QPushButton(self.analysisGroup)
+        self.analyzeBtn.setObjectName(_fromUtf8("analyzeBtn"))
+        self.gridLayout_4.addWidget(self.analyzeBtn, 7, 0, 1, 3)
         spacerItem4 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.gridLayout_4.addItem(spacerItem4, 6, 1, 1, 1)
         spacerItem5 = QtGui.QSpacerItem(10, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
@@ -210,11 +210,11 @@ class Ui_Form(object):
         self.label_3.setText(_translate("Form", "Start:", None))
         self.label_4.setText(_translate("Form", "End:", None))
         self.label_7.setText(_translate("Form", "Measure:", None))
-        self.pointsToAvgSpin.setText(_translate("Form", "Points to average:", None))
+        self.pointsToAvgCheck.setText(_translate("Form", "Points to average:", None))
         self.healthCheck.setText(_translate("Form", "Cell Health Region (blue)", None))
         self.label_6.setText(_translate("Form", "End:", None))
         self.label_5.setText(_translate("Form", "Start:", None))
-        self.pushButton.setText(_translate("Form", "Analyze!", None))
+        self.analyzeBtn.setText(_translate("Form", "Analyze!", None))
 
 from acq4.pyqtgraph.widgets.SpinBox import SpinBox
 from acq4.pyqtgraph.widgets.ComboBox import ComboBox

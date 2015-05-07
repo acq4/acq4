@@ -276,7 +276,7 @@
          </widget>
         </item>
         <item row="3" column="0" colspan="2">
-         <widget class="QCheckBox" name="pointsToAvgSpin">
+         <widget class="QCheckBox" name="pointsToAvgCheck">
           <property name="text">
            <string>Points to average:</string>
           </property>
@@ -344,7 +344,7 @@
        </layout>
       </item>
       <item row="7" column="0" colspan="3">
-       <widget class="QPushButton" name="pushButton">
+       <widget class="QPushButton" name="analyzeBtn">
         <property name="text">
          <string>Analyze!</string>
         </property>

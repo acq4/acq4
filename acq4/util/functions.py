@@ -2325,6 +2325,39 @@ def find(data, val, op='==', arrayOp='all', axis=0, useWeave=True):
         #"""
         #pass
 
+def measureResistance(data, mode):
+    """Return a tuple of the (inputResistance, seriesResistance) for the given data."""
+    cmd = data['command']
+
+    pulseStart = cmd.axisValues('Time')[np.argwhere(cmd != cmd[0])[0][0]]
+    pulseStop = cmd.axisValues('Time')[np.argwhere(cmd != cmd[0])[-1][0]]
+    
+    ## Extract specific time segments
+    nudge = 0.1e-3
+    base = data['Time': :(pulseStart-nudge)]
+    pulse = data['Time': (pulseStart+nudge):(pulseStop-nudge)]
+    pulseEnd = data['Time': pulseStart+((pulseStop-pulseStart)*2./3.):pulseStop-nudge]
+    end = data['Time': (pulseStop+nudge): ]
+    
+    pulseAmp = pulse['command'].mean() - base['command'].mean()
+
+    if mode == 'IC':
+        inputResistance = pulseAmp/(pulseEnd['primary'].mean() - base['primary'].mean())
+        seriesResistance = None
+
+    elif mode == 'VC':
+        if pulseAmp < 0:
+            RsPeak = data['primary'].min()
+        else:
+            RsPeak = data['primary'].max()
+        seriesResistance = pulseAmp/(RsPeak-base['primary'].mean())
+        inputResistance = pulseAmp/(pulseEnd['primary'].mean() - base['primary'].mean())
+
+    else:
+        raise Exception("Not sure how to interpret mode: %s. Please use either 'VC' or 'IC'. " %str(mode))
+
+    return (inputResistance, seriesResistance)
+
 
 
 
