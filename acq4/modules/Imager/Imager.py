@@ -867,7 +867,7 @@ class Imager(Module):
         duration = samples / sampleRate
         program = self.scanProgram.saveState()  # meta-data to annotate protocol
 
-        pcell = np.empty(vscan.shape[0], dtype=np.float32)
+        pcell = np.empty(vscan.shape[0], dtype=np.float64)  # DAQmx requires float64!
         pcell[:] = scanParams['Pockels']
         pcell[-1] = 0
 

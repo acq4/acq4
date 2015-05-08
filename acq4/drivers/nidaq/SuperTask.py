@@ -84,7 +84,7 @@ class SuperTask:
                 mode = getattr(self.daq, 'Val_' + allowed[ind])
             except AttributeError:
                 raise ValueError("Mode '%s' not supported by the DAQmx driver" % mode)
-            print typ, mode, allowed[ind]
+
         if typ == 'ai':
             #print 'CreateAIVoltageChan(%s, "", %s, vRange[0], vRange[1], Val_Volts, None)' % (chan, str(mode))
             t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], self.daq.Val_Volts, None, **kargs)
@@ -151,7 +151,7 @@ class SuperTask:
         for k in self.tasks:
             if self.tasks[k].isOutputTask() and not self.taskInfo[k]['dataWritten']:
                 d = self.getTaskData(k)
-                #print "  Writing %s to task %s" % (d.shape, str(k))
+                # print "  Writing %s %s to task %s" % (d.shape, d.dtype, str(k))
                 try:
                     self.tasks[k].write(d)
                 except:
