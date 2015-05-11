@@ -49,10 +49,6 @@ class Scanner(Device, OptomechDevice):
         with self.lock:
             self.currentCommand = vals
             if self.getShutterOpen():
-                ## make sure we have not requested a command outside the allowed limits
-                (mn, mx) = self.config['commandLimits']
-                v0 = max(mn, min(mx, vals[0]))
-                v1 = max(mn, min(mx, vals[1]))
                 self._setVoltage([v0, v1])
             else:
                 logMsg("Virtual shutter closed, not setting mirror position.", msgType='warning')
@@ -116,14 +112,17 @@ class Scanner(Device, OptomechDevice):
     
     def _setVoltage(self, vals):
         '''Immediately sets the voltage value on the mirrors.
-        Does NOT do shutter or limit checking; most likely you want to use setCommand instead.'''
+        Does check virtual shutter state; most likely you want to use setCommand instead.'''
         with self.lock:
+            ## make sure we have not requested a command outside the allowed limits
+            (mn, mx) = self.config['commandLimits']
             for i in [0,1]:
                 x = ['XAxis', 'YAxis'][i]
                 daq = self.config[x]['device']
                 chan = self.config[x]['channel']
                 dev = self.dm.getDevice(daq)
-                dev.setChannelValue(chan, vals[i], block=True)
+                clipped = max(mn, min(mx, vals[i]))
+                dev.setChannelValue(chan, clipped, block=True)
             self.currentVoltage = vals
 
     def getVoltage(self):
@@ -367,6 +366,9 @@ class ScannerTask(DeviceTask):
     #     self.cmd['yCommand'] = arr[1]
         
     def createChannels(self, daqTask):
+        ## make sure we have not requested a command outside the allowed limits
+        (mn, mx) = self.dev.config['commandLimits']
+
         self.daqTasks = []
         with self.dev.lock:
             ## If buffered waveforms are requested in the command, configure them here.
@@ -384,7 +386,8 @@ class ScannerTask(DeviceTask):
                 
                 daqTask.addChannel(chConf['channel'], 'ao')
                 self.daqTasks.append(daqTask)  ## remember task so we can stop it later on
-                daqTask.setWaveform(chConf['channel'], self.cmd[cmdName])
+                clipped = np.clip(self.cmd[cmdName], mn, mx)
+                daqTask.setWaveform(chConf['channel'], clipped)
 
     def stop(self, abort=False):
         if abort:
