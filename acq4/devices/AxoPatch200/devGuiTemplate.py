@@ -24,7 +24,8 @@ except AttributeError:
         return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_devGui(object):
-    def setupUi(self, devGui):
+    def setupUi(self, devGui, AxoPatchVersion):
+        self.AxoPatchVersion = AxoPatchVersion
         devGui.setObjectName(_fromUtf8("devGui"))
         devGui.resize(126, 88)
         self.gridLayout = QtGui.QGridLayout(devGui)
@@ -59,11 +60,18 @@ class Ui_devGui(object):
 
     def retranslateUi(self, devGui):
         devGui.setWindowTitle(_translate("devGui", "Form", None))
-        self.modeCombo.setItemText(0, _translate("devGui", "V-Clamp", None))
-        self.modeCombo.setItemText(1, _translate("devGui", "I=0", None))
-        self.modeCombo.setItemText(2, _translate("devGui", "I-Clamp Normal", None))
-        self.modeCombo.setItemText(3, _translate("devGui", "I-Clamp Fast", None))
-        self.modeCombo.setItemText(4, _translate("devGui", "Track", None))
+        if self.AxoPatchVersion == '200A':
+            self.modeCombo.setItemText(0, _translate("devGui", "V-Clamp", None))
+            self.modeCombo.setItemText(1, _translate("devGui", "Track", None))
+            #self.modeCombo.setItemText(1, _translate("devGui", "I=0", None))
+            self.modeCombo.setItemText(2, _translate("devGui", "I-Clamp Normal", None))
+            self.modeCombo.setItemText(3, _translate("devGui", "I-Clamp Fast", None))
+        elif self.AxoPatchVersion == '200B':
+            self.modeCombo.setItemText(0, _translate("devGui", "V-Clamp", None))
+            self.modeCombo.setItemText(1, _translate("devGui", "I=0", None))
+            self.modeCombo.setItemText(2, _translate("devGui", "I-Clamp Normal", None))
+            self.modeCombo.setItemText(3, _translate("devGui", "I-Clamp Fast", None))
+            self.modeCombo.setItemText(4, _translate("devGui", "Track", None))
         self.label.setText(_translate("devGui", "VC Holding", None))
         self.label_2.setText(_translate("devGui", "IC Holding", None))
 
