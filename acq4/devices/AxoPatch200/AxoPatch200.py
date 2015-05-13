@@ -18,14 +18,6 @@ from devGuiTemplate import *
         #LPFchannel: 'DAQ', '/Dev1/ai15'
         #VCommand: 'DAQ', '/Dev1/ao0'
         #ScaledSignal: 'DAQ', '/Dev1/ai5'
-try:
-    _encoding = QtGui.QApplication.UnicodeUTF8
-    def _translate(context, text, disambig):
-        return QtGui.QApplication.translate(context, text, disambig, _encoding)
-except AttributeError:
-    def _translate(context, text, disambig):
-        return QtGui.QApplication.translate(context, text, disambig)
-
 
 
 class AP200DataMapping(DataMapping):
@@ -602,16 +594,16 @@ class AxoPatchDevGui(QtGui.QWidget):
         self.ui.vcHoldingSpin.setOpts(step=1, minStep=1e-3, dec=True, suffix='V', siPrefix=True)
         self.ui.icHoldingSpin.setOpts(step=1, minStep=1e-12, dec=True, suffix='A', siPrefix=True)
         if AxoPatchVersion == '200A':
-            self.ui.modeCombo.setItemText(0, _translate("devGui", "V-Clamp", None))
-            self.ui.modeCombo.setItemText(1, _translate("devGui", "Track", None))
-            self.ui.modeCombo.setItemText(2, _translate("devGui", "I-Clamp Normal", None))
-            self.ui.modeCombo.setItemText(3, _translate("devGui", "I-Clamp Fast", None))
+            self.ui.modeCombo.addItem("V-Clamp")
+            self.ui.modeCombo.addItem("Track")
+            self.ui.modeCombo.addItem("I-Clamp Normal")
+            self.ui.modeCombo.addItem("I-Clamp Fast")
         elif AxoPatchVersion == '200B':
-            self.ui.modeCombo.setItemText(0, _translate("devGui", "V-Clamp", None))
-            self.ui.modeCombo.setItemText(1, _translate("devGui", "I=0", None))
-            self.ui.modeCombo.setItemText(2, _translate("devGui", "I-Clamp Normal", None))
-            self.ui.modeCombo.setItemText(3, _translate("devGui", "I-Clamp Fast", None))
-            self.ui.modeCombo.setItemText(4, _translate("devGui", "Track", None))
+            self.ui.modeCombo.addItem("V-Clamp")
+            self.ui.modeCombo.addItem("I=0")
+            self.ui.modeCombo.addItem("I-Clamp Normal")
+            self.ui.modeCombo.addItem("I-Clamp Fast")
+            self.ui.modeCombo.addItem("Track")
         self.updateStatus()
         
         self.ui.modeCombo.currentIndexChanged.connect(self.modeComboChanged)
