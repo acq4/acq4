@@ -420,5 +420,5 @@ if __name__ == '__main__':
     camera.flash = 0
     
     camera.solve()
-    print camera.saveState()
+    print(camera.saveState())
     

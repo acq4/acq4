@@ -16,14 +16,16 @@ This class is very heavily featured:
   - Control panel with a huge feature set including averaging, decimation,
     display, power spectrum, svg/png export, plot linking, and more.
 """
-from ...Qt import QtGui, QtCore, QtSvg, USE_PYSIDE
+from ...Qt import QtGui, QtCore, QT_LIB
 from ... import pixmaps
 import sys
 
-if USE_PYSIDE:
-    from .plotConfigTemplate_pyside import *
-else:
+if QT_LIB == 'PyQt4':
     from .plotConfigTemplate_pyqt import *
+elif QT_LIB == 'PySide':
+    from .plotConfigTemplate_pyside import *
+elif QT_LIB == 'PyQt5':
+    from .plotConfigTemplate_pyqt5 import *
 
 from ... import functions as fn
 from ...widgets.FileDialog import FileDialog
@@ -145,7 +147,7 @@ class PlotItem(GraphicsWidget):
         self.layout.setVerticalSpacing(0)
         
         if viewBox is None:
-            viewBox = ViewBox()
+            viewBox = ViewBox(parent=self)
         self.vb = viewBox
         self.vb.sigStateChanged.connect(self.viewStateChanged)
         self.setMenuEnabled(enableMenu, enableMenu) ## en/disable plotitem and viewbox menus
@@ -168,14 +170,17 @@ class PlotItem(GraphicsWidget):
             axisItems = {}
         self.axes = {}
         for k, pos in (('top', (1,1)), ('bottom', (3,1)), ('left', (2,0)), ('right', (2,2))):
-            axis = axisItems.get(k, AxisItem(orientation=k))
+            if k in axisItems:
+                axis = axisItems[k]
+            else:
+                axis = AxisItem(orientation=k, parent=self)
             axis.linkToView(self.vb)
             self.axes[k] = {'item': axis, 'pos': pos}
             self.layout.addItem(axis, *pos)
             axis.setZValue(-1000)
             axis.setFlag(axis.ItemNegativeZStacksBehindParent)
         
-        self.titleLabel = LabelItem('', size='11pt')
+        self.titleLabel = LabelItem('', size='11pt', parent=self)
         self.layout.addItem(self.titleLabel, 0, 1)
         self.setTitle(None)  ## hide
         
@@ -794,42 +799,9 @@ class PlotItem(GraphicsWidget):
         fileName = str(fileName)
         PlotItem.lastFileDir = os.path.dirname(fileName)
         
-        self.svg = QtSvg.QSvgGenerator()
-        self.svg.setFileName(fileName)
-        res = 120.
-        view = self.scene().views()[0]
-        bounds = view.viewport().rect()
-        bounds = QtCore.QRectF(0, 0, bounds.width(), bounds.height())
-        
-        self.svg.setResolution(res)
-        self.svg.setViewBox(bounds)
-        
-        self.svg.setSize(QtCore.QSize(bounds.width(), bounds.height()))
-        
-        painter = QtGui.QPainter(self.svg)
-        view.render(painter, bounds)
-        
-        painter.end()
-        
-        ## Workaround to set pen widths correctly
-        import re
-        data = open(fileName).readlines()
-        for i in range(len(data)):
-            line = data[i]
-            m = re.match(r'(<g .*)stroke-width="1"(.*transform="matrix\(([^\)]+)\)".*)', line)
-            if m is not None:
-                #print "Matched group:", line
-                g = m.groups()
-                matrix = list(map(float, g[2].split(',')))
-                #print "matrix:", matrix
-                scale = max(abs(matrix[0]), abs(matrix[3]))
-                if scale == 0 or scale == 1.0:
-                    continue
-                data[i] = g[0] + ' stroke-width="%0.2g" ' % (1.0/scale) + g[1] + '\n'
-                #print "old line:", line
-                #print "new line:", data[i]
-        open(fileName, 'w').write(''.join(data))
-        
+        from ...exporters import SVGExporter
+        ex = SVGExporter(self)
+        ex.export(fileName)
         
     def writeImage(self, fileName=None):
         if fileName is None:

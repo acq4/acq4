@@ -386,10 +386,10 @@ class PlotDataItem(GraphicsObject):
                 raise Exception('When passing two unnamed arguments, both must be a list or array of values. (got %s, %s)' % (str(type(args[0])), str(type(args[1]))))
             if not isinstance(args[0], np.ndarray):
                 #x = np.array(args[0])
-                if dtyp[0] == 'MetaArray':  # what is the purpose of this??
+                if dtyp[0] == 'MetaArray':
                     x = args[0].asarray()
                 else:
-                    x = np.array(args[0])  ## this is much slower than below (x = args[0].view(np.ndarray))
+                    x = np.array(args[0])
             else:
                 x = args[0].view(np.ndarray)
             if not isinstance(args[1], np.ndarray):
@@ -569,11 +569,11 @@ class PlotDataItem(GraphicsObject):
                     x = x[::ds]
                     y = y[::ds]
                 elif self.opts['downsampleMethod'] == 'mean':
-                    n = len(x) / ds
+                    n = len(x) // ds
                     x = x[:n*ds:ds]
                     y = y[:n*ds].reshape(n,ds).mean(axis=1)
                 elif self.opts['downsampleMethod'] == 'peak':
-                    n = len(x) / ds
+                    n = len(x) // ds
                     x1 = np.empty((n,2))
                     x1[:] = x[:n*ds:ds,np.newaxis]
                     x = x1.reshape(n*2)

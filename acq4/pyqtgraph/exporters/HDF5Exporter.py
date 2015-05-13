@@ -4,10 +4,14 @@ from ..parametertree import Parameter
 from .. import PlotItem
 
 import numpy 
-import h5py
-
-__all__ = ['HDF5Exporter']
+try:
+    import h5py
+    HAVE_HDF5 = True
+except ImportError:
+    HAVE_HDF5 = False
     
+__all__ = ['HDF5Exporter']
+
     
 class HDF5Exporter(Exporter):
     Name = "HDF5 Export: plot (x,y)"
@@ -25,6 +29,9 @@ class HDF5Exporter(Exporter):
         return self.params
     
     def export(self, fileName=None):
+        if not HAVE_HDF5:
+            raise RuntimeError("This exporter requires the h5py package, "
+                               "but it was not importable.")
         
         if not isinstance(self.item, PlotItem):
             raise Exception("Must have a PlotItem selected for HDF5 export.")
@@ -53,5 +60,5 @@ class HDF5Exporter(Exporter):
         dset = fd.create_dataset(dsname, data=fdata)
         fd.close()
 
-
-HDF5Exporter.register()
+if HAVE_HDF5:
+    HDF5Exporter.register()

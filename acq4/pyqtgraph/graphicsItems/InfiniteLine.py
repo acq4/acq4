@@ -311,7 +311,6 @@ class InfiniteLine(GraphicsObject):
         p.setPen(pen)
         p.drawLine(Point(left, 0), Point(right, 0))
         
-        #p.drawRect(self.boundingRect())
         
         if len(self.markers) == 0:
             return
@@ -361,15 +360,11 @@ class InfiniteLine(GraphicsObject):
             if not self.moving:
                 return
                 
-            #pressDelta = self.mapToParent(ev.buttonDownPos()) - Point(self.p)
             self.setPos(self.cursorOffset + self.mapToParent(ev.pos()))
             self.sigDragged.emit(self)
             if ev.isFinish():
                 self.moving = False
                 self.sigPositionChangeFinished.emit(self)
-        #else:
-            #print ev
-
             
     def mouseClickEvent(self, ev):
         if self.moving and ev.button() == QtCore.Qt.RightButton:
@@ -395,4 +390,3 @@ class InfiniteLine(GraphicsObject):
         else:
             self.currentPen = self.pen
         self.update()
-
