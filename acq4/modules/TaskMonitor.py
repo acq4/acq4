@@ -26,11 +26,14 @@ class TaskMonitor(Module):
         self.taskTimer.start(100)
 
     def checkResult(self):
-        if self._lastTask.isDone():
-            result = self._lastTask.getResult()
-            self.resultTree.setData(result)
+        try:
+            if self._lastTask.isDone():
+                result = self._lastTask.getResult()
+                self.resultTree.setData(result)
+                self.taskTimer.stop()
+        except Exception:
+            self.resultTree.setData("Task failed.")
             self.taskTimer.stop()
-
     
 
 

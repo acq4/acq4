@@ -796,6 +796,12 @@ class TaskRunner(Module):
         if params is None:
             params = {}
         prot = {'protocol': self.protoStateGroup.state()}
+
+        # Disable timeouts for these tasks because we don't know how long to wait
+        # for external triggers. TODO: use the default timeout, but also allow devices
+        # in the task to modify the default.
+        prot['protocol']['timeout'] = None
+
         #prof.mark('protocol state')
         store = (dh is not None)
         prot['protocol']['storeData'] = store

@@ -3,6 +3,10 @@ acq4-0.9.3 (unreleased)
     API / behavior changes:
         Disabled HDF5 compression by default--lzf is not readable by most HDF5 libraries, and gzip is too slow. 
             (see the 'defaultCompression' config option).
+        Tasks now have a default timeout to prevent endless tasks locking up the system. For tasks that
+            require tolerance to long, unpredictable wait times (such as while waiting for an external 
+            trigger), it is necessary to set {'protocol': {'timeout': None}}. Note that the TaskRunner
+            disables the default timeout for exactly this reason.
     New Features:
         Timelapse + z-stack in camera module
         Motorized focus control interface in camera module

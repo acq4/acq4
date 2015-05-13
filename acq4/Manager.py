@@ -895,7 +895,7 @@ class Task:
         self.startedDevs = []
         self.startTime = None
         self.stopTime = None
-        
+
         #self.reserved = False
         try:
             self.cfg = command['protocol']
@@ -983,8 +983,10 @@ class Task:
         with self.taskLock:
             self.lockedDevs = []
             self.startedDevs = []
-            self.stopped = False
+            self.stopped = False  # whether sub-tasks have been stopped yet
             self.abortRequested = False
+            self._done = False  # cached output of isDone()
+
             #print "======  Executing task %d:" % self.id
             #print self.cfg
             #print "======================="
@@ -1056,16 +1058,13 @@ class Task:
                 
                 ## Wait until all tasks are done
                 #print "Waiting for all tasks to finish.."
-                timeout = self.cfg.get('timeout', None)
-                
+
                 lastProcess = ptime.time()
                 isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
                 #print "isGuiThread:", isGuiThread
                 while not self.isDone():
                     now = ptime.time()
                     elapsed = now - self.startTime
-                    if timeout is not None and elapsed > timeout:
-                        raise Exception("Task timed out (>%0.2fs); aborting." % timeout)
                     if isGuiThread:
                         if processEvents and now-lastProcess > 20e-3:  ## only process Qt events every 20ms
                             QtGui.QApplication.processEvents()
@@ -1092,8 +1091,34 @@ class Task:
         
     def isDone(self):
         """Return True if all tasks are completed and ready to return results.
+
+        If the task run time exceeds the timeout duration, then raise RuntimeError.
         """
         with self.taskLock:
+            # If we previously returned True or raised an exception, then 
+            # just repeat that result.
+            if self._done is True:
+                return True
+            elif self._done is not False:
+                raise self._done
+
+            # Check for timeout
+            if self.startTime is not None:
+                # By default, timeout occurs 10 sec after requested duration is elapsed.
+                # Set timeout=None to disable the check.
+                timeout = self.cfg.get('timeout', self.cfg['duration'] + 10.0)
+                
+                now = ptime.time()
+                elapsed = now - self.startTime
+                if timeout is not None and elapsed > timeout:
+                    self.stop(abort=True)
+                    self._done = RuntimeError("Task timed out (>%0.2fs)." % timeout)
+                    raise self._done
+
+            # For testing tasks that fail to complete
+            if getattr(self, 'test_endless', False):
+                return False
+
             #print "Manager.Task.isDone"
             if not self.abortRequested:
                 t = ptime.time()
@@ -1106,6 +1131,7 @@ class Task:
                 #print "  aborted, checking tasks.."
             d = self._tasksDone()
             #print "  tasks say:", d
+            self._done = d
             return d
         
     def _tasksDone(self):
@@ -1133,7 +1159,7 @@ class Task:
         return self.stopTime - self.startTime
         
     def stop(self, abort=False):
-        """Stop all tasks and read data. If abort is True, does not attempt to collect data from the run.
+        """Stop all tasks and read data. If abort is True, do not attempt to collect results from the task.
         """
         with self.taskLock:
 

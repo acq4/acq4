@@ -864,7 +864,7 @@ class Imager(Module):
         scanParams = self.param.child('Scan Control')
         samples = vscan.shape[0]
         sampleRate = scanParams['Sample Rate']
-        duration = samples / sampleRate
+        duration = float(samples) / sampleRate
         program = self.scanProgram.saveState()  # meta-data to annotate protocol
 
         pcell = np.empty(vscan.shape[0], dtype=np.float64)  # DAQmx requires float64!
@@ -1190,7 +1190,7 @@ class ImagingThread(Thread):
         # Need to build task from a deep copy of the protocol because 
         # it will be modified after execution.
         task = self.manager.createTask(copy.deepcopy(prot))
-
+        
         dur = prot['protocol']['duration']
         start = pg.ptime.time()
         endtime = start + dur - 0.005 
