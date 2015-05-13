@@ -36,6 +36,7 @@ class Dock(QtGui.QWidget, DockDrop):
         self.widgetArea.setLayout(self.layout)
         self.widgetArea.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         self.widgets = []
+        self._container = None
         self.currentRow = 0
         #self.titlePos = 'top'
         self.raiseOverlay()

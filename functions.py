@@ -29,6 +29,7 @@ SI_PREFIXES_ASCII = 'yzafpnum kMGTPEZY'
 
 from .Qt import QtGui, QtCore, USE_PYSIDE
 from . import getConfigOption, setConfigOptions
+from .reload import getPreviousVersion
 import numpy as np
 import decimal, re
 import ctypes
@@ -617,23 +618,15 @@ def subArray(data, offset, shape, stride):
     #data = data.flatten()
     data = data[offset:]
     shape = tuple(shape)
-    stride = tuple(stride)
     extraShape = data.shape[1:]
-    #print data.shape, offset, shape, stride
-    for i in range(len(shape)):
-        mask = (slice(None),) * i + (slice(None, shape[i] * stride[i]),)
-        newShape = shape[:i+1]
-        if i < len(shape)-1:
-            newShape += (stride[i],)
-        newShape += extraShape 
-        #print i, mask, newShape
-        #print "start:\n", data.shape, data
-        data = data[mask]
-        #print "mask:\n", data.shape, data
-        data = data.reshape(newShape)
-        #print "reshape:\n", data.shape, data
+
+    strides = list(data.strides[::-1])
+    itemsize = strides[-1]
+    for s in stride[1::-1]:
+        strides.append(itemsize * s)
+    strides = tuple(strides[::-1])
     
-    return data
+    return np.ndarray(buffer=data, shape=shape+extraShape, strides=strides, dtype=data.dtype)
 
 
 def transformToArray(tr):
@@ -931,7 +924,9 @@ def makeARGB(data, lut=None, levels=None, scale=None, useRGBA=False):
                 minVal, maxVal = levels[i]
                 if minVal == maxVal:
                     maxVal += 1e-16
-                newData[...,i] = rescaleData(data[...,i], scale/(maxVal-minVal), minVal, dtype=int)
+                rng = maxVal-minVal
+                rng = 1 if rng == 0 else rng
+                newData[...,i] = rescaleData(data[...,i], scale / rng, minVal, dtype=int)
             data = newData
         else:
             minVal, maxVal = levels
@@ -940,7 +935,9 @@ def makeARGB(data, lut=None, levels=None, scale=None, useRGBA=False):
             if maxVal == minVal:
                 data = rescaleData(data, 1, minVal, dtype=int)
             else:
-                data = rescaleData(data, scale/(maxVal-minVal), minVal, dtype=int)
+                rng = maxVal-minVal
+                rng = 1 if rng == 0 else rng
+                data = rescaleData(data, scale / rng, minVal, dtype=int)
 
     profile()
 
@@ -2251,3 +2248,44 @@ def toposort(deps, nodes=None, seen=None, stack=None, depth=0):
         sorted.extend( toposort(deps, deps[n], seen, stack+[n], depth=depth+1))
         sorted.append(n)
     return sorted
+
+
+def disconnect(signal, slot):
+    """Disconnect a Qt signal from a slot.
+
+    This method augments Qt's Signal.disconnect():
+
+    * Return bool indicating whether disconnection was successful, rather than
+      raising an exception
+    * Attempt to disconnect prior versions of the slot when using pg.reload    
+    """
+    while True:
+        try:
+            signal.disconnect(slot)
+            return True
+        except TypeError, RuntimeError:
+            slot = getPreviousVersion(slot)
+            if slot is None:
+                return False
+
+
+class SignalBlock(object):
+    """Class used to temporarily block a Qt signal connection::
+
+        with SignalBlock(signal, slot):
+            # do something that emits a signal; it will
+            # not be delivered to slot
+    """
+    def __init__(self, signal, slot):
+        self.signal = signal
+        self.slot = slot
+
+    def __enter__(self):
+        disconnect(self.signal, self.slot)
+        return self
+
+    def __exit__(self, *args):
+        self.signal.connect(self.slot)
+
+
+

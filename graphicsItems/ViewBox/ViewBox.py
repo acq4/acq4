@@ -296,8 +296,7 @@ class ViewBox(GraphicsWidget):
         # don't check whether auto range is enabled here--only check when setting dirty flag.
         if self._autoRangeNeedsUpdate: # and autoRangeEnabled: 
             self.updateAutoRange()
-        if self._matrixNeedsUpdate:
-            self.updateMatrix()
+        self.updateMatrix()
         
     def getState(self, copy=True):
         """Return the current state of the ViewBox. 
@@ -326,7 +325,6 @@ class ViewBox(GraphicsWidget):
         del state['linkedViews']
         
         self.state.update(state)
-        #self.updateMatrix()
         self.updateViewRange()
         self.sigStateChanged.emit(self)
 
@@ -423,6 +421,7 @@ class ViewBox(GraphicsWidget):
             ch.setParentItem(None)
         
     def resizeEvent(self, ev):
+        self._matrixNeedsUpdate = True
         self.linkedXChanged()
         self.linkedYChanged()
         self.updateAutoRange()
@@ -562,10 +561,6 @@ class ViewBox(GraphicsWidget):
 
         # If nothing has changed, we are done.
         if any(changed):
-            #if update and self.matrixNeedsUpdate:
-                #self.updateMatrix(changed)
-            #return 
-        
             self.sigStateChanged.emit(self)
             
             # Update target rect for debugging
@@ -576,24 +571,8 @@ class ViewBox(GraphicsWidget):
         # Note that aspect ratio constraints and auto-visible probably do not work together..
         if changed[0] and self.state['autoVisibleOnly'][1] and (self.state['autoRange'][0] is not False):
             self._autoRangeNeedsUpdate = True
-            #self.updateAutoRange()  ## Maybe just indicate that auto range needs to be updated?
         elif changed[1] and self.state['autoVisibleOnly'][0] and (self.state['autoRange'][1] is not False):
             self._autoRangeNeedsUpdate = True
-            #self.updateAutoRange()
-            
-        ## Update view matrix only if requested
-        #if update:
-            #self.updateMatrix(changed)
-        ## Otherwise, indicate that the matrix needs to be updated
-        #else:
-            #self.matrixNeedsUpdate = True
-            
-        ## Inform linked views that the range has changed <<This should be moved>>
-        #for ax, range in changes.items():
-            #link = self.linkedView(ax)
-            #if link is not None:
-                #link.linkedViewChanged(self, ax)
-
 
             
     def setYRange(self, min, max, padding=None, update=True):
@@ -1091,7 +1070,6 @@ class ViewBox(GraphicsWidget):
             return
         
         self.state['xInverted'] = b
-        #self.updateMatrix(changed=(False, True))
         self.updateViewRange()
         self.sigStateChanged.emit(self)
         self.sigXRangeChanged.emit(self, tuple(self.state['viewRange'][0]))
@@ -1144,36 +1122,44 @@ class ViewBox(GraphicsWidget):
 
     def mapToView(self, obj):
         """Maps from the local coordinates of the ViewBox to the coordinate system displayed inside the ViewBox"""
+        self.updateMatrix()
         m = fn.invertQTransform(self.childTransform())
         return m.map(obj)
 
     def mapFromView(self, obj):
         """Maps from the coordinate system displayed inside the ViewBox to the local coordinates of the ViewBox"""
+        self.updateMatrix()
         m = self.childTransform()
         return m.map(obj)
 
     def mapSceneToView(self, obj):
         """Maps from scene coordinates to the coordinate system displayed inside the ViewBox"""
+        self.updateMatrix()
         return self.mapToView(self.mapFromScene(obj))
 
     def mapViewToScene(self, obj):
         """Maps from the coordinate system displayed inside the ViewBox to scene coordinates"""
+        self.updateMatrix()
         return self.mapToScene(self.mapFromView(obj))
     
     def mapFromItemToView(self, item, obj):
         """Maps *obj* from the local coordinate system of *item* to the view coordinates"""
+        self.updateMatrix()
         return self.childGroup.mapFromItem(item, obj)
         #return self.mapSceneToView(item.mapToScene(obj))
 
     def mapFromViewToItem(self, item, obj):
         """Maps *obj* from view coordinates to the local coordinate system of *item*."""
+        self.updateMatrix()
         return self.childGroup.mapToItem(item, obj)
         #return item.mapFromScene(self.mapViewToScene(obj))
 
     def mapViewToDevice(self, obj):
+        self.updateMatrix()
         return self.mapToDevice(self.mapFromView(obj))
         
     def mapDeviceToView(self, obj):
+        self.updateMatrix()
         return self.mapToView(self.mapFromDevice(obj))
         
     def viewPixelSize(self):
@@ -1590,9 +1576,9 @@ class ViewBox(GraphicsWidget):
             self.sigYRangeChanged.emit(self, tuple(self.state['viewRange'][1]))
         
         if any(changed):
-            self.sigRangeChanged.emit(self, self.state['viewRange'])
             self.update()
             self._matrixNeedsUpdate = True
+            self.sigRangeChanged.emit(self, self.state['viewRange'])
         
             # Inform linked views that the range has changed
             for ax in [0, 1]:
@@ -1603,6 +1589,9 @@ class ViewBox(GraphicsWidget):
                     link.linkedViewChanged(self, ax)
         
     def updateMatrix(self, changed=None):
+        if self._matrixNeedsUpdate is False:
+            return
+
         ## Make the childGroup's transform match the requested viewRange.
         bounds = self.rect()
         

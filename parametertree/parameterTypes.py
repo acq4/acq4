@@ -318,6 +318,11 @@ class SimpleParameter(Parameter):
             self.value = self.colorValue
             self.saveState = self.saveColorState
     
+    def setValue(self, value, blockSignal=None):
+        if self.opts['type'] == 'int':
+            value = int(value)
+        Parameter.setValue(self, value, blockSignal)
+
     def colorValue(self):
         return fn.mkColor(Parameter.value(self))
     
@@ -447,12 +452,15 @@ class GroupParameter(Parameter):
     instead of a button.
     """
     itemClass = GroupParameterItem
+    
+    sigAddNew = QtCore.Signal(object, object)  # self, type
 
     def addNew(self, typ=None):
         """
         This method is called when the user has requested to add a new item to the group.
+        By default, it emits ``sigAddNew(self, typ)``.
         """
-        raise Exception("Must override this function in subclass.")
+        self.sigAddNew.emit(self, typ)
     
     def setAddList(self, vals):
         """Change the list of options available for the user to add to the group."""
@@ -590,6 +598,7 @@ class ActionParameterItem(ParameterItem):
         ParameterItem.__init__(self, param, depth)
         self.layoutWidget = QtGui.QWidget()
         self.layout = QtGui.QHBoxLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
         self.layoutWidget.setLayout(self.layout)
         self.button = QtGui.QPushButton(param.name())
         #self.layout.addSpacing(100)

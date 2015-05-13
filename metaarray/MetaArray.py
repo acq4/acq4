@@ -737,7 +737,6 @@ class MetaArray(object):
             else:
                 fd.seek(0)
                 meta = MetaArray._readMeta(fd)
-
                 if not kwargs.get("readAllData", True):
                     self._data = np.empty(meta['shape'], dtype=meta['type'])
                 if 'version' in meta:
