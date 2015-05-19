@@ -6,6 +6,7 @@ import STDPControlTemplate, STDPPlotsTemplate
 import acq4.pyqtgraph as pg
 import numpy as np
 from acq4.util.functions import measureResistance
+from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
 
 
 class STDPAnalyzer(AnalysisModule):
@@ -19,10 +20,17 @@ class STDPAnalyzer(AnalysisModule):
         self.ctrl = STDPControlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
 
+        tables = OrderedDict([
+            (self.dbIdentity+'.trials', 'STDP_Trials'),
+            (self.dbIdentity+'.cell', 'STDP_Cell')
+        ])
+        self.dbGui = DatabaseGui(dm=self.dataManager(), tables=tables)
+
        
         self.plotsWidget = QtGui.QWidget()
         self.plots = STDPPlotsTemplate.Ui_Form()
         self.plots.setupUi(self.plotsWidget)
+
 
         # ### Plots accessible through self.plots - defined above:
         #     exptPlot - displays the time when traces were recorded. Used to choose which traces are displayed in tracesPlot
@@ -34,6 +42,7 @@ class STDPAnalyzer(AnalysisModule):
         self._elements_ = OrderedDict([
             ('File Loader', {'type':'fileInput', 'host':self, 'showFileTree':True, 'size': (100, 100)}),
             ('Control Panel', {'type':'ctrl', 'object': self.ctrlWidget, 'pos':('below', 'File Loader'),'size': (100, 400)}),
+            ('Database', {'type':'ctrl', 'object': self.dbGui, 'pos':('bottom', 'Control Panel'), 'size':(100,100)}),
             ('Plots', {'type': 'ctrl', 'object': self.plotsWidget, 'pos': ('right', 'File Loader'), 'size': (400, 700)})
         ])
         self.initializeElements()
@@ -43,11 +52,11 @@ class STDPAnalyzer(AnalysisModule):
         # self.plots.exptPlot.setTitle('Experiment Timecourse')
         # self.plots.tracesPlot.setLabel('left', "Voltage") ### TODO: check whether traces are in VC or IC
         # self.plots.tracesPlot.setTitle("Data")
-         self.plots.plasticityPlot.setLabel('left', 'Slope')
+        self.plots.plasticityPlot.setLabel('left', 'Slope')
         # self.plots.plasticityPlot.setTitle('Plasticity')
         # self.plots.RMP_plot.setTitle('Resting Membrane Potential')
-         self.plots.RMP_plot.setLabel('left', 'Voltage')
-         self.plots.RI_plot.setLabel('left', 'Resistance')
+        self.plots.RMP_plot.setLabel('left', 'Voltage')
+        self.plots.RI_plot.setLabel('left', 'Resistance')
         # self.plots.RI_plot.setTitle('Input Resistance')
 
         for p in [self.plots.exptPlot, self.plots.tracesPlot, self.plots.plasticityPlot, self.plots.RMP_plot, self.plots.RI_plot]:
@@ -108,10 +117,13 @@ class STDPAnalyzer(AnalysisModule):
 
         ### Set up internal information storage
         self.traces = np.array([], dtype=[('timestamp', float), ('data', object)]) 
+        self.excludedTraces = np.array([], dtype=[('timestamp', float), ('data', object)])
         self.averagedTraces = None
         self.resetAveragedTraces()
         self.lastAverageState = {}
         self.files = []
+
+        self.ctrl.excludeAPsCheck = QtGui.QCheckBox()
 
 
 
@@ -164,6 +176,9 @@ class STDPAnalyzer(AnalysisModule):
         else:
             self.plots.exptPlot.plot(x=self.traces['timestamp']-self.expStart, y=[1]*len(self.traces), pen=None, symbol='o')
 
+        if self.ctrl.excludeAPsCheck.isChecked():
+            self.plots.exptPlot.plot(x=self.excludedTraces['timestamp'], y=[1]*len(self.excludedTraces), pen=None, symbol='o', symbolBrush=(255,100,100))
+
     def clearTracesPlot(self):
         self.plots.tracesPlot.clear()
         for item in [self.baselineRgn, self.pspRgn, self.healthRgn]:
@@ -206,6 +221,8 @@ class STDPAnalyzer(AnalysisModule):
         if not self.needNewAverage(): ## if the parameters for averaging didn't change, we don't need to do anything
             return
 
+
+
         prof.mark("  need new averages")
         self.getNewAverages()
         prof.mark("  got new averages")
@@ -214,6 +231,10 @@ class STDPAnalyzer(AnalysisModule):
 
     def needNewAverage(self):
         ### Checks if the current values for the averaging controls are the same as when we last averaged
+        excludeAPs = self.ctrl.excludeAPsCheck.isChecked()
+        if not excludeAPs == self.lastAverageState.get('excludeAPs', None):
+            return True
+
         if self.ctrl.averageTimeRadio.isChecked():
             method = 'time'
             value = self.ctrl.averageTimeSpin.value()
@@ -236,24 +257,35 @@ class STDPAnalyzer(AnalysisModule):
 
     def getNewAverages(self):
 
+        excludeAPs = self.ctrl.excludeAPsCheck.isChecked()
+
         if self.ctrl.averageTimeRadio.isChecked():
             method = 'time'
             value = self.ctrl.averageTimeSpin.value()
-            self.averageByTime(value)
+            self.averageByTime(value, excludeAPs=excludeAPs)
         elif self.ctrl.averageNumberRadio.isChecked():
             method = 'number'
             value = self.ctrl.averageNumberSpin.value()
-            self.averageByNumber(value)
+            self.averageByNumber(value, excludeAPs=excludeAPs)
         else:
             raise Exception("Unable to average traces. Please make sure an averaging method is selected.")
 
-        self.lastAverageState = {'method': method, 'value': value}
+        self.lastAverageState = {'method': method, 'value': value, 'excludeAPs':excludeAPs}
         #print "finished getNewAverages"
 
-    def averageByTime(self, time):
+    def checkForAP(trace, timeWindow):
+        """Return True if there is an action potential present in the trace in the given timeWindow (tuple of start, stop)."""
+        data = trace['primary']['Time':timeWindow[0]:timeWindow[1]]
+        if data.max() > -0.02:
+            return True
+        else:
+            return False
+
+    def averageByTime(self, time, excludeAPs=False):
         #print "averageByTime called."
-        t = 0
-        i = 0
+        t = 0 ## how many traces we've gone through
+        i = 0 ## how many timesteps we've gone through
+        k = 0 ## how many excluded traces we have
         n = int((self.traces['timestamp'].max() - self.expStart)/time) + ((self.traces['timestamp'].max() - self.expStart) % time > 0) ### weird solution for rounding up
         self.resetAveragedTraces(n)
         # print "   computed numbers, reset average array. "
@@ -262,18 +294,36 @@ class STDPAnalyzer(AnalysisModule):
         # print "      expStart:", self.expStart
         # print "      timestamp.min():", self.traces['timestamp'].min()
         # print "      time:", time
+        self.excludedTraces = np.zeros(len(self.traces), dtype=self.traces.dtype)
 
         while t < len(self.traces):
             traces = self.traces[(self.traces['timestamp'] >= self.expStart+time*i)*(self.traces['timestamp'] < self.expStart+time*i+time)]
+            j = 0
             if len(traces) > 1:
-                x = traces[0]['data']
-                for t2 in traces[1:]:
-                    x += t2['data']
-                x /= float(len(traces))
+                x = traces[0]['data'] ### TODO: What if there is an AP in this trace?
+                for trace2 in traces[1:]:
+                    if excludeAPs:
+                        if not self.checkForAP(trace, (0, .25)):
+                            x += trace2['data']
+                            j+= 1
+                        else:
+                            self.excludedTraces[k] = trace
+                            k += 1
+                    else:
+                        x += trace2['data']
+                        j += 1
+                x /= j
             elif len(traces) == 1:
-                x = traces[0]['data']
+                if excludeAPs:
+                    if not self.checkForAP(trace, (0., 0.25)):
+                        x = traces[0]['data']
+                        i += 1
+                    else:
+                        i += 1
+                else:
+                    x = traces[0]['data']
+                    i += 1
             else:
-                t += len(traces)
                 i += 1
                 continue
             #print "   averaged set ", i
@@ -286,10 +336,11 @@ class STDPAnalyzer(AnalysisModule):
 
             #print (len(self.averagedTraces[self.averagedTraces['avgTimeStamp'] <= self.expStart]))
         self.averagedTraces = self.averagedTraces[self.averagedTraces['avgTimeStamp'] != 0] ## clean up any left over zeros from pauses in data collection
+        self.excludedTraces = self.excludedTraces[self.excludedTraces['timestamp'] != 0]
         #print "  finished averaging"
 
 
-    def averageByNumber(self, number):
+    def averageByNumber(self, number, excludeAPs=False):
         t = 0
         i = 0
         n = int(len(self.traces)/number) + (len(self.traces) % number > 0) ### weird solution for rounding up
@@ -419,19 +470,24 @@ class STDPAnalyzer(AnalysisModule):
 
         if self.ctrl.baselineCheck.isChecked():
             self.measureBaseline(traces)
-            self.plots.RMP_plot.plot(x=times-self.expStart, y=self.analysisResults['RMP'])
+            self.plots.RMP_plot.plot(x=times-self.expStart, y=self.analysisResults['RMP'], pen=None, symbol='o', symbolPen=None)
 
         if self.ctrl.pspCheck.isChecked():
             self.measurePSP(traces)
             if self.ctrl.measureModeCombo.currentText() == 'Slope (max)':
-                self.plots.plasticityPlot.plot(x=times-self.expStart, y=self.analysisResults['pspSlope'])
+                self.plots.plasticityPlot.plot(x=times-self.expStart, y=self.analysisResults['pspSlope'], pen=None, symbol='o', symbolPen=None)
+                base, basetime = (self.analysisResults['pspSlope'][:5].mean(), self.analysisResults['time'][:5].mean()-self.expStart)
+                postStart = self.analysisResults['time'][5]
+                postRgn = (np.argwhere(self.analysisResults['time'] > postStart+60*20.)[0], np.argwhere(self.analysisResults['time']< postStart+60*40.)[-1])
+                post, postTime = (self.analysisResults['pspSlope'][postRgn[0]:postRgn[1]].mean(), self.analysisResults['time'][postRgn[0]:postRgn[1]].mean()-self.expStart)
+                self.plots.plasticityPlot.plot(x=[basetime, postTime], y=[base, post], pen=None, symbolBrush='r')
                 self.plots.plasticityPlot.setLabel('left', "Slope")
             elif self.ctrl.measureModeCombo.currentText() == 'Amplitude (max)':
-                self.plots.plasticityPlot.plot(x=times-self.expStart, y=self.analysisResults['pspAmplitude'])
+                self.plots.plasticityPlot.plot(x=times-self.expStart, y=self.analysisResults['pspAmplitude'], pen=None, symbol='o', symbolPen=None)
                 self.plots.plasticityPlot.setLabel('left', "Amplitude")
         if self.ctrl.healthCheck.isChecked():
             self.measureHealth(traces)
-            self.plots.RI_plot.plot(x=times-self.expStart, y=self.analysisResults['InputResistance'])
+            self.plots.RI_plot.plot(x=times-self.expStart, y=self.analysisResults['InputResistance'], pen=None, symbol='o', symbolPen=None)
 
     def measureBaseline(self, traces):
         rgn = self.baselineRgn.getRegion()
@@ -453,7 +509,7 @@ class STDPAnalyzer(AnalysisModule):
 
             ## Measure PSP slope
             slopes = np.diff(data)
-            maxSlopePosition = np.argwhere(slopes == slopes.max())
+            maxSlopePosition = np.argwhere(slopes == slopes.max())[0]
             avgMaxSlope = slopes[maxSlopePosition-int(ptsToAvg/2):maxSlopePosition+int(ptsToAvg/2)].mean()/timestep
             self.analysisResults[i]['pspSlope'] = avgMaxSlope
 
@@ -462,7 +518,7 @@ class STDPAnalyzer(AnalysisModule):
                 baseline = self.analysisResults['RMP'][i]
             else:
                 baseline = data[:5].mean() ## if we don't have a baseline measurement, just use the first 5 points
-            peakPosition = np.argwhere(data == data.max())
+            peakPosition = np.argwhere(data == data.max())[0]
             avgPeak = data[peakPosition-int(ptsToAvg/2):peakPosition+int(ptsToAvg/2)].mean() - baseline
             self.analysisResults[i]['pspAmplitude'] = avgPeak
 

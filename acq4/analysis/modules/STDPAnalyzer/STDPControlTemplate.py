@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'acq4/analysis/modules/STDPAnalyzer/STDPControlTemplate.ui'
 #
-# Created: Tue May  5 16:37:29 2015
+# Created: Tue May 19 09:00:06 2015
 #      by: PyQt4 UI code generator 4.11.1
 #
 # WARNING! All changes made in this file will be lost!
@@ -26,7 +26,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(351, 463)
+        Form.resize(352, 629)
         self.gridLayout_7 = QtGui.QGridLayout(Form)
         self.gridLayout_7.setMargin(1)
         self.gridLayout_7.setSpacing(3)
@@ -47,28 +47,32 @@ class Ui_Form(object):
         self.averageTimeRadio = QtGui.QRadioButton(self.traceDisplayGroup)
         self.averageTimeRadio.setChecked(True)
         self.averageTimeRadio.setObjectName(_fromUtf8("averageTimeRadio"))
-        self.gridLayout_2.addWidget(self.averageTimeRadio, 0, 0, 1, 1)
+        self.gridLayout_2.addWidget(self.averageTimeRadio, 1, 0, 1, 1)
         self.averageTimeSpin = SpinBox(self.traceDisplayGroup)
         self.averageTimeSpin.setObjectName(_fromUtf8("averageTimeSpin"))
-        self.gridLayout_2.addWidget(self.averageTimeSpin, 0, 1, 1, 2)
+        self.gridLayout_2.addWidget(self.averageTimeSpin, 1, 1, 1, 2)
         self.averageNumberRadio = QtGui.QRadioButton(self.traceDisplayGroup)
         self.averageNumberRadio.setObjectName(_fromUtf8("averageNumberRadio"))
-        self.gridLayout_2.addWidget(self.averageNumberRadio, 1, 0, 1, 2)
+        self.gridLayout_2.addWidget(self.averageNumberRadio, 2, 0, 1, 2)
         self.averageAnalysisCheck = QtGui.QCheckBox(self.traceDisplayGroup)
         self.averageAnalysisCheck.setMinimumSize(QtCore.QSize(0, 20))
         self.averageAnalysisCheck.setChecked(True)
         self.averageAnalysisCheck.setObjectName(_fromUtf8("averageAnalysisCheck"))
-        self.gridLayout_2.addWidget(self.averageAnalysisCheck, 2, 0, 1, 3)
+        self.gridLayout_2.addWidget(self.averageAnalysisCheck, 3, 0, 1, 3)
         self.averageNumberSpin = SpinBox(self.traceDisplayGroup)
         self.averageNumberSpin.setDecimals(0)
         self.averageNumberSpin.setMaximum(1000.0)
         self.averageNumberSpin.setProperty("value", 5.0)
         self.averageNumberSpin.setObjectName(_fromUtf8("averageNumberSpin"))
-        self.gridLayout_2.addWidget(self.averageNumberSpin, 1, 2, 1, 1)
+        self.gridLayout_2.addWidget(self.averageNumberSpin, 2, 2, 1, 1)
         self.displayTracesCheck = QtGui.QCheckBox(self.traceDisplayGroup)
         self.displayTracesCheck.setMinimumSize(QtCore.QSize(0, 20))
         self.displayTracesCheck.setObjectName(_fromUtf8("displayTracesCheck"))
-        self.gridLayout_2.addWidget(self.displayTracesCheck, 3, 0, 1, 3)
+        self.gridLayout_2.addWidget(self.displayTracesCheck, 4, 0, 1, 3)
+        self.excludeAPsCheck = QtGui.QCheckBox(self.traceDisplayGroup)
+        self.excludeAPsCheck.setChecked(True)
+        self.excludeAPsCheck.setObjectName(_fromUtf8("excludeAPsCheck"))
+        self.gridLayout_2.addWidget(self.excludeAPsCheck, 0, 0, 1, 3)
         self.gridLayout_3.addLayout(self.gridLayout_2, 1, 1, 1, 1)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.gridLayout_3.addItem(spacerItem, 2, 1, 1, 2)
@@ -77,8 +81,8 @@ class Ui_Form(object):
         spacerItem2 = QtGui.QSpacerItem(0, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.gridLayout_3.addItem(spacerItem2, 1, 2, 1, 1)
         self.gridLayout_7.addWidget(self.traceDisplayGroup, 0, 0, 1, 1)
-        spacerItem3 = QtGui.QSpacerItem(244, 0, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        self.gridLayout_7.addItem(spacerItem3, 2, 0, 1, 1)
+        spacerItem3 = QtGui.QSpacerItem(337, 47, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.gridLayout_7.addItem(spacerItem3, 3, 0, 1, 1)
         self.analysisGroup = QtGui.QGroupBox(Form)
         self.analysisGroup.setObjectName(_fromUtf8("analysisGroup"))
         self.gridLayout_4 = QtGui.QGridLayout(self.analysisGroup)
@@ -190,6 +194,9 @@ class Ui_Form(object):
         self.gridLayout_4.addItem(spacerItem10, 5, 2, 1, 1)
         self.gridLayout_4.setColumnStretch(1, 5)
         self.gridLayout_7.addWidget(self.analysisGroup, 1, 0, 1, 1)
+        self.storeToDBBtn = QtGui.QPushButton(Form)
+        self.storeToDBBtn.setObjectName(_fromUtf8("storeToDBBtn"))
+        self.gridLayout_7.addWidget(self.storeToDBBtn, 2, 0, 1, 1)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
@@ -202,6 +209,7 @@ class Ui_Form(object):
         self.averageNumberRadio.setText(_translate("Form", "Number:", None))
         self.averageAnalysisCheck.setText(_translate("Form", "Use averaged traces for analysis", None))
         self.displayTracesCheck.setText(_translate("Form", "Display original traces (slow)", None))
+        self.excludeAPsCheck.setText(_translate("Form", "Exclude traces with action potentials", None))
         self.analysisGroup.setTitle(_translate("Form", "Analysis", None))
         self.baselineCheck.setText(_translate("Form", "Baseline Region (green)", None))
         self.label.setText(_translate("Form", "Start:", None))
@@ -215,6 +223,7 @@ class Ui_Form(object):
         self.label_6.setText(_translate("Form", "End:", None))
         self.label_5.setText(_translate("Form", "Start:", None))
         self.analyzeBtn.setText(_translate("Form", "Analyze!", None))
+        self.storeToDBBtn.setText(_translate("Form", "Store to Database", None))
 
 from acq4.pyqtgraph.widgets.SpinBox import SpinBox
 from acq4.pyqtgraph.widgets.ComboBox import ComboBox
