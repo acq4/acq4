@@ -237,7 +237,7 @@ class ConvolverItem(QtGui.QTreeWidgetItem):
             #self.paramCombo.addItem(p)
             #if p == prev:
                 #self.paramCombo.setCurrentIndex(self.paramCombo.count()-1)     
-        self.paramCombo.updateList(paramList)
+        self.paramCombo.updateList(list(paramList))
 
     def methodChanged(self):
         method = str(self.convolutionCombo.currentText())

@@ -42,7 +42,7 @@ class SpatialCorrelator(QtGui.QWidget):
     #def getOutline(self):
         #return self.outline
     def populateEventsCombo(self, arr):
-        names = arr.dtype.names ## it would be nice to narrow this down to only include integer fields
+        names = list(arr.dtype.names) ## it would be nice to narrow this down to only include integer fields
         self.ctrl.eventCombo.updateList(names)
     
     def setData(self, arr=None, xPos=None, yPos=None, numOfPostEvents=None):
