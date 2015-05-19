@@ -123,8 +123,6 @@ class STDPAnalyzer(AnalysisModule):
         self.lastAverageState = {}
         self.files = []
 
-        self.ctrl.excludeAPsCheck = QtGui.QCheckBox()
-
 
 
 
@@ -159,6 +157,7 @@ class STDPAnalyzer(AnalysisModule):
                 self.lastAverageState = {}
         #print "   ", len(self.traces)
         self.updateExptPlot()
+        self.updateTracesPlot()
         return True
 
     def updateExptPlot(self):
@@ -177,7 +176,7 @@ class STDPAnalyzer(AnalysisModule):
             self.plots.exptPlot.plot(x=self.traces['timestamp']-self.expStart, y=[1]*len(self.traces), pen=None, symbol='o')
 
         if self.ctrl.excludeAPsCheck.isChecked():
-            self.plots.exptPlot.plot(x=self.excludedTraces['timestamp'], y=[1]*len(self.excludedTraces), pen=None, symbol='o', symbolBrush=(255,100,100))
+            self.plots.exptPlot.plot(x=self.excludedTraces['timestamp']-self.expStart, y=[1]*len(self.excludedTraces), pen=None, symbol='o', symbolBrush=(255,100,100))
 
     def clearTracesPlot(self):
         self.plots.tracesPlot.clear()
@@ -214,20 +213,17 @@ class STDPAnalyzer(AnalysisModule):
         self.averagedTraces = np.zeros(n, dtype=[('avgTimeStamp', float), ('avgData', object), ('origTimes', object)])
 
     def averageCtrlChanged(self):
-        prof = pg.debug.Profiler("STDPAnalyzer.averageCtrlChanged", disabled=True)
         if not self.ctrl.averageCheck.isChecked(): ## if we're not averaging anyway, we don't need to do anything
             self.updateExptPlot()
+            self.updateTracesPlot()
             return
         if not self.needNewAverage(): ## if the parameters for averaging didn't change, we don't need to do anything
+            self.updateTracesPlot()
             return
 
-
-
-        prof.mark("  need new averages")
         self.getNewAverages()
-        prof.mark("  got new averages")
         self.updateExptPlot()
-        prof.mark('  updated exptPlot')
+        self.updateTracesPlot()
 
     def needNewAverage(self):
         ### Checks if the current values for the averaging controls are the same as when we last averaged
@@ -273,8 +269,9 @@ class STDPAnalyzer(AnalysisModule):
         self.lastAverageState = {'method': method, 'value': value, 'excludeAPs':excludeAPs}
         #print "finished getNewAverages"
 
-    def checkForAP(trace, timeWindow):
+    def checkForAP(self, trace, timeWindow):
         """Return True if there is an action potential present in the trace in the given timeWindow (tuple of start, stop)."""
+        print 'checkforAP called.'
         data = trace['primary']['Time':timeWindow[0]:timeWindow[1]]
         if data.max() > -0.02:
             return True
@@ -282,49 +279,43 @@ class STDPAnalyzer(AnalysisModule):
             return False
 
     def averageByTime(self, time, excludeAPs=False):
-        #print "averageByTime called."
-        t = 0 ## how many traces we've gone through
-        i = 0 ## how many timesteps we've gone through
-        k = 0 ## how many excluded traces we have
+        # print "averageByTime called."
+        
+        # k = 0 ## how many excluded traces we have
         n = int((self.traces['timestamp'].max() - self.expStart)/time) + ((self.traces['timestamp'].max() - self.expStart) % time > 0) ### weird solution for rounding up
         self.resetAveragedTraces(n)
-        # print "   computed numbers, reset average array. "
+        #print "   computed numbers, reset average array. "
         # print "      n:", n
         # print "      timestamp.max():", self.traces['timestamp'].max()
         # print "      expStart:", self.expStart
         # print "      timestamp.min():", self.traces['timestamp'].min()
         # print "      time:", time
-        self.excludedTraces = np.zeros(len(self.traces), dtype=self.traces.dtype)
+        if excludeAPs:
+            #print '   excluding APs:'
+            APmask = np.zeros(len(self.traces), dtype=bool)
+            for i, trace in enumerate(self.traces):
+                APmask[i] = self.checkForAP(trace['data'], (0, 0.25))
+            self.excludedTraces = self.traces[APmask]
+            includedTraces = self.traces[~APmask]
+        else:
+            includedTraces = self.traces
 
-        while t < len(self.traces):
-            traces = self.traces[(self.traces['timestamp'] >= self.expStart+time*i)*(self.traces['timestamp'] < self.expStart+time*i+time)]
-            j = 0
+        #print "   averaging traces:"
+        t = 0 ## how many traces we've gone through
+        i = 0 ## how many timesteps we've gone through
+        while t < len(includedTraces):
+            #raise Exception("Stop!")
+            traces = includedTraces[(includedTraces['timestamp'] >= self.expStart+time*i)*(includedTraces['timestamp'] < self.expStart+time*i+time)]
             if len(traces) > 1:
-                x = traces[0]['data'] ### TODO: What if there is an AP in this trace?
+                x = traces[0]['data']
                 for trace2 in traces[1:]:
-                    if excludeAPs:
-                        if not self.checkForAP(trace, (0, .25)):
-                            x += trace2['data']
-                            j+= 1
-                        else:
-                            self.excludedTraces[k] = trace
-                            k += 1
-                    else:
-                        x += trace2['data']
-                        j += 1
-                x /= j
+                    x += trace2['data']
+                x /= len(traces)
             elif len(traces) == 1:
-                if excludeAPs:
-                    if not self.checkForAP(trace, (0., 0.25)):
-                        x = traces[0]['data']
-                        i += 1
-                    else:
-                        i += 1
-                else:
-                    x = traces[0]['data']
-                    i += 1
+                x = traces[0]['data']
             else:
                 i += 1
+                #print t, len(includedTraces), len(traces)
                 continue
             #print "   averaged set ", i
             self.averagedTraces[i]['avgTimeStamp'] = traces['timestamp'].mean()
@@ -333,21 +324,32 @@ class STDPAnalyzer(AnalysisModule):
             #print "   assigned values for set", i
             t += len(traces)
             i += 1
+            #print t, len(includedTraces)
 
             #print (len(self.averagedTraces[self.averagedTraces['avgTimeStamp'] <= self.expStart]))
         self.averagedTraces = self.averagedTraces[self.averagedTraces['avgTimeStamp'] != 0] ## clean up any left over zeros from pauses in data collection
-        self.excludedTraces = self.excludedTraces[self.excludedTraces['timestamp'] != 0]
+        #self.excludedTraces = self.excludedTraces[self.excludedTraces['timestamp'] != 0]
         #print "  finished averaging"
 
 
     def averageByNumber(self, number, excludeAPs=False):
-        t = 0
-        i = 0
         n = int(len(self.traces)/number) + (len(self.traces) % number > 0) ### weird solution for rounding up
         self.resetAveragedTraces(n)
 
-        while t < len(self.traces):
-            traces = self.traces[i*number:i*number+number]
+        if excludeAPs:
+            #print '   excluding APs:'
+            APmask = np.zeros(len(self.traces), dtype=bool)
+            for i, trace in enumerate(self.traces):
+                APmask[i] = self.checkForAP(trace['data'], (0, 0.25))
+            self.excludedTraces = self.traces[APmask]
+            includedTraces = self.traces[~APmask]
+        else:
+            includedTraces = self.traces
+
+        t = 0
+        i = 0
+        while t < len(includedTraces):
+            traces = includedTraces[i*number:i*number+number]
 
             x = traces[0]['data']['primary']
             for t2 in traces[1:]:
