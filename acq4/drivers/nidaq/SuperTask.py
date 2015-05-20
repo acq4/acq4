@@ -12,9 +12,9 @@ class SuperTask:
     
     def __init__(self, daq):
         self.daq = daq
-        self.tasks = {}
-        self.taskInfo = {}
-        self.channelInfo = {}
+        self.tasks = {}  # {taskKey: Task}
+        self.taskInfo = {}  # {taskKey: {'cache': ..., 'chans': [...], 'dataWritten': bool}
+        self.channelInfo = {}  # {'channelName': {'task': taskKey, 'type': '...', 'index': int, 'data': ..., 'clipped': bool}}
         self.dataWrtten = False
         self.devs = daq.listDevices()
         self.triggerChannel = None
@@ -42,6 +42,11 @@ class SuperTask:
             raise Exception('Must specify type of task (ai, ao, di, do)')
         parts = chan.lstrip('/').split('/')
         devn = parts[0]
+
+        # TODO: check to see whether devn is connected by RTSI to other devices. 
+        # For now, we assume all devices are connected; all channels of the same type will share a
+        # single task.
+        devn = 'default'
         return (devn, typ)
         
     def getTask(self, chan, typ=None):
@@ -54,19 +59,20 @@ class SuperTask:
         
     def addChannel(self, chan, typ, mode=None, vRange=[-10., 10.], **kargs):
         chan = self.absChanName(chan)
-        (dev, typ) = self.getTaskKey(chan, typ)
-        t = self.getTask(chan, typ)
+        taskKey = self.getTaskKey(chan, typ)
+        typ = taskKey[1]
+        task = self.getTask(chan, typ)
         
         ## Determine mode to use for this channel
         if mode is None:
             if typ == 'ai':
-                mode = self.daq.Val_RSE
+                mode = self.daq.Val_Cfg_Default
             elif typ in ['di', 'do']:
                 mode = self.daq.Val_ChanPerLine
         elif isinstance(mode, basestring):
             # decide which modes are allowed for this channel
             if typ == 'ai':
-                allowed = ['RSE', 'NRSE', 'Diff', 'PseudoDiff']
+                allowed = ['RSE', 'NRSE', 'Diff', 'PseudoDiff', 'Cfg_Default']
             elif typ in ['di', 'do']:
                 allowed = ['ChanPerLine', 'ChanForAllLines']
             else:
@@ -87,22 +93,22 @@ class SuperTask:
 
         if typ == 'ai':
             #print 'CreateAIVoltageChan(%s, "", %s, vRange[0], vRange[1], Val_Volts, None)' % (chan, str(mode))
-            t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], self.daq.Val_Volts, None, **kargs)
+            task.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], self.daq.Val_Volts, None, **kargs)
         elif typ == 'ao':
             #print 'CreateAOVoltageChan(%s, "", vRange[0], vRange[1], Val_Volts, None)' % (chan)
-            t.CreateAOVoltageChan(chan, "", vRange[0], vRange[1], self.daq.Val_Volts, None, **kargs)
+            task.CreateAOVoltageChan(chan, "", vRange[0], vRange[1], self.daq.Val_Volts, None, **kargs)
         elif typ == 'di':
             #print 'CreateDIChan(%s, "", %s)' % (chan, str(mode))
-            t.CreateDIChan(chan, "", mode, **kargs)
+            task.CreateDIChan(chan, "", mode, **kargs)
         elif typ == 'do':
             #print 'CreateDOChan(%s, "", %s)' % (chan, str(mode))
-            t.CreateDOChan(chan, "", mode, **kargs)
+            task.CreateDOChan(chan, "", mode, **kargs)
         else:
             raise Exception("Don't know how to create channel type %s" % typ)
-        self.taskInfo[(dev, typ)]['chans'].append(chan)
+        self.taskInfo[taskKey]['chans'].append(chan)
         self.channelInfo[chan] = {
-            'task': (dev, typ),
-            'index': t.GetTaskNumChans()-1,
+            'task': taskKey,
+            'index': task.GetTaskNumChans()-1,
         }
 
     # def setChannelInfo(self, chan, info):
@@ -212,7 +218,6 @@ class SuperTask:
             else:
                 #print "%s CfgSampClkTiming('', %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
                 self.tasks[k].CfgSampClkTiming("", rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
-
         
     def setTrigger(self, trig):
         #self.tasks[self.clockSource].CfgDigEdgeStartTrig(trig, Val_Rising)
