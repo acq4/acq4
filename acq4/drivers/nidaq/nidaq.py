@@ -248,6 +248,7 @@ class Task:
     def __init__(self, nidaq, taskName=""):
         self.nidaq = nidaq
         self.handle = self.nidaq.CreateTask(taskName)
+        self._taskType = None
 
     def __del__(self):
         self.nidaq.ClearTask(self.handle)
@@ -368,18 +369,23 @@ class Task:
         return '/' + '/'.join(parts)
         
     def taskType(self):
-        #print "taskType:"
-        ch = self.GetTaskChannels().split(', ')
-        #print ch
-        ch = self.absChannelName(ch[0])
-        #print "First task channel:", ch
-        return self.GetChanType(ch)
+        if self._taskType is None:
+            # print "taskType:"
+            ch = self.GetTaskChannels().split(', ')
+            # print ch
+            ch = self.absChannelName(ch[0])
+            # print "First task channel:", ch
+            self._taskType = self.GetChanType(ch)
+        return self._taskType
 
     def isInputTask(self):
         return self.taskType() in [LIB.Val_AI, LIB.Val_DI]
 
     def isOutputTask(self):
         return self.taskType() in [LIB.Val_AO, LIB.Val_DO]
+
+    def channels(self):
+        return [self.absChannelName(n) for n in self.GetTaskChannels().split(', ')]
 
 
 #class SuperTask:

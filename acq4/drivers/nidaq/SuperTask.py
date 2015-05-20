@@ -173,7 +173,7 @@ class SuperTask:
         clkSource = None
         if len(self.tasks) == 0:
             raise Exception("No tasks to configure.")
-        keys = self.tasks.keys()
+        keys = list(self.tasks.keys())
         self.numPts = nPts
         self.rate = rate
         
@@ -181,30 +181,37 @@ class SuperTask:
         ndevs = len(set([k[0] for k in keys]))
         #if ndevs > 1:
             #raise Exception("Multiple DAQ devices not yet supported.")
-        dev = keys[0][0]
+        taskDevs = {}
+        taskKeys = {}
+        for k,t in self.tasks.items():
+            dev = t.channels()[0].lstrip('/').split('/')[0]
+            taskDevs[t.taskType()] = dev
+            taskKeys[t.taskType()] = k
         
-        if (dev, 'ao') in keys:  ## Try ao first since E-series devices don't seem to work the other way around..
+        if self.daq.Val_AO in taskDevs:  ## Try ao first since E-series devices don't seem to work the other way around..
             clkSource = 'ao' # '/Dev1/ao/SampleClock'
-        elif (dev, 'ai') in keys:
+            dev = taskDevs[self.daq.Val_AO]
+            key = taskKeys[self.daq.Val_AO]
+        elif self.daq.Val_AI in taskDevs:
             clkSource = 'ai'  # '/Dev1/ai/SampleClock'
+            dev = taskDevs[self.daq.Val_AI]
+            key = taskKeys[self.daq.Val_AI]
         else:
             ## Only digital tasks, configure a fake AI task so we can use the ai sample clock.
             ## Even better: Configure a counter to make a clock..
+            dev = taskDevs[self.daq.Val_AI]
             aich = '/%s/ai0' % dev
             self.addChannel(aich, 'ai')
             clkSource = 'ai'  # '/Dev1/ai/SampleClock'
+            key = taskKeys[self.daq.Val_AI]
         
-        self.clockSource = (dev, clkSource)
-        
+        # record which task has the clock source so the we know to 
+        # start it last later on.
+        self.clockSource = key
+
         ## Configure sample clock, rate for all tasks
         clk = '/%s/%s/SampleClock' % (dev, clkSource)
         
-        
-        #keys = self.tasks.keys()
-        #keys.remove(self.clockSource)
-        #keys.insert(0, self.clockSource)
-        #for k in keys:
-
         for k in self.tasks:
             ## TODO: this must be skipped for the task which uses clkSource by default.
             maxrate = self.tasks[k].GetSampClkMaxRate()
@@ -212,16 +219,14 @@ class SuperTask:
                 raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (int(rate), int(maxrate)))
 
             if k[1] != clkSource:
-                #print "%s CfgSampClkTiming(%s, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), clk, rate, nPts)
+                print "%s CfgSampClkTiming(%s, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), clk, rate, nPts)
 
                 self.tasks[k].CfgSampClkTiming(clk, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
             else:
-                #print "%s CfgSampClkTiming('', %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
+                print "%s CfgSampClkTiming('', %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
                 self.tasks[k].CfgSampClkTiming("", rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
         
     def setTrigger(self, trig):
-        #self.tasks[self.clockSource].CfgDigEdgeStartTrig(trig, Val_Rising)
-
         for t in self.tasks:
             if t[1] in ['di', 'do']:   ## M-series DAQ does not have trigger for digital acquisition
                 #print "  skipping trigger for digital task"

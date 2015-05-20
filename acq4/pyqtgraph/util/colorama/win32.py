@@ -5,7 +5,9 @@ STDOUT = -11
 STDERR = -12
 
 try:
-    from ctypes import windll
+    import ctypes
+    # Don't import ctypes.windll directly: https://bugs.python.org/issue22552
+    windll = ctypes.LibraryLoader(ctypes.WinDLL)
     from ctypes import wintypes
 except ImportError:
     windll = None

@@ -424,6 +424,10 @@ class CFunction:
     def prettySignature(self):
         return "%s %s(%s)" % (''.join(self.sig[0]), self.name, ', '.join(["%s %s" % ("".join(map(str, s[1])), s[0]) for s in self.sig[1]]))
     
+    def __repr__(self):
+        return "<CFunction %s>" % self.name
+
+
 class CallResult:
     """Class for bundling results from C function calls. Allows access to the function
     return value as well as all of the arguments, since the function call will often return
