@@ -1169,7 +1169,7 @@ class ThreadColor(object):
         return self.colors[tid]
 
 
-def enable_faulthandler():
+def enableFaulthandler():
     """ Enable faulthandler for all threads. 
     
     If the faulthandler package is available, this function disables and then 

@@ -1,5 +1,5 @@
 from PyQt4 import QtCore
-from .debug import enable_faulthandler
+from .debug import enableFaulthandler
 
 class Thread(QtCore.QThread):
     """ Simple wrapper around QThread that allows customization of behavior for all threads
@@ -18,6 +18,6 @@ class Thread(QtCore.QThread):
     def __run_wrapper(self):
         # for every new thread, re-enable faulthandler to ensure the new
         # thread is properly handled
-        enable_faulthandler()
+        enableFaulthandler()
 
         self.__subclass_run()

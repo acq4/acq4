@@ -29,8 +29,8 @@ else:
 
 
 ## Enable stack trace output when a crash is detected
-from .util.debug import enable_faulthandler
-enable_faulthandler()
+from .util.debug import enableFaulthandler
+enableFaulthandler()
 
 ## Initialize Qt
 app = pg.mkQApp()

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from ..Qt import QtCore, QtGui, USE_PYSIDE
+from ..Qt import QtCore, QtGui, USE_PYSIDE, USE_PYQT5
 from .Node import *
 from ..pgcollections import OrderedDict
 from ..widgets.TreeWidget import *
@@ -9,6 +9,9 @@ from .. import FileDialog, DataTreeWidget
 if USE_PYSIDE:
     from . import FlowchartTemplate_pyside as FlowchartTemplate
     from . import FlowchartCtrlTemplate_pyside as FlowchartCtrlTemplate
+elif USE_PYQT5:
+    from . import FlowchartTemplate_pyqt5 as FlowchartTemplate
+    from . import FlowchartCtrlTemplate_pyqt5 as FlowchartCtrlTemplate
 else:
     from . import FlowchartTemplate_pyqt as FlowchartTemplate
     from . import FlowchartCtrlTemplate_pyqt as FlowchartCtrlTemplate
@@ -619,7 +622,10 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         self.cwWin.resize(1000,800)
         
         h = self.ui.ctrlList.header()
-        h.setResizeMode(0, h.Stretch)
+        if not USE_PYQT5:
+            h.setResizeMode(0, h.Stretch)
+        else:
+            h.setSectionResizeMode(0, h.Stretch)
         
         self.ui.ctrlList.itemChanged.connect(self.itemChanged)
         self.ui.loadBtn.clicked.connect(self.loadClicked)
@@ -823,16 +829,20 @@ class FlowchartWidget(dockarea.DockArea):
         self.buildMenu()
         
     def buildMenu(self, pos=None):
+        def buildSubMenu(node, rootMenu, subMenus, pos=None):
+            for section, node in node.items():
+                menu = QtGui.QMenu(section)
+                rootMenu.addMenu(menu)
+                if isinstance(node, OrderedDict): 
+                    buildSubMenu(node, menu, subMenus, pos=pos)
+                    subMenus.append(menu)
+                else:
+                    act = rootMenu.addAction(section)
+                    act.nodeType = section
+                    act.pos = pos
         self.nodeMenu = QtGui.QMenu()
-        self.subMenus = []
-        for section, nodes in self.chart.library.getNodeTree().items():
-            menu = QtGui.QMenu(section)
-            self.nodeMenu.addMenu(menu)
-            for name in nodes:
-                act = menu.addAction(name)
-                act.nodeType = name
-                act.pos = pos
-            self.subMenus.append(menu)
+        self.subMenus = []       
+        buildSubMenu(self.chart.library.getNodeTree(), self.nodeMenu, self.subMenus, pos=pos)
         self.nodeMenu.triggered.connect(self.nodeMenuTriggered)
         return self.nodeMenu
     

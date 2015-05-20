@@ -51,7 +51,7 @@ class HistogramLUTItem(GraphicsWidget):
         self.setLayout(self.layout)
         self.layout.setContentsMargins(1,1,1,1)
         self.layout.setSpacing(0)
-        self.vb = ViewBox()
+        self.vb = ViewBox(parent=self)
         self.vb.setMaximumWidth(152)
         self.vb.setMinimumWidth(45)
         self.vb.setMouseEnabled(x=False, y=True)
@@ -79,7 +79,7 @@ class HistogramLUTItem(GraphicsWidget):
             
         self.region = self.regions[0]  # for backward compatibility.
         
-        self.axis = AxisItem('left', linkView=self.vb, maxTickLength=-10)
+        self.axis = AxisItem('left', linkView=self.vb, maxTickLength=-10, parent=self)
         self.layout.addItem(self.axis, 0, 0)
         self.layout.addItem(self.vb, 0, 1)
         self.layout.addItem(self.gradient, 0, 2)
@@ -156,6 +156,9 @@ class HistogramLUTItem(GraphicsWidget):
         self.vb.enableAutoRange(self.vb.XYAxes)
 
     def setImageItem(self, img):
+        """Set an ImageItem to have its levels and LUT automatically controlled
+        by this HistogramLUTItem.
+        """
         self.imageItem = weakref.ref(img)
         img.sigImageChanged.connect(self.imageChanged)
         img.setLookupTable(self.getLookupTable)  ## send function pointer, not the result
@@ -176,6 +179,9 @@ class HistogramLUTItem(GraphicsWidget):
         self.sigLookupTableChanged.emit(self)
 
     def getLookupTable(self, img=None, n=None, alpha=None):
+        """Return a lookup table from the color gradient defined by this 
+        HistogramLUTItem.
+        """
         if self.levelMode is not 'mono':
             return None
         if n is None:
@@ -238,6 +244,8 @@ class HistogramLUTItem(GraphicsWidget):
             self._showRegions()
             
     def getLevels(self):
+        """Return the min and max levels.
+        """
         if self.levelMode == 'mono':
             return self.region.getRegion()
         else:

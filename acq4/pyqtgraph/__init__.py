@@ -4,7 +4,7 @@ PyQtGraph - Scientific Graphics and GUI Library for Python
 www.pyqtgraph.org
 """
 
-__version__ = '0.9.8'
+__version__ = '0.9.10'
 
 ### import all the goodies and add some helper functions for easy CLI use
 
@@ -41,7 +41,8 @@ elif 'darwin' in sys.platform: ## openGL can have a major impact on mac, but als
     useOpenGL = False
     if QtGui.QApplication.instance() is not None:
         print('Warning: QApplication was created before pyqtgraph was imported; there may be problems (to avoid bugs, call QApplication.setGraphicsSystem("raster") before the QApplication is created).')
-    QtGui.QApplication.setGraphicsSystem('raster')  ## work around a variety of bugs in the native graphics system 
+    if QtGui.QApplication.setGraphicsSystem:
+        QtGui.QApplication.setGraphicsSystem('raster')  ## work around a variety of bugs in the native graphics system 
 else:
     useOpenGL = False  ## on windows there's a more even performance / bugginess tradeoff. 
                 
@@ -271,7 +272,12 @@ from .Qt import isQObjectAlive
 
 ## Attempts to work around exit crashes:
 import atexit
+_cleanupCalled = False
 def cleanup():
+    global _cleanupCalled
+    if _cleanupCalled:
+        return
+    
     if not getConfigOption('exitCleanup'):
         return
     
@@ -296,7 +302,21 @@ def cleanup():
                 s.addItem(o)
         except RuntimeError:  ## occurs if a python wrapper no longer has its underlying C++ object
             continue
+    _cleanupCalled = True
+
 atexit.register(cleanup)
+
+# Call cleanup when QApplication quits. This is necessary because sometimes
+# the QApplication will quit before the atexit callbacks are invoked.
+# Note: cannot connect this function until QApplication has been created, so
+# instead we have GraphicsView.__init__ call this for us.
+_cleanupConnected = False
+def _connectCleanup():
+    global _cleanupConnected
+    if _cleanupConnected:
+        return
+    QtGui.QApplication.instance().aboutToQuit.connect(cleanup)
+    _cleanupConnected = True
 
 
 ## Optional function for exiting immediately (with some manual teardown)
