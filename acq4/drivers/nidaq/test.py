@@ -1,8 +1,4 @@
-#!/cygdrive/c/Python25/python.exe
 # -*- coding: utf-8 -*-
-## Workaround for symlinks not working in windows
-print "Starting up.."
-
 import sys, time, os
 import numpy as np
 modPath = os.path.split(__file__)[0]
@@ -12,31 +8,28 @@ sys.path = [acq4Path, utilPath] + sys.path
 from nidaq import LIB as lib
 import acq4.util.ptime as ptime
 
-
 if sys.argv[-1] == 'mock':
     from mock import NIDAQ as n
 else:
     from nidaq import NIDAQ as n
 
+devs = n.listDevices()
+assert(len(devs) > 0)
 
-print "Assert num devs > 0:"
-assert(len(n.listDevices()) > 0)
-print "  OK"
-print "devices: %s" % n.listDevices()
-dev = n.listDevices()[0]
+print "======= Devices: ======="
+for dev in devs:
+    print '\n' + dev
+    print "  Analog Channels:"
+    print "    AI: ", n.listAIChannels(dev)
+    print "    AO: ", n.listAOChannels(dev)
+    print "  Digital ports:"
+    print "    DI: ", n.listDIPorts(dev)
+    print "    DO: ", n.listDOPorts(dev)
+    print "  Digital lines:"
+    print "    DI: ", n.listDILines(dev)
+    print "    DO: ", n.listDOLines(dev)
 
-print "\nAnalog Channels:"
-print "  AI: ", n.listAIChannels(dev)
-print "  AO: ", n.listAOChannels(dev)
-
-print "\nDigital ports:"
-print "  DI: ", n.listDIPorts(dev)
-print "  DO: ", n.listDOPorts(dev)
-
-print "\nDigital lines:"
-print "  DI: ", n.listDILines(dev)
-print "  DO: ", n.listDOLines(dev)
-
+dev = devs[0]
 
 def finiteReadTest():
     print "::::::::::::::::::  Analog Input Test  :::::::::::::::::::::"
@@ -95,7 +88,9 @@ def syncADTest():
     task1.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
     task2 = n.createTask()
     task2.CreateDIChan("/Dev1/port0", "", n.Val_ChanForAllLines)
-    task2.CfgSampClkTiming("/Dev1/ai/SampleClock", 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
+    #task2.CfgSampClkTiming("/Dev1/ai/SampleClock", 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
+    task2.CfgSampClkTiming("", 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
+    task2.CfgDigEdgeStartTrig('/Dev1/ai/StartTrigger', n.Val_Rising)
     
     print task2.GetTaskChannels()
     task2.start()
@@ -174,7 +169,7 @@ def syncIOTest():
     data1[20:40] = 7.0
     data1[60:80] = 5.0
     print "Wrote ao samples:", task2.write(data1)
-    print "Wrote do samples:", task4.write(data1.astype(uint32))
+    print "Wrote do samples:", task4.write(data1.astype('uint32'))
     task2.start()
     task3.start()
     task1.start()
@@ -289,8 +284,8 @@ data = finiteReadTest()
 outputTest()
 syncAIOTest()
 contReadTest()
-#syncIOTest()
-#syncADTest()
+syncIOTest()
+syncADTest()
 #triggerTest()
 #data = superTaskTest()
 analogSuperTaskTest()
