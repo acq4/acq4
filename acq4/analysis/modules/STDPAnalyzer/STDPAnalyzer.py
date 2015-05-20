@@ -42,7 +42,7 @@ class STDPAnalyzer(AnalysisModule):
         self._elements_ = OrderedDict([
             ('File Loader', {'type':'fileInput', 'host':self, 'showFileTree':True, 'size': (100, 100)}),
             ('Control Panel', {'type':'ctrl', 'object': self.ctrlWidget, 'pos':('below', 'File Loader'),'size': (100, 400)}),
-            ('Database', {'type':'ctrl', 'object': self.dbGui, 'pos':('bottom', 'Control Panel'), 'size':(100,100)}),
+            ('Database', {'type':'ctrl', 'object': self.dbGui, 'pos':('below', 'Control Panel'), 'size':(100,100)}),
             ('Plots', {'type': 'ctrl', 'object': self.plotsWidget, 'pos': ('right', 'File Loader'), 'size': (400, 700)})
         ])
         self.initializeElements()
@@ -107,6 +107,7 @@ class STDPAnalyzer(AnalysisModule):
         self.healthRgn.sigRegionChangeFinished.connect(self.healthRgnChanged)
 
         self.ctrl.analyzeBtn.clicked.connect(self.analyze)
+        self.ctrl.storeToDBBtn.clicked.connect(self.storeToDB)
 
         self.baselineRgn.setRegion((0,0.05))
         self.pspRgn.setRegion((0.052,0.067))
@@ -532,11 +533,30 @@ class STDPAnalyzer(AnalysisModule):
             inputResistance = measureResistance(data, 'IC')[0]
             self.analysisResults[i]['InputResistance'] = inputResistance
 
+    def storeToDB(self):
+        if len(analysisResults) == 0:
+            self.analyze()
 
+        db = self.dbgui.getDatabase()
+        #identity = self.dbIdentity
+        table = self.dbgui.getTableName(self.dbIdentity+'.trials')
 
+        trialFields = OrderedDict([
+            ('CellDir', 'directory:Cell'),
+            ('ProtocolSequenceDir', 'directory:ProtocolSequence')
+            ('timestamp', 'real'),
+            ('time', 'real'),
+            ('RPM', 'real'),
+            ('InputResistance', 'real'),
+            ('pspSlope', 'real'),
+            ('normalizedPspSlope', 'real'),
+            ('pspRgnStart', 'real'),
+            ('pspRgnEnd', 'real'),
+            ('ctrlWidgetState', 'text'),
+            ('includedProtocols', 'text')
+            ])
 
-
-
+        db.checkTable(table, owner=self.dbIdentity+'.trials', columns=trialFields, create=True, addUnknownColumns=True, indexes=[['CellDir'], ['ProtocolSequenceDir']]))
 
 
 
