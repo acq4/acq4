@@ -123,6 +123,7 @@ class STDPAnalyzer(AnalysisModule):
         self.resetAveragedTraces()
         self.lastAverageState = {}
         self.files = []
+        self.analysisResults=None
 
 
 
@@ -190,12 +191,16 @@ class STDPAnalyzer(AnalysisModule):
 
         if not self.ctrl.averageCheck.isChecked():
             data = self.traces[(self.traces['timestamp'] > rgn[0]+self.expStart)*(self.traces['timestamp'] < rgn[1]+self.expStart)]['data']
+            timeKey = 'timestamp'
+            dataKey='data'
             for i, d in enumerate(data):
                 self.plots.tracesPlot.plot(d['primary'], pen=pg.intColor(i, len(data)))
 
         if self.ctrl.averageCheck.isChecked():
             data = self.averagedTraces[(self.averagedTraces['avgTimeStamp'] > rgn[0]+self.expStart)*(self.averagedTraces['avgTimeStamp'] < rgn[1]+self.expStart)]
             displayOrig = self.ctrl.displayTracesCheck.isChecked()
+            timeKey = 'avgTimeStamp'
+            dataKey='avgData'
             #print "   len(data):", len(data)
             for i, d in enumerate(data['avgData']):
                 self.plots.tracesPlot.plot(d['primary'], pen=pg.intColor(i, len(data)))
@@ -207,6 +212,15 @@ class STDPAnalyzer(AnalysisModule):
                         #print orig.infoCopy()
                         #print sample.infoCopy()
                         self.plots.tracesPlot.plot(orig['primary'], pen=pg.intColor(i, len(data), alpha=30))
+
+        timestep = data[dataKey][0].axisValues('Time')[1]-data[dataKey][0].axisValues('Time')[0]
+        if self.analysisResults is not None:
+            for i, time in enumerate(data[timeKey]):
+                slopeTime = self.analysisResults[self.analysisResults['time'] == time]['highSlopeLocation']
+                slopeInd = int(slopeTime/timestep)
+                self.plots.tracesPlot.plot([slopeTime], [data[i][dataKey]['primary'][slopeInd]], pen=None, symbol='o', symbolPen=None, symbolBrush=pg.intColor(i, len(data)))
+
+
 
 
     def resetAveragedTraces(self, n=0):
@@ -465,6 +479,8 @@ class STDPAnalyzer(AnalysisModule):
         self.analysisResults = np.zeros(len(traces), dtype=[('time', float), 
                                                             ('RMP', float), 
                                                             ('pspSlope', float),
+                                                            ('slopeFitOffset', float),
+                                                            ('highSlopeLocation', float),
                                                             ('pspAmplitude', float),
                                                             ('InputResistance', float)
                                                             ])
@@ -508,22 +524,45 @@ class STDPAnalyzer(AnalysisModule):
         ptsToAvg = self.ctrl.measureAvgSpin.value()
 
         for i, trace in enumerate(traces):
-            data = trace['primary']['Time':rgn[0]:rgn[1]]
+            data = trace['Time':rgn[0]:rgn[1]]
+            rgn2 = (data.axisValues('Time')[0], data.axisValues('Time')[-1])
 
-            ## Measure PSP slope
-            slopes = np.diff(data)
-            maxSlopePosition = np.argwhere(slopes == slopes.max())[0]
-            avgMaxSlope = slopes[maxSlopePosition-int(ptsToAvg/2):maxSlopePosition+int(ptsToAvg/2)].mean()/timestep
-            self.analysisResults[i]['pspSlope'] = avgMaxSlope
+            ## Measure PSP slope -- takes max diff between points
+            # slopes = np.diff(data)
+            # maxSlopePosition = np.argwhere(slopes == slopes.max())[0]
+            # avgMaxSlope = slopes[maxSlopePosition-int(ptsToAvg/2):maxSlopePosition+int(ptsToAvg/2)].mean()/timestep
+            # self.analysisResults[i]['pspSlope'] = avgMaxSlope
+
+            ## Measure PSP slope -- does a rolling fit of a line
+            step = int(0.0001/timestep) ## measure every 100 us
+            region = int(0.0003/timestep) ## fit a line to a 300 us region
+            t = region
+            slope = 0
+            highest=None
+            #raise Exception("stop!")
+            while t < len(data['primary']):
+                data2 = data['Time':t-region:t]['primary']
+                s = np.polyfit(np.arange(len(data2))*timestep, data2, 1)
+                if s[0] > slope:
+                    slope = s[0]
+                    offset = s[1]
+                    hightime = rgn2[0]+t*timestep-(region*timestep)/2.
+                t += step
+
+            self.analysisResults[i]['pspSlope'] = slope
+            self.analysisResults[i]['slopeFitOffset'] = offset
+            self.analysisResults[i]['highSlopeLocation'] = hightime
+
+
 
             ## Measure PSP Amplitude
-            if self.analysisResults['RMP'][i] != 0:
-                baseline = self.analysisResults['RMP'][i]
-            else:
-                baseline = data[:5].mean() ## if we don't have a baseline measurement, just use the first 5 points
-            peakPosition = np.argwhere(data == data.max())[0]
-            avgPeak = data[peakPosition-int(ptsToAvg/2):peakPosition+int(ptsToAvg/2)].mean() - baseline
-            self.analysisResults[i]['pspAmplitude'] = avgPeak
+            # if self.analysisResults['RMP'][i] != 0:
+            #     baseline = self.analysisResults['RMP'][i]
+            # else:
+            #     baseline = data[:5].mean() ## if we don't have a baseline measurement, just use the first 5 points
+            # peakPosition = np.argwhere(data == data.max())[0]
+            # avgPeak = data[peakPosition-int(ptsToAvg/2):peakPosition+int(ptsToAvg/2)].mean() - baseline
+            # self.analysisResults[i]['pspAmplitude'] = avgPeak
 
     def measureHealth(self, traces):
         rgn = self.healthRgn.getRegion()
@@ -556,7 +595,7 @@ class STDPAnalyzer(AnalysisModule):
             ('includedProtocols', 'text')
             ])
 
-        db.checkTable(table, owner=self.dbIdentity+'.trials', columns=trialFields, create=True, addUnknownColumns=True, indexes=[['CellDir'], ['ProtocolSequenceDir']]))
+        db.checkTable(table, owner=self.dbIdentity+'.trials', columns=trialFields, create=True, addUnknownColumns=True, indexes=[['CellDir'], ['ProtocolSequenceDir']])
 
 
 
