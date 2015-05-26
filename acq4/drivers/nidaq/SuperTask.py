@@ -170,7 +170,7 @@ class SuperTask:
         
     def configureClocks(self, rate, nPts):
         """Configure sample clock and triggering for all tasks"""
-        clkSource = None
+        trigSource = None
         if len(self.tasks) == 0:
             raise Exception("No tasks to configure.")
         keys = list(self.tasks.keys())
@@ -189,11 +189,11 @@ class SuperTask:
             taskKeys[t.taskType()] = k
         
         if self.daq.Val_AO in taskDevs:  ## Try ao first since E-series devices don't seem to work the other way around..
-            clkSource = 'ao' # '/Dev1/ao/SampleClock'
+            trigSource = 'ao' # '/Dev1/ao/SampleClock'
             dev = taskDevs[self.daq.Val_AO]
             key = taskKeys[self.daq.Val_AO]
         elif self.daq.Val_AI in taskDevs:
-            clkSource = 'ai'  # '/Dev1/ai/SampleClock'
+            trigSource = 'ai'  # '/Dev1/ai/SampleClock'
             dev = taskDevs[self.daq.Val_AI]
             key = taskKeys[self.daq.Val_AI]
         else:
@@ -202,29 +202,33 @@ class SuperTask:
             dev = taskDevs[self.daq.Val_AI]
             aich = '/%s/ai0' % dev
             self.addChannel(aich, 'ai')
-            clkSource = 'ai'  # '/Dev1/ai/SampleClock'
+            trigSource = 'ai'  # '/Dev1/ai/SampleClock'
             key = taskKeys[self.daq.Val_AI]
         
         # record which task has the clock source so the we know to 
         # start it last later on.
         self.clockSource = key
 
-        ## Configure sample clock, rate for all tasks
-        clk = '/%s/%s/SampleClock' % (dev, clkSource)
+        ## Configure common trigger for all tasks
+        trig = '/%s/%s/StartTrigger' % (dev, trigSource)
         
         for k in self.tasks:
-            ## TODO: this must be skipped for the task which uses clkSource by default.
+            ## TODO: this must be skipped for the task which uses trigSource by default.
             maxrate = self.tasks[k].GetSampClkMaxRate()
             if rate > maxrate:
                 raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (int(rate), int(maxrate)))
 
-            if k[1] != clkSource:
-                print "%s CfgSampClkTiming(%s, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), clk, rate, nPts)
-
-                self.tasks[k].CfgSampClkTiming(clk, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
+            if k[1] != trigSource:
+                print "%s CfgSampClkTiming(None, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
+                self.tasks[k].CfgSampClkTiming(None, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
+                self.tasks[k].CfgDigEdgeStartTrig(trig, self.daq.Val_Rising)
+                
+                #self.tasks[k].CfgSampClkTiming(clk, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
             else:
                 print "%s CfgSampClkTiming('', %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
-                self.tasks[k].CfgSampClkTiming("", rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
+                self.tasks[k].CfgSampClkTiming(None, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
+                
+                #self.tasks[k].CfgSampClkTiming("", rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
         
     def setTrigger(self, trig):
         for t in self.tasks:
