@@ -157,6 +157,7 @@ class STDPAnalyzer(AnalysisModule):
                         return
                 self.traces = np.concatenate((self.traces, arr))
                 self.lastAverageState = {}
+                self.files.append(f)
         #print "   ", len(self.traces)
         self.updateExptPlot()
         self.updateTracesPlot()
@@ -213,8 +214,8 @@ class STDPAnalyzer(AnalysisModule):
                         #print sample.infoCopy()
                         self.plots.tracesPlot.plot(orig['primary'], pen=pg.intColor(i, len(data), alpha=30))
 
-        timestep = data[dataKey][0].axisValues('Time')[1]-data[dataKey][0].axisValues('Time')[0]
         if self.analysisResults is not None:
+            timestep = data[dataKey][0].axisValues('Time')[1]-data[dataKey][0].axisValues('Time')[0]
             for i, time in enumerate(data[timeKey]):
                 slopeTime = self.analysisResults[self.analysisResults['time'] == time]['highSlopeLocation']
                 slopeInd = int(slopeTime/timestep)
@@ -286,7 +287,7 @@ class STDPAnalyzer(AnalysisModule):
 
     def checkForAP(self, trace, timeWindow):
         """Return True if there is an action potential present in the trace in the given timeWindow (tuple of start, stop)."""
-        print 'checkforAP called.'
+        # print 'checkforAP called.'
         data = trace['primary']['Time':timeWindow[0]:timeWindow[1]]
         if data.max() > -0.02:
             return True
@@ -508,10 +509,12 @@ class STDPAnalyzer(AnalysisModule):
             self.measureHealth(traces)
             self.plots.RI_plot.plot(x=times-self.expStart, y=self.analysisResults['InputResistance'], pen=None, symbol='o', symbolPen=None)
 
+        self.updateTracesPlot()
+
     def measureBaseline(self, traces):
         rgn = self.baselineRgn.getRegion()
-        print "MeasureBaseline:"
-        print "   ", traces[0].shape
+        #print "MeasureBaseline:"
+        #print "   ", traces[0].shape
 
 
         for i, trace in enumerate(traces):
@@ -555,14 +558,16 @@ class STDPAnalyzer(AnalysisModule):
 
 
 
-            ## Measure PSP Amplitude
-            # if self.analysisResults['RMP'][i] != 0:
-            #     baseline = self.analysisResults['RMP'][i]
-            # else:
-            #     baseline = data[:5].mean() ## if we don't have a baseline measurement, just use the first 5 points
-            # peakPosition = np.argwhere(data == data.max())[0]
-            # avgPeak = data[peakPosition-int(ptsToAvg/2):peakPosition+int(ptsToAvg/2)].mean() - baseline
-            # self.analysisResults[i]['pspAmplitude'] = avgPeak
+            # Measure PSP Amplitude
+            if self.analysisResults['RMP'][i] != 0:
+                baseline = self.analysisResults['RMP'][i]
+            else:
+                baseline = data['primary'][:5].mean() ## if we don't have a baseline measurement, just use the first 5 points
+            peakPosition = np.argwhere(data['primary'] == data['primary'].max())[0]
+            avgPeak = data['primary'][peakPosition-int(ptsToAvg/2):peakPosition+int(ptsToAvg/2)].mean() - baseline
+            print "avgPeak:", avgPeak
+            self.analysisResults[i]['pspAmplitude'] = avgPeak
+            #raise Exception('Stop!')
 
     def measureHealth(self, traces):
         rgn = self.healthRgn.getRegion()
@@ -573,34 +578,80 @@ class STDPAnalyzer(AnalysisModule):
             self.analysisResults[i]['InputResistance'] = inputResistance
 
     def storeToDB(self):
-        if len(analysisResults) == 0:
+        if len(self.analysisResults) == 0:
             self.analyze()
 
-        db = self.dbgui.getDatabase()
+        db = self.dbGui.getDb()
+        if db is None:
+            raise Exception("No database loaded.")
         #identity = self.dbIdentity
-        table = self.dbgui.getTableName(self.dbIdentity+'.trials')
+        table = self.dbGui.getTableName(self.dbIdentity+'.trials')
 
         trialFields = OrderedDict([
             ('CellDir', 'directory:Cell'),
-            ('ProtocolSequenceDir', 'directory:ProtocolSequence')
+            ('ProtocolSequenceDir', 'directory:ProtocolSequence'),
             ('timestamp', 'real'),
             ('time', 'real'),
-            ('RPM', 'real'),
+            ('RMP', 'real'),
             ('InputResistance', 'real'),
             ('pspSlope', 'real'),
             ('normalizedPspSlope', 'real'),
+            ('slopeFitOffset', 'real'),
+            ('highSlopeLocation', 'real'),
+            ('pspAmplitude', 'real'),
             ('pspRgnStart', 'real'),
             ('pspRgnEnd', 'real'),
-            ('ctrlWidgetState', 'text'),
+            ('analysisCtrlState', 'text'),
+            ('averageCtrlState', 'text'),
             ('includedProtocols', 'text')
             ])
 
         db.checkTable(table, owner=self.dbIdentity+'.trials', columns=trialFields, create=True, addUnknownColumns=True, indexes=[['CellDir'], ['ProtocolSequenceDir']])
 
 
+        data = np.zeros(len(self.analysisResults), dtype=[
+                                                            ('CellDir', object),
+                                                            #('ProtocolSequenceDir', object),
+                                                            ('timestamp', float), 
+                                                            ('time', float),
+                                                            ('RMP', float), 
+                                                            ('InputResistance', float),
+                                                            ('pspSlope', float),
+                                                            ('normalizedPspSlope', float),
+                                                            ('slopeFitOffset', float),
+                                                            ('highSlopeLocation', float),
+                                                            ('pspAmplitude', float),
+                                                            ('pspRgnStart', float),
+                                                            ('pspRgnEnd', float),
+                                                            ('analysisCtrlState', object),
+                                                            ('averageCtrlState', object),
+                                                            ('includedProtocols', object)
+                                                            ])
 
+        data['CellDir'] = self.dataModel.getParent(self.files[0], 'Cell')
+        data['pspRgnStart'] = self.pspRgn.getRegion()[0]
+        data['pspRgnEnd'] = self.pspRgn.getRegion()[1]
+        data['analysisCtrlState'] = str(self.analysisCtrl.state())
+        data['averageCtrlState'] = str(self.averageCtrl.state())
 
+        baselineSlope = self.analysisResults[self.analysisResults['time'] < self.expStart+300]['pspSlope'].mean()
+        for i in range(len(self.analysisResults)):
+            data[i]['timestamp'] = self.analysisResults[i]['time']
+            data[i]['time'] = self.analysisResults[i]['time'] - self.expStart
+            data[i]['RMP'] = self.analysisResults[i]['RMP']
+            data[i]['InputResistance'] = self.analysisResults[i]['InputResistance']
+            data[i]['pspSlope'] = self.analysisResults[i]['pspSlope']
+            data[i]['normalizedPspSlope'] = self.analysisResults[i]['pspSlope']/baselineSlope
+            data[i]['slopeFitOffset'] = self.analysisResults[i]['slopeFitOffset']
+            data[i]['highSlopeLocation'] = self.analysisResults[i]['highSlopeLocation']
+            data[i]['pspAmplitude'] = self.analysisResults[i]['pspAmplitude']
+            data[i]['includedProtocols'] = self.averagedTraces[i]['origTimes'] ### TODO: make this protocolDirs instead of timestamps....
 
+        old = db.select(table, where={'CellDir':data['CellDir'][0]}, toArray=True)
+        if old is not None: ## only do deleting if there is already data stored for this cell
+            db.delete(table, where={'CellDir': data['CellDir'][0]})
+        
+        db.insert(table, data)
 
 
 
