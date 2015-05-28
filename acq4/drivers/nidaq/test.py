@@ -430,6 +430,6 @@ def analogSyncAcrossDevices():
 #syncADTest()
 #triggerTest()
 #data = superTaskTest()
-#analogSuperTaskTest()
-data = analogSyncAcrossDevices()
+analogSuperTaskTest()
+#data = analogSyncAcrossDevices()
 

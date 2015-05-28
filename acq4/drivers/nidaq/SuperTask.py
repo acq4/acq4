@@ -198,8 +198,9 @@ class SuperTask:
                 trigSource = keys[i][1]
                 dev = keys[i][0]
                 key = keys[i]
+                break
                 
-        #print trigSource, dev, key
+        print trigSource, dev, key
             
         #for k,t in self.tasks.items():
         #    dev = t.channels()[0].lstrip('/').split('/')[0]
@@ -233,6 +234,7 @@ class SuperTask:
         #print "KEY:", key
         ## Configure common trigger for all tasks
         trig = '/%s/%s/StartTrigger' % (dev, trigSource)
+        print trig
         
         for k in self.tasks:
             ## TODO: this must be skipped for the task which uses trigSource by default.
@@ -240,14 +242,14 @@ class SuperTask:
             if rate > maxrate:
                 raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (int(rate), int(maxrate)))
 
-            if k[0] != dev:
-                #print "%s CfgSampClkTiming(None, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
+            if k != key:
+                print "%s CfgSampClkTiming(None, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
                 self.tasks[k].CfgSampClkTiming(None, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
                 self.tasks[k].CfgDigEdgeStartTrig(trig, self.daq.Val_Rising)
                 
                 #self.tasks[k].CfgSampClkTiming(clk, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
             else:
-                #print "TrigSource %s CfgSampClkTiming('', %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
+                print "TrigSource %s CfgSampClkTiming('', %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
                 self.tasks[k].CfgSampClkTiming(None, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
                 
                 #self.tasks[k].CfgSampClkTiming("", rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
