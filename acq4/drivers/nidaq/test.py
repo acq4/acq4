@@ -115,16 +115,16 @@ def syncADTest():
 def syncAIOTest():
     print "::::::::::::::::::  Sync Analog I/O Test  :::::::::::::::::::::"
     task1 = n.createTask()
-    task1.CreateAIVoltageChan("/Dev2/ai0", "", n.Val_RSE, -10., 10., n.Val_Volts, None)
+    task1.CreateAIVoltageChan("/Dev1/ai0", "", n.Val_PseudoDiff, -10., 10., n.Val_Volts, None)
     task1.CfgSampClkTiming(None , 100000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
     #task1.CfgDigEdgeStartTrig("/Dev1/ao/SampleClock",n.Val_Rising)
     #task1.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
     
     task2 = n.createTask()
-    task2.CreateAOVoltageChan("/Dev1/ao0", "", -10., 10., n.Val_Volts, None)
+    task2.CreateAOVoltageChan("/Dev2/ao0", "", -10., 10., n.Val_Volts, None)
     #task2.CfgSampClkTiming(None, 10000.0, nidaq.Val_Rising, nidaq.Val_FiniteSamps, 1000)
     task2.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
-    task2.CfgDigEdgeStartTrig("/Dev2/ai/StartTrigger", n.Val_Rising)
+    task2.CfgDigEdgeStartTrig("/Dev1/ai/StartTrigger", n.Val_Rising)
     
 
 
@@ -264,16 +264,16 @@ def analogSuperTaskTest():
     print "::::::::::::::::::  Analog SuperTask  Test  :::::::::::::::::::::"
 
     st.addChannel('/Dev1/ai0', 'ai', n.Val_PseudoDiff)
-    st.addChannel('/Dev1/ai1', 'ai', n.Val_PseudoDiff)
+    st.addChannel('/Dev2/ai1', 'ai', n.Val_RSE)
     st.addChannel('/Dev1/ao0', 'ao', n.Val_PseudoDiff)
-    st.addChannel('/Dev1/ao1', 'ao', n.Val_PseudoDiff)
+    st.addChannel('/Dev2/ao1', 'ao', n.Val_RSE)
 
     ao = np.zeros((2, 1000))
     ao[0, 200:300] = 1.0
     ao[1, 400:500] = 2.0
     st.setWaveform('/Dev1/ao0', ao[0])
-    st.setWaveform('/Dev1/ao1', ao[1])
-    print 'here'
+    st.setWaveform('/Dev2/ao1', ao[1])
+    #print 'here'
     st.configureClocks(rate=10000., nPts=1000)
     
     #st.setTrigger('/Dev1/PFI5')
@@ -286,19 +286,147 @@ def analogSuperTaskTest():
         print "=====Output", k
         #print data
         #print data[k][0][:, ::20].round()
-        print data[k]['data']
+        print data[k]['data'].shape
     return data
     
+def analogSyncAcrossDevices():
+    print "::::::::::::::::::  Analog Output/Input synchronzized across devices Test  :::::::::::::::::::::"
+    
+    synchType = 5
+    
+    masterAITask = n.createTask()
+    masterAITask.CreateAIVoltageChan("/Dev1/ai0", "", n.Val_PseudoDiff, -10., 10., n.Val_Volts, None)
+    masterAITask.CfgSampClkTiming(None , 10000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
+    #task1.CfgDigEdgeStartTrig("/Dev1/ao/SampleClock",n.Val_Rising)
+    #task1.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
+    
+    masterAOTask = n.createTask()
+    masterAOTask.CreateAOVoltageChan("/Dev1/ao0", "", -10., 10., n.Val_Volts, None)
+    masterAOTask.CfgSampClkTiming(None , 10000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
+    
+    slaveAITask = n.createTask()
+    slaveAITask.CreateAIVoltageChan("/Dev2/ai0", "",n.Val_RSE, -10., 10., n.Val_Volts, None)
+    #task2.CfgSampClkTiming(None, 10000.0, nidaq.Val_Rising, nidaq.Val_FiniteSamps, 1000)
+    slaveAITask.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
+    
+    slaveAOTask = n.createTask()
+    slaveAOTask.CreateAOVoltageChan("/Dev2/ao0", "", -10., 10., n.Val_Volts, None)
+    #task2.CfgSampClkTiming(None, 10000.0, nidaq.Val_Rising, nidaq.Val_FiniteSamps, 1000)
+    slaveAOTask.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
+    
+    if synchType == 0: # E & S Series Sharing Master Timebase
+        # Note:  PXI 6115 and 6120 (S Series) devices don't require sharing of master timebase, 
+        # because they auto-lock to Clock 10.  For those devices sharing a start trigger is adequate.
+        # For the PCI-6154 S Series device use the M Series (PCI) synchronization type to synchronize 
+        # using the reference clock. 
+        str1 = masterTask.GetMasterTimebaseSrc()
+        clkRate = masterTask.GetMasterTimebaseRate()
+        print str1, clkRate
+        slaveTask.SetMasterTimebaseSrc(str1)
+        slaveTask.SetMasterTimebaseRate(clkRate)
+    elif synchType == 1:
+        # M Series Sharing Reference Clock for PCI Devices
+        #masterTask.SetRefClkSrc("OnboardClock")
+        str1 = slaveTask.GetRefClkSrc()
+        clkRate = slaveTask.GetRefClkRate()
+        print str1, clkRate
+        masterTask.SetMasterTimebaseSrc(str1)
+        masterTask.SetMasterTimebaseRate(clkRate)
+    elif synchType == 2:
+        # M Series Sharing Reference Clock for PXI Devices
+        masterTask.SetRefClkSrc("PXI_Clk10")
+        masterTask.SetRefClkRate(10000000.0)
+        slaveTask.SetRefClkSrc("PXI_Clk10")
+        slaveTask.SetRefClkRate(10000000.0)
+    elif synchType == 3:
+        # DSA Sharing Sample Clock
+        # Note:  If you are using PXI DSA Devices, the master device must reside in PXI Slot 2.
+        #str1 = masterTask.GetTerminalNameWithDevPrefix("SampleClockTimebase")
+        str2 = masterTask.GetTerminalNameWithDevPrefix("SyncPulse")
+        str1 = "/Dev1/ai/SampleClockTimebase"
+        #str2 = 
+        print str1, str2
+        slaveTask.SetSampClkTimebaseSrc(str1)
+        slaveTask.SetSyncPulseSrc(str2)
+    elif synchType ==4:
+        # Reference clock 10 synchronization for DSA devices.
+        # Note: Not all DSA devices support reference clock synchronization. Refer to your hardware 
+        # device manual for further information on whether this method of synchronization is supported
+        # for your particular device
+        masterTask.SetRefClkSrc("PXI_Clk10")
+        str1 = masterTask.GetTerminalNameWithDevPrefix("SyncPulse")
+        slaveTask.SetSyncPulseSrc(str1)
+        slaveTask.SetRefClkSrc("PXI_Clk10")
+    elif synchType == 5:
+        #masterTask.ConnectTerms("/Dev1/20MHzTimebase","/Dev1/RTSI7")
+        masterTimeBaseAI = masterAITask.GetMasterTimebaseSrc()
+        masterclkRateAI = masterAITask.GetMasterTimebaseRate()
+        masterTimeBaseAO = masterAOTask.GetMasterTimebaseSrc()
+        masterclkRateAO = masterAOTask.GetMasterTimebaseRate()
+        print masterTimeBaseAI, masterclkRateAI, masterTimeBaseAO, masterclkRateAO
+        slaveAOTask.SetSampClkTimebaseSrc(masterTimeBaseAO)
+        slaveAOTask.SetSampClkTimebaseRate(masterclkRateAO)
+        slaveAITask.SetSampClkTimebaseSrc(masterTimeBaseAO)
+        slaveAITask.SetSampClkTimebaseRate(masterclkRateAO)
+        #masterTask.SetMasterTimebaseSrc('RTSI7')
+        #masterTask.SetMasterTimebaseRate(20e6)
+    else:
+        print 'Please specify valid synchType'
+        exit(1)
+    
+    #trigName = masterTask.GetTerminalNameWithDevPrefix("ai/StartTrigger")
+    #trigName = "/Dev1/ai/StartTrigger"
+    masterAOTask.CfgDigEdgeStartTrig("/Dev1/ai/StartTrigger",n.Val_Rising)
+    slaveAOTask.CfgDigEdgeStartTrig("/Dev1/ai/StartTrigger",n.Val_Rising)
+    slaveAITask.CfgDigEdgeStartTrig("/Dev1/ai/StartTrigger",n.Val_Rising)
+    #slaveTask.CfgDigEdgeStartTrig("/Dev1/ai/ReferenceTrigger",n.Val_Rising)
+    
+    #hDevice = n.Device("/Dev1/")
+    deviceFamily =  n.GetDevProductType("Dev1")
+    deviceNum =  n.GetDevProductNum("Dev1")
+    print deviceFamily, deviceNum
+    
+    chanType = masterAOTask.GetChanType(["/Dev1/ao0","/Dev2/ao0"])
+    print chanType 
+    taskType = masterAOTask.taskType()
+    print taskType
+    
+    dataAO = np.zeros((1000,), dtype=np.float64)
+    dataAO[200:400] = 7.0
+    dataAO[600:800] = 5.0
+    print "Wrote master ao samples:", masterAOTask.write(dataAO)
+    print "Wrote slave ao samples:", slaveAOTask.write(dataAO)
+    
+    slaveAOTask.start()
+    slaveAITask.start()
+    masterAOTask.start()
+    masterAITask.start()
+    
+    slaveAIData  = slaveAITask.read()
+    masterAIData = masterAITask.read()
 
+    slaveAOTask.stop()
+    slaveAITask.stop()
+    masterAOTask.stop()
+    masterAITask.stop()
+    
+    
+    print "Data acquired:"
+    print slaveAIData[0].shape
+    print masterAIData[0].shape
+    
+    return np.column_stack((masterAIData,slaveAIData))
 
-data = finiteReadTest()
-outputTest()
-syncAIOTest()
-contReadTest()
+########################################################################
+
+#data = finiteReadTest()
+#outputTest()
+#syncAIOTest()
+#contReadTest()
 #syncIOTest()
 #syncADTest()
 #triggerTest()
 #data = superTaskTest()
 analogSuperTaskTest()
-
+#data = analogSyncAcrossDevices()
 

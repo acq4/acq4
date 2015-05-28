@@ -7,6 +7,11 @@ import acq4.util.ptime as ptime  ## platform-independent precision timing
 from collections import OrderedDict
 #import debug
 
+# refClkTimebase does not work for the new device family
+newDeviceFamilies = ['DAQmx_Val_MSeriesDAQ' 'DAQmx_Val_XSeriesDAQ']
+oldDeviceFamilies = ['DAQmx_Val_ESeriesDAQ' 'DAQmx_Val_SSeriesDAQ' 'DAQmx_Val_BSeriesDAQ' 'DAQmx_Val_AOSeries']
+
+
 class SuperTask:
     """Class for creating and encapsulating multiple synchronous tasks. Holds and assembles arrays for writing to each task as well as per-channel meta data."""
     
@@ -42,11 +47,11 @@ class SuperTask:
             raise Exception('Must specify type of task (ai, ao, di, do)')
         parts = chan.lstrip('/').split('/')
         devn = parts[0]
-
+        #print devn
         # TODO: check to see whether devn is connected by RTSI to other devices. 
         # For now, we assume all devices are connected; all channels of the same type will share a
         # single task.
-        devn = 'default'
+        #devn = 'default'
         return (devn, typ)
         
     def getTask(self, chan, typ=None):
@@ -110,7 +115,6 @@ class SuperTask:
             'task': taskKey,
             'index': task.GetTaskNumChans()-1,
         }
-
     # def setChannelInfo(self, chan, info):
         # chan = self.absChanName(chan)
         # self.channelInfo[chan] = info
@@ -167,7 +171,13 @@ class SuperTask:
         
     def hasTasks(self):
         return len(self.tasks) > 0
-        
+    
+    def getDeviceFamilies(self, deviceNames):
+        deviceFamilies = {}
+        for k in deviceNames:
+            #hDevice = Device(deviceNames[k])
+            deviceFamilies[k] = GetDevProductCategory(deviceNames[k])
+            
     def configureClocks(self, rate, nPts):
         """Configure sample clock and triggering for all tasks"""
         trigSource = None
@@ -183,32 +193,44 @@ class SuperTask:
             #raise Exception("Multiple DAQ devices not yet supported.")
         taskDevs = {}
         taskKeys = {}
-        for k,t in self.tasks.items():
-            dev = t.channels()[0].lstrip('/').split('/')[0]
-            taskDevs[t.taskType()] = dev
-            taskKeys[t.taskType()] = k
+        for i in range(len(keys)):
+            if keys[i][0] == 'Dev1':
+                trigSource = keys[i][1]
+                dev = keys[i][0]
+                key = keys[i]
+                
+        print trigSource, dev, key
+            
+        #for k,t in self.tasks.items():
+        #    dev = t.channels()[0].lstrip('/').split('/')[0]
+        #    print dev, k, t.taskType()
+        #    taskDevs[t.taskType()] = dev
+        #    taskKeys[t.taskType()] = k
         
-        if self.daq.Val_AO in taskDevs:  ## Try ao first since E-series devices don't seem to work the other way around..
-            trigSource = 'ao' # '/Dev1/ao/SampleClock'
-            dev = taskDevs[self.daq.Val_AO]
-            key = taskKeys[self.daq.Val_AO]
-        elif self.daq.Val_AI in taskDevs:
-            trigSource = 'ai'  # '/Dev1/ai/SampleClock'
-            dev = taskDevs[self.daq.Val_AI]
-            key = taskKeys[self.daq.Val_AI]
-        else:
-            ## Only digital tasks, configure a fake AI task so we can use the ai sample clock.
-            ## Even better: Configure a counter to make a clock..
-            dev = taskDevs[self.daq.Val_AI]
-            aich = '/%s/ai0' % dev
-            self.addChannel(aich, 'ai')
-            trigSource = 'ai'  # '/Dev1/ai/SampleClock'
-            key = taskKeys[self.daq.Val_AI]
+        #print self.daq.Val_AO
+        #if self.daq.Val_AO in taskDevs:  ## Try ao first since E-series devices don't seem to work the other way around..
+        #    trigSource = 'ao' # '/Dev1/ao/SampleClock'
+        #    dev = taskDevs[self.daq.Val_AO]
+        #    key = taskKeys[self.daq.Val_AO]
+        #elif self.daq.Val_AI in taskDevs:
+        #    trigSource = 'ai'  # '/Dev1/ai/SampleClock'
+        #    dev = taskDevs[self.daq.Val_AI]
+        #    key = taskKeys[self.daq.Val_AI]
+        #else:
+        #    ## Only digital tasks, configure a fake AI task so we can use the ai sample clock.
+        #    ## Even better: Configure a counter to make a clock..
+        #    dev = taskDevs[self.daq.Val_AI]
+        #    aich = '/%s/ai0' % dev
+        #    self.addChannel(aich, 'ai')
+        #    trigSource = 'ai'  # '/Dev1/ai/SampleClock'
+        #    key = taskKeys[self.daq.Val_AI]
+        #deviceFamilies = getDeviceFamilies(taskDevs)
+        
         
         # record which task has the clock source so the we know to 
         # start it last later on.
         self.clockSource = key
-
+        print "KEY:", key
         ## Configure common trigger for all tasks
         trig = '/%s/%s/StartTrigger' % (dev, trigSource)
         
@@ -218,17 +240,27 @@ class SuperTask:
             if rate > maxrate:
                 raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (int(rate), int(maxrate)))
 
-            if k[1] != trigSource:
+            if k[0] != dev:
                 print "%s CfgSampClkTiming(None, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
                 self.tasks[k].CfgSampClkTiming(None, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
                 self.tasks[k].CfgDigEdgeStartTrig(trig, self.daq.Val_Rising)
                 
                 #self.tasks[k].CfgSampClkTiming(clk, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
             else:
-                print "%s CfgSampClkTiming('', %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
+                print "TrigSource %s CfgSampClkTiming('', %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
                 self.tasks[k].CfgSampClkTiming(None, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
                 
                 #self.tasks[k].CfgSampClkTiming("", rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
+        # In this example, the S Series device has been made the master and the X Series device has been made the slave. The reason for this is that the S Series synchronization has the least flexibility compared to the X Series that has PLL circuitry as well as access to the master timebase where the S Series only allows access to the master timebase for Analog circuit. Along with this, the X Series card has a faster timebase so it is easier to export the low frequency timebase from the S Series device to the X Series device.
+        masterTimeBase = self.tasks[key].GetMasterTimebaseSrc()
+        masterclkRate  = self.tasks[key].GetMasterTimebaseRate()
+        print masterTimeBase, masterclkRate
+        for k in self.tasks:
+            print k
+            if k[0] != dev:
+                self.tasks[k].SetSampClkTimebaseSrc(masterTimeBase)
+                self.tasks[k].SetSampClkTimebaseRate(masterclkRate)
+                
         
     def setTrigger(self, trig):
         for t in self.tasks:
