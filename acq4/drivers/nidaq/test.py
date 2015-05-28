@@ -386,10 +386,13 @@ def analogSyncAcrossDevices():
     deviceNum =  n.GetDevProductNum("Dev1")
     print deviceFamily, deviceNum
     
-    chanType = masterAOTask.GetChanType(["/Dev1/ao0","/Dev2/ao0"])
-    print chanType 
-    taskType = masterAOTask.taskType()
-    print taskType
+    #test = n.GetDeviceAttribute("productTypeDev1")
+    #print test.ProductCategory()
+    
+    #chanType = masterAOTask.GetChanType(["/Dev1/ao0","/Dev2/ao0"])
+    #print chanType 
+    #taskType = masterAOTask.taskType()
+    #print taskType
     
     dataAO = np.zeros((1000,), dtype=np.float64)
     dataAO[200:400] = 7.0
@@ -427,6 +430,6 @@ def analogSyncAcrossDevices():
 #syncADTest()
 #triggerTest()
 #data = superTaskTest()
-analogSuperTaskTest()
-#data = analogSyncAcrossDevices()
+#analogSuperTaskTest()
+data = analogSyncAcrossDevices()
 

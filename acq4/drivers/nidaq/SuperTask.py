@@ -199,7 +199,7 @@ class SuperTask:
                 dev = keys[i][0]
                 key = keys[i]
                 
-        print trigSource, dev, key
+        #print trigSource, dev, key
             
         #for k,t in self.tasks.items():
         #    dev = t.channels()[0].lstrip('/').split('/')[0]
@@ -230,7 +230,7 @@ class SuperTask:
         # record which task has the clock source so the we know to 
         # start it last later on.
         self.clockSource = key
-        print "KEY:", key
+        #print "KEY:", key
         ## Configure common trigger for all tasks
         trig = '/%s/%s/StartTrigger' % (dev, trigSource)
         
@@ -241,22 +241,22 @@ class SuperTask:
                 raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (int(rate), int(maxrate)))
 
             if k[0] != dev:
-                print "%s CfgSampClkTiming(None, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
+                #print "%s CfgSampClkTiming(None, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
                 self.tasks[k].CfgSampClkTiming(None, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
                 self.tasks[k].CfgDigEdgeStartTrig(trig, self.daq.Val_Rising)
                 
                 #self.tasks[k].CfgSampClkTiming(clk, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
             else:
-                print "TrigSource %s CfgSampClkTiming('', %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
+                #print "TrigSource %s CfgSampClkTiming('', %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
                 self.tasks[k].CfgSampClkTiming(None, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
                 
                 #self.tasks[k].CfgSampClkTiming("", rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
         # In this example, the S Series device has been made the master and the X Series device has been made the slave. The reason for this is that the S Series synchronization has the least flexibility compared to the X Series that has PLL circuitry as well as access to the master timebase where the S Series only allows access to the master timebase for Analog circuit. Along with this, the X Series card has a faster timebase so it is easier to export the low frequency timebase from the S Series device to the X Series device.
         masterTimeBase = self.tasks[key].GetMasterTimebaseSrc()
         masterclkRate  = self.tasks[key].GetMasterTimebaseRate()
-        print masterTimeBase, masterclkRate
+        #print masterTimeBase, masterclkRate
         for k in self.tasks:
-            print k
+            #print k
             if k[0] != dev:
                 self.tasks[k].SetSampClkTimebaseSrc(masterTimeBase)
                 self.tasks[k].SetSampClkTimebaseRate(masterclkRate)
