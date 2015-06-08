@@ -11,6 +11,7 @@ utilPath = os.path.join(acq4Path, 'lib', 'util')
 sys.path = [acq4Path, utilPath] + sys.path
 from nidaq import LIB as lib
 import acq4.util.ptime as ptime
+import ctypes
 
 
 if sys.argv[-1] == 'mock':
@@ -421,6 +422,35 @@ def analogSyncAcrossDevices():
     return np.column_stack((masterAIData,slaveAIData))
 
 ########################################################################
+def countPhotonTaskTest():
+    #    Note: An external sample clock must be used. Counters do not
+    #          have an internal sample clock available. You can use the
+    #          Gen Dig Pulse Train-Continuous example to generate a pulse
+    #          train on another counter and connect it to the Sample
+    #          Clock Source you are using in this example.
+    
+    tPulses = n.createTask()
+    tPulses.CreateCOPulseChanFreq("Dev1/ctr1","",n.Val_Hz,n.Val_Low,0.0,10000.,0.50)
+    tPulses.CfgImplicitTiming(n.Val_ContSamps,1000)
+    #DAQmxErrChk (DAQmxCreateCOPulseChanFreq(taskHandle,"Dev1/ctr0","",DAQmx_Val_Hz,DAQmx_Val_Low,0.0,1.00,0.50));
+    #DAQmxErrChk (DAQmxCfgImplicitTiming(taskHandle,DAQmx_Val_ContSamps,1000));
+    
+    tCount = n.createTask()
+    tCount.CreateCICountEdgesChan("/Dev1/ctr0", "", n.Val_Rising, 0, n.Val_CountUp)
+    tCount.CfgSampClkTiming("/Dev1/ctr1InternalOutput", 10000., n.Val_Rising, n.Val_FiniteSamps, 1000)
+    
+    tPulses.start()
+    tCount.start()
+    counts = tCount.read()
+    #t.ReadCounterU32(n.Val_Auto,10.0,data,1000,data2,None)
+    #counts = t.read()
+    
+    tPulses.stop()
+    tCount.stop()
+
+    return counts
+
+########################################################################
 
 #data = finiteReadTest()
 #outputTest()
@@ -430,6 +460,7 @@ def analogSyncAcrossDevices():
 #syncADTest()
 #triggerTest()
 #data = superTaskTest()
-analogSuperTaskTest()
+#analogSuperTaskTest()
 #data = analogSyncAcrossDevices()
+dd = countPhotonTaskTest()
 

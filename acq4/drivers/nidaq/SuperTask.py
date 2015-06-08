@@ -200,7 +200,7 @@ class SuperTask:
                 key = keys[i]
                 break
                 
-        print trigSource, dev, key
+        #print trigSource, dev, key
             
         #for k,t in self.tasks.items():
         #    dev = t.channels()[0].lstrip('/').split('/')[0]
@@ -234,7 +234,7 @@ class SuperTask:
         #print "KEY:", key
         ## Configure common trigger for all tasks
         trig = '/%s/%s/StartTrigger' % (dev, trigSource)
-        print trig
+        #print trig
         
         for k in self.tasks:
             ## TODO: this must be skipped for the task which uses trigSource by default.

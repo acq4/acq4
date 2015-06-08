@@ -9,6 +9,7 @@ import acq4.util.debug as debug
 import acq4.util.clibrary as clibrary
 import ctypes
 import SuperTask
+import pdb
 
 dtypes = {  ## for converting numpy dtypes to nidaq type strings
     '<f8': 'F64',
@@ -288,7 +289,7 @@ class Task:
         if dtype is None:
             if tt in [LIB.Val_AI, LIB.Val_AO]:
                 dtype = float64
-            elif tt in [LIB.Val_DI, LIB.Val_DO]:
+            elif tt in [LIB.Val_DI, LIB.Val_DO, LIB.Val_CI]:
                 dtype = uint32  ## uint8 / 16 might be sufficient, but don't seem to work anyway.
             else:
                 raise Exception("No default dtype for %s tasks." % chTypes[tt])
@@ -311,7 +312,10 @@ class Task:
             else:
                 raise Exception('dtype %s not allowed for DI channels (must be uint8, uint16, or uint32)' % str(dtype))
         elif tt == LIB.Val_CI:
-            fName += 'Counter'
+            if dtype in [uint8, uint16, uint32]:
+                fName += 'Counter'
+            else:
+                raise Exception('dtype %s not allowed for CI channels (must be uint8, uint16, or uint32)' % str(dtype))
         else:
             raise Exception("read() not allowed for this task type (%s)" % chTypes(tt))
             
@@ -323,8 +327,11 @@ class Task:
         ## buf.ctypes is a c_void_p, but the function requires a specific pointer type so we are forced to recast the pointer:
         fn = LIB('functions', fName)
         cbuf = ctypes.cast(buf.ctypes, fn.argCType('readArray'))
-        
-        nPts = getattr(self, fName)(reqSamps, timeout, LIB.Val_GroupByChannel, cbuf, buf.size)
+        #pdb.set_trace()
+        if tt == LIB.Val_CI:
+            nPts = getattr(self, fName)(reqSamps, timeout, cbuf, buf.size )
+        else:
+            nPts = getattr(self, fName)(reqSamps, timeout, LIB.Val_GroupByChannel, cbuf, buf.size)
         return (buf, nPts)
 
     def write(self, data, timeout=10.):

@@ -5,7 +5,7 @@ I22
 sS'fileOrder'
 p2
 (lp3
-S'C:\\Users\\2-photonScan\\experiments\\test\\nidaq\\acq4\\drivers\\nidaq\\NIDAQmx.h'
+S'acq4\\drivers\\nidaq\\NIDAQmx.h'
 p4
 asS'fileDefs'
 p5
